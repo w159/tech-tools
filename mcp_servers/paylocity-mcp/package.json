@@ -23,7 +23,7 @@
     "hcm",
     "model-context-protocol"
   ],
-  "author": "tech-agent",
+  "author": "w159",
   "license": "Apache-2.0",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",

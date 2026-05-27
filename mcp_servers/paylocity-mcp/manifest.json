@@ -6,7 +6,7 @@
   "description": "MCP server for the Paylocity REST API — read employees, positions, pay rates, deductions, taxes, cost centers, and pay statements through AI assistants.",
   "long_description": "Provides AI assistants with structured read access to your Paylocity HCM data. Browse the active roster, inspect pay rates and future pay rates, audit deductions and local taxes, review direct-deposit setups, pull cost-center and pay-grade catalogs, and summarize pay statements. Supports both the modern CoreHR / API Hub endpoints (cursor pagination) and legacy /api/v1, /api/v2 endpoints (raw array). OAuth2 client_credentials with form-urlencoded body, proactive 1-hour token caching, exponential backoff on 429.",
   "author": {
-    "name": "tech-agent",
+    "name": "w159",
     "url": "https://github.com/w159"
   },
   "homepage": "https://developer.paylocity.com",

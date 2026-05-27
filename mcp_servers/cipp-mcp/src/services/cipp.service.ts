@@ -72,10 +72,11 @@ export class CippService {
     this.apiKey = apiKey;
     this.logger = logger;
 
-    // If a static apiKey was supplied, prefer it (backwards-compatible behaviour).
-    // Otherwise, if OAuth client-credentials fields are present, build a token
-    // provider that will mint CIPP access tokens on demand.
-    if (!apiKey && tenantId && clientId && clientSecret) {
+    // Prefer OAuth client-credentials when the full trio is configured —
+    // modern CIPP-API deployments authenticate via Entra app registrations,
+    // and the static apiKey path is only kept as a fallback for legacy setups.
+    if (tenantId && clientId && clientSecret) {
+      this.apiKey = undefined;
       this.tokenProvider = new TokenProvider(
         {
           tenantId,

@@ -6,7 +6,7 @@
   "description": "MCP server for Vanta REST API — access frameworks, controls, tests, evidence documents, vendors, vulnerabilities, policies, people, and integrations through AI assistants.",
   "long_description": "Provides AI assistants with structured access to your Vanta GRC data. Browse frameworks (SOC 2, ISO 27001, HIPAA, etc.), inspect controls and test results, hunt evidence-document gaps, review vendor risk, triage vulnerabilities, and pull integration resource inventories. OAuth2 client_credentials auth with proactive token refresh and cursor-based pagination.",
   "author": {
-    "name": "tech-agent",
+    "name": "w159",
     "url": "https://github.com/w159"
   },
   "homepage": "https://developer.vanta.com",

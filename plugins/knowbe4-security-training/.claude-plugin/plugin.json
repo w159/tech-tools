@@ -2,7 +2,7 @@
   "name": "knowbe4-security-training",
   "version": "0.1.0",
   "description": "KnowBe4 security-awareness power skills: risk heatmaps, phishing failure cohort analysis, at-risk user drilldowns, and campaign effectiveness deltas.",
-  "author": "tech-agent",
+  "author": "w159",
   "mcp_dependencies": ["knowbe4-mcp"],
   "skills_dir": "skills",
   "commands_dir": "commands"

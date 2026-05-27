@@ -2,7 +2,7 @@
   "name": "ninjaone-rmm-ops",
   "version": "0.1.0",
   "description": "NinjaOne RMM power skills: fleet health sweep, mass-incident response, offline-device hunt, and patch compliance reporting — all parallelized across organizations.",
-  "author": "tech-agent",
+  "author": "w159",
   "mcp_dependencies": ["ninjaone-mcp"],
   "skills_dir": "skills",
   "commands_dir": "commands"

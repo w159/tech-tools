@@ -2,7 +2,7 @@
   "name": "msp-command-center",
   "version": "0.1.0",
   "description": "Cross-platform MSP super-skills that fan out across Auvik, CIPP, ConnectWise, KnowBe4, NinjaOne, and ThreatLocker in parallel. Provides the morning briefing, full client 360, and unified incident response.",
-  "author": "tech-agent",
+  "author": "w159",
   "mcp_dependencies": [
     "auvik-mcp",
     "cipp-mcp",

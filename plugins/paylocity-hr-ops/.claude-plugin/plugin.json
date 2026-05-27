@@ -2,7 +2,7 @@
   "name": "paylocity-hr-ops",
   "version": "0.1.0",
   "description": "Paylocity HR power skills: active-roster snapshots, new-hire flow tracking, pay-rate audits, and deduction/tax overviews backed by the Paylocity MCP server.",
-  "author": "tech-agent",
+  "author": "w159",
   "mcp_dependencies": ["paylocity-mcp"],
   "skills_dir": "skills",
   "commands_dir": "commands"

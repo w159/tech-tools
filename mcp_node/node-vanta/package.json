@@ -27,7 +27,7 @@
     "test": "vitest run",
     "clean": "rm -rf dist"
   },
-  "author": "tech-agent",
+  "author": "w159",
   "license": "Apache-2.0",
   "engines": {
     "node": ">=18.0.0"
