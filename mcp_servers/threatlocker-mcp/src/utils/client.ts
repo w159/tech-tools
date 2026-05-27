@@ -4,6 +4,13 @@ import { logger } from './logger.js';
 let _client: any | null = null;
 let _credKey: string | null = null;
 
+// Strip unresolved MCP host template placeholders (e.g. "${user_config.x}")
+// and whitespace-only values so optional env vars fall through to their defaults.
+const isUnresolvedPlaceholder = (v: string | undefined): boolean =>
+  !!v && /^\$\{[^}]+\}$/.test(v.trim());
+const cleanEnv = (v: string | undefined): string =>
+  !v || isUnresolvedPlaceholder(v) ? '' : v.trim();
+
 interface Credentials {
   apiKey: string;
   organizationId?: string;
@@ -11,13 +18,13 @@ interface Credentials {
 }
 
 export function getCredentials(): Credentials | null {
-  const apiKey = process.env.THREATLOCKER_API_KEY;
+  const apiKey = cleanEnv(process.env.THREATLOCKER_API_KEY);
   if (!apiKey) {
     logger.warn('Missing THREATLOCKER_API_KEY');
     return null;
   }
-  const organizationId = process.env.THREATLOCKER_ORGANIZATION_ID || undefined;
-  const baseUrl = process.env.THREATLOCKER_BASE_URL || undefined;
+  const organizationId = cleanEnv(process.env.THREATLOCKER_ORGANIZATION_ID) || undefined;
+  const baseUrl = cleanEnv(process.env.THREATLOCKER_BASE_URL) || undefined;
   return { apiKey, organizationId, baseUrl };
 }
 

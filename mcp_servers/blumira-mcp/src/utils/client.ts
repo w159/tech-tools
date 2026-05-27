@@ -1,6 +1,13 @@
 import { BlumiraClient } from 'node-blumira';
 import { logger } from './logger.js';
 
+// Strip unresolved MCP host template placeholders (e.g. "${user_config.x}")
+// and whitespace-only values so optional env vars fall through to their defaults.
+const isUnresolvedPlaceholder = (v: string | undefined): boolean =>
+  !!v && /^\$\{[^}]+\}$/.test(v.trim());
+const cleanEnv = (v: string | undefined): string =>
+  !v || isUnresolvedPlaceholder(v) ? '' : v.trim();
+
 let _client: BlumiraClient | null = null;
 let _credKey: string | null = null;
 
@@ -70,7 +77,7 @@ interface Credentials {
  * 2. OAuth client credentials (BLUMIRA_CLIENT_ID + BLUMIRA_CLIENT_SECRET) — performs exchange
  */
 export function getCredentials(): Credentials | null {
-  const jwtToken = process.env.BLUMIRA_JWT_TOKEN;
+  const jwtToken = cleanEnv(process.env.BLUMIRA_JWT_TOKEN);
   if (jwtToken) {
     return { jwtToken };
   }
@@ -78,8 +85,8 @@ export function getCredentials(): Credentials | null {
   // If client_id + client_secret are set, we can obtain a token —
   // but the exchange is async, so we signal "credentials available" and
   // the actual exchange happens in getClient().
-  const clientId = process.env.BLUMIRA_CLIENT_ID;
-  const clientSecret = process.env.BLUMIRA_CLIENT_SECRET;
+  const clientId = cleanEnv(process.env.BLUMIRA_CLIENT_ID);
+  const clientSecret = cleanEnv(process.env.BLUMIRA_CLIENT_SECRET);
   if (clientId && clientSecret) {
     // Return a sentinel so health checks know we have credentials configured.
     // The real token will be fetched in getClient().
@@ -92,7 +99,7 @@ export function getCredentials(): Credentials | null {
 
 export async function getClient(): Promise<BlumiraClient> {
   // Direct JWT path
-  const jwtToken = process.env.BLUMIRA_JWT_TOKEN;
+  const jwtToken = cleanEnv(process.env.BLUMIRA_JWT_TOKEN);
   if (jwtToken) {
     if (_client && _credKey === jwtToken) return _client;
     _client = new BlumiraClient({ jwtToken });
@@ -102,8 +109,8 @@ export async function getClient(): Promise<BlumiraClient> {
   }
 
   // OAuth client credentials path
-  const clientId = process.env.BLUMIRA_CLIENT_ID;
-  const clientSecret = process.env.BLUMIRA_CLIENT_SECRET;
+  const clientId = cleanEnv(process.env.BLUMIRA_CLIENT_ID);
+  const clientSecret = cleanEnv(process.env.BLUMIRA_CLIENT_SECRET);
   if (clientId && clientSecret) {
     const token = await exchangeOAuthToken(clientId, clientSecret);
     const credKey = `oauth:${clientId}:${token}`;

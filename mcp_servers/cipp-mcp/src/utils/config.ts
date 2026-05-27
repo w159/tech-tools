@@ -5,6 +5,13 @@
 import { McpServerConfig } from '../types/index.js';
 import { LogLevel } from './logger.js';
 
+// Strip unresolved MCP host template placeholders (e.g. "${user_config.x}")
+// and whitespace-only values so optional env vars fall through to their defaults.
+const isUnresolvedPlaceholder = (v: string | undefined): boolean =>
+  !!v && /^\$\{[^}]+\}$/.test(v.trim());
+const cleanEnv = (v: string | undefined): string =>
+  !v || isUnresolvedPlaceholder(v) ? '' : v.trim();
+
 export type TransportType = 'stdio' | 'http';
 export type AuthMode = 'env' | 'gateway';
 
@@ -86,13 +93,13 @@ export interface GatewayCredentials {
  */
 export function getCredentialsFromGateway(): GatewayCredentials {
   return {
-    apiKey: process.env.X_API_KEY || process.env.CIPP_API_KEY,
-    baseUrl: process.env.X_BASE_URL || process.env.CIPP_BASE_URL,
-    tenantId: process.env.X_TENANT_ID || process.env.CIPP_TENANT_ID,
-    clientId: process.env.X_CLIENT_ID || process.env.CIPP_CLIENT_ID,
-    clientSecret: process.env.X_CLIENT_SECRET || process.env.CIPP_CLIENT_SECRET,
-    tokenScope: process.env.X_TOKEN_SCOPE || process.env.CIPP_TOKEN_SCOPE,
-    tokenUrl: process.env.X_TOKEN_URL || process.env.CIPP_TOKEN_URL,
+    apiKey: cleanEnv(process.env.X_API_KEY) || cleanEnv(process.env.CIPP_API_KEY) || undefined,
+    baseUrl: cleanEnv(process.env.X_BASE_URL) || cleanEnv(process.env.CIPP_BASE_URL) || undefined,
+    tenantId: cleanEnv(process.env.X_TENANT_ID) || cleanEnv(process.env.CIPP_TENANT_ID) || undefined,
+    clientId: cleanEnv(process.env.X_CLIENT_ID) || cleanEnv(process.env.CIPP_CLIENT_ID) || undefined,
+    clientSecret: cleanEnv(process.env.X_CLIENT_SECRET) || cleanEnv(process.env.CIPP_CLIENT_SECRET) || undefined,
+    tokenScope: cleanEnv(process.env.X_TOKEN_SCOPE) || cleanEnv(process.env.CIPP_TOKEN_SCOPE) || undefined,
+    tokenUrl: cleanEnv(process.env.X_TOKEN_URL) || cleanEnv(process.env.CIPP_TOKEN_URL) || undefined,
   };
 }
 
@@ -157,13 +164,13 @@ export function loadEnvironmentConfig(): EnvironmentConfig {
   const creds: GatewayCredentials = authMode === 'gateway'
     ? getCredentialsFromGateway()
     : {
-        apiKey: process.env.CIPP_API_KEY,
-        baseUrl: process.env.CIPP_BASE_URL,
-        tenantId: process.env.CIPP_TENANT_ID,
-        clientId: process.env.CIPP_CLIENT_ID,
-        clientSecret: process.env.CIPP_CLIENT_SECRET,
-        tokenScope: process.env.CIPP_TOKEN_SCOPE,
-        tokenUrl: process.env.CIPP_TOKEN_URL,
+        apiKey: cleanEnv(process.env.CIPP_API_KEY) || undefined,
+        baseUrl: cleanEnv(process.env.CIPP_BASE_URL) || undefined,
+        tenantId: cleanEnv(process.env.CIPP_TENANT_ID) || undefined,
+        clientId: cleanEnv(process.env.CIPP_CLIENT_ID) || undefined,
+        clientSecret: cleanEnv(process.env.CIPP_CLIENT_SECRET) || undefined,
+        tokenScope: cleanEnv(process.env.CIPP_TOKEN_SCOPE) || undefined,
+        tokenUrl: cleanEnv(process.env.CIPP_TOKEN_URL) || undefined,
       };
 
   // Build the cipp sub-object, omitting undefined values so that

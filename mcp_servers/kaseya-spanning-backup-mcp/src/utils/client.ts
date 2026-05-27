@@ -1,6 +1,13 @@
 import { SpanningClient, type SpanningPlatform } from 'node-spanning';
 import { logger } from './logger.js';
 
+// Strip unresolved MCP host template placeholders (e.g. "${user_config.x}")
+// and whitespace-only values so optional env vars fall through to their defaults.
+const isUnresolvedPlaceholder = (v: string | undefined): boolean =>
+  !!v && /^\$\{[^}]+\}$/.test(v.trim());
+const cleanEnv = (v: string | undefined): string =>
+  !v || isUnresolvedPlaceholder(v) ? '' : v.trim();
+
 interface Credentials {
   adminEmail: string;
   apiToken: string;
@@ -18,8 +25,8 @@ function normalizePlatform(raw: string | undefined): SpanningPlatform {
 }
 
 export function getCredentials(): Credentials | null {
-  const adminEmail = process.env.SPANNING_ADMIN_EMAIL;
-  const apiToken = process.env.SPANNING_API_TOKEN;
+  const adminEmail = cleanEnv(process.env.SPANNING_ADMIN_EMAIL);
+  const apiToken = cleanEnv(process.env.SPANNING_API_TOKEN);
   if (!adminEmail || !apiToken) {
     logger.warn('Missing SPANNING_ADMIN_EMAIL or SPANNING_API_TOKEN');
     return null;
@@ -27,8 +34,8 @@ export function getCredentials(): Credentials | null {
   return {
     adminEmail,
     apiToken,
-    platform: normalizePlatform(process.env.SPANNING_PLATFORM),
-    apiUrl: process.env.SPANNING_API_URL || undefined,
+    platform: normalizePlatform(cleanEnv(process.env.SPANNING_PLATFORM) || undefined),
+    apiUrl: cleanEnv(process.env.SPANNING_API_URL) || undefined,
   };
 }
 

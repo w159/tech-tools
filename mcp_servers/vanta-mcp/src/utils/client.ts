@@ -4,6 +4,13 @@ import { logger } from './logger.js';
 let _client: VantaClient | null = null;
 let _credKey: string | null = null;
 
+// Strip unresolved MCP host template placeholders (e.g. "${user_config.x}")
+// and whitespace-only values so optional env vars fall through to their defaults.
+const isUnresolvedPlaceholder = (v: string | undefined): boolean =>
+  !!v && /^\$\{[^}]+\}$/.test(v.trim());
+const cleanEnv = (v: string | undefined): string =>
+  !v || isUnresolvedPlaceholder(v) ? '' : v.trim();
+
 interface Credentials {
   clientId: string;
   clientSecret: string;
@@ -13,12 +20,12 @@ interface Credentials {
 export function getCredentials(): Credentials | null {
   const clientId = process.env.VANTA_CLIENT_ID;
   const clientSecret = process.env.VANTA_CLIENT_SECRET;
-  if (!clientId || !clientSecret) {
+  if (!cleanEnv(clientId) || !cleanEnv(clientSecret)) {
     logger.warn('Missing VANTA_CLIENT_ID or VANTA_CLIENT_SECRET');
     return null;
   }
-  const baseUrl = process.env.VANTA_BASE_URL || undefined;
-  return { clientId, clientSecret, baseUrl };
+  const baseUrl = cleanEnv(process.env.VANTA_BASE_URL) || undefined;
+  return { clientId: cleanEnv(clientId), clientSecret: cleanEnv(clientSecret), baseUrl };
 }
 
 export function resetClient(): void {

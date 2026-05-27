@@ -35,11 +35,21 @@ export function getConfig(): CwManageConfig | null {
 
   // Default to North America cloud. Override for EU, AU, or self-hosted.
   // Accept CW_MANAGE_BASE_URL (canonical name) or CW_MANAGE_URL (legacy alias).
-  // Normalize: if the value looks like a hostname without a scheme, prepend https://.
+  //
+  // Some MCP hosts (e.g. Claude Desktop builds prior to ~0.11) pass the literal
+  // template placeholder `${user_config.cw_manage_base_url}` through as the env
+  // value when the optional config field is left blank. Strip those, plus any
+  // empty/whitespace-only values, before deciding to fall back to the default.
+  const DEFAULT_BASE_URL = "https://api-na.myconnectwise.net";
+  const isUnresolvedPlaceholder = (v: string | undefined): boolean =>
+    !!v && /^\$\{[^}]+\}$/.test(v.trim());
+  const cleanEnv = (v: string | undefined): string =>
+    !v || isUnresolvedPlaceholder(v) ? "" : v.trim();
+
   const rawUrl = (
-    process.env.CW_MANAGE_BASE_URL ||
-    process.env.CW_MANAGE_URL ||
-    "https://api-na.myconnectwise.net"
+    cleanEnv(process.env.CW_MANAGE_BASE_URL) ||
+    cleanEnv(process.env.CW_MANAGE_URL) ||
+    DEFAULT_BASE_URL
   ).replace(/\/+$/, "");
   const baseUrl = rawUrl.startsWith("http://") || rawUrl.startsWith("https://")
     ? rawUrl

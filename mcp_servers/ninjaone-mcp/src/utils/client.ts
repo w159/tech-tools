@@ -9,6 +9,13 @@ import type { NinjaOneClient } from "node-ninjaone";
 import { isValidRegion, getBaseUrlForRegion, type NinjaOneRegion } from "./types.js";
 import { logger } from "./logger.js";
 
+// Strip unresolved MCP host template placeholders (e.g. "${user_config.x}")
+// and whitespace-only values so optional env vars fall through to their defaults.
+const isUnresolvedPlaceholder = (v: string | undefined): boolean =>
+  !!v && /^\$\{[^}]+\}$/.test(v.trim());
+const cleanEnv = (v: string | undefined): string =>
+  !v || isUnresolvedPlaceholder(v) ? "" : v.trim();
+
 export interface NinjaOneCredentials {
   clientId: string;
   clientSecret: string;
@@ -78,9 +85,9 @@ export function getCredentials(): NinjaOneCredentials | null {
     return _credentialOverrides;
   }
 
-  const clientId = process.env.NINJAONE_CLIENT_ID;
-  const clientSecret = process.env.NINJAONE_CLIENT_SECRET;
-  const regionEnv = process.env.NINJAONE_REGION?.toLowerCase() || "us";
+  const clientId = cleanEnv(process.env.NINJAONE_CLIENT_ID);
+  const clientSecret = cleanEnv(process.env.NINJAONE_CLIENT_SECRET);
+  const regionEnv = (cleanEnv(process.env.NINJAONE_REGION) || "us").toLowerCase();
 
   if (!clientId || !clientSecret) {
     logger.warn("Missing credentials", {

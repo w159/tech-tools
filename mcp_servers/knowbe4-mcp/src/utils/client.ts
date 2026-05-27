@@ -24,6 +24,13 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { logger } from "./logger.js";
 import { KNOWBE4_REGIONS, type KnowBe4Credentials } from "./types.js";
 
+// Strip unresolved MCP host template placeholders (e.g. "${user_config.x}")
+// and whitespace-only values so optional env vars fall through to their defaults.
+const isUnresolvedPlaceholder = (v: string | undefined): boolean =>
+  !!v && /^\$\{[^}]+\}$/.test(v.trim());
+const cleanEnv = (v: string | undefined): string =>
+  !v || isUnresolvedPlaceholder(v) ? "" : v.trim();
+
 /**
  * Per-request credential store for gateway mode.
  * Prevents cross-tenant leakage when concurrent requests
@@ -43,15 +50,15 @@ export function getCredentials(): KnowBe4Credentials | null {
   }
 
   // Fall back to environment variables (stdio/env mode)
-  const apiKey = process.env.KNOWBE4_API_KEY;
+  const apiKey = cleanEnv(process.env.KNOWBE4_API_KEY);
 
   if (!apiKey) {
     logger.warn("Missing credentials", { hasApiKey: false });
     return null;
   }
 
-  const region = (process.env.KNOWBE4_REGION || "us").toLowerCase();
-  const baseUrl = process.env.KNOWBE4_BASE_URL || KNOWBE4_REGIONS[region] || KNOWBE4_REGIONS.us;
+  const region = (cleanEnv(process.env.KNOWBE4_REGION) || "us").toLowerCase();
+  const baseUrl = cleanEnv(process.env.KNOWBE4_BASE_URL) || KNOWBE4_REGIONS[region] || KNOWBE4_REGIONS.us;
 
   return { apiKey, baseUrl };
 }
