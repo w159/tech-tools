@@ -22,6 +22,7 @@ description: Cluster, prioritize, and route open ConnectWise tickets with assign
    - Top 10 clusters with: ticket IDs, suggested owner, suggested action, SLA timer.
    - Standalone urgent tickets.
    - "Old & stuck" tail (no update >14d).
+   - For device-centric tickets, flag whether `cw-ticket-device-troubleshoot` from `msp-tool-bridge-ops` should be the next handoff.
 
 ## Performance
 

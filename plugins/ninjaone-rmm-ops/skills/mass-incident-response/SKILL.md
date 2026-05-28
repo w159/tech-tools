@@ -25,7 +25,8 @@ description: Coordinate response to an incident affecting many NinjaOne devices 
 
 ### Phase 4 — Acknowledge & document
 - `ninjaone_alerts_reset` only after device confirmed healthy.
-- Create CW ticket if `connectwise-psa-ops` available with full timeline.
+- If `msp-tool-bridge-ops` is installed, use `ninja-device-ticket-sync` to correlate against existing ConnectWise work and draft the best update.
+- Otherwise, create CW ticket if `connectwise-psa-ops` available with full timeline.
 
 ## Rules
 

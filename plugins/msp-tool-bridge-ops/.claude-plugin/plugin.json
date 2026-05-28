@@ -1,0 +1,9 @@
+{
+  "name": "msp-tool-bridge-ops",
+  "version": "0.1.0",
+  "description": "Cross-tool bridge skills that connect ConnectWise Manage ticket workflows with NinjaOne device telemetry and remediation context.",
+  "author": "w159",
+  "mcp_dependencies": ["connectwise-manage-mcp", "ninjaone-mcp"],
+  "skills_dir": "skills",
+  "commands_dir": "commands"
+}

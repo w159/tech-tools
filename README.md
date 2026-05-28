@@ -2,7 +2,7 @@
 
 Monorepo of MCP servers, plugins, and supporting Node.js client libraries for common MSP/IT vendor APIs. A production-grade toolkit of **Model Context Protocol (MCP) servers, vendor SDKs, and Claude Code plugins** that turn an LLM agent into an autonomous **MSP (Managed Service Provider) operator**. One toolkit gives an AI agent first-class access to the security, RMM, PSA, M365, HR, backup, and compliance platforms an MSP runs every day.
 
-> Built and maintained by **w159**. The toolkit currently ships **10 MCP servers**, **7 typed Node SDKs**, **10 Claude Code plugins**, and a curated **vendor + framework documentation set** that an AI agent can read directly while it works.
+> Built and maintained by **w159**. The toolkit currently ships **10 MCP servers**, **7 typed Node SDKs**, **11 Claude Code plugins**, and a curated **vendor + framework documentation set** that an AI agent can read directly while it works.
 
 ---
 
@@ -46,7 +46,7 @@ MSPs run a stack of vendor portals — Auvik, NinjaOne, ConnectWise, CIPP/M365, 
 ### Core Capabilities
 
 - **10 MCP servers** wrapping the most common MSP vendor APIs.
-- **Cross-platform Claude Code plugins** that orchestrate parallel fan-out across vendors (e.g. *morning briefing*, *client 360*, *unified incident response*).
+- **Cross-platform + bridge Claude Code plugins** that orchestrate parallel fan-out across vendors and hand work cleanly between tools (e.g. *morning briefing*, *client 360*, *unified incident response*, *ConnectWise ticket → NinjaOne triage*).
 - **Pre-built `.mcpb` bundles** — drop into Claude Desktop and go.
 - **End-to-end test harness** (`test-mcp-tools.mjs`) that exercises every server against real credentials.
 - **Curated vendor + framework documentation** (`docs/`) so the agent never has to leave the repo to find an API shape.
@@ -54,7 +54,7 @@ MSPs run a stack of vendor portals — Auvik, NinjaOne, ConnectWise, CIPP/M365, 
 ### Key Differentiators
 
 - **Real SDKs, not just MCP wrappers.** The `mcp_node/` folder ships fully typed Node.js clients (`node-auvik`, `node-ninjaone`, `node-vanta`, etc.) that the MCP layer sits on top of — usable from any non-MCP project too.
-- **Cross-vendor super-skills.** The `msp-command-center` plugin fans out across 6 vendor MCPs in parallel for a single user query.
+- **Cross-vendor super-skills.** The `msp-command-center` plugin fans out across 6 vendor MCPs in parallel for a single user query, while `msp-tool-bridge-ops` pivots directly between PSA and RMM workflows when one platform needs evidence from another.
 - **Production-grade packaging.** A hardened `pack-mcpb.js` script guards against broken bundles before they ever ship to Claude Desktop.
 
 ---
@@ -66,8 +66,9 @@ MSPs run a stack of vendor portals — Auvik, NinjaOne, ConnectWise, CIPP/M365, 
 |                      Claude Desktop / Claude Code              |
 |                                                                |
 |  +------------------+    +------------------+                  |
-|  | msp-command-     |    | vendor-specific  |   plugins/       |
-|  | center plugin    |    | plugins (9)      |                  |
+|  | cross-platform + |    | vendor-specific  |   plugins/       |
+|  | bridge plugins   |    | plugins (9)      |                  |
+|  | (2)              |    |                  |                  |
 |  +---------+--------+    +---------+--------+                  |
 |            |                       |                           |
 |            v                       v                           |
@@ -135,7 +136,7 @@ Every MCP server reads credentials from environment variables at boot (Claude De
 ai-tech-toolkit/
 ├── mcp_servers/         10 MCP servers (one per vendor) + _shared tooling
 ├── mcp_node/            7 typed Node.js SDK libraries the servers depend on
-├── plugins/             10 Claude Code plugins (skills + slash commands)
+├── plugins/             11 Claude Code plugins (skills + slash commands)
 ├── docs/                Vendor API docs + framework references (read by AI agents)
 ├── .env.template        Credential template for the test harness
 ├── test-mcp-tools.mjs   End-to-end MCP server tester
@@ -382,6 +383,7 @@ All plugins live under `plugins/`. Each declares its required MCP servers in `.c
 | Plugin | MCP Deps | Skills | Slash Commands |
 |---|---|---|---|
 | [`msp-command-center`](https://github.com/w159/ai-tech-toolkit/tree/main/plugins/msp-command-center) | auvik, cipp, connectwise, knowbe4, ninjaone, threatlocker | `client-360`, `cross-platform-incident`, `morning-briefing` | `/briefing`, `/client`, `/incident` |
+| [`msp-tool-bridge-ops`](https://github.com/w159/ai-tech-toolkit/tree/main/plugins/msp-tool-bridge-ops) | connectwise-manage, ninjaone | `cw-ticket-device-troubleshoot`, `ninja-device-ticket-sync` | `/cw-device-triage`, `/ninja-ticket-sync` |
 | [`auvik-network-ops`](https://github.com/w159/ai-tech-toolkit/tree/main/plugins/auvik-network-ops) | auvik | `bandwidth-hog-hunt`, `config-drift-watch`, `network-triage` | `/auvik-triage` |
 | [`cipp-m365-ops`](https://github.com/w159/ai-tech-toolkit/tree/main/plugins/cipp-m365-ops) | cipp | `bec-rapid-response`, `full-offboard`, `suspicious-signin-hunt`, `tenant-health-sweep` | `/cipp-morning` |
 | [`connectwise-psa-ops`](https://github.com/w159/ai-tech-toolkit/tree/main/plugins/connectwise-psa-ops) | connectwise-manage | `project-burndown`, `sla-breach-radar`, `ticket-triage`, `utilization-report` | `/cw-sla-radar` |
