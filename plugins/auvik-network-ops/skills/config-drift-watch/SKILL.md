@@ -8,7 +8,7 @@ description: Detect unauthorized or unexpected device configuration changes acro
 ## Pipeline
 
 1. `auvik_devices_list` filtered to manageable types (routers, switches, firewalls).
-2. **Parallel** `auvik_configurations_list` for each device, sorted by `created_at desc`, limit=2 (current + previous).
+2. **Parallel** `auvik_configurations_list` with `filter_deviceId=<deviceId>` and `pageSize=2` (most recent + previous snapshot).
 3. **Diff in code** (`ctx_execute`):
    - For each device pair: compute structured diff (line-level + section-level).
    - Classify changes: ACL/policy, interface, routing, credentials, NTP/DNS.

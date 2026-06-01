@@ -341,7 +341,7 @@ The canonical list lives in [`.env.template`](.env.template). Empty values are t
 
 | Package | Version | Vendor | Bundle |
 |---|---|---|---|
-| [`auvik-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/auvik-mcp) | 0.1.0 | Auvik network monitoring | `auvik-mcp.mcpb` |
+| [`auvik-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/auvik-mcp) | 0.3.0 | Auvik network monitoring | `auvik-mcp.mcpb` |
 | [`blumira-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/blumira-mcp) | 1.1.2 | Blumira SIEM/XDR | `blumira-mcp.mcpb` |
 | [`cipp-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/cipp-mcp) | 0.1.0 | CIPP — M365 MSP control plane | `cipp-mcp.mcpb` |
 | [`connectwise-manage-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/connectwise-manage-mcp) | 1.4.0 | ConnectWise Manage PSA | `connectwise-manage-mcp.mcpb` |
@@ -355,11 +355,11 @@ The canonical list lives in [`.env.template`](.env.template). Empty values are t
 Every server speaks MCP over **stdio JSON-RPC** and registers its tools/resources via `@modelcontextprotocol/sdk`.
 
 <details>
-<summary><strong>Last verified tool counts and status (2026-05-26)</strong></summary>
+<summary><strong>Last verified tool counts and status (2026-05-28)</strong></summary>
 
 | Server | Status | Tools | Notes |
 |---|---|---|---|
-| auvik | ✅ PASS | 26 | |
+| auvik | ✅ PASS | 39 | |
 | blumira | ⏭ SKIP | — | needs `BLUMIRA_JWT_TOKEN` |
 | cipp | ❌ FAIL | — | HTTP 401 — caller lacks permission for `ListTenants` |
 | connectwise | ✅ PASS | 51 | |
