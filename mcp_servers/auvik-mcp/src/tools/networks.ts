@@ -1,36 +1,41 @@
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
-import { getCredentials } from '../credentials.js';
-import { createAuvikClient } from '../client-factory.js';
-import { toMcpError } from '../errors.js';
-
-const noCreds = () => ({ content: [{ type: 'text' as const, text: 'No Auvik credentials configured.' }], isError: true });
-const ok = (r: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(r, null, 2) }] });
-const fail = (e: unknown) => { const m = toMcpError(e); return { content: [{ type: 'text' as const, text: m.message }], isError: true }; };
+import {
+  withClient,
+  tenantsProp,
+  pageProps,
+  NETWORK_TYPES,
+  NETWORK_SCAN_STATUSES,
+  NETWORK_SCOPES,
+} from './shared.js';
 
 export const networksListTool: Tool = {
   name: 'auvik_networks_list',
-  description: 'GET /v1/inventory/network/info — list networks (VLANs/subnets) per tenant.',
+  description: 'GET /v1/inventory/network/info — list networks (routed/VLAN/wifi/subnets) per tenant.',
   inputSchema: {
     type: 'object',
     properties: {
-      tenants: { type: 'string', description: 'Comma-separated tenant IDs (required).' },
-      pageSize: { type: 'number', description: 'page[first].' },
-      pageAfter: { type: 'string', description: 'page[after] cursor.' },
-      filter_networkType: { type: 'string', description: 'filter[networkType], e.g. "vlan".' },
+      ...tenantsProp,
+      ...pageProps,
+      filter_networkType: { type: 'string', enum: [...NETWORK_TYPES], description: 'filter[networkType].' },
+      filter_scanStatus: { type: 'string', enum: [...NETWORK_SCAN_STATUSES], description: 'filter[scanStatus].' },
+      filter_devices: { type: 'string', description: 'filter[devices] — comma-separated device IDs on the network.' },
       filter_modifiedAfter: { type: 'string', description: 'filter[modifiedAfter] ISO 8601.' },
-      filter_scanStatus: { type: 'string', description: 'filter[scanStatus].' },
+      include: { type: 'string', enum: ['networkDetail'], description: 'Sideload "networkDetail".' },
     },
-    required: ['tenants'],
+    required: [],
     additionalProperties: false,
   },
 };
 
 export const networksGetTool: Tool = {
   name: 'auvik_networks_get',
-  description: 'GET /v1/inventory/network/info/{networkId} — single network basic info.',
+  description: 'GET /v1/inventory/network/info/{id} — single network basic info.',
   inputSchema: {
     type: 'object',
-    properties: { networkId: { type: 'string', description: 'Auvik network ID.' } },
+    properties: {
+      networkId: { type: 'string', description: 'Auvik network ID.' },
+      include: { type: 'string', enum: ['networkDetail'], description: 'Sideload "networkDetail".' },
+    },
     required: ['networkId'],
     additionalProperties: false,
   },
@@ -42,21 +47,35 @@ export const networksListDetailTool: Tool = {
   inputSchema: {
     type: 'object',
     properties: {
-      tenants: { type: 'string', description: 'Comma-separated tenant IDs (required).' },
-      pageSize: { type: 'number' },
-      pageAfter: { type: 'string' },
+      ...tenantsProp,
+      ...pageProps,
+      filter_networkType: { type: 'string', enum: [...NETWORK_TYPES], description: 'filter[networkType].' },
+      filter_scanStatus: { type: 'string', enum: [...NETWORK_SCAN_STATUSES], description: 'filter[scanStatus].' },
+      filter_scope: { type: 'string', enum: [...NETWORK_SCOPES], description: 'filter[scope].' },
+      filter_devices: { type: 'string', description: 'filter[devices] — comma-separated device IDs.' },
+      filter_modifiedAfter: { type: 'string', description: 'filter[modifiedAfter] ISO 8601.' },
     },
-    required: ['tenants'],
+    required: [],
     additionalProperties: false,
   },
 };
 
-export async function handleNetworksList(args: Record<string, unknown>) {
-  try { const c = getCredentials(); if (!c) return noCreds(); return ok(await createAuvikClient(c).networks.list(args)); } catch (e) { return fail(e); }
-}
-export async function handleNetworksGet(args: { networkId: string }) {
-  try { const c = getCredentials(); if (!c) return noCreds(); return ok(await createAuvikClient(c).networks.get(args.networkId)); } catch (e) { return fail(e); }
-}
-export async function handleNetworksListDetail(args: Record<string, unknown>) {
-  try { const c = getCredentials(); if (!c) return noCreds(); return ok(await createAuvikClient(c).networks.listDetail(args)); } catch (e) { return fail(e); }
-}
+export const networksGetDetailTool: Tool = {
+  name: 'auvik_networks_get_detail',
+  description: 'GET /v1/inventory/network/detail/{id} — single network detail record (scope, collectors, excluded IPs).',
+  inputSchema: {
+    type: 'object',
+    properties: { networkId: { type: 'string', description: 'Auvik network ID.' } },
+    required: ['networkId'],
+    additionalProperties: false,
+  },
+};
+
+type ListArgs = Record<string, unknown>;
+
+export const handleNetworksList = (args: ListArgs) => withClient((c) => c.networks.list(args));
+export const handleNetworksGet = (args: { networkId: string; include?: string }) =>
+  withClient((c) => c.networks.get(args.networkId, { include: args.include }));
+export const handleNetworksListDetail = (args: ListArgs) => withClient((c) => c.networks.listDetail(args));
+export const handleNetworksGetDetail = (args: { networkId: string }) =>
+  withClient((c) => c.networks.getDetail(args.networkId));

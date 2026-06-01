@@ -4,58 +4,68 @@ MCP server for the Auvik network monitoring API. This server provides tools to i
 
 ## Features
 
-- **Multi-tenant support** - Works in both single-tenant and gateway modes
-- **Comprehensive API coverage** - 25+ tools covering all major Auvik API endpoints
+- **Multi-tenant support** - Works in both single-tenant and gateway (per-request credential) modes
+- **Spec-verified coverage** - 39 tools whose paths, filters, and enums are checked against the live Auvik OpenAPI spec
 - **Transport flexibility** - Supports both HTTP and stdio transports
-- **Type-safe** - Built with TypeScript and Zod validation
+- **Resilient HTTP** - Follows 308 region redirects transparently and retries 429s with backoff
 
 ## Tools Available
 
+39 read-only tools. Endpoint paths, query filters, and enum values are verified
+against the live Auvik OpenAPI spec (`/spec`). List endpoints are JSON:API —
+paginate by passing the `page[after]` cursor from `links.next` into `pageAfter`,
+or call `auvik_navigate` with the `links.next` URL. The `tenants` parameter is
+optional on inventory endpoints (omit to span every accessible tenant).
+
 ### Status and Navigation
-- `auvik_status` - Check server status and configuration
-- `auvik_navigate` - Get navigation links to Auvik UI and documentation
+- `auvik_status` - Preflight: report whether credentials are configured and verify them live
+- `auvik_navigate` - Follow a JSON:API `links.next`/`prev`/`first` URL to paginate
 
 ### Tenants
-- `auvik_tenants_list` - List all accessible tenants
-- `auvik_tenants_get` - Get basic tenant information
-- `auvik_tenants_detail` - Get detailed tenant information
+- `auvik_tenants_list` - List all accessible tenants (IDs + domainPrefix)
+- `auvik_tenants_detail` - Tenant detail by domain prefix
+- `auvik_tenants_get_detail` - Tenant detail by numeric ID (needs id + domainPrefix)
 
 ### Devices
-- `auvik_devices_list` - List network devices
-- `auvik_devices_get` - Get basic device information
-- `auvik_devices_get_details` - Get detailed device information
-- `auvik_devices_get_warranty` - Get device warranty information
-- `auvik_devices_get_lifecycle` - Get device lifecycle information
+- `auvik_devices_list` - List devices (filter by type/vendor/status/network/modifiedAfter)
+- `auvik_devices_get` - Single device basic info
+- `auvik_devices_get_details` / `auvik_devices_list_details` - Device discovery/manage detail
+- `auvik_devices_get_extended` / `auvik_devices_list_extended` - Extended detail (traffic insights)
+- `auvik_devices_list_warranty` / `auvik_devices_get_warranty` - Warranty / service coverage
+- `auvik_devices_list_lifecycle` / `auvik_devices_get_lifecycle` - End-of-life / end-of-support
 
 ### Networks
-- `auvik_networks_list` - List discovered networks
-- `auvik_networks_get` - Get network information
+- `auvik_networks_list` / `auvik_networks_get` - Networks (VLAN/routed/wifi/subnets)
+- `auvik_networks_list_detail` / `auvik_networks_get_detail` - Network detail (scope, collectors)
 
 ### Interfaces
-- `auvik_interfaces_list` - List network interfaces
+- `auvik_interfaces_list` / `auvik_interfaces_get` - Network interfaces
 
 ### Configurations
-- `auvik_configurations_list` - List device configurations
-- `auvik_configurations_get` - Get specific configuration
+- `auvik_configurations_list` / `auvik_configurations_get` - Device config backups
+
+### Components
+- `auvik_components_list` / `auvik_components_get` - CPUs, disks, fans, power supplies
 
 ### Entities
-- `auvik_entities_list_notes` - List entity notes
-- `auvik_entities_list_audits` - List entity audit logs
+- `auvik_entities_list_notes` / `auvik_entities_get_note` - Entity notes
+- `auvik_entities_list_audits` / `auvik_entities_get_audit` - Audit logs (terminal/tunnel sessions)
 
 ### Alerts
-- `auvik_alerts_list` - List monitoring alerts
-- `auvik_alerts_get` - Get specific alert
-- `auvik_alerts_dismiss` - Dismiss/acknowledge alert
+- `auvik_alerts_list` - List alerts (filter by severity/status/dismissed/time/entity)
+- `auvik_alerts_get` - Single alert detail
 
 ### Statistics
-- `auvik_statistics_device` - Get device performance metrics
-- `auvik_statistics_interface` - Get interface performance metrics
-- `auvik_statistics_service` - Get service performance metrics
-- `auvik_statistics_snmp_poller` - Get SNMP poller metrics
+- `auvik_statistics_device` - Device metrics (cpu/memory/storage/bandwidth/packets)
+- `auvik_statistics_device_availability` - Uptime / outage
+- `auvik_statistics_interface` - Interface metrics (utilization/bandwidth/loss/discard/packets)
+- `auvik_statistics_service` - Service-monitor ping metrics
+- `auvik_statistics_component` - Per-component metrics (fan speed, PSU power, etc.)
+- `auvik_statistics_oid` - SNMP OID monitor statistics
 
 ### Billing
-- `auvik_billing_client_usage` - Get client billing usage
-- `auvik_billing_device_usage` - Get device billing usage
+- `auvik_billing_client_usage` - Per-client billable device counts
+- `auvik_billing_device_usage` - Per-device billable usage
 
 ## Installation
 

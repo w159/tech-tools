@@ -1,59 +1,48 @@
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
-import { getCredentials } from '../credentials.js';
-import { createAuvikClient } from '../client-factory.js';
-import { toMcpError } from '../errors.js';
-
-const noCreds = () => ({
-  content: [{ type: 'text' as const, text: 'No Auvik credentials configured.' }],
-  isError: true,
-});
-const ok = (r: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(r, null, 2) }] });
-const fail = (e: unknown) => {
-  const m = toMcpError(e);
-  return { content: [{ type: 'text' as const, text: m.message }], isError: true };
-};
-
-const tenantsProp = {
-  tenants: {
-    type: 'string',
-    description: 'Comma-separated Auvik tenant IDs (REQUIRED — Auvik rejects unscoped inventory queries on multi-tenant credentials).',
-  },
-} as const;
-
-const pageProps = {
-  pageSize: { type: 'number', description: 'Items per page (page[first]). Max 1000.' },
-  pageAfter: { type: 'string', description: 'Cursor from prior response links.next (page[after]).' },
-} as const;
+import {
+  withClient,
+  tenantsProp,
+  pageProps,
+  DEVICE_TYPES,
+  ONLINE_STATUSES,
+  DISCOVERY_STATUSES,
+  TRAFFIC_INSIGHTS_STATUSES,
+  LIFECYCLE_STATUSES,
+} from './shared.js';
 
 export const devicesListTool: Tool = {
   name: 'auvik_devices_list',
-  description: 'GET /v1/inventory/device/info — list Auvik-managed devices. JSON:API. Paginate via links.next (pass page[after] cursor via pageAfter).',
+  description:
+    'GET /v1/inventory/device/info — list Auvik-managed devices (basic info). JSON:API; paginate by passing the page[after] cursor from links.next into pageAfter, or call auvik_navigate with links.next.',
   inputSchema: {
     type: 'object',
     properties: {
       ...tenantsProp,
       ...pageProps,
-      filter_deviceType: { type: 'string', description: 'filter[deviceType], e.g. "switch", "router", "firewall".' },
-      filter_modifiedAfter: { type: 'string', description: 'filter[modifiedAfter] ISO 8601.' },
-      filter_makeModel: { type: 'string', description: 'filter[makeModel].' },
+      filter_deviceType: { type: 'string', enum: [...DEVICE_TYPES], description: 'filter[deviceType].' },
+      filter_makeModel: { type: 'string', description: 'filter[makeModel] (exact make/model string).' },
       filter_vendorName: { type: 'string', description: 'filter[vendorName].' },
-      filter_onlineStatus: {
-        type: 'string',
-        enum: ['online', 'offline', 'unreachable', 'testing', 'unknown', 'dormant', 'notPresent', 'lowerLayerDown'],
-        description: 'filter[onlineStatus].',
-      },
+      filter_onlineStatus: { type: 'string', enum: [...ONLINE_STATUSES], description: 'filter[onlineStatus].' },
+      filter_networks: { type: 'string', description: 'filter[networks] — comma-separated network IDs the device belongs to.' },
+      filter_modifiedAfter: { type: 'string', description: 'filter[modifiedAfter] — ISO 8601; only devices modified after this time.' },
+      filter_notSeenSince: { type: 'string', description: 'filter[notSeenSince] — ISO 8601; only devices not seen since this time.' },
+      filter_stateKnown: { type: 'boolean', description: 'filter[stateKnown].' },
+      include: { type: 'string', enum: ['deviceDetail'], description: 'Sideload related resources (only "deviceDetail" is supported).' },
     },
-    required: ['tenants'],
+    required: [],
     additionalProperties: false,
   },
 };
 
 export const devicesGetTool: Tool = {
   name: 'auvik_devices_get',
-  description: 'GET /v1/inventory/device/info/{deviceId} — single device basic info.',
+  description: 'GET /v1/inventory/device/info/{id} — single device basic info.',
   inputSchema: {
     type: 'object',
-    properties: { deviceId: { type: 'string', description: 'Auvik device ID from a list call.' } },
+    properties: {
+      deviceId: { type: 'string', description: 'Auvik device ID from a list call.' },
+      include: { type: 'string', enum: ['deviceDetail'], description: 'Sideload "deviceDetail".' },
+    },
     required: ['deviceId'],
     additionalProperties: false,
   },
@@ -61,7 +50,8 @@ export const devicesGetTool: Tool = {
 
 export const devicesGetDetailsTool: Tool = {
   name: 'auvik_devices_get_details',
-  description: 'GET /v1/inventory/device/detail/{deviceId} — extended detail (discoveryStatus, manageStatus, traffic insights, connected devices).',
+  description:
+    'GET /v1/inventory/device/detail/{id} — extended detail for one device (discovery status, manage status, connected devices). Use auvik_devices_get_extended for traffic-insight extended details.',
   inputSchema: {
     type: 'object',
     properties: { deviceId: { type: 'string', description: 'Auvik device ID.' } },
@@ -70,74 +60,133 @@ export const devicesGetDetailsTool: Tool = {
   },
 };
 
-export const devicesListWarrantyTool: Tool = {
-  name: 'auvik_devices_list_warranty',
-  description: 'GET /v1/inventory/device/warranty — list device warranty records for a tenant. (No per-device endpoint; list and filter client-side.)',
+export const devicesListDetailsTool: Tool = {
+  name: 'auvik_devices_list_details',
+  description:
+    'GET /v1/inventory/device/detail — list extended device detail records (discovery + manage status) across a tenant, filterable by discovery/traffic-insight status.',
   inputSchema: {
     type: 'object',
-    properties: { ...tenantsProp, ...pageProps },
-    required: ['tenants'],
+    properties: {
+      ...tenantsProp,
+      ...pageProps,
+      filter_manageStatus: { type: 'boolean', description: 'filter[manageStatus] — true=managed.' },
+      filter_discoverySNMP: { type: 'string', enum: [...DISCOVERY_STATUSES], description: 'filter[discoverySNMP].' },
+      filter_discoveryWMI: { type: 'string', enum: [...DISCOVERY_STATUSES], description: 'filter[discoveryWMI].' },
+      filter_discoveryLogin: { type: 'string', enum: [...DISCOVERY_STATUSES], description: 'filter[discoveryLogin].' },
+      filter_discoveryVMware: { type: 'string', enum: [...DISCOVERY_STATUSES], description: 'filter[discoveryVMware].' },
+      filter_trafficInsightsStatus: {
+        type: 'string',
+        enum: [...TRAFFIC_INSIGHTS_STATUSES],
+        description: 'filter[trafficInsightsStatus].',
+      },
+    },
+    required: [],
+    additionalProperties: false,
+  },
+};
+
+export const devicesGetExtendedTool: Tool = {
+  name: 'auvik_devices_get_extended',
+  description: 'GET /v1/inventory/device/detail/extended/{id} — single device extended detail (traffic insights, deep attributes).',
+  inputSchema: {
+    type: 'object',
+    properties: { deviceId: { type: 'string', description: 'Auvik device ID.' } },
+    required: ['deviceId'],
+    additionalProperties: false,
+  },
+};
+
+export const devicesListExtendedTool: Tool = {
+  name: 'auvik_devices_list_extended',
+  description:
+    'GET /v1/inventory/device/detail/extended — list extended device details. filter[deviceType] is REQUIRED by this endpoint.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      filter_deviceType: { type: 'string', enum: [...DEVICE_TYPES], description: 'filter[deviceType] (REQUIRED).' },
+      ...tenantsProp,
+      ...pageProps,
+      filter_modifiedAfter: { type: 'string', description: 'filter[modifiedAfter] ISO 8601.' },
+      filter_notSeenSince: { type: 'string', description: 'filter[notSeenSince] ISO 8601.' },
+      filter_stateKnown: { type: 'boolean', description: 'filter[stateKnown].' },
+    },
+    required: ['filter_deviceType'],
+    additionalProperties: false,
+  },
+};
+
+export const devicesListWarrantyTool: Tool = {
+  name: 'auvik_devices_list_warranty',
+  description: 'GET /v1/inventory/device/warranty — list device warranty/service-coverage records for a tenant.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      ...tenantsProp,
+      ...pageProps,
+      filter_coveredUnderWarranty: { type: 'boolean', description: 'filter[coveredUnderWarranty].' },
+      filter_coveredUnderService: { type: 'boolean', description: 'filter[coveredUnderService].' },
+    },
+    required: [],
+    additionalProperties: false,
+  },
+};
+
+export const devicesGetWarrantyTool: Tool = {
+  name: 'auvik_devices_get_warranty',
+  description:
+    'GET /v1/inventory/device/warranty/{id} — warranty info for one device. Returns 404 if the device has no warranty record (not an error in the endpoint).',
+  inputSchema: {
+    type: 'object',
+    properties: { deviceId: { type: 'string', description: 'Auvik device ID.' } },
+    required: ['deviceId'],
     additionalProperties: false,
   },
 };
 
 export const devicesListLifecycleTool: Tool = {
   name: 'auvik_devices_list_lifecycle',
-  description: 'GET /v1/inventory/device/lifecycle — list device end-of-life / end-of-support records for a tenant.',
+  description: 'GET /v1/inventory/device/lifecycle — list device end-of-life / end-of-sale / end-of-support records for a tenant.',
   inputSchema: {
     type: 'object',
-    properties: { ...tenantsProp, ...pageProps },
-    required: ['tenants'],
+    properties: {
+      ...tenantsProp,
+      ...pageProps,
+      filter_salesAvailability: { type: 'string', enum: [...LIFECYCLE_STATUSES], description: 'filter[salesAvailability].' },
+      filter_softwareMaintenanceStatus: { type: 'string', enum: [...LIFECYCLE_STATUSES], description: 'filter[softwareMaintenanceStatus].' },
+      filter_securitySoftwareMaintenanceStatus: { type: 'string', enum: [...LIFECYCLE_STATUSES], description: 'filter[securitySoftwareMaintenanceStatus].' },
+      filter_lastSupportStatus: { type: 'string', enum: [...LIFECYCLE_STATUSES], description: 'filter[lastSupportStatus].' },
+    },
+    required: [],
     additionalProperties: false,
   },
 };
 
-export async function handleDevicesList(args: Record<string, unknown>) {
-  try {
-    const c = getCredentials();
-    if (!c) return noCreds();
-    return ok(await createAuvikClient(c).devices.list(args));
-  } catch (e) {
-    return fail(e);
-  }
-}
+export const devicesGetLifecycleTool: Tool = {
+  name: 'auvik_devices_get_lifecycle',
+  description:
+    'GET /v1/inventory/device/lifecycle/{id} — lifecycle info for one device. Returns 404 if the device has no lifecycle record.',
+  inputSchema: {
+    type: 'object',
+    properties: { deviceId: { type: 'string', description: 'Auvik device ID.' } },
+    required: ['deviceId'],
+    additionalProperties: false,
+  },
+};
 
-export async function handleDevicesGet(args: { deviceId: string }) {
-  try {
-    const c = getCredentials();
-    if (!c) return noCreds();
-    return ok(await createAuvikClient(c).devices.get(args.deviceId));
-  } catch (e) {
-    return fail(e);
-  }
-}
+type ListArgs = Record<string, unknown>;
 
-export async function handleDevicesGetDetails(args: { deviceId: string }) {
-  try {
-    const c = getCredentials();
-    if (!c) return noCreds();
-    return ok(await createAuvikClient(c).devices.getDetail(args.deviceId));
-  } catch (e) {
-    return fail(e);
-  }
-}
-
-export async function handleDevicesListWarranty(args: Record<string, unknown>) {
-  try {
-    const c = getCredentials();
-    if (!c) return noCreds();
-    return ok(await createAuvikClient(c).devices.listWarranty(args));
-  } catch (e) {
-    return fail(e);
-  }
-}
-
-export async function handleDevicesListLifecycle(args: Record<string, unknown>) {
-  try {
-    const c = getCredentials();
-    if (!c) return noCreds();
-    return ok(await createAuvikClient(c).devices.listLifecycle(args));
-  } catch (e) {
-    return fail(e);
-  }
-}
+export const handleDevicesList = (args: ListArgs) => withClient((c) => c.devices.list(args));
+export const handleDevicesGet = (args: { deviceId: string; include?: string }) =>
+  withClient((c) => c.devices.get(args.deviceId, { include: args.include }));
+export const handleDevicesGetDetails = (args: { deviceId: string }) =>
+  withClient((c) => c.devices.getDetail(args.deviceId));
+export const handleDevicesListDetails = (args: ListArgs) => withClient((c) => c.devices.listDetail(args));
+export const handleDevicesGetExtended = (args: { deviceId: string }) =>
+  withClient((c) => c.devices.getExtended(args.deviceId));
+export const handleDevicesListExtended = (args: ListArgs) => withClient((c) => c.devices.listExtended(args));
+export const handleDevicesListWarranty = (args: ListArgs) => withClient((c) => c.devices.listWarranty(args));
+export const handleDevicesGetWarranty = (args: { deviceId: string }) =>
+  withClient((c) => c.devices.getWarranty(args.deviceId));
+export const handleDevicesListLifecycle = (args: ListArgs) => withClient((c) => c.devices.listLifecycle(args));
+export const handleDevicesGetLifecycle = (args: { deviceId: string }) =>
+  withClient((c) => c.devices.getLifecycle(args.deviceId));

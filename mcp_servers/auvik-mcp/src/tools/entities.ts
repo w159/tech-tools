@@ -1,48 +1,77 @@
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
-import { getCredentials } from '../credentials.js';
-import { createAuvikClient } from '../client-factory.js';
-import { toMcpError } from '../errors.js';
-
-const noCreds = () => ({ content: [{ type: 'text' as const, text: 'No Auvik credentials configured.' }], isError: true });
-const ok = (r: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(r, null, 2) }] });
-const fail = (e: unknown) => { const m = toMcpError(e); return { content: [{ type: 'text' as const, text: m.message }], isError: true }; };
+import {
+  withClient,
+  tenantsProp,
+  pageProps,
+  ENTITY_TYPES,
+  ENTITY_AUDIT_CATEGORIES,
+  ENTITY_AUDIT_STATUSES,
+} from './shared.js';
 
 export const entitiesListNotesTool: Tool = {
   name: 'auvik_entities_list_notes',
-  description: 'GET /v1/inventory/entity/note — list notes attached to entities (devices, networks).',
+  description: 'GET /v1/inventory/entity/note — list notes attached to entities (devices, networks, interfaces, root).',
   inputSchema: {
     type: 'object',
     properties: {
-      tenants: { type: 'string', description: 'Comma-separated tenant IDs (required).' },
-      pageSize: { type: 'number' },
-      pageAfter: { type: 'string' },
-      filter_entityId: { type: 'string', description: 'filter[entityId].' },
+      ...tenantsProp,
+      ...pageProps,
+      filter_entityId: { type: 'string', description: 'filter[entityId] — the noted entity ID.' },
+      filter_entityType: { type: 'string', enum: [...ENTITY_TYPES], description: 'filter[entityType].' },
+      filter_entityName: { type: 'string', description: 'filter[entityName].' },
+      filter_lastModifiedBy: { type: 'string', description: 'filter[lastModifiedBy] — user who last edited the note.' },
+      filter_modifiedAfter: { type: 'string', description: 'filter[modifiedAfter] ISO 8601.' },
     },
-    required: ['tenants'],
+    required: [],
+    additionalProperties: false,
+  },
+};
+
+export const entitiesGetNoteTool: Tool = {
+  name: 'auvik_entities_get_note',
+  description: 'GET /v1/inventory/entity/note/{id} — single entity note.',
+  inputSchema: {
+    type: 'object',
+    properties: { noteId: { type: 'string', description: 'Auvik entity note ID.' } },
+    required: ['noteId'],
     additionalProperties: false,
   },
 };
 
 export const entitiesListAuditsTool: Tool = {
   name: 'auvik_entities_list_audits',
-  description: 'GET /v1/inventory/entity/audit — list audit log entries (user actions: terminal sessions, config changes, etc.).',
+  description: 'GET /v1/inventory/entity/audit — list audit-log entries (terminal sessions, tunnels, remote-browser sessions).',
   inputSchema: {
     type: 'object',
     properties: {
-      tenants: { type: 'string', description: 'Comma-separated tenant IDs (required).' },
-      pageSize: { type: 'number' },
-      pageAfter: { type: 'string' },
-      filter_entityId: { type: 'string', description: 'filter[entityId].' },
-      filter_category: { type: 'string', description: 'filter[category], e.g. "terminal".' },
+      ...tenantsProp,
+      ...pageProps,
+      filter_user: { type: 'string', description: 'filter[user] — the acting user.' },
+      filter_category: { type: 'string', enum: [...ENTITY_AUDIT_CATEGORIES], description: 'filter[category].' },
+      filter_status: { type: 'string', enum: [...ENTITY_AUDIT_STATUSES], description: 'filter[status].' },
+      filter_modifiedAfter: { type: 'string', description: 'filter[modifiedAfter] ISO 8601.' },
     },
-    required: ['tenants'],
+    required: [],
     additionalProperties: false,
   },
 };
 
-export async function handleEntitiesListNotes(args: Record<string, unknown>) {
-  try { const c = getCredentials(); if (!c) return noCreds(); return ok(await createAuvikClient(c).entities.listNotes(args)); } catch (e) { return fail(e); }
-}
-export async function handleEntitiesListAudits(args: Record<string, unknown>) {
-  try { const c = getCredentials(); if (!c) return noCreds(); return ok(await createAuvikClient(c).entities.listAudits(args)); } catch (e) { return fail(e); }
-}
+export const entitiesGetAuditTool: Tool = {
+  name: 'auvik_entities_get_audit',
+  description: 'GET /v1/inventory/entity/audit/{id} — single audit-log entry.',
+  inputSchema: {
+    type: 'object',
+    properties: { auditId: { type: 'string', description: 'Auvik entity audit ID.' } },
+    required: ['auditId'],
+    additionalProperties: false,
+  },
+};
+
+export const handleEntitiesListNotes = (args: Record<string, unknown>) =>
+  withClient((c) => c.entities.listNotes(args));
+export const handleEntitiesGetNote = (args: { noteId: string }) =>
+  withClient((c) => c.entities.getNote(args.noteId));
+export const handleEntitiesListAudits = (args: Record<string, unknown>) =>
+  withClient((c) => c.entities.listAudits(args));
+export const handleEntitiesGetAudit = (args: { auditId: string }) =>
+  withClient((c) => c.entities.getAudit(args.auditId));

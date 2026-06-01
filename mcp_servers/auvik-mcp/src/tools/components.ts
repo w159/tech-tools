@@ -1,28 +1,39 @@
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
-import { getCredentials } from '../credentials.js';
-import { createAuvikClient } from '../client-factory.js';
-import { toMcpError } from '../errors.js';
-
-const noCreds = () => ({ content: [{ type: 'text' as const, text: 'No Auvik credentials configured.' }], isError: true });
-const ok = (r: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(r, null, 2) }] });
-const fail = (e: unknown) => { const m = toMcpError(e); return { content: [{ type: 'text' as const, text: m.message }], isError: true }; };
+import { withClient, tenantsProp, pageProps, COMPONENT_CURRENT_STATUSES } from './shared.js';
 
 export const componentsListTool: Tool = {
   name: 'auvik_components_list',
-  description: 'GET /v1/inventory/component/info — list device components (line cards, power supplies, fans).',
+  description: 'GET /v1/inventory/component/info — list device components (CPUs, disks, fans, power supplies, system boards).',
   inputSchema: {
     type: 'object',
     properties: {
-      tenants: { type: 'string', description: 'Comma-separated tenant IDs (required).' },
-      pageSize: { type: 'number' },
-      pageAfter: { type: 'string' },
-      filter_componentType: { type: 'string', description: 'filter[componentType].' },
+      ...tenantsProp,
+      ...pageProps,
+      filter_deviceId: { type: 'string', description: 'filter[deviceId] — components belonging to this device.' },
+      filter_deviceName: { type: 'string', description: 'filter[deviceName].' },
+      filter_currentStatus: {
+        type: 'string',
+        enum: [...COMPONENT_CURRENT_STATUSES],
+        description: 'filter[currentStatus] — ok / degraded / failed.',
+      },
+      filter_modifiedAfter: { type: 'string', description: 'filter[modifiedAfter] ISO 8601.' },
     },
-    required: ['tenants'],
+    required: [],
     additionalProperties: false,
   },
 };
 
-export async function handleComponentsList(args: Record<string, unknown>) {
-  try { const c = getCredentials(); if (!c) return noCreds(); return ok(await createAuvikClient(c).components.list(args)); } catch (e) { return fail(e); }
-}
+export const componentsGetTool: Tool = {
+  name: 'auvik_components_get',
+  description: 'GET /v1/inventory/component/info/{id} — single component.',
+  inputSchema: {
+    type: 'object',
+    properties: { componentId: { type: 'string', description: 'Auvik component ID.' } },
+    required: ['componentId'],
+    additionalProperties: false,
+  },
+};
+
+export const handleComponentsList = (args: Record<string, unknown>) => withClient((c) => c.components.list(args));
+export const handleComponentsGet = (args: { componentId: string }) =>
+  withClient((c) => c.components.get(args.componentId));

@@ -1,11 +1,5 @@
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
-import { getCredentials } from '../credentials.js';
-import { createAuvikClient } from '../client-factory.js';
-import { toMcpError } from '../errors.js';
-
-const noCreds = () => ({ content: [{ type: 'text' as const, text: 'No Auvik credentials configured.' }], isError: true });
-const ok = (r: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(r, null, 2) }] });
-const fail = (e: unknown) => { const m = toMcpError(e); return { content: [{ type: 'text' as const, text: m.message }], isError: true }; };
+import { withClient, tenantsProp, pageProps } from './shared.js';
 
 export const configurationsListTool: Tool = {
   name: 'auvik_configurations_list',
@@ -13,18 +7,21 @@ export const configurationsListTool: Tool = {
   inputSchema: {
     type: 'object',
     properties: {
-      tenants: { type: 'string', description: 'Comma-separated tenant IDs (required).' },
-      pageSize: { type: 'number' },
-      pageAfter: { type: 'string' },
+      ...tenantsProp,
+      ...pageProps,
+      filter_deviceId: { type: 'string', description: 'filter[deviceId] — only configs for this device.' },
+      filter_backupTimeAfter: { type: 'string', description: 'filter[backupTimeAfter] ISO 8601.' },
+      filter_backupTimeBefore: { type: 'string', description: 'filter[backupTimeBefore] ISO 8601.' },
+      filter_isRunning: { type: 'boolean', description: 'filter[isRunning] — true=running config (vs. startup/saved).' },
     },
-    required: ['tenants'],
+    required: [],
     additionalProperties: false,
   },
 };
 
 export const configurationsGetTool: Tool = {
   name: 'auvik_configurations_get',
-  description: 'GET /v1/inventory/configuration/{configurationId} — single configuration record.',
+  description: 'GET /v1/inventory/configuration/{id} — single configuration backup record (includes the config text).',
   inputSchema: {
     type: 'object',
     properties: { configurationId: { type: 'string', description: 'Auvik configuration ID.' } },
@@ -33,9 +30,7 @@ export const configurationsGetTool: Tool = {
   },
 };
 
-export async function handleConfigurationsList(args: Record<string, unknown>) {
-  try { const c = getCredentials(); if (!c) return noCreds(); return ok(await createAuvikClient(c).configurations.list(args)); } catch (e) { return fail(e); }
-}
-export async function handleConfigurationsGet(args: { configurationId: string }) {
-  try { const c = getCredentials(); if (!c) return noCreds(); return ok(await createAuvikClient(c).configurations.get(args.configurationId)); } catch (e) { return fail(e); }
-}
+export const handleConfigurationsList = (args: Record<string, unknown>) =>
+  withClient((c) => c.configurations.list(args));
+export const handleConfigurationsGet = (args: { configurationId: string }) =>
+  withClient((c) => c.configurations.get(args.configurationId));

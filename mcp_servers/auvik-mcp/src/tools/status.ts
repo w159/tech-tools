@@ -4,7 +4,8 @@ import { createAuvikClient } from '../client-factory.js';
 
 export const statusTool: Tool = {
   name: 'auvik_status',
-  description: 'Live preflight: hits GET /v1/authentication/verify and reports whether credentials work and which region they routed to (308 redirects are followed transparently).',
+  description:
+    'Preflight check. Reports whether Auvik credentials are configured and, if so, hits GET /v1/authentication/verify to confirm they work (308 region redirects are followed transparently). Call this first if other tools return auth errors.',
   inputSchema: { type: 'object', properties: {}, additionalProperties: false },
 };
 
@@ -12,36 +13,65 @@ export async function handleStatus() {
   const c = getCredentials();
   if (!c) {
     return {
-      content: [{ type: 'text' as const, text: JSON.stringify({ ok: false, reason: 'No Auvik credentials configured (AUVIK_USERNAME / AUVIK_API_KEY).' }, null, 2) }],
-      isError: true,
+      content: [
+        {
+          type: 'text' as const,
+          text: JSON.stringify(
+            {
+              ok: true,
+              hasCredentials: false,
+              region: null,
+              note: 'No Auvik credentials configured. Set AUVIK_USERNAME and AUVIK_API_KEY (and optionally AUVIK_REGION).',
+            },
+            null,
+            2
+          ),
+        },
+      ],
     };
   }
 
-  const client = createAuvikClient(c);
+  const region = c.region || 'us1';
   try {
-    await client.verify();
+    await createAuvikClient(c).verify();
     return {
-      content: [{
-        type: 'text' as const,
-        text: JSON.stringify({
-          ok: true,
-          configuredRegion: c.region || 'us1',
-          note: 'authentication/verify returned 200. Server auto-follows 308 region redirects on subsequent calls.',
-        }, null, 2),
-      }],
+      content: [
+        {
+          type: 'text' as const,
+          text: JSON.stringify(
+            {
+              ok: true,
+              hasCredentials: true,
+              region,
+              verified: true,
+              note: 'authentication/verify returned 200. The server auto-follows 308 region redirects on every call.',
+            },
+            null,
+            2
+          ),
+        },
+      ],
     };
   } catch (e: unknown) {
     const err = e as { status?: number; message?: string };
     return {
-      content: [{
-        type: 'text' as const,
-        text: JSON.stringify({
-          ok: false,
-          configuredRegion: c.region || 'us1',
-          status: err.status,
-          message: err.message,
-        }, null, 2),
-      }],
+      content: [
+        {
+          type: 'text' as const,
+          text: JSON.stringify(
+            {
+              ok: false,
+              hasCredentials: true,
+              region,
+              verified: false,
+              status: err.status,
+              message: err.message,
+            },
+            null,
+            2
+          ),
+        },
+      ],
       isError: true,
     };
   }

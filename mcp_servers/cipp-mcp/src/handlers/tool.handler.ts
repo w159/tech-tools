@@ -438,18 +438,23 @@ export class CippToolHandler {
         // Core
         // -----------------------------------------------------------------------
         case 'cipp_status': {
-          const url = process.env.CIPP_URL || process.env.CIPP_API_URL || '(not set)';
+          const baseUrl = process.env.CIPP_BASE_URL || process.env.CIPP_URL || process.env.CIPP_API_URL || '(not set)';
+          const hasApiKey = !!(process.env.CIPP_API_KEY);
           const hasClientId = !!(process.env.CIPP_CLIENT_ID);
           const hasClientSecret = !!(process.env.CIPP_CLIENT_SECRET);
           const hasTenantId = !!(process.env.CIPP_TENANT_ID);
+          const hasOAuth = hasClientId && hasClientSecret && hasTenantId;
           result = {
-            configured: hasClientId && hasClientSecret && hasTenantId,
-            cippUrl: url,
+            configured: baseUrl !== '(not set)' && (hasApiKey || hasOAuth),
+            cippBaseUrl: baseUrl,
+            authMode: hasApiKey ? 'api_key' : hasOAuth ? 'oauth_client_credentials' : 'missing',
             credentials: {
-              CIPP_URL: url !== '(not set)' ? 'set' : 'NOT SET',
-              CIPP_CLIENT_ID: hasClientId ? 'set' : 'NOT SET — required',
-              CIPP_CLIENT_SECRET: hasClientSecret ? 'set' : 'NOT SET — required',
-              CIPP_TENANT_ID: hasTenantId ? 'set' : 'NOT SET — required',
+              CIPP_BASE_URL: baseUrl !== '(not set)' ? 'set' : 'NOT SET — required',
+              CIPP_API_KEY: hasApiKey ? 'set' : 'not set (optional when OAuth is configured)',
+              CIPP_CLIENT_ID: hasClientId ? 'set' : 'NOT SET — required for OAuth',
+              CIPP_CLIENT_SECRET: hasClientSecret ? 'set' : 'NOT SET — required for OAuth',
+              CIPP_TENANT_ID: hasTenantId ? 'set' : 'NOT SET — required for OAuth',
+              CIPP_TOKEN_SCOPE: process.env.CIPP_TOKEN_SCOPE ? 'set' : 'not set (optional)',
             },
           };
           break;
@@ -491,10 +496,10 @@ export class CippToolHandler {
         ? JSON.stringify((error as any).response.data).slice(0, 300)
         : '';
       const hint = statusCode === 401 || statusCode === 403
-        ? 'Verify CIPP_URL, CIPP_CLIENT_ID, CIPP_CLIENT_SECRET, and CIPP_TENANT_ID are correct in your environment.'
+        ? 'Verify CIPP_BASE_URL is correct and authentication is valid: either CIPP_API_KEY, or OAuth values CIPP_TENANT_ID + CIPP_CLIENT_ID + CIPP_CLIENT_SECRET (optionally CIPP_TOKEN_SCOPE).'
         : statusCode === 404
         ? 'The requested resource was not found. Verify the tenantFilter and resource IDs are correct.'
-        : 'Check that CIPP is reachable at CIPP_URL and your credentials are valid.';
+        : 'Check that CIPP is reachable at CIPP_BASE_URL and your credentials are valid.';
       const fullMsg = `CIPP API error${statusCode ? ` (HTTP ${statusCode})` : ''}: ${message}${responseBody ? ` — ${responseBody}` : ''}. ${hint}`;
       this.logger.error(`Tool call failed: ${name}`, { error: fullMsg });
       return {

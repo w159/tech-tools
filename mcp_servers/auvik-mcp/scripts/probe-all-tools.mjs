@@ -1,224 +1,171 @@
 #!/usr/bin/env node
 // Live-probe every Auvik MCP tool against real credentials.
 // Loads creds from the parent toolkit .env, then exercises each handler with
-// realistic args and reports pass/fail/status per tool.
+// realistic args and reports pass/fail per tool.
+//
+// Run with:  npx tsx scripts/probe-all-tools.mjs
 
 import { config } from 'dotenv';
-import { resolve } from 'node:path';
+import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { dirname } from 'node:path';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-// Load parent toolkit .env first, then local override
+const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: resolve(__dirname, '../../../.env') });
 config({ path: resolve(__dirname, '../.env'), override: false });
 
-const handlers = await import('../dist/index.js').catch(() => null);
-
-// We need handlers directly, not the server. Import from source.
-const mod = await import('../src/server.ts').catch(async () => {
-  // Fallback: import individual tool modules from dist? dist is a single bundle.
-  // Easier: import source via tsx
-  return null;
-});
-
-// Use tsx-style runtime — but the user's node may not have it. Instead, re-export handlers via a tiny bridge.
-import { handleStatus } from '../src/tools/status.ts';
-import { handleTenantsList, handleTenantsDetail } from '../src/tools/tenants.ts';
-import { handleDevicesList, handleDevicesGet, handleDevicesGetDetails, handleDevicesListWarranty, handleDevicesListLifecycle } from '../src/tools/devices.ts';
-import { handleNetworksList, handleNetworksGet, handleNetworksListDetail } from '../src/tools/networks.ts';
-import { handleInterfacesList, handleInterfacesGet } from '../src/tools/interfaces.ts';
-import { handleConfigurationsList, handleConfigurationsGet } from '../src/tools/configurations.ts';
-import { handleComponentsList } from '../src/tools/components.ts';
-import { handleEntitiesListNotes, handleEntitiesListAudits } from '../src/tools/entities.ts';
-import { handleAlertsList, handleAlertsGet } from '../src/tools/alerts.ts';
-import { handleStatisticsDevice, handleStatisticsInterface } from '../src/tools/statistics.ts';
-import { handleBillingClientUsage } from '../src/tools/billing.ts';
-import { handleNavigate } from '../src/tools/navigate.ts';
+const status = await import('../src/tools/status.ts');
+const tenants = await import('../src/tools/tenants.ts');
+const devices = await import('../src/tools/devices.ts');
+const networks = await import('../src/tools/networks.ts');
+const interfaces = await import('../src/tools/interfaces.ts');
+const configs = await import('../src/tools/configurations.ts');
+const components = await import('../src/tools/components.ts');
+const entities = await import('../src/tools/entities.ts');
+const alerts = await import('../src/tools/alerts.ts');
+const stats = await import('../src/tools/statistics.ts');
+const billing = await import('../src/tools/billing.ts');
+const navigate = await import('../src/tools/navigate.ts');
 
 const results = [];
-const log = (name, ok, summary, raw) => {
-  results.push({ name, ok, summary });
-  const tag = ok ? 'PASS' : 'FAIL';
-  console.log(`[${tag}] ${name}  ${summary}`);
-  if (process.env.VERBOSE && raw) console.log(raw.slice(0, 2000));
-};
-
 const summarize = (r) => {
   if (!r) return 'no result';
-  if (r.isError) return `ERROR: ${(r.content?.[0]?.text || '').split('\n')[0].slice(0, 200)}`;
+  if (r.isError) return `ERROR: ${(r.content?.[0]?.text || '').split('\n')[0].slice(0, 180)}`;
   try {
     const body = JSON.parse(r.content[0].text);
-    if (body?.data === null || body?.data === undefined) return 'ok (empty)';
+    if (body?.data == null) return 'ok (empty)';
     if (Array.isArray(body.data)) return `ok (${body.data.length} items)`;
     return `ok (${body.data?.type || 'object'})`;
   } catch {
-    return `ok (${(r.content?.[0]?.text || '').slice(0, 80)})`;
+    return `ok (${(r.content?.[0]?.text || '').slice(0, 60)})`;
   }
 };
-
-const run = async (name, fn) => {
+const run = async (name, fn, { allow404 = false } = {}) => {
+  let r;
   try {
-    const r = await fn();
-    log(name, !r.isError, summarize(r), r.content?.[0]?.text);
-    return r;
+    r = await fn();
   } catch (e) {
-    log(name, false, `THREW: ${e.message}`);
-    return null;
+    r = { isError: true, content: [{ text: `THREW: ${e.message}` }] };
+  }
+  let ok = !r.isError;
+  const summary = summarize(r);
+  // Some by-id endpoints legitimately 404 when the resource has no record.
+  if (!ok && allow404 && /404/.test(summary)) ok = true;
+  results.push({ name, ok, summary });
+  console.log(`[${ok ? 'PASS' : 'FAIL'}] ${name}  ${summary}`);
+  return r;
+};
+const parse = (r) => {
+  try {
+    return JSON.parse(r.content[0].text);
+  } catch {
+    return {};
   }
 };
 
 console.log('=== Auvik MCP — live tool probe ===');
-console.log(`Region: ${process.env.AUVIK_REGION}  User: ${process.env.AUVIK_USERNAME}`);
-console.log('');
+console.log(`Region: ${process.env.AUVIK_REGION}  User: ${process.env.AUVIK_USERNAME}\n`);
 
-await run('auvik_status', () => handleStatus());
+await run('auvik_status', () => status.handleStatus());
 
-// Get a tenant id to use for subsequent calls
-const tenantsResp = await run('auvik_tenants_list', () => handleTenantsList());
-let tenantId = null;
-let tenantPrefix = null;
-let parentTenantId = null;
-try {
-  const body = JSON.parse(tenantsResp.content[0].text);
-  const items = Array.isArray(body?.data) ? body.data : [];
-  // Prefer a sub-tenant (client) rather than the parent MSP root
-  const client = items.find((t) => t.attributes?.tenantType !== 'parentMsp') || items[0];
-  tenantId = client?.id;
-  tenantPrefix = client?.attributes?.domainPrefix;
-  const parent = items.find((t) => t.attributes?.tenantType === 'parentMsp');
-  parentTenantId = parent?.id || tenantId;
-  console.log(`  → using tenantId=${tenantId} prefix=${tenantPrefix} (parent=${parentTenantId})`);
-} catch (e) {
-  console.log('  could not parse tenants response:', e.message);
-}
+const tResp = await run('auvik_tenants_list', () => tenants.handleTenantsList());
+const tItems = parse(tResp).data || [];
+const client = tItems.find((t) => t.attributes?.tenantType !== 'parentMsp') || tItems[0];
+const tenantId = client?.id;
+const prefix = client?.attributes?.domainPrefix;
+console.log(`  → tenantId=${tenantId} prefix=${prefix}`);
 
-if (tenantPrefix) {
-  await run('auvik_tenants_detail', () => handleTenantsDetail({ tenantDomainPrefix: tenantPrefix }));
-}
+if (prefix) await run('auvik_tenants_detail', () => tenants.handleTenantsDetail({ tenantDomainPrefix: prefix }));
+if (tenantId && prefix)
+  await run('auvik_tenants_get_detail', () => tenants.handleTenantsGetDetail({ id: tenantId, tenantDomainPrefix: prefix }));
 
 if (!tenantId) {
-  console.log('No tenant id — aborting remaining tests.');
+  console.log('No tenant id — aborting.');
   process.exit(1);
 }
+const T = { tenants: tenantId, pageSize: 5 };
 
-const devicesResp = await run('auvik_devices_list', () =>
-  handleDevicesList({ tenants: tenantId, pageSize: 5 })
-);
-let deviceId = null;
-try {
-  const body = JSON.parse(devicesResp.content[0].text);
-  deviceId = body.data?.[0]?.id;
-  console.log(`  → using deviceId=${deviceId}`);
-} catch {}
+const dResp = await run('auvik_devices_list', () => devices.handleDevicesList(T));
+const deviceId = parse(dResp).data?.[0]?.id;
+console.log(`  → deviceId=${deviceId}`);
 
 if (deviceId) {
-  await run('auvik_devices_get', () => handleDevicesGet({ deviceId }));
-  await run('auvik_devices_get_details', () => handleDevicesGetDetails({ deviceId }));
+  await run('auvik_devices_get', () => devices.handleDevicesGet({ deviceId }));
+  await run('auvik_devices_get_details', () => devices.handleDevicesGetDetails({ deviceId }));
+  await run('auvik_devices_get_extended', () => devices.handleDevicesGetExtended({ deviceId }));
+  await run('auvik_devices_get_warranty', () => devices.handleDevicesGetWarranty({ deviceId }), { allow404: true });
+  await run('auvik_devices_get_lifecycle', () => devices.handleDevicesGetLifecycle({ deviceId }), { allow404: true });
 }
+await run('auvik_devices_list_details', () => devices.handleDevicesListDetails(T));
+await run('auvik_devices_list_extended', () => devices.handleDevicesListExtended({ ...T, filter_deviceType: 'switch' }));
+await run('auvik_devices_list_warranty', () => devices.handleDevicesListWarranty(T));
+await run('auvik_devices_list_lifecycle', () => devices.handleDevicesListLifecycle(T));
 
-await run('auvik_devices_list_warranty', () => handleDevicesListWarranty({ tenants: tenantId, pageSize: 3 }));
-await run('auvik_devices_list_lifecycle', () => handleDevicesListLifecycle({ tenants: tenantId, pageSize: 3 }));
-
-const netsResp = await run('auvik_networks_list', () => handleNetworksList({ tenants: tenantId, pageSize: 3 }));
-let networkId = null;
-try {
-  const body = JSON.parse(netsResp.content[0].text);
-  networkId = body.data?.[0]?.id;
-} catch {}
+const nResp = await run('auvik_networks_list', () => networks.handleNetworksList(T));
+const networkId = parse(nResp).data?.[0]?.id;
 if (networkId) {
-  await run('auvik_networks_get', () => handleNetworksGet({ networkId }));
+  await run('auvik_networks_get', () => networks.handleNetworksGet({ networkId }));
+  await run('auvik_networks_get_detail', () => networks.handleNetworksGetDetail({ networkId }), { allow404: true });
 }
-await run('auvik_networks_list_detail', () => handleNetworksListDetail({ tenants: tenantId, pageSize: 3 }));
+await run('auvik_networks_list_detail', () => networks.handleNetworksListDetail(T));
 
-const ifResp = await run('auvik_interfaces_list', () => handleInterfacesList({ tenants: tenantId, pageSize: 3 }));
-let interfaceId = null;
-try {
-  const body = JSON.parse(ifResp.content[0].text);
-  interfaceId = body.data?.[0]?.id;
-} catch {}
-if (interfaceId) {
-  await run('auvik_interfaces_get', () => handleInterfacesGet({ interfaceId }));
-}
+const iResp = await run('auvik_interfaces_list', () => interfaces.handleInterfacesList(T));
+const interfaceId = parse(iResp).data?.[0]?.id;
+if (interfaceId) await run('auvik_interfaces_get', () => interfaces.handleInterfacesGet({ interfaceId }));
 
-const cfgResp = await run('auvik_configurations_list', () => handleConfigurationsList({ tenants: tenantId, pageSize: 3 }));
-let configId = null;
-try {
-  const body = JSON.parse(cfgResp.content[0].text);
-  configId = body.data?.[0]?.id;
-} catch {}
-if (configId) {
-  await run('auvik_configurations_get', () => handleConfigurationsGet({ configurationId: configId }));
-}
+const cfgResp = await run('auvik_configurations_list', () => configs.handleConfigurationsList(T));
+const configId = parse(cfgResp).data?.[0]?.id;
+if (configId) await run('auvik_configurations_get', () => configs.handleConfigurationsGet({ configurationId: configId }));
 
-await run('auvik_components_list', () => handleComponentsList({ tenants: tenantId, pageSize: 3 }));
-await run('auvik_entities_list_notes', () => handleEntitiesListNotes({ tenants: tenantId, pageSize: 3 }));
-await run('auvik_entities_list_audits', () => handleEntitiesListAudits({ tenants: tenantId, pageSize: 3 }));
+const compResp = await run('auvik_components_list', () => components.handleComponentsList(T));
+const componentId = parse(compResp).data?.[0]?.id;
+if (componentId) await run('auvik_components_get', () => components.handleComponentsGet({ componentId }));
 
-const alertsResp = await run('auvik_alerts_list', () => handleAlertsList({ tenants: tenantId, pageSize: 3 }));
-let alertId = null;
-try {
-  const body = JSON.parse(alertsResp.content[0].text);
-  alertId = body.data?.[0]?.id;
-} catch {}
-if (alertId) {
-  await run('auvik_alerts_get', () => handleAlertsGet({ alertId }));
-}
+const noteResp = await run('auvik_entities_list_notes', () => entities.handleEntitiesListNotes(T));
+const noteId = parse(noteResp).data?.[0]?.id;
+if (noteId) await run('auvik_entities_get_note', () => entities.handleEntitiesGetNote({ noteId }));
+const auditResp = await run('auvik_entities_list_audits', () => entities.handleEntitiesListAudits(T));
+const auditId = parse(auditResp).data?.[0]?.id;
+if (auditId) await run('auvik_entities_get_audit', () => entities.handleEntitiesGetAudit({ auditId }), { allow404: true });
 
-// Statistics need a fresh-ish date range
+const alertResp = await run('auvik_alerts_list', () => alerts.handleAlertsList(T));
+const alertId = parse(alertResp).data?.[0]?.id;
+if (alertId) await run('auvik_alerts_get', () => alerts.handleAlertsGet({ alertId }), { allow404: true });
+
 const thru = new Date();
 const from = new Date(thru.getTime() - 24 * 3600 * 1000);
 const iso = (d) => d.toISOString().replace(/\.\d{3}Z$/, '.000Z');
+const win = { tenants: tenantId, fromTime: iso(from), thruTime: iso(thru), interval: 'hour' };
 
-if (deviceId) {
-  await run('auvik_statistics_device(cpuUtilization)', () =>
-    handleStatisticsDevice({
-      statId: 'cpuUtilization',
-      tenants: tenantId,
-      fromTime: iso(from),
-      thruTime: iso(thru),
-      interval: 'hour',
-      deviceId,
-    })
-  );
-}
-if (interfaceId) {
-  await run('auvik_statistics_interface(transmittedTotal)', () =>
-    handleStatisticsInterface({
-      statId: 'transmittedTotal',
-      tenants: tenantId,
-      fromTime: iso(from),
-      thruTime: iso(thru),
-      interval: 'hour',
-      interfaceId,
-    })
-  );
-}
+await run('auvik_statistics_device', () => stats.handleStatisticsDevice({ statId: 'cpuUtilization', ...win, deviceId }));
+await run('auvik_statistics_device_availability', () =>
+  stats.handleStatisticsDeviceAvailability({ statId: 'uptime', ...win })
+);
+await run('auvik_statistics_interface', () =>
+  stats.handleStatisticsInterface({ statId: 'utilization', ...win, interfaceId })
+);
+await run('auvik_statistics_service', () => stats.handleStatisticsService({ statId: 'pingTime', ...win }));
+await run('auvik_statistics_component', () =>
+  stats.handleStatisticsComponent({ componentType: 'fan', statId: 'speed', ...win })
+);
+await run('auvik_statistics_oid', () => stats.handleStatisticsOid({ statId: 'deviceMonitor', tenants: tenantId }));
 
 const billFrom = new Date(thru.getTime() - 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
 const billThru = thru.toISOString().slice(0, 10);
-await run('auvik_billing_client_usage', () =>
-  handleBillingClientUsage({ fromDate: billFrom, thruDate: billThru })
-);
+await run('auvik_billing_client_usage', () => billing.handleBillingClientUsage({ fromDate: billFrom, thruDate: billThru }));
+if (deviceId)
+  await run(
+    'auvik_billing_device_usage',
+    () => billing.handleBillingDeviceUsage({ deviceId, fromDate: billFrom, thruDate: billThru }),
+    { allow404: true }
+  );
 
-// navigate: re-paginate devices via links.next
-try {
-  const body = JSON.parse(devicesResp.content[0].text);
-  const next = body?.links?.next;
-  if (next) {
-    await run('auvik_navigate(devices.next)', () => handleNavigate({ url: next }));
-  } else {
-    console.log('[SKIP] auvik_navigate — no links.next on devices page');
-  }
-} catch {}
+const next = parse(dResp)?.links?.next;
+if (next) await run('auvik_navigate', () => navigate.handleNavigate({ url: next }));
+else console.log('[SKIP] auvik_navigate — no links.next');
 
 console.log('\n=== summary ===');
 const pass = results.filter((r) => r.ok).length;
 const fail = results.filter((r) => !r.ok).length;
 console.log(`${pass} passed, ${fail} failed, ${results.length} total`);
-for (const r of results) {
-  if (!r.ok) console.log(`  FAIL  ${r.name}: ${r.summary}`);
-}
+for (const r of results) if (!r.ok) console.log(`  FAIL  ${r.name}: ${r.summary}`);
 process.exit(fail ? 1 : 0);

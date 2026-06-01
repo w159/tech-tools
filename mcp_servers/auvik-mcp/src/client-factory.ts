@@ -23,12 +23,20 @@ export interface AuvikApiError extends Error {
 }
 
 function makeError(status: number, body: unknown, retryAfter?: number): AuvikApiError {
-  const detail =
-    body && typeof body === 'object' && 'errors' in body && Array.isArray((body as any).errors)
-      ? (body as any).errors.map((e: any) => e.title || e.detail || JSON.stringify(e)).join('; ')
-      : typeof body === 'string'
-        ? body
-        : JSON.stringify(body);
+  const hasErrors =
+    body && typeof body === 'object' && 'errors' in body && Array.isArray((body as any).errors);
+  let detail: string;
+  if (hasErrors) {
+    detail = (body as any).errors.map((e: any) => e.title || e.detail || JSON.stringify(e)).join('; ');
+  } else if (typeof body === 'string' && body.trim()) {
+    detail = body.trim();
+  } else if (body == null || body === '') {
+    // Auvik returns an empty-body 404 when a by-id resource has no record
+    // (e.g. a device with no warranty/lifecycle/billing row). Make that legible.
+    detail = status === 404 ? 'no matching record (empty response body)' : '(empty response body)';
+  } else {
+    detail = JSON.stringify(body);
+  }
   const err = new Error(`Auvik API ${status}: ${detail}`) as AuvikApiError;
   err.status = status;
   err.body = body;
@@ -37,7 +45,7 @@ function makeError(status: number, body: unknown, retryAfter?: number): AuvikApi
 }
 
 // Build query string preserving JSON:API bracket syntax (filter[x]=y, page[first]=N).
-// URLSearchParams percent-encodes [ and ] which Auvik rejects.
+// URLSearchParams percent-encodes [ and ] which Auvik accepts as %5B/%5D.
 function buildQuery(params: Record<string, unknown> | undefined): string {
   if (!params) return '';
   const pairs: string[] = [];
@@ -53,8 +61,13 @@ function buildQuery(params: Record<string, unknown> | undefined): string {
   return pairs.length ? `?${pairs.join('&')}` : '';
 }
 
-// Translate flat tool args ({ filter_deviceType: "x", page: 1, pageSize: 50 })
-// to JSON:API query keys ({ "filter[deviceType]": "x", "page[first]": 50 }).
+// Translate flat tool args to JSON:API query keys.
+//   filter_deviceType  -> filter[deviceType]
+//   fields_deviceDetail-> fields[deviceDetail]
+//   pageSize           -> page[first]
+//   pageAfter          -> page[after]
+//   pageLast/pageBefore-> page[last]/page[before]
+// Anything else (tenants, tenantDomainPrefix, include) passes through unchanged.
 function toJsonApiParams(input: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
   if (!input) return undefined;
   const out: Record<string, unknown> = {};
@@ -62,13 +75,16 @@ function toJsonApiParams(input: Record<string, unknown> | undefined): Record<str
     if (v === undefined || v === null || v === '') continue;
     if (k.startsWith('filter_')) {
       out[`filter[${k.slice('filter_'.length)}]`] = v;
+    } else if (k.startsWith('fields_')) {
+      out[`fields[${k.slice('fields_'.length)}]`] = v;
     } else if (k === 'pageSize') {
       out['page[first]'] = v;
     } else if (k === 'pageAfter') {
       out['page[after]'] = v;
-    } else if (k === 'page') {
-      // legacy: numeric page indexes aren't supported by Auvik; ignore
-      continue;
+    } else if (k === 'pageLast') {
+      out['page[last]'] = v;
+    } else if (k === 'pageBefore') {
+      out['page[before]'] = v;
     } else {
       out[k] = v;
     }
@@ -94,6 +110,7 @@ class AuvikHttpClient {
     const apiParams = toJsonApiParams(params);
     let attempt = 0;
     let url = `${this.baseUrl()}${path}${buildQuery(apiParams)}`;
+    let redirects = 0;
 
     while (true) {
       const resp = await fetch(url, {
@@ -101,12 +118,13 @@ class AuvikHttpClient {
         redirect: 'manual',
         headers: {
           Authorization: `Basic ${this.auth}`,
-          Accept: 'application/json',
+          Accept: 'application/vnd.api+json, application/json',
         },
       });
 
-      // Region redirect — re-target and try again (preserves credentials).
-      if (resp.status === 308 || resp.status === 301) {
+      // Region redirect — re-target and re-send (fetch strips auth across hosts on auto-follow).
+      if (resp.status === 308 || resp.status === 301 || resp.status === 307) {
+        if (redirects++ > 5) throw makeError(resp.status, 'too many region redirects');
         const location = resp.headers.get('location');
         if (!location) throw makeError(resp.status, await resp.text());
         const match = location.match(/auvikapi\.([a-z0-9]+)\.my\.auvik\.com/);
@@ -118,7 +136,10 @@ class AuvikHttpClient {
       if (resp.status === 429) {
         const retryAfter = parseInt(resp.headers.get('retry-after') || '0', 10);
         if (attempt < this.maxRetries) {
-          const backoff = retryAfter > 0 ? retryAfter * 1000 : Math.min(60_000, 1000 * 2 ** attempt + Math.random() * 250);
+          const backoff =
+            retryAfter > 0
+              ? Math.min(60_000, retryAfter * 1000)
+              : Math.min(60_000, 1000 * 2 ** attempt + Math.random() * 250);
           await new Promise((r) => setTimeout(r, backoff));
           attempt++;
           continue;
@@ -126,7 +147,6 @@ class AuvikHttpClient {
         throw makeError(429, await resp.json().catch(() => null), retryAfter || undefined);
       }
 
-      // Auvik returns application/json AND application/vnd.api+json — try JSON first either way.
       const contentType = resp.headers.get('content-type') || '';
       const looksJson = contentType.includes('json');
       let body: unknown;
@@ -134,14 +154,18 @@ class AuvikHttpClient {
         body = await resp.json().catch(() => null);
       } else {
         const text = await resp.text();
-        try { body = text ? JSON.parse(text) : null; } catch { body = text; }
+        try {
+          body = text ? JSON.parse(text) : null;
+        } catch {
+          body = text;
+        }
       }
 
       if (!resp.ok) {
         throw makeError(resp.status, body);
       }
 
-      // Empty-body 200 (e.g. /authentication/verify) → synthesize a shape
+      // Empty-body 200 (e.g. /authentication/verify) → synthesize a shape.
       if (body === null || body === '') {
         return { data: null } as unknown as T;
       }
@@ -151,7 +175,6 @@ class AuvikHttpClient {
 
   // Followable JSON:API navigation — used by auvik_navigate.
   async followUrl<T = JsonApiResponse>(absoluteUrl: string): Promise<T> {
-    // Validate it's an Auvik API URL
     if (!/^https:\/\/auvikapi\.[a-z0-9]+\.my\.auvik\.com\/v1\//.test(absoluteUrl)) {
       throw new Error(`Refusing to follow non-Auvik URL: ${absoluteUrl}`);
     }
@@ -160,61 +183,77 @@ class AuvikHttpClient {
   }
 }
 
+const enc = (s: string) => encodeURIComponent(s);
+
 export interface AuvikClient {
   verify(): Promise<JsonApiResponse | { data: null }>;
   followUrl(absoluteUrl: string): Promise<JsonApiResponse>;
 
   tenants: {
     list(params?: Record<string, unknown>): Promise<JsonApiResponse>;
-    detail(domainPrefix: string): Promise<JsonApiResponse>;
+    detail(tenantDomainPrefix: string, params?: Record<string, unknown>): Promise<JsonApiResponse>;
+    detailById(id: string, tenantDomainPrefix: string): Promise<JsonApiResponse>;
   };
 
   devices: {
     list(params?: Record<string, unknown>): Promise<JsonApiResponse>;
-    get(deviceId: string): Promise<JsonApiResponse>;
+    get(id: string, params?: Record<string, unknown>): Promise<JsonApiResponse>;
     listDetail(params?: Record<string, unknown>): Promise<JsonApiResponse>;
-    getDetail(deviceId: string): Promise<JsonApiResponse>;
+    getDetail(id: string): Promise<JsonApiResponse>;
+    listExtended(params?: Record<string, unknown>): Promise<JsonApiResponse>;
+    getExtended(id: string): Promise<JsonApiResponse>;
     listWarranty(params?: Record<string, unknown>): Promise<JsonApiResponse>;
+    getWarranty(id: string): Promise<JsonApiResponse>;
     listLifecycle(params?: Record<string, unknown>): Promise<JsonApiResponse>;
+    getLifecycle(id: string): Promise<JsonApiResponse>;
   };
 
   interfaces: {
     list(params?: Record<string, unknown>): Promise<JsonApiResponse>;
-    get(interfaceId: string): Promise<JsonApiResponse>;
+    get(id: string): Promise<JsonApiResponse>;
   };
 
   networks: {
     list(params?: Record<string, unknown>): Promise<JsonApiResponse>;
-    get(networkId: string): Promise<JsonApiResponse>;
+    get(id: string, params?: Record<string, unknown>): Promise<JsonApiResponse>;
     listDetail(params?: Record<string, unknown>): Promise<JsonApiResponse>;
+    getDetail(id: string): Promise<JsonApiResponse>;
   };
 
   entities: {
     listNotes(params?: Record<string, unknown>): Promise<JsonApiResponse>;
+    getNote(id: string): Promise<JsonApiResponse>;
     listAudits(params?: Record<string, unknown>): Promise<JsonApiResponse>;
+    getAudit(id: string): Promise<JsonApiResponse>;
   };
 
   configurations: {
     list(params?: Record<string, unknown>): Promise<JsonApiResponse>;
-    get(configurationId: string): Promise<JsonApiResponse>;
+    get(id: string): Promise<JsonApiResponse>;
   };
 
   components: {
     list(params?: Record<string, unknown>): Promise<JsonApiResponse>;
+    get(id: string): Promise<JsonApiResponse>;
   };
 
   alerts: {
     list(params?: Record<string, unknown>): Promise<JsonApiResponse>;
-    get(alertId: string): Promise<JsonApiResponse>;
+    get(id: string): Promise<JsonApiResponse>;
   };
 
   statistics: {
     device(statId: string, params: Record<string, unknown>): Promise<JsonApiResponse>;
+    deviceAvailability(statId: string, params: Record<string, unknown>): Promise<JsonApiResponse>;
+    service(statId: string, params: Record<string, unknown>): Promise<JsonApiResponse>;
     interface(statId: string, params: Record<string, unknown>): Promise<JsonApiResponse>;
+    component(componentType: string, statId: string, params: Record<string, unknown>): Promise<JsonApiResponse>;
+    oid(statId: string, params: Record<string, unknown>): Promise<JsonApiResponse>;
   };
 
   billing: {
     clientUsage(params: Record<string, unknown>): Promise<JsonApiResponse>;
+    deviceUsage(id: string, params: Record<string, unknown>): Promise<JsonApiResponse>;
   };
 }
 
@@ -234,64 +273,80 @@ class RealAuvikClient implements AuvikClient {
 
   tenants = {
     list: (params?: Record<string, unknown>) => this.http.request('/tenants', params),
-    detail: (domainPrefix: string) =>
-      this.http.request('/tenants/detail', { tenantDomainPrefix: domainPrefix }),
+    detail: (tenantDomainPrefix: string, params?: Record<string, unknown>) =>
+      this.http.request('/tenants/detail', { tenantDomainPrefix, ...params }),
+    detailById: (id: string, tenantDomainPrefix: string) =>
+      this.http.request(`/tenants/detail/${enc(id)}`, { tenantDomainPrefix }),
   };
 
   devices = {
     list: (params?: Record<string, unknown>) => this.http.request('/inventory/device/info', params),
-    get: (id: string) => this.http.request(`/inventory/device/info/${encodeURIComponent(id)}`),
-    listDetail: (params?: Record<string, unknown>) =>
-      this.http.request('/inventory/device/detail', params),
-    getDetail: (id: string) =>
-      this.http.request(`/inventory/device/detail/${encodeURIComponent(id)}`),
-    listWarranty: (params?: Record<string, unknown>) =>
-      this.http.request('/inventory/device/warranty', params),
-    listLifecycle: (params?: Record<string, unknown>) =>
-      this.http.request('/inventory/device/lifecycle', params),
+    get: (id: string, params?: Record<string, unknown>) =>
+      this.http.request(`/inventory/device/info/${enc(id)}`, params),
+    listDetail: (params?: Record<string, unknown>) => this.http.request('/inventory/device/detail', params),
+    getDetail: (id: string) => this.http.request(`/inventory/device/detail/${enc(id)}`),
+    listExtended: (params?: Record<string, unknown>) =>
+      this.http.request('/inventory/device/detail/extended', params),
+    getExtended: (id: string) => this.http.request(`/inventory/device/detail/extended/${enc(id)}`),
+    listWarranty: (params?: Record<string, unknown>) => this.http.request('/inventory/device/warranty', params),
+    getWarranty: (id: string) => this.http.request(`/inventory/device/warranty/${enc(id)}`),
+    listLifecycle: (params?: Record<string, unknown>) => this.http.request('/inventory/device/lifecycle', params),
+    getLifecycle: (id: string) => this.http.request(`/inventory/device/lifecycle/${enc(id)}`),
   };
 
   interfaces = {
     list: (params?: Record<string, unknown>) => this.http.request('/inventory/interface/info', params),
-    get: (id: string) => this.http.request(`/inventory/interface/info/${encodeURIComponent(id)}`),
+    get: (id: string) => this.http.request(`/inventory/interface/info/${enc(id)}`),
   };
 
   networks = {
     list: (params?: Record<string, unknown>) => this.http.request('/inventory/network/info', params),
-    get: (id: string) => this.http.request(`/inventory/network/info/${encodeURIComponent(id)}`),
-    listDetail: (params?: Record<string, unknown>) =>
-      this.http.request('/inventory/network/detail', params),
+    get: (id: string, params?: Record<string, unknown>) =>
+      this.http.request(`/inventory/network/info/${enc(id)}`, params),
+    listDetail: (params?: Record<string, unknown>) => this.http.request('/inventory/network/detail', params),
+    getDetail: (id: string) => this.http.request(`/inventory/network/detail/${enc(id)}`),
   };
 
   entities = {
     listNotes: (params?: Record<string, unknown>) => this.http.request('/inventory/entity/note', params),
+    getNote: (id: string) => this.http.request(`/inventory/entity/note/${enc(id)}`),
     listAudits: (params?: Record<string, unknown>) => this.http.request('/inventory/entity/audit', params),
+    getAudit: (id: string) => this.http.request(`/inventory/entity/audit/${enc(id)}`),
   };
 
   configurations = {
     list: (params?: Record<string, unknown>) => this.http.request('/inventory/configuration', params),
-    get: (id: string) => this.http.request(`/inventory/configuration/${encodeURIComponent(id)}`),
+    get: (id: string) => this.http.request(`/inventory/configuration/${enc(id)}`),
   };
 
   components = {
     list: (params?: Record<string, unknown>) => this.http.request('/inventory/component/info', params),
+    get: (id: string) => this.http.request(`/inventory/component/info/${enc(id)}`),
   };
 
   alerts = {
     list: (params?: Record<string, unknown>) => this.http.request('/alert/history/info', params),
-    get: (id: string) => this.http.request(`/alert/history/info/${encodeURIComponent(id)}`),
+    get: (id: string) => this.http.request(`/alert/history/info/${enc(id)}`),
   };
 
   statistics = {
     device: (statId: string, params: Record<string, unknown>) =>
-      this.http.request(`/stat/device/${encodeURIComponent(statId)}`, params),
+      this.http.request(`/stat/device/${enc(statId)}`, params),
+    deviceAvailability: (statId: string, params: Record<string, unknown>) =>
+      this.http.request(`/stat/deviceAvailability/${enc(statId)}`, params),
+    service: (statId: string, params: Record<string, unknown>) =>
+      this.http.request(`/stat/service/${enc(statId)}`, params),
     interface: (statId: string, params: Record<string, unknown>) =>
-      this.http.request(`/stat/interface/${encodeURIComponent(statId)}`, params),
+      this.http.request(`/stat/interface/${enc(statId)}`, params),
+    component: (componentType: string, statId: string, params: Record<string, unknown>) =>
+      this.http.request(`/stat/component/${enc(componentType)}/${enc(statId)}`, params),
+    oid: (statId: string, params: Record<string, unknown>) => this.http.request(`/stat/oid/${enc(statId)}`, params),
   };
 
   billing = {
-    clientUsage: (params: Record<string, unknown>) =>
-      this.http.request('/billing/usage/client', params),
+    clientUsage: (params: Record<string, unknown>) => this.http.request('/billing/usage/client', params),
+    deviceUsage: (id: string, params: Record<string, unknown>) =>
+      this.http.request(`/billing/usage/device/${enc(id)}`, params),
   };
 }
 
