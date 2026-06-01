@@ -16,17 +16,18 @@ Composite workflow that turns raw Auvik alerts into root-cause hypotheses in one
 ## Pipeline (run in parallel where possible)
 
 1. **Snapshot fan-out** — call simultaneously:
-   - `auvik_alerts_list` (status=open, severity>=warning, limit=100)
+   - `auvik_alerts_list` with `filter_status=created`, `filter_severity=warning`, `pageSize=100`
    - `auvik_status` (server/API health)
    - `auvik_tenants_list` (only if multi-tenant gateway)
 2. **For each alert** in parallel batches of 5:
    - `auvik_devices_get` on `entityId` to enrich (model, vendor, role, last_seen)
-   - `auvik_interfaces_list` filtered to the device — flag any down/error-counter spike
-   - `auvik_statistics_*` last 1h for the device (CPU/mem/iface util)
+   - `auvik_interfaces_list` with `filter_parentDevice=<deviceId>` to flag down/error interfaces
+   - `auvik_statistics_device` with `statId=cpuUtilization` (device health)
+   - `auvik_statistics_device` with `statId=memoryUtilization` (memory pressure)
 3. **Topology blast radius** — for each impacted device:
-   - `auvik_networks_get` to find the network it belongs to
+   - `auvik_networks_list` with `filter_deviceId=<deviceId>` to find related networks
    - List sibling devices on the same network; mark which are also alerting
-4. **Change correlation** — `auvik_configurations_list` for the device, filter by `updated_at >= alert.firstSeen - 24h`. Surface diffs.
+4. **Change correlation** — call `auvik_configurations_list` with `filter_deviceId=<deviceId>` and `pageSize=10`; sort and diff by `attributes.backupTime`.
 5. **Synthesize**: rank alerts by (severity × impacted_device_count × dependent_service_count). Output ranked incident list with: root-cause hypothesis, evidence, recommended next action.
 
 ## Output shape

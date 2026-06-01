@@ -11,13 +11,13 @@ Hunts top bandwidth consumers globally or per-tenant, ranks by Δ vs. baseline, 
 
 1. `auvik_tenants_list` → tenant set (or use the one the user named).
 2. **Parallel fan-out per tenant**:
-   - `auvik_statistics_interface` window=last_1h, sort=tx_bps_desc, limit=20
-   - `auvik_statistics_interface` window=same_hour_last_week (baseline)
+   - `auvik_statistics_interface` with `statId=bandwidth`, `interval=minute`, `fromTime=<now-1h>`, `thruTime=<now>`
+   - `auvik_statistics_interface` with `statId=bandwidth`, `interval=minute`, `fromTime=<same-hour-last-week>`, `thruTime=<same-hour-last-week+1h>` (baseline)
 3. **Aggregation in code** (`ctx_execute` JS):
    - Join current vs baseline by `interfaceId`.
    - Compute `delta_bps`, `pct_change`, `current_utilization_%`.
    - Filter: `current_utilization_% >= 70` OR `pct_change >= 2.0x`.
-4. **Enrichment**: for top 10, fetch `auvik_interfaces_list` (filtered to the device) and `auvik_devices_get` for context (port description, device role, location).
+4. **Enrichment**: for top 10, fetch `auvik_interfaces_get` and `auvik_devices_get` for context (port description, device role, location).
 5. **Output**: ranked table with site, device, interface, current Mbps, baseline Mbps, multiplier, suspected cause (uplink saturation vs. specific port).
 
 ## When to use
