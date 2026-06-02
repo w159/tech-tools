@@ -1,5 +1,7 @@
 # AI Tech Toolkit
 
+<!-- markdownlint-disable MD032 MD033 MD040 MD060 -->
+
 Monorepo of MCP servers, plugins, and supporting Node.js client libraries for common MSP/IT vendor APIs. A production-grade toolkit of **Model Context Protocol (MCP) servers, vendor SDKs, and Claude Code plugins** that turn an LLM agent into an autonomous **MSP (Managed Service Provider) operator**. One toolkit gives an AI agent first-class access to the security, RMM, PSA, M365, HR, backup, and compliance platforms an MSP runs every day.
 
 > Built and maintained by **w159**. The toolkit currently ships **10 MCP servers**, **7 typed Node SDKs**, **11 Claude Code plugins**, and a curated **vendor + framework documentation set** that an AI agent can read directly while it works.
@@ -61,7 +63,7 @@ MSPs run a stack of vendor portals — Auvik, NinjaOne, ConnectWise, CIPP/M365, 
 
 ## Architecture
 
-```
+```text
 +----------------------------------------------------------------+
 |                      Claude Desktop / Claude Code              |
 |                                                                |
@@ -103,8 +105,7 @@ MSPs run a stack of vendor portals — Auvik, NinjaOne, ConnectWise, CIPP/M365, 
 Every MCP server reads credentials from environment variables at boot (Claude Desktop passes them in via the bundle manifest, or `test-mcp-tools.mjs` reads them from `.env`). Three auth flavors are used across the stack:
 
 | Flavor | Used by | Notes |
-|---|---|---|
-| **Static API key / JWT** | Auvik, Blumira, KnowBe4, ThreatLocker, CIPP (legacy) | Sent as `Authorization: Bearer` or vendor-specific header. |
+| --- | --- | --- || **Static API key / JWT** | Auvik, Blumira, KnowBe4, ThreatLocker, CIPP (legacy) | Sent as `Authorization: Bearer` or vendor-specific header. |
 | **OAuth2 client_credentials** | NinjaOne, Vanta, Paylocity, CIPP (modern) | Token minted on demand, cached ~1h. Vanta token endpoint is **rate-limited to 5 req/min** — reuse is critical. |
 | **Public/Private key + Client ID** | ConnectWise Manage | Basic-auth-style with `companyId+publicKey:privateKey` and a `clientId` header. |
 
@@ -118,8 +119,7 @@ Every MCP server reads credentials from environment variables at boot (Claude De
 ## Tech Stack
 
 | Layer | Technology | Purpose | Docs |
-|---|---|---|---|
-| Protocol | **Model Context Protocol** (2024-11-05 → 2025-11-25) | Tool / resource interface between Claude and servers | <https://modelcontextprotocol.io> |
+| --- | --- | --- | --- || Protocol | **Model Context Protocol** (2024-11-05 → 2025-11-25) | Tool / resource interface between Claude and servers | <https://modelcontextprotocol.io> |
 | MCP SDK | **`@modelcontextprotocol/sdk`** (TypeScript) | Server framework | <https://github.com/modelcontextprotocol/typescript-sdk> |
 | Runtime | **Node.js ≥ 18** (ESM) | All MCP servers + SDKs | <https://nodejs.org> |
 | Build | **`tsup`** + **`tsc`** | Bundle to `dist/` + emit types | <https://tsup.egoist.dev/> |
@@ -132,7 +132,7 @@ Every MCP server reads credentials from environment variables at boot (Claude De
 
 ## Repository Layout
 
-```
+```text
 ai-tech-toolkit/
 ├── mcp_servers/         10 MCP servers (one per vendor) + _shared tooling
 ├── mcp_node/            7 typed Node.js SDK libraries the servers depend on
@@ -150,7 +150,7 @@ ai-tech-toolkit/
 
 Each `mcp_servers/<vendor>-mcp/` package is a standalone TypeScript MCP server:
 
-```
+```text
 <vendor>-mcp/
 ├── src/                  TypeScript source (entry typically src/index.ts or src/entry.ts)
 ├── dist/                 Build output (committed for bundle reproducibility)
@@ -169,6 +169,7 @@ Each `mcp_servers/<vendor>-mcp/` package is a standalone TypeScript MCP server:
 ```
 
 **Important files:**
+
 - `manifest.json` — Declares `entry_point`, required env vars, display name. Consumed by Claude Desktop when you install the `.mcpb`.
 - `<vendor>-mcp.mcpb` — A zip archive containing the staged `dist/` + production `node_modules/`. Drag-and-drop into Claude Desktop to install.
 
@@ -180,7 +181,7 @@ Canonical hardened packer. Drop a thin `scripts/pack-mcpb.js` into any server th
 
 Each `mcp_node/node-<vendor>/` is a fully typed REST client library — independent of MCP. The corresponding MCP server depends on it via `dependencies` in its `package.json`.
 
-```
+```text
 node-<vendor>/
 ├── src/                  TypeScript source
 ├── dist/                 tsup output (cjs + esm + d.ts)
@@ -197,7 +198,7 @@ node-<vendor>/
 
 Each `plugins/<name>/` is a Claude Code plugin:
 
-```
+```text
 <plugin-name>/
 ├── .claude-plugin/
 │   └── plugin.json       Manifest (name, version, mcp_dependencies)
@@ -223,8 +224,7 @@ Read-only documentation tree the agent can grep / read while it works:
 ### Prerequisites
 
 | Tool | Min Version | Install |
-|---|---|---|
-| Node.js | 18 LTS | <https://nodejs.org/en/download> |
+| --- | --- | --- || Node.js | 18 LTS | <https://nodejs.org/en/download> |
 | npm | 9+ | bundled with Node |
 | `mcpb` CLI (optional, for re-packing) | latest | `npm install -g @anthropic-ai/mcpb` — <https://github.com/anthropics/mcpb> |
 | Claude Desktop **or** Claude Code | latest | <https://claude.ai/download> / <https://docs.claude.com/en/docs/claude-code> |
@@ -248,7 +248,7 @@ cd mcp_servers/auvik-mcp && npm install && npm run build && cd ../..
 # 4. Verify everything boots and can call its API
 node test-mcp-tools.mjs               # all servers with creds present
 node test-mcp-tools.mjs auvik vanta   # subset
-```
+```text
 
 ### Installing an MCP server into Claude Desktop
 
@@ -272,8 +272,7 @@ The plugin will refuse to activate skills whose `mcp_dependencies` are not insta
 The canonical list lives in [`.env.template`](.env.template). Empty values are treated as **"skip this server"** by `test-mcp-tools.mjs`.
 
 | Variable | Required | Server | Description |
-|---|---|---|---|
-| `AUVIK_USERNAME` | ✅ | auvik-mcp | Auvik portal username (email). |
+| --- | --- | --- | --- || `AUVIK_USERNAME` | ✅ | auvik-mcp | Auvik portal username (email). |
 | `AUVIK_API_KEY` | ✅ | auvik-mcp | Auvik portal API key. |
 | `AUVIK_REGION` | ⬜ | auvik-mcp | `us1` (default), `eu1`, `anz1`, … |
 | `BLUMIRA_JWT_TOKEN` | ✅ | blumira-mcp | Long-lived JWT from Blumira → Integrations → API. |
@@ -305,8 +304,7 @@ The canonical list lives in [`.env.template`](.env.template). Empty values are t
 ## Authentication & Authorization
 
 | Vendor | Flow | Token caching | Required scopes / roles |
-|---|---|---|---|
-| Auvik | Static API key | n/a | API access enabled on the portal user. |
+| --- | --- | --- | --- || Auvik | Static API key | n/a | API access enabled on the portal user. |
 | Blumira | Long-lived JWT | n/a | Generated under Integrations → API. |
 | CIPP (legacy) | Static bearer | n/a | Granted by CIPP admin. |
 | CIPP (modern) | OAuth2 client_credentials against Entra ID | ~1h | App registration with delegated access to CIPP-API. See `mcp_servers/connectwise-manage-mcp/entra-app-registration.md`. |
@@ -320,8 +318,7 @@ The canonical list lives in [`.env.template`](.env.template). Empty values are t
 ### Common failure modes
 
 | Symptom | Likely cause | Fix |
-|---|---|---|
-| `401 Unauthorized` | Wrong key / expired token | Re-mint, double-check env var spelling. |
+| --- | --- | --- || `401 Unauthorized` | Wrong key / expired token | Re-mint, double-check env var spelling. |
 | `403 Forbidden` on a specific tool | API user lacks role for that endpoint | Add the missing role in the vendor portal (e.g. CIPP `ListTenants` needs tenant-read). |
 | `406 Not Acceptable` | Wrong `Accept` header (seen on Paylocity token endpoint) | Verify content-type negotiation; check vendor changelog. |
 | `429` from Vanta during boot | Hammering the 5 req/min token endpoint | Reuse a single MCP server instance; do not restart in a loop. |
@@ -340,8 +337,7 @@ The canonical list lives in [`.env.template`](.env.template). Empty values are t
 ## MCP Servers
 
 | Package | Version | Vendor | Bundle |
-|---|---|---|---|
-| [`auvik-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/auvik-mcp) | 0.3.0 | Auvik network monitoring | `auvik-mcp.mcpb` |
+| --- | --- | --- | --- || [`auvik-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/auvik-mcp) | 0.3.0 | Auvik network monitoring | `auvik-mcp.mcpb` |
 | [`blumira-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/blumira-mcp) | 1.1.2 | Blumira SIEM/XDR | `blumira-mcp.mcpb` |
 | [`cipp-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/cipp-mcp) | 0.1.0 | CIPP — M365 MSP control plane | `cipp-mcp.mcpb` |
 | [`connectwise-manage-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/connectwise-manage-mcp) | 1.4.0 | ConnectWise Manage PSA | `connectwise-manage-mcp.mcpb` |
@@ -358,8 +354,7 @@ Every server speaks MCP over **stdio JSON-RPC** and registers its tools/resource
 <summary><strong>Last verified tool counts and status (2026-05-28)</strong></summary>
 
 | Server | Status | Tools | Notes |
-|---|---|---|---|
-| auvik | ✅ PASS | 39 | |
+| --- | --- | --- | --- || auvik | ✅ PASS | 39 | |
 | blumira | ⏭ SKIP | — | needs `BLUMIRA_JWT_TOKEN` |
 | cipp | ❌ FAIL | — | HTTP 401 — caller lacks permission for `ListTenants` |
 | connectwise | ✅ PASS | 51 | |
@@ -381,8 +376,7 @@ Re-run any time with `node test-mcp-tools.mjs`.
 All plugins live under `plugins/`. Each declares its required MCP servers in `.claude-plugin/plugin.json` and ships **skills** (Claude follows them like a runbook) and **slash commands** (one-shot entry points).
 
 | Plugin | MCP Deps | Skills | Slash Commands |
-|---|---|---|---|
-| [`msp-command-center`](https://github.com/w159/ai-tech-toolkit/tree/main/plugins/msp-command-center) | auvik, cipp, connectwise, knowbe4, ninjaone, threatlocker | `client-360`, `cross-platform-incident`, `morning-briefing` | `/briefing`, `/client`, `/incident` |
+| --- | --- | --- | --- || [`msp-command-center`](https://github.com/w159/ai-tech-toolkit/tree/main/plugins/msp-command-center) | auvik, cipp, connectwise, knowbe4, ninjaone, threatlocker | `client-360`, `cross-platform-incident`, `morning-briefing` | `/briefing`, `/client`, `/incident` |
 | [`msp-tool-bridge-ops`](https://github.com/w159/ai-tech-toolkit/tree/main/plugins/msp-tool-bridge-ops) | connectwise-manage, ninjaone | `cw-ticket-device-troubleshoot`, `ninja-device-ticket-sync` | `/cw-device-triage`, `/ninja-ticket-sync` |
 | [`auvik-network-ops`](https://github.com/w159/ai-tech-toolkit/tree/main/plugins/auvik-network-ops) | auvik | `bandwidth-hog-hunt`, `config-drift-watch`, `network-triage` | `/auvik-triage` |
 | [`cipp-m365-ops`](https://github.com/w159/ai-tech-toolkit/tree/main/plugins/cipp-m365-ops) | cipp | `bec-rapid-response`, `full-offboard`, `suspicious-signin-hunt`, `tenant-health-sweep` | `/cipp-morning` |
@@ -403,8 +397,7 @@ All plugins live under `plugins/`. Each declares its required MCP servers in `.c
 The MCP servers depend on these standalone, typed Node.js clients. You can use them directly from any Node project — they have no MCP coupling.
 
 | Package | Version | Purpose |
-|---|---|---|
-| [`node-auvik`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_node/node-auvik) | 1.0.0 | Auvik network monitoring API client. |
+| --- | --- | --- || [`node-auvik`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_node/node-auvik) | 1.0.0 | Auvik network monitoring API client. |
 | [`node-blumira`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_node/node-blumira) | 1.0.1 | Blumira SIEM API client. |
 | [`node-ninjaone`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_node/node-ninjaone) | 1.1.2 | NinjaOne / NinjaRMM API client — comprehensive, fully typed. |
 | [`node-paylocity`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_node/node-paylocity) | 1.0.0 | Paylocity REST API client. |
@@ -538,7 +531,7 @@ type ToolResult = {
   // Most servers return text containing pretty-printed JSON
   // so the LLM can reason over it directly.
 };
-```
+```text
 
 For the **typed object models** (`Ticket`, `Device`, `Alert`, `User`, `Tenant`, etc.) see each `node-<vendor>/src/types/` directory — these are the source of truth and are emitted as `.d.ts` declarations.
 
@@ -571,7 +564,7 @@ npm install
 npm test           # vitest
 npm run build      # tsup / tsc — must succeed before pack
 npm run pack       # produces <name>.mcpb (servers only)
-```
+```text
 
 ### CI
 
@@ -582,8 +575,7 @@ Existing GitHub Actions workflows have been **intentionally disabled** (renamed 
 ## Scripts & Automation
 
 | Script | Where | Purpose |
-|---|---|---|
-| `npm run build` | each `mcp_servers/*` and `mcp_node/*` | tsup/tsc → `dist/` |
+| --- | --- | --- || `npm run build` | each `mcp_servers/*` and `mcp_node/*` | tsup/tsc → `dist/` |
 | `npm test` | each package | vitest |
 | `npm run pack` | each `mcp_servers/*` | Calls `_shared/pack-mcpb.js` to produce `<name>.mcpb` |
 | `node test-mcp-tools.mjs` | repo root | End-to-end MCP server tester |
@@ -667,8 +659,7 @@ If you add an endpoint, also add or update the markdown page in `docs/vendors/<v
 ## Troubleshooting
 
 | Issue | Diagnosis |
-|---|---|
-| **`Server SKIPPED` in `test-mcp-tools.mjs`** | A required env var is blank in `.env`. Open `.env.template` for the list. |
+| --- | --- || **`Server SKIPPED` in `test-mcp-tools.mjs`** | A required env var is blank in `.env`. Open `.env.template` for the list. |
 | **`401 Unauthorized`** | Wrong key, wrong region, or revoked credentials. Re-issue and re-paste. |
 | **`403 Forbidden`** on a specific tool | The API user lacks role for that endpoint. Check vendor portal role assignment. |
 | **`406 Not Acceptable`** (Paylocity) | Token-endpoint negotiating wrong content-type — confirm the Paylocity app is approved for the `accounting` / `payroll` scope you expect. |

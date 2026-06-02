@@ -70,29 +70,28 @@ def _reason() -> str:
     )
 
 
-def main() -> int:
+def main() -> None:
     try:
         raw = sys.stdin.read()
         data = json.loads(raw) if raw.strip() else {}
-    except (json.JSONDecodeError, ValueError):
-        return 0
+    except ValueError:
+        return
     try:
         if os.environ.get("ORCHESTRATE_GATE", "").lower() == "off":
-            return 0
+            return
         # Loop guard: never re-block a continuation we already triggered.
         if data.get("stop_hook_active"):
-            return 0
+            return
         cwd = data.get("cwd") or os.getcwd()
         orch = Path(cwd) / ".orchestrator"
         if not orch.is_dir():
-            return 0  # not an orchestrate run -> silent no-op
+            return  # not an orchestrate run -> silent no-op
         if _has_evidence(orch):
-            return 0
+            return
         print(json.dumps({"decision": "block", "reason": _reason()}))
     except Exception:  # noqa: BLE001 — a Stop hook must never wedge the session
-        return 0
-    return 0
+        return
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

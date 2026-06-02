@@ -6,7 +6,7 @@ How to dispatch a subagent so it stays small, focused, and returns only what you
 
 Pass paths and goals — not file contents. The subagent's prompt is its entire system prompt; every extra sentence is context it spends before starting.
 
-```
+```text
 ROLE: <one line — which specialist this is>
 GOAL: <one sentence, measurable>
 CONTEXT: <only what it cannot derive itself — key paths, the inventory line, prior finding ids>
@@ -36,7 +36,7 @@ REPORT BACK (final message only): what you did · evidence (file:line / cmd outp
 Use these by name as `subagent_type`. They already carry the orchestrator's discipline; your spec just supplies GOAL + CONTEXT + paths.
 
 | Agent | Use for | Model | Writes? |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `orc-explorer` | map a feature/module, find owners, trace a call path | haiku | no |
 | `orc-implementer` | make one bounded change correctly, run the local gate | sonnet | yes |
 | `orc-verifier` | adversarially confirm a finding/fix in a fresh context | sonnet (→opus if critical) | no |
