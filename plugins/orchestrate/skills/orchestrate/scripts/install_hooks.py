@@ -142,10 +142,11 @@ def apply_uninstall(settings: dict, selected: list[str]) -> int:
 
 def cmd_list(settings: dict) -> None:
     print("orchestrate hook coverage:")
-    for hid, (event, matcher, script, _e) in HOOK_SPECS.items():
+    for hid, (event, _matcher, script, _e) in HOOK_SPECS.items():
         state = (
             "✔ installed" if has_hook(settings, event, script) else "· not installed"
         )
+        matcher = HOOK_SPECS[hid][1]
         m = f" [{matcher}]" if matcher else ""
         print(f"  {state:16} {hid:9} -> {event}{m}")
     # surface any OTHER hooks present so the user sees the whole picture
@@ -163,7 +164,54 @@ def cmd_list(settings: dict) -> None:
                 print(f"  {event}: {c}")
 
 
-def main() -> int:
+def _selected_ids(select: list[str] | None) -> list[str]:
+    return select or default_selection()
+
+
+def _handle_list(path: Path, settings: dict) -> None:
+    print(f"settings: {path}")
+    cmd_list(settings)
+
+
+def _handle_uninstall(
+    apply: bool, path: Path, settings: dict, selected: list[str]
+) -> None:
+    print(f"settings: {path}")
+    if apply:
+        n = apply_uninstall(settings, selected)
+        if n:
+            _backup_and_write(path, settings)
+        print(f"removed {n} hook handler(s)." if n else "nothing to remove.")
+        return
+
+    for hid in selected:
+        event, _m, script, _e = HOOK_SPECS[hid]
+        label = "REMOVE" if has_hook(settings, event, script) else "absent"
+        print(f"  {label}: {hid} ({event})")
+    print("\n(dry-run) re-run with --apply to remove.")
+
+
+def _handle_install(apply: bool, path: Path, settings: dict, selected: list[str]) -> None:
+    print(f"settings: {path}")
+    for p in plan(settings, selected):
+        tag = "INSTALL" if p["action"] == "install" else "present"
+        print(f"  {tag:8} {p['id']:9} -> {p['event']}  ({command_for(p['script'])})")
+
+    if not apply:
+        print("\n(dry-run) re-run with --apply to install.")
+        return
+
+    n = apply_install(settings, selected)
+    if n:
+        _backup_and_write(path, settings)
+        print(
+            f"\ninstalled {n} hook(s). Restart Claude Code or start a new session to load them."
+        )
+    else:
+        print("\nall selected hooks already installed — no change.")
+
+
+def main() -> None:
     ap = argparse.ArgumentParser(
         description="Install orchestrate automation hooks (gated)."
     )
@@ -190,45 +238,17 @@ def main() -> int:
 
     path = Path(args.settings).expanduser()
     settings = load_settings(path)
-    selected = args.select or default_selection()
+    selected = _selected_ids(args.select)
 
     if args.list:
-        print(f"settings: {path}")
-        cmd_list(settings)
-        return 0
+        _handle_list(path, settings)
+        return
 
-    print(f"settings: {path}")
     if args.uninstall:
-        if args.apply:
-            n = apply_uninstall(settings, selected)
-            if n:
-                _backup_and_write(path, settings)
-            print(f"removed {n} hook handler(s)." if n else "nothing to remove.")
-        else:
-            for hid in selected:
-                event, _m, script, _e = HOOK_SPECS[hid]
-                print(
-                    f"  {'REMOVE' if has_hook(settings, event, script) else 'absent'}: {hid} ({event})"
-                )
-            print("\n(dry-run) re-run with --apply to remove.")
-        return 0
+        _handle_uninstall(args.apply, path, settings, selected)
+        return
 
-    for p in plan(settings, selected):
-        tag = "INSTALL" if p["action"] == "install" else "present"
-        print(f"  {tag:8} {p['id']:9} -> {p['event']}  ({command_for(p['script'])})")
-
-    if args.apply:
-        n = apply_install(settings, selected)
-        if n:
-            _backup_and_write(path, settings)
-            print(
-                f"\ninstalled {n} hook(s). Restart Claude Code or start a new session to load them."
-            )
-        else:
-            print("\nall selected hooks already installed — no change.")
-    else:
-        print("\n(dry-run) re-run with --apply to install.")
-    return 0
+    _handle_install(args.apply, path, settings, selected)
 
 
 def _backup_and_write(path: Path, settings: dict) -> None:
@@ -242,4 +262,4 @@ def _backup_and_write(path: Path, settings: dict) -> None:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

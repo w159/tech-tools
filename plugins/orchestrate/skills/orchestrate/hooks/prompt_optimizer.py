@@ -65,7 +65,7 @@ import urllib.request
 # erase sequences (e.g. "data c\x1b[1D\x1b[K\nconsistency"). Stripping those codes naively
 # leaves the dangling "c"; we must INTERPRET them like a terminal to get clean text. The HTTP
 # API path emits no codes, so this is a no-op there.
-_CSI = re.compile(r"\x1b\[([0-9]*)([A-Za-z])")
+_CSI = re.compile(r"\x1b\[(\d*)([A-Za-z])")
 _OSC = re.compile(r"\x1b\][^\x07]*\x07")  # OSC (e.g. window-title) sequences
 
 DEFAULT_TRIGGERS = ("opt:", "optimize:", "++")
@@ -75,6 +75,26 @@ DEFAULT_MODEL = "prompt-optimizer:latest"
 def _env(name: str, default: str) -> str:
     val = os.environ.get(name, "").strip()
     return val if val else default
+
+
+def _apply_csi(line: list[str], pos: int, match: re.Match[str]) -> int:
+    num_s, cmd = match.group(1), match.group(2)
+    num = int(num_s) if num_s else 0
+    if cmd == "D":  # cursor back
+        return max(0, pos - (num or 1))
+    if cmd == "C":  # cursor forward
+        return min(len(line), pos + (num or 1))
+    if cmd == "K" and num == 0:  # erase from cursor to end of line (default mode 0)
+        del line[pos:]
+    return pos
+
+
+def _write_char(line: list[str], pos: int, ch: str) -> int:
+    if pos < len(line):
+        line[pos] = ch
+    else:
+        line.append(ch)
+    return pos + 1
 
 
 def clean(text: str) -> str:
@@ -91,15 +111,7 @@ def clean(text: str) -> str:
             if not m:
                 i += 1
                 continue
-            num_s, cmd = m.group(1), m.group(2)
-            num = int(num_s) if num_s else 0
-            if cmd == "D":  # cursor back
-                pos = max(0, pos - (num or 1))
-            elif cmd == "C":  # cursor forward
-                pos = min(len(line), pos + (num or 1))
-            elif cmd == "K":  # erase from cursor to end of line (default mode 0)
-                if num == 0:
-                    del line[pos:]
+            pos = _apply_csi(line, pos, m)
             # color/style and other CSI codes are ignored
             i = m.end()
             continue
@@ -111,11 +123,7 @@ def clean(text: str) -> str:
         elif ch == "\x08":  # backspace
             pos = max(0, pos - 1)
         else:
-            if pos < len(line):
-                line[pos] = ch
-            else:
-                line.append(ch)
-            pos += 1
+            pos = _write_char(line, pos, ch)
         i += 1
     out_lines.append("".join(line))
     # drop leading/trailing blank lines without flattening internal structure
@@ -188,7 +196,7 @@ def _run_argv(cmd: list[str], timeout: float) -> str | None:
             text=True,
             timeout=timeout,
         )
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+    except (subprocess.TimeoutExpired, OSError):
         return None
     if proc.returncode != 0:
         return None
@@ -220,7 +228,7 @@ def run_via_api(prompt: str, model: str, timeout: float) -> str | None:
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = json.loads(resp.read())
-    except (urllib.error.URLError, OSError, ValueError, TimeoutError):
+    except (OSError, ValueError):
         return None
     return clean(data.get("response", "")) or None
 
@@ -320,30 +328,29 @@ def audit(original: str, optimized: str | None) -> None:
         pass  # logging must never break the hook
 
 
-def main() -> int:
+def main() -> None:
     try:
         raw = sys.stdin.read()
         data = json.loads(raw) if raw.strip() else {}
-    except (json.JSONDecodeError, ValueError):
-        return 0  # malformed input → passthrough
+    except ValueError:
+        return  # malformed input -> passthrough
     prompt = (data.get("prompt") or "").strip()
     if not prompt:
-        return 0
+        return
 
     do_it, body = should_optimize(prompt)
     if not do_it:
-        return 0  # instant passthrough — no output, no latency
+        return  # instant passthrough - no output, no latency
 
     optimized = run_optimizer(body)
     if optimized and is_skip(optimized):
         optimized = None  # model judged the prompt trivial — pass the raw text through
     audit(body, optimized)
     if not optimized:
-        return 0  # unavailable / slow / empty / SKIP → passthrough, never block
+        return  # unavailable / slow / empty / SKIP -> passthrough, never block
     emit_context(optimized)
     notify(optimized)
-    return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()
