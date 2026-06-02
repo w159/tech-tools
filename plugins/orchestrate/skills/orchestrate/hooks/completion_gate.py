@@ -52,7 +52,7 @@ def _has_evidence(orch: Path) -> bool:
                     and str(item.get("status", "")).lower() == "verified"
                 ):
                     return True
-    except (OSError, json.JSONDecodeError, ValueError, AttributeError):
+    except (OSError, ValueError, AttributeError):
         return True  # malformed findings -> fail open
     return False
 

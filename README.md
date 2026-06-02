@@ -1,6 +1,6 @@
 # AI Tech Toolkit
 
-<!-- markdownlint-disable MD032 MD033 MD040 MD060 -->
+<!-- markdownlint-disable MD032 MD033 MD040 MD051 MD060 -->
 
 Monorepo of MCP servers, plugins, and supporting Node.js client libraries for common MSP/IT vendor APIs. A production-grade toolkit of **Model Context Protocol (MCP) servers, vendor SDKs, and Claude Code plugins** that turn an LLM agent into an autonomous **MSP (Managed Service Provider) operator**. One toolkit gives an AI agent first-class access to the security, RMM, PSA, M365, HR, backup, and compliance platforms an MSP runs every day.
 
