@@ -2,8 +2,7 @@
   "name": "aikit",
   "description": "MCP-backed skills and workflow plugins for MSP operations, vendor platforms, and knowledge workers.",
   "owner": {
-    "name": "Jerry",
-    "email": "jmorg83@gmail.com"
+    "name": "w159"
   },
   "metadata": {
     "pluginRoot": "./plugins"

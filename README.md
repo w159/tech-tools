@@ -50,7 +50,7 @@ MSPs run a stack of vendor portals — Auvik, NinjaOne, ConnectWise, CIPP/M365, 
 
 - **10 MCP servers** wrapping the most common MSP vendor APIs.
 - **Cross-platform + bridge Claude Code plugins** that orchestrate parallel fan-out across vendors and hand work cleanly between tools (e.g. *morning briefing*, *client 360*, *unified incident response*, *ConnectWise ticket -> NinjaOne triage*).
-- **Plugin marketplace** -- 27 plugins installable via `claude plugin marketplace add W159/aikit` once published, or locally via the path.
+- **Plugin marketplace** -- 27 plugins installable via `claude plugin marketplace add w159/tech-tools` once published, or locally via the path.
 - **Compact-by-default responses** -- all list/get tools return concise summaries by default; pass `fields=[...]` to select specific fields or `full=true` to get the raw vendor payload. Errors are structured `{error:{code, message, detail, hint}}` so agents can act on them.
 - **Pre-built `.mcpb` bundles** -- drop into Claude Desktop and go.
 - **End-to-end test harness** (`test-mcp-tools.mjs`) that exercises every server against real credentials.
@@ -108,7 +108,8 @@ MSPs run a stack of vendor portals — Auvik, NinjaOne, ConnectWise, CIPP/M365, 
 Every MCP server reads credentials from environment variables at boot (Claude Desktop passes them in via the bundle manifest, or `test-mcp-tools.mjs` reads them from `.env`). Three auth flavors are used across the stack:
 
 | Flavor | Used by | Notes |
-| --- | --- | --- || **Static API key / JWT** | Auvik, Blumira, KnowBe4, ThreatLocker, CIPP (legacy) | Sent as `Authorization: Bearer` or vendor-specific header. |
+| --- | --- | --- |
+| **Static API key / JWT** | Auvik, Blumira, KnowBe4, ThreatLocker, CIPP (legacy) | Sent as `Authorization: Bearer` or vendor-specific header. |
 | **OAuth2 client_credentials** | NinjaOne, Vanta, Paylocity, CIPP (modern) | Token minted on demand, cached ~1h. Vanta token endpoint is **rate-limited to 5 req/min** — reuse is critical. |
 | **Public/Private key + Client ID** | ConnectWise Manage | Basic-auth-style with `companyId+publicKey:privateKey` and a `clientId` header. |
 
@@ -122,7 +123,8 @@ Every MCP server reads credentials from environment variables at boot (Claude De
 ## Tech Stack
 
 | Layer | Technology | Purpose | Docs |
-| --- | --- | --- | --- || Protocol | **Model Context Protocol** (2024-11-05 → 2025-11-25) | Tool / resource interface between Claude and servers | <https://modelcontextprotocol.io> |
+| --- | --- | --- | --- |
+| Protocol | **Model Context Protocol** (2024-11-05 → 2025-11-25) | Tool / resource interface between Claude and servers | <https://modelcontextprotocol.io> |
 | MCP SDK | **`@modelcontextprotocol/sdk`** (TypeScript) | Server framework | <https://github.com/modelcontextprotocol/typescript-sdk> |
 | Runtime | **Node.js ≥ 18** (ESM) | All MCP servers + SDKs | <https://nodejs.org> |
 | Build | **`tsup`** + **`tsc`** | Bundle to `dist/` + emit types | <https://tsup.egoist.dev/> |
@@ -136,7 +138,7 @@ Every MCP server reads credentials from environment variables at boot (Claude De
 ## Repository Layout
 
 ```text
-ai-tech-toolkit/
+tech-tools/
 ├── mcp_servers/         10 MCP servers (one per vendor) + _shared tooling
 ├── mcp_node/            7 typed Node.js SDK libraries the servers depend on
 ├── plugins/             27 Claude Code plugins (skills + slash commands)
@@ -219,9 +221,9 @@ The root marketplace manifest lists all 27 plugins with name, source path, descr
 
 ```bash
 # Install all plugins from a local clone
-claude plugin marketplace add ./path/to/aikit
+claude plugin marketplace add ./path/to/tech-tools
 
-# Install a single plugin by name (once published to the registry as W159/aikit)
+# Install a single plugin by name (marketplace name is "aikit", set in marketplace.json)
 claude plugin install <plugin-name>@aikit
 
 # Browse available plugins in the Claude Code /plugin Discover tab
@@ -244,7 +246,8 @@ Read-only documentation tree the agent can grep / read while it works:
 ### Prerequisites
 
 | Tool | Min Version | Install |
-| --- | --- | --- || Node.js | 18 LTS | <https://nodejs.org/en/download> |
+| --- | --- | --- |
+| Node.js | 18 LTS | <https://nodejs.org/en/download> |
 | npm | 9+ | bundled with Node |
 | `mcpb` CLI (optional, for re-packing) | latest | `npm install -g @anthropic-ai/mcpb` — <https://github.com/anthropics/mcpb> |
 | Claude Desktop **or** Claude Code | latest | <https://claude.ai/download> / <https://docs.claude.com/en/docs/claude-code> |
@@ -255,8 +258,8 @@ You also need API credentials for whichever vendors you want to connect to (see 
 
 ```bash
 # 1. Clone
-git clone <this-repo-url> ai-tech-toolkit
-cd ai-tech-toolkit
+git clone https://github.com/w159/tech-tools.git
+cd tech-tools
 
 # 2. Configure credentials
 cp .env.template .env
@@ -268,7 +271,7 @@ cd mcp_servers/auvik-mcp && npm install && npm run build && cd ../..
 # 4. Verify everything boots and can call its API
 node test-mcp-tools.mjs               # all servers with creds present
 node test-mcp-tools.mjs auvik vanta   # subset
-```text
+```
 
 ### Installing an MCP server into Claude Desktop
 
@@ -280,7 +283,7 @@ node test-mcp-tools.mjs auvik vanta   # subset
 
 ```bash
 # from your Claude Code workspace
-claude code plugin install /absolute/path/to/ai-tech-toolkit/plugins/msp-command-center
+claude code plugin install /absolute/path/to/tech-tools/plugins/msp-command-center
 ```
 
 The plugin will refuse to activate skills whose `mcp_dependencies` are not installed.
@@ -292,7 +295,8 @@ The plugin will refuse to activate skills whose `mcp_dependencies` are not insta
 The canonical list lives in [`.env.template`](.env.template). Empty values are treated as **"skip this server"** by `test-mcp-tools.mjs`.
 
 | Variable | Required | Server | Description |
-| --- | --- | --- | --- || `AUVIK_USERNAME` | ✅ | auvik-mcp | Auvik portal username (email). |
+| --- | --- | --- | --- |
+| `AUVIK_USERNAME` | ✅ | auvik-mcp | Auvik portal username (email). |
 | `AUVIK_API_KEY` | ✅ | auvik-mcp | Auvik portal API key. |
 | `AUVIK_REGION` | ⬜ | auvik-mcp | `us1` (default), `eu1`, `anz1`, … |
 | `BLUMIRA_JWT_TOKEN` | ✅ | blumira-mcp | Long-lived JWT from Blumira → Integrations → API. |
@@ -324,7 +328,8 @@ The canonical list lives in [`.env.template`](.env.template). Empty values are t
 ## Authentication & Authorization
 
 | Vendor | Flow | Token caching | Required scopes / roles |
-| --- | --- | --- | --- || Auvik | Static API key | n/a | API access enabled on the portal user. |
+| --- | --- | --- | --- |
+| Auvik | Static API key | n/a | API access enabled on the portal user. |
 | Blumira | Long-lived JWT | n/a | Generated under Integrations → API. |
 | CIPP (legacy) | Static bearer | n/a | Granted by CIPP admin. |
 | CIPP (modern) | OAuth2 client_credentials against Entra ID | ~1h | App registration with delegated access to CIPP-API. See `mcp_servers/connectwise-manage-mcp/entra-app-registration.md`. |
@@ -338,7 +343,8 @@ The canonical list lives in [`.env.template`](.env.template). Empty values are t
 ### Common failure modes
 
 | Symptom | Likely cause | Fix |
-| --- | --- | --- || `401 Unauthorized` | Wrong key / expired token | Re-mint, double-check env var spelling. |
+| --- | --- | --- |
+| `401 Unauthorized` | Wrong key / expired token | Re-mint, double-check env var spelling. |
 | `403 Forbidden` on a specific tool | API user lacks role for that endpoint | Add the missing role in the vendor portal (e.g. CIPP `ListTenants` needs tenant-read). |
 | `406 Not Acceptable` | Wrong `Accept` header (seen on Paylocity token endpoint) | Verify content-type negotiation; check vendor changelog. |
 | `429` from Vanta during boot | Hammering the 5 req/min token endpoint | Reuse a single MCP server instance; do not restart in a loop. |
@@ -357,16 +363,17 @@ The canonical list lives in [`.env.template`](.env.template). Empty values are t
 ## MCP Servers
 
 | Package | Version | Vendor | Bundle |
-| --- | --- | --- | --- || [`auvik-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/auvik-mcp) | 0.4.0 | Auvik network monitoring | `auvik-mcp.mcpb` |
-| [`blumira-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/blumira-mcp) | 1.1.0 | Blumira SIEM/XDR | `blumira-mcp.mcpb` |
-| [`cipp-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/cipp-mcp) | 0.2.0 | CIPP -- M365 MSP control plane | `cipp-mcp.mcpb` |
-| [`connectwise-manage-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/connectwise-manage-mcp) | 0.1.0 | ConnectWise Manage PSA | `connectwise-manage-mcp.mcpb` |
-| [`kaseya-spanning-backup-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/kaseya-spanning-backup-mcp) | 1.1.0 | Kaseya Spanning -- SaaS backup for M365/GWS/Salesforce | `kaseya-spanning-backup-mcp.mcpb` |
-| [`knowbe4-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/knowbe4-mcp) | 1.1.0 | KnowBe4 security awareness | `knowbe4-mcp.mcpb` |
-| [`ninjaone-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/ninjaone-mcp) | 1.6.0 | NinjaOne RMM | `ninjaone-mcp.mcpb` |
-| [`paylocity-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/paylocity-mcp) | 0.1.1 | Paylocity HR/payroll | `paylocity-mcp.mcpb` |
-| [`threatlocker-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/threatlocker-mcp) | 1.2.0 | ThreatLocker zero-trust EDR | `threatlocker-mcp.mcpb` |
-| [`vanta-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/vanta-mcp) | 0.2.0 | Vanta GRC / compliance | `vanta-mcp.mcpb` |
+| --- | --- | --- | --- |
+| [`auvik-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/auvik-mcp) | 0.4.0 | Auvik network monitoring | `auvik-mcp.mcpb` |
+| [`blumira-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/blumira-mcp) | 1.1.0 | Blumira SIEM/XDR | `blumira-mcp.mcpb` |
+| [`cipp-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/cipp-mcp) | 0.2.0 | CIPP -- M365 MSP control plane | `cipp-mcp.mcpb` |
+| [`connectwise-manage-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/connectwise-manage-mcp) | 0.1.0 | ConnectWise Manage PSA | `connectwise-manage-mcp.mcpb` |
+| [`kaseya-spanning-backup-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/kaseya-spanning-backup-mcp) | 1.1.0 | Kaseya Spanning -- SaaS backup for M365/GWS/Salesforce | `kaseya-spanning-backup-mcp.mcpb` |
+| [`knowbe4-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/knowbe4-mcp) | 1.1.0 | KnowBe4 security awareness | `knowbe4-mcp.mcpb` |
+| [`ninjaone-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/ninjaone-mcp) | 1.6.0 | NinjaOne RMM | `ninjaone-mcp.mcpb` |
+| [`paylocity-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/paylocity-mcp) | 0.1.1 | Paylocity HR/payroll | `paylocity-mcp.mcpb` |
+| [`threatlocker-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/threatlocker-mcp) | 1.2.0 | ThreatLocker zero-trust EDR | `threatlocker-mcp.mcpb` |
+| [`vanta-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/vanta-mcp) | 0.2.0 | Vanta GRC / compliance | `vanta-mcp.mcpb` |
 
 Every server speaks MCP over **stdio JSON-RPC** and registers its tools/resources via `@modelcontextprotocol/sdk`.
 
@@ -374,7 +381,8 @@ Every server speaks MCP over **stdio JSON-RPC** and registers its tools/resource
 <summary><strong>Last verified tool counts and status (2026-06-09)</strong></summary>
 
 | Server | Status | Tools | Notes |
-| --- | --- | --- | --- || auvik | PASS | 39 | |
+| --- | --- | --- | --- |
+| auvik | PASS | 39 | |
 | blumira | SKIP | 30 | missing `BLUMIRA_JWT_TOKEN`; count from source, mcpb bundle pending rebuild |
 | cipp | FAIL | 43 | HTTP 401 -- CIPP tenant permission issue (pre-existing); `tools/list` confirmed 43 tools boot correctly [1] |
 | connectwise | PASS | 52 | |
@@ -400,7 +408,8 @@ All 27 plugins live under `plugins/` and are listed in the marketplace manifest 
 **MSP vendor plugins** (10) -- each wraps one vendor's MCP server:
 
 | Plugin | MCP Deps | Skills | Slash Commands |
-| --- | --- | --- | --- || [`msp-command-center`](plugins/msp-command-center) | auvik, cipp, connectwise, knowbe4, ninjaone, threatlocker | `client-360`, `cross-platform-incident`, `morning-briefing` | `/briefing`, `/client`, `/incident` |
+| --- | --- | --- | --- |
+| [`msp-command-center`](plugins/msp-command-center) | auvik, cipp, connectwise, knowbe4, ninjaone, threatlocker | `client-360`, `cross-platform-incident`, `morning-briefing` | `/briefing`, `/client`, `/incident` |
 | [`msp-tool-bridge-ops`](plugins/msp-tool-bridge-ops) | connectwise-manage, ninjaone | `cw-ticket-device-troubleshoot`, `ninja-device-ticket-sync` | `/cw-device-triage`, `/ninja-ticket-sync` |
 | [`auvik-network-ops`](plugins/auvik-network-ops) | auvik | `bandwidth-hog-hunt`, `config-drift-watch`, `network-triage` | `/auvik-triage` |
 | [`cipp-m365-ops`](plugins/cipp-m365-ops) | cipp | `bec-rapid-response`, `full-offboard`, `suspicious-signin-hunt`, `tenant-health-sweep` | `/cipp-morning` |
@@ -415,7 +424,8 @@ All 27 plugins live under `plugins/` and are listed in the marketplace manifest 
 **Knowledge-worker and platform plugins** (16) -- no MCP server dependency:
 
 | Plugin | Purpose |
-| --- | --- || `brand-voice` | Discover, enforce, and generate brand voice guidelines across content |
+| --- | --- |
+| `brand-voice` | Discover, enforce, and generate brand voice guidelines across content |
 | `cowork-plugin-management` | Manage Claude Code plugin installations and marketplace entries |
 | `customer-support` | Customer support workflow skills (ticket routing, response drafting) |
 | `data` | Data analysis and transformation skills |
@@ -436,16 +446,16 @@ All 27 plugins live under `plugins/` and are listed in the marketplace manifest 
 
 ### Plugin Marketplace
 
-The repo ships a marketplace manifest at `.claude-plugin/marketplace.json`. Once the repo is published as `W159/aikit`:
+The repo ships a marketplace manifest at `.claude-plugin/marketplace.json` (marketplace name: `aikit`). Once the repo is published at `w159/tech-tools`:
 
 ```bash
-# Add all plugins from the marketplace registry
-claude plugin marketplace add W159/aikit
+# Add all plugins from the marketplace registry (GitHub repo slug)
+claude plugin marketplace add w159/tech-tools
 
 # Or install from a local clone
-claude plugin marketplace add ./path/to/aikit
+claude plugin marketplace add ./path/to/tech-tools
 
-# Install a specific plugin by name
+# Install a specific plugin by name (suffix is the marketplace name)
 claude plugin install auvik-network-ops@aikit
 ```
 
@@ -458,7 +468,8 @@ The Claude Code `/plugin` Discover tab will list all marketplace entries once th
 The `skills/` directory ships 13 curated skills installable into any Claude Code workspace. These are standalone -- they do not require any MCP server from this repo.
 
 | Skill | Purpose |
-| --- | --- || `az-cost-optimize` | Azure cost analysis and optimization recommendations |
+| --- | --- |
+| `az-cost-optimize` | Azure cost analysis and optimization recommendations |
 | `azure-deployment-preflight` | Pre-flight checks before Azure resource deployments |
 | `cloud-design-patterns` | Apply Azure cloud design patterns to architecture decisions |
 | `codebase-brain` | Give a codebase persistent memory and a self-validation gate |
@@ -479,13 +490,14 @@ The previous 25-skill set was consolidated to 13 in June 2026. Skills that were 
 The MCP servers depend on these standalone, typed Node.js clients. You can use them directly from any Node project — they have no MCP coupling.
 
 | Package | Version | Purpose |
-| --- | --- | --- || [`node-auvik`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_node/node-auvik) | 1.0.0 | Auvik network monitoring API client. |
-| [`node-blumira`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_node/node-blumira) | 1.0.1 | Blumira SIEM API client. |
-| [`node-ninjaone`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_node/node-ninjaone) | 1.1.2 | NinjaOne / NinjaRMM API client — comprehensive, fully typed. |
-| [`node-paylocity`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_node/node-paylocity) | 1.0.0 | Paylocity REST API client. |
-| [`node-spanning`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_node/node-spanning) | 1.0.2 | Spanning Cloud Backup API client (M365 / GWS / SF). |
-| [`node-threatlocker`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_node/node-threatlocker) | 1.0.3 | ThreatLocker Portal API client. |
-| [`node-vanta`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_node/node-vanta) | 1.0.0 | Vanta REST API client. |
+| --- | --- | --- |
+| [`node-auvik`](https://github.com/w159/tech-tools/tree/main/mcp_node/node-auvik) | 1.0.0 | Auvik network monitoring API client. |
+| [`node-blumira`](https://github.com/w159/tech-tools/tree/main/mcp_node/node-blumira) | 1.0.1 | Blumira SIEM API client. |
+| [`node-ninjaone`](https://github.com/w159/tech-tools/tree/main/mcp_node/node-ninjaone) | 1.1.2 | NinjaOne / NinjaRMM API client — comprehensive, fully typed. |
+| [`node-paylocity`](https://github.com/w159/tech-tools/tree/main/mcp_node/node-paylocity) | 1.0.0 | Paylocity REST API client. |
+| [`node-spanning`](https://github.com/w159/tech-tools/tree/main/mcp_node/node-spanning) | 1.0.2 | Spanning Cloud Backup API client (M365 / GWS / SF). |
+| [`node-threatlocker`](https://github.com/w159/tech-tools/tree/main/mcp_node/node-threatlocker) | 1.0.3 | ThreatLocker Portal API client. |
+| [`node-vanta`](https://github.com/w159/tech-tools/tree/main/mcp_node/node-vanta) | 1.0.0 | Vanta REST API client. |
 
 Each ships dual ESM/CJS bundles + `.d.ts` via `tsup`, and is fully unit-tested via `vitest`.
 
@@ -613,7 +625,7 @@ type ToolResult = {
   // Most servers return text containing pretty-printed JSON
   // so the LLM can reason over it directly.
 };
-```text
+```
 
 For the **typed object models** (`Ticket`, `Device`, `Alert`, `User`, `Tenant`, etc.) see each `node-<vendor>/src/types/` directory — these are the source of truth and are emitted as `.d.ts` declarations.
 
@@ -646,7 +658,7 @@ npm install
 npm test           # vitest
 npm run build      # tsup / tsc — must succeed before pack
 npm run pack       # produces <name>.mcpb (servers only)
-```text
+```
 
 ### CI
 
@@ -657,7 +669,8 @@ Existing GitHub Actions workflows have been **intentionally disabled** (renamed 
 ## Scripts & Automation
 
 | Script | Where | Purpose |
-| --- | --- | --- || `npm run build` | each `mcp_servers/*` and `mcp_node/*` | tsup/tsc → `dist/` |
+| --- | --- | --- |
+| `npm run build` | each `mcp_servers/*` and `mcp_node/*` | tsup/tsc → `dist/` |
 | `npm test` | each package | vitest |
 | `npm run pack` | each `mcp_servers/*` | Calls `_shared/pack-mcpb.js` to produce `<name>.mcpb` |
 | `node test-mcp-tools.mjs` | repo root | End-to-end MCP server tester |
@@ -741,7 +754,8 @@ If you add an endpoint, also add or update the markdown page in `docs/vendors/<v
 ## Troubleshooting
 
 | Issue | Diagnosis |
-| --- | --- || **`Server SKIPPED` in `test-mcp-tools.mjs`** | A required env var is blank in `.env`. Open `.env.template` for the list. |
+| --- | --- |
+| **`Server SKIPPED` in `test-mcp-tools.mjs`** | A required env var is blank in `.env`. Open `.env.template` for the list. |
 | **`401 Unauthorized`** | Wrong key, wrong region, or revoked credentials. Re-issue and re-paste. |
 | **`403 Forbidden`** on a specific tool | The API user lacks role for that endpoint. Check vendor portal role assignment. |
 | **`406 Not Acceptable`** (Paylocity) | Token-endpoint negotiating wrong content-type — confirm the Paylocity app is approved for the `accounting` / `payroll` scope you expect. |

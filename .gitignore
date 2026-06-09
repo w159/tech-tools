@@ -29,7 +29,7 @@
 #   - TypeScript/Node.js monorepo with three top-level domains:
 #       mcp_node/    — 7 SDK client libraries (node-auvik, node-blumira, etc.)
 #       mcp_servers/ — 10 MCP server packages (auvik-mcp, cipp-mcp, etc.)
-#       plugins/     — 10 Claude plugin definitions
+#       plugins/     — 27 Claude plugin definitions (marketplace)
 #   - *.mcpb bundle files are NOT tracked — GitHub's 100 MB hard limit blocks pushes
 #     once bundled node_modules grow past it. Bundles are published as GitHub Release
 #     artifacts; rebuild locally with `npm run pack:mcpb` inside each server dir.
@@ -208,6 +208,11 @@ firebase-adminsdk*.json
 **/coverage/
 **/coverage/**
 **/.eslintcache
+
+# ---- Generated knowledge-graph output (graphify skill) ----
+# These cache files embed absolute /Users/<name>/... paths — never commit them.
+**/graphify-out/
+**/graphify-out/**
 
 # ---- Downloaded / auto-generated archives ----
 mcp_servers/*.zip
