@@ -1,7 +1,7 @@
 {
   "manifest_version": "0.3",
   "name": "vanta-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "display_name": "Vanta MCP Server",
   "description": "Query Vanta GRC compliance data — frameworks, controls, tests, evidence, vendors, vulnerabilities, and policies — for compliance AI agents.",
   "long_description": "Provides AI assistants with structured access to your Vanta GRC data. Browse frameworks (SOC 2, ISO 27001, HIPAA, etc.), inspect controls and test results, hunt evidence-document gaps, review vendor risk, triage vulnerabilities, and pull integration resource inventories. OAuth2 client_credentials auth with proactive token refresh and cursor-based pagination.",
@@ -49,9 +49,9 @@
     "vanta_base_url": {
       "type": "string",
       "title": "Vanta API base URL",
-      "description": "Prefilled with the production default. Override only for staging/sovereign shards.",
+      "description": "Optional. Leave blank to use the vendor default (https://api.vanta.com/v1). Only set for staging/sovereign shards.",
       "required": false,
-      "default": "https://api.vanta.com/v1"
+      "default": ""
     }
   },
   "compatibility": {

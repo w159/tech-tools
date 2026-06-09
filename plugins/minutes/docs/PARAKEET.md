@@ -1,0 +1,447 @@
+# Parakeet Engine Setup
+
+Minutes supports [parakeet.cpp](https://github.com/Frikallo/parakeet.cpp) as an alternative
+transcription engine. Parakeet uses NVIDIA's FastConformer architecture and achieves lower
+word error rates than Whisper at equivalent model sizes, with dramatically faster inference
+on Apple Silicon via Metal GPU acceleration.
+
+## Why Parakeet?
+
+| Engine | Model | Params | LibriSpeech Clean WER | Speed (10s audio, M-series GPU) |
+|--------|-------|--------|----------------------|--------------------------------|
+| Whisper | small (default) | 244M | 3.4% | ~200ms |
+| Whisper | medium | 769M | 2.9% | ~600ms |
+| Whisper | large-v3 | 1.55B | 2.4% | ~1.5s |
+| **Parakeet** | **tdt-ctc-110m** | **110M** | **2.4%** | **~27ms** |
+| **Parakeet** | **tdt-600m** | **600M** | **1.7%** | **~520ms** |
+
+Parakeet's 110M model matches Whisper large-v3 accuracy at 14x fewer parameters.
+The 600M model beats everything in its class.
+
+## Scope
+
+Today, `engine = "parakeet"` is wired for these paths:
+
+- post-recording batch transcription (`minutes process`, desktop processing, and the shared cleanup pipeline)
+- folder watcher memo processing after a file lands on disk
+- recording-sidecar live transcription during `minutes record`
+- standalone live transcription (`minutes live` and desktop Live Mode) — see RFC 0002
+
+Both live paths route each VAD-gated utterance through the Parakeet path. If
+`parakeet_sidecar_enabled = true`, they reuse the warm `example-server` socket;
+otherwise they fall back to the Parakeet subprocess path for each utterance.
+The standalone live path additionally warms the sidecar at session start so the
+first utterance does not pay the subprocess-spawn + model-load cost.
+
+Parakeet also participates in the experimental Apple Speech standalone-live
+path as the **first runtime fallback**. If `engine = "apple-speech"` is set for
+`minutes live` and Apple Speech cannot run or fails mid-session, Minutes tries
+a ready Parakeet backend before falling back to Whisper. Apple Speech itself is
+still configured separately and remains standalone-live-only; this note is just
+about the fallback order behind that path. See [`docs/APPLE_SPEECH.md`](APPLE_SPEECH.md)
+for the current Apple Speech scope and desktop-settings limitation.
+
+Strongly recommended for live use: set `parakeet_sidecar_enabled = true` and
+ensure `example-server` is discoverable (either on `PATH` or via
+`MINUTES_PARAKEET_SERVER_BINARY`). Without the warm sidecar, every live
+utterance incurs full subprocess startup, which makes live mode visibly slow.
+
+Dictation remains Whisper by default because its overlay depends on fast
+mid-utterance partials. You can opt into Parakeet for final utterance
+transcription with:
+
+```toml
+[dictation]
+backend = "parakeet"
+```
+
+In that mode, Whisper still powers progressive partial text while Parakeet is
+used at VAD-finalization when the installed/compiled backend is ready. If
+Parakeet is unavailable or fails for an utterance, dictation falls back to
+Whisper for that utterance.
+
+If Parakeet support is not compiled into the current build, Minutes logs a
+warning and falls back to Whisper for live and dictation paths.
+
+Note: both live paths still require the `whisper` Cargo feature to be compiled
+in. Whisper is the runtime fallback when Parakeet fails mid-session (warmup
+error, sidecar unreachable, transcription failure), so builds with
+`--features parakeet` and `--no-default-features` (no whisper) cannot run
+`minutes live` — the session errors out immediately. Whisper is a default
+feature, so this only matters for unusual build configurations.
+
+## Fastest Path on Apple Silicon
+
+If you want the shortest path from "I have a Mac" to "Minutes is using
+Parakeet locally on Metal," do this. Each step is a separate command — do
+not paste TOML into the shell; step 4 writes a file.
+
+Prerequisites first (see [Prerequisites](#prerequisites) for details):
+- Full Xcode installed (Command Line Tools alone is not enough — Metal needs
+  the full Xcode shader compiler)
+- CMake 3.x. CMake 4.x trips both an atomics check and a new
+  `install(EXPORT)` strictness rule in parakeet.cpp's `axiom` submodule
+  (`target "axiom" ... requires target "hwy" that is not in any export set`).
+  Easiest fix: `brew install cmake@3` and prepend it on `PATH` for the
+  parakeet.cpp build. See [Troubleshooting](#troubleshooting).
+
+```bash
+# 1. Build and install parakeet.cpp — clone OUTSIDE the Minutes repo
+mkdir -p ~/src && cd ~/src
+git clone --recursive https://github.com/Frikallo/parakeet.cpp
+cd parakeet.cpp
+make build
+mkdir -p ~/.local/bin
+cp build/bin/parakeet ~/.local/bin/
+# Also copy the warm-sidecar binary. Without this, live mode (minutes live
+# and the recording sidecar) falls back to spawning a fresh subprocess for
+# every utterance — visibly slow because the model has to reload each time.
+cp build/bin/example-server ~/.local/bin/
+
+# 2. Build the Minutes CLI WITH the parakeet feature, then install it
+cd <path/to/your/minutes/checkout>     # e.g. ~/Sites/minutes
+cargo build --release -p minutes-cli --features parakeet
+mkdir -p ~/.local/bin
+cp target/release/minutes ~/.local/bin/minutes
+# Make sure ~/.local/bin is on PATH (add to ~/.zshrc if it isn't):
+#   export PATH="$HOME/.local/bin:$PATH"
+
+# 3. Download the multilingual model + Silero VAD weights
+minutes setup --parakeet
+```
+
+4. Edit `~/.config/minutes/config.toml` so it contains the following.
+   The block goes **inside the file**, not into the shell:
+
+```toml
+[transcription]
+engine = "parakeet"
+parakeet_model = "tdt-600m"
+parakeet_binary = "/Users/<you>/.local/bin/parakeet"
+parakeet_vocab = "tdt-600m.tokenizer.vocab"
+# Reuse the warm example-server socket for live mode instead of spawning
+# a fresh subprocess per utterance. Requires step 1's example-server copy.
+parakeet_sidecar_enabled = true
+```
+
+That gives you the validated multilingual path:
+- `tdt-600m`
+- local `parakeet.cpp`
+- local Metal GPU acceleration on Apple Silicon
+
+If you want the smaller English-only model instead, set
+`parakeet_model = "tdt-ctc-110m"` and
+`parakeet_vocab = "tdt-ctc-110m.tokenizer.vocab"` in the same file.
+
+Minutes will continue to run locally either way.
+
+## Important macOS note for desktop users
+
+If you launch Minutes from Finder, Spotlight, or the Dock, the app may not see
+the same `PATH` as your shell.
+
+That means this can work in Terminal:
+
+```bash
+which parakeet
+```
+
+but the desktop app can still fail with "parakeet binary not found."
+
+For the desktop app, prefer an **absolute path** in `config.toml`:
+
+```toml
+[transcription]
+parakeet_binary = "/Users/you/.local/bin/parakeet"
+```
+
+Common macOS install locations:
+- `/opt/homebrew/bin/parakeet`
+- `/usr/local/bin/parakeet`
+- `/Users/you/.local/bin/parakeet`
+
+## Prerequisites
+
+### macOS (Apple Silicon)
+
+Full Xcode is required for Metal GPU acceleration (the shader compiler is not
+included in Command Line Tools).
+
+```bash
+# 1. Install Xcode from the App Store (if not already installed)
+#    Or: mas install 497799835
+
+# 2. Accept the license
+sudo xcodebuild -license accept
+
+# 3. Switch developer directory to Xcode
+sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+# 4. Download the Metal Toolchain
+xcodebuild -downloadComponent MetalToolchain
+```
+
+### Linux / Windows (parakeet.cpp, CPU only)
+
+parakeet.cpp does not yet have CUDA support (WIP in the axiom tensor library).
+CPU-only builds work but lose the speed advantage. Monitor the
+[parakeet.cpp repo](https://github.com/Frikallo/parakeet.cpp) for CUDA updates.
+
+### Linux with an NVIDIA GPU (NeMo wrapper, CUDA)
+
+If you have an NVIDIA GPU on Linux, NVIDIA's [NeMo toolkit](https://github.com/NVIDIA/NeMo)
+supports Parakeet natively with full CUDA acceleration. The `parakeet_binary`
+config key accepts any executable that follows the parakeet.cpp CLI contract,
+so you can point it at a small Python wrapper around NeMo and get GPU-backed
+transcription without waiting on parakeet.cpp CUDA support.
+
+This approach was contributed by [@ed0c](https://github.com/silverstein/minutes/issues/122).
+Tested on an RTX 3090 with CUDA 13.2: a 68-minute French meeting transcribes
+in about 3.5 minutes total, with quality that beats Whisper large-v3 on
+mixed-language audio.
+
+**1. Create a Python venv with NeMo**
+
+```bash
+python3 -m venv ~/parakeet-env
+source ~/parakeet-env/bin/activate
+pip install nemo_toolkit[asr]
+```
+
+**2. Create the wrapper script**
+
+Save this as `~/bin/parakeet-nemo` (or any path you control) and `chmod +x` it:
+
+```bash
+#!/bin/bash
+source ~/parakeet-env/bin/activate
+
+python3 - "$@" << 'EOF'
+import sys
+import os
+import contextlib
+
+os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
+
+audio_files = [a for a in sys.argv[1:] if a.endswith('.wav')]
+if not audio_files:
+    sys.exit(0)
+
+with contextlib.redirect_stdout(sys.stderr):
+    import nemo.collections.asr as nemo_asr
+    model = nemo_asr.models.ASRModel.from_pretrained('nvidia/parakeet-tdt-0.6b-v3')
+    model = model.cuda()
+
+output = model.transcribe(audio_files, timestamps=True)
+for result in output:
+    segments = result.timestamp.get('segment', [])
+    if segments:
+        for seg in segments:
+            text = seg['segment'].strip()
+            if text:
+                sys.stdout.write(f"[{seg['start']:.2f} - {seg['end']:.2f}] {text}\n")
+                sys.stdout.flush()
+    elif result.text.strip():
+        sys.stdout.write(f"[0.00 - 1.00] {result.text.strip()}\n")
+        sys.stdout.flush()
+EOF
+```
+
+**3. Point Minutes at it**
+
+In `~/.config/minutes/config.toml`:
+
+```toml
+[transcription]
+engine = "parakeet"
+parakeet_binary = "/home/you/bin/parakeet-nemo"
+parakeet_model = "tdt-600m"
+parakeet_vocab = "tdt-600m.tokenizer.vocab"
+```
+
+**Known limitation: per-chunk model reload**
+
+Minutes invokes the parakeet binary once per audio chunk, so the NeMo
+wrapper reloads the model from disk cache on every call (about 4 to 5
+seconds of overhead per chunk). For long recordings this adds up. A
+persistent daemon that keeps the model resident in VRAM eliminates the
+reload cost; see [#122](https://github.com/silverstein/minutes/issues/122)
+if you want to help land one.
+
+## Build parakeet.cpp
+
+```bash
+# Clone with submodules
+git clone --recursive https://github.com/Frikallo/parakeet.cpp
+cd parakeet.cpp
+
+# Build (macOS with Metal)
+make build
+
+# If CMake 4.x fails with "Neither lock free instructions nor -latomic found",
+# patch third_party/axiom/third_party/highway/cmake/FindAtomics.cmake:
+# Replace the check_cxx_source_compiles block with an Apple arm64 short-circuit.
+# See: https://github.com/google/highway/issues/XXXX
+
+# Install the binaries
+cp build/bin/parakeet ~/.local/bin/
+# Warm-sidecar binary: required for live mode to reuse a single loaded
+# model across utterances instead of spawning a fresh subprocess each time.
+cp build/bin/example-server ~/.local/bin/
+```
+
+## Install Models
+
+Parakeet models are distributed as `.nemo` files on HuggingFace and must be
+converted to safetensors format.
+
+```bash
+# Install Python dependencies
+pip install safetensors torch torchaudio huggingface_hub
+
+# Option A: Use Minutes setup (recommended)
+minutes setup --parakeet                           # Multilingual v3 (tdt-600m, ~1.2 GB)
+minutes setup --parakeet --parakeet-model tdt-ctc-110m # English-only compact model (~220 MB)
+# Installs native Silero VAD weights automatically
+
+# Option B: Manual download and conversion
+hf download nvidia/parakeet-tdt-0.6b-v3 parakeet-tdt-0.6b-v3.nemo --local-dir .
+cd parakeet.cpp
+mkdir -p ~/.minutes/models/parakeet/tdt-600m
+python scripts/convert_nemo.py parakeet-tdt-0.6b-v3.nemo -o ~/.minutes/models/parakeet/tdt-600m/tdt-600m.safetensors --model 600m-tdt
+
+# Also convert Silero VAD weights manually only if you are not using `minutes setup`
+python scripts/convert_silero_vad.py -o ~/.minutes/models/parakeet/silero_vad_v5.safetensors
+
+# Extract the SentencePiece tokenizer vocab and store it with a model-specific name
+tar xf parakeet-tdt-0.6b-v3.nemo --wildcards --no-anchored '*tokenizer.vocab'
+cp *_tokenizer.vocab ~/.minutes/models/parakeet/tdt-600m/tdt-600m.tokenizer.vocab
+```
+
+`parakeet.cpp` expects the SentencePiece `tokenizer.vocab` file, not the
+plain extracted `vocab.txt`. If you install more than one Parakeet model,
+store each model in its own directory and use model-specific filenames such
+as `tdt-ctc-110m/tdt-ctc-110m.tokenizer.vocab` and
+`tdt-600m/tdt-600m.tokenizer.vocab` so model switches stay deterministic.
+
+## Configure Minutes
+
+### Config file
+
+Edit `~/.config/minutes/config.toml`:
+
+```toml
+[transcription]
+engine = "parakeet"              # "whisper" (default) or "parakeet"
+parakeet_model = "tdt-600m"      # "tdt-ctc-110m" (English) or "tdt-600m" (multilingual v3)
+parakeet_binary = "/Users/you/.local/bin/parakeet"  # Prefer an absolute path for desktop app launches
+parakeet_sidecar_enabled = true  # Reuse warm example-server socket for live mode (requires example-server copied above)
+parakeet_boost_limit = 25        # Experimental: top graph-derived boost phrases (0 disables)
+parakeet_boost_score = 2.0       # Experimental tuning for parakeet.cpp --boost-score
+parakeet_fp16 = true             # Default on macOS Apple Silicon: ~35% faster transcription with lower GPU memory (see docs/designs/parakeet-perf-2026-04-14.md)
+parakeet_vocab = "tdt-600m.tokenizer.vocab"  # Safer when multiple Parakeet models are installed
+```
+
+### Tauri Desktop App
+
+Settings > Transcription > Engine dropdown. Select "Parakeet", then choose the
+model. On macOS, Finder-launched apps may not inherit your shell `PATH`, so
+desktop users should usually configure `parakeet_binary` as an absolute path.
+
+## Language Support
+
+| Model | Languages |
+|-------|-----------|
+| tdt-ctc-110m | English only |
+| tdt-600m (v3) | 25 European languages: Bulgarian, Croatian, Czech, Danish, Dutch, English, Estonian, Finnish, French, German, Greek, Hungarian, Italian, Latvian, Lithuanian, Maltese, Polish, Portuguese, Romanian, Russian, Slovak, Slovenian, Spanish, Swedish, Ukrainian |
+
+For languages outside this list, use Whisper (99 languages supported).
+
+## Building Minutes with Parakeet Support
+
+The `parakeet` Cargo feature must be enabled at build time:
+
+```bash
+# CLI only
+cargo build --release -p minutes-cli --features parakeet
+
+# Tauri desktop app
+TAURI_FEATURES="parakeet" cargo tauri build --bundles app
+
+# Or use the build script (add parakeet feature)
+cargo build --release -p minutes-cli --features parakeet
+```
+
+For local macOS builds in this repo, prefer the helper scripts because they keep the CLI and desktop app aligned on the same feature set:
+
+```bash
+MINUTES_BUILD_FEATURES=parakeet,metal ./scripts/build.sh
+MINUTES_BUILD_FEATURES=parakeet,metal ./scripts/install-dev-app.sh
+```
+
+Note: The `parakeet` feature is opt-in and not included in the default build.
+Whisper is always compiled in (it's the default feature). Both engines can coexist
+in the same binary — the config file selects the offline/batch path plus both
+live transcription paths (`minutes record` sidecar and standalone `minutes live`).
+Dictation still uses Whisper. See [Scope](#scope).
+
+## Switching Back to Whisper
+
+Change `engine = "whisper"` in config.toml, or use the Tauri settings UI.
+No rebuild needed — both engines are compiled in when the `parakeet` feature is enabled.
+
+## Troubleshooting
+
+### "parakeet binary not found"
+The `parakeet` executable is not in your PATH. Either:
+- Add its location to PATH: `export PATH="$PATH:/path/to/parakeet.cpp/build/bin"`
+- Or set the full path in config: `parakeet_binary = "/path/to/parakeet"`
+
+On macOS desktop builds, the second option is more reliable because Finder /
+Spotlight / Dock launches may not inherit the same shell `PATH` that Terminal
+sees.
+
+### "unknown parakeet model"
+Only `tdt-ctc-110m` and `tdt-600m` are supported. Check your config.
+
+### "Expected parakeet model in ~/.minutes/models/parakeet/"
+Run `minutes setup --parakeet` to install the recommended Parakeet model plus
+native VAD weights, or follow the manual download steps above.
+
+### CMake 4.x atomics error (build)
+Google Highway's `FindAtomics.cmake` is incompatible with CMake 4.x on Apple Silicon.
+The atomics check fails because it forces `CMAKE_CXX_STANDARD 11` which conflicts with
+the project's C++20. Workaround: patch the check to short-circuit on `APPLE AND arm64`.
+
+### CMake 4.x axiom export-set error (build)
+
+On CMake 4.x you may also see:
+
+```
+CMake Error in third_party/axiom/CMakeLists.txt:
+  install(EXPORT "AxiomTargets" ...) includes target "axiom" which requires
+  target "hwy" that is not in any export set.
+```
+
+CMake 4.x tightened `install(EXPORT)` rules; parakeet.cpp's `axiom` submodule
+exports `axiom` but does not export its `hwy` dependency, which the new rule
+rejects. Easiest workaround is to build with CMake 3.x:
+
+```bash
+brew install cmake@3
+export PATH="$(brew --prefix cmake@3)/bin:$PATH"
+cmake --version    # confirm 3.x is now first
+cd ~/src/parakeet.cpp
+rm -rf build
+make build
+```
+
+Only the parakeet.cpp build needs CMake 3.x; you can leave CMake 4.x on
+`PATH` for the rest of your system once parakeet is built.
+
+### Metal shader compiler not found (build)
+Requires full Xcode (not just Command Line Tools):
+```bash
+sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+xcodebuild -downloadComponent MetalToolchain
+```

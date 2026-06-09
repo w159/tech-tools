@@ -1,0 +1,17 @@
+{
+  "name": "operations",
+  "version": "1.0.0",
+  "description": "Change management, process optimization, resource planning, risk assessment, compliance tracking, and vendor management for operations teams.",
+  "keywords": [
+    "operations",
+    "change-management",
+    "process",
+    "risk",
+    "compliance",
+    "vendor-management"
+  ],
+  "author": {
+    "name": "Jerry",
+    "email": "jmorg83@gmail.com"
+  }
+}

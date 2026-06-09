@@ -2,16 +2,41 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { DomainHandler, CallToolResult } from '../utils/types.js';
 import { getClient } from '../utils/client.js';
 import { logger } from '../utils/logger.js';
+import {
+  shapeList,
+  shapeItem,
+  extractShapeArgs,
+  SHAPE_PROPS,
+  toolError,
+  toolErrorFromCatch,
+  unknownTool,
+  type SummaryFn,
+} from './_helpers.js';
+
+// Compact summary: enough to identify the user and understand their backup state.
+const userSummary: SummaryFn = (u) => ({
+  userId:           u['userId']           ?? u['id'],
+  email:            u['email']            ?? u['userPrincipalName'],
+  displayName:      u['displayName']      ?? u['name'],
+  backupEnabled:    u['backupEnabled']    ?? u['isBackupEnabled'],
+  assignedLicense:  u['assignedLicense']  ?? u['licenseAssigned'],
+  lastBackupStatus: u['lastBackupStatus'] ?? u['status'],
+  lastBackupDate:   u['lastBackupDate']   ?? u['lastBackup'],
+});
 
 function getTools(): Tool[] {
   return [
     {
       name: 'spanning_users_list',
-      description: 'List Spanning backed-up users (one page). Returns user IDs and backup status. Cursor-paginated — pass cursor from previous response to get next page.',
+      description:
+        'Returns one page of Spanning backed-up users with their backup-enabled state and last-backup status. ' +
+        'Cursor-paginated — pass cursor from the previous response to advance. ' +
+        'Use spanning_users_get to fetch a single user by ID.',
       inputSchema: {
         type: 'object' as const,
         properties: {
-          limit: { type: 'number', description: 'Page size — users per page (integer 1-500, default: 100).' },
+          ...SHAPE_PROPS,
+          limit:  { type: 'number', description: 'Page size — users per page (integer 1-500, default 100).' },
           cursor: { type: 'string', description: 'Opaque cursor returned from the previous page response.' },
         },
       },
@@ -19,21 +44,30 @@ function getTools(): Tool[] {
     {
       name: 'spanning_users_list_all',
       description:
-        'Iterate every backed-up user across all pages and return the full collection. Use sparingly on large tenants — Spanning enforces 100 req/min.',
+        'Iterates every backed-up user across all pages and returns the full collection. ' +
+        'Use sparingly on large tenants — Spanning enforces 100 req/min. ' +
+        'Prefer spanning_users_list with cursor pagination for large orgs.',
       inputSchema: {
         type: 'object' as const,
         properties: {
-          limit: { type: 'number', description: 'Page size per fetch (integer 1-500, default: 100).' },
+          ...SHAPE_PROPS,
+          limit:    { type: 'number', description: 'Page size per fetch (integer 1-500, default 100).' },
           maxItems: { type: 'number', description: 'Optional hard cap on total items returned across all pages.' },
         },
       },
     },
     {
       name: 'spanning_users_get',
-      description: 'Get a single Spanning backed-up user by userId (required). Returns backup enabled state, email, and per-service summary.',
+      description:
+        'Returns a single Spanning backed-up user by userId (required). ' +
+        'Includes backup-enabled state, email, and per-service summary. ' +
+        'Obtain userId from spanning_users_list.',
       inputSchema: {
         type: 'object' as const,
-        properties: { userId: { type: 'string', description: 'Spanning user ID.' } },
+        properties: {
+          ...SHAPE_PROPS,
+          userId: { type: 'string', description: 'Spanning user ID (required) — opaque string from spanning_users_list.' },
+        },
         required: ['userId'],
       },
     },
@@ -41,47 +75,76 @@ function getTools(): Tool[] {
 }
 
 async function handleCall(toolName: string, args: Record<string, unknown>): Promise<CallToolResult> {
-  try {
-    const client = getClient();
-    switch (toolName) {
-      case 'spanning_users_list': {
+  const shapeArgs = extractShapeArgs(args);
+
+  switch (toolName) {
+    case 'spanning_users_list': {
+      try {
+        const client = getClient();
         const params = {
-          limit: args.limit as number | undefined,
+          limit:  args.limit  as number | undefined,
           cursor: args.cursor as string | undefined,
         };
         logger.info('API call: users.list', params);
         const result = await client.users.list(params);
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        const items: unknown[] = Array.isArray(result)
+          ? result
+          : (result as Record<string, unknown>)['users'] as unknown[] ?? (result as Record<string, unknown>)['items'] as unknown[] ?? [];
+        const next = (result as Record<string, unknown>)['next'] as string | undefined;
+        return shapeList(
+          items as Record<string, unknown>[],
+          userSummary,
+          shapeArgs,
+          undefined,
+          next ? `Pass cursor='${next}' to get the next page.` : undefined,
+        );
+      } catch (err) {
+        return toolErrorFromCatch('spanning_users_list', err, {
+          hint: 'Verify SPANNING_ADMIN_EMAIL, SPANNING_API_TOKEN, and SPANNING_PLATFORM are correct.',
+        });
       }
-      case 'spanning_users_list_all': {
-        const limit = args.limit as number | undefined;
+    }
+
+    case 'spanning_users_list_all': {
+      try {
+        const client = getClient();
+        const limit    = args.limit    as number | undefined;
         const maxItems = (args.maxItems as number | undefined) ?? Infinity;
-        const items: unknown[] = [];
+        const items: Record<string, unknown>[] = [];
         logger.info('API call: users.listAll', { limit, maxItems });
         for await (const item of client.users.listAll(limit ? { limit } : undefined)) {
-          items.push(item);
+          items.push(item as Record<string, unknown>);
           if (items.length >= maxItems) break;
         }
-        return { content: [{ type: 'text', text: JSON.stringify({ count: items.length, items }, null, 2) }] };
+        return shapeList(items, userSummary, shapeArgs);
+      } catch (err) {
+        return toolErrorFromCatch('spanning_users_list_all', err, {
+          hint: 'Verify SPANNING_ADMIN_EMAIL, SPANNING_API_TOKEN, and SPANNING_PLATFORM are correct.',
+        });
       }
-      case 'spanning_users_get': {
-        const userId = args.userId as string;
-        if (!userId) return { content: [{ type: 'text', text: 'Error: userId is required (opaque string from spanning_users_list).' }], isError: true };
+    }
+
+    case 'spanning_users_get': {
+      const userId = args.userId as string;
+      if (!userId) {
+        return toolError('INVALID_ARGS', 'userId is required.', {
+          hint: 'Pass the opaque userId string returned by spanning_users_list.',
+        });
+      }
+      try {
+        const client = getClient();
         logger.info('API call: users.get', { userId });
         const user = await client.users.get(userId);
-        return { content: [{ type: 'text', text: JSON.stringify(user, null, 2) }] };
+        return shapeItem(user as Record<string, unknown>, userSummary, shapeArgs);
+      } catch (err) {
+        return toolErrorFromCatch('spanning_users_get', err, {
+          hint: 'Verify userId with spanning_users_list.',
+        });
       }
-      default:
-        return { content: [{ type: 'text', text: `Unknown tool: ${toolName}` }], isError: true };
     }
-  } catch (error: any) {
-    const status = error?.status ?? error?.statusCode ?? '';
-    const hint = status === 401 || status === 403
-      ? 'Verify SPANNING_ADMIN_EMAIL and SPANNING_API_TOKEN environment variables are correct.'
-      : 'Check Spanning API credentials (SPANNING_ADMIN_EMAIL, SPANNING_API_TOKEN) and platform setting (SPANNING_PLATFORM).';
-    const msg = `Spanning API error${status ? ` (HTTP ${status})` : ''}: ${error?.message ?? String(error)}. ${hint}`;
-    logger.error('Tool call failed', { tool: toolName, error: msg });
-    return { content: [{ type: 'text', text: msg }], isError: true };
+
+    default:
+      return unknownTool(toolName);
   }
 }
 

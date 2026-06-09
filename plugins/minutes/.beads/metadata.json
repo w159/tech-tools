@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "server",
+  "dolt_database": "minutes",
+  "project_id": "5088dd2d-8136-4dcd-a0da-e462401b176d"
+}

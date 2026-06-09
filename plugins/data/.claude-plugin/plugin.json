@@ -1,0 +1,17 @@
+{
+  "name": "data",
+  "version": "1.0.0",
+  "description": "Explore datasets, write SQL queries, validate data quality, build visualizations, and generate interactive dashboards.",
+  "keywords": [
+    "data",
+    "sql",
+    "analytics",
+    "visualization",
+    "dashboard",
+    "statistics"
+  ],
+  "author": {
+    "name": "Jerry",
+    "email": "jmorg83@gmail.com"
+  }
+}

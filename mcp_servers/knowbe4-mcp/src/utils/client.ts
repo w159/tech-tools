@@ -23,6 +23,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { logger } from "./logger.js";
 import { KNOWBE4_REGIONS, type KnowBe4Credentials } from "./types.js";
+import { resolveBaseUrl, describeBaseUrl } from "../../../_shared/base-url.js";
 
 // Strip unresolved MCP host template placeholders (e.g. "${user_config.x}")
 // and whitespace-only values so optional env vars fall through to their defaults.
@@ -57,8 +58,16 @@ export function getCredentials(): KnowBe4Credentials | null {
     return null;
   }
 
+  // Base URL resolution order:
+  // 1. KNOWBE4_BASE_URL env var (explicit override, handled by resolveBaseUrl)
+  // 2. Region-derived URL from KNOWBE4_REGIONS map
+  // 3. Vendor default via resolveBaseUrl ("https://us.api.knowbe4.com")
   const region = (cleanEnv(process.env.KNOWBE4_REGION) || "us").toLowerCase();
-  const baseUrl = cleanEnv(process.env.KNOWBE4_BASE_URL) || KNOWBE4_REGIONS[region] || KNOWBE4_REGIONS.us;
+  const regionUrl = KNOWBE4_REGIONS[region];
+  const baseUrl =
+    resolveBaseUrl("knowbe4", cleanEnv(process.env.KNOWBE4_BASE_URL) || undefined) ??
+    regionUrl ??
+    (KNOWBE4_REGIONS.us as string);
 
   return { apiKey, baseUrl };
 }
@@ -152,6 +161,23 @@ export async function apiRequest<T>(
   }
 
   return responseBody as T;
+}
+
+/**
+ * Return a human-readable description of the resolved base URL.
+ * Used by the status tool to report which endpoint is active.
+ */
+export function describeKnowBe4BaseUrl(): string {
+  const region = (cleanEnv(process.env.KNOWBE4_REGION) || "us").toLowerCase();
+  const regionUrl = KNOWBE4_REGIONS[region];
+  const explicitOverride = cleanEnv(process.env.KNOWBE4_BASE_URL) || undefined;
+  if (explicitOverride) {
+    return describeBaseUrl("knowbe4", explicitOverride, "KNOWBE4_BASE_URL");
+  }
+  if (regionUrl && region !== "us") {
+    return `${regionUrl} (from KNOWBE4_REGION=${region})`;
+  }
+  return describeBaseUrl("knowbe4", undefined, "KNOWBE4_BASE_URL");
 }
 
 /**

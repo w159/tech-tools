@@ -86,7 +86,7 @@ def has_hook(settings: dict, event: str, script: str) -> bool:
 def plan(settings: dict, selected: list[str]) -> list[dict]:
     out = []
     for hid in selected:
-        event, _matcher, script, _extra = HOOK_SPECS[hid]
+        event, matcher, script, _extra = HOOK_SPECS[hid]
         out.append(
             {
                 "id": hid,
@@ -140,88 +140,30 @@ def apply_uninstall(settings: dict, selected: list[str]) -> int:
     return changed
 
 
-def _print_primary_hook_coverage(settings: dict) -> None:
-    for hid, (event, matcher, script, _e) in HOOK_SPECS.items():
-        state = "✔ installed" if has_hook(settings, event, script) else "· not installed"
-        m = f" [{matcher}]" if matcher else ""
-        print(f"  {state:16} {hid:9} -> {event}{m}")
-
-
-def _other_hook_commands(settings: dict) -> dict[str, list[str]]:
-    others: dict[str, list[str]] = {}
-    for event, groups in settings.get("hooks", {}).items():
-        for group in groups:
-            for hook in group.get("hooks", []):
-                command = hook.get("command", "")
-                if not any(spec[2] in command for spec in HOOK_SPECS.values()):
-                    others.setdefault(event, []).append(command)
-    return others
-
-
-def _print_other_hook_coverage(settings: dict) -> None:
-    others = _other_hook_commands(settings)
-    if not others:
-        return
-    print("\nother hooks already configured:")
-    for event, commands in others.items():
-        for command in commands:
-            print(f"  {event}: {command}")
-
-
 def cmd_list(settings: dict) -> None:
     print("orchestrate hook coverage:")
-    _print_primary_hook_coverage(settings)
-    _print_other_hook_coverage(settings)
-
-
-def _selected_ids(select: list[str] | None) -> list[str]:
-    return select or default_selection()
-
-
-def _handle_list(path: Path, settings: dict) -> None:
-    print(f"settings: {path}")
-    cmd_list(settings)
-
-
-def _handle_uninstall(
-    apply: bool, path: Path, settings: dict, selected: list[str]
-) -> None:
-    print(f"settings: {path}")
-    if apply:
-        n = apply_uninstall(settings, selected)
-        if n:
-            _backup_and_write(path, settings)
-        print(f"removed {n} hook handler(s)." if n else "nothing to remove.")
-        return
-
-    for hid in selected:
-        event, _m, script, _e = HOOK_SPECS[hid]
-        label = "REMOVE" if has_hook(settings, event, script) else "absent"
-        print(f"  {label}: {hid} ({event})")
-    print("\n(dry-run) re-run with --apply to remove.")
-
-
-def _handle_install(apply: bool, path: Path, settings: dict, selected: list[str]) -> None:
-    print(f"settings: {path}")
-    for p in plan(settings, selected):
-        tag = "INSTALL" if p["action"] == "install" else "present"
-        print(f"  {tag:8} {p['id']:9} -> {p['event']}  ({command_for(p['script'])})")
-
-    if not apply:
-        print("\n(dry-run) re-run with --apply to install.")
-        return
-
-    n = apply_install(settings, selected)
-    if n:
-        _backup_and_write(path, settings)
-        print(
-            f"\ninstalled {n} hook(s). Restart Claude Code or start a new session to load them."
+    for hid, (event, matcher, script, _e) in HOOK_SPECS.items():
+        state = (
+            "✔ installed" if has_hook(settings, event, script) else "· not installed"
         )
-    else:
-        print("\nall selected hooks already installed — no change.")
+        m = f" [{matcher}]" if matcher else ""
+        print(f"  {state:16} {hid:9} -> {event}{m}")
+    # surface any OTHER hooks present so the user sees the whole picture
+    others = {}
+    for event, groups in settings.get("hooks", {}).items():
+        for group in groups:
+            for h in group.get("hooks", []):
+                cmd = h.get("command", "")
+                if not any(s[2] in cmd for s in HOOK_SPECS.values()):
+                    others.setdefault(event, []).append(cmd)
+    if others:
+        print("\nother hooks already configured:")
+        for event, cmds in others.items():
+            for c in cmds:
+                print(f"  {event}: {c}")
 
 
-def main() -> None:
+def main() -> int:
     ap = argparse.ArgumentParser(
         description="Install orchestrate automation hooks (gated)."
     )
@@ -248,17 +190,45 @@ def main() -> None:
 
     path = Path(args.settings).expanduser()
     settings = load_settings(path)
-    selected = _selected_ids(args.select)
+    selected = args.select or default_selection()
 
     if args.list:
-        _handle_list(path, settings)
-        return
+        print(f"settings: {path}")
+        cmd_list(settings)
+        return 0
 
+    print(f"settings: {path}")
     if args.uninstall:
-        _handle_uninstall(args.apply, path, settings, selected)
-        return
+        if args.apply:
+            n = apply_uninstall(settings, selected)
+            if n:
+                _backup_and_write(path, settings)
+            print(f"removed {n} hook handler(s)." if n else "nothing to remove.")
+        else:
+            for hid in selected:
+                event, _m, script, _e = HOOK_SPECS[hid]
+                print(
+                    f"  {'REMOVE' if has_hook(settings, event, script) else 'absent'}: {hid} ({event})"
+                )
+            print("\n(dry-run) re-run with --apply to remove.")
+        return 0
 
-    _handle_install(args.apply, path, settings, selected)
+    for p in plan(settings, selected):
+        tag = "INSTALL" if p["action"] == "install" else "present"
+        print(f"  {tag:8} {p['id']:9} -> {p['event']}  ({command_for(p['script'])})")
+
+    if args.apply:
+        n = apply_install(settings, selected)
+        if n:
+            _backup_and_write(path, settings)
+            print(
+                f"\ninstalled {n} hook(s). Restart Claude Code or start a new session to load them."
+            )
+        else:
+            print("\nall selected hooks already installed — no change.")
+    else:
+        print("\n(dry-run) re-run with --apply to install.")
+    return 0
 
 
 def _backup_and_write(path: Path, settings: dict) -> None:
@@ -272,4 +242,4 @@ def _backup_and_write(path: Path, settings: dict) -> None:
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

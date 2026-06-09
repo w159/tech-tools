@@ -1,0 +1,47 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicedoc/tauri/dev/crates/tauri-cli/schema.json",
+  "productName": "Minutes",
+  "identifier": "com.useminutes.desktop",
+  "version": "0.18.5",
+  "build": {
+    "frontendDist": "../src"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "macOSPrivateApi": true,
+    "windows": [],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "createUpdaterArtifacts": true,
+    "resources": [
+      "resources/assistant-skill-bundle/**/*"
+    ],
+    "icon": [
+      "icons/icon.icns",
+      "icons/icon.ico",
+      "icons/app-icon.png"
+    ],
+    "macOS": {
+      "dmg": {
+        "background": "dmg-background.png",
+        "windowSize": { "width": 660, "height": 400 },
+        "appPosition": { "x": 180, "y": 200 },
+        "applicationFolderPosition": { "x": 480, "y": 200 }
+      }
+    }
+  },
+  "plugins": {
+    "shell": {
+      "open": true
+    },
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEUyMjA0OUE4OTg1RjhCNDYKUldSR2kxK1lxRWtnNHRKQ2ZxenRqN1V6cFhCSUFDT0tZVTBHUk1LdGJuOFJzdTVkd2xsNjZFQTUK",
+      "endpoints": [
+        "https://github.com/silverstein/minutes/releases/latest/download/latest.json"
+      ]
+    }
+  }
+}

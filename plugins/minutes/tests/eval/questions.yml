@@ -1,0 +1,299 @@
+# Minutes Eval v0.1 — 20 ground-truth questions against the Portolan fixture corpus.
+#
+# Corpus period: 2026-02-28 through 2026-04-17. 10 seeded markdown files:
+# 9 meetings + 1 voice memo (2026-04-10-voice-memo-q2-priorities.md).
+# Every question has an expected answer derivable from the fixture corpus alone.
+# `rubric` is the minimum elements an agent's answer must include to pass.
+# Humans sign off on pass/fail. An optional LLM-as-judge grader in grade.py
+# pre-scores each response for convenience.
+
+questions:
+
+  # ─────────────────────────────────────────────────────────────────
+  # Relationship ownership (3)
+  # ─────────────────────────────────────────────────────────────────
+
+  - id: q01
+    category: relationship_ownership
+    question: "Who currently owns the Northwind customer relationship?"
+    expected: >
+      Priya Raghavan. Ownership was formally transferred from Mat to Priya at the
+      customer success review on 2026-04-14. Mat is now escalation-only.
+    rubric:
+      - "Names Priya as current owner"
+      - "Notes the handoff happened at the 2026-04-14 CS review"
+      - "Notes Mat stepped back to escalation-only (or equivalent)"
+
+  - id: q02
+    category: relationship_ownership
+    question: "Who at the company has spoken directly to Riley at Northwind?"
+    expected: >
+      Mat spoke to Riley on 2026-03-04 (initial SSO complaint) and 2026-03-30
+      (status follow-up). Priya also spoke to Riley recently, per the 2026-04-14
+      CS review where Priya noted Riley had started calling her directly. Alex,
+      Sam, Jordan, and Jamie are not documented as having spoken to Riley.
+    rubric:
+      - "Names Mat and Priya"
+      - "Cites at least one of the Mat-Riley meetings (2026-03-04 or 2026-03-30)"
+      - "Does not falsely claim Alex, Sam, Jordan, or Jamie spoke to Riley"
+
+  - id: q03
+    category: relationship_ownership
+    question: "Who is the primary engineering point of contact for customer-facing shipping commitments?"
+    expected: >
+      Alex Kim. Alex owns the SSO nested-groups feature (shipped 2026-04-03),
+      team billing (ships 2026-04-15), and the scoped reporting-exports fix
+      (ships 2026-05-02). Every customer-facing engineering commitment in the
+      corpus routes through Alex.
+    rubric:
+      - "Names Alex"
+      - "Cites at least two of: SSO, team billing, reporting exports"
+
+  # ─────────────────────────────────────────────────────────────────
+  # Active priorities (3)
+  # ─────────────────────────────────────────────────────────────────
+
+  - id: q04
+    category: active_priorities
+    question: "What is the current Q2 engineering focus?"
+    expected: >
+      Team billing (ships 2026-04-15) and a scoped reporting-exports fix
+      (ships 2026-05-02). Advanced analytics was explicitly cut at the
+      2026-04-17 prioritization meeting.
+    rubric:
+      - "Names team billing"
+      - "Names reporting exports"
+      - "Mentions that advanced analytics was killed (or equivalent)"
+
+  - id: q05
+    category: active_priorities
+    question: "Is the company currently offering monthly billing to new customers?"
+    expected: >
+      No. Monthly billing was launched 2026-02-28 for the consultant segment,
+      and the experiment was explicitly reversed on 2026-03-25. The company is
+      now annual-only across all segments. The four existing monthly customers
+      were given a soft migration path rather than a forced switch.
+    rubric:
+      - "Answers No"
+      - "Cites the 2026-03-25 reversal"
+      - "Notes the experiment supersedes the 2026-02-28 launch decision"
+
+  - id: q06
+    category: active_priorities
+    question: "What is Priya's current top priority?"
+    expected: >
+      Retention of three at-risk accounts — Northwind, Seabreeze Labs, and
+      Canton Research. Priya committed to personal outreach to all three by
+      2026-04-18 and to standing up a weekly at-risk review cadence with a
+      first session on 2026-04-21.
+    rubric:
+      - "Names retention or at-risk accounts"
+      - "Names all three accounts (Northwind, Seabreeze, Canton)"
+      - "Notes the weekly review cadence starting 2026-04-21"
+
+  # ─────────────────────────────────────────────────────────────────
+  # What changed recently (3)
+  # ─────────────────────────────────────────────────────────────────
+
+  - id: q07
+    category: what_changed
+    question: "What feature got killed in the most recent product prioritization meeting?"
+    expected: >
+      Advanced analytics. It was on the Q2 roadmap and was cut at the
+      2026-04-17 prioritization meeting. Priya confirmed zero at-risk accounts
+      cited analytics as a concern.
+    rubric:
+      - "Names advanced analytics as killed"
+      - "Cites the 2026-04-17 meeting"
+
+  - id: q08
+    category: what_changed
+    question: "What changed about the Northwind relationship recently?"
+    expected: >
+      Ownership transferred from Mat to Priya at the 2026-04-14 CS review.
+      Mat is now escalation-only. The underlying driver is that Riley had
+      started calling Priya directly.
+    rubric:
+      - "Names the ownership transfer from Mat to Priya"
+      - "Cites the 2026-04-14 CS review"
+
+  - id: q09
+    category: what_changed
+    question: "What's new about the reporting-exports situation?"
+    expected: >
+      Reporting exports was explicitly off-roadmap as of 2026-03-30 when Riley
+      raised it. At the 2026-04-17 product prioritization meeting it was given
+      a scoped green-light: date-ranged CSV exports only (no dashboard, no
+      visualizations), bounded to two weeks of engineering, shipping 2026-05-02.
+    rubric:
+      - "Notes it was previously off-roadmap"
+      - "Notes the 2026-04-17 scoped green-light"
+      - "Includes the scope constraint (date-ranged CSV, no dashboard)"
+      - "Includes the 2026-05-02 ship date"
+
+  # ─────────────────────────────────────────────────────────────────
+  # Decision history + contradictions (4)
+  # ─────────────────────────────────────────────────────────────────
+
+  - id: q10
+    category: decision_history
+    question: "Has the pricing strategy changed in the last two months? If so, describe the sequence of decisions."
+    expected: >
+      Yes. Two decisions, in order. (1) 2026-02-28: launch monthly billing
+      narrowly to the consultant segment, keep annual as default for
+      enterprise. Threshold was 12 signups by end of March. (2) 2026-03-25:
+      reverse the monthly billing experiment. Only four signups came in
+      versus the 12-signup threshold; churn on the four was 50% versus the
+      annual baseline. Company is now annual-only across all segments.
+    rubric:
+      - "Identifies both decisions in order"
+      - "Cites both dates (2026-02-28 and 2026-03-25)"
+      - "Notes the second decision supersedes the first"
+      - "Explains why the reversal happened (signup miss and/or churn)"
+
+  - id: q11
+    category: decision_history
+    question: "What's the current state of the SSO nested-groups commitment?"
+    expected: >
+      Shipped on 2026-04-03, three days after Riley's originally-promised
+      date of 2026-03-31. Riley confirmed delivery per the 2026-04-07 eng
+      standup. The commitment is closed.
+    rubric:
+      - "Ship date: 2026-04-03 (or April 3)"
+      - "Notes it shipped 3 days late vs the 2026-03-31 promise"
+      - "Notes it is shipped (not still open)"
+
+  - id: q12
+    category: decision_history
+    question: "Are there any decisions in the corpus that directly contradict earlier decisions?"
+    expected: >
+      Yes. The 2026-03-25 pricing-reversal decision explicitly supersedes the
+      2026-02-28 decision to launch monthly billing. The frontmatter on the
+      2026-03-25 meeting names this explicitly via a `supersedes` field.
+    rubric:
+      - "Identifies the pricing decision pair"
+      - "Cites both dates"
+      - "Names the later as superseding the earlier"
+
+  - id: q13
+    category: decision_history
+    question: "What did Jamie ask for at the 2026-03-18 investor check-in, and has it been delivered?"
+    expected: >
+      Jamie asked for a Q2 OKR doc with three objectives and three key
+      results each, originally due first week of April, something he could
+      show the board at the April meeting. It had not been delivered by the
+      end of the corpus on 2026-04-17; Mat re-committed at that meeting to
+      finalizing and sending it on 2026-04-18. Delivery is not confirmed in
+      the corpus.
+    rubric:
+      - "Names the Q2 OKR doc"
+      - "Notes 3 objectives, 3 KRs each"
+      - "States it has not been confirmed delivered in the corpus (or equivalent)"
+
+  # ─────────────────────────────────────────────────────────────────
+  # Commitment / staleness (4)
+  # ─────────────────────────────────────────────────────────────────
+
+  - id: q14
+    category: staleness
+    question: "What commitments are overdue or at risk of being overdue relative to the corpus end date of 2026-04-17?"
+    expected: >
+      The Q2 OKR doc is the clearest overdue item — originally due first week
+      of April per the 2026-03-18 investor check-in, not yet delivered.
+      Jordan's commitment to email the four monthly-billing customers with
+      migration-back-to-annual options was due 2026-04-01 and status is not
+      confirmed in any later meeting. Team billing ships 2026-04-15 and may
+      be close to on-time; corpus ends two days after.
+    rubric:
+      - "Names the Q2 OKR doc"
+      - "Either: names the Jordan monthly-customers email, OR explicitly notes only the OKR doc is clearly overdue"
+
+  - id: q15
+    category: staleness
+    question: "What did Mat personally commit to Riley, and was it kept?"
+    expected: >
+      Mat personally committed on 2026-03-04 to shipping the SSO nested-groups
+      onboarding fix by end of Q1 (2026-03-31), and to following up the week
+      of 2026-03-30 regardless of shipping status. Result: (a) the ship-by-
+      2026-03-31 commitment was NOT kept on that date; it slipped to
+      2026-04-03, three days late, but did ship. (b) The call-regardless
+      commitment WAS kept: Mat called Riley on 2026-03-30 with an honest
+      status update.
+    rubric:
+      - "Names the SSO fix commitment"
+      - "States the SSO commitment was NOT kept on the original date"
+      - "Notes it did ship (late) on 2026-04-03"
+      - "Credits Mat for keeping the secondary follow-up-regardless commitment"
+
+  - id: q16
+    category: staleness
+    question: "What open action items involve Alex as of the end of the corpus?"
+    expected: >
+      Two. (1) Ship team billing backend (multi-seat Stripe subscriptions)
+      by 2026-04-15. (2) Ship the scoped reporting-exports fix (date-ranged
+      CSV) by 2026-05-02.
+    rubric:
+      - "Names both: team billing and reporting exports"
+      - "Includes both due dates"
+
+  - id: q17
+    category: staleness
+    question: "Are there any open action items owed to Jamie?"
+    expected: >
+      Yes, one. The Q2 OKR doc. Originally committed at the 2026-03-18
+      investor check-in with a first-week-of-April due date, re-committed on
+      2026-04-17 to ship 2026-04-18.
+    rubric:
+      - "Names the Q2 OKR doc"
+      - "Notes the original 2026-03-18 commitment and/or the 2026-04-17 recommit"
+
+  # ─────────────────────────────────────────────────────────────────
+  # Cross-meeting inference (3)
+  # ─────────────────────────────────────────────────────────────────
+
+  - id: q18
+    category: cross_meeting_inference
+    question: "Why is the reporting-exports project happening now?"
+    expected: >
+      Three-meeting arc. Riley raised reporting exports as a new pain point
+      at the 2026-03-30 Northwind status call. Priya reinforced it as a live
+      retention driver at the 2026-04-14 CS review (Riley's attention had
+      shifted from SSO to exports). Mat then brought a scoped proposal to the
+      2026-04-17 product prioritization meeting, where the team approved a
+      narrow date-ranged-CSV fix to ship by 2026-05-02.
+    rubric:
+      - "Traces the chain through all three meetings (2026-03-30, 2026-04-14, 2026-04-17)"
+      - "Names Riley or Northwind as the origin"
+      - "Notes Priya's role in flagging it as a retention risk"
+
+  - id: q19
+    category: cross_meeting_inference
+    question: "What is the overall arc of the Northwind relationship across the corpus?"
+    expected: >
+      Four-phase arc. (1) 2026-03-04: hot and angry. Riley cited SSO
+      friction and said the word churn twice. Mat personally committed to a
+      2026-03-31 fix. (2) 2026-03-30: partially resolved. SSO slipped 3
+      days. Mat called honestly. Riley annoyed but accepting. New pain
+      point surfaced: reporting exports. (3) 2026-04-14: SSO delivered but
+      reporting concerns remain. Relationship ownership transferred from
+      Mat to Priya. (4) 2026-04-17: reporting-exports fix scoped for
+      2026-05-02. Account is still at-risk but with active remediation
+      owned by Priya.
+    rubric:
+      - "Identifies at least 3 distinct phases"
+      - "Cites the SSO arc and the exports arc"
+      - "Notes the relationship-ownership transfer"
+      - "States current status is at-risk-with-active-remediation (or equivalent)"
+
+  - id: q20
+    category: cross_meeting_inference
+    question: "What is the company's hiring plan for Q2 2026?"
+    expected: >
+      No net new hires. Per the 2026-03-18 investor check-in, Jamie
+      explicitly endorsed a zero-new-hires Q2 on the grounds that the team
+      needs to gel around what's already shipped, and Mat confirmed that
+      plan. Reinforced in Mat's 2026-04-10 voice memo ("no new hires").
+    rubric:
+      - "Answers zero/no new hires"
+      - "Cites Jamie's input from 2026-03-18"
+      - "Cites Mat's reinforcement in the 2026-04-10 voice memo"

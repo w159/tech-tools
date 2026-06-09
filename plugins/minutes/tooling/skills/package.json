@@ -1,0 +1,21 @@
+{
+  "name": "minutes-skill-tooling",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --test dist/compiler/*.test.js",
+    "compile": "node dist/compiler/compile.js",
+    "compile:dry": "node dist/compiler/compile.js --dry-run --host claude --host codex --host opencode",
+    "resolvable": "node dist/compiler/resolver.js",
+    "routing": "node dist/compiler/routing.js",
+    "routing:agents": "node dist/compiler/agent-routing.js",
+    "skill-audit": "node dist/compiler/skill-audit.js",
+    "surface-audit": "node dist/compiler/surface-audit.js",
+    "check": "node dist/compiler/check.js && npm run resolvable && npm run routing && npm run surface-audit",
+    "golden": "node dist/compiler/golden.js",
+    "golden:write": "node dist/compiler/golden.js --write",
+    "doctor": "node dist/compiler/doctor.js",
+    "ci": "npm run build && npm run test && npm run check && npm run golden && npm run compile:dry"
+  }
+}

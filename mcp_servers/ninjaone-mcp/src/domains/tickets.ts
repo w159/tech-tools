@@ -9,10 +9,52 @@ import type { DomainHandler, CallToolResult } from "../utils/types.js";
 import type { TicketStatus, TicketPriority, TicketType } from "node-ninjaone";
 import { getClient } from "../utils/client.js";
 import { logger } from "../utils/logger.js";
+import {
+  shapeList,
+  shapeItem,
+  shapeRaw,
+  extractShapeArgs,
+  SHAPE_PROPS,
+  toolError,
+  toolErrorFromCatch,
+  type SummaryFn,
+} from "./_helpers.js";
+
+// ---------------------------------------------------------------------------
+// Summary functions
+// ---------------------------------------------------------------------------
 
 /**
- * Get ticket domain tools
+ * Compact summary for a ticket list entry.
  */
+const ticketSummary: SummaryFn = (item) => ({
+  id:             item.id,
+  subject:        item.subject,
+  status:         item.status,
+  priority:       item.priority,
+  type:           item.type,
+  organizationId: item.organizationId,
+  deviceId:       item.deviceId,
+  assigneeUid:    item.assigneeUid,
+  createTime:     item.createTime,
+  updateTime:     item.updateTime,
+});
+
+/**
+ * Compact summary for a ticket comment entry.
+ */
+const commentSummary: SummaryFn = (item) => ({
+  id:         item.id,
+  body:       item.body,
+  internal:   item.internal,
+  authorName: item.authorName,
+  createTime: item.createTime,
+});
+
+// ---------------------------------------------------------------------------
+// Tool definitions
+// ---------------------------------------------------------------------------
+
 function getTools(): Tool[] {
   return [
     {
@@ -22,6 +64,7 @@ function getTools(): Tool[] {
       inputSchema: {
         type: "object" as const,
         properties: {
+          ...SHAPE_PROPS,
           status: {
             type: "string",
             enum: ["OPEN", "IN_PROGRESS", "WAITING", "CLOSED"],
@@ -56,6 +99,7 @@ function getTools(): Tool[] {
       inputSchema: {
         type: "object" as const,
         properties: {
+          ...SHAPE_PROPS,
           ticket_id: {
             type: "number",
             description: "Integer NinjaOne ticket ID.",
@@ -168,6 +212,7 @@ function getTools(): Tool[] {
       inputSchema: {
         type: "object" as const,
         properties: {
+          ...SHAPE_PROPS,
           ticket_id: {
             type: "number",
             description: "Integer NinjaOne ticket ID.",
@@ -179,122 +224,140 @@ function getTools(): Tool[] {
   ];
 }
 
-/**
- * Handle a ticket domain tool call
- */
+// ---------------------------------------------------------------------------
+// Handler
+// ---------------------------------------------------------------------------
+
 async function handleCall(
   toolName: string,
   args: Record<string, unknown>
 ): Promise<CallToolResult> {
   const client = await getClient();
+  const shapeArgs = extractShapeArgs(args);
 
   switch (toolName) {
     case "ninjaone_tickets_list": {
       const limit = (args.limit as number) || 50;
-      const cursor = args.cursor as string | undefined;
       logger.info("API call: tickets.list", {
         status: args.status,
         organizationId: args.organization_id,
         deviceId: args.device_id,
         boardId: args.board_id,
         limit,
-        cursor,
+        cursor: args.cursor,
       });
 
-      const response = await client.tickets.list({
-        status: args.status as TicketStatus | undefined,
-        organizationId: args.organization_id as number | undefined,
-        deviceId: args.device_id as number | undefined,
-        boardId: args.board_id as number | undefined,
-        pageSize: limit,
-      });
-      logger.debug("API response: tickets.list", { count: response.tickets?.length });
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(response, null, 2),
-          },
-        ],
-      };
+      try {
+        const response = await client.tickets.list({
+          status: args.status as TicketStatus | undefined,
+          organizationId: args.organization_id as number | undefined,
+          deviceId: args.device_id as number | undefined,
+          boardId: args.board_id as number | undefined,
+          pageSize: limit,
+        });
+        logger.debug("API response: tickets.list", { count: response.tickets?.length });
+        const tickets = response.tickets ?? [];
+        const cursor = (response as unknown as Record<string, unknown>).cursor as string | undefined;
+        const hint = cursor ? `Pass cursor='${cursor}' to get the next page.` : undefined;
+        return shapeList(tickets as unknown as Record<string, unknown>[], ticketSummary, shapeArgs, undefined, hint);
+      } catch (err) {
+        return toolErrorFromCatch("ninjaone_tickets_list", err, {
+          hint: "Verify NINJAONE_CLIENT_ID, NINJAONE_CLIENT_SECRET, and NINJAONE_REGION are set.",
+        });
+      }
     }
 
     case "ninjaone_tickets_get": {
       const ticketId = args.ticket_id as number;
       logger.info("API call: tickets.get", { ticketId });
-      const ticket = await client.tickets.get(ticketId);
-      logger.debug("API response: tickets.get", { ticket });
-
-      return {
-        content: [{ type: "text", text: JSON.stringify(ticket, null, 2) }],
-      };
+      try {
+        const ticket = await client.tickets.get(ticketId);
+        logger.debug("API response: tickets.get", { ticketId });
+        return shapeItem(ticket as unknown as Record<string, unknown>, ticketSummary, shapeArgs);
+      } catch (err) {
+        return toolErrorFromCatch("ninjaone_tickets_get", err, {
+          hint: "Verify ticket_id with ninjaone_tickets_list first.",
+        });
+      }
     }
 
     case "ninjaone_tickets_create": {
       logger.info("API call: tickets.create", { subject: args.subject, organizationId: args.organization_id });
-      const ticket = await client.tickets.create({
-        subject: args.subject as string,
-        description: args.description as string | undefined,
-        organizationId: args.organization_id as number,
-        deviceId: args.device_id as number | undefined,
-        priority: args.priority as TicketPriority | undefined,
-        type: args.type as TicketType | undefined,
-      });
-      logger.debug("API response: tickets.create", { ticket });
-
-      return {
-        content: [{ type: "text", text: JSON.stringify(ticket, null, 2) }],
-      };
+      try {
+        const ticket = await client.tickets.create({
+          subject: args.subject as string,
+          description: args.description as string | undefined,
+          organizationId: args.organization_id as number,
+          deviceId: args.device_id as number | undefined,
+          priority: args.priority as TicketPriority | undefined,
+          type: args.type as TicketType | undefined,
+        });
+        logger.debug("API response: tickets.create", { ticketId: (ticket as unknown as Record<string, unknown>).id });
+        return shapeRaw(ticket);
+      } catch (err) {
+        return toolErrorFromCatch("ninjaone_tickets_create", err, {
+          hint: "Verify organization_id with ninjaone_organizations_list. Subject is required.",
+        });
+      }
     }
 
     case "ninjaone_tickets_update": {
       const ticketId = args.ticket_id as number;
       logger.info("API call: tickets.update", { ticketId });
-      const ticket = await client.tickets.update(ticketId, {
-        subject: args.subject as string | undefined,
-        description: args.description as string | undefined,
-        status: args.status as TicketStatus | undefined,
-        priority: args.priority as TicketPriority | undefined,
-        assigneeUid: args.assignee_id ? String(args.assignee_id) : undefined,
-      });
-      logger.debug("API response: tickets.update", { ticket });
-
-      return {
-        content: [{ type: "text", text: JSON.stringify(ticket, null, 2) }],
-      };
+      try {
+        const ticket = await client.tickets.update(ticketId, {
+          subject: args.subject as string | undefined,
+          description: args.description as string | undefined,
+          status: args.status as TicketStatus | undefined,
+          priority: args.priority as TicketPriority | undefined,
+          assigneeUid: args.assignee_id ? String(args.assignee_id) : undefined,
+        });
+        logger.debug("API response: tickets.update", { ticketId });
+        return shapeRaw(ticket);
+      } catch (err) {
+        return toolErrorFromCatch("ninjaone_tickets_update", err, {
+          hint: "Verify ticket_id with ninjaone_tickets_list first.",
+        });
+      }
     }
 
     case "ninjaone_tickets_add_comment": {
       const ticketId = args.ticket_id as number;
       logger.info("API call: tickets.addComment", { ticketId });
-      const comment = await client.tickets.addComment(ticketId, {
-        body: args.body as string,
-        internal: args.public === false,
-      });
-      logger.debug("API response: tickets.addComment", { comment });
-
-      return {
-        content: [{ type: "text", text: JSON.stringify(comment, null, 2) }],
-      };
+      try {
+        const comment = await client.tickets.addComment(ticketId, {
+          body: args.body as string,
+          internal: args.public === false,
+        });
+        logger.debug("API response: tickets.addComment", { ticketId });
+        return shapeRaw(comment);
+      } catch (err) {
+        return toolErrorFromCatch("ninjaone_tickets_add_comment", err, {
+          hint: "Verify ticket_id with ninjaone_tickets_list first.",
+        });
+      }
     }
 
     case "ninjaone_tickets_comments": {
       const ticketId = args.ticket_id as number;
       logger.info("API call: tickets.getComments", { ticketId });
-      const comments = await client.tickets.getComments(ticketId);
-      logger.debug("API response: tickets.getComments", { comments });
-
-      return {
-        content: [{ type: "text", text: JSON.stringify(comments, null, 2) }],
-      };
+      try {
+        const comments = await client.tickets.getComments(ticketId);
+        logger.debug("API response: tickets.getComments", { count: Array.isArray(comments) ? comments.length : 1 });
+        return shapeList(
+          (Array.isArray(comments) ? comments : [comments]) as unknown as Record<string, unknown>[],
+          commentSummary,
+          shapeArgs
+        );
+      } catch (err) {
+        return toolErrorFromCatch("ninjaone_tickets_comments", err, {
+          hint: "Verify ticket_id with ninjaone_tickets_list first.",
+        });
+      }
     }
 
     default:
-      return {
-        content: [{ type: "text", text: `Unknown ticket tool: ${toolName}` }],
-        isError: true,
-      };
+      return toolError("INVALID_ARGS", `Unknown ticket tool: ${toolName}`);
   }
 }
 

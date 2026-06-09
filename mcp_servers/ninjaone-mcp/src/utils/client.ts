@@ -7,6 +7,7 @@
 
 import type { NinjaOneClient } from "node-ninjaone";
 import { isValidRegion, getBaseUrlForRegion, type NinjaOneRegion } from "./types.js";
+import { resolveBaseUrl } from "../../../_shared/base-url.js";
 import { logger } from "./logger.js";
 import { UserTokenManager } from "../oauth/token-manager.js";
 
@@ -123,7 +124,11 @@ export function getCredentials(): NinjaOneCredentials | null {
   }
 
   const region = regionEnv as NinjaOneRegion;
-  const baseUrl = getBaseUrlForRegion(region);
+  // NINJAONE_BASE_URL is optional: empty/placeholder resolves to the
+  // region-derived default (e.g. https://app.ninjarmm.com for "us").
+  // Set it only to override the regional default for staging/sovereign shards.
+  const baseUrlOverride = cleanEnv(process.env.NINJAONE_BASE_URL);
+  const baseUrl = resolveBaseUrl("ninjaone", baseUrlOverride) ?? getBaseUrlForRegion(region);
 
   return { clientId, clientSecret, region, baseUrl, authMode };
 }

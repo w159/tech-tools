@@ -2,6 +2,40 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { DomainHandler, CallToolResult } from '../utils/types.js';
 import { getClient } from '../utils/client.js';
 import { logger } from '../utils/logger.js';
+import {
+  shapeList,
+  shapeItem,
+  extractShapeArgs,
+  SHAPE_PROPS,
+  toolError,
+  toolErrorFromCatch,
+  type SummaryFn,
+} from './_helpers.js';
+
+// ---------------------------------------------------------------------------
+// Compact summaries
+// ---------------------------------------------------------------------------
+
+const deviceSummary: SummaryFn = (item) => ({
+  id:       item.id,
+  hostname: item.hostname,
+  status:   item.status,
+  lastSeen: item.lastSeen ?? item.last_seen,
+  os:       item.os,
+  org:      item.org,
+});
+
+const keySummary: SummaryFn = (item) => ({
+  id:      item.id,
+  label:   item.label,
+  key:     item.key,
+  active:  item.active,
+  created: item.created,
+});
+
+// ---------------------------------------------------------------------------
+// Tool definitions
+// ---------------------------------------------------------------------------
 
 function getTools(): Tool[] {
   return [
@@ -11,10 +45,11 @@ function getTools(): Tool[] {
       inputSchema: {
         type: 'object' as const,
         properties: {
-          page: { type: 'number', description: 'Page number' },
-          page_size: { type: 'number', description: 'Results per page' },
-          limit: { type: 'number', description: 'Maximum records' },
-          order_by: { type: 'string', description: 'Order by field' },
+          ...SHAPE_PROPS,
+          page: { type: 'number', description: 'Page number.' },
+          page_size: { type: 'number', description: 'Results per page.' },
+          limit: { type: 'number', description: 'Maximum records to return.' },
+          order_by: { type: 'string', description: 'Sort field and direction, e.g. "hostname;asc".' },
         },
       },
     },
@@ -24,7 +59,8 @@ function getTools(): Tool[] {
       inputSchema: {
         type: 'object' as const,
         properties: {
-          device_id: { type: 'string', description: 'Device UUID' },
+          ...SHAPE_PROPS,
+          device_id: { type: 'string', description: 'Device UUID (required).' },
         },
         required: ['device_id'],
       },
@@ -35,10 +71,11 @@ function getTools(): Tool[] {
       inputSchema: {
         type: 'object' as const,
         properties: {
-          page: { type: 'number', description: 'Page number' },
-          page_size: { type: 'number', description: 'Results per page' },
-          limit: { type: 'number', description: 'Maximum records' },
-          order_by: { type: 'string', description: 'Order by field' },
+          ...SHAPE_PROPS,
+          page: { type: 'number', description: 'Page number.' },
+          page_size: { type: 'number', description: 'Results per page.' },
+          limit: { type: 'number', description: 'Maximum records to return.' },
+          order_by: { type: 'string', description: 'Sort field and direction.' },
         },
       },
     },
@@ -48,7 +85,8 @@ function getTools(): Tool[] {
       inputSchema: {
         type: 'object' as const,
         properties: {
-          key_id: { type: 'string', description: 'Key UUID' },
+          ...SHAPE_PROPS,
+          key_id: { type: 'string', description: 'Key UUID (required).' },
         },
         required: ['key_id'],
       },
@@ -56,7 +94,13 @@ function getTools(): Tool[] {
   ];
 }
 
+// ---------------------------------------------------------------------------
+// Handler
+// ---------------------------------------------------------------------------
+
 async function handleCall(toolName: string, args: Record<string, unknown>): Promise<CallToolResult> {
+  const shapeArgs = extractShapeArgs(args);
+
   try {
     const client = await getClient();
 
@@ -64,39 +108,36 @@ async function handleCall(toolName: string, args: Record<string, unknown>): Prom
       case 'blumira_agents_devices_list': {
         logger.info('API call: agents.listDevices', args);
         const res = await client.agents.listDevices(args as any);
-        return { content: [{ type: 'text' as const, text: JSON.stringify(res, null, 2) }] };
+        const items = Array.isArray(res) ? res : (res as any)?.results ?? (res as any)?.data ?? [];
+        return shapeList(items, deviceSummary, shapeArgs);
       }
       case 'blumira_agents_devices_get': {
         const id = args.device_id as string;
-        if (!id) return { content: [{ type: 'text' as const, text: 'Error: device_id is required (UUID string).' }], isError: true };
+        if (!id) return toolError('INVALID_ARGS', 'device_id is required.', { hint: 'Pass the device UUID string.' });
         logger.info('API call: agents.getDevice', { id });
         const res = await client.agents.getDevice(id);
-        return { content: [{ type: 'text' as const, text: JSON.stringify(res, null, 2) }] };
+        return shapeItem(res as Record<string, unknown>, deviceSummary, shapeArgs);
       }
       case 'blumira_agents_keys_list': {
         logger.info('API call: agents.listKeys', args);
         const res = await client.agents.listKeys(args as any);
-        return { content: [{ type: 'text' as const, text: JSON.stringify(res, null, 2) }] };
+        const items = Array.isArray(res) ? res : (res as any)?.results ?? (res as any)?.data ?? [];
+        return shapeList(items, keySummary, shapeArgs);
       }
       case 'blumira_agents_keys_get': {
         const id = args.key_id as string;
-        if (!id) return { content: [{ type: 'text' as const, text: 'Error: key_id is required (UUID string).' }], isError: true };
+        if (!id) return toolError('INVALID_ARGS', 'key_id is required.', { hint: 'Pass the key UUID string.' });
         logger.info('API call: agents.getKey', { id });
         const res = await client.agents.getKey(id);
-        return { content: [{ type: 'text' as const, text: JSON.stringify(res, null, 2) }] };
+        return shapeItem(res as Record<string, unknown>, keySummary, shapeArgs);
       }
       default:
-        return { content: [{ type: 'text' as const, text: `Unknown tool: ${toolName}` }], isError: true };
+        return toolError('INVALID_ARGS', `Unknown tool: ${toolName}`);
     }
-  } catch (error: any) {
-    const status = error?.status ?? error?.statusCode ?? '';
-    const body = error?.body ? JSON.stringify(error.body).slice(0, 200) : '';
-    const hint = status === 401 || status === 403
-      ? 'Verify BLUMIRA_JWT_TOKEN or BLUMIRA_CLIENT_ID + BLUMIRA_CLIENT_SECRET are correct.'
-      : 'Check that your Blumira credentials are valid and the API is reachable.';
-    const msg = `Blumira API error${status ? ` (HTTP ${status})` : ''}: ${error?.message ?? String(error)}${body ? ` — ${body}` : ''}. ${hint}`;
-    logger.error('Tool call failed', { tool: toolName, error: msg });
-    return { content: [{ type: 'text' as const, text: msg }], isError: true };
+  } catch (err: unknown) {
+    return toolErrorFromCatch(toolName, err, {
+      hint: 'Verify BLUMIRA_JWT_TOKEN or BLUMIRA_CLIENT_ID + BLUMIRA_CLIENT_SECRET are correct.',
+    });
   }
 }
 

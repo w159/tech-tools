@@ -1,6 +1,8 @@
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { getCredentials } from '../credentials.js';
 import { createAuvikClient } from '../client-factory.js';
+import { missingCredsError, shapeRaw } from './shared.js';
+import { describeBaseUrl } from '../../../_shared/base-url.js';
 
 export const statusTool: Tool = {
   name: 'auvik_status',
@@ -12,67 +14,35 @@ export const statusTool: Tool = {
 export async function handleStatus() {
   const c = getCredentials();
   if (!c) {
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: JSON.stringify(
-            {
-              ok: true,
-              hasCredentials: false,
-              region: null,
-              note: 'No Auvik credentials configured. Set AUVIK_USERNAME and AUVIK_API_KEY (and optionally AUVIK_REGION).',
-            },
-            null,
-            2
-          ),
-        },
-      ],
-    };
+    return missingCredsError('Auvik', ['AUVIK_USERNAME', 'AUVIK_API_KEY']);
   }
 
   const region = c.region || 'us1';
+  // Build a custom base-url override string so describeBaseUrl can show the
+  // active endpoint. The region env var controls the URL, not AUVIK_BASE_URL.
+  const activeUrl = `https://auvikapi.${region}.my.auvik.com/v1`;
+  const urlDesc = describeBaseUrl('auvik', process.env.AUVIK_REGION ? activeUrl : undefined, 'AUVIK_REGION');
+
   try {
     await createAuvikClient(c).verify();
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: JSON.stringify(
-            {
-              ok: true,
-              hasCredentials: true,
-              region,
-              verified: true,
-              note: 'authentication/verify returned 200. The server auto-follows 308 region redirects on every call.',
-            },
-            null,
-            2
-          ),
-        },
-      ],
-    };
+    return shapeRaw({
+      ok: true,
+      hasCredentials: true,
+      region,
+      baseUrl: urlDesc,
+      verified: true,
+      note: 'authentication/verify returned 200. The server auto-follows 308 region redirects on every call.',
+    });
   } catch (e: unknown) {
     const err = e as { status?: number; message?: string };
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: JSON.stringify(
-            {
-              ok: false,
-              hasCredentials: true,
-              region,
-              verified: false,
-              status: err.status,
-              message: err.message,
-            },
-            null,
-            2
-          ),
-        },
-      ],
-      isError: true,
-    };
+    return shapeRaw({
+      ok: false,
+      hasCredentials: true,
+      region,
+      baseUrl: urlDesc,
+      verified: false,
+      status: err.status,
+      message: err.message,
+    });
   }
 }

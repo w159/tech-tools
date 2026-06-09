@@ -1,44 +1,148 @@
 import { getCredentials, type AuvikCredentials } from '../credentials.js';
-import { createAuvikClient, type AuvikClient } from '../client-factory.js';
-import { toMcpError } from '../errors.js';
+import { createAuvikClient, type AuvikClient, type JsonApiResponse, type JsonApiResource } from '../client-factory.js';
+import {
+  shapeList,
+  shapeItem,
+  shapeRaw,
+  extractShapeArgs,
+  SHAPE_PROPS,
+  type SummaryFn,
+  type ToolResult,
+  type ShapeArgs,
+} from '../../../_shared/response-shaper.js';
+import {
+  toolErrorFromCatch,
+  missingCredsError,
+  toolError,
+  type ErrorCode,
+  type ErrorContext,
+} from '../../../_shared/error-envelope.js';
 
-export type ToolResult = {
-  content: { type: 'text'; text: string }[];
-  isError?: boolean;
-};
+// Re-export for convenience so tool files only import from './shared.js'.
+export type { ToolResult, SummaryFn, ShapeArgs };
+export { shapeList, shapeItem, shapeRaw, extractShapeArgs, SHAPE_PROPS };
+export { toolError, toolErrorFromCatch, missingCredsError };
+export type { ErrorCode, ErrorContext };
 
-export const noCreds = (): ToolResult => ({
-  content: [
-    {
-      type: 'text',
-      text: 'No Auvik credentials configured. Set AUVIK_USERNAME and AUVIK_API_KEY (and optionally AUVIK_REGION).',
-    },
-  ],
-  isError: true,
-});
+// ---------------------------------------------------------------------------
+// JSON:API helpers
+// ---------------------------------------------------------------------------
 
-export const ok = (r: unknown): ToolResult => ({
-  content: [{ type: 'text', text: JSON.stringify(r, null, 2) }],
-});
+// Auvik uses JSON:API: list results arrive as { data: JsonApiResource[] }.
+// A flattened item merges { id, type } with attributes so summary fns can
+// use flat field paths like item.deviceName rather than item.attributes.deviceName.
+export type FlatResource = Record<string, unknown> & { id: string; _type: string };
 
-export const fail = (e: unknown): ToolResult => {
-  const m = toMcpError(e);
-  return { content: [{ type: 'text', text: m.message }], isError: true };
-};
+/**
+ * Flatten a single JSON:API resource into a plain object suitable for shapeList/shapeItem.
+ * Spreads attributes onto the top level; preserves `id` and stashes `type` as `_type`.
+ * Relationships are kept as-is under `relationships` for callers that need them.
+ */
+export function flattenResource(r: JsonApiResource): FlatResource {
+  return {
+    id: r.id,
+    _type: r.type,
+    ...(r.attributes ?? {}),
+    relationships: r.relationships,
+  } as FlatResource;
+}
 
-// Runs `fn(client)` with resolved credentials, mapping the common no-creds /
-// error paths so every handler stays a one-liner.
-export async function withClient(fn: (client: AuvikClient, creds: AuvikCredentials) => Promise<unknown>): Promise<ToolResult> {
+/**
+ * Extract and flatten the data array from a JSON:API list response.
+ * Returns [] if data is missing or not an array (e.g. empty-body 200).
+ */
+export function flattenList(resp: JsonApiResponse): FlatResource[] {
+  const data = resp.data;
+  if (!Array.isArray(data)) return [];
+  return data.map(flattenResource);
+}
+
+/**
+ * Extract and flatten a single-item JSON:API response.
+ * Returns null if data is null or not an object.
+ */
+export function flattenItem(resp: JsonApiResponse): FlatResource | null {
+  const data = resp.data;
+  if (!data || Array.isArray(data)) return null;
+  return flattenResource(data as JsonApiResource);
+}
+
+// ---------------------------------------------------------------------------
+// withClient variants
+// ---------------------------------------------------------------------------
+
+/**
+ * Runs fn(client, creds) and returns its ToolResult directly.
+ * The fn is responsible for shaping; use withClientList/withClientItem for
+ * the common list/get cases. Used by status and navigate which handle their
+ * own serialization.
+ */
+export async function withClient(
+  fn: (client: AuvikClient, creds: AuvikCredentials) => Promise<ToolResult>
+): Promise<ToolResult> {
   const creds = getCredentials();
-  if (!creds) return noCreds();
+  if (!creds) return missingCredsError('Auvik', ['AUVIK_USERNAME', 'AUVIK_API_KEY']);
   try {
-    return ok(await fn(createAuvikClient(creds), creds));
+    return await fn(createAuvikClient(creds), creds);
   } catch (e) {
-    return fail(e);
+    return toolErrorFromCatch('auvik', e);
   }
 }
 
+/**
+ * List tool helper: fetches a JSON:API list, flattens, shapes, and enforces
+ * the char cap. Callers pass the summary function + shape args from the tool
+ * input. The pagination hint is auto-built from links.next when present.
+ */
+export async function withClientList(
+  apiFn: (client: AuvikClient, creds: AuvikCredentials) => Promise<JsonApiResponse>,
+  summaryFn: SummaryFn<FlatResource>,
+  args: ShapeArgs,
+  toolName: string,
+  hint?: string
+): Promise<ToolResult> {
+  const creds = getCredentials();
+  if (!creds) return missingCredsError('Auvik', ['AUVIK_USERNAME', 'AUVIK_API_KEY']);
+  try {
+    const resp = await apiFn(createAuvikClient(creds), creds);
+    const items = flattenList(resp);
+    const paginationHint =
+      hint ??
+      (resp.links?.next
+        ? `Pass pageAfter cursor from links.next, or call auvik_navigate with links.next="${resp.links.next}".`
+        : undefined);
+    return shapeList(items, summaryFn, args, undefined, paginationHint);
+  } catch (e) {
+    return toolErrorFromCatch(toolName, e);
+  }
+}
+
+/**
+ * Get/detail tool helper: fetches a single JSON:API resource, flattens,
+ * shapes, and enforces the char cap.
+ */
+export async function withClientItem(
+  apiFn: (client: AuvikClient, creds: AuvikCredentials) => Promise<JsonApiResponse>,
+  summaryFn: SummaryFn<FlatResource>,
+  args: ShapeArgs,
+  toolName: string
+): Promise<ToolResult> {
+  const creds = getCredentials();
+  if (!creds) return missingCredsError('Auvik', ['AUVIK_USERNAME', 'AUVIK_API_KEY']);
+  try {
+    const resp = await apiFn(createAuvikClient(creds), creds);
+    const item = flattenItem(resp);
+    if (!item) return shapeRaw(resp);
+    return shapeItem(item, summaryFn, args);
+  } catch (e) {
+    return toolErrorFromCatch(toolName, e);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Reusable JSON-schema fragments shared across tools.
+// ---------------------------------------------------------------------------
+
 export const tenantsProp = {
   tenants: {
     type: 'string',

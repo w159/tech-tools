@@ -1,0 +1,197 @@
+name: Release macOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to upload assets to, for example v0.16.0"
+        required: true
+        type: string
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  MACOSX_DEPLOYMENT_TARGET: "11.0"
+  CXXFLAGS: -I$(xcrun --show-sdk-path)/usr/include/c++/v1
+  TAURI_CLI_VERSION: "2.10.1"
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
+jobs:
+  macos-release:
+    name: Build signed + notarized Minutes.app
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Verify checked out release ref
+        run: |
+          tag_commit="$(git rev-parse "${RELEASE_TAG}^{commit}")"
+          head_commit="$(git rev-parse HEAD)"
+          if [ "$head_commit" != "$tag_commit" ]; then
+            echo "ERROR: checkout HEAD ($head_commit) does not match ${RELEASE_TAG} ($tag_commit)" >&2
+            exit 1
+          fi
+
+      - name: Set C++ include path for whisper.cpp
+        run: echo "CXXFLAGS=-I$(xcrun --show-sdk-path)/usr/include/c++/v1" >> "$GITHUB_ENV"
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --version "${TAURI_CLI_VERSION}" --locked
+
+      - name: Validate signing and notarization secrets
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          missing=()
+          for name in \
+            APPLE_CERTIFICATE \
+            APPLE_CERTIFICATE_PASSWORD \
+            APPLE_SIGNING_IDENTITY \
+            APPLE_API_ISSUER \
+            APPLE_API_KEY \
+            APPLE_API_PRIVATE_KEY \
+            TAURI_SIGNING_PRIVATE_KEY
+          do
+            if [ -z "${!name}" ]; then
+              missing+=("$name")
+            fi
+          done
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "Missing required release secrets: ${missing[*]}" >&2
+            echo "See docs/RELEASE-MACOS.md for the expected values." >&2
+            exit 1
+          fi
+
+      - name: Materialize App Store Connect key
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+        run: |
+          key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY}.p8"
+          printf '%s' "$APPLE_API_PRIVATE_KEY" > "$key_path"
+          chmod 600 "$key_path"
+          echo "APPLE_API_KEY_PATH=$key_path" >> "$GITHUB_ENV"
+
+      - name: Build signed + notarized bundle (with updater artifacts)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        run: cargo tauri build --features parakeet,metal --bundles app
+
+      - name: Refresh release helper scripts for manual reruns
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          git fetch origin main
+          git show origin/main:scripts/create-branded-dmg.sh > scripts/create-branded-dmg.sh
+          chmod +x scripts/create-branded-dmg.sh
+
+      - name: Create DMG
+        run: |
+          VERSION="${RELEASE_TAG#v}"
+          ./scripts/create-branded-dmg.sh \
+            --app target/release/bundle/macos/Minutes.app \
+            --version "$VERSION" \
+            --output "target/release/bundle/dmg/Minutes_${VERSION}_aarch64.dmg"
+
+      - name: Upload signed app bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: minutes-macos-app
+          path: target/release/bundle/macos/Minutes.app
+          if-no-files-found: error
+
+      - name: Upload signed dmg
+        uses: actions/upload-artifact@v4
+        with:
+          name: minutes-macos-dmg
+          path: target/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+
+      - name: Verify release exists before uploading assets
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "${RELEASE_TAG}" >/dev/null
+
+      - name: Generate latest.json for auto-updater
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${RELEASE_TAG#v}"
+          SIG=$(cat target/release/bundle/macos/Minutes.app.tar.gz.sig)
+          if [ -z "$SIG" ]; then
+            echo "ERROR: .sig file empty or missing" >&2
+            exit 1
+          fi
+          URL="https://github.com/silverstein/minutes/releases/download/${RELEASE_TAG}/Minutes.app.tar.gz"
+          NOTES=$(gh release view "${RELEASE_TAG}" --json body -q .body 2>/dev/null || echo "")
+          export UPDATE_VERSION="$VERSION"
+          export UPDATE_SIG="$SIG"
+          export UPDATE_URL="$URL"
+          export UPDATE_NOTES="$NOTES"
+          python3 << 'PYEOF'
+          import json, os, datetime
+          data = {
+              "version": os.environ["UPDATE_VERSION"],
+              "notes": os.environ["UPDATE_NOTES"],
+              "pub_date": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "platforms": {
+                  "darwin-aarch64": {
+                      "signature": os.environ["UPDATE_SIG"].strip(),
+                      "url": os.environ["UPDATE_URL"]
+                  }
+              }
+          }
+          with open("target/release/bundle/macos/latest.json", "w") as f:
+              json.dump(data, f, indent=2)
+          PYEOF
+
+      - name: Upload release assets to existing tag release
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${RELEASE_TAG}" \
+            target/release/bundle/dmg/*.dmg \
+            target/release/bundle/macos/Minutes.app.tar.gz \
+            target/release/bundle/macos/Minutes.app.tar.gz.sig \
+            target/release/bundle/macos/latest.json \
+            --clobber

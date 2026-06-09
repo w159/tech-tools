@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Minutes Terminal</title>
+  <link rel="stylesheet" href="vendor/xterm/xterm.css">
+  <style>
+    @font-face {
+      font-family: 'Geist';
+      font-style: normal;
+      font-weight: 400;
+      src: url('fonts/Geist-Regular.woff2') format('woff2');
+    }
+    @font-face {
+      font-family: 'Geist';
+      font-style: normal;
+      font-weight: 500;
+      src: url('fonts/Geist-Medium.woff2') format('woff2');
+    }
+    @font-face {
+      font-family: 'Geist Mono';
+      font-style: normal;
+      font-weight: 400;
+      src: url('fonts/GeistMono-Regular.woff2') format('woff2');
+    }
+    @font-face {
+      font-family: 'Geist Mono';
+      font-style: normal;
+      font-weight: 500;
+      src: url('fonts/GeistMono-Medium.woff2') format('woff2');
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      color-scheme: light dark;
+      --bg:          #0D0D0B;
+      --bg-elevated: #141412;
+      --bg-hover:    #1C1C1A;
+      --border:      #2A2924;
+      --text:        #E8E4DA;
+      --text-secondary: #6B6760;
+      --text-tertiary:  #3D3B38;
+      --accent:      #30D158;
+      --red:         #FF453A;
+      --green:       #30D158;
+      --font-mono:   'Geist Mono', 'SF Mono', 'Menlo', monospace;
+      --font-sans:   'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg:             #F8F4ED;
+        --bg-elevated:    #EFEBE2;
+        --bg-hover:       #E8E2D8;
+        --border:         rgba(0,0,0,0.13);
+        --text:           #1A1916;
+        --text-secondary: #8C8880;
+        --text-tertiary:  #BDB9B0;
+        --accent:         #C96B4E;
+        --red:            #C0392B;
+        --green:          #2E7D46;
+      }
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      -webkit-app-region: drag;
+      flex-shrink: 0;
+    }
+
+    .header-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .header-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      flex-shrink: 0;
+    }
+
+    .header-dot.exited {
+      background: var(--text-tertiary);
+    }
+
+    .header-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 8px;
+      -webkit-app-region: no-drag;
+    }
+
+    .btn {
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg-elevated);
+      color: var(--text-secondary);
+      font-family: inherit;
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    .btn:hover { background: var(--bg-hover); }
+
+    #terminal-container {
+      flex: 1;
+      padding: 8px 4px 4px 4px;
+      overflow: hidden;
+    }
+
+    .exit-banner {
+      display: none;
+      padding: 12px 16px;
+      background: var(--bg-elevated);
+      border-top: 1px solid var(--border);
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-secondary);
+      flex-shrink: 0;
+    }
+
+    .exit-banner.active { display: block; }
+
+    .exit-banner button {
+      margin-left: 12px;
+    }
+
+    /* Override xterm background to match app */
+    .xterm { height: 100%; }
+    .xterm-viewport { overflow-y: auto; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-info">
+      <div class="header-dot" id="status-dot"></div>
+      <div class="header-title" id="header-title">Terminal</div>
+    </div>
+    <div class="header-actions">
+      <button class="btn" id="btn-kill">End Session</button>
+    </div>
+  </div>
+
+  <div id="terminal-container"></div>
+
+  <div class="exit-banner" id="exit-banner">
+    Session ended.
+    <button class="btn" id="btn-restart">Restart</button>
+    <button class="btn" id="btn-close">Close</button>
+  </div>
+
+  <script src="vendor/xterm/xterm.js"></script>
+  <script src="vendor/xterm/xterm-addon-fit.js"></script>
+  <script src="vendor/xterm/minutes-theme.js"></script>
+  <script>
+    (async function() {
+    const { invoke } = window.__TAURI__.core;
+    const { getCurrentWindow } = window.__TAURI__.window;
+
+    // Session ID = window label (set by show_terminal_window)
+    // Try URL fragment first, fall back to window label
+    const currentWindow = getCurrentWindow();
+    const sessionId = window.location.hash.slice(1) || currentWindow.label;
+    console.log('[minutes-terminal] session:', sessionId, 'label:', currentWindow.label, 'hash:', window.location.hash);
+    const headerTitle = document.getElementById('header-title');
+    const statusDot = document.getElementById('status-dot');
+    const exitBanner = document.getElementById('exit-banner');
+    const container = document.getElementById('terminal-container');
+
+    const terminalInfo = await invoke('cmd_terminal_info', { sessionId });
+    headerTitle.textContent = terminalInfo.title || 'Minutes Assistant';
+    document.title = headerTitle.textContent;
+
+    // Initialize xterm.js
+    const term = new Terminal({
+      theme: window.MINUTES_XTERM_THEME,
+      fontFamily: "'Geist Mono', 'SF Mono', Menlo, monospace",
+      fontSize: 13,
+      lineHeight: 1.2,
+      cursorBlink: true,
+      cursorStyle: 'bar',
+      scrollback: 10000,
+      allowProposedApi: true,
+    });
+
+    const applyTerminalTheme = (isDark) => {
+      term.options.theme = window.getMinutesTheme(isDark);
+    };
+
+    const fitAddon = new FitAddon.FitAddon();
+    term.loadAddon(fitAddon);
+    term.open(container);
+    fitAddon.fit();
+    window.MINUTES_XTERM_THEME_QUERY.addEventListener('change', (event) => {
+      applyTerminalTheme(event.matches);
+    });
+
+    let isAlive = true;
+
+    // Send terminal input to PTY
+    term.onData((data) => {
+      if (!isAlive) return;
+      invoke('cmd_pty_input', { sessionId, data }).catch(console.error);
+    });
+
+    // Receive PTY output — also listen on the generic event name in case
+    // Tauri delivers it without the session suffix
+    const dataEvent = `pty:data:${sessionId}`;
+    console.log('[minutes-terminal] listening for:', dataEvent);
+    let dataReceived = 0;
+    // Use window-scoped listen for emit_to targeted events
+    await currentWindow.listen(dataEvent, (event) => {
+      dataReceived++;
+      if (dataReceived === 1) console.log('[minutes-terminal] first data received');
+      // Decode base64 to Uint8Array
+      const raw = atob(event.payload);
+      const bytes = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) {
+        bytes[i] = raw.charCodeAt(i);
+      }
+      term.write(bytes);
+    });
+
+    // Handle PTY exit — clean up workspace when process exits naturally
+    await currentWindow.listen(`pty:exit:${sessionId}`, () => {
+      isAlive = false;
+      statusDot.classList.add('exited');
+      exitBanner.classList.add('active');
+      fitAddon.fit();
+      // Trigger cleanup of the context workspace
+      invoke('cmd_pty_kill', { sessionId }).catch(() => {});
+    });
+
+    await currentWindow.listen(`terminal:title:${sessionId}`, (event) => {
+      headerTitle.textContent = event.payload || 'Minutes Assistant';
+      document.title = headerTitle.textContent;
+    });
+
+    // Resize handling
+    const resizeObserver = new ResizeObserver(() => {
+      fitAddon.fit();
+      if (isAlive) {
+        invoke('cmd_pty_resize', {
+          sessionId,
+          cols: term.cols,
+          rows: term.rows,
+        }).catch(() => {});
+      }
+    });
+    resizeObserver.observe(container);
+
+    // Kill button
+    document.getElementById('btn-kill').addEventListener('click', async () => {
+      try {
+        await invoke('cmd_pty_kill', { sessionId });
+      } catch (e) {
+        console.error('Kill:', e);
+      }
+    });
+
+    // Close button
+    document.getElementById('btn-close').addEventListener('click', () => {
+      getCurrentWindow().close();
+    });
+
+    // Restart button — close this window and spawn a new session
+    // For simplicity, just close. User can reopen from main window.
+    document.getElementById('btn-restart').addEventListener('click', () => {
+      getCurrentWindow().close();
+    });
+
+    // Focus terminal on window focus
+    getCurrentWindow().onFocusChanged(({ payload: focused }) => {
+      if (focused) term.focus();
+    });
+
+    // Initial focus
+    term.focus();
+    console.log('[minutes-terminal] setup complete, listeners registered');
+    })();
+  </script>
+</body>
+</html>

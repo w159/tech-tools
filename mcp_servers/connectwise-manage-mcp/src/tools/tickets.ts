@@ -2,11 +2,39 @@ import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { CwManageClient } from "../api-client.js";
 import { READ, WRITE_CREATE, WRITE_UPDATE, titled } from "./annotations.js";
+import {
+  shapeList,
+  shapeItem,
+  shapeRaw,
+  type SummaryFn,
+} from "../_shared/response-shaper.js";
+import { toolErrorFromCatch } from "../_shared/error-envelope.js";
+
+// Compact summary for list/search results. Covers triage-relevant fields.
+// Pass full=true or fields=[...] to retrieve additional fields.
+const ticketSummary: SummaryFn = (t) => ({
+  id: t["id"],
+  summary: t["summary"],
+  status: (t["status"] as Record<string, unknown> | undefined)?.name,
+  board: (t["board"] as Record<string, unknown> | undefined)?.name,
+  company: (t["company"] as Record<string, unknown> | undefined)?.name,
+  contact: (t["contact"] as Record<string, unknown> | undefined)
+    ? `${(t["contact"] as Record<string, unknown>)["name"] ?? ""}`.trim() || undefined
+    : undefined,
+  priority: (t["priority"] as Record<string, unknown> | undefined)?.name,
+  owner: (t["owner"] as Record<string, unknown> | undefined)?.name,
+  dateEntered: t["dateEntered"],
+  lastUpdated: t["_info"]
+    ? (t["_info"] as Record<string, unknown>)["lastUpdated"]
+    : undefined,
+  slaStatus: t["slaStatus"] ?? undefined,
+  closedFlag: t["closedFlag"],
+});
 
 export function registerTicketTools(server: McpServer, client: CwManageClient) {
   server.tool(
     "cw_search_tickets",
-    "Search service tickets in ConnectWise Manage. Use 'conditions' for CW query syntax (e.g. \"status/name != 'Closed'\" or \"company/name = 'Acme'\").",
+    "Search service tickets in ConnectWise Manage. Returns a compact summary (id, summary, status, board, company, contact, priority, owner, dates) by default — pass full=true or fields=[...] for more. Use 'conditions' for CW query syntax (e.g. \"board/name='Triage' AND closedFlag=false\").",
     {
       conditions: z
         .string()
@@ -21,29 +49,46 @@ export function registerTicketTools(server: McpServer, client: CwManageClient) {
         .string()
         .optional()
         .describe("Field to order by (e.g. 'id desc')"),
+      fields: z.array(z.string()).optional().describe('Optional. Return only these fields (e.g. ["id","status","summary"]). Overrides the default compact summary.'),
+      full: z.boolean().optional().describe('Optional. When true, return the complete vendor object. Use only when you need fields not in the default summary.'),
     },
     titled("CW Manage: search tickets", READ),
-    async ({ conditions, page, pageSize, orderBy }) => {
-      const result = await client.get("/service/tickets", {
-        conditions,
-        page: page ?? 1,
-        pageSize: pageSize ?? 25,
-        orderBy,
-      });
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    async ({ conditions, page, pageSize, orderBy, fields, full }) => {
+      try {
+        const result = await client.get<unknown[]>("/service/tickets", {
+          conditions,
+          page: page ?? 1,
+          pageSize: pageSize ?? 25,
+          orderBy,
+        });
+        const items = Array.isArray(result) ? result : [];
+        return shapeList(items as Record<string, unknown>[], ticketSummary, { fields, full });
+      } catch (err) {
+        return toolErrorFromCatch("cw_search_tickets", err, {
+          hint: "Check conditions syntax. Example: \"board/name='Triage' AND closedFlag=false\".",
+        });
+      }
     },
   );
 
   server.tool(
     "cw_get_ticket",
-    "Get a ConnectWise Manage service ticket by ID (required). Returns status, summary, company, contact, board, priority, and time budget.",
+    "Get a ConnectWise Manage service ticket by ID (required). Returns a compact summary by default; pass full=true or fields=[...] for the complete vendor object.",
     {
       id: z.number().describe("Ticket ID"),
+      fields: z.array(z.string()).optional().describe('Optional. Return only these fields (e.g. ["id","status","summary"]). Overrides the default compact summary.'),
+      full: z.boolean().optional().describe('Optional. When true, return the complete vendor object. Use only when you need fields not in the default summary.'),
     },
     titled("CW Manage: get ticket", READ),
-    async ({ id }) => {
-      const result = await client.get(`/service/tickets/${id}`);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    async ({ id, fields, full }) => {
+      try {
+        const result = await client.get<Record<string, unknown>>(`/service/tickets/${id}`);
+        return shapeItem(result, ticketSummary, { fields, full });
+      } catch (err) {
+        return toolErrorFromCatch("cw_get_ticket", err, {
+          hint: "Verify ticket id with cw_search_tickets first.",
+        });
+      }
     },
   );
 
@@ -63,18 +108,23 @@ export function registerTicketTools(server: McpServer, client: CwManageClient) {
     },
     titled("CW Manage: create ticket", WRITE_CREATE),
     async ({ summary, boardId, companyId, contactId, statusId, priorityId, typeId, subTypeId, initialDescription }) => {
-      const body: Record<string, unknown> = { summary };
-      if (boardId) body.board = { id: boardId };
-      if (companyId) body.company = { id: companyId };
-      if (contactId) body.contact = { id: contactId };
-      if (statusId) body.status = { id: statusId };
-      if (priorityId) body.priority = { id: priorityId };
-      if (typeId) body.type = { id: typeId };
-      if (subTypeId) body.subType = { id: subTypeId };
-      if (initialDescription) body.initialDescription = initialDescription;
-
-      const result = await client.post("/service/tickets", body);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      try {
+        const body: Record<string, unknown> = { summary };
+        if (boardId) body.board = { id: boardId };
+        if (companyId) body.company = { id: companyId };
+        if (contactId) body.contact = { id: contactId };
+        if (statusId) body.status = { id: statusId };
+        if (priorityId) body.priority = { id: priorityId };
+        if (typeId) body.type = { id: typeId };
+        if (subTypeId) body.subType = { id: subTypeId };
+        if (initialDescription) body.initialDescription = initialDescription;
+        const result = await client.post<Record<string, unknown>>("/service/tickets", body);
+        return shapeRaw(result);
+      } catch (err) {
+        return toolErrorFromCatch("cw_create_ticket", err, {
+          hint: "Verify boardId with cw_list_boards and companyId with cw_search_companies.",
+        });
+      }
     },
   );
 
@@ -95,38 +145,64 @@ export function registerTicketTools(server: McpServer, client: CwManageClient) {
     },
     titled("CW Manage: update ticket", WRITE_UPDATE),
     async ({ id, operations }) => {
-      const result = await client.patch(`/service/tickets/${id}`, operations);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      try {
+        const result = await client.patch<Record<string, unknown>>(`/service/tickets/${id}`, operations);
+        return shapeRaw(result);
+      } catch (err) {
+        return toolErrorFromCatch("cw_update_ticket", err, {
+          hint: "Verify ticket id and operation paths (e.g. 'status/id', 'summary').",
+        });
+      }
     },
   );
 
   server.tool(
     "cw_get_ticket_notes",
-    "Get all notes/discussions on a service ticket, including notes from any child tickets.",
+    "Get all notes/discussions on a service ticket, including notes from any child tickets. Returns a compact summary by default; pass full=true for complete note objects.",
     {
       id: z.number().describe("Ticket ID"),
       page: z.number().optional().describe("Page number (default: 1)"),
       pageSize: z.number().optional().describe("Results per page (default: 25, max: 1000)"),
+      fields: z.array(z.string()).optional().describe('Optional. Return only these fields (e.g. ["id","status","summary"]). Overrides the default compact summary.'),
+      full: z.boolean().optional().describe('Optional. When true, return the complete vendor object. Use only when you need fields not in the default summary.'),
     },
     titled("CW Manage: get ticket notes", READ),
-    async ({ id, page, pageSize }) => {
+    async ({ id, page, pageSize, fields, full }) => {
+      const noteSummary: SummaryFn = (n) => ({
+        id: n["id"],
+        text: typeof n["text"] === "string" ? n["text"].slice(0, 300) : n["text"],
+        member: (n["member"] as Record<string, unknown> | undefined)?.name,
+        dateCreated: n["dateCreated"],
+        internalAnalysisFlag: n["internalAnalysisFlag"],
+        resolutionFlag: n["resolutionFlag"],
+      });
       try {
-        const result = await client.get(`/service/tickets/${id}/allNotes`, {
+        const result = await client.get<unknown[]>(`/service/tickets/${id}/allNotes`, {
           page: page ?? 1,
           pageSize: pageSize ?? 25,
         });
-        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+        const items = Array.isArray(result) ? result : [];
+        return shapeList(items as Record<string, unknown>[], noteSummary, { fields, full });
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         if (msg.includes("404") || msg.includes("405")) {
           // allNotes not supported on this CWM version — fall back to /notes
-          const result = await client.get(`/service/tickets/${id}/notes`, {
-            page: page ?? 1,
-            pageSize: pageSize ?? 25,
-          });
-          return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+          try {
+            const result = await client.get<unknown[]>(`/service/tickets/${id}/notes`, {
+              page: page ?? 1,
+              pageSize: pageSize ?? 25,
+            });
+            const items = Array.isArray(result) ? result : [];
+            return shapeList(items as Record<string, unknown>[], noteSummary, { fields, full });
+          } catch (fallbackErr) {
+            return toolErrorFromCatch("cw_get_ticket_notes", fallbackErr, {
+              hint: "Verify ticket id with cw_search_tickets first.",
+            });
+          }
         }
-        throw err;
+        return toolErrorFromCatch("cw_get_ticket_notes", err, {
+          hint: "Verify ticket id with cw_search_tickets first.",
+        });
       }
     },
   );
@@ -144,14 +220,19 @@ export function registerTicketTools(server: McpServer, client: CwManageClient) {
     },
     titled("CW Manage: add ticket note", WRITE_CREATE),
     async ({ id, text, detailDescriptionFlag, internalAnalysisFlag, resolutionFlag, customerUpdatedFlag }) => {
-      const body: Record<string, unknown> = { text };
-      if (detailDescriptionFlag !== undefined) body.detailDescriptionFlag = detailDescriptionFlag;
-      if (internalAnalysisFlag !== undefined) body.internalAnalysisFlag = internalAnalysisFlag;
-      if (resolutionFlag !== undefined) body.resolutionFlag = resolutionFlag;
-      if (customerUpdatedFlag !== undefined) body.customerUpdatedFlag = customerUpdatedFlag;
-
-      const result = await client.post(`/service/tickets/${id}/notes`, body);
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      try {
+        const body: Record<string, unknown> = { text };
+        if (detailDescriptionFlag !== undefined) body.detailDescriptionFlag = detailDescriptionFlag;
+        if (internalAnalysisFlag !== undefined) body.internalAnalysisFlag = internalAnalysisFlag;
+        if (resolutionFlag !== undefined) body.resolutionFlag = resolutionFlag;
+        if (customerUpdatedFlag !== undefined) body.customerUpdatedFlag = customerUpdatedFlag;
+        const result = await client.post<Record<string, unknown>>(`/service/tickets/${id}/notes`, body);
+        return shapeRaw(result);
+      } catch (err) {
+        return toolErrorFromCatch("cw_add_ticket_note", err, {
+          hint: "Verify ticket id with cw_search_tickets first.",
+        });
+      }
     },
   );
 }

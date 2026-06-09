@@ -177,6 +177,15 @@ firebase-adminsdk*.json
 !plugins/
 !plugins/**
 
+# ---- skills — canonical skill definitions (SKILL.md, references/, hooks/, scripts/, agents/) ----
+!skills/
+!skills/**
+
+# ---- .claude-plugin — root marketplace manifest ----
+# Note: /.* and /.*/ in SECTION 2 block root-level dotdirs; we must re-allow this one.
+!.claude-plugin/
+!.claude-plugin/**
+
 
 # ============================================================================
 # SECTION 5 — Re-exclude generated, local, and machine-specific artifacts
@@ -264,3 +273,4 @@ desktop.ini
 
 # Built MCPB bundles — too large for GitHub (100 MB hard limit); ship via Releases
 *.mcpb
+.orchestrator/

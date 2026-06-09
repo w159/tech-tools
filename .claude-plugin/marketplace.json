@@ -1,0 +1,195 @@
+{
+  "name": "aikit",
+  "description": "MCP-backed skills and workflow plugins for MSP operations, vendor platforms, and knowledge workers.",
+  "owner": {
+    "name": "Jerry",
+    "email": "jmorg83@gmail.com"
+  },
+  "metadata": {
+    "pluginRoot": "./plugins"
+  },
+  "plugins": [
+    {
+      "name": "auvik-network-ops",
+      "source": "./plugins/auvik-network-ops",
+      "description": "Network operations skills for Auvik-monitored infrastructure — triage alerts, hunt bandwidth hogs, and detect config drift.",
+      "category": "msp",
+      "keywords": ["auvik", "network", "rmm", "msp", "alerts", "bandwidth", "config-drift", "topology"]
+    },
+    {
+      "name": "brand-voice",
+      "source": "./plugins/brand-voice",
+      "description": "Discover, enforce, and generate brand voice guidelines across all content.",
+      "category": "content",
+      "keywords": ["brand", "voice", "content", "guidelines", "tone", "writing"]
+    },
+    {
+      "name": "cipp-m365-ops",
+      "source": "./plugins/cipp-m365-ops",
+      "description": "M365 management skills for multi-tenant CIPP environments — tenant health sweeps, BEC incident response, and user offboarding.",
+      "category": "msp",
+      "keywords": ["cipp", "m365", "microsoft-365", "msp", "bec", "offboard", "tenant", "security"]
+    },
+    {
+      "name": "connectwise-psa-ops",
+      "source": "./plugins/connectwise-psa-ops",
+      "description": "PSA skills for ConnectWise Manage — ticket triage, SLA breach monitoring, technician utilization, and project burn-down.",
+      "category": "msp",
+      "keywords": ["connectwise", "psa", "tickets", "sla", "utilization", "projects", "msp"]
+    },
+    {
+      "name": "cowork-plugin-management",
+      "source": "./plugins/cowork-plugin-management",
+      "description": "Create, customize, and manage Claude Code plugins inside the Cowork desktop environment.",
+      "category": "developer-tools",
+      "keywords": ["cowork", "plugin", "management", "customization"]
+    },
+    {
+      "name": "customer-support",
+      "source": "./plugins/customer-support",
+      "description": "Triage tickets, draft responses, research customer questions, manage escalations, and build knowledge-base articles.",
+      "category": "customer-support",
+      "keywords": ["customer-support", "tickets", "triage", "knowledge-base", "escalation"]
+    },
+    {
+      "name": "data",
+      "source": "./plugins/data",
+      "description": "Explore datasets, write SQL queries, validate data quality, build visualizations, and generate interactive dashboards.",
+      "category": "data",
+      "keywords": ["data", "sql", "analytics", "visualization", "dashboard", "statistics"]
+    },
+    {
+      "name": "design",
+      "source": "./plugins/design",
+      "description": "Review accessibility, critique designs, manage design systems, write UX copy, and synthesize user research.",
+      "category": "design",
+      "keywords": ["design", "ux", "accessibility", "wcag", "design-system", "ui"]
+    },
+    {
+      "name": "engineering",
+      "source": "./plugins/engineering",
+      "description": "Code review, system design, incident response, testing strategy, and tech-debt management for engineering teams.",
+      "category": "engineering",
+      "keywords": ["engineering", "code-review", "incident-response", "system-design", "testing", "tech-debt"]
+    },
+    {
+      "name": "enterprise-search",
+      "source": "./plugins/enterprise-search",
+      "description": "Synthesize knowledge across enterprise sources — search, digest, and manage information from connected repositories.",
+      "category": "productivity",
+      "keywords": ["search", "knowledge", "enterprise", "synthesis", "research"]
+    },
+    {
+      "name": "finance",
+      "source": "./plugins/finance",
+      "description": "Financial close, journal entry prep, reconciliation, variance analysis, financial statements, and SOX audit workflows.",
+      "category": "finance",
+      "keywords": ["finance", "accounting", "reconciliation", "journal-entry", "sox", "audit", "close"]
+    },
+    {
+      "name": "human-resources",
+      "source": "./plugins/human-resources",
+      "description": "Compensation benchmarking, recruiting pipeline, interview prep, org planning, people analytics, and handbook authoring.",
+      "category": "hr",
+      "keywords": ["hr", "human-resources", "recruiting", "compensation", "people-analytics", "onboarding"]
+    },
+    {
+      "name": "kaseya-spanning-backup-ops",
+      "source": "./plugins/kaseya-spanning-backup-ops",
+      "description": "Backup operations skills for Kaseya Spanning Backup — sweep health, orchestrate restores, and audit seat utilization.",
+      "category": "msp",
+      "keywords": ["kaseya", "spanning", "backup", "restore", "m365", "google-workspace", "saas-backup", "msp"]
+    },
+    {
+      "name": "knowbe4-security-training",
+      "source": "./plugins/knowbe4-security-training",
+      "description": "Security awareness skills for KnowBe4 — user risk heatmaps, phishing-failure cohorts, and campaign effectiveness deltas.",
+      "category": "msp",
+      "keywords": ["knowbe4", "security-awareness", "phishing", "training", "risk-score", "msp"]
+    },
+    {
+      "name": "msp-command-center",
+      "source": "./plugins/msp-command-center",
+      "description": "Cross-platform MSP skills that fan out across all connected platforms — morning briefing, client 360, and incident response.",
+      "category": "msp",
+      "keywords": ["msp", "dashboard", "morning-briefing", "incident-response", "cross-platform", "client-360"]
+    },
+    {
+      "name": "msp-tool-bridge-ops",
+      "source": "./plugins/msp-tool-bridge-ops",
+      "description": "Bridge skills for MSP workflows that cross platforms — ConnectWise tickets to NinjaOne telemetry and back.",
+      "category": "msp",
+      "keywords": ["msp", "bridge", "interop", "connectwise", "ninjaone", "psa", "rmm", "ticket-to-device"]
+    },
+    {
+      "name": "ninjaone-rmm-ops",
+      "source": "./plugins/ninjaone-rmm-ops",
+      "description": "RMM skills for NinjaOne — fleet health sweeps, mass incident response, and offline device hunting across organizations.",
+      "category": "msp",
+      "keywords": ["ninjaone", "rmm", "fleet", "devices", "alerts", "patch", "msp"]
+    },
+    {
+      "name": "nudge",
+      "source": "./plugins/nudge",
+      "description": "Keep AI coding agents productive — detects when Codex, Claude Code, or Gemini CLI stalls in tmux and sends continuation signals.",
+      "category": "developer-tools",
+      "keywords": ["nudge", "coding-agent", "tmux", "productivity", "automation"]
+    },
+    {
+      "name": "operations",
+      "source": "./plugins/operations",
+      "description": "Change management, process optimization, resource planning, risk assessment, and vendor management for operations teams.",
+      "category": "operations",
+      "keywords": ["operations", "change-management", "process", "risk", "compliance", "vendor-management"]
+    },
+    {
+      "name": "orchestrate",
+      "source": "./plugins/orchestrate",
+      "description": "Multi-agent coding orchestrator — drives whole-codebase build, fix, and audit work through subagents with real execution and independent verification.",
+      "category": "developer-tools",
+      "keywords": ["orchestrate", "subagents", "prompt-optimization", "code-review", "verification", "hooks", "agentic", "coding-agent"]
+    },
+    {
+      "name": "paylocity-hr-ops",
+      "source": "./plugins/paylocity-hr-ops",
+      "description": "HR and payroll skills for Paylocity — roster snapshots, onboarding gap analysis, pay-rate audits, and deduction reviews.",
+      "category": "hr",
+      "keywords": ["paylocity", "hr", "payroll", "employees", "onboarding", "pay-rate", "deductions"]
+    },
+    {
+      "name": "pdf-viewer",
+      "source": "./plugins/pdf-viewer",
+      "description": "View, annotate, and sign PDFs in a live interactive viewer — mark up contracts, fill forms, stamp approvals, and place signatures.",
+      "category": "productivity",
+      "keywords": ["pdf", "viewer", "annotations", "signatures", "contracts", "forms"]
+    },
+    {
+      "name": "product-management",
+      "source": "./plugins/product-management",
+      "description": "Write feature specs, plan roadmaps, synthesize user research, update stakeholders, and track the competitive landscape.",
+      "category": "product",
+      "keywords": ["product-management", "roadmap", "specs", "user-research", "stakeholders"]
+    },
+    {
+      "name": "productivity",
+      "source": "./plugins/productivity",
+      "description": "Two-tier memory management and task tracking to make Claude a true workplace collaborator across projects and commitments.",
+      "category": "productivity",
+      "keywords": ["productivity", "memory", "tasks", "workflow", "collaboration"]
+    },
+    {
+      "name": "threatlocker-zerotrust-ops",
+      "source": "./plugins/threatlocker-zerotrust-ops",
+      "description": "Zero-trust endpoint skills for ThreatLocker — approval request triage, forensic audit investigations, and multi-org block volume rollups.",
+      "category": "msp",
+      "keywords": ["threatlocker", "zero-trust", "allowlisting", "approvals", "audit", "endpoint", "msp"]
+    },
+    {
+      "name": "vanta-compliance-ops",
+      "source": "./plugins/vanta-compliance-ops",
+      "description": "GRC skills for Vanta — framework audit readiness, missing evidence hunting, vendor risk rollups, and vulnerability triage.",
+      "category": "compliance",
+      "keywords": ["vanta", "compliance", "soc2", "iso27001", "hipaa", "grc", "evidence", "vendor-risk", "vulnerabilities"]
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 {
   "manifest_version": "0.3",
   "name": "threatlocker-mcp",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "display_name": "ThreatLocker MCP Server",
   "description": "Query and manage ThreatLocker endpoint application-control data — computers, groups, approval requests, and audit logs — for MSP security AI agents.",
   "long_description": "Use this server when you need to automate ThreatLocker Portal operations. List and filter computers and computer groups by organization; retrieve and act on software approval requests (approve/deny); search the audit log for blocked application events; and manage organizations (MSP child tenants). Supports scoping to a specific managed organization via the optional THREATLOCKER_ORGANIZATION_ID config, or acting as the primary org by default.",
@@ -48,9 +48,8 @@
     "threatlocker_base_url": {
       "type": "string",
       "title": "Portal API base URL",
-      "description": "Prefilled with the global default. Override for non-default shards (e.g. https://portalapi.eu.threatlocker.com/portalapi). Locate yours at https://threatlocker.kb.help/locating-your-organizations-instance/",
-      "required": false,
-      "default": "https://portalapi.g.threatlocker.com/portalapi"
+      "description": "Optional. Leave blank to use the vendor default (https://portalapi.g.threatlocker.com/portalapi). Only set for non-default shards (e.g. https://portalapi.eu.threatlocker.com/portalapi). Locate your region at https://threatlocker.kb.help/locating-your-organizations-instance/",
+      "required": false
     }
   },
   "compatibility": {

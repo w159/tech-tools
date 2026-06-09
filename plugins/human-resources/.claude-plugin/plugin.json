@@ -1,0 +1,17 @@
+{
+  "name": "human-resources",
+  "version": "1.0.0",
+  "description": "Compensation benchmarking, recruiting pipeline management, interview prep, org planning, people analytics, and employee handbook authoring.",
+  "keywords": [
+    "hr",
+    "human-resources",
+    "recruiting",
+    "compensation",
+    "people-analytics",
+    "onboarding"
+  ],
+  "author": {
+    "name": "Jerry",
+    "email": "jmorg83@gmail.com"
+  }
+}

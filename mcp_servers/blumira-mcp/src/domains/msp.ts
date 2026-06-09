@@ -2,6 +2,75 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { DomainHandler, CallToolResult } from '../utils/types.js';
 import { getClient } from '../utils/client.js';
 import { logger } from '../utils/logger.js';
+import {
+  shapeList,
+  shapeItem,
+  shapeRaw,
+  extractShapeArgs,
+  SHAPE_PROPS,
+  toolError,
+  toolErrorFromCatch,
+  type SummaryFn,
+} from './_helpers.js';
+
+// ---------------------------------------------------------------------------
+// Compact summaries
+// ---------------------------------------------------------------------------
+
+const accountSummary: SummaryFn = (item) => ({
+  id:           item.id,
+  name:         item.name,
+  openFindings: item.openFindings ?? item.open_findings,
+  agentCount:   item.agentCount ?? item.agent_count,
+  userCount:    item.userCount ?? item.user_count,
+  license:      item.license,
+});
+
+const findingSummary: SummaryFn = (item) => ({
+  id:       item.id,
+  name:     item.name,
+  type:     item.type,
+  priority: item.priority,
+  severity: item.severity,
+  status:   item.status,
+  created:  item.created,
+  modified: item.modified,
+  org:      item.org,
+});
+
+const deviceSummary: SummaryFn = (item) => ({
+  id:       item.id,
+  hostname: item.hostname,
+  status:   item.status,
+  lastSeen: item.lastSeen ?? item.last_seen,
+  os:       item.os,
+});
+
+const keySummary: SummaryFn = (item) => ({
+  id:      item.id,
+  label:   item.label,
+  active:  item.active,
+  created: item.created,
+});
+
+const userSummary: SummaryFn = (item) => ({
+  id:        item.id,
+  email:     item.email,
+  firstName: item.firstName ?? item.first_name,
+  lastName:  item.lastName ?? item.last_name,
+  role:      item.role,
+});
+
+const commentSummary: SummaryFn = (item) => ({
+  id:      item.id,
+  sender:  item.sender,
+  body:    item.body,
+  created: item.created,
+});
+
+// ---------------------------------------------------------------------------
+// Tool definitions
+// ---------------------------------------------------------------------------
 
 function getTools(): Tool[] {
   return [
@@ -11,10 +80,11 @@ function getTools(): Tool[] {
       inputSchema: {
         type: 'object' as const,
         properties: {
-          page: { type: 'number', description: 'Page number' },
-          page_size: { type: 'number', description: 'Results per page' },
-          limit: { type: 'number', description: 'Maximum records' },
-          order_by: { type: 'string', description: 'Order by field' },
+          ...SHAPE_PROPS,
+          page: { type: 'number', description: 'Page number.' },
+          page_size: { type: 'number', description: 'Results per page.' },
+          limit: { type: 'number', description: 'Maximum records to return.' },
+          order_by: { type: 'string', description: 'Sort field and direction.' },
         },
       },
     },
@@ -24,7 +94,8 @@ function getTools(): Tool[] {
       inputSchema: {
         type: 'object' as const,
         properties: {
-          account_id: { type: 'string', description: 'Account UUID' },
+          ...SHAPE_PROPS,
+          account_id: { type: 'string', description: 'Account UUID (required).' },
         },
         required: ['account_id'],
       },
@@ -35,13 +106,14 @@ function getTools(): Tool[] {
       inputSchema: {
         type: 'object' as const,
         properties: {
-          page: { type: 'number', description: 'Page number' },
-          page_size: { type: 'number', description: 'Results per page' },
-          limit: { type: 'number', description: 'Maximum records' },
-          status: { type: 'number', description: 'Filter by status code' },
-          priority: { type: 'number', description: 'Filter by priority' },
-          created_after: { type: 'string', description: 'Created after datetime (UTC)' },
-          created_before: { type: 'string', description: 'Created before datetime (UTC)' },
+          ...SHAPE_PROPS,
+          page: { type: 'number', description: 'Page number.' },
+          page_size: { type: 'number', description: 'Results per page.' },
+          limit: { type: 'number', description: 'Maximum records to return.' },
+          status: { type: 'number', description: 'Filter by status code (10=Open, 40=Resolved).' },
+          priority: { type: 'number', description: 'Filter by priority (1–5).' },
+          created_after: { type: 'string', description: 'ISO 8601 UTC lower bound for creation time.' },
+          created_before: { type: 'string', description: 'ISO 8601 UTC upper bound for creation time.' },
         },
       },
     },
@@ -51,11 +123,12 @@ function getTools(): Tool[] {
       inputSchema: {
         type: 'object' as const,
         properties: {
-          account_id: { type: 'string', description: 'Account UUID' },
-          page: { type: 'number', description: 'Page number' },
-          page_size: { type: 'number', description: 'Results per page' },
-          status: { type: 'number', description: 'Filter by status code' },
-          priority: { type: 'number', description: 'Filter by priority' },
+          ...SHAPE_PROPS,
+          account_id: { type: 'string', description: 'Account UUID (required).' },
+          page: { type: 'number', description: 'Page number.' },
+          page_size: { type: 'number', description: 'Results per page.' },
+          status: { type: 'number', description: 'Filter by status code (10=Open, 40=Resolved).' },
+          priority: { type: 'number', description: 'Filter by priority (1–5).' },
         },
         required: ['account_id'],
       },
@@ -66,8 +139,9 @@ function getTools(): Tool[] {
       inputSchema: {
         type: 'object' as const,
         properties: {
-          account_id: { type: 'string', description: 'Account UUID' },
-          finding_id: { type: 'string', description: 'Finding UUID' },
+          ...SHAPE_PROPS,
+          account_id: { type: 'string', description: 'Account UUID (required).' },
+          finding_id: { type: 'string', description: 'Finding UUID (required).' },
         },
         required: ['account_id', 'finding_id'],
       },
@@ -78,10 +152,10 @@ function getTools(): Tool[] {
       inputSchema: {
         type: 'object' as const,
         properties: {
-          account_id: { type: 'string', description: 'Account UUID' },
-          finding_id: { type: 'string', description: 'Finding UUID' },
-          resolution: { type: 'number', description: 'Resolution ID (10, 20, 30, or 40)' },
-          resolution_notes: { type: 'string', description: 'Optional resolution notes' },
+          account_id: { type: 'string', description: 'Account UUID (required).' },
+          finding_id: { type: 'string', description: 'Finding UUID (required).' },
+          resolution: { type: 'number', description: 'Resolution ID (required): 10=Valid, 20=False Positive, 30=No Action Needed, 40=Risk Accepted.' },
+          resolution_notes: { type: 'string', description: 'Optional resolution notes.' },
         },
         required: ['account_id', 'finding_id', 'resolution'],
       },
@@ -92,10 +166,10 @@ function getTools(): Tool[] {
       inputSchema: {
         type: 'object' as const,
         properties: {
-          account_id: { type: 'string', description: 'Account UUID' },
-          finding_id: { type: 'string', description: 'Finding UUID' },
-          owner_type: { type: 'string', enum: ['responder', 'analyst', 'manager'], description: 'Type of owner' },
-          owners: { type: 'array', items: { type: 'string' }, description: 'Array of user UUIDs' },
+          account_id: { type: 'string', description: 'Account UUID (required).' },
+          finding_id: { type: 'string', description: 'Finding UUID (required).' },
+          owner_type: { type: 'string', enum: ['responder', 'analyst', 'manager'], description: 'Type of owner (required).' },
+          owners: { type: 'array', items: { type: 'string' }, description: 'Array of user UUIDs (required); pass [] to clear.' },
         },
         required: ['account_id', 'finding_id', 'owner_type', 'owners'],
       },
@@ -106,8 +180,9 @@ function getTools(): Tool[] {
       inputSchema: {
         type: 'object' as const,
         properties: {
-          account_id: { type: 'string', description: 'Account UUID' },
-          finding_id: { type: 'string', description: 'Finding UUID' },
+          ...SHAPE_PROPS,
+          account_id: { type: 'string', description: 'Account UUID (required).' },
+          finding_id: { type: 'string', description: 'Finding UUID (required).' },
         },
         required: ['account_id', 'finding_id'],
       },
@@ -118,10 +193,10 @@ function getTools(): Tool[] {
       inputSchema: {
         type: 'object' as const,
         properties: {
-          account_id: { type: 'string', description: 'Account UUID' },
-          finding_id: { type: 'string', description: 'Finding UUID' },
-          body: { type: 'string', description: 'Comment body (may contain HTML)' },
-          sender: { type: 'string', description: 'UUID of the commenting user' },
+          account_id: { type: 'string', description: 'Account UUID (required).' },
+          finding_id: { type: 'string', description: 'Finding UUID (required).' },
+          body: { type: 'string', description: 'Comment body (required, HTML allowed).' },
+          sender: { type: 'string', description: 'UUID of the commenting user (required).' },
         },
         required: ['account_id', 'finding_id', 'body', 'sender'],
       },
@@ -132,9 +207,10 @@ function getTools(): Tool[] {
       inputSchema: {
         type: 'object' as const,
         properties: {
-          account_id: { type: 'string', description: 'Account UUID' },
-          page: { type: 'number', description: 'Page number' },
-          page_size: { type: 'number', description: 'Results per page' },
+          ...SHAPE_PROPS,
+          account_id: { type: 'string', description: 'Account UUID (required).' },
+          page: { type: 'number', description: 'Page number.' },
+          page_size: { type: 'number', description: 'Results per page.' },
         },
         required: ['account_id'],
       },
@@ -145,8 +221,9 @@ function getTools(): Tool[] {
       inputSchema: {
         type: 'object' as const,
         properties: {
-          account_id: { type: 'string', description: 'Account UUID' },
-          device_id: { type: 'string', description: 'Device UUID' },
+          ...SHAPE_PROPS,
+          account_id: { type: 'string', description: 'Account UUID (required).' },
+          device_id: { type: 'string', description: 'Device UUID (required).' },
         },
         required: ['account_id', 'device_id'],
       },
@@ -157,9 +234,10 @@ function getTools(): Tool[] {
       inputSchema: {
         type: 'object' as const,
         properties: {
-          account_id: { type: 'string', description: 'Account UUID' },
-          page: { type: 'number', description: 'Page number' },
-          page_size: { type: 'number', description: 'Results per page' },
+          ...SHAPE_PROPS,
+          account_id: { type: 'string', description: 'Account UUID (required).' },
+          page: { type: 'number', description: 'Page number.' },
+          page_size: { type: 'number', description: 'Results per page.' },
         },
         required: ['account_id'],
       },
@@ -170,8 +248,9 @@ function getTools(): Tool[] {
       inputSchema: {
         type: 'object' as const,
         properties: {
-          account_id: { type: 'string', description: 'Account UUID' },
-          key_id: { type: 'string', description: 'Key UUID' },
+          ...SHAPE_PROPS,
+          account_id: { type: 'string', description: 'Account UUID (required).' },
+          key_id: { type: 'string', description: 'Key UUID (required).' },
         },
         required: ['account_id', 'key_id'],
       },
@@ -182,9 +261,10 @@ function getTools(): Tool[] {
       inputSchema: {
         type: 'object' as const,
         properties: {
-          account_id: { type: 'string', description: 'Account UUID' },
-          page: { type: 'number', description: 'Page number' },
-          page_size: { type: 'number', description: 'Results per page' },
+          ...SHAPE_PROPS,
+          account_id: { type: 'string', description: 'Account UUID (required).' },
+          page: { type: 'number', description: 'Page number.' },
+          page_size: { type: 'number', description: 'Results per page.' },
         },
         required: ['account_id'],
       },
@@ -192,106 +272,138 @@ function getTools(): Tool[] {
   ];
 }
 
+// ---------------------------------------------------------------------------
+// Handler
+// ---------------------------------------------------------------------------
+
 async function handleCall(toolName: string, args: Record<string, unknown>): Promise<CallToolResult> {
+  const shapeArgs = extractShapeArgs(args);
+  const accountId = args.account_id as string;
+  const findingId = args.finding_id as string;
+
   try {
     const client = await getClient();
-    const accountId = args.account_id as string;
-    const findingId = args.finding_id as string;
 
-  switch (toolName) {
-    case 'blumira_msp_accounts_list': {
-      logger.info('API call: msp.listAccounts', args);
-      const res = await client.msp.listAccounts(args as any);
-      return { content: [{ type: 'text' as const, text: JSON.stringify(res, null, 2) }] };
+    switch (toolName) {
+      case 'blumira_msp_accounts_list': {
+        logger.info('API call: msp.listAccounts', args);
+        const res = await client.msp.listAccounts(args as any);
+        const items = Array.isArray(res) ? res : (res as any)?.results ?? (res as any)?.data ?? [];
+        return shapeList(items, accountSummary, shapeArgs);
+      }
+      case 'blumira_msp_accounts_get': {
+        if (!accountId) return toolError('INVALID_ARGS', 'account_id is required.', { hint: 'Pass the account UUID string.' });
+        logger.info('API call: msp.getAccount', { accountId });
+        const res = await client.msp.getAccount(accountId);
+        return shapeItem(res as Record<string, unknown>, accountSummary, shapeArgs);
+      }
+      case 'blumira_msp_findings_all': {
+        logger.info('API call: msp.listAllFindings', args);
+        const res = await client.msp.listAllFindings(args as any);
+        const items = Array.isArray(res) ? res : (res as any)?.results ?? (res as any)?.data ?? [];
+        return shapeList(items, findingSummary, shapeArgs);
+      }
+      case 'blumira_msp_findings_list': {
+        if (!accountId) return toolError('INVALID_ARGS', 'account_id is required.', { hint: 'Pass the account UUID string.' });
+        logger.info('API call: msp.listFindings', { accountId });
+        const res = await client.msp.listFindings(accountId, args as any);
+        const items = Array.isArray(res) ? res : (res as any)?.results ?? (res as any)?.data ?? [];
+        return shapeList(items, findingSummary, shapeArgs);
+      }
+      case 'blumira_msp_findings_get': {
+        if (!accountId) return toolError('INVALID_ARGS', 'account_id is required.', { hint: 'Pass the account UUID string.' });
+        if (!findingId) return toolError('INVALID_ARGS', 'finding_id is required.', { hint: 'Pass the finding UUID string.' });
+        logger.info('API call: msp.getFinding', { accountId, findingId });
+        const res = await client.msp.getFinding(accountId, findingId);
+        return shapeItem(res as Record<string, unknown>, findingSummary, shapeArgs);
+      }
+      case 'blumira_msp_findings_resolve': {
+        if (!accountId) return toolError('INVALID_ARGS', 'account_id is required.', { hint: 'Pass the account UUID string.' });
+        if (!findingId) return toolError('INVALID_ARGS', 'finding_id is required.', { hint: 'Pass the finding UUID string.' });
+        if (args.resolution === undefined) return toolError('INVALID_ARGS', 'resolution is required.', { hint: 'Use 10=Valid, 20=False Positive, 30=No Action Needed, 40=Risk Accepted.' });
+        logger.info('API call: msp.resolveFinding', { accountId, findingId });
+        const res = await client.msp.resolveFinding(accountId, findingId, {
+          resolution: args.resolution as number,
+          resolution_notes: args.resolution_notes as string | undefined,
+        });
+        return shapeRaw(res);
+      }
+      case 'blumira_msp_findings_assign': {
+        if (!accountId) return toolError('INVALID_ARGS', 'account_id is required.', { hint: 'Pass the account UUID string.' });
+        if (!findingId) return toolError('INVALID_ARGS', 'finding_id is required.', { hint: 'Pass the finding UUID string.' });
+        if (!args.owner_type) return toolError('INVALID_ARGS', 'owner_type is required.', { hint: 'Use one of: responder, analyst, manager.' });
+        if (!args.owners) return toolError('INVALID_ARGS', 'owners is required.', { hint: 'Pass an array of user UUID strings; pass [] to clear.' });
+        logger.info('API call: msp.assignFindingOwners', { accountId, findingId });
+        const res = await client.msp.assignFindingOwners(accountId, findingId, {
+          owner_type: args.owner_type as 'responder' | 'analyst' | 'manager',
+          owners: args.owners as string[],
+        });
+        return shapeRaw(res);
+      }
+      case 'blumira_msp_findings_comments_list': {
+        if (!accountId) return toolError('INVALID_ARGS', 'account_id is required.', { hint: 'Pass the account UUID string.' });
+        if (!findingId) return toolError('INVALID_ARGS', 'finding_id is required.', { hint: 'Pass the finding UUID string.' });
+        logger.info('API call: msp.listFindingComments', { accountId, findingId });
+        const res = await client.msp.listFindingComments(accountId, findingId);
+        const items = Array.isArray(res) ? res : (res as any)?.results ?? (res as any)?.data ?? [];
+        return shapeList(items, commentSummary, shapeArgs);
+      }
+      case 'blumira_msp_findings_comments_add': {
+        if (!accountId) return toolError('INVALID_ARGS', 'account_id is required.', { hint: 'Pass the account UUID string.' });
+        if (!findingId) return toolError('INVALID_ARGS', 'finding_id is required.', { hint: 'Pass the finding UUID string.' });
+        if (!args.body) return toolError('INVALID_ARGS', 'body is required.', { hint: 'Pass the comment text (HTML allowed).' });
+        if (!args.sender) return toolError('INVALID_ARGS', 'sender is required.', { hint: 'Pass the user UUID from blumira_msp_users_list.' });
+        logger.info('API call: msp.addFindingComment', { accountId, findingId });
+        const res = await client.msp.addFindingComment(accountId, findingId, {
+          body: args.body as string,
+          sender: args.sender as string,
+        });
+        return shapeRaw(res);
+      }
+      case 'blumira_msp_devices_list': {
+        if (!accountId) return toolError('INVALID_ARGS', 'account_id is required.', { hint: 'Pass the account UUID string.' });
+        logger.info('API call: msp.listDevices', { accountId });
+        const res = await client.msp.listDevices(accountId, args as any);
+        const items = Array.isArray(res) ? res : (res as any)?.results ?? (res as any)?.data ?? [];
+        return shapeList(items, deviceSummary, shapeArgs);
+      }
+      case 'blumira_msp_devices_get': {
+        if (!accountId) return toolError('INVALID_ARGS', 'account_id is required.', { hint: 'Pass the account UUID string.' });
+        const deviceId = args.device_id as string;
+        if (!deviceId) return toolError('INVALID_ARGS', 'device_id is required.', { hint: 'Pass the device UUID string.' });
+        logger.info('API call: msp.getDevice', { accountId, deviceId });
+        const res = await client.msp.getDevice(accountId, deviceId);
+        return shapeItem(res as Record<string, unknown>, deviceSummary, shapeArgs);
+      }
+      case 'blumira_msp_keys_list': {
+        if (!accountId) return toolError('INVALID_ARGS', 'account_id is required.', { hint: 'Pass the account UUID string.' });
+        logger.info('API call: msp.listKeys', { accountId });
+        const res = await client.msp.listKeys(accountId, args as any);
+        const items = Array.isArray(res) ? res : (res as any)?.results ?? (res as any)?.data ?? [];
+        return shapeList(items, keySummary, shapeArgs);
+      }
+      case 'blumira_msp_keys_get': {
+        if (!accountId) return toolError('INVALID_ARGS', 'account_id is required.', { hint: 'Pass the account UUID string.' });
+        const keyId = args.key_id as string;
+        if (!keyId) return toolError('INVALID_ARGS', 'key_id is required.', { hint: 'Pass the key UUID string.' });
+        logger.info('API call: msp.getKey', { accountId, keyId });
+        const res = await client.msp.getKey(accountId, keyId);
+        return shapeItem(res as Record<string, unknown>, keySummary, shapeArgs);
+      }
+      case 'blumira_msp_users_list': {
+        if (!accountId) return toolError('INVALID_ARGS', 'account_id is required.', { hint: 'Pass the account UUID string.' });
+        logger.info('API call: msp.listUsers', { accountId });
+        const res = await client.msp.listUsers(accountId, args as any);
+        const items = Array.isArray(res) ? res : (res as any)?.results ?? (res as any)?.data ?? [];
+        return shapeList(items, userSummary, shapeArgs);
+      }
+      default:
+        return toolError('INVALID_ARGS', `Unknown tool: ${toolName}`);
     }
-    case 'blumira_msp_accounts_get': {
-      logger.info('API call: msp.getAccount', { accountId });
-      const res = await client.msp.getAccount(accountId);
-      return { content: [{ type: 'text' as const, text: JSON.stringify(res, null, 2) }] };
-    }
-    case 'blumira_msp_findings_all': {
-      logger.info('API call: msp.listAllFindings', args);
-      const res = await client.msp.listAllFindings(args as any);
-      return { content: [{ type: 'text' as const, text: JSON.stringify(res, null, 2) }] };
-    }
-    case 'blumira_msp_findings_list': {
-      logger.info('API call: msp.listFindings', { accountId });
-      const res = await client.msp.listFindings(accountId, args as any);
-      return { content: [{ type: 'text' as const, text: JSON.stringify(res, null, 2) }] };
-    }
-    case 'blumira_msp_findings_get': {
-      logger.info('API call: msp.getFinding', { accountId, findingId });
-      const res = await client.msp.getFinding(accountId, findingId);
-      return { content: [{ type: 'text' as const, text: JSON.stringify(res, null, 2) }] };
-    }
-    case 'blumira_msp_findings_resolve': {
-      logger.info('API call: msp.resolveFinding', { accountId, findingId });
-      const res = await client.msp.resolveFinding(accountId, findingId, {
-        resolution: args.resolution as number,
-        resolution_notes: args.resolution_notes as string | undefined,
-      });
-      return { content: [{ type: 'text' as const, text: JSON.stringify(res, null, 2) }] };
-    }
-    case 'blumira_msp_findings_assign': {
-      logger.info('API call: msp.assignFindingOwners', { accountId, findingId });
-      const res = await client.msp.assignFindingOwners(accountId, findingId, {
-        owner_type: args.owner_type as 'responder' | 'analyst' | 'manager',
-        owners: args.owners as string[],
-      });
-      return { content: [{ type: 'text' as const, text: JSON.stringify(res, null, 2) }] };
-    }
-    case 'blumira_msp_findings_comments_list': {
-      logger.info('API call: msp.listFindingComments', { accountId, findingId });
-      const res = await client.msp.listFindingComments(accountId, findingId);
-      return { content: [{ type: 'text' as const, text: JSON.stringify(res, null, 2) }] };
-    }
-    case 'blumira_msp_findings_comments_add': {
-      logger.info('API call: msp.addFindingComment', { accountId, findingId });
-      const res = await client.msp.addFindingComment(accountId, findingId, {
-        body: args.body as string,
-        sender: args.sender as string,
-      });
-      return { content: [{ type: 'text' as const, text: JSON.stringify(res, null, 2) }] };
-    }
-    case 'blumira_msp_devices_list': {
-      logger.info('API call: msp.listDevices', { accountId });
-      const res = await client.msp.listDevices(accountId, args as any);
-      return { content: [{ type: 'text' as const, text: JSON.stringify(res, null, 2) }] };
-    }
-    case 'blumira_msp_devices_get': {
-      const deviceId = args.device_id as string;
-      logger.info('API call: msp.getDevice', { accountId, deviceId });
-      const res = await client.msp.getDevice(accountId, deviceId);
-      return { content: [{ type: 'text' as const, text: JSON.stringify(res, null, 2) }] };
-    }
-    case 'blumira_msp_keys_list': {
-      logger.info('API call: msp.listKeys', { accountId });
-      const res = await client.msp.listKeys(accountId, args as any);
-      return { content: [{ type: 'text' as const, text: JSON.stringify(res, null, 2) }] };
-    }
-    case 'blumira_msp_keys_get': {
-      const keyId = args.key_id as string;
-      logger.info('API call: msp.getKey', { accountId, keyId });
-      const res = await client.msp.getKey(accountId, keyId);
-      return { content: [{ type: 'text' as const, text: JSON.stringify(res, null, 2) }] };
-    }
-    case 'blumira_msp_users_list': {
-      logger.info('API call: msp.listUsers', { accountId });
-      const res = await client.msp.listUsers(accountId, args as any);
-      return { content: [{ type: 'text' as const, text: JSON.stringify(res, null, 2) }] };
-    }
-    default:
-      return { content: [{ type: 'text' as const, text: `Unknown tool: ${toolName}` }], isError: true };
-  }
-  } catch (error: any) {
-    const status = error?.status ?? error?.statusCode ?? '';
-    const body = error?.body ? JSON.stringify(error.body).slice(0, 200) : '';
-    const hint = status === 401 || status === 403
-      ? 'Verify BLUMIRA_JWT_TOKEN or BLUMIRA_CLIENT_ID + BLUMIRA_CLIENT_SECRET are correct.'
-      : 'Check that your Blumira credentials are valid and the API is reachable.';
-    const msg = `Blumira API error${status ? ` (HTTP ${status})` : ''}: ${error?.message ?? String(error)}${body ? ` — ${body}` : ''}. ${hint}`;
-    logger.error('Tool call failed', { tool: toolName, error: msg });
-    return { content: [{ type: 'text' as const, text: msg }], isError: true };
+  } catch (err: unknown) {
+    return toolErrorFromCatch(toolName, err, {
+      hint: 'Verify BLUMIRA_JWT_TOKEN or BLUMIRA_CLIENT_ID + BLUMIRA_CLIENT_SECRET are correct.',
+    });
   }
 }
 

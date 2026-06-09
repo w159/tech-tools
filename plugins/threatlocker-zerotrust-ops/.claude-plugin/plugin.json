@@ -1,9 +1,10 @@
 {
   "name": "threatlocker-zerotrust-ops",
-  "version": "0.1.0",
-  "description": "ThreatLocker zero-trust power skills: approval-queue triage with file-history context, forensic audit walks, rogue-software hunting, and multi-org rollups for MSPs.",
-  "author": "w159",
-  "mcp_dependencies": ["threatlocker-mcp"],
-  "skills_dir": "skills",
-  "commands_dir": "commands"
+  "version": "1.0.0",
+  "description": "Zero-trust endpoint skills for ThreatLocker — use to triage pending approval requests with file-history context, forensically investigate audit logs, and roll up block volume across MSP child orgs.",
+  "author": { "name": "w159", "url": "https://github.com/w159" },
+  "repository": "https://github.com/w159/ai-tech-toolkit",
+  "homepage": "https://github.com/w159/ai-tech-toolkit/tree/main/plugins/threatlocker-zerotrust-ops",
+  "license": "Apache-2.0",
+  "keywords": ["threatlocker", "zero-trust", "allowlisting", "approvals", "audit", "endpoint", "msp"]
 }

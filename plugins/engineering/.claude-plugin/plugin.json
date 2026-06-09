@@ -1,0 +1,17 @@
+{
+  "name": "engineering",
+  "version": "1.0.0",
+  "description": "Code review, system design, incident response, testing strategy, and tech-debt management skills for software engineering teams.",
+  "keywords": [
+    "engineering",
+    "code-review",
+    "incident-response",
+    "system-design",
+    "testing",
+    "tech-debt"
+  ],
+  "author": {
+    "name": "Jerry",
+    "email": "jmorg83@gmail.com"
+  }
+}

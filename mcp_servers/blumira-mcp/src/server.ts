@@ -7,6 +7,7 @@ import { elicitCredentials } from './elicitation/forms.js';
 import { logger } from './utils/logger.js';
 import type { DomainName } from './utils/types.js';
 import { annotate } from './annotate-tool.js';
+import { missingCredsError, toolErrorFromCatch, describeBaseUrl } from './domains/_helpers.js';
 
 export function createServer(): Server {
   const server = new Server(
@@ -89,14 +90,21 @@ export function createServer(): Server {
       };
     }
 
-    // Navigation: status
+    // Navigation: status — never throws, reports missing creds gracefully
     if (name === 'blumira_status') {
       const creds = getCredentials();
+      if (!creds) {
+        return missingCredsError('Blumira', [
+          'BLUMIRA_JWT_TOKEN',
+          'BLUMIRA_CLIENT_ID + BLUMIRA_CLIENT_SECRET',
+        ]);
+      }
       return {
         content: [{
           type: 'text' as const,
           text: JSON.stringify({
-            connected: !!creds,
+            connected: true,
+            baseUrl: describeBaseUrl('blumira', process.env.BLUMIRA_BASE_URL, 'BLUMIRA_BASE_URL'),
             domains: DOMAINS,
             currentDomain: state.currentDomain,
           }, null, 2),
@@ -115,17 +123,11 @@ export function createServer(): Server {
     const handler = await getDomainHandler(state.currentDomain);
     try {
       return await handler.handleCall(name, (args || {}) as Record<string, unknown>, extra);
-    } catch (error: any) {
-      const status = error?.status ?? error?.statusCode ?? error?.response?.status ?? '';
-      const hint = status === 401 || status === 403
-        ? 'Verify BLUMIRA_JWT_TOKEN or BLUMIRA_CLIENT_ID + BLUMIRA_CLIENT_SECRET are correct.'
-        : 'Check that Blumira credentials are valid and the API is reachable.';
-      const msg = `Blumira API error${status ? ` (HTTP ${status})` : ''}: ${(error as Error).message}. ${hint}`;
-      logger.error('Tool call failed', { tool: name, error: msg });
-      return {
-        content: [{ type: 'text' as const, text: msg }],
-        isError: true,
-      };
+    } catch (error: unknown) {
+      logger.error('Tool call failed', { tool: name, error });
+      return toolErrorFromCatch(name, error, {
+        hint: 'Verify BLUMIRA_JWT_TOKEN or BLUMIRA_CLIENT_ID + BLUMIRA_CLIENT_SECRET are correct.',
+      });
     }
   });
 

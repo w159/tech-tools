@@ -74,15 +74,15 @@ def file_path_from(data: dict) -> str | None:
     return fp if isinstance(fp, str) and fp else None
 
 
-def main() -> None:
+def main() -> int:
     try:
         raw = sys.stdin.read()
         data = json.loads(raw) if raw.strip() else {}
-    except ValueError:
-        return
+    except (json.JSONDecodeError, ValueError):
+        return 0
     fp = file_path_from(data)
     if not fp or not os.path.isfile(fp):
-        return
+        return 0
     cwd = data.get("cwd") or os.getcwd()
     for base in candidates_for(fp, cwd):
         try:
@@ -90,7 +90,7 @@ def main() -> None:
                 base + [fp], stdin=subprocess.DEVNULL,
                 capture_output=True, text=True, timeout=55,
             )
-        except (subprocess.TimeoutExpired, OSError):
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
             continue
         if proc.returncode == 0:
             tool = os.path.basename(base[0])
@@ -100,7 +100,10 @@ def main() -> None:
                     "additionalContext": f"[orchestrate] auto-formatted {os.path.basename(fp)} with {tool}.",
                 }
             }))
-            return
+            return 0
         # non-zero (e.g. syntax error mid-edit): try the next candidate, else give up quietly
+    return 0
+
+
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

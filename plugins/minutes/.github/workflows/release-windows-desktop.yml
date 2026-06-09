@@ -1,0 +1,104 @@
+name: Release Windows Desktop
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  TAURI_CLI_VERSION: "2.10.1"
+
+jobs:
+  windows-desktop:
+    name: Build Windows desktop installer
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-release-desktop-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Clean stale Windows native build cache
+        shell: bash
+        run: |
+          rm -rf \
+            target/debug/build/whisper-rs-sys-* \
+            target/release/build/whisper-rs-sys-* \
+            target/debug/build/knf-rs-sys-* \
+            target/release/build/knf-rs-sys-*
+
+      - name: Cache ONNX Runtime binaries
+        uses: actions/cache@v4
+        with:
+          path: ~/AppData/Local/dfbin
+          key: ${{ runner.os }}-ort-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install Tauri CLI
+        shell: bash
+        run: cargo install tauri-cli --version "${TAURI_CLI_VERSION}" --locked
+
+      - name: Build desktop installer (unsigned)
+        working-directory: tauri/src-tauri
+        run: cargo tauri build --features parakeet --ci --bundles nsis --no-sign
+        env:
+          CARGO_NET_RETRY: 3
+          # Cap ggml/whisper.cpp at AVX2-class instructions for the shipped
+          # Windows binary. GitHub's Windows runners may expose AVX-512, and
+          # whisper-rs-sys forwards GGML_* env vars straight into CMake.
+          GGML_NATIVE: "OFF"
+          GGML_AVX: "ON"
+          GGML_AVX2: "ON"
+          GGML_AVX512: "OFF"
+          GGML_AVX512_VBMI: "OFF"
+          GGML_AVX512_VNNI: "OFF"
+          GGML_AVX512_BF16: "OFF"
+
+      - name: Rename desktop binary
+        shell: bash
+        run: cp -f target/release/minutes-app.exe minutes-desktop-windows-x64.exe
+
+      - name: Rename NSIS installer
+        shell: bash
+        run: |
+          mapfile -t installers < <(find target/release/bundle/nsis -maxdepth 1 -type f -name '*.exe' | sort)
+          if [ "${#installers[@]}" -eq 0 ]; then
+            echo "No NSIS installer .exe found under target/release/bundle/nsis" >&2
+            exit 1
+          fi
+          cp -f "${installers[0]}" minutes-desktop-windows-x64-setup.exe
+
+      - name: Upload desktop artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: minutes-desktop-windows-x64
+          path: |
+            minutes-desktop-windows-x64.exe
+            minutes-desktop-windows-x64-setup.exe
+          if-no-files-found: error
+
+      - name: Attach desktop assets on tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            minutes-desktop-windows-x64.exe
+            minutes-desktop-windows-x64-setup.exe

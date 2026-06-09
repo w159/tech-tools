@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Minutes Architecture</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper: #f8f4ed;
+      --color-paper-2: #efebe2;
+      --color-ink: #1a1916;
+      --color-muted: #8c8880;
+      --color-soft: #bdb9b0;
+      --color-rule: rgba(26, 25, 22, 0.10);
+      --color-rule-strong: rgba(26, 25, 22, 0.18);
+      --color-accent: #c96b4e;
+      --color-accent-hover: #b85a3e;
+      --color-accent-tint: rgba(201, 107, 78, 0.10);
+      --font-sans: "Geist", system-ui, sans-serif;
+      --font-serif: "Instrument Serif", serif;
+      --font-mono: "Geist Mono", ui-monospace, monospace;
+    }
+
+    body {
+      min-height: 100vh;
+      padding: 48px 28px 36px;
+      background: var(--color-paper);
+      color: var(--color-ink);
+      font-family: var(--font-sans);
+    }
+
+    .page {
+      max-width: 1120px;
+      margin: 0 auto;
+    }
+
+    .header {
+      margin-bottom: 28px;
+    }
+
+    .eyebrow {
+      margin-bottom: 10px;
+      color: var(--color-accent);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin-bottom: 10px;
+      font-family: var(--font-serif);
+      font-size: clamp(36px, 5vw, 58px);
+      font-weight: 400;
+      letter-spacing: -0.04em;
+      line-height: 0.98;
+    }
+
+    .subtitle {
+      max-width: 64ch;
+      color: var(--color-muted);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.7;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .diagram {
+      margin-bottom: 28px;
+      border-top: 1px solid var(--color-rule);
+      border-bottom: 1px solid var(--color-rule);
+      padding: 18px 0;
+      overflow-x: auto;
+    }
+
+    svg {
+      display: block;
+      width: 100%;
+      min-width: 980px;
+      height: auto;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: 1.15fr 1fr 1fr;
+      gap: 16px;
+    }
+
+    .card {
+      border: 1px solid var(--color-rule);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.52);
+      padding: 18px 18px 16px;
+    }
+
+    .card-eyebrow {
+      margin-bottom: 10px;
+      color: var(--color-muted);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+
+    .card h2 {
+      margin-bottom: 10px;
+      font-size: 17px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
+    .card p {
+      color: var(--color-muted);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .footer {
+      margin-top: 20px;
+      padding-top: 14px;
+      border-top: 1px solid var(--color-rule);
+      color: var(--color-muted);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      display: flex;
+      gap: 18px;
+      flex-wrap: wrap;
+    }
+
+    @media (max-width: 880px) {
+      .cards {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="header">
+      <p class="eyebrow">Architecture / Minutes</p>
+      <h1>Local-first conversation memory</h1>
+      <p class="subtitle">Minutes captures audio and imports, runs a local processing pipeline, writes durable meeting markdown, and exposes that memory to desktop, CLI, MCP, and agent workflows without making the markdown corpus depend on any one surface.</p>
+    </header>
+
+    <section class="diagram" aria-label="Minutes architecture diagram">
+      <svg viewBox="0 0 1040 560" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+        <title id="title">Minutes architecture</title>
+        <desc id="desc">Architecture diagram showing capture surfaces flowing into minutes-core, durable markdown and sidecar stores, then minutes-mcp and agent clients.</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#8c8880"/>
+          </marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#c96b4e"/>
+          </marker>
+        </defs>
+
+        <rect width="100%" height="100%" fill="#f8f4ed"/>
+
+        <rect x="208" y="88" width="728" height="384" rx="8" fill="none" stroke="rgba(26,25,22,0.16)" stroke-width="1" stroke-dasharray="5 5"/>
+        <rect x="236" y="76" width="164" height="16" rx="3" fill="#f8f4ed"/>
+        <text x="240" y="88" fill="#8c8880" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.16em">LOCAL-FIRST MEMORY PLANE</text>
+
+        <text x="40" y="108" fill="#8c8880" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.16em">CAPTURE</text>
+        <text x="264" y="108" fill="#8c8880" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.16em">PROCESS</text>
+        <text x="520" y="108" fill="#8c8880" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.16em">ARTIFACTS</text>
+        <text x="760" y="108" fill="#8c8880" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.16em">QUERY SURFACES</text>
+
+        <line x1="180" y1="196" x2="232" y2="260" stroke="#8c8880" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <line x1="180" y1="360" x2="232" y2="312" stroke="#8c8880" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <line x1="416" y1="284" x2="496" y2="212" stroke="#c96b4e" stroke-width="1.5" marker-end="url(#arrow-accent)"/>
+        <line x1="416" y1="316" x2="496" y2="368" stroke="#8c8880" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <line x1="672" y1="208" x2="752" y2="208" stroke="#8c8880" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <line x1="672" y1="372" x2="752" y2="220" stroke="#8c8880" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <line x1="672" y1="224" x2="752" y2="372" stroke="#c96b4e" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+        <line x1="920" y1="208" x2="920" y2="332" stroke="#8c8880" stroke-width="1.0" marker-end="url(#arrow)" stroke-dasharray="5 4"/>
+
+        <rect x="176" y="220" width="48" height="12" rx="2" fill="#f8f4ed"/>
+        <text x="200" y="229" fill="#8c8880" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">INGEST</text>
+
+        <rect x="172" y="332" width="56" height="12" rx="2" fill="#f8f4ed"/>
+        <text x="200" y="341" fill="#8c8880" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">CONTROL</text>
+
+        <rect x="432" y="224" width="56" height="12" rx="2" fill="#f8f4ed"/>
+        <text x="460" y="233" fill="#c96b4e" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">WRITE</text>
+
+        <rect x="428" y="340" width="72" height="12" rx="2" fill="#f8f4ed"/>
+        <text x="464" y="349" fill="#8c8880" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">INDEX STATE</text>
+
+        <rect x="688" y="188" width="52" height="12" rx="2" fill="#f8f4ed"/>
+        <text x="714" y="197" fill="#8c8880" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">TOOLS</text>
+
+        <rect x="680" y="272" width="84" height="12" rx="2" fill="#f8f4ed"/>
+        <text x="722" y="281" fill="#8c8880" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">RECALL CONTEXT</text>
+
+        <rect x="688" y="260" width="76" height="12" rx="2" fill="#f8f4ed"/>
+        <text x="726" y="269" fill="#c96b4e" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">READ FILES</text>
+
+        <rect x="928" y="264" width="68" height="12" rx="2" fill="#f8f4ed"/>
+        <text x="962" y="273" fill="#8c8880" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">WORKFLOWS</text>
+
+        <rect x="40" y="156" width="140" height="72" rx="6" fill="#f8f4ed"/>
+        <rect x="40" y="156" width="140" height="72" rx="6" fill="rgba(140,136,128,0.10)" stroke="#bdb9b0" stroke-width="1"/>
+        <rect x="48" y="164" width="30" height="12" rx="2" fill="transparent" stroke="rgba(189,185,176,0.55)" stroke-width="0.8"/>
+        <text x="63" y="173" fill="#8c8880" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">EXT</text>
+        <text x="110" y="192" fill="#1a1916" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Audio and imports</text>
+        <text x="110" y="208" fill="#8c8880" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">mic / loopback / memos</text>
+
+        <rect x="40" y="324" width="140" height="72" rx="6" fill="#f8f4ed"/>
+        <rect x="40" y="324" width="140" height="72" rx="6" fill="#ffffff" stroke="#1a1916" stroke-width="1"/>
+        <rect x="48" y="332" width="28" height="12" rx="2" fill="transparent" stroke="rgba(26,25,22,0.32)" stroke-width="0.8"/>
+        <text x="62" y="341" fill="#8c8880" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">UI</text>
+        <text x="110" y="360" fill="#1a1916" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Desktop app and CLI</text>
+        <text x="110" y="376" fill="#8c8880" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">record / watch / live / note</text>
+
+        <rect x="232" y="236" width="184" height="88" rx="6" fill="#f8f4ed"/>
+        <rect x="232" y="236" width="184" height="88" rx="6" fill="rgba(201,107,78,0.10)" stroke="#c96b4e" stroke-width="1"/>
+        <rect x="240" y="244" width="36" height="12" rx="2" fill="transparent" stroke="rgba(201,107,78,0.55)" stroke-width="0.8"/>
+        <text x="258" y="253" fill="#c96b4e" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">CORE</text>
+        <text x="400" y="314" fill="rgba(201,107,78,0.12)" font-size="36" font-weight="600" font-family="'Geist Mono', monospace" text-anchor="end">01</text>
+        <text x="324" y="276" fill="#1a1916" font-size="14" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">minutes-core</text>
+        <text x="324" y="296" fill="#8c8880" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">capture / transcribe / diarize / summarize</text>
+
+        <rect x="496" y="164" width="176" height="88" rx="6" fill="#f8f4ed"/>
+        <rect x="496" y="164" width="176" height="88" rx="6" fill="rgba(201,107,78,0.10)" stroke="#c96b4e" stroke-width="1"/>
+        <rect x="504" y="172" width="28" height="12" rx="2" fill="transparent" stroke="rgba(201,107,78,0.55)" stroke-width="0.8"/>
+        <text x="518" y="181" fill="#c96b4e" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">MEM</text>
+        <text x="656" y="242" fill="rgba(201,107,78,0.12)" font-size="36" font-weight="600" font-family="'Geist Mono', monospace" text-anchor="end">02</text>
+        <text x="584" y="204" fill="#1a1916" font-size="14" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">~/meetings/*.md</text>
+        <text x="584" y="224" fill="#8c8880" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">durable source of truth</text>
+
+        <rect x="496" y="328" width="176" height="88" rx="6" fill="#f8f4ed"/>
+        <rect x="496" y="328" width="176" height="88" rx="6" fill="rgba(26,25,22,0.05)" stroke="#8c8880" stroke-width="1"/>
+        <rect x="504" y="336" width="28" height="12" rx="2" fill="transparent" stroke="rgba(140,136,128,0.45)" stroke-width="0.8"/>
+        <text x="518" y="345" fill="#8c8880" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">IDX</text>
+        <text x="584" y="368" fill="#1a1916" font-size="14" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Local sidecars</text>
+        <text x="584" y="388" fill="#8c8880" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">graph.db / context.db / JSONL / WAV</text>
+
+        <rect x="752" y="164" width="168" height="88" rx="6" fill="#f8f4ed"/>
+        <rect x="752" y="164" width="168" height="88" rx="6" fill="#ffffff" stroke="#1a1916" stroke-width="1"/>
+        <rect x="760" y="172" width="30" height="12" rx="2" fill="transparent" stroke="rgba(26,25,22,0.32)" stroke-width="0.8"/>
+        <text x="775" y="181" fill="#8c8880" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">MCP</text>
+        <text x="904" y="242" fill="rgba(26,25,22,0.08)" font-size="36" font-weight="600" font-family="'Geist Mono', monospace" text-anchor="end">03</text>
+        <text x="836" y="204" fill="#1a1916" font-size="14" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">minutes-mcp</text>
+        <text x="836" y="224" fill="#8c8880" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">tools / resources / interactive UI</text>
+
+        <rect x="752" y="328" width="168" height="88" rx="6" fill="#f8f4ed"/>
+        <rect x="752" y="328" width="168" height="88" rx="6" fill="rgba(140,136,128,0.10)" stroke="#bdb9b0" stroke-width="1"/>
+        <rect x="760" y="336" width="30" height="12" rx="2" fill="transparent" stroke="rgba(189,185,176,0.55)" stroke-width="0.8"/>
+        <text x="775" y="345" fill="#8c8880" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">EXT</text>
+        <text x="836" y="368" fill="#1a1916" font-size="14" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Agents and apps</text>
+        <text x="836" y="388" fill="#8c8880" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">Codex / Claude / OpenCode / Obsidian</text>
+
+        <line x1="40" y1="500" x2="1000" y2="500" stroke="rgba(26,25,22,0.10)" stroke-width="0.8"/>
+        <text x="40" y="516" fill="#8c8880" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">LEGEND</text>
+
+        <rect x="40" y="528" width="14" height="10" rx="2" fill="rgba(201,107,78,0.10)" stroke="#c96b4e" stroke-width="1"/>
+        <text x="62" y="536" fill="#8c8880" font-size="8.5" font-family="'Geist', sans-serif">Primary contract</text>
+
+        <rect x="176" y="528" width="14" height="10" rx="2" fill="#ffffff" stroke="#1a1916" stroke-width="1"/>
+        <text x="198" y="536" fill="#8c8880" font-size="8.5" font-family="'Geist', sans-serif">Surface / service</text>
+
+        <rect x="320" y="528" width="14" height="10" rx="2" fill="rgba(26,25,22,0.05)" stroke="#8c8880" stroke-width="1"/>
+        <text x="342" y="536" fill="#8c8880" font-size="8.5" font-family="'Geist', sans-serif">Local sidecar state</text>
+
+        <rect x="488" y="528" width="14" height="10" rx="2" fill="rgba(140,136,128,0.10)" stroke="#bdb9b0" stroke-width="1"/>
+        <text x="510" y="536" fill="#8c8880" font-size="8.5" font-family="'Geist', sans-serif">External input / client</text>
+
+        <line x1="696" y1="534" x2="724" y2="534" stroke="#c96b4e" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+        <text x="734" y="536" fill="#8c8880" font-size="8.5" font-family="'Geist', sans-serif">Primary flow</text>
+
+        <line x1="844" y1="534" x2="872" y2="534" stroke="#8c8880" stroke-width="1.0" marker-end="url(#arrow)" stroke-dasharray="5 4"/>
+        <text x="882" y="536" fill="#8c8880" font-size="8.5" font-family="'Geist', sans-serif">Secondary workflow</text>
+      </svg>
+    </section>
+
+    <section class="cards" aria-label="Diagram notes">
+      <article class="card">
+        <p class="card-eyebrow">Durable contract</p>
+        <h2>The markdown corpus is the product</h2>
+        <p><code>~/meetings/*.md</code> is the durable memory surface. If the sidecar databases disappear, the conversation corpus still exists as files that any agent or human tool can read directly.</p>
+      </article>
+
+      <article class="card">
+        <p class="card-eyebrow">Why sidecars exist</p>
+        <h2>Recall gets faster without swallowing the source</h2>
+        <p><code>graph.db</code> and <code>context.db</code> keep relationship, artifact, and desktop-context indexes local and adjacent. They enrich recall and MCP workflows without becoming the only place the truth lives.</p>
+      </article>
+
+      <article class="card">
+        <p class="card-eyebrow">Surface strategy</p>
+        <h2>One backend, many ways in</h2>
+        <p>The desktop app and CLI handle capture and operator workflows. <code>minutes-mcp</code> turns the same local memory plane into agent tools, resources, and interactive dashboards for Codex, Claude, OpenCode, and related clients.</p>
+      </article>
+    </section>
+
+    <footer class="footer">
+      <span>minutes architecture</span>
+      <span>standalone html / inline svg</span>
+      <span>brand tokens sampled from useminutes.app source</span>
+    </footer>
+  </div>
+</body>
+</html>

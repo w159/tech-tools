@@ -1,5 +1,6 @@
 import { BlumiraClient } from 'node-blumira';
 import { logger } from './logger.js';
+import { resolveBaseUrl } from '../domains/_helpers.js';
 
 // Strip unresolved MCP host template placeholders (e.g. "${user_config.x}")
 // and whitespace-only values so optional env vars fall through to their defaults.
@@ -98,12 +99,16 @@ export function getCredentials(): Credentials | null {
 }
 
 export async function getClient(): Promise<BlumiraClient> {
+  // Resolve base URL — optional env var, falls back to the node-blumira library default.
+  const baseUrl = resolveBaseUrl('blumira', cleanEnv(process.env.BLUMIRA_BASE_URL));
+
   // Direct JWT path
   const jwtToken = cleanEnv(process.env.BLUMIRA_JWT_TOKEN);
   if (jwtToken) {
-    if (_client && _credKey === jwtToken) return _client;
-    _client = new BlumiraClient({ jwtToken });
-    _credKey = jwtToken;
+    const credKey = `jwt:${jwtToken}:${baseUrl}`;
+    if (_client && _credKey === credKey) return _client;
+    _client = new BlumiraClient({ jwtToken, ...(baseUrl ? { baseUrl } : {}) });
+    _credKey = credKey;
     logger.info('Created Blumira API client (JWT)');
     return _client;
   }
@@ -113,9 +118,9 @@ export async function getClient(): Promise<BlumiraClient> {
   const clientSecret = cleanEnv(process.env.BLUMIRA_CLIENT_SECRET);
   if (clientId && clientSecret) {
     const token = await exchangeOAuthToken(clientId, clientSecret);
-    const credKey = `oauth:${clientId}:${token}`;
+    const credKey = `oauth:${clientId}:${token}:${baseUrl}`;
     if (_client && _credKey === credKey) return _client;
-    _client = new BlumiraClient({ jwtToken: token });
+    _client = new BlumiraClient({ jwtToken: token, ...(baseUrl ? { baseUrl } : {}) });
     _credKey = credKey;
     logger.info('Created Blumira API client (OAuth)');
     return _client;

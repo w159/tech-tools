@@ -52,7 +52,7 @@ def _has_evidence(orch: Path) -> bool:
                     and str(item.get("status", "")).lower() == "verified"
                 ):
                     return True
-    except (OSError, ValueError, AttributeError):
+    except (OSError, json.JSONDecodeError, ValueError, AttributeError):
         return True  # malformed findings -> fail open
     return False
 
@@ -70,28 +70,29 @@ def _reason() -> str:
     )
 
 
-def main() -> None:
+def main() -> int:
     try:
         raw = sys.stdin.read()
         data = json.loads(raw) if raw.strip() else {}
-    except ValueError:
-        return
+    except (json.JSONDecodeError, ValueError):
+        return 0
     try:
         if os.environ.get("ORCHESTRATE_GATE", "").lower() == "off":
-            return
+            return 0
         # Loop guard: never re-block a continuation we already triggered.
         if data.get("stop_hook_active"):
-            return
+            return 0
         cwd = data.get("cwd") or os.getcwd()
         orch = Path(cwd) / ".orchestrator"
         if not orch.is_dir():
-            return  # not an orchestrate run -> silent no-op
+            return 0  # not an orchestrate run -> silent no-op
         if _has_evidence(orch):
-            return
+            return 0
         print(json.dumps({"decision": "block", "reason": _reason()}))
     except Exception:  # noqa: BLE001 — a Stop hook must never wedge the session
-        return
+        return 0
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

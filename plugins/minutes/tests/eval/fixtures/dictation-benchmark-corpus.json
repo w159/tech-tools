@@ -1,0 +1,18 @@
+[
+  {
+    "id": "dictation-short-local",
+    "audioPath": "audio/apple-speech-dictation.wav",
+    "contentType": "dictation",
+    "locale": "en-US",
+    "referenceText": "Minutes benchmark dictation check. Apple speech should handle short form voice notes locally.",
+    "requiredTerms": [
+      "Minutes",
+      "Apple speech",
+      "voice notes"
+    ],
+    "forbiddenTerms": [
+      "Matt Mullenweg",
+      "WordPress"
+    ]
+  }
+]

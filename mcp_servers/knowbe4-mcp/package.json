@@ -3,10 +3,10 @@
   "version": "1.0.3",
   "description": "MCP server for KnowBe4 — security awareness training, phishing simulation, and user risk management API integration",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/mcp_servers/knowbe4-mcp/src/index.js",
+  "types": "dist/mcp_servers/knowbe4-mcp/src/index.d.ts",
   "bin": {
-    "mcp-server-knowbe4": "./dist/index.js"
+    "mcp-server-knowbe4": "./dist/mcp_servers/knowbe4-mcp/src/index.js"
   },
   "files": [
     "dist"

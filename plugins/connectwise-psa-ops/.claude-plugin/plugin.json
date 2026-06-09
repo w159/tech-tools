@@ -1,9 +1,10 @@
 {
   "name": "connectwise-psa-ops",
-  "version": "0.1.0",
-  "description": "PSA power skills on top of ConnectWise Manage MCP: ticket triage with clustering, SLA breach radar, utilization analytics, and project burn-down inference.",
-  "author": "w159",
-  "mcp_dependencies": ["connectwise-manage-mcp"],
-  "skills_dir": "skills",
-  "commands_dir": "commands"
+  "version": "1.0.0",
+  "description": "PSA skills for ConnectWise Manage — use to triage and cluster open tickets, monitor SLA breach risk, report technician utilization, and track project burn-down.",
+  "author": { "name": "w159", "url": "https://github.com/w159" },
+  "repository": "https://github.com/w159/ai-tech-toolkit",
+  "homepage": "https://github.com/w159/ai-tech-toolkit/tree/main/plugins/connectwise-psa-ops",
+  "license": "Apache-2.0",
+  "keywords": ["connectwise", "psa", "tickets", "sla", "utilization", "projects", "msp"]
 }

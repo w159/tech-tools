@@ -59,6 +59,22 @@ export function getConfig(): CwManageConfig | null {
 }
 
 /**
+ * HTTP error thrown by CwManageClient when the vendor returns a non-2xx response.
+ * Carries a numeric `.status` so toolErrorFromCatch / isStatusError() can map
+ * it to the correct canonical code (NOT_FOUND, RATE_LIMITED, FORBIDDEN, etc.)
+ * instead of falling through to INTERNAL_ERROR.
+ */
+export class CwHttpError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "CwHttpError";
+    this.status = status;
+  }
+}
+
+/**
  * Low-level API client for ConnectWise Manage REST API.
  */
 export class CwManageClient {
@@ -133,7 +149,8 @@ export class CwManageClient {
 
       if (!response.ok) {
         const errorBody = await response.text();
-        throw new Error(
+        throw new CwHttpError(
+          response.status,
           `ConnectWise API ${method} ${path} returned ${response.status}: ${errorBody}`,
         );
       }

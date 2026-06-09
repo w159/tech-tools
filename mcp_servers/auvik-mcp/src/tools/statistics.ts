@@ -1,6 +1,9 @@
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import {
   withClient,
+  shapeRaw,
+  toolErrorFromCatch,
+  missingCredsError,
   tenantsProp,
   pageProps,
   STAT_INTERVALS,
@@ -14,6 +17,8 @@ import {
   DEVICE_TYPES,
   INTERFACE_TYPES,
 } from './shared.js';
+import { getCredentials } from '../credentials.js';
+import { createAuvikClient } from '../client-factory.js';
 
 // fromTime + interval are always required by Auvik. thruTime is documented as
 // optional but is required at runtime, so we require it too to avoid a 400.
@@ -156,49 +161,54 @@ const timeParams = (a: StatArgs, extra: Record<string, unknown>) => ({
   ...extra,
 });
 
+// Statistics endpoints return time-series data (arrays of numeric samples per
+// device), not inventory items with stable summary fields. Use shapeRaw to
+// enforce the char cap without imposing a summary that would strip the data.
 export const handleStatisticsDevice = (
   a: StatArgs & { statId: string; deviceId?: string; filter_deviceType?: string }
 ) =>
-  withClient((c) =>
-    c.statistics.device(a.statId, timeParams(a, { filter_deviceId: a.deviceId, filter_deviceType: a.filter_deviceType }))
+  withClient(async (c) =>
+    shapeRaw(await c.statistics.device(a.statId, timeParams(a, { filter_deviceId: a.deviceId, filter_deviceType: a.filter_deviceType })))
   );
 
 export const handleStatisticsDeviceAvailability = (
   a: StatArgs & { statId: string; deviceId?: string; filter_deviceType?: string }
 ) =>
-  withClient((c) =>
-    c.statistics.deviceAvailability(
+  withClient(async (c) =>
+    shapeRaw(await c.statistics.deviceAvailability(
       a.statId,
       timeParams(a, { filter_deviceId: a.deviceId, filter_deviceType: a.filter_deviceType })
-    )
+    ))
   );
 
 export const handleStatisticsInterface = (
   a: StatArgs & { statId: string; interfaceId?: string; filter_interfaceType?: string; filter_parentDevice?: string }
 ) =>
-  withClient((c) =>
-    c.statistics.interface(
+  withClient(async (c) =>
+    shapeRaw(await c.statistics.interface(
       a.statId,
       timeParams(a, {
         filter_interfaceId: a.interfaceId,
         filter_interfaceType: a.filter_interfaceType,
         filter_parentDevice: a.filter_parentDevice,
       })
-    )
+    ))
   );
 
 export const handleStatisticsService = (a: StatArgs & { statId: string; serviceId?: string }) =>
-  withClient((c) => c.statistics.service(a.statId, timeParams(a, { filter_serviceId: a.serviceId })));
+  withClient(async (c) =>
+    shapeRaw(await c.statistics.service(a.statId, timeParams(a, { filter_serviceId: a.serviceId })))
+  );
 
 export const handleStatisticsComponent = (
   a: StatArgs & { componentType: string; statId: string; componentId?: string; filter_parentDevice?: string }
 ) =>
-  withClient((c) =>
-    c.statistics.component(
+  withClient(async (c) =>
+    shapeRaw(await c.statistics.component(
       a.componentType,
       a.statId,
       timeParams(a, { filter_componentId: a.componentId, filter_parentDevice: a.filter_parentDevice })
-    )
+    ))
   );
 
 export const handleStatisticsOid = (a: {
@@ -211,8 +221,8 @@ export const handleStatisticsOid = (a: {
   pageAfter?: string;
   pageBefore?: string;
 }) =>
-  withClient((c) =>
-    c.statistics.oid(a.statId, {
+  withClient(async (c) =>
+    shapeRaw(await c.statistics.oid(a.statId, {
       tenants: a.tenants,
       pageSize: a.pageSize,
       pageAfter: a.pageAfter,
@@ -220,5 +230,5 @@ export const handleStatisticsOid = (a: {
       filter_deviceId: a.deviceId,
       filter_deviceType: a.filter_deviceType,
       filter_oid: a.filter_oid,
-    })
+    }))
   );

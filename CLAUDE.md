@@ -58,5 +58,22 @@ Every tool must:
 ## Build conventions per server
 
 - Most servers use `tsup` (TypeScript bundler). Build with `npm run build`; pack with `npm run pack:mcpb`.
-- `cipp-mcp` uses raw `tsc` instead of tsup — both `npm run build` and `npm run pack:mcpb` work the same way.
+- `cipp-mcp` uses raw `tsc` instead of tsup -- both `npm run build` and `npm run pack:mcpb` work the same way.
 - The pack script lives at `mcp_servers/<svc>-mcp/scripts/pack-mcpb.js` and is the canonical packer.
+
+## Build flow -- iCloud path constraints
+
+This repo lives under iCloud Drive. Three rules apply for any build or pack operation:
+
+1. **Never run `npm install` inside the repo directory.** `node_modules` under an iCloud path syncs
+   continuously and causes file-lock errors, churn, and corrupted installs. Stage builds in `/tmp`
+   instead: `cp -r mcp_servers/<svc>-mcp /tmp/<svc>-build && cd /tmp/<svc>-build && npm install && npm run build && npm run pack:mcpb`.
+   Copy the resulting `.mcpb` back to the repo path when done.
+
+2. **IDE TypeScript diagnostics show missing-module errors by design.** Because `node_modules` is
+   never present under the repo path, editors (VS Code, Cursor, etc.) will flag `Cannot find module`
+   for `@modelcontextprotocol/sdk`, `zod`, and local `mcp_node` packages. These are false positives --
+   the `dist/` outputs that matter are built in `/tmp` where `node_modules` is present.
+
+3. **The `dist/` directories are committed.** Pre-built outputs are committed so `test-mcp-tools.mjs`
+   can run against a fresh clone without a build step. Do not delete them.

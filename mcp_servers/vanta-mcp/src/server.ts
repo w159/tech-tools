@@ -6,10 +6,12 @@ import { getCredentials } from './utils/client.js';
 import { logger } from './utils/logger.js';
 import type { DomainName } from './utils/types.js';
 import { annotate } from './annotate-tool.js';
+import { describeBaseUrl } from './domains/_helpers.js';
+import { toolErrorFromCatch } from './domains/_helpers.js';
 
 export function createMcpServer(): Server {
   const server = new Server(
-    { name: 'vanta-mcp', version: '0.1.0' },
+    { name: 'vanta-mcp', version: '0.2.0' },
     {
       capabilities: {
         tools: {},
@@ -51,8 +53,9 @@ export function createMcpServer(): Server {
 
     if (name === 'vanta_status') {
       const creds = getCredentials();
+      const urlDesc = describeBaseUrl('vanta', process.env.VANTA_BASE_URL, 'VANTA_BASE_URL');
       const credStatus = creds
-        ? `Configured (clientId=${creds.clientId.slice(0, 6)}…, baseUrl=${creds.baseUrl || 'https://api.vanta.com/v1 (default)'})`
+        ? `Configured (clientId=${creds.clientId.slice(0, 6)}…, baseUrl=${urlDesc})`
         : 'NOT CONFIGURED — set VANTA_CLIENT_ID and VANTA_CLIENT_SECRET';
       return {
         content: [{
@@ -66,21 +69,15 @@ export function createMcpServer(): Server {
       const handler = await getDomainHandler(domain);
       const toolNames = handler.getTools().map(t => t.name);
       if (toolNames.includes(name)) {
+        // Domain handlers now handle their own errors; this catch is a last-resort
+        // safety net for unexpected throws that escape the handler.
         try {
           return await handler.handleCall(name, (args || {}) as Record<string, unknown>, extra);
-        } catch (error: any) {
-          const status = error?.status ?? error?.statusCode ?? error?.response?.status ?? '';
-          const hint = status === 401 || status === 403
-            ? 'Verify VANTA_CLIENT_ID and VANTA_CLIENT_SECRET are correct. Ensure the OAuth scope includes the required resource.'
-            : status === 429
-            ? 'Vanta API rate limit hit. Wait a moment before retrying.'
-            : 'Check that VANTA_CLIENT_ID and VANTA_CLIENT_SECRET are set correctly.';
-          const msg = `Vanta API error${status ? ` (HTTP ${status})` : ''}: ${(error as Error).message}. ${hint}`;
-          logger.error('Tool call failed', { tool: name, error: msg });
-          return {
-            content: [{ type: 'text' as const, text: msg }],
-            isError: true,
-          };
+        } catch (err) {
+          logger.error('Unhandled error from domain handler', { tool: name, err });
+          return toolErrorFromCatch(name, err, {
+            hint: 'Check VANTA_CLIENT_ID and VANTA_CLIENT_SECRET are set correctly.',
+          });
         }
       }
     }

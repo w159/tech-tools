@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Minutes Dashboard</title>
+  <link rel="stylesheet" href="./src/mcp-app.css" />
+</head>
+<body>
+  <div class="main">
+    <!-- Loading -->
+    <div id="loading">
+      <div class="loading-content">
+        <div class="spinner"></div>
+        <span id="loading-text">Connecting...</span>
+      </div>
+    </div>
+
+    <!-- Error -->
+    <div id="error" style="display:none">
+      <div class="error-icon">!</div>
+      <div id="error-message"></div>
+    </div>
+
+    <!-- Recording Banner -->
+    <div id="recording-banner" style="display:none">
+      <div class="rec-dot"></div>
+      <span id="rec-label">Recording</span>
+      <span id="rec-elapsed" class="rec-elapsed"></span>
+      <button id="rec-stop-btn" class="rec-stop-btn">Stop</button>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="dashboard" style="display:none">
+      <div class="app-header">
+        <button class="brand-link" id="brand-link" type="button" title="Open useminutes.app">
+          <span class="brand-mark" role="img" aria-label="Minutes">
+            <span class="brand-mark-letter" aria-hidden="true">m</span>
+            <span class="brand-mark-dot" aria-hidden="true"></span>
+          </span>
+          <span class="brand-name">Minutes</span>
+        </button>
+      </div>
+      <div class="stats-bar" id="stats-bar"></div>
+      <div class="filter-bar">
+        <input type="text" id="filter-input" placeholder="Filter meetings..." />
+        <div class="filter-toggles">
+          <button class="filter-btn active" data-filter="all">All</button>
+          <button class="filter-btn" data-filter="meeting">Meetings</button>
+          <button class="filter-btn" data-filter="memo">Memos</button>
+          <button class="filter-btn" data-filter="people" id="people-tab-btn">People</button>
+        </div>
+      </div>
+      <div class="dashboard-body">
+        <div class="meetings-list" id="meetings-list"></div>
+        <div class="actions-sidebar" id="actions-sidebar"></div>
+      </div>
+    </div>
+
+    <!-- Detail -->
+    <div id="detail" style="display:none">
+      <div class="detail-toolbar">
+        <button class="back-btn" id="back-btn">&larr; Back to list</button>
+        <div class="detail-toolbar-actions">
+          <button class="toolbar-btn" id="context-btn" title="Send to Claude's context">Send to Claude</button>
+          <button class="toolbar-btn" id="fullscreen-btn" title="Toggle fullscreen">Fullscreen</button>
+        </div>
+      </div>
+      <div class="detail-header" id="detail-header"></div>
+      <div class="detail-body">
+        <div class="detail-content" id="detail-content"></div>
+        <div class="detail-panels" id="detail-panels"></div>
+      </div>
+    </div>
+
+    <!-- Person -->
+    <div id="person" style="display:none">
+      <div class="person-header" id="person-header"></div>
+      <div class="person-body" id="person-body"></div>
+    </div>
+
+    <!-- People Map -->
+    <div id="people-map" style="display:none">
+      <button class="back-btn" id="people-back-btn">&larr; Back to meetings</button>
+      <div class="people-header" id="people-header"></div>
+      <div class="people-grid" id="people-grid"></div>
+    </div>
+
+    <!-- Report -->
+    <div id="report" style="display:none">
+      <div class="report-header" id="report-header"></div>
+      <div class="report-body" id="report-body"></div>
+    </div>
+  </div>
+
+  <script type="module" src="./src/mcp-app.ts"></script>
+</body>
+</html>

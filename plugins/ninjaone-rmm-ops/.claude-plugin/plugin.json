@@ -1,9 +1,10 @@
 {
   "name": "ninjaone-rmm-ops",
-  "version": "0.1.0",
-  "description": "NinjaOne RMM power skills: fleet health sweep, mass-incident response, offline-device hunt, and patch compliance reporting — all parallelized across organizations.",
-  "author": "w159",
-  "mcp_dependencies": ["ninjaone-mcp"],
-  "skills_dir": "skills",
-  "commands_dir": "commands"
+  "version": "1.0.0",
+  "description": "RMM skills for NinjaOne — use to sweep fleet health across all organizations, respond to mass incidents, and hunt offline or stale devices.",
+  "author": { "name": "w159", "url": "https://github.com/w159" },
+  "repository": "https://github.com/w159/ai-tech-toolkit",
+  "homepage": "https://github.com/w159/ai-tech-toolkit/tree/main/plugins/ninjaone-rmm-ops",
+  "license": "Apache-2.0",
+  "keywords": ["ninjaone", "rmm", "fleet", "devices", "alerts", "patch", "msp"]
 }

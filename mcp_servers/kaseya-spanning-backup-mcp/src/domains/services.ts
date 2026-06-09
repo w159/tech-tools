@@ -2,16 +2,39 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { DomainHandler, CallToolResult } from '../utils/types.js';
 import { getClient } from '../utils/client.js';
 import { logger } from '../utils/logger.js';
+import {
+  shapeList,
+  extractShapeArgs,
+  SHAPE_PROPS,
+  toolError,
+  toolErrorFromCatch,
+  unknownTool,
+  type SummaryFn,
+} from './_helpers.js';
+
+// Compact summary: service name, status, and last backup date.
+const serviceSummary: SummaryFn = (s) => ({
+  service:      s['service']      ?? s['serviceName'] ?? s['name'],
+  status:       s['status']       ?? s['backupStatus'],
+  lastBackup:   s['lastBackup']   ?? s['lastBackupDate'],
+  enabled:      s['enabled']      ?? s['isEnabled'],
+  itemCount:    s['itemCount']    ?? s['totalItems'],
+});
 
 function getTools(): Tool[] {
   return [
     {
       name: 'spanning_services_list',
       description:
-        'List the backed-up services for one user (e.g. mail, drive, calendar, contacts). Tells you what is actually protected for that account.',
+        'Returns the backed-up services for one user (e.g. mail, drive, calendar, contacts). ' +
+        'Use this to discover valid service names before calling spanning_backups_list. ' +
+        'Requires userId from spanning_users_list.',
       inputSchema: {
         type: 'object' as const,
-        properties: { userId: { type: 'string', description: 'Spanning user ID.' } },
+        properties: {
+          ...SHAPE_PROPS,
+          userId: { type: 'string', description: 'Spanning user ID (required) — opaque string from spanning_users_list.' },
+        },
         required: ['userId'],
       },
     },
@@ -19,27 +42,33 @@ function getTools(): Tool[] {
 }
 
 async function handleCall(toolName: string, args: Record<string, unknown>): Promise<CallToolResult> {
-  try {
-    const client = getClient();
-    switch (toolName) {
-      case 'spanning_services_list': {
-        const userId = args.userId as string;
-        if (!userId) return { content: [{ type: 'text', text: 'Error: userId is required (opaque string from spanning_users_list).' }], isError: true };
+  const shapeArgs = extractShapeArgs(args);
+
+  switch (toolName) {
+    case 'spanning_services_list': {
+      const userId = args.userId as string;
+      if (!userId) {
+        return toolError('INVALID_ARGS', 'userId is required.', {
+          hint: 'Pass the opaque userId string returned by spanning_users_list.',
+        });
+      }
+      try {
+        const client = getClient();
         logger.info('API call: services.list', { userId });
         const result = await client.services.list(userId);
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        const items: unknown[] = Array.isArray(result)
+          ? result
+          : (result as Record<string, unknown>)['services'] as unknown[] ?? (result as Record<string, unknown>)['items'] as unknown[] ?? [];
+        return shapeList(items as Record<string, unknown>[], serviceSummary, shapeArgs);
+      } catch (err) {
+        return toolErrorFromCatch('spanning_services_list', err, {
+          hint: 'Verify userId with spanning_users_list and that the user has active services.',
+        });
       }
-      default:
-        return { content: [{ type: 'text', text: `Unknown tool: ${toolName}` }], isError: true };
     }
-  } catch (error: any) {
-    const status = error?.status ?? error?.statusCode ?? '';
-    const hint = status === 401 || status === 403
-      ? 'Verify SPANNING_ADMIN_EMAIL and SPANNING_API_TOKEN environment variables are correct.'
-      : 'Check Spanning API credentials (SPANNING_ADMIN_EMAIL, SPANNING_API_TOKEN) and platform setting (SPANNING_PLATFORM).';
-    const msg = `Spanning API error${status ? ` (HTTP ${status})` : ''}: ${error?.message ?? String(error)}. ${hint}`;
-    logger.error('Tool call failed', { tool: toolName, error: msg });
-    return { content: [{ type: 'text', text: msg }], isError: true };
+
+    default:
+      return unknownTool(toolName);
   }
 }
 

@@ -4,7 +4,7 @@
 
 Monorepo of MCP servers, plugins, and supporting Node.js client libraries for common MSP/IT vendor APIs. A production-grade toolkit of **Model Context Protocol (MCP) servers, vendor SDKs, and Claude Code plugins** that turn an LLM agent into an autonomous **MSP (Managed Service Provider) operator**. One toolkit gives an AI agent first-class access to the security, RMM, PSA, M365, HR, backup, and compliance platforms an MSP runs every day.
 
-> Built and maintained by **w159**. The toolkit currently ships **10 MCP servers**, **7 typed Node SDKs**, **11 Claude Code plugins**, and a curated **vendor + framework documentation set** that an AI agent can read directly while it works.
+> Built and maintained by **w159**. The toolkit currently ships **10 MCP servers**, **7 typed Node SDKs**, **27 Claude Code plugins** (across a plugin marketplace), and a curated **vendor + framework documentation set** that an AI agent can read directly while it works.
 
 ---
 
@@ -19,6 +19,7 @@ Monorepo of MCP servers, plugins, and supporting Node.js client libraries for co
 - [Authentication & Authorization](#authentication--authorization)
 - [MCP Servers](#mcp-servers)
 - [Claude Code Plugins](#claude-code-plugins)
+- [Skills](#skills)
 - [Node SDK Libraries](#node-sdk-libraries)
 - [API Integrations](#api-integrations)
 - [Testing & Validation](#testing--validation)
@@ -48,8 +49,10 @@ MSPs run a stack of vendor portals — Auvik, NinjaOne, ConnectWise, CIPP/M365, 
 ### Core Capabilities
 
 - **10 MCP servers** wrapping the most common MSP vendor APIs.
-- **Cross-platform + bridge Claude Code plugins** that orchestrate parallel fan-out across vendors and hand work cleanly between tools (e.g. *morning briefing*, *client 360*, *unified incident response*, *ConnectWise ticket → NinjaOne triage*).
-- **Pre-built `.mcpb` bundles** — drop into Claude Desktop and go.
+- **Cross-platform + bridge Claude Code plugins** that orchestrate parallel fan-out across vendors and hand work cleanly between tools (e.g. *morning briefing*, *client 360*, *unified incident response*, *ConnectWise ticket -> NinjaOne triage*).
+- **Plugin marketplace** -- 27 plugins installable via `claude plugin marketplace add W159/aikit` once published, or locally via the path.
+- **Compact-by-default responses** -- all list/get tools return concise summaries by default; pass `fields=[...]` to select specific fields or `full=true` to get the raw vendor payload. Errors are structured `{error:{code, message, detail, hint}}` so agents can act on them.
+- **Pre-built `.mcpb` bundles** -- drop into Claude Desktop and go.
 - **End-to-end test harness** (`test-mcp-tools.mjs`) that exercises every server against real credentials.
 - **Curated vendor + framework documentation** (`docs/`) so the agent never has to leave the repo to find an API shape.
 
@@ -136,7 +139,9 @@ Every MCP server reads credentials from environment variables at boot (Claude De
 ai-tech-toolkit/
 ├── mcp_servers/         10 MCP servers (one per vendor) + _shared tooling
 ├── mcp_node/            7 typed Node.js SDK libraries the servers depend on
-├── plugins/             11 Claude Code plugins (skills + slash commands)
+├── plugins/             27 Claude Code plugins (skills + slash commands)
+├── skills/              13 standalone skills installable into any Claude Code workspace
+├── .claude-plugin/      Marketplace manifest (marketplace.json) + root plugin.json
 ├── docs/                Vendor API docs + framework references (read by AI agents)
 ├── .env.template        Credential template for the test harness
 ├── test-mcp-tools.mjs   End-to-end MCP server tester
@@ -196,7 +201,7 @@ node-<vendor>/
 
 ### `plugins/`
 
-Each `plugins/<name>/` is a Claude Code plugin:
+Each `plugins/<name>/` is a Claude Code plugin. The repo ships 27 plugins organized under a marketplace manifest at `.claude-plugin/marketplace.json`.
 
 ```text
 <plugin-name>/
@@ -206,7 +211,22 @@ Each `plugins/<name>/` is a Claude Code plugin:
 └── skills/               Folder per skill (each contains SKILL.md + assets)
 ```
 
-The `mcp_dependencies` array names the MCP servers that **must be installed** for the plugin's skills to function. The plugin layer never makes HTTP calls itself — it instructs Claude how to compose MCP tool calls.
+The `mcp_dependencies` array names the MCP servers that **must be installed** for the plugin's skills to function. The plugin layer never makes HTTP calls itself -- it instructs Claude how to compose MCP tool calls.
+
+### `.claude-plugin/marketplace.json`
+
+The root marketplace manifest lists all 27 plugins with name, source path, description, category, and keywords. It enables bulk discovery and future registry publication.
+
+```bash
+# Install all plugins from a local clone
+claude plugin marketplace add ./path/to/aikit
+
+# Install a single plugin by name (once published to the registry as W159/aikit)
+claude plugin install <plugin-name>@aikit
+
+# Browse available plugins in the Claude Code /plugin Discover tab
+# (shows plugins declared in marketplace.json)
+```
 
 ### `docs/`
 
@@ -337,33 +357,35 @@ The canonical list lives in [`.env.template`](.env.template). Empty values are t
 ## MCP Servers
 
 | Package | Version | Vendor | Bundle |
-| --- | --- | --- | --- || [`auvik-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/auvik-mcp) | 0.3.0 | Auvik network monitoring | `auvik-mcp.mcpb` |
-| [`blumira-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/blumira-mcp) | 1.1.2 | Blumira SIEM/XDR | `blumira-mcp.mcpb` |
-| [`cipp-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/cipp-mcp) | 0.1.0 | CIPP — M365 MSP control plane | `cipp-mcp.mcpb` |
-| [`connectwise-manage-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/connectwise-manage-mcp) | 1.4.0 | ConnectWise Manage PSA | `connectwise-manage-mcp.mcpb` |
-| [`kaseya-spanning-backup-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/kaseya-spanning-backup-mcp) | 1.0.0 | Kaseya Spanning — SaaS backup for M365/GWS/Salesforce | `kaseya-spanning-backup-mcp.mcpb` |
-| [`knowbe4-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/knowbe4-mcp) | 1.0.1 | KnowBe4 security awareness | `knowbe4-mcp.mcpb` |
-| [`ninjaone-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/ninjaone-mcp) | 1.4.3 | NinjaOne RMM | `ninjaone-mcp.mcpb` |
-| [`paylocity-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/paylocity-mcp) | 0.1.0 | Paylocity HR/payroll | `paylocity-mcp.mcpb` |
-| [`threatlocker-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/threatlocker-mcp) | 1.1.0 | ThreatLocker zero-trust EDR | `threatlocker-mcp.mcpb` |
-| [`vanta-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/vanta-mcp) | 0.1.0 | Vanta GRC / compliance | `vanta-mcp.mcpb` |
+| --- | --- | --- | --- || [`auvik-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/auvik-mcp) | 0.4.0 | Auvik network monitoring | `auvik-mcp.mcpb` |
+| [`blumira-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/blumira-mcp) | 1.1.0 | Blumira SIEM/XDR | `blumira-mcp.mcpb` |
+| [`cipp-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/cipp-mcp) | 0.2.0 | CIPP -- M365 MSP control plane | `cipp-mcp.mcpb` |
+| [`connectwise-manage-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/connectwise-manage-mcp) | 0.1.0 | ConnectWise Manage PSA | `connectwise-manage-mcp.mcpb` |
+| [`kaseya-spanning-backup-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/kaseya-spanning-backup-mcp) | 1.1.0 | Kaseya Spanning -- SaaS backup for M365/GWS/Salesforce | `kaseya-spanning-backup-mcp.mcpb` |
+| [`knowbe4-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/knowbe4-mcp) | 1.1.0 | KnowBe4 security awareness | `knowbe4-mcp.mcpb` |
+| [`ninjaone-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/ninjaone-mcp) | 1.6.0 | NinjaOne RMM | `ninjaone-mcp.mcpb` |
+| [`paylocity-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/paylocity-mcp) | 0.1.1 | Paylocity HR/payroll | `paylocity-mcp.mcpb` |
+| [`threatlocker-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/threatlocker-mcp) | 1.2.0 | ThreatLocker zero-trust EDR | `threatlocker-mcp.mcpb` |
+| [`vanta-mcp`](https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/vanta-mcp) | 0.2.0 | Vanta GRC / compliance | `vanta-mcp.mcpb` |
 
 Every server speaks MCP over **stdio JSON-RPC** and registers its tools/resources via `@modelcontextprotocol/sdk`.
 
 <details>
-<summary><strong>Last verified tool counts and status (2026-05-28)</strong></summary>
+<summary><strong>Last verified tool counts and status (2026-06-09)</strong></summary>
 
 | Server | Status | Tools | Notes |
-| --- | --- | --- | --- || auvik | ✅ PASS | 39 | |
-| blumira | ⏭ SKIP | — | needs `BLUMIRA_JWT_TOKEN` |
-| cipp | ❌ FAIL | — | HTTP 401 — caller lacks permission for `ListTenants` |
-| connectwise | ✅ PASS | 51 | |
-| kaseya-spanning-backup | ⏭ SKIP | — | needs `SPANNING_ADMIN_EMAIL` + `SPANNING_API_TOKEN` |
-| knowbe4 | ⏭ SKIP | — | needs `KNOWBE4_API_KEY` |
-| ninjaone | ✅ PASS | 23 | |
-| paylocity | ❌ FAIL | — | token mint HTTP 406 — check `Accept` header / scope |
-| threatlocker | ✅ PASS | 17 | |
-| vanta | ✅ PASS | 28 | |
+| --- | --- | --- | --- || auvik | PASS | 39 | |
+| blumira | SKIP | 30 | missing `BLUMIRA_JWT_TOKEN`; count from source, mcpb bundle pending rebuild |
+| cipp | FAIL | 43 | HTTP 401 -- CIPP tenant permission issue (pre-existing); `tools/list` confirmed 43 tools boot correctly [1] |
+| connectwise | PASS | 52 | |
+| kaseya-spanning-backup | SKIP | 14 | missing `SPANNING_ADMIN_EMAIL` + `SPANNING_API_TOKEN`; count verified via `tools/list` |
+| knowbe4 | PASS | 30 | `knowbe4_status` OK; `knowbe4_account_get` returns 500 (vendor-side API key scope issue, not a creds-absent skip) |
+| ninjaone | PASS | 26 | |
+| paylocity | PASS | 16 | |
+| threatlocker | PASS | 17 | |
+| vanta | PASS | 28 | |
+
+[1] CIPP 401 is a pre-existing tenant permission issue: the API caller lacks the `ListTenants` permission inside CIPP. Fix: CIPP -> Settings -> Application Settings -> API -> grant `ListTenants`. The server itself boots and registers all 43 tools correctly.
 
 Re-run any time with `node test-mcp-tools.mjs`.
 
@@ -373,24 +395,84 @@ Re-run any time with `node test-mcp-tools.mjs`.
 
 ## Claude Code Plugins
 
-All plugins live under `plugins/`. Each declares its required MCP servers in `.claude-plugin/plugin.json` and ships **skills** (Claude follows them like a runbook) and **slash commands** (one-shot entry points).
+All 27 plugins live under `plugins/` and are listed in the marketplace manifest at `.claude-plugin/marketplace.json`. Each declares its required MCP servers in its own `.claude-plugin/plugin.json` and ships **skills** (Claude follows them like a runbook) and **slash commands** (one-shot entry points).
+
+**MSP vendor plugins** (10) -- each wraps one vendor's MCP server:
 
 | Plugin | MCP Deps | Skills | Slash Commands |
-| --- | --- | --- | --- || [`msp-command-center`](https://github.com/w159/ai-tech-toolkit/tree/main/plugins/msp-command-center) | auvik, cipp, connectwise, knowbe4, ninjaone, threatlocker | `client-360`, `cross-platform-incident`, `morning-briefing` | `/briefing`, `/client`, `/incident` |
-| [`msp-tool-bridge-ops`](https://github.com/w159/ai-tech-toolkit/tree/main/plugins/msp-tool-bridge-ops) | connectwise-manage, ninjaone | `cw-ticket-device-troubleshoot`, `ninja-device-ticket-sync` | `/cw-device-triage`, `/ninja-ticket-sync` |
-| [`auvik-network-ops`](https://github.com/w159/ai-tech-toolkit/tree/main/plugins/auvik-network-ops) | auvik | `bandwidth-hog-hunt`, `config-drift-watch`, `network-triage` | `/auvik-triage` |
-| [`cipp-m365-ops`](https://github.com/w159/ai-tech-toolkit/tree/main/plugins/cipp-m365-ops) | cipp | `bec-rapid-response`, `full-offboard`, `suspicious-signin-hunt`, `tenant-health-sweep` | `/cipp-morning` |
-| [`connectwise-psa-ops`](https://github.com/w159/ai-tech-toolkit/tree/main/plugins/connectwise-psa-ops) | connectwise-manage | `project-burndown`, `sla-breach-radar`, `ticket-triage`, `utilization-report` | `/cw-sla-radar` |
-| [`kaseya-spanning-backup-ops`](https://github.com/w159/ai-tech-toolkit/tree/main/plugins/kaseya-spanning-backup-ops) | kaseya-spanning-backup | `audit-forensics`, `backup-health-sweep`, `license-utilization`, `restore-orchestrator` | `/spanning-health`, `/spanning-restore` |
-| [`knowbe4-security-training`](https://github.com/w159/ai-tech-toolkit/tree/main/plugins/knowbe4-security-training) | knowbe4 | `campaign-effectiveness`, `phishing-failure-cohort`, `risk-heatmap` | `/kb4-heatmap` |
-| [`ninjaone-rmm-ops`](https://github.com/w159/ai-tech-toolkit/tree/main/plugins/ninjaone-rmm-ops) | ninjaone | `fleet-health-sweep`, `mass-incident-response`, `offline-device-hunt` | `/ninja-sweep` |
-| [`paylocity-hr-ops`](https://github.com/w159/ai-tech-toolkit/tree/main/plugins/paylocity-hr-ops) | paylocity | `deduction-and-tax-overview`, `new-hire-flow`, `pay-rate-audit`, `roster-snapshot` | `/paylocity-new-hires`, `/paylocity-roster` |
-| [`threatlocker-zerotrust-ops`](https://github.com/w159/ai-tech-toolkit/tree/main/plugins/threatlocker-zerotrust-ops) | threatlocker | `approval-queue-triage`, `audit-forensics`, `child-org-rollup` | `/tl-approvals` |
-| [`vanta-compliance-ops`](https://github.com/w159/ai-tech-toolkit/tree/main/plugins/vanta-compliance-ops) | vanta | `evidence-gap-hunter`, `framework-audit-readiness`, `vendor-risk-rollup`, `vulnerability-triage` | `/vanta-audit-prep`, `/vanta-morning` |
+| --- | --- | --- | --- || [`msp-command-center`](plugins/msp-command-center) | auvik, cipp, connectwise, knowbe4, ninjaone, threatlocker | `client-360`, `cross-platform-incident`, `morning-briefing` | `/briefing`, `/client`, `/incident` |
+| [`msp-tool-bridge-ops`](plugins/msp-tool-bridge-ops) | connectwise-manage, ninjaone | `cw-ticket-device-troubleshoot`, `ninja-device-ticket-sync` | `/cw-device-triage`, `/ninja-ticket-sync` |
+| [`auvik-network-ops`](plugins/auvik-network-ops) | auvik | `bandwidth-hog-hunt`, `config-drift-watch`, `network-triage` | `/auvik-triage` |
+| [`cipp-m365-ops`](plugins/cipp-m365-ops) | cipp | `bec-rapid-response`, `full-offboard`, `suspicious-signin-hunt`, `tenant-health-sweep` | `/cipp-morning` |
+| [`connectwise-psa-ops`](plugins/connectwise-psa-ops) | connectwise-manage | `project-burndown`, `sla-breach-radar`, `ticket-triage`, `utilization-report` | `/cw-sla-radar` |
+| [`kaseya-spanning-backup-ops`](plugins/kaseya-spanning-backup-ops) | kaseya-spanning-backup | `audit-forensics`, `backup-health-sweep`, `license-utilization`, `restore-orchestrator` | `/spanning-health`, `/spanning-restore` |
+| [`knowbe4-security-training`](plugins/knowbe4-security-training) | knowbe4 | `campaign-effectiveness`, `phishing-failure-cohort`, `risk-heatmap` | `/kb4-heatmap` |
+| [`ninjaone-rmm-ops`](plugins/ninjaone-rmm-ops) | ninjaone | `fleet-health-sweep`, `mass-incident-response`, `offline-device-hunt` | `/ninja-sweep` |
+| [`paylocity-hr-ops`](plugins/paylocity-hr-ops) | paylocity | `deduction-and-tax-overview`, `new-hire-flow`, `pay-rate-audit`, `roster-snapshot` | `/paylocity-new-hires`, `/paylocity-roster` |
+| [`threatlocker-zerotrust-ops`](plugins/threatlocker-zerotrust-ops) | threatlocker | `approval-queue-triage`, `audit-forensics`, `child-org-rollup` | `/tl-approvals` |
+| [`vanta-compliance-ops`](plugins/vanta-compliance-ops) | vanta | `evidence-gap-hunter`, `framework-audit-readiness`, `vendor-risk-rollup`, `vulnerability-triage` | `/vanta-audit-prep`, `/vanta-morning` |
+
+**Knowledge-worker and platform plugins** (16) -- no MCP server dependency:
+
+| Plugin | Purpose |
+| --- | --- || `brand-voice` | Discover, enforce, and generate brand voice guidelines across content |
+| `cowork-plugin-management` | Manage Claude Code plugin installations and marketplace entries |
+| `customer-support` | Customer support workflow skills (ticket routing, response drafting) |
+| `data` | Data analysis and transformation skills |
+| `design` | Design workflow skills (Figma-adjacent, asset management) |
+| `engineering` | Engineering workflow skills (code review, PR triage, runbooks) |
+| `enterprise-search` | Cross-source search orchestration across vendor data |
+| `finance` | Finance workflow skills (budget review, expense categorization) |
+| `human-resources` | HR workflow skills (onboarding, offboarding, policy lookup) |
+| `minutes` | Meeting minutes capture and action-item extraction (includes nested Rust app; excluded from marketplace auto-install) |
+| `nudge` | Nudge-based reminder and follow-up workflow |
+| `operations` | Operations workflow skills (runbooks, escalation trees) |
+| `orchestrate` | Orchestration meta-plugin for driving multi-step agent workflows |
+| `pdf-viewer` | PDF reading and summarization skills |
+| `product-management` | Product management workflow skills (PRD drafting, roadmap triage) |
+| `productivity` | General productivity skills (writing, summarization, task planning) |
 
 > Plugin docs: <https://docs.claude.com/en/docs/claude-code/plugins>
 
+### Plugin Marketplace
+
+The repo ships a marketplace manifest at `.claude-plugin/marketplace.json`. Once the repo is published as `W159/aikit`:
+
+```bash
+# Add all plugins from the marketplace registry
+claude plugin marketplace add W159/aikit
+
+# Or install from a local clone
+claude plugin marketplace add ./path/to/aikit
+
+# Install a specific plugin by name
+claude plugin install auvik-network-ops@aikit
+```
+
+The Claude Code `/plugin` Discover tab will list all marketplace entries once the manifest is registered.
+
 ---
+
+## Skills
+
+The `skills/` directory ships 13 curated skills installable into any Claude Code workspace. These are standalone -- they do not require any MCP server from this repo.
+
+| Skill | Purpose |
+| --- | --- || `az-cost-optimize` | Azure cost analysis and optimization recommendations |
+| `azure-deployment-preflight` | Pre-flight checks before Azure resource deployments |
+| `cloud-design-patterns` | Apply Azure cloud design patterns to architecture decisions |
+| `codebase-brain` | Give a codebase persistent memory and a self-validation gate |
+| `database-optimization` | Query analysis, index recommendations, schema review |
+| `entra-agent-user` | Manage Entra ID (Azure AD) users and service principals via agent workflows |
+| `graphify` | Turn any input (code, docs, data) into an interactive knowledge graph |
+| `msgraph-sdk` | Guided Microsoft Graph SDK usage for common M365 operations |
+| `msoffice-docs` | Read, summarize, and extract from Word/Excel/PowerPoint documents |
+| `orchestrate` | Drive multi-step, multi-surface engineering work through parallel subagents |
+| `scrapling-official` | Web scraping via the Scrapling library with anti-detection patterns |
+| `security-audit` | Security review of code changes, dependencies, and configs |
+| `webapp-testing` | End-to-end web app testing workflows (Playwright-oriented) |
+
+The previous 25-skill set was consolidated to 13 in June 2026. Skills that were absorbed or merged: `codeql` and `pytest-coverage` merged into `security-audit`; `prompt-optimizer` and `self-improving` merged into `orchestrate` as referenced sub-patterns. The remaining retired skills had overlapping scope with the survivors.
 
 ## Node SDK Libraries
 

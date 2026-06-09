@@ -1,6 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { CwManageClient, getConfig } from "../api-client.js";
 import { READ, titled } from "./annotations.js";
+import { shapeRaw } from "../_shared/response-shaper.js";
+import { toolErrorFromCatch } from "../_shared/error-envelope.js";
 
 export function registerHealthTools(server: McpServer, client: CwManageClient) {
   server.tool(
@@ -21,7 +23,7 @@ export function registerHealthTools(server: McpServer, client: CwManageClient) {
           CW_MANAGE_URL: process.env.CW_MANAGE_URL ?? process.env.CW_MANAGE_BASE_URL ?? "(not set — using default)",
         },
       };
-      return { content: [{ type: "text", text: JSON.stringify(status, null, 2) }] };
+      return shapeRaw(status);
     },
   );
 
@@ -32,19 +34,12 @@ export function registerHealthTools(server: McpServer, client: CwManageClient) {
     titled("CW Manage: test connection", READ),
     async () => {
       try {
-        const result = await client.get("/system/info");
-        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        const hint = msg.includes("401") || msg.includes("403")
-          ? "Verify CW_MANAGE_COMPANY_ID, CW_MANAGE_PUBLIC_KEY, CW_MANAGE_PRIVATE_KEY, and CW_MANAGE_CLIENT_ID are correct."
-          : msg.includes("ECONNREFUSED") || msg.includes("ENOTFOUND")
-          ? "Cannot reach CW_MANAGE_URL. Verify the URL is correct and the host is reachable."
-          : "Check ConnectWise Manage credentials and URL.";
-        return {
-          content: [{ type: "text", text: `ConnectWise Manage connection error: ${msg}. ${hint}` }],
-          isError: true,
-        };
+        const result = await client.get<Record<string, unknown>>("/system/info");
+        return shapeRaw(result);
+      } catch (err) {
+        return toolErrorFromCatch("cw_test_connection", err, {
+          hint: "Verify CW_MANAGE_COMPANY_ID, CW_MANAGE_PUBLIC_KEY, CW_MANAGE_PRIVATE_KEY, CW_MANAGE_CLIENT_ID, and CW_MANAGE_URL are correct.",
+        });
       }
     },
   );

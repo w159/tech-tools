@@ -1,0 +1,16 @@
+[
+  {
+    "id": "dictation-short",
+    "audioPath": "tests/eval/fixtures/audio/apple-speech-dictation.wav",
+    "contentType": "dictation",
+    "locale": "en_US",
+    "referenceText": "Minutes benchmark dictation check. Apple speech should handle short form voice notes locally."
+  },
+  {
+    "id": "meeting-longer",
+    "audioPath": "tests/eval/fixtures/audio/apple-speech-meeting.wav",
+    "contentType": "meeting",
+    "locale": "en_US",
+    "referenceText": "Matt and Wesley are reviewing the Minutes Apple speech benchmark. They want to compare SpeechTranscriber and DictationTranscriber against Whisper and Parakeet before making a product decision."
+  }
+]

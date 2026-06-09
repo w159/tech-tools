@@ -1,4 +1,5 @@
 import { ThreatLockerClient } from 'node-threatlocker';
+import { resolveBaseUrl } from '../domains/_helpers.js';
 import { logger } from './logger.js';
 
 let _client: any | null = null;
@@ -14,7 +15,7 @@ const cleanEnv = (v: string | undefined): string =>
 interface Credentials {
   apiKey: string;
   organizationId?: string;
-  baseUrl?: string;
+  baseUrl: string;
 }
 
 export function getCredentials(): Credentials | null {
@@ -24,7 +25,9 @@ export function getCredentials(): Credentials | null {
     return null;
   }
   const organizationId = cleanEnv(process.env.THREATLOCKER_ORGANIZATION_ID) || undefined;
-  const baseUrl = cleanEnv(process.env.THREATLOCKER_BASE_URL) || undefined;
+  // resolveBaseUrl returns the env-var value when set, or the hardcoded
+  // default (https://portalapi.g.threatlocker.com/portalapi) when unset.
+  const baseUrl = resolveBaseUrl('threatlocker', cleanEnv(process.env.THREATLOCKER_BASE_URL))!;
   return { apiKey, organizationId, baseUrl };
 }
 
@@ -44,14 +47,14 @@ export async function getClient(): Promise<any> {
     );
   }
 
-  const key = `${creds.apiKey}:${creds.organizationId || ''}:${creds.baseUrl || ''}`;
+  const key = `${creds.apiKey}:${creds.organizationId || ''}:${creds.baseUrl}`;
   if (_client && _credKey === key) return _client;
 
   _client = new ThreatLockerClient(creds);
   _credKey = key;
   logger.info('Created ThreatLocker API client', {
     hasOrgScope: !!creds.organizationId,
-    baseUrl: creds.baseUrl || '(default)',
+    baseUrl: creds.baseUrl,
   });
   return _client;
 }

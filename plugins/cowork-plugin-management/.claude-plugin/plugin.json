@@ -1,0 +1,15 @@
+{
+  "name": "cowork-plugin-management",
+  "version": "1.0.0",
+  "description": "Create, customize, and manage Claude Code plugins inside the Cowork desktop environment.",
+  "keywords": [
+    "cowork",
+    "plugin",
+    "management",
+    "customization"
+  ],
+  "author": {
+    "name": "Jerry",
+    "email": "jmorg83@gmail.com"
+  }
+}

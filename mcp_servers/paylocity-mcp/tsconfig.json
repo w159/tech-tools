@@ -9,8 +9,8 @@
     "skipLibCheck": true,
     "outDir": "dist",
     "rootDir": "src",
-    "sourceMap": true
+    "sourceMap": true,
   },
-  "include": ["src"],
+  "include": ["src", "../_shared/*.ts"],
   "exclude": ["node_modules", "dist"]
 }

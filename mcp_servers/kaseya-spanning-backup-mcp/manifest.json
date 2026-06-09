@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "kaseya-spanning-backup-mcp",
   "display_name": "Kaseya Spanning Backup MCP Server",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Query and manage Kaseya Spanning Backup for M365, Google Workspace, and Salesforce — for MSP data-protection AI agents.",
   "long_description": "Use this server when you need to inspect or trigger Spanning SaaS backup operations. List backed-up users and their per-service status, enumerate daily backup runs, queue point-in-time restore jobs for individual users or items, poll restore job status, search the audit log for backup/restore events, and view license seat usage. Supports M365, Google Workspace, and Salesforce platforms via platform-scoped HTTP Basic auth (admin email + API token pair).",
   "author": {
@@ -59,14 +59,14 @@
     "spanning_platform": {
       "type": "string",
       "title": "Spanning Platform (optional)",
-      "description": "Optional. Which Spanning product the token targets. Leave blank to use the default (m365 → https://o365-api.spanningbackup.com/external). Other values: gws (→ https://api.spanningbackup.com/external), salesforce (→ https://salesforce-api.spanningbackup.com). Tokens cannot cross platforms.",
+      "description": "Optional. Which Spanning product the token targets. Leave blank to default to m365. Valid values: m365 (default, base URL https://o365-api.spanningbackup.com/external), gws (https://api.spanningbackup.com/external), salesforce (https://salesforce-api.spanningbackup.com). Tokens cannot cross platforms.",
       "required": false,
       "default": "m365"
     },
     "spanning_api_url": {
       "type": "string",
       "title": "Spanning API Base URL (optional)",
-      "description": "Optional. Leave blank to use the vendor default derived from spanning_platform. Only set for staging/sovereign shards.",
+      "description": "Optional. Leave blank to use the vendor default for the selected platform (m365: https://o365-api.spanningbackup.com/external; gws: https://api.spanningbackup.com/external; salesforce: https://salesforce-api.spanningbackup.com). Only set for staging environments or regional sovereign shards.",
       "required": false
     }
   }

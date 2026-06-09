@@ -1,7 +1,7 @@
 {
   "manifest_version": "0.3",
   "name": "paylocity-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "display_name": "Paylocity MCP Server",
   "description": "Read Paylocity HCM data — employees, pay rates, deductions, taxes, cost centers, and pay statements — for HR AI agents.",
   "long_description": "Provides AI assistants with structured read access to your Paylocity HCM data. Browse the active roster, inspect pay rates and future pay rates, audit deductions and local taxes, review direct-deposit setups, pull cost-center and pay-grade catalogs, and summarize pay statements. Supports both the modern CoreHR / API Hub endpoints (cursor pagination) and legacy /api/v1, /api/v2 endpoints (raw array). OAuth2 client_credentials with form-urlencoded body, proactive 1-hour token caching, exponential backoff on 429.",
@@ -57,9 +57,8 @@
     "paylocity_base_url": {
       "type": "string",
       "title": "Paylocity API base URL",
-      "description": "Prefilled with the production default. Override only for staging/sovereign shards. Ignored if you only need the sandbox toggle below.",
-      "required": false,
-      "default": "https://api.paylocity.com"
+      "description": "Optional. Leave blank to use the vendor default (https://api.paylocity.com). Only set for staging or sovereign shards. The sandbox toggle below overrides this field for sandbox use.",
+      "required": false
     },
     "paylocity_sandbox": {
       "type": "boolean",

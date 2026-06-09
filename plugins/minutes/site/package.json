@@ -1,0 +1,33 @@
+{
+  "name": "minutes-site",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "generate:llms": "node ../scripts/generate_llms_txt.mjs",
+    "check:llms": "node ../scripts/generate_llms_txt.mjs --check",
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.5.0",
+    "@remotion/player": "^4.0.446",
+    "@types/three": "^0.183.1",
+    "@vercel/analytics": "^2.0.1",
+    "geist": "^1.4.1",
+    "next": "^16.2.3",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "remotion": "^4.0.446",
+    "three": "^0.183.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.8.3"
+  }
+}

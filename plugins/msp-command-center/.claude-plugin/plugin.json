@@ -1,16 +1,10 @@
 {
   "name": "msp-command-center",
-  "version": "0.1.0",
-  "description": "Cross-platform MSP super-skills that fan out across Auvik, CIPP, ConnectWise, KnowBe4, NinjaOne, and ThreatLocker in parallel. Provides the morning briefing, full client 360, and unified incident response.",
-  "author": "w159",
-  "mcp_dependencies": [
-    "auvik-mcp",
-    "cipp-mcp",
-    "connectwise-manage-mcp",
-    "knowbe4-mcp",
-    "ninjaone-mcp",
-    "threatlocker-mcp"
-  ],
-  "skills_dir": "skills",
-  "commands_dir": "commands"
+  "version": "1.0.0",
+  "description": "Cross-platform MSP command skills that fan out across all connected platforms in parallel — use for the daily morning briefing, full client 360 views, and unified cross-platform incident response.",
+  "author": { "name": "w159", "url": "https://github.com/w159" },
+  "repository": "https://github.com/w159/ai-tech-toolkit",
+  "homepage": "https://github.com/w159/ai-tech-toolkit/tree/main/plugins/msp-command-center",
+  "license": "Apache-2.0",
+  "keywords": ["msp", "dashboard", "morning-briefing", "incident-response", "cross-platform", "client-360"]
 }

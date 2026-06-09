@@ -2,11 +2,12 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { getNavigationTools, DOMAINS } from './domains/navigation.js';
 import { getDomainHandler } from './domains/index.js';
-import { getCredentials, resetClient } from './utils/client.js';
+import { getCredentials } from './utils/client.js';
 import { logger } from './utils/logger.js';
 import { setServerRef } from './utils/server-ref.js';
 import type { DomainName } from './utils/types.js';
 import { annotate } from './annotate-tool.js';
+import { describeBaseUrl, toolErrorFromCatch } from './domains/_helpers.js';
 
 export function createMcpServer(): Server {
   const server = new Server(
@@ -69,12 +70,13 @@ export function createMcpServer(): Server {
       };
     }
 
-    // Navigation: status
+    // Navigation: status — must never throw, even with missing creds
     if (name === 'threatlocker_status') {
       const creds = getCredentials();
+      const urlDesc = describeBaseUrl('threatlocker', process.env.THREATLOCKER_BASE_URL, 'THREATLOCKER_BASE_URL');
       const credStatus = creds
-        ? 'Configured (API connection available)'
-        : 'NOT CONFIGURED - Please set environment variables';
+        ? `Configured (API key present; baseUrl=${urlDesc})`
+        : `NOT CONFIGURED — set THREATLOCKER_API_KEY. Base URL: ${urlDesc}`;
 
       return {
         content: [{
@@ -89,19 +91,15 @@ export function createMcpServer(): Server {
       const handler = await getDomainHandler(domain);
       const toolNames = handler.getTools().map(t => t.name);
       if (toolNames.includes(name)) {
+        // Domain handlers handle their own errors; this catch is a last-resort
+        // safety net for unexpected throws that escape the handler.
         try {
           return await handler.handleCall(name, (args || {}) as Record<string, unknown>, extra);
-        } catch (error: any) {
-          const status = error?.status ?? error?.statusCode ?? error?.response?.status ?? '';
-          const hint = status === 401 || status === 403
-            ? 'Verify THREATLOCKER_API_KEY is correct and the key has appropriate permissions.'
-            : 'Check that THREATLOCKER_API_KEY is set. Verify THREATLOCKER_BASE_URL if using a non-default region.';
-          const msg = `ThreatLocker API error${status ? ` (HTTP ${status})` : ''}: ${(error as Error).message}. ${hint}`;
-          logger.error('Tool call failed', { tool: name, error: msg });
-          return {
-            content: [{ type: 'text' as const, text: msg }],
-            isError: true,
-          };
+        } catch (err) {
+          logger.error('Unhandled error from domain handler', { tool: name, err });
+          return toolErrorFromCatch(name, err, {
+            hint: 'Check THREATLOCKER_API_KEY is set. Verify THREATLOCKER_BASE_URL if using a non-default region.',
+          });
         }
       }
     }

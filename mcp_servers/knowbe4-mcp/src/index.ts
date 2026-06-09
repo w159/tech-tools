@@ -38,8 +38,9 @@ import {
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { getDomainHandler, getAvailableDomains } from "./domains/index.js";
 import { isDomainName, KNOWBE4_REGIONS, type DomainName } from "./utils/types.js";
-import { getCredentials, credentialStore } from "./utils/client.js";
+import { getCredentials, credentialStore, describeKnowBe4BaseUrl } from "./utils/client.js";
 import { logger } from "./utils/logger.js";
+import { missingCredsError, toolErrorFromCatch } from "../../_shared/error-envelope.js";
 import { setServerRef } from "./utils/server-ref.js";
 import { TOOL_CATEGORIES, findDomainForTool, routeIntent } from "./utils/categories.js";
 import { annotate } from "./annotate-tool.js";
@@ -443,18 +444,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       };
     }
 
-    // Status check
+    // Status check — must never throw, even with missing credentials
     if (name === "knowbe4_status") {
       const creds = getCredentials();
-      const credStatus = creds
-        ? `Configured (region: ${process.env.KNOWBE4_REGION || "us"})`
-        : "NOT CONFIGURED - Please set KNOWBE4_API_KEY environment variable";
+      if (!creds) {
+        return missingCredsError("KnowBe4", ["KNOWBE4_API_KEY"]);
+      }
+
+      const urlDescription = describeKnowBe4BaseUrl();
 
       return {
         content: [
           {
             type: "text",
-            text: `KnowBe4 MCP Server Status\n\nCredentials: ${credStatus}\nAvailable domains: ${getAvailableDomains().join(", ")}\n\nAll tools are available at all times. Use knowbe4_navigate to discover tools by domain.`,
+            text: `KnowBe4 MCP Server Status\n\nCredentials: Configured\nBase URL: ${urlDescription}\nAvailable domains: ${getAvailableDomains().join(", ")}\n\nAll tools are available at all times. Use knowbe4_navigate to discover tools by domain.`,
           },
         ],
       };
@@ -498,21 +501,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       ],
       isError: true,
     };
-  } catch (error: any) {
-    const message = error instanceof Error ? error.message : String(error);
+  } catch (error: unknown) {
     const stack = error instanceof Error ? error.stack : undefined;
-    const status = error?.status ?? error?.statusCode ?? error?.response?.status ?? '';
-    const hint = status === 401 || status === 403
-      ? 'Verify KNOWBE4_API_KEY is correct and has the required permissions.'
-      : status === 429
-      ? 'KnowBe4 rate limit hit. Wait before retrying.'
-      : 'Check that KNOWBE4_API_KEY is set and KNOWBE4_REGION matches your account region (us, eu, ca, uk, sg, au).';
-    const msg = `KnowBe4 API error${status ? ` (HTTP ${status})` : ''}: ${message}. ${hint}`;
-    logger.error("Tool call failed", { tool: name, error: msg, stack });
-    return {
-      content: [{ type: "text", text: msg }],
-      isError: true,
-    };
+    logger.error("Tool call failed", { tool: name, stack });
+    return toolErrorFromCatch(name, error, {
+      hint: "Check that KNOWBE4_API_KEY is set and KNOWBE4_REGION matches your account region (us, eu, ca, uk, de).",
+    });
   }
 });
 

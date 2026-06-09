@@ -147,10 +147,25 @@ try {
   } catch (err) {
     prodPathsRaw = err.stdout ? err.stdout.toString() : '';
   }
+  // Drop paths that are transitive deps nested inside a file:-linked package's
+  // own node_modules (e.g. mcp_node/node-spanning/node_modules/ajv).
+  // Those packages are dev/peer deps of the vendor lib itself and must not
+  // land in the bundle (doing so was the root cause of the AJV 6 vs 8 crash).
+  // A path is "nested inside a file: dep" when it contains /node_modules/ at
+  // least twice AND does not start under ROOT (i.e. it comes from an external
+  // file: link whose own node_modules are polluting npm ls --parseable output).
   const prodPaths = prodPathsRaw
     .split('\n')
+    .map((p) => p.trim())
     .filter((p) => p.includes('node_modules'))
-    .map((p) => p.trim());
+    .filter((p) => {
+      // Paths inside ROOT are always fine: npm manages deduplication there.
+      if (p.startsWith(ROOT + '/')) return true;
+      // External path (file: linked package root or one of its deps).
+      // Only keep the package root itself (contains node_modules exactly once).
+      const count = (p.match(/node_modules/g) || []).length;
+      return count === 1;
+    });
   console.log(`  ${prodPaths.length} production packages`);
   for (const absPath of prodPaths) {
     // Compute relative path against ROOT so file:../../vendor links land

@@ -1,0 +1,90 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-display: var(--font-instrument-serif), "Iowan Old Style", "Palatino Linotype", serif;
+  --font-sans: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: var(--font-geist-mono), "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
+  --bg: #f8f4ed;
+  --bg-elevated: #efebe2;
+  --bg-hover: #e8e2d8;
+  --border: rgba(0, 0, 0, 0.07);
+  --border-mid: rgba(0, 0, 0, 0.13);
+  --text: #1a1916;
+  --text-secondary: #8c8880;
+  --text-tertiary: #bdb9b0;
+  --accent: #c96b4e;
+  --accent-hover: #b85a3e;
+  --accent-soft: rgba(201, 107, 78, 0.1);
+  --red: #c0392b;
+  --green: #2e7d46;
+  --purple: #bf5af2;
+  --orange: #d4832a;
+  --shadow-panel: 0 18px 40px rgba(26, 25, 22, 0.08);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d0d0b;
+    --bg-elevated: #141412;
+    --bg-hover: #1c1c1a;
+    --border: rgba(255, 255, 255, 0.06);
+    --border-mid: #2a2924;
+    --text: #e8e4da;
+    --text-secondary: #6b6760;
+    --text-tertiary: #3d3b38;
+    --accent: #30d158;
+    --accent-hover: #4ade70;
+    --accent-soft: rgba(48, 209, 88, 0.1);
+    --red: #ff453a;
+    --green: #30d158;
+    --shadow-panel: 0 18px 40px rgba(0, 0, 0, 0.34);
+    color-scheme: dark;
+  }
+}
+
+html {
+  background: var(--bg);
+  color: var(--text);
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "liga" 1, "calt" 1;
+}
+
+a,
+button {
+  transition:
+    color 0.18s ease,
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.transcript-grid {
+  display: grid;
+  grid-template-columns: 72px 88px minmax(0, 1fr);
+  gap: 10px 14px;
+}
+
+@media (max-width: 640px) {
+  .transcript-grid {
+    grid-template-columns: 60px 78px minmax(0, 1fr);
+    gap: 8px 10px;
+  }
+}

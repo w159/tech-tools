@@ -10,10 +10,37 @@ import type { AlertSeverity, AlertSourceType } from "node-ninjaone";
 import { getClient } from "../utils/client.js";
 import { logger } from "../utils/logger.js";
 import { elicitSelection } from "../utils/elicitation.js";
+import {
+  shapeList,
+  shapeRaw,
+  extractShapeArgs,
+  SHAPE_PROPS,
+  toolError,
+  toolErrorFromCatch,
+  type SummaryFn,
+} from "./_helpers.js";
+
+// ---------------------------------------------------------------------------
+// Summary functions
+// ---------------------------------------------------------------------------
 
 /**
- * Get alert domain tools
+ * Compact summary for an alert list entry.
  */
+const alertSummary: SummaryFn = (item) => ({
+  uid:            item.uid,
+  severity:       item.severity,
+  message:        item.message,
+  deviceId:       item.deviceId,
+  organizationId: item.organizationId,
+  sourceType:     item.sourceType,
+  createTime:     item.createTime,
+});
+
+// ---------------------------------------------------------------------------
+// Tool definitions
+// ---------------------------------------------------------------------------
+
 function getTools(): Tool[] {
   return [
     {
@@ -23,6 +50,7 @@ function getTools(): Tool[] {
       inputSchema: {
         type: "object" as const,
         properties: {
+          ...SHAPE_PROPS,
           severity: {
             type: "string",
             enum: ["CRITICAL", "MAJOR", "MINOR", "NONE"],
@@ -107,14 +135,16 @@ function getTools(): Tool[] {
   ];
 }
 
-/**
- * Handle an alert domain tool call
- */
+// ---------------------------------------------------------------------------
+// Handler
+// ---------------------------------------------------------------------------
+
 async function handleCall(
   toolName: string,
   args: Record<string, unknown>
 ): Promise<CallToolResult> {
   const client = await getClient();
+  const shapeArgs = extractShapeArgs(args);
 
   switch (toolName) {
     case "ninjaone_alerts_list": {
@@ -152,116 +182,95 @@ async function handleCall(
         cursor,
       });
 
-      const alerts = await client.alerts.list({
-        severity,
-        organizationId: args.organization_id as number | undefined,
-        deviceId: args.device_id as number | undefined,
-        sourceType: args.source_type as AlertSourceType | undefined,
-        pageSize: limit,
-        cursor,
-      });
-      logger.debug("API response: alerts.list", { count: alerts.length });
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify({ alerts }, null, 2),
-          },
-        ],
-      };
+      try {
+        const alerts = await client.alerts.list({
+          severity,
+          organizationId: args.organization_id as number | undefined,
+          deviceId: args.device_id as number | undefined,
+          sourceType: args.source_type as AlertSourceType | undefined,
+          pageSize: limit,
+          cursor,
+        });
+        logger.debug("API response: alerts.list", { count: alerts.length });
+        return shapeList(alerts as unknown as Record<string, unknown>[], alertSummary, shapeArgs);
+      } catch (err) {
+        return toolErrorFromCatch("ninjaone_alerts_list", err, {
+          hint: "Verify NINJAONE_CLIENT_ID, NINJAONE_CLIENT_SECRET, and NINJAONE_REGION are set.",
+        });
+      }
     }
 
     case "ninjaone_alerts_reset": {
       const alertUid = args.alert_uid as string;
       logger.info("API call: alerts.reset", { alertUid });
-      const result = await client.alerts.reset(alertUid);
-      logger.debug("API response: alerts.reset", { result });
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              { success: true, message: "Alert reset successfully", result },
-              null,
-              2
-            ),
-          },
-        ],
-      };
+      try {
+        const result = await client.alerts.reset(alertUid);
+        logger.debug("API response: alerts.reset", { alertUid });
+        return shapeRaw({ success: true, message: "Alert reset successfully", result });
+      } catch (err) {
+        return toolErrorFromCatch("ninjaone_alerts_reset", err, {
+          hint: "Verify alert_uid with ninjaone_alerts_list first.",
+        });
+      }
     }
 
     case "ninjaone_alerts_reset_all": {
       const deviceId = args.device_id as number | undefined;
       const organizationId = args.organization_id as number | undefined;
-      const severity = args.severity as string | undefined;
 
       if (!deviceId && !organizationId) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: "Error: Must specify either device_id or organization_id to reset alerts",
-            },
-          ],
-          isError: true,
-        };
+        return toolError("INVALID_ARGS", "Must specify either device_id or organization_id to reset alerts.", {
+          hint: "Get device IDs from ninjaone_devices_list or organization IDs from ninjaone_organizations_list.",
+        });
       }
 
-      logger.info("API call: alerts.resetAll", { deviceId, organizationId, severity });
-      let result;
-      if (deviceId) {
-        result = await client.alerts.resetByDevice(deviceId);
-      } else if (organizationId) {
-        result = await client.alerts.resetByOrganization(organizationId);
+      logger.info("API call: alerts.resetAll", { deviceId, organizationId, severity: args.severity });
+      try {
+        let result;
+        if (deviceId) {
+          result = await client.alerts.resetByDevice(deviceId);
+        } else if (organizationId) {
+          result = await client.alerts.resetByOrganization(organizationId);
+        }
+        logger.debug("API response: alerts.resetAll", { deviceId, organizationId });
+        return shapeRaw({ success: true, message: "Alerts reset successfully", result });
+      } catch (err) {
+        return toolErrorFromCatch("ninjaone_alerts_reset_all", err, {
+          hint: "Verify device_id or organization_id exists with ninjaone_devices_list or ninjaone_organizations_list.",
+        });
       }
-      logger.debug("API response: alerts.resetAll", { result });
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              { success: true, message: "Alerts reset successfully", result },
-              null,
-              2
-            ),
-          },
-        ],
-      };
     }
 
     case "ninjaone_alerts_summary": {
       const groupBy = (args.group_by as string) || "severity";
       logger.info("API call: alerts.list (for summary)", { groupBy });
-      const alerts = await client.alerts.list();
+      try {
+        const alerts = await client.alerts.list();
 
-      const summary: Record<string, Record<string, number>> = {};
-      for (const alert of alerts) {
-        if (groupBy === "severity" || groupBy === "both") {
-          const sev = alert.severity || "UNKNOWN";
-          summary.bySeverity = summary.bySeverity || {};
-          summary.bySeverity[sev] = (summary.bySeverity[sev] || 0) + 1;
+        const summary: Record<string, Record<string, number>> = {};
+        for (const alert of alerts) {
+          if (groupBy === "severity" || groupBy === "both") {
+            const sev = alert.severity || "UNKNOWN";
+            summary.bySeverity = summary.bySeverity || {};
+            summary.bySeverity[sev] = (summary.bySeverity[sev] || 0) + 1;
+          }
+          if (groupBy === "organization" || groupBy === "both") {
+            const orgId = String(alert.organizationId || "UNKNOWN");
+            summary.byOrganization = summary.byOrganization || {};
+            summary.byOrganization[orgId] = (summary.byOrganization[orgId] || 0) + 1;
+          }
         }
-        if (groupBy === "organization" || groupBy === "both") {
-          const orgId = String(alert.organizationId || "UNKNOWN");
-          summary.byOrganization = summary.byOrganization || {};
-          summary.byOrganization[orgId] = (summary.byOrganization[orgId] || 0) + 1;
-        }
+        logger.debug("API response: alerts summary", { total: alerts.length });
+        return shapeRaw({ total: alerts.length, ...summary });
+      } catch (err) {
+        return toolErrorFromCatch("ninjaone_alerts_summary", err, {
+          hint: "Verify NINJAONE_CLIENT_ID, NINJAONE_CLIENT_SECRET, and NINJAONE_REGION are set.",
+        });
       }
-      logger.debug("API response: alerts summary", { summary });
-
-      return {
-        content: [{ type: "text", text: JSON.stringify({ total: alerts.length, ...summary }, null, 2) }],
-      };
     }
 
     default:
-      return {
-        content: [{ type: "text", text: `Unknown alert tool: ${toolName}` }],
-        isError: true,
-      };
+      return toolError("INVALID_ARGS", `Unknown alert tool: ${toolName}`);
   }
 }
 

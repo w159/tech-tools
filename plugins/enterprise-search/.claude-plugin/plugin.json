@@ -1,0 +1,16 @@
+{
+  "name": "enterprise-search",
+  "version": "1.0.0",
+  "description": "Synthesize knowledge across enterprise sources — search, digest, and manage information from connected repositories and knowledge bases.",
+  "keywords": [
+    "search",
+    "knowledge",
+    "enterprise",
+    "synthesis",
+    "research"
+  ],
+  "author": {
+    "name": "Jerry",
+    "email": "jmorg83@gmail.com"
+  }
+}

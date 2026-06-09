@@ -2,19 +2,40 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { DomainHandler, CallToolResult } from '../utils/types.js';
 import { getClient } from '../utils/client.js';
 import { logger } from '../utils/logger.js';
+import {
+  shapeList,
+  extractShapeArgs,
+  SHAPE_PROPS,
+  toolErrorFromCatch,
+  unknownTool,
+  type SummaryFn,
+} from './_helpers.js';
+
+// Compact summary: id, action type, acting user, and timestamp.
+const auditSummary: SummaryFn = (e) => ({
+  auditId:    e['auditId']    ?? e['id'],
+  action:     e['action']     ?? e['eventType'] ?? e['type'],
+  user:       e['user']       ?? e['adminEmail'] ?? e['actorEmail'],
+  targetUser: e['targetUser'] ?? e['affectedUser'],
+  timestamp:  e['timestamp']  ?? e['createdAt']  ?? e['date'],
+  details:    e['details']    ?? e['description'],
+});
 
 function getTools(): Tool[] {
   return [
     {
       name: 'spanning_audit_list',
       description:
-        'List audit log entries (admin actions, restore operations) for the connected org. Cursor-paginated; optionally bounded by from/to ISO 8601 dates.',
+        'Returns one page of admin audit log entries (token generation, restore actions, license changes, sign-ins). ' +
+        'Optionally bounded by ISO 8601 from/to dates. ' +
+        'Cursor-paginated — pass cursor from the previous response to advance.',
       inputSchema: {
         type: 'object' as const,
         properties: {
-          from: { type: 'string', description: 'ISO 8601 datetime lower bound (inclusive), e.g. 2024-01-01T00:00:00Z.' },
-          to: { type: 'string', description: 'ISO 8601 datetime upper bound (inclusive), e.g. 2024-12-31T23:59:59Z.' },
-          limit: { type: 'number', description: 'Page size — entries per page (integer 1-500, default: 100).' },
+          ...SHAPE_PROPS,
+          from:   { type: 'string', description: 'ISO 8601 datetime lower bound (inclusive), e.g. 2024-01-01T00:00:00Z.' },
+          to:     { type: 'string', description: 'ISO 8601 datetime upper bound (inclusive), e.g. 2024-12-31T23:59:59Z.' },
+          limit:  { type: 'number', description: 'Page size — entries per page (integer 1-500, default 100).' },
           cursor: { type: 'string', description: 'Opaque cursor from the previous page response.' },
         },
       },
@@ -22,13 +43,15 @@ function getTools(): Tool[] {
     {
       name: 'spanning_audit_list_all',
       description:
-        'Iterate every audit entry across all pages (within optional from/to bounds) and return the full collection. Use sparingly on large windows — Spanning enforces 100 req/min.',
+        'Iterates every audit entry across all pages (within optional from/to bounds) and returns the full collection. ' +
+        'Use sparingly on large date windows — Spanning enforces 100 req/min.',
       inputSchema: {
         type: 'object' as const,
         properties: {
-          from: { type: 'string', description: 'ISO 8601 datetime lower bound (inclusive), e.g. 2024-01-01T00:00:00Z.' },
-          to: { type: 'string', description: 'ISO 8601 datetime upper bound (inclusive), e.g. 2024-12-31T23:59:59Z.' },
-          limit: { type: 'number', description: 'Page size per fetch (integer 1-500, default: 100).' },
+          ...SHAPE_PROPS,
+          from:     { type: 'string', description: 'ISO 8601 datetime lower bound (inclusive), e.g. 2024-01-01T00:00:00Z.' },
+          to:       { type: 'string', description: 'ISO 8601 datetime upper bound (inclusive), e.g. 2024-12-31T23:59:59Z.' },
+          limit:    { type: 'number', description: 'Page size per fetch (integer 1-500, default 100).' },
           maxItems: { type: 'number', description: 'Optional hard cap on total items returned across all pages.' },
         },
       },
@@ -37,48 +60,65 @@ function getTools(): Tool[] {
 }
 
 async function handleCall(toolName: string, args: Record<string, unknown>): Promise<CallToolResult> {
-  try {
-    const client = getClient();
-    switch (toolName) {
-      case 'spanning_audit_list': {
+  const shapeArgs = extractShapeArgs(args);
+
+  switch (toolName) {
+    case 'spanning_audit_list': {
+      try {
+        const client = getClient();
         const params = {
-          from: args.from as string | undefined,
-          to: args.to as string | undefined,
-          limit: args.limit as number | undefined,
+          from:   args.from   as string | undefined,
+          to:     args.to     as string | undefined,
+          limit:  args.limit  as number | undefined,
           cursor: args.cursor as string | undefined,
         };
         logger.info('API call: audit.list', params);
         const result = await client.audit.list(params);
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        const items: unknown[] = Array.isArray(result)
+          ? result
+          : (result as Record<string, unknown>)['auditEvents'] as unknown[] ?? (result as Record<string, unknown>)['items'] as unknown[] ?? [];
+        const next = (result as Record<string, unknown>)['next'] as string | undefined;
+        return shapeList(
+          items as Record<string, unknown>[],
+          auditSummary,
+          shapeArgs,
+          undefined,
+          next ? `Pass cursor='${next}' to get the next page.` : undefined,
+        );
+      } catch (err) {
+        return toolErrorFromCatch('spanning_audit_list', err, {
+          hint: 'Verify SPANNING_ADMIN_EMAIL, SPANNING_API_TOKEN, and SPANNING_PLATFORM are correct.',
+        });
       }
-      case 'spanning_audit_list_all': {
-        const from = args.from as string | undefined;
-        const to = args.to as string | undefined;
-        const limit = args.limit as number | undefined;
+    }
+
+    case 'spanning_audit_list_all': {
+      try {
+        const client = getClient();
+        const from     = args.from     as string | undefined;
+        const to       = args.to       as string | undefined;
+        const limit    = args.limit    as number | undefined;
         const maxItems = (args.maxItems as number | undefined) ?? Infinity;
-        const items: unknown[] = [];
+        const items: Record<string, unknown>[] = [];
         logger.info('API call: audit.listAll', { from, to, limit, maxItems });
         const iterParams: Record<string, unknown> = {};
         if (limit) iterParams['limit'] = limit;
-        if (from) iterParams['from'] = from;
-        if (to) iterParams['to'] = to;
+        if (from)  iterParams['from']  = from;
+        if (to)    iterParams['to']    = to;
         for await (const item of client.audit.listAll(iterParams as Parameters<typeof client.audit.listAll>[0])) {
-          items.push(item);
+          items.push(item as Record<string, unknown>);
           if (items.length >= maxItems) break;
         }
-        return { content: [{ type: 'text', text: JSON.stringify({ count: items.length, items }, null, 2) }] };
+        return shapeList(items, auditSummary, shapeArgs);
+      } catch (err) {
+        return toolErrorFromCatch('spanning_audit_list_all', err, {
+          hint: 'Verify SPANNING_ADMIN_EMAIL, SPANNING_API_TOKEN, and SPANNING_PLATFORM are correct.',
+        });
       }
-      default:
-        return { content: [{ type: 'text', text: `Unknown tool: ${toolName}` }], isError: true };
     }
-  } catch (error: any) {
-    const status = error?.status ?? error?.statusCode ?? '';
-    const hint = status === 401 || status === 403
-      ? 'Verify SPANNING_ADMIN_EMAIL and SPANNING_API_TOKEN environment variables are correct.'
-      : 'Check Spanning API credentials (SPANNING_ADMIN_EMAIL, SPANNING_API_TOKEN) and platform setting (SPANNING_PLATFORM).';
-    const msg = `Spanning API error${status ? ` (HTTP ${status})` : ''}: ${error?.message ?? String(error)}. ${hint}`;
-    logger.error('Tool call failed', { tool: toolName, error: msg });
-    return { content: [{ type: 'text', text: msg }], isError: true };
+
+    default:
+      return unknownTool(toolName);
   }
 }
 

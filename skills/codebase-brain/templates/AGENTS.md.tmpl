@@ -1,0 +1,28 @@
+# <PROJECT NAME>
+
+<One paragraph: what this project is and what it's for.>
+
+## Codebase Brain
+
+This repo carries a committed agent brain in `.agents/`. Any coding agent (Claude Code,
+Codex, Copilot) should consult it before changing code, and append to it when it learns
+something durable.
+
+- **Knowledge** — how this codebase works: `.agents/knowledge/`
+  - `invariants.md` — **DO NOT break these.** Read first.
+  - `architecture.md`, `structure.md`, `conventions.md`, `stack.md`,
+    `integrations.md`, `testing.md`, `concerns.md`
+- **Memory** — durable decisions & gotchas, one fact per file: `.agents/memory/`
+  (index: `.agents/memory/MEMORY.md`)
+
+## Working agreement
+
+- Read `invariants.md` before editing; if a request would violate one, say so before doing it.
+- Run it before claiming it works — evidence before assertions.
+- When you learn something the next person would otherwise rediscover, record it in memory.
+
+## Build / test / run
+
+```
+# fill in: how to install, run, and test this project
+```

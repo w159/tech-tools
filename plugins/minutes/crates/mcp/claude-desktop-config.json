@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "minutes": {
+      "command": "node",
+      "args": ["REPLACE_WITH_PATH/crates/mcp/dist/index.js"],
+      "env": {}
+    }
+  }
+}

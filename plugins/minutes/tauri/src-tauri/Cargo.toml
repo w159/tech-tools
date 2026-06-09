@@ -1,0 +1,52 @@
+[package]
+name = "minutes-app"
+version = "0.1.0"
+edition = "2021"
+description = "Minutes — menu bar app for conversation memory"
+
+[features]
+parakeet = ["minutes-core/parakeet"]
+coreml = ["minutes-core/coreml"]
+cuda = ["minutes-core/cuda"]
+hipblas = ["minutes-core/hipblas"]
+metal = ["minutes-core/metal"]
+vulkan = ["minutes-core/vulkan"]
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png", "devtools", "macos-private-api"] }
+tauri-plugin-shell = "2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-notification = "2"
+notify-rust = "4.12.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = { workspace = true }
+minutes-core = { path = "../../crates/core", features = ["streaming", "diarize"] }
+chrono = { version = "0.4", features = ["serde"] }
+dirs = "6"
+libc = "0.2"
+which = { workspace = true }
+portable-pty = "0.9"
+base64 = "0.22"
+futures-util = "0.3"
+minisign-verify = "0.2"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"] }
+tauri-plugin-pty = "0.1"
+tauri-plugin-autostart = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-window-state = "2"
+walkdir = { workspace = true }
+ureq = { workspace = true }
+window-vibrancy = "0.7"
+notify = "7"
+tracing = "0.1"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = "3.7"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dev-dependencies]
+tempfile = "3"

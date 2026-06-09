@@ -48,6 +48,8 @@ import {
 } from "./utils/client.js";
 import { logger } from "./utils/logger.js";
 import { setServerRef } from "./utils/server-ref.js";
+import { missingCredsError } from "../../_shared/error-envelope.js";
+import { describeBaseUrl } from "../../_shared/base-url.js";
 import { registerPromptHandlers } from "./prompts.js";
 import { annotate } from "./annotate-tool.js";
 import { runUserFlow, DEFAULT_SCOPES, REDIRECT_URI } from "./oauth/user-flow.js";
@@ -239,9 +241,19 @@ async function createMcpServer(credentialOverrides?: NinjaOneCredentials): Promi
       // Handle status tool
       if (name === "ninjaone_status") {
         const creds = getCredentials();
-        const credStatus = creds
-          ? `Configured (region: ${creds.region}, base URL: ${creds.baseUrl}, auth: ${creds.authMode})`
-          : "NOT CONFIGURED - Please set environment variables";
+        if (!creds) {
+          return missingCredsError("NinjaOne", [
+            "NINJAONE_CLIENT_ID",
+            "NINJAONE_CLIENT_SECRET",
+          ]);
+        }
+
+        const urlDesc = describeBaseUrl(
+          "ninjaone",
+          process.env.NINJAONE_BASE_URL,
+          "NINJAONE_BASE_URL"
+        );
+        const credStatus = `Configured (region: ${creds.region}, base URL: ${urlDesc}, auth: ${creds.authMode})`;
 
         return {
           content: [

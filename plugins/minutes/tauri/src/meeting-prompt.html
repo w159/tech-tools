@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Upcoming Meeting</title>
+  <style>
+    @font-face {
+      font-family: 'Instrument Serif';
+      font-style: normal;
+      font-weight: 400;
+      src: url('fonts/InstrumentSerif-Regular.woff2') format('woff2');
+    }
+    @font-face {
+      font-family: 'Instrument Serif';
+      font-style: italic;
+      font-weight: 400;
+      src: url('fonts/InstrumentSerif-Italic.woff2') format('woff2');
+    }
+    @font-face {
+      font-family: 'Geist';
+      font-style: normal;
+      font-weight: 400;
+      src: url('fonts/Geist-Regular.woff2') format('woff2');
+    }
+    @font-face {
+      font-family: 'Geist';
+      font-style: normal;
+      font-weight: 500;
+      src: url('fonts/Geist-Medium.woff2') format('woff2');
+    }
+    @font-face {
+      font-family: 'Geist';
+      font-style: normal;
+      font-weight: 600;
+      src: url('fonts/Geist-SemiBold.woff2') format('woff2');
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      color-scheme: light dark;
+      --bg: #0D0D0B;
+      --bg-elevated: #141412;
+      --bg-hover: #1C1C1A;
+      --border: rgba(255, 255, 255, 0.06);
+      --border-mid: #2A2924;
+      --text: #E8E4DA;
+      --text-secondary: #6B6760;
+      --text-tertiary: #3D3B38;
+      --accent: #30D158;
+      --accent-hover: #4ADE70;
+      --accent-soft: rgba(48, 209, 88, 0.12);
+      --red: #FF453A;
+      --red-bg: rgba(255, 69, 58, 0.12);
+      --surface-fill: rgba(255, 255, 255, 0.02);
+      --inset-shadow: rgba(0, 0, 0, 0.14);
+      --shadow:
+        0 18px 36px rgba(0, 0, 0, 0.34),
+        inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg:             #F8F4ED;
+        --bg-elevated:    #EFEBE2;
+        --bg-hover:       #E8E2D8;
+        --border:         rgba(0, 0, 0, 0.07);
+        --border-mid:     rgba(0, 0, 0, 0.13);
+        --text:           #1A1916;
+        --text-secondary: #8C8880;
+        --text-tertiary:  #BDB9B0;
+        --accent:         #C96B4E;
+        --accent-hover:   #B85A3E;
+        --accent-soft:    rgba(201, 107, 78, 0.10);
+        --red:            #C0392B;
+        --red-bg:         rgba(192, 57, 43, 0.12);
+        --surface-fill:   rgba(0, 0, 0, 0.03);
+        --inset-shadow:   rgba(0, 0, 0, 0.08);
+        --shadow:
+          0 18px 36px rgba(0, 0, 0, 0.12),
+          inset 0 1px 0 rgba(0, 0, 0, 0.03);
+      }
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+    }
+
+    body {
+      font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 0;
+      -webkit-user-select: none;
+      user-select: none;
+      overflow: hidden;
+    }
+
+    .prompt {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 14px;
+      border-radius: 16px;
+      border: 1px solid var(--border-mid);
+      background: var(--bg);
+      box-shadow: var(--shadow);
+      animation: slideIn 220ms ease-out;
+    }
+
+    .header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .meeting-info {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .eyebrow {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 4px;
+    }
+
+    .calendar-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 9px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+
+    .meeting-text {
+      min-width: 0;
+    }
+
+    .meeting-title {
+      font-family: 'Instrument Serif', ui-serif, Georgia, serif;
+      font-size: 22px;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+      color: var(--text);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      padding-bottom: 2px;
+    }
+
+    .meeting-countdown {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      width: fit-content;
+      margin-top: 8px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .meeting-countdown.urgent {
+      background: var(--red-bg);
+      color: var(--red);
+    }
+
+    .close-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface-fill);
+      color: var(--text-tertiary);
+      font-size: 13px;
+      cursor: pointer;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+
+    .close-btn:hover { color: var(--text-secondary); background: var(--bg-hover); }
+
+    .summary {
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--text-secondary);
+      min-height: 34px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      margin-top: auto;
+    }
+
+    .btn {
+      padding: 9px 14px;
+      border-radius: 8px;
+      border: none;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.12s ease;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: var(--bg);
+      flex: 1;
+      box-shadow: inset 0 -1px 0 var(--inset-shadow);
+    }
+
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-primary:active { transform: scale(0.97); }
+    .btn-primary:disabled {
+      background: var(--bg-hover);
+      color: var(--text-tertiary);
+      cursor: default;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--text-secondary);
+      border: 1px solid var(--border-mid);
+    }
+
+    .btn-secondary:hover { background: var(--bg-hover); color: var(--text); }
+    .btn-secondary:active { transform: scale(0.97); }
+
+    .error-text {
+      font-size: 12px;
+      color: var(--red);
+      display: none;
+      line-height: 1.4;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%) translateY(30px);
+      background: var(--accent);
+      color: var(--bg);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 20px;
+      opacity: 0;
+      transition: all 0.25s ease;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body role="alertdialog" aria-label="Upcoming meeting">
+  <div class="prompt">
+    <div class="header">
+      <div class="meeting-info">
+        <span class="calendar-icon">📅</span>
+        <div class="meeting-text">
+          <div class="eyebrow">Upcoming meeting</div>
+          <div class="meeting-title" id="title"></div>
+          <div class="meeting-countdown" id="countdown"></div>
+        </div>
+      </div>
+      <button class="close-btn" id="close-btn" aria-label="Dismiss">✕</button>
+    </div>
+    <div class="summary" id="summary"></div>
+    <div class="actions">
+      <button class="btn btn-primary" id="primary-btn" autofocus></button>
+      <button class="btn btn-secondary" id="dismiss-btn">Dismiss</button>
+    </div>
+    <div class="error-text" id="error-text"></div>
+  </div>
+  <div class="toast" id="toast">Recording started ✓</div>
+
+  <script>
+    const invoke = window.__TAURI__?.core?.invoke || (async () => null);
+    const getCurrentWebviewWindow =
+      window.__TAURI__?.webviewWindow?.getCurrentWebviewWindow ||
+      (() => ({ close: () => window.close() }));
+
+    // Element refs
+    const titleEl = document.getElementById('title');
+    const countdownEl = document.getElementById('countdown');
+    const primaryBtn = document.getElementById('primary-btn');
+    const errorEl = document.getElementById('error-text');
+    const toast = document.getElementById('toast');
+    const summaryEl = document.getElementById('summary');
+
+    // Populated from cmd_get_meeting_prompt below
+    let title = 'Meeting';
+    let minutesUntil = 0;
+    let meetingUrl = '';
+    let hasUrl = false;
+
+    function renderFromState() {
+      titleEl.textContent = title || 'Meeting';
+      titleEl.title = title || 'Meeting'; // full text on hover
+
+      if (minutesUntil <= 0) {
+        countdownEl.textContent = 'starting now';
+        countdownEl.classList.add('urgent');
+      } else if (minutesUntil === 1) {
+        countdownEl.textContent = 'in 1 minute';
+      } else {
+        countdownEl.textContent = `in ${minutesUntil} minutes`;
+      }
+
+      primaryBtn.textContent = hasUrl ? 'Join & Record' : 'Record';
+      summaryEl.textContent = hasUrl
+        ? 'Minutes can open the meeting link and start a local recording before the conversation gets away from you.'
+        : 'Minutes can start a local recording now so the transcript, decisions, and action items are captured from the beginning.';
+    }
+
+    function closeWindow() {
+      try { getCurrentWebviewWindow().close(); } catch { window.close(); }
+    }
+
+    (async () => {
+      // Parse the staging token. The overlay is only meaningful if it was
+      // opened by show_meeting_prompt with a token; otherwise we have no
+      // meeting context to render and should quietly close rather than show
+      // a phantom "Meeting · starting now · Record" overlay.
+      const tokenStr = new URLSearchParams(window.location.search).get('t');
+      const token = tokenStr === null ? NaN : Number(tokenStr);
+      if (!Number.isFinite(token)) {
+        console.warn('meeting-prompt opened without staging token; closing');
+        closeWindow();
+        return;
+      }
+
+      let data = null;
+      try {
+        data = await invoke('cmd_get_meeting_prompt', { token });
+      } catch (e) {
+        // IPC itself failed (command not registered, state missing, etc.).
+        // This is operator-visible in devtools/stderr; for the user, close
+        // silently rather than render a context-free overlay.
+        console.warn('cmd_get_meeting_prompt failed:', e);
+        closeWindow();
+        return;
+      }
+
+      if (!data) {
+        // Token was already drained (rapid-reopen race) or never staged.
+        // Either way the overlay has nothing to show — close it.
+        console.warn('meeting-prompt token', token, 'returned no data; closing');
+        closeWindow();
+        return;
+      }
+
+      title = data.title ?? 'Meeting';
+      minutesUntil = Number.isFinite(data.minutesUntil) ? data.minutesUntil : 0;
+      meetingUrl = typeof data.url === 'string' ? data.url : '';
+      hasUrl = meetingUrl.length > 0;
+
+      renderFromState();
+      primaryBtn.focus();
+    })();
+
+    // Actions
+    async function startRecording() {
+      primaryBtn.disabled = true;
+      primaryBtn.textContent = 'Starting...';
+
+      try {
+        // Open meeting URL first if available
+        if (hasUrl) {
+          await invoke('cmd_open_meeting_url', { url: meetingUrl });
+        }
+
+        // Start recording
+        await invoke('cmd_start_recording');
+
+        // Success toast
+        toast.classList.add('show');
+        setTimeout(() => {
+          toast.classList.remove('show');
+          setTimeout(() => getCurrentWebviewWindow().close(), 200);
+        }, 600);
+      } catch (e) {
+        primaryBtn.disabled = false;
+        primaryBtn.textContent = hasUrl ? 'Join & Record' : 'Record';
+        errorEl.textContent = String(e);
+        errorEl.style.display = 'block';
+      }
+    }
+
+    function dismiss() {
+      getCurrentWebviewWindow().close();
+    }
+
+    primaryBtn.addEventListener('click', startRecording);
+    document.getElementById('dismiss-btn').addEventListener('click', dismiss);
+    document.getElementById('close-btn').addEventListener('click', dismiss);
+
+    // Keyboard: Escape to dismiss
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') dismiss();
+    });
+
+    // Auto-dismiss after 60 seconds
+    setTimeout(() => {
+      document.body.style.transition = 'opacity 300ms ease-out';
+      document.body.style.opacity = '0';
+      setTimeout(() => getCurrentWebviewWindow().close(), 300);
+    }, 60000);
+  </script>
+</body>
+</html>

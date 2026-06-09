@@ -1,7 +1,7 @@
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { getCredentials } from '../credentials.js';
 import { createAuvikClient } from '../client-factory.js';
-import { toMcpError } from '../errors.js';
+import { missingCredsError, toolErrorFromCatch, shapeRaw } from './shared.js';
 
 export const navigateTool: Tool = {
   name: 'auvik_navigate',
@@ -17,15 +17,14 @@ export const navigateTool: Tool = {
 };
 
 export async function handleNavigate(args: { url: string }) {
+  const c = getCredentials();
+  if (!c) return missingCredsError('Auvik', ['AUVIK_USERNAME', 'AUVIK_API_KEY']);
   try {
-    const c = getCredentials();
-    if (!c) {
-      return { content: [{ type: 'text' as const, text: 'No Auvik credentials configured.' }], isError: true };
-    }
     const resp = await createAuvikClient(c).followUrl(args.url);
-    return { content: [{ type: 'text' as const, text: JSON.stringify(resp, null, 2) }] };
+    return shapeRaw(resp);
   } catch (e) {
-    const m = toMcpError(e);
-    return { content: [{ type: 'text' as const, text: m.message }], isError: true };
+    return toolErrorFromCatch('auvik_navigate', e, {
+      hint: 'Ensure the url comes from a prior Auvik list response links.next/links.prev field.',
+    });
   }
 }

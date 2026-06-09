@@ -4,13 +4,18 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "strict": true,
-    "rootDir": "src",
+    "rootDir": "../..",
     "outDir": "dist",
     "declaration": true,
     "sourceMap": true,
     "esModuleInterop": true,
     "skipLibCheck": true
   },
-  "include": ["src"],
+  "include": [
+    "src/**/*",
+    "../_shared/response-shaper.ts",
+    "../_shared/error-envelope.ts",
+    "../_shared/base-url.ts"
+  ],
   "exclude": ["node_modules", "dist"]
 }

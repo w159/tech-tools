@@ -1,0 +1,108 @@
+<svg width="720" height="520" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      @font-face { font-family: 'SF Mono'; src: local('SF Mono'), local('SFMono-Regular'), local('Menlo'); }
+      .bg { fill: #0d1117; }
+      .titlebar { fill: #161b22; }
+      .dot-red { fill: #ff5f57; }
+      .dot-yellow { fill: #febc2e; }
+      .dot-green { fill: #28c840; }
+      .title { fill: #8b949e; font-family: 'SF Mono', 'Menlo', 'Monaco', monospace; font-size: 12px; }
+      .cmd { fill: #c9d1d9; font-family: 'SF Mono', 'Menlo', 'Monaco', monospace; font-size: 13px; }
+      .prompt { fill: #7ee787; }
+      .dim { fill: #6e7681; }
+      .white { fill: #e6edf3; }
+      .green { fill: #3fb950; }
+      .yellow { fill: #d29922; }
+      .blue { fill: #58a6ff; }
+      .cyan { fill: #39d353; }
+      .heading { fill: #e6edf3; font-weight: 600; }
+      .muted { fill: #484f58; }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect class="bg" width="720" height="520" rx="10"/>
+
+  <!-- Title bar -->
+  <rect class="titlebar" width="720" height="36" rx="10"/>
+  <rect class="titlebar" y="10" width="720" height="26"/>
+  <circle class="dot-red" cx="20" cy="18" r="6"/>
+  <circle class="dot-yellow" cx="40" cy="18" r="6"/>
+  <circle class="dot-green" cx="60" cy="18" r="6"/>
+  <text class="title" x="360" y="22" text-anchor="middle">~/Sites/minutes</text>
+
+  <!-- Command 1 -->
+  <text y="62" x="16">
+    <tspan class="prompt">$</tspan>
+    <tspan class="cmd"> minutes people --rebuild</tspan>
+  </text>
+  <text class="dim" y="80" x="16">Building relationship index...</text>
+  <text class="white" y="98" x="16">Index rebuilt: 10 people, 83 meetings, 16 commitments in 11ms</text>
+
+  <!-- Duplicates -->
+  <text y="124" x="16">
+    <tspan class="yellow">Possible duplicates:</tspan>
+  </text>
+  <text class="dim" y="142" x="16">  Alex C. ↔ Alex (2 shared meetings)</text>
+  <text class="dim" y="158" x="16">  Case W. ↔ Case (2 shared meetings)</text>
+
+  <!-- Top Contacts -->
+  <text class="heading" y="186" x="16">TOP CONTACTS</text>
+
+  <text y="206" x="16">
+    <tspan class="white">  Mat S.              </tspan>
+    <tspan class="dim">4 meetings  last: 5d ago  </tspan>
+    <tspan class="green">&#x2713; all clear</tspan>
+  </text>
+  <text y="224" x="16">
+    <tspan class="white">  Alex C.             </tspan>
+    <tspan class="dim">2 meetings  last: 5d ago  </tspan>
+    <tspan class="blue">2 open commitments</tspan>
+  </text>
+  <text y="242" x="16">
+    <tspan class="white">  Case W.             </tspan>
+    <tspan class="dim">2 meetings  last: 5d ago  </tspan>
+    <tspan class="blue">2 open commitments</tspan>
+  </text>
+  <text y="260" x="16">
+    <tspan class="white">  Logan R.            </tspan>
+    <tspan class="dim">1 meeting   last: 5d ago  </tspan>
+    <tspan class="green">&#x2713; all clear</tspan>
+  </text>
+
+  <!-- Divider -->
+  <line x1="16" y1="280" x2="704" y2="280" stroke="#21262d" stroke-width="1"/>
+
+  <!-- Command 2 -->
+  <text y="306" x="16">
+    <tspan class="prompt">$</tspan>
+    <tspan class="cmd"> minutes commitments --person alex</tspan>
+  </text>
+
+  <text class="heading" y="332" x="16">OPEN (2)</text>
+
+  <text y="356" x="16">
+    <tspan class="dim">  &#183; </tspan>
+    <tspan class="white">Close out pricing experiment proposal</tspan>
+  </text>
+  <text class="dim" y="374" x="30">Alex; from: Weekly Standup</text>
+
+  <text y="400" x="16">
+    <tspan class="dim">  &#183; </tspan>
+    <tspan class="white">Review competitor pricing grid</tspan>
+  </text>
+  <text class="dim" y="418" x="30">Alex; from: Q2 Pricing Discussion with Alex</text>
+
+  <!-- Divider -->
+  <line x1="16" y1="442" x2="704" y2="442" stroke="#21262d" stroke-width="1"/>
+
+  <!-- Footer -->
+  <text y="470" x="16">
+    <tspan class="prompt">$</tspan>
+    <tspan class="muted"> _</tspan>
+  </text>
+
+  <!-- Branding -->
+  <text class="dim" x="360" y="500" text-anchor="middle">github.com/silverstein/minutes  &#183;  v0.8.1  &#183;  open source</text>
+</svg>

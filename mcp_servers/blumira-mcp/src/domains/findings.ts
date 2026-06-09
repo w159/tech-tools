@@ -2,6 +2,43 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { DomainHandler, CallToolResult } from '../utils/types.js';
 import { getClient } from '../utils/client.js';
 import { logger } from '../utils/logger.js';
+import {
+  shapeList,
+  shapeItem,
+  shapeRaw,
+  extractShapeArgs,
+  SHAPE_PROPS,
+  toolError,
+  toolErrorFromCatch,
+  type SummaryFn,
+} from './_helpers.js';
+
+// ---------------------------------------------------------------------------
+// Compact summaries
+// ---------------------------------------------------------------------------
+
+const findingSummary: SummaryFn = (item) => ({
+  id:       item.id,
+  name:     item.name,
+  type:     item.type,
+  priority: item.priority,
+  severity: item.severity,
+  status:   item.status,
+  created:  item.created,
+  modified: item.modified,
+  org:      item.org,
+});
+
+const commentSummary: SummaryFn = (item) => ({
+  id:      item.id,
+  sender:  item.sender,
+  body:    item.body,
+  created: item.created,
+});
+
+// ---------------------------------------------------------------------------
+// Tool definitions
+// ---------------------------------------------------------------------------
 
 function getTools(): Tool[] {
   return [
@@ -11,21 +48,22 @@ function getTools(): Tool[] {
       inputSchema: {
         type: 'object' as const,
         properties: {
-          page: { type: 'number', description: 'Page number (default: 1)' },
-          page_size: { type: 'number', description: 'Results per page (default: 100)' },
-          limit: { type: 'number', description: 'Maximum records to return (max: 5000)' },
-          order_by: { type: 'string', description: 'Order by field, e.g., "created;desc"' },
-          status: { type: 'number', description: 'Filter by status code (e.g., 10=Open, 40=Resolved)' },
-          priority: { type: 'number', description: 'Filter by priority (1-5)' },
-          category: { type: 'number', description: 'Filter by category ID' },
-          name: { type: 'string', description: 'Filter by exact name' },
-          'name.contains': { type: 'string', description: 'Filter by name substring' },
-          'name.regex': { type: 'string', description: 'Filter by name regex' },
-          created_after: { type: 'string', description: 'ISO 8601 datetime (UTC) lower bound for creation time, e.g. 2024-01-01T00:00:00Z.' },
-          created_before: { type: 'string', description: 'ISO 8601 datetime (UTC) upper bound for creation time.' },
-          modified_after: { type: 'string', description: 'ISO 8601 datetime (UTC) lower bound for last-modified time.' },
-          modified_before: { type: 'string', description: 'ISO 8601 datetime (UTC) upper bound for last-modified time.' },
-          blocked: { type: 'boolean', description: 'Filter by blocked status' },
+          ...SHAPE_PROPS,
+          page: { type: 'number', description: 'Page number (default: 1).' },
+          page_size: { type: 'number', description: 'Results per page (default: 100).' },
+          limit: { type: 'number', description: 'Maximum records to return (max: 5000).' },
+          order_by: { type: 'string', description: 'Sort field and direction, e.g. "created;desc".' },
+          status: { type: 'number', description: 'Filter by status code (10=Open, 40=Resolved).' },
+          priority: { type: 'number', description: 'Filter by priority (1–5, where 1 is highest).' },
+          category: { type: 'number', description: 'Filter by category ID.' },
+          name: { type: 'string', description: 'Filter by exact name match.' },
+          'name.contains': { type: 'string', description: 'Filter by name substring.' },
+          'name.regex': { type: 'string', description: 'Filter by name regex.' },
+          created_after: { type: 'string', description: 'ISO 8601 UTC lower bound for creation time, e.g. 2024-01-01T00:00:00Z.' },
+          created_before: { type: 'string', description: 'ISO 8601 UTC upper bound for creation time.' },
+          modified_after: { type: 'string', description: 'ISO 8601 UTC lower bound for last-modified time.' },
+          modified_before: { type: 'string', description: 'ISO 8601 UTC upper bound for last-modified time.' },
+          blocked: { type: 'boolean', description: 'Filter by blocked status.' },
         },
       },
     },
@@ -35,7 +73,8 @@ function getTools(): Tool[] {
       inputSchema: {
         type: 'object' as const,
         properties: {
-          finding_id: { type: 'string', description: 'Finding UUID' },
+          ...SHAPE_PROPS,
+          finding_id: { type: 'string', description: 'Finding UUID (required).' },
         },
         required: ['finding_id'],
       },
@@ -46,7 +85,8 @@ function getTools(): Tool[] {
       inputSchema: {
         type: 'object' as const,
         properties: {
-          finding_id: { type: 'string', description: 'Finding UUID' },
+          ...SHAPE_PROPS,
+          finding_id: { type: 'string', description: 'Finding UUID (required).' },
         },
         required: ['finding_id'],
       },
@@ -57,9 +97,9 @@ function getTools(): Tool[] {
       inputSchema: {
         type: 'object' as const,
         properties: {
-          finding_id: { type: 'string', description: 'Finding UUID' },
-          resolution: { type: 'number', description: 'Resolution ID (10, 20, 30, or 40)' },
-          resolution_notes: { type: 'string', description: 'Optional resolution notes' },
+          finding_id: { type: 'string', description: 'Finding UUID (required).' },
+          resolution: { type: 'number', description: 'Resolution ID (required): 10=Valid, 20=False Positive, 30=No Action Needed, 40=Risk Accepted.' },
+          resolution_notes: { type: 'string', description: 'Optional resolution notes.' },
         },
         required: ['finding_id', 'resolution'],
       },
@@ -70,9 +110,9 @@ function getTools(): Tool[] {
       inputSchema: {
         type: 'object' as const,
         properties: {
-          finding_id: { type: 'string', description: 'Finding UUID' },
-          owner_type: { type: 'string', enum: ['responder', 'analyst', 'manager'], description: 'Type of owner' },
-          owners: { type: 'array', items: { type: 'string' }, description: 'Array of user UUIDs to assign' },
+          finding_id: { type: 'string', description: 'Finding UUID (required).' },
+          owner_type: { type: 'string', enum: ['responder', 'analyst', 'manager'], description: 'Type of owner (required).' },
+          owners: { type: 'array', items: { type: 'string' }, description: 'Array of user UUIDs to assign (required). Pass empty array to clear.' },
         },
         required: ['finding_id', 'owner_type', 'owners'],
       },
@@ -83,7 +123,8 @@ function getTools(): Tool[] {
       inputSchema: {
         type: 'object' as const,
         properties: {
-          finding_id: { type: 'string', description: 'Finding UUID' },
+          ...SHAPE_PROPS,
+          finding_id: { type: 'string', description: 'Finding UUID (required).' },
         },
         required: ['finding_id'],
       },
@@ -94,9 +135,9 @@ function getTools(): Tool[] {
       inputSchema: {
         type: 'object' as const,
         properties: {
-          finding_id: { type: 'string', description: 'Finding UUID' },
-          body: { type: 'string', description: 'Comment body (may contain HTML)' },
-          sender: { type: 'string', description: 'UUID of the commenting user (use blumira_users_list to get IDs)' },
+          finding_id: { type: 'string', description: 'Finding UUID (required).' },
+          body: { type: 'string', description: 'Comment body (required, HTML allowed).' },
+          sender: { type: 'string', description: 'UUID of the commenting user (required; use blumira_users_list to get IDs).' },
         },
         required: ['finding_id', 'body', 'sender'],
       },
@@ -104,7 +145,13 @@ function getTools(): Tool[] {
   ];
 }
 
+// ---------------------------------------------------------------------------
+// Handler
+// ---------------------------------------------------------------------------
+
 async function handleCall(toolName: string, args: Record<string, unknown>): Promise<CallToolResult> {
+  const shapeArgs = extractShapeArgs(args);
+
   try {
     const client = await getClient();
 
@@ -112,76 +159,73 @@ async function handleCall(toolName: string, args: Record<string, unknown>): Prom
       case 'blumira_findings_list': {
         logger.info('API call: findings.list', args);
         const res = await client.findings.list(args as any);
-        return { content: [{ type: 'text' as const, text: JSON.stringify(res, null, 2) }] };
+        const items = Array.isArray(res) ? res : (res as any)?.results ?? (res as any)?.data ?? [];
+        return shapeList(items, findingSummary, shapeArgs);
       }
       case 'blumira_findings_get': {
         const id = args.finding_id as string;
-        if (!id) return { content: [{ type: 'text' as const, text: 'Error: finding_id is required (UUID string).' }], isError: true };
+        if (!id) return toolError('INVALID_ARGS', 'finding_id is required.', { hint: 'Pass the finding UUID string.' });
         logger.info('API call: findings.get', { id });
         const res = await client.findings.get(id);
-        return { content: [{ type: 'text' as const, text: JSON.stringify(res, null, 2) }] };
+        return shapeItem(res as Record<string, unknown>, findingSummary, shapeArgs);
       }
       case 'blumira_findings_details': {
         const id = args.finding_id as string;
-        if (!id) return { content: [{ type: 'text' as const, text: 'Error: finding_id is required (UUID string).' }], isError: true };
+        if (!id) return toolError('INVALID_ARGS', 'finding_id is required.', { hint: 'Pass the finding UUID string.' });
         logger.info('API call: findings.getDetails', { id });
         const res = await client.findings.getDetails(id);
-        return { content: [{ type: 'text' as const, text: JSON.stringify(res, null, 2) }] };
+        return shapeItem(res as Record<string, unknown>, findingSummary, shapeArgs);
       }
       case 'blumira_findings_resolve': {
         const id = args.finding_id as string;
-        if (!id) return { content: [{ type: 'text' as const, text: 'Error: finding_id is required (UUID string).' }], isError: true };
-        if (args.resolution === undefined) return { content: [{ type: 'text' as const, text: 'Error: resolution is required (integer: 10=Valid, 20=False Positive, 30=No Action Needed, 40=Risk Accepted).' }], isError: true };
+        if (!id) return toolError('INVALID_ARGS', 'finding_id is required.', { hint: 'Pass the finding UUID string.' });
+        if (args.resolution === undefined) return toolError('INVALID_ARGS', 'resolution is required.', { hint: 'Use 10=Valid, 20=False Positive, 30=No Action Needed, 40=Risk Accepted.' });
         logger.info('API call: findings.resolve', { id, resolution: args.resolution });
         const res = await client.findings.resolve(id, {
           resolution: args.resolution as number,
           resolution_notes: args.resolution_notes as string | undefined,
         });
-        return { content: [{ type: 'text' as const, text: JSON.stringify(res, null, 2) }] };
+        return shapeRaw(res);
       }
       case 'blumira_findings_assign': {
         const id = args.finding_id as string;
-        if (!id) return { content: [{ type: 'text' as const, text: 'Error: finding_id is required (UUID string).' }], isError: true };
-        if (!args.owner_type) return { content: [{ type: 'text' as const, text: 'Error: owner_type is required (responder|analyst|manager).' }], isError: true };
-        if (!args.owners) return { content: [{ type: 'text' as const, text: 'Error: owners is required (array of user UUID strings; pass empty array to clear).' }], isError: true };
+        if (!id) return toolError('INVALID_ARGS', 'finding_id is required.', { hint: 'Pass the finding UUID string.' });
+        if (!args.owner_type) return toolError('INVALID_ARGS', 'owner_type is required.', { hint: 'Use one of: responder, analyst, manager.' });
+        if (!args.owners) return toolError('INVALID_ARGS', 'owners is required.', { hint: 'Pass an array of user UUID strings; use blumira_users_list to get IDs. Pass [] to clear.' });
         logger.info('API call: findings.assignOwners', { id, owner_type: args.owner_type });
         const res = await client.findings.assignOwners(id, {
           owner_type: args.owner_type as 'responder' | 'analyst' | 'manager',
           owners: args.owners as string[],
         });
-        return { content: [{ type: 'text' as const, text: JSON.stringify(res, null, 2) }] };
+        return shapeRaw(res);
       }
       case 'blumira_findings_comments_list': {
         const id = args.finding_id as string;
-        if (!id) return { content: [{ type: 'text' as const, text: 'Error: finding_id is required (UUID string).' }], isError: true };
+        if (!id) return toolError('INVALID_ARGS', 'finding_id is required.', { hint: 'Pass the finding UUID string.' });
         logger.info('API call: findings.listComments', { id });
         const res = await client.findings.listComments(id);
-        return { content: [{ type: 'text' as const, text: JSON.stringify(res, null, 2) }] };
+        const items = Array.isArray(res) ? res : (res as any)?.results ?? (res as any)?.data ?? [];
+        return shapeList(items, commentSummary, shapeArgs);
       }
       case 'blumira_findings_comments_add': {
         const id = args.finding_id as string;
-        if (!id) return { content: [{ type: 'text' as const, text: 'Error: finding_id is required (UUID string).' }], isError: true };
-        if (!args.body) return { content: [{ type: 'text' as const, text: 'Error: body is required (string, HTML allowed).' }], isError: true };
-        if (!args.sender) return { content: [{ type: 'text' as const, text: 'Error: sender is required (user UUID from blumira_users_list).' }], isError: true };
+        if (!id) return toolError('INVALID_ARGS', 'finding_id is required.', { hint: 'Pass the finding UUID string.' });
+        if (!args.body) return toolError('INVALID_ARGS', 'body is required.', { hint: 'Pass the comment text (HTML allowed).' });
+        if (!args.sender) return toolError('INVALID_ARGS', 'sender is required.', { hint: 'Pass the user UUID from blumira_users_list.' });
         logger.info('API call: findings.addComment', { id });
         const res = await client.findings.addComment(id, {
           body: args.body as string,
           sender: args.sender as string,
         });
-        return { content: [{ type: 'text' as const, text: JSON.stringify(res, null, 2) }] };
+        return shapeRaw(res);
       }
       default:
-        return { content: [{ type: 'text' as const, text: `Unknown tool: ${toolName}` }], isError: true };
+        return toolError('INVALID_ARGS', `Unknown tool: ${toolName}`);
     }
-  } catch (error: any) {
-    const status = error?.status ?? error?.statusCode ?? '';
-    const body = error?.body ? JSON.stringify(error.body).slice(0, 200) : '';
-    const hint = status === 401 || status === 403
-      ? 'Verify BLUMIRA_JWT_TOKEN or BLUMIRA_CLIENT_ID + BLUMIRA_CLIENT_SECRET are correct.'
-      : 'Check that your Blumira credentials are valid and the API is reachable.';
-    const msg = `Blumira API error${status ? ` (HTTP ${status})` : ''}: ${error?.message ?? String(error)}${body ? ` — ${body}` : ''}. ${hint}`;
-    logger.error('Tool call failed', { tool: toolName, error: msg });
-    return { content: [{ type: 'text' as const, text: msg }], isError: true };
+  } catch (err: unknown) {
+    return toolErrorFromCatch(toolName, err, {
+      hint: 'Verify BLUMIRA_JWT_TOKEN or BLUMIRA_CLIENT_ID + BLUMIRA_CLIENT_SECRET are correct.',
+    });
   }
 }
 

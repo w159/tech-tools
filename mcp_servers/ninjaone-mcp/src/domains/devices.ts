@@ -9,10 +9,74 @@ import type { DomainHandler, CallToolResult } from "../utils/types.js";
 import { getClient } from "../utils/client.js";
 import { logger } from "../utils/logger.js";
 import { elicitSelection } from "../utils/elicitation.js";
+import {
+  shapeList,
+  shapeItem,
+  shapeRaw,
+  extractShapeArgs,
+  SHAPE_PROPS,
+  toolError,
+  toolErrorFromCatch,
+  type SummaryFn,
+} from "./_helpers.js";
+
+// ---------------------------------------------------------------------------
+// Summary functions
+// ---------------------------------------------------------------------------
 
 /**
- * Get device domain tools
+ * Compact summary for a device list entry.
+ * Full detail is available via ninjaone_devices_get or fields=[...].
  */
+const deviceSummary: SummaryFn = (item) => ({
+  id:          item.id,
+  systemName:  item.systemName,
+  displayName: item.displayName,
+  deviceClass: item.deviceClass,
+  online:      item.online ?? false,
+  status:      item.status,
+  locationId:  item.locationId,
+  organizationId: item.organizationId,
+  lastContact: item.lastContact,
+});
+
+/**
+ * Compact summary for a Windows service entry.
+ */
+const serviceSummary: SummaryFn = (item) => ({
+  name:        item.name,
+  displayName: item.displayName,
+  state:       item.state,
+  startType:   item.startType,
+});
+
+/**
+ * Compact summary for an alert entry returned by device-scoped alert calls.
+ */
+const alertSummary: SummaryFn = (item) => ({
+  uid:            item.uid,
+  severity:       item.severity,
+  message:        item.message,
+  deviceId:       item.deviceId,
+  organizationId: item.organizationId,
+  createTime:     item.createTime,
+});
+
+/**
+ * Compact summary for an activity log entry.
+ */
+const activitySummary: SummaryFn = (item) => ({
+  id:           item.id,
+  activityType: item.activityType,
+  status:       item.status,
+  message:      item.message,
+  createTime:   item.createTime,
+});
+
+// ---------------------------------------------------------------------------
+// Tool definitions
+// ---------------------------------------------------------------------------
+
 function getTools(): Tool[] {
   return [
     {
@@ -22,6 +86,7 @@ function getTools(): Tool[] {
       inputSchema: {
         type: "object" as const,
         properties: {
+          ...SHAPE_PROPS,
           organization_id: {
             type: "number",
             description: "Integer NinjaOne organization ID; scopes results to one customer account.",
@@ -52,6 +117,7 @@ function getTools(): Tool[] {
       inputSchema: {
         type: "object" as const,
         properties: {
+          ...SHAPE_PROPS,
           device_id: {
             type: "number",
             description: "Integer NinjaOne device ID.",
@@ -84,6 +150,7 @@ function getTools(): Tool[] {
       inputSchema: {
         type: "object" as const,
         properties: {
+          ...SHAPE_PROPS,
           device_id: {
             type: "number",
             description: "Integer NinjaOne device ID.",
@@ -103,6 +170,7 @@ function getTools(): Tool[] {
       inputSchema: {
         type: "object" as const,
         properties: {
+          ...SHAPE_PROPS,
           device_id: {
             type: "number",
             description: "Integer NinjaOne device ID.",
@@ -122,6 +190,7 @@ function getTools(): Tool[] {
       inputSchema: {
         type: "object" as const,
         properties: {
+          ...SHAPE_PROPS,
           device_id: {
             type: "number",
             description: "Integer NinjaOne device ID.",
@@ -141,14 +210,16 @@ function getTools(): Tool[] {
   ];
 }
 
-/**
- * Handle a device domain tool call
- */
+// ---------------------------------------------------------------------------
+// Handler
+// ---------------------------------------------------------------------------
+
 async function handleCall(
   toolName: string,
   args: Record<string, unknown>
 ): Promise<CallToolResult> {
   const client = await getClient();
+  const shapeArgs = extractShapeArgs(args);
 
   switch (toolName) {
     case "ninjaone_devices_list": {
@@ -157,11 +228,8 @@ async function handleCall(
       let organizationId = args.organization_id as number | undefined;
 
       // If no organization filter provided, elicit organization selection
-      const hasOrgFilter = args.organization_id !== undefined;
-
-      if (!hasOrgFilter) {
+      if (organizationId === undefined) {
         try {
-          // Fetch organizations to present as options
           const orgs = await client.organizations.list();
           if (orgs.length > 0) {
             const options = orgs.slice(0, 20).map((org) => ({
@@ -193,110 +261,111 @@ async function handleCall(
         cursor,
       });
 
-      const devices = await client.devices.list({
-        organizationId,
-        pageSize: limit,
-        cursor,
-      });
-      logger.debug("API response: devices.list", { deviceCount: devices.length });
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify({ devices }, null, 2),
-          },
-        ],
-      };
+      try {
+        const devices = await client.devices.list({
+          organizationId,
+          pageSize: limit,
+          cursor,
+        });
+        logger.debug("API response: devices.list", { deviceCount: devices.length });
+        return shapeList(devices as unknown as Record<string, unknown>[], deviceSummary, shapeArgs);
+      } catch (err) {
+        return toolErrorFromCatch("ninjaone_devices_list", err, {
+          hint: "Verify NINJAONE_CLIENT_ID, NINJAONE_CLIENT_SECRET, and NINJAONE_REGION are set.",
+        });
+      }
     }
 
     case "ninjaone_devices_get": {
       const deviceId = (args.device_id ?? args.deviceId ?? args.id) as number;
       if (!deviceId) {
-        return {
-          content: [{ type: "text", text: "Error: device_id is required" }],
-          isError: true,
-        };
+        return toolError("INVALID_ARGS", "device_id is required.", {
+          hint: "Pass the integer device ID returned by ninjaone_devices_list.",
+        });
       }
       logger.info("API call: devices.get", { deviceId });
-      const device = await client.devices.get(deviceId);
-      logger.debug("API response: devices.get", { device });
-
-      return {
-        content: [{ type: "text", text: JSON.stringify(device, null, 2) }],
-      };
+      try {
+        const device = await client.devices.get(deviceId);
+        logger.debug("API response: devices.get", { deviceId });
+        return shapeItem(device as unknown as Record<string, unknown>, deviceSummary, shapeArgs);
+      } catch (err) {
+        return toolErrorFromCatch("ninjaone_devices_get", err, {
+          hint: "Verify device_id with ninjaone_devices_list first.",
+        });
+      }
     }
 
     case "ninjaone_devices_reboot": {
       const deviceId = args.device_id as number;
       const reason = args.reason as string | undefined;
       logger.info("API call: devices.reboot", { deviceId, reason });
-      const result = await client.devices.reboot(deviceId, reason);
-      logger.debug("API response: devices.reboot", { result });
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              { success: true, message: "Reboot scheduled", result },
-              null,
-              2
-            ),
-          },
-        ],
-      };
+      try {
+        const result = await client.devices.reboot(deviceId, reason);
+        logger.debug("API response: devices.reboot", { deviceId });
+        return shapeRaw({ success: true, message: "Reboot scheduled", result });
+      } catch (err) {
+        return toolErrorFromCatch("ninjaone_devices_reboot", err, {
+          hint: "Verify device_id with ninjaone_devices_list and confirm the device is online.",
+        });
+      }
     }
 
     case "ninjaone_devices_services": {
       const deviceId = args.device_id as number;
       const stateFilter = args.state as string | undefined;
       logger.info("API call: devices.getServices", { deviceId, state: stateFilter });
-      let services = await client.devices.getServices(deviceId);
-      if (stateFilter) {
-        services = services.filter((s) => s.state === stateFilter);
+      try {
+        let services = await client.devices.getServices(deviceId);
+        if (stateFilter) {
+          services = services.filter((s) => s.state === stateFilter);
+        }
+        logger.debug("API response: devices.getServices", { count: services.length });
+        return shapeList(services as unknown as Record<string, unknown>[], serviceSummary, shapeArgs);
+      } catch (err) {
+        return toolErrorFromCatch("ninjaone_devices_services", err, {
+          hint: "Verify device_id with ninjaone_devices_list. Only Windows devices report services.",
+        });
       }
-      logger.debug("API response: devices.getServices", { services });
-
-      return {
-        content: [{ type: "text", text: JSON.stringify(services, null, 2) }],
-      };
     }
 
     case "ninjaone_devices_alerts": {
       const deviceId = args.device_id as number;
       const severityFilter = args.severity as string | undefined;
       logger.info("API call: alerts.listByDevice", { deviceId, severity: severityFilter });
-      let alerts = await client.alerts.listByDevice(deviceId);
-      if (severityFilter) {
-        alerts = alerts.filter((a) => a.severity === severityFilter);
+      try {
+        let alerts = await client.alerts.listByDevice(deviceId);
+        if (severityFilter) {
+          alerts = alerts.filter((a) => a.severity === severityFilter);
+        }
+        logger.debug("API response: alerts.listByDevice", { count: alerts.length });
+        return shapeList(alerts as unknown as Record<string, unknown>[], alertSummary, shapeArgs);
+      } catch (err) {
+        return toolErrorFromCatch("ninjaone_devices_alerts", err, {
+          hint: "Verify device_id with ninjaone_devices_list first.",
+        });
       }
-      logger.debug("API response: alerts.listByDevice", { alerts });
-
-      return {
-        content: [{ type: "text", text: JSON.stringify(alerts, null, 2) }],
-      };
     }
 
     case "ninjaone_devices_activities": {
       const deviceId = args.device_id as number;
       const limit = (args.limit as number) || 50;
       logger.info("API call: devices.getActivities", { deviceId, limit });
-      const activities = await client.devices.getActivities(deviceId, {
-        pageSize: limit,
-      });
-      logger.debug("API response: devices.getActivities", { activities });
-
-      return {
-        content: [{ type: "text", text: JSON.stringify(activities, null, 2) }],
-      };
+      try {
+        const activitiesResponse = await client.devices.getActivities(deviceId, {
+          pageSize: limit,
+        });
+        const activities = activitiesResponse.activities ?? [];
+        logger.debug("API response: devices.getActivities", { count: activities.length });
+        return shapeList(activities as unknown as Record<string, unknown>[], activitySummary, shapeArgs);
+      } catch (err) {
+        return toolErrorFromCatch("ninjaone_devices_activities", err, {
+          hint: "Verify device_id with ninjaone_devices_list first.",
+        });
+      }
     }
 
     default:
-      return {
-        content: [{ type: "text", text: `Unknown device tool: ${toolName}` }],
-        isError: true,
-      };
+      return toolError("INVALID_ARGS", `Unknown device tool: ${toolName}`);
   }
 }
 

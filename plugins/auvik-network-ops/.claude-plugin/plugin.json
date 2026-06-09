@@ -1,9 +1,10 @@
 {
   "name": "auvik-network-ops",
-  "version": "0.1.0",
-  "description": "High-leverage network operations skills built on top of the Auvik MCP server. Adds parallel multi-tenant sweeps, alert-to-topology correlation, bandwidth hunting, and config drift detection.",
-  "author": "w159",
-  "mcp_dependencies": ["auvik-mcp"],
-  "skills_dir": "skills",
-  "commands_dir": "commands"
+  "version": "1.0.0",
+  "description": "Network operations skills for Auvik-monitored infrastructure — use to triage alerts, hunt bandwidth hogs, and detect config drift across single or multi-tenant environments.",
+  "author": { "name": "w159", "url": "https://github.com/w159" },
+  "repository": "https://github.com/w159/ai-tech-toolkit",
+  "homepage": "https://github.com/w159/ai-tech-toolkit/tree/main/plugins/auvik-network-ops",
+  "license": "Apache-2.0",
+  "keywords": ["auvik", "network", "rmm", "msp", "alerts", "bandwidth", "config-drift", "topology"]
 }

@@ -1,0 +1,18 @@
+{
+  "name": "finance",
+  "version": "1.0.0",
+  "description": "Support financial close, journal entry prep, reconciliation, variance analysis, financial statements, and SOX audit workflows.",
+  "keywords": [
+    "finance",
+    "accounting",
+    "reconciliation",
+    "journal-entry",
+    "sox",
+    "audit",
+    "close"
+  ],
+  "author": {
+    "name": "Jerry",
+    "email": "jmorg83@gmail.com"
+  }
+}

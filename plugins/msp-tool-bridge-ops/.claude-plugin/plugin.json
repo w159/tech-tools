@@ -1,9 +1,10 @@
 {
   "name": "msp-tool-bridge-ops",
-  "version": "0.1.0",
-  "description": "Cross-tool bridge skills that connect ConnectWise Manage ticket workflows with NinjaOne device telemetry and remediation context.",
-  "author": "w159",
-  "mcp_dependencies": ["connectwise-manage-mcp", "ninjaone-mcp"],
-  "skills_dir": "skills",
-  "commands_dir": "commands"
+  "version": "1.0.0",
+  "description": "Bridge skills for MSP workflows that must hop between platforms — ConnectWise Manage tickets to NinjaOne device telemetry and NinjaOne alerts back into ConnectWise ticketing.",
+  "author": { "name": "w159", "url": "https://github.com/w159" },
+  "repository": "https://github.com/w159/ai-tech-toolkit",
+  "homepage": "https://github.com/w159/ai-tech-toolkit/tree/main/plugins/msp-tool-bridge-ops",
+  "license": "Apache-2.0",
+  "keywords": ["msp", "bridge", "interop", "connectwise", "ninjaone", "psa", "rmm", "ticket-to-device"]
 }

@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — Minutes</title>
+  <meta name="description" content="Privacy policy for Minutes, the open-source conversation memory tool.">
+  <meta name="theme-color" content="#1c1c1e">
+  <link rel="canonical" href="https://useminutes.app/privacy">
+
+  <style>
+    :root {
+      --bg: #1c1c1e;
+      --bg-elevated: #2c2c2e;
+      --border: #38383a;
+      --text: #f5f5f7;
+      --text-secondary: #86868b;
+      --accent: #0a84ff;
+      --accent-hover: #409cff;
+      --radius: 10px;
+      --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: var(--accent-hover); }
+
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    nav {
+      padding: 20px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .nav-brand {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      margin: 48px 0 12px;
+      letter-spacing: -0.02em;
+    }
+
+    .last-updated {
+      color: var(--text-secondary);
+      font-size: 14px;
+      margin-bottom: 40px;
+    }
+
+    h2 {
+      font-size: 20px;
+      font-weight: 600;
+      margin: 36px 0 12px;
+      letter-spacing: -0.01em;
+    }
+
+    p, li {
+      color: var(--text-secondary);
+      font-size: 15px;
+      margin-bottom: 12px;
+    }
+
+    ul {
+      padding-left: 20px;
+      margin-bottom: 16px;
+    }
+
+    li { margin-bottom: 6px; }
+
+    .highlight {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      margin: 24px 0;
+    }
+
+    .highlight p {
+      color: var(--text);
+      font-weight: 500;
+      margin-bottom: 0;
+    }
+
+    footer {
+      margin: 64px 0 48px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      color: var(--text-secondary);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <nav>
+      <a href="/" class="nav-brand">minutes</a>
+      <a href="https://github.com/silverstein/minutes">GitHub</a>
+    </nav>
+
+    <h1>Privacy Policy</h1>
+    <p class="last-updated">Last updated: March 23, 2026</p>
+
+    <div class="highlight">
+      <p>Minutes is designed from the ground up to be private. All audio processing happens locally on your machine. No audio, transcripts, or meeting data is ever sent to external servers by Minutes.</p>
+    </div>
+
+    <h2>What Minutes Does</h2>
+    <p>Minutes is an open-source, local-first tool that records audio, transcribes it using whisper.cpp on your device, and saves structured markdown files to a directory you control.</p>
+
+    <h2>Data That Stays on Your Machine</h2>
+    <ul>
+      <li>Audio recordings (WAV files, deleted after processing unless configured otherwise)</li>
+      <li>Transcripts and meeting notes (markdown files in your meetings directory)</li>
+      <li>Configuration and logs (stored in <code>~/.minutes/</code>)</li>
+      <li>Speaker diarization data</li>
+      <li>Action items, decisions, and structured metadata</li>
+    </ul>
+    <p>All of this data lives on your local filesystem. Minutes does not operate a server, database, or cloud service.</p>
+
+    <h2>Data Minutes Does Not Collect</h2>
+    <ul>
+      <li>No analytics or telemetry</li>
+      <li>No crash reports</li>
+      <li>No usage tracking</li>
+      <li>No account creation</li>
+      <li>No network requests to our servers (we don't have any)</li>
+    </ul>
+
+    <h2>Optional Cloud Features</h2>
+    <p>If you configure Minutes to use a cloud LLM for summarization (e.g., via Ollama with a remote endpoint, or a cloud API key in your config), that transcript data will be sent to the provider you configured. This is entirely opt-in and off by default.</p>
+    <p>The MCP server communicates only with the local MCP client (Claude Desktop, Cursor, etc.) running on your machine over stdio.</p>
+
+    <h2>Third-Party Services</h2>
+    <p>Minutes itself makes no network requests. However:</p>
+    <ul>
+      <li>The <code>minutes setup</code> command downloads whisper model files from Hugging Face</li>
+      <li>If you install via <code>npm</code>, npm's standard telemetry policies apply</li>
+      <li>The Tauri desktop app does not phone home</li>
+    </ul>
+
+    <h2>Data Retention</h2>
+    <p>You control all data retention. Meeting files are plain markdown on your filesystem. Delete them whenever you want. There is no remote copy.</p>
+
+    <h2>Children's Privacy</h2>
+    <p>Minutes does not collect any personal information from anyone, including children under 13.</p>
+
+    <h2>Changes to This Policy</h2>
+    <p>If we change this policy, we'll update this page and the date above. Since Minutes is open source, you can always audit exactly what the software does.</p>
+
+    <h2>Contact</h2>
+    <p>Questions about this policy: <a href="mailto:mat@businessvacation.com">mat@businessvacation.com</a></p>
+    <p>Source code: <a href="https://github.com/silverstein/minutes">github.com/silverstein/minutes</a></p>
+
+    <footer>
+      <p>Minutes is open source under the MIT License.</p>
+    </footer>
+  </div>
+</body>
+</html>

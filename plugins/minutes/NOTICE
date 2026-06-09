@@ -1,0 +1,35 @@
+Minutes
+Copyright 2025-2026 Mat Silverstein
+
+This product includes software and models developed by third parties:
+
+---
+
+pyannote-rs
+Copyright (c) 2024 thewh1teagle
+Licensed under the MIT License
+https://github.com/thewh1teagle/pyannote-rs
+
+---
+
+pyannote segmentation-3.0 (ONNX)
+Original model by pyannote.audio / Hervé Bredin
+Licensed under the MIT License (community-1 model weights)
+https://huggingface.co/pyannote/segmentation-3.0
+
+---
+
+WeSpeaker VoxCeleb CAM++ and CAM++_LM (ONNX)
+Developed by the WeSpeaker team
+Licensed under the Apache License, Version 2.0
+https://github.com/wenet-e2e/wespeaker
+
+You may obtain a copy of the Apache License at:
+http://www.apache.org/licenses/LICENSE-2.0
+
+---
+
+whisper.cpp / whisper-rs
+Copyright (c) 2022-2025 Georgi Gerganov
+Licensed under the MIT License
+https://github.com/ggerganov/whisper.cpp

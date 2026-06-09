@@ -3,10 +3,10 @@
   "version": "1.5.0",
   "description": "NinjaOne MCP server with decision tree architecture for Claude",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/mcp_servers/ninjaone-mcp/src/index.js",
+  "types": "dist/mcp_servers/ninjaone-mcp/src/index.d.ts",
   "bin": {
-    "ninjaone-mcp": "./dist/index.js"
+    "ninjaone-mcp": "./dist/mcp_servers/ninjaone-mcp/src/index.js"
   },
   "files": [
     "dist"

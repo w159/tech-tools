@@ -1,0 +1,16 @@
+{
+  "name": "customer-support",
+  "version": "1.0.0",
+  "description": "Triage tickets, draft responses, research customer questions, manage escalations, and build knowledge-base articles for support teams.",
+  "keywords": [
+    "customer-support",
+    "tickets",
+    "triage",
+    "knowledge-base",
+    "escalation"
+  ],
+  "author": {
+    "name": "Jerry",
+    "email": "jmorg83@gmail.com"
+  }
+}

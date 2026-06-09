@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>com.useminutes.calendar-helper</string>
+    <key>CFBundleName</key>
+    <string>Minutes Calendar Helper</string>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>Minutes shows upcoming meetings in the menu bar so you can start recording with one click.</string>
+</dict>
+</plist>

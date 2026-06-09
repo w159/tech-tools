@@ -2,6 +2,8 @@
 // Defines every MCP tool the CIPP MCP server exposes, including name,
 // description, and JSON Schema for input validation.
 
+import { SHAPE_PROPS } from '../_shared/response-shaper.js';
+
 // ---------------------------------------------------------------------------
 // Interface
 // ---------------------------------------------------------------------------
@@ -60,6 +62,7 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
     inputSchema: {
       type: 'object',
       properties: {
+        ...SHAPE_PROPS,
         allTenants: {
           type: 'boolean',
           description:
@@ -74,6 +77,7 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
     inputSchema: {
       type: 'object',
       properties: {
+        ...SHAPE_PROPS,
         tenantFilter: {
           type: 'string',
           description: "Tenant domain name or ID, use 'allTenants' for all",
@@ -88,10 +92,11 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
   // -------------------------------------------------------------------------
   {
     name: 'cipp_list_users',
-    description: 'List M365 users in a tenant (tenantFilter required); optionally search by displayName, userPrincipalName, or mail. Returns UPNs and object IDs.',
+    description: 'List M365 users in a tenant (tenantFilter required); optionally search by displayName, userPrincipalName, or mail. Default summary: id, userPrincipalName, displayName, accountEnabled.',
     inputSchema: {
       type: 'object',
       properties: {
+        ...SHAPE_PROPS,
         tenantFilter: TENANT_FILTER_PROP,
         searchField: {
           type: 'string',
@@ -346,6 +351,7 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
     inputSchema: {
       type: 'object',
       properties: {
+        ...SHAPE_PROPS,
         tenantFilter: TENANT_FILTER_PROP,
         userId: USER_ID_PROP,
       },
@@ -354,10 +360,11 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
   },
   {
     name: 'cipp_list_mfa_users',
-    description: 'List all M365 users and their MFA registration status in a tenant (tenantFilter required). Use to identify users without MFA configured.',
+    description: 'List all M365 users and their MFA registration status in a tenant (tenantFilter required). Default summary: id, userPrincipalName, displayName, isMFARegistered. Use to identify users without MFA configured.',
     inputSchema: {
       type: 'object',
       properties: {
+        ...SHAPE_PROPS,
         tenantFilter: TENANT_FILTER_PROP,
       },
       required: ['tenantFilter'],
@@ -365,10 +372,11 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
   },
   {
     name: 'cipp_list_user_devices',
-    description: 'List Intune/Entra-enrolled devices for a specific M365 user (tenantFilter and userId required). Use to audit devices associated with an account.',
+    description: 'List Intune/Entra-enrolled devices for a specific M365 user (tenantFilter and userId required). Default summary: id, displayName, operatingSystem, complianceState. Use to audit devices associated with an account.',
     inputSchema: {
       type: 'object',
       properties: {
+        ...SHAPE_PROPS,
         tenantFilter: TENANT_FILTER_PROP,
         userId: USER_ID_PROP,
       },
@@ -377,10 +385,11 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
   },
   {
     name: 'cipp_list_user_groups',
-    description: 'List M365 groups a specific user belongs to (tenantFilter and userId required). Use before modifying group membership or checking access scope.',
+    description: 'List M365 groups a specific user belongs to (tenantFilter and userId required). Default summary: id, displayName, groupType. Use before modifying group membership or checking access scope.',
     inputSchema: {
       type: 'object',
       properties: {
+        ...SHAPE_PROPS,
         tenantFilter: TENANT_FILTER_PROP,
         userId: USER_ID_PROP,
       },
@@ -393,10 +402,11 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
   // -------------------------------------------------------------------------
   {
     name: 'cipp_list_groups',
-    description: 'List M365 groups in a tenant (tenantFilter required); optionally filter by display name. Returns security and mail-enabled groups.',
+    description: 'List M365 groups in a tenant (tenantFilter required); optionally filter by display name. Default summary: id, displayName, groupType, mailEnabled. Returns security and mail-enabled groups.',
     inputSchema: {
       type: 'object',
       properties: {
+        ...SHAPE_PROPS,
         tenantFilter: TENANT_FILTER_PROP,
         search: {
           type: 'string',
@@ -457,10 +467,11 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
   // -------------------------------------------------------------------------
   {
     name: 'cipp_list_mailboxes',
-    description: 'List Exchange Online mailboxes in a tenant (tenantFilter required); filter by type (UserMailbox, SharedMailbox, RoomMailbox, EquipmentMailbox).',
+    description: 'List Exchange Online mailboxes in a tenant (tenantFilter required); filter by type (UserMailbox, SharedMailbox, RoomMailbox, EquipmentMailbox). Default summary: id, displayName, primarySmtpAddress, recipientTypeDetails.',
     inputSchema: {
       type: 'object',
       properties: {
+        ...SHAPE_PROPS,
         tenantFilter: TENANT_FILTER_PROP,
         type: {
           type: 'string',
@@ -478,6 +489,7 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
     inputSchema: {
       type: 'object',
       properties: {
+        ...SHAPE_PROPS,
         tenantFilter: TENANT_FILTER_PROP,
         upn: {
           type: 'string',
@@ -570,10 +582,11 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
   // -------------------------------------------------------------------------
   {
     name: 'cipp_list_conditional_access_policies',
-    description: 'List Entra Conditional Access policies for a tenant (tenantFilter required). Returns policy names, states (enabled/disabled/reportOnly), and conditions.',
+    description: 'List Entra Conditional Access policies for a tenant (tenantFilter required). Default summary: id, displayName, state, conditions. Returns policy names, states (enabled/disabled/reportOnly), and conditions.',
     inputSchema: {
       type: 'object',
       properties: {
+        ...SHAPE_PROPS,
         tenantFilter: TENANT_FILTER_PROP,
       },
       required: ['tenantFilter'],
@@ -581,10 +594,11 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
   },
   {
     name: 'cipp_list_named_locations',
-    description: 'List Entra named locations (trusted IP ranges and countries) for a tenant (tenantFilter required). Used in Conditional Access policy conditions.',
+    description: 'List Entra named locations (trusted IP ranges and countries) for a tenant (tenantFilter required). Default summary: id, displayName, isTrusted. Used in Conditional Access policy conditions.',
     inputSchema: {
       type: 'object',
       properties: {
+        ...SHAPE_PROPS,
         tenantFilter: TENANT_FILTER_PROP,
       },
       required: ['tenantFilter'],
@@ -596,10 +610,11 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
   // -------------------------------------------------------------------------
   {
     name: 'cipp_list_standards',
-    description: 'List CIPP compliance standards configured for a tenant (tenantFilter required). Returns each standard name, remediation mode, and last-run result.',
+    description: 'List CIPP compliance standards configured for a tenant (tenantFilter required). Default summary: displayName, remediationAction, lastRunResult. Returns each standard name, remediation mode, and last-run result.',
     inputSchema: {
       type: 'object',
       properties: {
+        ...SHAPE_PROPS,
         tenantFilter: TENANT_FILTER_PROP,
       },
       required: ['tenantFilter'],
@@ -618,10 +633,12 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
   },
   {
     name: 'cipp_list_standard_templates',
-    description: 'List the CIPP Standards Templates configured across the partner tenant.',
+    description: 'List the CIPP Standards Templates configured across the partner tenant. Default summary: id, displayName, tenantFilter.',
     inputSchema: {
       type: 'object',
-      properties: {},
+      properties: {
+        ...SHAPE_PROPS,
+      },
     },
     annotations: {
       title: 'List standards templates',
@@ -633,10 +650,11 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
     name: 'cipp_get_tenant_drift',
     description:
       'Report standards drift — settings that deviate from a tenant\'s assigned ' +
-      'Standards Template. Omit tenantFilter to report drift across all tenants.',
+      'Standards Template. Default summary: tenantName, standard, currentValue, expectedValue. Omit tenantFilter to report drift across all tenants.',
     inputSchema: {
       type: 'object',
       properties: {
+        ...SHAPE_PROPS,
         tenantFilter: {
           type: 'string',
           description:
@@ -654,11 +672,11 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
     name: 'cipp_get_tenant_alignment',
     description:
       "Report each tenant's alignment percentage against its assigned Standards " +
-      'Templates — the key signal for deciding which standards are safe to ' +
-      'promote to Remediate. Omit tenantFilter to report on all tenants.',
+      'Templates. Default summary: tenantName, alignmentPercent, templateName. Omit tenantFilter to report on all tenants.',
     inputSchema: {
       type: 'object',
       properties: {
+        ...SHAPE_PROPS,
         tenantFilter: {
           type: 'string',
           description:
@@ -725,10 +743,11 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
   },
   {
     name: 'cipp_list_bpa',
-    description: 'Get CIPP Best Practice Analyser (BPA) results for a tenant (tenantFilter required). Returns per-check pass/fail scores against Microsoft best practices.',
+    description: 'Get CIPP Best Practice Analyser (BPA) results for a tenant (tenantFilter required). Default summary: checkName, result, severity. Returns per-check pass/fail scores against Microsoft best practices.',
     inputSchema: {
       type: 'object',
       properties: {
+        ...SHAPE_PROPS,
         tenantFilter: TENANT_FILTER_PROP,
       },
       required: ['tenantFilter'],
@@ -736,10 +755,11 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
   },
   {
     name: 'cipp_list_domain_health',
-    description: 'Check email domain health (DMARC, DKIM, SPF, MX records) for a tenant (tenantFilter required). Use to identify missing DNS security records.',
+    description: 'Check email domain health (DMARC, DKIM, SPF, MX records) for a tenant (tenantFilter required). Default summary: domain, spf.result, dmarc.result, dkim.result. Use to identify missing DNS security records.',
     inputSchema: {
       type: 'object',
       properties: {
+        ...SHAPE_PROPS,
         tenantFilter: TENANT_FILTER_PROP,
       },
       required: ['tenantFilter'],
@@ -751,10 +771,11 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
   // -------------------------------------------------------------------------
   {
     name: 'cipp_list_licenses',
-    description: 'List M365 license SKUs, assigned counts, and available seats for a tenant (tenantFilter required). Use to identify over- or under-allocated licences.',
+    description: 'List M365 license SKUs, assigned counts, and available seats for a tenant (tenantFilter required). Default summary: id, skuPartNumber, assignedUnits, availableUnits. Use to identify over- or under-allocated licences.',
     inputSchema: {
       type: 'object',
       properties: {
+        ...SHAPE_PROPS,
         tenantFilter: TENANT_FILTER_PROP,
       },
       required: ['tenantFilter'],
@@ -762,10 +783,12 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
   },
   {
     name: 'cipp_list_csp_licenses',
-    description: 'List all CSP Microsoft 365 license subscriptions across every managed tenant. Use for MSP-wide licence inventory and billing reconciliation.',
+    description: 'List all CSP Microsoft 365 license subscriptions across every managed tenant. Default summary: tenantName, skuPartNumber, quantity. Use for MSP-wide licence inventory and billing reconciliation.',
     inputSchema: {
       type: 'object',
-      properties: {},
+      properties: {
+        ...SHAPE_PROPS,
+      },
     },
   },
 
@@ -774,10 +797,11 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
   // -------------------------------------------------------------------------
   {
     name: 'cipp_list_audit_logs',
-    description: 'List Microsoft 365 audit log entries for a tenant (tenantFilter required); filter by log type and look-back days. Use to investigate recent admin or user actions.',
+    description: 'List Microsoft 365 audit log entries for a tenant (tenantFilter required); filter by log type and look-back days. Default summary: creationTime, operation, userId, result. Use to investigate recent admin or user actions.',
     inputSchema: {
       type: 'object',
       properties: {
+        ...SHAPE_PROPS,
         tenantFilter: TENANT_FILTER_PROP,
         days: {
           type: 'number',
@@ -795,10 +819,12 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
   },
   {
     name: 'cipp_list_alert_queue',
-    description: 'List CIPP-generated alerts queued for review across all managed tenants. Use to check for policy violations or security findings pending acknowledgment.',
+    description: 'List CIPP-generated alerts queued for review across all managed tenants. Default summary: id, tenantName, alertType, severity, createdAt. Use to check for policy violations or security findings pending acknowledgment.',
     inputSchema: {
       type: 'object',
-      properties: {},
+      properties: {
+        ...SHAPE_PROPS,
+      },
     },
   },
 
@@ -807,18 +833,22 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
   // -------------------------------------------------------------------------
   {
     name: 'cipp_list_gdap_roles',
-    description: 'List available GDAP (Granular Delegated Admin Privileges) Entra directory roles that can be assigned via CIPP. Use when setting up new GDAP relationships.',
+    description: 'List available GDAP (Granular Delegated Admin Privileges) Entra directory roles that can be assigned via CIPP. Default summary: id, displayName, description. Use when setting up new GDAP relationships.',
     inputSchema: {
       type: 'object',
-      properties: {},
+      properties: {
+        ...SHAPE_PROPS,
+      },
     },
   },
   {
     name: 'cipp_list_gdap_invites',
-    description: 'List pending GDAP relationship invites sent to tenants. Use to track outstanding onboarding requests and confirm acceptance status.',
+    description: 'List pending GDAP relationship invites sent to tenants. Default summary: id, tenantName, status, createdAt. Use to track outstanding onboarding requests and confirm acceptance status.',
     inputSchema: {
       type: 'object',
-      properties: {},
+      properties: {
+        ...SHAPE_PROPS,
+      },
     },
   },
 
@@ -827,10 +857,12 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
   // -------------------------------------------------------------------------
   {
     name: 'cipp_list_scheduled_items',
-    description: 'List scheduled tasks configured in CIPP. Returns task names, commands, next-run times, and tenant scope.',
+    description: 'List scheduled tasks configured in CIPP. Default summary: taskName, command, nextRunTime, tenantFilter. Returns task names, commands, next-run times, and tenant scope.',
     inputSchema: {
       type: 'object',
-      properties: {},
+      properties: {
+        ...SHAPE_PROPS,
+      },
     },
   },
   {
@@ -897,10 +929,11 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
   },
   {
     name: 'cipp_list_logs',
-    description: 'List CIPP application-level logs; filter by date (optional ISO 8601 date). Use to diagnose CIPP backend errors or audit automation runs.',
+    description: 'List CIPP application-level logs; filter by date (optional ISO 8601 date). Default summary: timestamp, level, message. Use to diagnose CIPP backend errors or audit automation runs.',
     inputSchema: {
       type: 'object',
       properties: {
+        ...SHAPE_PROPS,
         dateFilter: {
           type: 'string',
           description:

@@ -1,9 +1,10 @@
 {
   "name": "cipp-m365-ops",
-  "version": "0.1.0",
-  "description": "Multi-tenant M365 power skills on top of CIPP MCP: tenant-wide health sweeps, BEC rapid response, full offboard playbooks, suspicious sign-in hunting, and standards-drift remediation.",
-  "author": "w159",
-  "mcp_dependencies": ["cipp-mcp"],
-  "skills_dir": "skills",
-  "commands_dir": "commands"
+  "version": "1.0.0",
+  "description": "M365 management skills for multi-tenant CIPP environments — use to sweep tenant health, respond to BEC incidents, offboard users, and hunt suspicious sign-ins.",
+  "author": { "name": "w159", "url": "https://github.com/w159" },
+  "repository": "https://github.com/w159/ai-tech-toolkit",
+  "homepage": "https://github.com/w159/ai-tech-toolkit/tree/main/plugins/cipp-m365-ops",
+  "license": "Apache-2.0",
+  "keywords": ["cipp", "m365", "microsoft-365", "msp", "bec", "offboard", "tenant", "security"]
 }

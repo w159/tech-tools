@@ -1,9 +1,10 @@
 {
   "name": "vanta-compliance-ops",
-  "version": "0.1.0",
-  "description": "Vanta GRC power skills: framework-readiness audits, evidence-gap hunting, vendor risk rollups, and vulnerability triage backed by the Vanta MCP server.",
-  "author": "w159",
-  "mcp_dependencies": ["vanta-mcp"],
-  "skills_dir": "skills",
-  "commands_dir": "commands"
+  "version": "1.0.0",
+  "description": "GRC skills for Vanta — use to assess framework audit readiness, find missing or expiring evidence, roll up vendor risk, and triage overdue vulnerabilities.",
+  "author": { "name": "w159", "url": "https://github.com/w159" },
+  "repository": "https://github.com/w159/ai-tech-toolkit",
+  "homepage": "https://github.com/w159/ai-tech-toolkit/tree/main/plugins/vanta-compliance-ops",
+  "license": "Apache-2.0",
+  "keywords": ["vanta", "compliance", "soc2", "iso27001", "hipaa", "grc", "evidence", "vendor-risk", "vulnerabilities"]
 }

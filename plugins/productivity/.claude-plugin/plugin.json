@@ -1,0 +1,16 @@
+{
+  "name": "productivity",
+  "version": "1.0.0",
+  "description": "Two-tier memory management and task tracking to make Claude a true workplace collaborator across projects and commitments.",
+  "keywords": [
+    "productivity",
+    "memory",
+    "tasks",
+    "workflow",
+    "collaboration"
+  ],
+  "author": {
+    "name": "Jerry",
+    "email": "jmorg83@gmail.com"
+  }
+}

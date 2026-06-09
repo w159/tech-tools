@@ -1,0 +1,10 @@
+{
+  "name": "kaseya-spanning-backup-ops",
+  "version": "1.0.0",
+  "description": "Backup operations skills for Kaseya Spanning Backup — use to sweep backup health, orchestrate restores, audit seat utilization, and investigate restore-activity anomalies.",
+  "author": { "name": "w159", "url": "https://github.com/w159" },
+  "repository": "https://github.com/w159/ai-tech-toolkit",
+  "homepage": "https://github.com/w159/ai-tech-toolkit/tree/main/plugins/kaseya-spanning-backup-ops",
+  "license": "Apache-2.0",
+  "keywords": ["kaseya", "spanning", "backup", "restore", "m365", "google-workspace", "saas-backup", "msp"]
+}

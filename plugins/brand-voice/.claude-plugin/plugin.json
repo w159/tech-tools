@@ -1,0 +1,17 @@
+{
+  "name": "brand-voice",
+  "version": "1.0.0",
+  "description": "Discover, enforce, and generate brand voice guidelines across all content — emails, proposals, social posts, and sales materials.",
+  "keywords": [
+    "brand",
+    "voice",
+    "content",
+    "guidelines",
+    "tone",
+    "writing"
+  ],
+  "author": {
+    "name": "Jerry",
+    "email": "jmorg83@gmail.com"
+  }
+}

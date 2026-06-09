@@ -1,7 +1,7 @@
 {
   "manifest_version": "0.3",
   "name": "auvik-mcp",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "display_name": "Auvik MCP Server",
   "description": "Query Auvik network monitoring data — tenants, devices, networks, interfaces, components, configs, alerts, statistics, and billing — for MSP AI agents.",
   "long_description": "Use this server when you need to inspect Auvik network monitoring data. Covers multi-tenant read workflows: list/get tenants, enumerate devices (with type/vendor/status filters plus detail, extended, warranty, and lifecycle views), browse discovered networks and interfaces, list device components, retrieve stored device configurations, fetch device/availability/interface/service/component/OID performance statistics over a time range, list and get alerts, read entity notes and audit logs, and pull client and per-device billing usage. Schemas, filters, and enum values are verified against the live Auvik OpenAPI spec. Ideal for MSP automation agents that need real-time network visibility across multiple client tenants.",
@@ -57,7 +57,7 @@
     "auvik_region": {
       "type": "string",
       "title": "Auvik Region",
-      "description": "Region code that auto-derives the base URL. Default us1 → https://auvikapi.us1.my.auvik.com/v1. Valid values: us1, us2, us3, us4, eu1, eu2, au1, ca1. Change only if your Auvik tenant is on a non-US1 shard.",
+      "description": "Optional. Leave blank to use the vendor default (https://auvikapi.us1.my.auvik.com/v1). Set to a region code (us2, us3, us4, eu1, eu2, au1, ca1) only if your Auvik tenant is on a non-US1 shard.",
       "required": false,
       "default": "us1"
     }

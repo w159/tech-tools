@@ -2,6 +2,26 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { DomainHandler, CallToolResult } from '../utils/types.js';
 import { getClient } from '../utils/client.js';
 import { logger } from '../utils/logger.js';
+import {
+  shapeList,
+  toolError,
+  toolErrorFromCatch,
+  type SummaryFn,
+} from './_helpers.js';
+
+// ---------------------------------------------------------------------------
+// Compact summary
+// ---------------------------------------------------------------------------
+
+const resolutionSummary: SummaryFn = (item) => ({
+  id:    item.id,
+  label: item.label ?? item.name,
+  code:  item.code,
+});
+
+// ---------------------------------------------------------------------------
+// Tool definitions
+// ---------------------------------------------------------------------------
 
 function getTools(): Tool[] {
   return [
@@ -16,6 +36,10 @@ function getTools(): Tool[] {
   ];
 }
 
+// ---------------------------------------------------------------------------
+// Handler
+// ---------------------------------------------------------------------------
+
 async function handleCall(toolName: string, _args: Record<string, unknown>): Promise<CallToolResult> {
   try {
     const client = await getClient();
@@ -24,19 +48,16 @@ async function handleCall(toolName: string, _args: Record<string, unknown>): Pro
       case 'blumira_resolutions_list': {
         logger.info('API call: resolutions.list');
         const res = await client.resolutions.list();
-        return { content: [{ type: 'text' as const, text: JSON.stringify(res, null, 2) }] };
+        const items = Array.isArray(res) ? res : (res as any)?.results ?? (res as any)?.data ?? [];
+        return shapeList(items, resolutionSummary, {});
       }
       default:
-        return { content: [{ type: 'text' as const, text: `Unknown tool: ${toolName}` }], isError: true };
+        return toolError('INVALID_ARGS', `Unknown tool: ${toolName}`);
     }
-  } catch (error: any) {
-    const status = error?.status ?? error?.statusCode ?? '';
-    const hint = status === 401 || status === 403
-      ? 'Verify BLUMIRA_JWT_TOKEN or BLUMIRA_CLIENT_ID + BLUMIRA_CLIENT_SECRET are correct.'
-      : 'Check that your Blumira credentials are valid and the API is reachable.';
-    const msg = `Blumira API error${status ? ` (HTTP ${status})` : ''}: ${error?.message ?? String(error)}. ${hint}`;
-    logger.error('Tool call failed', { tool: toolName, error: msg });
-    return { content: [{ type: 'text' as const, text: msg }], isError: true };
+  } catch (err: unknown) {
+    return toolErrorFromCatch(toolName, err, {
+      hint: 'Verify BLUMIRA_JWT_TOKEN or BLUMIRA_CLIENT_ID + BLUMIRA_CLIENT_SECRET are correct.',
+    });
   }
 }
 

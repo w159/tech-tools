@@ -9,10 +9,11 @@ import { getCredentials } from './utils/client.js';
 import { logger } from './utils/logger.js';
 import type { DomainName } from './utils/types.js';
 import { annotate } from './annotate-tool.js';
+import { toolErrorFromCatch, describeBaseUrl } from './domains/_helpers.js';
 
 export function createMcpServer(): Server {
   const server = new Server(
-    { name: 'paylocity-mcp', version: '0.1.0' },
+    { name: 'paylocity-mcp', version: '0.1.1' },
     {
       capabilities: {
         tools: {},
@@ -61,8 +62,16 @@ export function createMcpServer(): Server {
 
     if (name === 'paylocity_status') {
       const creds = getCredentials();
+      const urlDesc = describeBaseUrl('paylocity', process.env.PAYLOCITY_BASE_URL, 'PAYLOCITY_BASE_URL');
+      const sandboxActive =
+        creds?.sandbox &&
+        !process.env.PAYLOCITY_BASE_URL?.trim();
+      const effectiveUrl = sandboxActive
+        ? 'https://apisandbox.paylocity.com (sandbox toggle active)'
+        : urlDesc;
+
       const credStatus = creds
-        ? `Configured (clientId=${creds.clientId.slice(0, 6)}…, baseUrl=${creds.baseUrl || (creds.sandbox ? 'https://apisandbox.paylocity.com (sandbox)' : 'https://api.paylocity.com (default)')}, defaultCompanyId=${creds.defaultCompanyId || '(none — must pass per call)'})`
+        ? `Configured (clientId=${creds.clientId.slice(0, 6)}..., baseUrl=${effectiveUrl}, defaultCompanyId=${creds.defaultCompanyId || '(none — must pass per call)'})`
         : 'NOT CONFIGURED — set PAYLOCITY_CLIENT_ID and PAYLOCITY_CLIENT_SECRET (and ideally PAYLOCITY_COMPANY_ID).';
       return {
         content: [
@@ -84,19 +93,11 @@ export function createMcpServer(): Server {
             (args || {}) as Record<string, unknown>,
             extra
           );
-        } catch (error: any) {
-          const status = error?.status ?? error?.statusCode ?? error?.response?.status ?? '';
-          const hint = status === 401 || status === 403
-            ? 'Verify PAYLOCITY_CLIENT_ID and PAYLOCITY_CLIENT_SECRET are correct.'
-            : status === 404
-            ? 'Resource not found. Verify the companyId and resource IDs are correct.'
-            : 'Check that PAYLOCITY_CLIENT_ID, PAYLOCITY_CLIENT_SECRET, and PAYLOCITY_COMPANY_ID are set.';
-          const msg = `Paylocity API error${status ? ` (HTTP ${status})` : ''}: ${(error as Error).message}. ${hint}`;
-          logger.error('Tool call failed', { tool: name, error: msg });
-          return {
-            content: [{ type: 'text' as const, text: msg }],
-            isError: true,
-          };
+        } catch (error: unknown) {
+          logger.error('Tool call failed', { tool: name, error: (error as Error)?.message });
+          return toolErrorFromCatch(name, error, {
+            hint: 'Check that PAYLOCITY_CLIENT_ID, PAYLOCITY_CLIENT_SECRET, and PAYLOCITY_COMPANY_ID are set.',
+          });
         }
       }
     }

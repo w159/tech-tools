@@ -1,0 +1,120 @@
+[
+  {
+    "id": "self-intro-parakeet",
+    "audio_path": "/absolute/path/to/self-intro-parakeet.wav",
+    "audio_start_secs": 0,
+    "audio_duration_secs": 30,
+    "content_type": "meeting",
+    "engine": "parakeet",
+    "parakeet_boost_score_override": 4.0,
+    "reference_text": "Mat Silverstein and Alex Chen discussed X1 Planning and Asana migration.",
+    "title": "X1 / Planning Review",
+    "calendar_event_title": "Mat with Alex Chen",
+    "pre_context": "Asana migration with Box",
+    "extra_priority_hints": [
+      "Alex Chen"
+    ],
+    "extra_context_hints": [
+      "X1 Planning"
+    ],
+    "vocabulary_entries": [
+      {
+        "kind": "project",
+        "canonical": "X1 Planning",
+        "aliases": [
+          "X One Planning"
+        ],
+        "priority": "high"
+      }
+    ],
+    "attendees": [
+      "mat@example.com",
+      "alex.chen@example.com"
+    ],
+    "identity_name": "Mat",
+    "identity_aliases": [
+      "Mathieu",
+      "Matthew",
+      "Matt"
+    ],
+    "max_wer_regression": 0.02,
+    "require_hinted_terms": [
+      "mat",
+      "alex chen",
+      "x1 planning"
+    ],
+    "forbid_hinted_terms": [
+      "matt mullenweg"
+    ]
+  },
+  {
+    "id": "self-intro-whisper",
+    "audio_path": "/absolute/path/to/self-intro-whisper.wav",
+    "content_type": "meeting",
+    "engine": "whisper",
+    "reference_text": "Mat shared the Command RX rollout plan with Samantha and mentioned LeaderNet.",
+    "title": "Command RX rollout check-in",
+    "calendar_event_title": "Mat / Samantha",
+    "pre_context": "LeaderNet follow-up and rollout sequencing",
+    "extra_priority_hints": [
+      "Samantha"
+    ],
+    "extra_context_hints": [
+      "Command RX",
+      "LeaderNet"
+    ],
+    "attendees": [
+      "Matt",
+      "Samantha"
+    ],
+    "identity_name": "Mat",
+    "identity_aliases": [
+      "Matt"
+    ],
+    "language": "en",
+    "max_wer_regression": 0.03,
+    "require_hinted_terms": [
+      "mat",
+      "samantha",
+      "command rx",
+      "leadernet"
+    ],
+    "forbid_hinted_terms": [
+      "matt mullenweg"
+    ]
+  },
+  {
+    "id": "external-proper-noun-research",
+    "audio_path": "/absolute/path/to/external-proper-noun.wav",
+    "content_type": "meeting",
+    "engine": "parakeet",
+    "reference_text": "Casey Rowan and the Northstar Studio team reviewed PDF Toolkit packaging.",
+    "title": "Casey / Northstar Studio follow-up",
+    "calendar_event_title": "Casey Rowan with Northstar Studio",
+    "pre_context": "PDF Toolkit packaging review",
+    "extra_priority_hints": [
+      "Casey Rowan",
+      "Northstar Studio"
+    ],
+    "extra_context_hints": [
+      "PDF Toolkit"
+    ],
+    "attendees": [
+      "garrett@example.com",
+      "well.factory@example.com"
+    ],
+    "max_wer_regression": 0.02,
+    "require_hinted_terms": [
+      "casey rowan",
+      "northstar studio",
+      "pdf toolkit"
+    ],
+    "forbid_hinted_terms": [
+      "matt mullenweg"
+    ],
+    "allowed_failure_substrings": [
+      "missing required hinted term 'casey rowan'",
+      "missing required hinted term 'northstar studio'"
+    ]
+  }
+]
