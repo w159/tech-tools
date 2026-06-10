@@ -1,28 +1,14 @@
 import type { HttpClient } from '../http.js';
 import type { JsonApiResponse, Page, PaginationOptions } from '../types/json-api.js';
 import type { AlertHistory, DismissAlertRequest } from '../types/alerts.js';
-import { paginate } from '../pagination.js';
+import { paginate, fetchPage } from '../pagination.js';
 
 export class AlertsResource {
   constructor(private getClient: () => Promise<HttpClient>) {}
 
   async listHistory(options: PaginationOptions = {}): Promise<Page<AlertHistory>> {
-    const { pageSize, pageAfter, filters = {} } = options;
-    const params = {
-      ...filters,
-      ...(pageSize && { 'page[first]': pageSize }),
-      ...(pageAfter && { 'page[after]': pageAfter }),
-    };
-
     const client = await this.getClient();
-    const response = await client.request<JsonApiResponse<AlertHistory>>('/alert/history', { params });
-    const data = Array.isArray(response.data) ? response.data : [response.data];
-
-    return {
-      data: data.map(item => ({ id: item.id, type: item.type, ...item.attributes })),
-      links: response.links || {},
-      meta: response.meta || {},
-    };
+    return fetchPage<AlertHistory>(client, '/alert/history', options);
   }
 
   async *listHistoryAll(filters: Record<string, string> = {}): AsyncIterable<AlertHistory> {

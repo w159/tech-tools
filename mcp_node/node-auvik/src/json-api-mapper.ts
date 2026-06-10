@@ -1,6 +1,6 @@
 import type { JsonApiResource } from './types/json-api.js';
 
-export function mapJsonApiResource<T>(item: JsonApiResource<T>): T & { id: string } {
+function mapJsonApiResource<T>(item: JsonApiResource<T>): T & { id: string } {
   return {
     id: item.id,
     ...item.attributes,

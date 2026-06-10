@@ -1,29 +1,15 @@
 import type { HttpClient } from '../http.js';
 import type { JsonApiResponse, Page, PaginationOptions } from '../types/json-api.js';
 import type { DeviceInfo, DeviceDetails, DeviceWarranty, DeviceLifecycle } from '../types/devices.js';
-import { paginate } from '../pagination.js';
+import { paginate, fetchPage } from '../pagination.js';
 
 export class InventoryDeviceResource {
   constructor(private getClient: () => Promise<HttpClient>) {}
 
   // Device Info (v2 preferred)
   async listInfo(options: PaginationOptions = {}): Promise<Page<DeviceInfo>> {
-    const { pageSize, pageAfter, filters = {} } = options;
-    const params = {
-      ...filters,
-      ...(pageSize && { 'page[first]': pageSize }),
-      ...(pageAfter && { 'page[after]': pageAfter }),
-    };
-
     const client = await this.getClient();
-    const response = await client.request<JsonApiResponse<DeviceInfo>>('/inventory/device/info', { params });
-    const data = Array.isArray(response.data) ? response.data : [response.data];
-
-    return {
-      data: data.map(item => ({ id: item.id, type: item.type, ...item.attributes })),
-      links: response.links || {},
-      meta: response.meta || {},
-    };
+    return fetchPage<DeviceInfo>(client, '/inventory/device/info', options);
   }
 
   async *listInfoAll(filters: Record<string, string> = {}): AsyncIterable<DeviceInfo> {
@@ -44,22 +30,8 @@ export class InventoryDeviceResource {
 
   // Device Extended Details (v2)
   async listExtendedDetails(options: PaginationOptions = {}): Promise<Page<DeviceDetails>> {
-    const { pageSize, pageAfter, filters = {} } = options;
-    const params = {
-      ...filters,
-      ...(pageSize && { 'page[first]': pageSize }),
-      ...(pageAfter && { 'page[after]': pageAfter }),
-    };
-
     const client = await this.getClient();
-    const response = await client.request<JsonApiResponse<DeviceDetails>>('/inventory/device/info/extended-details', { params });
-    const data = Array.isArray(response.data) ? response.data : [response.data];
-
-    return {
-      data: data.map(item => ({ id: item.id, type: item.type, ...item.attributes })),
-      links: response.links || {},
-      meta: response.meta || {},
-    };
+    return fetchPage<DeviceDetails>(client, '/inventory/device/info/extended-details', options);
   }
 
   async *listExtendedDetailsAll(filters: Record<string, string> = {}): AsyncIterable<DeviceDetails> {
@@ -73,22 +45,8 @@ export class InventoryDeviceResource {
 
   // Device Details (v1 fallback)
   async listDetails(options: PaginationOptions = {}): Promise<Page<DeviceDetails>> {
-    const { pageSize, pageAfter, filters = {} } = options;
-    const params = {
-      ...filters,
-      ...(pageSize && { 'page[first]': pageSize }),
-      ...(pageAfter && { 'page[after]': pageAfter }),
-    };
-
     const client = await this.getClient();
-    const response = await client.request<JsonApiResponse<DeviceDetails>>('/inventory/device/details', { params });
-    const data = Array.isArray(response.data) ? response.data : [response.data];
-
-    return {
-      data: data.map(item => ({ id: item.id, type: item.type, ...item.attributes })),
-      links: response.links || {},
-      meta: response.meta || {},
-    };
+    return fetchPage<DeviceDetails>(client, '/inventory/device/details', options);
   }
 
   async *listDetailsAll(filters: Record<string, string> = {}): AsyncIterable<DeviceDetails> {
@@ -109,22 +67,13 @@ export class InventoryDeviceResource {
 
   // Device Warranty
   async listWarranty(options: PaginationOptions = {}): Promise<Page<DeviceWarranty & { deviceId: string }>> {
-    const { pageSize, pageAfter, filters = {} } = options;
-    const params = {
-      ...filters,
-      ...(pageSize && { 'page[first]': pageSize }),
-      ...(pageAfter && { 'page[after]': pageAfter }),
-    };
-
     const client = await this.getClient();
-    const response = await client.request<JsonApiResponse<DeviceWarranty>>('/inventory/device/warranty', { params });
-    const data = Array.isArray(response.data) ? response.data : [response.data];
-
-    return {
-      data: data.map(item => ({ deviceId: item.id, id: item.id, ...item.attributes })) as (DeviceWarranty & { deviceId: string })[],
-      links: response.links || {},
-      meta: response.meta || {},
-    };
+    return fetchPage<DeviceWarranty, DeviceWarranty & { deviceId: string }>(
+      client,
+      '/inventory/device/warranty',
+      options,
+      item => ({ deviceId: item.id, id: item.id, ...item.attributes }) as DeviceWarranty & { deviceId: string },
+    );
   }
 
   async *listWarrantyAll(filters: Record<string, string> = {}): AsyncIterable<DeviceWarranty & { deviceId: string }> {
@@ -145,22 +94,13 @@ export class InventoryDeviceResource {
 
   // Device Lifecycle
   async listLifecycle(options: PaginationOptions = {}): Promise<Page<DeviceLifecycle & { deviceId: string }>> {
-    const { pageSize, pageAfter, filters = {} } = options;
-    const params = {
-      ...filters,
-      ...(pageSize && { 'page[first]': pageSize }),
-      ...(pageAfter && { 'page[after]': pageAfter }),
-    };
-
     const client = await this.getClient();
-    const response = await client.request<JsonApiResponse<DeviceLifecycle>>('/inventory/device/lifecycle', { params });
-    const data = Array.isArray(response.data) ? response.data : [response.data];
-
-    return {
-      data: data.map(item => ({ deviceId: item.id, id: item.id, ...item.attributes })) as (DeviceLifecycle & { deviceId: string })[],
-      links: response.links || {},
-      meta: response.meta || {},
-    };
+    return fetchPage<DeviceLifecycle, DeviceLifecycle & { deviceId: string }>(
+      client,
+      '/inventory/device/lifecycle',
+      options,
+      item => ({ deviceId: item.id, id: item.id, ...item.attributes }) as DeviceLifecycle & { deviceId: string },
+    );
   }
 
   async *listLifecycleAll(filters: Record<string, string> = {}): AsyncIterable<DeviceLifecycle & { deviceId: string }> {

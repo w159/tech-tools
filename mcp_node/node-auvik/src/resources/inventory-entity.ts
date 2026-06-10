@@ -1,28 +1,14 @@
 import type { HttpClient } from '../http.js';
 import type { JsonApiResponse, Page, PaginationOptions } from '../types/json-api.js';
 import type { EntityNote, EntityAudit } from '../types/entity.js';
-import { paginate } from '../pagination.js';
+import { paginate, fetchPage } from '../pagination.js';
 
 export class InventoryEntityResource {
   constructor(private getClient: () => Promise<HttpClient>) {}
 
   async listNotes(options: PaginationOptions = {}): Promise<Page<EntityNote>> {
-    const { pageSize, pageAfter, filters = {} } = options;
-    const params = {
-      ...filters,
-      ...(pageSize && { 'page[first]': pageSize }),
-      ...(pageAfter && { 'page[after]': pageAfter }),
-    };
-
     const client = await this.getClient();
-    const response = await client.request<JsonApiResponse<EntityNote>>('/inventory/entity/note', { params });
-    const data = Array.isArray(response.data) ? response.data : [response.data];
-
-    return {
-      data: data.map(item => ({ id: item.id, type: item.type, ...item.attributes })),
-      links: response.links || {},
-      meta: response.meta || {},
-    };
+    return fetchPage<EntityNote>(client, '/inventory/entity/note', options);
   }
 
   async *listNotesAll(filters: Record<string, string> = {}): AsyncIterable<EntityNote> {
@@ -42,22 +28,8 @@ export class InventoryEntityResource {
   }
 
   async listAudits(options: PaginationOptions = {}): Promise<Page<EntityAudit>> {
-    const { pageSize, pageAfter, filters = {} } = options;
-    const params = {
-      ...filters,
-      ...(pageSize && { 'page[first]': pageSize }),
-      ...(pageAfter && { 'page[after]': pageAfter }),
-    };
-
     const client = await this.getClient();
-    const response = await client.request<JsonApiResponse<EntityAudit>>('/inventory/entity/audit', { params });
-    const data = Array.isArray(response.data) ? response.data : [response.data];
-
-    return {
-      data: data.map(item => ({ id: item.id, type: item.type, ...item.attributes })),
-      links: response.links || {},
-      meta: response.meta || {},
-    };
+    return fetchPage<EntityAudit>(client, '/inventory/entity/audit', options);
   }
 
   async *listAuditsAll(filters: Record<string, string> = {}): AsyncIterable<EntityAudit> {

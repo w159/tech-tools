@@ -136,6 +136,7 @@ firebase-adminsdk*.json
 # ---- Repo / meta ----
 !.gitignore
 !.gitattributes
+!.fallowrc.json
 !.env.template
 !README.md
 !CLAUDE.md
@@ -195,6 +196,9 @@ firebase-adminsdk*.json
 # ---- Node / TypeScript build outputs ----
 **/node_modules/
 **/node_modules/**
+**/node_modules.nosync.noindex/
+**/node_modules.nosync.noindex/**
+**/node_modules.nosync.noindex
 **/dist/
 **/dist/**
 **/build/
@@ -279,3 +283,4 @@ desktop.ini
 # Built MCPB bundles — too large for GitHub (100 MB hard limit); ship via Releases
 *.mcpb
 .orchestrator/
+.fallow/
