@@ -38,17 +38,17 @@ Monorepo of MCP servers, plugins, and supporting Node.js client libraries for co
 
 ### Business Purpose
 
-MSPs run a stack of vendor portals — Auvik, NinjaOne, ConnectWise, CIPP/M365, ThreatLocker, KnowBe4, Blumira, Vanta, Paylocity. Each has a REST API, its own auth, its own pagination, and its own quirks. This repo gives an AI agent (Claude Desktop, Claude Code, or any MCP-compatible client) **one consistent way to read and act across all of them**.
+Internal IT Help Desk/Engineer tools for Auvik, NinjaOne, ConnectWise, CIPP/M365, ThreatLocker, KnowBe4, Blumira, Vanta, Paylocity. Each has a REST API, its own auth, its own pagination, and its own quirks. This repo gives an AI agent (Claude Desktop, Claude Code, or any MCP-compatible client) **one consistent way to read and act across all of them**.
 
 ### Target Users
 
-- **MSP technicians & analysts** wanting an LLM copilot that can actually pull tickets, devices, alerts, users, and approvals.
+- ***admins & support staff** wanting an LLM copilot that can actually pull tickets, devices, alerts, users, and approvals.
 - **MSP engineering / automation teams** building agentic workflows across multiple vendors.
 - **Independent operators** who want a private, locally-runnable Claude integration for their own M365/RMM/PSA stack.
 
 ### Core Capabilities
 
-- **10 MCP servers** wrapping the most common MSP vendor APIs.
+- **10 MCP servers** wrapping some of the most common vendor APIs in each category (PSA, Endpoint Security, ITSM, etc.).
 - **Cross-platform + bridge Claude Code plugins** that orchestrate parallel fan-out across vendors and hand work cleanly between tools (e.g. *morning briefing*, *client 360*, *unified incident response*, *ConnectWise ticket -> NinjaOne triage*).
 - **Plugin marketplace** -- 27 plugins installable via `claude plugin marketplace add w159/tech-tools` once published, or locally via the path.
 - **Compact-by-default responses** -- all list/get tools return concise summaries by default; pass `fields=[...]` to select specific fields or `full=true` to get the raw vendor payload. Errors are structured `{error:{code, message, detail, hint}}` so agents can act on them.
@@ -58,7 +58,7 @@ MSPs run a stack of vendor portals — Auvik, NinjaOne, ConnectWise, CIPP/M365, 
 
 ### Key Differentiators
 
-- **Real SDKs, not just MCP wrappers.** The `mcp_node/` folder ships fully typed Node.js clients (`node-auvik`, `node-ninjaone`, `node-vanta`, etc.) that the MCP layer sits on top of — usable from any non-MCP project too.
+- **Real SDKs, not just MCP wrappers.** The `mcp_node/` folder ships fully typed Node.js clients (`node-auvik`, `node-ninjaone`, `node-vanta`, etc.) that the MCP layer sits on top of - usable from any non-MCP project too.
 - **Cross-vendor super-skills.** The `msp-command-center` plugin fans out across 6 vendor MCPs in parallel for a single user query, while `msp-tool-bridge-ops` pivots directly between PSA and RMM workflows when one platform needs evidence from another.
 - **Production-grade packaging.** A hardened `pack-mcpb.js` script guards against broken bundles before they ever ship to Claude Desktop.
 
@@ -101,7 +101,7 @@ MSPs run a stack of vendor portals — Auvik, NinjaOne, ConnectWise, CIPP/M365, 
 2. **Skill activates.** A Claude Code plugin (e.g. `cipp-m365-ops/skills/suspicious-signin-hunt`) tells Claude how to decompose the task.
 3. **MCP tool calls.** Claude calls one or more MCP tools over stdio JSON-RPC (e.g. `cipp_list_tenants`, then `cipp_get_signin_logs` per tenant).
 4. **Server → SDK → REST.** The MCP server validates input with `zod`, delegates to the typed Node SDK in `mcp_node/`, and hits the vendor REST API.
-5. **Normalized response.** The server returns a structured JSON payload — the LLM summarizes, clusters, and ranks.
+5. **Normalized response.** The server returns a structured JSON payload - the LLM summarizes, clusters, and ranks.
 
 ### Authentication Flow
 
@@ -110,7 +110,7 @@ Every MCP server reads credentials from environment variables at boot (Claude De
 | Flavor | Used by | Notes |
 | --- | --- | --- |
 | **Static API key / JWT** | Auvik, Blumira, KnowBe4, ThreatLocker, CIPP (legacy) | Sent as `Authorization: Bearer` or vendor-specific header. |
-| **OAuth2 client_credentials** | NinjaOne, Vanta, Paylocity, CIPP (modern) | Token minted on demand, cached ~1h. Vanta token endpoint is **rate-limited to 5 req/min** — reuse is critical. |
+| **OAuth2 client_credentials** | NinjaOne, Vanta, Paylocity, CIPP (modern) | Token minted on demand, cached ~1h. Vanta token endpoint is **rate-limited to 5 req/min** - reuse is critical. |
 | **Public/Private key + Client ID** | ConnectWise Manage | Basic-auth-style with `companyId+publicKey:privateKey` and a `clientId` header. |
 
 ### Permission Model
@@ -177,8 +177,8 @@ Each `mcp_servers/<vendor>-mcp/` package is a standalone TypeScript MCP server:
 
 **Important files:**
 
-- `manifest.json` — Declares `entry_point`, required env vars, display name. Consumed by Claude Desktop when you install the `.mcpb`.
-- `<vendor>-mcp.mcpb` — A zip archive containing the staged `dist/` + production `node_modules/`. Drag-and-drop into Claude Desktop to install.
+- `manifest.json` - Declares `entry_point`, required env vars, display name. Consumed by Claude Desktop when you install the `.mcpb`.
+- `<vendor>-mcp.mcpb` - A zip archive containing the staged `dist/` + production `node_modules/`. Drag-and-drop into Claude Desktop to install.
 
 ### `mcp_servers/_shared/pack-mcpb.js`
 
@@ -186,7 +186,7 @@ Canonical hardened packer. Drop a thin `scripts/pack-mcpb.js` into any server th
 
 ### `mcp_node/`
 
-Each `mcp_node/node-<vendor>/` is a fully typed REST client library — independent of MCP. The corresponding MCP server depends on it via `dependencies` in its `package.json`.
+Each `mcp_node/node-<vendor>/` is a fully typed REST client library - independent of MCP. The corresponding MCP server depends on it via `dependencies` in its `package.json`.
 
 ```text
 node-<vendor>/
@@ -223,8 +223,8 @@ The root marketplace manifest lists all 27 plugins with name, source path, descr
 # Install all plugins from a local clone
 claude plugin marketplace add ./path/to/tech-tools
 
-# Install a single plugin by name (marketplace name is "aikit", set in marketplace.json)
-claude plugin install <plugin-name>@aikit
+# Install a single plugin by name (marketplace name is "tech-tools", set in marketplace.json)
+claude plugin install <plugin-name>@tech-tools
 
 # Browse available plugins in the Claude Code /plugin Discover tab
 # (shows plugins declared in marketplace.json)
@@ -234,8 +234,8 @@ claude plugin install <plugin-name>@aikit
 
 Read-only documentation tree the agent can grep / read while it works:
 
-- `docs/vendors/<vendor>/` — README + OpenAPI specs + sample payloads + (where licensable) shallow clones of the vendor's upstream repo.
-- `docs/frameworks/` — Anthropic SDK source, MCP TypeScript & Python SDKs, MCP spec (every revision), Claude Code docs mirror.
+- `docs/vendors/<vendor>/` - README + OpenAPI specs + sample payloads + (where licensable) shallow clones of the vendor's upstream repo.
+- `docs/frameworks/` - Anthropic SDK source, MCP TypeScript & Python SDKs, MCP spec (every revision), Claude Code docs mirror.
 
 </details>
 
@@ -249,7 +249,7 @@ Read-only documentation tree the agent can grep / read while it works:
 | --- | --- | --- |
 | Node.js | 18 LTS | <https://nodejs.org/en/download> |
 | npm | 9+ | bundled with Node |
-| `mcpb` CLI (optional, for re-packing) | latest | `npm install -g @anthropic-ai/mcpb` — <https://github.com/anthropics/mcpb> |
+| `mcpb` CLI (optional, for re-packing) | latest | `npm install -g @anthropic-ai/mcpb` - <https://github.com/anthropics/mcpb> |
 | Claude Desktop **or** Claude Code | latest | <https://claude.ai/download> / <https://docs.claude.com/en/docs/claude-code> |
 
 You also need API credentials for whichever vendors you want to connect to (see [Environment Variables](#environment-variables)).
@@ -446,7 +446,7 @@ All 27 plugins live under `plugins/` and are listed in the marketplace manifest 
 
 ### Plugin Marketplace
 
-The repo ships a marketplace manifest at `.claude-plugin/marketplace.json` (marketplace name: `aikit`). Once the repo is published at `w159/tech-tools`:
+The repo ships a marketplace manifest at `.claude-plugin/marketplace.json` (marketplace name: `tech-tools`). Once the repo is published at `w159/tech-tools`:
 
 ```bash
 # Add all plugins from the marketplace registry (GitHub repo slug)
@@ -456,7 +456,7 @@ claude plugin marketplace add w159/tech-tools
 claude plugin marketplace add ./path/to/tech-tools
 
 # Install a specific plugin by name (suffix is the marketplace name)
-claude plugin install auvik-network-ops@aikit
+claude plugin install auvik-network-ops@tech-tools
 ```
 
 The Claude Code `/plugin` Discover tab will list all marketplace entries once the manifest is registered.
@@ -487,13 +487,13 @@ The previous 25-skill set was consolidated to 13 in June 2026. Skills that were 
 
 ## Node SDK Libraries
 
-The MCP servers depend on these standalone, typed Node.js clients. You can use them directly from any Node project — they have no MCP coupling.
+The MCP servers depend on these standalone, typed Node.js clients. You can use them directly from any Node project - they have no MCP coupling.
 
 | Package | Version | Purpose |
 | --- | --- | --- |
 | [`node-auvik`](https://github.com/w159/tech-tools/tree/main/mcp_node/node-auvik) | 1.0.0 | Auvik network monitoring API client. |
 | [`node-blumira`](https://github.com/w159/tech-tools/tree/main/mcp_node/node-blumira) | 1.0.1 | Blumira SIEM API client. |
-| [`node-ninjaone`](https://github.com/w159/tech-tools/tree/main/mcp_node/node-ninjaone) | 1.1.2 | NinjaOne / NinjaRMM API client — comprehensive, fully typed. |
+| [`node-ninjaone`](https://github.com/w159/tech-tools/tree/main/mcp_node/node-ninjaone) | 1.1.2 | NinjaOne / NinjaRMM API client - comprehensive, fully typed. |
 | [`node-paylocity`](https://github.com/w159/tech-tools/tree/main/mcp_node/node-paylocity) | 1.0.0 | Paylocity REST API client. |
 | [`node-spanning`](https://github.com/w159/tech-tools/tree/main/mcp_node/node-spanning) | 1.0.2 | Spanning Cloud Backup API client (M365 / GWS / SF). |
 | [`node-threatlocker`](https://github.com/w159/tech-tools/tree/main/mcp_node/node-threatlocker) | 1.0.3 | ThreatLocker Portal API client. |
@@ -519,7 +519,7 @@ Each ships dual ESM/CJS bundles + `.d.ts` via `tsup`, and is fully unit-tested v
 <details>
 <summary><strong>Blumira</strong></summary>
 
-- **Purpose:** SIEM/XDR — findings, detections, devices.
+- **Purpose:** SIEM/XDR - findings, detections, devices.
 - **Base URL:** `https://api.blumira.com/`
 - **Auth:** Long-lived JWT bearer.
 - **Docs:** <https://app.blumira.com/api/v3/docs>
@@ -534,15 +534,15 @@ Each ships dual ESM/CJS bundles + `.d.ts` via `tsup`, and is fully unit-tested v
 - **Base URL:** customer-deployed Azure Function URL (set via `CIPP_BASE_URL`).
 - **Auth:** Static bearer **or** OAuth2 against the CIPP-API Entra app.
 - **Docs:** <https://docs.cipp.app>
-- **Local docs:** `docs/vendors/cipp/` — includes full `CIPP-API` and `docs-site` clones (~192 MB). The `CIPP-API/Tools/cipp-openapispec.json` enumerates 192 endpoints.
-- **Notes:** CIPP wraps Microsoft Graph — see <https://learn.microsoft.com/en-us/graph/overview>.
+- **Local docs:** `docs/vendors/cipp/` - includes full `CIPP-API` and `docs-site` clones (~192 MB). The `CIPP-API/Tools/cipp-openapispec.json` enumerates 192 endpoints.
+- **Notes:** CIPP wraps Microsoft Graph - see <https://learn.microsoft.com/en-us/graph/overview>.
 
 </details>
 
 <details>
 <summary><strong>ConnectWise Manage</strong></summary>
 
-- **Purpose:** PSA — tickets, companies, projects, time entries, agreements.
+- **Purpose:** PSA - tickets, companies, projects, time entries, agreements.
 - **Base URL:** `https://{site}.connectwise.com/v4_6_release/apis/3.0/` (e.g. `https://api-na.myconnectwise.net/...`).
 - **Auth:** Basic auth with `companyId+publicKey:privateKey` plus `clientId` header.
 - **Docs:** <https://developer.connectwise.com/Products/ConnectWise_PSA/REST>
@@ -554,7 +554,7 @@ Each ships dual ESM/CJS bundles + `.d.ts` via `tsup`, and is fully unit-tested v
 <summary><strong>KnowBe4</strong></summary>
 
 - **Purpose:** Security awareness training, phishing simulation, user risk.
-- **Base URLs:** Reporting API + User Event API + GraphQL — region-specific (`us`/`eu`/`ca`/`uk`/`de`).
+- **Base URLs:** Reporting API + User Event API + GraphQL - region-specific (`us`/`eu`/`ca`/`uk`/`de`).
 - **Auth:** Static API key.
 - **Docs:** <https://developer.knowbe4.com/>
 - **Local docs:** `docs/vendors/knowbe4/` (includes OpenAPI YAML for Reporting + User Event).
@@ -564,7 +564,7 @@ Each ships dual ESM/CJS bundles + `.d.ts` via `tsup`, and is fully unit-tested v
 <details>
 <summary><strong>NinjaOne (NinjaRMM)</strong></summary>
 
-- **Purpose:** RMM — devices, alerts, organizations, patching, scripting.
+- **Purpose:** RMM - devices, alerts, organizations, patching, scripting.
 - **Base URL:** `https://{region}.ninjarmm.com/v2/`
 - **Auth:** OAuth2 client_credentials.
 - **Docs:** <https://app.ninjarmm.com/apidocs/>
@@ -575,7 +575,7 @@ Each ships dual ESM/CJS bundles + `.d.ts` via `tsup`, and is fully unit-tested v
 <details>
 <summary><strong>Paylocity</strong></summary>
 
-- **Purpose:** HR / payroll — employees, deductions, taxes, new hires.
+- **Purpose:** HR / payroll - employees, deductions, taxes, new hires.
 - **Base URL:** `https://api.paylocity.com/api` (or `https://apisandbox.paylocity.com` if `PAYLOCITY_SANDBOX=true`).
 - **Auth:** OAuth2 client_credentials (form-urlencoded token endpoint).
 - **Docs:** <https://developer.paylocity.com/integrations/reference>
@@ -586,7 +586,7 @@ Each ships dual ESM/CJS bundles + `.d.ts` via `tsup`, and is fully unit-tested v
 <details>
 <summary><strong>ThreatLocker</strong></summary>
 
-- **Purpose:** Zero-trust EDR — applications, approvals, audit, policies.
+- **Purpose:** Zero-trust EDR - applications, approvals, audit, policies.
 - **Base URL:** Portal-shard specific (see <https://threatlocker.kb.help/locating-your-organizations-instance/>).
 - **Auth:** Static API key from Portal → Administrators → API Users.
 - **Docs:** vendor portal Swagger (auth-gated).
@@ -597,11 +597,11 @@ Each ships dual ESM/CJS bundles + `.d.ts` via `tsup`, and is fully unit-tested v
 <details>
 <summary><strong>Vanta</strong></summary>
 
-- **Purpose:** GRC — frameworks, controls, evidence, vendors, vulnerabilities.
+- **Purpose:** GRC - frameworks, controls, evidence, vendors, vulnerabilities.
 - **Base URL:** `https://api.vanta.com/v1` (override only on shard moves).
-- **Auth:** OAuth2 client_credentials. **Token endpoint capped at 5 req/min — reuse is critical**.
+- **Auth:** OAuth2 client_credentials. **Token endpoint capped at 5 req/min - reuse is critical**.
 - **Docs:** <https://developer.vanta.com/reference>
-- **Local docs:** `docs/vendors/vanta/` — includes 5 official Vanta repos cloned (including Vanta's own MCP server reference + Claude Code plugin).
+- **Local docs:** `docs/vendors/vanta/` - includes 5 official Vanta repos cloned (including Vanta's own MCP server reference + Claude Code plugin).
 
 </details>
 
@@ -609,7 +609,7 @@ Each ships dual ESM/CJS bundles + `.d.ts` via `tsup`, and is fully unit-tested v
 
 ## Data Models
 
-Each vendor has its own object model — the MCP servers expose a normalized **tool input/output shape** validated with `zod`. The general shape is:
+Each vendor has its own object model - the MCP servers expose a normalized **tool input/output shape** validated with `zod`. The general shape is:
 
 ```ts
 // Tool input (validated with zod)
@@ -627,7 +627,7 @@ type ToolResult = {
 };
 ```
 
-For the **typed object models** (`Ticket`, `Device`, `Alert`, `User`, `Tenant`, etc.) see each `node-<vendor>/src/types/` directory — these are the source of truth and are emitted as `.d.ts` declarations.
+For the **typed object models** (`Ticket`, `Device`, `Alert`, `User`, `Tenant`, etc.) see each `node-<vendor>/src/types/` directory - these are the source of truth and are emitted as `.d.ts` declarations.
 
 ---
 
@@ -656,13 +656,13 @@ Inside any SDK or server directory:
 ```bash
 npm install
 npm test           # vitest
-npm run build      # tsup / tsc — must succeed before pack
+npm run build      # tsup / tsc - must succeed before pack
 npm run pack       # produces <name>.mcpb (servers only)
 ```
 
 ### CI
 
-Existing GitHub Actions workflows have been **intentionally disabled** (renamed `*.disabled`) to keep CI off during early iteration — see commit history. They can be re-enabled by removing the `.disabled` suffix when the repo is opened up publicly.
+Existing GitHub Actions workflows have been **intentionally disabled** (renamed `*.disabled`) to keep CI off during early iteration - see commit history. They can be re-enabled by removing the `.disabled` suffix when the repo is opened up publicly.
 
 ---
 
@@ -681,7 +681,7 @@ Existing GitHub Actions workflows have been **intentionally disabled** (renamed 
 ## Security Considerations
 
 - **Secrets:** `.env` files are denied by the strict allowlist `.gitignore` (see top of file). `.env.template` is intentionally tracked. Never commit a populated `.env`. Rotate any key you suspect has been pasted into a shared chat.
-- **Token storage:** OAuth tokens are kept in-memory only — they are never written to disk by the MCP servers.
+- **Token storage:** OAuth tokens are kept in-memory only - they are never written to disk by the MCP servers.
 - **Scope minimization:** API users should be created **per integration**, with the minimum role required. Several vendors expose granular API roles (CIPP, ConnectWise, NinjaOne).
 - **Input validation:** All tool inputs go through `zod` schemas before any outbound HTTP call.
 - **Logging hygiene:** Servers log to stderr (so it doesn't pollute the MCP stdio channel). Tokens and authorization headers are stripped from log lines.
@@ -692,7 +692,7 @@ Existing GitHub Actions workflows have been **intentionally disabled** (renamed 
 ## Performance Considerations
 
 - **Token caching:** OAuth-based vendors mint tokens at boot and cache for ~1h. Vanta's 5 req/min ceiling on the token endpoint makes this a hard requirement, not an optimization.
-- **Pagination:** Tools that return collections accept `page` + `pageSize` and pass them through to the vendor — never auto-paginate the entire dataset.
+- **Pagination:** Tools that return collections accept `page` + `pageSize` and pass them through to the vendor - never auto-paginate the entire dataset.
 - **Parallel fan-out:** The cross-vendor plugins (`msp-command-center`) ask Claude to issue tool calls in parallel where there's no data dependency.
 - **Bundle size:** `.mcpb` bundles include `node_modules`. Production deps only (`npm ci --omit=dev`) before pack.
 
@@ -715,7 +715,7 @@ Existing GitHub Actions workflows have been **intentionally disabled** (renamed 
 
 ### Commit conventions
 
-Short imperative subject (≤ 70 chars). The existing log uses descriptive sentences — match that style.
+Short imperative subject (≤ 70 chars). The existing log uses descriptive sentences - match that style.
 
 ### Documentation standards
 
@@ -727,7 +727,7 @@ If you add an endpoint, also add or update the markdown page in `docs/vendors/<v
 
 ### Add a new MCP tool to an existing server
 
-1. Edit `mcp_servers/<vendor>-mcp/src/tools/<area>.ts` — add a `zod` input schema and a handler that delegates to the SDK.
+1. Edit `mcp_servers/<vendor>-mcp/src/tools/<area>.ts` - add a `zod` input schema and a handler that delegates to the SDK.
 2. Register it in the server's tool registry (`src/index.ts` or `src/registry.ts`).
 3. Add a test under `tests/`.
 4. `npm run build && npm run pack`.
@@ -736,7 +736,7 @@ If you add an endpoint, also add or update the markdown page in `docs/vendors/<v
 ### Add a new vendor integration end-to-end
 
 1. **SDK:** scaffold `mcp_node/node-<vendor>` (copy the closest existing SDK as a template; replace transport + types).
-2. **Server:** scaffold `mcp_servers/<vendor>-mcp` — `dependencies: ["node-<vendor>", "@modelcontextprotocol/sdk", "zod"]`.
+2. **Server:** scaffold `mcp_servers/<vendor>-mcp` - `dependencies: ["node-<vendor>", "@modelcontextprotocol/sdk", "zod"]`.
 3. **Manifest:** fill in `manifest.json` (entry_point, env vars, display name).
 4. **Pack:** wire `scripts/pack-mcpb.js` to re-export `_shared/pack-mcpb.js`.
 5. **Docs:** create `docs/vendors/<vendor>/README.md` + endpoint reference.
@@ -745,9 +745,9 @@ If you add an endpoint, also add or update the markdown page in `docs/vendors/<v
 
 ### Add a new Claude Code plugin
 
-1. `plugins/<name>/.claude-plugin/plugin.json` — list `mcp_dependencies` precisely.
-2. `plugins/<name>/skills/<skill-name>/SKILL.md` — runbook the agent will follow.
-3. `plugins/<name>/commands/<command>.md` — optional slash command entry point.
+1. `plugins/<name>/.claude-plugin/plugin.json` - list `mcp_dependencies` precisely.
+2. `plugins/<name>/skills/<skill-name>/SKILL.md` - runbook the agent will follow.
+3. `plugins/<name>/commands/<command>.md` - optional slash command entry point.
 
 ---
 
@@ -758,8 +758,8 @@ If you add an endpoint, also add or update the markdown page in `docs/vendors/<v
 | **`Server SKIPPED` in `test-mcp-tools.mjs`** | A required env var is blank in `.env`. Open `.env.template` for the list. |
 | **`401 Unauthorized`** | Wrong key, wrong region, or revoked credentials. Re-issue and re-paste. |
 | **`403 Forbidden`** on a specific tool | The API user lacks role for that endpoint. Check vendor portal role assignment. |
-| **`406 Not Acceptable`** (Paylocity) | Token-endpoint negotiating wrong content-type — confirm the Paylocity app is approved for the `accounting` / `payroll` scope you expect. |
-| **`429 Too Many Requests`** (Vanta) | Restarted the server in a hot loop — Vanta's token endpoint allows 5 req/min. Wait 60 s. |
+| **`406 Not Acceptable`** (Paylocity) | Token-endpoint negotiating wrong content-type - confirm the Paylocity app is approved for the `accounting` / `payroll` scope you expect. |
+| **`429 Too Many Requests`** (Vanta) | Restarted the server in a hot loop - Vanta's token endpoint allows 5 req/min. Wait 60 s. |
 | **CIPP `ListTenants` 401** | API caller missing tenant-read permission inside CIPP. Grant in CIPP → Settings → Application Settings → API. |
 | **Bundle fails to launch in Claude Desktop** | Re-pack: `npm run pack`. The hardened packer aborts loudly if entry/deps are missing. |
 | **`Cannot find module 'node-<vendor>'`** | The SDK was not built (`npm run build` in `mcp_node/node-<vendor>`) or not staged into the bundle (`npm install` in the server first). |
@@ -785,4 +785,4 @@ The cloned vendor repos under `docs/vendors/*` are depth-1 clones. `git -C docs/
 
 ## License
 
-License files are tracked per-package — see `mcp_servers/*/LICENSE` and `mcp_node/*/LICENSE`. No repo-wide license file is currently set. Treat the toolkit as **proprietary** until a top-level `LICENSE` is added.
+License files are tracked per-package - see `mcp_servers/*/LICENSE` and `mcp_node/*/LICENSE`. No repo-wide license file is currently set. Treat the toolkit as **proprietary** until a top-level `LICENSE` is added.
