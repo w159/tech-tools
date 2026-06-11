@@ -1,0 +1,257 @@
+---
+import { plugins, getPluginsByCategory } from '@/data/plugins';
+import { mcpServers, getMcpServersByCategory } from '@/data/mcp-servers';
+import { roleLabels, roleOrder, getPromptsByRole } from '@/data/prompts';
+
+const baseUrl = import.meta.env.BASE_URL;
+const currentPath = Astro.url.pathname;
+
+interface SidebarItem {
+  label: string;
+  href?: string;
+  children?: SidebarItem[];
+}
+
+const pluginCategoryLabels: Record<string, string> = {
+  rmm: 'RMM',
+  psa: 'PSA',
+  documentation: 'IT Documentation',
+  security: 'Security',
+  'email-security': 'Email Security',
+  monitoring: 'Monitoring',
+  network: 'Network',
+  'incident-management': 'Incident Management',
+  crm: 'CRM',
+  marketplace: 'Marketplace',
+  sales: 'Sales & Distribution',
+  accounting: 'Accounting & Finance',
+  productivity: 'Productivity',
+};
+
+const pluginCategoryOrder = ['psa', 'rmm', 'documentation', 'security', 'email-security', 'monitoring', 'network', 'incident-management', 'crm', 'marketplace', 'sales', 'accounting', 'productivity'] as const;
+
+const mcpCategoryLabels: Record<string, string> = {
+  rmm: 'RMM',
+  psa: 'PSA',
+  documentation: 'IT Documentation',
+  security: 'Security',
+  accounting: 'Accounting & Finance',
+  network: 'Network',
+  sales: 'Sales & Distribution',
+};
+
+const mcpCategoryOrder = ['psa', 'rmm', 'documentation', 'security', 'accounting', 'network', 'sales'] as const;
+
+const sidebarItems: SidebarItem[] = [
+  {
+    label: 'Getting Started',
+    children: [
+      { label: 'Introduction', href: `${baseUrl}getting-started/` },
+      { label: 'Quick Start', href: `${baseUrl}getting-started/quick-start/` },
+      { label: 'Installation', href: `${baseUrl}getting-started/installation/` },
+    ]
+  },
+  {
+    label: 'Gateway',
+    children: [
+      {
+        label: 'Concepts',
+        children: [
+          { label: 'Overview', href: `${baseUrl}getting-started/gateway/` },
+          { label: 'Architecture', href: `${baseUrl}getting-started/architecture/` },
+          { label: 'Security Model', href: `${baseUrl}getting-started/security/` },
+        ],
+      },
+      {
+        label: 'Setup',
+        children: [
+          { label: 'Deployment', href: `${baseUrl}getting-started/deployment/` },
+          { label: 'Authentication', href: `${baseUrl}getting-started/authentication/` },
+        ],
+      },
+      {
+        label: 'Operations',
+        children: [
+          { label: 'Teams & Access', href: `${baseUrl}getting-started/teams/` },
+          { label: 'Per-Team Tool Access', href: `${baseUrl}getting-started/tool-access/` },
+          { label: 'Logging & Audit (coming soon)', href: '#' },
+        ],
+      },
+      {
+        label: 'Billing',
+        children: [
+          { label: 'Overview', href: `${baseUrl}getting-started/billing/` },
+          { label: 'Plan comparison', href: `${baseUrl}getting-started/billing/plans/` },
+          { label: 'Plan changes & upgrades', href: `${baseUrl}getting-started/billing/plan-changes/` },
+          { label: 'Payment & invoices', href: `${baseUrl}getting-started/billing/payment-and-invoices/` },
+          { label: 'Refund policy', href: `${baseUrl}getting-started/billing/refunds/` },
+          { label: 'Double-charge troubleshooting', href: `${baseUrl}getting-started/billing/double-charge/` },
+        ],
+      },
+      {
+        label: 'Clients',
+        children: [
+          { label: 'Claude Code (coming soon)', href: '#' },
+          { label: 'Copilot', href: `${baseUrl}getting-started/copilot/` },
+          { label: 'Custom Integrations (coming soon)', href: '#' },
+        ],
+      },
+      {
+        label: 'Reference',
+        children: [
+          { label: 'Configuration (coming soon)', href: '#' },
+          { label: 'Troubleshooting', href: `${baseUrl}getting-started/troubleshooting/` },
+        ],
+      },
+    ]
+  },
+  {
+    label: 'Advanced Workflows',
+    children: [
+      { label: 'Overview', href: `${baseUrl}advanced-workflows/` },
+      { label: 'Delivery Adapters', href: `${baseUrl}advanced-workflows/delivery-adapters/` },
+      { label: 'Agent → Routine Catalog', href: `${baseUrl}advanced-workflows/agent-routine-catalog/` },
+      { label: 'Autotask Ticket Triage', href: `${baseUrl}advanced-workflows/autotask-ticket-triage/` },
+      { label: 'Patch Drift Reporter', href: `${baseUrl}advanced-workflows/patch-drift-reporter/` },
+      { label: 'Device Health Auditor', href: `${baseUrl}advanced-workflows/device-health-auditor/` },
+      { label: 'M365 License Auditor', href: `${baseUrl}advanced-workflows/m365-license-auditor/` },
+      { label: 'Compliance Drift Reporter', href: `${baseUrl}advanced-workflows/compliance-drift-reporter/` },
+      { label: 'Billing Reconciler', href: `${baseUrl}advanced-workflows/billing-reconciler/` },
+      { label: 'QBR Prep', href: `${baseUrl}advanced-workflows/qbr-prep/` },
+      { label: 'Contract Renewal Tracker', href: `${baseUrl}advanced-workflows/contract-renewal-tracker/` },
+      { label: 'Service Desk SLA Triage', href: `${baseUrl}advanced-workflows/service-desk-sla-triage/` },
+      { label: 'Cash Flow Analyzer', href: `${baseUrl}advanced-workflows/cash-flow-analyzer/` },
+      { label: 'Pax8 Renewal & License Optimizer', href: `${baseUrl}advanced-workflows/pax8-renewal-optimizer/` },
+      { label: 'Client Profitability Reporter', href: `${baseUrl}advanced-workflows/client-profitability-reporter/` },
+      { label: 'Sales Pipeline Pulse', href: `${baseUrl}advanced-workflows/sales-pipeline-pulse/` },
+      { label: 'Pending-Proposal Tracker', href: `${baseUrl}advanced-workflows/pending-proposal-tracker/` },
+      { label: 'IT Glue Documentation Auditor', href: `${baseUrl}advanced-workflows/it-glue-documentation-auditor/` },
+      { label: 'M365 Identity Auditor', href: `${baseUrl}advanced-workflows/m365-identity-auditor/` },
+      { label: 'Gateway Usage & Anomaly Auditor', href: `${baseUrl}advanced-workflows/gateway-usage-auditor/` },
+    ]
+  },
+  {
+    label: 'Plugins',
+    children: [
+      { label: 'Overview', href: `${baseUrl}plugins/` },
+      ...pluginCategoryOrder.flatMap(cat => {
+        const items = getPluginsByCategory(cat);
+        if (items.length === 0) return [];
+        return [{
+          label: pluginCategoryLabels[cat],
+          children: items.map(p => ({
+            label: p.name,
+            href: `${baseUrl}plugins/${p.id}/`
+          }))
+        }];
+      }),
+      {
+        label: 'Components',
+        children: [
+          { label: 'All Agents', href: `${baseUrl}agents/` },
+          { label: 'All Skills', href: `${baseUrl}skills/` },
+          { label: 'All Commands', href: `${baseUrl}commands/` },
+          { label: 'All MCP Servers', href: `${baseUrl}mcp-servers/` },
+          { label: 'All Prompts', href: `${baseUrl}prompts/` },
+        ],
+      },
+    ]
+  },
+];
+
+function isActive(href?: string): boolean {
+  if (!href) return false;
+  return currentPath === href || currentPath === href.slice(0, -1);
+}
+
+function hasActiveChild(item: SidebarItem): boolean {
+  if (item.children) {
+    return item.children.some(child => isActive(child.href) || hasActiveChild(child));
+  }
+  return false;
+}
+---
+
+<aside class="w-64 shrink-0 hidden lg:block">
+  <nav class="sticky top-20 max-h-[calc(100vh-5rem)] overflow-y-auto py-6 pr-4">
+    {sidebarItems.map(section => (
+      <div class="mb-2">
+        <button
+          class="sidebar-toggle w-full flex items-center justify-between font-semibold text-sm uppercase tracking-wider text-[var(--muted)] hover:text-[var(--text)] mb-1 px-3 py-1.5 rounded-lg transition-colors"
+          data-expanded={hasActiveChild(section) ? 'true' : 'false'}
+        >
+          <span>{section.label}</span>
+          <svg class="sidebar-chevron w-3.5 h-3.5 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        <ul class="sidebar-content space-y-1" data-expanded={hasActiveChild(section) ? 'true' : 'false'}>
+          {section.children?.map(item => (
+            item.children ? (
+              <li class="mt-1 first:mt-0">
+                <button
+                  class="sidebar-toggle w-full flex items-center justify-between text-xs font-medium uppercase tracking-wider text-[var(--muted)] hover:text-[var(--text)] px-3 py-1 rounded transition-colors"
+                  data-expanded={hasActiveChild(item) ? 'true' : 'false'}
+                >
+                  <span>{item.label}</span>
+                  <svg class="sidebar-chevron w-3 h-3 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                <ul class="sidebar-content space-y-0.5" data-expanded={hasActiveChild(item) ? 'true' : 'false'}>
+                  {item.children.map(child => (
+                    <li>
+                      <a
+                        href={child.href}
+                        class={`${isActive(child.href) ? 'sidebar-link-active sidebar-link' : 'sidebar-link'} pl-5 text-sm`}
+                      >
+                        {child.label}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ) : (
+              <li>
+                <a
+                  href={item.href}
+                  class={isActive(item.href) ? 'sidebar-link-active sidebar-link' : 'sidebar-link'}
+                >
+                  {item.label}
+                </a>
+              </li>
+            )
+          ))}
+        </ul>
+      </div>
+    ))}
+  </nav>
+</aside>
+
+<style>
+  .sidebar-content[data-expanded="false"] {
+    display: none;
+  }
+  .sidebar-content[data-expanded="true"] {
+    display: block;
+  }
+  .sidebar-toggle[data-expanded="false"] .sidebar-chevron {
+    transform: rotate(-90deg);
+  }
+  .sidebar-toggle[data-expanded="true"] .sidebar-chevron {
+    transform: rotate(0deg);
+  }
+</style>
+
+<script>
+  document.querySelectorAll('.sidebar-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const expanded = btn.getAttribute('data-expanded') === 'true';
+      btn.setAttribute('data-expanded', String(!expanded));
+      const content = btn.nextElementSibling;
+      if (content?.classList.contains('sidebar-content')) {
+        content.setAttribute('data-expanded', String(!expanded));
+      }
+    });
+  });
+</script>

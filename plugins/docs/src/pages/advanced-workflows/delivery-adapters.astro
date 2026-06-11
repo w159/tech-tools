@@ -1,0 +1,142 @@
+---
+import DocsLayout from '@/layouts/DocsLayout.astro';
+
+const baseUrl = import.meta.env.BASE_URL;
+---
+<DocsLayout title="Delivery Adapters" description="How an advanced workflow routine delivers its report — the split between a workflow body that produces a report and a swappable delivery adapter that writes it somewhere, plus the contract for adding new delivery targets.">
+  <h1>Delivery Adapters</h1>
+
+  <p class="lead text-lg text-[var(--muted)] mb-8">
+    Every <a href={`${baseUrl}advanced-workflows/`}>advanced workflow</a> routine has two
+    separable halves. The <strong>workflow body</strong> collects data and reasons about it
+    to produce a <strong>report</strong>. The <strong>delivery adapter</strong> takes that
+    report and writes it somewhere a human will see it, such as a Slack channel, a Slack
+    canvas, or an IT Glue document. The two halves are joined by a <strong>report
+    payload</strong>, the finished report the body hands off. Swap the adapter and the same
+    workflow delivers to a different target without touching its logic.
+  </p>
+
+  <h2 id="why-split">Why split body from delivery</h2>
+  <p>
+    Keeping delivery separate from the workflow body means a routine's logic — what it reads,
+    how it classifies, what it decides — never changes when you change where the report lands.
+    A triage workflow that posts to Slack today can post to an IT Glue document tomorrow by
+    swapping one section of the routine prompt and one connector. The body produces a report
+    payload; the adapter consumes it. That payload is the interface between them.
+  </p>
+
+  <hr class="my-8" />
+
+  <h2 id="adapter-contract">The adapter contract</h2>
+  <p>
+    Each delivery adapter is documented by four fields. To add a new delivery target, fill in
+    these four and you have a working adapter.
+  </p>
+  <ul>
+    <li><strong>Connector</strong> — the MCP connector the adapter writes through.</li>
+    <li><strong><code>permitted_tools</code></strong> — the exact tool names the routine must list for that connector. An empty list means the routine runs with no tools and silently does nothing.</li>
+    <li><strong>Write snippet</strong> — the instruction added to the routine prompt that tells the agent how to deliver the report.</li>
+    <li><strong>Limits</strong> — what the adapter can and cannot do, so you pick the right one.</li>
+  </ul>
+
+  <hr class="my-8" />
+
+  <h2 id="shipped">Shipped adapters</h2>
+  <p>
+    These adapters are documented and proven. At a glance:
+  </p>
+  <table>
+    <thead>
+      <tr><th>Adapter</th><th>Connector</th><th><code>permitted_tools</code></th><th>Use</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Slack summary</strong></td>
+        <td>Slack</td>
+        <td><code>slack_send_message</code></td>
+        <td>A short report straight into a channel.</td>
+      </tr>
+      <tr>
+        <td><strong>Slack canvas</strong></td>
+        <td>Slack</td>
+        <td><code>slack_create_canvas</code>, <code>slack_send_message</code></td>
+        <td>A long report as a canvas, with a message linking it.</td>
+      </tr>
+      <tr>
+        <td><strong>IT Glue document</strong></td>
+        <td>WYRE MCP Gateway (<code>itglue</code>)</td>
+        <td><code>create_document</code>, <code>update_document_section</code>, <code>search_documents</code></td>
+        <td>A living document that reruns update in place.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Slack summary</h3>
+  <ul>
+    <li><strong>Connector</strong> — Slack.</li>
+    <li><strong><code>permitted_tools</code></strong> — <code>slack_send_message</code>.</li>
+    <li><strong>Write snippet</strong> — post a one-paragraph summary to the channel.</li>
+    <li><strong>Limits</strong> — plain text, no rich layout. Best for a short result a human reads at a glance; a long report becomes an unscannable wall of text.</li>
+  </ul>
+
+  <h3>Slack canvas</h3>
+  <ul>
+    <li><strong>Connector</strong> — Slack.</li>
+    <li><strong><code>permitted_tools</code></strong> — <code>slack_create_canvas</code>, <code>slack_send_message</code>.</li>
+    <li><strong>Write snippet</strong> — create a canvas titled <code>&lt;report name&gt; — &lt;date&gt;</code> with the full report; post a summary message linking it.</li>
+    <li><strong>Limits</strong> — a canvas is markdown-ish, so it carries structure a plain message cannot. One canvas is created per run, so each run leaves its own dated artefact rather than updating a single document.</li>
+  </ul>
+
+  <h3>IT Glue document</h3>
+  <ul>
+    <li><strong>Connector</strong> — WYRE MCP Gateway (<code>itglue</code>).</li>
+    <li><strong><code>permitted_tools</code></strong> — <code>create_document</code>, <code>update_document_section</code>, <code>search_documents</code>.</li>
+    <li><strong>Write snippet</strong> — search for an existing document named <code>&lt;report name&gt;</code> in the target IT Glue org; if found, update its section, else create it.</li>
+    <li><strong>Limits</strong> — needs a target org ID baked into the routine. Because it updates in place, reruns converge on a single document rather than accumulating artefacts.</li>
+  </ul>
+
+  <hr class="my-8" />
+
+  <h2 id="not-shipped">Documented but not shipped</h2>
+  <p>
+    These targets are understood but not yet proven adapters. Each is a contract stub —
+    enough to know the connector situation and why it is deferred or blocked.
+  </p>
+  <ul>
+    <li>
+      <strong>Notion.</strong> A Notion connector exposes <code>notion-create-pages</code> and
+      <code>notion-update-page</code>, which is enough to write a report. It works — it is
+      <em>deferred</em> only because Slack and IT Glue cover the current need.
+    </li>
+    <li>
+      <strong>Hudu.</strong> Hudu is an IT documentation target like IT Glue, but whether the
+      gateway exposes a write-capable Hudu tool is <em>unverified</em>. Confirm the gateway
+      capability before treating it as an adapter.
+    </li>
+    <li>
+      <strong>SharePoint.</strong> <strong>Blocked.</strong> The available Microsoft 365
+      connector is search/read only — it cannot upload or write a document. A SharePoint
+      delivery adapter needs a write-capable connector added gateway-side first.
+    </li>
+    <li>
+      <strong>Email.</strong> <em>Deferred.</em> A report could be delivered by email, but no
+      email adapter has been built yet; Slack and IT Glue are the current targets.
+    </li>
+  </ul>
+
+  <hr class="my-8" />
+
+  <h2 id="adding-an-adapter">Adding a new adapter</h2>
+  <p>
+    To deliver a workflow's report to a new target, pick a connector that can write there,
+    confirm it exposes a write tool, and fill in the four contract fields above — Connector,
+    <code>permitted_tools</code>, Write snippet, Limits. The workflow body never changes: it
+    still produces the same report payload. Only the adapter — the connector, the permitted
+    tools, and the write snippet in the routine prompt — is swapped.
+  </p>
+  <p class="text-sm text-[var(--muted)]">
+    A delivery target you'd like documented as an adapter?
+    <a href="https://github.com/wyre-technology/msp-claude-plugins/issues" target="_blank" rel="noopener noreferrer">Open an issue</a>
+    in the <code>msp-claude-plugins</code> repository.
+  </p>
+</DocsLayout>

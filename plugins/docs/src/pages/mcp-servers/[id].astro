@@ -1,0 +1,200 @@
+---
+import DocsLayout from '@/layouts/DocsLayout.astro';
+import InstallCommand from '@/components/InstallCommand.astro';
+import { mcpServers, getMcpServerById } from '@/data/mcp-servers';
+import { getPluginById } from '@/data/plugins';
+
+export function getStaticPaths() {
+  return mcpServers.map(server => ({
+    params: { id: server.id },
+    props: { server }
+  }));
+}
+
+const { server } = Astro.props;
+const baseUrl = import.meta.env.BASE_URL;
+const companionPlugin = server.companionPluginId ? getPluginById(server.companionPluginId) : undefined;
+
+const categoryColors = {
+  psa: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400',
+  rmm: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+  documentation: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+  security: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+  accounting: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+  network: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
+  sales: 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400'
+};
+
+const categoryLabels = {
+  psa: 'PSA',
+  rmm: 'RMM',
+  documentation: 'Documentation',
+  security: 'Security',
+  accounting: 'Accounting',
+  network: 'Network',
+  sales: 'Sales'
+};
+
+const totalTools = server.domains.reduce((sum, d) => sum + d.tools.length, 0);
+---
+
+<DocsLayout title={server.name} description={server.description}>
+  <div class="flex flex-wrap items-center gap-2 mb-2">
+    <span class={`text-xs font-medium px-2 py-1 rounded-full ${categoryColors[server.category]}`}>
+      {categoryLabels[server.category]}
+    </span>
+    <span class="text-xs font-medium px-2 py-1 rounded-full bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400">
+      MCP Server
+    </span>
+    {server.dockerAvailable && (
+      <span class="text-xs font-medium px-2 py-1 rounded-full bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400">
+        🐳 Docker
+      </span>
+    )}
+  </div>
+
+  <div class="flex flex-wrap items-center gap-3 mb-2 not-prose text-sm">
+    <a href={server.repoUrl} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-[var(--link)] hover:underline">
+      <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      Source Code
+    </a>
+    {server.mcpbAvailable && (
+      <>
+        <span class="text-[var(--muted)]">•</span>
+        <a href={`${server.repoUrl}/releases`} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-[var(--link)] hover:underline">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+          MCPB Bundle
+        </a>
+      </>
+    )}
+  </div>
+
+  <div class="flex flex-wrap items-center gap-3 mb-4 not-prose">
+    <a href={`https://cloud.digitalocean.com/apps/new?repo=${server.repoUrl}/tree/main`} target="_blank" rel="noopener noreferrer">
+      <img src="https://www.deploytodo.com/do-btn-blue.svg" alt="Deploy to DigitalOcean" height="32" />
+    </a>
+    <a href={`https://deploy.workers.cloudflare.com/?url=${server.repoUrl}`} target="_blank" rel="noopener noreferrer">
+      <img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare Workers" height="32" />
+    </a>
+  </div>
+
+  <h1>{server.name}</h1>
+
+  <p class="lead text-lg text-[var(--muted)] mb-8">
+    {server.description}
+  </p>
+
+  {companionPlugin && (
+    <div class="not-prose my-6 p-4 rounded-lg border border-accent/30 bg-accent/5">
+      <p class="text-sm font-medium mb-1">🔗 Companion Plugin</p>
+      <p class="text-sm text-[var(--muted)]">
+        Pair this MCP server with the{' '}
+        <a href={`${baseUrl}plugins/${companionPlugin.id}/`} class="text-accent underline font-medium">
+          {companionPlugin.name} plugin
+        </a>{' '}
+        for skills, commands, and API knowledge alongside direct API access.
+      </p>
+    </div>
+  )}
+
+  <h2>Installation</h2>
+
+  <p>Run the MCP server with npx:</p>
+
+  <div class="not-prose my-6">
+    <InstallCommand command={server.installCommand} />
+  </div>
+
+  <p>Or install the package:</p>
+
+  <div class="not-prose my-6">
+    <InstallCommand command={`npm install ${server.npmPackage}`} />
+  </div>
+
+  {server.mcpbAvailable && (
+    <>
+      <h3>MCPB Bundle (Claude Desktop)</h3>
+      <p>
+        Download the <code>.mcpb</code> bundle from
+        <a href={`${server.repoUrl}/releases`} target="_blank" rel="noopener noreferrer">GitHub Releases</a>
+        for a zero-config Claude Desktop install. No Node.js or terminal required — just open the
+        bundle in Claude Desktop via <strong>Settings &rarr; MCP Servers &rarr; Install from file</strong>.
+        Requires Claude Desktop 0.10+.
+      </p>
+    </>
+  )}
+
+  <h3>Claude Desktop Configuration</h3>
+
+  <p>Add to your <code>claude_desktop_config.json</code>:</p>
+
+  <pre><code class="language-json">{JSON.stringify({
+    mcpServers: {
+      [server.id]: {
+        command: 'npx',
+        args: [server.npmPackage],
+        env: Object.fromEntries(
+          server.envVars.filter(v => v.required).map(v => [v.name, `your-${v.name.toLowerCase().replace(/_/g, '-')}`])
+        )
+      }
+    }
+  }, null, 2)}</code></pre>
+
+  <h2>Authentication</h2>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Variable</th>
+        <th>Required</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      {server.envVars.map(envVar => (
+        <tr>
+          <td><code>{envVar.name}</code></td>
+          <td>{envVar.required ? 'Yes' : 'No'}</td>
+          <td>{envVar.description}</td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+
+  <h2>Architecture</h2>
+
+  <p>{server.architecture}</p>
+
+  <h2>Available Tools ({totalTools})</h2>
+
+  <p>Tools are organized into {server.domains.length} domains:</p>
+
+  {server.domains.map(domain => (
+    <h3>{domain.name}</h3>
+    <p>{domain.description}</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Tool</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        {domain.tools.map(tool => (
+          <tr>
+            <td><code>{tool.name}</code></td>
+            <td>{tool.description}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  ))}
+
+  {server.rateLimit && (
+    <>
+      <h2>Rate Limits</h2>
+      <p>{server.rateLimit}. The underlying client library handles rate limiting automatically.</p>
+    </>
+  )}
+
+</DocsLayout>

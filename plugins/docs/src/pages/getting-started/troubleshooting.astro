@@ -1,0 +1,194 @@
+---
+import DocsLayout from '@/layouts/DocsLayout.astro';
+
+const baseUrl = import.meta.env.BASE_URL;
+---
+<DocsLayout title="Troubleshooting" description="Common issues and fixes when using the WYRE MCP Gateway with Claude Desktop and Claude Code.">
+  <h1>Troubleshooting</h1>
+
+  <p class="lead text-lg text-[var(--muted)] mb-8">
+    Common issues and fixes for the WYRE MCP Gateway. If your issue isn't listed here,
+    check the <a href="https://mcp.wyre.ai/health/vendors" target="_blank" rel="noopener noreferrer">vendor health dashboard</a>
+    for upstream outages. Prefer to have Claude triage it for you?
+    <a href="#triage-with-claude">Use the <code>wyre-gateway-troubleshooting</code> skill</a>.
+  </p>
+
+  <h2 id="invalid-oauth-html">"Invalid OAuth error response: Unexpected token '&lt;'"</h2>
+  <p>
+    This error means the OAuth discovery or token endpoint returned HTML instead of JSON — typically
+    a Cloudflare error page (404, 502, or 520) rather than the gateway's response.
+  </p>
+  <h3>Causes</h3>
+  <ul>
+    <li>The gateway is being deployed (brief downtime during container restart)</li>
+    <li>A vendor MCP container is down and Cloudflare is returning its default error page</li>
+    <li>DNS or routing misconfiguration</li>
+  </ul>
+  <h3>Fix</h3>
+  <ol>
+    <li>Wait 1–2 minutes and try again (deployments typically complete within 60 seconds)</li>
+    <li>Check <a href="https://mcp.wyre.ai/health" target="_blank" rel="noopener noreferrer"><code>/health</code></a> — if it returns <code>{`{"status":"ok"}`}</code>, the gateway is running</li>
+    <li>Check <a href="https://mcp.wyre.ai/health/vendors" target="_blank" rel="noopener noreferrer"><code>/health/vendors</code></a> to see if a specific vendor is down</li>
+    <li>If the issue persists, restart Claude Desktop and try again</li>
+  </ol>
+
+  <hr class="my-8" />
+
+  <h2 id="connection-refused">"Connection refused" on OAuth callback</h2>
+  <p>
+    During OAuth, <code>mcp-remote</code> opens a temporary local HTTP server (e.g., <code>localhost:26873</code>)
+    to receive the OAuth callback. If too many OAuth flows run simultaneously, the listener can time out
+    before the browser redirects back — resulting in "connection refused" on the callback URL.
+  </p>
+  <h3>Causes</h3>
+  <ul>
+    <li><strong>Multiple per-vendor entries</strong> — each vendor triggers its own OAuth flow on startup; with 5+ vendors, the listeners race and time out</li>
+    <li>The browser took too long to complete the OAuth flow (manual login, 2FA, etc.)</li>
+    <li>A firewall or antivirus is blocking localhost connections</li>
+  </ul>
+  <h3>Fix</h3>
+  <ol>
+    <li>
+      <strong>Use the unified endpoint</strong> — replace all per-vendor <code>mcp-remote</code> entries with a single entry pointing
+      to <code>https://mcp.wyre.ai/v1/mcp</code>. This means one OAuth flow instead of many.
+      See the <a href={`${baseUrl}getting-started/gateway/`}>Gateway setup guide</a>.
+    </li>
+    <li>If using per-vendor endpoints, add them one at a time — connect one vendor, restart Claude Desktop, then add the next</li>
+    <li>Kill any stale <code>mcp-remote</code> processes: <code>pkill -f mcp-remote</code></li>
+    <li>Restart Claude Desktop</li>
+  </ol>
+
+  <hr class="my-8" />
+
+  <h2 id="failed-to-reconnect">"Failed to reconnect" / stale sessions</h2>
+  <p>
+    After a gateway deployment or container restart, existing MCP sessions become invalid. The
+    <code>mcp-remote</code> bridge may show "failed to reconnect" errors or hang indefinitely.
+  </p>
+  <h3>Fix</h3>
+  <ol>
+    <li>Kill all <code>mcp-remote</code> processes:
+      <pre><code>pkill -f mcp-remote</code></pre>
+    </li>
+    <li>Restart Claude Desktop (or restart Claude Code's MCP connection with <code>/mcp</code>)</li>
+    <li>The client will establish a fresh session with the gateway on the next request</li>
+  </ol>
+  <p class="text-sm text-[var(--muted)] mt-2">
+    This is expected after deployments. The gateway deploys new revisions with zero-downtime traffic switching,
+    but <code>mcp-remote</code>'s persistent connections don't automatically reconnect to the new revision.
+  </p>
+
+  <hr class="my-8" />
+
+  <h2 id="vendor-down">Vendor shows DOWN on /health/vendors</h2>
+  <p>
+    The <a href="https://mcp.wyre.ai/health/vendors" target="_blank" rel="noopener noreferrer"><code>/health/vendors</code></a>
+    endpoint monitors all vendor MCP containers. If a vendor shows <code>"status": "down"</code>,
+    the underlying vendor container is unreachable.
+  </p>
+  <h3>Causes</h3>
+  <ul>
+    <li>The vendor's MCP container is restarting after a deployment</li>
+    <li>The vendor's upstream API is experiencing an outage</li>
+    <li>A container crashed and is being restarted by the orchestrator</li>
+  </ul>
+  <h3>Fix</h3>
+  <ol>
+    <li>Wait 2–5 minutes — containers typically auto-recover</li>
+    <li>Check the <code>consecutiveFailures</code> count in the health response — if it's climbing, the issue is ongoing</li>
+    <li>Other vendors on the unified endpoint continue to work normally — only the affected vendor's tools will be unavailable</li>
+  </ol>
+
+  <hr class="my-8" />
+
+  <h2 id="tools-not-appearing">Connected vendor's tools don't appear</h2>
+  <p>
+    If you've added credentials for a vendor but its tools don't show up in Claude:
+  </p>
+  <ol>
+    <li>Verify your credentials are saved at <a href="https://mcp.wyre.ai" target="_blank" rel="noopener noreferrer">mcp.wyre.ai</a> — log in and check the credentials page</li>
+    <li>
+      <strong>Fully quit and reopen Claude Desktop</strong> (<code>Cmd+Q</code> on macOS, then relaunch).
+      Claude registers the gateway's tool catalog at the moment its MCP client connects and does <em>not</em>
+      refresh while a session is live — adding a new vendor in the Wyre dashboard will not push tools into
+      a running Claude session. In Claude Code, use <code>/mcp</code> and reconnect the gateway entry.
+    </li>
+    <li>The unified endpoint only lists tools for vendors where you have valid credentials — if credentials are expired or invalid, that vendor is silently skipped</li>
+    <li>If using org/team credentials, ensure you have the correct role and the vendor's tools are in your team's allowlist</li>
+  </ol>
+
+  <hr class="my-8" />
+
+  <h2 id="failed-to-update-tool-access">"Failed to update tool access" on the Tool Allowlists page</h2>
+  <p>
+    When you toggle which vendor tools are available for admins or members and click Save, the gateway returns
+    a generic alert: <em>"Failed to update tool access."</em> The most common cause is a permissions mismatch.
+  </p>
+  <h3>Cause</h3>
+  <p>
+    Saving or clearing a tool allowlist requires the <strong>org owner</strong> role. Admins can open the
+    Tool Allowlists page and see every vendor with all tools checked (the "allow all" default), but any
+    Save or Reset action returns <code>403 Requires owner role or higher</code> — which the UI surfaces as
+    the generic alert.
+  </p>
+  <h3>Fix</h3>
+  <ol>
+    <li>Confirm which user is the org owner: <strong>Organization → Members</strong>. The owner has the highest privilege level and is typically the user who created the organization.</li>
+    <li>If you are not the owner, ask them to make the allowlist change for you, or have them transfer ownership.</li>
+    <li>If you <em>are</em> signed in as the owner and still see this error, contact <a href="mailto:hello@wyre.ai">hello@wyre.ai</a> with your org name and the vendor you were editing.</li>
+  </ol>
+  <p class="text-sm text-[var(--muted)]">
+    Note: every vendor's tools appearing as "checked" on a fresh org is expected. With no allowlist saved,
+    the gateway permits every tool for that role; the checkboxes reflect the effective default, not a stored
+    configuration.
+  </p>
+
+  <hr class="my-8" />
+
+  <h2 id="triage-with-claude">Triage with Claude (the <code>wyre-gateway-troubleshooting</code> skill)</h2>
+  <p>
+    If you'd rather not walk through this page yourself, the WYRE skill set includes a
+    <code>wyre-gateway-troubleshooting</code> skill that teaches Claude how to diagnose the same
+    issues described above — missing tools, "Failed to update tool access" errors, OAuth failures,
+    expired credentials, and the request flow through the gateway.
+  </p>
+
+  <h3>Install the shared skills plugin</h3>
+  <pre class="bg-[var(--surface-2)] border border-[var(--border)] rounded p-3 text-sm overflow-x-auto"><code>/plugin marketplace add wyre-technology/msp-claude-plugins
+/plugin install shared-skills</code></pre>
+  <p class="text-sm text-[var(--muted)] mt-2">
+    Run these in Claude Code. The skill becomes available immediately — no restart needed.
+    Already have the marketplace added? Just run <code>/plugin install shared-skills</code>.
+  </p>
+
+  <h3>Trigger phrases</h3>
+  <p>
+    Once installed, Claude will pick up the skill automatically when you describe a gateway problem.
+    Phrases that reliably trigger it:
+  </p>
+  <ul>
+    <li>"My WYRE gateway tools aren't showing up in Claude"</li>
+    <li>"I get 'Failed to update tool access' when I try to save"</li>
+    <li>"OAuth is failing on mcp.wyre.ai"</li>
+    <li>"Why is my IT Glue (or Autotask, CIPP, etc.) connection not working?"</li>
+    <li>"Help me troubleshoot the WYRE gateway"</li>
+  </ul>
+
+  <h3>What the skill does</h3>
+  <p>
+    The skill walks Claude through the five-layer request path
+    (Claude → mcp-remote → gateway → vendor container → vendor API), asks you targeted
+    questions to localize the failure, and gives you the fix specific to your symptom.
+    For permission-related errors it identifies whether the user is the org owner; for
+    missing tools it confirms the credentials are saved and points you at the
+    Cmd+Q-and-reopen step. If the issue requires WYRE support, the skill prepares the
+    information we need (org name, vendor slug, exact error, timestamp) so the
+    handoff is fast.
+  </p>
+  <p class="text-sm text-[var(--muted)]">
+    Source:
+    <a href="https://github.com/wyre-technology/msp-claude-plugins/tree/main/shared/skills/wyre-gateway-troubleshooting" target="_blank" rel="noopener noreferrer">
+      shared/skills/wyre-gateway-troubleshooting
+    </a> in the <code>msp-claude-plugins</code> repository.
+  </p>
+</DocsLayout>

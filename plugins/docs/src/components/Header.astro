@@ -1,0 +1,317 @@
+---
+import { plugins } from '@/data/plugins';
+import { mcpServers } from '@/data/mcp-servers';
+
+const baseUrl = import.meta.env.BASE_URL;
+const gatewayUrl = import.meta.env.GATEWAY_URL || 'https://mcp.wyre.ai';
+const currentPath = Astro.url.pathname;
+
+// Marketing-style top nav. Skills / Commands / MCP Servers / Getting-Started
+// detail pages are still reachable from the Docs entry and the sidebar on
+// any docs page, but they shouldn't crowd out the primary product tabs.
+const navLinks = [
+  { href: `${baseUrl}`, label: 'Home' },
+  { href: `${baseUrl}plugins/`, label: 'Plugins' },
+  { href: `${baseUrl}pricing/`, label: 'Pricing' },
+  { href: `${baseUrl}getting-started/`, label: 'Docs' },
+  { href: 'mailto:hello@wyre.ai', label: 'Contact' },
+];
+
+const sidebarSections = [
+  {
+    label: 'Getting Started',
+    children: [
+      { label: 'Introduction', href: `${baseUrl}getting-started/` },
+      { label: 'Installation', href: `${baseUrl}getting-started/installation/` },
+      { label: 'Quick Start', href: `${baseUrl}getting-started/quick-start/` },
+      { label: 'Architecture', href: `${baseUrl}getting-started/architecture/` },
+      { label: 'Deployment', href: `${baseUrl}getting-started/deployment/` },
+      { label: 'Gateway', href: `${baseUrl}getting-started/gateway/` },
+    ]
+  },
+  {
+    label: 'Plugins',
+    children: [
+      { label: 'Overview', href: `${baseUrl}plugins/` },
+      ...plugins.map(p => ({
+        label: p.name,
+        href: `${baseUrl}plugins/${p.id}/`
+      }))
+    ]
+  },
+  {
+    label: 'MCP Servers',
+    children: [
+      { label: 'Overview', href: `${baseUrl}mcp-servers/` },
+      ...mcpServers.map(s => ({
+        label: s.name,
+        href: `${baseUrl}mcp-servers/${s.id}/`
+      }))
+    ]
+  },
+  {
+    label: 'Reference',
+    children: [
+      { label: 'Skills', href: `${baseUrl}skills/` },
+      { label: 'Commands', href: `${baseUrl}commands/` },
+    ]
+  }
+];
+
+function isActive(href: string): boolean {
+  if (href === baseUrl) {
+    return currentPath === baseUrl || currentPath === baseUrl.slice(0, -1);
+  }
+  return currentPath.startsWith(href);
+}
+
+function isExactActive(href?: string): boolean {
+  if (!href) return false;
+  return currentPath === href || currentPath === href.slice(0, -1);
+}
+---
+
+<header class="sticky top-0 z-50 bg-[var(--background)]/80 backdrop-blur-md border-b border-[var(--border)]">
+  <div class="container">
+    <div class="flex items-center justify-between h-16">
+      <a href={baseUrl} class="flex items-center gap-2 font-semibold text-lg">
+        <svg class="w-8 h-8 text-accent" viewBox="0 0 32 32" fill="currentColor" role="img" aria-label="MSP Claude Plugins logo">
+          <path d="M16 2L2 9l14 7 14-7-14-7zM2 23l14 7 14-7M2 16l14 7 14-7"/>
+        </svg>
+        <span>MSP Claude Plugins</span>
+      </a>
+
+      <nav class="hidden lg:flex items-center gap-6">
+        {navLinks.map(link => (
+          <a
+            href={link.href}
+            class={isActive(link.href) ? 'nav-link-active' : 'nav-link'}
+          >
+            {link.label}
+          </a>
+        ))}
+      </nav>
+
+      <div class="flex items-center gap-4">
+        <!-- Mobile menu button -->
+        <button
+          id="mobile-menu-button"
+          class="lg:hidden p-2 rounded-lg hover:bg-[var(--border)] transition-colors"
+          aria-label="Open navigation menu"
+        >
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+
+        <button
+          id="search-button"
+          aria-label="Search documentation"
+          class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)] hover:border-[var(--text)] transition-colors"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="8"/>
+            <path d="m21 21-4.35-4.35"/>
+          </svg>
+          <span class="hidden sm:inline text-sm">Search</span>
+          <kbd class="hidden sm:inline text-xs bg-[var(--border)] px-1.5 py-0.5 rounded">Ctrl K</kbd>
+        </button>
+
+        <button data-theme-toggle aria-label="Toggle dark mode" class="p-2 rounded-lg hover:bg-[var(--border)] transition-colors">
+          <svg class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="5"/>
+            <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+          </svg>
+          <svg class="w-5 h-5 dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+        </button>
+
+        <a
+          href="https://github.com/wyre-technology/msp-claude-plugins"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="View on GitHub"
+          class="p-2 rounded-lg hover:bg-[var(--border)] transition-colors"
+        >
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
+          </svg>
+        </a>
+
+        <a href={`${gatewayUrl}/auth/choose`} class="hidden sm:inline-flex items-center px-4 py-1.5 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/90 transition-colors">
+          Sign in
+        </a>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- Search modal -->
+<div id="search-dialog" class="search-dialog" role="dialog" aria-modal="true" aria-label="Search documentation" data-base-url={baseUrl}>
+  <div id="search-dialog-backdrop" class="absolute inset-0"></div>
+  <div class="relative w-full max-w-2xl mx-4 bg-[var(--background)] rounded-xl border border-[var(--border)] shadow-2xl overflow-hidden max-h-[70vh] flex flex-col">
+    <div id="search-container" class="pagefind-ui p-4 overflow-y-auto"></div>
+  </div>
+</div>
+
+<!-- Mobile menu overlay -->
+<div id="mobile-menu" class="fixed inset-0 z-[100] hidden">
+  <!-- Backdrop -->
+  <div id="mobile-menu-backdrop" class="absolute inset-0 bg-black/50 backdrop-blur-sm"></div>
+  
+  <!-- Panel -->
+  <div class="absolute inset-y-0 left-0 w-80 max-w-[85vw] bg-[var(--background)] border-r border-[var(--border)] overflow-y-auto shadow-2xl">
+    <!-- Close button -->
+    <div class="flex items-center justify-between h-16 px-4 border-b border-[var(--border)]">
+      <span class="font-semibold">Navigation</span>
+      <button id="mobile-menu-close" class="p-2 rounded-lg hover:bg-[var(--border)] transition-colors" aria-label="Close menu">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    
+    <!-- Navigation sections -->
+    <nav class="p-4">
+      <!-- Primary marketing nav (mirrors desktop top nav) -->
+      <div class="mb-6">
+        <ul class="space-y-1">
+          {navLinks.map(link => (
+            <li>
+              <a
+                href={link.href}
+                class={isActive(link.href) ? 'sidebar-link-active sidebar-link' : 'sidebar-link'}
+              >
+                {link.label}
+              </a>
+            </li>
+          ))}
+        </ul>
+        <a
+          href={`${gatewayUrl}/auth/choose`}
+          class="mt-4 inline-flex w-full items-center justify-center px-4 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/90 transition-colors"
+        >
+          Sign in
+        </a>
+      </div>
+
+      {sidebarSections.map(section => (
+        <div class="mb-6">
+          <h3 class="font-semibold text-sm uppercase tracking-wider text-[var(--muted)] mb-2 px-3">
+            {section.label}
+          </h3>
+          <ul class="space-y-1">
+            {section.children.map(item => (
+              <li>
+                <a
+                  href={item.href}
+                  class={isExactActive(item.href) ? 'sidebar-link-active sidebar-link' : 'sidebar-link'}
+                >
+                  {item.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </nav>
+  </div>
+</div>
+
+<script>
+  // Mobile menu toggle
+  const menuButton = document.getElementById('mobile-menu-button');
+  const menu = document.getElementById('mobile-menu');
+  const menuClose = document.getElementById('mobile-menu-close');
+  const menuBackdrop = document.getElementById('mobile-menu-backdrop');
+
+  function openMenu() {
+    menu?.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeMenu() {
+    menu?.classList.add('hidden');
+    document.body.style.overflow = '';
+  }
+
+  menuButton?.addEventListener('click', openMenu);
+  menuClose?.addEventListener('click', closeMenu);
+  menuBackdrop?.addEventListener('click', closeMenu);
+
+  // Search modal
+  const searchButton = document.getElementById('search-button');
+  const searchDialog = document.getElementById('search-dialog');
+  const searchBackdrop = document.getElementById('search-dialog-backdrop');
+  const basePath = searchDialog?.dataset.baseUrl || '/';
+  let pagefindLoaded = false;
+
+  async function openSearch() {
+    if (searchDialog) {
+      searchDialog.style.display = 'flex';
+    }
+    document.body.style.overflow = 'hidden';
+
+    if (!pagefindLoaded) {
+      pagefindLoaded = true;
+      // Load Pagefind UI CSS
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = `${basePath}pagefind/pagefind-ui.css`;
+      document.head.appendChild(link);
+      // Load Pagefind UI JS via script tag (can't use import — only exists post-build)
+      await new Promise<void>((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = `${basePath}pagefind/pagefind-ui.js`;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('Failed to load Pagefind'));
+        document.head.appendChild(script);
+      });
+      // @ts-ignore — PagefindUI is now on window
+      new window.PagefindUI({
+        element: '#search-container',
+        showSubResults: true,
+        showImages: false,
+      });
+    }
+
+    // Focus the search input after Pagefind renders
+    requestAnimationFrame(() => {
+      const input = document.querySelector<HTMLInputElement>('.pagefind-ui--touch .pagefind-ui__search-input, .pagefind-ui__search-input');
+      input?.focus();
+    });
+  }
+
+  function closeSearch() {
+    if (searchDialog) {
+      searchDialog.style.display = 'none';
+    }
+    document.body.style.overflow = '';
+  }
+
+  searchButton?.addEventListener('click', openSearch);
+  searchBackdrop?.addEventListener('click', closeSearch);
+
+  function isSearchOpen() {
+    return searchDialog?.style.display === 'flex';
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (isSearchOpen()) {
+        closeSearch();
+      } else {
+        closeMenu();
+      }
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+      e.preventDefault();
+      if (isSearchOpen()) {
+        closeSearch();
+      } else {
+        openSearch();
+      }
+    }
+  });
+</script>

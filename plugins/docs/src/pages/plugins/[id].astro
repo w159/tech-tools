@@ -1,0 +1,242 @@
+---
+import DocsLayout from '@/layouts/DocsLayout.astro';
+import InstallCommand from '@/components/InstallCommand.astro';
+import { plugins, getPluginById } from '@/data/plugins';
+import { getMcpServerByPluginId } from '@/data/mcp-servers';
+
+export function getStaticPaths() {
+  return plugins.map(plugin => ({
+    params: { id: plugin.id },
+    props: { plugin }
+  }));
+}
+
+const { plugin } = Astro.props;
+const baseUrl = import.meta.env.BASE_URL;
+const companionMcpServer = getMcpServerByPluginId(plugin.id);
+
+const categoryColors = {
+  psa: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400',
+  rmm: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+  documentation: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+  security: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+  sales: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+  accounting: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+};
+
+const categoryLabels = {
+  psa: 'PSA',
+  rmm: 'RMM',
+  documentation: 'IT Documentation',
+  security: 'Security',
+  sales: 'Sales & Distribution',
+  accounting: 'Accounting & Finance'
+};
+
+const compatibilityBadges = {
+  claudeCode: plugin.compatibility.claudeCode
+    ? { label: 'Claude Code', color: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400', icon: '✓' }
+    : { label: 'Claude Code', color: 'bg-gray-100 text-gray-500', icon: '✗' },
+  claudeDesktop: plugin.compatibility.claudeDesktop === true
+    ? { label: 'Claude Desktop', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400', icon: '✓' }
+    : plugin.compatibility.claudeDesktop === 'coming-soon'
+    ? { label: 'Claude Desktop', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400', icon: '🔜' }
+    : { label: 'Claude Desktop', color: 'bg-gray-100 text-gray-500', icon: '✗' },
+  validated: plugin.compatibility.validated
+    ? { label: 'Validated', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400', icon: '✓' }
+    : { label: 'Community', color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400', icon: '🧪' }
+};
+---
+
+<DocsLayout title={plugin.name} description={plugin.description}>
+  <div class="flex flex-wrap items-center gap-2 mb-2">
+    <span class={`text-xs font-medium px-2 py-1 rounded-full ${categoryColors[plugin.category]}`}>
+      {categoryLabels[plugin.category]}
+    </span>
+    <span class={`text-xs font-medium px-2 py-1 rounded-full ${compatibilityBadges.validated.color}`}>
+      {compatibilityBadges.validated.icon} {compatibilityBadges.validated.label}
+    </span>
+    <span class={`text-xs font-medium px-2 py-1 rounded-full ${compatibilityBadges.claudeCode.color}`}>
+      {compatibilityBadges.claudeCode.icon} {compatibilityBadges.claudeCode.label}
+    </span>
+    <span class={`text-xs font-medium px-2 py-1 rounded-full ${compatibilityBadges.claudeDesktop.color}`}>
+      {compatibilityBadges.claudeDesktop.icon} {compatibilityBadges.claudeDesktop.label}
+    </span>
+    {companionMcpServer
+      ? <span class="text-xs font-medium px-2 py-1 rounded-full bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400">🔌 Requires MCP Server</span>
+      : <span class="text-xs font-medium px-2 py-1 rounded-full bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">Standalone</span>
+    }
+    <span class="text-[var(--muted)]">• {plugin.vendor}</span>
+  </div>
+
+  <div class="flex flex-wrap items-center gap-3 mb-4 not-prose text-sm">
+    {plugin.mcpRepo ? (
+      <>
+        <a href={plugin.mcpRepo} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-[var(--link)] hover:underline">
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          MCP Server Source
+        </a>
+        <span class="text-[var(--muted)]">•</span>
+        <a href={`https://github.com/wyre-technology/msp-claude-plugins/tree/main/${plugin.path}`} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-[var(--link)] hover:underline">
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          Plugin Source
+        </a>
+      </>
+    ) : (
+      <a href={`https://github.com/wyre-technology/msp-claude-plugins/tree/main/${plugin.path}`} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-[var(--link)] hover:underline">
+        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        Plugin Source
+      </a>
+    )}
+  </div>
+
+  <h1>{plugin.name}</h1>
+
+  <p class="lead text-lg text-[var(--muted)] mb-8">
+    {plugin.description}
+  </p>
+
+  {companionMcpServer && (
+    <div class="not-prose my-6 p-4 rounded-lg border border-cyan-500/30 bg-cyan-500/5">
+      <p class="text-sm font-medium mb-1">🔌 Recommended MCP Server</p>
+      <p class="text-sm text-[var(--muted)]">
+        Pair this plugin with the{' '}
+        <a href={`${baseUrl}mcp-servers/${companionMcpServer.id}/`} class="text-accent underline font-medium">
+          {companionMcpServer.name}
+        </a>{' '}
+        for direct API access alongside skills and commands.
+      </p>
+    </div>
+  )}
+
+  <h2>Installation</h2>
+
+  <p>Install this plugin individually:</p>
+
+  <div class="not-prose my-6">
+    <InstallCommand command={`/plugin marketplace add wyre-technology/msp-claude-plugins --plugin ${plugin.id}`} />
+  </div>
+
+  <p>Or install all MSP plugins at once:</p>
+
+  <div class="not-prose my-6">
+    <InstallCommand />
+  </div>
+
+  <h2>Features</h2>
+
+  <ul>
+    {plugin.features.map(feature => (
+      <li><strong>{feature}</strong></li>
+    ))}
+  </ul>
+
+  <h2>Skills</h2>
+
+  <p>This plugin provides {plugin.skills.length} skills that teach Claude about {plugin.name}:</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Skill</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      {plugin.skills.map(skill => (
+        <tr>
+          <td><code>{skill.name}</code></td>
+          <td>{skill.description}</td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+
+  {plugin.agents.length > 0 && (
+    <>
+      <h2>Agents</h2>
+
+      <p>This plugin provides {plugin.agents.length} agent{plugin.agents.length === 1 ? '' : 's'} for autonomous task execution:</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Agent</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          {plugin.agents.map(agent => (
+            <tr>
+              <td><code>{agent.name}</code></td>
+              <td>{agent.description}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  )}
+
+  <h2>Commands</h2>
+
+  <p>Available slash commands:</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Command</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      {plugin.commands.map(cmd => (
+        <tr>
+          <td><code>{cmd.name}</code></td>
+          <td>{cmd.description}</td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+
+  <h2>API Reference</h2>
+
+  <table>
+    <tbody>
+      <tr>
+        <td><strong>Base URL</strong></td>
+        <td><code>{plugin.apiInfo.baseUrl}</code></td>
+      </tr>
+      <tr>
+        <td><strong>Authentication</strong></td>
+        <td>{plugin.apiInfo.auth}</td>
+      </tr>
+      <tr>
+        <td><strong>Rate Limit</strong></td>
+        <td>{plugin.apiInfo.rateLimit}</td>
+      </tr>
+      <tr>
+        <td><strong>Documentation</strong></td>
+        <td><a href={plugin.apiInfo.docsUrl} target="_blank" rel="noopener noreferrer">{plugin.apiInfo.docsUrl}</a></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Example Usage</h2>
+
+  {plugin.commands.map(cmd => (
+    <div>
+      <h3>{cmd.description}</h3>
+      <pre><code class="language-text">{cmd.name}</code></pre>
+    </div>
+  ))}
+
+  {plugin.skills.length > 0 && (
+    <div>
+      <h3>Using Skills</h3>
+      <pre><code class="language-text">/skill {plugin.id}:{plugin.skills[0].name}
+
+{plugin.skills[0].description}</code></pre>
+    </div>
+  )}
+
+</DocsLayout>

@@ -1,0 +1,468 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import Header from '@/components/Header.astro';
+import Footer from '@/components/Footer.astro';
+import PluginCard from '@/components/PluginCard.astro';
+import InstallCommand from '@/components/InstallCommand.astro';
+import FAQSchema from '@/components/schema/FAQSchema.astro';
+import OrganizationSchema from '@/components/schema/OrganizationSchema.astro';
+import PricingCard from '@/components/PricingCard.astro';
+import { plugins } from '@/data/plugins';
+import { prompts } from '@/data/prompts';
+
+const baseUrl = import.meta.env.BASE_URL;
+const gatewayUrl = import.meta.env.GATEWAY_URL || 'https://mcp.wyre.ai';
+
+const pluginCount = plugins.length;
+const skillCount = plugins.flatMap(p => p.skills).length;
+const subagentCount = plugins.flatMap(p => p.agents).length;
+const commandCount = plugins.flatMap(p => p.commands).length;
+const vendorNames = plugins.map(p => p.name).join(', ');
+
+// Short, punchy prompt examples for the typewriter — demonstrating real value
+const typingExamples = [
+  "Which tickets are at risk of breaching SLA in the next 4 hours?",
+  "Pull a QBR summary for Acme Corp covering the past 90 days.",
+  "Find devices 4+ years old across all clients for hardware refresh.",
+  "Show all unbilled work that's ready to invoice.",
+  "Prepare a shift handoff brief for the incoming on-call engineer.",
+  "Which clients have grown device count but not their contract?",
+  "Correlate active PagerDuty incidents with open HaloPSA tickets.",
+  "Identify the top 3 risk areas for TechCorp based on current data.",
+];
+
+const faqs = [
+  {
+    question: "What are MSP Claude Plugins?",
+    answer: `MSP Claude Plugins are community-driven extensions for Claude Code that integrate with RMM, PSA, IT Documentation, Security, Sales & Distribution, and Accounting & Finance tools including ${vendorNames}. They provide skills, commands, and MCP server integrations to supercharge AI-assisted MSP workflows.`
+  },
+  {
+    question: "How do I install MSP Claude Plugins?",
+    answer: "Install via the Claude Code marketplace with one command: /plugin marketplace add wyre-technology/msp-claude-plugins. Then browse available plugins with /plugin."
+  },
+  {
+    question: "What PSA and RMM tools are supported?",
+    answer: `Currently supported platforms include ${vendorNames}. Each plugin ships skills, commands, and a self-hostable MCP server. Most are also available as hosted integrations on the WYRE Gateway.`
+  },
+  {
+    question: "Are MSP Claude Plugins free?",
+    answer: "The open-source MSP Claude Plugins (the skills, commands, and self-hostable MCP servers in this collection) are free under the Apache 2.0 license. The hosted WYRE MCP Gateway is a separate paid managed service — see the Pro, Business, and Enterprise plans on the Pricing page. Community contributions to the OSS plugins are welcome."
+  },
+  {
+    question: "What is the Model Context Protocol (MCP)?",
+    answer: "MCP (Model Context Protocol) is an open standard that allows AI models like Claude to securely connect to external tools and data sources. MSP Claude Plugins use MCP to give Claude direct access to your PSA, RMM, documentation, security, and billing platforms — enabling natural language queries and actions across your entire MSP stack."
+  },
+  {
+    question: "How does the hosted gateway work?",
+    answer: "The hosted gateway at mcp.wyre.ai acts as a secure proxy between Claude Desktop and your MSP platforms. You authenticate via OAuth 2.1 with PKCE, store your vendor API credentials (encrypted with per-user isolation), and Claude connects through a single MCP endpoint. No local servers, no Docker, no maintenance required."
+  },
+  {
+    question: "Is my data secure with the gateway?",
+    answer: "Yes. The gateway uses OAuth 2.1 + PKCE authentication, encrypts all stored credentials, and provides per-user isolation. Your vendor API credentials are never exposed to other users. For maximum security, you can also self-host the MCP servers so credentials never leave your network."
+  },
+  {
+    question: "What is the difference between the gateway and self-hosting?",
+    answer: "The hosted gateway requires zero infrastructure — connect Claude Desktop in minutes with just your API credentials. Self-hosting gives you full control: run MCP servers locally, keep all credentials on your machine, and customize or extend the open-source code. Both approaches provide the same MCP integrations and plugin capabilities."
+  }
+];
+
+const features = [
+  {
+    icon: '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>',
+    title: 'One-Command Install',
+    description: 'Install all MSP plugins with a single marketplace command. No configuration required.'
+  },
+  {
+    icon: '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>',
+    title: 'Actively Developed',
+    description: 'Plugins built with proper error handling, rate limiting, and security best practices. Autotask PSA has the deepest coverage — other plugins are in active development.'
+  },
+  {
+    icon: '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>',
+    title: 'Deep Domain Knowledge',
+    description: 'Each plugin includes comprehensive skills that teach Claude MSP terminology and workflows.'
+  },
+  {
+    icon: '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>',
+    title: 'Community Driven',
+    description: 'Open source plugins built by MSPs, for MSPs. Contributions welcome!'
+  }
+];
+---
+
+<BaseLayout title="AI-Powered WYRE MCP Gateway">
+  <FAQSchema faqs={faqs} />
+  <OrganizationSchema />
+  <Header />
+
+  <main id="main">
+  <!-- Hero Section -->
+  <section class="py-20 lg:py-32 bg-gradient-to-b from-cyan-50 to-transparent dark:from-cyan-950/20">
+    <div class="container text-center">
+      <h1 class="text-4xl lg:text-6xl font-bold mb-6 tracking-tight">
+        MSP Claude Plugins
+      </h1>
+      <p class="text-xl lg:text-2xl text-[var(--muted)] max-w-3xl mx-auto mb-4">
+        The definitive Claude Code plugin collection for Managed Service Providers.
+      </p>
+      <!-- Animated stat counters -->
+      <p class="text-lg font-semibold max-w-2xl mx-auto mb-4">
+        <span class="counter" data-target={pluginCount}>{pluginCount}</span> plugins &middot;
+        <span class="counter" data-target={skillCount}>{skillCount}</span> specialized skills &middot;
+        <span class="counter" data-target={subagentCount}>{subagentCount}</span> subagents &middot;
+        <span class="counter" data-target={commandCount}>{commandCount}</span> commands
+      </p>
+
+      <!-- Typewriter prompt examples -->
+      <p class="text-base text-[var(--muted)] max-w-2xl mx-auto mb-8 min-h-[1.75rem]">
+        <span class="text-accent font-mono">&gt;</span>
+        <span id="typewriter" class="ml-2 text-[var(--text)]"></span><span id="typewriter-cursor" class="animate-pulse text-accent font-bold ml-px">|</span>
+      </p>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+        <!-- Gateway path -->
+        <div class="card p-8 border border-green-300 dark:border-green-500/30 bg-green-50 dark:bg-green-950/10 text-left">
+          <div class="flex items-center gap-2 mb-3">
+            <svg class="w-5 h-5 text-green-600 dark:text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <span class="text-xs font-semibold uppercase tracking-wider text-green-600 dark:text-green-500">Recommended</span>
+          </div>
+          <h2 class="text-xl font-bold mb-2">Use the Hosted Gateway</h2>
+          <p class="text-[var(--muted)] text-sm mb-4">
+            Connect your MSP tools to Claude Desktop in minutes. No servers to manage — just add your API credentials and go.
+          </p>
+          <a href={`${gatewayUrl}/auth/choose`} class="btn btn-primary w-full text-center">Get Started</a>
+        </div>
+
+        <!-- Self-host path -->
+        <div class="card p-8 text-left">
+          <div class="flex items-center gap-2 mb-3">
+            <svg class="w-5 h-5 text-[var(--muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            <span class="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Self-Host</span>
+          </div>
+          <h2 class="text-xl font-bold mb-2">Run Your Own MCP Servers</h2>
+          <p class="text-[var(--muted)] text-sm mb-4">
+            Full control with local MCP servers. Install the plugin collection and configure each integration yourself.
+          </p>
+          <div class="mb-0">
+            <InstallCommand size="sm" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Section -->
+  <section class="py-20">
+    <div class="container">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+        {features.map(feature => (
+          <div class="text-center">
+            <div class="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-accent/10 text-accent mb-4" set:html={feature.icon} />
+            <h3 class="font-semibold text-lg mb-2">{feature.title}</h3>
+            <p class="text-[var(--muted)] text-sm">{feature.description}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Plugin Grid -->
+  <section class="py-20 bg-neutral-50 dark:bg-neutral-900/50">
+    <div class="container">
+      <div class="text-center mb-12">
+        <h2 class="text-3xl font-bold mb-4">{pluginCount} Plugins, One Ecosystem</h2>
+        <p class="text-[var(--muted)] max-w-2xl mx-auto mb-4">
+          Comprehensive support for the most popular MSP platforms. Each plugin includes skills,
+          commands, and deep API knowledge.
+        </p>
+        <p class="text-sm text-[var(--muted)] max-w-xl mx-auto">
+          Covering {plugins.map((p, i) => (
+            <span>{p.name}{i < plugins.length - 1 ? ', ' : '.'}</span>
+          ))}
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {plugins.map(plugin => (
+          <PluginCard plugin={plugin} />
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Two Paths Comparison -->
+  <section class="py-20">
+    <div class="container">
+      <div class="text-center mb-12">
+        <h2 class="text-3xl font-bold mb-4">Two Ways to Connect</h2>
+        <p class="text-[var(--muted)] max-w-2xl mx-auto">
+          Use the hosted gateway for zero-config setup, or self-host for full control. Both give you the same MCP integrations.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+        <!-- Gateway column -->
+        <div class="card p-8 border border-green-300 dark:border-green-500/20 bg-green-50 dark:bg-green-950/10">
+          <div class="flex items-center gap-2 mb-6">
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700 border border-green-300 dark:bg-green-500/20 dark:text-green-400 dark:border-green-500/30">Recommended</span>
+            <h3 class="text-xl font-bold">Hosted Gateway</h3>
+          </div>
+          <ul class="space-y-3 mb-8 text-sm">
+            <li class="flex items-start gap-2">
+              <svg class="w-5 h-5 text-green-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+              <span>Works with Claude Desktop out of the box</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <svg class="w-5 h-5 text-green-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+              <span>OAuth 2.1 + PKCE — no API keys in local config</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <svg class="w-5 h-5 text-green-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+              <span>Encrypted credential storage with per-user isolation</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <svg class="w-5 h-5 text-green-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+              <span>No Docker, no servers, no maintenance</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <svg class="w-5 h-5 text-green-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+              <span>All supported vendors available immediately</span>
+            </li>
+          </ul>
+          <div class="flex flex-wrap gap-3">
+            <a href={`${gatewayUrl}/auth/choose`} class="btn btn-primary text-sm">Get Started</a>
+            <a href={`${baseUrl}getting-started/gateway/`} class="btn btn-secondary text-sm">Learn more about the gateway</a>
+          </div>
+        </div>
+
+        <!-- Self-host column -->
+        <div class="card p-8">
+          <div class="flex items-center gap-2 mb-6">
+            <h3 class="text-xl font-bold">Self-Hosted</h3>
+          </div>
+          <ul class="space-y-3 mb-8 text-sm">
+            <li class="flex items-start gap-2">
+              <svg class="w-5 h-5 text-accent mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+              <span>Full control over your MCP server infrastructure</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <svg class="w-5 h-5 text-accent mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+              <span>Credentials stay on your machine — nothing leaves your network</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <svg class="w-5 h-5 text-accent mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+              <span>Works with Claude Code, Claude Desktop, or any MCP client</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <svg class="w-5 h-5 text-accent mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+              <span>Includes Claude Code skills and commands beyond MCP</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <svg class="w-5 h-5 text-accent mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+              <span>Open source — customize, extend, contribute</span>
+            </li>
+          </ul>
+          <div class="flex flex-wrap gap-3">
+            <a href={`${baseUrl}getting-started/`} class="btn btn-primary text-sm">Installation Guide</a>
+            <a href={`${baseUrl}plugins/`} class="btn btn-secondary text-sm">Browse Plugins</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Plans & Pricing Section -->
+  <section class="py-20 bg-neutral-50 dark:bg-neutral-900/50">
+    <div class="container">
+      <div class="text-center mb-12">
+        <h2 class="text-3xl font-bold mb-4">Plans &amp; Pricing</h2>
+        <p class="text-[var(--muted)] max-w-2xl mx-auto">
+          Pick the tier that fits your team. All plans include the full MCP integration suite.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+        <PricingCard
+          plan="Pro"
+          price="$49/user/mo"
+          description="For growing MSP teams, up to 3 users."
+          features={[
+            "Up to 3 users",
+            "3 personal connections per user",
+            "5 shared org connections",
+            "2,000 credits/seat/month",
+            "Team roles & invites",
+            "Email support",
+          ]}
+          cta="Get started"
+          ctaHref="https://mcp.wyre.ai/auth/choose"
+          highlighted={true}
+        />
+
+        <PricingCard
+          plan="Business"
+          price="$99/user/mo"
+          description="For MSP teams of 5+ users."
+          features={[
+            "5+ users",
+            "Unlimited personal connections",
+            "Unlimited shared org connections",
+            "4,000 credits/seat/month (pooled)",
+            "Audit log & log shipping",
+            "Tool allowlists & service clients",
+            "Dedicated support",
+          ]}
+          cta="Get started"
+          ctaHref="https://mcp.wyre.ai/auth/choose"
+        />
+
+        <PricingCard
+          plan="Enterprise"
+          price="Custom"
+          description="For large MSP organizations and custom deployments."
+          features={[
+            "Everything in Business",
+            "SSO / SAML",
+            "SCIM provisioning",
+            "Custom credit packages",
+            "Uptime SLA",
+            "Dedicated onboarding & CSM",
+            "Custom contract terms",
+          ]}
+          cta="Talk to sales"
+          ctaHref="mailto:sales@wyre.ai"
+        />
+      </div>
+
+      <p class="text-center text-sm text-[var(--muted)] mt-8">
+        Need a custom plan? <a href="mailto:sales@wyre.ai" class="text-accent underline">Get in touch.</a>
+      </p>
+    </div>
+  </section>
+
+  <!-- FAQ Section -->
+  <section class="py-20">
+    <div class="container">
+      <div class="text-center mb-12">
+        <h2 class="text-3xl font-bold mb-4">Frequently Asked Questions</h2>
+        <p class="text-[var(--muted)] max-w-2xl mx-auto">
+          Everything you need to know about MSP Claude Plugins.
+        </p>
+      </div>
+
+      <div class="max-w-3xl mx-auto space-y-6">
+        {faqs.map(faq => (
+          <div class="card p-6">
+            <h3 class="font-semibold text-lg mb-2">{faq.question}</h3>
+            <p class="text-[var(--muted)]">{faq.answer}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Quick Start CTA -->
+  <section class="py-20 bg-neutral-50 dark:bg-neutral-900/50">
+    <div class="container">
+      <div class="card max-w-4xl mx-auto text-center p-12">
+        <h2 class="text-2xl font-bold mb-4">Ready to Get Started?</h2>
+        <p class="text-[var(--muted)] mb-8 max-w-xl mx-auto">
+          Connect your MSP tools to Claude in minutes — use the hosted gateway or self-host with a single install command.
+        </p>
+
+        <div class="flex flex-wrap justify-center gap-4 mb-6">
+          <a href={`${gatewayUrl}/auth/choose`} class="btn btn-primary">Use the Gateway</a>
+          <a href={`${baseUrl}getting-started/`} class="btn btn-secondary">Self-Host Guide</a>
+        </div>
+
+        <div class="max-w-xl mx-auto mb-4">
+          <InstallCommand />
+        </div>
+
+        <p class="text-sm text-[var(--muted)]">
+          Or <a href={`${baseUrl}getting-started/installation/`} class="text-accent underline">
+            install individual plugins
+          </a> if you only need one.
+        </p>
+      </div>
+    </div>
+  </section>
+  </main>
+
+  <Footer />
+</BaseLayout>
+
+<script define:vars={{ typingExamples }}>
+// ── Count-up animation ──────────────────────────────────────────────
+function animateCounter(el) {
+  const target = parseInt(el.dataset.target, 10);
+  const suffix = el.dataset.suffix ?? '';
+  const duration = 1200;
+  const start = performance.now();
+
+  function tick(now) {
+    const elapsed = now - start;
+    const progress = Math.min(elapsed / duration, 1);
+    // Ease out cubic
+    const eased = 1 - Math.pow(1 - progress, 3);
+    el.textContent = Math.floor(eased * target) + (progress === 1 ? suffix : '');
+    if (progress < 1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+const counters = document.querySelectorAll('.counter');
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      animateCounter(entry.target);
+      observer.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.5 });
+
+counters.forEach(el => observer.observe(el));
+
+// ── Typewriter animation ────────────────────────────────────────────
+const typewriterEl = document.getElementById('typewriter');
+const examples = typingExamples;
+let exampleIndex = 0;
+let charIndex = 0;
+let isDeleting = false;
+let isPaused = false;
+
+function type() {
+  const current = examples[exampleIndex];
+
+  if (isPaused) {
+    isPaused = false;
+    isDeleting = true;
+    setTimeout(type, 1800);
+    return;
+  }
+
+  if (!isDeleting) {
+    typewriterEl.textContent = current.slice(0, charIndex + 1);
+    charIndex++;
+    if (charIndex === current.length) {
+      isPaused = true;
+      setTimeout(type, 50);
+      return;
+    }
+    setTimeout(type, 38);
+  } else {
+    typewriterEl.textContent = current.slice(0, charIndex - 1);
+    charIndex--;
+    if (charIndex === 0) {
+      isDeleting = false;
+      exampleIndex = (exampleIndex + 1) % examples.length;
+      setTimeout(type, 400);
+      return;
+    }
+    setTimeout(type, 18);
+  }
+}
+
+// Small delay before starting so the page has settled
+setTimeout(type, 800);
+</script>

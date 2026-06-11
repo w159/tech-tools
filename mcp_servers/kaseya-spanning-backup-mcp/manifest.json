@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "kaseya-spanning-backup-mcp",
   "display_name": "Kaseya Spanning Backup MCP Server",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Query and manage Kaseya Spanning Backup for M365, Google Workspace, and Salesforce — for MSP data-protection AI agents.",
   "long_description": "Use this server when you need to inspect or trigger Spanning SaaS backup operations. List backed-up users and their per-service status, enumerate daily backup runs, queue point-in-time restore jobs for individual users or items, poll restore job status, search the audit log for backup/restore events, and view license seat usage. Supports M365, Google Workspace, and Salesforce platforms via platform-scoped HTTP Basic auth (admin email + API token pair).",
   "author": {

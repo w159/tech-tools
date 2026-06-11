@@ -1,0 +1,187 @@
+---
+import DocsLayout from '@/layouts/DocsLayout.astro';
+import PluginCard from '@/components/PluginCard.astro';
+import { plugins, getPluginsByCategory } from '@/data/plugins';
+
+const psaPlugins = getPluginsByCategory('psa');
+const rmmPlugins = getPluginsByCategory('rmm');
+const docPlugins = getPluginsByCategory('documentation');
+const securityPlugins = getPluginsByCategory('security');
+const emailSecurityPlugins = getPluginsByCategory('email-security');
+const monitoringPlugins = getPluginsByCategory('monitoring');
+const networkPlugins = getPluginsByCategory('network');
+const incidentPlugins = getPluginsByCategory('incident-management');
+const salesPlugins = getPluginsByCategory('sales');
+const crmPlugins = getPluginsByCategory('crm');
+const marketplacePlugins = getPluginsByCategory('marketplace');
+const accountingPlugins = getPluginsByCategory('accounting');
+const productivityPlugins = getPluginsByCategory('productivity');
+---
+
+<DocsLayout title="Plugin Catalog">
+  <h1>Plugin Catalog</h1>
+
+  <p class="lead text-lg text-[var(--muted)] mb-8">
+    Browse all {plugins.length} MSP Claude Plugins. Each plugin provides skills,
+    commands, and deep API knowledge for its platform.
+  </p>
+
+  <h2>RMM ({rmmPlugins.length})</h2>
+
+  <p>Remote Monitoring and Management plugins for device management, alerts, and automation.</p>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 not-prose my-6">
+    {rmmPlugins.map(plugin => (
+      <PluginCard plugin={plugin} />
+    ))}
+  </div>
+
+  <h2>PSA ({psaPlugins.length})</h2>
+
+  <p>Professional Services Automation plugins for ticket management, CRM, and billing.</p>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 not-prose my-6">
+    {psaPlugins.map(plugin => (
+      <PluginCard plugin={plugin} />
+    ))}
+  </div>
+
+  <h2>IT Documentation ({docPlugins.length})</h2>
+
+  <p>Documentation and knowledge base plugins for asset tracking, password management, and configuration monitoring.</p>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 not-prose my-6">
+    {docPlugins.map(plugin => (
+      <PluginCard plugin={plugin} />
+    ))}
+  </div>
+
+  <h2>Security ({securityPlugins.length})</h2>
+
+  <p>Security and SOC plugins for threat detection, endpoint protection, and compliance.</p>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 not-prose my-6">
+    {securityPlugins.map(plugin => (
+      <PluginCard plugin={plugin} />
+    ))}
+  </div>
+
+  <h2>Email Security ({emailSecurityPlugins.length})</h2>
+
+  <p>Email security plugins for phishing detection, spam filtering, and security awareness training.</p>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 not-prose my-6">
+    {emailSecurityPlugins.map(plugin => (
+      <PluginCard plugin={plugin} />
+    ))}
+  </div>
+
+  <h2>Monitoring ({monitoringPlugins.length})</h2>
+
+  <p>Uptime monitoring, logging, and observability plugins for infrastructure and services.</p>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 not-prose my-6">
+    {monitoringPlugins.map(plugin => (
+      <PluginCard plugin={plugin} />
+    ))}
+  </div>
+
+  <h2>Network ({networkPlugins.length})</h2>
+
+  <p>Network monitoring, SNMP discovery, and device management plugins.</p>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 not-prose my-6">
+    {networkPlugins.map(plugin => (
+      <PluginCard plugin={plugin} />
+    ))}
+  </div>
+
+  <h2>Incident Management ({incidentPlugins.length})</h2>
+
+  <p>Incident response, on-call scheduling, and postmortem management plugins.</p>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 not-prose my-6">
+    {incidentPlugins.map(plugin => (
+      <PluginCard plugin={plugin} />
+    ))}
+  </div>
+
+  <h2>CRM ({crmPlugins.length})</h2>
+
+  <p>Customer relationship management plugins for contacts, deals, and sales pipelines.</p>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 not-prose my-6">
+    {crmPlugins.map(plugin => (
+      <PluginCard plugin={plugin} />
+    ))}
+  </div>
+
+  <h2>Sales & Distribution ({salesPlugins.length})</h2>
+
+  <p>CRM, quoting, document automation, and cloud marketplace plugins for sales pipelines, proposals, and licensing.</p>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 not-prose my-6">
+    {salesPlugins.map(plugin => (
+      <PluginCard plugin={plugin} />
+    ))}
+  </div>
+
+  <h2>Accounting & Finance ({accountingPlugins.length})</h2>
+
+  <p>Accounting and financial plugins for invoicing, payments, and reporting.</p>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 not-prose my-6">
+    {accountingPlugins.map(plugin => (
+      <PluginCard plugin={plugin} />
+    ))}
+  </div>
+
+  <h2>Marketplace ({marketplacePlugins.length})</h2>
+
+  <p>Cloud marketplace and distribution plugins for licensing, subscriptions, and procurement.</p>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 not-prose my-6">
+    {marketplacePlugins.map(plugin => (
+      <PluginCard plugin={plugin} />
+    ))}
+  </div>
+
+  {productivityPlugins.length > 0 && (
+    <>
+      <h2>Productivity ({productivityPlugins.length})</h2>
+
+      <p>Productivity and collaboration plugins for email, calendaring, file storage, and user management.</p>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 not-prose my-6">
+        {productivityPlugins.map(plugin => (
+          <PluginCard plugin={plugin} />
+        ))}
+      </div>
+    </>
+  )}
+
+  <h2>All Plugins at a Glance</h2>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Plugin</th>
+        <th>Vendor</th>
+        <th>Category</th>
+        <th>Skills</th>
+        <th>Commands</th>
+      </tr>
+    </thead>
+    <tbody>
+      {plugins.map(plugin => (
+        <tr>
+          <td><a href={`${import.meta.env.BASE_URL}plugins/${plugin.id}/`}>{plugin.name}</a></td>
+          <td>{plugin.vendor}</td>
+          <td>{{psa: 'PSA', rmm: 'RMM', documentation: 'IT Documentation', security: 'Security', 'email-security': 'Email Security', monitoring: 'Monitoring', network: 'Network', 'incident-management': 'Incident Management', crm: 'CRM', sales: 'Sales & Distribution', marketplace: 'Marketplace', accounting: 'Accounting & Finance', productivity: 'Productivity'}[plugin.category]}</td>
+          <td>{plugin.skills.length}</td>
+          <td>{plugin.commands.length}</td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</DocsLayout>

@@ -1,0 +1,279 @@
+---
+import DocsLayout from '@/layouts/DocsLayout.astro';
+import InstallCommand from '@/components/InstallCommand.astro';
+
+const baseUrl = import.meta.env.BASE_URL;
+
+const claudeCodeAddUser = `claude mcp add --scope user --transport http msp-mcp-gateway https://mcp.wyre.ai/v1/mcp`;
+
+const claudeCodeAddProject = `claude mcp add --transport http msp-mcp-gateway https://mcp.wyre.ai/v1/mcp`;
+
+const claudeCodeMcpJson = `// .mcp.json (in your project root) — manual alternative
+{
+  "mcpServers": {
+    "msp-mcp-gateway": {
+      "type": "http",
+      "url": "https://mcp.wyre.ai/v1/mcp"
+    }
+  }
+}`;
+
+const claudeDesktopUnified = `// claude_desktop_config.json
+{
+  "mcpServers": {
+    "msp-mcp-gateway": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://mcp.wyre.ai/v1/mcp"]
+    }
+  }
+}`;
+
+const claudeCodePerVendor = `// .mcp.json — per-vendor (legacy)
+{
+  "mcpServers": {
+    "autotask": { "url": "https://mcp.wyre.ai/v1/autotask/mcp" },
+    "datto-rmm": { "url": "https://mcp.wyre.ai/v1/datto-rmm/mcp" }
+  }
+}`;
+
+const claudeDesktopPerVendor = `// claude_desktop_config.json — per-vendor (legacy)
+{
+  "mcpServers": {
+    "autotask": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://mcp.wyre.ai/v1/autotask/mcp"]
+    },
+    "datto-rmm": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://mcp.wyre.ai/v1/datto-rmm/mcp"]
+    }
+  }
+}`;
+
+---
+<DocsLayout title="WYRE MCP Gateway" description="Hosted MCP gateway at mcp.wyre.ai with OAuth 2.1 and encrypted credential storage.">
+  <h1>WYRE MCP Gateway</h1>
+
+  <p class="lead text-lg text-[var(--muted)] mb-8">
+    Connect Claude to all MSP tools through a single hosted gateway at
+    <code>mcp.wyre.ai</code>. No Docker, no config files — just add one URL and authenticate.
+  </p>
+
+  <h2>How It Works</h2>
+  <ol>
+    <li>Add the unified gateway URL as an MCP server in Claude Code or Claude Desktop (see below)</li>
+    <li>Claude initiates a single OAuth 2.1 + PKCE flow — a browser window opens</li>
+    <li>Log in or sign up, then connect your vendor API credentials via the web UI</li>
+    <li>The gateway validates your credentials, then encrypts and stores them (AES-256-GCM)</li>
+    <li>All vendors are available through the single connection — tool names are prefixed with the vendor (e.g., <code>autotask__list_tickets</code>)</li>
+  </ol>
+
+  <h2 id="supported-vendors">Supported Vendors</h2>
+  <p>
+    All vendors below are available through the unified endpoint at
+    <code>https://mcp.wyre.ai/v1/mcp</code>. You only need to connect the vendors
+    you use — the gateway automatically discovers which vendors you have credentials for.
+  </p>
+  <table>
+    <thead><tr><th>Vendor</th><th>Tool Prefix</th></tr></thead>
+    <tbody>
+      <tr><td>Autotask PSA</td><td><code>autotask__</code></td></tr>
+      <tr><td>Datto RMM</td><td><code>datto-rmm__</code></td></tr>
+      <tr><td>IT Glue</td><td><code>itglue__</code></td></tr>
+      <tr><td>Syncro MSP</td><td><code>syncro__</code></td></tr>
+      <tr><td>Atera</td><td><code>atera__</code></td></tr>
+      <tr><td>SuperOps.ai</td><td><code>superops__</code></td></tr>
+      <tr><td>HaloPSA</td><td><code>halopsa__</code></td></tr>
+      <tr><td>ConnectWise PSA</td><td><code>connectwise-psa__</code></td></tr>
+      <tr><td>ConnectWise Automate</td><td><code>connectwise-automate__</code></td></tr>
+      <tr><td>NinjaOne</td><td><code>ninjaone__</code></td></tr>
+      <tr><td>Liongard</td><td><code>liongard__</code></td></tr>
+      <tr><td>SalesBuildr</td><td><code>salesbuildr__</code></td></tr>
+      <tr><td>Pax8</td><td><code>pax8__</code></td></tr>
+      <tr><td>SentinelOne</td><td><code>sentinelone__</code></td></tr>
+      <tr><td>Huntress</td><td><code>huntress__</code></td></tr>
+
+      <tr><td>RocketCyber</td><td><code>rocketcyber__</code></td></tr>
+      <tr><td>Blumira</td><td><code>blumira__</code></td></tr>
+      <tr><td>ThreatLocker</td><td><code>threatlocker__</code></td></tr>
+      <tr><td>Microsoft 365</td><td><code>m365__</code></td></tr>
+    </tbody>
+  </table>
+
+  <h2>Claude Code (CLI)</h2>
+  <p>
+    One command adds the gateway to Claude Code. Run this in your terminal — no config files to edit:
+  </p>
+
+  <h3>Add for all projects (recommended)</h3>
+  <p>Use <code>--scope user</code> to make the gateway available in every Claude Code session on this machine:</p>
+  <pre><code class="language-bash" set:text={claudeCodeAddUser} /></pre>
+
+  <h3>Add for the current project only</h3>
+  <p>Omit <code>--scope</code> to scope the gateway to the current project (writes to <code>.mcp.json</code> in the project root):</p>
+  <pre><code class="language-bash" set:text={claudeCodeAddProject} /></pre>
+
+  <p class="text-sm text-[var(--muted)] mt-2">
+    On first use, Claude Code will open a browser for OAuth authentication. After signing in, connect your
+    vendor credentials at <a href="https://mcp.wyre.ai" target="_blank" rel="noopener noreferrer">mcp.wyre.ai</a> —
+    all connected vendors are then available automatically.
+  </p>
+
+  <h3>Verify the install</h3>
+  <pre><code class="language-bash">claude mcp list</code></pre>
+  <p class="text-sm text-[var(--muted)] mt-2">
+    You should see <code>msp-mcp-gateway</code> in the list. To remove it later, run
+    <code>claude mcp remove msp-mcp-gateway</code>.
+  </p>
+
+  <details class="mt-4">
+    <summary class="cursor-pointer font-medium text-[var(--muted)] hover:text-[var(--text)]">Manual <code>.mcp.json</code> alternative</summary>
+    <div class="mt-4">
+      <p>If you prefer to manage config by hand, add this to <code>.mcp.json</code> in your project root:</p>
+      <pre><code class="language-json" set:text={claudeCodeMcpJson} /></pre>
+    </div>
+  </details>
+
+  <h2>Claude Desktop</h2>
+
+  <div class="card my-4">
+    <p class="!mt-0">
+      <strong>Claude Desktop setup has two parts.</strong> Do both — each one is required.
+    </p>
+    <ol class="!mb-0">
+      <li><strong>Install the plugin</strong> via the Cowork marketplace — provides skills, slash commands, and MSP domain knowledge</li>
+      <li><strong>Add the MCP gateway server</strong> — the live API connection that lets Claude read and write in your MSP tools</li>
+    </ol>
+  </div>
+
+  <h3>Part 1: Install the Plugin via the Cowork Marketplace</h3>
+  <p>
+    The plugin gives Claude Desktop the MSP skills and slash commands (e.g. <code>/search-tickets</code>,
+    <code>/create-ticket</code>). Add it from the Cowork marketplace UI:
+  </p>
+  <ol>
+    <li>Click the <strong>Cowork</strong> icon in the bottom-left of Claude Desktop</li>
+    <li>Click the <strong>+</strong> button</li>
+    <li>Click <strong>Plugins</strong></li>
+    <li>Click <strong>Add Plugin</strong></li>
+    <li>Click <strong>Personal</strong></li>
+    <li>Click the <strong>+</strong> button</li>
+    <li>Click <strong>Add marketplace from Github</strong></li>
+    <li>Enter the repo owner/URL:
+      <div class="not-prose my-3">
+        <InstallCommand command="wyre-technology/msp-claude-plugins" size="sm" />
+      </div>
+    </li>
+    <li>Click <strong>Sync</strong> — all plugin skills and commands are now installed</li>
+  </ol>
+
+  <h3>Part 2: Add the WYRE MCP Gateway Server</h3>
+  <p>Pick one of the two options below — you only need to do this once.</p>
+
+  <h4>Option A: Connectors UI (easiest — no CLI, no config files)</h4>
+  <p>
+    If you're on Claude Pro, Team, or Enterprise, add the gateway directly from Claude Desktop's
+    built-in Connectors UI:
+  </p>
+  <ol>
+    <li>Open Claude Desktop → <strong>Settings</strong> → <strong>Connectors</strong></li>
+    <li>Click <strong>Add Connector</strong> (or <strong>Add custom connector</strong>)</li>
+    <li>Name it <code>MSP Gateway</code> (or anything you like)</li>
+    <li>Remote MCP server URL: <code>https://mcp.wyre.ai/v1/mcp</code></li>
+    <li>Click <strong>Add</strong>, then complete the OAuth login in the browser that opens</li>
+  </ol>
+  <p class="text-sm text-[var(--muted)] mt-2">
+    After OAuth completes, connect your vendor credentials at
+    <a href="https://mcp.wyre.ai" target="_blank" rel="noopener noreferrer">mcp.wyre.ai</a>.
+    All connected vendors become available immediately.
+  </p>
+
+  <h4 class="mt-8">Option B: Manual Configuration</h4>
+  <p>
+    Add a single entry to your <code>claude_desktop_config.json</code> that connects to all vendors at once.
+    Older Claude Desktop builds use stdio-based transports, so the remote gateway requires the
+    <a href="https://www.npmjs.com/package/mcp-remote" target="_blank" rel="noopener noreferrer"><code>mcp-remote</code></a>
+    bridge:
+  </p>
+  <pre><code class="language-json" set:text={claudeDesktopUnified} /></pre>
+
+  <p class="mt-4">
+    That's it — one entry for all vendors. On first use, a browser will open for OAuth authentication.
+    After that, add your vendor credentials via the gateway web UI at
+    <a href="https://mcp.wyre.ai" target="_blank" rel="noopener noreferrer">mcp.wyre.ai</a>.
+  </p>
+
+  <h4>Config File Location</h4>
+  <table>
+    <thead><tr><th>Operating System</th><th>Path</th></tr></thead>
+    <tbody>
+      <tr><td>macOS</td><td><code>~/Library/Application Support/Claude/claude_desktop_config.json</code></td></tr>
+      <tr><td>Windows</td><td><code>%APPDATA%\Claude\claude_desktop_config.json</code></td></tr>
+      <tr><td>Linux</td><td><code>~/.config/Claude/claude_desktop_config.json</code></td></tr>
+    </tbody>
+  </table>
+  <p class="text-sm text-[var(--muted)] mt-2">
+    <strong>Requires Node.js 18+.</strong> The <code>npx -y mcp-remote</code> command downloads the bridge automatically on first run.
+    If the file doesn't exist yet, create it with the JSON content above. Restart Claude Desktop after editing.
+  </p>
+
+  <h2>Claude.ai (Web)</h2>
+  <p>
+    Claude Pro, Team, and Enterprise users can connect the gateway directly from
+    <a href="https://claude.ai">claude.ai</a> — no config files or CLI needed:
+  </p>
+  <ol>
+    <li>Click <strong>Customize</strong> in the left sidebar</li>
+    <li>Click <strong>Connectors</strong></li>
+    <li>Click the <strong>+</strong> button, then <strong>Add custom connector</strong></li>
+    <li>Enter a name (e.g. <code>MSP Gateway</code>)</li>
+    <li>Enter the Remote MCP server URL: <code>https://mcp.wyre.ai/v1/mcp</code></li>
+    <li>Click <strong>Add</strong>, then complete the OAuth login flow when prompted</li>
+  </ol>
+  <p class="text-sm text-[var(--muted)] mt-2">
+    After setup, all your connected vendors are available immediately in any conversation.
+  </p>
+
+  <h2 id="per-vendor-legacy">Per-Vendor Endpoints (Legacy)</h2>
+  <p>
+    The per-vendor endpoints (<code>/v1/{'{vendor}'}/mcp</code>) are still available but <strong>deprecated</strong>.
+    They require a separate OAuth flow and config entry for each vendor, which can cause connection
+    timeouts when multiple flows run simultaneously. We recommend migrating to the unified endpoint above.
+  </p>
+  <details>
+    <summary class="cursor-pointer font-medium text-[var(--muted)] hover:text-[var(--text)]">Show per-vendor configuration examples</summary>
+    <div class="mt-4">
+      <h4>Claude Code (per-vendor)</h4>
+      <pre><code class="language-json" set:text={claudeCodePerVendor} /></pre>
+      <h4 class="mt-4">Claude Desktop (per-vendor)</h4>
+      <pre><code class="language-json" set:text={claudeDesktopPerVendor} /></pre>
+    </div>
+  </details>
+
+  <h2>Security</h2>
+  <ul>
+    <li><strong>OAuth 2.1 + PKCE</strong> — industry-standard authentication with mandatory code challenge</li>
+    <li><strong>AES-256-GCM encryption</strong> — credentials encrypted at rest with per-user key derivation (PBKDF2, 100k iterations, SHA-512)</li>
+    <li><strong>Refresh token rotation</strong> — old tokens revoked on every use</li>
+    <li><strong>No credential exposure</strong> — vendor API keys never leave the gateway; injected as HTTP headers on the internal network</li>
+    <li><strong>Per-team tool scoping</strong> — narrow which vendor tools a team can call beneath the org-level allowlist; see <a href={`${baseUrl}getting-started/tool-access/`}>Per-Team Tool Access</a></li>
+  </ul>
+
+  <h2>If something goes wrong</h2>
+  <p>
+    Common issues — missing tools after adding a vendor, "Failed to update tool access" when saving
+    allowlists, OAuth failures — are documented in the
+    <a href={`${baseUrl}getting-started/troubleshooting/`}>Troubleshooting guide</a>. If you'd rather
+    have Claude diagnose the issue, install the
+    <a href={`${baseUrl}getting-started/troubleshooting/#triage-with-claude`}><code>wyre-gateway-troubleshooting</code> skill</a>
+    from the shared-skills plugin.
+  </p>
+
+  <h2>Local Alternative</h2>
+  <p>
+    If you prefer to keep credentials on your own machine, you can run individual MCP servers
+    locally instead of using the hosted gateway. See the
+    <a href={`${baseUrl}getting-started/deployment/`}>deployment guide</a> for Docker, npx, and
+    MCPB bundle options.
+  </p>
+</DocsLayout>

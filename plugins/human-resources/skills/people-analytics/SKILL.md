@@ -1,6 +1,6 @@
 ---
 name: people-analytics
-description: Analyze workforce data — attrition, engagement, diversity, and productivity. Trigger with "attrition rate", "turnover analysis", "diversity metrics", "engagement data", "retention risk", or when the user wants to understand workforce trends from HR data.
+description: Analyze workforce data -- attrition, engagement, diversity, and productivity. Use when user asks for "attrition rate", "turnover analysis", "diversity metrics", "engagement data", "retention risk", or wants to understand workforce trends.
 ---
 
 # People Analytics
@@ -34,8 +34,8 @@ Analyze workforce data to surface trends, risks, and opportunities.
 
 ## Approach
 
-1. Understand what question they're trying to answer
-2. Identify the right data (upload, paste, or pull from ~~HRIS)
-3. Analyze with appropriate statistical methods
-4. Present findings with context and caveats
-5. Recommend specific actions based on data
+1. Understand what question the user is trying to answer.
+2. Identify the right data (upload, paste, or pull from Paylocity via `/roster-snapshot`).
+3. Analyze with appropriate statistical methods in `ctx_execute`.
+4. Present findings with context and caveats.
+5. Recommend specific actions based on data.

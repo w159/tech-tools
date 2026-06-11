@@ -1,0 +1,10 @@
+{
+  "name": "security-compliance",
+  "version": "1.0.0",
+  "description": "Security and compliance skills for Vanta (SOC 2/ISO/HIPAA GRC), KnowBe4 (security awareness), and ThreatLocker (zero-trust endpoint). Audit readiness, evidence gaps, user risk heatmaps, approval triage, and forensic investigations.",
+  "author": { "name": "w159", "url": "https://github.com/w159" },
+  "repository": "https://github.com/w159/tech-tools",
+  "homepage": "https://github.com/w159/tech-tools/tree/main/plugins/security-compliance",
+  "license": "Apache-2.0",
+  "keywords": ["vanta", "knowbe4", "threatlocker", "compliance", "soc2", "iso27001", "hipaa", "grc", "security-awareness", "zero-trust", "audit", "phishing", "evidence"]
+}

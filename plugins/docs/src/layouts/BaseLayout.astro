@@ -1,0 +1,95 @@
+---
+import '@/styles/global.css';
+import SEOHead from '@/components/SEOHead.astro';
+import { plugins } from '@/data/plugins';
+
+interface Props {
+  title: string;
+  description?: string;
+  canonicalURL?: string;
+  ogImage?: string;
+  ogType?: string;
+  twitterCard?: string;
+}
+
+// Data-driven counts so meta stats track reality on every regenerate.
+const pluginCount = plugins.length;
+const skillCount = plugins.flatMap((p) => p.skills).length;
+const subagentCount = plugins.flatMap((p) => p.agents).length;
+const commandCount = plugins.flatMap((p) => p.commands).length;
+const defaultDescription =
+  `Connect ${pluginCount} MSP platforms to Claude via MCP — ${skillCount} skills, ` +
+  `${subagentCount} subagents, ${commandCount} commands across PSA, RMM, security, ` +
+  `documentation, and billing. Hosted gateway or self-host. Free & open source.`;
+
+// Keywords derived from registered plugin names + the canonical category set.
+const vendorKeywords = plugins.map((p) => p.name).join(', ');
+const keywords =
+  `MSP, Claude, AI, MCP, Model Context Protocol, PSA, RMM, plugins, managed service provider, ${vendorKeywords}`;
+
+const {
+  title,
+  description = defaultDescription,
+  canonicalURL,
+  ogImage,
+  ogType,
+  twitterCard
+} = Astro.props;
+const baseUrl = import.meta.env.BASE_URL;
+---
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="keywords" content={keywords} />
+    <link rel="icon" type="image/svg+xml" href={`${baseUrl}favicon.svg`} />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=Nunito+Sans:wght@300;400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <SEOHead
+      title={title}
+      description={description}
+      canonicalURL={canonicalURL}
+      ogImage={ogImage}
+      ogType={ogType}
+      twitterCard={twitterCard}
+    />
+    <script is:inline>
+      // Dark mode toggle
+      const theme = localStorage.getItem('theme') ||
+        (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.classList.toggle('dark', theme === 'dark');
+    </script>
+  </head>
+  <body class="min-h-screen flex flex-col">
+    <slot />
+    <script is:inline>
+      // Copy code button functionality
+      document.querySelectorAll('pre').forEach(pre => {
+        const button = document.createElement('button');
+        button.className = 'copy-button';
+        button.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+        button.addEventListener('click', async () => {
+          const code = pre.querySelector('code')?.textContent || pre.textContent;
+          await navigator.clipboard.writeText(code);
+          button.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>';
+          setTimeout(() => {
+            button.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+          }, 2000);
+        });
+        pre.style.position = 'relative';
+        pre.appendChild(button);
+      });
+
+      // Theme toggle
+      document.querySelectorAll('[data-theme-toggle]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const isDark = document.documentElement.classList.toggle('dark');
+          localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        });
+      });
+    </script>
+  </body>
+</html>

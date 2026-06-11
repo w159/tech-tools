@@ -1,0 +1,159 @@
+---
+import DocsLayout from '@/layouts/DocsLayout.astro';
+
+const baseUrl = import.meta.env.BASE_URL;
+---
+<DocsLayout title="Advanced Workflows" description="End-to-end automations built on the WYRE MCP Gateway — scheduled agents that combine multiple vendor tools into a single repeatable workflow.">
+  <h1>Advanced Workflows</h1>
+
+  <p class="lead text-lg text-[var(--muted)] mb-8">
+    An <strong>advanced workflow</strong> is an agent that strings several gateway tools
+    together into a repeatable, often scheduled, end-to-end task such as triaging a queue,
+    reconciling billing, or summarising alerts. There are no servers to run and no code to
+    deploy.
+  </p>
+
+  <h2 id="what-makes-a-workflow">What makes a workflow</h2>
+  <p>
+    Every workflow in this section shares the same shape:
+  </p>
+  <ul>
+    <li><strong>A trigger</strong> — usually a Claude-managed scheduled routine running on a cron, occasionally an on-demand run.</li>
+    <li><strong>Gateway tools</strong> — the workflow reads and writes through MCP connectors; the gateway holds the credentials and does the vendor I/O.</li>
+    <li><strong>A prompt</strong> — the agent's logic lives in a well-written prompt. That prompt <em>is</em> the workflow.</li>
+    <li><strong>A notification</strong> — the result is surfaced to a human, typically in Slack or back onto the source record.</li>
+  </ul>
+  <p>
+    Nothing here requires a hosted service. If you can connect the gateway and write a
+    clear prompt, you can build these.
+
+  </p>
+
+  <h2 id="workflows">Workflows</h2>
+  <p>
+    Each guide is self-contained — prerequisites, a copy-paste build prompt, the resulting
+    routine prompt, and the platform gotchas that will otherwise cost you an afternoon.
+  </p>
+  <ul>
+    <li>
+      <a href={`${baseUrl}advanced-workflows/delivery-adapters/`}>Delivery Adapters</a>
+      &mdash; how a workflow routine delivers its report (Slack, IT Glue), and the adapter
+      contract for adding new targets.
+    </li>
+    <li>
+      <a href={`${baseUrl}advanced-workflows/agent-routine-catalog/`}>Agent → Routine Catalog</a>
+      &mdash; every msp-claude-plugins subagent classified by routine-fitness; the backlog
+      future workflows are picked from.
+    </li>
+    <li>
+      <a href={`${baseUrl}advanced-workflows/autotask-ticket-triage/`}>Autotask Ticket Triage Agent</a>
+      &mdash; a scheduled agent that classifies new Autotask tickets by priority, advances
+      them to <em>In Progress</em>, and posts a summary to Slack.
+    </li>
+    <li>
+      <a href={`${baseUrl}advanced-workflows/patch-drift-reporter/`}>Patch Drift Reporter</a>
+      &mdash; a weekly scheduled agent that sweeps the Datto RMM fleet for devices behind
+      on patching and posts a site-by-site report to Slack as a canvas.
+    </li>
+    <li>
+      <a href={`${baseUrl}advanced-workflows/device-health-auditor/`}>Device Health Auditor</a>
+      &mdash; a daily scheduled agent that checks Datto RMM devices for antivirus, check-in,
+      and reboot problems and posts a grouped report to Slack.
+    </li>
+    <li>
+      <a href={`${baseUrl}advanced-workflows/m365-license-auditor/`}>M365 License Auditor</a>
+      &mdash; a monthly scheduled agent that checks Microsoft 365 tenants via CIPP, flags
+      unassigned licenses, estimates the wasted spend, and posts a grouped report to Slack.
+    </li>
+    <li>
+      <a href={`${baseUrl}advanced-workflows/compliance-drift-reporter/`}>Compliance Drift Reporter</a>
+      &mdash; a weekly scheduled agent that surfaces the week's Liongard configuration-change
+      detections, groups them by system, and posts a drift digest to Slack as a canvas.
+    </li>
+    <li>
+      <a href={`${baseUrl}advanced-workflows/billing-reconciler/`}>Billing Reconciler</a>
+      &mdash; a weekly, strictly read-only scheduled agent that reviews QuickBooks Online
+      for overdue invoices and billing anomalies, and posts a reconciliation report to
+      Slack as a canvas.
+    </li>
+    <li>
+      <a href={`${baseUrl}advanced-workflows/qbr-prep/`}>QBR Prep</a>
+      &mdash; a weekly scheduled agent that assembles a Quarterly Business Review pack for
+      one designated client by composing data from four systems, writes it to IT Glue, and
+      posts a summary to Slack.
+    </li>
+    <li>
+      <a href={`${baseUrl}advanced-workflows/contract-renewal-tracker/`}>Contract Renewal Tracker</a>
+      &mdash; a weekly scheduled agent that finds Autotask contracts approaching their end
+      date in the next 90 days, buckets them by renewal window with the recurring revenue at
+      risk, and posts a renewal-pipeline report to Slack as a canvas.
+    </li>
+    <li>
+      <a href={`${baseUrl}advanced-workflows/service-desk-sla-triage/`}>Service Desk SLA Triage</a>
+      &mdash; an hourly triage agent that surfaces HaloPSA tickets breaching or at risk of
+      breaching SLA, using a one-time triage note as an idempotency guard so reruns only flag
+      newly at-risk tickets, and posts a prioritized digest to Slack.
+    </li>
+    <li>
+      <a href={`${baseUrl}advanced-workflows/cash-flow-analyzer/`}>Cash Flow Analyzer</a>
+      &mdash; a weekly, strictly read-only scheduled agent that pulls the QuickBooks Online
+      cash-flow and aged-receivables reports, summarises the near-term cash position and the
+      overdue receivables behind it, and posts a digest to Slack as a canvas.
+    </li>
+    <li>
+      <a href={`${baseUrl}advanced-workflows/pax8-renewal-optimizer/`}>Pax8 Renewal &amp; License Optimizer</a>
+      &mdash; a weekly scheduled agent that sweeps Pax8 subscriptions, buckets upcoming
+      renewals by 30/60/90-day window with committed value, flags over-provisioned
+      subscriptions with the reclaimable monthly spend, and posts a combined digest to Slack
+      as a canvas.
+    </li>
+    <li>
+      <a href={`${baseUrl}advanced-workflows/client-profitability-reporter/`}>Client Profitability Reporter</a>
+      &mdash; a monthly, strictly read-only scheduled agent that ranks clients by revenue from
+      QuickBooks Online and reports company net margin, posting a profitability digest to Slack
+      as a canvas.
+    </li>
+    <li>
+      <a href={`${baseUrl}advanced-workflows/sales-pipeline-pulse/`}>Sales Pipeline Pulse</a>
+      &mdash; a weekly scheduled agent that summarises open HubSpot pipeline value by stage,
+      flags stalled deals, surfaces deals closing this period, and posts a sales digest to
+      Slack as a canvas.
+    </li>
+    <li>
+      <a href={`${baseUrl}advanced-workflows/pending-proposal-tracker/`}>Pending-Proposal Tracker</a>
+      &mdash; a weekly scheduled agent that tracks PandaDoc proposals sent but unsigned,
+      buckets them by age in stage with their outstanding value, flags those nearing expiry,
+      and posts a digest to Slack as a canvas.
+    </li>
+    <li>
+      <a href={`${baseUrl}advanced-workflows/it-glue-documentation-auditor/`}>IT Glue Documentation Auditor</a>
+      &mdash; a monthly scheduled agent that sweeps IT Glue organizations, scores
+      documentation completeness and freshness, and posts a ranked documentation-debt report
+      to Slack as a canvas.
+    </li>
+    <li>
+      <a href={`${baseUrl}advanced-workflows/m365-identity-auditor/`}>M365 Identity Auditor</a>
+      &mdash; a monthly scheduled agent that checks Microsoft 365 tenants via CIPP for MFA
+      coverage, conditional access, and admin-account exposure, and posts a per-tenant
+      identity-posture report to Slack.
+    </li>
+    <li>
+      <a href={`${baseUrl}advanced-workflows/gateway-usage-auditor/`}>Gateway Usage &amp; Anomaly Auditor</a>
+      &mdash; a weekly scheduled agent that reviews the WYRE MCP Gateway's own usage, connection
+      health, and credit consumption for anomalies, and posts a gateway-ops digest to Slack.
+    </li>
+  </ul>
+  <p class="text-sm text-[var(--muted)]">
+    More workflows will be added here. Have one you'd like documented?
+    <a href="https://github.com/wyre-technology/msp-claude-plugins/issues" target="_blank" rel="noopener noreferrer">Open an issue</a>.
+  </p>
+
+  <hr class="my-8" />
+
+  <h2 id="before-you-start">Before you start</h2>
+  <p>
+    Workflows assume you already have a working gateway connection. If you don't, start
+    with the <a href={`${baseUrl}getting-started/quick-start/`}>Quick Start</a> and the
+    <a href={`${baseUrl}getting-started/gateway/`}>Gateway overview</a>, then come back here.
+  </p>
+</DocsLayout>

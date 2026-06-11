@@ -1,0 +1,158 @@
+---
+import DocsLayout from '@/layouts/DocsLayout.astro';
+import { prompts, roleLabels, roleDescriptions, roleOrder, getPromptsByRole } from '@/data/prompts';
+import { plugins } from '@/data/plugins';
+import { mcpServers } from '@/data/mcp-servers';
+
+const baseUrl = import.meta.env.BASE_URL;
+
+const roleIcons: Record<string, string> = {
+  account:       '🤝',
+  finance:       '💰',
+  sales:         '📈',
+  support:       '🎧',
+  noc:           '🖥️',
+  incident:      '🚨',
+  security:      '🔐',
+  documentation: '📋',
+  bizops:        '📊',
+};
+
+function getPluginLabel(id: string): string {
+  return plugins.find(p => p.id === id)?.name ?? id;
+}
+
+function getMcpServerLabel(id: string): string {
+  return mcpServers.find(s => s.id === id)?.name?.replace(' MCP', '') ?? id;
+}
+---
+
+<DocsLayout title="Prompt Bank" description="Ready-to-use prompts for MSP teams — account management, finance, sales, support, and NOC.">
+  <h1>Prompt Bank</h1>
+
+  <p class="lead text-lg text-[var(--muted)] mb-8">
+    Ready-to-use prompts for every MSP team. Copy, fill in the brackets, and go.
+    {prompts.length} prompts across {roleOrder.length} roles.
+  </p>
+
+  <div class="not-prose mb-8 flex flex-wrap gap-2">
+    {roleOrder.map(role => (
+      <a
+        href={`#${role}`}
+        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium bg-[var(--surface)] border border-[var(--border)] hover:border-[var(--link)] hover:text-[var(--link)] transition-colors"
+      >
+        <span>{roleIcons[role]}</span>
+        <span>{roleLabels[role]}</span>
+        <span class="text-[var(--muted)]">({getPromptsByRole(role).length})</span>
+      </a>
+    ))}
+  </div>
+
+  <hr />
+
+  {roleOrder.map(role => {
+    const rolePrompts = getPromptsByRole(role);
+    return (
+      <section id={role} class="mb-16">
+        <h2>
+          <span class="mr-2">{roleIcons[role]}</span>
+          {roleLabels[role]}
+        </h2>
+        <p class="text-[var(--muted)]">{roleDescriptions[role]}</p>
+
+        <div class="not-prose space-y-6 mt-6">
+          {rolePrompts.map(prompt => (
+            <div class="rounded-lg border border-[var(--border)] overflow-hidden">
+              {/* Header */}
+              <div class="px-5 py-4 bg-[var(--surface)] border-b border-[var(--border)]">
+                <h3 class="font-semibold text-[var(--text)] text-base mb-1">{prompt.title}</h3>
+                <p class="text-sm text-[var(--muted)] mb-3">{prompt.description}</p>
+
+                {/* Requirements */}
+                <div class="flex flex-wrap gap-2 text-xs">
+                  {prompt.mcpServers.length > 0 && (
+                    <div class="flex flex-wrap items-center gap-1">
+                      <span class="text-[var(--muted)] font-medium">MCP:</span>
+                      {prompt.mcpServers.map(id => (
+                        <a
+                          href={`${baseUrl}mcp-servers/${id}/`}
+                          class="px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 hover:border-cyan-500/50 transition-colors"
+                        >
+                          {getMcpServerLabel(id)}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                  {prompt.plugins.length > 0 && (
+                    <div class="flex flex-wrap items-center gap-1">
+                      <span class="text-[var(--muted)] font-medium">Plugin:</span>
+                      {prompt.plugins.map(id => (
+                        <a
+                          href={`${baseUrl}plugins/${id}/`}
+                          class="px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 hover:border-purple-500/50 transition-colors"
+                        >
+                          {getPluginLabel(id)}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                  {prompt.mcpServers.length === 0 && prompt.plugins.length === 0 && (
+                    <span class="px-1.5 py-0.5 rounded bg-[var(--bg)] text-[var(--muted)] border border-[var(--border)]">
+                      Any PSA / RMM
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Prompt body */}
+              <div class="relative group bg-[var(--bg)]">
+                <pre class="m-0 p-5 text-sm overflow-x-auto whitespace-pre-wrap leading-relaxed"><code>{prompt.prompt}</code></pre>
+                <button
+                  class="copy-btn absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity px-2.5 py-1.5 text-xs font-medium rounded bg-[var(--surface)] border border-[var(--border)] hover:border-[var(--link)] hover:text-[var(--link)]"
+                  data-prompt={prompt.prompt}
+                  aria-label="Copy prompt"
+                >
+                  Copy
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  })}
+
+  <hr />
+
+  <h2>Tips for Better Results</h2>
+
+  <h3>Always specify the client</h3>
+  <p>Replace <code>[CLIENT NAME]</code> with the actual company name. Claude will use it to filter data across all connected tools.</p>
+
+  <h3>Set the time range</h3>
+  <p>Prompts with <code>[DATE RANGE]</code> or <code>[MONTH]</code> work best with specific dates — <em>"March 1–31 2025"</em> is better than <em>"last month."</em></p>
+
+  <h3>Chain prompts for deeper analysis</h3>
+  <p>Start with a summary prompt, then ask follow-up questions. Claude maintains context across the conversation:</p>
+  <pre><code class="language-text"># Run the QBR Client Summary for Acme Corp, then follow up:
+Which of those recurring issues could we have prevented with proactive monitoring?</code></pre>
+
+  <h3>Load skills before cross-platform prompts</h3>
+  <p>For prompts that span multiple tools, load the relevant skills first:</p>
+  <pre><code class="language-text">/skill autotask:tickets
+/skill ninjaone:devices
+
+Now run the Client Health Scorecard for Acme Corp.</code></pre>
+
+</DocsLayout>
+
+<script>
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const text = btn.getAttribute('data-prompt') ?? '';
+      await navigator.clipboard.writeText(text);
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+    });
+  });
+</script>

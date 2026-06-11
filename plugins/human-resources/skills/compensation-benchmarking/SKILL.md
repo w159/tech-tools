@@ -1,32 +1,30 @@
 ---
 name: compensation-benchmarking
-description: Benchmark compensation against market data. Trigger with "what should we pay", "comp benchmark", "market rate for", "salary range for", "is this offer competitive", or when the user needs help evaluating or setting compensation levels.
+description: Benchmark compensation against market data. Use when user asks "what should we pay", "comp benchmark", "market rate for", "salary range for", or "is this offer competitive".
 ---
 
 # Compensation Benchmarking
 
-Help benchmark compensation against market data for hiring, retention, and equity planning.
+Benchmark compensation against market data for hiring, retention, and equity planning.
 
 ## Framework
 
 ### Components of Total Compensation
-- **Base salary**: Cash compensation
+- **Base salary**: cash compensation
 - **Equity**: RSUs, stock options, or other equity
-- **Bonus**: Annual target bonus, signing bonus
-- **Benefits**: Health, retirement, perks (harder to quantify)
+- **Bonus**: annual target bonus, signing bonus
+- **Benefits**: health, retirement, perks
 
 ### Key Variables
-- **Role**: Function and specialization
+- **Role**: function and specialization
 - **Level**: IC levels, management levels
-- **Location**: Geographic pay adjustments
-- **Company stage**: Startup vs. growth vs. public
-- **Industry**: Tech vs. finance vs. healthcare
+- **Location**: geographic pay adjustments
+- **Company stage**: startup vs. growth vs. public
+- **Industry**: tech vs. finance vs. healthcare
 
 ## Data Sources
 
-- **With ~~compensation data**: Pull verified benchmarks
-- **Without**: Use web research, public salary data, and user-provided context
-- Always note data freshness and source limitations
+If Paylocity is available, pull current pay data via `/pay-rate-audit` for the internal anchor. For external benchmarks, use web research, public salary data, and user-provided context. Always note data freshness and source limitations.
 
 ## Output
 

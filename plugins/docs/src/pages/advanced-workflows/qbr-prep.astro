@@ -1,0 +1,240 @@
+---
+import DocsLayout from '@/layouts/DocsLayout.astro';
+
+const baseUrl = import.meta.env.BASE_URL;
+
+// Prompts kept as consts so literal braces / angle brackets render verbatim
+// (.astro treats { } as expressions — a const string sidesteps all escaping).
+const buildPrompt = `Build me a scheduled QBR Prep agent. Do all of this end to end:
+
+1. Confirm the WYRE MCP Gateway works and the systems are reachable: it must
+   expose the autotask_*, datto_*, cipp_*, liongard_* and IT Glue tools.
+2. Pick ONE designated client to prepare the QBR pack for, and discover its
+   five IDs - these get baked into the routine prompt so the routine never runs
+   discovery itself:
+   - Autotask companyID via autotask_search_companies.
+   - Datto RMM site UID (the site the client's devices live in).
+   - CIPP tenant ID via cipp_list_tenants, matched by company name/domain.
+   - Liongard environment ID via liongard_environments_list, matched by name.
+   - IT Glue organization ID via search_organizations.
+   If the client cannot be matched in one system, record that - the routine
+   degrades that section gracefully.
+3. Confirm a Slack connector is connected. Note the destination channel name
+   and ID (e.g. #sw-dev). If Slack does not show in the /schedule connector
+   list, read its connector_uuid and url from an existing routine that already
+   uses Slack (RemoteTrigger list -> get -> mcp_connections).
+4. Create a Claude-managed scheduled routine named "QBR Prep":
+   - Schedule: weekly, cron "0 14 * * 1" (Monday 10:00 America/New_York =
+     14:00 UTC). Faster-than-hourly cadences are rejected.
+   - Attach TWO connectors, each with permitted_tools populated:
+       * WYRE MCP Gateway: autotask_search_tickets, datto_list_devices,
+         cipp_list_users, cipp_list_mfa_users, liongard_detections_list,
+         search_documents, create_document, update_document_section
+       * Slack: slack_send_message
+     An empty permitted_tools list = the routine runs with no tools.
+   - Routine prompt: every run, assemble a QBR pack for the designated client
+     by composing tickets, devices, identity and configuration-change data,
+     write it to an IT Glue document, and post a one-line summary to Slack.
+     Use the exact routine prompt below, with your client's five IDs baked in.
+5. Confirm the create response echoes both connectors with the correct
+   permitted_tools and the routine prompt verbatim. Do not trigger a run -
+   routine runs need a one-time approval handled separately.`;
+
+const routinePrompt = `You are the QBR Prep routine for WYRE. Once a week you assemble a Quarterly Business Review pack for one designated client. All IDs are baked in below - do NOT call any list_*/search_* discovery tool to find IDs (the only allowed search is search_documents to find-or-create the IT Glue doc).
+
+Designated client: <client name>
+- Autotask companyID: <autotask-company-id>
+- Datto RMM site UID: <datto-site-uid>
+- CIPP tenant: <cipp-tenant-id>
+- Liongard environment ID: <liongard-environment-id>
+- IT Glue organization ID: <itglue-org-id>
+
+Build the pack from four areas. If any area cannot be read, put a 'data not available' note in that section - never omit a section silently.
+
+1. Tickets. Call autotask_search_tickets with companyID <autotask-company-id> and createdAfter set to 90 days ago. Report total ticket volume, counts by priority, and how many are still open.
+
+2. Devices. Call datto_list_devices with siteUid <datto-site-uid>. Ignore the large udf block on each device. Report device count and any devices with health concerns: antivirus not RunningAndUpToDate, offline/stale check-in, or reboot pending.
+
+3. Identity. Call cipp_list_users and cipp_list_mfa_users with tenantFilter <cipp-tenant-id>. Report user count and MFA coverage (how many users have MFA enabled vs not).
+
+4. Configuration changes. Call liongard_detections_list with a startDate 90 days ago, pageSize 5, and a filter for EnvironmentID <liongard-environment-id>. Read only the most recent ~15 detections and only their small metadata fields (ID, SystemName, Name, Date, SystemType). Never read the large ChangeDetection field. Produce a short list of recent configuration changes.
+
+5. Assemble a QBR pack: an executive summary paragraph, then one section per area above (Tickets, Devices, Identity, Configuration Changes).
+
+6. Deliver. Call search_documents with organization_id <itglue-org-id> and name 'QBR Pack - <client name>'. If a matching document is found, use update_document_section to write the new pack into it. If not found, use create_document with organization_id <itglue-org-id>, name 'QBR Pack - <client name>', and the pack as HTML content. If the IT Glue org or document step fails, fall back to including the full pack inline in the Slack message. Then call slack_send_message to channel <channel-id> (#sw-dev) with: 'QBR pack ready for <client name> - <ticket/device/MFA headline>'.
+
+Keep the prompt lean and factual. Do not invent data - if a tool returns nothing or errors, say so in that section.`;
+---
+<DocsLayout title="QBR Prep" description="Build a Claude-managed scheduled agent that assembles a Quarterly Business Review pack for one designated client every week by composing data from four systems — Autotask, Datto RMM, CIPP and Liongard — writes it to IT Glue, and posts a summary to Slack. No servers, no code.">
+  <h1>QBR Prep</h1>
+
+  <p class="lead text-lg text-[var(--muted)] mb-8">
+    A worked example of an <a href={`${baseUrl}advanced-workflows/`}>advanced workflow</a>:
+    a Claude-managed scheduled agent that, once a week, assembles a Quarterly Business
+    Review pack for one designated client by composing data from four systems — ticket
+    history from Autotask, device health from Datto RMM, identity and MFA coverage from
+    CIPP, and configuration changes from Liongard — writes the pack to an IT Glue
+    document, and posts a one-line summary to Slack. There are no servers and no code to
+    deploy: the agent is a saved prompt plus a schedule plus two MCP connectors, running
+    in Claude's cloud.
+  </p>
+
+  <h2 id="what-it-builds">What it builds</h2>
+  <p>
+    The finished workflow runs unattended on a weekly cron. Each run it reads the
+    designated client's tickets, devices, users and configuration changes, reasons
+    about what matters, assembles an executive summary plus a section per area, and
+    saves it as a QBR pack, turning four separate systems into a single review
+    document with a Slack trail.
+  </p>
+
+  <hr class="my-8" />
+
+  <h2 id="prerequisites">Prerequisites</h2>
+  <p>Before building, your Claude account needs all of the following:</p>
+  <table>
+    <thead>
+      <tr><th>Requirement</th><th>Notes</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>WYRE MCP Gateway connector</strong></td>
+        <td>Connected in claude.ai (<code>https://mcp.wyre.ai/v1/mcp</code>). Provides the <code>autotask_*</code>, <code>datto_*</code>, <code>cipp_*</code>, <code>liongard_*</code> and IT Glue tools. See the <a href={`${baseUrl}getting-started/gateway/`}>Gateway overview</a>.</td>
+      </tr>
+      <tr>
+        <td><strong>Autotask, Datto RMM, CIPP, Liongard &amp; IT Glue enabled in the gateway</strong></td>
+        <td>The gateway's API users must be able to <strong>read</strong> tickets, devices, users/MFA, detections and organizations — and to <strong>create</strong> and <strong>update</strong> IT Glue documents.</td>
+      </tr>
+      <tr>
+        <td><strong>Slack connector</strong></td>
+        <td>The first-party Slack connector connected in claude.ai (<code>https://mcp.slack.com/mcp</code>). Provides <code>slack_send_message</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>Scheduled routines access</strong></td>
+        <td>Created via the <code>/schedule</code> capability; managed at <a href="https://claude.ai/code/routines" target="_blank" rel="noopener noreferrer">claude.ai/code/routines</a>.</td>
+      </tr>
+      <tr>
+        <td><strong>A designated client present across those systems</strong></td>
+        <td>One client that can be matched in Autotask, Datto RMM, CIPP, Liongard and IT Glue, so all five IDs can be baked into the routine prompt.</td>
+      </tr>
+      <tr>
+        <td><strong>A destination Slack channel</strong></td>
+        <td>e.g. <code>#sw-dev</code>, plus its channel ID. The Slack connector must have access to it.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <hr class="my-8" />
+
+  <h2 id="gotchas">Known gotchas</h2>
+  <p>
+    These are the things that cost real time the first time through. Account for them
+    up front and the build genuinely takes minutes.
+  </p>
+  <ul>
+    <li>
+      <strong>The cadence floor is hourly.</strong> Scheduled routines reject
+      faster-than-hourly cron expressions. A QBR pack is a weekly artifact anyway —
+      <code>0 14 * * 1</code> runs it every Monday morning.
+    </li>
+    <li>
+      <strong><code>permitted_tools</code> must be populated per connector.</strong> A
+      routine with a connector attached but an empty <code>permitted_tools</code> list
+      runs with <em>no tools</em> and silently does nothing — no error, no output. List
+      the exact tool names the routine needs, and only those.
+    </li>
+    <li>
+      <strong>QBRs are quarterly and staggered per client — a routine is a cron.</strong>
+      Real QBRs land on a per-client cadence, not all at once. This POC sidesteps that by
+      preparing a pack for <em>one designated client</em> every week. The production
+      pattern is a "QBR radar" routine that scans the PSA for clients with a QBR due in
+      roughly two weeks and preps a pack for each — but that needs a source of QBR dates
+      to scan, which is out of scope here.
+    </li>
+    <li>
+      <strong>Liongard's metric-evaluation endpoint is unavailable.</strong> The
+      configuration section uses <code>liongard_detections_list</code> — recent change
+      detections — instead. Window it to the last ~90 days with a small page size, read
+      only the most recent ~15 detections' metadata, and never read the large
+      <code>ChangeDetection</code> field.
+    </li>
+    <li>
+      <strong>Ignore the Datto <code>udf</code> block.</strong> Each
+      <code>datto_list_devices</code> record carries a 300-field <code>udf</code> block
+      that is almost entirely empty. For one client's site that is a single call and
+      manageable — just tell the routine to ignore the <code>udf</code> block.
+    </li>
+    <li>
+      <strong>A routine reaches only its attached connectors.</strong> The routine
+      sandbox blocks arbitrary network egress, so notifications must go through the
+      Slack connector's tools. Attach every connector the workflow touches.
+    </li>
+  </ul>
+
+  <hr class="my-8" />
+
+  <h2 id="build-prompt">The one-shot build prompt</h2>
+  <p>
+    With the connectors above in place, paste this to Claude. It confirms the gateway,
+    discovers the designated client's five IDs, and creates the routine.
+  </p>
+  <pre class="not-prose"><code>{buildPrompt}</code></pre>
+
+  <hr class="my-8" />
+
+  <h2 id="routine-prompt">The resulting routine prompt</h2>
+  <p>
+    This is the lean prompt the build process installs into the scheduled routine itself.
+    Substitute your designated client's five IDs and destination channel.
+  </p>
+  <pre class="not-prose"><code>{routinePrompt}</code></pre>
+
+  <hr class="my-8" />
+
+  <h2 id="how-it-works">How it works</h2>
+  <h3>Four connectors composed into one pack</h3>
+  <p>
+    A QBR pack pulls from four systems that normally need four separate logins. The
+    routine calls each in turn — Autotask for ticket volume, Datto RMM for device health,
+    CIPP for identity and MFA coverage, Liongard for configuration changes — and reasons
+    over the combined picture to write an executive summary plus a section per area. All
+    five client IDs are baked into the routine prompt, so the routine never spends a run
+    on discovery.
+  </p>
+  <h3>The IT Glue document is updated in place</h3>
+  <p>
+    Each run the routine searches the client's IT Glue organization for a document
+    named "QBR Pack - &lt;client name&gt;". If it exists, the routine updates it; if not,
+    it creates it. Reruns therefore converge on a single living document rather than
+    piling up new ones — the latest pack is always at the same place, and the Slack
+    message is just a pointer to it.
+  </p>
+  <h3>Graceful per-section degradation</h3>
+  <p>
+    If any one system can't be read — a client unmatched in CIPP, a Liongard timeout —
+    that section of the pack carries a "data not available" note instead of vanishing.
+    The pack always has the same four sections, so a reader can tell the difference
+    between "nothing to report" and "we couldn't check." If the IT Glue step itself
+    fails, the routine falls back to posting the full pack inline in Slack.
+    See <a href={`${baseUrl}advanced-workflows/delivery-adapters/`}>delivery adapters</a>
+    for other ways to surface a routine's output.
+  </p>
+
+  <hr class="my-8" />
+
+  <h2 id="extending">Extending it</h2>
+  <p>
+    The natural next step is the <strong>QBR radar</strong>: instead of one designated
+    client on a fixed weekly cron, a routine that scans the PSA for clients with a QBR
+    due in roughly two weeks and preps a pack for each one. That needs a source of QBR
+    dates to scan against — a custom field, a calendar, a tracking sheet — which is why
+    it is out of scope for this POC. The pack itself is also easy to widen: add a
+    financials section by attaching the <code>qbo</code> connector and pulling the
+    client's recent invoices and balance alongside the operational data.
+  </p>
+  <p class="text-sm text-[var(--muted)]">
+    Questions or a workflow you'd like documented?
+    <a href="https://github.com/wyre-technology/msp-claude-plugins/issues" target="_blank" rel="noopener noreferrer">Open an issue</a>
+    in the <code>msp-claude-plugins</code> repository.
+  </p>
+</DocsLayout>
