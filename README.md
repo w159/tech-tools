@@ -298,8 +298,10 @@ The canonical list lives in [`.env.template`](.env.template). Empty values are t
 | --- | --- | --- | --- |
 | `AUVIK_USERNAME` | ✅ | auvik-mcp | Auvik portal username (email). |
 | `AUVIK_API_KEY` | ✅ | auvik-mcp | Auvik portal API key. |
-| `AUVIK_REGION` | ⬜ | auvik-mcp | `us1` (default), `eu1`, `anz1`, … |
-| `BLUMIRA_JWT_TOKEN` | ✅ | blumira-mcp | Long-lived JWT from Blumira → Integrations → API. |
+| `AUVIK_REGION` | ⬜ | auvik-mcp | `us1` (default), `us2`, `us3`, `us4`, `eu1`, `eu2`, `au1`, `ca1`. |
+| `BLUMIRA_CLIENT_ID` / `BLUMIRA_CLIENT_SECRET` | one-of | blumira-mcp | OAuth2 client_credentials; generated under Settings → Organization → Blumira API Credentials. |
+| `BLUMIRA_JWT_TOKEN` | one-of | blumira-mcp | Pre-issued JWT bearer token (alternative to OAuth). |
+| `BLUMIRA_BASE_URL` | ⬜ | blumira-mcp | Defaults to `https://api.blumira.com/public-api/v1`. |
 | `CIPP_BASE_URL` | ✅ | cipp-mcp | URL of the deployed CIPP Azure Function. |
 | `CIPP_API_KEY` | one-of | cipp-mcp | Legacy static bearer. |
 | `CIPP_TENANT_ID` / `CIPP_CLIENT_ID` / `CIPP_CLIENT_SECRET` | one-of | cipp-mcp | Modern OAuth2 trio. |
@@ -330,7 +332,7 @@ The canonical list lives in [`.env.template`](.env.template). Empty values are t
 | Vendor | Flow | Token caching | Required scopes / roles |
 | --- | --- | --- | --- |
 | Auvik | Static API key | n/a | API access enabled on the portal user. |
-| Blumira | Long-lived JWT | n/a | Generated under Integrations → API. |
+| Blumira | OAuth2 client_credentials (audience `public-api`) or pre-issued JWT | ~30 days (JWT) | API credentials generated under Settings → Organization. |
 | CIPP (legacy) | Static bearer | n/a | Granted by CIPP admin. |
 | CIPP (modern) | OAuth2 client_credentials against Entra ID | ~1h | App registration with delegated access to CIPP-API. See `mcp_servers/connectwise-manage-mcp/entra-app-registration.md`. |
 | ConnectWise Manage | Public/Private key + `clientId` header | n/a | Member with API access; client ID registered at <https://developer.connectwise.com>. |
@@ -364,14 +366,14 @@ The canonical list lives in [`.env.template`](.env.template). Empty values are t
 
 | Package | Version | Vendor | Bundle |
 | --- | --- | --- | --- |
-| [`auvik-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/auvik-mcp) | 0.4.0 | Auvik network monitoring | `auvik-mcp.mcpb` |
-| [`blumira-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/blumira-mcp) | 1.1.0 | Blumira SIEM/XDR | `blumira-mcp.mcpb` |
+| [`auvik-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/auvik-mcp) | 0.4.1 | Auvik network monitoring | `auvik-mcp.mcpb` |
+| [`blumira-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/blumira-mcp) | 1.1.4 | Blumira SIEM/XDR | `blumira-mcp.mcpb` |
 | [`cipp-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/cipp-mcp) | 0.2.0 | CIPP -- M365 MSP control plane | `cipp-mcp.mcpb` |
 | [`connectwise-manage-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/connectwise-manage-mcp) | 0.1.0 | ConnectWise Manage PSA | `connectwise-manage-mcp.mcpb` |
-| [`kaseya-spanning-backup-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/kaseya-spanning-backup-mcp) | 1.1.0 | Kaseya Spanning -- SaaS backup for M365/GWS/Salesforce | `kaseya-spanning-backup-mcp.mcpb` |
+| [`kaseya-spanning-backup-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/kaseya-spanning-backup-mcp) | 1.1.2 | Kaseya Spanning -- SaaS backup for M365/GWS/Salesforce | `kaseya-spanning-backup-mcp.mcpb` |
 | [`knowbe4-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/knowbe4-mcp) | 1.1.0 | KnowBe4 security awareness | `knowbe4-mcp.mcpb` |
 | [`ninjaone-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/ninjaone-mcp) | 1.6.0 | NinjaOne RMM | `ninjaone-mcp.mcpb` |
-| [`paylocity-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/paylocity-mcp) | 0.1.1 | Paylocity HR/payroll | `paylocity-mcp.mcpb` |
+| [`paylocity-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/paylocity-mcp) | 0.1.3 | Paylocity HR/payroll | `paylocity-mcp.mcpb` |
 | [`threatlocker-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/threatlocker-mcp) | 1.2.0 | ThreatLocker zero-trust EDR | `threatlocker-mcp.mcpb` |
 | [`vanta-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/vanta-mcp) | 0.2.0 | Vanta GRC / compliance | `vanta-mcp.mcpb` |
 
@@ -383,7 +385,7 @@ Every server speaks MCP over **stdio JSON-RPC** and registers its tools/resource
 | Server | Status | Tools | Notes |
 | --- | --- | --- | --- |
 | auvik | PASS | 39 | |
-| blumira | SKIP | 30 | missing `BLUMIRA_JWT_TOKEN`; count from source, mcpb bundle pending rebuild |
+| blumira | SKIP | 32 | missing creds; count from source (added findings/MSP evidence tools); boots + tools/list verified |
 | cipp | FAIL | 43 | HTTP 401 -- CIPP tenant permission issue (pre-existing); `tools/list` confirmed 43 tools boot correctly [1] |
 | connectwise | PASS | 52 | |
 | kaseya-spanning-backup | SKIP | 14 | missing `SPANNING_ADMIN_EMAIL` + `SPANNING_API_TOKEN`; count verified via `tools/list` |
@@ -491,8 +493,8 @@ The MCP servers depend on these standalone, typed Node.js clients. You can use t
 
 | Package | Version | Purpose |
 | --- | --- | --- |
-| [`node-auvik`](https://github.com/w159/tech-tools/tree/main/mcp_node/node-auvik) | 1.0.0 | Auvik network monitoring API client. |
-| [`node-blumira`](https://github.com/w159/tech-tools/tree/main/mcp_node/node-blumira) | 1.0.1 | Blumira SIEM API client. |
+| [`node-auvik`](https://github.com/w159/tech-tools/tree/main/mcp_node/node-auvik) | 1.0.1 | Auvik network monitoring API client. |
+| [`node-blumira`](https://github.com/w159/tech-tools/tree/main/mcp_node/node-blumira) | 1.0.2 | Blumira SIEM API client. |
 | [`node-ninjaone`](https://github.com/w159/tech-tools/tree/main/mcp_node/node-ninjaone) | 1.1.2 | NinjaOne / NinjaRMM API client - comprehensive, fully typed. |
 | [`node-paylocity`](https://github.com/w159/tech-tools/tree/main/mcp_node/node-paylocity) | 1.0.0 | Paylocity REST API client. |
 | [`node-spanning`](https://github.com/w159/tech-tools/tree/main/mcp_node/node-spanning) | 1.0.2 | Spanning Cloud Backup API client (M365 / GWS / SF). |
@@ -519,10 +521,10 @@ Each ships dual ESM/CJS bundles + `.d.ts` via `tsup`, and is fully unit-tested v
 <details>
 <summary><strong>Blumira</strong></summary>
 
-- **Purpose:** SIEM/XDR - findings, detections, devices.
-- **Base URL:** `https://api.blumira.com/`
-- **Auth:** Long-lived JWT bearer.
-- **Docs:** <https://app.blumira.com/api/v3/docs>
+- **Purpose:** SIEM/XDR - findings, evidence, detections, devices.
+- **Base URL:** `https://api.blumira.com/public-api/v1`
+- **Auth:** OAuth2 client_credentials (token at `https://auth.blumira.com/oauth/token`, audience `public-api`) or pre-issued JWT bearer.
+- **Docs:** <https://api.blumira.com/public-api/v1/ui/>
 - **Local docs:** `docs/vendors/blumira/` (includes OpenAPI spec).
 
 </details>

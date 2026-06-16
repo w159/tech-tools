@@ -116,10 +116,11 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: 'cipp_create_user',
     description:
-      '⚠ HIGH-IMPACT. Creates a new user account in the tenant, which grants ' +
+      'VISIBLE-TO-OTHERS: Create a new user account in the tenant. Grants ' +
       'directory presence and may include initial credentials and license/role ' +
-      'eligibility. Reversible by deleting or disabling the user. ' +
-      'Confirm with the user before invoking.',
+      'eligibility; the new account becomes visible to tenant admins and the ' +
+      'global address list. Reversible by deleting or disabling the user. ' +
+      'Confirm with the user before invoking. Returns the CIPP create result.',
     annotations: {
       title: 'Create user (high-impact)',
       readOnlyHint: false,
@@ -174,10 +175,10 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: 'cipp_edit_user',
     description:
-      "⚠ HIGH-IMPACT. Edits an existing user's properties, which can include " +
+      "DESTRUCTIVE: Edit an existing user's properties, which can include " +
       'directory attributes, usage location, and may grant or revoke roles or ' +
       'license eligibility. Reversible by editing again. ' +
-      'Confirm with the user before invoking.',
+      'Confirm with the user before invoking. Returns the CIPP edit result.',
     annotations: {
       title: 'Edit user (high-impact)',
       readOnlyHint: false,
@@ -217,8 +218,9 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: 'cipp_disable_user',
     description:
-      '⚠ HIGH-IMPACT. Disables a user account, blocking sign-in. Reversible by ' +
-      're-enabling the account. Confirm with the user before invoking.',
+      'DESTRUCTIVE: Disable a user account, blocking sign-in. Reversible by ' +
+      're-enabling the account. Confirm with the user before invoking. ' +
+      'Returns the CIPP action result.',
     annotations: {
       title: 'Disable user (reversible)',
       readOnlyHint: false,
@@ -238,8 +240,10 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: 'cipp_reset_password',
     description:
-      '⚠ HIGH-IMPACT. Resets a user\'s password, invalidating their current ' +
-      'password. Reversible by setting a new password. Confirm with the user before invoking.',
+      "DESTRUCTIVE: Reset a user's password, invalidating their current " +
+      'password and locking them out until the new password is shared. Reversible ' +
+      'by setting a new password. Confirm with the user before invoking. Returns ' +
+      'the CIPP result (includes the new password when CIPP generated one).',
     annotations: {
       title: 'Reset password (reversible)',
       readOnlyHint: false,
@@ -264,8 +268,10 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: 'cipp_reset_mfa',
     description:
-      '⚠ HIGH-IMPACT. Resets all MFA methods for a user, requiring them to ' +
-      're-register their authentication methods. Reversible by re-enabling MFA. Confirm with the user before invoking.',
+      'DESTRUCTIVE: Reset all MFA methods for a user, requiring them to ' +
+      're-register their authentication methods before they can sign in with MFA. ' +
+      'Reversible by re-registering MFA. Confirm with the user before invoking. ' +
+      'Returns the CIPP action result.',
     annotations: {
       title: 'Reset MFA (reversible)',
       readOnlyHint: false,
@@ -285,8 +291,9 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: 'cipp_revoke_sessions',
     description:
-      '⚠ HIGH-IMPACT. Revokes all active sessions for a user, forcing them to ' +
-      're-authenticate. Reversible by the user signing in again. Confirm with the user before invoking.',
+      'DESTRUCTIVE: Revoke all active sessions for a user, forcing them to ' +
+      're-authenticate on every device. Reversible by the user signing in again. ' +
+      'Confirm with the user before invoking. Returns the CIPP action result.',
     annotations: {
       title: 'Revoke sessions (reversible)',
       readOnlyHint: false,
@@ -306,9 +313,10 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: 'cipp_offboard_user',
     description:
-      '⚠ DESTRUCTIVE — IRREVERSIBLE. Completely offboards a user by disabling ' +
-      'their account, revoking sessions, removing group memberships, and optionally ' +
-      'transferring data. This comprehensive action cannot be easily undone. Confirm with the user before invoking.',
+      'DESTRUCTIVE: Fully offboard a user (effectively irreversible). Disables ' +
+      'their account, revokes sessions, removes group memberships, and optionally ' +
+      'transfers mailbox data. This comprehensive action cannot be easily undone. ' +
+      'Confirm with the user before invoking. Returns the CIPP offboarding result.',
     annotations: {
       title: 'Offboard user (irreversible)',
       readOnlyHint: false,
@@ -420,9 +428,11 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: 'cipp_create_group',
     description:
-      '⚠ HIGH-IMPACT. Creates a new group in the tenant, which can be used for ' +
+      'VISIBLE-TO-OTHERS: Create a new group in the tenant, usable for ' +
       'security policy assignments (RBAC, Conditional Access) or mail distribution. ' +
-      'Reversible by deleting the group. Confirm with the user before invoking.',
+      'A mail-enabled group appears in the global address list. Reversible by ' +
+      'deleting the group. Confirm with the user before invoking. Returns the ' +
+      'CIPP create result.',
     annotations: {
       title: 'Create group (high-impact)',
       readOnlyHint: false,
@@ -502,10 +512,10 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: 'cipp_set_out_of_office',
     description:
-      '⚠ HIGH-IMPACT. Configures the out-of-office / auto-reply for a mailbox, ' +
-      'which causes automated messages to be sent to internal and/or external ' +
-      'senders. Reversible by disabling the auto-reply. ' +
-      'Confirm with the user before invoking.',
+      'VISIBLE-TO-OTHERS: Configure the out-of-office / auto-reply for a mailbox. ' +
+      'Causes automated messages to be sent to internal and/or external senders ' +
+      'who email the mailbox. Reversible by disabling the auto-reply. ' +
+      'Confirm with the user before invoking. Returns the CIPP action result.',
     annotations: {
       title: 'Set out-of-office (high-impact)',
       readOnlyHint: false,
@@ -542,10 +552,11 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: 'cipp_set_email_forwarding',
     description:
-      '⚠ HIGH-IMPACT. Configures email forwarding on a mailbox, silently ' +
-      "redirecting the user's incoming mail to another address. This is a common " +
-      'data-exfiltration vector. Reversible by removing the forwarding rule. ' +
-      'Confirm with the user before invoking.',
+      'DESTRUCTIVE: Configure email forwarding on a mailbox, redirecting the ' +
+      "user's incoming mail to another address. This is a common data-exfiltration " +
+      'vector, so confirm intent carefully. Reversible by removing the forwarding ' +
+      'rule (call with forwardTo omitted). Confirm with the user before invoking. ' +
+      'Returns the CIPP action result.',
     annotations: {
       title: 'Set email forwarding (high-impact)',
       readOnlyHint: false,
@@ -649,7 +660,7 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: 'cipp_get_tenant_drift',
     description:
-      'Report standards drift — settings that deviate from a tenant\'s assigned ' +
+      "Report standards drift - settings that deviate from a tenant's assigned " +
       'Standards Template. Default summary: tenantName, standard, currentValue, expectedValue. Omit tenantFilter to report drift across all tenants.',
     inputSchema: {
       type: 'object',
@@ -693,10 +704,10 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: 'cipp_create_standard_template',
     description:
-      '⚠ HIGH-IMPACT. Creates or updates a CIPP Standards Template (upsert by ' +
+      'DESTRUCTIVE: Create or update a CIPP Standards Template (upsert by ' +
       'GUID). A template assigned to tenants with any Remediate-action standard ' +
-      'WILL modify those tenants on the next standards run. ' +
-      'Confirm with the user before invoking.',
+      'will modify those tenants on the next standards run. ' +
+      'Confirm with the user before invoking. Returns the CIPP upsert result.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -720,9 +731,9 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: 'cipp_delete_standard_template',
     description:
-      '⚠ HIGH-IMPACT. Permanently deletes a CIPP Standards Template by ID. ' +
+      'DESTRUCTIVE: Permanently delete a CIPP Standards Template by ID. ' +
       'Tenants assigned to it lose the standards it enforced. ' +
-      'Confirm with the user before invoking.',
+      'Confirm with the user before invoking. Returns the CIPP delete result.',
     inputSchema: {
       type: 'object',
       properties: {

@@ -1,3 +1,12 @@
+# 1.5.0 (2026-06-12)
+
+
+### Features
+
+* response shaping on all list/get tools: results return a compact field summary by default; pass `fields: ["id","status",...]` to select specific fields or `full: true` for the complete vendor object. A 40,000-char cap with a pagination hint prevents oversized blobs. Cuts a typical ticket response by roughly 85%.
+* align manifest.json version with package.json (was 0.1.0 vs 1.4.1).
+
+
 # [1.4.0](https://github.com/w159/connectwise-manage-mcp/compare/v1.3.0...v1.4.0) (2026-04-03)
 
 

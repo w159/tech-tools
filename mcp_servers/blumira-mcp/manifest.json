@@ -1,7 +1,7 @@
 {
   "manifest_version": "0.3",
   "name": "blumira-mcp",
-  "version": "1.1.0",
+  "version": "1.1.4",
   "display_name": "Blumira MCP Server",
   "description": "Query and manage Blumira SIEM findings, agents, users, and MSP sub-accounts — for security operations AI agents.",
   "long_description": "Use this server when you need to triage or act on Blumira SIEM security findings. List/search findings with rich filters (status, priority, category, date range), get finding details and comments, resolve findings with a resolution code, assign owners, and add investigation comments. Manage Blumira agent devices and agent keys. MSP operators can switch between sub-accounts and perform the same finding/agent/user operations scoped to each account. Call blumira_navigate first to load the tools for a specific domain.",

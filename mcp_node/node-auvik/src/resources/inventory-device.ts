@@ -28,30 +28,30 @@ export class InventoryDeviceResource {
     return { id: data.id, ...data.attributes } as any;
   }
 
-  // Device Extended Details (v2)
+  // Device Extended Details (v2). Auvik path is /inventory/device/detail/extended.
   async listExtendedDetails(options: PaginationOptions = {}): Promise<Page<DeviceDetails>> {
     const client = await this.getClient();
-    return fetchPage<DeviceDetails>(client, '/inventory/device/info/extended-details', options);
+    return fetchPage<DeviceDetails>(client, '/inventory/device/detail/extended', options);
   }
 
   async *listExtendedDetailsAll(filters: Record<string, string> = {}): AsyncIterable<DeviceDetails> {
     const client = await this.getClient();
-    for await (const page of paginate<DeviceDetails>(client, '/inventory/device/info/extended-details', filters)) {
+    for await (const page of paginate<DeviceDetails>(client, '/inventory/device/detail/extended', filters)) {
       for (const device of page.data) {
         yield device;
       }
     }
   }
 
-  // Device Details (v1 fallback)
+  // Device Details. Auvik path is the singular /inventory/device/detail.
   async listDetails(options: PaginationOptions = {}): Promise<Page<DeviceDetails>> {
     const client = await this.getClient();
-    return fetchPage<DeviceDetails>(client, '/inventory/device/details', options);
+    return fetchPage<DeviceDetails>(client, '/inventory/device/detail', options);
   }
 
   async *listDetailsAll(filters: Record<string, string> = {}): AsyncIterable<DeviceDetails> {
     const client = await this.getClient();
-    for await (const page of paginate<DeviceDetails>(client, '/inventory/device/details', filters)) {
+    for await (const page of paginate<DeviceDetails>(client, '/inventory/device/detail', filters)) {
       for (const device of page.data) {
         yield device;
       }
@@ -60,7 +60,7 @@ export class InventoryDeviceResource {
 
   async getDetails(id: string): Promise<DeviceDetails> {
     const client = await this.getClient();
-    const response = await client.request<JsonApiResponse<DeviceDetails>>(`/inventory/device/details/${id}`);
+    const response = await client.request<JsonApiResponse<DeviceDetails>>(`/inventory/device/detail/${id}`);
     const data = Array.isArray(response.data) ? response.data[0] : response.data;
     return { id: data.id, ...data.attributes } as any;
   }

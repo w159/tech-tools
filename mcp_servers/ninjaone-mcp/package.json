@@ -1,6 +1,6 @@
 {
   "name": "ninjaone-mcp",
-  "version": "1.5.0",
+  "version": "1.6.1",
   "description": "NinjaOne MCP server with decision tree architecture for Claude",
   "type": "module",
   "main": "dist/mcp_servers/ninjaone-mcp/src/index.js",

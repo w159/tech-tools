@@ -31,7 +31,7 @@ function getTools(): Tool[] {
     {
       name: 'paylocity_pay_statements_summary',
       description:
-        'Get the yearly pay statement summary for a Paylocity employee (employeeId and year both required). Returns gross pay, net pay, total deductions, and total taxes by default. Pass full:true for the full period-by-period detail.',
+        'Get the yearly pay statement summary for a Paylocity employee (read-only; legacy WebLink GET /api/v2/.../paystatement/summary/{year}). employeeId and year both required. Returns gross pay, net pay, total deductions, and total taxes by default. Pass full:true for the full period-by-period detail.',
       inputSchema: {
         type: 'object' as const,
         properties: {

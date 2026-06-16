@@ -1,6 +1,6 @@
 {
   "name": "auvik-mcp",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "MCP server for the Auvik network monitoring API",
   "type": "module",
   "main": "./dist/index.js",
@@ -17,7 +17,6 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.0",
-    "node-auvik": "file:../../mcp_node/node-auvik",
     "fastify": "^5.0.0",
     "dotenv": "^16.4.0"
   },

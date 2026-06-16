@@ -20,6 +20,7 @@ Pass the chosen capabilities into each subagent's spec as directives, **and** te
 | Implement a feature / bounded change | `orc-implementer`, `frontend-developer`, `backend-architect` | `superpowers:test-driven-development`, `frontend-design`/`ui-ux-pro-max` | `context7` (mandatory), `serena`, LSP | sonnet |
 | Fix a bug / regression / incident | `debugger` | `superpowers:systematic-debugging` | `serena`, `context-mode`, Sentry MCP if present | sonnet |
 | Run & validate behavior (FE/BE/DB) | `orc-ui-runtime-tester`, `test-executor`, `test-engineer` | `verify`, `run`, `webapp-testing`, `python-testing-patterns` | Claude_Preview MCP, `context-mode`, curl, playwright | sonnet |
+| Full UI/UX test pass / persona testing / pre-release UX sweep | `orc-ux-cartographer`, `orc-ux-persona`, `orc-ux-fuzzer`, `orc-ux-accuracy-oracle`, `orc-ux-reporter` | `references/ux-test-swarm.md`, `webapp-testing` | Chrome DevTools MCP / Claude_Preview MCP / `browser-harness` / playwright, `context-mode` | sonnet; opus for the reporter |
 | Probe the database (read-only) | `orc-db-prober` | — | read-only `psql`, `whodb`/data-agent-kit plugin if present, `gcloud` | sonnet |
 | Verify a finding / fix (adversarial) | `orc-verifier`, `secondary-expert-validator` | `superpowers:requesting-code-review` | re-run tests/queries; `codex` for a true second opinion | sonnet → opus if critical |
 | Security review | `security-engineer` | `security-review`, `security-best-practices`; `backend-security-skills`/`vibeguard` plugins if present | `context7`, `serena` | opus |

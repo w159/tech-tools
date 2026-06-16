@@ -14,9 +14,8 @@ import {
 // ---------------------------------------------------------------------------
 
 const resolutionSummary: SummaryFn = (item) => ({
-  id:    item.id,
-  label: item.label ?? item.name,
-  code:  item.code,
+  id:   item.id,
+  name: item.name ?? item.label,
 });
 
 // ---------------------------------------------------------------------------

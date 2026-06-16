@@ -18,22 +18,24 @@ import {
 // ---------------------------------------------------------------------------
 
 const findingSummary: SummaryFn = (item) => ({
-  id:       item.id,
-  name:     item.name,
-  type:     item.type,
-  priority: item.priority,
-  severity: item.severity,
-  status:   item.status,
-  created:  item.created,
-  modified: item.modified,
-  org:      item.org,
+  finding_id:  item.finding_id ?? item.id,
+  short_id:    item.short_id,
+  name:        item.name,
+  type_name:   item.type_name,
+  priority:    item.priority,
+  status:      item.status,
+  status_name: item.status_name,
+  org_id:      item.org_id,
+  org_name:    item.org_name,
+  created:     item.created,
+  modified:    item.modified,
 });
 
 const commentSummary: SummaryFn = (item) => ({
-  id:      item.id,
-  sender:  item.sender,
-  body:    item.body,
-  created: item.created,
+  id:     item.id,
+  sender: item.sender,
+  body:   item.body,
+  age:    item.age,
 });
 
 // ---------------------------------------------------------------------------
@@ -87,6 +89,20 @@ function getTools(): Tool[] {
         properties: {
           ...SHAPE_PROPS,
           finding_id: { type: 'string', description: 'Finding UUID (required).' },
+        },
+        required: ['finding_id'],
+      },
+    },
+    {
+      name: 'blumira_findings_evidence',
+      description: 'Get the raw evidence behind a Blumira finding by finding_id (required): returns the evidence schema (column keys) plus a paginated first page of evidence rows (the underlying log/detection data). Use when investigating why a finding fired. Supports page/page_size for additional rows.',
+      inputSchema: {
+        type: 'object' as const,
+        properties: {
+          ...SHAPE_PROPS,
+          finding_id: { type: 'string', description: 'Finding UUID (required).' },
+          page: { type: 'number', description: 'Evidence page number (default: 1).' },
+          page_size: { type: 'number', description: 'Evidence rows per page.' },
         },
         required: ['finding_id'],
       },
@@ -175,6 +191,16 @@ async function handleCall(toolName: string, args: Record<string, unknown>): Prom
         logger.info('API call: findings.getDetails', { id });
         const res = await client.findings.getDetails(id);
         return shapeItem(res as Record<string, unknown>, findingSummary, shapeArgs);
+      }
+      case 'blumira_findings_evidence': {
+        const id = args.finding_id as string;
+        if (!id) return toolError('INVALID_ARGS', 'finding_id is required.', { hint: 'Pass the finding UUID string.' });
+        logger.info('API call: findings.getEvidence', { id });
+        const res = await client.findings.getEvidence(id, {
+          page: args.page as number | undefined,
+          page_size: args.page_size as number | undefined,
+        });
+        return shapeRaw(res);
       }
       case 'blumira_findings_resolve': {
         const id = args.finding_id as string;

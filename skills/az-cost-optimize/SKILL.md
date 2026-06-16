@@ -1,6 +1,6 @@
 ---
 name: az-cost-optimize
-description: 'Analyze Azure resources used in the app (IaC files and/or resources in a target rg) and optimize costs - creating GitHub issues for identified optimizations.'
+description: 'Analyze Azure resources (IaC files and/or a deployed resource group), identify cost-saving opportunities, and file GitHub issues plus an EPIC to track them. Use when the user wants to reduce, optimize, or review Azure spend, right-size resources, find idle/over-provisioned resources, or cut their cloud bill. Trigger phrases: Azure cost optimization, reduce Azure spend, right-size, cost savings, idle resources, cloud bill too high, optimize my resource group.'
 ---
 
 # Azure Cost Optimize

@@ -17,20 +17,25 @@ import {
 // ---------------------------------------------------------------------------
 
 const deviceSummary: SummaryFn = (item) => ({
-  id:       item.id,
-  hostname: item.hostname,
-  status:   item.status,
-  lastSeen: item.lastSeen ?? item.last_seen,
-  os:       item.os,
-  org:      item.org,
+  device_id:   item.device_id ?? item.id,
+  hostname:    item.hostname,
+  plat:        item.plat,
+  arch:        item.arch,
+  is_isolated: item.is_isolated,
+  is_sleeping: item.is_sleeping,
+  keyname:     item.keyname,
+  org_id:      item.org_id,
+  alive:       item.alive,
+  modified:    item.modified,
 });
 
 const keySummary: SummaryFn = (item) => ({
-  id:      item.id,
-  label:   item.label,
-  key:     item.key,
-  active:  item.active,
-  created: item.created,
+  key_id:           item.key_id ?? item.id,
+  description:      item.description,
+  agent_count:      item.agent_count,
+  agent_seat_count: item.agent_seat_count,
+  org_id:           item.org_id,
+  created:          item.created,
 });
 
 // ---------------------------------------------------------------------------

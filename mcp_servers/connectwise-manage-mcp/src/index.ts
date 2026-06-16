@@ -75,7 +75,7 @@ import { registerOpportunityTools } from "./tools/opportunities.js";
 function createMcpServer(): McpServer {
   const server = new McpServer({
     name: "connectwise-manage-mcp",
-    version: "1.1.5",
+    version: "1.5.1",
   });
 
   const config = getConfig();
@@ -93,11 +93,11 @@ function createMcpServer(): McpServer {
             text: JSON.stringify({
               configured: false,
               credentials: {
-                CW_MANAGE_COMPANY_ID: process.env.CW_MANAGE_COMPANY_ID ? "set" : "NOT SET — required",
-                CW_MANAGE_PUBLIC_KEY: process.env.CW_MANAGE_PUBLIC_KEY ? "set" : "NOT SET — required",
-                CW_MANAGE_PRIVATE_KEY: process.env.CW_MANAGE_PRIVATE_KEY ? "set" : "NOT SET — required",
-                CW_MANAGE_CLIENT_ID: process.env.CW_MANAGE_CLIENT_ID ? "set" : "NOT SET — required",
-                CW_MANAGE_BASE_URL: process.env.CW_MANAGE_BASE_URL ?? process.env.CW_MANAGE_URL ?? "(not set — will use https://api-na.myconnectwise.net)",
+                CW_MANAGE_COMPANY_ID: process.env.CW_MANAGE_COMPANY_ID ? "set" : "NOT SET - required",
+                CW_MANAGE_PUBLIC_KEY: process.env.CW_MANAGE_PUBLIC_KEY ? "set" : "NOT SET - required",
+                CW_MANAGE_PRIVATE_KEY: process.env.CW_MANAGE_PRIVATE_KEY ? "set" : "NOT SET - required",
+                CW_MANAGE_CLIENT_ID: process.env.CW_MANAGE_CLIENT_ID ? "set" : "NOT SET - required",
+                CW_MANAGE_BASE_URL: process.env.CW_MANAGE_BASE_URL ?? process.env.CW_MANAGE_URL ?? "(not set - will use https://api-na.myconnectwise.net)",
               },
               note: "Set all required environment variables and restart the server.",
             }, null, 2),
@@ -191,7 +191,7 @@ async function startHttpTransport(): Promise<void> {
     entraConfig = getEntraConfig();
     jwksClient = createJwksClient(entraConfig);
     console.error(
-      `[auth] Entra ID OAuth enabled — tenant: ${entraConfig.tenantId}, required role: ${entraConfig.requiredRole}`,
+      `[auth] Entra ID OAuth enabled - tenant: ${entraConfig.tenantId}, required role: ${entraConfig.requiredRole}`,
     );
     if (entraConfig.bearerToken) {
       console.error("[auth] Static bearer token fallback enabled (CLI/Desktop)");

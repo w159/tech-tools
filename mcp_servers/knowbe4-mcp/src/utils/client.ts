@@ -59,15 +59,21 @@ export function getCredentials(): KnowBe4Credentials | null {
   }
 
   // Base URL resolution order:
-  // 1. KNOWBE4_BASE_URL env var (explicit override, handled by resolveBaseUrl)
-  // 2. Region-derived URL from KNOWBE4_REGIONS map
-  // 3. Vendor default via resolveBaseUrl ("https://us.api.knowbe4.com")
+  // 1. KNOWBE4_BASE_URL env var (explicit override) — always wins.
+  // 2. Region-derived URL from KNOWBE4_REGIONS map (us/eu/ca/uk/de).
+  // 3. Vendor default via resolveBaseUrl ("https://us.api.knowbe4.com").
+  //
+  // NOTE: resolveBaseUrl("knowbe4") ALWAYS returns the hardcoded US default
+  // when no explicit override is given, so it must only be consulted for the
+  // explicit-override case. Consulting it before the region map would make
+  // KNOWBE4_REGION a no-op and silently route EU/CA/UK/DE accounts to the US
+  // shard. We therefore branch on whether an explicit override is present.
+  const explicitOverride = cleanEnv(process.env.KNOWBE4_BASE_URL) || undefined;
   const region = (cleanEnv(process.env.KNOWBE4_REGION) || "us").toLowerCase();
   const regionUrl = KNOWBE4_REGIONS[region];
-  const baseUrl =
-    resolveBaseUrl("knowbe4", cleanEnv(process.env.KNOWBE4_BASE_URL) || undefined) ??
-    regionUrl ??
-    (KNOWBE4_REGIONS.us as string);
+  const baseUrl = explicitOverride
+    ? (resolveBaseUrl("knowbe4", explicitOverride) as string)
+    : regionUrl ?? (KNOWBE4_REGIONS.us as string);
 
   return { apiKey, baseUrl };
 }
@@ -174,10 +180,11 @@ export function describeKnowBe4BaseUrl(): string {
   if (explicitOverride) {
     return describeBaseUrl("knowbe4", explicitOverride, "KNOWBE4_BASE_URL");
   }
-  if (regionUrl && region !== "us") {
-    return `${regionUrl} (from KNOWBE4_REGION=${region})`;
+  if (regionUrl) {
+    return `${regionUrl} (from KNOWBE4_REGION=${region}; set KNOWBE4_BASE_URL to override)`;
   }
-  return describeBaseUrl("knowbe4", undefined, "KNOWBE4_BASE_URL");
+  // Unknown region code — fall back to the US default.
+  return `${KNOWBE4_REGIONS.us} (default; KNOWBE4_REGION='${region}' is not a known region, set KNOWBE4_REGION to one of us, eu, ca, uk, de)`;
 }
 
 /**

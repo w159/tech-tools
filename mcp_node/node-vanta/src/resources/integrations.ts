@@ -16,38 +16,42 @@ export class IntegrationsResource {
     return unwrapPaginatedResponse<Integration>(response);
   }
 
-  async get(connectionId: string): Promise<Integration> {
+  async get(integrationId: string): Promise<Integration> {
     return this.http.request<Integration>(
-      `/integrations/${encodeURIComponent(connectionId)}`
+      `/integrations/${encodeURIComponent(integrationId)}`
     );
   }
 
   async listResourceKinds(
-    connectionId: string,
+    integrationId: string,
     params: ListParams = {}
   ): Promise<NormalizedList<IntegrationResourceKind>> {
     const response = await this.http.request<unknown>(
-      `/integrations/${encodeURIComponent(connectionId)}/resource-kinds`,
+      `/integrations/${encodeURIComponent(integrationId)}/resource-kinds`,
       { params }
     );
     return unwrapPaginatedResponse<IntegrationResourceKind>(response);
   }
 
   async listResources(
-    connectionId: string,
+    integrationId: string,
     resourceKind: string,
     params: ListParams = {}
   ): Promise<NormalizedList<IntegrationResourceObj>> {
     const response = await this.http.request<unknown>(
-      `/integrations/${encodeURIComponent(connectionId)}/resource-kinds/${encodeURIComponent(resourceKind)}/resources`,
+      `/integrations/${encodeURIComponent(integrationId)}/resource-kinds/${encodeURIComponent(resourceKind)}/resources`,
       { params }
     );
     return unwrapPaginatedResponse<IntegrationResourceObj>(response);
   }
 
-  async getResource(resourceId: string): Promise<IntegrationResourceObj> {
+  async getResource(
+    integrationId: string,
+    resourceKind: string,
+    resourceId: string
+  ): Promise<IntegrationResourceObj> {
     return this.http.request<IntegrationResourceObj>(
-      `/integrations/resources/${encodeURIComponent(resourceId)}`
+      `/integrations/${encodeURIComponent(integrationId)}/resource-kinds/${encodeURIComponent(resourceKind)}/resources/${encodeURIComponent(resourceId)}`
     );
   }
 }

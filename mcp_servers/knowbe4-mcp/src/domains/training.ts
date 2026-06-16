@@ -382,7 +382,7 @@ async function handleCall(
         const perPage = (args.per_page as number) || 100;
 
         logger.info("API call: store.purchases.list", { page, perPage });
-        const result = await apiRequest<unknown>("/v1/store/purchases", {
+        const result = await apiRequest<unknown>("/v1/training/store_purchases", {
           params: { page, per_page: perPage },
         });
 
@@ -410,7 +410,7 @@ async function handleCall(
         }
 
         logger.info("API call: store.purchases.get", { purchaseId });
-        const result = await apiRequest<Record<string, unknown>>(`/v1/store/purchases/${purchaseId}`);
+        const result = await apiRequest<Record<string, unknown>>(`/v1/training/store_purchases/${purchaseId}`);
 
         const shapeArgs = extractShapeArgs(args);
         return shapeItem(result, purchaseSummary, shapeArgs);
@@ -427,7 +427,7 @@ async function handleCall(
         const perPage = (args.per_page as number) || 100;
 
         logger.info("API call: policies.list", { page, perPage });
-        const result = await apiRequest<unknown>("/v1/policies", {
+        const result = await apiRequest<unknown>("/v1/training/policies", {
           params: { page, per_page: perPage },
         });
 
@@ -455,7 +455,7 @@ async function handleCall(
         }
 
         logger.info("API call: policies.get", { policyId });
-        const result = await apiRequest<Record<string, unknown>>(`/v1/policies/${policyId}`);
+        const result = await apiRequest<Record<string, unknown>>(`/v1/training/policies/${policyId}`);
 
         const shapeArgs = extractShapeArgs(args);
         return shapeItem(result, policySummary, shapeArgs);

@@ -21,15 +21,15 @@ const domainDescriptions: Record<DomainName, string> = {
   legacy_employees:
     'Legacy /api/v2 employees — list/get returning raw JSON arrays (no pagination)',
   earnings:
-    'Company-level earning codes (modern) + per-employee earnings (legacy)',
-  deductions: 'Per-employee deductions (legacy /api/v1)',
-  taxes: 'Per-employee local taxes (legacy /api/v1)',
-  direct_deposit: 'Per-employee direct deposit accounts (legacy /api/v2)',
-  cost_centers: 'Cost center catalog (modern API Hub)',
-  pay_grades: 'Pay grade catalog (modern Position Management)',
-  job_codes: 'Job code catalog (modern Position Management)',
+    'Company-level earning codes (modern Payroll API Hub) + per-employee earnings (legacy WebLink /api/v2)',
+  deductions: 'Per-employee deductions (legacy WebLink /api/v1)',
+  taxes: 'Per-employee local taxes (legacy WebLink /api/v2)',
+  direct_deposit: 'Per-employee direct deposit accounts (legacy WebLink /api/v2)',
+  cost_centers: 'Cost center catalog (modern Time and Labor API Hub)',
+  pay_grades: 'Pay grade catalog (modern Position Management API Hub)',
+  job_codes: 'Job code catalog (modern Payroll API Hub)',
   pay_statements:
-    'Yearly pay statement summary for an employee (modern API Hub payroll)',
+    'Yearly pay statement summary for an employee (legacy WebLink /api/v2)',
   lookup_codes:
     'Lookup codes by resource (paygroup, EEO, positions, departments, etc.)',
 };

@@ -1,6 +1,6 @@
 {
   "name": "vanta-mcp",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "MCP server for the Vanta REST API",
   "type": "module",
   "main": "./dist/index.js",

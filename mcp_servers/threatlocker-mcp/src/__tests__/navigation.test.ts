@@ -28,6 +28,6 @@ describe('Navigation', () => {
   it('should have status tool for connection info', () => {
     const tools = getNavigationTools();
     const statusTool = tools.find(t => t.name === 'threatlocker_status');
-    expect(statusTool?.description).toContain('credentials status');
+    expect(statusTool?.description).toContain('configuration status');
   });
 });

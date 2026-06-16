@@ -13,7 +13,7 @@ import { toolErrorFromCatch, describeBaseUrl } from './domains/_helpers.js';
 
 export function createMcpServer(): Server {
   const server = new Server(
-    { name: 'paylocity-mcp', version: '0.1.1' },
+    { name: 'paylocity-mcp', version: '0.1.3' },
     {
       capabilities: {
         tools: {},

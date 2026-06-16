@@ -41,7 +41,7 @@ export const handlers = [
 
   // Modern employees list (paginated).
   http.get(
-    `${BASE}/coreHr/v1/companies/${COMPANY}/employees`,
+    `${BASE}/corehr/v1/companies/${COMPANY}/employees`,
     ({ request }) => {
       const url = new URL(request.url);
       const next = url.searchParams.get('nextToken');
@@ -59,7 +59,7 @@ export const handlers = [
   ),
 
   // Modern employee get
-  http.get(`${BASE}/coreHr/v1/companies/${COMPANY}/employees/E1`, () =>
+  http.get(`${BASE}/corehr/v1/companies/${COMPANY}/employees/E1`, () =>
     HttpResponse.json({ employeeId: 'E1', firstName: 'Alice', lastName: 'Z' })
   ),
 

@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "ninjaone-mcp",
   "display_name": "NinjaOne MCP Server",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Query and manage NinjaOne RMM data — devices, organizations, tickets, alerts, and software — for MSP AI agents.",
   "long_description": "Use this server when you need to automate or query NinjaOne RMM. List and filter devices by organization, class, or online status; get device details and installed software; reboot devices; manage Windows services; list organizations and their device counts; search and manage helpdesk tickets; and acknowledge or resolve alerts. Uses OAuth2 client_credentials. Call ninjaone_navigate first to load the tools for a specific domain.",
   "author": { "name": "w159", "url": "https://github.com/w159" },

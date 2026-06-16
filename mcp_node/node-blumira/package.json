@@ -1,6 +1,6 @@
 {
   "name": "node-blumira",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Typed Node.js client for the Blumira SIEM API; used by blumira-mcp.",
   "type": "module",
   "files": [

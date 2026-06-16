@@ -65,7 +65,7 @@ export const VENDOR_DEFAULTS: Partial<Record<VendorKey, string>> = {
   kaseya_spanning: "https://o365-api.spanning.com",
   knowbe4:         "https://us.api.knowbe4.com/v1",
   ninjaone:        "https://app.ninjarmm.com",
-  paylocity:       "https://api.paylocity.com/api/v2",
+  paylocity:       "https://api.paylocity.com",
   threatlocker:    "https://portalapi.g.threatlocker.com/portalapi",
   vanta:           "https://api.vanta.com/v1",
   // cipp and connectwise are self-hosted; no default. resolveBaseUrl will
@@ -100,8 +100,7 @@ export function resolveBaseUrl(
   vendor: VendorKey,
   override?: string
 ): string | undefined {
-  const cleaned = override?.trim();
-  if (cleaned) return stripTrailingSlash(cleaned);
+  if (isUsableOverride(override)) return stripTrailingSlash(override.trim());
 
   const def = VENDOR_DEFAULTS[vendor];
   return def ? stripTrailingSlash(def) : undefined;
@@ -148,10 +147,9 @@ export function describeBaseUrl(
   override?: string,
   envVarName?: string
 ): string {
-  const cleaned = override?.trim();
-  if (cleaned) {
+  if (isUsableOverride(override)) {
     const label = envVarName ? `from ${envVarName} env var` : "from env var override";
-    return `${stripTrailingSlash(cleaned)} (${label})`;
+    return `${stripTrailingSlash(override.trim())} (${label})`;
   }
 
   const def = VENDOR_DEFAULTS[vendor];
@@ -172,4 +170,25 @@ export function describeBaseUrl(
 
 function stripTrailingSlash(url: string): string {
   return url.endsWith("/") ? url.slice(0, -1) : url;
+}
+
+/**
+ * Decide whether an env-var override is a usable base URL.
+ *
+ * Rejects three failure modes that otherwise silently break every API call by
+ * being used verbatim as the base URL:
+ *   1. empty / whitespace-only (optional var left blank).
+ *   2. an unexpanded manifest placeholder like "${user_config.x_base_url}" that
+ *      Claude Desktop passes literally when an optional user_config field is left
+ *      blank (observed live on Paylocity: every call 404'd against
+ *      "${user_config.paylocity_base_url}/api/v2/...").
+ *   3. anything that is not an http(s) URL.
+ *
+ * When the override is not usable, the caller falls back to the vendor default.
+ */
+function isUsableOverride(v?: string): v is string {
+  const c = v?.trim();
+  if (!c) return false;
+  if (c.includes("${")) return false;
+  return /^https?:\/\//i.test(c);
 }

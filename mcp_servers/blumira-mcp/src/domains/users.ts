@@ -16,12 +16,11 @@ import {
 // ---------------------------------------------------------------------------
 
 const userSummary: SummaryFn = (item) => ({
-  id:        item.id,
-  email:     item.email,
-  firstName: item.firstName ?? item.first_name,
-  lastName:  item.lastName ?? item.last_name,
-  role:      item.role,
-  active:    item.active,
+  id:         item.id,
+  email:      item.email,
+  first_name: item.first_name,
+  last_name:  item.last_name,
+  org_roles:  item.org_roles,
 });
 
 // ---------------------------------------------------------------------------

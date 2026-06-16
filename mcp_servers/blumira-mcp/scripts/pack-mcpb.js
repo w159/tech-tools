@@ -33,6 +33,7 @@ import {
   writeFileSync,
   statSync,
   readdirSync,
+  realpathSync,
 } from 'fs';
 import { resolve, join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -154,6 +155,7 @@ try {
   // A path is "nested inside a file: dep" when it contains /node_modules/ at
   // least twice AND does not start under ROOT (i.e. it comes from an external
   // file: link whose own node_modules are polluting npm ls --parseable output).
+  const declaredDeps = new Set(Object.keys(pkg.dependencies || {}));
   const prodPaths = prodPathsRaw
     .split('\n')
     .map((p) => p.trim())
@@ -161,10 +163,19 @@ try {
     .filter((p) => {
       // Paths inside ROOT are always fine: npm manages deduplication there.
       if (p.startsWith(ROOT + '/')) return true;
-      // External path (file: linked package root or one of its deps).
-      // Only keep the package root itself (contains node_modules exactly once).
-      const count = (p.match(/node_modules/g) || []).length;
-      return count === 1;
+      // External path. `npm ls --all` walks INTO a file:-linked package's
+      // own node_modules and reports that package's dev/peer deps as if they
+      // were ours (each appears with node_modules exactly once, e.g.
+      // .../mcp_node/node-paylocity/node_modules/vitest). Those must NOT ship.
+      // Keep an external path ONLY when the segment right after its LAST
+      // node_modules/ is a dependency THIS server actually declares (i.e. the
+      // file:-linked vendor package root itself). Everything else is a nested
+      // dev dependency of the vendor and is dropped.
+      const tail = p.slice(p.lastIndexOf('node_modules/') + 'node_modules/'.length);
+      const name = tail.startsWith('@')
+        ? tail.split('/').slice(0, 2).join('/')
+        : tail.split('/')[0];
+      return declaredDeps.has(name);
     });
   console.log(`  ${prodPaths.length} production packages`);
   for (const absPath of prodPaths) {
@@ -190,7 +201,24 @@ try {
     const destPath = join(STAGING, relPath);
     if (existsSync(absPath)) {
       mkdirSync(join(destPath, '..'), { recursive: true });
-      cpSync(absPath, destPath, { recursive: true });
+      // Resolve symlinks to a real path before copying. npm represents a
+      // file:-linked vendor (e.g. node_modules/node-paylocity ->
+      // ../../mcp_node/node-paylocity) as a SYMLINK; cpSync would just recreate
+      // that symlink, and the downstream `mcpb pack` would then dereference it
+      // and archive the entire target tree — including the vendor's 80MB+ dev
+      // install (msw, vitest, tsup). Copy the real directory with a filter that
+      // drops nested node_modules. The vendor's RUNTIME deps were already
+      // flattened into STAGING/node_modules by the prodPaths loop, so dropping
+      // nested node_modules is safe and yields a lean bundle.
+      const realSrc = realpathSync(absPath);
+      cpSync(realSrc, destPath, {
+        recursive: true,
+        dereference: true,
+        filter: (src) => {
+          const rel = src.slice(realSrc.length);
+          return !/(^|[\\/])node_modules([\\/]|$)/.test(rel);
+        },
+      });
     }
   }
   for (const dep of Object.keys(pkg.dependencies || {})) {

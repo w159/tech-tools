@@ -111,7 +111,7 @@ describe('DevicesResource', () => {
       // This was the root cause of msp-claude-plugins#22 — NinjaOne API responses
       // were silently discarded when the content-type header was missing or unexpected.
       server.use(
-        http.get('https://app.ninjarmm.com/api/v2/devices', () => {
+        http.get('https://app.ninjarmm.com/v2/devices', () => {
           return new HttpResponse(JSON.stringify(fixtures.devices.list), {
             status: 200,
             headers: { 'Content-Type': 'text/plain' },
@@ -126,7 +126,7 @@ describe('DevicesResource', () => {
 
     it('should parse JSON response with no content-type header', async () => {
       server.use(
-        http.get('https://app.ninjarmm.com/api/v2/devices', () => {
+        http.get('https://app.ninjarmm.com/v2/devices', () => {
           return new HttpResponse(JSON.stringify(fixtures.devices.list), {
             status: 200,
           });
@@ -139,7 +139,7 @@ describe('DevicesResource', () => {
 
     it('should return empty object for truly empty response body', async () => {
       server.use(
-        http.get('https://app.ninjarmm.com/api/v2/device/101', () => {
+        http.get('https://app.ninjarmm.com/v2/device/101', () => {
           return new HttpResponse('', {
             status: 200,
             headers: { 'Content-Type': 'application/json' },

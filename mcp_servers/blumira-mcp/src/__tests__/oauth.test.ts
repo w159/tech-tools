@@ -67,7 +67,7 @@ describe('exchangeOAuthToken', () => {
         grant_type: 'client_credentials',
         client_id: 'test-id',
         client_secret: 'test-secret',
-        audience: 'https://api.blumira.com/public-api/v1',
+        audience: 'public-api',
       }),
     });
   });

@@ -18,54 +18,61 @@ import {
 // ---------------------------------------------------------------------------
 
 const accountSummary: SummaryFn = (item) => ({
-  id:           item.id,
-  name:         item.name,
-  openFindings: item.openFindings ?? item.open_findings,
-  agentCount:   item.agentCount ?? item.agent_count,
-  userCount:    item.userCount ?? item.user_count,
-  license:      item.license,
+  account_id:            item.account_id ?? item.id,
+  name:                  item.name,
+  open_findings:         item.open_findings,
+  license:               item.license,
+  agent_count_used:      item.agent_count_used,
+  agent_count_available: item.agent_count_available,
+  user_count:            item.user_count,
 });
 
 const findingSummary: SummaryFn = (item) => ({
-  id:       item.id,
-  name:     item.name,
-  type:     item.type,
-  priority: item.priority,
-  severity: item.severity,
-  status:   item.status,
-  created:  item.created,
-  modified: item.modified,
-  org:      item.org,
+  finding_id:  item.finding_id ?? item.id,
+  short_id:    item.short_id,
+  name:        item.name,
+  type_name:   item.type_name,
+  priority:    item.priority,
+  status:      item.status,
+  status_name: item.status_name,
+  org_id:      item.org_id,
+  org_name:    item.org_name,
+  created:     item.created,
+  modified:    item.modified,
 });
 
 const deviceSummary: SummaryFn = (item) => ({
-  id:       item.id,
-  hostname: item.hostname,
-  status:   item.status,
-  lastSeen: item.lastSeen ?? item.last_seen,
-  os:       item.os,
+  device_id:   item.device_id ?? item.id,
+  hostname:    item.hostname,
+  plat:        item.plat,
+  arch:        item.arch,
+  is_isolated: item.is_isolated,
+  keyname:     item.keyname,
+  org_id:      item.org_id,
+  alive:       item.alive,
 });
 
 const keySummary: SummaryFn = (item) => ({
-  id:      item.id,
-  label:   item.label,
-  active:  item.active,
-  created: item.created,
+  key_id:      item.key_id ?? item.id,
+  description: item.description,
+  agent_count: item.agent_count,
+  org_id:      item.org_id,
+  created:     item.created,
 });
 
 const userSummary: SummaryFn = (item) => ({
-  id:        item.id,
-  email:     item.email,
-  firstName: item.firstName ?? item.first_name,
-  lastName:  item.lastName ?? item.last_name,
-  role:      item.role,
+  id:         item.id,
+  email:      item.email,
+  first_name: item.first_name,
+  last_name:  item.last_name,
+  org_roles:  item.org_roles,
 });
 
 const commentSummary: SummaryFn = (item) => ({
-  id:      item.id,
-  sender:  item.sender,
-  body:    item.body,
-  created: item.created,
+  id:     item.id,
+  sender: item.sender,
+  body:   item.body,
+  age:    item.age,
 });
 
 // ---------------------------------------------------------------------------
@@ -142,6 +149,21 @@ function getTools(): Tool[] {
           ...SHAPE_PROPS,
           account_id: { type: 'string', description: 'Account UUID (required).' },
           finding_id: { type: 'string', description: 'Finding UUID (required).' },
+        },
+        required: ['account_id', 'finding_id'],
+      },
+    },
+    {
+      name: 'blumira_msp_findings_evidence',
+      description: 'Get the raw evidence behind a Blumira finding in an MSP sub-account (account_id and finding_id both required): returns the evidence schema (column keys) plus a paginated first page of evidence rows. Use when investigating a sub-account finding. Supports page/page_size.',
+      inputSchema: {
+        type: 'object' as const,
+        properties: {
+          ...SHAPE_PROPS,
+          account_id: { type: 'string', description: 'Account UUID (required).' },
+          finding_id: { type: 'string', description: 'Finding UUID (required).' },
+          page: { type: 'number', description: 'Evidence page number (default: 1).' },
+          page_size: { type: 'number', description: 'Evidence rows per page.' },
         },
         required: ['account_id', 'finding_id'],
       },
@@ -316,6 +338,16 @@ async function handleCall(toolName: string, args: Record<string, unknown>): Prom
         logger.info('API call: msp.getFinding', { accountId, findingId });
         const res = await client.msp.getFinding(accountId, findingId);
         return shapeItem(res as Record<string, unknown>, findingSummary, shapeArgs);
+      }
+      case 'blumira_msp_findings_evidence': {
+        if (!accountId) return toolError('INVALID_ARGS', 'account_id is required.', { hint: 'Pass the account UUID string.' });
+        if (!findingId) return toolError('INVALID_ARGS', 'finding_id is required.', { hint: 'Pass the finding UUID string.' });
+        logger.info('API call: msp.getFindingEvidence', { accountId, findingId });
+        const res = await client.msp.getFindingEvidence(accountId, findingId, {
+          page: args.page as number | undefined,
+          page_size: args.page_size as number | undefined,
+        });
+        return shapeRaw(res);
       }
       case 'blumira_msp_findings_resolve': {
         if (!accountId) return toolError('INVALID_ARGS', 'account_id is required.', { hint: 'Pass the account UUID string.' });

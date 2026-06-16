@@ -2,19 +2,34 @@ import type { PayStatementSummary } from '../types/index.js';
 import { CompanyScopedResource } from './_base.js';
 
 /**
- * GET /apihub-payroll/v1/companies/{companyId}/employees/{employeeId}/paystatement/summary/{year}
+ * Legacy WebLink pay statement summary:
+ *   GET /api/v2/companies/{companyId}/employees/{employeeId}/paystatement/summary/{year}
+ *   (verified against developer.paylocity.com WebLink
+ *    "Get employee pay statement summary data for the specified year")
+ *
+ * Optional query params: pagesize, pagenumber, includetotalcount, codegroup.
  */
+export interface PayStatementSummaryParams {
+  companyId?: string;
+  pagesize?: number;
+  pagenumber?: number;
+  includetotalcount?: boolean;
+  codegroup?: string;
+}
+
 export class PayStatementsResource extends CompanyScopedResource {
   async getYearlySummary(
     employeeId: string,
     year: number,
-    opts: { companyId?: string } = {}
+    opts: PayStatementSummaryParams = {}
   ): Promise<PayStatementSummary> {
-    const cid = this.resolveCompany(opts.companyId);
+    const { companyId, ...query } = opts;
+    const cid = this.resolveCompany(companyId);
     return this.http.request<PayStatementSummary>(
-      `/apihub-payroll/v1/companies/${cid}/employees/${encodeURIComponent(
+      `/api/v2/companies/${cid}/employees/${encodeURIComponent(
         employeeId
-      )}/paystatement/summary/${year}`
+      )}/paystatement/summary/${year}`,
+      { params: query }
     );
   }
 }

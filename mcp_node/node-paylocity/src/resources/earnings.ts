@@ -12,8 +12,9 @@ import { CompanyScopedResource } from './_base.js';
  * Modern company earning codes (API Hub):
  *   GET /apihub-payroll/v1/companies/{companyId}/earnings
  *
- * Legacy per-employee earnings (returns raw array):
- *   GET /api/v1/companies/{companyId}/employees/{employeeId}/earnings
+ * Legacy WebLink per-employee earnings (returns raw array):
+ *   GET /api/v2/companies/{companyId}/employees/{employeeId}/earnings
+ *   (verified against developer.paylocity.com WebLink "Get All Earnings")
  */
 export class EarningsResource extends CompanyScopedResource {
   /** Modern API Hub: company-level earning codes. */
@@ -29,7 +30,7 @@ export class EarningsResource extends CompanyScopedResource {
     return unwrapModernPage<CompanyEarning>(response);
   }
 
-  /** Legacy v1 employee-scoped earnings (raw array). */
+  /** Legacy WebLink v2 employee-scoped earnings (raw array). */
   async listEmployeeEarnings(
     employeeId: string,
     params: LegacyListParams & { companyId?: string } = {}
@@ -37,7 +38,7 @@ export class EarningsResource extends CompanyScopedResource {
     const { companyId, ...rest } = params;
     const cid = this.resolveCompany(companyId);
     const response = await this.http.request<unknown>(
-      `/api/v1/companies/${cid}/employees/${encodeURIComponent(employeeId)}/earnings`,
+      `/api/v2/companies/${cid}/employees/${encodeURIComponent(employeeId)}/earnings`,
       { params: rest }
     );
     return unwrapLegacyArray<EmployeeEarning>(response);

@@ -1,6 +1,6 @@
 {
   "name": "kaseya-spanning-backup-mcp",
-  "version": "1.0.2",
+  "version": "1.1.2",
   "description": "MCP server for Kaseya Spanning Backup — SaaS backup for Microsoft 365, Google Workspace, and Salesforce. Exposes users, services, backups, restores, audit, and license operations through the Model Context Protocol.",
   "type": "module",
   "main": "./dist/index.js",

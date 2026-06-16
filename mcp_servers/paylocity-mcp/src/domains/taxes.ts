@@ -24,7 +24,7 @@ function getTools(): Tool[] {
     {
       name: 'paylocity_taxes_local_list',
       description:
-        "List a single employee's local taxes (legacy /api/v1). Returns tax codes, filing status, and exemptions by default. employeeId is required.",
+        "List a single employee's local taxes (read-only; legacy WebLink GET /api/v2/.../localTaxes). Returns tax codes, filing status, and exemptions by default. employeeId is required.",
       inputSchema: {
         type: 'object' as const,
         properties: {

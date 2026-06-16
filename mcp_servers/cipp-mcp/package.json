@@ -1,6 +1,6 @@
 {
   "name": "cipp-mcp",
-  "version": "0.1.1",
+  "version": "0.2.1",
   "description": "MCP server for CIPP (CyberDrain Improved Partner Portal) — M365 multi-tenant management, users, security, and standards for MSPs",
   "main": "dist/entry.js",
   "bin": {

@@ -125,7 +125,7 @@ async function handleCall(toolName: string, args: Record<string, unknown>): Prom
       logger.info('API call: approvalRequests.pendingCount');
       try {
         const client = await getClient();
-        const count = await client.approvalRequests.pendingCount();
+        const count = await client.approvalRequests.getPendingCount();
         return shapeRaw(count);
       } catch (err) {
         return toolErrorFromCatch('threatlocker_approvals_pending_count', err, {

@@ -8,8 +8,8 @@ import { CompanyScopedResource } from './_base.js';
 
 /**
  * Modern CoreHR employees:
- *   GET /coreHr/v1/companies/{companyId}/employees
- *   GET /coreHr/v1/companies/{companyId}/employees/{employeeId}
+ *   GET /corehr/v1/companies/{companyId}/employees
+ *   GET /corehr/v1/companies/{companyId}/employees/{employeeId}
  *
  * Pagination via `limit` (max 20) and `nextToken`. Expansion via `include`
  * CSV (info, position, status, payRate, futurePayRate).
@@ -23,7 +23,7 @@ export class EmployeesResource extends CompanyScopedResource {
     const { companyId, ...rest } = params;
     const cid = this.resolveCompany(companyId);
     const response = await this.http.request<unknown>(
-      `/coreHr/v1/companies/${cid}/employees`,
+      `/corehr/v1/companies/${cid}/employees`,
       { params: rest }
     );
     return unwrapModernPage<Employee>(response);
@@ -36,7 +36,7 @@ export class EmployeesResource extends CompanyScopedResource {
     const { companyId, ...rest } = params;
     const cid = this.resolveCompany(companyId);
     return this.http.request<Employee>(
-      `/coreHr/v1/companies/${cid}/employees/${encodeURIComponent(employeeId)}`,
+      `/corehr/v1/companies/${cid}/employees/${encodeURIComponent(employeeId)}`,
       { params: rest }
     );
   }

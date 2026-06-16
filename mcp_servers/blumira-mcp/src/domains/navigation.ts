@@ -17,7 +17,7 @@ export function getNavigationTools(): Tool[] {
     {
       name: 'blumira_navigate',
       description: `Navigate to a Blumira domain to expose its tools. Call this first before any domain-specific operation. Domains: ${DOMAINS.join(', ')}.
-- findings: list/search findings, get, get details, resolve, assign owners, list/add comments
+- findings: list/search findings, get, get details, get evidence, resolve, assign owners, list/add comments
 - agents: list/get devices and enrollment keys
 - users: list organization users (UUIDs needed for assignments)
 - msp: MSP multi-account — list accounts, per-account findings/agents/users

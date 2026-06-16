@@ -58,8 +58,10 @@ describe("Phishing Domain Handler", () => {
       });
       expect(result.isError).toBeUndefined();
 
+      // shapeList returns a compact JSON array (not an object envelope).
       const parsed = JSON.parse(result.content[0].text);
-      expect(parsed.campaigns).toHaveLength(2);
+      expect(Array.isArray(parsed)).toBe(true);
+      expect(parsed).toHaveLength(2);
     });
 
     it("should get a specific phishing campaign", async () => {

@@ -23,7 +23,7 @@ function getTools(): Tool[] {
     {
       name: 'paylocity_job_codes_list',
       description:
-        'List Paylocity job codes (Position Management Modern API). Returns code, title, and grade rows by default. Use to discover valid jobCode values for employee position records or pay-band analysis.',
+        'List Paylocity job codes (read-only; Payroll API Hub GET /apihub-payroll/v1/.../jobs). Returns code, title, and grade rows by default. Use to discover valid jobCode values for employee position records or pay-band analysis.',
       inputSchema: {
         type: 'object' as const,
         properties: {

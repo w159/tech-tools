@@ -74,23 +74,25 @@ backstop for a runaway subagent or a careless paste — not a replacement for `p
 
 ## 4. `completion-gate` — the Definition-of-done backstop (opt-in)
 
-Encodes the skill's hardest rule — *a change is not done until observed behavior is captured and
-an independent agent verified it* — as a `Stop` hook. Prose alone doesn't enforce it (the
+Encodes the skill's hardest rule -- *a change is not done until observed behavior is captured and
+an independent agent verified it* -- as a `Stop` hook. Prose alone doesn't enforce it (the
 orchestrator rationalizes "I'll mark it unverified and move on"); this is the machine backstop.
 
-- **Scoped.** Engages only when the working dir holds an `.orchestrator/` state dir — i.e. an
-  orchestrate run is actually in progress. In any other session it is a silent no-op, so it is
-  safe to leave installed.
-- **What satisfies it.** At least one file under `.orchestrator/evidence/`, **or** a
-  `findings.json` recording a `verified` entry. It checks that *something was observed and
-  verified*, not that the work is perfect — keep the harder correctness/coverage bar in the prose
-  laws (3 and 5), not the hook.
+- **Scoped.** Engages only when a `docs/` directory is found at or above the working dir (walked
+  up to 6 levels). In any other session it is a silent no-op, so it is safe to leave installed.
+- **What satisfies it.** All three conditions must hold:
+  - (a) At least one file under `docs/evidence/` (observed-behavior proof captured).
+  - (b) `docs/.run/findings.json` exists and records at least one entry with status `verified`
+    (independent orc-verifier result present).
+  - (c) `docs/CHANGELOG.md` exists and is non-empty (docs/ is current -- CHANGELOG, ROADMAP,
+    and affected subfolders must reflect this run before the gate passes).
+  The block message names exactly which condition(s) are missing.
 - **Single nudge, never a wedge.** It blocks the stop at most **once** (the `stop_hook_active`
   loop-guard), then lets the continuation through. Fail-open on any error. Disable entirely with
   `ORCHESTRATE_GATE=off`.
 - **Off by default.** A plain `--apply` installs only optimizer/format/guard; opt in with
   `--select completion-gate --apply`. (Note: it coexists with codebase-brain's `validate_gate.py`
-  Stop hook — that one is message-text based, this one is artifact based; complementary.)
+  Stop hook -- that one is message-text based, this one is artifact based; complementary.)
 
 ## Extending
 

@@ -137,7 +137,7 @@ async function handleCall(toolName: string, args: Record<string, unknown>): Prom
       logger.info('API call: auditLog.fileHistory', { fullPath });
       try {
         const client = await getClient();
-        const history = await client.auditLog.fileHistory(fullPath);
+        const history = await client.auditLog.getFileHistory(fullPath);
         const items = Array.isArray(history) ? history : (history?.items ?? history?.data ?? [history]);
         return shapeList(items, auditSummary, shapeArgs);
       } catch (err) {

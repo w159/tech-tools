@@ -1,5 +1,23 @@
 # ConnectWise Manage MCP Server
 
+## Response shaping (compact by default)
+
+Every `cw_search_*`, `cw_list_*`, and `cw_get_*` tool returns a compact, agent-friendly
+summary by default instead of the raw ConnectWise object (which can exceed 100 KB for a
+single ticket). Two opt-in parameters control the output:
+
+- `fields: ["id","status","summary"]` - return only the named top-level fields.
+- `full: true` - return the complete, unfiltered vendor object.
+
+Responses are capped at 40,000 characters; when a list is truncated the result ends with a
+notice telling the agent to page or narrow the query. This keeps dashboards and multi-call
+workflows fast and within token budget.
+
+> Note: this behavior ships in server build 1.5.0+. If a tool still returns a full unfiltered
+> object, the connected server is an older build - reinstall `connectwise-manage-mcp.mcpb`.
+
+
+
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen.svg)](https://nodejs.org/)
 

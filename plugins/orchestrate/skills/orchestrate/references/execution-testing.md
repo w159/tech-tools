@@ -14,7 +14,7 @@ Always derive commands from the project's manifests/scripts (`package.json` scri
    - the **network calls fire and succeed** (status + payload shape) — this is the bridge to the backend;
    - every user-facing **state** is handled: loading, empty, error, success;
    - responsive at mobile width; reduced-motion respected.
-5. **Capture** screenshots + console + network into `.orchestrator/evidence/`. Tear down the server.
+5. **Capture** screenshots + console + network into `docs/evidence/`. Tear down the server.
 
 ## Backend / API
 
@@ -32,7 +32,7 @@ Always derive commands from the project's manifests/scripts (`package.json` scri
 2. **Inspect**: does the table/column exist? nullability, FKs, `ON DELETE`, PK present, sensible defaults, `created_at`/`updated_at`?
 3. **Permissions & policies** (the silent killers): row-level-security policies, `GRANT`s for the *runtime* role (not just your admin/superuser connection — a query that works for you may return zero rows for the app), required session GUCs.
 4. **Performance**: `EXPLAIN` (no `ANALYZE` against prod) for filters/joins seen in the backend; missing/unused indexes; slow queries if `pg_stat_statements` is already enabled (do not enable it).
-5. Use `whodb`/data-agent-kit plugins or `gcloud` if present and helpful. Capture plans into `.orchestrator/evidence/`.
+5. Use `whodb`/data-agent-kit plugins or `gcloud` if present and helpful. Capture plans into `docs/evidence/`.
 
 ## Cross-surface fault localization (which layer owns the bug?)
 

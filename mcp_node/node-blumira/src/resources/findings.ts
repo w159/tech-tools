@@ -3,7 +3,9 @@ import type {
   Finding,
   FindingDetail,
   FindingComment,
+  FindingEvidence,
   FindingsListParams,
+  PaginationParams,
   PaginatedResponse,
   SingleResponse,
   ResolveFindingRequest,
@@ -26,6 +28,12 @@ export class FindingsResource {
 
   async getDetails(findingId: string): Promise<SingleResponse<FindingDetail>> {
     return this.http.request<SingleResponse<FindingDetail>>(`/org/findings/${findingId}/details`);
+  }
+
+  async getEvidence(findingId: string, params?: PaginationParams): Promise<FindingEvidence> {
+    return this.http.request<FindingEvidence>(`/org/findings/${findingId}/evidence`, {
+      params: params as Record<string, unknown>,
+    });
   }
 
   async resolve(findingId: string, data: ResolveFindingRequest): Promise<unknown> {

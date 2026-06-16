@@ -28,7 +28,7 @@ export class DevicesResource {
    * List all devices
    */
   async list(params?: DeviceListParams): Promise<Device[]> {
-    const response = await this.httpClient.request<Device[]>('/api/v2/devices', {
+    const response = await this.httpClient.request<Device[]>('/v2/devices', {
       params: this.buildListParams(params),
     });
     return response;
@@ -38,7 +38,7 @@ export class DevicesResource {
    * List devices for a specific organization
    */
   async listByOrganization(organizationId: number, params?: Omit<DeviceListParams, 'organizationId'>): Promise<Device[]> {
-    const response = await this.httpClient.request<Device[]>(`/api/v2/organization/${organizationId}/devices`, {
+    const response = await this.httpClient.request<Device[]>(`/v2/organization/${organizationId}/devices`, {
       params: this.buildListParams(params),
     });
     return response;
@@ -48,14 +48,14 @@ export class DevicesResource {
    * Get a single device by ID
    */
   async get(id: number): Promise<Device> {
-    return this.httpClient.request<Device>(`/api/v2/device/${id}`);
+    return this.httpClient.request<Device>(`/v2/device/${id}`);
   }
 
   /**
    * Update a device
    */
   async update(id: number, data: DeviceUpdateData): Promise<Device> {
-    return this.httpClient.request<Device>(`/api/v2/device/${id}`, {
+    return this.httpClient.request<Device>(`/v2/device/${id}`, {
       method: 'PATCH',
       body: data,
     });
@@ -65,7 +65,7 @@ export class DevicesResource {
    * Approve a pending device
    */
   async approve(id: number): Promise<void> {
-    await this.httpClient.request<void>(`/api/v2/device/${id}/approval/APPROVED`, {
+    await this.httpClient.request<void>(`/v2/device/${id}/approval/APPROVED`, {
       method: 'POST',
     });
   }
@@ -74,7 +74,7 @@ export class DevicesResource {
    * Reject a pending device
    */
   async reject(id: number): Promise<void> {
-    await this.httpClient.request<void>(`/api/v2/device/${id}/approval/REJECTED`, {
+    await this.httpClient.request<void>(`/v2/device/${id}/approval/REJECTED`, {
       method: 'POST',
     });
   }
@@ -83,7 +83,7 @@ export class DevicesResource {
    * Reboot a device
    */
   async reboot(id: number, reason?: string): Promise<void> {
-    await this.httpClient.request<void>(`/api/v2/device/${id}/reboot`, {
+    await this.httpClient.request<void>(`/v2/device/${id}/reboot`, {
       method: 'POST',
       body: reason ? { reason } : undefined,
     });
@@ -93,7 +93,7 @@ export class DevicesResource {
    * Get device activities
    */
   async getActivities(id: number, params?: { after?: number; before?: number; pageSize?: number }): Promise<DeviceActivityListResponse> {
-    return this.httpClient.request<DeviceActivityListResponse>(`/api/v2/device/${id}/activities`, {
+    return this.httpClient.request<DeviceActivityListResponse>(`/v2/device/${id}/activities`, {
       params: this.buildListParams(params),
     });
   }
@@ -102,7 +102,7 @@ export class DevicesResource {
    * Get all activities for all devices (optionally filtered by organization)
    */
   async listActivities(params?: { organizationId?: number; after?: number; before?: number; pageSize?: number }): Promise<DeviceActivity[]> {
-    return this.httpClient.request<DeviceActivity[]>('/api/v2/activities', {
+    return this.httpClient.request<DeviceActivity[]>('/v2/activities', {
       params: this.buildListParams(params),
     });
   }
@@ -111,14 +111,14 @@ export class DevicesResource {
    * Get device services (Windows only)
    */
   async getServices(id: number): Promise<DeviceService[]> {
-    return this.httpClient.request<DeviceService[]>(`/api/v2/device/${id}/windows-services`);
+    return this.httpClient.request<DeviceService[]>(`/v2/device/${id}/windows-services`);
   }
 
   /**
    * Start a Windows service
    */
   async startService(id: number, serviceName: string): Promise<void> {
-    await this.httpClient.request<void>(`/api/v2/device/${id}/windows-service/${encodeURIComponent(serviceName)}/start`, {
+    await this.httpClient.request<void>(`/v2/device/${id}/windows-service/${encodeURIComponent(serviceName)}/start`, {
       method: 'POST',
     });
   }
@@ -127,7 +127,7 @@ export class DevicesResource {
    * Stop a Windows service
    */
   async stopService(id: number, serviceName: string): Promise<void> {
-    await this.httpClient.request<void>(`/api/v2/device/${id}/windows-service/${encodeURIComponent(serviceName)}/stop`, {
+    await this.httpClient.request<void>(`/v2/device/${id}/windows-service/${encodeURIComponent(serviceName)}/stop`, {
       method: 'POST',
     });
   }
@@ -136,7 +136,7 @@ export class DevicesResource {
    * Restart a Windows service
    */
   async restartService(id: number, serviceName: string): Promise<void> {
-    await this.httpClient.request<void>(`/api/v2/device/${id}/windows-service/${encodeURIComponent(serviceName)}/restart`, {
+    await this.httpClient.request<void>(`/v2/device/${id}/windows-service/${encodeURIComponent(serviceName)}/restart`, {
       method: 'POST',
     });
   }
@@ -145,28 +145,28 @@ export class DevicesResource {
    * Get device software inventory
    */
   async getSoftware(id: number): Promise<DeviceSoftware[]> {
-    return this.httpClient.request<DeviceSoftware[]>(`/api/v2/device/${id}/software`);
+    return this.httpClient.request<DeviceSoftware[]>(`/v2/device/${id}/software`);
   }
 
   /**
    * Get device hardware inventory
    */
   async getInventory(id: number): Promise<DeviceInventory> {
-    return this.httpClient.request<DeviceInventory>(`/api/v2/device/${id}/inventory`);
+    return this.httpClient.request<DeviceInventory>(`/v2/device/${id}/inventory`);
   }
 
   /**
    * Get device custom fields
    */
   async getCustomFields(id: number): Promise<Record<string, unknown>> {
-    return this.httpClient.request<Record<string, unknown>>(`/api/v2/device/${id}/custom-fields`);
+    return this.httpClient.request<Record<string, unknown>>(`/v2/device/${id}/custom-fields`);
   }
 
   /**
    * Update device custom fields
    */
   async updateCustomFields(id: number, fields: Record<string, unknown>): Promise<void> {
-    await this.httpClient.request<void>(`/api/v2/device/${id}/custom-fields`, {
+    await this.httpClient.request<void>(`/v2/device/${id}/custom-fields`, {
       method: 'PATCH',
       body: fields,
     });
@@ -176,7 +176,7 @@ export class DevicesResource {
    * Delete a device
    */
   async delete(id: number): Promise<void> {
-    await this.httpClient.request<void>(`/api/v2/device/${id}`, {
+    await this.httpClient.request<void>(`/v2/device/${id}`, {
       method: 'DELETE',
     });
   }

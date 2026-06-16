@@ -1,6 +1,6 @@
 ---
 name: cloud-design-patterns
-description: 'Cloud design patterns for distributed systems architecture covering 42 industry-standard patterns across reliability, performance, messaging, security, and deployment categories. Use when designing, reviewing, or implementing distributed system architectures.'
+description: 'Apply 42 industry-standard cloud design patterns for distributed systems across reliability, performance, messaging, security, architecture, and deployment categories. Use when designing, reviewing, or implementing a distributed system or microservices architecture, choosing a pattern for a specific problem, or improving resilience/scalability. Trigger phrases: cloud design pattern, distributed system architecture, microservices pattern, circuit breaker, retry, saga, CQRS, event sourcing, bulkhead, sidecar, strangler fig, anti-corruption layer, which pattern should I use.'
 ---
 
 # Cloud Design Patterns

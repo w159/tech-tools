@@ -111,7 +111,7 @@ describe('AlertsResource', () => {
     await expect(alertsResource.dismiss('1', { reason: 'False positive' })).resolves.not.toThrow();
 
     expect(mockFetch).toHaveBeenCalledWith(
-      'https://api.example.com/v1/alert/history/1/dismiss',
+      'https://api.example.com/v1/alert/dismiss/1',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ reason: 'False positive' }),

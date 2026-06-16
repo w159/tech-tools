@@ -5,6 +5,7 @@ import type {
   Finding,
   FindingDetail,
   FindingComment,
+  FindingEvidence,
   AgentDevice,
   AgentKey,
   User,
@@ -50,6 +51,12 @@ export class MspResource {
 
   async getFinding(accountId: string, findingId: string): Promise<SingleResponse<Finding>> {
     return this.http.request<SingleResponse<Finding>>(`/msp/accounts/${accountId}/findings/${findingId}`);
+  }
+
+  async getFindingEvidence(accountId: string, findingId: string, params?: PaginationParams): Promise<FindingEvidence> {
+    return this.http.request<FindingEvidence>(`/msp/accounts/${accountId}/findings/${findingId}/evidence`, {
+      params: params as Record<string, unknown>,
+    });
   }
 
   async resolveFinding(accountId: string, findingId: string, data: ResolveFindingRequest): Promise<unknown> {

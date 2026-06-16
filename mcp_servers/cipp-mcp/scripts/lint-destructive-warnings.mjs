@@ -2,7 +2,9 @@
 // Lint MCP tool definitions for missing destructive-action warnings.
 // Usage: node scripts/lint-destructive-warnings.mjs [path ...]
 // Exits 1 if any tool whose name matches a destructive verb lacks both
-// (a) a "⚠ DESTRUCTIVE" or "⚠ HIGH-IMPACT" prefix in its description, AND
+// (a) a destructive prefix in its description -- the ASCII "DESTRUCTIVE:" or
+//     "VISIBLE-TO-OTHERS:" tokens (preferred, US-keyboard only) or the legacy
+//     "(warn) DESTRUCTIVE" / "(warn) HIGH-IMPACT" unicode forms, AND
 // (b) annotations.destructiveHint: true.
 //
 // Convention: see ~/.claude/skills/mcp-vendor-scaffolding/SKILL.md §2.7b.
@@ -65,14 +67,16 @@ for (const root of roots) {
       if (!DESTRUCTIVE_VERBS.some(v => lower.includes(v))) continue;
 
       const window = src.slice(match.index, match.index + 1200);
-      const hasWarningPrefix = /⚠\s*(DESTRUCTIVE|HIGH-IMPACT)/.test(window);
+      const hasWarningPrefix =
+        /\b(DESTRUCTIVE|VISIBLE-TO-OTHERS)\s*:/.test(window) ||
+        /⚠\s*(DESTRUCTIVE|HIGH-IMPACT)/.test(window);
       const hasDestructiveHint = /destructiveHint\s*:\s*true/.test(window);
 
       if (!hasWarningPrefix || !hasDestructiveHint) {
         violations++;
         const lineNum = src.slice(0, match.index).split('\n').length;
         const missing = [
-          !hasWarningPrefix && 'description prefix (⚠ DESTRUCTIVE/HIGH-IMPACT)',
+          !hasWarningPrefix && 'description prefix (DESTRUCTIVE:/VISIBLE-TO-OTHERS:)',
           !hasDestructiveHint && 'annotations.destructiveHint: true',
         ].filter(Boolean).join(' + ');
         console.error(`${file}:${lineNum}  ${toolName}  missing: ${missing}`);

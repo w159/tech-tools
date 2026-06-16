@@ -1,7 +1,7 @@
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { getCredentials } from '../credentials.js';
 import { createAuvikClient } from '../client-factory.js';
-import { missingCredsError, shapeRaw } from './shared.js';
+import { shapeRaw } from './shared.js';
 import { describeBaseUrl } from '../../../_shared/base-url.js';
 
 export const statusTool: Tool = {
@@ -14,7 +14,16 @@ export const statusTool: Tool = {
 export async function handleStatus() {
   const c = getCredentials();
   if (!c) {
-    return missingCredsError('Auvik', ['AUVIK_USERNAME', 'AUVIK_API_KEY']);
+    // Boot/preflight must never throw or error when creds are absent. Report the
+    // missing-creds state as a successful status read so an agent can act on it.
+    return shapeRaw({
+      ok: true,
+      hasCredentials: false,
+      region: null,
+      baseUrl: describeBaseUrl('auvik', undefined, 'AUVIK_REGION'),
+      verified: false,
+      note: 'AUVIK_USERNAME and AUVIK_API_KEY are not set. Configure them, then re-run auvik_status.',
+    });
   }
 
   const region = c.region || 'us1';
@@ -35,14 +44,19 @@ export async function handleStatus() {
     });
   } catch (e: unknown) {
     const err = e as { status?: number; message?: string };
-    return shapeRaw({
-      ok: false,
-      hasCredentials: true,
-      region,
-      baseUrl: urlDesc,
-      verified: false,
-      status: err.status,
-      message: err.message,
-    });
+    // Surface verification failures as an error result (isError: true) so callers
+    // can branch on it, while still returning the diagnostic payload as JSON.
+    return {
+      ...shapeRaw({
+        ok: false,
+        hasCredentials: true,
+        region,
+        baseUrl: urlDesc,
+        verified: false,
+        status: err.status,
+        message: err.message,
+      }),
+      isError: true,
+    };
   }
 }

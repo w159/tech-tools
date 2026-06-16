@@ -37,14 +37,18 @@ export interface Document {
 }
 
 export interface Integration {
-  connectionId: string;
-  applicationUrl?: string;
-  integrationCategory?: string;
+  integrationId: string;
+  displayName?: string;
+  resourceKinds?: string[];
   [k: string]: unknown;
 }
 
 export interface IntegrationResourceKind {
+  integrationId?: string;
   resourceKind: string;
+  isScopable?: boolean;
+  numResources?: number;
+  numInScope?: number;
   [k: string]: unknown;
 }
 

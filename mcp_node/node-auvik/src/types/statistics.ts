@@ -1,7 +1,14 @@
 export interface StatisticsOptions {
   fromTime: string;
-  thruTime: string;
+  thruTime?: string;
+  /** Sampling interval: "minute" | "hour" | "day". Required by the Auvik API. */
+  interval?: string;
+  /** Comma-separated tenant IDs (sent as the `tenants` query param). */
+  tenants?: string;
+  /** @deprecated use `tenants`. Kept for backward compatibility. */
   tenantId?: string;
+  /** Extra filter[...] params already keyed (e.g. { "filter[deviceId]": "..." }). */
+  filters?: Record<string, string>;
   [key: string]: unknown;
 }
 

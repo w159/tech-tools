@@ -77,7 +77,7 @@ export interface Ticket extends TimestampFields {
  * Ticket list parameters.
  *
  * NinjaOne uses a board-based query model for listing tickets.
- * Tickets are queried via POST /api/v2/ticketing/trigger/board/{boardId}/run
+ * Tickets are queried via POST /v2/ticketing/trigger/board/{boardId}/run
  * with filters and pagination in the request body.
  */
 export interface TicketListParams {

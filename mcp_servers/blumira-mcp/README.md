@@ -31,7 +31,7 @@ See [Installation](#installation) for from-source method.
 - **🛡️ Comprehensive SIEM Coverage**: Tools spanning findings, agents/devices, users, resolutions, and MSP account management
 - **🔍 Decision-Tree Navigation**: Start with `blumira_navigate` to explore domains, then dynamically load domain-specific tools
 - **🏢 MSP Multi-Tenant Support**: Full MSP endpoint coverage for managing findings, agents, and users across accounts
-- **🔒 Secure Authentication**: JWT token or API key (`pax8ApiTokenV1`) authentication
+- **🔒 Secure Authentication**: OAuth2 client credentials (auto-exchanged for a bearer token) or a pre-issued JWT bearer token
 - **🌐 Dual Transport**: Supports both stdio (local) and HTTP Streamable (remote) transports
 - **📦 MCPB Packaging**: One-click installation via MCP Bundle for desktop clients
 - **⚡ Rate Limiting**: Built-in rate limiter respects Blumira API limits
@@ -66,9 +66,14 @@ npm run build
 
 ## Configuration
 
+Provide EITHER OAuth client credentials OR a JWT token.
+
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `BLUMIRA_JWT_TOKEN` | JWT token for authentication | — |
+| `BLUMIRA_CLIENT_ID` | OAuth2 client_id (exchanged for a bearer token) | — |
+| `BLUMIRA_CLIENT_SECRET` | OAuth2 client_secret | — |
+| `BLUMIRA_JWT_TOKEN` | Pre-issued JWT bearer token (alternative to OAuth) | — |
+| `BLUMIRA_BASE_URL` | API base URL override (optional) | `https://api.blumira.com/public-api/v1` |
 | `MCP_TRANSPORT` | Transport mode (`stdio` or `http`) | `stdio` |
 | `MCP_HTTP_PORT` | HTTP server port | `8080` |
 | `AUTH_MODE` | Auth mode (`env` or `gateway`) | `env` |
@@ -80,11 +85,11 @@ The server uses decision-tree navigation. Start with `blumira_navigate` to pick 
 
 | Domain | Tools |
 |--------|-------|
-| **findings** | List findings, get finding, get finding details, resolve finding, assign owners, list/add comments |
+| **findings** | List findings, get finding, get finding details, get finding evidence, resolve finding, assign owners, list/add comments |
 | **agents** | List devices, get device, list agent keys, get agent key |
 | **users** | List users |
 | **resolutions** | List available resolutions |
-| **msp** | List/get accounts, list/get/resolve findings, assign owners, comments, list devices/keys, list users |
+| **msp** | List/get accounts, list/get/resolve findings, get finding evidence, assign owners, comments, list devices/keys, list users |
 
 ## Filtering
 
@@ -92,10 +97,10 @@ Blumira supports rich query filtering on list endpoints:
 
 ```
 status.eq=10              # Exact match
-severity.in=HIGH,CRITICAL # Multiple values
-created_at.gt=2026-01-01  # Greater than
+priority.in=1,2           # Multiple values
+created.gt=2026-01-01     # Greater than
 name.contains=malware     # Substring match
-!status.eq=30             # Negation
+status.!eq=40             # Negation
 ```
 
 Pass filters as tool input parameters — the server handles query string construction.

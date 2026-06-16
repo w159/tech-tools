@@ -1,6 +1,6 @@
 # Claude Code Setup Audit & Tune
 
-Sometimes the root cause is not the code — it's that Claude Code is missing a tool, plugin, or setting that would make the whole session faster, cheaper, or more capable. This is the orchestrator's "fix the toolbox, not just the bug" capability.
+Sometimes the root cause is not the code: it's that Claude Code is missing a tool, plugin, or setting that would make the whole session faster, cheaper, or more capable. This is the orchestrator's "fix the toolbox, not just the bug" capability.
 
 **Autonomy:** recommend first, then apply low-risk fixes **only with the user's approval** (batch them into one approval). Never silently mutate the user's `~/.claude` or a project's `.claude`.
 
@@ -13,7 +13,7 @@ Sometimes the root cause is not the code — it's that Claude Code is missing a 
 ## High-leverage gap checks
 
 ### Token & context economy (usually the biggest wins)
-- **Code-intelligence LSP plugins for active languages.** One LSP call replaces 3–10 file reads and gives automatic post-edit diagnostics. Detect languages from manifests; check `enabledPlugins` for the matching `*-lsp@claude-plugins-official` (e.g. `typescript-lsp`, `pyright-lsp`, `gopls-lsp`, `rust-analyzer-lsp`). Missing ones for a language in active use = recommend install + enable. (Note any `serena`/other symbol MCP already covering this — don't stack redundant nav.)
+- **Code-intelligence LSP plugins for active languages.** One LSP call replaces 3–10 file reads and gives automatic post-edit diagnostics. Detect languages from manifests; check `enabledPlugins` for the matching `*-lsp@claude-plugins-official` (e.g. `typescript-lsp`, `pyright-lsp`, `gopls-lsp`, `rust-analyzer-lsp`). Missing ones for a language in active use = recommend install + enable. (Note any `serena`/other symbol MCP already covering this, don't stack redundant nav.)
 - **`permissions.deny` Read rules for build artifacts** so they never enter context: `Read(./**/dist/**)`, `Read(./**/build/**)`, `Read(./**/*.generated.*)`, `Read(./**/node_modules/**)`, `Read(./**/.venv*/**)`, `Read(./vendor/**)`.
 - **`claudeMdExcludes`** (in `settings.local.json`) to skip CLAUDE.md for packages outside the task scope; and prefer launching from the relevant sub-package dir so sibling CLAUDE.md files don't load.
 - **`subagentDefaults.maxTurns` / `contextHandling`** set, so subagents are bounded and can fork context off the main thread.
@@ -26,7 +26,7 @@ Sometimes the root cause is not the code — it's that Claude Code is missing a 
 - `PreCompact`/`PostCompact` → preserve key state across compaction.
 
 **This skill already ships ready-made implementations** of the first two plus an automatic
-prompt-optimizer (`UserPromptSubmit`) — install them with `scripts/install_hooks.py` rather
+prompt-optimizer (`UserPromptSubmit`), install them with `scripts/install_hooks.py` rather
 than hand-writing handlers. Details: `references/hooks-automation.md`.
 
 ### Capability coverage
@@ -50,7 +50,7 @@ Match to detected stack; check the plugin's per-turn **context cost** before sug
 1. Present the gap report grouped by leverage (token economy → automation → coverage → plugins), each with the concrete change and its benefit.
 2. On approval, apply low-risk changes in one batch: settings `permissions.deny`/`claudeMdExcludes`/`subagentDefaults`, format/guard hooks, LSP-plugin installs, agent/skill files. Respect the user's source-of-truth layout (e.g. write to their managed source and let their sync/symlinks pick it up; don't bypass it).
 3. **Verify the change took effect**: re-read settings, `/plugin` shows it enabled/installed, `/reload-plugins` or `/reload-skills` if needed, a probe confirms the new capability works.
-4. Record applied changes in `.orchestrator/` and offer to note durable conventions in the user-level `~/.claude/CLAUDE.md`.
+4. Record applied changes in `docs/` (the consolidated SSOT, e.g. `docs/CHANGELOG.md` / `docs/audits/`) and offer to note durable conventions in the user-level `~/.claude/CLAUDE.md`.
 
 ## Authoritative sources (re-verify against these, don't trust memory)
 `code.claude.com/docs/en/`: `settings`, `hooks`, `mcp`, `memory`, `sub-agents`, `large-codebases`, `discover-plugins`, `skills`, `goal`, `workflows`. The user's own setup conventions take precedence over any default.

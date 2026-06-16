@@ -3,7 +3,9 @@ import { unwrapModernPage } from '../pagination.js';
 import { CompanyScopedResource } from './_base.js';
 
 /**
- * GET /apihub-positionmanagement/v1/companies/{companyId}/jobcodes
+ * Job Codes [Batch]: GET /apihub-payroll/v1/companies/{companyId}/jobs
+ * (verified against developer.paylocity.com "Get Job Codes [Batch]";
+ *  job codes live under the Payroll API Hub, not Position Management.)
  */
 export class JobCodesResource extends CompanyScopedResource {
   async list(
@@ -12,7 +14,7 @@ export class JobCodesResource extends CompanyScopedResource {
     const { companyId, ...rest } = params;
     const cid = this.resolveCompany(companyId);
     const response = await this.http.request<unknown>(
-      `/apihub-positionmanagement/v1/companies/${cid}/jobcodes`,
+      `/apihub-payroll/v1/companies/${cid}/jobs`,
       { params: rest }
     );
     return unwrapModernPage<JobCode>(response);

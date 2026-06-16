@@ -1,6 +1,6 @@
 {
   "name": "node-paylocity",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Typed Node.js client for the Paylocity REST API; used by paylocity-mcp.",
   "type": "module",
   "main": "./dist/index.cjs",

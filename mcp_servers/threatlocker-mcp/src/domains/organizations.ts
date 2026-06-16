@@ -89,7 +89,7 @@ async function handleCall(toolName: string, args: Record<string, unknown>): Prom
       logger.info('API call: organizations.forMoveComputers');
       try {
         const client = await getClient();
-        const organizations = await client.organizations.forMoveComputers();
+        const organizations = await client.organizations.listForMoveComputers();
         const items = Array.isArray(organizations) ? organizations : (organizations?.items ?? organizations?.data ?? [organizations]);
         return shapeList(items, orgSummary, shapeArgs);
       } catch (err) {

@@ -16,11 +16,11 @@ export function registerHealthTools(server: McpServer, client: CwManageClient) {
         configured: !!config,
         baseUrl: config?.baseUrl ?? process.env.CW_MANAGE_URL ?? process.env.CW_MANAGE_BASE_URL ?? "https://api-na.myconnectwise.net (default)",
         credentials: {
-          CW_MANAGE_COMPANY_ID: process.env.CW_MANAGE_COMPANY_ID ? "set" : "NOT SET — required",
-          CW_MANAGE_PUBLIC_KEY: process.env.CW_MANAGE_PUBLIC_KEY ? "set" : "NOT SET — required",
-          CW_MANAGE_PRIVATE_KEY: process.env.CW_MANAGE_PRIVATE_KEY ? "set" : "NOT SET — required",
-          CW_MANAGE_CLIENT_ID: process.env.CW_MANAGE_CLIENT_ID ? "set" : "NOT SET — required",
-          CW_MANAGE_URL: process.env.CW_MANAGE_URL ?? process.env.CW_MANAGE_BASE_URL ?? "(not set — using default)",
+          CW_MANAGE_COMPANY_ID: process.env.CW_MANAGE_COMPANY_ID ? "set" : "NOT SET - required",
+          CW_MANAGE_PUBLIC_KEY: process.env.CW_MANAGE_PUBLIC_KEY ? "set" : "NOT SET - required",
+          CW_MANAGE_PRIVATE_KEY: process.env.CW_MANAGE_PRIVATE_KEY ? "set" : "NOT SET - required",
+          CW_MANAGE_CLIENT_ID: process.env.CW_MANAGE_CLIENT_ID ? "set" : "NOT SET - required",
+          CW_MANAGE_URL: process.env.CW_MANAGE_URL ?? process.env.CW_MANAGE_BASE_URL ?? "(not set - using default)",
         },
       };
       return shapeRaw(status);

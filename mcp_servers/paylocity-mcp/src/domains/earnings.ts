@@ -57,7 +57,7 @@ function getTools(): Tool[] {
     {
       name: 'paylocity_earnings_employee_list',
       description:
-        "List a single employee's earnings (legacy /api/v1). Returns earning code, amounts, and effective dates by default. employeeId is required.",
+        "List a single employee's configured earnings (read-only; legacy WebLink GET /api/v2/.../earnings). Returns earning code, amounts, and effective dates by default. employeeId is required.",
       inputSchema: {
         type: 'object' as const,
         properties: {

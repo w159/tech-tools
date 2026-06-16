@@ -224,7 +224,7 @@ export function registerCatalogTools(server: McpServer, client: CwManageClient) 
     titled("CW Manage: list catalog subcategories", READ),
     async ({ conditions, page, pageSize, fields, full }) => {
       try {
-        const result = await client.get<unknown[]>("/procurement/subCategories", {
+        const result = await client.get<unknown[]>("/procurement/subcategories", {
           conditions,
           page: page ?? 1,
           pageSize: pageSize ?? 25,

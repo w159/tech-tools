@@ -29,12 +29,12 @@ export class InventoryNetworkResource {
 
   async listDetails(options: PaginationOptions = {}): Promise<Page<NetworkDetails>> {
     const client = await this.getClient();
-    return fetchPage<NetworkDetails>(client, '/inventory/network/details', options);
+    return fetchPage<NetworkDetails>(client, '/inventory/network/detail', options);
   }
 
   async *listDetailsAll(filters: Record<string, string> = {}): AsyncIterable<NetworkDetails> {
     const client = await this.getClient();
-    for await (const page of paginate<NetworkDetails>(client, '/inventory/network/details', filters)) {
+    for await (const page of paginate<NetworkDetails>(client, '/inventory/network/detail', filters)) {
       for (const network of page.data) {
         yield network;
       }
@@ -43,7 +43,7 @@ export class InventoryNetworkResource {
 
   async getDetails(id: string): Promise<NetworkDetails> {
     const client = await this.getClient();
-    const response = await client.request<JsonApiResponse<NetworkDetails>>(`/inventory/network/details/${id}`);
+    const response = await client.request<JsonApiResponse<NetworkDetails>>(`/inventory/network/detail/${id}`);
     const data = Array.isArray(response.data) ? response.data[0] : response.data;
     return { id: data.id, ...data.attributes } as any;
   }

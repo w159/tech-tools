@@ -23,7 +23,7 @@ export class AlertsResource {
    * List all alerts
    */
   async list(params?: AlertListParams): Promise<Alert[]> {
-    const response = await this.httpClient.request<Alert[]>('/api/v2/alerts', {
+    const response = await this.httpClient.request<Alert[]>('/v2/alerts', {
       params: this.buildListParams(params),
     });
     return response;
@@ -33,7 +33,7 @@ export class AlertsResource {
    * List alerts for a specific device
    */
   async listByDevice(deviceId: number, params?: Omit<AlertListParams, 'deviceId'>): Promise<Alert[]> {
-    const response = await this.httpClient.request<Alert[]>(`/api/v2/device/${deviceId}/alerts`, {
+    const response = await this.httpClient.request<Alert[]>(`/v2/device/${deviceId}/alerts`, {
       params: this.buildListParams(params),
     });
     return response;
@@ -43,7 +43,7 @@ export class AlertsResource {
    * List alerts for a specific organization
    */
   async listByOrganization(organizationId: number, params?: Omit<AlertListParams, 'organizationId'>): Promise<Alert[]> {
-    const response = await this.httpClient.request<Alert[]>(`/api/v2/organization/${organizationId}/alerts`, {
+    const response = await this.httpClient.request<Alert[]>(`/v2/organization/${organizationId}/alerts`, {
       params: this.buildListParams(params),
     });
     return response;
@@ -53,14 +53,14 @@ export class AlertsResource {
    * Get a single alert by UID
    */
   async get(uid: string): Promise<Alert> {
-    return this.httpClient.request<Alert>(`/api/v2/alert/${uid}`);
+    return this.httpClient.request<Alert>(`/v2/alert/${uid}`);
   }
 
   /**
    * Delete/reset an alert by UID
    */
   async delete(uid: string): Promise<void> {
-    await this.httpClient.request<void>(`/api/v2/alert/${uid}`, {
+    await this.httpClient.request<void>(`/v2/alert/${uid}`, {
       method: 'DELETE',
     });
   }
@@ -69,7 +69,7 @@ export class AlertsResource {
    * Reset an alert by UID
    */
   async reset(uid: string): Promise<void> {
-    await this.httpClient.request<void>(`/api/v2/alert/${uid}/reset`, {
+    await this.httpClient.request<void>(`/v2/alert/${uid}/reset`, {
       method: 'POST',
     });
   }
@@ -78,7 +78,7 @@ export class AlertsResource {
    * Reset all alerts for a device
    */
   async resetByDevice(deviceId: number): Promise<AlertActionResult> {
-    return this.httpClient.request<AlertActionResult>(`/api/v2/device/${deviceId}/alerts/reset`, {
+    return this.httpClient.request<AlertActionResult>(`/v2/device/${deviceId}/alerts/reset`, {
       method: 'POST',
     });
   }
@@ -87,7 +87,7 @@ export class AlertsResource {
    * Reset all alerts for an organization
    */
   async resetByOrganization(organizationId: number): Promise<AlertActionResult> {
-    return this.httpClient.request<AlertActionResult>(`/api/v2/organization/${organizationId}/alerts/reset`, {
+    return this.httpClient.request<AlertActionResult>(`/v2/organization/${organizationId}/alerts/reset`, {
       method: 'POST',
     });
   }

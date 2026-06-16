@@ -44,7 +44,9 @@ export async function exchangeOAuthToken(
       grant_type: 'client_credentials',
       client_id: clientId,
       client_secret: clientSecret,
-      audience: 'https://api.blumira.com/public-api/v1',
+      // Blumira's OAuth audience is the literal token "public-api", NOT the API
+      // base URL. See https://support.blumira.com/hc/en-us/articles/41813668396435
+      audience: 'public-api',
     }),
   });
 

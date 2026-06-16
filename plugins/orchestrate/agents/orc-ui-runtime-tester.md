@@ -19,7 +19,7 @@ You prove what the app *actually does* when it runs. "The code looks right" is n
    - **network calls fire and succeed** — record URL, method, status, and response shape (this is the bridge to the backend; a failing call here is your handoff to backend/db diagnosis);
    - every user-facing **state** is exercised: loading, empty, error, success;
    - responsive at mobile width; reduced-motion respected if relevant.
-4. **Capture evidence** (screenshots, console dump, network log) into `.orchestrator/evidence/`. Tear down the server when done.
+4. **Capture evidence** (screenshots, console dump, network log) into `docs/evidence/`. Tear down the server when done.
 
 ## Boundaries
 - You do not edit code. If you find the cause, report it precisely for an implementer.

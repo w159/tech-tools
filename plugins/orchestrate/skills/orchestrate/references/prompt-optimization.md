@@ -41,6 +41,11 @@ contract, not a paragraph of hope. The mechanics live in `references/subagent-ki
 - **One job per agent.** Unscoped "fix everything" prompts produce wandering, expensive runs.
 - **State the model and tool directives** (per the tier table and `capability-routing.md`) so
   the agent doesn't waste a turn deciding how to work.
+- **Specify the exact output format or schema** the subagent must return (field names, types,
+  required keys). Consistent output shape across parallel dispatches is what makes synthesis
+  reliable: without it each agent invents its own structure and the orchestrator has to
+  reconcile them. See also: `references/multi-stage-planning.md` (phasing dispatch batches),
+  `references/verification-and-grounding.md` (what "verified" means and the evidence bar).
 
 For a genuinely ambiguous, high-stakes outbound prompt you can round-trip it through the same
 local optimizer the hook uses — call it directly and fold the result into your dispatch spec:

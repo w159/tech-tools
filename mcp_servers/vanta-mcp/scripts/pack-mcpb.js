@@ -148,12 +148,20 @@ try {
     prodPathsRaw = err.stdout ? err.stdout.toString() : '';
   }
   // Drop paths that are transitive deps nested inside a file:-linked package's
-  // own node_modules (e.g. mcp_node/node-spanning/node_modules/ajv).
+  // own node_modules (e.g. mcp_node/node-vanta/node_modules/tsup).
   // Those packages are dev/peer deps of the vendor lib itself and must not
-  // land in the bundle (doing so was the root cause of the AJV 6 vs 8 crash).
-  // A path is "nested inside a file: dep" when it contains /node_modules/ at
-  // least twice AND does not start under ROOT (i.e. it comes from an external
-  // file: link whose own node_modules are polluting npm ls --parseable output).
+  // land in the bundle. `npm ls --omit=dev` only omits THIS package's
+  // devDeps; the file:-linked lib's devDeps still appear in the parseable
+  // output, and they ballooned the Vanta bundle to 66MB.
+  //
+  // Classification of an external path (one that does not start under ROOT):
+  //   - file:-link package ROOT  -> has NO "/node_modules/" segment
+  //                                  (e.g. /repo/mcp_node/node-vanta). Keep it;
+  //                                  its dist/ is the only thing we ship.
+  //   - anything with a "/node_modules/" segment -> a nested dependency of
+  //                                  that link. Drop it; if the linked lib has
+  //                                  real prod deps they will already be hoisted
+  //                                  into ROOT/node_modules and kept above.
   const prodPaths = prodPathsRaw
     .split('\n')
     .map((p) => p.trim())
@@ -161,10 +169,9 @@ try {
     .filter((p) => {
       // Paths inside ROOT are always fine: npm manages deduplication there.
       if (p.startsWith(ROOT + '/')) return true;
-      // External path (file: linked package root or one of its deps).
-      // Only keep the package root itself (contains node_modules exactly once).
-      const count = (p.match(/node_modules/g) || []).length;
-      return count === 1;
+      // External path: keep only the file:-link package root (no nested
+      // node_modules segment). This drops the linked lib's own devDeps.
+      return !p.includes('/node_modules/');
     });
   console.log(`  ${prodPaths.length} production packages`);
   for (const absPath of prodPaths) {
@@ -190,7 +197,18 @@ try {
     const destPath = join(STAGING, relPath);
     if (existsSync(absPath)) {
       mkdirSync(join(destPath, '..'), { recursive: true });
-      cpSync(absPath, destPath, { recursive: true });
+      // Never copy a package's own nested node_modules. For file:-linked
+      // vendor libs (e.g. node-vanta) that directory holds the lib's devDeps
+      // (tsup, vitest, msw, ...) and ballooned the bundle to 66MB. Real prod
+      // deps are hoisted to ROOT/node_modules and staged via their own paths.
+      cpSync(absPath, destPath, {
+        recursive: true,
+        dereference: true,
+        filter: (src) => {
+          const norm = src.replace(/\\/g, '/');
+          return !/\/node_modules(\/|$)/.test(norm.slice(absPath.length));
+        },
+      });
     }
   }
   for (const dep of Object.keys(pkg.dependencies || {})) {

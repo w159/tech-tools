@@ -69,7 +69,7 @@ async function handleCall(toolName: string, args: Record<string, unknown>): Prom
       logger.info('API call: computerGroups.dropdown');
       try {
         const client = await getClient();
-        const dropdown = await client.computerGroups.dropdown();
+        const dropdown = await client.computerGroups.getDropdown();
         return shapeRaw(dropdown);
       } catch (err) {
         return toolErrorFromCatch('threatlocker_computer_groups_dropdown', err, {

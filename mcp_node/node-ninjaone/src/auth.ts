@@ -124,7 +124,10 @@ export class AuthManager {
    * Perform the actual token acquisition using Client Credentials flow
    */
   private async doAcquireToken(): Promise<TokenInfo> {
-    const tokenUrl = `${this.config.baseUrl}/oauth/token`;
+    // NinjaOne's OAuth token endpoint lives under /ws/oauth/token (verified
+    // against the official NinjaOne API docs and the authorization_code flow
+    // used by the MCP server). The bare /oauth/token path 404s.
+    const tokenUrl = `${this.config.baseUrl}/ws/oauth/token`;
 
     // Build the request body for client credentials flow
     const bodyParams = new URLSearchParams({

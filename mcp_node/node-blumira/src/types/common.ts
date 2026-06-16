@@ -156,6 +156,25 @@ export interface FindingsListParams extends PaginationParams {
   'modified_by.!in'?: string;
 }
 
+export interface EvidenceKey {
+  /** Field/column name present in each evidence row. */
+  name: string;
+  /** Human-friendly label for the field, when provided by the API. */
+  label?: string;
+  /** Field data type hint (e.g. "string", "ip", "timestamp"), when provided. */
+  type?: string;
+}
+
+export interface FindingEvidence {
+  /** Schema describing the keys present in each evidence row. */
+  evidence_keys: EvidenceKey[];
+  /** Paginated evidence rows; each object's keys come from evidence_keys. */
+  data: Array<Record<string, unknown>>;
+  meta?: ApiMeta;
+  links?: ApiLinks;
+  status?: string;
+}
+
 export interface ResolveFindingRequest {
   resolution: number;
   resolution_notes?: string;

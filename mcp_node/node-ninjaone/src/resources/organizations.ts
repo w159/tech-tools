@@ -25,7 +25,7 @@ export class OrganizationsResource {
    * List all organizations
    */
   async list(params?: OrganizationListParams): Promise<Organization[]> {
-    const response = await this.httpClient.request<Organization[]>('/api/v2/organizations', {
+    const response = await this.httpClient.request<Organization[]>('/v2/organizations', {
       params: this.buildListParams(params),
     });
     return response;
@@ -35,21 +35,21 @@ export class OrganizationsResource {
    * Get a single organization by ID
    */
   async get(id: number): Promise<Organization> {
-    return this.httpClient.request<Organization>(`/api/v2/organization/${id}`);
+    return this.httpClient.request<Organization>(`/v2/organization/${id}`);
   }
 
   /**
    * Get detailed organization information including device counts
    */
   async getDetailed(id: number): Promise<OrganizationDetailed> {
-    return this.httpClient.request<OrganizationDetailed>(`/api/v2/organization/${id}/detailed`);
+    return this.httpClient.request<OrganizationDetailed>(`/v2/organization/${id}/detailed`);
   }
 
   /**
    * Create a new organization
    */
   async create(data: OrganizationCreateData): Promise<Organization> {
-    return this.httpClient.request<Organization>('/api/v2/organizations', {
+    return this.httpClient.request<Organization>('/v2/organizations', {
       method: 'POST',
       body: data,
     });
@@ -59,7 +59,7 @@ export class OrganizationsResource {
    * Update an existing organization
    */
   async update(id: number, data: OrganizationUpdateData): Promise<Organization> {
-    return this.httpClient.request<Organization>(`/api/v2/organization/${id}`, {
+    return this.httpClient.request<Organization>(`/v2/organization/${id}`, {
       method: 'PATCH',
       body: data,
     });
@@ -69,7 +69,7 @@ export class OrganizationsResource {
    * Delete an organization
    */
   async delete(id: number): Promise<void> {
-    await this.httpClient.request<void>(`/api/v2/organization/${id}`, {
+    await this.httpClient.request<void>(`/v2/organization/${id}`, {
       method: 'DELETE',
     });
   }
@@ -78,14 +78,14 @@ export class OrganizationsResource {
    * Get organization locations
    */
   async getLocations(id: number): Promise<{ locations: Array<{ id: number; name: string }> }> {
-    return this.httpClient.request(`/api/v2/organization/${id}/locations`);
+    return this.httpClient.request(`/v2/organization/${id}/locations`);
   }
 
   /**
    * Get organization policies
    */
   async getPolicies(id: number): Promise<{ policies: Array<{ id: number; name: string }> }> {
-    return this.httpClient.request(`/api/v2/organization/${id}/policies`);
+    return this.httpClient.request(`/v2/organization/${id}/policies`);
   }
 
   /**

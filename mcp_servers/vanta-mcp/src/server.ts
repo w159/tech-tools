@@ -11,7 +11,7 @@ import { toolErrorFromCatch } from './domains/_helpers.js';
 
 export function createMcpServer(): Server {
   const server = new Server(
-    { name: 'vanta-mcp', version: '0.2.0' },
+    { name: 'vanta-mcp', version: '0.2.2' },
     {
       capabilities: {
         tools: {},

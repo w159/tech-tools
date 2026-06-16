@@ -193,7 +193,7 @@ const HANDLERS: Record<string, Handler> = {
 };
 
 export function createServer(): Server {
-  const server = new Server({ name: 'auvik-mcp', version: '0.3.0' }, { capabilities: { tools: {}, logging: {} } });
+  const server = new Server({ name: 'auvik-mcp', version: '0.4.1' }, { capabilities: { tools: {}, logging: {} } });
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     return { tools: annotate(TOOLS, 'Auvik') };

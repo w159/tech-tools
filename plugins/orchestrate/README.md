@@ -9,6 +9,7 @@ Three things ship together:
 | Piece | What it is |
 | --- | --- |
 | **`orchestrate` skill** | The orchestrator playbook: decompose a task, route every code edit to a subagent, demand execution evidence, verify with a second agent, and protect the main context window. Triggers on whole-codebase build/fix/audit/refactor/investigate work. |
+| **UI/UX test swarm** | A project-independent, browser-driven full UX pass folded into the skill (`references/ux-test-swarm.md` + five `orc-ux-*` agents). Discovers any web app's routes/fields and live save contract, generates personas that enroll and enter data through the real UI, walks and fuzzes it, recomputes every client-facing number with an independent oracle, and emits gated bug/user-story/feedback/feature-request reports. Detects and reports app bugs; never edits the target app. |
 | **`/orc-prompt` command** | On-demand prompt optimizer for agentic coding. Discovers the tools/skills/subagents *actually* loaded this session and rewrites a "noob" prompt into a structured `# Optimized Prompt` block — methodology, mandatory verification gates, a subagent plan, and acceptance criteria. No external dependency. |
 | **`prompt-optimizer` skill + Modelfile** | The passive path: a chat-oriented prompt rewriter skill, plus the ollama `Modelfile` that powers the optional automatic `UserPromptSubmit` hook. |
 
@@ -17,12 +18,21 @@ Three things ship together:
 ```
 orchestrate/
 ├── .claude-plugin/plugin.json     # manifest
-├── agents/                        # 5 subagents, auto-registered on install
+├── agents/                        # 14 subagents, auto-registered on install
 │   ├── orc-explorer.md            #   read-only codebase mapping
 │   ├── orc-implementer.md         #   bounded, verified code edits
 │   ├── orc-verifier.md            #   adversarial confirm/refute
 │   ├── orc-db-prober.md           #   read-only schema/RLS/index inspection
-│   └── orc-ui-runtime-tester.md   #   live browser/runtime behavior
+│   ├── orc-ui-runtime-tester.md   #   live browser/runtime behavior
+│   ├── orc-planner.md             #   multi-stage decomposition + stage maps
+│   ├── orc-docs-curator.md        #   maintains the docs/ single source of truth
+│   ├── orc-docs-auditor.md        #   audits docs/ for drift against code
+│   ├── orc-completeness-critic.md #   "what did we miss" gap pass before done
+│   ├── orc-ux-cartographer.md     #   UX swarm: discover routes/fields + save contract
+│   ├── orc-ux-persona.md          #   UX swarm: enroll, enter data, walk UI, file findings
+│   ├── orc-ux-fuzzer.md           #   UX swarm: boundary/fuzz the discovered inputs
+│   ├── orc-ux-accuracy-oracle.md  #   UX swarm: independent recompute of client numbers
+│   └── orc-ux-reporter.md         #   UX swarm: synthesis + three hard gates + deliverables
 ├── commands/orc-prompt.md         # the /orc-prompt command
 └── skills/
     ├── orchestrate/               # SKILL.md + references/ + hooks/ + scripts/
@@ -32,7 +42,7 @@ orchestrate/
 ## Install
 
 **As a plugin (Claude Code):** place this directory under your plugins root (or install
-from the marketplace once published). The skills, `/orc-prompt` command, and the five
+from the marketplace once published). The skills, `/orc-prompt` command, and the fourteen
 `orc-*` subagents are discovered automatically.
 
 **As a bare skill (any agent):** copy `skills/orchestrate/` into the agent's skills

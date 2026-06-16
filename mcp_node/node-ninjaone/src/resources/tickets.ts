@@ -2,7 +2,7 @@
  * Tickets resource operations
  *
  * NinjaOne's ticketing API uses a board-based query model:
- * - Listing tickets requires POST to /api/v2/ticketing/trigger/board/{boardId}/run
+ * - Listing tickets requires POST to /v2/ticketing/trigger/board/{boardId}/run
  * - Comments/activity are accessed via /log-entry (not /comment)
  */
 
@@ -69,7 +69,7 @@ export class TicketsResource {
     }
 
     const response = await this.httpClient.request<Ticket[] | TicketListResponse>(
-      `/api/v2/ticketing/trigger/board/${boardId}/run`,
+      `/v2/ticketing/trigger/board/${boardId}/run`,
       { method: 'POST', body }
     );
 
@@ -84,14 +84,14 @@ export class TicketsResource {
    * Get a single ticket by ID
    */
   async get(id: number): Promise<Ticket> {
-    return this.httpClient.request<Ticket>(`/api/v2/ticketing/ticket/${id}`);
+    return this.httpClient.request<Ticket>(`/v2/ticketing/ticket/${id}`);
   }
 
   /**
    * Create a new ticket
    */
   async create(data: TicketCreateData): Promise<Ticket> {
-    return this.httpClient.request<Ticket>('/api/v2/ticketing/ticket', {
+    return this.httpClient.request<Ticket>('/v2/ticketing/ticket', {
       method: 'POST',
       body: data,
     });
@@ -101,7 +101,7 @@ export class TicketsResource {
    * Update an existing ticket
    */
   async update(id: number, data: TicketUpdateData): Promise<Ticket> {
-    return this.httpClient.request<Ticket>(`/api/v2/ticketing/ticket/${id}`, {
+    return this.httpClient.request<Ticket>(`/v2/ticketing/ticket/${id}`, {
       method: 'PUT',
       body: data,
     });
@@ -111,7 +111,7 @@ export class TicketsResource {
    * Delete a ticket
    */
   async delete(id: number): Promise<void> {
-    await this.httpClient.request<void>(`/api/v2/ticketing/ticket/${id}`, {
+    await this.httpClient.request<void>(`/v2/ticketing/ticket/${id}`, {
       method: 'DELETE',
     });
   }
@@ -128,7 +128,7 @@ export class TicketsResource {
       params.type = type;
     }
     return this.httpClient.request<TicketComment[]>(
-      `/api/v2/ticketing/ticket/${ticketId}/log-entry`,
+      `/v2/ticketing/ticket/${ticketId}/log-entry`,
       { params }
     );
   }
@@ -137,7 +137,7 @@ export class TicketsResource {
    * Add a comment to a ticket
    */
   async addComment(ticketId: number, data: TicketCommentCreateData): Promise<TicketComment> {
-    return this.httpClient.request<TicketComment>(`/api/v2/ticketing/ticket/${ticketId}/comment`, {
+    return this.httpClient.request<TicketComment>(`/v2/ticketing/ticket/${ticketId}/comment`, {
       method: 'POST',
       body: data,
     });
@@ -147,27 +147,27 @@ export class TicketsResource {
    * Get ticket attachments
    */
   async getAttachments(ticketId: number): Promise<TicketAttachment[]> {
-    return this.httpClient.request<TicketAttachment[]>(`/api/v2/ticketing/ticket/${ticketId}/attachment`);
+    return this.httpClient.request<TicketAttachment[]>(`/v2/ticketing/ticket/${ticketId}/attachment`);
   }
 
   /**
    * List available ticket boards
    */
   async listBoards(): Promise<unknown[]> {
-    return this.httpClient.request<unknown[]>('/api/v2/ticketing/trigger/board');
+    return this.httpClient.request<unknown[]>('/v2/ticketing/trigger/board');
   }
 
   /**
    * List available ticket forms
    */
   async listForms(): Promise<TicketForm[]> {
-    return this.httpClient.request<TicketForm[]>('/api/v2/ticketing/ticket-form');
+    return this.httpClient.request<TicketForm[]>('/v2/ticketing/ticket-form');
   }
 
   /**
    * Get a specific ticket form
    */
   async getForm(id: number): Promise<TicketForm> {
-    return this.httpClient.request<TicketForm>(`/api/v2/ticketing/ticket-form/${id}`);
+    return this.httpClient.request<TicketForm>(`/v2/ticketing/ticket-form/${id}`);
   }
 }

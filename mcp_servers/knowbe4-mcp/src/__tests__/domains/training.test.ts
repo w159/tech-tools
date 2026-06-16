@@ -93,7 +93,7 @@ describe("Training Domain Handler", () => {
 
       const result = await trainingHandler.handleCall("knowbe4_store_purchases_list", {});
 
-      expect(mockApiRequest).toHaveBeenCalledWith("/v1/store/purchases", {
+      expect(mockApiRequest).toHaveBeenCalledWith("/v1/training/store_purchases", {
         params: { page: 1, per_page: 100 },
       });
       expect(result.isError).toBeUndefined();
@@ -107,7 +107,7 @@ describe("Training Domain Handler", () => {
 
       const result = await trainingHandler.handleCall("knowbe4_policies_list", {});
 
-      expect(mockApiRequest).toHaveBeenCalledWith("/v1/policies", {
+      expect(mockApiRequest).toHaveBeenCalledWith("/v1/training/policies", {
         params: { page: 1, per_page: 100 },
       });
       expect(result.isError).toBeUndefined();

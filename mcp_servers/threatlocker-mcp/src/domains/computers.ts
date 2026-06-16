@@ -125,7 +125,8 @@ async function handleCall(toolName: string, args: Record<string, unknown>): Prom
       logger.info('API call: computers.getCheckins', params);
       try {
         const client = await getClient();
-        const checkins = await client.computers.getCheckins(params.computerId, {
+        const checkins = await client.computers.getCheckins({
+          computerId: params.computerId,
           pageNumber: params.pageNumber,
           pageSize: params.pageSize,
         });

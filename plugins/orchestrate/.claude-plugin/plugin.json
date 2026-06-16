@@ -1,7 +1,7 @@
 {
   "name": "orchestrate",
-  "version": "0.2.0",
-  "description": "Multi-agent coding orchestrator for AI coding agents. Drives whole-codebase build/fix/audit/refactor work through subagents with real execution and independent verification, ships fail-safe automation hooks, and turns vague 'noob' prompts into structured, environment-aware, best-practices prompts via /orc-prompt.",
+  "version": "0.4.0",
+  "description": "Multi-agent coding orchestrator for AI coding agents. Drives whole-codebase build/fix/audit/refactor work through a structured multi-stage planning lifecycle backed by a docs/ single source of truth the skill auto-maintains (evidence, findings, CHANGELOG, ROADMAP), an expanded subagent squad (explorer, implementer, verifier, UI runtime tester, DB prober), a project-independent browser-driven UI/UX test swarm (persona enrollment, data entry, fuzzing, an independent accuracy oracle, gated bug/user-story/feedback reporting), fail-safe automation hooks, and /orc-prompt to turn vague requests into structured, environment-aware specs.",
   "author": { "name": "w159", "url": "https://github.com/w159" },
   "repository": "https://github.com/w159/tech-tools",
   "homepage": "https://github.com/w159/tech-tools/tree/main/plugins/orchestrate",
@@ -14,6 +14,11 @@
     "verification",
     "hooks",
     "agentic",
-    "coding-agent"
+    "coding-agent",
+    "docs-as-code",
+    "multi-stage-planning",
+    "ux-testing",
+    "persona-testing",
+    "browser-testing"
   ]
 }

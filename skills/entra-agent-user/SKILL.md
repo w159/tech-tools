@@ -1,6 +1,6 @@
 ---
 name: entra-agent-user
-description: 'Create Agent Users in Microsoft Entra ID from Agent Identities, enabling AI agents to act as digital workers with user identity capabilities in Microsoft 365 and Azure environments.'
+description: 'Create Agent Users in Microsoft Entra ID from an agent identity so AI agents can act as digital workers with a user identity (idtyp=user) and access user-only APIs like Exchange mailboxes, Teams, and org charts. Use when setting up an Entra agent user, granting an AI agent a user identity, provisioning a digital worker, or troubleshooting agent identity vs agent user token types. Trigger phrases: Entra agent user, agent identity, digital worker, idtyp=user, AI agent mailbox access, ServiceIdentity service principal.'
 ---
 
 # SKILL: Creating Agent Users in Microsoft Entra Agent ID
