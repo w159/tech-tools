@@ -121,7 +121,7 @@ Statuses: `planned | in-progress | blocked | deferred | done`. Move `done` items
 - shared/    Single source of truth for cross-side TypeScript types.
 
 ## Conventions
-- yarn over npm. Never run installs under the iCloud path; stage in /tmp.
+- yarn over npm. If the repo lives on a cloud-synced drive, stage installs outside it (e.g. /tmp) to avoid sync churn.
 - Error envelope: { error: { code, message, details, traceId } }. See docs/architecture/.
 
 ## Glossary

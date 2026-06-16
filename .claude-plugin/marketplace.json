@@ -11,9 +11,9 @@
     {
       "name": "orchestrate",
       "source": "./plugins/orchestrate",
-      "description": "Multi-agent coding orchestrator that drives whole-codebase build, fix, audit, and refactor work through subagents with real execution and independent verification, multi-stage planning, a project-independent browser-driven UI/UX test swarm, and a docs/ single source of truth it auto-maintains.",
+      "description": "Multi-agent coding orchestrator that drives whole-codebase build, fix, audit, and refactor work through subagents with real execution and independent verification, multi-stage planning, a project-independent browser-driven UI/UX test swarm, a docs/ single source of truth it auto-maintains, and a library of verification-gated /orc-* launcher commands (feature, frontend, component, debug, refactor, readme, gitignore, handoff, db-audit, grafana, m365, vendor-assessment, harden) sharing one neutral Operating Contract.",
       "category": "developer-tools",
-      "keywords": ["orchestrate", "subagents", "prompt-optimization", "code-review", "verification", "hooks", "agentic", "coding-agent", "docs-as-code", "multi-stage-planning", "ux-testing", "persona-testing", "browser-testing"]
+      "keywords": ["orchestrate", "subagents", "prompt-optimization", "code-review", "verification", "hooks", "agentic", "coding-agent", "docs-as-code", "multi-stage-planning", "ux-testing", "persona-testing", "browser-testing", "slash-commands", "operating-contract", "verify-loop"]
     },
     {
       "name": "msp-ops",
