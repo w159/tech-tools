@@ -1,0 +1,22 @@
+{
+  "name": "microsoft-365",
+  "version": "0.3.0",
+  "description": "Microsoft 365 administration and identity. Bundles native M365 management (users, mailboxes, Teams, OneDrive, licensing, security posture), Microsoft Graph and Entra reporting, and CIPP multi-tenant management (tenant health, standards drift, secure score, offboarding).",
+  "author": {
+    "name": "MSP Claude Plugins Community"
+  },
+  "homepage": "https://github.com/wyre-technology/msp-claude-plugins",
+  "repository": "https://github.com/wyre-technology/msp-claude-plugins",
+  "license": "Apache-2.0",
+  "keywords": [
+    "m365",
+    "microsoft-graph",
+    "entra",
+    "cipp",
+    "identity",
+    "licensing",
+    "tenants",
+    "mailboxes",
+    "teams"
+  ]
+}

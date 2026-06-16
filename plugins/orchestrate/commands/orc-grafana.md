@@ -1,6 +1,6 @@
 ---
-description: Build or fix a Grafana panel or dashboard backed by a SQL datasource; use when you need a clean, dialect-correct query plus the panel and variable configuration to render a metric.
-argument-hint: [datasource] [SQL dialect] [panel goal] [metric definition]
+description: "Build or fix a Grafana panel or dashboard backed by a SQL datasource; use when you need a clean, dialect-correct query plus the panel and variable configuration to render a metric."
+argument-hint: "[datasource] [SQL dialect] [panel goal] [metric definition]"
 ---
 
 Apply the Operating Contract to this entire task. It is injected below.

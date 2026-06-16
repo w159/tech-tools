@@ -1,6 +1,6 @@
 ---
-description: Reorganize and clean up structure, naming, and layout of a codebase without changing observable behavior; use when code works but is messy, hard to navigate, or carries dead weight.
-argument-hint: [project] [description] [pain points]
+description: "Reorganize and clean up structure, naming, and layout of a codebase without changing observable behavior; use when code works but is messy, hard to navigate, or carries dead weight."
+argument-hint: "[project] [description] [pain points]"
 ---
 
 Apply the Operating Contract to this entire task. It is injected below.

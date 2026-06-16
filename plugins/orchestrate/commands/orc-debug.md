@@ -1,6 +1,6 @@
 ---
-description: Chase down and fix a specific failing behavior or error; use when you have a reproducible bug, exception, or bad output and want the root cause fixed with evidence.
-argument-hint: [context] [stack] [symptom] [paste error/log]
+description: "Chase down and fix a specific failing behavior or error; use when you have a reproducible bug, exception, or bad output and want the root cause fixed with evidence."
+argument-hint: "[context] [stack] [symptom] [paste error/log]"
 ---
 
 Apply the Operating Contract to this entire task. It is injected below.

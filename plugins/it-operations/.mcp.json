@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+    "auvik": {
+      "type": "http",
+      "url": "https://mcp.wyre.ai/v1/auvik/mcp",
+      "headers": {
+        "X-Auvik-Username": "${AUVIK_USERNAME}",
+        "X-Auvik-Api-Key": "${AUVIK_API_KEY}",
+        "X-Auvik-Region": "${AUVIK_REGION}"
+      }
+    },
+    "immybot": {
+      "type": "http",
+      "url": "https://mcp.wyre.ai/v1/immybot/mcp",
+      "headers": {
+        "X-Immybot-Instance-Subdomain": "${IMMYBOT_INSTANCE_SUBDOMAIN}",
+        "X-Immybot-Tenant-Id": "${IMMYBOT_TENANT_ID}",
+        "X-Immybot-Client-Id": "${IMMYBOT_CLIENT_ID}",
+        "X-Immybot-Client-Secret": "${IMMYBOT_CLIENT_SECRET}"
+      }
+    }
+  }
+}

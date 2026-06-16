@@ -4,7 +4,7 @@
 
 Monorepo of MCP servers, plugins, and supporting Node.js client libraries for common MSP/IT vendor APIs. A production-grade toolkit of **Model Context Protocol (MCP) servers, vendor SDKs, and Claude Code plugins** that turn an LLM agent into an autonomous **MSP (Managed Service Provider) operator**. One toolkit gives an AI agent first-class access to the security, RMM, PSA, M365, HR, backup, and compliance platforms an MSP runs every day.
 
-> Built and maintained by **w159**. The toolkit currently ships **10 MCP servers**, **7 typed Node SDKs**, **27 Claude Code plugins** (across a plugin marketplace), and a curated **vendor + framework documentation set** that an AI agent can read directly while it works.
+> Built and maintained by **w159**. The toolkit currently ships **10 MCP servers**, **7 typed Node SDKs**, **12 domain-cluster Claude Code plugins** (across a plugin marketplace), and a curated **vendor + framework documentation set** that an AI agent can read directly while it works.
 
 ---
 
@@ -50,7 +50,7 @@ Internal IT Help Desk/Engineer tools for Auvik, NinjaOne, ConnectWise, CIPP/M365
 
 - **10 MCP servers** wrapping some of the most common vendor APIs in each category (PSA, Endpoint Security, ITSM, etc.).
 - **Cross-platform + bridge Claude Code plugins** that orchestrate parallel fan-out across vendors and hand work cleanly between tools (e.g. *morning briefing*, *client 360*, *unified incident response*, *ConnectWise ticket -> NinjaOne triage*).
-- **Plugin marketplace** -- 27 plugins installable via `claude plugin marketplace add w159/tech-tools` once published, or locally via the path.
+- **Plugin marketplace** -- 12 domain-cluster plugins installable via `claude plugin marketplace add w159/tech-tools` once published, or locally via the path.
 - **Compact-by-default responses** -- all list/get tools return concise summaries by default; pass `fields=[...]` to select specific fields or `full=true` to get the raw vendor payload. Errors are structured `{error:{code, message, detail, hint}}` so agents can act on them.
 - **Pre-built `.mcpb` bundles** -- drop into Claude Desktop and go.
 - **End-to-end test harness** (`test-mcp-tools.mjs`) that exercises every server against real credentials.
@@ -59,7 +59,7 @@ Internal IT Help Desk/Engineer tools for Auvik, NinjaOne, ConnectWise, CIPP/M365
 ### Key Differentiators
 
 - **Real SDKs, not just MCP wrappers.** The `mcp_node/` folder ships fully typed Node.js clients (`node-auvik`, `node-ninjaone`, `node-vanta`, etc.) that the MCP layer sits on top of - usable from any non-MCP project too.
-- **Cross-vendor super-skills.** The `msp-command-center` plugin fans out across 6 vendor MCPs in parallel for a single user query, while `msp-tool-bridge-ops` pivots directly between PSA and RMM workflows when one platform needs evidence from another.
+- **Domain-cluster plugins.** The `it-operations` plugin bundles RMM, PSA, network, endpoint, backup, and documentation vendors behind one domain so a single query can fan out across NinjaOne, ConnectWise, Auvik, and ImmyBot, while `orchestrate` drives multi-agent coding work across the whole codebase.
 - **Production-grade packaging.** A hardened `pack-mcpb.js` script guards against broken bundles before they ever ship to Claude Desktop.
 
 ---
@@ -71,9 +71,9 @@ Internal IT Help Desk/Engineer tools for Auvik, NinjaOne, ConnectWise, CIPP/M365
 |                      Claude Desktop / Claude Code              |
 |                                                                |
 |  +------------------+    +------------------+                  |
-|  | cross-platform + |    | vendor-specific  |   plugins/       |
-|  | bridge plugins   |    | plugins (9)      |                  |
-|  | (2)              |    |                  |                  |
+|  | orchestrate      |    | 11 domain-cluster|   plugins/       |
+|  | coding meta-agent|    | plugins          |                  |
+|  |                  |    |                  |                  |
 |  +---------+--------+    +---------+--------+                  |
 |            |                       |                           |
 |            v                       v                           |
@@ -141,7 +141,7 @@ Every MCP server reads credentials from environment variables at boot (Claude De
 tech-tools/
 ├── mcp_servers/         10 MCP servers (one per vendor) + _shared tooling
 ├── mcp_node/            7 typed Node.js SDK libraries the servers depend on
-├── plugins/             27 Claude Code plugins (skills + slash commands)
+├── plugins/             12 domain-cluster plugins (skills + slash commands)
 ├── skills/              13 standalone skills installable into any Claude Code workspace
 ├── .claude-plugin/      Marketplace manifest (marketplace.json) + root plugin.json
 ├── docs/                Vendor API docs + framework references (read by AI agents)
@@ -203,7 +203,7 @@ node-<vendor>/
 
 ### `plugins/`
 
-Each `plugins/<name>/` is a Claude Code plugin. The repo ships 27 plugins organized under a marketplace manifest at `.claude-plugin/marketplace.json`.
+Each `plugins/<name>/` is a Claude Code plugin. The repo ships 12 domain-cluster plugins organized under a marketplace manifest at `.claude-plugin/marketplace.json`.
 
 ```text
 <plugin-name>/
@@ -217,7 +217,7 @@ The `mcp_dependencies` array names the MCP servers that **must be installed** fo
 
 ### `.claude-plugin/marketplace.json`
 
-The root marketplace manifest lists all 27 plugins with name, source path, description, category, and keywords. It enables bulk discovery and future registry publication.
+The root marketplace manifest lists all 12 plugins with name, source path, description, category, and keywords. It enables bulk discovery and future registry publication.
 
 ```bash
 # Install all plugins from a local clone
@@ -283,7 +283,7 @@ node test-mcp-tools.mjs auvik vanta   # subset
 
 ```bash
 # from your Claude Code workspace
-claude code plugin install /absolute/path/to/tech-tools/plugins/msp-command-center
+claude code plugin install /absolute/path/to/tech-tools/plugins/it-operations
 ```
 
 The plugin will refuse to activate skills whose `mcp_dependencies` are not installed.
@@ -405,44 +405,22 @@ Re-run any time with `node test-mcp-tools.mjs`.
 
 ## Claude Code Plugins
 
-All 27 plugins live under `plugins/` and are listed in the marketplace manifest at `.claude-plugin/marketplace.json`. Each declares its required MCP servers in its own `.claude-plugin/plugin.json` and ships **skills** (Claude follows them like a runbook) and **slash commands** (one-shot entry points).
+The marketplace ships **12 domain-cluster plugins** under `plugins/`, listed in the manifest at `.claude-plugin/marketplace.json`. Each vendor's tooling is bundled into the business domain it serves; `orchestrate` is the do-everything coding meta-agent. Plugins declare any required MCP servers in their own `.mcp.json` and ship **skills** (Claude follows them like a runbook) and **slash commands** (one-shot entry points). Folded vendor skills and commands are prefixed by vendor (for example `ninjaone-*`, `auvik-*`) so names stay unique within a domain.
 
-**MSP vendor plugins** (10) -- each wraps one vendor's MCP server:
-
-| Plugin | MCP Deps | Skills | Slash Commands |
+| Plugin | Domain | Bundled tools / surface | MCP servers |
 | --- | --- | --- | --- |
-| [`msp-command-center`](plugins/msp-command-center) | auvik, cipp, connectwise, knowbe4, ninjaone, threatlocker | `client-360`, `cross-platform-incident`, `morning-briefing` | `/briefing`, `/client`, `/incident` |
-| [`msp-tool-bridge-ops`](plugins/msp-tool-bridge-ops) | connectwise-manage, ninjaone | `cw-ticket-device-troubleshoot`, `ninja-device-ticket-sync` | `/cw-device-triage`, `/ninja-ticket-sync` |
-| [`auvik-network-ops`](plugins/auvik-network-ops) | auvik | `bandwidth-hog-hunt`, `config-drift-watch`, `network-triage` | `/auvik-triage` |
-| [`cipp-m365-ops`](plugins/cipp-m365-ops) | cipp | `bec-rapid-response`, `full-offboard`, `suspicious-signin-hunt`, `tenant-health-sweep` | `/cipp-morning` |
-| [`connectwise-psa-ops`](plugins/connectwise-psa-ops) | connectwise-manage | `project-burndown`, `sla-breach-radar`, `ticket-triage`, `utilization-report` | `/cw-sla-radar` |
-| [`kaseya-spanning-backup-ops`](plugins/kaseya-spanning-backup-ops) | kaseya-spanning-backup | `audit-forensics`, `backup-health-sweep`, `license-utilization`, `restore-orchestrator` | `/spanning-health`, `/spanning-restore` |
-| [`knowbe4-security-training`](plugins/knowbe4-security-training) | knowbe4 | `campaign-effectiveness`, `phishing-failure-cohort`, `risk-heatmap` | `/kb4-heatmap` |
-| [`ninjaone-rmm-ops`](plugins/ninjaone-rmm-ops) | ninjaone | `fleet-health-sweep`, `mass-incident-response`, `offline-device-hunt` | `/ninja-sweep` |
-| [`paylocity-hr-ops`](plugins/paylocity-hr-ops) | paylocity | `deduction-and-tax-overview`, `new-hire-flow`, `pay-rate-audit`, `roster-snapshot` | `/paylocity-new-hires`, `/paylocity-roster` |
-| [`threatlocker-zerotrust-ops`](plugins/threatlocker-zerotrust-ops) | threatlocker | `approval-queue-triage`, `audit-forensics`, `child-org-rollup` | `/tl-approvals` |
-| [`vanta-compliance-ops`](plugins/vanta-compliance-ops) | vanta | `evidence-gap-hunter`, `framework-audit-readiness`, `vendor-risk-rollup`, `vulnerability-triage` | `/vanta-audit-prep`, `/vanta-morning` |
-
-**Knowledge-worker and platform plugins** (16) -- no MCP server dependency:
-
-| Plugin | Purpose |
-| --- | --- |
-| `brand-voice` | Discover, enforce, and generate brand voice guidelines across content |
-| `cowork-plugin-management` | Manage Claude Code plugin installations and marketplace entries |
-| `customer-support` | Customer support workflow skills (ticket routing, response drafting) |
-| `data` | Data analysis and transformation skills |
-| `design` | Design workflow skills (Figma-adjacent, asset management) |
-| `engineering` | Engineering workflow skills (code review, PR triage, runbooks) |
-| `enterprise-search` | Cross-source search orchestration across vendor data |
-| `finance` | Finance workflow skills (budget review, expense categorization) |
-| `human-resources` | HR workflow skills (onboarding, offboarding, policy lookup) |
-| `minutes` | Meeting minutes capture and action-item extraction (includes nested Rust app; excluded from marketplace auto-install) |
-| `nudge` | Nudge-based reminder and follow-up workflow |
-| `operations` | Operations workflow skills (runbooks, escalation trees) |
-| `orchestrate` | Orchestration meta-plugin for driving multi-step agent workflows |
-| `pdf-viewer` | PDF reading and summarization skills |
-| `product-management` | Product management workflow skills (PRD drafting, roadmap triage) |
-| `productivity` | General productivity skills (writing, summarization, task planning) |
+| [`orchestrate`](plugins/orchestrate) | Multi-agent coding | 14 launcher commands, 14 subagents, multi-stage planning, docs SSoT, UX test swarm | -- |
+| [`it-operations`](plugins/it-operations) | MSP IT operations | NinjaOne, ConnectWise Automate, ConnectWise PSA, Auvik, ImmyBot, Kaseya IT Glue, Kaseya Spanning, Azure + ops skills | auvik, immybot |
+| [`security-compliance`](plugins/security-compliance) | Security & GRC | Vanta, KnowBe4, ThreatLocker, Blumira, Proofpoint, Checkpoint Avanan + audit/evidence/risk skills | threatlocker |
+| [`microsoft-365`](plugins/microsoft-365) | M365 & identity | M365 admin, Microsoft Graph/Entra, CIPP multi-tenant | -- |
+| [`hr-payroll`](plugins/hr-payroll) | HR & payroll | Paylocity + compensation, recruiting, onboarding, people analytics | -- |
+| [`finance`](plugins/finance) | Finance & revenue | PandaDoc, Pax8 + close, reconciliation, variance, SOX | -- |
+| [`engineering`](plugins/engineering) | Software engineering | code review, system design, incident response, testing, tech-debt, Cowork plugin tooling | -- |
+| [`design`](plugins/design) | Design & UX | accessibility, design systems, UX writing, user research | -- |
+| [`data`](plugins/data) | Data & analytics | SQL, validation, visualization, dashboards, statistics | -- |
+| [`customer-support`](plugins/customer-support) | Support | ticket triage, response drafting, escalation, KB articles | -- |
+| [`product-management`](plugins/product-management) | Product | specs, roadmaps, research synthesis + SaaS integrations | Linear, Asana, Notion, Figma, Slack, +11 |
+| [`productivity`](plugins/productivity) | Productivity | memory & task management, enterprise search, PDF, brand voice, nudge | pdf |
 
 > Plugin docs: <https://docs.claude.com/en/docs/claude-code/plugins>
 
@@ -458,7 +436,7 @@ claude plugin marketplace add w159/tech-tools
 claude plugin marketplace add ./path/to/tech-tools
 
 # Install a specific plugin by name (suffix is the marketplace name)
-claude plugin install auvik-network-ops@tech-tools
+claude plugin install it-operations@tech-tools
 ```
 
 The Claude Code `/plugin` Discover tab will list all marketplace entries once the manifest is registered.

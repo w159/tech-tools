@@ -1,6 +1,6 @@
 ---
-description: Run a strictly read-only database audit via parallel subagents and produce a findings report plus a remediation plan; use when you need to inventory a live schema, reconcile it against the code, and check privileges and naming before changing anything.
-argument-hint: [repo path] [db connection] [glossary path] [naming-convention notes]
+description: "Run a strictly read-only database audit via parallel subagents and produce a findings report plus a remediation plan; use when you need to inventory a live schema, reconcile it against the code, and check privileges and naming before changing anything."
+argument-hint: "[repo path] [db connection] [glossary path] [naming-convention notes]"
 ---
 
 Apply the Operating Contract to this entire task. It is injected below.

@@ -1,0 +1,19 @@
+{
+  "name": "hr-payroll",
+  "version": "1.1.0",
+  "description": "HR and payroll operations. Bundles Paylocity (roster snapshots, new-hire flow, pay-rate and deduction/tax audits) plus core HR skills: compensation benchmarking, recruiting pipeline, interview prep, org planning, people analytics, and employee handbook authoring.",
+  "keywords": [
+    "hr",
+    "human-resources",
+    "recruiting",
+    "compensation",
+    "people-analytics",
+    "onboarding",
+    "paylocity",
+    "payroll"
+  ],
+  "author": {
+    "name": "w159",
+    "url": "https://github.com/w159"
+  }
+}

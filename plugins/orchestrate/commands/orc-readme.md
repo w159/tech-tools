@@ -1,6 +1,6 @@
 ---
-description: Generate an onboarding-grade README.md by inspecting the actual repo, with every claim traced to a real file; use when a repo has no README or its README is stale.
-argument-hint: [repo path] [audience: contributors/internal/both]
+description: "Generate an onboarding-grade README.md by inspecting the actual repo, with every claim traced to a real file; use when a repo has no README or its README is stale."
+argument-hint: "[repo path] [audience: contributors/internal/both]"
 ---
 
 Apply the Operating Contract to this entire task. It is injected below.

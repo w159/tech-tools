@@ -1,13 +1,18 @@
 {
   "name": "productivity",
-  "version": "1.0.0",
-  "description": "Two-tier memory management and task tracking to make Claude a true workplace collaborator across projects and commitments.",
+  "version": "1.1.0",
+  "description": "Workplace productivity utilities: two-tier memory management and task tracking, plus enterprise search and knowledge synthesis, PDF viewing/form-filling/signing, brand-voice enforcement, and nudge reminders.",
   "keywords": [
     "productivity",
     "memory",
     "tasks",
     "workflow",
-    "collaboration"
+    "collaboration",
+    "pdf",
+    "enterprise-search",
+    "knowledge",
+    "brand-voice",
+    "nudge"
   ],
   "author": {
     "name": "w159",

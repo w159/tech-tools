@@ -1,0 +1,30 @@
+{
+  "name": "it-operations",
+  "version": "1.1.0",
+  "description": "MSP IT operations across RMM, PSA, networking, endpoint, backup, and documentation. Bundles NinjaOne and ConnectWise Automate (RMM), ConnectWise PSA (tickets, time, agreements), Auvik (network monitoring), ImmyBot (endpoint automation), Kaseya IT Glue (documentation), Kaseya Spanning (M365/Google backup), and Azure operations, plus core operations skills: change management, process optimization, resource planning, risk assessment, compliance tracking, and vendor management.",
+  "keywords": [
+    "operations",
+    "change-management",
+    "process",
+    "risk",
+    "compliance",
+    "vendor-management",
+    "auvik",
+    "immybot",
+    "msp",
+    "rmm",
+    "psa",
+    "ninjaone",
+    "connectwise",
+    "it-glue",
+    "spanning",
+    "azure",
+    "backup",
+    "networking",
+    "endpoint"
+  ],
+  "author": {
+    "name": "w159",
+    "url": "https://github.com/w159"
+  }
+}
