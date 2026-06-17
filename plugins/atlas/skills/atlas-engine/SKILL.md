@@ -1,9 +1,9 @@
 ---
 name: atlas-engine
-description: Use when starting any multi-step, multi-stage, multi-surface, or whole-codebase engineering task (build, fix, audit, refactor, investigate) in a codebase or monorepo - especially when the work should be driven through subagents with real execution and independent verification instead of done inline, and the docs/ tree must stay the single source of truth. Triggers on "orchestrate", whole-repo work, cross-layer (frontend/backend/database) bugs, and audits.
+description: Use when starting any multi-step, multi-stage, multi-surface, or whole-codebase engineering task (build, fix, audit, refactor, investigate) in a codebase or monorepo - especially when the work should be driven through subagents with real execution and independent verification instead of done inline, and the docs/ tree must stay the single source of truth. Triggers on "orchestrate", whole-repo work, cross-layer (frontend/backend/database) bugs, and audits. To first install and configure atlas itself (memory, context-mode, capability discovery, hooks), use atlas-architect instead; this skill is for running the actual work.
 ---
 
-# Orchestrate
+# atlas-engine - the orchestrator
 
 You are the **ORCHESTRATOR**. You coordinate the work; you do not perform it. You decompose, route to subagents and tools, demand evidence, verify with a second agent, and synthesize. Your scarcest resource is your own context window - protect it ruthlessly so you can run long without degrading.
 
@@ -122,16 +122,19 @@ Dispatch constantly. Three complementary sets:
 
 `references/capability-routing.md` maps task signals -> the right agent + skill + MCP + model.
 
-This skill ships as part of the **atlas plugin**: the fourteen `atlas:*` companions live in the plugin's top-level `agents/` directory (`plugins/atlas/agents/`) and are auto-discovered by Claude Code; the automation hooks under `hooks/` ship with their installer.
+This skill ships as part of the **atlas plugin**: the fourteen `atlas:*` companions live in the plugin's top-level `agents/` directory (`plugins/atlas/agents/`) and are auto-discovered by Claude Code; the seven automation hooks under `hooks/` auto-load via `hooks/hooks.json` on install (no manual step).
 
 ## Automation: hooks enforce the discipline
 
-The rules above must not depend on you remembering them. This skill ships fail-safe hooks (stdlib-only; each passes through silently on any error) and a gated installer (`scripts/install_hooks.py` - dry-run by default, merges without clobbering, backs up first). Per law 6, present the plan and get go-ahead before `--apply`; hooks load next session.
+The rules above must not depend on you remembering them. The seven hooks auto-load from `hooks/hooks.json` when the plugin is installed; all are stdlib-only and fail-open, so any internal error exits 0 and a hook never blocks a session. For non-plugin installs, `scripts/install_hooks.py` (dry-run by default, merges without clobbering, backs up first) wires them manually.
 
+- **`session_boot.py`** (`SessionStart`) - activates the runtime each session: injects this contract and methodology, reports claude-mem/context-mode state, and surfaces relevant past lessons. Crash-proof.
 - **`prompt_optimizer.py`** (`UserPromptSubmit`) - sharpens the prompt before any token is spent on it; trigger-gated (`opt:` / `++`), augments never replaces.
-- **`format_after_edit.py`** (`PostToolUse` Edit|Write) - auto-formats the edited file with the repo's own formatter so diffs stay minimal.
 - **`bash_guard.py`** (`PreToolUse` Bash) - denies catastrophic and asks before high-blast-radius shell commands; the automatic backstop for law 6.
-- **completion-gate `Stop` hook** (opt-in) - the machine enforcement of "Definition of done": blocks stopping until the evidence artifact, the independent verifier report, and current docs/ all exist. Fail-open. Off by default; enable with `--apply`.
+- **`validate-readonly-query.sh`** (`PreToolUse` Bash) - blocks SQL writes, DDL, and GRANT/REVOKE during read-only audits.
+- **`format_after_edit.py`** (`PostToolUse` Edit|Write) - auto-formats the edited file with the repo's own formatter so diffs stay minimal.
+- **`completion_gate.py`** (`Stop`, opt-in) - machine enforcement of "Definition of done": blocks stopping until the evidence artifact, the independent verifier report, and current docs/ all exist. Fail-open; enable with `ATLAS_GATE`.
+- **`nudge.py`** (`Stop`, `SubagentStop`) - self-improvement: surfaces a relevant past lesson and prompts to capture new ones; throttled and non-blocking. See the self-improving skill.
 
 Full contract, config env vars, and install commands: `references/hooks-automation.md`.
 
@@ -140,6 +143,7 @@ Full contract, config env vars, and install commands: `references/hooks-automati
 | Load this | When |
 |---|---|
 | `references/capability-routing.md` | deciding which agent/skill/MCP/model a job needs |
+| `references/capability-catalog.md` | recommending which skills/plugins/MCP to install for a project (used by `/atlas` and the atlas-architect skill) |
 | `references/subagent-kit.md` | writing any subagent dispatch (spec template, output contract, per-role briefs) |
 | `references/scaffolding.md` | at Orient, or any time you create per-root `docs/` artifacts / write a finding |
 | `references/execution-testing.md` | when a job requires actually running & validating FE/BE/DB behavior |
@@ -155,7 +159,7 @@ Full contract, config env vars, and install commands: `references/hooks-automati
 | `references/pytest-coverage.md` | running pytest with coverage, reading annotated reports, driving coverage to 100% |
 | `references/self-improving.md` | agent self-reflection, persistent corrections memory in `~/self-improving/`, tiered storage, learning signals |
 
-> Cross-agent workspace maintenance (porting MCP/skills across the six coding agents, the `doctor`/`setup`/`port`/`sync` verbs) is no longer part of this skill - it lives in the top-level `scripts/` tooling and the `/orc-*` commands. This skill is now purely the coding-session orchestrator.
+> Cross-agent workspace maintenance (porting MCP/skills across the six coding agents, the `doctor`/`setup`/`port`/`sync` verbs) is no longer part of this skill - it lives in the separate workspace maintenance skills (`orc-setup`, `orc-sync`, `orc-port`, `orc-doctor`, `orc-validate`, `orc-audit`), which are unrelated to this plugin's `/atlas-*` commands. This skill is now purely the coding-session orchestrator.
 
 ## First move
 

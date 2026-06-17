@@ -62,4 +62,4 @@ work."
 
 > This contract ships neutral. Put your own stack preferences, brand and design tokens,
 > compliance frameworks, environment rules, and house style in your project's
-> `CLAUDE.md` / `AGENTS.md`; the `orc-*` commands honor whatever you set there.
+> `CLAUDE.md` / `AGENTS.md`; the `atlas-*` commands honor whatever you set there.

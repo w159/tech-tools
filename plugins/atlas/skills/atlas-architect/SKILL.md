@@ -1,6 +1,6 @@
 ---
 name: atlas-architect
-description: "Use to boot and configure a project so the full atlas runtime is active - verify and install claude-mem and context-mode, scan the stack and recommend skills/plugins/MCP to install (recommend then confirm), confirm the automation hooks are wired, write the project config, and seed the docs/ single source of truth. This is the methodology the /atlas command and the SessionStart boot both lean on. Triggers on project setup, onboarding a repo to atlas, or a request to configure tooling for a codebase."
+description: "Use to boot and configure a project so the full atlas runtime is active - verify and install claude-mem and context-mode, scan the stack and recommend skills/plugins/MCP to install (recommend then confirm), confirm the automation hooks are wired, write the project config, and seed the docs/ single source of truth. This is the methodology the /atlas command and the SessionStart boot both lean on. Triggers on project bootstrap, onboarding a repo to atlas, or a request to configure tooling for a codebase. This is configuration and install, not task execution - to run an actual build/fix/audit/refactor through subagents, use atlas-engine."
 ---
 
 # atlas-architect
