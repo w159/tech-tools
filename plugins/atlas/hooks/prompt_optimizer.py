@@ -25,18 +25,18 @@ very short prompts instantly (before any model call), and a bare `SKIP` token re
 the model (its own trivial-input verdict) is treated as a passthrough rather than injected.
 
 Configuration (environment variables):
-  ORCHESTRATE_OPTIMIZE          off | trigger | always   (default: trigger)
-  ORCHESTRATE_OPTIMIZE_TRIGGER  comma-separated prefixes  (default: "opt:,optimize:,++")
-  ORCHESTRATE_OPTIMIZER_MODEL   ollama model tag          (default: prompt-optimizer:latest)
-  ORCHESTRATE_OLLAMA_URL        ollama base URL; falls back to $OLLAMA_HOST, then
+  ATLAS_OPTIMIZE          off | trigger | always   (default: trigger)
+  ATLAS_OPTIMIZE_TRIGGER  comma-separated prefixes  (default: "opt:,optimize:,++")
+  ATLAS_OPTIMIZER_MODEL   ollama model tag          (default: prompt-optimizer:latest)
+  ATLAS_OLLAMA_URL        ollama base URL; falls back to $OLLAMA_HOST, then
                                 http://127.0.0.1:11434
-  ORCHESTRATE_OPTIMIZE_CMD      override: run this instead of ollama. "{prompt}" is
+  ATLAS_OPTIMIZE_CMD      override: run this instead of ollama. "{prompt}" is
                                 substituted, else the prompt is appended as the final argv item
-  ORCHESTRATE_OPTIMIZE_TIMEOUT  seconds before giving up  (default: 110)
-  ORCHESTRATE_OPTIMIZE_MINLEN   skip prompts shorter than this many chars, in BOTH trigger
+  ATLAS_OPTIMIZE_TIMEOUT  seconds before giving up  (default: 110)
+  ATLAS_OPTIMIZE_MINLEN   skip prompts shorter than this many chars, in BOTH trigger
                                 and always mode (default: 12)
-  ORCHESTRATE_OPTIMIZE_QUIET    if set, suppress the stderr banner (silent injection)
-  ORCHESTRATE_OPTIMIZE_LOG      if set, append an audit line (orig -> optimized) to this file
+  ATLAS_OPTIMIZE_QUIET    if set, suppress the stderr banner (silent injection)
+  ATLAS_OPTIMIZE_LOG      if set, append an audit line (orig -> optimized) to this file
 
 Wire it up (settings.json) with a generous timeout so Claude Code does not kill the
 optimizer mid-run:
@@ -139,17 +139,17 @@ def match_trigger(prompt: str, triggers: tuple[str, ...]) -> tuple[bool, str]:
 
 def should_optimize(prompt: str) -> tuple[bool, str]:
     """Decide whether to optimize and return the (possibly de-triggered) prompt to send."""
-    mode = _env("ORCHESTRATE_OPTIMIZE", "trigger").lower()
+    mode = _env("ATLAS_OPTIMIZE", "trigger").lower()
     if mode == "off":
         return False, prompt
     # Never touch slash commands — they expand into their own prompts downstream.
     if prompt.lstrip().startswith("/"):
         return False, prompt
     triggers = tuple(
-        _env("ORCHESTRATE_OPTIMIZE_TRIGGER", ",".join(DEFAULT_TRIGGERS)).split(",")
+        _env("ATLAS_OPTIMIZE_TRIGGER", ",".join(DEFAULT_TRIGGERS)).split(",")
     )
     matched, body = match_trigger(prompt, triggers)
-    minlen = int(_env("ORCHESTRATE_OPTIMIZE_MINLEN", "12") or "12")
+    minlen = int(_env("ATLAS_OPTIMIZE_MINLEN", "12") or "12")
     if mode == "always":
         # Fire on everything that isn't a slash command, but still skip prompts too short
         # to be worth the latency — a bare "ok"/"thanks" should pass through instantly.
@@ -166,8 +166,8 @@ def should_optimize(prompt: str) -> tuple[bool, str]:
 
 
 def override_command(prompt: str) -> list[str] | None:
-    """argv for ORCHESTRATE_OPTIMIZE_CMD, or None if no override is set."""
-    override = os.environ.get("ORCHESTRATE_OPTIMIZE_CMD", "").strip()
+    """argv for ATLAS_OPTIMIZE_CMD, or None if no override is set."""
+    override = os.environ.get("ATLAS_OPTIMIZE_CMD", "").strip()
     if not override:
         return None
     import shlex
@@ -198,7 +198,7 @@ def _run_argv(cmd: list[str], timeout: float) -> str | None:
 def ollama_base_url() -> str:
     """Resolve the ollama base URL from config, normalizing a bare host:port."""
     url = (
-        os.environ.get("ORCHESTRATE_OLLAMA_URL")
+        os.environ.get("ATLAS_OLLAMA_URL")
         or os.environ.get("OLLAMA_HOST")
         or "http://127.0.0.1:11434"
     ).strip()
@@ -227,11 +227,11 @@ def run_via_api(prompt: str, model: str, timeout: float) -> str | None:
 
 def run_optimizer(prompt: str) -> str | None:
     """Optimize via override cmd → HTTP API → CLI fallback. Returns cleaned text or None."""
-    timeout = float(_env("ORCHESTRATE_OPTIMIZE_TIMEOUT", "110") or "110")
+    timeout = float(_env("ATLAS_OPTIMIZE_TIMEOUT", "110") or "110")
     override = override_command(prompt)
     if override is not None:
         return _run_argv(override, timeout)
-    model = _env("ORCHESTRATE_OPTIMIZER_MODEL", DEFAULT_MODEL)
+    model = _env("ATLAS_OPTIMIZER_MODEL", DEFAULT_MODEL)
     # Prefer the HTTP API (pristine output); fall back to the CLI if the server is down.
     via_api = run_via_api(prompt, model, timeout)
     if via_api:
@@ -280,9 +280,9 @@ def notify(optimized: str) -> None:
     """Brief colored banner to STDERR so the user sees the optimizer fired.
 
     stderr is surfaced in the terminal and renders ANSI color; unlike stdout it never enters
-    Claude's context, so it can't pollute the spec. Silence it with ORCHESTRATE_OPTIMIZE_QUIET.
+    Claude's context, so it can't pollute the spec. Silence it with ATLAS_OPTIMIZE_QUIET.
     """
-    if os.environ.get("ORCHESTRATE_OPTIMIZE_QUIET", "").strip():
+    if os.environ.get("ATLAS_OPTIMIZE_QUIET", "").strip():
         return
     # Pull the one-line Intent out of the spec for an at-a-glance summary, if present.
     intent = ""
@@ -306,7 +306,7 @@ def notify(optimized: str) -> None:
 
 
 def audit(original: str, optimized: str | None) -> None:
-    path = os.environ.get("ORCHESTRATE_OPTIMIZE_LOG", "").strip()
+    path = os.environ.get("ATLAS_OPTIMIZE_LOG", "").strip()
     if not path:
         return
     try:
