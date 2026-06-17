@@ -1,4 +1,4 @@
-# AI Tech Toolkit
+# AI Tech Tools
 
 <!-- markdownlint-disable MD032 MD033 MD040 MD051 MD060 -->
 
