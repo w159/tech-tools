@@ -1,0 +1,29 @@
+{
+  "description": "Atlas automation: boot, guards, formatting, prompt optimization, completion gate, self-improvement nudge.",
+  "hooks": {
+    "SessionStart": [
+      { "matcher": "*", "hooks": [ { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/session_boot.py" } ] }
+    ],
+    "UserPromptSubmit": [
+      { "matcher": "*", "hooks": [ { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/prompt_optimizer.py" } ] }
+    ],
+    "PreToolUse": [
+      { "matcher": "Bash", "hooks": [
+        { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/bash_guard.py" },
+        { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/validate-readonly-query.sh" }
+      ] }
+    ],
+    "PostToolUse": [
+      { "matcher": "Edit|Write|MultiEdit", "hooks": [ { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/format_after_edit.py" } ] }
+    ],
+    "Stop": [
+      { "matcher": "*", "hooks": [
+        { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/completion_gate.py" },
+        { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/nudge.py" }
+      ] }
+    ],
+    "SubagentStop": [
+      { "matcher": "*", "hooks": [ { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/nudge.py" } ] }
+    ]
+  }
+}
