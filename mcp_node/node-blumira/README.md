@@ -1,4 +1,4 @@
-Part of [ai-tech-toolkit](https://github.com/w159/ai-tech-toolkit) — see repo for the matching MCP server (`mcp_servers/blumira-mcp`) and plugin (`plugins/blumira-*`).
+Part of [tech-tools](https://github.com/w159/tech-tools) — see repo for the matching MCP server (`mcp_servers/blumira-mcp`) and plugin (`plugins/blumira-*`).
 
 # node-blumira
 

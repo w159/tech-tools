@@ -59,7 +59,7 @@ Internal IT Help Desk/Engineer tools for Auvik, NinjaOne, ConnectWise, CIPP/M365
 ### Key Differentiators
 
 - **Real SDKs, not just MCP wrappers.** The `mcp_node/` folder ships fully typed Node.js clients (`node-auvik`, `node-ninjaone`, `node-vanta`, etc.) that the MCP layer sits on top of - usable from any non-MCP project too.
-- **Domain-cluster plugins.** The `it-operations` plugin bundles RMM, PSA, network, endpoint, backup, and documentation vendors behind one domain so a single query can fan out across NinjaOne, ConnectWise, Auvik, and ImmyBot, while `orchestrate` drives multi-agent coding work across the whole codebase.
+- **Domain-cluster plugins.** The `it-operations` plugin bundles RMM, PSA, network, and backup vendors behind one domain so a single query can fan out across NinjaOne, ConnectWise, and Auvik, while `orchestrate` drives multi-agent coding work across the whole codebase.
 - **Production-grade packaging.** A hardened `pack-mcpb.js` script guards against broken bundles before they ever ship to Claude Desktop.
 
 ---
@@ -410,8 +410,8 @@ The marketplace ships **12 domain-cluster plugins** under `plugins/`, listed in 
 | Plugin | Domain | Bundled tools / surface | MCP servers |
 | --- | --- | --- | --- |
 | [`orchestrate`](plugins/orchestrate) | Multi-agent coding | 14 launcher commands, 14 subagents, multi-stage planning, docs SSoT, UX test swarm | -- |
-| [`it-operations`](plugins/it-operations) | MSP IT operations | NinjaOne, ConnectWise Automate, ConnectWise PSA, Auvik, ImmyBot, Kaseya IT Glue, Kaseya Spanning, Azure + ops skills | auvik, immybot |
-| [`security-compliance`](plugins/security-compliance) | Security & GRC | Vanta, KnowBe4, ThreatLocker, Blumira, Proofpoint, Checkpoint Avanan + audit/evidence/risk skills | threatlocker |
+| [`it-operations`](plugins/it-operations) | MSP IT operations | NinjaOne, ConnectWise Manage (PSA), Auvik, Kaseya Spanning + ops skills | auvik |
+| [`security-compliance`](plugins/security-compliance) | Security & GRC | Vanta, KnowBe4, ThreatLocker, Blumira + audit/evidence/risk skills | threatlocker |
 | [`microsoft-365`](plugins/microsoft-365) | M365 & identity | M365 admin, Microsoft Graph/Entra, CIPP multi-tenant | -- |
 | [`hr-payroll`](plugins/hr-payroll) | HR & payroll | Paylocity + compensation, recruiting, onboarding, people analytics | -- |
 | [`finance`](plugins/finance) | Finance & revenue | PandaDoc, Pax8 + close, reconciliation, variance, SOX | -- |

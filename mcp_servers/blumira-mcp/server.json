@@ -4,11 +4,11 @@
   "title": "Blumira",
   "description": "MCP server for Blumira SIEM — query findings, evidence, and detection data via the Blumira API.",
   "repository": {
-    "url": "https://github.com/w159/blumira-mcp",
+    "url": "https://github.com/w159/tech-tools",
     "source": "github"
   },
   "version": "0.0.0",
-  "websiteUrl": "https://github.com/w159/blumira-mcp",
+  "websiteUrl": "https://github.com/w159/tech-tools",
   "packages": [
     {
       "registryType": "oci",

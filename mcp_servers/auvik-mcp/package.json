@@ -36,11 +36,11 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/w159/ai-tech-toolkit.git",
+    "url": "git+https://github.com/w159/tech-tools.git",
     "directory": "mcp_servers/auvik-mcp"
   },
-  "homepage": "https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/auvik-mcp",
+  "homepage": "https://github.com/w159/tech-tools/tree/main/mcp_servers/auvik-mcp",
   "bugs": {
-    "url": "https://github.com/w159/ai-tech-toolkit/issues"
+    "url": "https://github.com/w159/tech-tools/issues"
   }
 }

@@ -4,11 +4,11 @@
   "title": "CIPP",
   "description": "MCP server for CIPP — M365 multi-tenant management for MSPs (users, tenants, policies).",
   "repository": {
-    "url": "https://github.com/w159/cipp-mcp",
+    "url": "https://github.com/w159/tech-tools",
     "source": "github"
   },
   "version": "0.0.0",
-  "websiteUrl": "https://github.com/w159/cipp-mcp",
+  "websiteUrl": "https://github.com/w159/tech-tools",
   "packages": [
     {
       "registryType": "oci",

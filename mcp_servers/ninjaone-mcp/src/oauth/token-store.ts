@@ -1,6 +1,6 @@
 // On-disk token storage for NinjaOne user-OAuth tokens.
 //
-// Refresh tokens are stored at `~/.ai-tech-toolkit/ninjaone-tokens.json` with
+// Refresh tokens are stored at `~/.tech-tools/ninjaone-tokens.json` with
 // 0600 file permissions. The data is NOT encrypted at rest — OS file
 // permissions are the practical control, matching the pattern used by Slack,
 // Discord, gcloud, and rclone. If your home directory is shared, treat the
@@ -19,7 +19,7 @@ export interface StoredTokens {
   region: string;
 }
 
-const STORAGE_DIR = join(homedir(), ".ai-tech-toolkit");
+const STORAGE_DIR = join(homedir(), ".tech-tools");
 const STORAGE_FILE = join(STORAGE_DIR, "ninjaone-tokens.json");
 
 async function ensureDir(): Promise<void> {

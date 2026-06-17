@@ -4,11 +4,11 @@
   "title": "ThreatLocker",
   "description": "MCP server for ThreatLocker \u2014 zero-trust endpoint protection, application allowlisting, ringfencing, and policies.",
   "repository": {
-    "url": "https://github.com/w159/threatlocker-mcp",
+    "url": "https://github.com/w159/tech-tools",
     "source": "github"
   },
   "version": "0.0.0",
-  "websiteUrl": "https://github.com/w159/threatlocker-mcp",
+  "websiteUrl": "https://github.com/w159/tech-tools",
   "packages": [
     {
       "registryType": "oci",

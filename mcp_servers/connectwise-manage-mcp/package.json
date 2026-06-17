@@ -24,7 +24,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/w159/ai-tech-toolkit.git",
+    "url": "git+https://github.com/w159/tech-tools.git",
     "directory": "mcp_servers/connectwise-manage-mcp"
   },
   "keywords": [
@@ -38,9 +38,9 @@
   "author": "w159",
   "license": "Apache-2.0",
   "bugs": {
-    "url": "https://github.com/w159/ai-tech-toolkit/issues"
+    "url": "https://github.com/w159/tech-tools/issues"
   },
-  "homepage": "https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/connectwise-manage-mcp",
+  "homepage": "https://github.com/w159/tech-tools/tree/main/mcp_servers/connectwise-manage-mcp",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.25.3",
     "jose": "^6.2.2"

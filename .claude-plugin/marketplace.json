@@ -37,7 +37,7 @@
     {
       "name": "it-operations",
       "source": "./plugins/it-operations",
-      "description": "MSP IT operations across RMM, PSA, networking, endpoint, backup, and documentation. Bundles NinjaOne and ConnectWise Automate (RMM), ConnectWise PSA (tickets, time, agreements), Auvik (network monitoring), ImmyBot (endpoint automation), Kaseya IT Glue (documentation), Kaseya Spanning (M365/Google backup), and Azure operations, plus core operations skills: change management, process optimization, resource planning, risk assessment, compliance tracking, and vendor management.",
+      "description": "MSP IT operations across RMM, PSA, networking, and backup. Bundles NinjaOne (RMM), ConnectWise Manage PSA (tickets, time, agreements), Auvik (network monitoring), and Kaseya Spanning (M365/Google backup), plus core operations skills: change management, process optimization, resource planning, risk assessment, compliance tracking, and vendor management.",
       "category": "msp",
       "keywords": [
         "operations",
@@ -47,24 +47,20 @@
         "compliance",
         "vendor-management",
         "auvik",
-        "immybot",
         "msp",
         "rmm",
         "psa",
         "ninjaone",
         "connectwise",
-        "it-glue",
         "spanning",
-        "azure",
         "backup",
-        "networking",
-        "endpoint"
+        "networking"
       ]
     },
     {
       "name": "security-compliance",
       "source": "./plugins/security-compliance",
-      "description": "Security and compliance operations. Bundles Vanta (SOC 2/ISO/HIPAA GRC), KnowBe4 (security awareness), ThreatLocker (zero-trust endpoint), Blumira (SIEM and detection), and Proofpoint plus Checkpoint Avanan (email security), alongside core audit-readiness, evidence-gap, risk-heatmap, and approval-triage skills.",
+      "description": "Security and compliance operations. Bundles Vanta (SOC 2/ISO/HIPAA GRC), KnowBe4 (security awareness), ThreatLocker (zero-trust endpoint), and Blumira (SIEM and detection), alongside core audit-readiness, evidence-gap, risk-heatmap, and approval-triage skills.",
       "category": "security",
       "keywords": [
         "vanta",
@@ -81,10 +77,7 @@
         "phishing",
         "evidence",
         "blumira",
-        "proofpoint",
-        "avanan",
-        "siem",
-        "email-security"
+        "siem"
       ]
     },
     {

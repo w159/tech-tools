@@ -38,13 +38,13 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/w159/ai-tech-toolkit.git",
+    "url": "git+https://github.com/w159/tech-tools.git",
     "directory": "mcp_node/node-auvik"
   },
   "bugs": {
-    "url": "https://github.com/w159/ai-tech-toolkit/issues"
+    "url": "https://github.com/w159/tech-tools/issues"
   },
-  "homepage": "https://github.com/w159/ai-tech-toolkit/tree/main/mcp_node/node-auvik",
+  "homepage": "https://github.com/w159/tech-tools/tree/main/mcp_node/node-auvik",
   "devDependencies": {
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",

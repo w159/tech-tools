@@ -25,13 +25,11 @@ workflows fast and within token budget.
 
 This is a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that gives Claude (or any MCP-compatible AI) 34 tools covering the daily operations ConnectWise Manage shops depend on. Works with both **cloud-hosted and self-hosted** CWM instances — just point it at your server.
 
-> **Part of the [MSP Claude Plugins](https://github.com/w159/msp-claude-plugins) ecosystem** — a growing suite of AI integrations for the MSP stack including [Autotask](https://github.com/w159/autotask-mcp), [Datto RMM](https://github.com/w159/datto-rmm-mcp), [IT Glue](https://github.com/w159/itglue-mcp), [HaloPSA](https://github.com/w159/halopsa-mcp), [NinjaOne](https://github.com/w159/ninjaone-mcp), [Huntress](https://github.com/w159/huntress-mcp), and more. Built by MSPs, for MSPs.
-
 ## One-Click Deployment
 
-[![Deploy to DO](https://www.deploytodo.com/do-btn-blue.svg)](https://cloud.digitalocean.com/apps/new?repo=https://github.com/w159/connectwise-manage-mcp/tree/main)
+[![Deploy to DO](https://www.deploytodo.com/do-btn-blue.svg)](https://cloud.digitalocean.com/apps/new?repo=https://github.com/w159/tech-tools/tree/main)
 
-[![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/w159/connectwise-manage-mcp)
+[![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/w159/tech-tools)
 
 ## Configuration
 
@@ -213,4 +211,4 @@ Apache-2.0
 
 ---
 
-Built by [w159](https://github.com/w159) — part of the [MSP Claude Plugins](https://github.com/w159/msp-claude-plugins) ecosystem
+Built by [w159](https://github.com/w159) — part of the [MSP Claude Plugins](https://github.com/w159/tech-tools) ecosystem

@@ -1,10 +1,10 @@
-Part of [ai-tech-toolkit](https://github.com/w159/ai-tech-toolkit) — see repo for the matching MCP server (`mcp_servers/ninjaone-mcp`) and plugin (`plugins/ninjaone-*`).
+Part of [tech-tools](https://github.com/w159/tech-tools) — see repo for the matching MCP server (`mcp_servers/ninjaone-mcp`) and plugin (`plugins/ninjaone-*`).
 
 # node-ninjaone
 
 Comprehensive, fully-typed Node.js/TypeScript library for the NinjaOne/NinjaRMM API.
 
-> **Vendored within the [ai-tech-toolkit](https://github.com/w159/ai-tech-toolkit) monorepo.**
+> **Vendored within the [tech-tools](https://github.com/w159/tech-tools) monorepo.**
 > Consumed by `ninjaone-mcp` via `"node-ninjaone": "file:../../mcp_node/node-ninjaone"`.
 > This is not the public `@asachs01/node-ninjaone` npm package — do not `npm install @asachs01/node-ninjaone`.
 

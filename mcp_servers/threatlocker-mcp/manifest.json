@@ -11,9 +11,9 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/w159/ai-tech-toolkit"
+    "url": "https://github.com/w159/tech-tools"
   },
-  "homepage": "https://github.com/w159/ai-tech-toolkit/tree/main/mcp_servers/threatlocker-mcp",
+  "homepage": "https://github.com/w159/tech-tools/tree/main/mcp_servers/threatlocker-mcp",
   "license": "Apache-2.0",
   "keywords": ["threatlocker", "security", "endpoint", "application-control", "msp", "computers"],
   "server": {

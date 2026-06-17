@@ -124,8 +124,3 @@ Lists all users with no MFA enrolled, prioritized by recent activity (highest ri
 - Admin consent is required for most operations — the app registration must be consented by a Global Administrator in the target tenant
 - For multi-tenant MSP use, each customer must consent your Entra app (or use delegated admin / GDAP relationships)
 - Read-only audit tasks (`User.Read.All`, `AuditLog.Read.All`) have lower consent friction than write operations
-
-## Related Plugins
-
-- [Autotask PSA](../kaseya-autotask/) - Create tickets for M365 issues found during audit
-- [IT Glue](../kaseya-it-glue/) - Document M365 configurations and user info

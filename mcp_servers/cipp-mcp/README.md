@@ -31,7 +31,7 @@ npx cipp-mcp
 ### From source
 
 ```sh
-git clone https://github.com/w159/cipp-mcp
+git clone https://github.com/w159/tech-tools
 cd cipp-mcp
 npm install
 npm run build
@@ -119,4 +119,4 @@ Apache-2.0 — see [LICENSE](LICENSE)
 
 ## Contributing
 
-Issues and PRs welcome. This server is tracked against [w159/msp-claude-plugins#24](https://github.com/w159/msp-claude-plugins/issues/24).
+Issues and PRs welcome. This server is tracked against [w159/tech-tools#24](https://github.com/w159/tech-tools/issues/24).

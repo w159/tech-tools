@@ -1,6 +1,6 @@
 # Copilot Code Review Instructions — MCP Server Template
 
-> This file applies to all MCP servers in this project (autotask-mcp, datto-rmm-mcp, syncro-mcp, halopsa-mcp, ninjaone-mcp, liongard-mcp, connectwise-manage-mcp, connectwise-automate-mcp, itglue-mcp, superops-mcp, atera-mcp, salesbuildr-mcp).
+> This file applies to all MCP servers in this project (auvik-mcp, blumira-mcp, cipp-mcp, connectwise-manage-mcp, kaseya-spanning-backup-mcp, knowbe4-mcp, ninjaone-mcp, paylocity-mcp, threatlocker-mcp, vanta-mcp).
 
 ## Review Philosophy
 - Only comment when you have HIGH CONFIDENCE (>80%) that an issue exists

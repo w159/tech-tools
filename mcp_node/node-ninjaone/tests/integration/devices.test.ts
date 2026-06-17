@@ -108,7 +108,7 @@ describe('DevicesResource', () => {
   describe('response parsing robustness', () => {
     it('should parse JSON response even without application/json content-type', async () => {
       // Simulate an API returning JSON data with a non-standard content-type.
-      // This was the root cause of msp-claude-plugins#22 — NinjaOne API responses
+      // This was the root cause of tech-tools#22 — NinjaOne API responses
       // were silently discarded when the content-type header was missing or unexpected.
       server.use(
         http.get('https://app.ninjarmm.com/v2/devices', () => {

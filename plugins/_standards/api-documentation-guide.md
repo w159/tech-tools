@@ -10,15 +10,14 @@ Headers:
   Authorization: Bearer {API_KEY}
 ```
 
-### Username/Secret Authentication (Autotask)
+### Public/Private Key Authentication (ConnectWise Manage)
 ```
 Headers:
-  ApiIntegrationCode: {INTEGRATION_CODE}
-  UserName: {USERNAME}
-  Secret: {SECRET}
+  Authorization: Basic base64({COMPANY}+{PUBLIC_KEY}:{PRIVATE_KEY})
+  clientId: {CLIENT_ID}
 ```
 
-### OAuth 2.0 (NinjaOne, HaloPSA)
+### OAuth 2.0 (NinjaOne, Vanta)
 ```
 POST /oauth/token
 Content-Type: application/x-www-form-urlencoded

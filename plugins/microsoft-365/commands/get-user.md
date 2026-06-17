@@ -13,7 +13,7 @@ Look up a Microsoft 365 user and return a comprehensive summary of their account
 
 ## Prerequisites
 
-- M365 connected via gateway or direct Entra app credentials
+- M365 connected via the Microsoft Graph MCP server or direct Entra app credentials
 - `User.Read.All` and `UserAuthenticationMethod.Read.All` permissions
 
 ## Steps

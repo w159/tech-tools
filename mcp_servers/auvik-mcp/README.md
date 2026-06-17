@@ -87,7 +87,7 @@ Credentials are provided via request headers:
 ### Local Development
 
 ```bash
-git clone https://github.com/w159/auvik-mcp.git
+git clone https://github.com/w159/tech-tools.git
 cd auvik-mcp
 npm install
 npm run build
@@ -191,6 +191,6 @@ Licensed under the Apache License 2.0. See [LICENSE](LICENSE) for details.
 
 ## Support
 
-- [GitHub Issues](https://github.com/w159/auvik-mcp/issues)
+- [GitHub Issues](https://github.com/w159/tech-tools/issues)
 - [Auvik API Documentation](https://api.auvik.com/documentation)
 - [MCP Protocol Documentation](https://modelcontextprotocol.io/)

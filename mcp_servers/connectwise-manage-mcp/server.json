@@ -4,11 +4,11 @@
   "title": "ConnectWise Manage",
   "description": "MCP server for ConnectWise Manage PSA — companies, tickets, projects, time entries, and more.",
   "repository": {
-    "url": "https://github.com/w159/connectwise-manage-mcp",
+    "url": "https://github.com/w159/tech-tools",
     "source": "github"
   },
   "version": "0.0.0",
-  "websiteUrl": "https://github.com/w159/connectwise-manage-mcp",
+  "websiteUrl": "https://github.com/w159/tech-tools",
   "packages": [
     {
       "registryType": "oci",

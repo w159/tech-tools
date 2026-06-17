@@ -74,7 +74,7 @@ LOG_LEVEL=debug|info|warn|error  # Default: info
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/w159/threatlocker-mcp.git
+git clone https://github.com/w159/tech-tools.git
 cd threatlocker-mcp
 ```
 

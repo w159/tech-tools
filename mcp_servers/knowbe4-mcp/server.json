@@ -4,11 +4,11 @@
   "title": "KnowBe4",
   "description": "MCP server for KnowBe4 security awareness training — users, groups, training, phishing campaigns.",
   "repository": {
-    "url": "https://github.com/w159/knowbe4-mcp",
+    "url": "https://github.com/w159/tech-tools",
     "source": "github"
   },
   "version": "0.0.0",
-  "websiteUrl": "https://github.com/w159/knowbe4-mcp",
+  "websiteUrl": "https://github.com/w159/tech-tools",
   "packages": [
     {
       "registryType": "oci",

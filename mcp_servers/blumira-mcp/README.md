@@ -9,7 +9,7 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that p
 
 **Claude Desktop** — download, open, done:
 
-1. Download `blumira-mcp.mcpb` from the [latest release](https://github.com/w159/blumira-mcp/releases/latest)
+1. Download `blumira-mcp.mcpb` from the [latest release](https://github.com/w159/tech-tools/releases/latest)
 2. Open the file (double-click or drag into Claude Desktop)
 3. Enter your Blumira JWT token when prompted
 
@@ -43,7 +43,7 @@ See [Installation](#installation) for from-source method.
 
 The simplest method — no terminal, no JSON editing, no Node.js install required.
 
-1. Download `blumira-mcp.mcpb` from the [latest release](https://github.com/w159/blumira-mcp/releases/latest)
+1. Download `blumira-mcp.mcpb` from the [latest release](https://github.com/w159/tech-tools/releases/latest)
 2. Open the file (double-click or drag into Claude Desktop)
 3. Enter your Blumira JWT token when prompted
 
@@ -58,7 +58,7 @@ claude mcp add blumira-mcp \
 ### Option 2: From Source
 
 ```bash
-git clone https://github.com/w159/blumira-mcp.git
+git clone https://github.com/w159/tech-tools.git
 cd blumira-mcp
 npm ci
 npm run build
