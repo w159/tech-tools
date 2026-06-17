@@ -16,22 +16,22 @@ The `docs/` tree lives at the **codebase root** the task targets, not at a multi
 
 ```
 <codebase-root>/docs/                 # single source of truth (create if absent)
-├── CHANGELOG.md          # append-only, newest-first; everything done/changed
-├── ROADMAP.md            # everything still to be done; backlog with status
-├── AGENTS.md             # how the project works: architecture, conventions, real run/test/build/lint commands, glossary
-├── evidence/             # COMMITTED permanent execution-evidence; one dir per item: <YYYY-MM-DD>-<slug>/
-├── architecture/         # system design, component maps, data flows; ADRs under architecture/decisions/
-├── reference_files/      # external/vendor doc snippets, API references, sample configs the project depends on
-├── audits/               # audit reports (security/quality/performance) with date + scope
-├── features/             # per-feature specs-as-built: what it does, where it lives, how it is tested
-├── lessons/              # durable lessons learned, gotchas, postmortems, why-we-did-X
-├── wiki/                 # onboarding, how-to, operational runbooks
-├── specs/                # requirements and specifications (pre-build intent)
-├── plans/                # implementation plans = numbered stage maps, one per task, living documents
-└── .run/                 # EPHEMERAL, GITIGNORED run state
-    ├── STATE.md          #   live: current wave, open subagents, decisions, next wave
-    ├── findings.json     #   machine-readable, one object per finding (schema below)
-    └── work-log.md       #   resumability log; re-read before any continuation
+|-- CHANGELOG.md          # append-only, newest-first; everything done/changed
+|-- ROADMAP.md            # everything still to be done; backlog with status
+|-- AGENTS.md             # how the project works: architecture, conventions, real run/test/build/lint commands, glossary
+|-- evidence/             # COMMITTED permanent execution-evidence; one dir per item: <YYYY-MM-DD>-<slug>/
+|-- architecture/         # system design, component maps, data flows; ADRs under architecture/decisions/
+|-- reference_files/      # external/vendor doc snippets, API references, sample configs the project depends on
+|-- audits/               # audit reports (security/quality/performance) with date + scope
+|-- features/             # per-feature specs-as-built: what it does, where it lives, how it is tested
+|-- lessons/              # durable lessons learned, gotchas, postmortems, why-we-did-X
+|-- wiki/                 # onboarding, how-to, operational runbooks
+|-- specs/                # requirements and specifications (pre-build intent)
+|-- plans/                # implementation plans = numbered stage maps, one per task, living documents
+`-- .run/                 # EPHEMERAL, GITIGNORED run state
+    |-- STATE.md          #   live: current wave, open subagents, decisions, next wave
+    |-- findings.json     #   machine-readable, one object per finding (schema below)
+    `-- work-log.md       #   resumability log; re-read before any continuation
 ```
 
 Per-codebase knowledge graphs stay scoped per root:

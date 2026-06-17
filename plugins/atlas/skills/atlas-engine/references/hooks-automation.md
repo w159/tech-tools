@@ -1,9 +1,9 @@
-# Hooks — make the discipline automatic
+# Hooks - make the discipline automatic
 
 Hooks turn the orchestrator's rules into things that *happen on their own* instead of things
 you have to remember. This skill ships four (three on by default, one opt-in), plus a gated
 installer. They are stdlib-only Python, self-contained under `hooks/`, and every one fails safe
-(any error → silent passthrough; none can break a prompt, a tool call, or wedge a session).
+(any error -> silent passthrough; none can break a prompt, a tool call, or wedge a session).
 
 | id | event | script | what it does |
 |---|---|---|---|
@@ -17,7 +17,7 @@ installer. They are stdlib-only Python, self-contained under `hooks/`, and every
 ```
 python3 ${CLAUDE_SKILL_DIR}/scripts/install_hooks.py --list            # current coverage
 python3 ${CLAUDE_SKILL_DIR}/scripts/install_hooks.py                   # plan (dry-run)
-python3 ${CLAUDE_SKILL_DIR}/scripts/install_hooks.py --apply           # install the DEFAULT set (optimizer, format, guard — NOT the gate)
+python3 ${CLAUDE_SKILL_DIR}/scripts/install_hooks.py --apply           # install the DEFAULT set (optimizer, format, guard - NOT the gate)
 python3 ${CLAUDE_SKILL_DIR}/scripts/install_hooks.py --select completion-gate --apply   # opt into the Stop gate
 python3 ${CLAUDE_SKILL_DIR}/scripts/install_hooks.py --select optimizer --apply
 python3 ${CLAUDE_SKILL_DIR}/scripts/install_hooks.py --uninstall --apply
@@ -25,10 +25,10 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/install_hooks.py --uninstall --apply
 
 It MERGES into the target settings file (default `~/.claude/settings.json`), never clobbering
 existing hooks, and backs the file up before writing. Per law 6, present the plan and get the
-user's go-ahead before `--apply` — installing hooks mutates their `~/.claude`. Hooks load on
+user's go-ahead before `--apply` - installing hooks mutates their `~/.claude`. Hooks load on
 the next session, not the current one.
 
-## 1. `optimizer` — automatic prompt optimization
+## 1. `optimizer` - automatic prompt optimization
 
 Automates "run my prompt through `ollama run prompt-optimizer:latest`, then paste the result."
 Reaches the optimizer via the ollama **HTTP API** (`/api/generate`, clean text) and falls back
@@ -37,42 +37,42 @@ to the `ollama run` CLI if the server is down. Injects the rewrite as `additiona
 read its output.
 
 Because the optimizer is slow and `UserPromptSubmit` is synchronous, it is **trigger-gated by
-default** — instant passthrough unless the prompt opts in — with a generous hook `timeout` so
+default** - instant passthrough unless the prompt opts in - with a generous hook `timeout` so
 Claude Code doesn't kill it mid-run.
 
 Config (env vars, all optional):
 
 | var | default | meaning |
 |---|---|---|
-| `ATLAS_OPTIMIZE` | `trigger` | `off` · `trigger` (opt-in prefix) · `always` |
+| `ATLAS_OPTIMIZE` | `trigger` | `off` - `trigger` (opt-in prefix) - `always` |
 | `ATLAS_OPTIMIZE_TRIGGER` | `opt:,optimize:,++` | comma-separated opt-in prefixes |
 | `ATLAS_OPTIMIZER_MODEL` | `prompt-optimizer:latest` | ollama model tag |
-| `ATLAS_OLLAMA_URL` | `$OLLAMA_HOST` → `http://127.0.0.1:11434` | optimizer endpoint |
-| `ATLAS_OPTIMIZE_CMD` | — | override: run this instead of ollama (`{prompt}` substituted) |
+| `ATLAS_OLLAMA_URL` | `$OLLAMA_HOST` -> `http://127.0.0.1:11434` | optimizer endpoint |
+| `ATLAS_OPTIMIZE_CMD` | - | override: run this instead of ollama (`{prompt}` substituted) |
 | `ATLAS_OPTIMIZE_TIMEOUT` | `110` | seconds before giving up (passthrough) |
 | `ATLAS_OPTIMIZE_MINLEN` | `12` | skip triggered prompts shorter than this |
-| `ATLAS_OPTIMIZE_LOG` | — | append an audit trail (original → optimized) to this file |
+| `ATLAS_OPTIMIZE_LOG` | - | append an audit trail (original -> optimized) to this file |
 
-Put env vars in `~/.claude/settings.json` under `env` (not just the shell profile —
+Put env vars in `~/.claude/settings.json` under `env` (not just the shell profile -
 non-interactive hook runs don't source it).
 
-## 2. `format` — format-on-edit
+## 2. `format` - format-on-edit
 
 Picks a formatter by extension and runs it in place using the **project's own config**, async
 so it never blocks the loop, no-op when the formatter isn't installed. Keeps diffs minimal so
 verifier subagents and reviewers see only real changes, not whitespace. Coverage: `.py`
-(ruff→black), prettier-family (`.ts/.tsx/.js/.json/.css/.md/.yaml/...`, prefers the repo's local
+(ruff->black), prettier-family (`.ts/.tsx/.js/.json/.css/.md/.yaml/...`, prefers the repo's local
 `node_modules/.bin/prettier`), `.go` (gofmt), `.rs` (rustfmt).
 
-## 3. `guard` — destructive-command backstop
+## 3. `guard` - destructive-command backstop
 
 Encodes law 6 ("gate writes") as an automatic check on every Bash call: `deny` for the
 near-irreversible (`rm -rf /`, fork bomb, `mkfs`, raw disk writes), `ask` for high-blast-radius
 (force push, hard reset, recursive delete, `curl|sh`, `sudo`, recursive chmod/chown, dependency
 installs). Everything else passes through to the normal permission flow untouched. It's a
-backstop for a runaway subagent or a careless paste — not a replacement for `permissions`.
+backstop for a runaway subagent or a careless paste - not a replacement for `permissions`.
 
-## 4. `completion-gate` — the Definition-of-done backstop (opt-in)
+## 4. `completion-gate` - the Definition-of-done backstop (opt-in)
 
 Encodes the skill's hardest rule -- *a change is not done until observed behavior is captured and
 an independent agent verified it* -- as a `Stop` hook. Prose alone doesn't enforce it (the

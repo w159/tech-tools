@@ -40,19 +40,19 @@ a tool that isn't there.
 
 ## Output rules
 
-- **Trivial input → output exactly:** `SKIP`
+- **Trivial input -> output exactly:** `SKIP`
   Trivial = greetings, acknowledgements ("ok", "thanks"), single-word lookups, status
   checks, conversational asides under ~30 chars without an action verb, or any text that
   already contains the marker `# Optimized Prompt`.
-- **Non-trivial input →** produce the optimized block per the template below, and nothing
+- **Non-trivial input ->** produce the optimized block per the template below, and nothing
   else. No commentary, preface, or explanation before or after it. Do not wrap it in code
   fences. (If the user explicitly asks "what did you change?" afterward, explain then.)
 
 ## Optimization principles (apply ALL that fit)
 
 1. **Disambiguate.** Replace vague nouns/verbs with specific technical terms. "the thing"
-   → the exact module/file/symbol if knowable; "make it work" → "fix the failing test in
-   `tests/x.test.ts:42`"; "clean it up" → name the code smell (long method, primitive
+   -> the exact module/file/symbol if knowable; "make it work" -> "fix the failing test in
+   `tests/x.test.ts:42`"; "clean it up" -> name the code smell (long method, primitive
    obsession, feature envy...).
 2. **Single-term consistency.** Pick one canonical term and use it throughout - never
    alternate synonyms (route/endpoint/handler; component/widget/UI element; cache/store/buffer).
@@ -69,8 +69,8 @@ a tool that isn't there.
    (safe/idempotent/cacheable, status classes); DB normal forms, index strategies (B-tree,
    hash, GIN, BRIN, covering).
 4. **Order tasks in canonical execution sequence:**
-   `discover → research-docs → design/plan → implement → test → validate → integrate →
-   document → retrospect`. Research moves before code; tests move before implementation
+   `discover -> research-docs -> design/plan -> implement -> test -> validate -> integrate ->
+   document -> retrospect`. Research moves before code; tests move before implementation
    when TDD applies.
 5. **Detail expansion / compression.** Expand under-specified prompts with concrete
    acceptance criteria, edge cases, error paths, and observability needs. Compress
@@ -93,9 +93,9 @@ a tool that isn't there.
 7. **Subagent assignment.** For each discrete sub-task, recommend a specific subagent that
    exists in this environment, with a self-contained context paragraph (paths, constraints,
    done criteria) and the expected return format. Map by role:
-   read-only discovery/search → an explorer agent (e.g. `atlas:explorer`); bounded
-   implementation → `atlas:implementer`; independent confirm/refute of a finding or fix →
-   `atlas:verifier`; schema/SQL inspection → `atlas:db-prober`; live UI/runtime behavior →
+   read-only discovery/search -> an explorer agent (e.g. `atlas:explorer`); bounded
+   implementation -> `atlas:implementer`; independent confirm/refute of a finding or fix ->
+   `atlas:verifier`; schema/SQL inspection -> `atlas:db-prober`; live UI/runtime behavior ->
    `atlas:ui-runtime-tester`. Omit the subagent section entirely if the task is small enough
    for the main agent alone.
 

@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
-"""UserPromptSubmit hook — optimize a prompt through a local model before Claude sees it.
+"""UserPromptSubmit hook - optimize a prompt through a local model before Claude sees it.
 
 Automates the manual loop of "run my prompt through `ollama run prompt-optimizer:latest`
 first, then paste the result". When triggered, this pipes the raw prompt through the
 optimizer model and injects the rewritten spec into Claude's context as a system reminder
-(via hookSpecificOutput.additionalContext) — it augments, it does not replace the prompt.
+(via hookSpecificOutput.additionalContext) - it augments, it does not replace the prompt.
 
 Design constraints (these drive every decision here):
-  * The optimizer is SLOW (tens of seconds) and UserPromptSubmit is SYNCHRONOUS — an async
+  * The optimizer is SLOW (tens of seconds) and UserPromptSubmit is SYNCHRONOUS - an async
     hook would deliver the rewrite a turn too late. So we must NOT run on every prompt.
     Default mode is TRIGGER-GATED: only prompts that opt in pay the latency; everything
     else is an instant passthrough (exit 0, no output).
   * It must NEVER block or break prompt submission. Any failure (no ollama, model missing,
-    timeout, empty output) → silent passthrough. The user's prompt always goes through.
+    timeout, empty output) -> silent passthrough. The user's prompt always goes through.
 
 The optimizer is reached two ways, in priority order: (1) an explicit command override,
-(2) the ollama HTTP API at /api/generate — pristine text, no terminal renderer — falling
+(2) the ollama HTTP API at /api/generate - pristine text, no terminal renderer - falling
 back to the `ollama run` CLI if the server is unreachable. The CLI path strips the word-wrap
 control noise the renderer emits; the API path needs none.
 
@@ -142,7 +142,7 @@ def should_optimize(prompt: str) -> tuple[bool, str]:
     mode = _env("ATLAS_OPTIMIZE", "trigger").lower()
     if mode == "off":
         return False, prompt
-    # Never touch slash commands — they expand into their own prompts downstream.
+    # Never touch slash commands - they expand into their own prompts downstream.
     if prompt.lstrip().startswith("/"):
         return False, prompt
     triggers = tuple(
@@ -152,7 +152,7 @@ def should_optimize(prompt: str) -> tuple[bool, str]:
     minlen = int(_env("ATLAS_OPTIMIZE_MINLEN", "12") or "12")
     if mode == "always":
         # Fire on everything that isn't a slash command, but still skip prompts too short
-        # to be worth the latency — a bare "ok"/"thanks" should pass through instantly.
+        # to be worth the latency - a bare "ok"/"thanks" should pass through instantly.
         body = body if matched else prompt
         if len(body.strip()) < minlen:
             return False, prompt
@@ -226,7 +226,7 @@ def run_via_api(prompt: str, model: str, timeout: float) -> str | None:
 
 
 def run_optimizer(prompt: str) -> str | None:
-    """Optimize via override cmd → HTTP API → CLI fallback. Returns cleaned text or None."""
+    """Optimize via override cmd -> HTTP API -> CLI fallback. Returns cleaned text or None."""
     timeout = float(_env("ATLAS_OPTIMIZE_TIMEOUT", "110") or "110")
     override = override_command(prompt)
     if override is not None:
@@ -244,7 +244,7 @@ def run_optimizer(prompt: str) -> str | None:
 def emit_context(optimized: str) -> None:
     """Print the UserPromptSubmit JSON that injects the optimized spec into Claude's context."""
     framing = (
-        "[orchestrate · prompt-optimizer] The user opted to optimize this prompt. A local "
+        "[orchestrate - prompt-optimizer] The user opted to optimize this prompt. A local "
         "prompt-optimizer model rewrote their request into the expanded specification below. "
         "Treat it as the authoritative task spec for this turn; where it conflicts with the "
         "raw prompt, prefer the user's original intent. Do not mention this preprocessing "
@@ -295,14 +295,14 @@ def notify(optimized: str) -> None:
                     break
             break
     if len(intent) > 96:
-        intent = intent[:95].rstrip() + "…"
+        intent = intent[:95].rstrip() + "..."
     header = (
-        "\033[48;5;22m\033[97;1m ⚡ prompt-optimizer \033[0m"
-        f"\033[38;5;108m optimized spec injected · {len(optimized)} chars \033[0m"
+        "\033[48;5;22m\033[97;1m * prompt-optimizer \033[0m"
+        f"\033[38;5;108m optimized spec injected - {len(optimized)} chars \033[0m"
     )
     print(header, file=sys.stderr)
     if intent:
-        print(f"\033[38;5;108m   ↳ {intent}\033[0m", file=sys.stderr)
+        print(f"\033[38;5;108m   -> {intent}\033[0m", file=sys.stderr)
 
 
 def audit(original: str, optimized: str | None) -> None:
@@ -325,21 +325,21 @@ def main() -> int:
         raw = sys.stdin.read()
         data = json.loads(raw) if raw.strip() else {}
     except (json.JSONDecodeError, ValueError):
-        return 0  # malformed input → passthrough
+        return 0  # malformed input -> passthrough
     prompt = (data.get("prompt") or "").strip()
     if not prompt:
         return 0
 
     do_it, body = should_optimize(prompt)
     if not do_it:
-        return 0  # instant passthrough — no output, no latency
+        return 0  # instant passthrough - no output, no latency
 
     optimized = run_optimizer(body)
     if optimized and is_skip(optimized):
-        optimized = None  # model judged the prompt trivial — pass the raw text through
+        optimized = None  # model judged the prompt trivial - pass the raw text through
     audit(body, optimized)
     if not optimized:
-        return 0  # unavailable / slow / empty / SKIP → passthrough, never block
+        return 0  # unavailable / slow / empty / SKIP -> passthrough, never block
     emit_context(optimized)
     notify(optimized)
     return 0

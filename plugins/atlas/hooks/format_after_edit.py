@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""PostToolUse hook — auto-format a file right after Claude edits it.
+"""PostToolUse hook - auto-format a file right after Claude edits it.
 
 Matches Edit / Write / MultiEdit. Picks a formatter by file extension, runs it in place
 using the project's own config, and is a no-op when the formatter is not installed. Meant
-to run ASYNC so it never blocks the agentic loop. Any failure is swallowed — formatting
+to run ASYNC so it never blocks the agentic loop. Any failure is swallowed - formatting
 must never break a tool call.
 
 Why this matters for an orchestrator: a uniform, formatter-clean tree means diffs stay
 minimal and reviewers (and verifier subagents) see only real changes, not whitespace noise.
 
 Formatters (first available wins; all respect the repo's local config):
-  .py                              ruff format → black
-  .js .jsx .ts .tsx .mjs .cjs      project-local prettier → global prettier
+  .py                              ruff format -> black
+  .js .jsx .ts .tsx .mjs .cjs      project-local prettier -> global prettier
   .json .jsonc .css .scss .less    (same prettier resolution)
   .html .vue .svelte .md .mdx .yaml .yml
   .go                              gofmt -w

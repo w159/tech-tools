@@ -2,7 +2,7 @@
 """Install the atlas-engine skill's automation hooks into a settings.json (GATED).
 
 The atlas-engine skill ships three hooks (under ../hooks/). This wires them into a Claude
-Code settings file by MERGING — it never clobbers existing hooks, and it is idempotent
+Code settings file by MERGING - it never clobbers existing hooks, and it is idempotent
 (re-running is a no-op once installed). Dry-run by default; only --apply writes, and it
 backs the settings file up first.
 
@@ -144,7 +144,7 @@ def cmd_list(settings: dict) -> None:
     print("orchestrate hook coverage:")
     for hid, (event, matcher, script, _e) in HOOK_SPECS.items():
         state = (
-            "✔ installed" if has_hook(settings, event, script) else "· not installed"
+            "[x] installed" if has_hook(settings, event, script) else "- not installed"
         )
         m = f" [{matcher}]" if matcher else ""
         print(f"  {state:16} {hid:9} -> {event}{m}")
@@ -225,7 +225,7 @@ def main() -> int:
                 f"\ninstalled {n} hook(s). Restart Claude Code or start a new session to load them."
             )
         else:
-            print("\nall selected hooks already installed — no change.")
+            print("\nall selected hooks already installed - no change.")
     else:
         print("\n(dry-run) re-run with --apply to install.")
     return 0

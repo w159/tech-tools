@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PreToolUse hook — guard against destructive Bash commands.
+"""PreToolUse hook - guard against destructive Bash commands.
 
 Inspects the command a Bash tool call is about to run and returns a permission decision:
   * "deny" for catastrophic, near-irreversible commands (recursive root delete, fork bomb,
@@ -7,7 +7,7 @@ Inspects the command a Bash tool call is about to run and returns a permission d
   * "ask"  for high-blast-radius commands the orchestrator's law 6 says to gate anyway
     (force push, hard reset, recursive delete, piping the network into a shell, privilege
     escalation, recursive permission/owner changes).
-Anything else: no output, exit 0 — the normal permission flow proceeds untouched.
+Anything else: no output, exit 0 - the normal permission flow proceeds untouched.
 
 This encodes the atlas-engine skill's "gate writes" law as an automatic backstop so a
 runaway subagent (or a careless paste) cannot quietly do something irreversible.
@@ -51,7 +51,7 @@ ASK = [
     (re.compile(r"\bchown\s+(-[a-zA-Z]*\s+)*-?R"), "recursive ownership change"),
     (re.compile(r"\bchmod\s+(-[a-zA-Z]*\s+)*-?R"), "recursive permission change"),
     (re.compile(r"\b(npm|pnpm|yarn)\s+(install|add|i)\b|\bpip\s+install\b|\buv\s+(add|pip\s+install)\b"),
-     "dependency install (state-mutating — law 6 gates this)"),
+     "dependency install (state-mutating - law 6 gates this)"),
     (re.compile(r"\bgit\s+push\b"), "git push publishes to a remote"),
 ]
 
@@ -79,7 +79,7 @@ def main() -> int:
         return 0
     verdict = decide(command)
     if not verdict:
-        return 0  # nothing risky → let the normal permission flow run
+        return 0  # nothing risky -> let the normal permission flow run
     decision, reason = verdict
     print(json.dumps({
         "hookSpecificOutput": {
