@@ -44,14 +44,14 @@ Config (env vars, all optional):
 
 | var | default | meaning |
 |---|---|---|
-| `ORCHESTRATE_OPTIMIZE` | `trigger` | `off` · `trigger` (opt-in prefix) · `always` |
-| `ORCHESTRATE_OPTIMIZE_TRIGGER` | `opt:,optimize:,++` | comma-separated opt-in prefixes |
-| `ORCHESTRATE_OPTIMIZER_MODEL` | `prompt-optimizer:latest` | ollama model tag |
-| `ORCHESTRATE_OLLAMA_URL` | `$OLLAMA_HOST` → `http://127.0.0.1:11434` | optimizer endpoint |
-| `ORCHESTRATE_OPTIMIZE_CMD` | — | override: run this instead of ollama (`{prompt}` substituted) |
-| `ORCHESTRATE_OPTIMIZE_TIMEOUT` | `110` | seconds before giving up (passthrough) |
-| `ORCHESTRATE_OPTIMIZE_MINLEN` | `12` | skip triggered prompts shorter than this |
-| `ORCHESTRATE_OPTIMIZE_LOG` | — | append an audit trail (original → optimized) to this file |
+| `ATLAS_OPTIMIZE` | `trigger` | `off` · `trigger` (opt-in prefix) · `always` |
+| `ATLAS_OPTIMIZE_TRIGGER` | `opt:,optimize:,++` | comma-separated opt-in prefixes |
+| `ATLAS_OPTIMIZER_MODEL` | `prompt-optimizer:latest` | ollama model tag |
+| `ATLAS_OLLAMA_URL` | `$OLLAMA_HOST` → `http://127.0.0.1:11434` | optimizer endpoint |
+| `ATLAS_OPTIMIZE_CMD` | — | override: run this instead of ollama (`{prompt}` substituted) |
+| `ATLAS_OPTIMIZE_TIMEOUT` | `110` | seconds before giving up (passthrough) |
+| `ATLAS_OPTIMIZE_MINLEN` | `12` | skip triggered prompts shorter than this |
+| `ATLAS_OPTIMIZE_LOG` | — | append an audit trail (original → optimized) to this file |
 
 Put env vars in `~/.claude/settings.json` under `env` (not just the shell profile —
 non-interactive hook runs don't source it).
@@ -89,7 +89,7 @@ orchestrator rationalizes "I'll mark it unverified and move on"); this is the ma
   The block message names exactly which condition(s) are missing.
 - **Single nudge, never a wedge.** It blocks the stop at most **once** (the `stop_hook_active`
   loop-guard), then lets the continuation through. Fail-open on any error. Disable entirely with
-  `ORCHESTRATE_GATE=off`.
+  `ATLAS_GATE=off`.
 - **Off by default.** A plain `--apply` installs only optimizer/format/guard; opt in with
   `--select completion-gate --apply`. (Note: it coexists with codebase-brain's `validate_gate.py`
   Stop hook -- that one is message-text based, this one is artifact based; complementary.)

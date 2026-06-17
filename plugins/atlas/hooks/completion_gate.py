@@ -21,7 +21,7 @@ failed and that docs/ must be current (CHANGELOG, ROADMAP, affected subfolders)
 before calling the work done.
 
 Fail-open by construction: any error, missing dir, or unparseable input lets the
-stop proceed. Disable entirely with ORCHESTRATE_GATE=off. Off by default -- installed
+stop proceed. Disable entirely with ATLAS_GATE=off. Off by default -- installed
 only via `install_hooks.py --select completion-gate --apply`.
 
 Stdlib only.
@@ -124,7 +124,7 @@ def main() -> int:
     except (json.JSONDecodeError, ValueError):
         return 0
     try:
-        if os.environ.get("ORCHESTRATE_GATE", "").lower() == "off":
+        if os.environ.get("ATLAS_GATE", "").lower() == "off":
             return 0
         # Loop guard: never re-block a continuation we already triggered.
         if data.get("stop_hook_active"):

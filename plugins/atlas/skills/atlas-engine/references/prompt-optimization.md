@@ -15,7 +15,7 @@ configure it.
 Key behaviors (so you interpret its output correctly when it fires):
 - It is **trigger-gated** by default — only prompts the user opts in (prefix `opt:`, `optimize:`,
   or `++`) are optimized; the optimizer is slow, so untriggered prompts pass through instantly.
-  The user can set `ORCHESTRATE_OPTIMIZE=always` to optimize every prompt.
+  The user can set `ATLAS_OPTIMIZE=always` to optimize every prompt.
 - It **augments, never replaces**. You receive the original prompt PLUS an `OPTIMIZED SPEC`
   block. Treat the optimized spec as the working task definition, but where it conflicts with
   the user's evident intent, the **user's original wins** — the optimizer can over-reach.
