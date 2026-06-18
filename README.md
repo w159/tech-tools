@@ -1,6 +1,35 @@
-# AI Tech Tools
-
 <!-- markdownlint-disable MD032 MD033 MD040 MD051 MD060 -->
+
+<p align="center">
+  <img src="img/project-logo-icon.png" alt="AI Tech Tools logo" width="116">
+</p>
+
+<h1 align="center">AI Tech Tools</h1>
+
+<p align="center">
+  <strong>One MCP toolkit that turns an MCP-compatible LLM agent into an autonomous MSP operator.</strong>
+</p>
+
+<p align="center">
+  Production-grade Model Context Protocol servers, typed vendor SDKs, and Claude Code plugins for the<br>
+  security, RMM, PSA, M365, HR, backup, and compliance platforms an MSP runs every day.
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/MCP_servers-10-7C3AED?style=flat-square&labelColor=1F2937" alt="10 MCP servers">
+  <img src="https://img.shields.io/badge/Node_SDKs-7-EC4899?style=flat-square&labelColor=1F2937" alt="7 Node SDKs">
+  <img src="https://img.shields.io/badge/Plugins-12-06B6D4?style=flat-square&labelColor=1F2937" alt="12 plugins">
+  <img src="https://img.shields.io/badge/Skills-13-7C3AED?style=flat-square&labelColor=1F2937" alt="13 skills">
+  <img src="https://img.shields.io/badge/Node.js-%E2%89%A518-339933?style=flat-square&labelColor=1F2937" alt="Node.js >= 18">
+  <img src="https://img.shields.io/badge/Protocol-MCP-EC4899?style=flat-square&labelColor=1F2937" alt="Model Context Protocol">
+  <img src="https://img.shields.io/badge/License-Proprietary-6B7280?style=flat-square&labelColor=1F2937" alt="Proprietary license">
+</p>
+
+<p align="center">
+  <img src="img/readme-hero-banner.png" alt="MCP servers branching from a central AI agent" width="100%">
+</p>
+
+<!-- GitHub repo social preview asset: img/github-social-preview.png (set under Settings -> Options -> Social preview) -->
 
 Monorepo of MCP servers, plugins, and supporting Node.js client libraries for common MSP/IT vendor APIs. A production-grade toolkit of **Model Context Protocol (MCP) servers, vendor SDKs, and Claude Code plugins** that turn an LLM agent into an autonomous **MSP (Managed Service Provider) operator**. One toolkit gives an AI agent first-class access to the security, RMM, PSA, M365, HR, backup, and compliance platforms an MSP runs every day.
 
@@ -36,13 +65,15 @@ Monorepo of MCP servers, plugins, and supporting Node.js client libraries for co
 
 ## Overview
 
+<p align="center"><img src="img/command-center-hero.png" alt="An MSP command center: one agent watching every vendor console at once" width="78%"></p>
+
 ### Business Purpose
 
 Internal IT Help Desk/Engineer tools for Auvik, NinjaOne, ConnectWise, CIPP/M365, ThreatLocker, KnowBe4, Blumira, Vanta, Paylocity. Each has a REST API, its own auth, its own pagination, and its own quirks. This repo gives an AI agent (Claude Desktop, Claude Code, or any MCP-compatible client) **one consistent way to read and act across all of them**.
 
 ### Target Users
 
-- ***admins & support staff** wanting an LLM copilot that can actually pull tickets, devices, alerts, users, and approvals.
+- **MSP/IT admins & support staff** wanting an LLM copilot that can actually pull tickets, devices, alerts, users, and approvals.
 - **MSP engineering / automation teams** building agentic workflows across multiple vendors.
 - **Independent operators** who want a private, locally-runnable Claude integration for their own M365/RMM/PSA stack.
 
@@ -63,6 +94,8 @@ Internal IT Help Desk/Engineer tools for Auvik, NinjaOne, ConnectWise, CIPP/M365
 - **Production-grade packaging.** A hardened `pack-mcpb.js` script guards against broken bundles before they ever ship to Claude Desktop.
 
 ---
+
+<p align="center"><img src="img/architecture-section-header.png" alt="" width="100%"></p>
 
 ## Architecture
 
@@ -407,6 +440,8 @@ Re-run any time with `node test-mcp-tools.mjs`.
 
 ---
 
+<p align="center"><img src="img/docs-wiki-header.png" alt="" width="100%"></p>
+
 ## Claude Code Plugins
 
 The marketplace ships **12 domain-cluster plugins** under `plugins/`, listed in the manifest at `.claude-plugin/marketplace.json`. Each vendor's tooling is bundled into the business domain it serves; `orchestrate` is the do-everything coding meta-agent. Plugins declare any required MCP servers in their own `.mcp.json` and ship **skills** (Claude follows them like a runbook) and **slash commands** (one-shot entry points). Folded vendor skills and commands are prefixed by vendor (for example `ninjaone-*`, `auvik-*`) so names stay unique within a domain.
@@ -429,6 +464,8 @@ The marketplace ships **12 domain-cluster plugins** under `plugins/`, listed in 
 > Plugin docs: <https://docs.claude.com/en/docs/claude-code/plugins>
 
 ### Plugin Marketplace
+
+<p align="center"><img src="img/plugin-marketplace-tile.png" alt="Plugin marketplace tiles" width="300"></p>
 
 The repo ships a marketplace manifest at `.claude-plugin/marketplace.json` (marketplace name: `tech-tools`). Once the repo is published at `w159/tech-tools`:
 
