@@ -127,7 +127,12 @@
         "audit",
         "close",
         "variance-analysis",
-        "financial-statements"
+        "financial-statements",
+        "ramp",
+        "spend-management",
+        "expense",
+        "reimbursement",
+        "card-controls"
       ]
     },
     {
@@ -143,7 +148,11 @@
         "testing",
         "tech-debt",
         "cowork",
-        "plugin-development"
+        "plugin-development",
+        "sentry",
+        "observability",
+        "error-monitoring",
+        "release-health"
       ]
     },
     {
@@ -192,7 +201,14 @@
       "source": "./plugins/product-management",
       "description": "Write feature specs, plan roadmaps, and synthesize user research faster. Keep stakeholders updated and stay ahead of the competitive landscape.",
       "category": "product",
-      "keywords": []
+      "keywords": [
+        "product-management",
+        "asana",
+        "sprint-planning",
+        "roadmap",
+        "portfolio",
+        "standup"
+      ]
     },
     {
       "name": "productivity",

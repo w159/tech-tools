@@ -1,6 +1,6 @@
 {
   "name": "finance",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Finance and accounting skills: financial close, journal entry prep, reconciliation, variance analysis, financial statements, and SOX audit workflows.",
   "keywords": [
     "finance",
@@ -11,7 +11,12 @@
     "audit",
     "close",
     "variance-analysis",
-    "financial-statements"
+    "financial-statements",
+    "ramp",
+    "spend-management",
+    "expense",
+    "reimbursement",
+    "card-controls"
   ],
   "author": {
     "name": "w159",
