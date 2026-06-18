@@ -252,12 +252,63 @@ function summarize(content) {
   return JSON.stringify(content).slice(0, 200);
 }
 
+// Credential-free boot check. Extracts the bundle, boots it with NO creds,
+// lists tools, and calls the status/connection tool with empty args. This is
+// the CLAUDE.md contract: every server must boot without crashing and its
+// status tool must report the missing-creds state gracefully (not throw).
+// Runs on the missing-creds skip path so a stale/empty/crashing bundle is
+// caught even when the credentialed probes can't run. Note: for servers that
+// gate their domain tools behind creds (blumira, connectwise), the no-creds
+// tool count is intentionally small; the count is surfaced in the SKIP line so
+// a 2-vs-52 regression stays visible to a human reviewer.
+async function bootCheck(name, bundle) {
+  const tmp = mkdtempSync(join(tmpdir(), `mcp-boot-${name}-`));
+  try {
+    execSync(`unzip -q "${bundle}" -d "${tmp}"`);
+    const client = new McpClient(tmp, {});
+    let tools = [];
+    try {
+      await client.start();
+      tools = await client.listTools();
+    } catch (e) {
+      client.stop();
+      return { booted: false, detail: e.message, stderr: client.stderrBuffer.split('\n').slice(0, 3).join(' | ') };
+    }
+    const statusTool = tools.find((t) => /(_status|test_connection)$/.test(t.name));
+    let statusOk = null, statusDetail = '';
+    if (statusTool) {
+      try {
+        const r = await client.callTool(statusTool.name, {});
+        statusOk = !r.error;
+        statusDetail = r.error ? (r.error.message || 'rpc error') : summarize(r.result?.content);
+      } catch (e) {
+        statusOk = false;
+        statusDetail = e.message;
+      }
+    }
+    client.stop();
+    return { booted: true, toolCount: tools.length, statusTool: statusTool?.name, statusOk, statusDetail };
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
 async function testServer(name, def, env) {
   const bundle = join(ROOT, def.bundle);
   if (!existsSync(bundle)) return { name, status: 'NO_BUNDLE', detail: bundle };
 
   const missing = def.required.filter((k) => !env[k] || env[k].trim() === '');
-  if (missing.length) return { name, status: 'SKIPPED', detail: `missing: ${missing.join(', ')}` };
+  if (missing.length) {
+    const boot = await bootCheck(name, bundle);
+    if (!boot.booted) {
+      return { name, status: 'FAIL', detail: `boot failed (creds absent): ${boot.detail}`, stderr: boot.stderr };
+    }
+    if (boot.statusTool && boot.statusOk === false) {
+      return { name, status: 'FAIL', detail: `status tool ${boot.statusTool} did not respond gracefully: ${boot.statusDetail}` };
+    }
+    const bootNote = boot.statusTool ? `, ${boot.statusTool} graceful` : ', no status tool';
+    return { name, status: 'SKIPPED', detail: `missing: ${missing.join(', ')}; boot OK (${boot.toolCount} tools${bootNote})` };
+  }
 
   const tmp = mkdtempSync(join(tmpdir(), `mcp-test-${name}-`));
   try {
