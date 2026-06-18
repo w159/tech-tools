@@ -1,5 +1,5 @@
 ---
-name: search-search-strategy
+name: search-strategy
 description: Decompose a natural-language question into targeted per-source searches, translate it into each source's query syntax, run them in parallel, and rank the merged results. Use when answering an enterprise-search question that spans multiple connected sources, when a query must be classified (decision, status, document, person, factual) before searching, or when initial searches return too little and need broadening.
 ---
 
