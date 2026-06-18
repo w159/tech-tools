@@ -31,7 +31,7 @@ atlas/
 |   |-- session_boot.py            #   SessionStart: activate runtime, surface lessons
 |   |-- prompt_optimizer.py        #   UserPromptSubmit: optional local-model rewrite
 |   |-- bash_guard.py              #   PreToolUse(Bash): nudge away from footguns
-|   |-- validate-readonly-query.sh #   PreToolUse(Bash): block writes in read-only audits
+|   |-- validate-readonly-query.sh #   per DB-audit subagent: block writes in read-only audits
 |   |-- format_after_edit.py       #   PostToolUse(Edit/Write): format after edits
 |   |-- completion_gate.py         #   Stop: block premature "done" (opt-in via ATLAS_GATE)
 |   `-- nudge.py                   #   Stop/SubagentStop: self-improvement nudge (throttled)
@@ -123,8 +123,8 @@ can never block a session.
 | --- | --- | --- |
 | `session_boot.py` | `SessionStart` | Activate the runtime, report dependency state, surface relevant lessons |
 | `prompt_optimizer.py` | `UserPromptSubmit` | Optional local-model prompt rewrite (trigger-gated; augments, never replaces) |
-| `bash_guard.py` | `PreToolUse` (Bash) | Nudge away from footgun shell commands |
-| `validate-readonly-query.sh` | `PreToolUse` (Bash) | Block writes/DDL/grants during read-only audits |
+| `bash_guard.py` | `PreToolUse` (Bash) | Deny catastrophic commands; ask before force push, network-piped shells, and sudo |
+| `validate-readonly-query.sh` | `PreToolUse` (Bash), per DB-audit subagent | Block writes/DDL/grants during read-only audits (wired by the audit agents, not the global session) |
 | `format_after_edit.py` | `PostToolUse` (Edit/Write) | Run the formatter after edits |
 | `completion_gate.py` | `Stop` | Block a premature "done" until verification evidence exists (opt-in via `ATLAS_GATE`) |
 | `nudge.py` | `Stop`, `SubagentStop` | Self-improvement: prompt to capture a lesson and check docs drift (throttled) |

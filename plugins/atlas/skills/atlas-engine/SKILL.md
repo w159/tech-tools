@@ -130,8 +130,8 @@ The rules above must not depend on you remembering them. The seven hooks auto-lo
 
 - **`session_boot.py`** (`SessionStart`) - activates the runtime each session: injects this contract and methodology, reports claude-mem/context-mode state, and surfaces relevant past lessons. Crash-proof.
 - **`prompt_optimizer.py`** (`UserPromptSubmit`) - sharpens the prompt before any token is spent on it; trigger-gated (`opt:` / `++`), augments never replaces.
-- **`bash_guard.py`** (`PreToolUse` Bash) - denies catastrophic and asks before high-blast-radius shell commands; the automatic backstop for law 6.
-- **`validate-readonly-query.sh`** (`PreToolUse` Bash) - blocks SQL writes, DDL, and GRANT/REVOKE during read-only audits.
+- **`bash_guard.py`** (`PreToolUse` Bash) - denies catastrophic commands and asks before a short list of hard-to-undo ones (force push, network-piped shells, sudo); the automatic backstop for law 6.
+- **`validate-readonly-query.sh`** (`PreToolUse` Bash) - blocks SQL writes, DDL, and GRANT/REVOKE during read-only audits. Wired by the DB-audit subagents themselves (schema-inventory, rls-privilege-audit, naming-glossary-audit), not the global session, so ordinary shell work is never gated by it.
 - **`format_after_edit.py`** (`PostToolUse` Edit|Write) - auto-formats the edited file with the repo's own formatter so diffs stay minimal.
 - **`completion_gate.py`** (`Stop`, opt-in) - machine enforcement of "Definition of done": blocks stopping until the evidence artifact, the independent verifier report, and current docs/ all exist. Fail-open; enable with `ATLAS_GATE`.
 - **`nudge.py`** (`Stop`, `SubagentStop`) - self-improvement: surfaces a relevant past lesson and prompts to capture new ones; throttled and non-blocking. See the self-improving skill.

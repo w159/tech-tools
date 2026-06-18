@@ -8,7 +8,7 @@ hooks:
     - matcher: "Bash"
       hooks:
         - type: command
-          command: "./scripts/validate-readonly-query.sh"
+          command: "${CLAUDE_PLUGIN_ROOT}/hooks/validate-readonly-query.sh"
 ---
 
 You inventory a live PostgreSQL schema. You change nothing.

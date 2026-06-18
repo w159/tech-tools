@@ -8,7 +8,7 @@ hooks:
     - matcher: "Bash"
       hooks:
         - type: command
-          command: "./scripts/validate-readonly-query.sh"
+          command: "${CLAUDE_PLUGIN_ROOT}/hooks/validate-readonly-query.sh"
 ---
 
 You audit database access control. You query catalogs only and change nothing.

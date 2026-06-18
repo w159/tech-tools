@@ -8,7 +8,7 @@ hooks:
     - matcher: "Bash"
       hooks:
         - type: command
-          command: "./scripts/validate-readonly-query.sh"
+          command: "${CLAUDE_PLUGIN_ROOT}/hooks/validate-readonly-query.sh"
 ---
 
 You check naming against the glossary. You read the glossary, the live object names, and the code; you change nothing.
