@@ -1,5 +1,5 @@
 ---
-name: "Auvik Networks"
+name: auvik-networks
 description: >
   Use this skill when working with Auvik network and interface entities -
   the network entity model, IP-range scoping, interface-to-device

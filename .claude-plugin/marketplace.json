@@ -116,7 +116,7 @@
     {
       "name": "finance",
       "source": "./plugins/finance",
-      "description": "Finance and revenue operations. Bundles PandaDoc (proposals, contracts, document workflows) and Pax8 (licensing, orders, subscriptions, invoices) plus core accounting skills: financial close, journal entry prep, reconciliation, variance analysis, financial statements, and SOX audit workflows.",
+      "description": "Finance and accounting skills: financial close, journal entry prep, reconciliation, variance analysis, financial statements, and SOX audit workflows.",
       "category": "finance",
       "keywords": [
         "finance",
@@ -126,11 +126,8 @@
         "sox",
         "audit",
         "close",
-        "pandadoc",
-        "pax8",
-        "proposals",
-        "licensing",
-        "invoices"
+        "variance-analysis",
+        "financial-statements"
       ]
     },
     {

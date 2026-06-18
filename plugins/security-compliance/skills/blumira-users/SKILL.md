@@ -1,5 +1,5 @@
 ---
-name: "Blumira Users"
+name: blumira-users
 description: >
   Use this skill when listing or looking up Blumira users, finding user IDs
   for finding assignment, or auditing user access.

@@ -1,5 +1,5 @@
 ---
-name: "KnowBe4 Reporting"
+name: knowbe4-reporting
 description: >
   Use this skill when generating KnowBe4 security awareness reports - phishing
   summary statistics, training completion rates, risk score overviews, trend analysis,

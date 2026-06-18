@@ -1,5 +1,5 @@
 ---
-name: "PandaDoc Proposals"
+name: pandadoc-proposals
 description: >
   Use this skill when working with MSP proposal workflows in PandaDoc -
   creating managed service agreements (MSAs), statements of work (SOWs),

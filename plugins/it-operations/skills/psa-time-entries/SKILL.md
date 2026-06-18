@@ -1,5 +1,5 @@
 ---
-name: "ConnectWise Manage Time Entries"
+name: psa-time-entries
 description: >
   Use this skill when working with ConnectWise PSA time entries - creating,
   updating, searching, or managing time tracking. Covers billable vs non-billable

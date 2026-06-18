@@ -1,5 +1,5 @@
 ---
-name: roster-snapshot
+name: paylocity-roster-snapshot
 description: Pull a snapshot of the active employee roster from Paylocity, expanded with position, pay rate, and status. Use when user asks for "headcount", "current roster", "who works here", "active employees", or wants a list of employees with their titles and pay.
 ---
 

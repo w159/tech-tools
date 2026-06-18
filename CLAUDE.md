@@ -63,7 +63,7 @@ Every tool must:
 
 ## Build flow -- iCloud path constraints
 
-This repo lives under iCloud Drive. Three rules apply for any build or pack operation:
+This repo lives under iCloud Drive. These rules apply for any build or pack operation:
 
 1. **Never run `npm install` inside the repo directory.** `node_modules` under an iCloud path syncs
    continuously and causes file-lock errors, churn, and corrupted installs. Stage builds in `/tmp`
@@ -75,5 +75,14 @@ This repo lives under iCloud Drive. Three rules apply for any build or pack oper
    for `@modelcontextprotocol/sdk`, `zod`, and local `mcp_node` packages. These are false positives --
    the `dist/` outputs that matter are built in `/tmp` where `node_modules` is present.
 
-3. **The `dist/` directories are committed.** Pre-built outputs are committed so `test-mcp-tools.mjs`
-   can run against a fresh clone without a build step. Do not delete them.
+3. **`mcp_servers/**/dist/`, `node_modules/`, and `mcp_servers/**/*.mcpb` are NOT tracked** (they are
+   gitignored). Build them locally before running `test-mcp-tools.mjs`. The runnable, distributable
+   artifact is the `.mcpb` bundle (server `dist/` + `node_modules`), produced by `npm run pack:mcpb`.
+
+4. **Connectors ship to the marketplace bundled inside plugins.** Each connector-bearing cluster
+   (`it-operations`, `security-compliance`, `microsoft-365`, `hr-payroll`) commits the vendor `.mcpb`
+   under `plugins/<cluster>/mcp/<name>.mcpb` (re-included in `.gitignore` Section 5). The plugin
+   extracts it to `${CLAUDE_PLUGIN_DATA}` on first use via `mcp/launch.sh` and runs it over stdio;
+   `.mcp.json` maps the plugin's `userConfig` to the server's env vars. After changing a server,
+   rebuild it AND refresh the copy under the owning plugin's `mcp/` (see PLUGIN_INVENTORY.md), or the
+   marketplace will ship a stale connector.

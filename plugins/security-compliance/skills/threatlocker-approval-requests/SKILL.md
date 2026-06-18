@@ -1,5 +1,5 @@
 ---
-name: "ThreatLocker Approval Requests"
+name: threatlocker-approval-requests
 description: >
   Use this skill when triaging ThreatLocker application approval
   requests — the heart of day-to-day ThreatLocker operations. Covers

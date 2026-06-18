@@ -1,5 +1,5 @@
 ---
-name: deduction-and-tax-overview
+name: paylocity-deduction-and-tax-overview
 description: For a single employee, pull deductions, local taxes, and direct deposit setup into one consolidated payroll snapshot. Use when user asks for "show me deductions for [name]", "what's set up for employee X", "payroll setup for one person", or pre-payroll checks for an individual.
 ---
 

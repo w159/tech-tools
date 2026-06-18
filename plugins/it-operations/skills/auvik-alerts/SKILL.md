@@ -1,5 +1,5 @@
 ---
-name: "Auvik Alerts"
+name: auvik-alerts
 description: >
   Use this skill when working with Auvik alerts - severity tiers,
   status lifecycle, dismissal semantics, and the common alertName

@@ -1,5 +1,5 @@
 ---
-name: "NinjaOne Tickets"
+name: ninjaone-tickets
 description: >
   Use this skill when working with NinjaOne tickets - creating, updating,
   searching, and managing ticketing operations. NinjaOne's built-in ticketing

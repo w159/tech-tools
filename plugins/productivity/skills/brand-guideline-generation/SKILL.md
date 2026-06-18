@@ -1,5 +1,5 @@
 ---
-name: guideline-generation
+name: brand-guideline-generation
 description: >
   This skill generates, creates, or builds brand voice guidelines from source
   materials. It should be used when the user asks to "generate brand guidelines",

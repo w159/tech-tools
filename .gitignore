@@ -29,7 +29,7 @@
 #   - TypeScript/Node.js monorepo with three top-level domains:
 #       mcp_node/    — 7 SDK client libraries (node-auvik, node-blumira, etc.)
 #       mcp_servers/ — 10 MCP server packages (auvik-mcp, cipp-mcp, etc.)
-#       plugins/     — 27 Claude plugin definitions (marketplace)
+#       plugins/     — 12 domain-cluster Claude plugin definitions (marketplace)
 #   - *.mcpb bundle files are NOT tracked — GitHub's 100 MB hard limit blocks pushes
 #     once bundled node_modules grow past it. Bundles are published as GitHub Release
 #     artifacts; rebuild locally with `npm run pack:mcpb` inside each server dir.
@@ -170,11 +170,12 @@ firebase-adminsdk*.json
 !mcp_servers/**
 
 # ---- plugins — Claude plugin definitions ----
-# Covers: auvik-network-ops, cipp-m365-ops, connectwise-psa-ops,
-#         kaseya-spanning-backup-ops, knowbe4-security-training,
-#         msp-command-center, ninjaone-rmm-ops, paylocity-hr-ops,
-#         threatlocker-zerotrust-ops, vanta-compliance-ops
-# Each plugin contains: .claude-plugin/plugin.json, commands/*.md, skills/*.md
+# 12 domain clusters: atlas, it-operations, security-compliance, microsoft-365,
+#   hr-payroll, finance, engineering, design, data, customer-support,
+#   product-management, productivity.
+# Each plugin contains: .claude-plugin/plugin.json, commands/*.md, skills/*.
+# Connector clusters also ship .mcp.json, hooks/, and mcp/<name>.mcpb bundles
+# (the .mcpb re-include is in Section 5; loose dist/node_modules stay ignored).
 !plugins/
 !plugins/**
 
@@ -280,7 +281,13 @@ desktop.ini
 # If ANY secret-like file appears in steps 1, 3, or 4 — STOP and investigate.
 # ============================================================================
 
-# Built MCPB bundles — too large for GitHub (100 MB hard limit); ship via Releases
+# Built MCPB bundles in mcp_servers/ are NOT tracked (rebuilt locally / shipped via Releases).
 *.mcpb
+# EXCEPTION: connector bundles shipped INSIDE a plugin are tracked on purpose.
+# Each is a self-contained server (~3 MB, well under GitHub's 100 MB/file limit)
+# that the plugin extracts to ${CLAUDE_PLUGIN_DATA} on first run. This is what
+# makes connectors work after a marketplace install. Later rules win, so this
+# re-include must stay after the *.mcpb exclusion above.
+!plugins/*/mcp/*.mcpb
 .orchestrator/
 .fallow/

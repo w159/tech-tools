@@ -1,5 +1,5 @@
 ---
-name: brand-voice-enforcement
+name: brand-brand-voice-enforcement
 description: >
   This skill applies brand guidelines to content creation. It should be used when
   the user asks to "write an email", "draft a proposal", "create a pitch deck",

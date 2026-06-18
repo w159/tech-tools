@@ -1,5 +1,5 @@
 ---
-name: "Spanning API Patterns"
+name: spanning-api-patterns
 when_to_use: "When working with the Spanning Cloud Backup REST API — auth, user/license queries, backup status, restore operations, audit retrieval"
 description: >
   Use this skill when integrating with Spanning Cloud Backup. Covers admin email + API

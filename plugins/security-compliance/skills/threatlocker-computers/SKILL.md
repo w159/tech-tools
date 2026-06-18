@@ -1,5 +1,5 @@
 ---
-name: "ThreatLocker Computers"
+name: threatlocker-computers
 description: >
   Use this skill when working with ThreatLocker-protected endpoints —
   fleet inventory, identifying offline agents, drilling into a single

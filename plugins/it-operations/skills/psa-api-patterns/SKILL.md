@@ -1,5 +1,5 @@
 ---
-name: "ConnectWise Manage API Patterns"
+name: psa-api-patterns
 description: >
   Use this skill when working with the ConnectWise PSA REST API - authentication
   using public/private keys and clientId, pagination with page/pageSize, conditions

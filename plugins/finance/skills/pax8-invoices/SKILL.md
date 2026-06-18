@@ -1,5 +1,5 @@
 ---
-name: "Pax8 Invoices"
+name: pax8-invoices
 description: >
   Use this skill when working with Pax8 invoices and billing - retrieving
   invoices, analyzing billing data, reconciling costs with client charges,

@@ -1,6 +1,6 @@
 ---
 name: blumira-resolve-finding
-description: Resolve a Blumira finding with the appropriate resolution type and notes
+description: "VISIBLE-TO-OTHERS: Resolve a Blumira finding with a resolution type and notes. Writes a resolution and comment that other analysts and examiners can see, so confirm the finding ID and rationale before calling."
 arguments:
   - name: finding_id
     description: The UUID of the finding to resolve

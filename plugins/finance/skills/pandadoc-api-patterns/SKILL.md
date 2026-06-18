@@ -1,5 +1,5 @@
 ---
-name: "PandaDoc API Patterns"
+name: pandadoc-api-patterns
 description: >
   Use this skill when working with PandaDoc MCP tools - available tools,
   API key authentication, the hosted MCP server connection, documentation

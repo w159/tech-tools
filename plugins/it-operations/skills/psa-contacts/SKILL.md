@@ -1,5 +1,5 @@
 ---
-name: "ConnectWise Manage Contacts"
+name: psa-contacts
 description: >
   Use this skill when working with ConnectWise PSA contacts - creating, updating,
   searching, or managing contact records. Covers contact types, communication items

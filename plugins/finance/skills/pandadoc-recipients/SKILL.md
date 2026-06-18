@@ -1,5 +1,5 @@
 ---
-name: "PandaDoc Recipients"
+name: pandadoc-recipients
 description: >
   Use this skill when working with PandaDoc recipients and signatures -
   adding recipients to documents, setting signing order, tracking who

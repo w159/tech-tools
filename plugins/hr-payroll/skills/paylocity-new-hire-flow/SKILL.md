@@ -1,5 +1,5 @@
 ---
-name: "new-hire-flow"
+name: paylocity-new-hire-flow
 description: "Identify recent new hires in Paylocity (default: last 30 days) and verify their onboarding fields are populated — pay rate, position, direct deposit, local taxes. Use when user asks for \"new hires\", \"recent hires\", \"onboarding gaps\", \"are the new people set up correctly\", or pre-payroll readiness checks."
 ---
 

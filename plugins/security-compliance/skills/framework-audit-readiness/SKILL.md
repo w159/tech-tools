@@ -1,6 +1,6 @@
 ---
 name: framework-audit-readiness
-description: Assess audit readiness for a specific Vanta framework (SOC 2, ISO 27001, HIPAA, etc.). Surfaces every failing test and the controls they map to. Use when user asks "are we audit ready for SOC 2", "what's failing in ISO 27001", or for pre-audit gap reviews.
+description: Assess audit readiness for a specific Vanta framework (SOC 2, ISO 27001, HIPAA, etc.). Pulls the framework, its controls, and current test statuses, then surfaces every NEEDS_ATTENTION test and the controls they map back to. Use when user asks "are we audit ready for SOC 2", "what's failing in ISO 27001", or for pre-audit gap reviews.
 ---
 
 # Framework Audit Readiness (Vanta)

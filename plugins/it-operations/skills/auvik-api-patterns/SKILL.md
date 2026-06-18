@@ -1,5 +1,5 @@
 ---
-name: "Auvik API Patterns"
+name: auvik-api-patterns
 description: >
   Use this skill when working with the Auvik MCP tools - JSON:API
   envelope shape, basic-auth credential model, region routing,

@@ -1,5 +1,5 @@
 ---
-name: "Pax8 Orders"
+name: pax8-orders
 description: >
   Use this skill when working with Pax8 orders - viewing orders,
   tracking provisioning status, understanding order line items, and

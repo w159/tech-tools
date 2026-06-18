@@ -1,5 +1,5 @@
 ---
-name: "Pax8 Products"
+name: pax8-products
 description: >
   Use this skill when working with the Pax8 product catalog - searching
   for cloud software, browsing vendors, checking pricing, reviewing

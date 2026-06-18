@@ -1,5 +1,5 @@
 ---
-name: "KnowBe4 API Patterns"
+name: knowbe4-api-patterns
 description: >
   Use this skill when working with the KnowBe4 REST API - Bearer token authentication,
   multi-region base URLs, pagination, rate limiting, error handling, and common

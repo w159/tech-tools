@@ -1,5 +1,5 @@
 ---
-name: "KnowBe4 Training"
+name: knowbe4-training
 description: >
   Use this skill when working with KnowBe4 training campaigns - creating and managing
   training assignments, tracking enrollment and completion, browsing training modules

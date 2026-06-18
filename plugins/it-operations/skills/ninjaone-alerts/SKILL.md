@@ -1,5 +1,5 @@
 ---
-name: "NinjaOne Alerts"
+name: ninjaone-alerts
 description: >
   Use this skill when working with NinjaOne alerts - viewing active conditions,
   dismissing alerts, and understanding alert severity levels. Alerts indicate

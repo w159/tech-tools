@@ -1,5 +1,5 @@
 ---
-name: "Microsoft 365 Calendar"
+name: calendar
 description: >
   Use this skill when working with Microsoft 365 calendars - viewing events,
   finding free/busy times, creating meetings, managing room bookings, or

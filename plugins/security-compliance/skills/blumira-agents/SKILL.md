@@ -1,5 +1,5 @@
 ---
-name: "Blumira Agents"
+name: blumira-agents
 description: >
   Use this skill when working with Blumira agents, devices, and agent keys,
   including listing devices, checking agent health, and managing agent

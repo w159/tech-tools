@@ -1,5 +1,5 @@
 ---
-name: "Pax8 Companies"
+name: pax8-companies
 description: >
   Use this skill when working with Pax8 companies (MSP clients) -
   searching, retrieving, and managing client records in the

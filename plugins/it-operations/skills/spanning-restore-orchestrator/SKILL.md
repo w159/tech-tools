@@ -1,5 +1,5 @@
 ---
-name: restore-orchestrator
+name: spanning-restore-orchestrator
 description: Orchestrate a Kaseya Spanning Backup restore end-to-end — pick the right backup point, queue the restore, poll until terminal status, and report actionable outcome. Use when user asks to "restore <user>'s <service>", recover deleted items, or roll back a mailbox/drive.
 ---
 

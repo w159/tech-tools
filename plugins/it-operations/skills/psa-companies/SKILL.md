@@ -1,5 +1,5 @@
 ---
-name: "ConnectWise Manage Companies"
+name: psa-companies
 description: >
   Use this skill when working with ConnectWise PSA companies - creating, updating,
   searching, or managing company/account records. Covers company types, statuses,

@@ -1,5 +1,5 @@
 ---
-name: "Microsoft 365 Files"
+name: files
 description: >
   Use this skill when working with Microsoft 365 files - OneDrive personal storage,
   SharePoint document libraries, file sharing permissions, storage quotas, or

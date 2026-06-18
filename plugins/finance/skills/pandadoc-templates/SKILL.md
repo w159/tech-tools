@@ -1,5 +1,5 @@
 ---
-name: "PandaDoc Templates"
+name: pandadoc-templates
 description: >
   Use this skill when working with PandaDoc templates - browsing the
   template library, finding the right template for a document type,

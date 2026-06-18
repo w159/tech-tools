@@ -1,5 +1,5 @@
 ---
-name: "Blumira MSP"
+name: blumira-msp
 description: >
   Use this skill when working with Blumira MSP (Managed Service Provider)
   multi-tenant operations, including managing multiple client accounts,

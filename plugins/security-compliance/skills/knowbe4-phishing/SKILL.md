@@ -1,5 +1,5 @@
 ---
-name: "KnowBe4 Phishing"
+name: knowbe4-phishing
 description: >
   Use this skill when working with KnowBe4 phishing simulations - creating campaigns,
   managing security tests, tracking recipient interactions (sent, opened, clicked, reported),

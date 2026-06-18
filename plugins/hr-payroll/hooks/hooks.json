@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/mcp/extract.sh\" >/dev/null 2>&1 || true"
+          }
+        ]
+      }
+    ]
+  }
+}

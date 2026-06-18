@@ -1,5 +1,5 @@
 ---
-name: "PandaDoc Documents"
+name: pandadoc-documents
 description: >
   Use this skill when working with PandaDoc documents - creating proposals,
   quotes, contracts, SOWs, and MSAs from templates, sending documents

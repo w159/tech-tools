@@ -1,5 +1,5 @@
 ---
-name: "KnowBe4 Users"
+name: knowbe4-users
 description: >
   Use this skill when working with KnowBe4 users and groups - user lifecycle management,
   group creation and membership, risk scores, risk score history, user event tracking,

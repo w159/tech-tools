@@ -1,6 +1,6 @@
 {
   "name": "hr-payroll",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "HR and payroll operations. Bundles Paylocity (roster snapshots, new-hire flow, pay-rate and deduction/tax audits) plus core HR skills: compensation benchmarking, recruiting pipeline, interview prep, org planning, people analytics, and employee handbook authoring.",
   "keywords": [
     "hr",
@@ -15,5 +15,34 @@
   "author": {
     "name": "w159",
     "url": "https://github.com/w159"
+  },
+  "userConfig": {
+    "paylocity_client_id": {
+      "type": "string",
+      "title": "Paylocity client ID",
+      "description": "Paylocity OAuth2 client ID. Leave blank to disable Paylocity."
+    },
+    "paylocity_client_secret": {
+      "type": "string",
+      "title": "Paylocity client secret",
+      "description": "Paylocity OAuth2 client secret.",
+      "sensitive": true
+    },
+    "paylocity_company_id": {
+      "type": "string",
+      "title": "Paylocity company ID",
+      "description": "Paylocity company ID that scopes all calls."
+    },
+    "paylocity_base_url": {
+      "type": "string",
+      "title": "Paylocity base URL",
+      "description": "Optional. Leave blank to use the default (https://api.paylocity.com)."
+    },
+    "paylocity_sandbox": {
+      "type": "boolean",
+      "title": "Paylocity sandbox",
+      "description": "Optional. Enable to target the Paylocity sandbox (ignored if a base URL is set).",
+      "default": false
+    }
   }
 }

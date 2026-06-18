@@ -1,5 +1,5 @@
 ---
-name: "Blumira API Patterns"
+name: blumira-api-patterns
 description: >
   Use this skill when working with Blumira API authentication, understanding
   the dual path structure (org vs MSP), constructing filtered queries, handling

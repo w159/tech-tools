@@ -1,5 +1,5 @@
 ---
-name: "Microsoft 365 Mailboxes"
+name: mailboxes
 description: >
   Use this skill when working with Microsoft 365 mailboxes - reading email,
   searching messages, managing shared mailboxes, setting out-of-office replies,

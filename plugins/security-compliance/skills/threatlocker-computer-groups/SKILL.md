@@ -1,5 +1,5 @@
 ---
-name: "ThreatLocker Computer Groups"
+name: threatlocker-computer-groups
 description: >
   Use this skill when working with ThreatLocker computer groups —
   the policy-scoping boundary that determines which allow/deny rules

@@ -13,7 +13,12 @@ INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
 [ -z "$COMMAND" ] && exit 0
 
-if echo "$COMMAND" | grep -iE '\b(INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE|REPLACE|MERGE|GRANT|REVOKE|COPY)\b' > /dev/null; then
+# Match only real SQL write/DDL/privilege STRUCTURE, not bare verbs. This keeps
+# ordinary shell usage from tripping the guard: find -delete, str.replace(),
+# "create a file", git update-index, revoke_meeting_access, etc. all pass.
+# Still case-insensitive and still errs toward blocking on genuine SQL.
+SQL_WRITE='(\bDELETE[[:space:]]+FROM\b|\bINSERT[[:space:]]+INTO\b|\bREPLACE[[:space:]]+INTO\b|\bMERGE[[:space:]]+INTO\b|\bUPDATE[[:space:]]+[A-Za-z0-9_."`]+[[:space:]]+SET\b|\bTRUNCATE([[:space:]]+TABLE)?[[:space:]]|\b(DROP|CREATE|ALTER)[[:space:]]+(TABLE|DATABASE|SCHEMA|INDEX|VIEW|MATERIALIZED|SEQUENCE|TRIGGER|FUNCTION|ROLE|USER|EXTENSION|POLICY|PUBLICATION)\b|\b(GRANT|REVOKE)[[:space:]]+.+[[:space:]]+ON[[:space:]]+|\bCOPY[[:space:]]+[^;|]+[[:space:]]+(FROM|TO)\b)'
+if echo "$COMMAND" | grep -iE "$SQL_WRITE" > /dev/null; then
   echo "Blocked: read-only audit. SQL write, DDL, and privilege statements are not allowed." >&2
   exit 2
 fi

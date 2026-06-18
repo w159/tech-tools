@@ -1,6 +1,6 @@
 ---
-name: search-strategy
-description: Query decomposition and multi-source search orchestration. Breaks natural language questions into targeted searches per source, translates queries into source-specific syntax, ranks results by relevance, and handles ambiguity and fallback strategies.
+name: search-search-strategy
+description: Decompose a natural-language question into targeted per-source searches, translate it into each source's query syntax, run them in parallel, and rank the merged results. Use when answering an enterprise-search question that spans multiple connected sources, when a query must be classified (decision, status, document, person, factual) before searching, or when initial searches return too little and need broadening.
 ---
 
 # Search Strategy

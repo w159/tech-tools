@@ -1,6 +1,6 @@
 {
   "name": "it-operations",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "MSP IT operations across RMM, PSA, networking, and backup. Bundles NinjaOne (RMM), ConnectWise PSA (tickets, time, agreements), Auvik (network monitoring), and Kaseya Spanning (M365/Google backup), plus core operations skills: change management, process optimization, resource planning, risk assessment, compliance tracking, and vendor management.",
   "keywords": [
     "operations",
@@ -23,5 +23,100 @@
   "author": {
     "name": "w159",
     "url": "https://github.com/w159"
+  },
+  "userConfig": {
+    "auvik_username": {
+      "type": "string",
+      "title": "Auvik username",
+      "description": "Auvik portal username (email) for the Auvik connector. Leave blank to disable Auvik."
+    },
+    "auvik_api_key": {
+      "type": "string",
+      "title": "Auvik API key",
+      "description": "Auvik portal API key.",
+      "sensitive": true
+    },
+    "auvik_region": {
+      "type": "string",
+      "title": "Auvik region",
+      "description": "Auvik shard: us1 (default), us2, us3, us4, eu1, eu2, au1, ca1. Leave blank for us1.",
+      "default": "us1"
+    },
+    "ninjaone_client_id": {
+      "type": "string",
+      "title": "NinjaOne client ID",
+      "description": "NinjaOne OAuth2 client ID. Leave blank to disable NinjaOne."
+    },
+    "ninjaone_client_secret": {
+      "type": "string",
+      "title": "NinjaOne client secret",
+      "description": "NinjaOne OAuth2 client secret.",
+      "sensitive": true
+    },
+    "ninjaone_region": {
+      "type": "string",
+      "title": "NinjaOne region",
+      "description": "NinjaOne shard: us (default), eu, ca, oc. Leave blank for us.",
+      "default": "us"
+    },
+    "ninjaone_auth_mode": {
+      "type": "string",
+      "title": "NinjaOne auth mode",
+      "description": "Optional. Overrides the default OAuth flow only if your NinjaOne integration requires it."
+    },
+    "ninjaone_base_url": {
+      "type": "string",
+      "title": "NinjaOne base URL",
+      "description": "Optional. Leave blank to use the region default; only set for a non-standard shard."
+    },
+    "cw_manage_company_id": {
+      "type": "string",
+      "title": "ConnectWise company ID",
+      "description": "ConnectWise Manage company ID. Leave blank to disable ConnectWise."
+    },
+    "cw_manage_public_key": {
+      "type": "string",
+      "title": "ConnectWise public key",
+      "description": "ConnectWise Manage API member public key.",
+      "sensitive": true
+    },
+    "cw_manage_private_key": {
+      "type": "string",
+      "title": "ConnectWise private key",
+      "description": "ConnectWise Manage API member private key.",
+      "sensitive": true
+    },
+    "cw_manage_client_id": {
+      "type": "string",
+      "title": "ConnectWise client ID",
+      "description": "Registered ConnectWise integrator clientId header value."
+    },
+    "cw_manage_base_url": {
+      "type": "string",
+      "title": "ConnectWise base URL",
+      "description": "ConnectWise site, e.g. na.myconnectwise.net (required for ConnectWise)."
+    },
+    "spanning_admin_email": {
+      "type": "string",
+      "title": "Spanning admin email",
+      "description": "Kaseya Spanning admin account email. Leave blank to disable Spanning."
+    },
+    "spanning_api_token": {
+      "type": "string",
+      "title": "Spanning API token",
+      "description": "Kaseya Spanning API token.",
+      "sensitive": true
+    },
+    "spanning_platform": {
+      "type": "string",
+      "title": "Spanning platform",
+      "description": "Backup platform: office365 (default) or google.",
+      "default": "office365"
+    },
+    "spanning_api_url": {
+      "type": "string",
+      "title": "Spanning API URL",
+      "description": "Optional. Leave blank to use the per-platform default endpoint."
+    }
   }
 }

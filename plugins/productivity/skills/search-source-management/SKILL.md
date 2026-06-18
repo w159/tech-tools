@@ -1,6 +1,6 @@
 ---
-name: source-management
-description: Manages connected MCP sources for enterprise search. Detects available sources, guides users to connect new ones, handles source priority ordering, and manages rate limiting awareness.
+name: search-source-management
+description: Detect which MCP search sources are connected, guide the user to add missing ones, order sources by query type, and handle rate limits gracefully. Use when a search returns few or no sources, when the user asks what is connected or how to add a source, or when a source is rate limited mid-search.
 ---
 
 # Source Management

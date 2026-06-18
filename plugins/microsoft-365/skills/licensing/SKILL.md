@@ -1,5 +1,5 @@
 ---
-name: "Microsoft 365 Licensing"
+name: licensing
 description: >
   Use this skill when managing Microsoft 365 licenses - checking available seats,
   assigning or removing licenses, auditing license usage, finding unused licenses,

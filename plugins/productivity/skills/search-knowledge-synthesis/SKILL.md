@@ -1,6 +1,6 @@
 ---
-name: knowledge-synthesis
-description: Combines search results from multiple sources into coherent, deduplicated answers with source attribution. Handles confidence scoring based on freshness and authority, and summarizes large result sets effectively.
+name: search-knowledge-synthesis
+description: Synthesize multi-source search results into one coherent, deduplicated, source-attributed answer, with confidence scored by freshness and authority. Use when results from several connected sources need merging into a single answer, when the same fact appears across chat/email/docs and must be reconciled, or when a large result set needs summarizing without losing nuance.
 ---
 
 # Knowledge Synthesis

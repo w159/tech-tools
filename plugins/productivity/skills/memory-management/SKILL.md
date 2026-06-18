@@ -1,6 +1,6 @@
 ---
 name: memory-management
-description: Two-tier memory system that makes Claude a true workplace collaborator. Decodes shorthand, acronyms, nicknames, and internal language so Claude understands requests like a colleague would. CLAUDE.md for working memory, memory/ directory for the full knowledge base.
+description: Decode workplace shorthand (acronyms, nicknames, project codenames, internal terms) using a two-tier store, CLAUDE.md as the hot cache and the memory/ directory as the full glossary. Use when a request contains an unfamiliar name or abbreviation, when the user says "remember this" or "X means Y", or when initializing or maintaining the memory store.
 ---
 
 # Memory Management

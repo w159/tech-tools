@@ -1,5 +1,5 @@
 ---
-name: "Microsoft 365 Security"
+name: security
 description: >
   Use this skill for Microsoft 365 security posture checks - MFA enrollment
   status, conditional access policies, risky sign-ins, suspicious inbox rules,

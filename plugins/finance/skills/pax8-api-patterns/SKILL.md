@@ -1,5 +1,5 @@
 ---
-name: "Pax8 API Patterns"
+name: pax8-api-patterns
 description: >
   Use this skill when working with the Pax8 MCP tools - available tools,
   parameters, pagination, sorting, filtering, rate limiting, error

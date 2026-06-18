@@ -1,5 +1,5 @@
 ---
-name: create-cowork-plugin
+name: cowork-create-cowork-plugin
 description: >
   Guide users through creating a new plugin from scratch in a cowork session.
   Use when users want to create a plugin, build a plugin, make a new plugin, develop a plugin, scaffold a plugin, start a plugin from scratch, or design a plugin.

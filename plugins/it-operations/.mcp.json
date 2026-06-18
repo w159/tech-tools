@@ -1,12 +1,48 @@
 {
   "mcpServers": {
     "auvik": {
-      "command": "node",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/../../mcp_servers/auvik-mcp/dist/index.js"],
+      "command": "bash",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/launch.sh", "auvik", "dist/index.js"],
       "env": {
-        "AUVIK_USERNAME": "${AUVIK_USERNAME}",
-        "AUVIK_API_KEY": "${AUVIK_API_KEY}",
-        "AUVIK_REGION": "${AUVIK_REGION}"
+        "AUVIK_USERNAME": "${user_config.auvik_username}",
+        "AUVIK_API_KEY": "${user_config.auvik_api_key}",
+        "AUVIK_REGION": "${user_config.auvik_region}",
+        "MCP_TRANSPORT": "stdio"
+      }
+    },
+    "ninjaone": {
+      "command": "bash",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/launch.sh", "ninjaone", "dist/mcp_servers/ninjaone-mcp/src/index.js"],
+      "env": {
+        "NINJAONE_CLIENT_ID": "${user_config.ninjaone_client_id}",
+        "NINJAONE_CLIENT_SECRET": "${user_config.ninjaone_client_secret}",
+        "NINJAONE_REGION": "${user_config.ninjaone_region}",
+        "NINJAONE_AUTH_MODE": "${user_config.ninjaone_auth_mode}",
+        "NINJAONE_BASE_URL": "${user_config.ninjaone_base_url}",
+        "MCP_TRANSPORT": "stdio"
+      }
+    },
+    "connectwise": {
+      "command": "bash",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/launch.sh", "connectwise", "dist/index.js"],
+      "env": {
+        "CW_MANAGE_COMPANY_ID": "${user_config.cw_manage_company_id}",
+        "CW_MANAGE_PUBLIC_KEY": "${user_config.cw_manage_public_key}",
+        "CW_MANAGE_PRIVATE_KEY": "${user_config.cw_manage_private_key}",
+        "CW_MANAGE_CLIENT_ID": "${user_config.cw_manage_client_id}",
+        "CW_MANAGE_URL": "${user_config.cw_manage_base_url}",
+        "MCP_TRANSPORT": "stdio"
+      }
+    },
+    "spanning": {
+      "command": "bash",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/launch.sh", "spanning", "dist/index.js"],
+      "env": {
+        "SPANNING_ADMIN_EMAIL": "${user_config.spanning_admin_email}",
+        "SPANNING_API_TOKEN": "${user_config.spanning_api_token}",
+        "SPANNING_PLATFORM": "${user_config.spanning_platform}",
+        "SPANNING_API_URL": "${user_config.spanning_api_url}",
+        "MCP_TRANSPORT": "stdio"
       }
     }
   }

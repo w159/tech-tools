@@ -1,5 +1,5 @@
 ---
-name: pay-rate-audit
+name: paylocity-pay-rate-audit
 description: Audit pay rates across the active roster — pulls current and future pay rates, flags missing/zero rates, future-dated rate changes, and outliers vs. pay grade. Use when user asks for "pay rate audit", "comp review", "salary check", "are pay rates correct", or before a merit-cycle / payroll run.
 ---
 

@@ -1,5 +1,5 @@
 ---
-name: "ThreatLocker Audit Log"
+name: threatlocker-audit-log
 description: >
   Use this skill when investigating events in the ThreatLocker Action Log
   (the API name is "audit") — building incident timelines, tracing a file's

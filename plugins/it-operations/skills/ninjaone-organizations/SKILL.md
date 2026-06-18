@@ -1,5 +1,5 @@
 ---
-name: "NinjaOne Organizations"
+name: ninjaone-organizations
 description: >
   Use this skill when working with NinjaOne organizations - creating, listing,
   managing locations, and configuring policies. Organizations are the top-level

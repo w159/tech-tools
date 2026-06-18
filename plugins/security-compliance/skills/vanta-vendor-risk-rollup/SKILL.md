@@ -1,5 +1,5 @@
 ---
-name: vendor-risk-rollup
+name: vanta-vendor-risk-rollup
 description: Roll up third-party vendor risk in Vanta — status breakdown, stale reviews, highest-risk vendors. Use when user asks "vendor risk summary", "what vendors need review", "third-party risk rollup", or for quarterly vendor-management reports.
 ---
 

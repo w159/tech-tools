@@ -1,5 +1,5 @@
 ---
-name: "ThreatLocker Organizations"
+name: threatlocker-organizations
 description: >
   Use this skill when working with the ThreatLocker MSP multi-tenant
   model — enumerating child organizations, retrieving per-org auth

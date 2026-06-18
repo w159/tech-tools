@@ -1,5 +1,5 @@
 ---
-name: "Blumira Findings"
+name: blumira-findings
 description: >
   Use this skill when working with Blumira findings (security alerts/detections),
   including listing, filtering, investigating, resolving, assigning, and commenting

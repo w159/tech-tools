@@ -98,7 +98,7 @@ Internal IT Help Desk/Engineer tools for Auvik, NinjaOne, ConnectWise, CIPP/M365
 ### Data Flow
 
 1. **User prompt → Claude.** User asks Claude something like *"Show me every BEC-suspicious sign-in across all my tenants this morning."*
-2. **Skill activates.** A Claude Code plugin (e.g. `cipp-m365-ops/skills/suspicious-signin-hunt`) tells Claude how to decompose the task.
+2. **Skill activates.** A Claude Code plugin (e.g. a skill in the `microsoft-365` plugin) tells Claude how to decompose the task.
 3. **MCP tool calls.** Claude calls one or more MCP tools over stdio JSON-RPC (e.g. `cipp_list_tenants`, then `cipp_get_signin_logs` per tenant).
 4. **Server → SDK → REST.** The MCP server validates input with `zod`, delegates to the typed Node SDK in `mcp_node/`, and hits the vendor REST API.
 5. **Normalized response.** The server returns a structured JSON payload - the LLM summarizes, clusters, and ranks.
@@ -208,12 +208,16 @@ Each `plugins/<name>/` is a Claude Code plugin. The repo ships 12 domain-cluster
 ```text
 <plugin-name>/
 ├── .claude-plugin/
-│   └── plugin.json       Manifest (name, version, mcp_dependencies)
-├── commands/             *.md slash commands (e.g. /briefing, /cipp-morning)
-└── skills/               Folder per skill (each contains SKILL.md + assets)
+│   └── plugin.json       Manifest (name, version, keywords, userConfig)
+├── commands/             *.md slash commands
+├── skills/               Folder per skill (each contains SKILL.md + assets)
+├── agents/               Optional subagent definitions
+├── hooks/hooks.json      Optional hooks (connector clusters pre-warm extraction here)
+├── .mcp.json             Optional connector wiring (auto-discovered)
+└── mcp/                  Optional bundled connectors (<name>.mcpb + launch.sh)
 ```
 
-The `mcp_dependencies` array names the MCP servers that **must be installed** for the plugin's skills to function. The plugin layer never makes HTTP calls itself -- it instructs Claude how to compose MCP tool calls.
+Connector-bearing clusters (`it-operations`, `security-compliance`, `microsoft-365`, `hr-payroll`) bundle each MCP server as a self-contained `.mcpb` under `mcp/`. The plugin extracts it to `${CLAUDE_PLUGIN_DATA}` on first use and runs it over stdio; `.mcp.json` maps the plugin's `userConfig` values to the server's environment variables. The plugin layer never makes HTTP calls itself -- it instructs Claude how to compose MCP tool calls. Plugins with no `mcp/` folder are skills-only.
 
 ### `.claude-plugin/marketplace.json`
 
@@ -673,7 +677,7 @@ Existing GitHub Actions workflows have been **intentionally disabled** (renamed 
 
 - **Token caching:** OAuth-based vendors mint tokens at boot and cache for ~1h. Vanta's 5 req/min ceiling on the token endpoint makes this a hard requirement, not an optimization.
 - **Pagination:** Tools that return collections accept `page` + `pageSize` and pass them through to the vendor - never auto-paginate the entire dataset.
-- **Parallel fan-out:** The cross-vendor plugins (`msp-command-center`) ask Claude to issue tool calls in parallel where there's no data dependency.
+- **Parallel fan-out:** The domain-cluster plugins (e.g. `it-operations`, which bundles NinjaOne, ConnectWise, Auvik, and Spanning) ask Claude to issue tool calls in parallel where there's no data dependency.
 - **Bundle size:** `.mcpb` bundles include `node_modules`. Production deps only (`npm ci --omit=dev`) before pack.
 
 ---

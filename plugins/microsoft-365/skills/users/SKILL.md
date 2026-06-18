@@ -1,5 +1,5 @@
 ---
-name: "Microsoft 365 Users"
+name: users
 description: >
   Use this skill when working with Microsoft 365 users - listing, searching,
   creating, disabling, or checking user properties. Covers account status,

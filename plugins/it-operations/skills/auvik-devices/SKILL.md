@@ -1,5 +1,5 @@
 ---
-name: "Auvik Devices"
+name: auvik-devices
 description: >
   Use this skill when working with Auvik device records - identifying
   device types, interpreting manageStatus, reading lifecycle and warranty

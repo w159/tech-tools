@@ -1,5 +1,5 @@
 ---
-name: backup-health-sweep
+name: spanning-backup-health-sweep
 description: Sweep Kaseya Spanning Backup for failed/missing daily backups, stale users (no successful backup in N days), and seat exhaustion across M365/GWS/Salesforce. Use when user asks "are backups healthy", "show me failed backups", "what's wrong with Spanning", or for a periodic NOC sweep.
 ---
 

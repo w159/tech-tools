@@ -1,5 +1,5 @@
 ---
-name: "Pax8 Subscriptions"
+name: pax8-subscriptions
 description: >
   Use this skill when working with Pax8 subscriptions - checking license
   status, reviewing seat counts, filtering by company or product,

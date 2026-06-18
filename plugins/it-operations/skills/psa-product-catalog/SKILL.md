@@ -1,5 +1,5 @@
 ---
-name: "ConnectWise Manage Product Catalog"
+name: psa-product-catalog
 description: >
   Use this skill when working with the ConnectWise PSA product catalog — searching,
   creating, or updating catalog items (SKUs), managing categories, subcategories,

@@ -1,5 +1,5 @@
 ---
-name: "ConnectWise Manage Projects"
+name: psa-projects
 description: >
   Use this skill when working with ConnectWise PSA projects - creating, updating,
   managing project phases, templates, and resource allocation. Covers project

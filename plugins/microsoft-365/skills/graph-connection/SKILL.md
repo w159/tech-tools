@@ -1,5 +1,5 @@
 ---
-name: "microsoft-graph-connection"
+name: graph-connection
 description: "Use this skill when connecting a self-hosted Microsoft Graph MCP server to a customer tenant - registering the multi-tenant Entra app, supplying tenantId/clientId/clientSecret, and (the part everyone misses) granting per-tenant admin consent for the required delegated permissions out of band. Also covers the read-only design and the 100 calls/min/user rate limit."
 when_to_use: "When setting up, troubleshooting, or explaining the Microsoft Graph MCP connection - Entra app registration, redirect URI, client secret, admin consent failures, or 'why is the tenant returning no data'"
 triggers:

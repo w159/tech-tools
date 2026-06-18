@@ -1,5 +1,5 @@
 ---
-name: "ThreatLocker API Patterns"
+name: threatlocker-api-patterns
 description: >
   Use this skill when working with the ThreatLocker MCP tools —
   raw-key authentication (NO Bearer prefix), multi-tenant routing via

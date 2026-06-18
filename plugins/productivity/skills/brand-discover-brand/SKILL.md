@@ -1,5 +1,5 @@
 ---
-name: discover-brand
+name: brand-discover-brand
 description: >
   This skill orchestrates autonomous discovery of brand materials across enterprise
   platforms (Notion, Confluence, Google Drive, Box, SharePoint, Figma, Gong, Granola, Slack).
