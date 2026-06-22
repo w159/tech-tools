@@ -7,7 +7,7 @@
 <h1 align="center">AI Tech Tools</h1>
 
 <p align="center">
-  <strong>One MCP toolkit that turns an MCP-compatible LLM agent into an autonomous MSP operator.</strong>
+  <strong>One MCP toolkit that turns an MCP-compatible LLM agent into an autonomous operator.</strong>
 </p>
 
 <p align="center">
