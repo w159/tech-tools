@@ -53,7 +53,7 @@ Earnings Per Share (if applicable)
 ### GAAP Presentation Requirements (ASC 220 / IAS 1)
 
 - Present all items of income and expense recognized in a period
-- Classify expenses either by nature (materials, labor, depreciation) or by function (COGS, R&D, S&M, G&A) — function is more common for US companies
+- Classify expenses either by nature (materials, labor, depreciation) or by function (COGS, R&D, S&M, G&A) - function is more common for US companies
 - If classified by function, disclose depreciation, amortization, and employee benefit costs by nature in the notes
 - Present operating and non-operating items separately
 - Show income tax expense as a separate line
@@ -126,10 +126,10 @@ TOTAL LIABILITIES AND STOCKHOLDERS' EQUITY
 
 - Distinguish between current and non-current assets and liabilities
 - Current: expected to be realized, consumed, or settled within 12 months (or the operating cycle if longer)
-- Present assets in order of liquidity (most liquid first) — standard US practice
+- Present assets in order of liquidity (most liquid first) - standard US practice
 - Accounts receivable shown net of allowance for credit losses (ASC 326)
 - Property and equipment shown net of accumulated depreciation
-- Goodwill is not amortized — tested for impairment annually (ASC 350)
+- Goodwill is not amortized - tested for impairment annually (ASC 350)
 - Leases: recognize right-of-use assets and lease liabilities for operating and finance leases (ASC 842)
 
 ## Cash Flow Statement

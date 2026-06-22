@@ -15,12 +15,12 @@ Search across all connected MCP sources in a single query. Decompose the user's 
 
 Before searching, determine which MCP sources are available. Attempt to identify connected tools from the available tool list. Common sources:
 
-- **~~chat** — chat platform tools
-- **~~email** — email tools
-- **~~cloud storage** — cloud storage tools
-- **~~project tracker** — project tracking tools
-- **~~CRM** — CRM tools
-- **~~knowledge base** — knowledge base tools
+- **~~chat**  -  chat platform tools
+- **~~email**  -  email tools
+- **~~cloud storage**  -  cloud storage tools
+- **~~project tracker**  -  project tracking tools
+- **~~CRM**  -  CRM tools
+- **~~knowledge base**  -  knowledge base tools
 
 If no MCP sources are connected:
 ```
@@ -40,11 +40,11 @@ Analyze the search query to understand:
 - **Time constraints**: Recency signals ("this week", "last month", specific dates)
 - **Source hints**: References to specific tools ("in ~~chat", "that email", "the doc")
 - **Filters**: Extract explicit filters from the query:
-  - `from:` — Filter by sender/author
-  - `in:` — Filter by channel, folder, or location
-  - `after:` — Only results after this date
-  - `before:` — Only results before this date
-  - `type:` — Filter by content type (message, email, doc, thread, file)
+  - `from:`  -  Filter by sender/author
+  - `in:`  -  Filter by channel, folder, or location
+  - `after:`  -  Only results after this date
+  - `before:`  -  Only results before this date
+  - `type:`  -  Filter by content type (message, email, doc, thread, file)
 
 ### 3. Decompose into Sub-Queries
 
@@ -85,7 +85,7 @@ Run all sub-queries simultaneously across available sources. Do not wait for one
 For each source:
 - Execute the translated query
 - Capture results with metadata (timestamps, authors, links, source type)
-- Note any sources that fail or return errors — do not let one failure block others
+- Note any sources that fail or return errors  -  do not let one failure block others
 
 ### 5. Rank and Deduplicate Results
 
@@ -168,7 +168,7 @@ Results above are from [successful sources] only.
 
 ## Notes
 
-- Always search multiple sources in parallel — never sequentially
+- Always search multiple sources in parallel  -  never sequentially
 - Synthesize results into answers, do not just list raw search results
 - Include source attribution so users can dig deeper
 - Respect the user's filter syntax and apply it appropriately per source

@@ -9,15 +9,15 @@ installer. They are stdlib-only Python, self-contained under `hooks/`, and every
 |---|---|---|---|
 | `optimizer` | `UserPromptSubmit` | `hooks/prompt_optimizer.py` | optimize the prompt through a local model before Claude sees it |
 | `format` | `PostToolUse` (Edit\|Write\|MultiEdit) | `hooks/format_after_edit.py` | auto-format the edited file (ruff/prettier/gofmt/rustfmt), async |
-| `guard` | `PreToolUse` (Bash) | `hooks/bash_guard.py` | deny catastrophic / ask before high-blast-radius shell commands |
-| `completion-gate` | `Stop` | `hooks/completion_gate.py` | **opt-in.** block stopping an orchestrate run until evidence is captured |
+| `advisor` | `PreToolUse` (Bash) | `hooks/bash_advisor.py` | advisory-only; emits a warning on catastrophic, near-irreversible commands only |
+| `completion-gate` | `Stop` | `hooks/completion_gate.py` | **opt-out.** block stopping an atlas run until evidence is captured (on by default when docs/ exists; disable with ATLAS_GATE=off) |
 
 ## Install (gated, idempotent)
 
 ```
 python3 ${CLAUDE_SKILL_DIR}/scripts/install_hooks.py --list            # current coverage
 python3 ${CLAUDE_SKILL_DIR}/scripts/install_hooks.py                   # plan (dry-run)
-python3 ${CLAUDE_SKILL_DIR}/scripts/install_hooks.py --apply           # install the DEFAULT set (optimizer, format, guard - NOT the gate)
+python3 ${CLAUDE_SKILL_DIR}/scripts/install_hooks.py --apply           # install the DEFAULT set (optimizer, format, advisor, completion-gate)
 python3 ${CLAUDE_SKILL_DIR}/scripts/install_hooks.py --select completion-gate --apply   # opt into the Stop gate
 python3 ${CLAUDE_SKILL_DIR}/scripts/install_hooks.py --select optimizer --apply
 python3 ${CLAUDE_SKILL_DIR}/scripts/install_hooks.py --uninstall --apply
@@ -64,15 +64,16 @@ verifier subagents and reviewers see only real changes, not whitespace. Coverage
 (ruff->black), prettier-family (`.ts/.tsx/.js/.json/.css/.md/.yaml/...`, prefers the repo's local
 `node_modules/.bin/prettier`), `.go` (gofmt), `.rs` (rustfmt).
 
-## 3. `guard` - destructive-command backstop
+## 3. `advisor` - catastrophic-command warning
 
-Encodes law 6 ("gate writes") as an automatic check on every Bash call: `deny` for the
-near-irreversible (`rm -rf /`, fork bomb, `mkfs`, raw disk writes), `ask` for high-blast-radius
-(force push, hard reset, recursive delete, `curl|sh`, `sudo`, recursive chmod/chown, dependency
-installs). Everything else passes through to the normal permission flow untouched. It's a
-backstop for a runaway subagent or a careless paste - not a replacement for `permissions`.
+Advisory-only: never alters approval or emits a `permissionDecision` field. On every Bash call
+it checks for a small set of catastrophic, near-irreversible patterns (`rm -rf /` or `~/`,
+fork bomb, `mkfs`, `dd` to a raw disk device). On a match it injects an `additionalContext`
+factual warning ("This command matches a catastrophic, near-irreversible pattern. Confirm intent
+before running.") and exits 0 so the normal permission flow continues unaffected. Every other
+command exits 0 with no output. It is a signal, not a gate.
 
-## 4. `completion-gate` - the Definition-of-done backstop (opt-in)
+## 4. `completion-gate` - the Definition-of-done backstop (opt-out)
 
 Encodes the skill's hardest rule -- *a change is not done until observed behavior is captured and
 an independent agent verified it* -- as a `Stop` hook. Prose alone doesn't enforce it (the
@@ -90,9 +91,10 @@ orchestrator rationalizes "I'll mark it unverified and move on"); this is the ma
 - **Single nudge, never a wedge.** It blocks the stop at most **once** (the `stop_hook_active`
   loop-guard), then lets the continuation through. Fail-open on any error. Disable entirely with
   `ATLAS_GATE=off`.
-- **Off by default.** A plain `--apply` installs only optimizer/format/guard; opt in with
-  `--select completion-gate --apply`. (Note: it coexists with codebase-brain's `validate_gate.py`
-  Stop hook -- that one is message-text based, this one is artifact based; complementary.)
+- **On by default when docs/ exists.** A plain `--apply` installs the full set including the
+  completion-gate. Disable with `ATLAS_GATE=off`. (Note: it coexists with codebase-brain's
+  `validate_gate.py` Stop hook -- that one is message-text based, this one is artifact based;
+  complementary.)
 
 ## Extending
 

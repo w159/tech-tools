@@ -31,27 +31,27 @@ Audit for accessibility: @$1
 #### Perceivable
 | # | Issue | WCAG Criterion | Severity | Recommendation |
 |---|-------|---------------|----------|----------------|
-| 1 | [Issue] | [1.4.3 Contrast] | 🔴 Critical | [Fix] |
+| 1 | [Issue] | [1.4.3 Contrast] | [Critical] | [Fix] |
 
 #### Operable
 | # | Issue | WCAG Criterion | Severity | Recommendation |
 |---|-------|---------------|----------|----------------|
-| 1 | [Issue] | [2.1.1 Keyboard] | 🟡 Major | [Fix] |
+| 1 | [Issue] | [2.1.1 Keyboard] | [Major] | [Fix] |
 
 #### Understandable
 | # | Issue | WCAG Criterion | Severity | Recommendation |
 |---|-------|---------------|----------|----------------|
-| 1 | [Issue] | [3.3.2 Labels] | 🟢 Minor | [Fix] |
+| 1 | [Issue] | [3.3.2 Labels] | [Minor] | [Fix] |
 
 #### Robust
 | # | Issue | WCAG Criterion | Severity | Recommendation |
 |---|-------|---------------|----------|----------------|
-| 1 | [Issue] | [4.1.2 Name, Role, Value] | 🟡 Major | [Fix] |
+| 1 | [Issue] | [4.1.2 Name, Role, Value] | [Major] | [Fix] |
 
 ### Color Contrast Check
 | Element | Foreground | Background | Ratio | Required | Pass? |
 |---------|-----------|------------|-------|----------|-------|
-| [Body text] | [color] | [color] | [X]:1 | 4.5:1 | ✅/❌ |
+| [Body text] | [color] | [color] | [X]:1 | 4.5:1 | Pass/Fail |
 
 ### Keyboard Navigation
 | Element | Tab Order | Enter/Space | Escape | Arrow Keys |
@@ -64,9 +64,9 @@ Audit for accessibility: @$1
 | [Element] | [What SR says] | [Problem if any] |
 
 ### Priority Fixes
-1. **[Critical fix]** — Affects [who] and blocks [what]
-2. **[Major fix]** — Improves [what] for [who]
-3. **[Minor fix]** — Nice to have
+1. **[Critical fix]** - Affects [who] and blocks [what]
+2. **[Major fix]** - Improves [what] for [who]
+3. **[Minor fix]** - Nice to have
 ```
 
 ## If Connectors Available
@@ -81,6 +81,6 @@ If **~~project tracker** is connected:
 
 ## Tips
 
-1. **Start with contrast and keyboard** — These catch the most common and impactful issues.
-2. **Test with real assistive technology** — My audit is a great start, but manual testing with VoiceOver/NVDA catches things I can't.
-3. **Prioritize by impact** — Fix issues that block users first, polish later.
+1. **Start with contrast and keyboard** - These catch the most common and impactful issues.
+2. **Test with real assistive technology** - My audit is a great start, but manual testing with VoiceOver/NVDA catches things I can't.
+3. **Prioritize by impact** - Fix issues that block users first, polish later.

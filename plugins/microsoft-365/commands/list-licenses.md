@@ -16,9 +16,9 @@ Show the current Microsoft 365 license inventory for the tenant, including seat 
 
 ## Prerequisites
 
-- `Directory.Read.All` — list subscribed SKUs
-- `User.Read.All` — per-user license assignments
-- `AuditLog.Read.All` — sign-in activity for inactive user detection (optional)
+- `Directory.Read.All` - list subscribed SKUs
+- `User.Read.All` - per-user license assignments
+- `AuditLog.Read.All` - sign-in activity for inactive user detection (optional)
 
 ## Steps
 
@@ -39,61 +39,61 @@ Show the current Microsoft 365 license inventory for the tenant, including seat 
    - Licensed users with no sign-in for 90+ days
    - SKUs with 0 remaining seats (may need expansion)
 
-## Output — Summary View
+## Output - Summary View
 
 ```
-Microsoft 365 License Inventory — contoso.com
+Microsoft 365 License Inventory - contoso.com
 As of: 2024-01-15
 
 SKU                                Purchased  Used   Available  Status
-─────────────────────────────────────────────────────────────────────
-Microsoft 365 Business Premium        50       46        4       ✅ OK
-Entra ID P1                           25       22        3       ✅ OK
-Microsoft 365 F1 (Frontline)          10        8        2       ✅ OK
-Power BI Pro                          15       15        0       ⚠️  FULL
+---------------------------------------------------------------------
+Microsoft 365 Business Premium        50       46        4       [OK] OK
+Entra ID P1                           25       22        3       [OK] OK
+Microsoft 365 F1 (Frontline)          10        8        2       [OK] OK
+Power BI Pro                          15       15        0       [WARN]  FULL
 
 Total monthly spend estimate: ~$1,840/mo
 
 Optimization Opportunities:
-  ⚠️  3 disabled users still have M365 Business Premium (3 seats × $22/mo = $66/mo recoverable)
-  ⚠️  Power BI Pro is at capacity — consider adding seats or auditing need
-  💡  5 users inactive 90+ days — review for downgrade or removal
+  [WARN]  3 disabled users still have M365 Business Premium (3 seats x $22/mo = $66/mo recoverable)
+  [WARN]  Power BI Pro is at capacity - consider adding seats or auditing need
+  [TIP]  5 users inactive 90+ days - review for downgrade or removal
 ```
 
-## Output — Unused Licenses (`--view unused`)
+## Output - Unused Licenses (`--view unused`)
 
 ```
-License Reclaim Candidates — M365 Business Premium
+License Reclaim Candidates - M365 Business Premium
 
 Disabled accounts with licenses (immediate reclaim):
-  ❌  jold@contoso.com         Disabled 2023-11-01   M365 Business Premium
-  ❌  ftemp@contoso.com        Disabled 2023-12-15   M365 Business Premium
-  ❌  test.user@contoso.com    Disabled 2024-01-01   M365 Business Premium
+  [FAIL]  jold@contoso.com         Disabled 2023-11-01   M365 Business Premium
+  [FAIL]  ftemp@contoso.com        Disabled 2023-12-15   M365 Business Premium
+  [FAIL]  test.user@contoso.com    Disabled 2024-01-01   M365 Business Premium
 
-  → 3 licenses recoverable immediately
+  -> 3 licenses recoverable immediately
 
 Inactive active accounts (last sign-in >90 days):
-  🕐  msmith@contoso.com       Last login: 2023-09-10  M365 Business Premium
-  🕐  jdoe@contoso.com         Last login: 2023-08-22  M365 Business Premium
+  [TIME]  msmith@contoso.com       Last login: 2023-09-10  M365 Business Premium
+  [TIME]  jdoe@contoso.com         Last login: 2023-08-22  M365 Business Premium
 
-  → 2 accounts to review — confirm with customer before removal
+  -> 2 accounts to review - confirm with customer before removal
 
-Estimated monthly saving if all reclaimed: $110/mo (5 seats × $22)
+Estimated monthly saving if all reclaimed: $110/mo (5 seats x $22)
 ```
 
-## Output — Per-User View (`--view users`)
+## Output - Per-User View (`--view users`)
 
 ```
 User License Assignments
 
 Active Users:
-  ✅  alice@contoso.com         M365 Business Premium
-  ✅  bob@contoso.com           M365 Business Premium, Power BI Pro
-  ✅  charlie@contoso.com       M365 F1 (Frontline)
+  [OK]  alice@contoso.com         M365 Business Premium
+  [OK]  bob@contoso.com           M365 Business Premium, Power BI Pro
+  [OK]  charlie@contoso.com       M365 F1 (Frontline)
   ...
 
 Disabled Users (with licenses):
-  ❌  jold@contoso.com          M365 Business Premium ← reclaim candidate
+  [FAIL]  jold@contoso.com          M365 Business Premium <- reclaim candidate
 ```
 
 ## Error Handling
@@ -108,11 +108,11 @@ are managed at the partner level.
 ### Insufficient Permissions
 ```
 Error: Directory.Read.All permission required to list SKUs.
-User-level permissions insufficient — admin consent needed.
+User-level permissions insufficient - admin consent needed.
 ```
 
 ## Related Commands
 
-- `/get-user` — Check a specific user's license assignments
-- `/check-mfa-status` — Ensure licensed users are properly secured
-- `/offboard-user` — Remove licenses during offboarding
+- `/get-user` - Check a specific user's license assignments
+- `/check-mfa-status` - Ensure licensed users are properly secured
+- `/offboard-user` - Remove licenses during offboarding

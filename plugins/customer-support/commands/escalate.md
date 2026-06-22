@@ -17,7 +17,7 @@ Package a support issue into a structured escalation brief for engineering, prod
 
 Examples:
 - `/escalate API returning 500 errors intermittently for Acme Corp`
-- `/escalate Data export is missing rows — 3 customers reported this week`
+- `/escalate Data export is missing rows - 3 customers reported this week`
 - `/escalate SSO login loop affecting all Enterprise customers`
 - `/escalate Customer threatening to churn over missing audit log feature`
 
@@ -80,7 +80,7 @@ If the issue is a bug, follow the reproduction step best practices from the **es
 - **Time in queue:** [How long this has been an issue]
 
 ### Issue Description
-[Clear, concise description of the problem — 3-5 sentences]
+[Clear, concise description of the problem - 3-5 sentences]
 
 ### What's Been Tried
 1. [Troubleshooting step and result]
@@ -88,7 +88,7 @@ If the issue is a bug, follow the reproduction step best practices from the **es
 3. [Troubleshooting step and result]
 
 ### Reproduction Steps
-[If applicable — follow the format from the escalation skill]
+[If applicable - follow the format from the escalation skill]
 
 ### Customer Communication
 - **Last update to customer:** [Date and what was communicated]
@@ -96,7 +96,7 @@ If the issue is a bug, follow the reproduction step best practices from the **es
 - **Escalation risk:** [Will they escalate further if not resolved by X?]
 
 ### What's Needed
-- [Specific ask — "investigate root cause", "prioritize fix",
+- [Specific ask - "investigate root cause", "prioritize fix",
   "make product decision on X", "approve exception for Y"]
 - **Deadline:** [When this needs resolution or an update]
 

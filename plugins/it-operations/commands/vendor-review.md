@@ -1,5 +1,5 @@
 ---
-description: Evaluate a vendor — cost analysis, risk assessment, and recommendation
+description: Evaluate a vendor  -  cost analysis, risk assessment, and recommendation
 argument-hint: "<vendor name or proposal>"
 ---
 
@@ -53,7 +53,7 @@ Evaluate a vendor with structured analysis covering cost, risk, performance, and
 - [Concern 2]
 
 ### Recommendation
-[Proceed / Negotiate / Pass] — [Reasoning]
+[Proceed / Negotiate / Pass]  -  [Reasoning]
 
 ### Negotiation Points
 - [Leverage point 1]
@@ -72,6 +72,6 @@ If **~~procurement** is connected:
 
 ## Tips
 
-1. **Upload the proposal** — I can extract pricing, terms, and SLAs from vendor documents.
-2. **Compare vendors** — "Compare Vendor A vs Vendor B" gets you a side-by-side analysis.
-3. **Include current spend** — For renewals, knowing what you pay now helps evaluate price changes.
+1. **Upload the proposal**  -  I can extract pricing, terms, and SLAs from vendor documents.
+2. **Compare vendors**  -  "Compare Vendor A vs Vendor B" gets you a side-by-side analysis.
+3. **Include current spend**  -  For renewals, knowing what you pay now helps evaluate price changes.

@@ -58,7 +58,7 @@ Conflict rule: a smaller tier caps the user count. `smoke` caps personas at a sm
 
 ## Agent roster
 
-The phases map to five orchestrate subagents. Run independent personas and roles in parallel: one message, many Agent dispatches.
+The phases map to five atlas subagents. Run independent personas and roles in parallel: one message, many Agent dispatches.
 
 | Agent | Phase | Owns |
 |---|---|---|
@@ -100,7 +100,7 @@ Severity is computed, not guessed, from frequency, impact, and persistence. A co
 3. If a prior run exists, read its bug log first and make those findings explicit regression targets in the agent briefs.
 4. No agent deletes data it did not create. List the test accounts created (`notes/test-accounts-created.txt`) when reporting back; the user purges them.
 
-The reporter promotes the final report set into the durable `docs/audits/ux-swarm/<run-id>/`, aligning with orchestrate's docs/ single source of truth. The deliverable set includes a results table, an ordered bug log (Blocker > Major > Minor > Cosmetic, deduplicated), a feature backlog tagged free-tier vs premium, user-stories with acceptance verdicts, friction and feedback notes, a coverage report naming every untested route and field with a reason, and a run summary that leads with the completion rate.
+The reporter promotes the final report set into the durable `docs/audits/ux-swarm/<run-id>/`, aligning with the atlas orchestrator's docs/ single source of truth. The deliverable set includes a results table, an ordered bug log (Blocker > Major > Minor > Cosmetic, deduplicated), a feature backlog tagged free-tier vs premium, user-stories with acceptance verdicts, friction and feedback notes, a coverage report naming every untested route and field with a reason, and a run summary that leads with the completion rate.
 
 ## Reporting back
 

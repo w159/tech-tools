@@ -7,7 +7,7 @@ argument-hint: "[audit | document | extend] <component or system>"
 
 > If you see unfamiliar placeholders or need to check which tools are connected, see [CONNECTORS.md](../CONNECTORS.md).
 
-Manage your design system — audit for consistency, document components, or design new patterns.
+Manage your design system - audit for consistency, document components, or design new patterns.
 
 ## Usage
 
@@ -17,7 +17,7 @@ Manage your design system — audit for consistency, document components, or des
 /design-system extend [pattern]         # Design a new component or pattern
 ```
 
-## Output — Audit
+## Output - Audit
 
 ```markdown
 ## Design System Audit
@@ -40,8 +40,8 @@ Manage your design system — audit for consistency, document components, or des
 ### Component Completeness
 | Component | States | Variants | Docs | Score |
 |-----------|--------|----------|------|-------|
-| Button | ✅ | ✅ | ⚠️ | 8/10 |
-| Input | ✅ | ⚠️ | ❌ | 5/10 |
+| Button | Yes | Yes | Partial | 8/10 |
+| Input | Yes | Partial | No | 5/10 |
 
 ### Priority Actions
 1. [Most impactful improvement]
@@ -49,7 +49,7 @@ Manage your design system — audit for consistency, document components, or des
 3. [Third priority]
 ```
 
-## Output — Document
+## Output - Document
 
 ```markdown
 ## Component: [Name]
@@ -71,7 +71,7 @@ Manage your design system — audit for consistency, document components, or des
 ### States
 | State | Visual | Behavior |
 |-------|--------|----------|
-| Default | [description] | — |
+| Default | [description] | - |
 | Hover | [description] | [interaction] |
 | Active | [description] | [interaction] |
 | Disabled | [description] | Non-interactive |
@@ -83,7 +83,7 @@ Manage your design system — audit for consistency, document components, or des
 - **Screen reader**: [Announced as...]
 
 ### Do's and Don'ts
-| ✅ Do | ❌ Don't |
+| Do | Don't |
 |------|---------|
 | [Best practice] | [Anti-pattern] |
 
@@ -91,7 +91,7 @@ Manage your design system — audit for consistency, document components, or des
 [Framework-appropriate code snippet]
 ```
 
-## Output — Extend
+## Output - Extend
 
 ```markdown
 ## New Component: [Name]
@@ -119,7 +119,7 @@ Manage your design system — audit for consistency, document components, or des
 #### States
 | State | Behavior | Notes |
 |-------|----------|-------|
-| Default | [Description] | — |
+| Default | [Description] | - |
 | Hover | [Description] | [Interaction] |
 | Disabled | [Description] | Non-interactive |
 | Loading | [Description] | [Animation] |
@@ -144,7 +144,7 @@ See the **design-system-management** skill for guidance on token naming, compone
 ## If Connectors Available
 
 If **~~design tool** is connected:
-- Audit components directly in Figma — check naming, variants, and token usage
+- Audit components directly in Figma - check naming, variants, and token usage
 - Pull component properties and layer structure for documentation
 
 If **~~knowledge base** is connected:
@@ -153,6 +153,6 @@ If **~~knowledge base** is connected:
 
 ## Tips
 
-1. **Start with an audit** — Know where you are before deciding where to go.
-2. **Document as you build** — It's easier to document a component while designing it.
-3. **Prioritize coverage over perfection** — 80% of components documented beats 100% of 10 components.
+1. **Start with an audit** - Know where you are before deciding where to go.
+2. **Document as you build** - It's easier to document a component while designing it.
+3. **Prioritize coverage over perfection** - 80% of components documented beats 100% of 10 components.

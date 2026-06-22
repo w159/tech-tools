@@ -86,3 +86,6 @@ Match field names across a wave so results stack. For a verification dispatch, a
 - x "Fix everything": unscoped agents wander. One domain per agent.
 - x Letting an agent grade its own fix: verification is always a separate context.
 - x Returning raw logs/diffs in the final message: return the distilled report; write bulky evidence to `docs/evidence/`.
+- x Assuming a generated or downloaded file exists without reading it back - verify the path before acting on it. Use `${CLAUDE_PLUGIN_ROOT}` for plugin-internal paths.
+- x Calling a deferred/MCP tool without loading its schema first (`ToolSearch` before the call); passing arrays or objects as strings causes `InputValidationError`.
+- x Firing external/MCP/network calls without a timeout or retry; one transient failure should not silently kill the subagent.

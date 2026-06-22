@@ -131,7 +131,7 @@ TOP RISKS
 
 RECOMMENDATIONS
   1. Target top 3 risk users with remedial training
-  2. PPP above org average by 6.3% -- consider additional phishing templates
+  2. PPP above org average by 6.3% - consider additional phishing templates
   3. Improve PAB adoption (25% vs 35% org average)
 ```
 
@@ -163,18 +163,18 @@ GROUP AVERAGES
 GROUP RISK TREND - Sales Team (12 months)
 ==========================================
 
-  2024-03: 38.5  ████████
-  2024-02: 40.2  ████████
-  2024-01: 43.8  █████████
-  2023-12: 47.2  █████████
-  2023-11: 46.0  █████████
-  2023-10: 44.5  █████████
-  2023-09: 48.1  ██████████
-  2023-08: 50.3  ██████████
-  2023-07: 52.7  ███████████
-  2023-06: 55.1  ███████████
-  2023-05: 54.8  ███████████
-  2023-04: 56.2  ███████████
+  2024-03: 38.5  ########
+  2024-02: 40.2  ########
+  2024-01: 43.8  #########
+  2023-12: 47.2  #########
+  2023-11: 46.0  #########
+  2023-10: 44.5  #########
+  2023-09: 48.1  ##########
+  2023-08: 50.3  ##########
+  2023-07: 52.7  ###########
+  2023-06: 55.1  ###########
+  2023-05: 54.8  ###########
+  2023-04: 56.2  ###########
 
 12-Month Improvement: -17.7 points (31.5% reduction)
 Trend Direction: Consistently improving

@@ -49,9 +49,9 @@ GET /v1.0/users/{userId}/messages?$search="subject:invoice 2024"&$select=id,subj
 ```
 
 Also supports KQL search operators:
-- `$search="from:john@example.com"` — by sender
-- `$search="subject:urgent hasAttachments:true"` — combined
-- `$search="received>=2024-01-01"` — date range
+- `$search="from:john@example.com"` - by sender
+- `$search="subject:urgent hasAttachments:true"` - combined
+- `$search="received>=2024-01-01"` - date range
 
 ### Get Message Details (with body)
 
@@ -160,7 +160,7 @@ Shared mailbox access is managed via Microsoft 365 admin or Exchange PowerShell,
 
 ### List Users With Shared Mailbox Access
 
-Access is represented as `mailboxPermissions` — check via admin APIs or Exchange PowerShell:
+Access is represented as `mailboxPermissions` - check via admin APIs or Exchange PowerShell:
 ```powershell
 Get-MailboxPermission -Identity "sharedmailbox@contoso.com" | Where-Object { $_.AccessRights -eq "FullAccess" }
 ```

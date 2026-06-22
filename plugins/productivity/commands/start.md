@@ -13,10 +13,10 @@ Initialize the task and memory systems, then open the unified dashboard.
 ### 1. Check What Exists
 
 Check the working directory for:
-- `TASKS.md` — task list
-- `CLAUDE.md` — working memory
-- `memory/` — deep memory directory
-- `dashboard.html` — the visual UI
+- `TASKS.md`  -  task list
+- `CLAUDE.md`  -  working memory
+- `memory/`  -  deep memory directory
+- `dashboard.html`  -  the visual UI
 
 ### 2. Create What's Missing
 
@@ -24,11 +24,11 @@ Check the working directory for:
 
 **If `dashboard.html` doesn't exist:** Copy it from `${CLAUDE_PLUGIN_ROOT}/skills/dashboard.html` to the current working directory.
 
-**If `CLAUDE.md` and `memory/` don't exist:** This is a fresh setup — after opening the dashboard, begin the memory bootstrap workflow (see below). Place these in the current working directory.
+**If `CLAUDE.md` and `memory/` don't exist:** This is a fresh setup  -  after opening the dashboard, begin the memory bootstrap workflow (see below). Place these in the current working directory.
 
 ### 3. Open the Dashboard
 
-Do NOT use `open` or `xdg-open` — in Cowork, the agent runs in a VM and shell open commands won't reach the user's browser. Instead, tell the user: "Dashboard is ready at `dashboard.html`. Open it from your file browser to get started."
+Do NOT use `open` or `xdg-open`  -  in Cowork, the agent runs in a VM and shell open commands won't reach the user's browser. Instead, tell the user: "Dashboard is ready at `dashboard.html`. Open it from your file browser to get started."
 
 ### 4. Orient the User
 
@@ -98,9 +98,9 @@ Gather data from available MCP sources:
 - **Calendar:** Meetings, attendees
 
 Build a braindump of people, projects, and terms found. Present findings grouped by confidence:
-- **Ready to add** (high confidence) — offer to add directly
-- **Needs clarification** — ask the user
-- **Low frequency / unclear** — note for later
+- **Ready to add** (high confidence)  -  offer to add directly
+- **Needs clarification**  -  ask the user
+- **Low frequency / unclear**  -  note for later
 
 ### 7. Write Memory Files
 
@@ -133,10 +133,10 @@ From everything gathered, create:
 ```
 
 **memory/** directory:
-- `memory/glossary.md` — full decoder ring (acronyms, terms, nicknames, codenames)
-- `memory/people/{name}.md` — individual profiles
-- `memory/projects/{name}.md` — project details
-- `memory/context/company.md` — teams, tools, processes
+- `memory/glossary.md`  -  full decoder ring (acronyms, terms, nicknames, codenames)
+- `memory/people/{name}.md`  -  individual profiles
+- `memory/projects/{name}.md`  -  project details
+- `memory/context/company.md`  -  teams, tools, processes
 
 ### 8. Report Results
 
@@ -152,6 +152,6 @@ Use /productivity:update to keep things current (add --comprehensive for a deep 
 ## Notes
 
 - If memory is already initialized, this just opens the dashboard
-- Nicknames are critical — always capture how people are actually referred to
+- Nicknames are critical  -  always capture how people are actually referred to
 - If a source isn't available, skip it and note the gap
 - Memory grows organically through natural conversation after bootstrap

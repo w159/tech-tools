@@ -26,7 +26,7 @@ Create a structured change request with impact analysis, risk assessment, and ro
 [What is changing and why]
 
 ### Business Justification
-[Why this change is needed — cost savings, compliance, efficiency, risk reduction]
+[Why this change is needed  -  cost savings, compliance, efficiency, risk reduction]
 
 ### Impact Analysis
 | Area | Impact | Details |
@@ -79,6 +79,6 @@ If **~~chat** is connected:
 
 ## Tips
 
-1. **Be specific about impact** — "Everyone" is not an impact assessment. "200 users in the billing team" is.
-2. **Always have a rollback plan** — Even if you're confident, plan for failure.
-3. **Communicate early** — Surprises create resistance. Previews create buy-in.
+1. **Be specific about impact**  -  "Everyone" is not an impact assessment. "200 users in the billing team" is.
+2. **Always have a rollback plan**  -  Even if you're confident, plan for failure.
+3. **Communicate early**  -  Surprises create resistance. Previews create buy-in.

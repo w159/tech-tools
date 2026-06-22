@@ -43,7 +43,7 @@ Ask what the user wants to do:
 
 **Reprioritize**: Change the order or priority of items
 - Ask what changed (new information, strategy shift, resource change, customer feedback)
-- Apply a prioritization framework if helpful — see **Prioritization Frameworks** below for RICE, MoSCoW, ICE, and value-vs-effort
+- Apply a prioritization framework if helpful - see **Prioritization Frameworks** below for RICE, MoSCoW, ICE, and value-vs-effort
 - Show before/after comparison
 
 **Move timeline**: Shift dates for items
@@ -53,7 +53,7 @@ Ask what the user wants to do:
 
 **Create new roadmap**: Build a roadmap from scratch
 - Ask about timeframe (quarter, half, year)
-- Ask about format preference (Now/Next/Later, quarterly columns, OKR-aligned) — see **Roadmap Frameworks** below
+- Ask about format preference (Now/Next/Later, quarterly columns, OKR-aligned) - see **Roadmap Frameworks** below
 - Gather the list of initiatives to include
 
 ### 3. Generate Roadmap Summary
@@ -161,7 +161,7 @@ Simpler than RICE. Score each item 1-10 on three dimensions:
 
 - **Impact**: How much will this move the target metric?
 - **Confidence**: How confident are we in the impact estimate?
-- **Ease**: How easy is this to implement? (Inverse of effort — higher = easier)
+- **Ease**: How easy is this to implement? (Inverse of effort - higher = easier)
 
 ICE Score = Impact x Confidence x Ease
 
@@ -192,8 +192,8 @@ Look for dependencies across these categories:
 - List all dependencies explicitly in the roadmap
 - Assign an owner to each dependency (who is responsible for resolving it)
 - Set a "need by" date: when does the depending item need this resolved
-- Build buffer around dependencies — they are the highest-risk items on any roadmap
-- Flag dependencies that cross team boundaries early — these require coordination
+- Build buffer around dependencies - they are the highest-risk items on any roadmap
+- Flag dependencies that cross team boundaries early - these require coordination
 - Have a contingency plan: what do you do if the dependency slips?
 
 ### Reducing Dependencies
@@ -225,7 +225,7 @@ Adjust ratios based on team context:
 
 ### Capacity vs Ambition
 - If roadmap commitments exceed capacity, something must give
-- Do not solve capacity problems by pretending people can do more — solve by cutting scope
+- Do not solve capacity problems by pretending people can do more - solve by cutting scope
 - When adding to the roadmap, always ask: "What comes off?"
 - Better to commit to fewer things and deliver reliably than to overcommit and disappoint
 
@@ -259,7 +259,7 @@ Use a clear, scannable format. Tables work well for roadmap items. Use text stat
 
 ## Tips
 
-- A roadmap is a communication tool, not a project plan. Keep it at the right altitude — themes and outcomes, not tasks.
+- A roadmap is a communication tool, not a project plan. Keep it at the right altitude - themes and outcomes, not tasks.
 - When reprioritizing, always ask what changed. Priority shifts should be driven by new information, not whim.
 - Flag capacity issues early. If the roadmap has more work than the team can handle, say so.
 - Dependencies are the biggest risk to roadmaps. Surface them explicitly.

@@ -22,10 +22,10 @@ Before starting, briefly explain what's about to happen so the user knows what t
 
 "Here's how brand discovery works:
 
-1. **Search** — I'll search your connected platforms (Notion, Google Drive, Slack, etc.) for brand-related materials: style guides, pitch decks, templates, transcripts, and more.
-2. **Analyze** — I'll categorize and rank what I find, pull the best sources, and produce a discovery report with what I found, any conflicts, and open questions.
-3. **Generate guidelines** — Once you've reviewed the report, I can generate a structured brand voice guideline document from the results.
-4. **Save** — Guidelines are saved to `.claude/brand-voice-guidelines.md` in your working folder once you approve them. Nothing is written until that step.
+1. **Search**  -  I'll search your connected platforms (Notion, Google Drive, Slack, etc.) for brand-related materials: style guides, pitch decks, templates, transcripts, and more.
+2. **Analyze**  -  I'll categorize and rank what I find, pull the best sources, and produce a discovery report with what I found, any conflicts, and open questions.
+3. **Generate guidelines**  -  Once you've reviewed the report, I can generate a structured brand voice guideline document from the results.
+4. **Save**  -  Guidelines are saved to `.claude/brand-voice-guidelines.md` in your working folder once you approve them. Nothing is written until that step.
 
 The search usually takes a few minutes depending on how many platforms are connected. Ready to get started?"
 
@@ -67,7 +67,7 @@ Before launching discovery, confirm:
 - Whether to include conversation transcripts (Gong, Granola) or just documents
 - Any known locations to prioritize
 
-Keep this brief — one question, not a questionnaire.
+Keep this brief  -  one question, not a questionnaire.
 
 ### 4. Delegate to Discover-Brand Agent
 
@@ -78,10 +78,10 @@ Launch the discover-brand agent via the Task tool. Provide:
 - Any known URLs or locations to check first
 
 The agent executes the 4-phase discovery algorithm autonomously:
-1. **Broad Discovery** — parallel searches across platforms
-2. **Source Triage** — categorize and rank sources
-3. **Deep Fetch** — retrieve and extract from top sources
-4. **Discovery Report** — structured output with open questions
+1. **Broad Discovery**  -  parallel searches across platforms
+2. **Source Triage**  -  categorize and rank sources
+3. **Deep Fetch**  -  retrieve and extract from top sources
+4. **Discovery Report**  -  structured output with open questions
 
 ### 5. Present Discovery Report
 
@@ -94,10 +94,10 @@ When the agent returns, present the report to the user with a summary:
 ### 6. Offer Next Steps
 
 After presenting the report, offer:
-1. **Generate guidelines now** — chain to `/brand-voice:generate-guidelines` using discovery report as input
-2. **Resolve open questions first** — work through high-priority questions before generating
-3. **Save report** — store the discovery report to Notion or as a local file
-4. **Expand search** — search additional platforms or deeper if coverage is low
+1. **Generate guidelines now**  -  chain to `/brand-voice:generate-guidelines` using discovery report as input
+2. **Resolve open questions first**  -  work through high-priority questions before generating
+3. **Save report**  -  store the discovery report to Notion or as a local file
+4. **Expand search**  -  search additional platforms or deeper if coverage is low
 
 ## Open Questions
 
@@ -106,7 +106,7 @@ Open questions arise when the discovery agent encounters ambiguity it cannot res
 - Missing critical sections (e.g., no social media guidelines found)
 - Inconsistent terminology across platforms
 
-Every open question includes an agent recommendation. Present questions as "confirm or override" — not dead ends.
+Every open question includes an agent recommendation. Present questions as "confirm or override"  -  not dead ends.
 
 ## Integration with Other Skills
 
@@ -123,5 +123,5 @@ Every open question includes an agent recommendation. Present questions as "conf
 
 For detailed discovery patterns and algorithms, consult:
 
-- **`references/search-strategies.md`** — Platform-specific search queries, query patterns by platform, and tips for maximizing discovery coverage
-- **`references/source-ranking.md`** — Source category definitions, ranking algorithm weights, and triage decision criteria
+- **`references/search-strategies.md`**  -  Platform-specific search queries, query patterns by platform, and tips for maximizing discovery coverage
+- **`references/source-ranking.md`**  -  Source category definitions, ranking algorithm weights, and triage decision criteria

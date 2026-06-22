@@ -1,6 +1,6 @@
 ---
 description: Find and explain company policies
-argument-hint: "<policy topic — PTO, benefits, travel, expenses, etc.>"
+argument-hint: "<policy topic - PTO, benefits, travel, expenses, etc.>"
 ---
 
 # /policy-lookup
@@ -20,18 +20,18 @@ Search for policies matching: $ARGUMENTS
 ## How It Works
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    POLICY LOOKUP                                   │
-├─────────────────────────────────────────────────────────────────┤
-│  STANDALONE (always works)                                       │
-│  ✓ Ask any policy question in plain language                    │
-│  ✓ Paste your employee handbook and I'll search it              │
-│  ✓ Get clear, jargon-free answers                               │
-├─────────────────────────────────────────────────────────────────┤
-│  SUPERCHARGED (when you connect your tools)                      │
-│  + Knowledge base: Search handbook and policy docs automatically │
-│  + HRIS: Pull employee-specific details (PTO balance, benefits) │
-└─────────────────────────────────────────────────────────────────┘
++-----------------------------------------------------------------+
+|                    POLICY LOOKUP                                   |
++-----------------------------------------------------------------+
+|  STANDALONE (always works)                                       |
+|  [x] Ask any policy question in plain language                    |
+|  [x] Paste your employee handbook and I'll search it              |
+|  [x] Get clear, jargon-free answers                               |
++-----------------------------------------------------------------+
+|  SUPERCHARGED (when you connect your tools)                      |
+|  + Knowledge base: Search handbook and policy docs automatically |
+|  + HRIS: Pull employee-specific details (PTO balance, benefits) |
++-----------------------------------------------------------------+
 ```
 
 ## Output
@@ -52,7 +52,7 @@ Search for policies matching: $ARGUMENTS
 [Person or team for questions beyond what's documented]
 
 ### Source
-[Where this information came from — document name, page, or section]
+[Where this information came from - document name, page, or section]
 ```
 
 ## If Connectors Available
@@ -66,5 +66,5 @@ If **~~HRIS** is connected:
 
 ## Tips
 
-1. **Ask in plain language** — "Can I work from Europe for a month?" is better than "international remote work policy."
-2. **Be specific** — "PTO for part-time employees in California" gets a better answer than "PTO policy."
+1. **Ask in plain language** - "Can I work from Europe for a month?" is better than "international remote work policy."
+2. **Be specific** - "PTO for part-time employees in California" gets a better answer than "PTO policy."

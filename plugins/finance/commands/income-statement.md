@@ -19,12 +19,12 @@ Generate an income statement with period-over-period comparison and variance ana
 
 ### Arguments
 
-- `period-type` — The reporting period type:
-  - `monthly` — Single month P&L with prior month and prior year month comparison
-  - `quarterly` — Quarter P&L with prior quarter and prior year quarter comparison
-  - `annual` — Full year P&L with prior year comparison
-  - `ytd` — Year-to-date P&L with prior year YTD comparison
-- `period` — The period to report (e.g., `2024-12`, `2024-Q4`, `2024`)
+- `period-type` - The reporting period type:
+  - `monthly` - Single month P&L with prior month and prior year month comparison
+  - `quarterly` - Quarter P&L with prior quarter and prior year quarter comparison
+  - `annual` - Full year P&L with prior year comparison
+  - `ytd` - Year-to-date P&L with prior year YTD comparison
+- `period` - The period to report (e.g., `2024-12`, `2024-Q4`, `2024`)
 
 ## Workflow
 
@@ -98,7 +98,7 @@ NET INCOME (LOSS)             $XX,XXX    $XX,XXX    $X,XXX     X.X%       $XX,XX
 For each line item, calculate and flag material variances:
 
 **Materiality thresholds** (flag if either condition met):
-- Dollar variance exceeds a defined threshold (e.g., $50K, $100K — ask user for their threshold)
+- Dollar variance exceeds a defined threshold (e.g., $50K, $100K - ask user for their threshold)
 - Percentage variance exceeds 10% (or user-defined threshold)
 
 For flagged variances, provide:

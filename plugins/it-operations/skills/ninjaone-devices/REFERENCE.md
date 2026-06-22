@@ -1,4 +1,4 @@
-# NinjaOne Devices — Reference
+# NinjaOne Devices  -  Reference
 
 ## API Base URLs
 
@@ -74,4 +74,4 @@ Modes: `APPROVE`, `REJECT`
 |------|-------------|------------|
 | 404 | Device not found | Verify device ID exists and belongs to an accessible organization |
 | 403 | Access denied | Check API key scopes and organization-level permissions |
-| 409 | Conflict | Device may be offline or mid-operation — retry after checking status |
+| 409 | Conflict | Device may be offline or mid-operation  -  retry after checking status |

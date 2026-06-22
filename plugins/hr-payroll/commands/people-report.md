@@ -1,6 +1,6 @@
 ---
 description: Generate headcount, attrition, diversity, or org health reports
-argument-hint: "<report type — headcount, attrition, diversity, org health>"
+argument-hint: "<report type - headcount, attrition, diversity, org health>"
 ---
 
 # /people-report
@@ -17,9 +17,9 @@ Generate people analytics reports from your HR data. See the **people-analytics*
 
 ## Report Types
 
-**Headcount**: Current org snapshot — by team, location, level, tenure
-**Attrition**: Turnover analysis — voluntary/involuntary, by team, trends
-**Diversity**: Representation metrics — by level, team, pipeline
+**Headcount**: Current org snapshot - by team, location, level, tenure
+**Attrition**: Turnover analysis - voluntary/involuntary, by team, trends
+**Diversity**: Representation metrics - by level, team, pipeline
 **Org Health**: Span of control, management layers, team sizes, flight risk
 
 ## What I Need From You
@@ -34,7 +34,7 @@ Upload a CSV or describe your data. Helpful fields:
 ## Output
 
 ```markdown
-## People Report: [Type] — [Date]
+## People Report: [Type] - [Date]
 
 ### Executive Summary
 [2-3 key takeaways]
@@ -58,7 +58,7 @@ Upload a CSV or describe your data. Helpful fields:
 ## If Connectors Available
 
 If **~~HRIS** is connected:
-- Pull live employee data — headcount, tenure, department, level
+- Pull live employee data - headcount, tenure, department, level
 - Generate reports without needing a CSV upload
 
 If **~~chat** is connected:

@@ -85,6 +85,6 @@ If **~~project tracker** is connected:
 
 ## Tips
 
-1. **Share the Figma link** — I can pull exact measurements, tokens, and component info.
-2. **Mention edge cases** — "What happens with 100 items?" helps me spec boundary conditions.
-3. **Specify the tech stack** — "We use React + Tailwind" helps me give relevant implementation notes.
+1. **Share the Figma link** - I can pull exact measurements, tokens, and component info.
+2. **Mention edge cases** - "What happens with 100 items?" helps me spec boundary conditions.
+3. **Specify the tech stack** - "We use React + Tailwind" helps me give relevant implementation notes.

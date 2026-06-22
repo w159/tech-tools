@@ -29,7 +29,7 @@ Multi-tenant pivot for MSP analysts working many ThreatLocker customers. Enumera
 
 3. **Pull recent audit volume per child (last 24h)**
 
-   For each child org, call `threatlocker_audit_search` for the last 24h with a small page size and read total / count. If volume is large enough to be expensive, sample the first page and note "≥N" instead of an exact figure.
+   For each child org, call `threatlocker_audit_search` for the last 24h with a small page size and read total / count. If volume is large enough to be expensive, sample the first page and note ">=N" instead of an exact figure.
 
 4. **Render the overview table**
 

@@ -24,7 +24,7 @@ triggers:
 
 ## Overview
 
-Users in Microsoft 365 (Entra ID) are the central identity object for your tenant. Every licensed service — Exchange, Teams, OneDrive, SharePoint — flows through the user object. For MSPs, user management spans onboarding new staff, offboarding leavers, license optimization, and security posture checks across customer tenants.
+Users in Microsoft 365 (Entra ID) are the central identity object for your tenant. Every licensed service - Exchange, Teams, OneDrive, SharePoint - flows through the user object. For MSPs, user management spans onboarding new staff, offboarding leavers, license optimization, and security posture checks across customer tenants.
 
 ## User Object Key Properties
 
@@ -48,7 +48,7 @@ Users in Microsoft 365 (Entra ID) are the central identity object for your tenan
 | Active | `true` | Normal working account |
 | Disabled | `false` | Blocked sign-in; retains data |
 | Deleted (soft) | N/A | 30-day recoverable window |
-| Deleted (hard) | N/A | Permanent — data gone |
+| Deleted (hard) | N/A | Permanent - data gone |
 
 ## License Assignment Model
 
@@ -153,11 +153,11 @@ GET /v1.0/users/{id}/authentication/methods
 ```
 
 **Response includes registered methods:**
-- `#microsoft.graph.microsoftAuthenticatorAuthenticationMethod` — Authenticator app
-- `#microsoft.graph.phoneAuthenticationMethod` — SMS/phone
-- `#microsoft.graph.fido2AuthenticationMethod` — Hardware key
-- `#microsoft.graph.windowsHelloForBusinessAuthenticationMethod` — WHfB
-- `#microsoft.graph.passwordAuthenticationMethod` — Password only (no MFA!)
+- `#microsoft.graph.microsoftAuthenticatorAuthenticationMethod` - Authenticator app
+- `#microsoft.graph.phoneAuthenticationMethod` - SMS/phone
+- `#microsoft.graph.fido2AuthenticationMethod` - Hardware key
+- `#microsoft.graph.windowsHelloForBusinessAuthenticationMethod` - WHfB
+- `#microsoft.graph.passwordAuthenticationMethod` - Password only (no MFA!)
 
 **Users with only `passwordAuthenticationMethod` have NO MFA enrolled.**
 

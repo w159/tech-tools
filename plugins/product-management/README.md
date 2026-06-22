@@ -1,6 +1,6 @@
 # Product Management Plugin
 
-A product management plugin primarily designed for [Cowork](https://claude.com/product/cowork), Anthropic's agentic desktop application — though it also works in Claude Code. Covers the full PM workflow: writing feature specs, managing roadmaps, communicating with stakeholders, synthesizing user research, analyzing competitors, and tracking product metrics.
+A product management plugin primarily designed for [Cowork](https://claude.com/product/cowork), Anthropic's agentic desktop application - though it also works in Claude Code. Covers the full PM workflow: writing feature specs, managing roadmaps, communicating with stakeholders, synthesizing user research, analyzing competitors, and tracking product metrics.
 
 ## Installation
 
@@ -12,13 +12,13 @@ claude plugins add knowledge-work-plugins/product-management
 
 This plugin gives you an AI-powered product management partner that can help with:
 
-- **Feature Specs & PRDs** — Generate structured product requirements documents from a problem statement or feature idea. Includes user stories, requirements prioritization, success metrics, and scope management.
-- **Roadmap Planning** — Create, update, and reprioritize your product roadmap. Supports Now/Next/Later, quarterly themes, and OKR-aligned formats with dependency mapping.
-- **Stakeholder Updates** — Generate status updates tailored to your audience (executives, engineering, customers). Pulls context from connected tools to save you the weekly update grind.
-- **User Research Synthesis** — Turn interview notes, survey data, and support tickets into structured insights. Identifies themes, builds personas, and surfaces opportunity areas with supporting evidence.
-- **Competitive Analysis** — Research competitors and generate briefs with feature comparisons, positioning analysis, and strategic implications.
-- **Metrics Review** — Analyze product metrics, identify trends, compare against targets, and surface actionable insights.
-- **Product Brainstorming** — Explore problem spaces, generate ideas, and stress-test product thinking with a sharp sparring partner. Supports divergent ideation, assumption testing, and strategy exploration using frameworks like How Might We, Jobs-to-be-Done, First Principles, and Opportunity Solution Trees.
+- **Feature Specs & PRDs** - Generate structured product requirements documents from a problem statement or feature idea. Includes user stories, requirements prioritization, success metrics, and scope management.
+- **Roadmap Planning** - Create, update, and reprioritize your product roadmap. Supports Now/Next/Later, quarterly themes, and OKR-aligned formats with dependency mapping.
+- **Stakeholder Updates** - Generate status updates tailored to your audience (executives, engineering, customers). Pulls context from connected tools to save you the weekly update grind.
+- **User Research Synthesis** - Turn interview notes, survey data, and support tickets into structured insights. Identifies themes, builds personas, and surfaces opportunity areas with supporting evidence.
+- **Competitive Analysis** - Research competitors and generate briefs with feature comparisons, positioning analysis, and strategic implications.
+- **Metrics Review** - Analyze product metrics, identify trends, compare against targets, and surface actionable insights.
+- **Product Brainstorming** - Explore problem spaces, generate ideas, and stress-test product thinking with a sharp sparring partner. Supports divergent ideation, assumption testing, and strategy exploration using frameworks like How Might We, Jobs-to-be-Done, First Principles, and Opportunity Solution Trees.
 
 ## Commands
 
@@ -80,7 +80,7 @@ Claude: [Generates synthesis with key findings, personas, opportunity areas, and
 
 ```
 You: /brainstorm Should we add AI-powered search to our product?
-Claude: Before we jump to AI search — what problem are your users hitting with search today?
+Claude: Before we jump to AI search - what problem are your users hitting with search today?
 You: They can't find things. Support tickets about "can't find X" are our #2 category.
 Claude: That's a discovery problem, not necessarily a search technology problem. Let me push on this...
 Claude: [Explores whether the issue is search quality, information architecture, or content discoverability]

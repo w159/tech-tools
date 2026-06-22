@@ -201,7 +201,7 @@ Before offboarding, identify files the user owns that are widely shared:
 GET /v1.0/users/{userId}/drive/root/search(q='*')?$select=id,name,permissions,parentReference
 ```
 
-Look for items with `scope: anonymous` sharing links — these should be cleaned up or ownership transferred.
+Look for items with `scope: anonymous` sharing links - these should be cleaned up or ownership transferred.
 
 ### OneDrive Quota Alert
 

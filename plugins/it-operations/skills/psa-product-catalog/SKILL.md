@@ -1,7 +1,7 @@
 ---
 name: psa-product-catalog
 description: >
-  Use this skill when working with the ConnectWise PSA product catalog — searching,
+  Use this skill when working with the ConnectWise PSA product catalog  -  searching,
   creating, or updating catalog items (SKUs), managing categories, subcategories,
   manufacturers, or using catalog items on quotes, opportunities, agreements, and
   tickets. Covers the full catalog item field reference, the common MSP workflows
@@ -29,7 +29,7 @@ triggers:
 
 ## Overview
 
-The ConnectWise Manage product catalog is the master list of everything an MSP sells — hardware SKUs, software licenses, managed service subscriptions, bundles, and service offerings. Catalog items are the building blocks that flow into quotes, opportunities, sales orders, agreement additions, and ticket charges. Getting the catalog right drives accurate quoting, consistent billing, and clean COGS/margin reporting.
+The ConnectWise Manage product catalog is the master list of everything an MSP sells  -  hardware SKUs, software licenses, managed service subscriptions, bundles, and service offerings. Catalog items are the building blocks that flow into quotes, opportunities, sales orders, agreement additions, and ticket charges. Getting the catalog right drives accurate quoting, consistent billing, and clean COGS/margin reporting.
 
 This skill covers the full catalog item schema, the supporting lookup entities (categories, subcategories, manufacturers, product types, unit of measure), and the workflows for the most common MSP scenarios.
 
@@ -76,11 +76,11 @@ Available MCP tools (connectwise-manage-mcp):
 | `Agreement` | Recurring managed-services line items | Drives MRR additions on agreements |
 
 **Rule of thumb for MSPs:**
-- Per-endpoint managed services (RMM, EDR, backup) → `Agreement`
-- M365 / Google Workspace licenses you resell → `NonInventory` (or `Agreement` if billing monthly)
-- Switches, firewalls, desktops you physically hold → `Inventory`
-- Project engineering hours, onboarding fee → `Service`
-- "Small Business Bundle" that rolls up RMM + EDR + backup → `Bundle`
+- Per-endpoint managed services (RMM, EDR, backup) -> `Agreement`
+- M365 / Google Workspace licenses you resell -> `NonInventory` (or `Agreement` if billing monthly)
+- Switches, firewalls, desktops you physically hold -> `Inventory`
+- Project engineering hours, onboarding fee -> `Service`
+- "Small Business Bundle" that rolls up RMM + EDR + backup -> `Bundle`
 
 ## Complete Catalog Item Field Reference
 
@@ -99,8 +99,8 @@ Available MCP tools (connectwise-manage-mcp):
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `category` | object | No | `{id: categoryId}` |
-| `subcategory` | object | Yes | `{id: subcategoryId}` — CW requires this |
-| `type` | object | Yes | `{id: typeId}` — product type |
+| `subcategory` | object | Yes | `{id: subcategoryId}`  -  CW requires this |
+| `type` | object | Yes | `{id: typeId}`  -  product type |
 | `productClass` | enum | No | `NonInventory` / `Inventory` / `Bundle` / `Service` / `Agreement` |
 | `serializedFlag` | boolean | No | Track by serial number (hardware) |
 | `serializedCostFlag` | boolean | No | Per-unit cost tracking |
@@ -121,15 +121,15 @@ Available MCP tools (connectwise-manage-mcp):
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `manufacturer` | object | No | `{id: manufacturerId}` |
-| `manufacturerPartNumber` | string | No | MPN (not your SKU — the mfr's part number) |
-| `vendor` | object | No | `{id: vendorCompanyId}` — a company flagged as a vendor |
+| `manufacturerPartNumber` | string | No | MPN (not your SKU  -  the mfr's part number) |
+| `vendor` | object | No | `{id: vendorCompanyId}`  -  a company flagged as a vendor |
 | `vendorSku` | string | No | Vendor's SKU for reordering |
 
 ### Inventory
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `unitOfMeasure` | object | No | `{id: uomId}` — Each, Box, Hour, Month, License, etc. |
+| `unitOfMeasure` | object | No | `{id: uomId}`  -  Each, Box, Hour, Month, License, etc. |
 | `minStockLevel` | int | No | Reorder threshold |
 | `ianCode` | string | No | Inventory account number (GL) |
 | `upc` | string | No | UPC barcode |
@@ -171,7 +171,7 @@ The `cw_create_catalog_item` tool surfaces ~11 common fields directly as typed Z
 }
 ```
 
-`extraFields` is merged into the POST body verbatim — anything the CW `/procurement/catalog` POST endpoint accepts will work.
+`extraFields` is merged into the POST body verbatim  -  anything the CW `/procurement/catalog` POST endpoint accepts will work.
 
 ## Common MSP Recipes
 
@@ -256,7 +256,7 @@ The `cw_create_catalog_item` tool surfaces ~11 common fields directly as typed Z
 
 ## Updating Catalog Items (JSON Patch)
 
-Use `cw_update_catalog_item` with JSON Patch ops. CW Manage is strict about patch syntax — reference fields use `/id` paths.
+Use `cw_update_catalog_item` with JSON Patch ops. CW Manage is strict about patch syntax  -  reference fields use `/id` paths.
 
 ### Common patch patterns
 
@@ -302,7 +302,7 @@ conditions=identifier like 'M365-%'
 conditions=manufacturer=null and inactiveFlag=false
 ```
 
-**Price-list export — active NonInventory:**
+**Price-list export  -  active NonInventory:**
 ```
 conditions=productClass="NonInventory" and inactiveFlag=false
 orderBy=identifier asc
@@ -315,14 +315,14 @@ conditions=_info/lastUpdated>=[2026-01-01T00:00:00Z]
 
 ## Best Practices
 
-1. **SKU conventions matter** — pick a pattern (`VENDOR-PRODUCT-VARIANT`) and stick to it. Catalog bloat from inconsistent SKUs is the #1 reason CW quote selection gets painful.
-2. **Always set `productClass`** — default CW behavior when it's missing is rarely what MSPs want. Bundles and agreement items especially must be classified correctly or they won't expand / won't roll up MRR.
-3. **`subcategory` and `type` are required** — look them up first with `cw_list_catalog_subcategories` and cache the IDs. Don't hardcode.
-4. **Separate `description` from `customerDescription`** — internal SKU naming (short, searchable) vs customer-facing (descriptive, marketing-friendly).
-5. **Retire, don't delete** — set `inactiveFlag=true` instead of deleting. Historical quotes, tickets, and invoices reference the item by ID.
-6. **Bundle children must exist first** — create the component SKUs before the bundle parent, or the bundle creation will fail.
-7. **GL account (`ianCode`) on agreement items** — this is what flows to accounting. Missing `ianCode` on `Agreement` class items is a common source of bad financial reports.
-8. **Keep `cost` current** — margin reporting uses the catalog `cost` at quote time unless the quote has its own override. Stale cost = lying margin.
+1. **SKU conventions matter**  -  pick a pattern (`VENDOR-PRODUCT-VARIANT`) and stick to it. Catalog bloat from inconsistent SKUs is the #1 reason CW quote selection gets painful.
+2. **Always set `productClass`**  -  default CW behavior when it's missing is rarely what MSPs want. Bundles and agreement items especially must be classified correctly or they won't expand / won't roll up MRR.
+3. **`subcategory` and `type` are required**  -  look them up first with `cw_list_catalog_subcategories` and cache the IDs. Don't hardcode.
+4. **Separate `description` from `customerDescription`**  -  internal SKU naming (short, searchable) vs customer-facing (descriptive, marketing-friendly).
+5. **Retire, don't delete**  -  set `inactiveFlag=true` instead of deleting. Historical quotes, tickets, and invoices reference the item by ID.
+6. **Bundle children must exist first**  -  create the component SKUs before the bundle parent, or the bundle creation will fail.
+7. **GL account (`ianCode`) on agreement items**  -  this is what flows to accounting. Missing `ianCode` on `Agreement` class items is a common source of bad financial reports.
+8. **Keep `cost` current**  -  margin reporting uses the catalog `cost` at quote time unless the quote has its own override. Stale cost = lying margin.
 
 ## Pitfalls & Error Handling
 
@@ -339,6 +339,6 @@ conditions=_info/lastUpdated>=[2026-01-01T00:00:00Z]
 
 ## Related Skills
 
-- [ConnectWise Tickets](../tickets/SKILL.md) — using catalog items as ticket product charges
-- [ConnectWise Projects](../projects/SKILL.md) — phase products and project service items
-- [ConnectWise API Patterns](../api-patterns/SKILL.md) — query syntax, JSON Patch, pagination
+- [ConnectWise Tickets](../tickets/SKILL.md)  -  using catalog items as ticket product charges
+- [ConnectWise Projects](../projects/SKILL.md)  -  phase products and project service items
+- [ConnectWise API Patterns](../api-patterns/SKILL.md)  -  query syntax, JSON Patch, pagination

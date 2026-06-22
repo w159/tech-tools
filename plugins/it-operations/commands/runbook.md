@@ -81,6 +81,6 @@ If **~~ITSM** is connected:
 
 ## Tips
 
-1. **Be painfully specific** — "Run the script" is not a step. "Run `python sync.py --prod --dry-run` from the ops server" is.
-2. **Include failure modes** — What can go wrong at each step and what to do about it.
-3. **Test the runbook** — Have someone unfamiliar with the process follow it. Fix where they get stuck.
+1. **Be painfully specific**  -  "Run the script" is not a step. "Run `python sync.py --prod --dry-run` from the ops server" is.
+2. **Include failure modes**  -  What can go wrong at each step and what to do about it.
+3. **Test the runbook**  -  Have someone unfamiliar with the process follow it. Fix where they get stuck.

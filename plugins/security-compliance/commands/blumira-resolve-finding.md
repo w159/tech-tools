@@ -24,9 +24,9 @@ arguments:
 
 1. Call `blumira_findings_get` to confirm the finding exists and review its current status
 2. Map the resolution type argument to the numeric code:
-   - `valid` → 10
-   - `not-applicable` → 20
-   - `false-positive` → 30
+   - `valid` -> 10
+   - `not-applicable` -> 20
+   - `false-positive` -> 30
 3. Add an investigation comment with `blumira_findings_comments_add` documenting the resolution rationale
 4. Call `blumira_findings_resolve` with the finding ID, resolution type code, and notes
 5. Confirm resolution was successful

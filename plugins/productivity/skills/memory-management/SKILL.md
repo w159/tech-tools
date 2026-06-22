@@ -13,25 +13,25 @@ Transform shorthand into understanding:
 
 ```
 User: "ask todd to do the PSR for oracle"
-              ↓ Claude decodes
+              v Claude decodes
 "Ask Todd Martinez (Finance lead) to prepare the Pipeline Status Report
  for the Oracle Systems deal ($2.3M, closing Q2)"
 ```
 
 Without memory, that request is meaningless. With memory, Claude knows:
-- **todd** → Todd Martinez, Finance lead, prefers Slack
-- **PSR** → Pipeline Status Report (weekly sales doc)
-- **oracle** → Oracle Systems deal, not the company
+- **todd** -> Todd Martinez, Finance lead, prefers Slack
+- **PSR** -> Pipeline Status Report (weekly sales doc)
+- **oracle** -> Oracle Systems deal, not the company
 
 ## Architecture
 
 ```
-CLAUDE.md          ← Hot cache (~30 people, common terms)
+CLAUDE.md          <- Hot cache (~30 people, common terms)
 memory/
-  glossary.md      ← Full decoder ring (everything)
-  people/          ← Complete profiles
-  projects/        ← Project details
-  context/         ← Company, teams, tools
+  glossary.md      <- Full decoder ring (everything)
+  people/          <- Complete profiles
+  projects/        <- Project details
+  context/         <- Company, teams, tools
 ```
 
 **CLAUDE.md (Hot Cache):**
@@ -56,15 +56,15 @@ memory/
 User: "ask todd about the PSR for phoenix"
 
 1. Check CLAUDE.md (hot cache)
-   → Todd? ✓ Todd Martinez, Finance
-   → PSR? ✓ Pipeline Status Report
-   → Phoenix? ✓ DB migration project
+   -> Todd? [x] Todd Martinez, Finance
+   -> PSR? [x] Pipeline Status Report
+   -> Phoenix? [x] DB migration project
 
-2. If not found → search memory/glossary.md
-   → Full glossary has everyone/everything
+2. If not found -> search memory/glossary.md
+   -> Full glossary has everyone/everything
 
-3. If still not found → ask user
-   → "What does X mean? I'll remember it."
+3. If still not found -> ask user
+   -> "What does X mean? I'll remember it."
 ```
 
 This tiered approach keeps CLAUDE.md lean (~100 lines) while supporting unlimited scale in memory/.
@@ -90,7 +90,7 @@ Use tables for compactness. Target ~50-80 lines total.
 | **Todd** | Todd Martinez, Finance lead |
 | **Sarah** | Sarah Chen, Engineering (Platform) |
 | **Greg** | Greg Wilson, Sales |
-→ Full list: memory/glossary.md, profiles: memory/people/
+-> Full list: memory/glossary.md, profiles: memory/people/
 
 ## Terms
 | Term | Meaning |
@@ -98,14 +98,14 @@ Use tables for compactness. Target ~50-80 lines total.
 | PSR | Pipeline Status Report |
 | P0 | Drop everything priority |
 | standup | Daily 9am sync |
-→ Full glossary: memory/glossary.md
+-> Full glossary: memory/glossary.md
 
 ## Projects
 | Name | What |
 |------|------|
 | **Phoenix** | DB migration, Q2 launch |
 | **Horizon** | Mobile app redesign |
-→ Details: memory/projects/
+-> Details: memory/projects/
 
 ## Preferences
 - 25-min meetings with buffers
@@ -136,7 +136,7 @@ Workplace shorthand, acronyms, and internal language.
 | ship it | Deploy to production |
 | escalate | Loop in leadership |
 
-## Nicknames → Full Names
+## Nicknames -> Full Names
 | Nickname | Person |
 |----------|--------|
 | Todd | Todd Martinez (Finance) |
@@ -225,10 +225,10 @@ $1.2M budget, 6-month timeline. Critical path for Horizon project.
 **Always** decode shorthand before acting on requests:
 
 ```
-1. CLAUDE.md (hot cache)     → Check first, covers 90% of cases
-2. memory/glossary.md        → Full glossary if not in hot cache
-3. memory/people/, projects/ → Rich detail when needed
-4. Ask user                  → Unknown term? Learn it.
+1. CLAUDE.md (hot cache)     -> Check first, covers 90% of cases
+2. memory/glossary.md        -> Full glossary if not in hot cache
+3. memory/people/, projects/ -> Rich detail when needed
+4. Ask user                  -> Unknown term? Learn it.
 ```
 
 Example:
@@ -236,12 +236,12 @@ Example:
 User: "ask todd to do the PSR for oracle"
 
 CLAUDE.md lookup:
-  "todd" → Todd Martinez, Finance ✓
-  "PSR" → Pipeline Status Report ✓
-  "oracle" → (not in hot cache)
+  "todd" -> Todd Martinez, Finance [x]
+  "PSR" -> Pipeline Status Report [x]
+  "oracle" -> (not in hot cache)
 
 memory/glossary.md lookup:
-  "oracle" → Oracle Systems deal ($2.3M) ✓
+  "oracle" -> Oracle Systems deal ($2.3M) [x]
 
 Now Claude can act with full context.
 ```
@@ -306,7 +306,7 @@ Use `/productivity:start` to initialize by scanning your chat, calendar, email, 
 | Nickname | In Key People if top 30 | glossary.md (all nicknames) |
 | Company context | Quick reference only | context/company.md |
 | Preferences | All preferences | - |
-| Historical/stale | ✗ Remove | ✓ Keep in memory/ |
+| Historical/stale | [X] Remove | [x] Keep in memory/ |
 
 ## Promotion / Demotion
 

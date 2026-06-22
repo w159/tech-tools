@@ -26,15 +26,15 @@ Assign every ticket a **primary category** and optionally a **secondary category
 ### Category Determination Tips
 
 - If the customer reports **both** a bug and a feature request, the bug is primary
-- If they can't log in due to a bug, category is **Bug** (not Account) — root cause drives the category
+- If they can't log in due to a bug, category is **Bug** (not Account) - root cause drives the category
 - "It used to work and now it doesn't" = **Bug**
 - "I want it to work differently" = **Feature request**
 - "How do I make it work?" = **How-to**
-- When in doubt, lean toward **Bug** — it's better to investigate than dismiss
+- When in doubt, lean toward **Bug** - it's better to investigate than dismiss
 
 ## Priority Framework
 
-### P1 — Critical
+### P1 - Critical
 **Criteria:** Production system down, data loss or corruption, security breach, all or most users affected.
 
 - The customer cannot use the product at all
@@ -44,7 +44,7 @@ Assign every ticket a **primary category** and optionally a **secondary category
 
 **SLA expectation:** Respond within 1 hour. Continuous work until resolved or mitigated. Updates every 1-2 hours.
 
-### P2 — High
+### P2 - High
 **Criteria:** Major feature broken, significant workflow blocked, many users affected, no workaround.
 
 - A core workflow is broken but the product is partially usable
@@ -54,7 +54,7 @@ Assign every ticket a **primary category** and optionally a **secondary category
 
 **SLA expectation:** Respond within 4 hours. Active investigation same day. Updates every 4 hours.
 
-### P3 — Medium
+### P3 - Medium
 **Criteria:** Feature partially broken, workaround available, single user or small team affected.
 
 - A feature isn't working correctly but a workaround exists
@@ -64,7 +64,7 @@ Assign every ticket a **primary category** and optionally a **secondary category
 
 **SLA expectation:** Respond within 1 business day. Resolution or update within 3 business days.
 
-### P4 — Low
+### P4 - Low
 **Criteria:** Minor inconvenience, cosmetic issue, general question, feature request.
 
 - Cosmetic or UI issues that don't affect functionality
@@ -113,7 +113,7 @@ Before creating a new ticket or routing, check for duplicates:
 
 ## Auto-Response Templates by Category
 
-### Bug — Initial Response
+### Bug - Initial Response
 ```
 Thank you for reporting this. I can see how [specific impact]
 would be disruptive for your work.
@@ -125,7 +125,7 @@ can [workaround]."]
 I'll update you within [SLA timeframe] with what we find.
 ```
 
-### How-to — Initial Response
+### How-to - Initial Response
 ```
 Great question! [Direct answer or link to documentation]
 
@@ -136,9 +136,9 @@ Let me know if that helps, or if you have any follow-up
 questions.
 ```
 
-### Feature Request — Initial Response
+### Feature Request - Initial Response
 ```
-Thank you for this suggestion — I can see why [capability]
+Thank you for this suggestion - I can see why [capability]
 would be valuable for your workflow.
 
 I've documented this and shared it with our product team.
@@ -149,7 +149,7 @@ directly informs our roadmap priorities.
 [alternative] helpful for achieving something similar."]
 ```
 
-### Billing — Initial Response
+### Billing - Initial Response
 ```
 I understand billing issues need prompt attention. Let me
 look into this for you.
@@ -159,9 +159,9 @@ look into this for you.
 an answer for you within [timeframe]."]
 ```
 
-### Security — Initial Response
+### Security - Initial Response
 ```
-Thank you for flagging this — we take security concerns
+Thank you for flagging this - we take security concerns
 seriously and are reviewing this immediately.
 
 I've escalated this to our security team for investigation.
@@ -175,10 +175,10 @@ We'll follow up with you within [timeframe] with our findings.
 
 When triaging tickets:
 
-1. Read the full ticket before categorizing — context in later messages often changes the assessment
+1. Read the full ticket before categorizing - context in later messages often changes the assessment
 2. Categorize by **root cause**, not just the symptom described
-3. When in doubt on priority, err on the side of higher — it's easier to de-escalate than to recover from a missed SLA
+3. When in doubt on priority, err on the side of higher - it's easier to de-escalate than to recover from a missed SLA
 4. Always check for duplicates and known issues before routing
 5. Write internal notes that help the next person pick up context quickly
 6. Include what you've already checked or ruled out to avoid duplicate investigation
-7. Flag patterns — if you're seeing the same issue repeatedly, escalate the pattern even if individual tickets are low priority
+7. Flag patterns - if you're seeing the same issue repeatedly, escalate the pattern even if individual tickets are low priority

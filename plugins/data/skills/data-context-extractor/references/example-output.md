@@ -34,8 +34,8 @@ description: "ShopCo data analysis skill for Snowflake. Provides context for que
 - **Account**: A billing entity, can have multiple users in B2B (CORE.DIM_ACCOUNTS: account_id)
 
 **Relationships:**
-- User → Customer: 1:1 (customer_id = user_id for purchasers)
-- Account → User: 1:many (join on account_id)
+- User -> Customer: 1:1 (customer_id = user_id for purchasers)
+- Account -> User: 1:many (join on account_id)
 
 ---
 

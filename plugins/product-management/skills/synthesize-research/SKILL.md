@@ -46,7 +46,7 @@ For each source, extract:
 
 ### 3. Identify Themes and Patterns
 
-Apply thematic analysis — see **Research Synthesis Methodology** below for detailed guidance on thematic analysis, affinity mapping, and triangulation techniques.
+Apply thematic analysis - see **Research Synthesis Methodology** below for detailed guidance on thematic analysis, affinity mapping, and triangulation techniques.
 
 Group observations into themes, count frequency across participants, and assess impact severity. Note contradictions and surprises.
 
@@ -115,7 +115,7 @@ After generating the synthesis:
 The core method for synthesizing qualitative research:
 
 1. **Familiarization**: Read through all the data. Get a feel for the overall landscape before coding anything.
-2. **Initial coding**: Go through the data systematically. Tag each observation, quote, or data point with descriptive codes. Be generous with codes — it is easier to merge than to split later.
+2. **Initial coding**: Go through the data systematically. Tag each observation, quote, or data point with descriptive codes. Be generous with codes - it is easier to merge than to split later.
 3. **Theme development**: Group related codes into candidate themes. A theme captures something important about the data in relation to the research question.
 4. **Theme review**: Check themes against the data. Does each theme have sufficient evidence? Are themes distinct from each other? Do they tell a coherent story?
 5. **Theme refinement**: Define and name each theme clearly. Write a 1-2 sentence description of what each theme captures.
@@ -125,7 +125,7 @@ The core method for synthesizing qualitative research:
 A collaborative method for grouping observations:
 
 1. **Capture observations**: Write each distinct observation, quote, or data point as a separate note
-2. **Cluster**: Group related notes together based on similarity. Do not pre-define categories — let them emerge from the data.
+2. **Cluster**: Group related notes together based on similarity. Do not pre-define categories - let them emerge from the data.
 3. **Label clusters**: Give each cluster a descriptive name that captures the common thread
 4. **Organize clusters**: Arrange clusters into higher-level groups if patterns emerge
 5. **Identify themes**: The clusters and their relationships reveal the key themes
@@ -144,7 +144,7 @@ Strengthen findings by combining multiple data sources:
 - **Source triangulation**: Same method, different participants or segments
 - **Temporal triangulation**: Same observation at different points in time
 
-A finding supported by multiple sources and methods is much stronger than one supported by a single source. When sources disagree, that is interesting — it may reveal different user segments or contexts.
+A finding supported by multiple sources and methods is much stronger than one supported by a single source. When sources disagree, that is interesting - it may reveal different user segments or contexts.
 
 ## Interview Note Analysis
 
@@ -154,7 +154,7 @@ For each interview, identify:
 **Observations**: What did the participant describe doing, experiencing, or feeling?
 - Distinguish between behaviors (what they do) and attitudes (what they think/feel)
 - Note context: when, where, with whom, how often
-- Flag workarounds — these are unmet needs in disguise
+- Flag workarounds - these are unmet needs in disguise
 
 **Direct quotes**: Verbatim statements that powerfully illustrate a point
 - Good quotes are specific and vivid, not generic
@@ -194,7 +194,7 @@ After processing individual interviews:
 - Code each response with themes
 - Count frequency of themes across responses
 - Pull representative quotes for each theme
-- Look for themes that appear in open-ended responses but not in structured questions — these are things you did not think to ask about
+- Look for themes that appear in open-ended responses but not in structured questions - these are things you did not think to ask about
 
 ### Common Survey Analysis Mistakes
 - Reporting averages without distributions. A 3.5 average could mean everyone is lukewarm or half love it and half hate it.
@@ -239,7 +239,7 @@ Personas should emerge from research data, not imagination:
 
 ### Persona Template
 ```
-[Persona Name] — [One-line description]
+[Persona Name] - [One-line description]
 
 Who they are:
 - Role, company type/size, experience level
@@ -299,7 +299,7 @@ Score opportunities on a simple matrix:
 
 ## Output Format
 
-Use clear headers and structured formatting. Each finding should stand on its own — a reader should be able to read any single finding and understand it without reading the rest.
+Use clear headers and structured formatting. Each finding should stand on its own - a reader should be able to read any single finding and understand it without reading the rest.
 
 ## Tips
 

@@ -19,7 +19,7 @@ triggers:
 
 ## Overview
 
-Findings are Blumira's primary security detection unit — they represent threats, suspicious activity, or policy violations detected across your environment. This skill covers the full finding lifecycle from discovery through resolution.
+Findings are Blumira's primary security detection unit - they represent threats, suspicious activity, or policy violations detected across your environment. This skill covers the full finding lifecycle from discovery through resolution.
 
 ## Key Concepts
 
@@ -144,27 +144,27 @@ blumira_findings_list
 **Cause:** Invalid finding ID or finding not accessible in current org scope
 **Solution:** Verify the finding ID. If using MSP credentials, use `blumira_msp_findings_get` instead.
 
-### Cannot Resolve — Missing Resolution Type
+### Cannot Resolve - Missing Resolution Type
 
 **Cause:** Resolution type not provided or invalid
 **Solution:** Provide a valid resolution type: 10 (Valid), 20 (Not Applicable), or 30 (False Positive).
 
-### Cannot Assign — Invalid User
+### Cannot Assign - Invalid User
 
 **Cause:** User ID doesn't exist or isn't a member of the organization
 **Solution:** Use `blumira_users_list` to get valid user IDs.
 
 ## Best Practices
 
-- Always triage by severity: CRITICAL → HIGH → MEDIUM → LOW
+- Always triage by severity: CRITICAL -> HIGH -> MEDIUM -> LOW
 - Add comments before resolving to document the investigation trail
-- Use resolution types accurately — false positive tracking improves detection tuning
+- Use resolution types accurately - false positive tracking improves detection tuning
 - Filter by date range when reviewing historical findings to avoid overwhelming results
 - Assign findings to specific analysts for accountability
 
 ## Related Skills
 
-- [API Patterns](../api-patterns/SKILL.md) — Filtering and pagination
-- [Resolutions](../resolutions/SKILL.md) — Resolution types in depth
-- [Users](../users/SKILL.md) — Finding user IDs for assignment
-- [MSP](../msp/SKILL.md) — Cross-account finding management
+- [API Patterns](../api-patterns/SKILL.md) - Filtering and pagination
+- [Resolutions](../resolutions/SKILL.md) - Resolution types in depth
+- [Users](../users/SKILL.md) - Finding user IDs for assignment
+- [MSP](../msp/SKILL.md) - Cross-account finding management

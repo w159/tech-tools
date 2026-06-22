@@ -1,6 +1,6 @@
 ---
 name: spanning-license-utilization
-description: Audit Kaseya Spanning Backup seat utilization — find unused seats consumed by stale/offboarded users, predict when the org will run out, and produce a reclamation list. Use when user asks "how many seats are we using", "free up Spanning seats", or before a license renewal.
+description: Audit Kaseya Spanning Backup seat utilization  -  find unused seats consumed by stale/offboarded users, predict when the org will run out, and produce a reclamation list. Use when user asks "how many seats are we using", "free up Spanning seats", or before a license renewal.
 ---
 
 # License Utilization Audit (Kaseya Spanning Backup)

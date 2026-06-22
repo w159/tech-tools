@@ -1,6 +1,6 @@
 # Brand Guidelines Output Template
 
-The complete structure for generated brand voice guidelines. Fill each section based on discovered and analyzed sources. The following is a raw markdown template — copy and fill the sections below. Omit sections with no data rather than including empty placeholders.
+The complete structure for generated brand voice guidelines. Fill each section based on discovered and analyzed sources. The following is a raw markdown template  -  copy and fill the sections below. Omit sections with no data rather than including empty placeholders.
 
 # [Company Name] Brand Voice Guidelines
 
@@ -25,15 +25,15 @@ What is the core personality? How should content feel to the reader?]
 
 ## We Are / We Are Not
 
-The foundational brand identity anchor. Voice is constant — it doesn't change by channel or audience.
+The foundational brand identity anchor. Voice is constant  -  it doesn't change by channel or audience.
 
 | We Are | We Are Not |
 |--------|------------|
-| **[Attribute 1]** — [brief description] | **[Counter 1]** — [what to avoid] |
-| **[Attribute 2]** — [brief description] | **[Counter 2]** — [what to avoid] |
-| **[Attribute 3]** — [brief description] | **[Counter 3]** — [what to avoid] |
-| **[Attribute 4]** — [brief description] | **[Counter 4]** — [what to avoid] |
-| **[Attribute 5]** — [brief description] | **[Counter 5]** — [what to avoid] |
+| **[Attribute 1]**  -  [brief description] | **[Counter 1]**  -  [what to avoid] |
+| **[Attribute 2]**  -  [brief description] | **[Counter 2]**  -  [what to avoid] |
+| **[Attribute 3]**  -  [brief description] | **[Counter 3]**  -  [what to avoid] |
+| **[Attribute 4]**  -  [brief description] | **[Counter 4]**  -  [what to avoid] |
+| **[Attribute 5]**  -  [brief description] | **[Counter 5]**  -  [what to avoid] |
 
 ### Voice Attributes Detail
 
@@ -52,7 +52,7 @@ For each "We Are" attribute:
 
 ## Brand Personality
 
-- **Archetype**: [e.g., "The Expert Friend" — technically deep but never condescending]
+- **Archetype**: [e.g., "The Expert Friend"  -  technically deep but never condescending]
 - **If our brand were a person**: [brief personality sketch]
 - **Core values expressed in voice**: [list]
 
@@ -61,7 +61,7 @@ For each "We Are" attribute:
 ## Messaging Framework
 
 ### Primary Value Proposition
-[Core value statement — one sentence]
+[Core value statement  -  one sentence]
 
 Variations observed:
 - "[Variation 1]" (Source: [doc])
@@ -153,12 +153,12 @@ Voice is constant. Tone flexes by context. These three dimensions adjust:
 Ranked by effectiveness (from conversation analysis, if available):
 
 ### Top Phrases
-1. **"[Phrase]"** — Context: [when to use], Why it works: [analysis]
-2. **"[Phrase]"** — Context: [when to use], Why it works: [analysis]
+1. **"[Phrase]"**  -  Context: [when to use], Why it works: [analysis]
+2. **"[Phrase]"**  -  Context: [when to use], Why it works: [analysis]
 
 ### Questions That Engage
-1. **"[Question]"** — Leads to: [typical outcome]
-2. **"[Question]"** — Leads to: [typical outcome]
+1. **"[Question]"**  -  Leads to: [typical outcome]
+2. **"[Question]"**  -  Leads to: [typical outcome]
 
 ### Objection Handling Patterns
 1. **Objection**: "[common objection]"
@@ -170,8 +170,8 @@ Ranked by effectiveness (from conversation analysis, if available):
 ## Language to Avoid
 
 ### Anti-Patterns
-1. **"[Phrase/pattern]"** — Problem: [what happens], Better: "[alternative]"
-2. **"[Phrase/pattern]"** — Problem: [what happens], Better: "[alternative]"
+1. **"[Phrase/pattern]"**  -  Problem: [what happens], Better: "[alternative]"
+2. **"[Phrase/pattern]"**  -  Problem: [what happens], Better: "[alternative]"
 
 ---
 

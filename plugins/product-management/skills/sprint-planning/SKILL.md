@@ -1,6 +1,6 @@
 ---
 name: sprint-planning
-description: Plan a sprint — scope work, estimate capacity, set goals, and draft a sprint plan. Use when kicking off a new sprint, sizing a backlog against team availability (accounting for PTO and meetings), deciding what's P0 vs. stretch, or handling carryover from the last sprint.
+description: Plan a sprint - scope work, estimate capacity, set goals, and draft a sprint plan. Use when kicking off a new sprint, sizing a backlog against team availability (accounting for PTO and meetings), deciding what's P0 vs. stretch, or handling carryover from the last sprint.
 argument-hint: "[sprint name or date range]"
 ---
 
@@ -19,21 +19,21 @@ Plan a sprint by scoping work, estimating capacity, and setting clear goals.
 ## How It Works
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    SPRINT PLANNING                                 │
-├─────────────────────────────────────────────────────────────────┤
-│  STANDALONE (always works)                                       │
-│  ✓ Define sprint goals and success criteria                     │
-│  ✓ Estimate team capacity (accounting for PTO, meetings)        │
-│  ✓ Scope and prioritize backlog items                           │
-│  ✓ Identify dependencies and risks                              │
-│  ✓ Generate sprint plan document                                │
-├─────────────────────────────────────────────────────────────────┤
-│  SUPERCHARGED (when you connect your tools)                      │
-│  + Project tracker: Pull backlog, create sprint, assign items   │
-│  + Calendar: Account for PTO and meetings in capacity           │
-│  + Chat: Share sprint plan with the team                        │
-└─────────────────────────────────────────────────────────────────┘
++-----------------------------------------------------------------+
+|                    SPRINT PLANNING                              |
++-----------------------------------------------------------------+
+|  STANDALONE (always works)                                      |
+|  [OK] Define sprint goals and success criteria                  |
+|  [OK] Estimate team capacity (accounting for PTO, meetings)     |
+|  [OK] Scope and prioritize backlog items                        |
+|  [OK] Identify dependencies and risks                           |
+|  [OK] Generate sprint plan document                             |
++-----------------------------------------------------------------+
+|  SUPERCHARGED (when you connect your tools)                     |
+|  + Project tracker: Pull backlog, create sprint, assign items   |
+|  + Calendar: Account for PTO and meetings in capacity           |
+|  + Chat: Share sprint plan with the team                        |
++-----------------------------------------------------------------+
 ```
 
 ## What I Need From You
@@ -48,7 +48,7 @@ Plan a sprint by scoping work, estimating capacity, and setting clear goals.
 
 ```markdown
 ## Sprint Plan: [Sprint Name]
-**Dates:** [Start] — [End] | **Team:** [X] engineers
+**Dates:** [Start] - [End] | **Team:** [X] engineers
 **Sprint Goal:** [One clear sentence about what success looks like]
 
 ### Capacity
@@ -88,7 +88,7 @@ Plan a sprint by scoping work, estimating capacity, and setting clear goals.
 
 ## Tips
 
-1. **Leave buffer** — Plan to 70-80% capacity. You will get interrupts.
-2. **One clear sprint goal** — If you can't state it in one sentence, the sprint is unfocused.
-3. **Identify stretch items** — Know what to cut if things take longer than expected.
-4. **Carry over honestly** — If something didn't ship, understand why before re-committing.
+1. **Leave buffer** - Plan to 70-80% capacity. You will get interrupts.
+2. **One clear sprint goal** - If you can't state it in one sentence, the sprint is unfocused.
+3. **Identify stretch items** - Know what to cut if things take longer than expected.
+4. **Carry over honestly** - If something didn't ship, understand why before re-committing.

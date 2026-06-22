@@ -22,10 +22,10 @@ Execute a structured, safe Microsoft 365 offboarding workflow for a departing em
 
 ## Prerequisites
 
-- `Directory.ReadWrite.All` — revoke sessions, disable account
-- `User.ReadWrite.All` — update account properties
-- `MailboxSettings.ReadWrite` — configure auto-reply and forwarding
-- `Sites.ReadWrite.All` — OneDrive ownership transfer
+- `Directory.ReadWrite.All` - revoke sessions, disable account
+- `User.ReadWrite.All` - update account properties
+- `MailboxSettings.ReadWrite` - configure auto-reply and forwarding
+- `Sites.ReadWrite.All` - OneDrive ownership transfer
 
 ## Workflow Steps
 
@@ -73,7 +73,7 @@ Execute a structured, safe Microsoft 365 offboarding workflow for a departing em
 
 ### Phase 3: Data and Access
 
-7. **Check for Teams ownership** — list teams where user is sole owner
+7. **Check for Teams ownership** - list teams where user is sole owner
    ```http
    GET /v1.0/users/{id}/joinedTeams
    ```
@@ -101,21 +101,21 @@ Offboarding: Jane Smith (jsmith@contoso.com)
 Transfer to: Bob Manager (bmanager@contoso.com)
 
 Phase 1: Security
-  ✅ Sessions revoked (3 active sessions terminated)
-  ✅ Account disabled
-  ✅ Password reset
+  [OK] Sessions revoked (3 active sessions terminated)
+  [OK] Account disabled
+  [OK] Password reset
 
 Phase 2: Mailbox
-  ✅ Out-of-office set (internal + external)
-  ✅ Mailbox converted to shared
-  ✅ bmanager@contoso.com granted Full Access
+  [OK] Out-of-office set (internal + external)
+  [OK] Mailbox converted to shared
+  [OK] bmanager@contoso.com granted Full Access
 
 Phase 3: Data & Access
-  ⚠️  Teams: Jane is sole owner of "2024 Project Alpha" — reassign owner
-       → Suggested owner: Bob Manager
-  ✅ Removed from 4 other teams
-  ✅ OneDrive access granted to Bob Manager
-  ✅ Licenses removed: M365 Business Premium (1 seat freed)
+  [WARN]  Teams: Jane is sole owner of "2024 Project Alpha" - reassign owner
+       -> Suggested owner: Bob Manager
+  [OK] Removed from 4 other teams
+  [OK] OneDrive access granted to Bob Manager
+  [OK] Licenses removed: M365 Business Premium (1 seat freed)
 
 PENDING (manual actions required):
   - Assign new Teams owner for "2024 Project Alpha"
@@ -130,7 +130,7 @@ Offboarding complete: 4 automated | 3 require manual follow-up
 ```
 /offboard-user jsmith@contoso.com --dry-run true
 
-DRY RUN — No changes will be made
+DRY RUN - No changes will be made
 
 Would execute:
   1. POST /users/{id}/revokeSignInSessions
@@ -154,19 +154,19 @@ Manual steps required:
 User not found: "Jane"
 
 Did you mean:
-- Jane Smith (jsmith@contoso.com) — Active
-- Jane Adams (jadams@contoso.com) — Active
+- Jane Smith (jsmith@contoso.com) - Active
+- Jane Adams (jadams@contoso.com) - Active
 ```
 
 ### No Manager Set
 ```
-⚠️  No manager configured for this user.
+[WARN]  No manager configured for this user.
 Who should receive OneDrive access and mailbox forwarding?
 Enter UPN or name:
 ```
 
 ## Related Commands
 
-- `/get-user` — View current state before starting
-- `/check-mfa-status` — Post-offboarding audit
-- `/list-licenses` — Verify license was freed
+- `/get-user` - View current state before starting
+- `/check-mfa-status` - Post-offboarding audit
+- `/list-licenses` - Verify license was freed

@@ -30,7 +30,7 @@ Notion AI Search federates across connected sources (Google Drive, SharePoint, O
 - "social media guidelines"
 
 ### Tips
-- Notion AI Search returns results from connected sources — one search covers multiple platforms
+- Notion AI Search returns results from connected sources  -  one search covers multiple platforms
 - Search for the company name + "brand" to find company-specific guidelines
 - Check for databases titled "Brand Assets", "Marketing Resources", or "Content Library"
 - Look for pages tagged with "brand", "marketing", "style"
@@ -58,14 +58,14 @@ Enterprises often store official brand documentation in Confluence spaces.
 - "presentation template"
 
 ### Tips
-- Confluence spaces often have hierarchical page trees — find the brand root page and explore children
+- Confluence spaces often have hierarchical page trees  -  find the brand root page and explore children
 - Check for recently updated pages (brand guidelines evolve)
-- Look for pages with many watchers — indicates important shared content
+- Look for pages with many watchers  -  indicates important shared content
 - Search attachments for PDF brand guides uploaded to Confluence pages
 
 ## Box
 
-Cloud file storage — official brand documents, shared decks, and style guides frequently live here.
+Cloud file storage  -  official brand documents, shared decks, and style guides frequently live here.
 
 ### Query Patterns
 
@@ -109,7 +109,7 @@ Google Drive stores shared brand documents, marketing materials, and official st
 - "brand voice"
 
 ### Tips
-- Check shared drives — brand materials often live in team-wide shared drives
+- Check shared drives  -  brand materials often live in team-wide shared drives
 - Look for recently modified brand documents to find the latest version
 - Search by owner (marketing team members) to surface brand-owned content
 - Google Docs and Slides are common formats for living brand documents
@@ -139,7 +139,7 @@ Enterprise organizations often centralize brand documentation on SharePoint site
 - "style guide" shared with the organization
 
 ### Tips
-- Check marketing/communications SharePoint sites first — most common location for brand docs
+- Check marketing/communications SharePoint sites first  -  most common location for brand docs
 - Search document libraries for PDF brand guides and PowerPoint brand decks
 - Look for brand-tagged content using SharePoint metadata
 - OneDrive shared folders may contain working drafts of brand materials
@@ -167,10 +167,10 @@ Slack channels contain informal brand discussions, decisions, and evolving brand
 - Pinned items often contain approved brand resources or decisions
 
 ### Tips
-- Search #brand and #marketing channels first — most likely to contain brand discussions
-- Look for pinned messages — teams often pin brand guidelines and decisions
+- Search #brand and #marketing channels first  -  most likely to contain brand discussions
+- Look for pinned messages  -  teams often pin brand guidelines and decisions
 - Find brand discussion threads for context on brand evolution
-- Slack is a conversational source — ranks as CONVERSATIONAL tier in source triage
+- Slack is a conversational source  -  ranks as CONVERSATIONAL tier in source triage
 - Recent messages may reveal brand changes not yet documented formally
 
 ## Gong (Conversation Intelligence)
@@ -190,10 +190,10 @@ Sales call transcripts reveal how the brand actually communicates in practice.
 - Find calls where competitors are discussed (reveals positioning)
 
 ### Tips
-- Focus on successful calls — they represent brand voice that works
+- Focus on successful calls  -  they represent brand voice that works
 - Compare top performer language with average performer language
 - Look for consistent opening lines and closing patterns
-- Note objection handling language — reveals brand positioning under pressure
+- Note objection handling language  -  reveals brand positioning under pressure
 
 ## Granola (Meeting Intelligence)
 
@@ -212,7 +212,7 @@ Meeting notes and transcripts from the AI notepad for meetings.
 - Find meetings with key stakeholders (marketing leads, executives)
 
 ### Tips
-- Granola captures both meeting notes and transcripts — both are valuable
+- Granola captures both meeting notes and transcripts  -  both are valuable
 - Meeting notes often contain summarized brand decisions and action items
 - Look for recurring meeting series (weekly brand syncs, marketing standups)
 - Cross-reference Granola meeting notes with Gong call transcripts when both are available
@@ -263,9 +263,9 @@ Visual brand elements inform voice and tone indirectly.
 - Focus on content from the last 12 months for operational, conversational, and contextual sources
 - Only search further back when looking for explicit brand documents (style guides, brand books)
 - When results include older content, prefer the most recently updated version
-- Flag any non-AUTHORITATIVE source older than 12 months — it may reflect outdated positioning
+- Flag any non-AUTHORITATIVE source older than 12 months  -  it may reflect outdated positioning
 
 ### Handling No Results
 - If a platform returns zero results, try broader queries ("marketing", "sales")
 - Check if the platform is actually connected and authenticated
-- Note the gap in the discovery report — the absence of content on a platform is itself useful information
+- Note the gap in the discovery report  -  the absence of content on a platform is itself useful information

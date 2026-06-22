@@ -1,6 +1,6 @@
 # HR Plugin
 
-A people operations plugin primarily designed for [Cowork](https://claude.com/product/cowork), Anthropic's agentic desktop application — though it also works in Claude Code. Helps with recruiting, onboarding, performance management, policy guidance, and compensation analysis. Works with any HR team — standalone with your input, supercharged when you connect your HRIS, ATS, and other tools.
+A people operations plugin primarily designed for [Cowork](https://claude.com/product/cowork), Anthropic's agentic desktop application - though it also works in Claude Code. Helps with recruiting, onboarding, performance management, policy guidance, and compensation analysis. Works with any HR team - standalone with your input, supercharged when you connect your HRIS, ATS, and other tools.
 
 ## Installation
 
@@ -16,9 +16,9 @@ Explicit workflows you invoke with a slash command:
 |---|---|
 | `/draft-offer` | Draft an offer letter with compensation details, start date, and terms |
 | `/onboarding` | Generate an onboarding checklist and first-week plan for a new hire |
-| `/performance-review` | Structure a performance review — self-assessment prompts, manager template, calibration prep |
-| `/policy-lookup` | Find and explain company policies — PTO, benefits, expense, travel, remote work |
-| `/comp-analysis` | Analyze compensation data — benchmarking, band placement, equity refresh modeling |
+| `/performance-review` | Structure a performance review - self-assessment prompts, manager template, calibration prep |
+| `/policy-lookup` | Find and explain company policies - PTO, benefits, expense, travel, remote work |
+| `/comp-analysis` | Analyze compensation data - benchmarking, band placement, equity refresh modeling |
 | `/people-report` | Generate headcount, attrition, diversity, or org health reports |
 
 All commands work **standalone** (provide context and details) and get **supercharged** with MCP connectors.
@@ -29,12 +29,12 @@ Domain knowledge Claude uses automatically when relevant:
 
 | Skill | Description |
 |---|---|
-| `recruiting-pipeline` | Track and manage recruiting pipeline — source, screen, interview, offer stages |
+| `recruiting-pipeline` | Track and manage recruiting pipeline - source, screen, interview, offer stages |
 | `employee-handbook` | Answer questions about company policies, benefits, and procedures |
-| `compensation-benchmarking` | Benchmark compensation against market data — base, equity, total comp |
+| `compensation-benchmarking` | Benchmark compensation against market data - base, equity, total comp |
 | `org-planning` | Headcount planning, org design, and team structure optimization |
-| `people-analytics` | Analyze workforce data — attrition trends, engagement signals, diversity metrics |
-| `interview-prep` | Create structured interview plans — competency-based questions, scorecards, debrief templates |
+| `people-analytics` | Analyze workforce data - attrition trends, engagement signals, diversity metrics |
+| `interview-prep` | Create structured interview plans - competency-based questions, scorecards, debrief templates |
 
 ## Example Workflows
 

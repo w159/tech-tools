@@ -9,7 +9,7 @@ compatibility: Requires Cowork desktop app environment with access to mounted pl
 
 # Cowork Plugin Customization
 
-Customize a plugin for a specific organization — either by setting up a generic plugin template for the first time, or by tweaking and refining an already-configured plugin.
+Customize a plugin for a specific organization  -  either by setting up a generic plugin template for the first time, or by tweaking and refining an already-configured plugin.
 
 > **Finding the plugin**: To find the plugin's source files, run `find mnt/.local-plugins mnt/.plugins -type d -name "*<plugin-name>*"` to locate the plugin directory, then read its files to understand its structure before making changes. If you cannot find the plugin directory, the user is likely running this conversation in a remote container. Abort and let them know: "Customizing plugins is currently only available in the desktop app's Cowork mode."
 
@@ -19,11 +19,11 @@ After locating the plugin, check for `~~`-prefixed placeholders: `grep -rn '~~\w
 
 > **Default rule**: If `~~` placeholders exist, default to **Generic plugin setup** unless the user explicitly asks to customize a specific part of the plugin.
 
-**1. Generic plugin setup** — The plugin contains `~~`-prefixed placeholders. These are customization points in a template that need to be replaced with real values (e.g., `~~Jira` → `Asana`, `~~your-team-channel` → `#engineering`).
+**1. Generic plugin setup**  -  The plugin contains `~~`-prefixed placeholders. These are customization points in a template that need to be replaced with real values (e.g., `~~Jira` -> `Asana`, `~~your-team-channel` -> `#engineering`).
 
-**2. Scoped customization** — No `~~` placeholders exist, and the user asked to customize a specific part of the plugin (e.g., "customize the connectors", "update the standup command", "change the ticket tool"). Read the plugin files to find the relevant section(s) and focus only on those. Do not scan the entire plugin or present unrelated customization items.
+**2. Scoped customization**  -  No `~~` placeholders exist, and the user asked to customize a specific part of the plugin (e.g., "customize the connectors", "update the standup command", "change the ticket tool"). Read the plugin files to find the relevant section(s) and focus only on those. Do not scan the entire plugin or present unrelated customization items.
 
-**3. General customization** — No `~~` placeholders exist, and the user wants to modify the plugin broadly. Read the plugin's files to understand its current configuration, then ask the user what they'd like to change.
+**3. General customization**  -  No `~~` placeholders exist, and the user wants to modify the plugin broadly. Read the plugin's files to understand its current configuration, then ask the user what they'd like to change.
 
 > **Important**: Never change the name of the plugin or skill being customized. Do not rename directories, files, or the plugin/skill name fields.
 
@@ -33,10 +33,10 @@ After locating the plugin, check for `~~`-prefixed placeholders: `grep -rn '~~\w
 
 ### Phase 0: Gather User Intent (scoped and general customization only)
 
-For **scoped customization** and **general customization** (not generic plugin setup), check whether the user provided free-form context alongside their request (e.g., "customize the standup command — we do async standups in #eng-updates every morning").
+For **scoped customization** and **general customization** (not generic plugin setup), check whether the user provided free-form context alongside their request (e.g., "customize the standup command  -  we do async standups in #eng-updates every morning").
 
-- **If the user provided context**: Record it and use it to pre-fill answers in Phase 3 — skip asking questions that the user already answered here.
-- **If the user did not provide context**: Ask a single open-ended question using AskUserQuestion before proceeding. Tailor the question to what they asked to customize — e.g., "What changes do you have in mind for the brief command?" or "What would you like to change about how this plugin works?" Keep it short and specific to their request.
+- **If the user provided context**: Record it and use it to pre-fill answers in Phase 3  -  skip asking questions that the user already answered here.
+- **If the user did not provide context**: Ask a single open-ended question using AskUserQuestion before proceeding. Tailor the question to what they asked to customize  -  e.g., "What changes do you have in mind for the brief command?" or "What would you like to change about how this plugin works?" Keep it short and specific to their request.
 
   Use their response (if any) as additional context throughout the remaining phases.
 
@@ -51,9 +51,9 @@ Use company-internal knowledge MCPs to collect information relevant to the custo
 - Configuration values (workspace IDs, project names, team identifiers)
 
 **Sources to search:**
-1. **Chat/Slack MCPs** — tool mentions, integrations, workflow discussions
-2. **Document MCPs** — onboarding docs, tool guides, setup instructions
-3. **Email MCPs** — license notifications, admin emails, setup invitations
+1. **Chat/Slack MCPs**  -  tool mentions, integrations, workflow discussions
+2. **Document MCPs**  -  onboarding docs, tool guides, setup instructions
+3. **Email MCPs**  -  license notifications, admin emails, setup invitations
 
 Record all findings for use in Phase 3.
 
@@ -76,13 +76,13 @@ Work through each item using context from Phase 0 and Phase 1.
 
 **If the user's free-form input (Phase 0) or knowledge MCPs (Phase 1) provided a clear answer**: Apply directly without confirmation.
 
-**Otherwise**: Use AskUserQuestion. Don't assume "industry standard" defaults are correct — if neither the user's input nor knowledge MCPs provided a specific answer, ask. Note: AskUserQuestion always includes a Skip button and a free-text input box for custom answers, so do not include `None` or `Other` as options.
+**Otherwise**: Use AskUserQuestion. Don't assume "industry standard" defaults are correct  -  if neither the user's input nor knowledge MCPs provided a specific answer, ask. Note: AskUserQuestion always includes a Skip button and a free-text input box for custom answers, so do not include `None` or `Other` as options.
 
 **Types of changes:**
 
-1. **Placeholder replacements** (generic setup): `~~Jira` → `Asana`, `~~your-org-channel` → `#engineering`
+1. **Placeholder replacements** (generic setup): `~~Jira` -> `Asana`, `~~your-org-channel` -> `#engineering`
 2. **Content updates**: Modifying instructions, commands, workflows, or references to match the organization
-3. **URL pattern updates**: `tickets.example.com/your-team/123` → `app.asana.com/0/PROJECT_ID/TASK_ID`
+3. **URL pattern updates**: `tickets.example.com/your-team/123` -> `app.asana.com/0/PROJECT_ID/TASK_ID`
 4. **Configuration values**: Workspace IDs, project names, team identifiers
 
 If user doesn't know or skips, leave the value unchanged (or the `~~`-prefixed placeholder, for generic setup).
@@ -93,10 +93,10 @@ After customization items have been resolved, connect MCPs for any tools that we
 
 For each tool identified during customization:
 1. Search the registry: `search_mcp_registry(keywords=[...])` using category keywords from `references/mcp-servers.md`, or search for the specific tool name if already known
-2. If unconnected: `suggest_connectors(directoryUuids=["chosen-uuid"])` — user completes auth
+2. If unconnected: `suggest_connectors(directoryUuids=["chosen-uuid"])`  -  user completes auth
 3. Update the plugin's MCP config file (check `plugin.json` for custom location, otherwise `.mcp.json` at root)
 
-Collect all MCP results and present them together in the summary output (see below) — don't present MCPs one at a time during this phase.
+Collect all MCP results and present them together in the summary output (see below)  -  don't present MCPs one at a time during this phase.
 
 ## Packaging the Plugin
 
@@ -110,7 +110,7 @@ After all customizations are applied, package the plugin as a `.plugin` file for
 
 > **Important**: Always create the zip in `/tmp/` first, then copy to the outputs folder. Writing directly to the outputs folder may fail due to permissions and leave behind temporary files.
 
-> **Naming**: Use the original plugin directory name for the `.plugin` file (e.g., if the plugin directory is `coder`, the output file should be `coder.plugin`). Do not rename the plugin or its files during customization — only replace placeholder values and update content.
+> **Naming**: Use the original plugin directory name for the `.plugin` file (e.g., if the plugin directory is `coder`, the output file should be `coder.plugin`). Do not rename the plugin or its files during customization  -  only replace placeholder values and update content.
 
 ## Summary Output
 
@@ -135,6 +135,6 @@ If no knowledge MCPs were available in Phase 1, and the user had to answer at le
 
 ## Additional Resources
 
-- **`references/mcp-servers.md`** — MCP discovery workflow, category-to-keywords mapping, config file locations
-- **`references/search-strategies.md`** — Knowledge MCP query patterns for finding tool names and org values
-- **`examples/customized-mcp.json`** — Example fully configured `.mcp.json`
+- **`references/mcp-servers.md`**  -  MCP discovery workflow, category-to-keywords mapping, config file locations
+- **`references/search-strategies.md`**  -  Knowledge MCP query patterns for finding tool names and org values
+- **`examples/customized-mcp.json`**  -  Example fully configured `.mcp.json`

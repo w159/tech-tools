@@ -5,11 +5,11 @@ description: >
 
   BOOTSTRAP MODE - Triggers: "Create a data context skill", "Set up data analysis for our warehouse",
   "Help me create a skill for our database", "Generate a data skill for [company]"
-  → Discovers schemas, asks key questions, generates initial skill with reference files
+  -> Discovers schemas, asks key questions, generates initial skill with reference files
 
   ITERATION MODE - Triggers: "Add context about [domain]", "The skill needs more info about [topic]",
   "Update the data skill with [metrics/tables/terminology]", "Improve the [domain] reference"
-  → Loads existing skill, asks targeted questions, appends/updates reference files
+  -> Loads existing skill, asks targeted questions, appends/updates reference files
 
   Use when data analysts want Claude to understand their company's specific data warehouse,
   terminology, metrics definitions, and common query patterns.
@@ -92,7 +92,7 @@ Listen for:
 > "What are the 2-3 metrics people ask about most? How is each one calculated?"
 
 Listen for:
-- Exact formulas (ARR = monthly_revenue × 12)
+- Exact formulas (ARR = monthly_revenue x 12)
 - Which tables/columns feed each metric
 - Time period conventions (trailing 7 days, calendar month, etc.)
 
@@ -119,14 +119,14 @@ Create a skill with this structure:
 
 ```
 [company]-data-analyst/
-├── SKILL.md
-└── references/
-    ├── entities.md          # Entity definitions and relationships
-    ├── metrics.md           # KPI calculations
-    ├── tables/              # One file per domain
-    │   ├── [domain1].md
-    │   └── [domain2].md
-    └── dashboards.json      # Optional: existing dashboards catalog
++-- SKILL.md
++-- references/
+    +-- entities.md          # Entity definitions and relationships
+    +-- metrics.md           # KPI calculations
+    +-- tables/              # One file per domain
+    |   +-- [domain1].md
+    |   +-- [domain2].md
+    +-- dashboards.json      # Optional: existing dashboards catalog
 ```
 
 **SKILL.md Template**: See `references/skill-template.md`

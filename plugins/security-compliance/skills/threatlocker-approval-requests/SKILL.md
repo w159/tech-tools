@@ -2,7 +2,7 @@
 name: threatlocker-approval-requests
 description: >
   Use this skill when triaging ThreatLocker application approval
-  requests — the heart of day-to-day ThreatLocker operations. Covers
+  requests - the heart of day-to-day ThreatLocker operations. Covers
   pulling the pending queue, grouping requests by application/hash,
   applying signed-publisher heuristics, and recommending approve/deny
   decisions with audit-friendly reasoning.
@@ -23,7 +23,7 @@ triggers:
 
 Approval requests are how ThreatLocker users ask for an application
 that's currently being blocked to be permitted. Each request carries
-rich context — file path, hash, signer, the user who asked, the
+rich context - file path, hash, signer, the user who asked, the
 computer it ran on, and a free-text justification. Triaging this queue
 well is the difference between a productive ThreatLocker deployment
 and a frustrated client.
@@ -36,7 +36,7 @@ and a frustrated client.
 threatlocker_approvals_list
 ```
 
-POST-based `GetByParameters` — see `api-patterns`. Useful filters via
+POST-based `GetByParameters` - see `api-patterns`. Useful filters via
 `searchText`: file name, application name, requester user, computer
 name. Each request typically includes:
 
@@ -44,7 +44,7 @@ name. Each request typically includes:
 - `signer` (Authenticode publisher), `signerVerified` boolean
 - `requesterUser`, `computerName`, `computerId`, `organizationName`
 - `justification` (free-text from the user), `dateRequested`
-- `status` — `Pending`, `Approved`, or `Denied`
+- `status` - `Pending`, `Approved`, or `Denied`
 
 ### Get Approval Request
 
@@ -52,7 +52,7 @@ name. Each request typically includes:
 threatlocker_approvals_get
 ```
 
-Full detail for one request — includes additional context like the
+Full detail for one request - includes additional context like the
 specific policy that blocked it and any prior history of the same hash.
 
 ### Pending Count
@@ -61,7 +61,7 @@ specific policy that blocked it and any prior history of the same hash.
 threatlocker_approvals_pending_count
 ```
 
-Cheap call — returns the size of the pending queue. Use this as the
+Cheap call - returns the size of the pending queue. Use this as the
 opening move every shift to know whether you have 3 requests or 300.
 
 ### Get Permit Application Detail
@@ -71,7 +71,7 @@ threatlocker_approvals_get_permit_application
 ```
 
 Returns the application that *would be permitted* if the request is
-approved — including which group(s) the approval would scope to and
+approved - including which group(s) the approval would scope to and
 what other endpoints would be affected. Always check this before
 approving anything that looks like it could have a wider blast radius
 than expected.
@@ -80,10 +80,10 @@ than expected.
 
 ### Daily Queue Triage
 
-1. `threatlocker_approvals_pending_count` — sets expectations.
+1. `threatlocker_approvals_pending_count` - sets expectations.
 2. `threatlocker_approvals_list` with `status: "Pending"`,
    `orderBy: "dateRequested"`, `isAscending: true` (oldest first).
-3. Group results by `fileHash` — many requests are duplicates of the
+3. Group results by `fileHash` - many requests are duplicates of the
    same binary asked for from multiple endpoints. Decide once, apply
    broadly.
 4. Within each hash, classify (see heuristics below).
@@ -113,13 +113,13 @@ Signals that warrant **needs-review** or **deny**:
   many requests.
 - Hash has been denied previously, especially with a security reason.
 
-Hard escalation triggers — surface to a senior analyst:
+Hard escalation triggers - surface to a senior analyst:
 
 - Known LOLBin (`certutil`, `mshta`, `bitsadmin`) requested from a
   user-writable path.
 - RAT/remote-tool installer (`AnyDesk`, `ConnectWise Control`,
   `ScreenConnect`) requested by an end user rather than IT.
-- Phishing dropper indicators — Office macros, ISO-mounted shortcuts,
+- Phishing dropper indicators - Office macros, ISO-mounted shortcuts,
   HTA files.
 
 ### Bulk Approve Pattern
@@ -127,7 +127,7 @@ Hard escalation triggers — surface to a senior analyst:
 When a single hash appears across many requests:
 
 1. Pick one representative request and review fully.
-2. Approve via the application — the resulting policy will cover all
+2. Approve via the application - the resulting policy will cover all
    endpoints in the chosen group.
 3. The other pending requests for the same hash typically resolve
    automatically once the application is permitted at group scope.
@@ -135,23 +135,23 @@ When a single hash appears across many requests:
 
 ## Edge Cases
 
-- **Vendor binaries with broken signatures** — Newer versions of some
+- **Vendor binaries with broken signatures** - Newer versions of some
   legitimate apps occasionally ship with signature timing issues.
   Verify the hash with VirusTotal or the vendor before approving an
   unsigned binary that *should* be signed.
-- **Self-signed installers** — Common in line-of-business apps.
+- **Self-signed installers** - Common in line-of-business apps.
   Approve on hash, not signer.
-- **Stale requests** — A request older than 30 days where the user has
+- **Stale requests** - A request older than 30 days where the user has
   since left the org should usually be denied with a "stale request"
   reason.
-- **Status transitions** — A request in `Approved`/`Denied` is
+- **Status transitions** - A request in `Approved`/`Denied` is
   terminal; do not attempt to re-process it. Filter to `Pending` only.
 
 ## Best Practices
 
-- Always document a one-line reason on every decision — the audit log
+- Always document a one-line reason on every decision - the audit log
   is your defense if a policy change ever needs review.
-- Approve at the application level (hash + signer), not file path —
+- Approve at the application level (hash + signer), not file path --
   paths drift, hashes don't.
 - Re-check the queue immediately after a bulk approve to confirm
   duplicate requests resolved.
@@ -160,9 +160,9 @@ When a single hash appears across many requests:
 
 ## Related Skills
 
-- [api-patterns](../api-patterns/SKILL.md) — Auth and pagination
-- [audit-log](../audit-log/SKILL.md) — Behavior of binaries before
+- [api-patterns](../api-patterns/SKILL.md) - Auth and pagination
+- [audit-log](../audit-log/SKILL.md) - Behavior of binaries before
   approval decisions
-- [computers](../computers/SKILL.md) — Endpoint context for requests
-- [computer-groups](../computer-groups/SKILL.md) — Policy scope of
+- [computers](../computers/SKILL.md) - Endpoint context for requests
+- [computer-groups](../computer-groups/SKILL.md) - Policy scope of
   the resulting permit

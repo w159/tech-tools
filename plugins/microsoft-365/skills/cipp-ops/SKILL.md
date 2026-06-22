@@ -1,6 +1,6 @@
 ---
 name: "cipp-ops"
-description: "Use this skill when working with CIPP operational tooling — GDAP role and invite management, scheduled tasks, server health checks, version reporting, and CIPP application logs. Covers the meta-layer: keeping CIPP itself healthy and properly delegated to managed tenants."
+description: "Use this skill when working with CIPP operational tooling - GDAP role and invite management, scheduled tasks, server health checks, version reporting, and CIPP application logs. Covers the meta-layer: keeping CIPP itself healthy and properly delegated to managed tenants."
 when_to_use: "When checking GDAP delegation status, managing scheduled CIPP tasks, verifying CIPP server health, or reading CIPP application logs"
 triggers:
   - gdap
@@ -16,7 +16,7 @@ triggers:
 
 # CIPP Operations
 
-The meta-layer — tools for managing CIPP itself rather than the tenants it manages. GDAP for the delegation chain, scheduler for recurring jobs, and health/version/log endpoints for verifying CIPP is reachable and functioning.
+The meta-layer - tools for managing CIPP itself rather than the tenants it manages. GDAP for the delegation chain, scheduler for recurring jobs, and health/version/log endpoints for verifying CIPP is reachable and functioning.
 
 ## GDAP
 
@@ -26,7 +26,7 @@ The meta-layer — tools for managing CIPP itself rather than the tenants it man
 cipp_list_gdap_roles()
 ```
 
-Returns the GDAP (Granular Delegated Admin Privileges) role definitions available — the AAD roles your CSP relationship can grant to your MSP technicians per-tenant.
+Returns the GDAP (Granular Delegated Admin Privileges) role definitions available - the AAD roles your CSP relationship can grant to your MSP technicians per-tenant.
 
 ### `cipp_list_gdap_invites`
 
@@ -34,7 +34,7 @@ Returns the GDAP (Granular Delegated Admin Privileges) role definitions availabl
 cipp_list_gdap_invites()
 ```
 
-Returns pending GDAP relationship invites that customers have not yet accepted. Stale invites > 14 days are usually customers who lost the email — re-send via the CIPP UI.
+Returns pending GDAP relationship invites that customers have not yet accepted. Stale invites > 14 days are usually customers who lost the email - re-send via the CIPP UI.
 
 GDAP is the modern replacement for AOBO/DAP. Each invite grants the MSP partner tenant a specific set of AAD roles in the customer tenant for a fixed duration. CIPP relies on active GDAP relationships for nearly every multi-tenant operation; broken GDAP = silent failures across the rest of the toolkit.
 
@@ -60,7 +60,7 @@ Creates a new scheduled task in CIPP. Use cases:
 - Schedule an end-of-quarter offboarding cleanup
 - Run a recurring CSP license reconciliation
 
-Pick `recurrence` deliberately — CIPP doesn't dedupe scheduled items, so re-running this tool with the same name creates a duplicate.
+Pick `recurrence` deliberately - CIPP doesn't dedupe scheduled items, so re-running this tool with the same name creates a duplicate.
 
 ## Health & diagnostics
 
@@ -70,7 +70,7 @@ Pick `recurrence` deliberately — CIPP doesn't dedupe scheduled items, so re-ru
 cipp_ping()
 ```
 
-Liveness probe for the CIPP API. Returns immediately if CIPP is reachable. First call when troubleshooting "tools aren't working" — separates "MCP can't reach CIPP" from "CIPP can't reach Microsoft."
+Liveness probe for the CIPP API. Returns immediately if CIPP is reachable. First call when troubleshooting "tools aren't working" - separates "MCP can't reach CIPP" from "CIPP can't reach Microsoft."
 
 ### `cipp_get_version`
 
@@ -104,20 +104,20 @@ If any are unhealthy, halt the bulk operation. Bulk standards deployments or use
 
 Run weekly:
 
-1. `cipp_list_gdap_invites` — chase pending > 14 days
-2. Compare `cipp_list_tenants` against expected onboarded list — gaps usually mean revoked GDAP
-3. `cipp_list_gdap_roles` — verify the MSP role template hasn't been altered (drift here breaks fine-grained access)
+1. `cipp_list_gdap_invites` - chase pending > 14 days
+2. Compare `cipp_list_tenants` against expected onboarded list - gaps usually mean revoked GDAP
+3. `cipp_list_gdap_roles` - verify the MSP role template hasn't been altered (drift here breaks fine-grained access)
 
 ### Diagnosing a failing tool call
 
 When any other CIPP tool returns an error:
 
-1. `cipp_ping` — is CIPP reachable at all?
-2. `cipp_get_version` — is it the version you think it is?
-3. `cipp_list_logs(severity='error', count=50)` — what does CIPP itself report?
-4. Check `cipp_list_gdap_invites` and the affected tenant in `cipp_list_tenants` — broken GDAP is the #1 cause of partial failures.
+1. `cipp_ping` - is CIPP reachable at all?
+2. `cipp_get_version` - is it the version you think it is?
+3. `cipp_list_logs(severity='error', count=50)` - what does CIPP itself report?
+4. Check `cipp_list_gdap_invites` and the affected tenant in `cipp_list_tenants` - broken GDAP is the #1 cause of partial failures.
 
 ## Caveats
 
-- `cipp_add_scheduled_item` doesn't validate the `command` parameter against CIPP's known job types — typos create scheduled items that fail silently. Verify with `cipp_list_scheduled_items` after creation.
-- `cipp_list_logs` is bounded by what CIPP itself retains — for long-term log retention, ship CIPP logs to an external SIEM via the CIPP integrations panel.
+- `cipp_add_scheduled_item` doesn't validate the `command` parameter against CIPP's known job types - typos create scheduled items that fail silently. Verify with `cipp_list_scheduled_items` after creation.
+- `cipp_list_logs` is bounded by what CIPP itself retains - for long-term log retention, ship CIPP logs to an external SIEM via the CIPP integrations panel.

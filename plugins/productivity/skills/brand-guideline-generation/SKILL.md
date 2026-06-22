@@ -13,7 +13,7 @@ description: >
 
 # Guideline Generation
 
-Generate comprehensive, LLM-ready brand voice guidelines from any combination of sources — brand documents, sales call transcripts, discovery reports, or direct user input. Transform raw materials into structured, enforceable guidelines with confidence scoring and open questions.
+Generate comprehensive, LLM-ready brand voice guidelines from any combination of sources  -  brand documents, sales call transcripts, discovery reports, or direct user input. Transform raw materials into structured, enforceable guidelines with confidence scoring and open questions.
 
 ## Inputs
 
@@ -23,7 +23,7 @@ Accept any combination of:
 - **Conversation transcripts** from Gong, Granola, manual uploads, or Notion meeting notes
 - **Direct user input** about their brand voice and values
 
-When a discovery report is provided, use it as the primary input — sources are already triaged and ranked. Supplement with additional analysis as needed.
+When a discovery report is provided, use it as the primary input  -  sources are already triaged and ranked. Supplement with additional analysis as needed.
 
 ## Generation Workflow
 
@@ -46,18 +46,18 @@ Determine what the user has provided. If no sources are available:
 
 Merge all findings into a unified guideline document following the template in `references/guideline-template.md`. Key sections:
 
-**"We Are / We Are Not" Table** — The core brand identity anchor:
+**"We Are / We Are Not" Table**  -  The core brand identity anchor:
 
 | We Are | We Are Not |
 |--------|------------|
-| [Attribute — e.g., "Confident"] | [Counter — e.g., "Arrogant"] |
-| [Attribute — e.g., "Approachable"] | [Counter — e.g., "Casual or sloppy"] |
+| [Attribute  -  e.g., "Confident"] | [Counter  -  e.g., "Arrogant"] |
+| [Attribute  -  e.g., "Approachable"] | [Counter  -  e.g., "Casual or sloppy"] |
 
 Derive attributes from the most consistent patterns across sources. Each row should have supporting evidence.
 
-**Voice Constants vs. Tone Flexes** — Clarify what stays fixed and what adapts:
-- **Voice** = personality, values, "We Are / We Are Not" — constant across all content
-- **Tone** = formality, energy, technical depth — flexes by context
+**Voice Constants vs. Tone Flexes**  -  Clarify what stays fixed and what adapts:
+- **Voice** = personality, values, "We Are / We Are Not"  -  constant across all content
+- **Tone** = formality, energy, technical depth  -  flexes by context
 
 **Tone-by-Context Matrix:**
 
@@ -88,7 +88,7 @@ Generate open questions for any ambiguity that cannot be resolved:
    - Need from you: [specific decision or confirmation needed]
 ```
 
-Every open question MUST include an agent recommendation. Turn ambiguity into "confirm or override" — never a dead end.
+Every open question MUST include an agent recommendation. Turn ambiguity into "confirm or override"  -  never a dead end.
 
 ### 6. Quality Check
 
@@ -137,5 +137,5 @@ Enforce these privacy constraints throughout the entire generation workflow, not
 
 ## Reference Files
 
-- **`references/guideline-template.md`** — Complete output template with all sections, field definitions, and formatting guidance
-- **`references/confidence-scoring.md`** — Confidence scoring methodology, thresholds, and examples
+- **`references/guideline-template.md`**  -  Complete output template with all sections, field definitions, and formatting guidance
+- **`references/confidence-scoring.md`**  -  Confidence scoring methodology, thresholds, and examples

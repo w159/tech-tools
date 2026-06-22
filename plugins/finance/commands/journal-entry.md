@@ -19,13 +19,13 @@ Prepare journal entries with proper debits, credits, supporting detail, and revi
 
 ### Arguments
 
-- `type` — The journal entry type. One of:
-  - `ap-accrual` — Accounts payable accruals for goods/services received but not yet invoiced
-  - `fixed-assets` — Depreciation and amortization entries for fixed assets and intangibles
-  - `prepaid` — Amortization of prepaid expenses (insurance, software, rent, etc.)
-  - `payroll` — Payroll accruals including salaries, benefits, taxes, and bonus accruals
-  - `revenue` — Revenue recognition entries including deferred revenue adjustments
-- `period` — The accounting period (e.g., `2024-12`, `2024-Q4`, `2024`)
+- `type` - The journal entry type. One of:
+  - `ap-accrual` - Accounts payable accruals for goods/services received but not yet invoiced
+  - `fixed-assets` - Depreciation and amortization entries for fixed assets and intangibles
+  - `prepaid` - Amortization of prepaid expenses (insurance, software, rent, etc.)
+  - `payroll` - Payroll accruals including salaries, benefits, taxes, and bonus accruals
+  - `revenue` - Revenue recognition entries including deferred revenue adjustments
+- `period` - The accounting period (e.g., `2024-12`, `2024-Q4`, `2024`)
 
 ## Workflow
 
@@ -64,7 +64,7 @@ Based on the JE type:
 **Prepaid:**
 - Pull the prepaid amortization schedule
 - Calculate the period amortization for each prepaid item
-- Debit: Expense accounts (by type — insurance, software, rent, etc.)
+- Debit: Expense accounts (by type - insurance, software, rent, etc.)
 - Credit: Prepaid expense accounts
 
 **Payroll:**
@@ -87,7 +87,7 @@ Based on the JE type:
 Present the entry in standard format:
 
 ```
-Journal Entry: [Type] — [Period]
+Journal Entry: [Type] - [Period]
 Prepared by: [User]
 Date: [Period end date]
 
@@ -101,7 +101,7 @@ Supporting Detail:
 - [Calculation basis and assumptions]
 - [Reference to supporting schedule or documentation]
 
-Reversal: [Yes/No — if yes, specify reversal date]
+Reversal: [Yes/No - if yes, specify reversal date]
 ```
 
 ### 4. Review Checklist

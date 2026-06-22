@@ -1,5 +1,5 @@
 ---
-description: Document a business process — flowcharts, RACI, and SOPs
+description: Document a business process  -  flowcharts, RACI, and SOPs
 argument-hint: "<process name or description>"
 ---
 
@@ -17,7 +17,7 @@ Document a business process as a complete standard operating procedure (SOP).
 
 ## How It Works
 
-Walk me through the process — describe it, paste existing docs, or just tell me the name and I'll ask the right questions. I'll produce a complete SOP.
+Walk me through the process  -  describe it, paste existing docs, or just tell me the name and I'll ask the right questions. I'll produce a complete SOP.
 
 ## Output
 
@@ -76,6 +76,6 @@ If **~~project tracker** is connected:
 
 ## Tips
 
-1. **Start messy** — You don't need a perfect description. Tell me how it works today and I'll structure it.
-2. **Include the exceptions** — "Usually we do X, but sometimes Y" is the most valuable part to document.
-3. **Name the people** — Even if roles change, knowing who does what today helps get the process right.
+1. **Start messy**  -  You don't need a perfect description. Tell me how it works today and I'll structure it.
+2. **Include the exceptions**  -  "Usually we do X, but sometimes Y" is the most valuable part to document.
+3. **Name the people**  -  Even if roles change, knowing who does what today helps get the process right.

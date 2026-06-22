@@ -34,12 +34,12 @@ Price Effect  = (Actual Price - Budget Price) x Budget Volume x Actual Mix
 Mix Effect    = Budget Price x Budget Volume x (Actual Mix - Budget Mix)
 ```
 
-**Example — Revenue variance:**
+**Example - Revenue variance:**
 - Budget: 10,000 units at $50 = $500,000
 - Actual: 11,000 units at $48 = $528,000
 - Total variance: +$28,000 favorable
-  - Volume effect: +1,000 units x $50 = +$50,000 (favorable — sold more units)
-  - Price effect: -$2 x 11,000 units = -$22,000 (unfavorable — lower ASP)
+  - Volume effect: +1,000 units x $50 = +$50,000 (favorable - sold more units)
+  - Price effect: -$2 x 11,000 units = -$22,000 (unfavorable - lower ASP)
   - Net: +$28,000
 
 ### Rate / Mix Decomposition
@@ -52,10 +52,10 @@ Rate Effect = Sum of (Actual Volume_i x (Actual Rate_i - Budget Rate_i))
 Mix Effect  = Sum of (Budget Rate_i x (Actual Volume_i - Expected Volume_i at Budget Mix))
 ```
 
-**Example — Gross margin variance:**
+**Example - Gross margin variance:**
 - Product A: 60% margin, Product B: 40% margin
-- Budget mix: 50% A, 50% B → Blended margin 50%
-- Actual mix: 40% A, 60% B → Blended margin 48%
+- Budget mix: 50% A, 50% B -> Blended margin 50%
+- Actual mix: 40% A, 60% B -> Blended margin 48%
 - Mix effect explains 2pp of margin compression
 
 ### Headcount / Compensation Decomposition
@@ -115,11 +115,11 @@ Materiality thresholds determine which variances require investigation and narra
 
 When multiple variances exceed thresholds, prioritize investigation by:
 
-1. **Largest absolute dollar variance** — biggest P&L impact
-2. **Largest percentage variance** — may indicate process issue or error
-3. **Unexpected direction** — variance opposite to trend or expectation
-4. **New variance** — item that was on track and is now off
-5. **Cumulative/trending variance** — growing each period
+1. **Largest absolute dollar variance** - biggest P&L impact
+2. **Largest percentage variance** - may indicate process issue or error
+3. **Unexpected direction** - variance opposite to trend or expectation
+4. **New variance** - item that was on track and is now off
+5. **Cumulative/trending variance** - growing each period
 
 ## Narrative Generation for Variance Explanations
 
@@ -150,8 +150,8 @@ Good variance narratives should be:
 
 ### Common Narrative Anti-Patterns to Avoid
 
-- "Revenue was higher than budget due to higher revenue" (circular — no actual explanation)
-- "Expenses were elevated this period" (vague — which expenses? why?)
+- "Revenue was higher than budget due to higher revenue" (circular - no actual explanation)
+- "Expenses were elevated this period" (vague - which expenses? why?)
 - "Timing" without specifying what was early/late and when it will normalize
 - "One-time" without explaining what the item was
 - "Various small items" for a material variance (must decompose further)
@@ -178,7 +178,7 @@ Verification:    Starting value + Sum of all drivers = Ending value
 When a charting tool is not available, present as a text waterfall:
 
 ```
-WATERFALL: Revenue — Q4 Actual vs Q4 Budget
+WATERFALL: Revenue - Q4 Actual vs Q4 Budget
 
 Q4 Budget Revenue                                    $10,000K
   |
@@ -213,7 +213,7 @@ Complement the waterfall with a reconciliation table:
 ### Waterfall Best Practices
 
 1. Order drivers from largest positive to largest negative (or in logical business sequence)
-2. Keep to 5-8 drivers maximum — aggregate smaller items into "Other"
+2. Keep to 5-8 drivers maximum - aggregate smaller items into "Other"
 3. Verify the waterfall reconciles (start + drivers = end)
 4. Color-code: green for favorable, red for unfavorable (in visual charts)
 5. Label each bar with both the amount and a brief description

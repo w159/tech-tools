@@ -1,6 +1,6 @@
 # Finance & Accounting Plugin
 
-A finance and accounting plugin primarily designed for [Cowork](https://claude.com/product/cowork), Anthropic's agentic desktop application — though it also works in Claude Code. Supports month-end close, journal entry preparation, account reconciliation, financial statement generation, variance analysis, and SOX audit support.
+A finance and accounting plugin primarily designed for [Cowork](https://claude.com/product/cowork), Anthropic's agentic desktop application - though it also works in Claude Code. Supports month-end close, journal entry preparation, account reconciliation, financial statement generation, variance analysis, and SOX audit support.
 
 > **Important**: This plugin assists with finance and accounting workflows but does not provide financial, tax, or audit advice. All outputs should be reviewed by qualified financial professionals before use in financial reporting, regulatory filings, or audit documentation.
 
@@ -14,11 +14,11 @@ claude plugins add knowledge-work-plugins/finance
 
 | Command | Description |
 |---------|-------------|
-| `/journal-entry` | Journal entry preparation — generate accruals, fixed asset entries, prepaids, payroll, and revenue entries with proper debits/credits and supporting detail |
-| `/reconciliation` | Account reconciliation — compare GL balances to subledger, bank, or third-party balances and identify reconciling items |
-| `/income-statement` | Income statement generation — produce P&L with period-over-period comparison and variance analysis |
-| `/variance-analysis` | Variance/flux analysis — decompose variances into drivers with narrative explanations and waterfall analysis |
-| `/sox-testing` | SOX compliance testing — generate sample selections, testing workpapers, and control assessments |
+| `/journal-entry` | Journal entry preparation - generate accruals, fixed asset entries, prepaids, payroll, and revenue entries with proper debits/credits and supporting detail |
+| `/reconciliation` | Account reconciliation - compare GL balances to subledger, bank, or third-party balances and identify reconciling items |
+| `/income-statement` | Income statement generation - produce P&L with period-over-period comparison and variance analysis |
+| `/variance-analysis` | Variance/flux analysis - decompose variances into drivers with narrative explanations and waterfall analysis |
+| `/sox-testing` | SOX compliance testing - generate sample selections, testing workpapers, and control assessments |
 
 ## Skills
 
@@ -58,7 +58,18 @@ claude plugins add knowledge-work-plugins/finance
 
 > If you see unfamiliar placeholders or need to check which tools are connected, see [CONNECTORS.md](CONNECTORS.md).
 
-This plugin works best when connected to your financial data sources via MCP servers. Add the relevant servers to your `.mcp.json`:
+This plugin ships with pre-configured connectors for Pax8 and PandaDoc. Set the required env vars (see below) and they are available immediately.
+
+### Pre-configured Connectors
+
+| Connector | Env Var | Hosted Server URL |
+|-----------|---------|-------------------|
+| Pax8 (cloud marketplace) | `PAX8_MCP_TOKEN` | `https://mcp.pax8.com/v1/mcp` (vendor default) |
+| PandaDoc (document automation) | `PANDADOC_API_KEY` | `https://developers.pandadoc.com/mcp` (vendor default) |
+
+No base URL configuration is needed -- both connectors use the vendors' documented hosted defaults.
+
+This plugin also works well when connected to your broader financial data sources via MCP servers. Add the relevant servers to your `.mcp.json`:
 
 ### ERP / Accounting System
 
@@ -82,10 +93,10 @@ Connect your BI platform (e.g., Tableau, Looker) to pull dashboards, KPIs, and t
 
 Add your data source MCP servers to the `mcpServers` section of `.mcp.json` in this plugin directory. The `recommendedCategories` field lists the types of integrations that enhance this plugin's capabilities:
 
-- `erp-accounting` — ERP or accounting system for GL, subledger, and JE data
-- `data-warehouse` — Data warehouse for financial queries and historical data
-- `spreadsheets` — Spreadsheet tools for workpaper generation
-- `analytics-bi` — BI tools for dashboards and KPI data
-- `documents` — Document storage for policies, memos, and support
-- `email` — Email for sending reports and requesting approvals
-- `chat` — Team communication for close status updates and questions
+- `erp-accounting` - ERP or accounting system for GL, subledger, and JE data
+- `data-warehouse` - Data warehouse for financial queries and historical data
+- `spreadsheets` - Spreadsheet tools for workpaper generation
+- `analytics-bi` - BI tools for dashboards and KPI data
+- `documents` - Document storage for policies, memos, and support
+- `email` - Email for sending reports and requesting approvals
+- `chat` - Team communication for close status updates and questions

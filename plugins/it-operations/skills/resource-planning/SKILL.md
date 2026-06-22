@@ -40,7 +40,7 @@ Help plan and optimize resource allocation across projects and teams.
 - Planning to 100% utilization (no buffer for surprises)
 - Ignoring meeting load and context-switching costs
 - Not accounting for vacation, holidays, and sick time
-- Treating all hours as equal (creative work ≠ admin work)
+- Treating all hours as equal (creative work != admin work)
 
 ## Output
 

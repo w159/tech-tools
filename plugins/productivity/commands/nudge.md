@@ -9,25 +9,24 @@ argument-hint: status, add <session> <intent>, done <session>, pause <session>, 
 Manage AI coding agents (Codex, Claude Code, Gemini CLI) running in tmux sessions. Detect stalls, send continuation signals, flag loops.
 
 Nudge also supports a second session type: `bd_epic`. In that mode, Nudge does
-not treat the pane like a generic “maybe send continue” target. Instead, it
+not treat the pane like a generic "maybe send continue" target. Instead, it
 supervises a repo-local epic runner that drains a `bd` epic and emits
 machine-readable `NUDGE_STATUS` lines.
 
 ## Architecture
 
-- **Daemon**: `~/scripts/nudge.sh` -- runs every 3 min via launchd
+- **Daemon**: `~/scripts/nudge.sh` -- background loop script (run manually or via any scheduler)
 - **Config**: `~/.nudge/sessions.json` -- session registry, intent scratchpad, tuning
 - **Snapshots**: `~/.nudge/snapshots/<session>.txt` -- last captured output per session
 - **Hashes**: `~/.nudge/<session>.hash` + `<session>.hashcount` -- loop detection state
 - **Log**: `~/.nudge/nudge.log` -- audit trail
-- **Plist**: `~/Library/LaunchAgents/com.nudge.daemon.plist`
 
 ## Agent setup checklist
 
 When an agent is asked to "set up Nudge so Codex can handle long-running
 projects," the safe default workflow is:
 
-1. Install Nudge with `./install.sh`
+1. Verify the `~/.nudge/` directory and `sessions.json` exist (run `/nudge install` to create them)
 2. Verify `tmux`, `jq`, and `codex` are available
 3. Confirm the target repo has a deterministic runner for the next ready work item
 4. Validate the target repo with `~/scripts/nudge-epic.sh doctor ...`
@@ -79,8 +78,8 @@ Print this quick reference and return:
 /nudge eval                   Deep AI evaluation of all active sessions
 /nudge log [N]                Show last N log lines (default 30)
 /nudge config <key> <value>   Update daemon config (nudgeMessage, cooldownNudges)
-/nudge install                Install/reload the launchd daemon
-/nudge uninstall              Stop the launchd daemon
+/nudge install                Create ~/.nudge/ scaffolding and validate dependencies
+/nudge uninstall              Remove ~/.nudge/ state files and stop any running daemon
 /nudge help                   Show this reference
 ```
 
@@ -177,7 +176,7 @@ This stores:
 Example:
 
 ```bash
-~/scripts/nudge-epic.sh add dojo /Users/silverbook/Sites/minutes minutes-ylql.2 --agent-arg=--full-auto
+~/scripts/nudge-epic.sh add dojo /path/to/your/project minutes-ylql.2 --agent-arg=--full-auto
 ```
 
 ### `/nudge start <session>`
@@ -226,7 +225,7 @@ Remove a session from monitoring:
 
 ### `/nudge pause <session>` / `/nudge resume <session>`
 
-Toggle the `paused` flag in sessions.json. Paused sessions stay in the registry but are not nudged. **Resume also resets nudgeCount to 0** and clears hash/hashcount files — otherwise the session immediately hits cooldown from the previous run.
+Toggle the `paused` flag in sessions.json. Paused sessions stay in the registry but are not nudged. **Resume also resets nudgeCount to 0** and clears hash/hashcount files  -  otherwise the session immediately hits cooldown from the previous run.
 
 ### `/nudge done <session>`
 
@@ -261,18 +260,41 @@ Deep evaluation of ALL active sessions:
 
 ### `/nudge install`
 
-Install/reload the launchd daemon. The plist template is at `${CLAUDE_PLUGIN_ROOT}/scripts/com.nudge.daemon.plist`. Copy it to `~/Library/LaunchAgents/`, substitute `__HOME__` with the user's home directory, then load:
+Create the `~/.nudge/` directory scaffold and validate that required tools are present:
+
 ```bash
-launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.nudge.daemon.plist 2>/dev/null
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.nudge.daemon.plist
+mkdir -p ~/.nudge/snapshots ~/.nudge/runtime
+touch ~/.nudge/sessions.json 2>/dev/null || true
+# Seed an empty registry if sessions.json is blank or missing
+[ ! -s ~/.nudge/sessions.json ] && echo '{}' > ~/.nudge/sessions.json
 ```
+
+Then check for required tools:
+- `tmux` -- session capture and send-keys
+- `jq` -- JSON read/write
+
+Report which tools are present and which are missing. If `~/scripts/nudge.sh` exists, confirm it is executable (`chmod +x ~/scripts/nudge.sh`).
+
+To have the daemon run automatically on any platform, point your preferred scheduler at `~/scripts/nudge.sh`. Common options:
+- **macOS**: `crontab -e` -- add `*/3 * * * * ~/scripts/nudge.sh`
+- **Linux**: same cron entry, or a systemd user timer
+- **Any OS**: run `~/scripts/nudge.sh` manually or from a terminal multiplexer loop
+
+Nudge works without a scheduler -- `/nudge kick`, `/nudge eval`, and `/nudge status` all operate on-demand and never require a background process.
 
 ### `/nudge uninstall`
 
-Stop and unload the launchd agent:
+Stop the daemon and clean up state files:
+
 ```bash
-launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.nudge.daemon.plist
+# Stop any running nudge.sh process
+pkill -f nudge.sh 2>/dev/null || true
+
+# Remove state files (preserves sessions.json so registry survives reinstall)
+rm -rf ~/.nudge/snapshots ~/.nudge/runtime ~/.nudge/*.hash ~/.nudge/*.hashcount ~/.nudge/*.idle
 ```
+
+Confirm: "Nudge daemon stopped. Registry preserved at `~/.nudge/sessions.json`. Run `/nudge install` to reinitialize."
 
 ### `/nudge config <key> <value>`
 

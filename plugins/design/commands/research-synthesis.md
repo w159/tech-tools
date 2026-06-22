@@ -40,14 +40,14 @@ Synthesize user research data into actionable insights. See the **user-research*
 **Prevalence:** [X of Y participants]
 **Summary:** [What this theme is about]
 **Supporting Evidence:**
-- "[Quote]" — P[X]
-- "[Quote]" — P[X]
+- "[Quote]" - P[X]
+- "[Quote]" - P[X]
 **Implication:** [What this means for the product]
 
 #### Theme 2: [Name]
 [Same format]
 
-### Insights → Opportunities
+### Insights -> Opportunities
 
 | Insight | Opportunity | Impact | Effort |
 |---------|-------------|--------|--------|
@@ -59,9 +59,9 @@ Synthesize user research data into actionable insights. See the **user-research*
 | [Name] | [Description] | [Key needs] | [Rough %] |
 
 ### Recommendations
-1. **[High priority]** — [Why, based on which findings]
-2. **[Medium priority]** — [Why]
-3. **[Lower priority]** — [Why]
+1. **[High priority]** - [Why, based on which findings]
+2. **[Medium priority]** - [Why]
+3. **[Lower priority]** - [Why]
 
 ### Questions for Further Research
 - [What we still don't know]
@@ -86,6 +86,6 @@ If **~~knowledge base** is connected:
 
 ## Tips
 
-1. **Include raw quotes** — Direct participant quotes make insights credible and memorable.
-2. **Separate observations from interpretations** — "5 of 8 users clicked the wrong button" is an observation. "The button placement is confusing" is an interpretation.
-3. **Quantify where possible** — "Most users" is vague. "7 of 10 users" is specific.
+1. **Include raw quotes** - Direct participant quotes make insights credible and memorable.
+2. **Separate observations from interpretations** - "5 of 8 users clicked the wrong button" is an observation. "The button placement is confusing" is an interpretation.
+3. **Quantify where possible** - "Most users" is vague. "7 of 10 users" is specific.

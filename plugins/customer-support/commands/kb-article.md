@@ -16,8 +16,8 @@ Draft a publish-ready knowledge base article from a resolved support issue, comm
 ```
 
 Examples:
-- `/kb-article How to configure SSO with Okta — resolved this for 3 customers last month`
-- `/kb-article Ticket #4521 — customer couldn't export data over 10k rows`
+- `/kb-article How to configure SSO with Okta - resolved this for 3 customers last month`
+- `/kb-article Ticket #4521 - customer couldn't export data over 10k rows`
 - `/kb-article Common question: how to set up webhook notifications`
 - `/kb-article Known issue: dashboard charts not loading on Safari 16`
 
@@ -62,7 +62,7 @@ Present the draft with metadata:
 
 ---
 
-[Full article content — using the appropriate template
+[Full article content - using the appropriate template
 from the knowledge-management skill]
 
 ---

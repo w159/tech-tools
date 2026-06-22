@@ -151,10 +151,10 @@ PHISHING CAMPAIGN SUMMARY - Last 90 Days
 ==========================================
 
 PPP TREND
-  December 2023:  21.7%  █████████████████
-  January 2024:   16.7%  █████████████
-  February 2024:  15.3%  ████████████
-  March 2024:     12.2%  ██████████ (in progress)
+  December 2023:  21.7%  #################
+  January 2024:   16.7%  #############
+  February 2024:  15.3%  ############
+  March 2024:     12.2%  ########## (in progress)
 
   Trend: Improving (-9.5% over 3 months)
 

@@ -79,7 +79,7 @@ You may **not** claim a change is done, fixed, working, or complete - and may no
 - an **independent verifier report** from a *different* agent than the author, one that re-derived its own check from the original symptom (law 5); and
 - **docs/ is current** - `CHANGELOG.md` and `ROADMAP.md` reconciled, and every affected durable subfolder (`architecture/`, `features/`, `specs/`, `audits/`, `lessons/`, etc.) updated by `atlas:docs-curator`. This is mandatory and gate-enforced, not optional cleanup.
 
-**"Unverified" is not a completion state.** If you cannot produce the artifact, the change is **not** done - say so explicitly and stop; do not declare success and do not let "mark it unverified" stand in for verification. Run `superpowers:verification-before-completion` at the close. The opt-in completion-gate `Stop` hook (`references/hooks-automation.md`) is the machine backstop for all three conditions above.
+**"Unverified" is not a completion state.** If you cannot produce the artifact, the change is **not** done - say so explicitly and stop; do not declare success and do not let "mark it unverified" stand in for verification. Run `superpowers:verification-before-completion` at the close. The completion-gate `Stop` hook (`references/hooks-automation.md`) is the machine backstop for all three conditions above; it is opt-out (on by default when `docs/` exists; disable with `ATLAS_GATE=off`).
 
 ## Rationalization table - STOP if you think any of these
 
@@ -130,10 +130,10 @@ The rules above must not depend on you remembering them. The seven hooks auto-lo
 
 - **`session_boot.py`** (`SessionStart`) - activates the runtime each session: injects this contract and methodology, reports claude-mem/context-mode state, and surfaces relevant past lessons. Crash-proof.
 - **`prompt_optimizer.py`** (`UserPromptSubmit`) - sharpens the prompt before any token is spent on it; trigger-gated (`opt:` / `++`), augments never replaces.
-- **`bash_guard.py`** (`PreToolUse` Bash) - denies catastrophic commands and asks before a short list of hard-to-undo ones (force push, network-piped shells, sudo); the automatic backstop for law 6.
+- **`bash_advisor.py`** (`PreToolUse` Bash) - advisory-only; never alters approval. Emits an `additionalContext` factual warning only on catastrophic, near-irreversible commands (rm -rf /, fork bomb, mkfs, dd to raw disk). All other commands pass through silently.
 - **`validate-readonly-query.sh`** (`PreToolUse` Bash) - blocks SQL writes, DDL, and GRANT/REVOKE during read-only audits. Wired by the DB-audit subagents themselves (schema-inventory, rls-privilege-audit, naming-glossary-audit), not the global session, so ordinary shell work is never gated by it.
 - **`format_after_edit.py`** (`PostToolUse` Edit|Write) - auto-formats the edited file with the repo's own formatter so diffs stay minimal.
-- **`completion_gate.py`** (`Stop`, opt-in) - machine enforcement of "Definition of done": blocks stopping until the evidence artifact, the independent verifier report, and current docs/ all exist. Fail-open; enable with `ATLAS_GATE`.
+- **`completion_gate.py`** (`Stop`, opt-out) - machine enforcement of "Definition of done": blocks stopping until the evidence artifact, the independent verifier report, and current docs/ all exist. Fail-open. Runs by default when a `docs/` tree exists; disable with `ATLAS_GATE=off`.
 - **`nudge.py`** (`Stop`, `SubagentStop`) - self-improvement: surfaces a relevant past lesson and prompts to capture new ones; throttled and non-blocking. See the self-improving skill.
 
 Full contract, config env vars, and install commands: `references/hooks-automation.md`.

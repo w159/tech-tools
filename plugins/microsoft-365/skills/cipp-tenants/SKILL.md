@@ -1,6 +1,6 @@
 ---
 name: "cipp-tenants"
-description: "Use this skill when working with CIPP tenants — listing managed M365 tenants, checking tenant details, identifying tenant ID/domain, and scoping operations to a specific tenant. The starting point for almost every CIPP workflow since most other tools require a tenant filter."
+description: "Use this skill when working with CIPP tenants - listing managed M365 tenants, checking tenant details, identifying tenant ID/domain, and scoping operations to a specific tenant. The starting point for almost every CIPP workflow since most other tools require a tenant filter."
 when_to_use: "When listing managed M365 tenants, looking up tenant IDs/domains, or scoping operations across the MSP portfolio"
 triggers:
   - cipp tenant
@@ -15,7 +15,7 @@ triggers:
 
 # CIPP Tenants
 
-Tenants are the top-level scope in CIPP. Every operational tool — users, mailboxes, standards, security — takes a `tenantFilter` parameter that scopes the call to one tenant or to `allTenants`. Knowing how to enumerate tenants and resolve a friendly name to its tenant ID is the first step in almost every CIPP workflow.
+Tenants are the top-level scope in CIPP. Every operational tool - users, mailboxes, standards, security - takes a `tenantFilter` parameter that scopes the call to one tenant or to `allTenants`. Knowing how to enumerate tenants and resolve a friendly name to its tenant ID is the first step in almost every CIPP workflow.
 
 ## Tools
 
@@ -27,7 +27,7 @@ List every tenant CIPP manages. Returns a list of tenant objects with `customerI
 cipp_list_tenants()
 ```
 
-Use this whenever a user refers to a client by name — the response gives you the `defaultDomainName` (or `customerId`) needed for `tenantFilter` on every other tool.
+Use this whenever a user refers to a client by name - the response gives you the `defaultDomainName` (or `customerId`) needed for `tenantFilter` on every other tool.
 
 ### `cipp_get_tenant_details`
 
@@ -37,7 +37,7 @@ Retrieve detailed information for one tenant: license count, domain list, GDAP r
 cipp_get_tenant_details(tenantFilter='contoso.onmicrosoft.com')
 ```
 
-Use `tenantFilter='allTenants'` to get a portfolio-wide aggregate — useful for fleet reports.
+Use `tenantFilter='allTenants'` to get a portfolio-wide aggregate - useful for fleet reports.
 
 ## Identifying a tenant
 
@@ -54,7 +54,7 @@ When a user says "Acme", always run `cipp_list_tenants` first and resolve to the
 
 ## Common patterns
 
-**Resolve a friendly name → tenant filter**
+**Resolve a friendly name -> tenant filter**
 
 ```
 tenants = cipp_list_tenants()
@@ -64,9 +64,9 @@ tenant_filter = acme['defaultDomainName']
 
 **Audit which tenants are stale in CIPP cache**
 
-`cipp_get_tenant_details` returns `lastRefresh`. Tenants not refreshed in >24h often signal a broken GDAP relationship or revoked consent — flag them before running standards or BPA checks against them.
+`cipp_get_tenant_details` returns `lastRefresh`. Tenants not refreshed in >24h often signal a broken GDAP relationship or revoked consent - flag them before running standards or BPA checks against them.
 
 ## Failure modes
 
-- **`tenantFilter` not found** — the tenant exists in M365 but CIPP hasn't onboarded it. Trigger a tenant cache refresh in CIPP UI or check GDAP roles.
-- **Empty tenant list** — the API client has no tenant scope assigned. Check the role assigned to the API client in CIPP Settings → API Client Management.
+- **`tenantFilter` not found** - the tenant exists in M365 but CIPP hasn't onboarded it. Trigger a tenant cache refresh in CIPP UI or check GDAP roles.
+- **Empty tenant list** - the API client has no tenant scope assigned. Check the role assigned to the API client in CIPP Settings -> API Client Management.

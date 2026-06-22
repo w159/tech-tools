@@ -26,7 +26,7 @@ Generate a comprehensive onboarding plan for a new team member.
 ## Output
 
 ```markdown
-## Onboarding Plan: [Name] — [Role]
+## Onboarding Plan: [Name] - [Role]
 **Start Date:** [Date] | **Team:** [Team] | **Manager:** [Manager]
 
 ### Pre-Start (Before Day 1)
@@ -98,6 +98,6 @@ If **~~calendar** is connected:
 
 ## Tips
 
-1. **Customize for the role** — An engineer's onboarding looks different from a designer's.
-2. **Don't overload Day 1** — Focus on setup and relationships. Deep work starts Week 2.
-3. **Assign a buddy** — Having a go-to person who isn't their manager makes a huge difference.
+1. **Customize for the role** - An engineer's onboarding looks different from a designer's.
+2. **Don't overload Day 1** - Focus on setup and relationships. Deep work starts Week 2.
+3. **Assign a buddy** - Having a go-to person who isn't their manager makes a huge difference.

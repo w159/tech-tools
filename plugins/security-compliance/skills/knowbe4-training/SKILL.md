@@ -34,9 +34,9 @@ KnowBe4 training campaigns deliver security awareness content to users through s
 ### Training Campaign Lifecycle
 
 ```
-CREATED ──> SCHEDULED ──> ACTIVE ──> CLOSED
-                │                       │
-                └──── CANCELLED         └──> ARCHIVED
+CREATED --> SCHEDULED --> ACTIVE --> CLOSED
+                |                       |
+                +---- CANCELLED         +--> ARCHIVED
 ```
 
 - **Created**: Campaign configured with content and target groups
@@ -144,10 +144,10 @@ Note: the connected KnowBe4 Reporting API does not expose a training module cata
 ### Create and Monitor Training Campaign
 
 1. **Review existing training campaigns** using `knowbe4_training_campaigns_list` (module catalog is managed in the KnowBe4 console)
-2. **Select target groups** -- choose which user groups need training
-3. **Set completion deadline** -- allow adequate time (2-4 weeks typical)
-4. **Launch campaign** -- schedule or start immediately
-5. **Monitor enrollment status** -- check completion rates weekly
+2. **Select target groups** - choose which user groups need training
+3. **Set completion deadline** - allow adequate time (2-4 weeks typical)
+4. **Launch campaign** - schedule or start immediately
+5. **Monitor enrollment status** - check completion rates weekly
 6. **Send reminders** to users with "not_started" or "in_progress" status
 7. **Review final completion** after deadline
 
@@ -156,7 +156,7 @@ Note: the connected KnowBe4 Reporting API does not expose a training module cata
 1. **List active campaigns** with `knowbe4_training_campaigns_list`
 2. **Get enrollments** for each campaign
 3. **Filter by status** to find incomplete/past_due enrollments
-4. **Identify non-compliant users** -- group by department or manager
+4. **Identify non-compliant users** - group by department or manager
 5. **Escalate** users who are past due on required training
 
 ### Post-Phishing Remediation Training
@@ -172,7 +172,7 @@ Note: the connected KnowBe4 Reporting API does not expose a training module cata
 1. **Pull all completed campaigns** for the quarter
 2. **Calculate overall completion rate** across all campaigns
 3. **Identify departments** with lowest completion rates
-4. **Review training content** -- are modules current and relevant?
+4. **Review training content** - are modules current and relevant?
 5. **Plan next quarter** based on gaps identified
 
 ### New Hire Onboarding
@@ -208,16 +208,16 @@ Note: the connected KnowBe4 Reporting API does not expose a training module cata
 
 ## Best Practices
 
-1. **Set realistic deadlines** -- Allow 2-4 weeks for standard training, 1 week for remediation
-2. **Send reminders** -- Notify at 50% and 75% of deadline elapsed
-3. **Keep content fresh** -- Rotate training modules quarterly
-4. **Match training to threats** -- Use phishing failure data to select relevant modules
-5. **Track completion trends** -- Completion rates should improve over time
-6. **Segment by audience** -- Executives, IT, finance, and general staff need different content
-7. **Combine with phishing** -- Always follow training with a phishing simulation to validate
-8. **Use gamification** -- Games and competitions increase engagement
-9. **Report to stakeholders** -- Share completion rates with department managers
-10. **Automate remediation** -- Auto-enroll phishing test failures in relevant training
+1. **Set realistic deadlines** - Allow 2-4 weeks for standard training, 1 week for remediation
+2. **Send reminders** - Notify at 50% and 75% of deadline elapsed
+3. **Keep content fresh** - Rotate training modules quarterly
+4. **Match training to threats** - Use phishing failure data to select relevant modules
+5. **Track completion trends** - Completion rates should improve over time
+6. **Segment by audience** - Executives, IT, finance, and general staff need different content
+7. **Combine with phishing** - Always follow training with a phishing simulation to validate
+8. **Use gamification** - Games and competitions increase engagement
+9. **Report to stakeholders** - Share completion rates with department managers
+10. **Automate remediation** - Auto-enroll phishing test failures in relevant training
 
 ## Related Skills
 

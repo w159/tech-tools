@@ -61,6 +61,9 @@ Its findings are not commentary. They become the next wave of work.
 - **For long documents, extract first, then reason.** Pull the exact relevant lines into view, then reason over those lines - not over memory of the document.
 - **Do not import outside facts** the task did not provide. If you must, label them `[unverified]` so the orchestrator sees they came from outside the task.
 - **Mark any gap with no failable check as `unverified`** so it stays visible downstream instead of silently passing as done.
+- **Verify a path exists before acting on it.** Never assume a generated file is present; read it back or stat it first. Prefer repo-relative resolution and `${CLAUDE_PLUGIN_ROOT}` for plugin-internal paths.
+- **Confirm tool schemas before calling deferred/MCP tools.** Use `ToolSearch` to load the schema; pass arrays and objects as real JSON, not strings. A missing schema causes `InputValidationError` - the most common non-path failure mode.
+- **Wrap external/MCP/network calls with a sane timeout** and one retry on transient failure. Surface the error explicitly; never silently swallow it.
 
 ## Mark unverified, visibly
 

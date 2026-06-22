@@ -11,8 +11,8 @@ Pipeline:
 1. Invoke `framework-audit-readiness` for the framework.
 2. Invoke `evidence-gap-hunter` scoped to the same framework.
 3. Merge into one dossier:
-   - Section A — Control readiness (pass rate, top at-risk controls).
-   - Section B — Evidence health (missing/expiring docs).
-   - Section C — Recommended pre-audit fix list (the union of "quick wins" from A and "expiring soonest" from B).
+   - Section A - Control readiness (pass rate, top at-risk controls).
+   - Section B - Evidence health (missing/expiring docs).
+   - Section C - Recommended pre-audit fix list (the union of "quick wins" from A and "expiring soonest" from B).
 
 Output is a status report, not an action plan. Never auto-update evidence; only surface what's needed.

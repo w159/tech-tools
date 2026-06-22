@@ -1,6 +1,6 @@
 # Data Analyst Plugin
 
-A data analyst plugin primarily designed for [Cowork](https://claude.com/product/cowork), Anthropic's agentic desktop application — though it also works in Claude Code. SQL queries, data exploration, visualization, dashboards, and insight generation. Works with any data warehouse, any SQL dialect, and any analytics stack.
+A data analyst plugin primarily designed for [Cowork](https://claude.com/product/cowork), Anthropic's agentic desktop application - though it also works in Claude Code. SQL queries, data exploration, visualization, dashboards, and insight generation. Works with any data warehouse, any SQL dialect, and any analytics stack.
 
 ## Installation
 
@@ -54,9 +54,9 @@ Without a data warehouse connection, paste SQL results or upload CSV/Excel files
 ```
 You: /analyze What was our monthly revenue trend for the past 12 months, broken down by product line?
 
-Claude: [Writes SQL query] → [Executes against data warehouse] → [Generates trend chart]
-       → [Identifies key patterns: "Product line A grew 23% YoY while B was flat"]
-       → [Validates results with sanity checks]
+Claude: [Writes SQL query] -> [Executes against data warehouse] -> [Generates trend chart]
+       -> [Identifies key patterns: "Product line A grew 23% YoY while B was flat"]
+       -> [Validates results with sanity checks]
 ```
 
 ### Data Exploration
@@ -65,9 +65,9 @@ Claude: [Writes SQL query] → [Executes against data warehouse] → [Generates 
 You: /explore-data users table
 
 Claude: [Profiles table: 2.3M rows, 47 columns]
-       → [Reports: created_at has 0.2% nulls, email has 99.8% cardinality]
-       → [Flags: status column has unexpected value "UNKNOWN" in 340 rows]
-       → [Suggests: "High-value dimensions to explore: plan_type, signup_source, country"]
+       -> [Reports: created_at has 0.2% nulls, email has 99.8% cardinality]
+       -> [Flags: status column has unexpected value "UNKNOWN" in 340 rows]
+       -> [Suggests: "High-value dimensions to explore: plan_type, signup_source, country"]
 ```
 
 ### Query Writing
@@ -77,8 +77,8 @@ You: /write-query I need a cohort retention analysis -- users grouped by signup 
      showing what % are still active 1, 3, 6, and 12 months later. We use Snowflake.
 
 Claude: [Writes optimized Snowflake SQL with CTEs]
-       → [Adds comments explaining each step]
-       → [Includes performance notes about partition pruning]
+       -> [Adds comments explaining each step]
+       -> [Includes performance notes about partition pruning]
 ```
 
 ### Dashboard Building
@@ -88,9 +88,9 @@ You: /build-dashboard Create a sales dashboard with monthly revenue, top product
      and regional breakdown. Here's the data: [pastes CSV]
 
 Claude: [Generates self-contained HTML file]
-       → [Includes interactive Chart.js visualizations]
-       → [Adds dropdown filters for region and time period]
-       → [Opens in browser for review]
+       -> [Includes interactive Chart.js visualizations]
+       -> [Adds dropdown filters for region and time period]
+       -> [Opens in browser for review]
 ```
 
 ### Pre-Share Validation
@@ -98,10 +98,10 @@ Claude: [Generates self-contained HTML file]
 ```
 You: /validate [shares analysis document]
 
-Claude: [Reviews methodology] → [Checks for survivorship bias in churn analysis]
-       → [Verifies aggregation logic] → [Flags: "Denominator excludes trial users
+Claude: [Reviews methodology] -> [Checks for survivorship bias in churn analysis]
+       -> [Verifies aggregation logic] -> [Flags: "Denominator excludes trial users
           which could overstate conversion rate by ~5pp"]
-       → [Confidence: "Ready to share with noted caveat"]
+       -> [Confidence: "Ready to share with noted caveat"]
 ```
 
 ## Connecting Your Data Stack

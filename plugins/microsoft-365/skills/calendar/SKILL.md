@@ -38,7 +38,7 @@ GET /v1.0/users/{userId}/calendar/events?$select=id,subject,start,end,organizer,
 GET /v1.0/users/{userId}/calendarView?startDateTime=2024-01-15T00:00:00Z&endDateTime=2024-01-22T00:00:00Z&$select=subject,start,end,organizer,attendees,isOnlineMeeting
 ```
 
-> Use `calendarView` (not `/events`) for date-range queries — it correctly expands recurring events.
+> Use `calendarView` (not `/events`) for date-range queries - it correctly expands recurring events.
 
 ### Check Free/Busy Time
 
@@ -84,7 +84,7 @@ POST /v1.0/users/{organizerId}/events
 Content-Type: application/json
 
 {
-  "subject": "IT Onboarding — Jane Smith",
+  "subject": "IT Onboarding - Jane Smith",
   "start": { "dateTime": "2024-01-20T10:00:00", "timeZone": "Eastern Standard Time" },
   "end":   { "dateTime": "2024-01-20T11:00:00", "timeZone": "Eastern Standard Time" },
   "attendees": [
@@ -125,7 +125,7 @@ PATCH /v1.0/users/{userId}/events/{eventId}
 Content-Type: application/json
 
 {
-  "subject": "Updated: IT Onboarding — Jane Smith",
+  "subject": "Updated: IT Onboarding - Jane Smith",
   "start": { "dateTime": "2024-01-21T14:00:00", "timeZone": "Eastern Standard Time" },
   "end":   { "dateTime": "2024-01-21T15:00:00", "timeZone": "Eastern Standard Time" }
 }
@@ -145,16 +145,16 @@ Content-Type: application/json
 When setting OOO (via mailbox settings), also check if the user has events during their absence:
 
 1. Get events in the OOO date range
-2. List events with other attendees — these may need cancellation or reassignment
+2. List events with other attendees - these may need cancellation or reassignment
 3. Cancel/update events as needed
 4. Set OOO via mailbox settings
 
 ### Recurring Event Management
 
 Recurring events are expanded in `calendarView` results. Each instance has:
-- `seriesMasterId` — the master recurring event ID
-- `type: "occurrence"` — individual instance
-- `type: "seriesMaster"` — the template
+- `seriesMasterId` - the master recurring event ID
+- `type: "occurrence"` - individual instance
+- `type: "seriesMaster"` - the template
 
 To update all future instances: `PATCH` the series master.
 To update only one instance: `PATCH` the specific occurrence.

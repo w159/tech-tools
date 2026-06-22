@@ -9,18 +9,18 @@ compatibility: Requires Cowork desktop app environment with access to the output
 
 # Create Cowork Plugin
 
-Build a new plugin from scratch through guided conversation. Walk the user through discovery, planning, design, implementation, and packaging — delivering a ready-to-install `.plugin` file at the end.
+Build a new plugin from scratch through guided conversation. Walk the user through discovery, planning, design, implementation, and packaging  -  delivering a ready-to-install `.plugin` file at the end.
 
 ## Overview
 
 A plugin is a self-contained directory that extends Claude's capabilities with commands, skills, agents, hooks, and MCP server integrations. This skill encodes the full plugin architecture and a five-phase workflow for creating one conversationally.
 
 The process:
-1. **Discovery** — understand what the user wants to build
-2. **Component Planning** — determine which component types are needed
-3. **Design & Clarifying Questions** — specify each component in detail
-4. **Implementation** — create all plugin files
-5. **Review & Package** — deliver the `.plugin` file
+1. **Discovery**  -  understand what the user wants to build
+2. **Component Planning**  -  determine which component types are needed
+3. **Design & Clarifying Questions**  -  specify each component in detail
+4. **Implementation**  -  create all plugin files
+5. **Review & Package**  -  deliver the `.plugin` file
 
 > **Nontechnical output**: Keep all user-facing conversation in plain language. Do not expose implementation details like file paths, directory structures, or schema fields unless the user asks. Frame everything in terms of what the plugin will do.
 
@@ -32,16 +32,16 @@ Every plugin follows this layout:
 
 ```
 plugin-name/
-├── .claude-plugin/
-│   └── plugin.json           # Required: plugin manifest
-├── commands/                 # Slash commands (.md files)
-├── agents/                   # Subagent definitions (.md files)
-├── skills/                   # Skills (subdirectories with SKILL.md)
-│   └── skill-name/
-│       ├── SKILL.md
-│       └── references/
-├── .mcp.json                 # MCP server definitions
-└── README.md                 # Plugin documentation
++-- .claude-plugin/
+|   +-- plugin.json           # Required: plugin manifest
++-- commands/                 # Slash commands (.md files)
++-- agents/                   # Subagent definitions (.md files)
++-- skills/                   # Skills (subdirectories with SKILL.md)
+|   +-- skill-name/
+|       +-- SKILL.md
+|       +-- references/
++-- .mcp.json                 # MCP server definitions
++-- README.md                 # Plugin documentation
 ```
 
 
@@ -112,7 +112,7 @@ If used any tool categories, write a `CONNECTORS.md` file at the plugin root to 
 ## How tool references work
 
 Plugin files use `~~category` as a placeholder for whatever tool the user
-connects in that category. Plugins are tool-agnostic — they describe
+connects in that category. Plugins are tool-agnostic  -  they describe
 workflows in terms of categories rather than specific products.
 
 ## Connectors for this plugin
@@ -135,7 +135,7 @@ When you ask the user something, use AskUserQuestion. Don't assume "industry sta
 
 **Goal**: Understand what the user wants to build and why.
 
-Ask (only what is unclear — skip questions if the user's initial request already answers them):
+Ask (only what is unclear  -  skip questions if the user's initial request already answers them):
 
 - What should this plugin do? What problem does it solve?
 - Who will use it and in what context?
@@ -152,11 +152,11 @@ Summarize understanding and confirm before proceeding.
 
 Based on the discovery answers, determine:
 
-- **Skills** — Does it need specialized knowledge that Claude should load on-demand? (domain expertise, reference schemas, workflow guides)
-- **Commands** — Are there user-initiated actions? (deploy, configure, analyze, review)
-- **MCP Servers** — Does it need external service integration? (databases, APIs, SaaS tools)
-- **Agents (uncommon)** — Are there autonomous multi-step tasks? (validation, generation, analysis)
-- **Hooks (rare)** — Should something happen automatically on certain events? (enforce policies, load context, validate operations)
+- **Skills**  -  Does it need specialized knowledge that Claude should load on-demand? (domain expertise, reference schemas, workflow guides)
+- **Commands**  -  Are there user-initiated actions? (deploy, configure, analyze, review)
+- **MCP Servers**  -  Does it need external service integration? (databases, APIs, SaaS tools)
+- **Agents (uncommon)**  -  Are there autonomous multi-step tasks? (validation, generation, analysis)
+- **Hooks (rare)**  -  Should something happen automatically on certain events? (enforce policies, load context, validate operations)
 
 Present a component plan table, including component types you decided not to create:
 
@@ -197,7 +197,7 @@ For each component type in the plan, ask targeted design questions. Present ques
 
 **Hooks:**
 - Which events? (PreToolUse, PostToolUse, Stop, SessionStart, etc.)
-- What behavior — validate, block, modify, add context?
+- What behavior  -  validate, block, modify, add context?
 - Prompt-based (LLM-driven) or command-based (deterministic script)?
 
 **MCP Servers:**
@@ -231,7 +231,7 @@ If the user says "whatever you think is best," provide specific recommendations 
 
 **Goal**: Deliver the finished plugin.
 
-1. Summarize what was created — list each component and its purpose
+1. Summarize what was created  -  list each component and its purpose
 2. Ask if the user wants any adjustments
 3. Run `claude plugin validate <path-to-plugin-json>`; fix any errors and warnings
 4. Package as a `.plugin` file:
@@ -258,5 +258,5 @@ The `.plugin` file will appear in the chat as a rich preview where the user can 
 
 ## Additional Resources
 
-- **`references/component-schemas.md`** — Detailed format specifications for every component type (commands, skills, agents, hooks, MCP, CONNECTORS.md)
-- **`references/example-plugins.md`** — Three complete example plugin structures at different complexity levels
+- **`references/component-schemas.md`**  -  Detailed format specifications for every component type (commands, skills, agents, hooks, MCP, CONNECTORS.md)
+- **`references/example-plugins.md`**  -  Three complete example plugin structures at different complexity levels

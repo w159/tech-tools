@@ -1,5 +1,5 @@
 ---
-description: Run an incident response workflow — triage, communicate, and write postmortem
+description: Run an incident response workflow - triage, communicate, and write postmortem
 argument-hint: "<incident description or alert>"
 ---
 
@@ -28,33 +28,33 @@ If no mode is specified, ask what phase the incident is in. See the **incident-r
 ## How It Works
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    INCIDENT RESPONSE                               │
-├─────────────────────────────────────────────────────────────────┤
-│  Phase 1: TRIAGE                                                  │
-│  ✓ Assess severity (SEV1-4)                                     │
-│  ✓ Identify affected systems and users                          │
-│  ✓ Assign roles (IC, comms, responders)                         │
-│                                                                    │
-│  Phase 2: COMMUNICATE                                              │
-│  ✓ Draft internal status update                                  │
-│  ✓ Draft customer communication (if needed)                     │
-│  ✓ Set up war room and cadence                                   │
-│                                                                    │
-│  Phase 3: MITIGATE                                                 │
-│  ✓ Document mitigation steps taken                               │
-│  ✓ Track timeline of events                                      │
-│  ✓ Confirm resolution                                            │
-│                                                                    │
-│  Phase 4: POSTMORTEM                                               │
-│  ✓ Blameless postmortem document                                 │
-│  ✓ Timeline reconstruction                                       │
-│  ✓ Root cause analysis (5 whys)                                  │
-│  ✓ Action items with owners                                      │
-└─────────────────────────────────────────────────────────────────┘
++-----------------------------------------------------------------+
+|                    INCIDENT RESPONSE                               |
++-----------------------------------------------------------------+
+|  Phase 1: TRIAGE                                                  |
+|  [x] Assess severity (SEV1-4)                                     |
+|  [x] Identify affected systems and users                          |
+|  [x] Assign roles (IC, comms, responders)                         |
+|                                                                    |
+|  Phase 2: COMMUNICATE                                              |
+|  [x] Draft internal status update                                  |
+|  [x] Draft customer communication (if needed)                     |
+|  [x] Set up war room and cadence                                   |
+|                                                                    |
+|  Phase 3: MITIGATE                                                 |
+|  [x] Document mitigation steps taken                               |
+|  [x] Track timeline of events                                      |
+|  [x] Confirm resolution                                            |
+|                                                                    |
+|  Phase 4: POSTMORTEM                                               |
+|  [x] Blameless postmortem document                                 |
+|  [x] Timeline reconstruction                                       |
+|  [x] Root cause analysis (5 whys)                                  |
+|  [x] Action items with owners                                      |
++-----------------------------------------------------------------+
 ```
 
-## Output — Status Update
+## Output  -  Status Update
 
 ```markdown
 ## Incident Update: [Title]
@@ -78,7 +78,7 @@ If no mode is specified, ask what phase the incident is in. See the **incident-r
 | [HH:MM] | [Event] |
 ```
 
-## Output — Postmortem
+## Output  -  Postmortem
 
 ```markdown
 ## Postmortem: [Incident Title]
@@ -102,11 +102,11 @@ If no mode is specified, ask what phase the incident is in. See the **incident-r
 [Detailed explanation of what caused the incident]
 
 ### 5 Whys
-1. Why did [symptom]? → [Because...]
-2. Why did [cause 1]? → [Because...]
-3. Why did [cause 2]? → [Because...]
-4. Why did [cause 3]? → [Because...]
-5. Why did [cause 4]? → [Root cause]
+1. Why did [symptom]? -> [Because...]
+2. Why did [cause 1]? -> [Because...]
+3. Why did [cause 2]? -> [Because...]
+4. Why did [cause 3]? -> [Because...]
+5. Why did [cause 4]? -> [Root cause]
 
 ### What Went Well
 - [Things that worked]
@@ -139,6 +139,6 @@ If **~~chat** is connected:
 
 ## Tips
 
-1. **Start writing immediately** — Don't wait for complete information. Update as you learn more.
-2. **Keep updates factual** — What we know, what we've done, what's next. No speculation.
-3. **Postmortems are blameless** — Focus on systems and processes, not individuals.
+1. **Start writing immediately**  -  Don't wait for complete information. Update as you learn more.
+2. **Keep updates factual**  -  What we know, what we've done, what's next. No speculation.
+3. **Postmortems are blameless**  -  Focus on systems and processes, not individuals.

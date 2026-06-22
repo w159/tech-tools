@@ -1,4 +1,4 @@
-# ConnectWise PSA Ticket — Field Reference
+# ConnectWise PSA Ticket  -  Field Reference
 
 Complete field reference for `/service/tickets`. For quick-start usage see [SKILL.md](./SKILL.md).
 
@@ -19,10 +19,10 @@ Complete field reference for `/service/tickets`. For quick-start usage see [SKIL
 | Field | Type | Required | Example |
 |-------|------|----------|---------|
 | `priority` | object | No | `{id: 2}` |
-| `type` | object | No | `{id: typeId}` — Service, Problem, Incident, etc. |
+| `type` | object | No | `{id: typeId}`  -  Service, Problem, Incident, etc. |
 | `subType` | object | No | `{id: subTypeId}` |
-| `item` | object | No | `{id: itemId}` — further categorization |
-| `source` | object | No | `{id: sourceId}` — Email, Phone, Portal, etc. |
+| `item` | object | No | `{id: itemId}`  -  further categorization |
+| `source` | object | No | `{id: sourceId}`  -  Email, Phone, Portal, etc. |
 | `severity` | string | No | `Low`, `Medium`, `High` |
 | `impact` | string | No | `Low`, `Medium`, `High` |
 

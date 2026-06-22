@@ -42,7 +42,7 @@ Create clear, complete handoff documentation so developers can implement designs
 
 ## Principles
 
-1. **Don't assume** — If it's not specified, the developer will guess. Specify everything.
-2. **Use tokens, not values** — Reference `spacing-md` not `16px`.
-3. **Show all states** — Default, hover, active, disabled, loading, error, empty.
-4. **Describe the why** — "This collapses on mobile because users primarily use one-handed" helps developers make good judgment calls.
+1. **Don't assume** - If it's not specified, the developer will guess. Specify everything.
+2. **Use tokens, not values** - Reference `spacing-md` not `16px`.
+3. **Show all states** - Default, hover, active, disabled, loading, error, empty.
+4. **Describe the why** - "This collapses on mobile because users primarily use one-handed" helps developers make good judgment calls.

@@ -10,7 +10,7 @@ argument-hint: "[--comprehensive]"
 Keep your task list and memory current. Two modes:
 
 - **Default:** Sync tasks from external tools, triage stale items, check memory for gaps
-- **`--comprehensive`:** Deep scan chat, email, calendar, docs — flag missed todos and suggest new memories
+- **`--comprehensive`:** Deep scan chat, email, calendar, docs  -  flag missed todos and suggest new memories
 
 ## Usage
 
@@ -61,9 +61,9 @@ For each task, attempt to decode all entities (people, projects, acronyms, tools
 Task: "Send PSR to Todd re: Phoenix blockers"
 
 Decode:
-- PSR → ✓ Pipeline Status Report (in glossary)
-- Todd → ✓ Todd Martinez (in people/)
-- Phoenix → ? Not in memory
+- PSR -> [x] Pipeline Status Report (in glossary)
+- Todd -> [x] Todd Martinez (in people/)
+- Phoenix -> ? Not in memory
 ```
 
 Track what's fully decoded vs. what has gaps.
@@ -75,10 +75,10 @@ Present unknown terms grouped:
 I found terms in your tasks I don't have context for:
 
 1. "Phoenix" (from: "Send PSR to Todd re: Phoenix blockers")
-   → What's Phoenix?
+   -> What's Phoenix?
 
 2. "Maya" (from: "sync with Maya on API design")
-   → Who is Maya?
+   -> Who is Maya?
 ```
 
 Add answers to the appropriate memory files (people/, projects/, glossary.md).
@@ -86,10 +86,10 @@ Add answers to the appropriate memory files (people/, projects/, glossary.md).
 ### 6. Capture Enrichment
 
 Tasks often contain richer context than memory. Extract and update:
-- **Links** from tasks → add to project/people files
-- **Status changes** ("launch done") → update project status, demote from CLAUDE.md
-- **Relationships** ("Todd's sign-off on Maya's proposal") → cross-reference people
-- **Deadlines** → add to project files
+- **Links** from tasks -> add to project/people files
+- **Status changes** ("launch done") -> update project status, demote from CLAUDE.md
+- **Relationships** ("Todd's sign-off on Maya's proposal") -> cross-reference people
+- **Deadlines** -> add to project files
 
 ### 7. Report
 
@@ -97,7 +97,7 @@ Tasks often contain richer context than memory. Extract and update:
 Update complete:
 - Tasks: +3 from project tracker (e.g. Asana), 1 completed, 2 triaged
 - Memory: 2 gaps filled, 1 project enriched
-- All tasks decoded ✓
+- All tasks decoded [x]
 ```
 
 ## Comprehensive Mode (`--comprehensive`)
@@ -123,15 +123,15 @@ From your activity, these look like todos you haven't captured:
 
 1. From chat (Jan 18):
    "I'll send the updated mockups by Friday"
-   → Add to TASKS.md?
+   -> Add to TASKS.md?
 
 2. From meeting "Phoenix Standup" (Jan 17):
    You have a recurring meeting but no Phoenix tasks active
-   → Anything needed here?
+   -> Anything needed here?
 
 3. From email (Jan 16):
    "I'll review the API spec this week"
-   → Add to TASKS.md?
+   -> Add to TASKS.md?
 ```
 
 Let user pick which to add.
@@ -153,7 +153,7 @@ Surface new entities not in memory:
 | Starlight | 15 mentions | planning docs, product |
 
 ## Suggested Cleanup
-- **Horizon project** — No mentions in 30 days. Mark completed?
+- **Horizon project**  -  No mentions in 30 days. Mark completed?
 ```
 
 Present grouped by confidence. High-confidence items offered to add directly; low-confidence items asked about.
@@ -163,5 +163,5 @@ Present grouped by confidence. High-confidence items offered to add directly; lo
 - Never auto-add tasks or memories without user confirmation
 - External source links are preserved when available
 - Fuzzy matching on task titles handles minor wording differences
-- Safe to run frequently — only updates when there's new info
+- Safe to run frequently  -  only updates when there's new info
 - `--comprehensive` always runs interactively

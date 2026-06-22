@@ -1,5 +1,5 @@
 ---
-description: Write or review UX copy — microcopy, error messages, empty states, CTAs
+description: Write or review UX copy - microcopy, error messages, empty states, CTAs
 argument-hint: "<context or copy to review>"
 ---
 
@@ -38,10 +38,10 @@ Write or review UX copy for any interface context. See the **ux-writing** skill 
 | C | [Copy] | [Tone] | [When to use] |
 
 ### Rationale
-[Why this copy works — user context, clarity, action-orientation]
+[Why this copy works - user context, clarity, action-orientation]
 
 ### Localization Notes
-[Anything translators should know — idioms to avoid, character expansion, cultural context]
+[Anything translators should know - idioms to avoid, character expansion, cultural context]
 ```
 
 ## Common UX Copy Types
@@ -66,6 +66,6 @@ If **~~design tool** is connected:
 
 ## Tips
 
-1. **Be specific about context** — "Error message when payment fails" is better than "error message."
-2. **Share your brand voice** — "We're professional but warm" helps me match your tone.
-3. **Consider the user's emotional state** — Error messages need empathy. Success messages can celebrate.
+1. **Be specific about context** - "Error message when payment fails" is better than "error message."
+2. **Share your brand voice** - "We're professional but warm" helps me match your tone.
+3. **Consider the user's emotional state** - Error messages need empathy. Success messages can celebrate.

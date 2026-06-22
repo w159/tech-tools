@@ -30,7 +30,7 @@ When users mention these terms, clarify which entity they mean:
 - **[OTHER_TYPE]**: [DEFINITION] ([TABLE]: [ID])
 
 **Relationships:**
-- [ENTITY_1] → [ENTITY_2]: [RELATIONSHIP_TYPE] (join on [JOIN_KEY])
+- [ENTITY_1] -> [ENTITY_2]: [RELATIONSHIP_TYPE] (join on [JOIN_KEY])
 
 ---
 
@@ -122,8 +122,8 @@ Use these reference files for detailed table documentation:
 ## Troubleshooting
 
 ### Common Mistakes
-- **[MISTAKE_1]**: [EXPLANATION] → [CORRECT_APPROACH]
-- **[MISTAKE_2]**: [EXPLANATION] → [CORRECT_APPROACH]
+- **[MISTAKE_1]**: [EXPLANATION] -> [CORRECT_APPROACH]
+- **[MISTAKE_2]**: [EXPLANATION] -> [CORRECT_APPROACH]
 
 ### Access Issues
 - If you encounter permission errors on `[TABLE]`: [WORKAROUND]

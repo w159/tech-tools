@@ -23,20 +23,20 @@ triggers:
 
 ## Overview
 
-M365 licensing is a top billing concern for MSPs. Licenses are purchased as SKU subscriptions, each containing bundles of service plans (Exchange, Teams, SharePoint, etc.). Efficient license management — finding unused seats, rightsizing SKUs, ensuring all users have what they need — directly impacts both the MSP's margin and the customer's costs.
+M365 licensing is a top billing concern for MSPs. Licenses are purchased as SKU subscriptions, each containing bundles of service plans (Exchange, Teams, SharePoint, etc.). Efficient license management - finding unused seats, rightsizing SKUs, ensuring all users have what they need - directly impacts both the MSP's margin and the customer's costs.
 
 ## Core Concepts
 
-### Subscription → SKU → Service Plans
+### Subscription -> SKU -> Service Plans
 
 ```
 M365 Business Premium (subscription)
-  └── GUID: cbdc14ab-d96c-4c30-b9f4-6ada7cdc1d46
-       ├── Exchange Online (service plan)
-       ├── Microsoft Teams (service plan)
-       ├── SharePoint Online (service plan)
-       ├── Intune (service plan)
-       └── Entra ID P1 (service plan)
+  +-- GUID: cbdc14ab-d96c-4c30-b9f4-6ada7cdc1d46
+       +-- Exchange Online (service plan)
+       +-- Microsoft Teams (service plan)
+       +-- SharePoint Online (service plan)
+       +-- Intune (service plan)
+       +-- Entra ID P1 (service plan)
 ```
 
 ### License States
@@ -45,7 +45,7 @@ M365 Business Premium (subscription)
 |-------|---------|
 | `Enabled` | Service plan is active and usable |
 | `Disabled` | Plan is turned off for this user (license still assigned) |
-| `Error` | Assignment failed — usually missing `usageLocation` |
+| `Error` | Assignment failed - usually missing `usageLocation` |
 | `LockedOut` | Tenant billing issue |
 | `PendingInput` | Waiting for additional configuration |
 
@@ -160,7 +160,7 @@ Pull `subscribedSkus` and calculate:
 
 ### Step 2: Cross-Reference With Active Users
 
-Find licenses assigned to disabled accounts — these are reclaim candidates:
+Find licenses assigned to disabled accounts - these are reclaim candidates:
 
 ```http
 GET /v1.0/users?$filter=accountEnabled eq false and assignedLicenses/$count ne 0&$count=true&$select=id,displayName,userPrincipalName,assignedLicenses
@@ -178,8 +178,8 @@ Filter results where `signInActivity.lastSignInDateTime < (today - 90 days)`.
 
 | Optimization | Estimated Saving |
 |--------------|----------------|
-| Remove licenses from disabled accounts | # disabled × monthly seat cost |
-| Downgrade inactive users to lighter SKU | SKU price delta × count |
+| Remove licenses from disabled accounts | # disabled x monthly seat cost |
+| Downgrade inactive users to lighter SKU | SKU price delta x count |
 | Recover unused purchased seats | (purchased - consumed) seats available |
 
 ## Common SKU GUIDs Reference

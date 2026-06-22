@@ -19,16 +19,16 @@ Reconcile GL account balances to subledger, bank, or third-party balances. Ident
 
 ### Arguments
 
-- `account` — The account or account category to reconcile. Examples:
-  - `cash` or `bank` — Bank reconciliation (GL cash to bank statement)
-  - `accounts-receivable` or `ar` — AR subledger reconciliation
-  - `accounts-payable` or `ap` — AP subledger reconciliation
-  - `fixed-assets` or `fa` — Fixed asset subledger reconciliation
-  - `intercompany` or `ic` — Intercompany balance reconciliation
-  - `prepaid` — Prepaid expense schedule reconciliation
-  - `accrued-liabilities` — Accrued liabilities detail reconciliation
+- `account` - The account or account category to reconcile. Examples:
+  - `cash` or `bank` - Bank reconciliation (GL cash to bank statement)
+  - `accounts-receivable` or `ar` - AR subledger reconciliation
+  - `accounts-payable` or `ap` - AP subledger reconciliation
+  - `fixed-assets` or `fa` - Fixed asset subledger reconciliation
+  - `intercompany` or `ic` - Intercompany balance reconciliation
+  - `prepaid` - Prepaid expense schedule reconciliation
+  - `accrued-liabilities` - Accrued liabilities detail reconciliation
   - Any specific GL account code (e.g., `1010`, `2100`)
-- `period` — The accounting period end date (e.g., `2024-12`, `2024-12-31`)
+- `period` - The accounting period end date (e.g., `2024-12`, `2024-12-31`)
 
 ## Workflow
 
@@ -80,7 +80,7 @@ Analyze the difference and categorize reconciling items:
 
 ```
 ACCOUNT RECONCILIATION
-Account: [Account code] — [Account name]
+Account: [Account code] - [Account name]
 Period End: [Date]
 Prepared by: [User]
 Date Prepared: [Today]

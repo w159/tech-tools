@@ -103,9 +103,9 @@ conditions=resources contains "jsmith" and closedFlag=false
 
 Follow these checkpoints before closing any ticket:
 
-1. **Verify resolution exists** — `GET /service/tickets/{id}` and confirm `resolution` field is populated. If empty, add a resolution note first (`resolutionFlag: true`).
-2. **Check time entries** — `GET /time/entries?conditions=chargeToId={id} and chargeToType="ServiceTicket"`. Ensure all work is logged.
-3. **Confirm status is Completed** — Tickets must pass through `Completed` before `Closed`. Set status to `Completed` first if still `In Progress` or waiting.
+1. **Verify resolution exists**  -  `GET /service/tickets/{id}` and confirm `resolution` field is populated. If empty, add a resolution note first (`resolutionFlag: true`).
+2. **Check time entries**  -  `GET /time/entries?conditions=chargeToId={id} and chargeToType="ServiceTicket"`. Ensure all work is logged.
+3. **Confirm status is Completed**  -  Tickets must pass through `Completed` before `Closed`. Set status to `Completed` first if still `In Progress` or waiting.
 4. **Close the ticket:**
    ```http
    PATCH /service/tickets/{id}
@@ -117,20 +117,20 @@ Follow these checkpoints before closing any ticket:
      "resolution": "DNS records corrected; email service restored for all affected users."
    }
    ```
-5. **Validate closure** — `GET /service/tickets/{id}` and confirm `closedFlag: true` and `closedDate` is populated.
+5. **Validate closure**  -  `GET /service/tickets/{id}` and confirm `closedFlag: true` and `closedDate` is populated.
 
 > If any checkpoint fails, stop and resolve the issue before proceeding. Closing without a resolution note will leave the ticket incomplete in reports.
 
 ## Best Practices
 
-1. **Always specify board** — determines available statuses, workflows, and SLA rules.
-2. **Set accurate priority** — use impact/urgency; Priority 1 = highest (business down). See [REFERENCE.md](./REFERENCE.md) for the matrix.
-3. **Search before creating** — check for duplicates with `conditions=company/id={id} and summary contains "keyword"`.
-4. **Update status promptly** — keeps SLA clocks accurate and queues reliable.
+1. **Always specify board**  -  determines available statuses, workflows, and SLA rules.
+2. **Set accurate priority**  -  use impact/urgency; Priority 1 = highest (business down). See [REFERENCE.md](./REFERENCE.md) for the matrix.
+3. **Search before creating**  -  check for duplicates with `conditions=company/id={id} and summary contains "keyword"`.
+4. **Update status promptly**  -  keeps SLA clocks accurate and queues reliable.
 
 ## Related Skills
 
-- [ConnectWise Companies](../companies/SKILL.md) — Company management
-- [ConnectWise Contacts](../contacts/SKILL.md) — Contact management
-- [ConnectWise Time Entries](../time-entries/SKILL.md) — Time tracking
-- [ConnectWise API Patterns](../api-patterns/SKILL.md) — Query syntax and auth
+- [ConnectWise Companies](../companies/SKILL.md)  -  Company management
+- [ConnectWise Contacts](../contacts/SKILL.md)  -  Contact management
+- [ConnectWise Time Entries](../time-entries/SKILL.md)  -  Time tracking
+- [ConnectWise API Patterns](../api-patterns/SKILL.md)  -  Query syntax and auth

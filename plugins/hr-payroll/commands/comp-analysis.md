@@ -1,5 +1,5 @@
 ---
-description: Analyze compensation — benchmarking, band placement, and equity modeling
+description: Analyze compensation - benchmarking, band placement, and equity modeling
 argument-hint: "<role, level, or dataset>"
 ---
 
@@ -64,6 +64,6 @@ If **~~HRIS** is connected:
 
 ## Tips
 
-1. **Location matters** — Always specify location for benchmarking. SF vs. Austin vs. London are very different.
-2. **Total comp, not just base** — Include equity, bonus, and benefits for a complete picture.
-3. **Keep data confidential** — Comp data is sensitive. Results stay in your conversation.
+1. **Location matters** - Always specify location for benchmarking. SF vs. Austin vs. London are very different.
+2. **Total comp, not just base** - Include equity, bonus, and benefits for a complete picture.
+3. **Keep data confidential** - Comp data is sensitive. Results stay in your conversation.

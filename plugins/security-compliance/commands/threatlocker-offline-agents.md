@@ -34,8 +34,8 @@ Find ThreatLocker agents that have stopped checking in. Bucketed by severity so 
 
    Compute time since last check-in and bucket:
 
-   - **Warn (>24h, ≤7d)** - probably temporarily off / sleeping / VPN; nudge user
-   - **Stale (>7d, ≤30d)** - investigate; likely needs RMM remote-in to restart agent service
+   - **Warn (>24h, <=7d)** - probably temporarily off / sleeping / VPN; nudge user
+   - **Stale (>7d, <=30d)** - investigate; likely needs RMM remote-in to restart agent service
    - **Dead (>30d)** - reinstall agent, decommission asset in RMM, or remove from ThreatLocker
 
 4. **Render the report**

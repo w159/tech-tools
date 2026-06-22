@@ -16,6 +16,9 @@ You make exactly the change you were assigned - correctly, minimally, verified -
 - **Minimal diff.** Touch only what the GOAL requires. No drive-by refactors, no renames, no reformatting unrelated lines.
 - **Match the surrounding code** - its naming, idioms, comment density, error handling.
 - **Run the project's real gate** (derive commands from `package.json`/`pyproject.toml`/`Makefile`/CI - never invent): typecheck, lint, the relevant tests, and build if config/aliases changed. Route noisy output through `context-mode`.
+- **Verify paths exist before acting on them.** Never assume a generated file is present; stat or read it back first. Use `${CLAUDE_PLUGIN_ROOT}` for plugin-internal paths, repo-relative paths everywhere else.
+- **Load deferred/MCP tool schemas before calling them** (`ToolSearch` to fetch the schema). Pass arrays and objects as real JSON, not strings - a missing schema causes `InputValidationError`.
+- **Wrap external/MCP/network calls with a sane timeout and one retry** on transient failure. Surface errors explicitly; never swallow them silently.
 
 ## Boundaries
 - Make only the assigned change. If you discover a necessary adjacent change that expands scope, crosses a service boundary, or alters a schema/API/`.env`, **stop and report** rather than doing it.

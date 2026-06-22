@@ -63,7 +63,7 @@ Interpretation:
 - Below 80% = Enforcement issue, need manager involvement
 - 80-95% = Normal range, follow up on stragglers
 - Above 95% = Excellent compliance
-- 100% = Verify data -- may indicate auto-completion
+- 100% = Verify data - may indicate auto-completion
 ```
 
 **Risk Score Trends:**
@@ -178,7 +178,7 @@ Note: there is no per-department metrics tool; use `knowbe4_reporting_risk_overv
 ### Risk Trend Analysis
 
 1. **Pull risk score history** for the organization over 12 months
-2. **Overlay with campaign dates** -- phishing tests and training launches
+2. **Overlay with campaign dates** - phishing tests and training launches
 3. **Correlate risk changes** with specific events
 4. **Identify which campaigns** had the most impact on risk
 5. **Recommend optimization** of campaign mix
@@ -227,11 +227,11 @@ DEPARTMENT SECURITY AWARENESS COMPARISON
 
 Department    | PPP    | Training | Risk Score | Trend
 -------------|--------|----------|------------|------
-IT           | 3.2%   | 98%      | 15.4       | ↓
-Finance      | 8.1%   | 95%      | 28.7       | ↓
-Sales        | 22.4%  | 82%      | 52.1       | →
-HR           | 12.7%  | 91%      | 35.2       | ↓
-Executive    | 15.3%  | 88%      | 41.0       | ↑
+IT           | 3.2%   | 98%      | 15.4       | (down)
+Finance      | 8.1%   | 95%      | 28.7       | (down)
+Sales        | 22.4%  | 82%      | 52.1       | ->
+HR           | 12.7%  | 91%      | 35.2       | (down)
+Executive    | 15.3%  | 88%      | 41.0       | (up)
 ```
 
 ## Error Handling
@@ -258,16 +258,16 @@ Executive    | 15.3%  | 88%      | 41.0       | ↑
 
 ## Best Practices
 
-1. **Report consistently** -- Use the same metrics and format every period
-2. **Show trends, not snapshots** -- A single PPP number is less useful than 6-month trend
-3. **Use benchmarks** -- Compare against industry averages for context
-4. **Segment by audience** -- Executives want summary; security team wants details
-5. **Include recommendations** -- Every report should have actionable next steps
-6. **Track leading indicators** -- PAB reporting rate predicts future PPP improvement
-7. **Celebrate successes** -- Highlight departments and users who improve
-8. **Avoid vanity metrics** -- Focus on metrics that drive security outcomes
-9. **Automate where possible** -- Schedule recurring reports to reduce manual effort
-10. **Correlate with real incidents** -- Connect awareness metrics to actual security events
+1. **Report consistently** - Use the same metrics and format every period
+2. **Show trends, not snapshots** - A single PPP number is less useful than 6-month trend
+3. **Use benchmarks** - Compare against industry averages for context
+4. **Segment by audience** - Executives want summary; security team wants details
+5. **Include recommendations** - Every report should have actionable next steps
+6. **Track leading indicators** - PAB reporting rate predicts future PPP improvement
+7. **Celebrate successes** - Highlight departments and users who improve
+8. **Avoid vanity metrics** - Focus on metrics that drive security outcomes
+9. **Automate where possible** - Schedule recurring reports to reduce manual effort
+10. **Correlate with real incidents** - Connect awareness metrics to actual security events
 
 ## Related Skills
 

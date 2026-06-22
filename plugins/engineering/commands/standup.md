@@ -12,20 +12,20 @@ Generate a standup update by pulling together recent activity across your tools.
 ## How It Works
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        STANDUP                                    │
-├─────────────────────────────────────────────────────────────────┤
-│  STANDALONE (always works)                                       │
-│  ✓ Tell me what you worked on and I'll structure it             │
-│  ✓ Format for daily standup (yesterday / today / blockers)      │
-│  ✓ Keep it concise and action-oriented                          │
-├─────────────────────────────────────────────────────────────────┤
-│  SUPERCHARGED (when you connect your tools)                      │
-│  + Source control: Recent commits and PRs                        │
-│  + Project tracker: Ticket status changes                        │
-│  + Chat: Relevant discussions and decisions                      │
-│  + CI/CD: Build and deploy status                                │
-└─────────────────────────────────────────────────────────────────┘
++-----------------------------------------------------------------+
+|                        STANDUP                                    |
++-----------------------------------------------------------------+
+|  STANDALONE (always works)                                       |
+|  [x] Tell me what you worked on and I'll structure it             |
+|  [x] Format for daily standup (yesterday / today / blockers)      |
+|  [x] Keep it concise and action-oriented                          |
++-----------------------------------------------------------------+
+|  SUPERCHARGED (when you connect your tools)                      |
+|  + Source control: Recent commits and PRs                        |
+|  + Project tracker: Ticket status changes                        |
+|  + Chat: Relevant discussions and decisions                      |
+|  + CI/CD: Build and deploy status                                |
++-----------------------------------------------------------------+
 ```
 
 ## What I Need From You
@@ -39,7 +39,7 @@ If your tools are connected, just say `/standup` and I'll gather everything auto
 ## Output
 
 ```markdown
-## Standup — [Date]
+## Standup  -  [Date]
 
 ### Yesterday
 - [Completed item with ticket reference if available]
@@ -69,6 +69,6 @@ If **~~chat** is connected:
 
 ## Tips
 
-1. **Run it every morning** — Build a habit and never scramble for standup notes.
-2. **Add context** — After I generate, add any nuance about blockers or priorities.
-3. **Share format** — Ask me to format for Slack, email, or your team's standup tool.
+1. **Run it every morning**  -  Build a habit and never scramble for standup notes.
+2. **Add context**  -  After I generate, add any nuance about blockers or priorities.
+3. **Share format**  -  Ask me to format for Slack, email, or your team's standup tool.
