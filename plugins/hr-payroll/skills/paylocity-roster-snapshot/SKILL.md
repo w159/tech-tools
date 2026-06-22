@@ -7,7 +7,7 @@ description: Pull a snapshot of the active employee roster from Paylocity, expan
 
 ## Pipeline
 
-1. `paylocity_status` — confirm credentials + default companyId are in place.
+1. `paylocity_status` - confirm credentials + default companyId are in place.
 2. `paylocity_employees_list` with `activeOnly=true`, `include="info,position,status,payRate"`, `limit=20`. Walk pages via `nextToken` until exhausted.
 3. **In `ctx_execute`**:
    - Project each employee to `{ employeeId, firstName, lastName, jobTitle, department, payRate, location, status }`.

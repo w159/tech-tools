@@ -22,22 +22,22 @@ If no specific file or URL is provided, ask what to review.
 ## How It Works
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                      CODE REVIEW                                   │
-├─────────────────────────────────────────────────────────────────┤
-│  STANDALONE (always works)                                       │
-│  ✓ Paste a diff, PR URL, or point to files                      │
-│  ✓ Security audit (OWASP top 10, injection, auth)               │
-│  ✓ Performance review (N+1, memory leaks, complexity)           │
-│  ✓ Correctness (edge cases, error handling, race conditions)    │
-│  ✓ Style (naming, structure, readability)                        │
-│  ✓ Actionable suggestions with code examples                    │
-├─────────────────────────────────────────────────────────────────┤
-│  SUPERCHARGED (when you connect your tools)                      │
-│  + Source control: Pull PR diff automatically                    │
-│  + Project tracker: Link findings to tickets                     │
-│  + Knowledge base: Check against team coding standards           │
-└─────────────────────────────────────────────────────────────────┘
++-----------------------------------------------------------------+
+|                      CODE REVIEW                                   |
++-----------------------------------------------------------------+
+|  STANDALONE (always works)                                       |
+|  [x] Paste a diff, PR URL, or point to files                      |
+|  [x] Security audit (OWASP top 10, injection, auth)               |
+|  [x] Performance review (N+1, memory leaks, complexity)           |
+|  [x] Correctness (edge cases, error handling, race conditions)    |
+|  [x] Style (naming, structure, readability)                        |
+|  [x] Actionable suggestions with code examples                    |
++-----------------------------------------------------------------+
+|  SUPERCHARGED (when you connect your tools)                      |
+|  + Source control: Pull PR diff automatically                    |
+|  + Project tracker: Link findings to tickets                     |
+|  + Knowledge base: Check against team coding standards           |
++-----------------------------------------------------------------+
 ```
 
 ## Output
@@ -51,7 +51,7 @@ If no specific file or URL is provided, ask what to review.
 ### Critical Issues
 | # | File | Line | Issue | Severity |
 |---|------|------|-------|----------|
-| 1 | [file] | [line] | [description] | 🔴 Critical |
+| 1 | [file] | [line] | [description] | [RED] Critical |
 
 ### Suggestions
 | # | File | Line | Suggestion | Category |
@@ -90,6 +90,6 @@ If **~~knowledge base** is connected:
 
 ## Tips
 
-1. **Provide context** — "This is a hot path" or "This handles PII" helps me focus.
-2. **Specify concerns** — "Focus on security" narrows the review.
-3. **Include tests** — I'll check test coverage and quality too.
+1. **Provide context**  -  "This is a hot path" or "This handles PII" helps me focus.
+2. **Specify concerns**  -  "Focus on security" narrows the review.
+3. **Include tests**  -  I'll check test coverage and quality too.

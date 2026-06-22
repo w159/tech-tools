@@ -118,7 +118,7 @@ An account is significant if there is more than a remote likelihood that it coul
 2. Select a random starting point within the first interval
 3. Select every Nth item from the starting point
 
-**Example:** Population of 1,000, sample of 25 → interval of 40. Random start: item 17. Select items 17, 57, 97, 137, ...
+**Example:** Population of 1,000, sample of 25 -> interval of 40. Random start: item 17. Select items 17, 57, 97, 137, ...
 
 **Advantages:** Even coverage across population, simple to execute
 **Disadvantages:** Periodic patterns in the population could bias results
@@ -200,23 +200,23 @@ Organize testing files by control area:
 
 ```
 SOX Testing/
-├── [Year]/
-│   ├── Scoping and Risk Assessment/
-│   ├── Revenue Cycle/
-│   │   ├── Control Matrix
-│   │   ├── Walkthrough Documentation
-│   │   ├── Test Workpapers (one per control)
-│   │   └── Supporting Evidence
-│   ├── Procure to Pay/
-│   ├── Payroll/
-│   ├── Financial Close/
-│   ├── Treasury/
-│   ├── Fixed Assets/
-│   ├── IT General Controls/
-│   ├── Entity Level Controls/
-│   └── Summary and Conclusions/
-│       ├── Deficiency Evaluation
-│       └── Management Assessment
++-- [Year]/
+|   +-- Scoping and Risk Assessment/
+|   +-- Revenue Cycle/
+|   |   +-- Control Matrix
+|   |   +-- Walkthrough Documentation
+|   |   +-- Test Workpapers (one per control)
+|   |   +-- Supporting Evidence
+|   +-- Procure to Pay/
+|   +-- Payroll/
+|   +-- Financial Close/
+|   +-- Treasury/
+|   +-- Fixed Assets/
+|   +-- IT General Controls/
+|   +-- Entity Level Controls/
+|   +-- Summary and Conclusions/
+|       +-- Deficiency Evaluation
+|       +-- Management Assessment
 ```
 
 ## Control Deficiency Classification
@@ -349,7 +349,7 @@ Manual controls that rely on the completeness and accuracy of system-generated i
 
 **Testing approach:**
 - Test the manual control (review, approval, follow-up on exceptions)
-- AND test the completeness and accuracy of the underlying report/data (IPE — Information Produced by the Entity)
+- AND test the completeness and accuracy of the underlying report/data (IPE - Information Produced by the Entity)
 - IPE testing confirms the data the reviewer relied on was complete and accurate
 
 ### Entity-Level Controls

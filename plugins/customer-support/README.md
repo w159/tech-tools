@@ -1,6 +1,6 @@
 # Customer Support Plugin
 
-A customer support plugin primarily designed for [Cowork](https://claude.com/product/cowork), Anthropic's agentic desktop application — though it also works in Claude Code. Provides ticket triage, escalation management, response drafting, customer research, and knowledge base authoring for support teams.
+A customer support plugin primarily designed for [Cowork](https://claude.com/product/cowork), Anthropic's agentic desktop application - though it also works in Claude Code. Provides ticket triage, escalation management, response drafting, customer research, and knowledge base authoring for support teams.
 
 ## Installation
 
@@ -61,14 +61,14 @@ Connect your support platform, knowledge base, and communication tools for the b
 
 ```
 You: /triage Customer says their dashboard has been showing a blank
-     page since this morning — they're on the Enterprise plan
+     page since this morning - they're on the Enterprise plan
 
 Claude: Analyzing the issue...
 
-## Triage: Dashboard blank page — Enterprise customer
+## Triage: Dashboard blank page - Enterprise customer
 
 **Category:** Bug
-**Priority:** P2 — High (core feature broken, enterprise customer)
+**Priority:** P2 - High (core feature broken, enterprise customer)
 **Product area:** Dashboard / Frontend
 
 ### Routing Recommendation
@@ -88,14 +88,14 @@ You: /research Does our platform support SSO with Okta?
 Claude: Let me check across available sources...
 
 [Searches docs, knowledge base, previous conversations,
- and web sources — synthesizes answer with confidence
+ and web sources - synthesizes answer with confidence
  level and source attribution]
 ```
 
 ### Packaging an Escalation
 
 ```
-You: /escalate API returning 500 errors intermittently — 3
+You: /escalate API returning 500 errors intermittently - 3
      Enterprise customers reported this week
 
 Claude: I'll gather context and build the escalation brief...
@@ -108,7 +108,7 @@ Claude: I'll gather context and build the escalation brief...
 ### Drafting a Response
 
 ```
-You: /draft-response Customer escalation — their integration
+You: /draft-response Customer escalation - their integration
      has been down for 2 days and they're frustrated
 
 Claude: [Generates empathetic, professional response acknowledging
@@ -119,12 +119,12 @@ Claude: [Generates empathetic, professional response acknowledging
 ### Writing a KB Article
 
 ```
-You: /kb-article How to configure webhook notifications —
+You: /kb-article How to configure webhook notifications -
      just resolved this for the third customer this month
 
 Claude: [Generates a structured how-to article with prerequisites,
  step-by-step instructions, verification steps, and common
- issues — optimized for search]
+ issues - optimized for search]
 ```
 
 ## Configuration

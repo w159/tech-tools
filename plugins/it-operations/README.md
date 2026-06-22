@@ -1,11 +1,11 @@
-# Operations Plugin
+# IT Operations Plugin
 
-A business operations plugin primarily designed for [Cowork](https://claude.com/product/cowork), Anthropic's agentic desktop application — though it also works in Claude Code. Helps with vendor management, process documentation, change management, capacity planning, compliance tracking, and resource planning. Works with any ops team — standalone with your input, supercharged when you connect your ITSM, project tracker, and other tools.
+A business operations plugin primarily designed for [Cowork](https://claude.com/product/cowork), Anthropic's agentic desktop application  -  though it also works in Claude Code. Helps with vendor management, process documentation, change management, capacity planning, compliance tracking, and resource planning. Works with any ops team  -  standalone with your input, supercharged when you connect your ITSM, project tracker, and other tools.
 
 ## Installation
 
 ```bash
-claude plugins add knowledge-work-plugins/operations
+claude plugins add knowledge-work-plugins/it-operations
 ```
 
 ## Commands
@@ -14,12 +14,12 @@ Explicit workflows you invoke with a slash command:
 
 | Command | Description |
 |---|---|
-| `/vendor-review` | Evaluate a vendor — cost analysis, risk assessment, contract summary, and renewal recommendation |
-| `/process-doc` | Document a business process — flowcharts, RACI matrices, SOPs, and runbooks |
-| `/change-request` | Create a change management request — impact analysis, rollback plan, approval routing |
-| `/capacity-plan` | Plan resource capacity — workload analysis, headcount modeling, utilization forecasting |
-| `/status-report` | Generate a status report — project updates, KPIs, risks, and action items for leadership |
-| `/runbook` | Create or update an operational runbook — step-by-step procedures for recurring tasks |
+| `/vendor-review` | Evaluate a vendor  -  cost analysis, risk assessment, contract summary, and renewal recommendation |
+| `/process-doc` | Document a business process  -  flowcharts, RACI matrices, SOPs, and runbooks |
+| `/change-request` | Create a change management request  -  impact analysis, rollback plan, approval routing |
+| `/capacity-plan` | Plan resource capacity  -  workload analysis, headcount modeling, utilization forecasting |
+| `/status-report` | Generate a status report  -  project updates, KPIs, risks, and action items for leadership |
+| `/runbook` | Create or update an operational runbook  -  step-by-step procedures for recurring tasks |
 
 All commands work **standalone** (provide context and details) and get **supercharged** with MCP connectors.
 
@@ -29,12 +29,12 @@ Domain knowledge Claude uses automatically when relevant:
 
 | Skill | Description |
 |---|---|
-| `vendor-management` | Evaluate, compare, and manage vendor relationships — contracts, performance, risk |
-| `process-optimization` | Analyze and improve business processes — identify bottlenecks, reduce waste, streamline workflows |
-| `change-management` | Plan and execute organizational or technical changes — communication, training, adoption |
-| `risk-assessment` | Identify, assess, and mitigate operational risks — risk registers, impact analysis, controls |
-| `compliance-tracking` | Track compliance requirements — audits, certifications, regulatory deadlines, policy adherence |
-| `resource-planning` | Plan and optimize resource allocation — capacity, utilization, forecasting, budget |
+| `vendor-management` | Evaluate, compare, and manage vendor relationships  -  contracts, performance, risk |
+| `process-optimization` | Analyze and improve business processes  -  identify bottlenecks, reduce waste, streamline workflows |
+| `change-management` | Plan and execute organizational or technical changes  -  communication, training, adoption |
+| `risk-assessment` | Identify, assess, and mitigate operational risks  -  risk registers, impact analysis, controls |
+| `compliance-tracking` | Track compliance requirements  -  audits, certifications, regulatory deadlines, policy adherence |
+| `resource-planning` | Plan and optimize resource allocation  -  capacity, utilization, forecasting, budget |
 
 ## Example Workflows
 

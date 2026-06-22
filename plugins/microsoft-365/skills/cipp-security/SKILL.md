@@ -1,6 +1,6 @@
 ---
 name: "cipp-security"
-description: "Use this skill when reviewing M365 conditional access policies and named locations through CIPP — auditing CA coverage, finding policies that exclude critical apps, listing trusted IP ranges, identifying tenants without baseline conditional access. Read-only surface focused on security posture review."
+description: "Use this skill when reviewing M365 conditional access policies and named locations through CIPP - auditing CA coverage, finding policies that exclude critical apps, listing trusted IP ranges, identifying tenants without baseline conditional access. Read-only surface focused on security posture review."
 when_to_use: "When auditing conditional access policies or named locations across managed tenants for security posture review"
 triggers:
   - conditional access
@@ -13,9 +13,9 @@ triggers:
   - location based access
 ---
 
-# CIPP Security — Conditional Access & Named Locations
+# CIPP Security - Conditional Access & Named Locations
 
-Read-only access to a tenant's Conditional Access policy graph and named-location list. Use as input to security posture reviews and to detect tenants drifting from MSP baseline policies. CIPP doesn't expose CA write operations through MCP — apply policy changes via CIPP standards or the CIPP UI.
+Read-only access to a tenant's Conditional Access policy graph and named-location list. Use as input to security posture reviews and to detect tenants drifting from MSP baseline policies. CIPP doesn't expose CA write operations through MCP - apply policy changes via CIPP standards or the CIPP UI.
 
 ## Tools
 
@@ -39,7 +39,7 @@ Returns named locations: IP ranges (trusted/untrusted) and country-based locatio
 
 | Finding | Why it matters |
 |---------|----------------|
-| Zero policies in `enabled` state | Tenant has no CA enforcement at all — a baseline `enabledForReportingButNotEnforced` doesn't block anything |
+| Zero policies in `enabled` state | Tenant has no CA enforcement at all - a baseline `enabledForReportingButNotEnforced` doesn't block anything |
 | MFA not required for "All cloud apps" | A baseline policy is missing or scoped too narrowly |
 | Policies excluding the entire admin role | Common configuration mistake; admins should require *more* MFA, not less |
 | Trusted location includes home/coffee-shop IPs | Named-location bloat creates exception paths for attackers |
@@ -69,5 +69,5 @@ Run `cipp_list_conditional_access_policies` per tenant and compare the policy fi
 ## Caveats
 
 - CA write operations (create/edit/delete) are not exposed via MCP. Use CIPP standards (`cipp_run_standards_check` and the standards UI) to deploy policy templates across tenants, or do it manually via the CIPP web UI.
-- Named locations are a **trust amplifier** — review them as carefully as policies. A misconfigured trusted IP range can quietly exempt entire networks from MFA.
+- Named locations are a **trust amplifier** - review them as carefully as policies. A misconfigured trusted IP range can quietly exempt entire networks from MFA.
 - `enabledForReportingButNotEnforced` looks like coverage in dashboards but enforces nothing. Always check `state == 'enabled'` for actual enforcement.

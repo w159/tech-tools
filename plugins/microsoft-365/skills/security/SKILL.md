@@ -36,7 +36,7 @@ MFA enrollment lives on the `authentication/methods` endpoint per user. Users wi
 GET /v1.0/users/{userId}/authentication/methods
 ```
 
-**Response — user WITH MFA:**
+**Response - user WITH MFA:**
 ```json
 {
   "value": [
@@ -53,7 +53,7 @@ GET /v1.0/users/{userId}/authentication/methods
 }
 ```
 
-**Response — user WITHOUT MFA (vulnerable):**
+**Response - user WITHOUT MFA (vulnerable):**
 ```json
 {
   "value": [
@@ -135,7 +135,7 @@ GET /v1.0/auditLogs/signIns?$filter=userPrincipalName eq 'user@contoso.com'&$sel
 **Key fields for incident response:**
 - `status.errorCode: 0` = success, nonzero = failure
 - `ipAddress` and `location` for geolocation anomalies
-- `clientAppUsed` — legacy auth clients are high risk
+- `clientAppUsed` - legacy auth clients are high risk
 - `conditionalAccessStatus: notApplied` = CA policy gap
 
 ## Suspicious Inbox Rules

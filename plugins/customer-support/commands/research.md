@@ -29,17 +29,17 @@ Identify what type of research is needed:
 
 Search in priority order, adapting to what is connected:
 
-**Tier 1 — Internal Documentation (highest confidence):**
+**Tier 1 - Internal Documentation (highest confidence):**
 - ~~knowledge base (if connected): product docs, runbooks, FAQs
 - ~~cloud storage: internal documents, specs, guides, past research
 - ~~CRM notes: previous answers to similar questions, account context
 
-**Tier 2 — Team Communications:**
+**Tier 2 - Team Communications:**
 - ~~chat: search for the topic in relevant channels; check if teammates have discussed or answered this before
 - ~~email: search for previous correspondence on this topic
 - ~~support platform (if connected): check if this has been asked/resolved before
 
-**Tier 3 — External Sources:**
+**Tier 3 - External Sources:**
 - Web search: official documentation, blog posts, community forums
 - Public knowledge bases, help centers, release notes
 
@@ -51,7 +51,7 @@ Compile results into a structured research brief:
 ## Research: [Question/Topic]
 
 ### Answer
-[Clear, direct answer to the question — lead with the bottom line]
+[Clear, direct answer to the question - lead with the bottom line]
 
 **Confidence:** [High / Medium / Low]
 [Explain what drives the confidence level]
@@ -69,9 +69,9 @@ Compile results into a structured research brief:
 [Any caveats, edge cases, or additional context that matters]
 
 ### Sources
-1. [Source name/link] — [what it contributed]
-2. [Source name/link] — [what it contributed]
-3. [Source name/link] — [what it contributed]
+1. [Source name/link] - [what it contributed]
+2. [Source name/link] - [what it contributed]
+3. [Source name/link] - [what it contributed]
 
 ### Gaps & Unknowns
 - [What couldn't be confirmed]
@@ -93,7 +93,7 @@ If no connected sources yield results:
   - "Has your team discussed this topic before? Any ~~chat channels I should check?"
   - "Is there a subject matter expert who would know the answer?"
 - Be transparent about limitations:
-  - "This answer is based on web research only — please verify against your internal documentation before sharing with the customer."
+  - "This answer is based on web research only - please verify against your internal documentation before sharing with the customer."
   - "I found a possible answer but couldn't confirm it from an authoritative internal source."
 
 ### 5. Customer-Facing Considerations
@@ -111,6 +111,6 @@ After research is complete, suggest capturing the knowledge:
 
 - "Should I save these findings to your knowledge base for future reference?"
 - "Want me to create a FAQ entry based on this research?"
-- "This might be worth documenting — should I draft a runbook entry?"
+- "This might be worth documenting - should I draft a runbook entry?"
 
 This helps build institutional knowledge and reduces duplicate research effort across the team.

@@ -12,9 +12,9 @@ The last mile of enterprise search. Takes raw results from multiple sources and 
 Transform this:
 ```
 ~~chat result: "Sarah said in #eng: 'let's go with REST, GraphQL is overkill for our use case'"
-~~email result: "Subject: API Decision — Sarah's email confirming REST approach with rationale"
-~~cloud storage result: "API Design Doc v3 — updated section 2 to reflect REST decision"
-~~project tracker result: "Task: Finalize API approach — marked complete by Sarah"
+~~email result: "Subject: API Decision  -  Sarah's email confirming REST approach with rationale"
+~~cloud storage result: "API Design Doc v3  -  updated section 2 to reflect REST decision"
+~~project tracker result: "Task: Finalize API approach  -  marked complete by Sarah"
 ```
 
 Into this:
@@ -82,9 +82,9 @@ The design doc was updated to reflect this (~~cloud storage: "API Design Doc v3"
 Source list at the end for completeness:
 ```
 Sources:
-- ~~chat: #engineering discussion (Jan 14) — initial decision thread
-- ~~email: "API Decision" from Sarah Chen (Jan 15) — formal confirmation
-- ~~cloud storage: "API Design Doc v3" last modified Jan 15 — updated specification
+- ~~chat: #engineering discussion (Jan 14)  -  initial decision thread
+- ~~email: "API Decision" from Sarah Chen (Jan 15)  -  formal confirmation
+- ~~cloud storage: "API Design Doc v3" last modified Jan 15  -  updated specification
 ```
 
 ### Attribution Rules
@@ -108,8 +108,8 @@ Not all results are equally trustworthy. Assess confidence based on:
 |---------|------------------|
 | Today / yesterday | High confidence for current state |
 | This week | Good confidence |
-| This month | Moderate — things may have changed |
-| Older than a month | Lower confidence — flag as potentially outdated |
+| This month | Moderate  -  things may have changed |
+| Older than a month | Lower confidence  -  flag as potentially outdated |
 
 For status queries, heavily weight freshness. For policy/factual queries, freshness matters less.
 
@@ -117,14 +117,14 @@ For status queries, heavily weight freshness. For policy/factual queries, freshn
 
 | Source type | Authority level |
 |-------------|----------------|
-| Official wiki / knowledge base | Highest — curated, maintained |
-| Shared documents (final versions) | High — intentionally published |
-| Email announcements | High — formal communication |
-| Meeting notes | Moderate-high — may be incomplete |
-| Chat messages (thread conclusions) | Moderate — informal but real-time |
-| Chat messages (mid-thread) | Lower — may not reflect final position |
-| Draft documents | Low — not finalized |
-| Task comments | Contextual — depends on commenter |
+| Official wiki / knowledge base | Highest  -  curated, maintained |
+| Shared documents (final versions) | High  -  intentionally published |
+| Email announcements | High  -  formal communication |
+| Meeting notes | Moderate-high  -  may be incomplete |
+| Chat messages (thread conclusions) | Moderate  -  informal but real-time |
+| Chat messages (mid-thread) | Lower  -  may not reflect final position |
+| Draft documents | Low  -  not finalized |
+| Task comments | Contextual  -  depends on commenter |
 
 ### Expressing Confidence
 
@@ -165,7 +165,7 @@ Always surface conflicts rather than silently picking one version.
 
 ### For Small Result Sets (1-5 results)
 
-Present each result with context. No summarization needed — give the user everything:
+Present each result with context. No summarization needed  -  give the user everything:
 ```
 [Direct answer synthesized from results]
 
@@ -211,7 +211,7 @@ Want me to dig deeper into any specific aspect?
 ### Summarization Rules
 
 - Lead with the answer, not the search process
-- Do not list raw results — synthesize them into narrative
+- Do not list raw results  -  synthesize them into narrative
 - Group related items from different sources together
 - Preserve important nuance and caveats
 - Include enough detail that the user can decide whether to dig deeper
@@ -221,19 +221,19 @@ Want me to dig deeper into any specific aspect?
 
 ```
 [Raw results from all sources]
-          ↓
-[1. Deduplicate — merge same info from different sources]
-          ↓
-[2. Cluster — group related results by theme/topic]
-          ↓
-[3. Rank — order clusters and items by relevance to query]
-          ↓
-[4. Assess confidence — freshness × authority × agreement]
-          ↓
-[5. Synthesize — produce narrative answer with attribution]
-          ↓
-[6. Format — choose appropriate detail level for result count]
-          ↓
+          v
+[1. Deduplicate  -  merge same info from different sources]
+          v
+[2. Cluster  -  group related results by theme/topic]
+          v
+[3. Rank  -  order clusters and items by relevance to query]
+          v
+[4. Assess confidence  -  freshness x authority x agreement]
+          v
+[5. Synthesize  -  produce narrative answer with attribution]
+          v
+[6. Format  -  choose appropriate detail level for result count]
+          v
 [Coherent answer with sources]
 ```
 

@@ -111,12 +111,12 @@ RISK SCORE: 42.8 (MODERATE)
   Department Avg: 38.5
 
 RISK SCORE HISTORY (6 months)
-  2024-02: 58.3  ████████████
-  2024-01: 52.1  ██████████
-  2023-12: 48.7  ██████████
-  2023-11: 45.2  █████████
-  2023-10: 44.0  █████████
-  2023-09: 42.8  █████████
+  2024-02: 58.3  ############
+  2024-01: 52.1  ##########
+  2023-12: 48.7  ##########
+  2023-11: 45.2  #########
+  2023-10: 44.0  #########
+  2023-09: 42.8  #########
 
 CONTRIBUTING FACTORS
   + Clicked phishing link (2024-01-15) - "Password Reset" template
@@ -127,7 +127,7 @@ CONTRIBUTING FACTORS
 
 RECOMMENDATIONS
   1. Assign targeted anti-phishing training focusing on password reset scenarios
-  2. Monitor closely -- risk trend is positive but still above department average
+  2. Monitor closely - risk trend is positive but still above department average
   3. Include in next phishing simulation for follow-up assessment
 ```
 

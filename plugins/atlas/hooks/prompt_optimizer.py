@@ -244,7 +244,7 @@ def run_optimizer(prompt: str) -> str | None:
 def emit_context(optimized: str) -> None:
     """Print the UserPromptSubmit JSON that injects the optimized spec into Claude's context."""
     framing = (
-        "[orchestrate - prompt-optimizer] The user opted to optimize this prompt. A local "
+        "[atlas - prompt-optimizer] The user opted to optimize this prompt. A local "
         "prompt-optimizer model rewrote their request into the expanded specification below. "
         "Treat it as the authoritative task spec for this turn; where it conflicts with the "
         "raw prompt, prefer the user's original intent. Do not mention this preprocessing "

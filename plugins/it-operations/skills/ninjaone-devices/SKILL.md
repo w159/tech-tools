@@ -66,7 +66,7 @@ Authorization: Bearer {token}
 Content-Type: application/json
 ```
 
-Control body — actions: `START`, `STOP`, `RESTART`:
+Control body  -  actions: `START`, `STOP`, `RESTART`:
 
 ```json
 { "action": "RESTART" }
@@ -96,18 +96,18 @@ Authorization: Bearer {token}
 
 Modes: `NORMAL` (graceful, notifies user) | `FORCED` (immediate, no warning).
 
-> **Destructive operation** — always validate before rebooting. See safe-reboot workflow below.
+> **Destructive operation**  -  always validate before rebooting. See safe-reboot workflow below.
 
 ## Workflows
 
 ### Safe Reboot with Validation
 
 ```text
-1. GET /api/v2/device/{id}           → assert "offline": false
-2. GET /api/v2/device/{id}/alerts    → review severity; abort if critical
+1. GET /api/v2/device/{id}           -> assert "offline": false
+2. GET /api/v2/device/{id}/alerts    -> review severity; abort if critical
 3. POST /api/v2/device/{id}/reboot/NORMAL
-4. Poll GET /api/v2/device/{id} every 30s (up to 10 min) → wait for "offline": false
-5. If still offline after 10 min → GET /api/v2/device/{id}/alerts for new alerts; escalate
+4. Poll GET /api/v2/device/{id} every 30s (up to 10 min) -> wait for "offline": false
+5. If still offline after 10 min -> GET /api/v2/device/{id}/alerts for new alerts; escalate
 ```
 
 **Error recovery**: If step 1 shows `"offline": true`, do not reboot. Check `lastContact` and alerts to diagnose.
@@ -115,29 +115,29 @@ Modes: `NORMAL` (graceful, notifies user) | `FORCED` (immediate, no warning).
 ### Restart a Windows Service
 
 ```text
-1. GET /api/v2/device/{id}/windows-services → find target service, note serviceId
+1. GET /api/v2/device/{id}/windows-services -> find target service, note serviceId
 2. If state is "STOPPED", use "START"; otherwise use "RESTART"
 3. POST /api/v2/device/{id}/windows-service/{serviceId}/control  Body: { "action": "RESTART" }
-4. GET /api/v2/device/{id}/windows-services → confirm state is "RUNNING"
+4. GET /api/v2/device/{id}/windows-services -> confirm state is "RUNNING"
 ```
 
-**Error recovery**: 404 means wrong `serviceId` — re-list and match by `serviceName` (case-sensitive). 409 means device offline — check device status first.
+**Error recovery**: 404 means wrong `serviceId`  -  re-list and match by `serviceName` (case-sensitive). 409 means device offline  -  check device status first.
 
 ### Check Server Health
 
 ```text
-1. GET /api/v2/device/{id}                  → confirm online, note OS and role
-2. GET /api/v2/device/{id}/volumes          → flag volumes with < 10% free space
-3. GET /api/v2/device/{id}/alerts           → triage by severity
-4. GET /api/v2/device/{id}/windows-services → verify critical services are RUNNING
+1. GET /api/v2/device/{id}                  -> confirm online, note OS and role
+2. GET /api/v2/device/{id}/volumes          -> flag volumes with < 10% free space
+3. GET /api/v2/device/{id}/alerts           -> triage by severity
+4. GET /api/v2/device/{id}/windows-services -> verify critical services are RUNNING
 ```
 
 ## Best Practices
 
-1. **Check `offline` before issuing commands** — control requests to offline devices return 409.
-2. **Default to `NORMAL` reboot** — `FORCED` skips user notification and risks data loss.
-3. **Poll after destructive operations** — confirm device/service status at 30s intervals before proceeding.
-4. **Scope maintenance windows tightly** — minimize alert suppression gaps.
+1. **Check `offline` before issuing commands**  -  control requests to offline devices return 409.
+2. **Default to `NORMAL` reboot**  -  `FORCED` skips user notification and risks data loss.
+3. **Poll after destructive operations**  -  confirm device/service status at 30s intervals before proceeding.
+4. **Scope maintenance windows tightly**  -  minimize alert suppression gaps.
 
 ## Reference
 
@@ -145,6 +145,6 @@ See [REFERENCE.md](./REFERENCE.md) for device roles, hardware inventory endpoint
 
 ## Related Skills
 
-- [Organizations](../organizations/SKILL.md) — Organization management
-- [Alerts](../alerts/SKILL.md) — Alert monitoring
-- [API Patterns](../api-patterns/SKILL.md) — Authentication and request patterns
+- [Organizations](../organizations/SKILL.md)  -  Organization management
+- [Alerts](../alerts/SKILL.md)  -  Alert monitoring
+- [API Patterns](../api-patterns/SKILL.md)  -  Authentication and request patterns

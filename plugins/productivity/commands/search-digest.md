@@ -15,8 +15,8 @@ Scan recent activity across all connected sources and generate a structured dige
 
 Determine the time window from the user's input:
 
-- `--daily` — Last 24 hours (default if no flag specified)
-- `--weekly` — Last 7 days
+- `--daily`  -  Last 24 hours (default if no flag specified)
+- `--weekly`  -  Last 7 days
 
 The user may also specify a custom range:
 - `--since yesterday`
@@ -27,12 +27,12 @@ The user may also specify a custom range:
 
 Identify which MCP sources are connected (same approach as the search command):
 
-- **~~chat** — channels, DMs, mentions
-- **~~email** — inbox, sent, threads
-- **~~cloud storage** — recently modified docs shared with user
-- **~~project tracker** — tasks assigned, completed, commented on
-- **~~CRM** — opportunity updates, account activity
-- **~~knowledge base** — recently updated wiki pages
+- **~~chat**  -  channels, DMs, mentions
+- **~~email**  -  inbox, sent, threads
+- **~~cloud storage**  -  recently modified docs shared with user
+- **~~project tracker**  -  tasks assigned, completed, commented on
+- **~~CRM**  -  opportunity updates, account activity
+- **~~knowledge base**  -  recently updated wiki pages
 
 If no sources are connected, guide the user:
 ```
@@ -101,7 +101,7 @@ Organize the digest by topic, project, or theme rather than by source. Merge rel
 
 ```
 ## Project Aurora
-- ~~chat: Design review thread concluded — team chose Option B (#design, Tuesday)
+- ~~chat: Design review thread concluded  -  team chose Option B (#design, Tuesday)
 - ~~email: Sarah sent updated spec incorporating feedback (Wednesday)
 - ~~cloud storage: "Aurora API Spec v3" updated by Sarah (Wednesday)
 - ~~project tracker: 3 tasks moved to In Progress, 2 completed
@@ -117,17 +117,17 @@ Organize the digest by topic, project, or theme rather than by source. Merge rel
 Structure the output clearly:
 
 ```
-# [Daily/Weekly] Digest — [Date or Date Range]
+# [Daily/Weekly] Digest  -  [Date or Date Range]
 
 Sources scanned: ~~chat, ~~email, ~~cloud storage, [others]
 
 ## Action Items (X items)
-- [ ] [Action item 1] — from [person], [source] ([date])
-- [ ] [Action item 2] — from [person], [source] ([date])
+- [ ] [Action item 1]  -  from [person], [source] ([date])
+- [ ] [Action item 2]  -  from [person], [source] ([date])
 
 ## Decisions Made
-- [Decision 1] — [context] ([source], [date])
-- [Decision 2] — [context] ([source], [date])
+- [Decision 1]  -  [context] ([source], [date])
+- [Decision 2]  -  [context] ([source], [date])
 
 ## [Topic/Project Group 1]
 [Activity summary with source attribution]
@@ -136,10 +136,10 @@ Sources scanned: ~~chat, ~~email, ~~cloud storage, [others]
 [Activity summary with source attribution]
 
 ## Mentions
-- [Mention context] — [source] ([date])
+- [Mention context]  -  [source] ([date])
 
 ## Documents Updated
-- [Doc name] — [who modified, what changed] ([date])
+- [Doc name]  -  [who modified, what changed] ([date])
 ```
 
 ### 7. Handle Unavailable Sources
@@ -157,16 +157,16 @@ Do not let one failed source prevent the digest from being generated. Produce th
 End with a quick summary:
 ```
 ---
-[X] action items · [Y] decisions · [Z] mentions · [W] doc updates
-Across [N] sources · Covering [time range]
+[X] action items . [Y] decisions . [Z] mentions . [W] doc updates
+Across [N] sources . Covering [time range]
 ```
 
 ## Notes
 
 - Default to `--daily` if no flag is specified
-- Group by topic/project, not by source — users care about what happened, not where it happened
-- Action items should always be listed first — they are the most actionable part of a digest
+- Group by topic/project, not by source  -  users care about what happened, not where it happened
+- Action items should always be listed first  -  they are the most actionable part of a digest
 - Deduplicate cross-source activity (same decision in ~~chat and email = one entry)
-- For weekly digests, prioritize significance over completeness — highlight what matters, skip noise
+- For weekly digests, prioritize significance over completeness  -  highlight what matters, skip noise
 - If the user has a memory system (CLAUDE.md), use it to decode people names and project references
 - Include enough context in each item that the user can decide whether to dig deeper without clicking through

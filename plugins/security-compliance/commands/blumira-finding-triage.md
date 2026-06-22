@@ -22,7 +22,7 @@ arguments:
 
 1. Call `blumira_findings_list` with `status.eq=10` (Open) and `order_by=-severity` to get open findings sorted by severity
 2. If severity argument provided, add `severity.eq=<value>` filter
-3. Group findings by severity level (CRITICAL → HIGH → MEDIUM → LOW)
+3. Group findings by severity level (CRITICAL -> HIGH -> MEDIUM -> LOW)
 4. Present a summary table with finding ID, severity, title, and creation date
 5. Highlight CRITICAL and HIGH findings that need immediate attention
 6. Show total counts per severity level
@@ -56,7 +56,7 @@ arguments:
 
 ## Error Handling
 
-- **No open findings:** Report that all findings are resolved — clean slate
+- **No open findings:** Report that all findings are resolved - clean slate
 - **Authentication error:** Prompt to verify JWT token
 - **Rate limited:** Retry with smaller page size
 

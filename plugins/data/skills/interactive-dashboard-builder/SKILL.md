@@ -418,7 +418,7 @@ function renderTable(containerId, data, columns) {
         html += '<thead><tr>';
         columns.forEach(col => {
             const arrow = sortCol === col.field
-                ? (sortDir === 'asc' ? ' ▲' : ' ▼')
+                ? (sortDir === 'asc' ? ' ^' : ' v')
                 : '';
             html += `<th onclick="sortTable('${col.field}')" style="cursor:pointer">${col.label}${arrow}</th>`;
         });

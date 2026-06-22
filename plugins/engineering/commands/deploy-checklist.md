@@ -52,9 +52,9 @@ Generate a pre-deployment checklist to verify readiness before shipping.
 ## Customization
 
 Tell me about your deploy and I'll customize the checklist:
-- "We use feature flags" → adds flag verification steps
-- "This includes a database migration" → adds migration-specific checks
-- "This is a breaking API change" → adds consumer notification steps
+- "We use feature flags" -> adds flag verification steps
+- "This includes a database migration" -> adds migration-specific checks
+- "This is a breaking API change" -> adds consumer notification steps
 
 ## If Connectors Available
 
@@ -72,6 +72,6 @@ If **~~monitoring** is connected:
 
 ## Tips
 
-1. **Run before every deploy** — Even routine ones. Checklists prevent "I forgot to..."
-2. **Customize once, reuse** — Tell me your stack and I'll remember your deploy process.
-3. **Include rollback criteria** — Decide when to roll back before you deploy, not during.
+1. **Run before every deploy**  -  Even routine ones. Checklists prevent "I forgot to..."
+2. **Customize once, reuse**  -  Tell me your stack and I'll remember your deploy process.
+3. **Include rollback criteria**  -  Decide when to roll back before you deploy, not during.

@@ -55,7 +55,7 @@ Month-end close checklist, task sequencing and dependencies, status tracking, an
 
 - [ ] Post tax provision entries (income tax, sales tax, property tax)
 - [ ] Complete equity roll-forward (stock compensation, treasury stock)
-- [ ] Finalize all journal entries — soft close
+- [ ] Finalize all journal entries - soft close
 - [ ] Generate draft financial statements (P&L, BS, CF)
 - [ ] Perform detailed flux analysis and prepare variance explanations
 - [ ] Management review of financial statements and key metrics
@@ -63,11 +63,11 @@ Month-end close checklist, task sequencing and dependencies, status tracking, an
 ### Close Day 5 (T+5)
 
 - [ ] Post any final adjustments from management review
-- [ ] Finalize financial statements — hard close
+- [ ] Finalize financial statements - hard close
 - [ ] Lock the period in the ERP/GL system
 - [ ] Distribute financial reporting package to stakeholders
 - [ ] Update forecasts/projections based on actual results
-- [ ] Conduct close retrospective — identify process improvements
+- [ ] Conduct close retrospective - identify process improvements
 
 ## Task Sequencing and Dependencies
 
@@ -76,42 +76,42 @@ Month-end close checklist, task sequencing and dependencies, status tracking, an
 Tasks are organized by what must complete before the next task can begin:
 
 ```
-LEVEL 1 (No dependencies — can start immediately at T+1):
-├── Cash receipts/disbursements recording
-├── Bank statement retrieval
-├── Payroll processing/accrual
-├── Fixed asset depreciation run
-├── Prepaid amortization
-├── AP accrual preparation
-└── Intercompany transaction posting
+LEVEL 1 (No dependencies - can start immediately at T+1):
++-- Cash receipts/disbursements recording
++-- Bank statement retrieval
++-- Payroll processing/accrual
++-- Fixed asset depreciation run
++-- Prepaid amortization
++-- AP accrual preparation
++-- Intercompany transaction posting
 
 LEVEL 2 (Depends on Level 1 completion):
-├── Bank reconciliation (needs: cash entries + bank statement)
-├── Revenue recognition (needs: billing/delivery data finalized)
-├── AR subledger reconciliation (needs: all revenue/cash entries)
-├── AP subledger reconciliation (needs: all AP entries/accruals)
-├── FX revaluation (needs: all foreign currency entries posted)
-└── Remaining accrual JEs (needs: review of all source data)
++-- Bank reconciliation (needs: cash entries + bank statement)
++-- Revenue recognition (needs: billing/delivery data finalized)
++-- AR subledger reconciliation (needs: all revenue/cash entries)
++-- AP subledger reconciliation (needs: all AP entries/accruals)
++-- FX revaluation (needs: all foreign currency entries posted)
++-- Remaining accrual JEs (needs: review of all source data)
 
 LEVEL 3 (Depends on Level 2 completion):
-├── All balance sheet reconciliations (needs: all JEs posted)
-├── Intercompany reconciliation (needs: both sides posted)
-├── Adjusting entries from reconciliations
-└── Preliminary trial balance
++-- All balance sheet reconciliations (needs: all JEs posted)
++-- Intercompany reconciliation (needs: both sides posted)
++-- Adjusting entries from reconciliations
++-- Preliminary trial balance
 
 LEVEL 4 (Depends on Level 3 completion):
-├── Tax provision (needs: pre-tax income finalized)
-├── Equity roll-forward
-├── Consolidation and eliminations
-├── Draft financial statements
-└── Preliminary flux analysis
++-- Tax provision (needs: pre-tax income finalized)
++-- Equity roll-forward
++-- Consolidation and eliminations
++-- Draft financial statements
++-- Preliminary flux analysis
 
 LEVEL 5 (Depends on Level 4 completion):
-├── Management review
-├── Final adjustments
-├── Hard close / period lock
-├── Financial reporting package
-└── Forecast updates
++-- Management review
++-- Final adjustments
++-- Hard close / period lock
++-- Financial reporting package
++-- Forecast updates
 ```
 
 ### Critical Path
@@ -119,8 +119,8 @@ LEVEL 5 (Depends on Level 4 completion):
 The critical path determines the minimum close duration. Typical critical path:
 
 ```
-Cash/AP/AR entries → Subledger reconciliations → Balance sheet recs →
-  Tax provision → Draft financials → Management review → Hard close
+Cash/AP/AR entries -> Subledger reconciliations -> Balance sheet recs ->
+  Tax provision -> Draft financials -> Management review -> Hard close
 ```
 
 To shorten the close:

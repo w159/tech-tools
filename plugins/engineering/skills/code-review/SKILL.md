@@ -20,7 +20,7 @@ Structured code review covering security, performance, correctness, and maintain
 ### Performance
 - N+1 queries
 - Unnecessary memory allocations
-- Algorithmic complexity (O(n²) in hot paths)
+- Algorithmic complexity (O(n^2) in hot paths)
 - Missing database indexes
 - Unbounded queries or loops
 - Resource leaks

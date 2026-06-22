@@ -57,13 +57,13 @@ For each competitor:
 Compare capabilities across key areas relevant to the analysis. See **Feature Comparison Matrices** below for rating scales and matrix templates.
 
 #### Positioning Analysis
-Analyze how each competitor positions themselves — target customer, category claim, key differentiator, and value proposition. See **Positioning Analysis Frameworks** below for the positioning statement template and message architecture levels.
+Analyze how each competitor positions themselves - target customer, category claim, key differentiator, and value proposition. See **Positioning Analysis Frameworks** below for the positioning statement template and message architecture levels.
 
 #### Strengths and Weaknesses
 For each competitor:
 - **Strengths**: Where they genuinely excel. What customers praise.
 - **Weaknesses**: Where they fall short. What customers complain about.
-- Be honest and evidence-based — do not dismiss competitors or inflate their weaknesses.
+- Be honest and evidence-based - do not dismiss competitors or inflate their weaknesses.
 
 #### Opportunities
 Based on the analysis:
@@ -105,7 +105,7 @@ Define competitors at multiple levels:
 
 **Indirect competitors**: Products that solve the same problem but differently.
 - Different approach to the same user need (e.g., spreadsheets vs dedicated project management tool)
-- Include "non-consumption" — sometimes the competitor is doing nothing or using a manual process
+- Include "non-consumption" - sometimes the competitor is doing nothing or using a manual process
 
 **Adjacent competitors**: Products that do not compete today but could.
 - Companies with similar technology, customer base, or distribution that could expand into your space
@@ -174,10 +174,10 @@ Track competitive movements over time:
 ```
 
 ### Tips for Feature Comparison
-- Rate based on real product experience, customer feedback, and reviews — not just marketing claims
+- Rate based on real product experience, customer feedback, and reviews - not just marketing claims
 - Features exist on a spectrum. "Has feature X" is less useful than "How well does it do X?"
 - Weight the comparison by what matters to your target customers, not by total feature count
-- Update regularly — feature comparisons get stale fast
+- Update regularly - feature comparisons get stale fast
 - Be honest about where competitors are ahead. A comparison that always shows you winning is not credible.
 - Include the "why it matters" for each capability area. Not all features matter equally to buyers.
 
@@ -198,10 +198,10 @@ For each competitor, extract their positioning:
 ### Message Architecture Analysis
 How does each competitor communicate value?
 
-**Level 1 — Category**: What category do they claim? (CRM, project management, collaboration platform)
-**Level 2 — Differentiator**: What makes them different within that category? (AI-powered, all-in-one, developer-first)
-**Level 3 — Value Proposition**: What outcome do they promise? (Close deals faster, ship products faster, never miss a deadline)
-**Level 4 — Proof Points**: What evidence do they provide? (Customer logos, metrics, awards, case studies)
+**Level 1 - Category**: What category do they claim? (CRM, project management, collaboration platform)
+**Level 2 - Differentiator**: What makes them different within that category? (AI-powered, all-in-one, developer-first)
+**Level 3 - Value Proposition**: What outcome do they promise? (Close deals faster, ship products faster, never miss a deadline)
+**Level 4 - Proof Points**: What evidence do they provide? (Customer logos, metrics, awards, case studies)
 
 ### Positioning Gaps and Opportunities
 Look for:
@@ -246,7 +246,7 @@ For losses:
 ### Common Win/Loss Patterns
 - **Feature gap**: Competitor has a specific capability you lack that is a dealbreaker
 - **Integration advantage**: Competitor integrates with tools the buyer already uses
-- **Pricing structure**: Not always cheaper — sometimes different pricing model (per-seat vs usage-based) fits better
+- **Pricing structure**: Not always cheaper - sometimes different pricing model (per-seat vs usage-based) fits better
 - **Incumbent advantage**: Buyer sticks with what they have because switching cost is too high
 - **Sales execution**: Better demo, faster response, more relevant case studies
 - **Brand/trust**: Buyer chooses the safer or more well-known option
@@ -289,7 +289,7 @@ The right response depends on: your competitive position, your customer base, yo
 
 ## Output Format
 
-Use tables for feature comparisons. Use clear headers for each section. Keep the strategic implications section concise and actionable — this is where the value is for the reader.
+Use tables for feature comparisons. Use clear headers for each section. Keep the strategic implications section concise and actionable - this is where the value is for the reader.
 
 ## Tips
 
@@ -298,5 +298,5 @@ Use tables for feature comparisons. Use clear headers for each section. Keep the
 - Pricing is hard to compare fairly. Note the caveats (different packaging, usage-based vs seat-based, enterprise custom pricing).
 - Job postings are underrated competitive intelligence. A competitor hiring ML engineers signals a strategic direction.
 - Customer reviews are gold. They reveal what real users love and hate, unfiltered by marketing.
-- The most valuable part of competitive analysis is the "so what" — the strategic implications. Do not skip this.
+- The most valuable part of competitive analysis is the "so what" - the strategic implications. Do not skip this.
 - Competitive analysis has a shelf life. Note the date and flag areas that change quickly.

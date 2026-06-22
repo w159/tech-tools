@@ -1,7 +1,7 @@
 ---
 name: threatlocker-computer-groups
 description: >
-  Use this skill when working with ThreatLocker computer groups —
+  Use this skill when working with ThreatLocker computer groups --
   the policy-scoping boundary that determines which allow/deny rules
   apply to which endpoints. Covers listing groups, mapping computer to
   group, and the difference between the dropdown and full list endpoints.
@@ -32,7 +32,7 @@ between groups changes which policy set applies to it. Groups can be
 threatlocker_computer_groups_list
 ```
 
-Full list with metadata — group name, ID, OS type, parent org,
+Full list with metadata - group name, ID, OS type, parent org,
 computer count, and policy associations. Use this for audits and
 reports.
 
@@ -42,7 +42,7 @@ reports.
 threatlocker_computer_groups_dropdown
 ```
 
-Slim list intended for selection UIs — typically just `id`, `name`, and
+Slim list intended for selection UIs - typically just `id`, `name`, and
 `osType`. Use this when you only need to map an ID to a name or pick a
 target group for a move.
 
@@ -64,7 +64,7 @@ and just need the IDs.
 | 2 | macOS |
 | 3 | Linux |
 
-A group's `osType` constrains which computers can be assigned to it —
+A group's `osType` constrains which computers can be assigned to it --
 you cannot put a Mac into a Windows-only group.
 
 ### Global vs Org-Specific Groups
@@ -80,7 +80,7 @@ you can filter or group by it.
 
 ## Common Workflows
 
-### Mapping Computer → Group
+### Mapping Computer -> Group
 
 The `threatlocker_computers_list` response includes
 `computerGroupId` and `computerGroupName` directly, so a separate
@@ -91,7 +91,7 @@ current name, use `threatlocker_computer_groups_dropdown` to resolve.
 
 1. List all groups with `threatlocker_computer_groups_list`.
 2. Flag groups with zero computers (likely dead or deprecated).
-3. Flag groups with extreme computer counts (oversized — policy
+3. Flag groups with extreme computer counts (oversized - policy
    changes there will have wide blast radius).
 4. Flag groups whose `osType` does not match the OS distribution of
    the computers actually assigned to it (misclassified group).
@@ -114,15 +114,15 @@ current name, use `threatlocker_computer_groups_dropdown` to resolve.
 
 ## Edge Cases
 
-- **Empty groups** — Some groups exist for future use. Don't auto-flag
+- **Empty groups** - Some groups exist for future use. Don't auto-flag
   every empty group as a problem; cross-reference recent policy edits
   before recommending deletion.
-- **OS-mismatch surprises** — A computer's reported `operatingSystem`
+- **OS-mismatch surprises** - A computer's reported `operatingSystem`
   string is normalized into the `osType` enum at assignment time.
   Edge OS strings (Windows IoT, macOS preview builds) sometimes land
   in the wrong bucket.
-- **Dropdown vs full** — Don't try to compute counts from the dropdown
-  — it does not return computer counts. Use the full list for that.
+- **Dropdown vs full** - Don't try to compute counts from the dropdown
+  - it does not return computer counts. Use the full list for that.
 
 ## Best Practices
 
@@ -130,12 +130,12 @@ current name, use `threatlocker_computer_groups_dropdown` to resolve.
   list when you genuinely need metadata or counts.
 - When scoping a policy change, list the group's computers first and
   estimate impact before recommending the change.
-- Keep group naming consistent across organizations — analysts triage
+- Keep group naming consistent across organizations - analysts triage
   faster when "Workstations - Standard" means the same thing
   everywhere.
 
 ## Related Skills
 
-- [api-patterns](../api-patterns/SKILL.md) — Auth and pagination
-- [computers](../computers/SKILL.md) — Computers within groups
-- [organizations](../organizations/SKILL.md) — Org scope for groups
+- [api-patterns](../api-patterns/SKILL.md) - Auth and pagination
+- [computers](../computers/SKILL.md) - Computers within groups
+- [organizations](../organizations/SKILL.md) - Org scope for groups

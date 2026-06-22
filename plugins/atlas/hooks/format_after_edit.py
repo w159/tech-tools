@@ -27,6 +27,7 @@ Wire it up (settings.json), async so it never blocks:
 
 Stdlib only.
 """
+
 from __future__ import annotations
 
 import json
@@ -37,9 +38,25 @@ import sys
 
 # extension -> ordered list of candidate commands; the file path is appended as the last arg.
 PRETTIER_EXTS = {
-    ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".json", ".jsonc",
-    ".css", ".scss", ".less", ".html", ".vue", ".svelte", ".md", ".mdx",
-    ".yaml", ".yml", ".graphql",
+    ".js",
+    ".jsx",
+    ".ts",
+    ".tsx",
+    ".mjs",
+    ".cjs",
+    ".json",
+    ".jsonc",
+    ".css",
+    ".scss",
+    ".less",
+    ".html",
+    ".vue",
+    ".svelte",
+    ".md",
+    ".mdx",
+    ".yaml",
+    ".yml",
+    ".graphql",
 }
 
 
@@ -87,19 +104,26 @@ def main() -> int:
     for base in candidates_for(fp, cwd):
         try:
             proc = subprocess.run(
-                base + [fp], stdin=subprocess.DEVNULL,
-                capture_output=True, text=True, timeout=55,
+                base + [fp],
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                timeout=55,
             )
         except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
             continue
         if proc.returncode == 0:
             tool = os.path.basename(base[0])
-            print(json.dumps({
-                "hookSpecificOutput": {
-                    "hookEventName": "PostToolUse",
-                    "additionalContext": f"[orchestrate] auto-formatted {os.path.basename(fp)} with {tool}.",
-                }
-            }))
+            print(
+                json.dumps(
+                    {
+                        "hookSpecificOutput": {
+                            "hookEventName": "PostToolUse",
+                            "additionalContext": f"[atlas] auto-formatted {os.path.basename(fp)} with {tool}.",
+                        }
+                    }
+                )
+            )
             return 0
         # non-zero (e.g. syntax error mid-edit): try the next candidate, else give up quietly
     return 0

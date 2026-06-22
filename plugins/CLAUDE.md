@@ -56,24 +56,24 @@ task-master generate                                         # Update task markd
 
 ```
 project/
-├── .taskmaster/
-│   ├── tasks/              # Task files directory
-│   │   ├── tasks.json      # Main task database
-│   │   ├── task-1.md      # Individual task files
-│   │   └── task-2.md
-│   ├── docs/              # Documentation directory
-│   │   ├── prd.txt        # Product requirements
-│   ├── reports/           # Analysis reports directory
-│   │   └── task-complexity-report.json
-│   ├── templates/         # Template files
-│   │   └── example_prd.txt  # Example PRD template
-│   └── config.json        # AI models & settings
-├── .claude/
-│   ├── settings.json      # Claude Code configuration
-│   └── commands/         # Custom slash commands
-├── .env                  # API keys
-├── .mcp.json            # MCP configuration
-└── CLAUDE.md            # This file - auto-loaded by Claude Code
++-- .taskmaster/
+|   +-- tasks/              # Task files directory
+|   |   +-- tasks.json      # Main task database
+|   |   +-- task-1.md      # Individual task files
+|   |   +-- task-2.md
+|   +-- docs/              # Documentation directory
+|   |   +-- prd.txt        # Product requirements
+|   +-- reports/           # Analysis reports directory
+|   |   +-- task-complexity-report.json
+|   +-- templates/         # Template files
+|   |   +-- example_prd.txt  # Example PRD template
+|   +-- config.json        # AI models & settings
++-- .claude/
+|   +-- settings.json      # Claude Code configuration
+|   +-- commands/         # Custom slash commands
++-- .env                  # API keys
++-- .mcp.json            # MCP configuration
++-- CLAUDE.md            # This file - auto-loaded by Claude Code
 ```
 
 ## MCP Integration

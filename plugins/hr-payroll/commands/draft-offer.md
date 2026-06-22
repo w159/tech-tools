@@ -29,7 +29,7 @@ If you don't have all details, I'll help you think through them.
 ## Output
 
 ```markdown
-## Offer Letter Draft: [Role] — [Level]
+## Offer Letter Draft: [Role] - [Level]
 
 ### Compensation Package
 | Component | Details |
@@ -76,6 +76,6 @@ If **~~ATS** is connected:
 
 ## Tips
 
-1. **Include total comp** — Candidates compare total compensation, not just base.
-2. **Be specific about equity** — Share count, current valuation method, vesting schedule.
-3. **Personalize** — Reference something from the interview process to make it warm.
+1. **Include total comp** - Candidates compare total compensation, not just base.
+2. **Be specific about equity** - Share count, current valuation method, vesting schedule.
+3. **Personalize** - Reference something from the interview process to make it warm.

@@ -21,8 +21,9 @@ failed and that docs/ must be current (CHANGELOG, ROADMAP, affected subfolders)
 before calling the work done.
 
 Fail-open by construction: any error, missing dir, or unparseable input lets the
-stop proceed. Disable entirely with ATLAS_GATE=off. Off by default -- installed
-only via `install_hooks.py --select completion-gate --apply`.
+stop proceed. Disable entirely with ATLAS_GATE=off. Opt-out (on by default when
+a docs/ tree is present and wired in hooks.json on Stop; set ATLAS_GATE=off to
+disable).
 
 Stdlib only.
 """
@@ -108,7 +109,7 @@ def _reason(missing_a: bool, missing_b: bool, missing_c: bool) -> str:
         )
     failed = "\n".join(parts)
     return (
-        "[orchestrate] Definition-of-done gate: the following condition(s) are not met:\n"
+        "[atlas] Definition-of-done gate: the following condition(s) are not met:\n"
         + failed
         + "\n\nAll three must hold before this run can be declared done. "
         "If the work is genuinely not done, say so explicitly -- what is unverified "
@@ -132,7 +133,7 @@ def main() -> int:
         cwd = Path(data.get("cwd") or os.getcwd())
         docs = _find_docs(cwd)
         if docs is None:
-            return 0  # no docs/ dir in tree -> not an orchestrate run -> silent no-op
+            return 0  # no docs/ dir in tree -> not an atlas run -> silent no-op
         ok_a = _check_evidence(docs)
         ok_b = _check_findings(docs)
         ok_c = _check_changelog(docs)

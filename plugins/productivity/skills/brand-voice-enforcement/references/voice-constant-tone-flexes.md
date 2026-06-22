@@ -4,13 +4,13 @@ The core mental model for brand voice enforcement: voice is constant, tone flexe
 
 ## The Distinction
 
-**Voice** is WHO the brand is — personality, values, identity. It never changes regardless of channel, audience, or content type. Think of it as the brand's character.
+**Voice** is WHO the brand is  -  personality, values, identity. It never changes regardless of channel, audience, or content type. Think of it as the brand's character.
 
-**Tone** is HOW the brand speaks in a given moment — formality, energy, technical depth. It adapts to context the way a person adjusts their tone when speaking to a friend vs. a CEO vs. a large audience.
+**Tone** is HOW the brand speaks in a given moment  -  formality, energy, technical depth. It adapts to context the way a person adjusts their tone when speaking to a friend vs. a CEO vs. a large audience.
 
 ## Voice Constants: "We Are / We Are Not"
 
-The "We Are / We Are Not" table is the anchor of brand voice. It defines the brand's personality in paired attributes — what the brand IS and the boundary it should never cross.
+The "We Are / We Are Not" table is the anchor of brand voice. It defines the brand's personality in paired attributes  -  what the brand IS and the boundary it should never cross.
 
 ### Structure
 
@@ -18,17 +18,17 @@ The table below is an illustrative example. During enforcement, use the "We Are 
 
 | We Are | We Are Not |
 |--------|------------|
-| **Confident** — we know our product and stand behind it | **Arrogant** — we never talk down to prospects or dismiss alternatives |
-| **Approachable** — we make complex topics feel manageable | **Casual or sloppy** — approachable doesn't mean unprofessional |
-| **Direct** — we get to the point quickly and clearly | **Blunt or aggressive** — directness includes empathy |
-| **Data-driven** — we support claims with evidence | **Dry or academic** — data tells stories, not lectures |
-| **Innovative** — we push boundaries and challenge status quo | **Hype-driven** — innovation is real, not buzzwords |
+| **Confident**  -  we know our product and stand behind it | **Arrogant**  -  we never talk down to prospects or dismiss alternatives |
+| **Approachable**  -  we make complex topics feel manageable | **Casual or sloppy**  -  approachable doesn't mean unprofessional |
+| **Direct**  -  we get to the point quickly and clearly | **Blunt or aggressive**  -  directness includes empathy |
+| **Data-driven**  -  we support claims with evidence | **Dry or academic**  -  data tells stories, not lectures |
+| **Innovative**  -  we push boundaries and challenge status quo | **Hype-driven**  -  innovation is real, not buzzwords |
 
 ### How to Use During Enforcement
 
 For every piece of content:
-1. Check each "We Are" attribute — does the content reflect this?
-2. Check each "We Are Not" boundary — does the content avoid crossing it?
+1. Check each "We Are" attribute  -  does the content reflect this?
+2. Check each "We Are Not" boundary  -  does the content avoid crossing it?
 3. If a boundary is crossed, revise the specific passage
 4. If an attribute is missing, find a natural place to express it
 
@@ -86,9 +86,9 @@ Combine the three dimensions for each content type:
 **Example: Cold outreach email**
 
 Voice constants active:
-- **Confident** — lead with a strong value claim
-- **Direct** — get to the point in sentence one
-- **Approachable** — don't sound like a robot
+- **Confident**  -  lead with a strong value claim
+- **Direct**  -  get to the point in sentence one
+- **Approachable**  -  don't sound like a robot
 
 Tone settings:
 - Formality: Medium (professional but not stiff)
@@ -98,9 +98,9 @@ Tone settings:
 **Example: Enterprise proposal**
 
 Voice constants active:
-- **Data-driven** — every claim has supporting evidence
-- **Confident** — strong positioning without hedging
-- **Innovative** — show forward-thinking approach
+- **Data-driven**  -  every claim has supporting evidence
+- **Confident**  -  strong positioning without hedging
+- **Innovative**  -  show forward-thinking approach
 
 Tone settings:
 - Formality: High (structured, complete sentences)
@@ -109,7 +109,7 @@ Tone settings:
 
 ## Common Enforcement Mistakes
 
-1. **Applying all voice attributes at maximum intensity** — Not every attribute needs to shine in every sentence. Let 2-3 lead for the content type.
-2. **Confusing voice with tone** — If the user asks for "casual" content, adjust TONE (lower formality, higher energy). Don't change VOICE (the brand's personality stays the same).
-3. **Rigid enforcement over natural flow** — Guidelines are principles, not a checklist. Content should feel natural, not mechanically assembled.
-4. **Ignoring the audience** — The same voice can sound very different to a CTO vs. a VP of Sales. Tone flexes handle this.
+1. **Applying all voice attributes at maximum intensity**  -  Not every attribute needs to shine in every sentence. Let 2-3 lead for the content type.
+2. **Confusing voice with tone**  -  If the user asks for "casual" content, adjust TONE (lower formality, higher energy). Don't change VOICE (the brand's personality stays the same).
+3. **Rigid enforcement over natural flow**  -  Guidelines are principles, not a checklist. Content should feel natural, not mechanically assembled.
+4. **Ignoring the audience**  -  The same voice can sound very different to a CTO vs. a VP of Sales. Tone flexes handle this.

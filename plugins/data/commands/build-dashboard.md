@@ -47,20 +47,20 @@ Determine:
 Follow a standard dashboard layout pattern:
 
 ```
-┌──────────────────────────────────────────────────┐
-│  Dashboard Title                    [Filters ▼]  │
-├────────────┬────────────┬────────────┬───────────┤
-│  KPI Card  │  KPI Card  │  KPI Card  │ KPI Card  │
-├────────────┴────────────┼────────────┴───────────┤
-│                         │                        │
-│    Primary Chart        │   Secondary Chart      │
-│    (largest area)       │                        │
-│                         │                        │
-├─────────────────────────┴────────────────────────┤
-│                                                  │
-│    Detail Table (sortable, scrollable)           │
-│                                                  │
-└──────────────────────────────────────────────────┘
++--------------------------------------------------+
+|  Dashboard Title                    [Filters v]  |
++------------+------------+------------+-----------+
+|  KPI Card  |  KPI Card  |  KPI Card  | KPI Card  |
++------------+------------+------------+-----------+
+|                         |                        |
+|    Primary Chart        |   Secondary Chart      |
+|    (largest area)       |                        |
+|                         |                        |
++-------------------------+------------------------+
+|                                                  |
+|    Detail Table (sortable, scrollable)           |
+|                                                  |
++--------------------------------------------------+
 ```
 
 **Adapt the layout to the content:**

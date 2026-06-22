@@ -18,18 +18,18 @@ Generate a polished status report for leadership or stakeholders. See the **risk
 ## Output
 
 ```markdown
-## Status Report: [Project/Team] — [Period]
+## Status Report: [Project/Team]  -  [Period]
 **Author:** [Name] | **Date:** [Date]
 
 ### Executive Summary
-[3-4 sentence overview — what's on track, what needs attention, key wins]
+[3-4 sentence overview  -  what's on track, what needs attention, key wins]
 
-### Overall Status: 🟢 On Track / 🟡 At Risk / 🔴 Off Track
+### Overall Status: [OK] On Track / [WARN] At Risk / [CRITICAL] Off Track
 
 ### Key Metrics
 | Metric | Target | Actual | Trend | Status |
 |--------|--------|--------|-------|--------|
-| [KPI] | [Target] | [Actual] | [up/down/flat] | 🟢/🟡/🔴 |
+| [KPI] | [Target] | [Actual] | [up/down/flat] | [OK]/[WARN]/[CRITICAL] |
 
 ### Accomplishments This Period
 - [Win 1]
@@ -71,6 +71,6 @@ If **~~calendar** is connected:
 
 ## Tips
 
-1. **Lead with the headline** — Busy leaders read the first 3 lines. Make them count.
-2. **Be honest about risks** — Surfacing issues early builds trust. Surprises erode it.
-3. **Make decisions easy** — For each decision needed, provide context and a recommendation.
+1. **Lead with the headline**  -  Busy leaders read the first 3 lines. Make them count.
+2. **Be honest about risks**  -  Surfacing issues early builds trust. Surprises erode it.
+3. **Make decisions easy**  -  For each decision needed, provide context and a recommendation.

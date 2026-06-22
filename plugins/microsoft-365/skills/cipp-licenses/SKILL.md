@@ -1,6 +1,6 @@
 ---
 name: "cipp-licenses"
-description: "Use this skill when working with M365 license assignments and CSP license inventory through CIPP — listing license usage per tenant, identifying unused licenses, surfacing license SKUs available for assignment, and reviewing CSP-level license commitments. Drives license-rightsizing reports for MSP billing reviews."
+description: "Use this skill when working with M365 license assignments and CSP license inventory through CIPP - listing license usage per tenant, identifying unused licenses, surfacing license SKUs available for assignment, and reviewing CSP-level license commitments. Drives license-rightsizing reports for MSP billing reviews."
 when_to_use: "When auditing M365 license usage, finding unused/overprovisioned licenses, or reviewing CSP license inventory across the MSP portfolio"
 triggers:
   - cipp license
@@ -15,7 +15,7 @@ triggers:
 
 # CIPP Licenses
 
-License visibility across managed tenants. Two tools cover the read surface: per-tenant assignment + usage, and portfolio CSP inventory. License *changes* (assigning, removing) flow through `cipp_create_user`, `cipp_offboard_user`, or the M365 plugin — this skill is read-only.
+License visibility across managed tenants. Two tools cover the read surface: per-tenant assignment + usage, and portfolio CSP inventory. License *changes* (assigning, removing) flow through `cipp_create_user`, `cipp_offboard_user`, or the M365 plugin - this skill is read-only.
 
 ## Tools
 
@@ -33,13 +33,13 @@ Returns every SKU in the tenant with `skuPartNumber`, friendly name, `prepaidUni
 cipp_list_csp_licenses()
 ```
 
-Portfolio-wide view of CSP (Cloud Solution Provider) license commitments — what the MSP owns across all tenants. Use to reconcile what's deployed against what's billed.
+Portfolio-wide view of CSP (Cloud Solution Provider) license commitments - what the MSP owns across all tenants. Use to reconcile what's deployed against what's billed.
 
 ## Common SKU reference
 
 | Part number | Friendly | Notes |
 |-------------|----------|-------|
-| `O365_BUSINESS_PREMIUM` | M365 Business Premium | SMB sweet spot — Exchange + EMS basics |
+| `O365_BUSINESS_PREMIUM` | M365 Business Premium | SMB sweet spot - Exchange + EMS basics |
 | `SPB` | M365 Business Premium (legacy code) | Same as above on older tenants |
 | `SPE_E3` | M365 E3 | Mid-market, includes Intune + EMS |
 | `SPE_E5` | M365 E5 | E3 + Defender + advanced compliance |
@@ -81,12 +81,12 @@ For each tenant in `cipp_list_tenants`, call `cipp_list_licenses` and tally SKUs
 
 | Pattern | Concern |
 |---------|---------|
-| Tenant has E3 + EMS E3 separately | Should be on M365 E3 — bundle is cheaper |
+| Tenant has E3 + EMS E3 separately | Should be on M365 E3 - bundle is cheaper |
 | Multiple Business Premium tenants > 300 users | Above 300, E3 typically wins on TCO |
 | Entra ID P1 absent but conditional access deployed | CA requires P1; tenant is using a feature not licensed |
 | Defender for Office not assigned but standards expect it | Standards will report failures until licensing is fixed |
 
 ## Caveats
 
-- License *write* operations (assign/remove SKU) aren't in the MCP surface — use `cipp_create_user` (assigns at create time), `cipp_offboard_user` with `removeLicenses=true`, or fall back to the M365 plugin / Graph for runtime changes.
+- License *write* operations (assign/remove SKU) aren't in the MCP surface - use `cipp_create_user` (assigns at create time), `cipp_offboard_user` with `removeLicenses=true`, or fall back to the M365 plugin / Graph for runtime changes.
 - `consumedUnits` can lag the live tenant by minutes; trust the tenant UI for time-sensitive decisions.

@@ -1,6 +1,6 @@
 # Microsoft 365 Claude Plugin
 
-A Claude Code plugin for Microsoft 365 administration — users, mailboxes, Teams, licensing, and security posture. Built for MSP technicians who need to query and manage M365 tenants alongside their PSA and RMM tools.
+A Claude Code plugin for Microsoft 365 administration - users, mailboxes, Teams, licensing, and security posture. Built for MSP technicians who need to query and manage M365 tenants alongside their PSA and RMM tools.
 
 ## What This Plugin Does
 
@@ -11,20 +11,20 @@ A Claude Code plugin for Microsoft 365 administration — users, mailboxes, Team
 | **Teams** | List teams/channels, manage membership, find meetings |
 | **Licensing** | Audit seat utilization, find unused licenses, assign/remove |
 | **Security** | MFA audit, risky sign-ins, inbox rule review, compromise response |
-| **Workflows** | Guided offboarding (revoke → disable → mailbox → data transfer) |
+| **Workflows** | Guided offboarding (revoke -> disable -> mailbox -> data transfer) |
 
 ## Setup
 
 ### 1. Create an Entra App Registration
 
-1. Go to [portal.azure.com](https://portal.azure.com) → Entra ID → App registrations → New
+1. Go to [portal.azure.com](https://portal.azure.com) -> Entra ID -> App registrations -> New
 2. Name: `MSP Claude Plugin` (or similar)
-3. Supported account types: **Accounts in any organizational directory** (multi-tenant) — or single-tenant if managing one customer
+3. Supported account types: **Accounts in any organizational directory** (multi-tenant) - or single-tenant if managing one customer
 4. Redirect URI: `http://localhost` (for device code / interactive auth)
 
 ### 2. Grant API Permissions (Delegated)
 
-In your app registration → API permissions → Add:
+In your app registration -> API permissions -> Add:
 
 | Permission | Type | Why |
 |-----------|------|-----|
@@ -42,7 +42,7 @@ Grant admin consent for all permissions.
 
 ### 3. Create a Client Secret
 
-App registration → Certificates & secrets → New client secret. Copy the value.
+App registration -> Certificates & secrets -> New client secret. Copy the value.
 
 ### 4. Configure Environment
 
@@ -69,7 +69,7 @@ Or add to your Claude Code MCP settings with the env vars from step 4.
 
 | Command | Description |
 |---------|-------------|
-| `/get-user <name or email>` | Full user profile — status, licenses, MFA |
+| `/get-user <name or email>` | Full user profile - status, licenses, MFA |
 | `/check-mfa-status` | Tenant-wide MFA enrollment audit |
 | `/list-licenses` | License inventory and optimization |
 | `/offboard-user <user>` | Guided offboarding workflow |
@@ -78,12 +78,12 @@ Or add to your Claude Code MCP settings with the env vars from step 4.
 
 These skills are automatically loaded and inform Claude's responses:
 
-- **Users** — Account management, creation, MFA, groups
-- **Mailboxes** — Exchange Online, search, auto-replies, shared mailboxes
-- **Teams** — Teams/channel management, meetings, membership
-- **Licensing** — SKUs, seat counts, assignment patterns
-- **Security** — MFA, sign-in risk, conditional access, compromise response
-- **API Patterns** — Graph OData syntax, pagination, throttling, batch requests
+- **Users** - Account management, creation, MFA, groups
+- **Mailboxes** - Exchange Online, search, auto-replies, shared mailboxes
+- **Teams** - Teams/channel management, meetings, membership
+- **Licensing** - SKUs, seat counts, assignment patterns
+- **Security** - MFA, sign-in risk, conditional access, compromise response
+- **API Patterns** - Graph OData syntax, pagination, throttling, batch requests
 
 ## MSP Use Cases
 
@@ -101,7 +101,7 @@ Claude will pull recent sign-ins, check for unfamiliar IP/country, review inbox 
 /offboard-user jane.smith@contoso.com --mailbox-action shared
 ```
 
-Revokes sessions, disables account, sets out-of-office, converts mailbox to shared, removes from Teams, frees license — with a summary of manual steps needed.
+Revokes sessions, disables account, sets out-of-office, converts mailbox to shared, removes from Teams, frees license - with a summary of manual steps needed.
 
 ### "Which M365 licenses can we reclaim this month?"
 
@@ -121,6 +121,6 @@ Lists all users with no MFA enrolled, prioritized by recent activity (highest ri
 
 ## Permissions Notes
 
-- Admin consent is required for most operations — the app registration must be consented by a Global Administrator in the target tenant
+- Admin consent is required for most operations - the app registration must be consented by a Global Administrator in the target tenant
 - For multi-tenant MSP use, each customer must consent your Entra app (or use delegated admin / GDAP relationships)
 - Read-only audit tasks (`User.Read.All`, `AuditLog.Read.All`) have lower consent friction than write operations

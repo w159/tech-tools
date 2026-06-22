@@ -9,10 +9,10 @@ Generate enterprise-grade, contributor-ready README.md files by analyzing every 
 
 ## Core Philosophy
 
-- **Analyze first, write second** — Never summarize superficially. Understand the architecture before documenting it.
-- **Progressive disclosure** — Keep the top level scannable. Hide deep technical detail inside collapsible `<details>` sections.
-- **Link to authority** — Every external dependency gets a link to its official docs. Never invent references.
-- **Stay current** — When updating, diff against reality. Don't preserve stale docs.
+- **Analyze first, write second** - Never summarize superficially. Understand the architecture before documenting it.
+- **Progressive disclosure** - Keep the top level scannable. Hide deep technical detail inside collapsible `<details>` sections.
+- **Link to authority** - Every external dependency gets a link to its official docs. Never invent references.
+- **Stay current** - When updating, diff against reality. Don't preserve stale docs.
 
 ## Required Sections
 
@@ -36,7 +36,7 @@ Adapt section depth to the project's complexity, but never omit critical areas.
 - High-level diagram (ASCII art or Mermaid if the renderer supports it)
 - Frontend structure and component architecture
 - Backend structure, API layers, service boundaries
-- Data flow — how requests move through the system
+- Data flow - how requests move through the system
 - Authentication and authorization flow
 - External integrations map
 - Permission model
@@ -64,12 +64,12 @@ Wrap detailed per-file explanations in collapsible sections:
 
 ```markdown
 <details>
-<summary>📁 src/api/ — API route handlers</summary>
+<summary>src/api/ - API route handlers</summary>
 
-- `routes/auth.ts` — OAuth2 token exchange, session creation
-- `routes/users.ts` — CRUD operations, role validation
-- `middleware/auth.ts` — JWT verification, scope checking
-- **Pattern**: Controller → Service → Repository
+- `routes/auth.ts` - OAuth2 token exchange, session creation
+- `routes/users.ts` - CRUD operations, role validation
+- `middleware/auth.ts` - JWT verification, scope checking
+- **Pattern**: Controller -> Service -> Repository
 - **Error handling**: Centralized via `errorHandler.ts`
 
 </details>
@@ -214,9 +214,9 @@ Detect from `LICENSE` file or `package.json`.
 - **Blank lines**: Always before lists and after headers (CommonMark compliance)
 - **Tables**: For structured data (env vars, scripts, tech stack, APIs)
 - **Code blocks**: For all commands, config snippets, file examples
-- **Collapsible sections**: For deep technical detail — keeps the main flow readable
+- **Collapsible sections**: For deep technical detail - keeps the main flow readable
 - **Badges**: At the top for build status, coverage, version, license
-- **Icons**: Use sparingly for visual engagement (📁 for folders, ⚡ for performance, 🔒 for security)
+- **Icons**: Use sparingly for visual engagement (folder icon for folders, performance icon for performance, security icon for security)
 - **No placeholder text**: Every section must have real content or be omitted
 
 ## Quality Bar

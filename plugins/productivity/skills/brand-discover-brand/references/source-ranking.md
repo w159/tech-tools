@@ -118,7 +118,7 @@ In addition to soft recency scoring, apply hard cutoffs to prevent stale content
 
 **STALE sources**: Exclude entirely from deep fetch. Include in the discovery report for reference only.
 
-These cutoffs apply at the deep-fetch stage (Phase 3). All sources are still collected during broad discovery (Phase 1) and triage (Phase 2) — the cutoffs filter what gets fully retrieved and analyzed.
+These cutoffs apply at the deep-fetch stage (Phase 3). All sources are still collected during broad discovery (Phase 1) and triage (Phase 2)  -  the cutoffs filter what gets fully retrieved and analyzed.
 
 ### 2. Explicitness (Weight: 25%)
 
@@ -159,13 +159,13 @@ Elements corroborated across multiple sources rank higher.
 ## Composite Score Calculation
 
 ```
-final_score = (recency × 0.30) + (explicitness × 0.25) + (authority × 0.20)
-            + (specificity × 0.15) + (consistency × 0.10)
+final_score = (recency x 0.30) + (explicitness x 0.25) + (authority x 0.20)
+            + (specificity x 0.15) + (consistency x 0.10)
 ```
 
 Multiply by category trust weight:
 ```
-ranked_score = final_score × category_trust_weight
+ranked_score = final_score x category_trust_weight
 ```
 
 ### Example Scoring
@@ -177,16 +177,16 @@ ranked_score = final_score × category_trust_weight
 - Specificity: 0.7 (good guidelines, some gaps)
 - Consistency: 0.7 (corroborated by email templates)
 - Category: AUTHORITATIVE (1.0)
-- **Final: (1.0×0.30 + 1.0×0.25 + 1.0×0.20 + 0.7×0.15 + 0.7×0.10) × 1.0 = 0.925**
+- **Final: (1.0x0.30 + 1.0x0.25 + 1.0x0.20 + 0.7x0.15 + 0.7x0.10) x 1.0 = 0.925**
 
-**Source: "Top Performer Call — Enterprise Close" (Gong, 2 months ago)**
+**Source: "Top Performer Call  -  Enterprise Close" (Gong, 2 months ago)**
 - Recency: 1.0
 - Explicitness: 0.2 (implicit patterns only)
 - Authority: 0.4 (senior AE)
 - Specificity: 0.7 (specific phrases used)
 - Consistency: 0.4 (single source)
 - Category: CONVERSATIONAL (0.6)
-- **Final: (1.0×0.30 + 0.2×0.25 + 0.4×0.20 + 0.7×0.15 + 0.4×0.10) × 0.6 = 0.345**
+- **Final: (1.0x0.30 + 0.2x0.25 + 0.4x0.20 + 0.7x0.15 + 0.4x0.10) x 0.6 = 0.345**
 
 ## Adaptive Scoring: No Authoritative Sources
 
@@ -196,7 +196,7 @@ When discovery finds **zero AUTHORITATIVE sources**, the scoring algorithm adapt
 
 | Category | Default Weight | Adapted Weight | Rationale |
 |----------|---------------|----------------|-----------|
-| AUTHORITATIVE | 1.0 | 1.0 | (n/a — none found) |
+| AUTHORITATIVE | 1.0 | 1.0 | (n/a  -  none found) |
 | OPERATIONAL | 0.8 | 0.9 | Templates become primary explicit evidence |
 | CONVERSATIONAL | 0.6 | 0.85 | Transcripts are the best signal for how the brand actually communicates |
 | CONTEXTUAL | 0.3 | 0.4 | Design and competitive context more valuable without formal docs |
@@ -206,20 +206,20 @@ When discovery finds **zero AUTHORITATIVE sources**, the scoring algorithm adapt
 
 When no authoritative sources exist, conversational patterns carry more prescriptive weight:
 
-- **Score 0.2 → 0.5**: "Inferred from conversational patterns" — these ARE the brand evidence now
-- **Score 0.4 → 0.6**: "Implicit patterns in templates or examples"
+- **Score 0.2 -> 0.5**: "Inferred from conversational patterns"  -  these ARE the brand evidence now
+- **Score 0.4 -> 0.6**: "Implicit patterns in templates or examples"
 - Other explicitness scores unchanged
 
 ### Example: Transcript Scoring With Adaptation
 
-**Source: "Top Performer Call — Enterprise Close" (Gong, 2 months ago)**
+**Source: "Top Performer Call  -  Enterprise Close" (Gong, 2 months ago)**
 - Recency: 1.0
-- Explicitness: 0.5 (adapted from 0.2 — patterns are primary evidence)
+- Explicitness: 0.5 (adapted from 0.2  -  patterns are primary evidence)
 - Authority: 0.4 (senior AE)
 - Specificity: 0.7 (specific phrases used)
 - Consistency: 0.4 (single source)
 - Category: CONVERSATIONAL (0.85 adapted)
-- **Adapted score: (1.0×0.30 + 0.5×0.25 + 0.4×0.20 + 0.7×0.15 + 0.4×0.10) × 0.85 = 0.552**
+- **Adapted score: (1.0x0.30 + 0.5x0.25 + 0.4x0.20 + 0.7x0.15 + 0.4x0.10) x 0.85 = 0.552**
 
 This puts the transcript well above the 0.5 deep-fetch threshold, ensuring conversational sources meaningfully contribute to guideline generation.
 
@@ -227,7 +227,7 @@ This puts the transcript well above the 0.5 deep-fetch threshold, ensuring conve
 
 Apply adaptive scoring when:
 - Phase 2 triage produces zero AUTHORITATIVE sources
-- Flag in the discovery report: "No formal brand guidelines found — scoring adapted to weight conversational and operational sources higher"
+- Flag in the discovery report: "No formal brand guidelines found  -  scoring adapted to weight conversational and operational sources higher"
 
 ## Triage Decision Criteria
 

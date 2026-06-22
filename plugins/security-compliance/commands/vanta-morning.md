@@ -1,5 +1,5 @@
 ---
-description: Daily Vanta GRC standup — failing tests, expiring evidence, overdue vulns, vendors in pending review.
+description: Daily Vanta GRC standup - failing tests, expiring evidence, overdue vulns, vendors in pending review.
 ---
 
 # Vanta Morning Brief

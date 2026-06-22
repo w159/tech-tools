@@ -1,6 +1,6 @@
 ---
 name: paylocity-pay-rate-audit
-description: Audit pay rates across the active roster — pulls current and future pay rates, flags missing/zero rates, future-dated rate changes, and outliers vs. pay grade. Use when user asks for "pay rate audit", "comp review", "salary check", "are pay rates correct", or before a merit-cycle / payroll run.
+description: Audit pay rates across the active roster - pulls current and future pay rates, flags missing/zero rates, future-dated rate changes, and outliers vs. pay grade. Use when user asks for "pay rate audit", "comp review", "salary check", "are pay rates correct", or before a merit-cycle / payroll run.
 ---
 
 # Pay Rate Audit (Paylocity)
@@ -8,8 +8,8 @@ description: Audit pay rates across the active roster — pulls current and futu
 ## Pipeline
 
 1. `paylocity_employees_list` with `include="info,position,status,payRate,futurePayRate"`, `activeOnly=true`. Page through all employees.
-2. `paylocity_pay_grades_list` — capture the pay grade catalog.
-3. `paylocity_job_codes_list` — capture the job code catalog.
+2. `paylocity_pay_grades_list` - capture the pay grade catalog.
+3. `paylocity_job_codes_list` - capture the job code catalog.
 4. **In `ctx_execute`**:
    - Project each employee to `{ employeeId, name, jobCode, payGrade, payRate, payType, futurePayRate, futureEffectiveDate }`.
    - For each pay grade, compute min/max/median observed pay rate.
@@ -22,12 +22,12 @@ description: Audit pay rates across the active roster — pulls current and futu
 ## Output
 
 - **Header**: total audited, anomalies count by category.
-- **Section: Missing/Zero pay rates** — full list, payroll-blocking.
-- **Section: Out-of-grade outliers** — name, current rate, grade min/max.
-- **Section: Future-dated changes coming up** — sorted by effective date.
-- **Section: Stale rates (>24mo)** — bottom of report, advisory only.
+- **Section: Missing/Zero pay rates** - full list, payroll-blocking.
+- **Section: Out-of-grade outliers** - name, current rate, grade min/max.
+- **Section: Future-dated changes coming up** - sorted by effective date.
+- **Section: Stale rates (>24mo)** - bottom of report, advisory only.
 
 ## Rules
 
-- Read-only. Never propose rate changes inline — flag for HR.
+- Read-only. Never propose rate changes inline - flag for HR.
 - If pay grade has no min/max defined, exclude from out-of-grade check (do not false-positive).

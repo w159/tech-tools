@@ -19,21 +19,21 @@ Decompose variances into underlying drivers, provide narrative explanations for 
 
 ### Arguments
 
-- `area` — The area to analyze:
-  - `revenue` — Revenue variance by stream, product, geography, customer segment
-  - `opex` — Operating expense variance by category, department, cost center
-  - `capex` — Capital expenditure variance vs budget by project and asset class
-  - `headcount` — Headcount and compensation variance by department and role level
-  - `cogs` or `cost-of-revenue` — Cost of revenue variance by component
-  - `gross-margin` — Gross margin analysis with mix and rate effects
+- `area` - The area to analyze:
+  - `revenue` - Revenue variance by stream, product, geography, customer segment
+  - `opex` - Operating expense variance by category, department, cost center
+  - `capex` - Capital expenditure variance vs budget by project and asset class
+  - `headcount` - Headcount and compensation variance by department and role level
+  - `cogs` or `cost-of-revenue` - Cost of revenue variance by component
+  - `gross-margin` - Gross margin analysis with mix and rate effects
   - Any specific GL account or account group
-- `period-comparison` — The periods to compare. Formats:
-  - `2024-12 vs 2024-11` — Month over month
-  - `2024-12 vs 2023-12` — Year over year
-  - `2024-Q4 vs 2024-Q3` — Quarter over quarter
-  - `2024-12 vs budget` — Actual vs budget
-  - `2024-12 vs forecast` — Actual vs forecast
-  - `2024-Q4 vs 2024-Q3 vs 2023-Q4` — Three-way comparison
+- `period-comparison` - The periods to compare. Formats:
+  - `2024-12 vs 2024-11` - Month over month
+  - `2024-12 vs 2023-12` - Year over year
+  - `2024-Q4 vs 2024-Q3` - Quarter over quarter
+  - `2024-12 vs budget` - Actual vs budget
+  - `2024-12 vs forecast` - Actual vs forecast
+  - `2024-Q4 vs 2024-Q3 vs 2023-Q4` - Three-way comparison
 
 ## Workflow
 
@@ -54,7 +54,7 @@ If no data source is connected:
 ### 2. Calculate Top-Level Variance
 
 ```
-VARIANCE SUMMARY: [Area] — [Period 1] vs [Period 2]
+VARIANCE SUMMARY: [Area] - [Period 1] vs [Period 2]
 
                               Period 1   Period 2   Variance ($)   Variance (%)
                               --------   --------   ------------   ------------
@@ -97,7 +97,7 @@ Break down the total variance into constituent drivers. Use the appropriate deco
 Generate a text-based waterfall showing how each driver contributes to the total variance:
 
 ```
-WATERFALL: [Area] — [Period 1] vs [Period 2]
+WATERFALL: [Area] - [Period 1] vs [Period 2]
 
 [Period 2 Base]                           $XX,XXX
   |
@@ -124,7 +124,7 @@ Variance Reconciliation:
 
 For each significant driver, generate a narrative explanation:
 
-> **[Driver name]** — [Favorable/Unfavorable] variance of $X,XXX (X.X%)
+> **[Driver name]** - [Favorable/Unfavorable] variance of $X,XXX (X.X%)
 >
 > [2-3 sentence explanation of what caused this variance, referencing specific operational factors, business events, or decisions. Include quantification where possible.]
 >

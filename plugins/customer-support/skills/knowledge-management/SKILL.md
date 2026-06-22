@@ -28,8 +28,8 @@ Every KB article should include:
 - **Use code blocks** for commands, API calls, error messages, and configuration values
 - **Use tables** for comparisons, options, or reference data
 - **Use callouts/notes** for warnings, tips, and important caveats
-- **Keep paragraphs short** — 2-4 sentences max
-- **One idea per section** — if a section covers two topics, split it
+- **Keep paragraphs short** - 2-4 sentences max
+- **One idea per section** - if a section covers two topics, split it
 
 ## Writing for Searchability
 
@@ -46,11 +46,11 @@ Articles are useless if customers can't find them. Optimize every article for se
 
 ### Keyword Optimization
 
-- **Include exact error messages** — customers copy-paste error text into search
-- **Use customer language**, not internal terminology — "can't log in" not "authentication failure"
-- **Include common synonyms** — "delete/remove", "dashboard/home page", "export/download"
-- **Add alternate phrasings** — address the same issue from different angles in the overview
-- **Tag with product areas** — make sure category and tags match how customers think about the product
+- **Include exact error messages** - customers copy-paste error text into search
+- **Use customer language**, not internal terminology - "can't log in" not "authentication failure"
+- **Include common synonyms** - "delete/remove", "dashboard/home page", "export/download"
+- **Add alternate phrasings** - address the same issue from different angles in the overview
+- **Tag with product areas** - make sure category and tags match how customers think about the product
 
 ### Opening Sentence Formula
 
@@ -71,7 +71,7 @@ Start every article with a sentence that restates the problem or task in plain l
 ```
 # How to [accomplish task]
 
-[Overview — what this guide covers and when you'd use it]
+[Overview - what this guide covers and when you'd use it]
 
 ## Prerequisites
 - [What's needed before starting]
@@ -105,13 +105,13 @@ Start every article with a sentence that restates the problem or task in plain l
 
 **Structure**:
 ```
-# [Problem description — what the user sees]
+# [Problem description - what the user sees]
 
 ## Symptoms
 - [What the user observes]
 
 ## Cause
-[Why this happens — brief, non-jargon explanation]
+[Why this happens - brief, non-jargon explanation]
 
 ## Solution
 ### Option 1: [Primary fix]
@@ -128,7 +128,7 @@ Start every article with a sentence that restates the problem or task in plain l
 ```
 
 **Best practices**:
-- Lead with symptoms, not causes — customers search for what they see
+- Lead with symptoms, not causes - customers search for what they see
 - Provide multiple solutions when possible (most likely fix first)
 - Include a "Still having issues?" section that points to support
 - If the root cause is complex, keep the customer-facing explanation simple
@@ -139,9 +139,9 @@ Start every article with a sentence that restates the problem or task in plain l
 
 **Structure**:
 ```
-# [Question — in the customer's words]
+# [Question - in the customer's words]
 
-[Direct answer — 1-3 sentences]
+[Direct answer - 1-3 sentences]
 
 ## Details
 [Additional context, nuance, or explanation if needed]
@@ -153,7 +153,7 @@ Start every article with a sentence that restates the problem or task in plain l
 
 **Best practices**:
 - Answer the question in the first sentence
-- Keep it concise — if the answer needs a walkthrough, it's a how-to, not an FAQ
+- Keep it concise - if the answer needs a walkthrough, it's a how-to, not an FAQ
 - Group related FAQs and link between them
 
 ### Known Issue Articles
@@ -182,7 +182,7 @@ Start every article with a sentence that restates the problem or task in plain l
 ```
 
 **Best practices**:
-- Keep the status current — nothing erodes trust faster than a stale known issue article
+- Keep the status current - nothing erodes trust faster than a stale known issue article
 - Update the article when the fix ships and mark as resolved
 - If resolved, keep the article live for 30 days for customers still searching the old symptoms
 
@@ -217,7 +217,7 @@ Knowledge bases decay without maintenance. Follow this schedule:
 
 **Create new** when:
 - A new feature or product area needs documentation
-- A resolved ticket reveals a gap — no article exists for this topic
+- A resolved ticket reveals a gap - no article exists for this topic
 - The existing article covers too many topics and should be split
 - A different audience needs the same information explained differently
 
@@ -229,29 +229,29 @@ Organize articles into a hierarchy that matches how customers think:
 
 ```
 Getting Started
-├── Account setup
-├── First-time configuration
-└── Quick start guides
++-- Account setup
++-- First-time configuration
++-- Quick start guides
 
 Features & How-tos
-├── [Feature area 1]
-├── [Feature area 2]
-└── [Feature area 3]
++-- [Feature area 1]
++-- [Feature area 2]
++-- [Feature area 3]
 
 Integrations
-├── [Integration 1]
-├── [Integration 2]
-└── API reference
++-- [Integration 1]
++-- [Integration 2]
++-- API reference
 
 Troubleshooting
-├── Common errors
-├── Performance issues
-└── Known issues
++-- Common errors
++-- Performance issues
++-- Known issues
 
 Billing & Account
-├── Plans and pricing
-├── Billing questions
-└── Account management
++-- Plans and pricing
++-- Billing questions
++-- Account management
 ```
 
 ### Linking Best Practices
@@ -260,17 +260,17 @@ Billing & Account
 - **Link from how-to to troubleshooting**: "If you encounter errors, see [Troubleshooting X]"
 - **Link from FAQ to detailed articles**: "For a full walkthrough, see [Guide to X]"
 - **Link from known issues to workarounds**: Keep the chain from problem to solution short
-- **Use relative links** within the KB — they survive restructuring better than absolute URLs
-- **Avoid circular links** — if A links to B, B shouldn't link back to A unless both are genuinely useful entry points
+- **Use relative links** within the KB - they survive restructuring better than absolute URLs
+- **Avoid circular links** - if A links to B, B shouldn't link back to A unless both are genuinely useful entry points
 
 ## Using This Skill
 
 When creating and maintaining KB content:
 
-1. Write for the customer who is frustrated and searching for an answer — be clear, direct, and helpful
+1. Write for the customer who is frustrated and searching for an answer - be clear, direct, and helpful
 2. Every article should be findable through search using the words a customer would type
-3. Test your articles — follow the steps yourself or have someone unfamiliar with the topic follow them
-4. Keep articles focused — one problem, one solution. Split if an article is growing too long
-5. Maintain aggressively — a wrong article is worse than no article
-6. Track what's missing — every ticket that could have been a KB article is a content gap
-7. Measure impact — articles that don't get traffic or don't reduce tickets need to be improved or retired
+3. Test your articles - follow the steps yourself or have someone unfamiliar with the topic follow them
+4. Keep articles focused - one problem, one solution. Split if an article is growing too long
+5. Maintain aggressively - a wrong article is worse than no article
+6. Track what's missing - every ticket that could have been a KB article is a content gap
+7. Measure impact - articles that don't get traffic or don't reduce tickets need to be improved or retired

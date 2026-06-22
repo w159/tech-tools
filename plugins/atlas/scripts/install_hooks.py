@@ -9,8 +9,8 @@ backs the settings file up first.
 Hooks:
   optimizer        UserPromptSubmit            prompt_optimizer.py    (timeout 120)
   format           PostToolUse Edit|Write|...  format_after_edit.py   (async, timeout 60)
-  guard            PreToolUse  Bash            bash_guard.py
-  completion-gate  Stop                        completion_gate.py     (OPT-IN; not in default set)
+  guard            PreToolUse  Bash            bash_advisor.py
+  completion-gate  Stop                        completion_gate.py     (opt-out; on by default when docs/ exists)
 
 The completion gate enforces the atlas "Definition of done" (no stopping a run
 until evidence is captured). It is intrusive, so it is OFF by default: a plain --apply
@@ -46,7 +46,7 @@ HOOK_SPECS = {
         "format_after_edit.py",
         {"async": True, "timeout": 60},
     ),
-    "guard": ("PreToolUse", "Bash", "bash_guard.py", {}),
+    "guard": ("PreToolUse", "Bash", "bash_advisor.py", {}),
     "completion-gate": ("Stop", None, "completion_gate.py", {"timeout": 10}),
 }
 
@@ -141,7 +141,7 @@ def apply_uninstall(settings: dict, selected: list[str]) -> int:
 
 
 def cmd_list(settings: dict) -> None:
-    print("orchestrate hook coverage:")
+    print("atlas hook coverage:")
     for hid, (event, matcher, script, _e) in HOOK_SPECS.items():
         state = (
             "[x] installed" if has_hook(settings, event, script) else "- not installed"
@@ -164,9 +164,7 @@ def cmd_list(settings: dict) -> None:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(
-        description="Install orchestrate automation hooks (gated)."
-    )
+    ap = argparse.ArgumentParser(description="Install atlas automation hooks (gated).")
     ap.add_argument(
         "--settings", type=str, default=str(Path.home() / ".claude" / "settings.json")
     )

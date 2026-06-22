@@ -21,10 +21,10 @@ Per-employee deep dive. Caller must supply `employeeId` (or a name to look up fi
 ## Output
 
 - **Header**: employee name, ID, hire date, position, status, current pay rate.
-- **Deductions** — table: code, description, amount, frequency, pre/post tax.
-- **Local taxes** — table: jurisdiction, code, filing status.
-- **Direct deposit** — table: account type, last 4 of account, amount or %, routing number, deposit order. Mask account numbers to last 4.
-- **Earnings (recurring)** — table: earning code, rate/amount.
+- **Deductions** - table: code, description, amount, frequency, pre/post tax.
+- **Local taxes** - table: jurisdiction, code, filing status.
+- **Direct deposit** - table: account type, last 4 of account, amount or %, routing number, deposit order. Mask account numbers to last 4.
+- **Earnings (recurring)** - table: earning code, rate/amount.
 - **Issues** subsection if any of these are true:
   - No direct deposit on file
   - Local taxes set but no jurisdiction listed
@@ -32,6 +32,6 @@ Per-employee deep dive. Caller must supply `employeeId` (or a name to look up fi
 
 ## Rules
 
-- ALWAYS mask account numbers — only show the last 4 digits.
+- ALWAYS mask account numbers - only show the last 4 digits.
 - Read-only. Surface findings, never propose writes.
 - If employee status is terminated, banner that at the top.

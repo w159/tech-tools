@@ -26,7 +26,7 @@ Compare the general ledger control account balance to the detailed subledger bal
 **Process:**
 1. Pull GL balance for the control account as of period end
 2. Pull subledger trial balance or detail report as of the same date
-3. Compare totals — they should match if posting is real-time
+3. Compare totals - they should match if posting is real-time
 4. Investigate any differences (timing of posting, manual entries not reflected, interface errors)
 
 **Common causes of differences:**
@@ -126,10 +126,10 @@ Track the age of reconciling items to identify stale items requiring escalation:
 
 | Age Bucket | Status | Action |
 |-----------|--------|--------|
-| 0-30 days | Current | Monitor — within normal processing cycle |
-| 31-60 days | Aging | Investigate — follow up on why item has not cleared |
-| 61-90 days | Overdue | Escalate — notify supervisor, document investigation |
-| 90+ days | Stale | Escalate to management — potential write-off or adjustment needed |
+| 0-30 days | Current | Monitor - within normal processing cycle |
+| 31-60 days | Aging | Investigate - follow up on why item has not cleared |
+| 61-90 days | Overdue | Escalate - notify supervisor, document investigation |
+| 90+ days | Stale | Escalate to management - potential write-off or adjustment needed |
 
 ### Aging Report Format
 
@@ -157,7 +157,7 @@ Define escalation triggers based on your organization's risk tolerance:
 | Total reconciling items | > $100,000 | Controller review |
 | Item age | > 60 days | Supervisor follow-up |
 | Item age | > 90 days | Controller / management review |
-| Unreconciled difference | Any amount | Cannot close — must resolve or document |
+| Unreconciled difference | Any amount | Cannot close - must resolve or document |
 | Growing trend | 3+ consecutive periods | Process improvement investigation |
 
 *Note: Set thresholds based on your organization's materiality level and risk appetite. The examples above are illustrative.*
@@ -168,7 +168,7 @@ Define escalation triggers based on your organization's risk tolerance:
 2. **Completeness:** Reconcile all balance sheet accounts on a defined frequency (monthly for material accounts, quarterly for immaterial)
 3. **Documentation:** Every reconciliation should include preparer, reviewer, date, and clear explanation of all reconciling items
 4. **Segregation:** The person who reconciles should not be the same person who processes transactions in that account
-5. **Follow-through:** Track open items to resolution — do not just carry items forward indefinitely
+5. **Follow-through:** Track open items to resolution - do not just carry items forward indefinitely
 6. **Root cause analysis:** For recurring reconciling items, investigate and fix the underlying process issue
 7. **Standardization:** Use consistent templates and procedures across all accounts
 8. **Retention:** Maintain reconciliations and supporting detail per your organization's document retention policy

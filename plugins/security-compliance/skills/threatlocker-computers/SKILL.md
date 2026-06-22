@@ -1,7 +1,7 @@
 ---
 name: threatlocker-computers
 description: >
-  Use this skill when working with ThreatLocker-protected endpoints —
+  Use this skill when working with ThreatLocker-protected endpoints --
   fleet inventory, identifying offline agents, drilling into a single
   computer's check-in history, and correlating computers across
   organizations and groups.
@@ -33,13 +33,13 @@ agent identification, and drilling into a single endpoint's history.
 threatlocker_computers_list
 ```
 
-POST-based `GetByParameters` endpoint — see `api-patterns` for the
+POST-based `GetByParameters` endpoint - see `api-patterns` for the
 request body shape. Common parameters:
 
 - `pageNumber`, `pageSize`, `isAscending`, `orderBy`
-- `searchText` — substring match on computer name, hostname, OS, etc.
-- `childOrganizations` — set `true` to roll up across all child orgs
-- `organizationId` header — scope to a single tenant
+- `searchText` - substring match on computer name, hostname, OS, etc.
+- `childOrganizations` - set `true` to roll up across all child orgs
+- `organizationId` header - scope to a single tenant
 
 Each returned computer typically includes `computerId`, `computerName`,
 `hostname`, `operatingSystem`, `lastCheckin`, `computerGroupId`,
@@ -62,7 +62,7 @@ recent activity counts.
 threatlocker_computers_get_checkins
 ```
 
-Returns recent check-in records for a computer — useful for
+Returns recent check-in records for a computer - useful for
 distinguishing a healthy-but-quiet endpoint from a true offline one,
 and for identifying flapping agents that come and go.
 
@@ -83,12 +83,12 @@ Recency tiers we use in practice:
 | Bucket | `lastCheckin` age | Action |
 |--------|-------------------|--------|
 | Fresh | < 24h | Healthy |
-| Stale | 24h–7d | Investigate (reboot, network) |
-| Cold | 7d–30d | Open ticket; possible decommission |
+| Stale | 24h-7d | Investigate (reboot, network) |
+| Cold | 7d-30d | Open ticket; possible decommission |
 | Dead | > 30d | Confirm decommissioned and remove |
 
 1. Pull computers with `orderBy: "lastCheckin"`, `isAscending: true`.
-2. The oldest check-ins surface first — bucket them and produce a
+2. The oldest check-ins surface first - bucket them and produce a
    per-bucket count.
 3. For Stale endpoints, call `threatlocker_computers_get_checkins`
    to see whether check-ins are flapping vs. truly stopped.
@@ -98,7 +98,7 @@ Recency tiers we use in practice:
 1. Identify the group with the `computer-groups` skill.
 2. Filter `threatlocker_computers_list` results client-side by
    `computerGroupId` (the API does not currently expose a group filter
-   parameter on the list endpoint — fetch and filter).
+   parameter on the list endpoint - fetch and filter).
 3. For each computer in the group, optionally call
    `threatlocker_computers_get` for policy mode and enforcement state.
 
@@ -111,30 +111,30 @@ strings like `"Windows 11"` work.
 
 ## Edge Cases
 
-- **Multi-org agents** — A single API key may see computers across many
+- **Multi-org agents** - A single API key may see computers across many
   child organizations. Always include `organizationId` /
   `organizationName` in your output so an analyst can see which tenant
   a computer belongs to.
-- **Recently re-imaged hosts** — A re-imaged endpoint can register as a
+- **Recently re-imaged hosts** - A re-imaged endpoint can register as a
   new computer with the same hostname. If you see two records with the
   same `hostname` but different `computerId`, prefer the one with the
   most recent `lastCheckin`.
-- **Time zones** — `lastCheckin` is UTC. Convert before showing it to a
+- **Time zones** - `lastCheckin` is UTC. Convert before showing it to a
   human, especially for "X hours ago" framing.
-- **Search performance** — Avoid `searchText: ""` plus `pageSize: 1000`.
-  Stick to 50–200 per page.
+- **Search performance** - Avoid `searchText: ""` plus `pageSize: 1000`.
+  Stick to 50-200 per page.
 
 ## Best Practices
 
 - Treat `lastCheckin` as your primary health signal; other fields lag.
 - For MSP fleet reports, always group by organization first, then by
   group, before listing individual machines.
-- Cross-reference with the RMM device count per org — a delta usually
+- Cross-reference with the RMM device count per org - a delta usually
   means an unprotected endpoint, which is the highest-priority gap.
 
 ## Related Skills
 
-- [api-patterns](../api-patterns/SKILL.md) — Pagination and auth
-- [computer-groups](../computer-groups/SKILL.md) — Policy scoping
-- [audit-log](../audit-log/SKILL.md) — Per-computer event timeline
-- [organizations](../organizations/SKILL.md) — Multi-tenant pivot
+- [api-patterns](../api-patterns/SKILL.md) - Pagination and auth
+- [computer-groups](../computer-groups/SKILL.md) - Policy scoping
+- [audit-log](../audit-log/SKILL.md) - Per-computer event timeline
+- [organizations](../organizations/SKILL.md) - Multi-tenant pivot

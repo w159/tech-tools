@@ -21,23 +21,23 @@ If a specific path or area is given (e.g., `frontend/src/auth`), scope the refac
 
 ## Workflow
 
-### Phase 1: Audit (read-only — no changes yet)
+### Phase 1: Audit (read-only - no changes yet)
 
 Before touching any code, produce a complete findings report:
 
-1. **Map the current structure** — full directory tree, layer boundaries, entry points
-2. **Scan for naming violations** — grep for banned patterns (see codebase-organization skill Section 2):
+1. **Map the current structure** - full directory tree, layer boundaries, entry points
+2. **Scan for naming violations** - grep for banned patterns (see codebase-organization skill Section 2):
    - `Enhanced`, `Improved`, `New`, `Old`, `Better`, `Fast`, `Smart`, `Final`
    - `V2`, `_backup`, `_copy`, `_orig`, `_fixed`, `_patched`, `_updated`
    - `temp_`, `test_` (in non-test files), `my_`, `foo`, `bar`, `xxx`
    - Generic names: `data`, `info`, `item`, `thing`, `stuff`, `obj`, `val`, `result` as standalone
    - `utils2`, `helpers_new`, `styles_final` versioned filenames
-3. **Identify duplication** — functions, types, constants, and logic that appear in multiple places
-4. **Flag dead code** — unused imports, commented-out blocks, unreachable branches, deprecated functions
-5. **Check async patterns** — silent catch blocks, fire-and-forget promises, missing timeouts
-6. **Measure file/function size** — flag files >300 lines, functions >50 lines
-7. **Assess test coverage** — existing tests, gaps, characterization test needs
-8. **Check type strictness** — `any` usage, untyped parameters, implicit nulls
+3. **Identify duplication** - functions, types, constants, and logic that appear in multiple places
+4. **Flag dead code** - unused imports, commented-out blocks, unreachable branches, deprecated functions
+5. **Check async patterns** - silent catch blocks, fire-and-forget promises, missing timeouts
+6. **Measure file/function size** - flag files >300 lines, functions >50 lines
+7. **Assess test coverage** - existing tests, gaps, characterization test needs
+8. **Check type strictness** - `any` usage, untyped parameters, implicit nulls
 
 Present the audit as a structured report with severity levels before proceeding.
 
@@ -53,7 +53,7 @@ Based on audit findings, produce a sequenced refactoring plan:
 6. Add missing documentation (docstrings, section comments, ADRs)
 7. Final validation (full test suite, lint, type check, smoke test)
 
-Each step includes a verification checkpoint — tests pass, app builds, no regressions.
+Each step includes a verification checkpoint - tests pass, app builds, no regressions.
 
 **Present the plan for approval before executing any changes.**
 
@@ -81,7 +81,7 @@ Run the full deliverables checklist from the codebase-organization skill:
 ## Output Modes
 
 ### Full refactor (default)
-Complete audit → plan → execute → validate cycle.
+Complete audit -> plan -> execute -> validate cycle.
 
 ### Audit only
 ```
@@ -108,7 +108,7 @@ If **~~project tracker** is connected:
 
 ## Tips
 
-1. **Start with `audit`** — understand the full scope before committing to changes.
-2. **Scope it down** — `/refactor backend/src/auth` is more manageable than refactoring everything at once.
-3. **Pair with `/readme update`** — after refactoring, update the README to reflect the new structure.
-4. **Run from the repo root** — I need to see the full picture even when scoping to a specific area.
+1. **Start with `audit`** - understand the full scope before committing to changes.
+2. **Scope it down** - `/refactor backend/src/auth` is more manageable than refactoring everything at once.
+3. **Pair with `/readme update`** - after refactoring, update the README to reflect the new structure.
+4. **Run from the repo root** - I need to see the full picture even when scoping to a specific area.

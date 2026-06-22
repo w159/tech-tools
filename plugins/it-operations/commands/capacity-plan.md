@@ -1,5 +1,5 @@
 ---
-description: Plan resource capacity — workload analysis and utilization forecasting
+description: Plan resource capacity  -  workload analysis and utilization forecasting
 argument-hint: "<team or project scope>"
 ---
 
@@ -72,6 +72,6 @@ If **~~calendar** is connected:
 
 ## Tips
 
-1. **Include all work** — BAU, projects, support, meetings. People aren't 100% available for project work.
-2. **Plan for buffer** — Target 80% utilization. 100% means no room for surprises.
-3. **Update regularly** — Capacity plans go stale fast. Review monthly.
+1. **Include all work**  -  BAU, projects, support, meetings. People aren't 100% available for project work.
+2. **Plan for buffer**  -  Target 80% utilization. 100% means no room for surprises.
+3. **Update regularly**  -  Capacity plans go stale fast. Review monthly.

@@ -74,7 +74,7 @@ All list endpoints support pagination parameters:
 |-----------|-------------|---------|
 | `page` | Page number (1-indexed) | 1 |
 | `page_size` | Results per page | 25 |
-| `limit` | Max total results | — |
+| `limit` | Max total results | - |
 | `order_by` | Sort field (prefix `-` for descending) | varies |
 
 Responses include pagination metadata:
@@ -98,9 +98,9 @@ Responses include pagination metadata:
 
 The MCP server includes stateful navigation tools:
 
-- **`blumira_navigate`** — Navigate to a specific resource or view
-- **`blumira_status`** — Show current navigation context
-- **`blumira_back`** — Return to previous context
+- **`blumira_navigate`** - Navigate to a specific resource or view
+- **`blumira_status`** - Show current navigation context
+- **`blumira_back`** - Return to previous context
 
 These help maintain context when drilling into findings, devices, or accounts.
 
@@ -150,13 +150,13 @@ These help maintain context when drilling into findings, devices, or accounts.
 ## Best Practices
 
 - Use pagination (`page_size=50`) for large datasets instead of fetching everything at once
-- Combine filters to narrow results before fetching — don't over-fetch and filter client-side
+- Combine filters to narrow results before fetching - don't over-fetch and filter client-side
 - Use `order_by=-created` to get most recent items first
 - Cache account lists when doing MSP operations to avoid repeated lookups
-- Always handle pagination — check `meta.total` to know if more pages exist
+- Always handle pagination - check `meta.total` to know if more pages exist
 
 ## Related Skills
 
-- [Findings](../findings/SKILL.md) — Finding lifecycle management
-- [MSP](../msp/SKILL.md) — MSP multi-tenant operations
-- [Agents](../agents/SKILL.md) — Device and agent management
+- [Findings](../findings/SKILL.md) - Finding lifecycle management
+- [MSP](../msp/SKILL.md) - MSP multi-tenant operations
+- [Agents](../agents/SKILL.md) - Device and agent management

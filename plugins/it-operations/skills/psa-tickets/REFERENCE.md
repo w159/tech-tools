@@ -1,4 +1,4 @@
-# ConnectWise PSA Ticket — Reference Tables
+# ConnectWise PSA Ticket  -  Reference Tables
 
 Status values, priority levels, service boards, SLA configuration, note types, and status transition rules. For quick-start usage see [SKILL.md](./SKILL.md).
 
@@ -22,17 +22,17 @@ Status values are configurable per board. Query `GET /service/boards/{id}/status
 ### Status Transition Rules
 
 ```
-New ────────────────────────────────> Completed
- │                                        |
+New --------------------------------> Completed
+ |                                        |
  v                                        |
-In Progress ─────────────────────────────>|
- │         │                              |
- │         v                              |
- │    Waiting Customer ──────────────────>|
- │         │                              |
- │         v                              |
- │    Waiting Vendor ────────────────────>┘
- │
+In Progress ----------------------------->|
+ |         |                              |
+ |         v                              |
+ |    Waiting Customer ------------------>|
+ |         |                              |
+ |         v                              |
+ |    Waiting Vendor -------------------->+
+ |
  v
 Closed (only after Completed)
 ```
@@ -93,10 +93,10 @@ Get board-specific statuses: `GET /service/boards/{boardId}/statuses`
 
 | Priority | Respond | Plan | Resolve |
 |----------|---------|------|---------|
-| 1 — Critical | 1 hr | 2 hr | 4 hr |
-| 2 — High | 2 hr | 4 hr | 8 hr |
-| 3 — Medium | 4 hr | 8 hr | 24 hr |
-| 4 — Low | 8 hr | 16 hr | 72 hr |
+| 1  -  Critical | 1 hr | 2 hr | 4 hr |
+| 2  -  High | 2 hr | 4 hr | 8 hr |
+| 3  -  Medium | 4 hr | 8 hr | 24 hr |
+| 4  -  Low | 8 hr | 16 hr | 72 hr |
 
 ### SLA Clock Behavior
 

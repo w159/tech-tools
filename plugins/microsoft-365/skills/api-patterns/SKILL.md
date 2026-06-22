@@ -90,7 +90,7 @@ Graph uses server-side pagination. Always check for `@odata.nextLink` in respons
 
 ```
 1. Make initial request with $top=100
-2. If response contains @odata.nextLink → follow it
+2. If response contains @odata.nextLink -> follow it
 3. Repeat until no @odata.nextLink
 ```
 
@@ -103,7 +103,7 @@ Graph uses server-side pagination. Always check for `@odata.nextLink` in respons
 }
 ```
 
-**Response — last page:**
+**Response - last page:**
 ```json
 {
   "@odata.context": "...",
@@ -115,7 +115,7 @@ The Softeria MCP server handles pagination automatically for supported operation
 
 ## Delta Queries (Incremental Sync)
 
-Delta queries return only changed items since the last sync — ideal for regular polling.
+Delta queries return only changed items since the last sync - ideal for regular polling.
 
 ### Initial Delta Request
 
@@ -123,7 +123,7 @@ Delta queries return only changed items since the last sync — ideal for regula
 GET /v1.0/users/delta?$select=id,displayName,userPrincipalName,accountEnabled
 ```
 
-Response includes a `@odata.deltaLink` after the last page — store this.
+Response includes a `@odata.deltaLink` after the last page - store this.
 
 ### Subsequent Delta Requests
 

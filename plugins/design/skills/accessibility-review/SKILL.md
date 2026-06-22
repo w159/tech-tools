@@ -46,4 +46,4 @@ Evaluate designs and implementations against WCAG 2.1 AA standards.
 2. Keyboard-only navigation
 3. Screen reader testing (VoiceOver, NVDA)
 4. Color contrast verification
-5. Zoom to 200% — does layout break?
+5. Zoom to 200% - does layout break?

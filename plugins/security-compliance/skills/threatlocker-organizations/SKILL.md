@@ -2,7 +2,7 @@
 name: threatlocker-organizations
 description: >
   Use this skill when working with the ThreatLocker MSP multi-tenant
-  model — enumerating child organizations, retrieving per-org auth
+  model - enumerating child organizations, retrieving per-org auth
   keys, and identifying valid move targets when relocating computers
   between tenants.
 when_to_use: "When fanning out reports across child orgs, retrieving an org's auth key, or moving computers between organizations"
@@ -34,7 +34,7 @@ threatlocker_organizations_list_children
 ```
 
 Returns the full list of child organizations visible to the
-authenticated key — typically `organizationId`, `organizationName`,
+authenticated key - typically `organizationId`, `organizationName`,
 `isPartner`, `parentOrganizationId`, computer counts, and creation
 timestamp. This is the first call in nearly every multi-tenant
 workflow.
@@ -59,16 +59,16 @@ threatlocker_organizations_for_move_computers
 ```
 
 Returns the orgs that are valid destinations when relocating a
-computer — usually a subset of child orgs filtered by partnership and
+computer - usually a subset of child orgs filtered by partnership and
 permission. Not the same as the full child list.
 
 ## Key Concepts
 
 ### Partner vs Customer Org
 
-- **Partner org** — Top-level MSP tenant. Holds the API key, owns
+- **Partner org** - Top-level MSP tenant. Holds the API key, owns
   global computer groups, and parents customer orgs.
-- **Customer (child) org** — One per MSP client. Holds that client's
+- **Customer (child) org** - One per MSP client. Holds that client's
   computers, org-specific groups, approvals, and Action Log entries.
 
 ### How Tenant Scoping Works
@@ -78,7 +78,7 @@ Three ways to scope a call to a specific tenant:
 1. Set the `organizationId` header on the HTTP call.
 2. Send `childOrganizations: true` in a `GetByParameters` body to
    roll across all children at once.
-3. Omit both — the API key's primary org is used.
+3. Omit both - the API key's primary org is used.
 
 See `api-patterns` for header/body details.
 
@@ -130,19 +130,19 @@ was registered to the wrong tenant:
 
 ## Edge Cases
 
-- **Inactive or hidden orgs** — Some child orgs are archived or
+- **Inactive or hidden orgs** - Some child orgs are archived or
   hidden. The list endpoint may include a flag; ignore those for
   fleet reports.
-- **Stale auth keys** — A previously retrieved auth key continues to
+- **Stale auth keys** - A previously retrieved auth key continues to
   work until rotated. Don't assume the key in your records is
   current; pull fresh when in doubt.
-- **Move eligibility surprises** — `for_move_computers` filters by
+- **Move eligibility surprises** - `for_move_computers` filters by
   partner relationship. If an org isn't in the result, the source
   org's parent doesn't have permission to move into it.
 
 ## Best Practices
 
-- Cache the child list for a session — it rarely changes mid-session.
+- Cache the child list for a session - it rarely changes mid-session.
 - Always include both `organizationId` and `organizationName` in
   multi-tenant reports so a reader knows which client a number
   refers to.
@@ -153,8 +153,8 @@ was registered to the wrong tenant:
 
 ## Related Skills
 
-- [api-patterns](../api-patterns/SKILL.md) — `organizationId` header
+- [api-patterns](../api-patterns/SKILL.md) - `organizationId` header
   and `childOrganizations` body flag
-- [computers](../computers/SKILL.md) — Computers within an org
-- [approval-requests](../approval-requests/SKILL.md) — Per-tenant queue
-- [audit-log](../audit-log/SKILL.md) — Per-tenant Action Log
+- [computers](../computers/SKILL.md) - Computers within an org
+- [approval-requests](../approval-requests/SKILL.md) - Per-tenant queue
+- [audit-log](../audit-log/SKILL.md) - Per-tenant Action Log

@@ -19,19 +19,19 @@ Generate sample selections, create testing workpapers, document control assessme
 
 ### Arguments
 
-- `control-area` — The control area to test:
-  - `revenue-recognition` — Revenue cycle controls (order-to-cash)
-  - `procure-to-pay` or `p2p` — Procurement and AP controls (purchase-to-pay)
-  - `payroll` — Payroll processing and compensation controls
-  - `financial-close` — Period-end close and reporting controls
-  - `treasury` — Cash management and treasury controls
-  - `fixed-assets` — Capital asset lifecycle controls
-  - `inventory` — Inventory valuation and management controls
-  - `itgc` — IT general controls (access, change management, operations)
-  - `entity-level` — Entity-level and monitoring controls
-  - `journal-entries` — Journal entry processing controls
+- `control-area` - The control area to test:
+  - `revenue-recognition` - Revenue cycle controls (order-to-cash)
+  - `procure-to-pay` or `p2p` - Procurement and AP controls (purchase-to-pay)
+  - `payroll` - Payroll processing and compensation controls
+  - `financial-close` - Period-end close and reporting controls
+  - `treasury` - Cash management and treasury controls
+  - `fixed-assets` - Capital asset lifecycle controls
+  - `inventory` - Inventory valuation and management controls
+  - `itgc` - IT general controls (access, change management, operations)
+  - `entity-level` - Entity-level and monitoring controls
+  - `journal-entries` - Journal entry processing controls
   - Any specific control ID or name
-- `period` — The testing period (e.g., `2024-Q4`, `2024`, `2024-H2`)
+- `period` - The testing period (e.g., `2024-Q4`, `2024`, `2024-H2`)
 
 ## Workflow
 
@@ -49,12 +49,12 @@ Based on the control area, identify the key controls. Present the control matrix
 - **IT-dependent manual:** Manual controls that rely on system-generated data
 
 **Assertions (CEAVOP):**
-- **C**ompleteness — All transactions are recorded
-- **E**xistence/Occurrence — Transactions actually occurred
-- **A**ccuracy — Amounts are correctly recorded
-- **V**aluation — Assets/liabilities are properly valued
-- **O**bligations/Rights — Entity has rights to assets, obligations for liabilities
-- **P**resentation/Disclosure — Properly classified and disclosed
+- **C**ompleteness - All transactions are recorded
+- **E**xistence/Occurrence - Transactions actually occurred
+- **A**ccuracy - Amounts are correctly recorded
+- **V**aluation - Assets/liabilities are properly valued
+- **O**bligations/Rights - Entity has rights to assets, obligations for liabilities
+- **P**resentation/Disclosure - Properly classified and disclosed
 
 ### 2. Determine Sample Size
 
@@ -94,7 +94,7 @@ Present the sample:
 
 ```
 SAMPLE SELECTION
-Control: [Control ID] — [Description]
+Control: [Control ID] - [Description]
 Period: [Testing period]
 Population: [Count] items, $[Total value]
 Sample size: [N] items
@@ -116,7 +116,7 @@ SOX CONTROL TESTING WORKPAPER
 ==============================
 Control #: [ID]
 Control Description: [Full description of the control activity]
-Control Owner: [Role/title — to be filled by tester]
+Control Owner: [Role/title - to be filled by tester]
 Control Type: [Manual/Automated/IT-Dependent Manual]
 Frequency: [How often the control operates]
 Key Control: [Yes/No]
@@ -127,16 +127,16 @@ TEST OBJECTIVE:
 To determine whether [control description] operated effectively throughout the testing period.
 
 TEST PROCEDURES:
-1. [Step 1 — What to inspect, examine, or re-perform]
-2. [Step 2 — What evidence to obtain]
-3. [Step 3 — What to compare or verify]
-4. [Step 4 — How to evaluate completeness of performance]
-5. [Step 5 — How to assess timeliness of performance]
+1. [Step 1 - What to inspect, examine, or re-perform]
+2. [Step 2 - What evidence to obtain]
+3. [Step 3 - What to compare or verify]
+4. [Step 4 - How to evaluate completeness of performance]
+5. [Step 5 - How to assess timeliness of performance]
 
 EXPECTED EVIDENCE:
-- [Document type 1 — e.g., signed approval form]
-- [Document type 2 — e.g., system screenshot showing review]
-- [Document type 3 — e.g., reconciliation with preparer sign-off]
+- [Document type 1 - e.g., signed approval form]
+- [Document type 2 - e.g., system screenshot showing review]
+- [Document type 3 - e.g., reconciliation with preparer sign-off]
 
 TEST RESULTS:
 
@@ -151,11 +151,11 @@ EXCEPTIONS NOTED:
 |          |                      |            |                     |        |
 
 CONCLUSION:
-[ ] Effective — Control operated effectively with no exceptions
-[ ] Effective with exceptions — Control operated effectively; exceptions are isolated
-[ ] Deficiency — Control did not operate effectively
-[ ] Significant Deficiency — Deficiency is more than inconsequential
-[ ] Material Weakness — Reasonable possibility of material misstatement not prevented/detected
+[ ] Effective - Control operated effectively with no exceptions
+[ ] Effective with exceptions - Control operated effectively; exceptions are isolated
+[ ] Deficiency - Control did not operate effectively
+[ ] Significant Deficiency - Deficiency is more than inconsequential
+[ ] Material Weakness - Reasonable possibility of material misstatement not prevented/detected
 
 Tested by: ________________  Date: ________
 Reviewed by: _______________  Date: ________

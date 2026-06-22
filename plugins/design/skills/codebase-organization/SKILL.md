@@ -5,13 +5,13 @@ description: Refactor and reorganize codebases using SOLID principles, clean arc
 
 # Codebase Refactoring & Organization
 
-A complete methodology for auditing, refactoring, and reorganizing codebases. Every decision must be filtered through the principles below — they are constraints, not suggestions. When two principles conflict, the order listed here represents priority.
+A complete methodology for auditing, refactoring, and reorganizing codebases. Every decision must be filtered through the principles below - they are constraints, not suggestions. When two principles conflict, the order listed here represents priority.
 
 ## 1. Guiding Principles
 
 ### SOLID Principles
 
-- **Single Responsibility (SRP)**: Every module, class, function, and component must have exactly one reason to change. If you can describe what something does using the word "and," it does too much — split it.
+- **Single Responsibility (SRP)**: Every module, class, function, and component must have exactly one reason to change. If you can describe what something does using the word "and," it does too much - split it.
 - **Open/Closed (OCP)**: Code should be open for extension but closed for modification. New features should be addable by writing new code (new modules, handlers, components), not by editing existing stable code. Use plugin patterns, strategy patterns, and configuration-driven behavior.
 - **Liskov Substitution (LSP)**: Any subclass or implementation must be usable wherever its parent or interface is expected without breaking behavior.
 - **Interface Segregation (ISP)**: No module should depend on methods or properties it doesn't use. Prefer many small, focused interfaces over one large general-purpose one.
@@ -21,7 +21,7 @@ A complete methodology for auditing, refactoring, and reorganizing codebases. Ev
 
 - **KISS**: The simplest solution that correctly solves the problem is the best solution. If a junior developer can't understand a module within 5 minutes, it's too complex.
 - **YAGNI**: Do not build abstractions or extension points for hypothetical future requirements. Solve today's problem today.
-- **DRY**: Every piece of knowledge must have a single, unambiguous, authoritative representation. But apply with judgment — two pieces of code that look similar but serve different domains and change for different reasons are NOT duplication.
+- **DRY**: Every piece of knowledge must have a single, unambiguous, authoritative representation. But apply with judgment - two pieces of code that look similar but serve different domains and change for different reasons are NOT duplication.
 - **Separation of Concerns**: Each layer, module, and function should address one concern. If removing one concern would require rewriting a module, the concerns are too entangled.
 - **Composition Over Inheritance**: Build complex behavior by combining simple, independent pieces rather than extending deep class hierarchies.
 - **Principle of Least Surprise**: Code should behave the way a reasonable developer would expect from reading its name and signature.
@@ -54,7 +54,7 @@ These are strictly prohibited in file names, folder names, function names, class
 | `utils2.js` / `helpers_new.py` / `styles_final.css` | Versioned filenames signal fear of replacing the original | One file, one name. `utils.js`. Delete or merge the old one |
 | `handleClickNew()` / `processDataV2()` | Creates ghost references developers hunt for | `handleClick()`. Or name the behavioral difference: `processDataInBatches()` |
 | `temp_`, `test_` (non-test), `my_`, `foo`, `bar`, `xxx` | Non-descriptive placeholders in production | Name for what it does: `extractInvoiceLineItems()` |
-| `data`, `info`, `item`, `thing`, `stuff`, `obj`, `val`, `result` (standalone) | Semantically empty — every variable holds data | Name the domain concept: `invoice`, `userProfile`, `authToken` |
+| `data`, `info`, `item`, `thing`, `stuff`, `obj`, `val`, `result` (standalone) | Semantically empty - every variable holds data | Name the domain concept: `invoice`, `userProfile`, `authToken` |
 | `doProcess()` / `handleStuff()` / `manageThings()` | Vague verbs + vague nouns | `calculatePortfolioReturn()`, `syncMeetingTranscript()` |
 | `IUserInterface` / `AbstractBaseUser` | Hungarian notation encodes type system info into names | `User` for the interface. Let the language's type system communicate the construct type |
 | `_backup`, `_copy`, `_orig`, `_fixed`, `_patched`, `_updated`, `_refactored` | Suffixes narrate the changelog inside the name | Strip the suffix. Git provides the history |
@@ -68,9 +68,9 @@ These are strictly prohibited in file names, folder names, function names, class
 - **Be specific about scope**: `emailAddress` not `email`. `retryDelayMs` not `delay`. `maxLoginAttempts` not `max`
 - **Booleans read as true/false questions**: `isAuthenticated`, `hasPermission`, `shouldRetry`, `canEdit`
 - **Collections are plural, items are singular**: `users` is an array, `user` is one element, `usersByEmail` is a map
-- **Event handlers**: `on[Event]` or `handle[Event]` — `onSubmit`, `handleFileUpload`
-- **Constants**: `UPPER_SNAKE_CASE` describing meaning — `MAX_RETRY_ATTEMPTS = 3`, `DEFAULT_TIMEOUT_MS = 5000`
-- **Acronyms follow casing rules**: `HttpClient`, `parseJson`, `userId`, `apiUrl` — not `HTTPClient`, `parseJSON`
+- **Event handlers**: `on[Event]` or `handle[Event]` - `onSubmit`, `handleFileUpload`
+- **Constants**: `UPPER_SNAKE_CASE` describing meaning - `MAX_RETRY_ATTEMPTS = 3`, `DEFAULT_TIMEOUT_MS = 5000`
+- **Acronyms follow casing rules**: `HttpClient`, `parseJson`, `userId`, `apiUrl` - not `HTTPClient`, `parseJSON`
 
 ### Cross-Stack Consistency
 
@@ -82,16 +82,16 @@ Reorganize into a clear, predictable layout:
 
 ```
 project-root/
-├── frontend/          # All client-side code
-├── backend/           # All server-side code
-├── shared/            # Types, constants, utilities shared across sides
-├── scripts/           # Build, deploy, migration, maintenance scripts
-├── docs/              # Architecture decisions, API docs, glossary, guides
-│   ├── decisions/     # Architecture Decision Records (ADRs)
-│   └── glossary.md    # Domain term → code name mapping
-├── .github/           # CI/CD workflows, PR templates, issue templates
-├── docker/            # Dockerfiles, compose files (if applicable)
-└── README.md
++-- frontend/          # All client-side code
++-- backend/           # All server-side code
++-- shared/            # Types, constants, utilities shared across sides
++-- scripts/           # Build, deploy, migration, maintenance scripts
++-- docs/              # Architecture decisions, API docs, glossary, guides
+|   +-- decisions/     # Architecture Decision Records (ADRs)
+|   +-- glossary.md    # Domain term -> code name mapping
++-- .github/           # CI/CD workflows, PR templates, issue templates
++-- docker/            # Dockerfiles, compose files (if applicable)
++-- README.md
 ```
 
 Rules:
@@ -117,12 +117,12 @@ File naming: `lowercase-kebab-case` for non-Python, `lowercase_snake_case` for P
 
 For every instance of duplicated or near-duplicated logic:
 
-1. **Identify** — flag every function, component, class, type, or constant appearing in multiple places
-2. **Consolidate** — extract to a single, well-named module in the appropriate location:
-   - Same-side duplication → `utils/`, `hooks/`, or `services/` within that side
-   - Cross-side duplication → `shared/`
-3. **Re-export** — update all consumers to import from the single source
-4. **Validate** — confirm no orphaned copies remain
+1. **Identify** - flag every function, component, class, type, or constant appearing in multiple places
+2. **Consolidate** - extract to a single, well-named module in the appropriate location:
+   - Same-side duplication -> `utils/`, `hooks/`, or `services/` within that side
+   - Cross-side duplication -> `shared/`
+3. **Re-export** - update all consumers to import from the single source
+4. **Validate** - confirm no orphaned copies remain
 
 Shared types between frontend and backend must live in `shared/types/`. Pure utility functions belong in `shared/utils/`.
 
@@ -132,14 +132,14 @@ Shared types between frontend and backend must live in `shared/types/`. Pure uti
 
 - One component does one thing (SRP)
 - Separate presentational components (rendering) from containers (data fetching, state)
-- Extract business logic into custom hooks or service modules — components are thin wrappers
+- Extract business logic into custom hooks or service modules - components are thin wrappers
 - Configuration and feature flags are externalized, never hardcoded
 
 ### Backend
 
-- Layered architecture: **Routes/Controllers** → **Services** → **Repositories/Data Access**
+- Layered architecture: **Routes/Controllers** -> **Services** -> **Repositories/Data Access**
   - Routes: HTTP concerns only (parsing, formatting, status codes)
-  - Services: all business logic and orchestration — no direct DB calls, no HTTP objects
+  - Services: all business logic and orchestration - no direct DB calls, no HTTP objects
   - Repositories: all data access and external API calls
 - Define clear interfaces between layers. Services depend on abstractions, not concrete implementations
 - Use dependency injection or factory patterns so any layer can be swapped or mocked
@@ -182,7 +182,7 @@ async function performOperation():
 ### Rules
 
 - Never use bare `try/catch` that swallows errors. Every catch must: log + rethrow, log + return fallback, or log + return typed error
-- Never `catch (e) {}` — this is a silent failure
+- Never `catch (e) {}` - this is a silent failure
 - All Promises must be handled. No fire-and-forget async calls
 - Timeouts are mandatory on all external calls
 - Circuit breakers for dependencies that can go down
@@ -193,21 +193,21 @@ async function performOperation():
 
 - **Section headers**: clear comment blocks delineating logical sections within files
 - **Why, not what**: comments explain intent and reasoning, not mechanics
-- **TODO/FIXME/HACK tags**: consistent format with author and date — `// TODO(jerry, 2025-02-24): Replace with batch API`
+- **TODO/FIXME/HACK tags**: consistent format with author and date - `// TODO(jerry, 2025-02-24): Replace with batch API`
 - **API documentation**: every endpoint has request/response schemas documented
 - **ADRs**: every significant structural choice documented in `docs/decisions/` with context, alternatives, and rationale
 
 ## 8. Refactoring Process (Execution Order)
 
-1. **Audit** — map current structure, identify all violations, present findings before changes
-2. **Test baseline** — ensure tests pass; write characterization tests if coverage is insufficient
-3. **Establish glossary** — create `docs/glossary.md`, align canonical names before renaming
-4. **Restructure directories** — move files, update imports, verify builds after each batch
-5. **Rename for consistency** — eliminate banned patterns, align with glossary, verify
-6. **Extract shared code** — consolidate duplication, verify
-7. **Refactor internals** — modularity, conciseness, async patterns, file by file, commit after each unit
-8. **Add missing documentation** — docstrings, section comments, ADRs
-9. **Final validation** — full test suite, linting, type checking, smoke test
+1. **Audit** - map current structure, identify all violations, present findings before changes
+2. **Test baseline** - ensure tests pass; write characterization tests if coverage is insufficient
+3. **Establish glossary** - create `docs/glossary.md`, align canonical names before renaming
+4. **Restructure directories** - move files, update imports, verify builds after each batch
+5. **Rename for consistency** - eliminate banned patterns, align with glossary, verify
+6. **Extract shared code** - consolidate duplication, verify
+7. **Refactor internals** - modularity, conciseness, async patterns, file by file, commit after each unit
+8. **Add missing documentation** - docstrings, section comments, ADRs
+9. **Final validation** - full test suite, linting, type checking, smoke test
 
 At every step: run tests, verify builds, confirm no regressions before proceeding.
 
@@ -220,7 +220,7 @@ Before considering the refactoring complete:
 - [ ] File and folder names follow mirrored conventions across frontend and backend
 - [ ] Same domain concept uses the same noun in frontend, backend, API, database, and docs
 - [ ] Zero banned naming patterns remain anywhere
-- [ ] Zero duplicated logic — every shared concern has a single source of truth
+- [ ] Zero duplicated logic - every shared concern has a single source of truth
 - [ ] No file exceeds ~300 lines; no function exceeds ~50 lines
 - [ ] All async operations have error handling, logging, timeouts, and fallbacks
 - [ ] No silent catch blocks exist
@@ -230,5 +230,5 @@ Before considering the refactoring complete:
 - [ ] Full test suite passes with no regressions
 - [ ] App builds and runs in dev and production modes
 - [ ] ADRs document every significant structural decision
-- [ ] SOLID principles followed — no god classes, no leaky abstractions, no hidden dependencies
-- [ ] Types are strict — no `any`, no untyped parameters, no implicit null
+- [ ] SOLID principles followed - no god classes, no leaky abstractions, no hidden dependencies
+- [ ] Types are strict - no `any`, no untyped parameters, no implicit null

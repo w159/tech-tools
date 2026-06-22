@@ -25,7 +25,7 @@ Generate performance review templates and help structure feedback.
 
 If no mode is specified, ask what type of review they need.
 
-## Output — Self-Assessment Template
+## Output - Self-Assessment Template
 
 ```markdown
 ## Self-Assessment: [Review Period]
@@ -50,7 +50,7 @@ If no mode is specified, ask what type of review they need.
 [What was hard? What would you do differently?]
 
 ### Goals for Next Period
-1. [Goal — specific and measurable]
+1. [Goal - specific and measurable]
 2. [Goal]
 3. [Goal]
 
@@ -58,7 +58,7 @@ If no mode is specified, ask what type of review they need.
 [How can your manager better support you?]
 ```
 
-## Output — Manager Review
+## Output - Manager Review
 
 ```markdown
 ## Performance Review: [Employee Name]
@@ -91,10 +91,10 @@ If no mode is specified, ask what type of review they need.
 | [Skill] | [Level] | [Level] | [How to get there] |
 
 ### Compensation Recommendation
-[Promotion / Equity refresh / Adjustment / No change — with justification]
+[Promotion / Equity refresh / Adjustment / No change - with justification]
 ```
 
-## Output — Calibration
+## Output - Calibration
 
 ```markdown
 ## Calibration Prep: [Review Cycle]
@@ -113,8 +113,8 @@ If no mode is specified, ask what type of review they need.
 | Below Expectations | [X] | [X]% | ~10-15% |
 
 ### Calibration Discussion Points
-1. **[Employee]** — [Why this rating may need discussion, e.g., borderline, first review at level, recent role change]
-2. **[Employee]** — [Discussion point]
+1. **[Employee]** - [Why this rating may need discussion, e.g., borderline, first review at level, recent role change]
+2. **[Employee]** - [Discussion point]
 
 ### Promotion Candidates
 | Employee | Current Level | Proposed Level | Justification |
@@ -127,7 +127,7 @@ If no mode is specified, ask what type of review they need.
 | [Name] | [Promotion / Equity refresh / Market adjustment / Retention] | [Why] |
 
 ### Manager Notes
-[Context the calibration group should know — team changes, org shifts, project impacts]
+[Context the calibration group should know - team changes, org shifts, project impacts]
 ```
 
 ## If Connectors Available
@@ -142,7 +142,7 @@ If **~~project tracker** is connected:
 
 ## Tips
 
-1. **Be specific** — "Great job" isn't feedback. "You reduced deploy time 40% by implementing the new CI pipeline" is.
-2. **Balance positive and constructive** — Both are essential. Neither should be a surprise.
-3. **Focus on behaviors, not personality** — "Your documentation has been incomplete" vs. "You're careless."
-4. **Make development actionable** — "Improve communication" is vague. "Present at the next team all-hands" is actionable.
+1. **Be specific** - "Great job" isn't feedback. "You reduced deploy time 40% by implementing the new CI pipeline" is.
+2. **Balance positive and constructive** - Both are essential. Neither should be a surprise.
+3. **Focus on behaviors, not personality** - "Your documentation has been incomplete" vs. "You're careless."
+4. **Make development actionable** - "Improve communication" is vague. "Present at the next team all-hands" is actionable.

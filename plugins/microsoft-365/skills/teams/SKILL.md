@@ -76,9 +76,9 @@ GET /v1.0/teams/{teamId}/channels?$select=id,displayName,description,membershipT
 ```
 
 **Channel types:**
-- `standard` — Open to all team members
-- `private` — Invite-only subset of team members
-- `shared` — Shared with external users or other teams
+- `standard` - Open to all team members
+- `private` - Invite-only subset of team members
+- `shared` - Shared with external users or other teams
 
 ### Get Team Members
 

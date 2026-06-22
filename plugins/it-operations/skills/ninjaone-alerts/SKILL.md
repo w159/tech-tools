@@ -68,7 +68,7 @@ Tool: `ninjaone_alerts_summary`
 Returns a count of active alerts grouped by severity and/or organization.
 
 Key parameter:
-- `group_by` — How to group counts: `"severity"` (default), `"organization"`, or `"both"`
+- `group_by`  -  How to group counts: `"severity"` (default), `"organization"`, or `"both"`
 
 Useful for dashboards and morning briefings to understand the overall alert posture at a glance without retrieving individual alerts.
 

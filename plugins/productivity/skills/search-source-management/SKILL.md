@@ -32,12 +32,12 @@ When a user searches but has few or no sources connected:
 You currently have [N] source(s) connected: [list].
 
 To expand your search, you can connect additional sources in your MCP settings:
-- ~~chat — messages, threads, channels
-- ~~email — emails, conversations, attachments
-- ~~cloud storage — docs, sheets, slides
-- ~~project tracker — tasks, projects, milestones
-- ~~CRM — accounts, contacts, opportunities
-- ~~knowledge base — wiki pages, knowledge base articles
+- ~~chat  -  messages, threads, channels
+- ~~email  -  emails, conversations, attachments
+- ~~cloud storage  -  docs, sheets, slides
+- ~~project tracker  -  tasks, projects, milestones
+- ~~CRM  -  accounts, contacts, opportunities
+- ~~knowledge base  -  wiki pages, knowledge base articles
 
 The more sources you connect, the more complete your search results.
 ```
@@ -70,7 +70,7 @@ Different query types benefit from searching certain sources first. Use these pr
 
 **Status queries** ("What's the status of..."):
 ```
-1. Task tracker (~~project tracker — authoritative status)
+1. Task tracker (~~project tracker  -  authoritative status)
 2. ~~chat (real-time discussion)
 3. ~~cloud storage (status docs, reports)
 4. ~~email (status update emails)
@@ -130,18 +130,18 @@ Rate limit responses typically appear as:
 
 When a source is rate limited:
 
-1. **Do not retry immediately** — respect the limit
-2. **Continue with other sources** — do not block the entire search
+1. **Do not retry immediately**  -  respect the limit
+2. **Continue with other sources**  -  do not block the entire search
 3. **Inform the user**:
 ```
 Note: [Source] is temporarily rate limited. Results below are from
 [other sources]. You can retry in a few minutes to include [source].
 ```
-4. **For digests** — if rate limited mid-scan, note which time range was covered before the limit hit
+4. **For digests**  -  if rate limited mid-scan, note which time range was covered before the limit hit
 
 ### Prevention
 
-- Avoid unnecessary API calls — check if the source is likely to have relevant results before querying
+- Avoid unnecessary API calls  -  check if the source is likely to have relevant results before querying
 - Use targeted queries over broad scans when possible
 - For digests, batch requests where the API supports it
 - Cache awareness: if a search was just run, avoid re-running the same query immediately
@@ -152,12 +152,12 @@ Track source availability during a session:
 
 ```
 Source Status:
-  ~~chat:        ✓ Available
-  ~~email:        ✓ Available
-  ~~cloud storage:  ✓ Available
-  ~~project tracker:        ✗ Not connected
-  ~~CRM:   ✗ Not connected
-  ~~knowledge base:      ⚠ Rate limited (retry in 2 min)
+  ~~chat:        [x] Available
+  ~~email:        [x] Available
+  ~~cloud storage:  [x] Available
+  ~~project tracker:        [X] Not connected
+  ~~CRM:   [X] Not connected
+  ~~knowledge base:      [!] Rate limited (retry in 2 min)
 ```
 
 When reporting search results, include which sources were searched so the user knows the scope of the answer.

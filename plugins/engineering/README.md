@@ -1,6 +1,6 @@
 # Engineering Plugin
 
-A software engineering plugin primarily designed for [Cowork](https://claude.com/product/cowork), Anthropic's agentic desktop application — though it also works in Claude Code. Helps with standups, code review, architecture decisions, incident response, debugging, and technical documentation. Works with any engineering team — standalone with your input, supercharged when you connect your source control, project tracker, and monitoring tools.
+A software engineering plugin primarily designed for [Cowork](https://claude.com/product/cowork), Anthropic's agentic desktop application  -  though it also works in Claude Code. Helps with standups, code review, architecture decisions, incident response, debugging, and technical documentation. Works with any engineering team  -  standalone with your input, supercharged when you connect your source control, project tracker, and monitoring tools.
 
 ## Installation
 
@@ -14,12 +14,12 @@ Explicit workflows you invoke with a slash command:
 
 | Command | Description |
 |---|---|
-| `/standup` | Generate a standup update from your recent activity — commits, PRs, tickets, and chat |
-| `/review` | Review code changes — security, performance, style, and correctness |
-| `/debug` | Structured debugging session — reproduce, isolate, diagnose, and fix |
-| `/architecture` | Create or evaluate architecture decisions — ADR format with trade-off analysis |
-| `/incident` | Run an incident response workflow — triage, communicate, mitigate, and write postmortem |
-| `/deploy-checklist` | Pre-deployment checklist — verify tests, review changes, check dependencies, confirm rollback plan |
+| `/standup` | Generate a standup update from your recent activity  -  commits, PRs, tickets, and chat |
+| `/review` | Review code changes  -  security, performance, style, and correctness |
+| `/debug` | Structured debugging session  -  reproduce, isolate, diagnose, and fix |
+| `/architecture` | Create or evaluate architecture decisions  -  ADR format with trade-off analysis |
+| `/incident` | Run an incident response workflow  -  triage, communicate, mitigate, and write postmortem |
+| `/deploy-checklist` | Pre-deployment checklist  -  verify tests, review changes, check dependencies, confirm rollback plan |
 
 All commands work **standalone** (paste code, describe your system, upload files) and get **supercharged** with MCP connectors.
 
@@ -30,11 +30,11 @@ Domain knowledge Claude uses automatically when relevant:
 | Skill | Description |
 |---|---|
 | `code-review` | Review code for bugs, security issues, performance, and maintainability |
-| `incident-response` | Triage and manage production incidents — status updates, runbooks, postmortems |
-| `system-design` | Design systems and services — architecture diagrams, API design, data modeling |
-| `tech-debt` | Identify, categorize, and prioritize technical debt — build a remediation plan |
-| `testing-strategy` | Design test strategies — unit, integration, e2e coverage, test plan creation |
-| `documentation` | Write and maintain technical documentation — READMEs, API docs, runbooks, onboarding guides |
+| `incident-response` | Triage and manage production incidents  -  status updates, runbooks, postmortems |
+| `system-design` | Design systems and services  -  architecture diagrams, API design, data modeling |
+| `tech-debt` | Identify, categorize, and prioritize technical debt  -  build a remediation plan |
+| `testing-strategy` | Design test strategies  -  unit, integration, e2e coverage, test plan creation |
+| `documentation` | Write and maintain technical documentation  -  READMEs, API docs, runbooks, onboarding guides |
 
 ## Example Workflows
 

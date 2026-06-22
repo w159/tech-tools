@@ -179,7 +179,7 @@ Detailed metrics used to investigate changes in L1 metrics:
 **What they measure**: Unique users who perform a qualifying action in a day, week, or month.
 
 **Key decisions**:
-- What counts as "active"? A login? A page view? A core action? Define this carefully — different definitions tell different stories.
+- What counts as "active"? A login? A page view? A core action? Define this carefully - different definitions tell different stories.
 - Which timeframe matters most? DAU for daily-use products (messaging, email). WAU for weekly-use products (project management). MAU for less frequent products (tax software, travel booking).
 
 **How to use them**:
@@ -197,7 +197,7 @@ Detailed metrics used to investigate changes in L1 metrics:
 - D90 (three months): Is this a durable user?
 
 **How to use retention**:
-- Plot retention curves by cohort. Look for: initial drop-off (activation problem), steady decline (engagement problem), or flattening (good — you have a stable retained base).
+- Plot retention curves by cohort. Look for: initial drop-off (activation problem), steady decline (engagement problem), or flattening (good - you have a stable retained base).
 - Compare cohorts over time. Are newer cohorts retaining better than older ones? That means product improvements are working.
 - Segment retention by activation behavior. Users who completed onboarding vs those who did not. Users who used feature X vs those who did not.
 
@@ -213,7 +213,7 @@ Detailed metrics used to investigate changes in L1 metrics:
 
 **How to use conversion**:
 - Map the full funnel and measure conversion at each step
-- Identify the biggest drop-off points — these are your highest-leverage improvement opportunities
+- Identify the biggest drop-off points - these are your highest-leverage improvement opportunities
 - Segment conversion by source, plan, user type. Different segments convert very differently.
 - Track conversion over time. Is it improving as you iterate on the experience?
 
@@ -228,7 +228,7 @@ Detailed metrics used to investigate changes in L1 metrics:
 
 **How to use activation**:
 - Track activation rate for every signup cohort
-- Measure time to activate — faster is almost always better
+- Measure time to activate - faster is almost always better
 - Build onboarding flows that guide users to the activation moment
 - A/B test activation flows and measure impact on retention, not just activation rate
 
@@ -344,11 +344,11 @@ A good dashboard answers the question "How is the product doing?" at a glance.
 
 **Top row**: North Star metric with trend line and target.
 
-**Second row**: L1 metrics scorecard — current value, change, target, status for each key metric.
+**Second row**: L1 metrics scorecard - current value, change, target, status for each key metric.
 
-**Third row**: Key funnels or conversion metrics — visual funnel showing drop-off at each stage.
+**Third row**: Key funnels or conversion metrics - visual funnel showing drop-off at each stage.
 
-**Fourth row**: Recent experiments and launches — active A/B tests, recent feature launches with early metrics.
+**Fourth row**: Recent experiments and launches - active A/B tests, recent feature launches with early metrics.
 
 **Bottom / drill-down**: L2 metrics, segment breakdowns, and detailed time series for investigation.
 
@@ -375,14 +375,14 @@ Set alerts for metrics that require immediate attention:
 
 ## Output Format
 
-Use tables for the scorecard. Use clear status indicators. Keep the summary tight — the reader should get the essential story in 30 seconds.
+Use tables for the scorecard. Use clear status indicators. Keep the summary tight - the reader should get the essential story in 30 seconds.
 
 ## Tips
 
-- Start with the "so what" — what is the most important thing in this metrics review? Lead with that.
+- Start with the "so what" - what is the most important thing in this metrics review? Lead with that.
 - Absolute numbers without context are useless. Always show comparisons (vs previous period, vs target, vs benchmark).
 - Be careful about attribution. Correlation is not causation. If a metric moved, acknowledge uncertainty about why.
 - Segment analysis often reveals that an aggregate metric masks important differences. A flat overall number might hide one segment growing and another shrinking.
 - Not all metric movements matter. Small fluctuations are noise. Focus attention on meaningful changes.
-- If a metric is missing its target, do not just report the miss — recommend what to do about it.
+- If a metric is missing its target, do not just report the miss - recommend what to do about it.
 - Metrics reviews should drive decisions. If the review does not lead to at least one action, it was not useful.

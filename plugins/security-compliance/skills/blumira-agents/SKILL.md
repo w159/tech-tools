@@ -111,6 +111,6 @@ blumira_agents_keys_get
 
 ## Related Skills
 
-- [API Patterns](../api-patterns/SKILL.md) — Filtering and pagination
-- [MSP](../msp/SKILL.md) — MSP device management across accounts
-- [Users](../users/SKILL.md) — Correlating devices with users
+- [API Patterns](../api-patterns/SKILL.md) - Filtering and pagination
+- [MSP](../msp/SKILL.md) - MSP device management across accounts
+- [Users](../users/SKILL.md) - Correlating devices with users

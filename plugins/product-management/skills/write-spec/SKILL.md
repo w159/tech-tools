@@ -28,7 +28,7 @@ Ask the user what they want to spec. Accept any of:
 
 ### 2. Gather Context
 
-Ask the user for the following. Be conversational — do not dump all questions at once. Ask the most important ones first and fill in gaps as you go:
+Ask the user for the following. Be conversational - do not dump all questions at once. Ask the most important ones first and fill in gaps as you go:
 
 - **User problem**: What problem does this solve? Who experiences it?
 - **Target users**: Which user segment(s) does this serve?
@@ -52,7 +52,7 @@ If **~~design** is connected:
 - Pull related mockups, wireframes, or design explorations
 - Search for design system components relevant to the feature
 
-If these tools are not connected, work entirely from what the user provides. Do not ask the user to connect tools — just proceed with available information.
+If these tools are not connected, work entirely from what the user provides. Do not ask the user to connect tools - just proceed with available information.
 
 ### 4. Generate the PRD
 
@@ -100,10 +100,10 @@ Write user stories in standard format: "As a [user type], I want [capability] so
 Guidelines:
 - The user type should be specific enough to be meaningful ("enterprise admin" not just "user")
 - The capability should describe what they want to accomplish, not how
-- The benefit should explain the "why" — what value does this deliver
+- The benefit should explain the "why" - what value does this deliver
 - Include edge cases: error states, empty states, boundary conditions
 - Include different user types if the feature serves multiple personas
-- Order by priority — most important stories first
+- Order by priority - most important stories first
 
 Example:
 - "As a team admin, I want to configure SSO for my organization so that my team members can log in with their corporate credentials"
@@ -145,11 +145,11 @@ Good user stories are:
 - **Testable**: There is a clear way to verify it works
 
 ### Common Mistakes in User Stories
-- Too vague: "As a user, I want the product to be faster" — what specifically should be faster?
-- Solution-prescriptive: "As a user, I want a dropdown menu" — describe the need, not the UI widget
-- No benefit: "As a user, I want to click a button" — why? What does it accomplish?
-- Too large: "As a user, I want to manage my team" — break this into specific capabilities
-- Internal focus: "As the engineering team, we want to refactor the database" — this is a task, not a user story
+- Too vague: "As a user, I want the product to be faster" - what specifically should be faster?
+- Solution-prescriptive: "As a user, I want a dropdown menu" - describe the need, not the UI widget
+- No benefit: "As a user, I want to click a button" - why? What does it accomplish?
+- Too large: "As a user, I want to manage my team" - break this into specific capabilities
+- Internal focus: "As the engineering team, we want to refactor the database" - this is a task, not a user story
 
 ## Requirements Categorization
 
@@ -163,7 +163,7 @@ Good user stories are:
 - Be ruthless about P0s. The tighter the must-have list, the faster you ship and learn.
 - If everything is P0, nothing is P0. Challenge every must-have: "Would we really not ship without this?"
 - P1s should be things you are confident you will build soon, not a wish list.
-- P2s are architectural insurance — they guide design decisions even though you are not building them now.
+- P2s are architectural insurance - they guide design decisions even though you are not building them now.
 
 ## Success Metrics Definition
 
@@ -217,7 +217,7 @@ Example:
 - Be specific about the expected behavior, not the implementation
 - Include what should NOT happen (negative test cases)
 - Each criterion should be independently testable
-- Avoid ambiguous words: "fast", "user-friendly", "intuitive" — define what these mean concretely
+- Avoid ambiguous words: "fast", "user-friendly", "intuitive" - define what these mean concretely
 
 ## Scope Management
 
@@ -233,13 +233,13 @@ Scope creep happens when:
 - Write explicit non-goals in every spec
 - Require that any scope addition comes with a scope removal or timeline extension
 - Separate "v1" from "v2" clearly in the spec
-- Review the spec against the original problem statement — does everything serve it?
+- Review the spec against the original problem statement - does everything serve it?
 - Time-box investigations: "If we cannot figure out X in 2 days, we cut it"
 - Create a "parking lot" for good ideas that are not in scope
 
 ## Output Format
 
-Use markdown with clear headers. Keep the document scannable — busy stakeholders should be able to read just the headers and bold text to get the gist.
+Use markdown with clear headers. Keep the document scannable - busy stakeholders should be able to read just the headers and bold text to get the gist.
 
 ## Tips
 
@@ -247,4 +247,4 @@ Use markdown with clear headers. Keep the document scannable — busy stakeholde
 - If the user's idea is too big for one spec, suggest breaking it into phases and spec the first phase.
 - Success metrics should be specific and measurable, not vague ("improve user experience").
 - Non-goals are as important as goals. They prevent scope creep during implementation.
-- Open questions should be genuinely open — do not include questions you can answer from context.
+- Open questions should be genuinely open - do not include questions you can answer from context.

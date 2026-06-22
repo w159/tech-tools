@@ -1,6 +1,6 @@
 ---
 name: "cipp-standards"
-description: "Use this skill when working with CIPP Standards, Best Practice Analyser (BPA), and domain health checks — listing configured standards per tenant, triggering on-demand compliance checks, retrieving BPA results, checking SPF/DKIM/DMARC. The core surface for CIPP's tenant-baseline enforcement model."
+description: "Use this skill when working with CIPP Standards, Best Practice Analyser (BPA), and domain health checks - listing configured standards per tenant, triggering on-demand compliance checks, retrieving BPA results, checking SPF/DKIM/DMARC. The core surface for CIPP's tenant-baseline enforcement model."
 when_to_use: "When auditing standards compliance, running BPA reports, checking domain authentication health, or detecting tenants drifting from configured baselines"
 triggers:
   - cipp standards
@@ -19,7 +19,7 @@ triggers:
 
 # CIPP Standards & BPA
 
-Standards are CIPP's mechanism for declaring "this is what every tenant we manage should look like" and continuously enforcing it. The Best Practice Analyser (BPA) is the read side — it shows you where current tenant state diverges from CIPP's recommended baseline. Domain health is a complementary check focused on email authentication.
+Standards are CIPP's mechanism for declaring "this is what every tenant we manage should look like" and continuously enforcing it. The Best Practice Analyser (BPA) is the read side - it shows you where current tenant state diverges from CIPP's recommended baseline. Domain health is a complementary check focused on email authentication.
 
 ## Tools
 
@@ -45,7 +45,7 @@ Triggers an on-demand standards evaluation. CIPP runs this on a schedule, but fo
 cipp_list_bpa(tenantFilter='contoso.onmicrosoft.com')
 ```
 
-Returns the latest Best Practice Analyser report — every CIPP-recommended check with `Pass`/`Fail`/`Warn` status across categories (Security, Identity, Mail, SharePoint, Teams, Intune). The most useful single call for tenant health.
+Returns the latest Best Practice Analyser report - every CIPP-recommended check with `Pass`/`Fail`/`Warn` status across categories (Security, Identity, Mail, SharePoint, Teams, Intune). The most useful single call for tenant health.
 
 ### `cipp_list_domain_health`
 
@@ -65,7 +65,7 @@ A "standard" in CIPP has three modes:
 | `Alert` | Check + raise alert when out of compliance |
 | `Remediate` | Check + auto-fix when out of compliance |
 
-The progression for an MSP rolling out a new baseline is typically `Report` → `Alert` → `Remediate` over weeks, with the longest dwell in `Alert` to validate that auto-remediation will be safe.
+The progression for an MSP rolling out a new baseline is typically `Report` -> `Alert` -> `Remediate` over weeks, with the longest dwell in `Alert` to validate that auto-remediation will be safe.
 
 ## Workflow patterns
 
@@ -92,10 +92,10 @@ Compare the standards each tenant has enabled against the MSP's master baseline 
 
 Before you change a tenant's identity or mail config:
 
-1. `cipp_list_bpa` — capture current state
+1. `cipp_list_bpa` - capture current state
 2. Make the change
 3. `cipp_run_standards_check` to force a fresh evaluation
-4. `cipp_list_bpa` again — diff against pre-change capture
+4. `cipp_list_bpa` again - diff against pre-change capture
 
 ## Domain health interpretation
 
@@ -110,5 +110,5 @@ Before you change a tenant's identity or mail config:
 ## Caveats
 
 - BPA results reflect the last scheduled run; run `cipp_run_standards_check` for fresh data.
-- Standards `Remediate` mode can change tenant configuration without an additional confirmation — scope carefully and stage `Alert` first.
-- Domain health doesn't catch every email-auth issue (it doesn't validate ARC, BIMI, MTA-STS) — for full mail forensics, supplement with external tools.
+- Standards `Remediate` mode can change tenant configuration without an additional confirmation - scope carefully and stage `Alert` first.
+- Domain health doesn't catch every email-auth issue (it doesn't validate ARC, BIMI, MTA-STS) - for full mail forensics, supplement with external tools.

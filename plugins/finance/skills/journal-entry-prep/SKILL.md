@@ -40,7 +40,7 @@ Book periodic depreciation expense for tangible and intangible assets.
 - Credit: Accumulated depreciation/amortization
 
 **Depreciation methods:**
-- **Straight-line:** (Cost - Salvage) / Useful life — most common for financial reporting
+- **Straight-line:** (Cost - Salvage) / Useful life - most common for financial reporting
 - **Declining balance:** Accelerated method applying fixed rate to net book value
 - **Units of production:** Based on actual usage or output vs total expected
 

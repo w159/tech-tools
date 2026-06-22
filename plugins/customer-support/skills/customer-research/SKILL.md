@@ -20,14 +20,14 @@ Before searching, clarify what you're actually trying to find:
 
 **Step 2: Plan Your Search Strategy**
 Map the question to likely source types:
-- Product capability question → documentation, knowledge base, product specs
-- Customer context question → CRM, email history, meeting notes, chat
-- Process/policy question → internal wikis, runbooks, policy docs
-- Technical question → documentation, engineering resources, support tickets
-- Market/competitive question → web research, analyst reports, competitive intel
+- Product capability question -> documentation, knowledge base, product specs
+- Customer context question -> CRM, email history, meeting notes, chat
+- Process/policy question -> internal wikis, runbooks, policy docs
+- Technical question -> documentation, engineering resources, support tickets
+- Market/competitive question -> web research, analyst reports, competitive intel
 
 **Step 3: Execute Searches Systematically**
-Search sources in priority order (see below). Don't stop at the first result — cross-reference across sources.
+Search sources in priority order (see below). Don't stop at the first result - cross-reference across sources.
 
 **Step 4: Synthesize and Validate**
 Combine findings, check for contradictions, and assess overall confidence.
@@ -39,7 +39,7 @@ Always cite sources and note confidence level.
 
 Search sources in this order, with decreasing authority:
 
-### Tier 1 — Official Internal Sources (Highest Confidence)
+### Tier 1 - Official Internal Sources (Highest Confidence)
 These are authoritative and should be trusted unless outdated.
 
 - **Product documentation**: Official docs, specs, API references
@@ -47,9 +47,9 @@ These are authoritative and should be trusted unless outdated.
 - **Policy documents**: Official policies, terms, SLAs
 - **Product roadmap** (internal-facing): Feature timelines, priorities
 
-Confidence level: **High** (unless clearly outdated — check dates)
+Confidence level: **High** (unless clearly outdated - check dates)
 
-### Tier 2 — Organizational Context
+### Tier 2 - Organizational Context
 These provide context but may reflect one perspective.
 
 - **CRM records**: Account notes, activity history, opportunity details
@@ -59,7 +59,7 @@ These provide context but may reflect one perspective.
 
 Confidence level: **Medium-High** (may be subjective or incomplete)
 
-### Tier 3 — Team Communications
+### Tier 3 - Team Communications
 Informal but often contain the most recent information.
 
 - **Chat history**: Team discussions, quick answers, context
@@ -68,7 +68,7 @@ Informal but often contain the most recent information.
 
 Confidence level: **Medium** (informal, may be out of context, could be speculative)
 
-### Tier 4 — External Sources
+### Tier 4 - External Sources
 Useful for general knowledge but not authoritative for internal matters.
 
 - **Web search**: Official websites, blog posts, industry resources
@@ -78,7 +78,7 @@ Useful for general knowledge but not authoritative for internal matters.
 
 Confidence level: **Low-Medium** (may not reflect your specific situation)
 
-### Tier 5 — Inferred or Analogical
+### Tier 5 - Inferred or Analogical
 Use when direct sources don't yield answers.
 
 - **Similar situations**: How similar questions were handled before
@@ -128,13 +128,13 @@ When sources disagree:
 ### Synthesis Structure
 
 ```
-**Direct Answer:** [Bottom-line answer — lead with this]
+**Direct Answer:** [Bottom-line answer - lead with this]
 
 **Confidence:** [High / Medium / Low]
 
 **Supporting Evidence:**
 - [Source 1]: [What it says]
-- [Source 2]: [What it says — corroborates or adds nuance]
+- [Source 2]: [What it says - corroborates or adds nuance]
 
 **Caveats:**
 - [Any limitations or conditions on the answer]
@@ -218,9 +218,9 @@ After completing research, capture the knowledge for future use:
 When conducting customer research:
 
 1. Always start by clarifying what you're actually looking for
-2. Search systematically — don't skip tiers even if you think you know where the answer is
+2. Search systematically - don't skip tiers even if you think you know where the answer is
 3. Cross-reference findings across multiple sources
-4. Be transparent about confidence levels — never present uncertain information as fact
+4. Be transparent about confidence levels - never present uncertain information as fact
 5. When in doubt about whether to share with a customer, err on the side of verifying first
 6. Document your research for future team benefit
 7. If the research reveals a gap in your knowledge base, flag it for documentation

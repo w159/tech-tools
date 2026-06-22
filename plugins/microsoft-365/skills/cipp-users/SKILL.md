@@ -1,7 +1,7 @@
 ---
 name: "cipp-users"
-description: "Use this skill when working with CIPP-managed M365 users — creating accounts, editing properties, disabling, resetting passwords, resetting MFA, revoking sessions, full offboarding, BEC investigation, MFA status reporting, and listing user devices/groups. Covers the complete user lifecycle across multi-tenant M365 environments."
-when_to_use: "When creating, editing, disabling, offboarding, or auditing M365 users via CIPP — including password resets, MFA resets, session revocation, BEC checks, and MFA enrollment reports"
+description: "Use this skill when working with CIPP-managed M365 users - creating accounts, editing properties, disabling, resetting passwords, resetting MFA, revoking sessions, full offboarding, BEC investigation, MFA status reporting, and listing user devices/groups. Covers the complete user lifecycle across multi-tenant M365 environments."
+when_to_use: "When creating, editing, disabling, offboarding, or auditing M365 users via CIPP - including password resets, MFA resets, session revocation, BEC checks, and MFA enrollment reports"
 triggers:
   - cipp user
   - create m365 user
@@ -20,7 +20,7 @@ triggers:
 
 # CIPP User Management
 
-User management is the highest-volume MSP workflow against CIPP. Every step of the M365 user lifecycle — onboarding, role changes, security incidents, offboarding — has a dedicated tool. Most calls require `tenantFilter`; resolve it via `cipp_list_tenants` before you start.
+User management is the highest-volume MSP workflow against CIPP. Every step of the M365 user lifecycle - onboarding, role changes, security incidents, offboarding - has a dedicated tool. Most calls require `tenantFilter`; resolve it via `cipp_list_tenants` before you start.
 
 ## Tool surface
 
@@ -46,18 +46,18 @@ cipp_edit_user(tenantFilter, userId, displayName?, jobTitle?, department?, ...)
 cipp_disable_user(tenantFilter, userId)
 ```
 
-`usageLocation` (ISO 2-letter country code) must be set before any license can be assigned — set it at create time even if licensing comes later.
+`usageLocation` (ISO 2-letter country code) must be set before any license can be assigned - set it at create time even if licensing comes later.
 
 ### Security actions
 
 ```
-cipp_reset_password(tenantFilter, userId, password?)        # password optional → CIPP generates one
+cipp_reset_password(tenantFilter, userId, password?)        # password optional -> CIPP generates one
 cipp_reset_mfa(tenantFilter, userId)                        # clears all registered MFA methods
 cipp_revoke_sessions(tenantFilter, userId)                  # invalidates all active tokens
 cipp_bec_check(tenantFilter, userId)                        # BEC investigation report
 ```
 
-`cipp_bec_check` runs a Business Email Compromise investigation: inbox rules, recent sign-in locations, MFA changes, mailbox forwarding rules, suspicious app consents. Always the first call when a user reports a phishing-related compromise — before disabling the account, while session telemetry is still live.
+`cipp_bec_check` runs a Business Email Compromise investigation: inbox rules, recent sign-in locations, MFA changes, mailbox forwarding rules, suspicious app consents. Always the first call when a user reports a phishing-related compromise - before disabling the account, while session telemetry is still live.
 
 ### Full offboarding
 
@@ -74,18 +74,18 @@ This single call wraps the canonical CIPP offboarding sequence: disable, revoke 
 
 ### Suspected BEC compromise
 
-1. `cipp_bec_check` — capture the forensic snapshot before changing anything
-2. `cipp_revoke_sessions` — kick the attacker out of all active sessions
-3. `cipp_reset_password` — generate a strong password, share via secure channel
-4. `cipp_reset_mfa` — clear attacker-registered methods; user re-enrolls
+1. `cipp_bec_check` - capture the forensic snapshot before changing anything
+2. `cipp_revoke_sessions` - kick the attacker out of all active sessions
+3. `cipp_reset_password` - generate a strong password, share via secure channel
+4. `cipp_reset_mfa` - clear attacker-registered methods; user re-enrolls
 5. Review the BEC report for inbox forwarding rules and remove them
 
 ### Standard offboarding
 
 Use `cipp_offboard_user` with the org's policy defaults. For high-trust environments, do a dry-run review first:
 
-1. `cipp_list_user_groups` — note group memberships (audit trail)
-2. `cipp_list_user_devices` — flag company-owned devices for retrieval
+1. `cipp_list_user_groups` - note group memberships (audit trail)
+2. `cipp_list_user_devices` - flag company-owned devices for retrieval
 3. Check `cipp_list_mailbox_permissions` on the user's mailbox (delegates may exist)
 4. `cipp_offboard_user` with `convertToShared=true`, `removeLicenses=true`, `forwardingAddress=manager-upn`
 
@@ -100,4 +100,4 @@ Use this monthly across the portfolio to drive MFA enforcement campaigns.
 
 ## Identifying a user
 
-`userId` accepts either the Azure AD object GUID or the userPrincipalName. UPN is more readable; GUID is more stable across UPN changes. CIPP returns both — pick one and stay consistent within a workflow.
+`userId` accepts either the Azure AD object GUID or the userPrincipalName. UPN is more readable; GUID is more stable across UPN changes. CIPP returns both - pick one and stay consistent within a workflow.

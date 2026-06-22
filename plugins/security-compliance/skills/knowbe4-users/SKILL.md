@@ -32,9 +32,9 @@ Users and groups are the foundation of KnowBe4's security awareness platform. Us
 ### User Lifecycle
 
 ```
-PROVISIONED ──> ACTIVE ──> ARCHIVED
-                  │
-                  └──> SUSPENDED
+PROVISIONED --> ACTIVE --> ARCHIVED
+                  |
+                  +--> SUSPENDED
 ```
 
 - **Provisioned**: User account created, not yet active in campaigns
@@ -148,8 +148,8 @@ The risk score is influenced by:
 
 1. **Get user details** with `knowbe4_users_get` for current risk score
 2. **Pull risk score history** to see trend over time
-3. **Check user events** -- phishing test results and training completions
-4. **Compare to group average** -- is the user above or below their department?
+3. **Check user events** - phishing test results and training completions
+4. **Compare to group average** - is the user above or below their department?
 5. **Recommend action** based on risk level and trend direction
 
 ### Identify High-Risk Users
@@ -165,7 +165,7 @@ The risk score is influenced by:
 1. **List all groups** with `knowbe4_groups_list`
 2. **Get group risk scores** for each group
 3. **Rank departments** by average risk score
-4. **Identify outlier groups** -- significantly higher or lower than average
+4. **Identify outlier groups** - significantly higher or lower than average
 5. **Recommend targeted campaigns** for high-risk groups
 
 ### New Employee Onboarding
@@ -186,9 +186,9 @@ The risk score is influenced by:
 ### Risk Score Trend Analysis
 
 1. **Pull risk score history** for user or group over 6-12 months
-2. **Plot trend** -- is risk decreasing (good) or increasing (bad)?
-3. **Correlate with events** -- training completion should precede risk decrease
-4. **Identify plateau** -- if risk score stopped improving, change training approach
+2. **Plot trend** - is risk decreasing (good) or increasing (bad)?
+3. **Correlate with events** - training completion should precede risk decrease
+4. **Identify plateau** - if risk score stopped improving, change training approach
 5. **Report progress** to stakeholders
 
 ## Error Handling
@@ -217,16 +217,16 @@ The risk score is influenced by:
 
 ## Best Practices
 
-1. **Use AD/SCIM provisioning** -- Automate user lifecycle from Active Directory
-2. **Maintain clean groups** -- Regularly audit group membership
-3. **Track risk trends** -- Monthly risk score reviews are more useful than point-in-time
-4. **Set risk thresholds** -- Define organizational policy for risk score actions
-5. **Segment campaigns by risk** -- High-risk users need more frequent, targeted training
-6. **Use manager email field** -- Enables manager notification for training compliance
-7. **Clean up departed users** -- Archive promptly to keep metrics accurate
-8. **Leverage custom fields** -- Map to HR attributes for richer reporting
-9. **Monitor group averages** -- Department-level risk trends reveal systemic issues
-10. **Correlate with incidents** -- Compare risk scores to actual security incidents
+1. **Use AD/SCIM provisioning** - Automate user lifecycle from Active Directory
+2. **Maintain clean groups** - Regularly audit group membership
+3. **Track risk trends** - Monthly risk score reviews are more useful than point-in-time
+4. **Set risk thresholds** - Define organizational policy for risk score actions
+5. **Segment campaigns by risk** - High-risk users need more frequent, targeted training
+6. **Use manager email field** - Enables manager notification for training compliance
+7. **Clean up departed users** - Archive promptly to keep metrics accurate
+8. **Leverage custom fields** - Map to HR attributes for richer reporting
+9. **Monitor group averages** - Department-level risk trends reveal systemic issues
+10. **Correlate with incidents** - Compare risk scores to actual security incidents
 
 ## Related Skills
 

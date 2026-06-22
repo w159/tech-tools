@@ -35,7 +35,7 @@ Common UI solutions combining components:
 
 ## Principles
 
-1. **Consistency over creativity** — The system exists so teams don't reinvent the wheel
-2. **Flexibility within constraints** — Components should be composable, not rigid
-3. **Document everything** — If it's not documented, it doesn't exist
-4. **Version and migrate** — Breaking changes need migration paths
+1. **Consistency over creativity** - The system exists so teams don't reinvent the wheel
+2. **Flexibility within constraints** - Components should be composable, not rigid
+3. **Document everything** - If it's not documented, it doesn't exist
+4. **Version and migrate** - Breaking changes need migration paths

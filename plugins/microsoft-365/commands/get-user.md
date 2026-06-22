@@ -34,7 +34,7 @@ Look up a Microsoft 365 user and return a comprehensive summary of their account
    ```
 
 4. **Resolve license names**
-   - Get `subscribedSkus` to map GUID → friendly name
+   - Get `subscribedSkus` to map GUID -> friendly name
    - Or use the common SKU table in the licensing skill
 
 5. **Format and return summary**
@@ -44,7 +44,7 @@ Look up a Microsoft 365 user and return a comprehensive summary of their account
 ```
 User: Jane Smith (jsmith@contoso.com)
 
-Status:     ✅ Active
+Status:     [OK] Active
 Created:    2022-03-15
 Last Login: 2024-01-14 09:23 UTC (1 day ago)
 
@@ -52,11 +52,11 @@ Role:       IT Coordinator
 Department: Operations
 
 Licenses:
-  ✅ Microsoft 365 Business Premium
+  [OK] Microsoft 365 Business Premium
 
 MFA:
-  ✅ Microsoft Authenticator (iPhone) — registered 2022-03-15
-  ✅ FIDO2 Key — registered 2023-11-01
+  [OK] Microsoft Authenticator (iPhone) - registered 2022-03-15
+  [OK] FIDO2 Key - registered 2023-11-01
 
 Groups: 3 groups (use /list-teams to see Teams)
 ```
@@ -65,17 +65,17 @@ Groups: 3 groups (use /list-teams to see Teams)
 ```
 User: John Old (jold@contoso.com)
 
-Status:     ❌ DISABLED
+Status:     [FAIL] DISABLED
 Last Login: 2023-10-01 14:05 UTC (105 days ago)
 
 Licenses:
-  ⚠️  M365 Business Premium — license still assigned (consider reclaiming)
+  [WARN]  M365 Business Premium - license still assigned (consider reclaiming)
 ```
 
 **No MFA example:**
 ```
 MFA:
-  ❌ No MFA registered — password only (HIGH RISK)
+  [FAIL] No MFA registered - password only (HIGH RISK)
   Recommend: Enroll in Microsoft Authenticator or FIDO2 key
 ```
 
@@ -86,8 +86,8 @@ MFA:
 User not found: "Janet Smith"
 
 Did you mean:
-- Jane Smith (jsmith@contoso.com) — Active
-- James Smith (jsm@contoso.com) — Active
+- Jane Smith (jsmith@contoso.com) - Active
+- James Smith (jsm@contoso.com) - Active
 ```
 
 ### Permission Denied for MFA
@@ -98,6 +98,6 @@ Account and license details shown above are accurate.
 
 ## Related Commands
 
-- `/check-mfa-status` — Audit MFA across all users
-- `/list-licenses` — Full license inventory
-- `/offboard-user` — Offboarding workflow for this user
+- `/check-mfa-status` - Audit MFA across all users
+- `/list-licenses` - Full license inventory
+- `/offboard-user` - Offboarding workflow for this user

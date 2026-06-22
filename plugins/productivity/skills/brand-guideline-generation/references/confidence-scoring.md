@@ -74,7 +74,7 @@ When guidelines are generated primarily from conversational sources (no AUTHORIT
 - Messaging Framework from consistent patterns across 5+ calls = **Medium**
 - Language Patterns weight increases from 10% to 20% in aggregate calculation (subtract 10% from Voice Attributes)
 
-Note this in the guideline metadata: "Guidelines generated primarily from conversational sources — team review recommended to formalize."
+Note this in the guideline metadata: "Guidelines generated primarily from conversational sources  -  team review recommended to formalize."
 
 ## Aggregate Confidence
 
@@ -99,8 +99,8 @@ Convert scores: High = 1.0, Medium = 0.6, Low = 0.3
 - **Overall: 0.75 = Medium-High confidence**
 
 **Aggregate score thresholds:**
-- 0.85–1.0 = High
-- 0.60–0.84 = Medium
+- 0.85-1.0 = High
+- 0.60-0.84 = Medium
 - Below 0.60 = Low
 
 ## Presentation
@@ -112,7 +112,7 @@ Present confidence alongside each section header:
 [content]
 
 ## Tone Matrix (Confidence: Medium)
-[content — note: no official social media guidelines found, tone inferred from email patterns]
+[content  -  note: no official social media guidelines found, tone inferred from email patterns]
 ```
 
 For Medium and Low confidence sections, include a brief note explaining why confidence is limited and what would raise it.

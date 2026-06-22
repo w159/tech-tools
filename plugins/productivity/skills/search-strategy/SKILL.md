@@ -99,12 +99,12 @@ query: "from:<@UserID> aurora"
 
 ### ~~knowledge base (Wiki)
 
-**Semantic search** — Use for conceptual queries:
+**Semantic search**  -  Use for conceptual queries:
 ```
 descriptive_query: "API migration timeline and decision rationale"
 ```
 
-**Keyword search** — Use for exact terms:
+**Keyword search**  -  Use for exact terms:
 ```
 query: "API migration"
 query: "\"API migration timeline\""  (exact phrase)
@@ -165,10 +165,10 @@ When a query is ambiguous, prefer asking one focused clarifying question over gu
 
 ```
 Ambiguous: "search for the migration"
-→ "I found references to a few migrations. Are you looking for:
+-> "I found references to a few migrations. Are you looking for:
    1. The database migration (Project Phoenix)
-   2. The cloud migration (AWS → GCP)
-   3. The email migration (Exchange → O365)"
+   2. The cloud migration (AWS -> GCP)
+   3. The email migration (Exchange -> O365)"
 ```
 
 Only ask for clarification when:
@@ -210,12 +210,12 @@ Always execute searches across sources in parallel, never sequentially. The tota
 
 ```
 [User query]
-     ↓ decompose
+     v decompose
 [~~chat query] [~~email query] [~~cloud storage query] [Wiki query] [~~project tracker query]
-     ↓            ↓            ↓              ↓            ↓
+     v            v            v              v            v
   (parallel execution)
-     ↓
+     v
 [Merge + Rank + Deduplicate]
-     ↓
+     v
 [Synthesized answer]
 ```

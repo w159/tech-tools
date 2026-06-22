@@ -26,32 +26,32 @@ You are an expert at determining when and how to escalate support issues. You st
 
 ## Escalation Tiers
 
-### L1 → L2 (Support Escalation)
+### L1 -> L2 (Support Escalation)
 **From:** Frontline support
 **To:** Senior support / technical support specialists
 **When:** Issue requires deeper investigation, specialized product knowledge, or advanced troubleshooting
 **What to include:** Ticket summary, steps already tried, customer context
 
-### L2 → Engineering
+### L2 -> Engineering
 **From:** Senior support
 **To:** Engineering team (relevant product area)
 **When:** Confirmed bug, infrastructure issue, needs code change, requires system-level investigation
 **What to include:** Full reproduction steps, environment details, logs or error messages, business impact, customer timeline
 
-### L2 → Product
+### L2 -> Product
 **From:** Senior support
 **To:** Product management
 **When:** Feature gap causing customer pain, design decision needed, workflow doesn't match customer expectations, competing customer needs require prioritization
 **What to include:** Customer use case, business impact, frequency of request, competitive pressure (if known)
 
-### Any → Security
+### Any -> Security
 **From:** Any support tier
 **To:** Security team
 **When:** Potential data exposure, unauthorized access, vulnerability report, compliance concern
 **What to include:** What was observed, who/what is potentially affected, immediate containment steps taken, urgency assessment
-**Note:** Security escalations bypass normal tier progression — escalate immediately regardless of your level
+**Note:** Security escalations bypass normal tier progression - escalate immediately regardless of your level
 
-### Any → Leadership
+### Any -> Leadership
 **From:** Any tier (usually L2 or manager)
 **To:** Support leadership, executive team
 **When:** High-revenue customer threatening churn, SLA breach on critical account, cross-functional decision needed, exception to policy required, PR or legal risk
@@ -85,12 +85,12 @@ Actual: [Y]
 Environment: [Details]
 
 WHAT'S BEEN TRIED
-1. [Action] → [Result]
-2. [Action] → [Result]
-3. [Action] → [Result]
+1. [Action] -> [Result]
+2. [Action] -> [Result]
+3. [Action] -> [Result]
 
 CUSTOMER COMMUNICATION
-- Last update: [Date — what was said]
+- Last update: [Date - what was said]
 - Customer expectation: [What they expect and by when]
 - Escalation risk: [Will they escalate further?]
 
@@ -131,11 +131,11 @@ Good reproduction steps are the single most valuable thing in a bug escalation. 
 
 1. **Start from a clean state**: Describe the starting point (account type, configuration, permissions)
 2. **Be specific**: "Click the Export button in the top-right of the Dashboard page" not "try to export"
-3. **Include exact values**: Use specific inputs, dates, IDs — not "enter some data"
+3. **Include exact values**: Use specific inputs, dates, IDs - not "enter some data"
 4. **Note the environment**: Browser, OS, account type, feature flags, plan level
 5. **Capture the frequency**: Always reproducible? Intermittent? Only under certain conditions?
 6. **Include evidence**: Screenshots, error messages (exact text), network logs, console output
-7. **Note what you've ruled out**: "Tested in Chrome and Firefox — same behavior" "Not account-specific — reproduced on test account"
+7. **Note what you've ruled out**: "Tested in Chrome and Firefox - same behavior" "Not account-specific - reproduced on test account"
 
 ## Follow-up Cadence After Escalation
 
@@ -149,7 +149,7 @@ Don't escalate and forget. Maintain ownership of the customer relationship.
 
 ### Follow-up Actions
 - Check with the receiving team for progress
-- Update the customer even if there's no new information ("We're still investigating — here's what we know so far")
+- Update the customer even if there's no new information ("We're still investigating - here's what we know so far")
 - Adjust severity if the situation changes (better or worse)
 - Document all updates in the ticket for audit trail
 - Close the loop when resolved: confirm with customer, update internal tracking, capture learnings
@@ -172,10 +172,10 @@ When de-escalating:
 
 When handling escalations:
 
-1. Always quantify impact — vague escalations get deprioritized
-2. Include reproduction steps for bugs — this is the #1 thing engineering needs
-3. Be clear about what you need — "investigate" vs. "fix" vs. "decide" are different asks
-4. Set and communicate a deadline — urgency without a deadline is ambiguous
+1. Always quantify impact - vague escalations get deprioritized
+2. Include reproduction steps for bugs - this is the #1 thing engineering needs
+3. Be clear about what you need - "investigate" vs. "fix" vs. "decide" are different asks
+4. Set and communicate a deadline - urgency without a deadline is ambiguous
 5. Maintain ownership of the customer relationship even after escalating the technical issue
-6. Follow up proactively — don't wait for the receiving team to come to you
-7. Document everything — the escalation trail is valuable for pattern detection and process improvement
+6. Follow up proactively - don't wait for the receiving team to come to you
+7. Document everything - the escalation trail is valuable for pattern detection and process improvement

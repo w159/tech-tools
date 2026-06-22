@@ -17,7 +17,7 @@ Analyze the codebase and generate (or update) a README.md for: @$1
 
 If no argument is provided, analyze the current working directory.
 
-If `update` is passed and a README.md already exists, diff the current README against the actual codebase state and update it to reflect reality — preserving any manually written sections.
+If `update` is passed and a README.md already exists, diff the current README against the actual codebase state and update it to reflect reality - preserving any manually written sections.
 
 ## Workflow
 
@@ -44,7 +44,7 @@ For every library, framework, API, or SDK detected:
 - Record the exact version from the manifest
 - Locate the official documentation URL
 - Note what it's used for in this project
-- **Never invent references** — only cite official sources
+- **Never invent references** - only cite official sources
 
 ### Step 3: Generate the README
 
@@ -92,7 +92,7 @@ If **~~knowledge base** is connected:
 
 ## Tips
 
-1. **Run from the repo root** — I'll scan everything from the current directory down.
-2. **Use `update` to keep it fresh** — I'll diff against reality and only change what's stale.
-3. **Works with any stack** — Frontend, backend, full-stack, monorepo, microservices, CLI tools, libraries.
-4. **Pair with `/review`** — After generating, use `/review` to sanity-check the README against the code.
+1. **Run from the repo root** - I'll scan everything from the current directory down.
+2. **Use `update` to keep it fresh** - I'll diff against reality and only change what's stale.
+3. **Works with any stack** - Frontend, backend, full-stack, monorepo, microservices, CLI tools, libraries.
+4. **Pair with `/review`** - After generating, use `/review` to sanity-check the README against the code.

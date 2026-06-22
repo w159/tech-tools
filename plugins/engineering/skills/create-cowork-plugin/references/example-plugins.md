@@ -10,11 +10,11 @@ A simple plugin with one slash command and no other components.
 
 ```
 meeting-notes/
-├── .claude-plugin/
-│   └── plugin.json
-├── commands/
-│   └── meeting-notes.md
-└── README.md
++-- .claude-plugin/
+|   +-- plugin.json
++-- commands/
+|   +-- meeting-notes.md
++-- README.md
 ```
 
 ### plugin.json
@@ -42,11 +42,11 @@ allowed-tools: Read, Write
 Read the transcript at @$1 and generate structured meeting notes.
 
 Include these sections:
-1. **Attendees** — list all participants mentioned
-2. **Summary** — 2-3 sentence overview of the meeting
-3. **Key Decisions** — numbered list of decisions made
-4. **Action Items** — table with columns: Owner, Task, Due Date
-5. **Open Questions** — anything unresolved
+1. **Attendees**  -  list all participants mentioned
+2. **Summary**  -  2-3 sentence overview of the meeting
+3. **Key Decisions**  -  numbered list of decisions made
+4. **Action Items**  -  table with columns: Owner, Task, Due Date
+5. **Open Questions**  -  anything unresolved
 
 Write the notes to a new file named after the transcript with `-notes` appended.
 ```
@@ -61,18 +61,18 @@ A plugin that combines domain knowledge, user commands, and external service int
 
 ```
 code-quality/
-├── .claude-plugin/
-│   └── plugin.json
-├── commands/
-│   ├── review.md
-│   └── fix-lint.md
-├── skills/
-│   └── coding-standards/
-│       ├── SKILL.md
-│       └── references/
-│           └── style-rules.md
-├── .mcp.json
-└── README.md
++-- .claude-plugin/
+|   +-- plugin.json
++-- commands/
+|   +-- review.md
+|   +-- fix-lint.md
++-- skills/
+|   +-- coding-standards/
+|       +-- SKILL.md
+|       +-- references/
+|           +-- style-rules.md
++-- .mcp.json
++-- README.md
 ```
 
 ### plugin.json
@@ -163,7 +163,7 @@ Project coding standards and conventions for consistent, high-quality code.
 
 ## Additional Resources
 
-- **`references/style-rules.md`** — complete style rules by language
+- **`references/style-rules.md`**  -  complete style rules by language
 ```
 
 ### .mcp.json
@@ -189,23 +189,23 @@ A plugin using skills, commands, agents, hooks, and MCP integration with tool-ag
 
 ```
 engineering-workflow/
-├── .claude-plugin/
-│   └── plugin.json
-├── commands/
-│   ├── standup-prep.md
-│   └── create-ticket.md
-├── skills/
-│   └── team-processes/
-│       ├── SKILL.md
-│       └── references/
-│           └── workflow-guide.md
-├── agents/
-│   └── ticket-analyzer.md
-├── hooks/
-│   └── hooks.json
-├── .mcp.json
-├── CONNECTORS.md
-└── README.md
++-- .claude-plugin/
+|   +-- plugin.json
++-- commands/
+|   +-- standup-prep.md
+|   +-- create-ticket.md
++-- skills/
+|   +-- team-processes/
+|       +-- SKILL.md
+|       +-- references/
+|           +-- workflow-guide.md
++-- agents/
+|   +-- ticket-analyzer.md
++-- hooks/
+|   +-- hooks.json
++-- .mcp.json
++-- CONNECTORS.md
++-- README.md
 ```
 
 ### plugin.json

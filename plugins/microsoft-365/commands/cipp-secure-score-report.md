@@ -1,9 +1,9 @@
 ---
 name: cipp-secure-score-report
-description: Generate a portfolio-wide M365 security posture report — Secure Score equivalents, MFA enrollment, conditional access coverage, and domain authentication across all managed tenants
+description: Generate a portfolio-wide M365 security posture report - Secure Score equivalents, MFA enrollment, conditional access coverage, and domain authentication across all managed tenants
 arguments:
   - name: format
-    description: scorecard (default) — tenant-by-tenant table sorted by risk; trend — compare to previous run; executive — client-deliverable summary
+    description: scorecard (default) - tenant-by-tenant table sorted by risk; trend - compare to previous run; executive - client-deliverable summary
     required: false
   - name: tenants
     description: Comma-separated list of tenants to include (defaults to all)

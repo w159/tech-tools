@@ -17,7 +17,7 @@ Draft a professional, customer-facing response tailored to the situation, custom
 
 Examples:
 - `/draft-response Acme Corp is asking when the new dashboard feature will ship`
-- `/draft-response Customer escalation — their integration has been down for 2 days`
+- `/draft-response Customer escalation - their integration has been down for 2 days`
 - `/draft-response Responding to a feature request we won't be building`
 - `/draft-response Customer hit a billing error and wants a resolution ASAP`
 
@@ -81,7 +81,7 @@ Produce a response tailored to the situation:
 
 ---
 
-### Notes for You (internal — do not send)
+### Notes for You (internal - do not send)
 - **Why this approach:** [Rationale for tone and content choices]
 - **Things to verify:** [Any facts or commitments to confirm before sending]
 - **Risk factors:** [Anything sensitive about this response]
@@ -112,7 +112,7 @@ Produce a response tailored to the situation:
 - Offer a meeting or call if appropriate for the severity
 
 **Delivering bad news (feature sunset, delay, can't-fix):**
-- Be direct — don't bury the news
+- Be direct - don't bury the news
 - Explain the reasoning honestly
 - Acknowledge the impact on them specifically
 - Offer alternatives or mitigation

@@ -20,11 +20,11 @@ Apply existing brand guidelines to all sales and marketing content generation. L
 
 Find the user's brand guidelines using this sequence. Stop as soon as you find them:
 
-1. **Session context** — Check if brand guidelines were generated earlier in this session (via `/brand-voice:generate-guidelines`). If so, they are already in the conversation. Use them directly. Session-generated guidelines are the freshest and reflect the user's most recent intent.
+1. **Session context**  -  Check if brand guidelines were generated earlier in this session (via `/brand-voice:generate-guidelines`). If so, they are already in the conversation. Use them directly. Session-generated guidelines are the freshest and reflect the user's most recent intent.
 
-2. **Local guidelines file** — Check for `.claude/brand-voice-guidelines.md` inside the user's working folder. Do NOT use a relative path from the agent's current working directory — in Cowork, the agent runs from a plugin cache directory, not the user's project. Resolve the path relative to the user's working folder. If no working folder is set, skip this step.
+2. **Local guidelines file**  -  Check for `.claude/brand-voice-guidelines.md` inside the user's working folder. Do NOT use a relative path from the agent's current working directory  -  in Cowork, the agent runs from a plugin cache directory, not the user's project. Resolve the path relative to the user's working folder. If no working folder is set, skip this step.
 
-3. **Ask the user** — If none of the above found guidelines, tell the user:
+3. **Ask the user**  -  If none of the above found guidelines, tell the user:
    "I couldn't find your brand guidelines. You can:
    - Run `/brand-voice:discover-brand` to find brand materials across your platforms
    - Run `/brand-voice:generate-guidelines` to create guidelines from documents or transcripts
@@ -48,7 +48,7 @@ Before writing, identify:
 
 ### 2. Apply Voice Constants
 
-Voice is the brand's personality — it stays constant across all content:
+Voice is the brand's personality  -  it stays constant across all content:
 - Apply "We Are / We Are Not" attributes from guidelines
 - Use brand personality consistently
 - Incorporate approved terminology; reject prohibited terms
@@ -103,5 +103,5 @@ Open questions are unresolved brand positioning decisions flagged during guideli
 
 ## Reference Files
 
-- **`references/voice-constant-tone-flexes.md`** — The "voice constant, tone flexes" mental model, "We Are / We Are Not" table structure, and tone-by-context matrix explanation
-- **`references/before-after-examples.md`** — Before/after content examples per content type showing enforcement in practice
+- **`references/voice-constant-tone-flexes.md`**  -  The "voice constant, tone flexes" mental model, "We Are / We Are Not" table structure, and tone-by-context matrix explanation
+- **`references/before-after-examples.md`**  -  Before/after content examples per content type showing enforcement in practice

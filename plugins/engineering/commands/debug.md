@@ -1,5 +1,5 @@
 ---
-description: Structured debugging session — reproduce, isolate, diagnose, and fix
+description: Structured debugging session - reproduce, isolate, diagnose, and fix
 argument-hint: "<error message or problem description>"
 ---
 
@@ -18,29 +18,29 @@ Run a structured debugging session to find and fix issues systematically.
 ## How It Works
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                       DEBUG                                        │
-├─────────────────────────────────────────────────────────────────┤
-│  Step 1: REPRODUCE                                                │
-│  ✓ Understand the expected vs. actual behavior                   │
-│  ✓ Identify exact reproduction steps                             │
-│  ✓ Determine scope (when did it start? who is affected?)        │
-│                                                                    │
-│  Step 2: ISOLATE                                                   │
-│  ✓ Narrow down the component, service, or code path             │
-│  ✓ Check recent changes (deploys, config changes, dependencies) │
-│  ✓ Review logs and error messages                                │
-│                                                                    │
-│  Step 3: DIAGNOSE                                                  │
-│  ✓ Form hypotheses and test them                                 │
-│  ✓ Trace the code path                                           │
-│  ✓ Identify root cause (not just symptoms)                      │
-│                                                                    │
-│  Step 4: FIX                                                       │
-│  ✓ Propose a fix with explanation                                │
-│  ✓ Consider side effects and edge cases                          │
-│  ✓ Suggest tests to prevent regression                           │
-└─────────────────────────────────────────────────────────────────┘
++-----------------------------------------------------------------+
+|                       DEBUG                                        |
++-----------------------------------------------------------------+
+|  Step 1: REPRODUCE                                                |
+|  [x] Understand the expected vs. actual behavior                   |
+|  [x] Identify exact reproduction steps                             |
+|  [x] Determine scope (when did it start? who is affected?)        |
+|                                                                    |
+|  Step 2: ISOLATE                                                   |
+|  [x] Narrow down the component, service, or code path             |
+|  [x] Check recent changes (deploys, config changes, dependencies) |
+|  [x] Review logs and error messages                                |
+|                                                                    |
+|  Step 3: DIAGNOSE                                                  |
+|  [x] Form hypotheses and test them                                 |
+|  [x] Trace the code path                                           |
+|  [x] Identify root cause (not just symptoms)                      |
+|                                                                    |
+|  Step 4: FIX                                                       |
+|  [x] Propose a fix with explanation                                |
+|  [x] Consider side effects and edge cases                          |
+|  [x] Suggest tests to prevent regression                           |
++-----------------------------------------------------------------+
 ```
 
 ## What I Need From You
@@ -89,6 +89,6 @@ If **~~project tracker** is connected:
 
 ## Tips
 
-1. **Share error messages exactly** — Don't paraphrase. The exact text matters.
-2. **Mention what changed** — Recent deploys, dependency updates, and config changes are top suspects.
-3. **Include context** — "This works in staging but not prod" or "Only affects large payloads" narrows things fast.
+1. **Share error messages exactly**  -  Don't paraphrase. The exact text matters.
+2. **Mention what changed**  -  Recent deploys, dependency updates, and config changes are top suspects.
+3. **Include context**  -  "This works in staging but not prod" or "Only affects large payloads" narrows things fast.

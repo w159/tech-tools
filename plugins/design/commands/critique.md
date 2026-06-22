@@ -31,15 +31,15 @@ If a Figma URL is provided, pull the design from Figma. If a file is referenced,
 ## Design Critique: [Design Name]
 
 ### Overall Impression
-[1-2 sentence first reaction — what works, what's the biggest opportunity]
+[1-2 sentence first reaction - what works, what's the biggest opportunity]
 
 ### Usability
 | Finding | Severity | Recommendation |
 |---------|----------|----------------|
-| [Issue] | 🔴 Critical / 🟡 Moderate / 🟢 Minor | [Fix] |
+| [Issue] | [Critical] / [Moderate] / [Minor] | [Fix] |
 
 ### Visual Hierarchy
-- **What draws the eye first**: [Element] — [Is this correct?]
+- **What draws the eye first**: [Element] - [Is this correct?]
 - **Reading flow**: [How does the eye move through the layout?]
 - **Emphasis**: [Are the right things emphasized?]
 
@@ -58,9 +58,9 @@ If a Figma URL is provided, pull the design from Figma. If a file is referenced,
 - [Positive observation 2]
 
 ### Priority Recommendations
-1. **[Most impactful change]** — [Why and how]
-2. **[Second priority]** — [Why and how]
-3. **[Third priority]** — [Why and how]
+1. **[Most impactful change]** - [Why and how]
+2. **[Second priority]** - [Why and how]
+3. **[Third priority]** - [Why and how]
 ```
 
 ## If Connectors Available
@@ -74,6 +74,6 @@ If **~~user feedback** is connected:
 
 ## Tips
 
-1. **Share the context** — "This is a checkout flow for a B2B SaaS" helps me give relevant feedback.
-2. **Specify your stage** — Early exploration gets different feedback than final polish.
-3. **Ask me to focus** — "Just look at the navigation" gives you more depth on one area.
+1. **Share the context** - "This is a checkout flow for a B2B SaaS" helps me give relevant feedback.
+2. **Specify your stage** - Early exploration gets different feedback than final polish.
+3. **Ask me to focus** - "Just look at the navigation" gives you more depth on one area.

@@ -17,15 +17,15 @@ a codebase the more it is used.
 | atlas-architect skill | The methodology behind `/atlas` and the boot hook: dependencies, capability discovery, hooks, config, docs seed. |
 | self-improving skill | Capture lessons (decisions, fixes, gotchas) to claude-mem and committed `.agents/` notes; surface them on resume. The Stop/SubagentStop nudge hook points here. |
 | operating-contract skill | The neutral engineering contract every launcher injects (research, document, implement, verify, report). Set your stack, brand tokens, and compliance framework in your project `CLAUDE.md`/`AGENTS.md` and the launchers honor it. |
-| Command library | Fourteen verification-gated `/atlas-*` launchers, each injecting the operating contract and driving a specific task through the squad. |
-| Subagent squad | Fourteen `atlas:<role>` subagents, including a five-agent browser-driven UI/UX test swarm. |
+| Command library | Fifteen verification-gated `/atlas-*` launchers, each injecting the operating contract and driving a specific task through the squad. |
+| Subagent squad | Eighteen `atlas:<role>` subagents, including a five-agent browser-driven UI/UX test swarm. |
 | Capability discovery | A read-only scanner plus a maintained catalog that recommend the skills/plugins/MCP a project needs, with exact install commands. |
 
 ## Layout
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json     # manifest (name: atlas, v1.0.0)
+|-- .claude-plugin/plugin.json     # manifest (name: atlas, v1.1.0)
 |-- hooks/                         # 7 hooks + hooks.json (auto-loaded on install)
 |   |-- hooks.json                 #   wires every hook below
 |   |-- session_boot.py            #   SessionStart: activate runtime, surface lessons
@@ -38,11 +38,15 @@ atlas/
 |-- scripts/
 |   |-- discover_capabilities.py   #   read-only stack scan -> ranked recommendations
 |   `-- install_hooks.py           #   fallback wiring for non-plugin installs
-|-- agents/                        # 14 subagents (atlas:<role>), auto-registered
+|-- agents/                        # 18 subagents (atlas:<role>), auto-registered
 |   |-- explorer.md                #   read-only codebase mapping
 |   |-- implementer.md             #   bounded, verified code edits
 |   |-- verifier.md                #   adversarial confirm/refute
 |   |-- db-prober.md               #   read-only schema/RLS/index inspection
+|   |-- schema-inventory.md        #   PostgreSQL catalog inventory (tables, columns, indexes)
+|   |-- rls-privilege-audit.md     #   read-only RLS/grants/privilege audit
+|   |-- naming-glossary-audit.md   #   table/column name audit against project glossary
+|   |-- api-usage-map.md           #   map every DB object the API references
 |   |-- ui-runtime-tester.md       #   live browser/runtime behavior
 |   |-- planner.md                 #   multi-stage decomposition + stage maps
 |   |-- docs-curator.md            #   maintains the docs/ single source of truth
@@ -53,7 +57,7 @@ atlas/
 |   |-- ux-fuzzer.md               #   UX swarm: boundary/fuzz the discovered inputs
 |   |-- ux-accuracy-oracle.md      #   UX swarm: independent recompute of client numbers
 |   `-- ux-reporter.md             #   UX swarm: synthesis + three hard gates + deliverables
-|-- commands/                      # 15 commands (/atlas + 14 launchers)
+|-- commands/                      # 16 commands (/atlas + 15 launchers)
 |   |-- atlas.md                   #   the architect: boot + configure the workspace
 |   |-- atlas-prompt.md            #   prompt optimizer
 |   |-- atlas-feature.md           #   full-stack feature build
@@ -68,7 +72,8 @@ atlas/
 |   |-- atlas-grafana.md           #   Grafana SQL panel / dashboard builder
 |   |-- atlas-m365.md              #   M365/Entra/Graph/Intune identity task
 |   |-- atlas-vendor-assessment.md #   evidence-based vendor security assessment
-|   `-- atlas-harden.md            #   idempotent CHECK/SET/VERIFY hardening script
+|   |-- atlas-harden.md            #   idempotent CHECK/SET/VERIFY hardening script
+|   `-- atlas-validate.md          #   validation-gated plugin/skill review (reports, no auto-fix)
 `-- skills/
     |-- atlas-engine/              # SKILL.md + references/ (incl. operating-contract.md, capability-catalog.md)
     |-- atlas-architect/           # SKILL.md - the boot/discovery methodology
@@ -112,6 +117,7 @@ the command ask once for anything missing.
 | `/atlas-vendor-assessment` | Assess a vendor against a control framework you name, strictly from provided evidence |
 | `/atlas-harden` | Write an idempotent CHECK/SET/VERIFY endpoint hardening script for RMM/MDM deployment |
 | `/atlas-prompt` | Rewrite a vague request into a structured, environment-aware, verification-gated prompt |
+| `/atlas-validate` | Run plugin-dev:plugin-validator and plugin-dev:skill-reviewer over a target plugin; reports findings without auto-fixing |
 
 ## Hooks
 

@@ -90,7 +90,7 @@ Internal IT Help Desk/Engineer tools for Auvik, NinjaOne, ConnectWise, CIPP/M365
 ### Key Differentiators
 
 - **Real SDKs, not just MCP wrappers.** The `mcp_node/` folder ships fully typed Node.js clients (`node-auvik`, `node-ninjaone`, `node-vanta`, etc.) that the MCP layer sits on top of - usable from any non-MCP project too.
-- **Domain-cluster plugins.** The `it-operations` plugin bundles RMM, PSA, network, and backup vendors behind one domain so a single query can fan out across NinjaOne, ConnectWise, and Auvik, while `orchestrate` drives multi-agent coding work across the whole codebase.
+- **Domain-cluster plugins.** The `it-operations` plugin bundles RMM, PSA, network, and backup vendors behind one domain so a single query can fan out across NinjaOne, ConnectWise, and Auvik, while `atlas` drives multi-agent coding work across the whole codebase.
 - **Production-grade packaging.** A hardened `pack-mcpb.js` script guards against broken bundles before they ever ship to Claude Desktop.
 
 ---
@@ -104,7 +104,7 @@ Internal IT Help Desk/Engineer tools for Auvik, NinjaOne, ConnectWise, CIPP/M365
 |                      Claude Desktop / Claude Code              |
 |                                                                |
 |  +------------------+    +------------------+                  |
-|  | orchestrate      |    | 11 domain-cluster|   plugins/       |
+|  | atlas            |    | 11 domain-cluster|   plugins/       |
 |  | coding meta-agent|    | plugins          |                  |
 |  |                  |    |                  |                  |
 |  +---------+--------+    +---------+--------+                  |
@@ -444,11 +444,11 @@ Re-run any time with `node test-mcp-tools.mjs`.
 
 ## Claude Code Plugins
 
-The marketplace ships **12 domain-cluster plugins** under `plugins/`, listed in the manifest at `.claude-plugin/marketplace.json`. Each vendor's tooling is bundled into the business domain it serves; `orchestrate` is the do-everything coding meta-agent. Plugins declare any required MCP servers in their own `.mcp.json` and ship **skills** (Claude follows them like a runbook) and **slash commands** (one-shot entry points). Folded vendor skills and commands are prefixed by vendor (for example `ninjaone-*`, `auvik-*`) so names stay unique within a domain.
+The marketplace ships **12 domain-cluster plugins** under `plugins/`, listed in the manifest at `.claude-plugin/marketplace.json`. Each vendor's tooling is bundled into the business domain it serves; `atlas` is the do-everything coding meta-agent. Plugins declare any required MCP servers in their own `.mcp.json` and ship **skills** (Claude follows them like a runbook) and **slash commands** (one-shot entry points). Folded vendor skills and commands are prefixed by vendor (for example `ninjaone-*`, `auvik-*`) so names stay unique within a domain.
 
 | Plugin | Domain | Bundled tools / surface | MCP servers |
 | --- | --- | --- | --- |
-| [`orchestrate`](plugins/orchestrate) | Multi-agent coding | 14 launcher commands, 14 subagents, multi-stage planning, docs SSoT, UX test swarm | -- |
+| [`atlas`](plugins/atlas) | Multi-agent coding | 15 launcher commands, 18 subagents, multi-stage planning, docs SSoT, UX test swarm | -- |
 | [`it-operations`](plugins/it-operations) | MSP IT operations | NinjaOne, ConnectWise Manage (PSA), Auvik, Kaseya Spanning + ops skills | auvik |
 | [`security-compliance`](plugins/security-compliance) | Security & GRC | Vanta, KnowBe4, ThreatLocker, Blumira + audit/evidence/risk skills | threatlocker |
 | [`microsoft-365`](plugins/microsoft-365) | M365 & identity | M365 admin, Microsoft Graph/Entra, CIPP multi-tenant | -- |
@@ -499,12 +499,12 @@ The `skills/` directory ships 13 curated skills installable into any Claude Code
 | `graphify` | Turn any input (code, docs, data) into an interactive knowledge graph |
 | `msgraph-sdk` | Guided Microsoft Graph SDK usage for common M365 operations |
 | `msoffice-docs` | Read, summarize, and extract from Word/Excel/PowerPoint documents |
-| `orchestrate` | Drive multi-step, multi-surface engineering work through parallel subagents |
+| `atlas` | Drive multi-step, multi-surface engineering work through parallel subagents |
 | `scrapling-official` | Web scraping via the Scrapling library with anti-detection patterns |
 | `security-audit` | Security review of code changes, dependencies, and configs |
 | `webapp-testing` | End-to-end web app testing workflows (Playwright-oriented) |
 
-The previous 25-skill set was consolidated to 13 in June 2026. Skills that were absorbed or merged: `codeql` and `pytest-coverage` merged into `security-audit`; `prompt-optimizer` and `self-improving` merged into `orchestrate` as referenced sub-patterns. The remaining retired skills had overlapping scope with the survivors.
+The previous 25-skill set was consolidated to 13 in June 2026. Skills that were absorbed or merged: `codeql` and `pytest-coverage` merged into `security-audit`; `prompt-optimizer` and `self-improving` merged into `atlas` as referenced sub-patterns. The remaining retired skills had overlapping scope with the survivors.
 
 ## Node SDK Libraries
 
@@ -761,7 +761,7 @@ If you add an endpoint, also add or update the markdown page in `docs/vendors/<v
 3. **Manifest:** fill in `manifest.json` (entry_point, env vars, display name).
 4. **Pack:** wire `scripts/pack-mcpb.js` to re-export `_shared/pack-mcpb.js`.
 5. **Docs:** create `docs/vendors/<vendor>/README.md` + endpoint reference.
-6. **Plugin (optional):** create `plugins/<vendor>-ops/` with one or more skills.
+6. **Plugin (optional):** add the vendor's skills to the owning domain plugin under `plugins/<domain>/`.
 7. **Registry:** add to `.env.template` and to `SERVERS` in `test-mcp-tools.mjs`.
 
 ### Add a new Claude Code plugin

@@ -1,6 +1,6 @@
 ---
 name: spanning-api-patterns
-when_to_use: "When working with the Spanning Cloud Backup REST API — auth, user/license queries, backup status, restore operations, audit retrieval"
+when_to_use: "When working with the Spanning Cloud Backup REST API  -  auth, user/license queries, backup status, restore operations, audit retrieval"
 description: >
   Use this skill when integrating with Spanning Cloud Backup. Covers admin email + API
   token auth, the per-platform endpoint surface (M365, Google Workspace, Salesforce),
@@ -42,22 +42,22 @@ Spanning uses **HTTP Basic auth** per the public OpenAPI spec
 Authorization: Basic base64(<admin_email>:<api_token>)
 ```
 
-The admin email and API token are pair-bound — both must match the
+The admin email and API token are pair-bound  -  both must match the
 pair on file in the Spanning admin console or the API returns 401.
 
 Token issuance:
 
-1. Spanning admin console → Settings → API Token
+1. Spanning admin console -> Settings -> API Token
 2. Copy token (shown once)
-3. Tokens are tenant-scoped — one per Spanning org
+3. Tokens are tenant-scoped  -  one per Spanning org
 
 ## Object model
 
 ```
 Org (a Spanning customer)
- └── User (a backed-up M365 / GWS / Salesforce user)
-      └── Backup runs (one per day per service per user)
-           └── Restorable items (mail / drive / calendar / records)
+ +-- User (a backed-up M365 / GWS / Salesforce user)
+      +-- Backup runs (one per day per service per user)
+           +-- Restorable items (mail / drive / calendar / records)
 ```
 
 ## Common endpoints (M365 example)
@@ -81,7 +81,7 @@ Cursor-based:
 
 ```
 GET /external/users?limit=100
-→ { items: [...], next: "<cursor>" }
+-> { items: [...], next: "<cursor>" }
 
 GET /external/users?limit=100&cursor=<cursor>
 ```
@@ -95,9 +95,9 @@ Async, similar pattern to Datto SaaS Protection:
 ```
 1. POST /external/users/{userId}/services/{service}/restores
    body: { items: [...], restoreDestination: "..." }
-   → { restoreId, status: "queued" }
+   -> { restoreId, status: "queued" }
 2. Poll GET /external/restores/{restoreId} every 30s
-3. status: queued → running → completed | failed
+3. status: queued -> running -> completed | failed
 ```
 
 ## Rate limits
@@ -119,7 +119,7 @@ Async, similar pattern to Datto SaaS Protection:
 
 ## Gotchas
 
-- **Admin email + token must match**: The token is bound to the admin email. If either is wrong, the API returns 401 with a generic message — surface a clear "verify both fields" error.
+- **Admin email + token must match**: The token is bound to the admin email. If either is wrong, the API returns 401 with a generic message  -  surface a clear "verify both fields" error.
 - **Platform-specific URL bases**: A token that works for M365 won't work against the GWS endpoint. Cross-platform org reporting requires separate tokens (or one platform-agnostic token at the partner level for partner-tier customers).
 - **Spanning vs Datto SaaS Protection**: Despite shared Kaseya branding, these are different products. Don't mix tokens.
 - **Salesforce API quirks**: The Salesforce surface uses Salesforce object IDs (15- or 18-character) rather than the user-friendly identifiers used by M365/GWS endpoints.

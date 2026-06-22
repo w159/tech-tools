@@ -16,19 +16,19 @@ annotation.
 
 ## Workflow
 
-1. **Get the signature image** — ask the user for a local file path
+1. **Get the signature image**  -  ask the user for a local file path
    (PNG/JPG) to their signature or initials. If they don't have one,
    suggest they create one and save it to a known path.
 
-2. **Open the PDF** — `display_pdf` (or reuse existing `viewUUID`).
-   Check the returned `formFields` for signature-type fields — they
+2. **Open the PDF**  -  `display_pdf` (or reuse existing `viewUUID`).
+   Check the returned `formFields` for signature-type fields  -  they
    include page and bounding-box coordinates.
 
-3. **Locate the target** — if there's a signature field, use its
+3. **Locate the target**  -  if there's a signature field, use its
    coordinates. Otherwise ask: "Which page, and where on the page?
    (e.g., bottom-right of page 3)"
 
-4. **Place it** — `interact` → `add_annotations`:
+4. **Place it**  -  `interact` -> `add_annotations`:
    ```json
    {"action": "add_annotations", "annotations": [
      {"id": "sig1", "type": "image", "page": 3,
@@ -38,10 +38,10 @@ annotation.
    ```
    Width/height auto-detected from the image if omitted.
 
-5. **Verify** — follow with `get_screenshot` of that page. Show the
+5. **Verify**  -  follow with `get_screenshot` of that page. Show the
    user. Adjust position if needed via `update_annotations`.
 
-6. **Initials on every page** — batch one `image` annotation per page
+6. **Initials on every page**  -  batch one `image` annotation per page
    in a single `add_annotations` call.
 
 ## Tips

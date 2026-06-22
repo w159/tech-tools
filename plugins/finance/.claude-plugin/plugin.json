@@ -1,7 +1,22 @@
 {
   "name": "finance",
-  "version": "1.3.0",
+  "version": "1.4.1",
   "description": "Finance and accounting skills: financial close, journal entry prep, reconciliation, variance analysis, financial statements, and SOX audit workflows.",
+  "mcpServers": "./.mcp.json",
+  "userConfig": {
+    "pax8_mcp_token": {
+      "type": "string",
+      "title": "Pax8 MCP token",
+      "description": "MCP token from app.pax8.com -> Integrations -> MCP. Leave blank to disable the Pax8 connector.",
+      "sensitive": true
+    },
+    "pandadoc_api_key": {
+      "type": "string",
+      "title": "PandaDoc API key",
+      "description": "API key from app.pandadoc.com -> Settings -> Integrations -> API. Leave blank to disable the PandaDoc connector.",
+      "sensitive": true
+    }
+  },
   "keywords": [
     "finance",
     "accounting",
@@ -12,11 +27,10 @@
     "close",
     "variance-analysis",
     "financial-statements",
-    "ramp",
-    "spend-management",
     "expense",
     "reimbursement",
-    "card-controls"
+    "pax8",
+    "pandadoc"
   ],
   "author": {
     "name": "w159",

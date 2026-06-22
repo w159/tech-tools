@@ -28,12 +28,12 @@ Resolutions are the final disposition applied to findings when closing them. Cho
 |------|-------|-------------|-------------|
 | 10 | Valid | Confirmed real threat | The finding represents a genuine security event. Action was taken (blocked, remediated, etc.) |
 | 20 | Not Applicable | Doesn't apply | The detection is correct but irrelevant to this environment (e.g., policy doesn't apply to test lab) |
-| 30 | False Positive | Incorrect detection | The detection fired incorrectly — the activity was benign |
+| 30 | False Positive | Incorrect detection | The detection fired incorrectly - the activity was benign |
 
 ### Impact on Metrics
 
 - **Valid** resolutions count toward your confirmed threat statistics
-- **False Positive** resolutions feed back into detection tuning — high FP rates indicate rules that need adjustment
+- **False Positive** resolutions feed back into detection tuning - high FP rates indicate rules that need adjustment
 - **Not Applicable** resolutions help identify rules to disable for specific environments
 
 ## API Patterns
@@ -70,9 +70,9 @@ blumira_msp_findings_resolve
 ### Choosing the Right Resolution
 
 1. **Is the detected activity real?**
-   - Yes → Was it malicious or a policy violation? → **Valid (10)**
-   - Yes → But it's expected/allowed in this environment → **Not Applicable (20)**
-   - No → The detection was wrong → **False Positive (30)**
+   - Yes -> Was it malicious or a policy violation? -> **Valid (10)**
+   - Yes -> But it's expected/allowed in this environment -> **Not Applicable (20)**
+   - No -> The detection was wrong -> **False Positive (30)**
 
 2. Always include detailed notes explaining the decision
 3. For False Positives, note what the activity actually was to help with tuning
@@ -98,7 +98,7 @@ blumira_msp_findings_resolve
 
 ## Best Practices
 
-- Always provide detailed notes — they're the audit trail for compliance
+- Always provide detailed notes - they're the audit trail for compliance
 - Track false positive rates by detection rule to identify tuning opportunities
 - Use "Not Applicable" instead of "False Positive" when the detection is correct but the policy doesn't apply
 - Review resolution statistics regularly to improve detection quality
@@ -106,5 +106,5 @@ blumira_msp_findings_resolve
 
 ## Related Skills
 
-- [Findings](../findings/SKILL.md) — Finding lifecycle and resolution workflow
-- [MSP](../msp/SKILL.md) — Cross-account resolution management
+- [Findings](../findings/SKILL.md) - Finding lifecycle and resolution workflow
+- [MSP](../msp/SKILL.md) - Cross-account resolution management

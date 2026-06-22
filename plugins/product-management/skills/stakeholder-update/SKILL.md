@@ -92,7 +92,7 @@ Executives want: strategic context, progress against goals, risks that need thei
 ```
 Status: [Green / Yellow / Red]
 
-TL;DR: [One sentence — the most important thing to know]
+TL;DR: [One sentence - the most important thing to know]
 
 Progress:
 - [Outcome achieved, tied to goal/OKR]
@@ -106,13 +106,13 @@ Decisions needed:
 - [Decision]: [Options with recommendation]. Need by [date].
 
 Next milestones:
-- [Milestone] — [Date]
+- [Milestone] - [Date]
 ```
 
 **Tips for executive updates**:
 - Lead with the conclusion, not the journey. Executives want "we shipped X and it moved Y metric" not "we had 14 standups and resolved 23 tickets."
 - Keep it under 200 words. If they want more, they will ask.
-- Status color should reflect YOUR genuine assessment, not what you think they want to hear. Yellow is not a failure — it is good risk management.
+- Status color should reflect YOUR genuine assessment, not what you think they want to hear. Yellow is not a failure - it is good risk management.
 - Only include risks you want help with. Do not list risks you are already handling unless they need to know.
 - Asks must be specific: "Decision on X by Friday" not "support needed."
 
@@ -122,10 +122,10 @@ Engineers want: clear priorities, technical context, blockers resolved, decision
 **Format**:
 ```
 Shipped:
-- [Feature/fix] — [Link to PR/ticket]. [Impact if notable].
+- [Feature/fix] - [Link to PR/ticket]. [Impact if notable].
 
 In progress:
-- [Item] — [Owner]. [Expected completion]. [Blockers if any].
+- [Item] - [Owner]. [Expected completion]. [Blockers if any].
 
 Decisions:
 - [Decision made]: [Rationale]. [Link to ADR if exists].
@@ -135,7 +135,7 @@ Priority changes:
 - [What changed and why]
 
 Coming up:
-- [Next items] — [Context on why these are next]
+- [Next items] - [Context on why these are next]
 ```
 
 **Tips for engineering updates**:
@@ -150,16 +150,16 @@ Partners (design, marketing, sales, support) want: what is coming that affects t
 **Format**:
 ```
 What's coming:
-- [Feature/launch] — [Date]. [What this means for your team].
+- [Feature/launch] - [Date]. [What this means for your team].
 
 What we need from you:
-- [Specific ask] — [Context]. By [date].
+- [Specific ask] - [Context]. By [date].
 
 Decisions made:
-- [Decision] — [How it affects your team].
+- [Decision] - [How it affects your team].
 
 Open for input:
-- [Topic we'd love feedback on] — [How to provide it].
+- [Topic we'd love feedback on] - [How to provide it].
 ```
 
 ### Customer / External Update
@@ -168,13 +168,13 @@ Customers want: what is new, what is coming, how it benefits them, how to get st
 **Format**:
 ```
 What's new:
-- [Feature] — [Benefit in customer terms]. [How to use it / link].
+- [Feature] - [Benefit in customer terms]. [How to use it / link].
 
 Coming soon:
-- [Feature] — [Expected timing]. [Why it matters to you].
+- [Feature] - [Expected timing]. [Why it matters to you].
 
 Known issues:
-- [Issue] — [Status]. [Workaround if available].
+- [Issue] - [Status]. [Workaround if available].
 
 Feedback:
 - [How to share feedback or request features]
@@ -194,13 +194,13 @@ Feedback:
 - Progressing as planned
 - No significant risks or blockers
 - On track to meet commitments and deadlines
-- Use Green when things are genuinely going well — not as a default
+- Use Green when things are genuinely going well - not as a default
 
 **Yellow** (At Risk):
 - Progress is slower than planned, or a risk has materialized
 - Mitigation is underway but outcome is uncertain
 - May miss commitments without intervention or scope adjustment
-- Use Yellow proactively — the earlier you flag risk, the more options you have
+- Use Yellow proactively - the earlier you flag risk, the more options you have
 
 **Red** (Off Track):
 - Significantly behind plan
@@ -212,7 +212,7 @@ Feedback:
 - Move to Yellow at the FIRST sign of risk, not when you are sure things are bad
 - Move to Red when you have exhausted your own options and need escalation
 - Move back to Green only when the risk is genuinely resolved, not just paused
-- Document what changed when you change status — "Moved to Yellow because [reason]"
+- Document what changed when you change status - "Moved to Yellow because [reason]"
 
 ## Risk Communication
 
@@ -231,7 +231,7 @@ Feedback:
 
 ### Common Mistakes in Risk Communication
 - Burying risks in good news. Lead with risks when they are important.
-- Being vague: "There might be some delays" — specify what, how long, and why.
+- Being vague: "There might be some delays" - specify what, how long, and why.
 - Presenting risks without mitigations. Every risk should come with a plan.
 - Waiting too long. A risk communicated early is a planning input. A risk communicated late is a fire drill.
 
@@ -273,8 +273,8 @@ For each: what was it, why was it rejected?
 ### Tips for Decision Documentation
 - Write ADRs close to when the decision is made, not weeks later
 - Include who was involved in the decision and who made the final call
-- Document the context generously — future readers will not have today's context
-- It is okay to document decisions that were wrong in hindsight — add a "superseded by" link
+- Document the context generously - future readers will not have today's context
+- It is okay to document decisions that were wrong in hindsight - add a "superseded by" link
 - Keep them short. One page is better than five.
 
 ## Meeting Facilitation
@@ -288,7 +288,7 @@ For each: what was it, why was it rejected?
 
 **Facilitation tips**:
 - Keep it to 15 minutes. If discussions emerge, take them offline.
-- Focus on blockers — this is the highest-value part of standup
+- Focus on blockers - this is the highest-value part of standup
 - Track blockers and follow up on resolution
 - Cancel standup if there is nothing to sync on. Respect people's time.
 
@@ -345,7 +345,7 @@ Keep updates scannable. Use bold for key points, bullets for lists. Executive up
 ## Tips
 
 - The most common mistake in stakeholder updates is burying the lead. Start with the most important thing.
-- Status colors (Green/Yellow/Red) should reflect reality, not optimism. Yellow is not a failure — it is good risk communication.
+- Status colors (Green/Yellow/Red) should reflect reality, not optimism. Yellow is not a failure - it is good risk communication.
 - Asks should be specific and actionable. "We need help" is not an ask. "We need a decision on X by Friday" is.
 - For executives, frame everything in terms of outcomes and goals, not activities and tasks.
 - If there is bad news, lead with it. Do not hide it after good news.

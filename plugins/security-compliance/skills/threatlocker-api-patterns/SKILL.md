@@ -1,7 +1,7 @@
 ---
 name: threatlocker-api-patterns
 description: >
-  Use this skill when working with the ThreatLocker MCP tools —
+  Use this skill when working with the ThreatLocker MCP tools --
   raw-key authentication (NO Bearer prefix), multi-tenant routing via
   organizationId header, POST-heavy "GetByParameters" endpoints,
   pagination shape, and child-organization fan-out patterns.
@@ -28,13 +28,13 @@ across computers, computer groups, approval requests, audit log
 ("Action Log" in the UI), and organizations. The API has two quirks
 that surprise people: the auth header does NOT use `Bearer`, and most
 "list" endpoints are POSTs against `/Entity/EntityGetByParameters` with
-a structured body — not GETs with query strings.
+a structured body - not GETs with query strings.
 
 ## Connection & Authentication
 
 ### Raw API Key Header
 
-ThreatLocker authenticates with a raw API key — no `Bearer` prefix:
+ThreatLocker authenticates with a raw API key - no `Bearer` prefix:
 
 | Header | Value |
 |--------|-------|
@@ -57,11 +57,11 @@ export THREATLOCKER_BASE_URL="https://portalapi.g.threatlocker.com/portalapi"
 ThreatLocker is built for MSPs and uses organizations as the tenant
 boundary. Three patterns:
 
-1. **Default org** — Omit the `organizationId` header. The API uses
+1. **Default org** - Omit the `organizationId` header. The API uses
    the API key's primary organization.
-2. **Specific child org** — Set `organizationId` to a child org ID to
+2. **Specific child org** - Set `organizationId` to a child org ID to
    scope a single call to that tenant.
-3. **Fleet-wide fan-out** — Set the body flag `childOrganizations: true`
+3. **Fleet-wide fan-out** - Set the body flag `childOrganizations: true`
    on `*GetByParameters` endpoints to roll up data across all child
    organizations the API key can see.
 
@@ -143,7 +143,7 @@ ThreatLocker uses page numbers, not cursors:
 3. Continue until you have collected `totalItems` rows or reached
    the last page.
 
-Avoid huge `pageSize` values — large pages can time out. 50–200 is the
+Avoid huge `pageSize` values - large pages can time out. 50-200 is the
 sweet spot.
 
 ### Sort and Search
@@ -170,15 +170,15 @@ sweet spot.
   before assuming you have the full set.
 - For multi-tenant reports, fan out with `childOrganizations: true`
   rather than looping per-org when the entity supports it.
-- Cache the result of `threatlocker_organizations_list_children` —
+- Cache the result of `threatlocker_organizations_list_children` --
   child org lists rarely change within a session.
 - Always pass `organizationId` explicitly when generating client-facing
   reports so the source tenant is unambiguous.
 
 ## Related Skills
 
-- [computers](../computers/SKILL.md) — Endpoint inventory
-- [computer-groups](../computer-groups/SKILL.md) — Policy scoping
-- [approval-requests](../approval-requests/SKILL.md) — Application approvals
-- [audit-log](../audit-log/SKILL.md) — Action Log investigation
-- [organizations](../organizations/SKILL.md) — Multi-tenant pivots
+- [computers](../computers/SKILL.md) - Endpoint inventory
+- [computer-groups](../computer-groups/SKILL.md) - Policy scoping
+- [approval-requests](../approval-requests/SKILL.md) - Application approvals
+- [audit-log](../audit-log/SKILL.md) - Action Log investigation
+- [organizations](../organizations/SKILL.md) - Multi-tenant pivots

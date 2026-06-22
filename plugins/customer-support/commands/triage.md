@@ -18,7 +18,7 @@ Categorize, prioritize, and route an incoming support ticket or customer issue. 
 Examples:
 - `/triage Customer says their dashboard has been showing a blank page since this morning`
 - `/triage "I was charged twice for my subscription this month"`
-- `/triage User can't connect their SSO — getting a 403 error on the callback URL`
+- `/triage User can't connect their SSO - getting a 403 error on the callback URL`
 - `/triage Feature request: they want to export reports as PDF`
 
 ## Workflow
@@ -38,7 +38,7 @@ Read the input and extract:
 Using the category taxonomy and priority framework from the **ticket-triage** skill:
 
 - Assign a **primary category** (bug, how-to, feature request, billing, account, integration, security, data, performance) and an optional secondary category
-- Assign a **priority** (P1–P4) based on impact and urgency
+- Assign a **priority** (P1-P4) based on impact and urgency
 - Identify the **product area** the issue maps to
 
 ### 3. Check for Duplicates and Known Issues
@@ -59,7 +59,7 @@ Using the routing rules from the **ticket-triage** skill, recommend which team o
 ## Triage: [One-line issue summary]
 
 **Category:** [Primary] / [Secondary if applicable]
-**Priority:** [P1-P4] — [Brief justification]
+**Priority:** [P1-P4] - [Brief justification]
 **Product area:** [Area/team]
 
 ### Issue Summary
@@ -70,14 +70,14 @@ Using the routing rules from the **ticket-triage** skill, recommend which team o
 - **Impact:** [Who and what is affected]
 - **Workaround:** [Available / Not available / Unknown]
 - **Related tickets:** [Links to similar issues if found]
-- **Known issue:** [Yes — link / No / Checking]
+- **Known issue:** [Yes - link / No / Checking]
 
 ### Routing Recommendation
 **Route to:** [Team or queue]
 **Why:** [Brief reasoning]
 
 ### Suggested Initial Response
-[Draft first response to the customer — acknowledge the issue,
+[Draft first response to the customer - acknowledge the issue,
 set expectations, provide workaround if available.
 Use the auto-response templates from the ticket-triage skill
 as a starting point.]

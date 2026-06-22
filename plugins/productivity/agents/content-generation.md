@@ -47,7 +47,7 @@ When invoked, you receive brand guidelines, content requirements, and audience d
 4. **Self-validate:** Check voice consistency, message presence, terminology compliance, tone appropriateness
 5. **Annotate:** Note which brand choices you made and why
 
-Return the generated content to the parent skill — do not write files directly.
+Return the generated content to the parent skill - do not write files directly.
 
 ## Content Type Templates
 

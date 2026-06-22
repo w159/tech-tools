@@ -1,6 +1,6 @@
 # Productivity Plugin
 
-A productivity plugin primarily designed for [Cowork](https://claude.com/product/cowork), Anthropic's agentic desktop application — though it also works in Claude Code. Task management, workplace memory, and a visual dashboard — Claude learns your people, projects, and terminology so it can act like a colleague, not a chatbot.
+A productivity plugin primarily designed for [Cowork](https://claude.com/product/cowork), Anthropic's agentic desktop application - though it also works in Claude Code. Task management, workplace memory, and a visual dashboard - Claude learns your people, projects, and terminology so it can act like a colleague, not a chatbot.
 
 ## Installation
 
@@ -12,9 +12,9 @@ claude plugins add knowledge-work-plugins/productivity
 
 This plugin gives Claude a persistent understanding of your work:
 
-- **Task management** — A markdown task list (`TASKS.md`) that Claude reads, writes, and executes against. Add tasks naturally, and Claude tracks status, triages stale items, and syncs with external tools.
-- **Workplace memory** — A two-tier memory system that teaches Claude your shorthand, people, projects, and terminology. Say "ask todd to do the PSR for oracle" and Claude knows exactly who, what, and which deal.
-- **Visual dashboard** — A local HTML file that gives you a board view of your tasks and a live view of what Claude knows about your workplace. Edit from the board or the file — they stay in sync.
+- **Task management** - A markdown task list (`TASKS.md`) that Claude reads, writes, and executes against. Add tasks naturally, and Claude tracks status, triages stale items, and syncs with external tools.
+- **Workplace memory** - A two-tier memory system that teaches Claude your shorthand, people, projects, and terminology. Say "ask todd to do the PSR for oracle" and Claude knows exactly who, what, and which deal.
+- **Visual dashboard** - A local HTML file that gives you a board view of your tasks and a live view of what Claude knows about your workplace. Edit from the board or the file - they stay in sync.
 
 ## Commands
 
@@ -22,13 +22,13 @@ This plugin gives Claude a persistent understanding of your work:
 |---------|--------------|
 | `/start` | Initialize tasks + memory, open the dashboard |
 | `/update` | Triage stale items, check memory for gaps, sync from external tools if applicable |
-| `/update --comprehensive` | Deep scan email, calendar, chat — flag missed todos and suggest new memories |
+| `/update --comprehensive` | Deep scan email, calendar, chat - flag missed todos and suggest new memories |
 
 ## Skills
 
 | Skill | Description |
 |-------|-------------|
-| `memory-management` | Two-tier memory system — CLAUDE.md for working memory, memory/ directory for deep storage |
+| `memory-management` | Two-tier memory system - CLAUDE.md for working memory, memory/ directory for deep storage |
 | `task-management` | Markdown-based task tracking using a shared TASKS.md file |
 
 ## Example Workflows
@@ -60,9 +60,9 @@ Claude: [Adds all three tasks to TASKS.md with context]
 You: /update --comprehensive
 
 Claude: [Scans email, calendar, and chat for new action items]
-        [Flags: "Budget proposal review is due tomorrow — still open"]
+        [Flags: "Budget proposal review is due tomorrow - still open"]
         [Suggests: "New person mentioned in 3 threads: Jamie Park,
-         Design Lead — add to memory?"]
+         Design Lead - add to memory?"]
         [Updates stale tasks and fills memory gaps]
 ```
 

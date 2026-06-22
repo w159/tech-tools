@@ -206,8 +206,8 @@ blumira_msp_users_list
 
 ## Related Skills
 
-- [API Patterns](../api-patterns/SKILL.md) — Filtering and pagination
-- [Findings](../findings/SKILL.md) — Finding lifecycle (org-level)
-- [Agents](../agents/SKILL.md) — Device management (org-level)
-- [Resolutions](../resolutions/SKILL.md) — Resolution types
-- [Users](../users/SKILL.md) — User management
+- [API Patterns](../api-patterns/SKILL.md) - Filtering and pagination
+- [Findings](../findings/SKILL.md) - Finding lifecycle (org-level)
+- [Agents](../agents/SKILL.md) - Device management (org-level)
+- [Resolutions](../resolutions/SKILL.md) - Resolution types
+- [Users](../users/SKILL.md) - User management

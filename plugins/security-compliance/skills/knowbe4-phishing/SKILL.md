@@ -27,16 +27,16 @@ triggers:
 
 ## Overview
 
-KnowBe4 phishing simulations are the core mechanism for testing and improving an organization's resilience to social engineering attacks. Campaigns deliver simulated phishing emails to users and track their interactions -- whether they opened the email, clicked the link, submitted data on the landing page, reported it via the Phish Alert Button, or took no action. The phish-prone percentage is the key metric derived from these campaigns.
+KnowBe4 phishing simulations are the core mechanism for testing and improving an organization's resilience to social engineering attacks. Campaigns deliver simulated phishing emails to users and track their interactions - whether they opened the email, clicked the link, submitted data on the landing page, reported it via the Phish Alert Button, or took no action. The phish-prone percentage is the key metric derived from these campaigns.
 
 ## Key Concepts
 
 ### Campaign Lifecycle
 
 ```
-CREATED ──> SCHEDULED ──> IN_PROGRESS ──> COMPLETED
-                │                              │
-                └──── CANCELLED                └──> ARCHIVED
+CREATED --> SCHEDULED --> IN_PROGRESS --> COMPLETED
+                |                              |
+                +---- CANCELLED                +--> ARCHIVED
 ```
 
 - **Created**: Campaign configured but not yet scheduled
@@ -193,8 +193,8 @@ Note: the connected KnowBe4 Reporting API does not expose phishing template brow
 
 1. **List all campaigns** sorted by date
 2. **Get PPP** for each campaign
-3. **Track trend** -- PPP should decrease over time with training
-4. **Identify anomalies** -- sudden PPP increase may indicate new attack vector or template difficulty
+3. **Track trend** - PPP should decrease over time with training
+4. **Identify anomalies** - sudden PPP increase may indicate new attack vector or template difficulty
 
 ### Post-Campaign Remediation
 
@@ -226,16 +226,16 @@ Note: the connected KnowBe4 Reporting API does not expose phishing template brow
 
 ## Best Practices
 
-1. **Vary templates** -- Use different phishing scenarios to avoid pattern recognition
-2. **Spread delivery** -- Send over days/weeks, not all at once, to avoid "water cooler effect"
-3. **Track trends, not individual tests** -- Single campaigns can be noisy; look at 3-6 month trends
-4. **Combine with training** -- Auto-enroll failed users in relevant training modules
-5. **Use realistic scenarios** -- Match templates to actual threats your clients face
-6. **Baseline first** -- Run an initial campaign before training to establish baseline PPP
-7. **Report to leadership** -- Share PPP trends with management to justify security awareness investment
-8. **Test all levels** -- Include executives and IT staff, not just general users
-9. **Respect local regulations** -- Some regions have restrictions on simulated phishing
-10. **Set proper tracking duration** -- Allow 72 hours minimum for accurate click data
+1. **Vary templates** - Use different phishing scenarios to avoid pattern recognition
+2. **Spread delivery** - Send over days/weeks, not all at once, to avoid "water cooler effect"
+3. **Track trends, not individual tests** - Single campaigns can be noisy; look at 3-6 month trends
+4. **Combine with training** - Auto-enroll failed users in relevant training modules
+5. **Use realistic scenarios** - Match templates to actual threats your clients face
+6. **Baseline first** - Run an initial campaign before training to establish baseline PPP
+7. **Report to leadership** - Share PPP trends with management to justify security awareness investment
+8. **Test all levels** - Include executives and IT staff, not just general users
+9. **Respect local regulations** - Some regions have restrictions on simulated phishing
+10. **Set proper tracking duration** - Allow 72 hours minimum for accurate click data
 
 ## Related Skills
 
