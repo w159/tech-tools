@@ -1,0 +1,14 @@
+{
+  "name": "blumira-mcp",
+  "version": "1.1.5",
+  "description": "MCP server for Blumira SIEM integration",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "blumira-mcp": "./dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "node-blumira": "file:../../mcp_node/node-blumira"
+  }
+}

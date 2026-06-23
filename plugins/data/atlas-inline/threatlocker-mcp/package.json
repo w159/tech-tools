@@ -1,0 +1,14 @@
+{
+  "name": "threatlocker-mcp",
+  "version": "1.3.0",
+  "description": "MCP server for the ThreatLocker Portal API",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "threatlocker-mcp": "./dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "node-threatlocker": "file:../../mcp_node/node-threatlocker"
+  }
+}

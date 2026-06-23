@@ -1,0 +1,75 @@
+{
+  "manifest_version": "0.3",
+  "name": "knowbe4-mcp",
+  "display_name": "KnowBe4 MCP Server",
+  "version": "1.1.1",
+  "description": "Query KnowBe4 security awareness data — phishing campaigns, training enrollments, user risk scores, and groups — for MSP AI agents.",
+  "long_description": "Use this server when you need to read security awareness and phishing simulation data from KnowBe4. List phishing campaigns and per-user phishing results, enumerate training campaigns and enrollment status, retrieve user risk scores and click rates, manage user groups, and access account-level configuration. Supports all KnowBe4 API regions (us, eu, ca, uk, de). Read-only reporting API — write operations are not available via this API.",
+  "author": {
+    "name": "w159",
+    "url": "https://github.com/w159"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/w159/tech-tools"
+  },
+  "homepage": "https://github.com/w159/tech-tools/tree/main/mcp_servers/knowbe4-mcp",
+  "license": "Apache-2.0",
+  "keywords": [
+    "knowbe4",
+    "security-awareness",
+    "phishing",
+    "training",
+    "mcp",
+    "msp"
+  ],
+  "server": {
+    "type": "node",
+    "entry_point": "dist/mcp_servers/knowbe4-mcp/src/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/dist/mcp_servers/knowbe4-mcp/src/index.js"
+      ],
+      "env": {
+        "KNOWBE4_API_KEY": "${user_config.api_key}",
+        "KNOWBE4_REGION": "${user_config.region}",
+        "KNOWBE4_BASE_URL": "${user_config.base_url}"
+      }
+    }
+  },
+  "tools_generated": true,
+  "user_config": {
+    "api_key": {
+      "type": "string",
+      "title": "API Key",
+      "description": "Your KnowBe4 Reporting API key (from Account Settings > API)",
+      "required": true,
+      "sensitive": true
+    },
+    "region": {
+      "type": "string",
+      "title": "Region",
+      "description": "Region code that auto-derives the base URL. Default us → https://us.api.knowbe4.com. Valid values: us, eu (https://eu.api.knowbe4.com), ca, uk, de. Change only if your KnowBe4 account is on a non-US shard.",
+      "required": false,
+      "default": "us"
+    },
+    "base_url": {
+      "type": "string",
+      "title": "Base URL Override",
+      "description": "Optional. Leave blank to use the vendor default (https://us.api.knowbe4.com) or the URL derived from your region setting. Only set for staging, sovereign, or custom-domain shards.",
+      "required": false
+    }
+  },
+  "compatibility": {
+    "platforms": [
+      "darwin",
+      "win32",
+      "linux"
+    ],
+    "runtimes": {
+      "node": ">=20.0.0"
+    },
+    "claude_desktop": ">=0.10.0"
+  }
+}
