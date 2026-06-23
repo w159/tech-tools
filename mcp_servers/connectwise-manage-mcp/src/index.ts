@@ -75,7 +75,7 @@ import { registerOpportunityTools } from "./tools/opportunities.js";
 function createMcpServer(): McpServer {
   const server = new McpServer({
     name: "connectwise-manage-mcp",
-    version: "1.5.1",
+    version: "1.5.2",
   });
 
   const config = getConfig();

@@ -51,7 +51,7 @@ import { annotate } from "./annotate-tool.js";
 const server = new Server(
   {
     name: "mcp-server-knowbe4",
-    version: "1.0.0",
+    version: "1.1.2",
   },
   {
     capabilities: {

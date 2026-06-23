@@ -165,7 +165,7 @@ async function createMcpServer(credentialOverrides?: NinjaOneCredentials): Promi
   const server = new Server(
     {
       name: "ninjaone-mcp",
-      version: "1.0.0",
+      version: "1.6.2",
     },
     {
       capabilities: {
