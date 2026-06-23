@@ -11,9 +11,17 @@
     "rootDir": ".",
     "sourceMap": true,
     "paths": {
-      "@shared/*": ["../../_shared/*"]
+      "@shared/*": [
+        "../../_shared/*"
+      ]
     }
   },
-  "include": ["src", "../_shared/*.ts"],
-  "exclude": ["node_modules", "dist"]
+  "include": [
+    "src",
+    "../_shared/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
 }
