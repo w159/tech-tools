@@ -328,10 +328,15 @@ desktop.ini
 # Built MCPB bundles in mcp_servers/ are NOT tracked (rebuilt locally / shipped via Releases).
 *.mcpb
 # EXCEPTION: connector bundles shipped INSIDE a plugin are tracked on purpose.
-# Each is a self-contained server (~3 MB, well under GitHub's 100 MB/file limit)
-# that the plugin extracts to ${CLAUDE_PLUGIN_DATA} on first run. This is what
-# makes connectors work after a marketplace install. Later rules win, so this
-# re-include must stay after the *.mcpb exclusion above.
+# Each MUST stay small (~3 MB): the slimmed pack excludes the dev toolchain and
+# the iCloud node_modules.nosync.noindex twin (see mcp_servers/_shared/pack-mcpb.js).
+# A bundle that balloons to tens of MB means the pack regressed - a marketplace
+# fetch then stalls, and any single file over GitHub's 100 MB hard limit rejects
+# the whole push. Re-pack with the canonical packer before committing; never
+# commit a multi-tens-of-MB .mcpb. The plugin extracts each bundle to
+# ${CLAUDE_PLUGIN_DATA} on first run, which is what makes connectors work after a
+# marketplace install. Later rules win, so this re-include must stay after the
+# *.mcpb exclusion above.
 !plugins/*/mcp/*.mcpb
 .orchestrator/
 .fallow/

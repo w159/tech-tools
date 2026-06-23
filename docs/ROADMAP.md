@@ -6,19 +6,29 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 
 ## Backlog
 
-### Atlas connector .mcpb bloat -- 5 bundles are 10-40x oversized (carried over)
-
-spanning 100M, blumira 61M, vanta 52M, threatlocker 47M, paylocity 25M ship their nested node-<svc>
-dev toolchain (esbuild/typescript/vite/rollup + node_modules.nosync.noindex). Fix the .mcpbignore/pack
-config to exclude dev deps before any repack. Not blocking atlas extract-on-demand (which reads whatever
-bundle is present).
-
 ### Atlas context/cost tuning recommendations (carried from Phase 3)
 
 Surface autocompact and thinking-token budgets plus model routing as recommend-then-confirm options
 (modeled on ECC), opt-in only. Not yet implemented.
 
 ## Done
+
+### Connector .mcpb bloat fixed + marketplace install repaired (resolved 2026-06-23)
+
+The canonical packer dragged each file:-linked vendor lib's iCloud
+`node_modules.nosync.noindex` twin into the bundle, ballooning 5 connectors to
+25-100M (spanning 99M, a hair under GitHub's 100M push limit). Two earlier packer
+variants tried to fix this but their regexes missed the `.nosync` twin. Fixed
+`mcp_servers/_shared/pack-mcpb.js` (dereference symlink + drop nested
+`node_modules` and `.nosync*`), propagated to all 10 per-server copies (now one
+md5), and rebuilt the 5 oversized bundles staged in /tmp: spanning 99M->2.78M,
+blumira 60M->2.61M, vanta 51M->2.77M, threatlocker 47M->2.76M, paylocity
+25M->2.77M. Each verified credential-free launch with full tools/list. Atlas now
+ships all 10 slimmed connectors under `plugins/atlas/mcp/` with an added
+`extract.sh` search path so its declared connectors resolve standalone. Also fixed
+`bash_advisor.py` exec bit (git mode 100644->100755). Details in CHANGELOG
+2026-06-23. Diagnosis: was the dominant cause of connector-heavy plugins not
+appearing in a Claude Desktop marketplace install.
 
 ### Atlas optimization (Phases 1-3) -- shipped and verified (resolved 2026-06-23)
 

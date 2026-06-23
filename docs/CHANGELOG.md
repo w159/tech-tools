@@ -4,6 +4,61 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
+## 2026-06-23 -- Connector .mcpb bloat fixed; marketplace install repaired; atlas connectors made standalone-resolvable
+
+Diagnosed why connector-heavy plugins did not appear (or appeared empty) when adding the marketplace in
+Claude Desktop. Root cause was bundle weight, not manifest structure: the marketplace catalog, all 12
+plugin.json manifests, userConfig/mcp.json key parity, and component frontmatter were all valid and
+git-tracked (confirmed via the plugin-dev plugin-validator agent).
+
+### Packer fix (root cause)
+
+`mcp_servers/_shared/pack-mcpb.js` copied each `file:`-linked vendor lib with a recursive `cpSync`, which
+dragged in that lib's nested `node_modules` and its iCloud `node_modules.nosync.noindex` twin (dev toolchain:
+esbuild, vite, typescript, rollup, msw). That was the entire bloat. Two earlier per-server packer variants
+attempted a fix but their regexes only matched `node_modules` followed by a separator, so they missed the
+`.nosync.noindex` twin. The fix dereferences the symlinked vendor (`realpathSync`) and filters out both
+nested `node_modules` and any `.nosync*` directory, plus a defensive staging cleanup and `.mcpbignore`
+entries. Propagated the one canonical packer to all 10 per-server copies (they had drifted into 3 variants;
+now a single md5, all `node --check` clean).
+
+### Bundles rebuilt and verified (staged in /tmp, never npm-installed under iCloud)
+
+| connector | before | after |
+| --- | --- | --- |
+| spanning | 99 MB | 2.78 MB |
+| blumira | 60 MB | 2.61 MB |
+| vanta | 51 MB | 2.77 MB |
+| threatlocker | 47 MB | 2.76 MB |
+| paylocity | 25 MB | 2.77 MB |
+
+Tracked `.mcpb` total dropped from ~283 MB to ~14 MB across these five; largest single bundle is now 3.3 MB
+vs GitHub's 104.8 MB hard push limit. Each rebuild was adversarially verified: size <= 20 MB, entry point
+present, zero `.nosync` entries, and a credential-free stdio launch returning a full `tools/list` (spanning,
+blumira, vanta ~30 tools, threatlocker 18, paylocity 17).
+
+### atlas connectors resolvable standalone
+
+`plugins/atlas/mcp/extract.sh` searched only the operator data dir, an env override, and a source checkout -
+none exist on a marketplace install, so all 10 declared atlas connectors were "declared but not set up."
+Added a `${CLAUDE_PLUGIN_ROOT}/mcp/<name>.mcpb` search candidate and shipped all 10 slimmed bundles (~27 MB
+total) under `plugins/atlas/mcp/` named `<svc>-mcp.mcpb`. Verified end to end: extract resolves the bundled
+copy and launch boots vanta credential-free with full tools/list. Connectors stay INERT until credentials
+are supplied.
+
+### bash_advisor.py exec bit
+
+`plugins/atlas/hooks/bash_advisor.py` (the PreToolUse Bash advisor) was missing its execute bit while the six
+peer hooks had it; hooks.json wires it as a bare command path, so a direct execve could fail to launch the
+catastrophic-command advisor. `chmod +x` and `git update-index --chmod=+x` (mode 100644 -> 100755) so a fresh
+clone keeps the bit. Verified: script exits 0 on a sample Bash event.
+
+### docs / .gitignore
+
+Corrected the `.gitignore` comment that wrongly assured connector bundles were "~3 MB, well under GitHub's
+limit" (they were up to 99 MB); it now states the slim-pack requirement and the regression risk. Refreshed
+`PLUGIN_INVENTORY.md` to document the slim packer and atlas standalone bundling.
+
 ## 2026-06-23 -- Atlas optimization Phase 2/3: Architect Mode, ponytail/loop-library/connector discovery, session-lifecycle docs, visual layer
 
 Independently verified (adversarial verifier, 14/14 after fixing one pre-existing broken script path).

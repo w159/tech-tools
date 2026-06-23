@@ -155,7 +155,6 @@ try {
   // A path is "nested inside a file: dep" when it contains /node_modules/ at
   // least twice AND does not start under ROOT (i.e. it comes from an external
   // file: link whose own node_modules are polluting npm ls --parseable output).
-  const declaredDeps = new Set(Object.keys(pkg.dependencies || {}));
   const prodPaths = prodPathsRaw
     .split('\n')
     .map((p) => p.trim())
@@ -163,19 +162,10 @@ try {
     .filter((p) => {
       // Paths inside ROOT are always fine: npm manages deduplication there.
       if (p.startsWith(ROOT + '/')) return true;
-      // External path. `npm ls --all` walks INTO a file:-linked package's
-      // own node_modules and reports that package's dev/peer deps as if they
-      // were ours (each appears with node_modules exactly once, e.g.
-      // .../mcp_node/node-paylocity/node_modules/vitest). Those must NOT ship.
-      // Keep an external path ONLY when the segment right after its LAST
-      // node_modules/ is a dependency THIS server actually declares (i.e. the
-      // file:-linked vendor package root itself). Everything else is a nested
-      // dev dependency of the vendor and is dropped.
-      const tail = p.slice(p.lastIndexOf('node_modules/') + 'node_modules/'.length);
-      const name = tail.startsWith('@')
-        ? tail.split('/').slice(0, 2).join('/')
-        : tail.split('/')[0];
-      return declaredDeps.has(name);
+      // External path (file: linked package root or one of its deps).
+      // Only keep the package root itself (contains node_modules exactly once).
+      const count = (p.match(/node_modules/g) || []).length;
+      return count === 1;
     });
   console.log(`  ${prodPaths.length} production packages`);
   for (const absPath of prodPaths) {
@@ -201,22 +191,23 @@ try {
     const destPath = join(STAGING, relPath);
     if (existsSync(absPath)) {
       mkdirSync(join(destPath, '..'), { recursive: true });
-      // Resolve symlinks to a real path before copying. npm represents a
-      // file:-linked vendor (e.g. node_modules/node-paylocity ->
-      // ../../mcp_node/node-paylocity) as a SYMLINK; cpSync would just recreate
-      // that symlink, and the downstream `mcpb pack` would then dereference it
-      // and archive the entire target tree — including the vendor's 80MB+ dev
-      // install (msw, vitest, tsup). Copy the real directory with a filter that
-      // drops nested node_modules. The vendor's RUNTIME deps were already
-      // flattened into STAGING/node_modules by the prodPaths loop, so dropping
-      // nested node_modules is safe and yields a lean bundle.
+      // npm represents a file:-linked vendor lib (e.g. node_modules/node-vanta
+      // -> ../../mcp_node/node-vanta) as a SYMLINK. cpSync without dereference
+      // recreates the symlink, and `mcpb pack` then dereferences it and archives
+      // the whole target - including the lib's dev toolchain. Copy the REAL dir
+      // and filter out two things that only bloat the bundle:
+      //   1. any nested node_modules/ (the lib's own dev/peer deps; its runtime
+      //      deps are hoisted to ROOT/node_modules and staged via their own paths)
+      //   2. any iCloud "node_modules.nosync.noindex" twin (Node's resolver never
+      //      reads a .nosync* directory). This twin was the dominant cause of the
+      //      50-100MB connector .mcpb files; the other variants' regexes missed it.
       const realSrc = realpathSync(absPath);
       cpSync(realSrc, destPath, {
         recursive: true,
         dereference: true,
         filter: (src) => {
-          const rel = src.slice(realSrc.length);
-          return !/(^|[\\/])node_modules([\\/]|$)/.test(rel);
+          const rel = src.slice(realSrc.length).replace(/\\/g, '/');
+          return !/\/node_modules(\.nosync(\.noindex)?)?(\/|$)/.test(rel);
         },
       });
     }
@@ -229,6 +220,15 @@ try {
   }
 
   // 7. Trim staged dependencies
+  // Belt-and-suspenders: drop any iCloud node_modules twins that slipped in.
+  run(
+    'find . -type d -name "*.nosync.noindex" -prune -exec rm -rf {} + 2>/dev/null || true',
+    { cwd: STAGING }
+  );
+  run(
+    'find . -type d -name "*.nosync" -prune -exec rm -rf {} + 2>/dev/null || true',
+    { cwd: STAGING }
+  );
   run('find dist -name "*.map" -delete 2>/dev/null || true', { cwd: STAGING });
   run(
     'find node_modules -type d \\( -name test -o -name tests -o -name __tests__ -o -name examples -o -name example -o -name .github \\) -exec rm -rf {} + 2>/dev/null || true',
@@ -245,6 +245,8 @@ try {
   const mcpbIgnore = [
     'node_modules/.cache',
     'node_modules/.bin',
+    '*.nosync.noindex',
+    '*.nosync',
     'node_modules/*/test/',
     'node_modules/*/tests/',
     'node_modules/*/__tests__/',

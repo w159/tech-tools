@@ -33,6 +33,7 @@ import {
   writeFileSync,
   statSync,
   readdirSync,
+  realpathSync,
 } from 'fs';
 import { resolve, join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -190,7 +191,25 @@ try {
     const destPath = join(STAGING, relPath);
     if (existsSync(absPath)) {
       mkdirSync(join(destPath, '..'), { recursive: true });
-      cpSync(absPath, destPath, { recursive: true });
+      // npm represents a file:-linked vendor lib (e.g. node_modules/node-vanta
+      // -> ../../mcp_node/node-vanta) as a SYMLINK. cpSync without dereference
+      // recreates the symlink, and `mcpb pack` then dereferences it and archives
+      // the whole target - including the lib's dev toolchain. Copy the REAL dir
+      // and filter out two things that only bloat the bundle:
+      //   1. any nested node_modules/ (the lib's own dev/peer deps; its runtime
+      //      deps are hoisted to ROOT/node_modules and staged via their own paths)
+      //   2. any iCloud "node_modules.nosync.noindex" twin (Node's resolver never
+      //      reads a .nosync* directory). This twin was the dominant cause of the
+      //      50-100MB connector .mcpb files; the other variants' regexes missed it.
+      const realSrc = realpathSync(absPath);
+      cpSync(realSrc, destPath, {
+        recursive: true,
+        dereference: true,
+        filter: (src) => {
+          const rel = src.slice(realSrc.length).replace(/\\/g, '/');
+          return !/\/node_modules(\.nosync(\.noindex)?)?(\/|$)/.test(rel);
+        },
+      });
     }
   }
   for (const dep of Object.keys(pkg.dependencies || {})) {
@@ -201,6 +220,15 @@ try {
   }
 
   // 7. Trim staged dependencies
+  // Belt-and-suspenders: drop any iCloud node_modules twins that slipped in.
+  run(
+    'find . -type d -name "*.nosync.noindex" -prune -exec rm -rf {} + 2>/dev/null || true',
+    { cwd: STAGING }
+  );
+  run(
+    'find . -type d -name "*.nosync" -prune -exec rm -rf {} + 2>/dev/null || true',
+    { cwd: STAGING }
+  );
   run('find dist -name "*.map" -delete 2>/dev/null || true', { cwd: STAGING });
   run(
     'find node_modules -type d \\( -name test -o -name tests -o -name __tests__ -o -name examples -o -name example -o -name .github \\) -exec rm -rf {} + 2>/dev/null || true',
@@ -217,6 +245,8 @@ try {
   const mcpbIgnore = [
     'node_modules/.cache',
     'node_modules/.bin',
+    '*.nosync.noindex',
+    '*.nosync',
     'node_modules/*/test/',
     'node_modules/*/tests/',
     'node_modules/*/__tests__/',

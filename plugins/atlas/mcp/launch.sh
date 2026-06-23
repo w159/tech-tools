@@ -2,10 +2,11 @@
 # Launch an atlas vendor connector over stdio, extracting its bundle on demand.
 #
 # Atlas ships these connectors INERT: every userConfig key defaults to empty, so
-# with no credentials the server fails its own credential check and does not run.
-# Atlas also does NOT bundle the vendor .mcpb archives. This script asks
-# extract.sh to find and unpack the vendor bundle the first time a connector is
-# actually used, then execs node on the connector's entry point.
+# API calls fail until credentials are supplied, but the server itself boots and
+# exposes its tools over stdio. Atlas bundles slimmed connector archives (~3MB
+# each) in its mcp/ dir, so a marketplace install resolves them with no network.
+# This script asks extract.sh to unpack the bundle on first use, then execs node
+# on the connector's entry point.
 #
 # If no bundle can be found, the connector is "declared but not set up": this
 # script exits with a clear, single-line message pointing at /atlas-connectors,

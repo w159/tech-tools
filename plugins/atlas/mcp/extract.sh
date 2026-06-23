@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # Locate a vendor connector .mcpb and extract it into the persistent plugin data
-# dir, on demand. Atlas does NOT bundle the ~297MB of .mcpb archives, so this
-# script finds each vendor bundle at runtime in a defined search order and
-# unpacks it once into ${CLAUDE_PLUGIN_DATA}.
+# dir, on demand. Atlas ships slimmed connector bundles (~3MB each) inside the
+# plugin's own mcp/ dir, so a marketplace install resolves them with no network
+# and no source checkout. This script finds each vendor bundle at runtime in a
+# defined search order and unpacks it once into ${CLAUDE_PLUGIN_DATA}.
 #
 # Search order for <name>.mcpb (first hit wins):
 #   (a) ${CLAUDE_PLUGIN_DATA}/mcp/<name>.mcpb   - operator dropped it here
-#   (b) ${ATLAS_MCP_SOURCE_DIR}/<name>.mcpb     - env points at a bundle dir
-#   (c) <repo>/mcp_servers/<name>/<name>.mcpb   - source checkout, reachable
+#   (b) <plugin>/mcp/<name>.mcpb                - bundled with atlas (default)
+#   (c) ${ATLAS_MCP_SOURCE_DIR}/<name>.mcpb     - env points at a bundle dir
+#   (d) <repo>/mcp_servers/<name>/<name>.mcpb   - source checkout, reachable
 #                                                 relative to this plugin
 #
 # Usage: extract.sh <name>
@@ -39,6 +41,7 @@ REPO_ROOT="$(cd "$MCP_DIR/../../.." 2>/dev/null && pwd || true)"
 find_bundle() {
   local candidates=()
   candidates+=("$DATA_ROOT/mcp/$NAME.mcpb")
+  candidates+=("$MCP_DIR/$NAME.mcpb")
   if [ -n "${ATLAS_MCP_SOURCE_DIR:-}" ]; then
     candidates+=("$ATLAS_MCP_SOURCE_DIR/$NAME.mcpb")
   fi
