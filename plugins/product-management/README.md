@@ -105,13 +105,7 @@ Claude: [Generates brief with feature comparison, strengths/weaknesses, and stra
 Connect your project management and communication tools for the best experience. Without them, provide context manually.
 
 **Included MCP connections:**
-- Chat (Slack) for team context and stakeholder threads
-- Project tracker (Linear, Asana, monday.com, ClickUp, Atlassian) for roadmap integration, ticket context, and status tracking
-- Knowledge base (Notion) for existing specs, research, and meeting notes
-- Design (Figma) for design context and handoff
-- Product analytics (Amplitude, Pendo) for usage data, metrics, and behavioral analysis
-- User feedback (Intercom) for support tickets, feature requests, and user conversations
+- Project tracker (Asana, ClickUp) for roadmap integration, ticket context, and status tracking
 - Meeting transcription (Fireflies) for meeting notes and discussion context
 
-**Additional options:**
-- See [CONNECTORS.md](CONNECTORS.md) for alternative tools in each category
+For other categories (chat, knowledge base, design, analytics, user feedback, competitive intelligence), provide context manually by pasting or uploading relevant material, or connect your own MCP server in that category. See [CONNECTORS.md](CONNECTORS.md) for options.

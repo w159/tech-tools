@@ -11,12 +11,12 @@ Plugins are **tool-agnostic** - they describe workflows in terms of categories (
 | Category | Placeholder | Included servers | Other options |
 |----------|-------------|-----------------|---------------|
 | Calendar | `~~calendar` | Google Calendar | Microsoft 365 |
-| Chat | `~~chat` | Slack | Microsoft Teams |
-| Competitive intelligence | `~~competitive intelligence` | Similarweb | Crayon, Klue |
-| Design | `~~design` | Figma | Sketch, Adobe XD |
+| Chat | `~~chat` | (none preconfigured) | Slack, Microsoft Teams |
+| Competitive intelligence | `~~competitive intelligence` | (none preconfigured) | Similarweb, Crayon, Klue |
+| Design | `~~design` | (none preconfigured) | Figma, Sketch, Adobe XD |
 | Email | `~~email` | Gmail | Microsoft 365 |
-| Knowledge base | `~~knowledge base` | Notion | Confluence, Guru, Coda |
+| Knowledge base | `~~knowledge base` | (none preconfigured) | Notion, Confluence, Guru, Coda |
 | Meeting transcription | `~~meeting transcription` | Fireflies | Gong, Dovetail, Otter.ai |
-| Product analytics | `~~product analytics` | Amplitude, Pendo | Mixpanel, Heap, FullStory |
-| Project tracker | `~~project tracker` | Linear, Asana, monday.com, ClickUp, Atlassian (Jira/Confluence) | Shortcut, Basecamp |
-| User feedback | `~~user feedback` | Intercom | Productboard, Canny, UserVoice |
+| Product analytics | `~~product analytics` | (none preconfigured) | Amplitude, Pendo, Mixpanel, Heap, FullStory |
+| Project tracker | `~~project tracker` | Asana, ClickUp | Linear, monday.com, Atlassian (Jira/Confluence), Shortcut, Basecamp |
+| User feedback | `~~user feedback` | (none preconfigured) | Intercom, Productboard, Canny, UserVoice |
