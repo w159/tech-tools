@@ -23,7 +23,7 @@ function resolveSpanningUrl(platform: string, apiUrlOverride?: string): string {
 
 export function createMcpServer(): Server {
   const server = new Server(
-    { name: 'kaseya-spanning-backup-mcp', version: '1.1.2' },
+    { name: 'kaseya-spanning-backup-mcp', version: '1.1.3' },
     { capabilities: { tools: {}, logging: {} } }
   );
 

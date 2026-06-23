@@ -11,7 +11,7 @@ import { describeBaseUrl, toolErrorFromCatch } from './domains/_helpers.js';
 
 export function createMcpServer(): Server {
   const server = new Server(
-    { name: 'threatlocker-mcp', version: '0.1.0' },
+    { name: 'threatlocker-mcp', version: '1.3.0' },
     {
       capabilities: {
         tools: {},

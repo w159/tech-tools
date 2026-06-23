@@ -149,7 +149,7 @@ export function parseCredentialsFromHeaders(
  * | `MCP_HTTP_PORT`     | TCP port for the HTTP transport                     | `8080`           |
  * | `MCP_HTTP_HOST`     | Bind address for the HTTP transport                 | `0.0.0.0`        |
  * | `MCP_SERVER_NAME`   | Server name surfaced to MCP clients                 | `cipp-mcp`       |
- * | `MCP_SERVER_VERSION`| Server version surfaced to MCP clients              | `1.0.0`          |
+ * | `MCP_SERVER_VERSION`| Server version surfaced to MCP clients              | `0.2.2`          |
  * | `LOG_LEVEL`         | Winston log level (`error`/`warn`/`info`/`debug`)   | `info`           |
  * | `LOG_FORMAT`        | Log output format (`json` or `simple`)              | `simple`         |
  *
@@ -195,7 +195,7 @@ export function loadEnvironmentConfig(): EnvironmentConfig {
     cipp: cippConfig,
     server: {
       name: process.env.MCP_SERVER_NAME || 'cipp-mcp',
-      version: process.env.MCP_SERVER_VERSION || '1.0.0',
+      version: process.env.MCP_SERVER_VERSION || '0.2.2',
     },
     transport: {
       type: transportType,

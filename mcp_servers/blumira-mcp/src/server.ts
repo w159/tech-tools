@@ -11,7 +11,7 @@ import { missingCredsError, toolErrorFromCatch, describeBaseUrl } from './domain
 
 export function createServer(): Server {
   const server = new Server(
-    { name: 'blumira-mcp', version: '1.0.0' },
+    { name: 'blumira-mcp', version: '1.1.5' },
     {
       capabilities: {
         tools: {},

@@ -1,6 +1,6 @@
 {
   "name": "auvik-mcp",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "MCP server for the Auvik network monitoring API",
   "type": "module",
   "main": "./dist/index.js",
