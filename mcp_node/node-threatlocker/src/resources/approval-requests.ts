@@ -31,4 +31,23 @@ export class ApprovalRequestsResource {
       params: { approvalRequestId: id },
     });
   }
+
+  // Source: https://threatlocker.kb.help/portalapiapprovalrequest/ > ApprovalRequestPermitApplication
+  // Body: { approvalRequest: { approvalRequestId, json, comments?, requestorEmailAddress? } }
+  // The `json` field must be the complete JSON object returned by getPermitApplication().
+  async approve(params: {
+    approvalRequestId: string;
+    json: unknown;
+    comments?: string;
+    requestorEmailAddress?: string;
+  }): Promise<unknown> {
+    const { approvalRequestId, json, comments, requestorEmailAddress } = params;
+    const approvalRequest: Record<string, unknown> = { approvalRequestId, json };
+    if (comments !== undefined) approvalRequest['comments'] = comments;
+    if (requestorEmailAddress !== undefined) approvalRequest['requestorEmailAddress'] = requestorEmailAddress;
+    return this.http.request<unknown>('/ApprovalRequest/ApprovalRequestPermitApplication', {
+      method: 'POST',
+      body: { approvalRequest },
+    });
+  }
 }

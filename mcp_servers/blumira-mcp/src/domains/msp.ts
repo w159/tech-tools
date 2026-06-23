@@ -170,7 +170,7 @@ function getTools(): Tool[] {
     },
     {
       name: 'blumira_msp_findings_resolve',
-      description: 'Resolve a Blumira finding in an MSP sub-account (account_id, finding_id, resolution all required). Resolution codes: 10=Valid, 20=False Positive, 30=No Action Needed, 40=Risk Accepted.',
+      description: 'DESTRUCTIVE: Resolve a Blumira finding in an MSP sub-account — permanently changes finding status and resolution code. Requires account_id, finding_id, and resolution code: 10=Valid, 20=False Positive, 30=No Action Needed, 40=Risk Accepted.',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -184,7 +184,7 @@ function getTools(): Tool[] {
     },
     {
       name: 'blumira_msp_findings_assign',
-      description: 'Assign owners to a Blumira finding in an MSP sub-account (account_id, finding_id, owner_type, owners array all required).',
+      description: 'DESTRUCTIVE: Assign owners to a Blumira finding in an MSP sub-account — overwrites the current owner list for the given role. Requires account_id, finding_id, owner_type (responder|analyst|manager), and owners array of user UUIDs (pass [] to clear).',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -211,7 +211,7 @@ function getTools(): Tool[] {
     },
     {
       name: 'blumira_msp_findings_comments_add',
-      description: 'Add a comment to a Blumira finding in an MSP sub-account (account_id, finding_id, body, sender UUID all required).',
+      description: 'VISIBLE-TO-OTHERS: Add a comment to a Blumira finding in an MSP sub-account — visible to all team members with access to that account. Requires account_id, finding_id, body (HTML allowed), and sender UUID.',
       inputSchema: {
         type: 'object' as const,
         properties: {

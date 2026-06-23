@@ -152,9 +152,11 @@ interface Classification {
 }
 
 function classifyError(operation: string, err: unknown): Classification {
-  // Error instance with a .status field (e.g. node-fetch / undici response errors)
+  // Error instance with a .status or .statusCode field
+  // (.status: node-fetch / undici; .statusCode: CIPP service errors thrown by cipp.service.ts)
   if (isStatusError(err)) {
-    const status = err.status as number;
+    const e = err as Record<string, unknown>;
+    const status = (typeof e.status === "number" ? e.status : e.statusCode) as number;
     return {
       code: httpStatusToCode(status),
       message: `${operation} failed: HTTP ${status}`,
@@ -184,23 +186,24 @@ function classifyError(operation: string, err: unknown): Classification {
 
 function isStatusError(
   err: unknown
-): err is { status: unknown; message?: unknown; body?: unknown } {
-  return (
-    err !== null &&
-    typeof err === "object" &&
-    "status" in err &&
-    typeof (err as Record<string, unknown>).status === "number"
-  );
+): err is { status?: unknown; statusCode?: unknown; message?: unknown; body?: unknown; response?: unknown } {
+  if (err === null || typeof err !== "object") return false;
+  const e = err as Record<string, unknown>;
+  // Accept either .status (node-fetch / undici) or .statusCode (CIPP service errors)
+  return typeof e.status === "number" || typeof e.statusCode === "number";
 }
 
 function extractBody(err: {
   body?: unknown;
+  response?: unknown;
   message?: unknown;
 }): string | undefined {
-  if (typeof err.body === "string") return err.body.slice(0, 500);
-  if (err.body !== undefined && err.body !== null) {
+  // Prefer .body (node-fetch / undici shape); fall back to .response (ServiceError shape)
+  const payload = err.body !== undefined ? err.body : err.response;
+  if (typeof payload === "string") return payload.slice(0, 500);
+  if (payload !== undefined && payload !== null) {
     try {
-      return JSON.stringify(err.body).slice(0, 500);
+      return JSON.stringify(payload).slice(0, 500);
     } catch {
       // ignore
     }

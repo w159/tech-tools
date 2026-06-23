@@ -7,7 +7,7 @@ import { describeBaseUrl } from '../../../_shared/base-url.js';
 export const statusTool: Tool = {
   name: 'auvik_status',
   description:
-    'Preflight check. Reports whether Auvik credentials are configured and, if so, hits GET /v1/authentication/verify to confirm they work (308 region redirects are followed transparently). Call this first if other tools return auth errors.',
+    'Verify Auvik credentials and connectivity by calling the authentication endpoint; call this first when other tools return auth errors or before running any workflow. Region redirects (308) are followed transparently. (GET /v1/authentication/verify)',
   inputSchema: { type: 'object', properties: {}, additionalProperties: false },
 };
 

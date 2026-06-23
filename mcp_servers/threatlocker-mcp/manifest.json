@@ -1,10 +1,10 @@
 {
   "manifest_version": "0.3",
   "name": "threatlocker-mcp",
-  "version": "1.2.2",
+  "version": "1.3.0",
   "display_name": "ThreatLocker MCP Server",
   "description": "Query and manage ThreatLocker endpoint application-control data — computers, groups, approval requests, and audit logs — for MSP security AI agents.",
-  "long_description": "Use this server when you need to automate ThreatLocker Portal operations. List and filter computers and computer groups by organization; retrieve and act on software approval requests (approve/deny); search the audit log for blocked application events; and manage organizations (MSP child tenants). Supports scoping to a specific managed organization via the optional THREATLOCKER_ORGANIZATION_ID config, or acting as the primary org by default.",
+  "long_description": "Use this server when you need to automate ThreatLocker Portal operations. List and filter computers and computer groups by organization; retrieve software approval requests and approve them (creating an allow policy for the requesting application); search the audit log for blocked application events; and manage organizations (MSP child tenants). Note: the ThreatLocker Portal API does not expose a deny endpoint — deny operations must be performed in the portal UI. Supports scoping to a specific managed organization via the optional THREATLOCKER_ORGANIZATION_ID config, or acting as the primary org by default.",
   "author": {
     "name": "w159",
     "url": "https://github.com/w159"

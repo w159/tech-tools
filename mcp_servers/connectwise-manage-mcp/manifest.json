@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "connectwise-manage-mcp",
   "display_name": "ConnectWise Manage MCP Server",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "description": "Query and manage ConnectWise Manage PSA data - tickets, companies, contacts, projects, and billing - for MSP AI agents.",
   "long_description": "Use this server when you need to automate or query ConnectWise Manage PSA. Covers the full service board workflow: search and create tickets using CW query syntax, update ticket fields via JSON Patch, add notes, log time entries, and close tickets. Also exposes companies, contacts, configurations, agreements, project tickets, activity records, catalog items, and member lookups. Authentication requires Company ID, public key, private key, and client ID.",
   "author": {

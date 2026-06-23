@@ -420,6 +420,149 @@ describe("toolErrorFromCatch", () => {
 });
 
 // ---------------------------------------------------------------------------
+// error-envelope: toolErrorFromCatch — statusCode+response shape
+// (node-threatlocker / node-vanta ServiceError pattern)
+// ---------------------------------------------------------------------------
+
+describe("toolErrorFromCatch — statusCode+response (ServiceError shape)", () => {
+  // Faithful replica of the node-threatlocker/node-vanta ServiceError hierarchy.
+  // We intentionally do NOT import the real library to keep this test self-contained
+  // (the node libs are never installed inside the iCloud repo path), but the shape
+  // is identical: statusCode (number) + response (unknown), NO .status or .body.
+  // Note: Node 22 strip-only mode does not support TS parameter properties, so we
+  // assign them explicitly inside the constructor body.
+  class ServiceError extends Error {
+    statusCode: number;
+    response: unknown;
+    constructor(message: string, statusCode: number, response: unknown) {
+      super(message);
+      this.statusCode = statusCode;
+      this.response = response;
+      Object.setPrototypeOf(this, new.target.prototype);
+    }
+  }
+
+  class AuthenticationError extends ServiceError {
+    constructor(message: string, response: unknown) { super(message, 401, response); }
+  }
+  class ForbiddenError extends ServiceError {
+    constructor(message: string, response: unknown) { super(message, 403, response); }
+  }
+  class NotFoundError extends ServiceError {
+    constructor(message: string, response: unknown) { super(message, 404, response); }
+  }
+  class RateLimitError extends ServiceError {
+    retryAfter: number;
+    constructor(message: string, retryAfter: number, response: unknown) {
+      super(message, 429, response);
+      this.retryAfter = retryAfter;
+    }
+  }
+  class ServerError extends ServiceError {
+    constructor(message: string, response: unknown) { super(message, 500, response); }
+  }
+
+  it("maps ForbiddenError (statusCode 403) to FORBIDDEN", () => {
+    const err = new ForbiddenError("Access denied", { error: "FORBIDDEN", message: "not authorized" });
+    const result = toolErrorFromCatch("threatlocker.get", err);
+    const parsed = parseText(result) as { error: Record<string, unknown> };
+    assert.equal(parsed.error.code, "FORBIDDEN");
+    assert.ok((parsed.error.message as string).includes("HTTP 403"), "message should include HTTP status");
+  });
+
+  it("maps ForbiddenError (statusCode 403) detail from .response", () => {
+    const err = new ForbiddenError("Access denied", { error: "FORBIDDEN", message: "not authorized" });
+    const result = toolErrorFromCatch("threatlocker.get", err);
+    const parsed = parseText(result) as { error: Record<string, unknown> };
+    assert.ok(
+      (parsed.error.detail as string).includes("FORBIDDEN"),
+      "detail should contain response body content"
+    );
+  });
+
+  it("maps NotFoundError (statusCode 404) to NOT_FOUND", () => {
+    const err = new NotFoundError("Resource not found", { error: "NOT_FOUND", id: "abc-123" });
+    const result = toolErrorFromCatch("vanta.getControl", err);
+    const parsed = parseText(result) as { error: Record<string, unknown> };
+    assert.equal(parsed.error.code, "NOT_FOUND");
+    assert.ok((parsed.error.message as string).includes("HTTP 404"));
+  });
+
+  it("maps NotFoundError (statusCode 404) detail from .response", () => {
+    const err = new NotFoundError("Resource not found", { error: "NOT_FOUND", id: "abc-123" });
+    const result = toolErrorFromCatch("vanta.getControl", err);
+    const parsed = parseText(result) as { error: Record<string, unknown> };
+    assert.ok(
+      (parsed.error.detail as string).includes("NOT_FOUND"),
+      "detail should contain response body content"
+    );
+  });
+
+  it("maps RateLimitError (statusCode 429) to RATE_LIMITED", () => {
+    const err = new RateLimitError("Rate limit exceeded", 60, { retryAfter: 60 });
+    const result = toolErrorFromCatch("threatlocker.list", err);
+    const parsed = parseText(result) as { error: Record<string, unknown> };
+    assert.equal(parsed.error.code, "RATE_LIMITED");
+    assert.ok((parsed.error.message as string).includes("HTTP 429"));
+  });
+
+  it("maps RateLimitError (statusCode 429) detail from .response", () => {
+    const err = new RateLimitError("Rate limit exceeded", 60, { retryAfter: 60 });
+    const result = toolErrorFromCatch("threatlocker.list", err);
+    const parsed = parseText(result) as { error: Record<string, unknown> };
+    assert.ok(
+      (parsed.error.detail as string).includes("retryAfter"),
+      "detail should serialize the response object"
+    );
+  });
+
+  it("maps AuthenticationError (statusCode 401) to FORBIDDEN", () => {
+    const err = new AuthenticationError("Unauthorized", { error: "UNAUTHORIZED" });
+    const result = toolErrorFromCatch("vanta.listUsers", err);
+    const parsed = parseText(result) as { error: Record<string, unknown> };
+    assert.equal(parsed.error.code, "FORBIDDEN");
+  });
+
+  it("maps ServerError (statusCode 500) to VENDOR_ERROR", () => {
+    const err = new ServerError("Internal server error", { error: "SERVER_ERROR" });
+    const result = toolErrorFromCatch("threatlocker.audit", err);
+    const parsed = parseText(result) as { error: Record<string, unknown> };
+    assert.equal(parsed.error.code, "VENDOR_ERROR");
+  });
+
+  it("accepts a string .response as the detail excerpt", () => {
+    const err = new NotFoundError("Not found", "device not registered");
+    const result = toolErrorFromCatch("threatlocker.getDevice", err);
+    const parsed = parseText(result) as { error: Record<string, unknown> };
+    assert.equal(parsed.error.detail, "device not registered");
+  });
+
+  // Regression: the old .status/.body shape must still classify correctly
+  it("regression: plain object with .status/.body still classifies correctly", () => {
+    const err = { status: 404, body: "not found" };
+    const result = toolErrorFromCatch("devices.get", err);
+    const parsed = parseText(result) as { error: Record<string, unknown> };
+    assert.equal(parsed.error.code, "NOT_FOUND");
+    assert.equal(parsed.error.detail, "not found");
+  });
+
+  it("regression: plain object with .status 429 and no body still classifies correctly", () => {
+    const err = { status: 429 };
+    const result = toolErrorFromCatch("reports.list", err);
+    const parsed = parseText(result) as { error: Record<string, unknown> };
+    assert.equal(parsed.error.code, "RATE_LIMITED");
+  });
+
+  it("regression: plain object with .status 401 still classifies to FORBIDDEN", () => {
+    const err = { status: 401, body: "unauthorized" };
+    const result = toolErrorFromCatch("users.list", err);
+    const parsed = parseText(result) as { error: Record<string, unknown> };
+    assert.equal(parsed.error.code, "FORBIDDEN");
+    assert.equal(parsed.error.detail, "unauthorized");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // error-envelope: missingCredsError
 // ---------------------------------------------------------------------------
 

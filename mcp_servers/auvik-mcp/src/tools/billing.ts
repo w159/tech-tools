@@ -27,7 +27,7 @@ const deviceUsageSummary: SummaryFn<FlatResource> = (u: FlatResource) => ({
 
 export const billingClientUsageTool: Tool = {
   name: 'auvik_billing_client_usage',
-  description: 'GET /v1/billing/usage/client — per-client billable device counts for a date range. Dates are calendar dates (YYYY-MM-DD), not timestamps. Returns compact summary by default; pass full=true or fields=[...] for more.',
+  description: 'Return per-client billable device counts for a date range (YYYY-MM-DD calendar dates); use to audit MSP billing or reconcile device counts across clients. (GET /v1/billing/usage/client)',
   inputSchema: {
     type: 'object',
     properties: {
@@ -44,7 +44,7 @@ export const billingClientUsageTool: Tool = {
 export const billingDeviceUsageTool: Tool = {
   name: 'auvik_billing_device_usage',
   description:
-    'GET /v1/billing/usage/device/{id} — billable usage for a single device over a date range. Returns 404 if the device has no billing record. Returns compact summary by default; pass full=true or fields=[...] for more.',
+    'Return billable usage for a single device over a date range (YYYY-MM-DD); returns 404 if the device has no billing record. (GET /v1/billing/usage/device/{id})',
   inputSchema: {
     type: 'object',
     properties: {

@@ -36,7 +36,7 @@ const auditSummary: SummaryFn<FlatResource> = (a: FlatResource) => ({
 
 export const entitiesListNotesTool: Tool = {
   name: 'auvik_entities_list_notes',
-  description: 'GET /v1/inventory/entity/note — list notes attached to entities (devices, networks, interfaces, root). Returns compact summary (id, entityName, entityType, note, lastModifiedBy, modifiedAt) by default; pass full=true or fields=[...] for more.',
+  description: 'List notes attached to Auvik entities (devices, networks, interfaces, or root); use to retrieve operator notes or find who last annotated a specific entity. (GET /v1/inventory/entity/note)',
   inputSchema: {
     type: 'object',
     properties: {
@@ -56,7 +56,7 @@ export const entitiesListNotesTool: Tool = {
 
 export const entitiesGetNoteTool: Tool = {
   name: 'auvik_entities_get_note',
-  description: 'GET /v1/inventory/entity/note/{id} — single entity note. Returns compact summary by default; pass full=true or fields=[...] for more.',
+  description: 'Fetch a single entity note by ID; use after auvik_entities_list_notes to read the full note content. (GET /v1/inventory/entity/note/{id})',
   inputSchema: {
     type: 'object',
     properties: {
@@ -70,7 +70,7 @@ export const entitiesGetNoteTool: Tool = {
 
 export const entitiesListAuditsTool: Tool = {
   name: 'auvik_entities_list_audits',
-  description: 'GET /v1/inventory/entity/audit — list audit-log entries (terminal sessions, tunnels, remote-browser sessions). Returns compact summary (id, user, category, status, createdAt, closedAt, entityId) by default; pass full=true or fields=[...] for more.',
+  description: 'List audit-log entries for entity access events (terminal sessions, SSH tunnels, remote-browser sessions); use to investigate who accessed a device and when. (GET /v1/inventory/entity/audit)',
   inputSchema: {
     type: 'object',
     properties: {
@@ -89,7 +89,7 @@ export const entitiesListAuditsTool: Tool = {
 
 export const entitiesGetAuditTool: Tool = {
   name: 'auvik_entities_get_audit',
-  description: 'GET /v1/inventory/entity/audit/{id} — single audit-log entry. Returns compact summary by default; pass full=true or fields=[...] for more.',
+  description: 'Fetch a single audit-log entry by ID; use after auvik_entities_list_audits to retrieve session detail for a specific access event. (GET /v1/inventory/entity/audit/{id})',
   inputSchema: {
     type: 'object',
     properties: {

@@ -403,21 +403,21 @@ The canonical list lives in [`.env.template`](.env.template). Empty values are t
 
 | Package | Version | Vendor | Bundle |
 | --- | --- | --- | --- |
-| [`auvik-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/auvik-mcp) | 0.4.1 | Auvik network monitoring | `auvik-mcp.mcpb` |
-| [`blumira-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/blumira-mcp) | 1.1.4 | Blumira SIEM/XDR | `blumira-mcp.mcpb` |
-| [`cipp-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/cipp-mcp) | 0.2.0 | CIPP -- M365 MSP control plane | `cipp-mcp.mcpb` |
-| [`connectwise-manage-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/connectwise-manage-mcp) | 0.1.0 | ConnectWise Manage PSA | `connectwise-manage-mcp.mcpb` |
-| [`kaseya-spanning-backup-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/kaseya-spanning-backup-mcp) | 1.1.2 | Kaseya Spanning -- SaaS backup for M365/GWS/Salesforce | `kaseya-spanning-backup-mcp.mcpb` |
-| [`knowbe4-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/knowbe4-mcp) | 1.1.0 | KnowBe4 security awareness | `knowbe4-mcp.mcpb` |
-| [`ninjaone-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/ninjaone-mcp) | 1.6.0 | NinjaOne RMM | `ninjaone-mcp.mcpb` |
-| [`paylocity-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/paylocity-mcp) | 0.1.3 | Paylocity HR/payroll | `paylocity-mcp.mcpb` |
-| [`threatlocker-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/threatlocker-mcp) | 1.2.0 | ThreatLocker zero-trust EDR | `threatlocker-mcp.mcpb` |
-| [`vanta-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/vanta-mcp) | 0.2.0 | Vanta GRC / compliance | `vanta-mcp.mcpb` |
+| [`auvik-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/auvik-mcp) | 0.4.2 | Auvik network monitoring | `auvik-mcp.mcpb` |
+| [`blumira-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/blumira-mcp) | 1.1.5 | Blumira SIEM/XDR | `blumira-mcp.mcpb` |
+| [`cipp-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/cipp-mcp) | 0.2.2 | CIPP -- M365 MSP control plane | `cipp-mcp.mcpb` |
+| [`connectwise-manage-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/connectwise-manage-mcp) | 1.5.2 | ConnectWise Manage PSA | `connectwise-manage-mcp.mcpb` |
+| [`kaseya-spanning-backup-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/kaseya-spanning-backup-mcp) | 1.1.3 | Kaseya Spanning -- SaaS backup for M365/GWS/Salesforce | `kaseya-spanning-backup-mcp.mcpb` |
+| [`knowbe4-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/knowbe4-mcp) | 1.1.2 | KnowBe4 security awareness | `knowbe4-mcp.mcpb` |
+| [`ninjaone-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/ninjaone-mcp) | 1.6.2 | NinjaOne RMM | `ninjaone-mcp.mcpb` |
+| [`paylocity-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/paylocity-mcp) | 0.1.4 | Paylocity HR/payroll | `paylocity-mcp.mcpb` |
+| [`threatlocker-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/threatlocker-mcp) | 1.3.0 | ThreatLocker zero-trust EDR | `threatlocker-mcp.mcpb` |
+| [`vanta-mcp`](https://github.com/w159/tech-tools/tree/main/mcp_servers/vanta-mcp) | 0.2.3 | Vanta GRC / compliance | `vanta-mcp.mcpb` |
 
 Every server speaks MCP over **stdio JSON-RPC** and registers its tools/resources via `@modelcontextprotocol/sdk`.
 
 <details>
-<summary><strong>Last verified tool counts and status (2026-06-09)</strong></summary>
+<summary><strong>Last verified tool counts and status (2026-06-22)</strong></summary>
 
 | Server | Status | Tools | Notes |
 | --- | --- | --- | --- |
@@ -429,7 +429,7 @@ Every server speaks MCP over **stdio JSON-RPC** and registers its tools/resource
 | knowbe4 | PASS | 30 | `knowbe4_status` OK; `knowbe4_account_get` returns 500 (vendor-side API key scope issue, not a creds-absent skip) |
 | ninjaone | PASS | 26 | |
 | paylocity | PASS | 16 | |
-| threatlocker | PASS | 17 | |
+| threatlocker | PASS | 18 | added `threatlocker_approvals_approve` (DESTRUCTIVE); no deny tool (ThreatLocker Portal API exposes no deny endpoint) |
 | vanta | PASS | 28 | |
 
 [1] CIPP 401 is a pre-existing tenant permission issue: the API caller lacks the `ListTenants` permission inside CIPP. Fix: CIPP -> Settings -> Application Settings -> API -> grant `ListTenants`. The server itself boots and registers all 43 tools correctly.

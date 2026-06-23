@@ -38,7 +38,7 @@ Triage pending ThreatLocker application approval requests across the managed fle
 
    Split into two buckets:
 
-   - **High confidence (auto-approve candidates):** signed by well-known publisher (Microsoft, Adobe, Google, Citrix, etc.), known good hash, common business app
+   - **High confidence (approve recommendations):** signed by well-known publisher (Microsoft, Adobe, Google, Citrix, etc.), known good hash, common business app
    - **Needs review:** unsigned, novel/uncommon hash, unusual install path (`%TEMP%`, `%APPDATA%`), unfamiliar publisher, request justification missing or suspicious
 
 5. **Surface the key fields per request**
@@ -47,7 +47,11 @@ Triage pending ThreatLocker application approval requests across the managed fle
 
 6. **Recommend a disposition**
 
-   For each group provide approve / deny / investigate with one-line reasoning. Call out anything that looks like a phishing dropper, LOLBin abuse, or remote-access tool installed outside policy.
+   For each group provide approve / deny / investigate with one-line reasoning. Call out anything that looks like a phishing dropper, LOLBin abuse, or remote-access tool installed outside policy. These are recommendations -- the agent does NOT act without explicit user instruction.
+
+7. **Execute on explicit user confirmation only**
+
+   This command is advisory by default. If the user explicitly confirms a specific approve recommendation, call `threatlocker_approvals_get_permit_application` first to surface the exact policy scope, then call `threatlocker_approvals_approve` (DESTRUCTIVE: permanently creates an allow policy in ThreatLocker). Deny decisions cannot be executed via API; direct the user to the ThreatLocker Portal UI.
 
 ## Parameters
 

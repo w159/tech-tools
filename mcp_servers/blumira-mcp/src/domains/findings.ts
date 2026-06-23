@@ -109,7 +109,7 @@ function getTools(): Tool[] {
     },
     {
       name: 'blumira_findings_resolve',
-      description: 'VISIBLE-TO-OTHERS: Resolve a Blumira finding — changes finding status visible to all team members. Requires finding_id and resolution code: 10=Valid, 20=False Positive, 30=No Action Needed, 40=Risk Accepted. Optional resolution_notes.',
+      description: 'DESTRUCTIVE: Resolve a Blumira finding — permanently changes finding status and resolution code. Requires finding_id and resolution code: 10=Valid, 20=False Positive, 30=No Action Needed, 40=Risk Accepted. Optional resolution_notes.',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -122,7 +122,7 @@ function getTools(): Tool[] {
     },
     {
       name: 'blumira_findings_assign',
-      description: 'VISIBLE-TO-OTHERS: Assign owners to a Blumira finding — changes are visible to all team members. Specify finding_id, owner_type (responder|analyst|manager), and owners array of user UUIDs (use blumira_users_list to look up UUIDs). Pass empty array to clear.',
+      description: 'DESTRUCTIVE: Assign owners to a Blumira finding — overwrites the current owner list for the given role. Specify finding_id, owner_type (responder|analyst|manager), and owners array of user UUIDs (use blumira_users_list to look up UUIDs). Pass empty array to clear.',
       inputSchema: {
         type: 'object' as const,
         properties: {

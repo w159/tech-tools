@@ -1,7 +1,7 @@
 {
   "manifest_version": "0.3",
   "name": "cipp-mcp",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "display_name": "CIPP MCP Server",
   "description": "Manage M365 tenants, users, security policies, and standards via CIPP (CyberDrain Improved Partner Portal) — for MSP AI agents.",
   "long_description": "Use this server when you need to automate Microsoft 365 management tasks across multiple MSP client tenants through CIPP. Covers user lifecycle (create, edit, reset passwords, MFA, licenses), group management, mailbox and shared-mailbox operations, conditional access policies, Defender and Entra security standards, compliance baselines, and CIPP alert/audit workflows. Supports both static Bearer token and OAuth client-credentials authentication. Call tools to query or act on any tenant accessible from your CIPP deployment.",

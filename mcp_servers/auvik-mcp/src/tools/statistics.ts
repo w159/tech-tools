@@ -2,8 +2,6 @@ import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import {
   withClient,
   shapeRaw,
-  toolErrorFromCatch,
-  missingCredsError,
   tenantsProp,
   pageProps,
   STAT_INTERVALS,
@@ -17,8 +15,6 @@ import {
   DEVICE_TYPES,
   INTERFACE_TYPES,
 } from './shared.js';
-import { getCredentials } from '../credentials.js';
-import { createAuvikClient } from '../client-factory.js';
 
 // fromTime + interval are always required by Auvik. thruTime is documented as
 // optional but is required at runtime, so we require it too to avoid a 400.
@@ -30,11 +26,11 @@ const timeProps = {
 
 export const statisticsDeviceTool: Tool = {
   name: 'auvik_statistics_device',
-  description: 'GET /v1/stat/device/{statId} — device time-series metrics. Omit deviceId to get the metric across all devices in scope.',
+  description: 'Fetch time-series device metrics (CPU utilization, memory, interface traffic, etc.) over a time window; omit deviceId to aggregate across all in-scope devices. Requires statId, fromTime, thruTime, and interval. (GET /v1/stat/device/{statId})',
   inputSchema: {
     type: 'object',
     properties: {
-      statId: { type: 'string', enum: [...DEVICE_STAT_IDS], description: 'Which device metric to read (path segment).' },
+      statId: { type: 'string', enum: [...DEVICE_STAT_IDS], description: 'Device metric to read, used as the URL path segment (e.g. "cpu", "memory", "disk").' },
       ...timeProps,
       deviceId: { type: 'string', description: 'Optional single device ID. Sent as filter[deviceId].' },
       filter_deviceType: { type: 'string', enum: [...DEVICE_TYPES], description: 'Optional filter[deviceType] to scope by device type.' },
@@ -48,11 +44,11 @@ export const statisticsDeviceTool: Tool = {
 
 export const statisticsDeviceAvailabilityTool: Tool = {
   name: 'auvik_statistics_device_availability',
-  description: 'GET /v1/stat/deviceAvailability/{statId} — device uptime/outage time-series.',
+  description: 'Fetch device uptime or outage duration time-series over a window; use for availability reporting or SLA calculations. Requires statId (uptime or outage), fromTime, thruTime, and interval. (GET /v1/stat/deviceAvailability/{statId})',
   inputSchema: {
     type: 'object',
     properties: {
-      statId: { type: 'string', enum: [...DEVICE_AVAILABILITY_STAT_IDS], description: 'uptime or outage (path segment).' },
+      statId: { type: 'string', enum: [...DEVICE_AVAILABILITY_STAT_IDS], description: 'Availability metric to read: "uptime" (seconds online) or "outage" (seconds offline), used as URL path segment.' },
       ...timeProps,
       deviceId: { type: 'string', description: 'Optional single device ID. Sent as filter[deviceId].' },
       filter_deviceType: { type: 'string', enum: [...DEVICE_TYPES], description: 'Optional filter[deviceType].' },
@@ -66,11 +62,11 @@ export const statisticsDeviceAvailabilityTool: Tool = {
 
 export const statisticsInterfaceTool: Tool = {
   name: 'auvik_statistics_interface',
-  description: 'GET /v1/stat/interface/{statId} — interface time-series metrics. Omit interfaceId to read across interfaces in scope.',
+  description: 'Fetch time-series interface metrics (traffic, errors, utilization) over a window; omit interfaceId to aggregate across all in-scope interfaces. Requires statId, fromTime, thruTime, and interval. (GET /v1/stat/interface/{statId})',
   inputSchema: {
     type: 'object',
     properties: {
-      statId: { type: 'string', enum: [...INTERFACE_STAT_IDS], description: 'Which interface metric to read (path segment).' },
+      statId: { type: 'string', enum: [...INTERFACE_STAT_IDS], description: 'Interface metric to read, used as the URL path segment (e.g. "inOctets", "outOctets", "inErrors").' },
       ...timeProps,
       interfaceId: { type: 'string', description: 'Optional single interface ID. Sent as filter[interfaceId].' },
       filter_interfaceType: { type: 'string', enum: [...INTERFACE_TYPES], description: 'Optional filter[interfaceType].' },
@@ -85,11 +81,11 @@ export const statisticsInterfaceTool: Tool = {
 
 export const statisticsServiceTool: Tool = {
   name: 'auvik_statistics_service',
-  description: 'GET /v1/stat/service/{statId} — service-monitor ping metrics (pingTime, pingPacket).',
+  description: 'Fetch time-series service-monitor ping metrics (round-trip time or packet loss) over a window; use to assess reachability trends for monitored services. Requires statId (pingTime or pingPacket), fromTime, thruTime, and interval. (GET /v1/stat/service/{statId})',
   inputSchema: {
     type: 'object',
     properties: {
-      statId: { type: 'string', enum: [...SERVICE_STAT_IDS], description: 'pingTime or pingPacket (path segment).' },
+      statId: { type: 'string', enum: [...SERVICE_STAT_IDS], description: 'Ping metric to read as the URL path segment: "pingTime" (round-trip latency) or "pingPacket" (packet loss rate).' },
       ...timeProps,
       serviceId: { type: 'string', description: 'Optional single service ID. Sent as filter[serviceId].' },
       ...tenantsProp,
@@ -103,7 +99,7 @@ export const statisticsServiceTool: Tool = {
 export const statisticsComponentTool: Tool = {
   name: 'auvik_statistics_component',
   description:
-    'GET /v1/stat/component/{componentType}/{statId} — component time-series metrics. Both path segments are required. Valid statId depends on componentType (e.g. fan→speed, powerSupply→power, cpu→idle/temperature); not every statId is valid for every type. If the combination is wrong, the API responds 400 and lists the valid statIds for that componentType — retry with one of those.',
+    'Fetch time-series metrics for a hardware component type (cpu, disk, fan, memory, powerSupply, etc.) over a window; both componentType and statId are required and must be a valid combination — a 400 response lists valid statIds for that type. (GET /v1/stat/component/{componentType}/{statId})',
   inputSchema: {
     type: 'object',
     properties: {
@@ -122,11 +118,11 @@ export const statisticsComponentTool: Tool = {
 
 export const statisticsOidTool: Tool = {
   name: 'auvik_statistics_oid',
-  description: 'GET /v1/stat/oid/{statId} — SNMP OID monitor statistics (statId is "deviceMonitor"). Not a time-series; filter by device and/or OID.',
+  description: 'Fetch SNMP OID monitor statistics for devices (statId must be "deviceMonitor"); use to read custom SNMP polling results, optionally filtered by device or specific OID value. (GET /v1/stat/oid/{statId})',
   inputSchema: {
     type: 'object',
     properties: {
-      statId: { type: 'string', enum: [...OID_STAT_IDS], description: 'OID stat type (path segment); only "deviceMonitor".' },
+      statId: { type: 'string', enum: [...OID_STAT_IDS], description: 'OID stat type used as URL path segment; the only supported value is "deviceMonitor".' },
       deviceId: { type: 'string', description: 'Optional filter[deviceId].' },
       filter_deviceType: { type: 'string', enum: [...DEVICE_TYPES], description: 'Optional filter[deviceType].' },
       filter_oid: { type: 'string', description: 'Optional filter[oid] — a specific OID string.' },

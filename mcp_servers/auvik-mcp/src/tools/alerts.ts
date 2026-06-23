@@ -27,22 +27,22 @@ const alertSummary: SummaryFn<FlatResource> = (a: FlatResource) => ({
 
 export const alertsListTool: Tool = {
   name: 'auvik_alerts_list',
-  description: 'GET /v1/alert/history/info — list alerts. Returns compact summary (id, name, severity, status, detectedTime, message, dismissed, entityId) by default. Pass full=true or fields=[...] for more. Filter by severity, status, dismissed, time window, or the entity/definition that raised them.',
+  description: 'List alerts across a tenant, returning severity, status, detectedTime, message, and entityId; call this to check what alerts are active or to pull alert history for a device/network/interface. (GET /v1/alert/history/info)',
   inputSchema: {
     type: 'object',
     properties: {
       ...tenantsProp,
       ...pageProps,
       ...SHAPE_PROPS,
-      filter_severity: { type: 'string', enum: [...ALERT_SEVERITIES], description: 'filter[severity].' },
-      filter_status: { type: 'string', enum: [...ALERT_STATUSES], description: 'filter[status] — created / resolved / paused / unpaused.' },
-      filter_entityId: { type: 'string', description: 'filter[entityId] — alerts for a specific device/network/interface.' },
-      filter_alertDefinitionId: { type: 'string', description: 'filter[alertDefinitionId].' },
-      filter_alertSpecificationId: { type: 'string', description: 'filter[alertSpecificationId].' },
-      filter_dismissed: { type: 'boolean', description: 'filter[dismissed].' },
-      filter_dispatched: { type: 'boolean', description: 'filter[dispatched].' },
-      filter_detectedTimeAfter: { type: 'string', description: 'filter[detectedTimeAfter] ISO 8601.' },
-      filter_detectedTimeBefore: { type: 'string', description: 'filter[detectedTimeBefore] ISO 8601.' },
+      filter_severity: { type: 'string', enum: [...ALERT_SEVERITIES], description: 'Alert severity level to filter on (e.g. "warning", "critical").' },
+      filter_status: { type: 'string', enum: [...ALERT_STATUSES], description: 'Alert lifecycle status: created, resolved, paused, or unpaused.' },
+      filter_entityId: { type: 'string', description: 'Return only alerts for this specific entity (device, network, or interface ID).' },
+      filter_alertDefinitionId: { type: 'string', description: 'Return only alerts triggered by this alert definition ID.' },
+      filter_alertSpecificationId: { type: 'string', description: 'Return only alerts matching this alert specification ID.' },
+      filter_dismissed: { type: 'boolean', description: 'When true, return only dismissed alerts; when false, only active ones.' },
+      filter_dispatched: { type: 'boolean', description: 'When true, return only alerts that have been dispatched to a notification channel.' },
+      filter_detectedTimeAfter: { type: 'string', description: 'ISO 8601 timestamp; return only alerts detected after this time.' },
+      filter_detectedTimeBefore: { type: 'string', description: 'ISO 8601 timestamp; return only alerts detected before this time.' },
     },
     required: [],
     additionalProperties: false,
@@ -52,7 +52,7 @@ export const alertsListTool: Tool = {
 export const alertsGetTool: Tool = {
   name: 'auvik_alerts_get',
   description:
-    'GET /v1/alert/history/info/{id} — single alert detail. Returns compact summary by default; pass full=true or fields=[...] for more. Note: may return 404 for a sub-tenant alert when called under a parent-tenant credential, even if it appeared in a list — that is an Auvik authorization quirk, not a missing alert.',
+    'Fetch full detail for a single alert by ID; use after auvik_alerts_list to inspect the message, entity, and dismissal state. Note: may return 404 for sub-tenant alerts under a parent credential — that is an Auvik authorization quirk, not a missing alert. (GET /v1/alert/history/info/{id})',
   inputSchema: {
     type: 'object',
     properties: {

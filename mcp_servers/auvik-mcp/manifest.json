@@ -1,7 +1,7 @@
 {
   "manifest_version": "0.3",
   "name": "auvik-mcp",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "display_name": "Auvik MCP Server",
   "description": "Query Auvik network monitoring data — tenants, devices, networks, interfaces, components, configs, alerts, statistics, and billing — for MSP AI agents.",
   "long_description": "Use this server when you need to inspect Auvik network monitoring data. Covers multi-tenant read workflows: list/get tenants, enumerate devices (with type/vendor/status filters plus detail, extended, warranty, and lifecycle views), browse discovered networks and interfaces, list device components, retrieve stored device configurations, fetch device/availability/interface/service/component/OID performance statistics over a time range, list and get alerts, read entity notes and audit logs, and pull client and per-device billing usage. Schemas, filters, and enum values are verified against the live Auvik OpenAPI spec. Ideal for MSP automation agents that need real-time network visibility across multiple client tenants.",

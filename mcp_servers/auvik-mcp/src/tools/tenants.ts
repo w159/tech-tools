@@ -27,7 +27,7 @@ const tenantDetailSummary: SummaryFn<FlatResource> = (t: FlatResource) => ({
 export const tenantsListTool: Tool = {
   name: 'auvik_tenants_list',
   description:
-    'GET /v1/tenants — list every Auvik tenant (MSP clients + parent) the credentials can access. Returns compact summary (id, domainPrefix, tenantType, enabled) by default; pass full=true or fields=[...] for more. Each item exposes the numeric tenant `id` (used as the `tenants` param elsewhere) and `attributes.domainPrefix` (used by auvik_tenants_detail). Start here when you need a tenant ID.',
+    'List every Auvik tenant accessible to the configured credentials (MSP clients and parent), returning the numeric tenant ID and domainPrefix needed by all other tools; start here when you need a tenant ID. (GET /v1/tenants)',
   inputSchema: {
     type: 'object',
     properties: {
@@ -40,7 +40,7 @@ export const tenantsListTool: Tool = {
 export const tenantsDetailTool: Tool = {
   name: 'auvik_tenants_detail',
   description:
-    'GET /v1/tenants/detail?tenantDomainPrefix=<prefix> — extended metadata (displayName, subscription, authorizations) for tenants under a domain prefix. Pass the domain PREFIX (e.g. "acme"), NOT the numeric tenant ID. Returns compact summary by default; pass full=true or fields=[...] for more.',
+    'Fetch extended tenant metadata (displayName, subscription status, authorizations) for tenants under a domain prefix; pass the domain PREFIX string (e.g. "acme"), not the numeric tenant ID. (GET /v1/tenants/detail)',
   inputSchema: {
     type: 'object',
     properties: {
@@ -62,7 +62,7 @@ export const tenantsDetailTool: Tool = {
 export const tenantsGetDetailTool: Tool = {
   name: 'auvik_tenants_get_detail',
   description:
-    'GET /v1/tenants/detail/{id} — extended metadata for a single tenant by numeric ID. Requires BOTH the tenant id and its domainPrefix (both from auvik_tenants_list). Returns compact summary by default; pass full=true or fields=[...] for more.',
+    'Fetch extended metadata for a single tenant by numeric ID; requires both the numeric id and its domainPrefix (both from auvik_tenants_list). (GET /v1/tenants/detail/{id})',
   inputSchema: {
     type: 'object',
     properties: {

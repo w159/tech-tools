@@ -13,7 +13,7 @@
     "prebuild": "npm run clean",
     "dev": "tsup --watch",
     "start": "node dist/index.js",
-    "test": "vitest run",
+    "test": "node node_modules/vitest/dist/cli.js run",
     "clean": "rm -rf dist",
     "pack:mcpb": "node scripts/pack-mcpb.js"
   },

@@ -21,7 +21,7 @@ const configSummary: SummaryFn<FlatResource> = (c: FlatResource) => ({
 
 export const configurationsListTool: Tool = {
   name: 'auvik_configurations_list',
-  description: 'GET /v1/inventory/configuration — list device configuration backup records (backupTime, isRunning, device relationship). Returns compact summary by default; pass full=true or fields=[...] for more.',
+  description: 'List device configuration backup records (backupTime, isRunning flag, linked device); use to find available config backups or determine when a device was last backed up. (GET /v1/inventory/configuration)',
   inputSchema: {
     type: 'object',
     properties: {
@@ -40,7 +40,7 @@ export const configurationsListTool: Tool = {
 
 export const configurationsGetTool: Tool = {
   name: 'auvik_configurations_get',
-  description: 'GET /v1/inventory/configuration/{id} — single configuration backup record (includes the config text). Returns compact summary by default; pass full=true or fields=[...] to retrieve config text.',
+  description: 'Fetch a single device configuration backup; pass full=true or fields=[...] to include the actual configuration text in the response. (GET /v1/inventory/configuration/{id})',
   inputSchema: {
     type: 'object',
     properties: {

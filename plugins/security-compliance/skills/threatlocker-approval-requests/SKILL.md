@@ -88,8 +88,14 @@ than expected.
    broadly.
 4. Within each hash, classify (see heuristics below).
 5. For approves, call `threatlocker_approvals_get_permit_application`
-   to confirm scope. Then approve.
+   to confirm the blast radius (which groups and endpoints the policy
+   would cover). Present that scope to the user and ask for explicit
+   confirmation before proceeding. After the user confirms, call
+   `threatlocker_approvals_approve` (DESTRUCTIVE: creates a permanent
+   allow policy in ThreatLocker -- this cannot be undone via API).
 6. For denies, capture a reason that the requesting user can act on.
+   Note: there is no deny API endpoint; deny decisions must be executed
+   in the ThreatLocker Portal UI directly.
 
 ### Signed-Publisher Heuristics
 

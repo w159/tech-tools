@@ -77,21 +77,21 @@ const deviceLifecycleSummary: SummaryFn<FlatResource> = (d: FlatResource) => ({
 export const devicesListTool: Tool = {
   name: 'auvik_devices_list',
   description:
-    'GET /v1/inventory/device/info — list Auvik-managed devices (basic info). Returns a compact summary (id, deviceName, deviceType, makeModel, onlineStatus, ipAddresses, lastSeen) by default. Pass full=true or fields=[...] for more fields. JSON:API; paginate by passing the page[after] cursor from links.next into pageAfter, or call auvik_navigate with links.next.',
+    'List Auvik-managed devices with basic identity and status (deviceName, deviceType, onlineStatus, IP addresses); start here to discover devices or find a device ID before drilling into details. Paginate via pageAfter cursor or auvik_navigate. (GET /v1/inventory/device/info)',
   inputSchema: {
     type: 'object',
     properties: {
       ...tenantsProp,
       ...pageProps,
       ...SHAPE_PROPS,
-      filter_deviceType: { type: 'string', enum: [...DEVICE_TYPES], description: 'filter[deviceType].' },
-      filter_makeModel: { type: 'string', description: 'filter[makeModel] (exact make/model string).' },
-      filter_vendorName: { type: 'string', description: 'filter[vendorName].' },
-      filter_onlineStatus: { type: 'string', enum: [...ONLINE_STATUSES], description: 'filter[onlineStatus].' },
+      filter_deviceType: { type: 'string', enum: [...DEVICE_TYPES], description: 'Narrow results to one device type (e.g. "switch", "router", "firewall").' },
+      filter_makeModel: { type: 'string', description: 'Exact make/model string to match (e.g. "Cisco Catalyst 2960").' },
+      filter_vendorName: { type: 'string', description: 'Vendor name to filter by (e.g. "Cisco", "Ubiquiti").' },
+      filter_onlineStatus: { type: 'string', enum: [...ONLINE_STATUSES], description: 'Current reachability state of the device (e.g. "online", "offline", "dormant").' },
       filter_networks: { type: 'string', description: 'filter[networks] — comma-separated network IDs the device belongs to.' },
       filter_modifiedAfter: { type: 'string', description: 'filter[modifiedAfter] — ISO 8601; only devices modified after this time.' },
       filter_notSeenSince: { type: 'string', description: 'filter[notSeenSince] — ISO 8601; only devices not seen since this time.' },
-      filter_stateKnown: { type: 'boolean', description: 'filter[stateKnown].' },
+      filter_stateKnown: { type: 'boolean', description: 'When true, returns only devices whose state Auvik has positively identified.' },
       include: { type: 'string', enum: ['deviceDetail'], description: 'Sideload related resources (only "deviceDetail" is supported).' },
     },
     required: [],
@@ -101,7 +101,7 @@ export const devicesListTool: Tool = {
 
 export const devicesGetTool: Tool = {
   name: 'auvik_devices_get',
-  description: 'GET /v1/inventory/device/info/{id} — single device basic info. Returns compact summary by default; pass full=true or fields=[...] for more.',
+  description: 'Fetch basic info (name, type, online status, IP addresses) for a single device by ID. (GET /v1/inventory/device/info/{id})',
   inputSchema: {
     type: 'object',
     properties: {
@@ -117,7 +117,7 @@ export const devicesGetTool: Tool = {
 export const devicesGetDetailsTool: Tool = {
   name: 'auvik_devices_get_details',
   description:
-    'GET /v1/inventory/device/detail/{id} — extended detail for one device (discovery status, manage status, connected devices). Use auvik_devices_get_extended for traffic-insight extended details.',
+    'Fetch discovery and management detail (SNMP/WMI/login discovery status, manageStatus, connected devices) for a single device; use auvik_devices_get_extended instead for traffic-insight attributes. (GET /v1/inventory/device/detail/{id})',
   inputSchema: {
     type: 'object',
     properties: {
@@ -132,7 +132,7 @@ export const devicesGetDetailsTool: Tool = {
 export const devicesListDetailsTool: Tool = {
   name: 'auvik_devices_list_details',
   description:
-    'GET /v1/inventory/device/detail — list extended device detail records (discovery + manage status) across a tenant, filterable by discovery/traffic-insight status. Returns compact summary by default; pass full=true or fields=[...] for more.',
+    'List discovery and management detail records for all devices in a tenant, filterable by SNMP/WMI/login discovery status and traffic-insights status; use to audit which devices Auvik can actively monitor. (GET /v1/inventory/device/detail)',
   inputSchema: {
     type: 'object',
     properties: {
@@ -140,14 +140,14 @@ export const devicesListDetailsTool: Tool = {
       ...pageProps,
       ...SHAPE_PROPS,
       filter_manageStatus: { type: 'boolean', description: 'filter[manageStatus] — true=managed.' },
-      filter_discoverySNMP: { type: 'string', enum: [...DISCOVERY_STATUSES], description: 'filter[discoverySNMP].' },
-      filter_discoveryWMI: { type: 'string', enum: [...DISCOVERY_STATUSES], description: 'filter[discoveryWMI].' },
-      filter_discoveryLogin: { type: 'string', enum: [...DISCOVERY_STATUSES], description: 'filter[discoveryLogin].' },
-      filter_discoveryVMware: { type: 'string', enum: [...DISCOVERY_STATUSES], description: 'filter[discoveryVMware].' },
+      filter_discoverySNMP: { type: 'string', enum: [...DISCOVERY_STATUSES], description: 'SNMP discovery status for the device (e.g. "discovered", "notDiscovered", "notSupported").' },
+      filter_discoveryWMI: { type: 'string', enum: [...DISCOVERY_STATUSES], description: 'WMI discovery status for the device.' },
+      filter_discoveryLogin: { type: 'string', enum: [...DISCOVERY_STATUSES], description: 'Login (SSH/Telnet) discovery status for the device.' },
+      filter_discoveryVMware: { type: 'string', enum: [...DISCOVERY_STATUSES], description: 'VMware discovery status for the device.' },
       filter_trafficInsightsStatus: {
         type: 'string',
         enum: [...TRAFFIC_INSIGHTS_STATUSES],
-        description: 'filter[trafficInsightsStatus].',
+        description: 'Traffic insights collection status for the device (e.g. "enabled", "disabled", "notSupported").',
       },
     },
     required: [],
@@ -157,7 +157,7 @@ export const devicesListDetailsTool: Tool = {
 
 export const devicesGetExtendedTool: Tool = {
   name: 'auvik_devices_get_extended',
-  description: 'GET /v1/inventory/device/detail/extended/{id} — single device extended detail (traffic insights, deep attributes). Returns compact summary by default; pass full=true or fields=[...] for more.',
+  description: 'Fetch extended detail (traffic insights status, software version, system uptime) for a single device by ID; use when you need attributes beyond what auvik_devices_get_details provides. (GET /v1/inventory/device/detail/extended/{id})',
   inputSchema: {
     type: 'object',
     properties: {
@@ -172,7 +172,7 @@ export const devicesGetExtendedTool: Tool = {
 export const devicesListExtendedTool: Tool = {
   name: 'auvik_devices_list_extended',
   description:
-    'GET /v1/inventory/device/detail/extended — list extended device details. filter[deviceType] is REQUIRED by this endpoint. Returns compact summary by default; pass full=true or fields=[...] for more.',
+    'List extended device details for all devices of a specific type (filter_deviceType is required by the API); use to bulk-audit traffic-insights status or software versions across a device class. (GET /v1/inventory/device/detail/extended)',
   inputSchema: {
     type: 'object',
     properties: {
@@ -191,15 +191,15 @@ export const devicesListExtendedTool: Tool = {
 
 export const devicesListWarrantyTool: Tool = {
   name: 'auvik_devices_list_warranty',
-  description: 'GET /v1/inventory/device/warranty — list device warranty/service-coverage records for a tenant. Returns compact summary by default; pass full=true or fields=[...] for more.',
+  description: 'List warranty and service-coverage records for all devices in a tenant; use to find devices with expired or expiring warranties. (GET /v1/inventory/device/warranty)',
   inputSchema: {
     type: 'object',
     properties: {
       ...tenantsProp,
       ...pageProps,
       ...SHAPE_PROPS,
-      filter_coveredUnderWarranty: { type: 'boolean', description: 'filter[coveredUnderWarranty].' },
-      filter_coveredUnderService: { type: 'boolean', description: 'filter[coveredUnderService].' },
+      filter_coveredUnderWarranty: { type: 'boolean', description: 'When true, return only devices currently under warranty.' },
+      filter_coveredUnderService: { type: 'boolean', description: 'When true, return only devices covered by a service contract.' },
     },
     required: [],
     additionalProperties: false,
@@ -209,7 +209,7 @@ export const devicesListWarrantyTool: Tool = {
 export const devicesGetWarrantyTool: Tool = {
   name: 'auvik_devices_get_warranty',
   description:
-    'GET /v1/inventory/device/warranty/{id} — warranty info for one device. Returns 404 if the device has no warranty record (not an error in the endpoint). Returns compact summary by default; pass full=true or fields=[...] for more.',
+    'Fetch warranty and service-coverage info for a single device; returns 404 if no warranty record exists for that device (that is normal, not an error). (GET /v1/inventory/device/warranty/{id})',
   inputSchema: {
     type: 'object',
     properties: {
@@ -223,17 +223,17 @@ export const devicesGetWarrantyTool: Tool = {
 
 export const devicesListLifecycleTool: Tool = {
   name: 'auvik_devices_list_lifecycle',
-  description: 'GET /v1/inventory/device/lifecycle — list device end-of-life / end-of-sale / end-of-support records for a tenant. Returns compact summary by default; pass full=true or fields=[...] for more.',
+  description: 'List end-of-life, end-of-sale, and end-of-support records for devices in a tenant; use to identify hardware nearing or past vendor lifecycle milestones. (GET /v1/inventory/device/lifecycle)',
   inputSchema: {
     type: 'object',
     properties: {
       ...tenantsProp,
       ...pageProps,
       ...SHAPE_PROPS,
-      filter_salesAvailability: { type: 'string', enum: [...LIFECYCLE_STATUSES], description: 'filter[salesAvailability].' },
-      filter_softwareMaintenanceStatus: { type: 'string', enum: [...LIFECYCLE_STATUSES], description: 'filter[softwareMaintenanceStatus].' },
-      filter_securitySoftwareMaintenanceStatus: { type: 'string', enum: [...LIFECYCLE_STATUSES], description: 'filter[securitySoftwareMaintenanceStatus].' },
-      filter_lastSupportStatus: { type: 'string', enum: [...LIFECYCLE_STATUSES], description: 'filter[lastSupportStatus].' },
+      filter_salesAvailability: { type: 'string', enum: [...LIFECYCLE_STATUSES], description: 'Sales availability lifecycle status (e.g. "available", "endOfSale", "endOfLife").' },
+      filter_softwareMaintenanceStatus: { type: 'string', enum: [...LIFECYCLE_STATUSES], description: 'Software maintenance lifecycle status.' },
+      filter_securitySoftwareMaintenanceStatus: { type: 'string', enum: [...LIFECYCLE_STATUSES], description: 'Security software maintenance lifecycle status.' },
+      filter_lastSupportStatus: { type: 'string', enum: [...LIFECYCLE_STATUSES], description: 'Last-day-of-support lifecycle status.' },
     },
     required: [],
     additionalProperties: false,
@@ -243,7 +243,7 @@ export const devicesListLifecycleTool: Tool = {
 export const devicesGetLifecycleTool: Tool = {
   name: 'auvik_devices_get_lifecycle',
   description:
-    'GET /v1/inventory/device/lifecycle/{id} — lifecycle info for one device. Returns 404 if the device has no lifecycle record. Returns compact summary by default; pass full=true or fields=[...] for more.',
+    'Fetch end-of-life and support lifecycle info for a single device; returns 404 if the vendor has no lifecycle data for that device. (GET /v1/inventory/device/lifecycle/{id})',
   inputSchema: {
     type: 'object',
     properties: {

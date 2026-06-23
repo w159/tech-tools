@@ -31,7 +31,7 @@ const networkDetailSummary: SummaryFn<FlatResource> = (n: FlatResource) => ({
 
 export const networksListTool: Tool = {
   name: 'auvik_networks_list',
-  description: 'GET /v1/inventory/network/info — list networks (routed/VLAN/wifi/subnets) per tenant. Returns compact summary (id, networkName, networkType, scanStatus) by default; pass full=true or fields=[...] for more.',
+  description: 'List networks (routed, VLAN, WiFi, subnets) for a tenant, returning name, type, and scan status; use to discover networks or find a network ID before checking devices on it. (GET /v1/inventory/network/info)',
   inputSchema: {
     type: 'object',
     properties: {
@@ -51,7 +51,7 @@ export const networksListTool: Tool = {
 
 export const networksGetTool: Tool = {
   name: 'auvik_networks_get',
-  description: 'GET /v1/inventory/network/info/{id} — single network basic info. Returns compact summary by default; pass full=true or fields=[...] for more.',
+  description: 'Fetch basic info (name, type, scan status) for a single network by ID. (GET /v1/inventory/network/info/{id})',
   inputSchema: {
     type: 'object',
     properties: {
@@ -66,7 +66,7 @@ export const networksGetTool: Tool = {
 
 export const networksListDetailTool: Tool = {
   name: 'auvik_networks_list_detail',
-  description: 'GET /v1/inventory/network/detail — list network detail records (scope, collectors). Returns compact summary by default; pass full=true or fields=[...] for more.',
+  description: 'List network detail records (scope, assigned collectors, excluded IPs) for all networks in a tenant; use to understand how networks are scanned and managed. (GET /v1/inventory/network/detail)',
   inputSchema: {
     type: 'object',
     properties: {
@@ -86,7 +86,7 @@ export const networksListDetailTool: Tool = {
 
 export const networksGetDetailTool: Tool = {
   name: 'auvik_networks_get_detail',
-  description: 'GET /v1/inventory/network/detail/{id} — single network detail record (scope, collectors, excluded IPs). Returns compact summary by default; pass full=true or fields=[...] for more.',
+  description: 'Fetch scope, collector, and excluded-IP detail for a single network by ID. (GET /v1/inventory/network/detail/{id})',
   inputSchema: {
     type: 'object',
     properties: {

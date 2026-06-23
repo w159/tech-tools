@@ -21,7 +21,7 @@ const componentSummary: SummaryFn<FlatResource> = (c: FlatResource) => ({
 
 export const componentsListTool: Tool = {
   name: 'auvik_components_list',
-  description: 'GET /v1/inventory/component/info — list device components (CPUs, disks, fans, power supplies, system boards). Returns compact summary (id, componentName, componentType, currentStatus, deviceName) by default; pass full=true or fields=[...] for more.',
+  description: 'List hardware components (CPUs, disks, fans, power supplies, system boards) across devices; use to check component health or get a component ID before calling auvik_statistics_component. (GET /v1/inventory/component/info)',
   inputSchema: {
     type: 'object',
     properties: {
@@ -44,7 +44,7 @@ export const componentsListTool: Tool = {
 
 export const componentsGetTool: Tool = {
   name: 'auvik_components_get',
-  description: 'GET /v1/inventory/component/info/{id} — single component. Returns compact summary by default; pass full=true or fields=[...] for more.',
+  description: 'Fetch detail for a single hardware component by ID; use after auvik_components_list when you need the full record for one component. (GET /v1/inventory/component/info/{id})',
   inputSchema: {
     type: 'object',
     properties: {

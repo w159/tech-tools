@@ -5,7 +5,7 @@ import { missingCredsError, toolErrorFromCatch, shapeRaw } from './shared.js';
 
 export const navigateTool: Tool = {
   name: 'auvik_navigate',
-  description: 'Follow a JSON:API links.next (or links.first/prev) absolute URL returned by a prior Auvik list call. Use this to paginate without re-encoding bracket params.',
+  description: 'Paginate through Auvik list results by following a links.next/links.prev absolute URL from a prior list call; use this instead of re-calling the list tool with re-encoded bracket params.',
   inputSchema: {
     type: 'object',
     properties: {

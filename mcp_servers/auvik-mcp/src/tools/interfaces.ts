@@ -24,7 +24,7 @@ const interfaceSummary: SummaryFn<FlatResource> = (i: FlatResource) => ({
 
 export const interfacesListTool: Tool = {
   name: 'auvik_interfaces_list',
-  description: 'GET /v1/inventory/interface/info — list network interfaces. Returns compact summary (id, interfaceName, interfaceType, operationalStatus, macAddress, ipAddresses) by default; pass full=true or fields=[...] for more. Get an interface ID here before fetching interface statistics.',
+  description: 'List network interfaces across devices, returning name, type, operational status, MAC address, and IP addresses; use to discover interfaces or get an interface ID before calling auvik_statistics_interface. (GET /v1/inventory/interface/info)',
   inputSchema: {
     type: 'object',
     properties: {
@@ -48,7 +48,7 @@ export const interfacesListTool: Tool = {
 
 export const interfacesGetTool: Tool = {
   name: 'auvik_interfaces_get',
-  description: 'GET /v1/inventory/interface/info/{id} — single interface. Returns compact summary by default; pass full=true or fields=[...] for more.',
+  description: 'Fetch detail for a single network interface by ID; use when you need the full interface record for one specific port or NIC. (GET /v1/inventory/interface/info/{id})',
   inputSchema: {
     type: 'object',
     properties: {

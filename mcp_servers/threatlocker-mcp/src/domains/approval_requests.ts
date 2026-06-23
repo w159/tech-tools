@@ -70,6 +70,31 @@ function getTools(): Tool[] {
         required: ['approvalRequestId'],
       },
     },
+    {
+      name: 'threatlocker_approvals_approve',
+      description: 'DESTRUCTIVE: Approve a ThreatLocker Application Control approval request, creating a permanent allow policy. Calls POST /ApprovalRequest/ApprovalRequestPermitApplication. Fetch the permit application JSON first with threatlocker_approvals_get_permit_application, then pass the complete json payload here. This action changes endpoint security posture.',
+      inputSchema: {
+        type: 'object' as const,
+        properties: {
+          approvalRequestId: {
+            type: 'string',
+            description: '(required) UUID of the approval request to approve. Format: "00000000-0000-0000-0000-000000000000". Obtain from threatlocker_approvals_list.',
+          },
+          json: {
+            description: '(required) Complete permit-application JSON object returned by threatlocker_approvals_get_permit_application. Must be passed as-is — do not modify fields.',
+          },
+          comments: {
+            type: 'string',
+            description: '(optional) Text to populate the Comments field in the Ticket Details tab. Overwrites any existing comment. Use to record the reason for approval.',
+          },
+          requestorEmailAddress: {
+            type: 'string',
+            description: '(optional) Email address to record as the requestor in the Ticket Details tab. Used to notify the requestor when the request is processed.',
+          },
+        },
+        required: ['approvalRequestId', 'json'],
+      },
+    },
   ];
 }
 
@@ -143,6 +168,27 @@ async function handleCall(toolName: string, args: Record<string, unknown>): Prom
       } catch (err) {
         return toolErrorFromCatch('threatlocker_approvals_get_permit_application', err, {
           hint: 'Verify the approvalRequestId with threatlocker_approvals_list first.',
+        });
+      }
+    }
+    case 'threatlocker_approvals_approve': {
+      const approvalRequestId = args.approvalRequestId as string;
+      const json = args.json;
+      const comments = args.comments as string | undefined;
+      const requestorEmailAddress = args.requestorEmailAddress as string | undefined;
+      logger.info('API call: approvalRequests.approve', { approvalRequestId });
+      try {
+        const client = await getClient();
+        const result = await client.approvalRequests.approve({
+          approvalRequestId,
+          json,
+          comments,
+          requestorEmailAddress,
+        });
+        return shapeRaw(result ?? { approved: true, approvalRequestId });
+      } catch (err) {
+        return toolErrorFromCatch('threatlocker_approvals_approve', err, {
+          hint: 'Fetch the permit application JSON first with threatlocker_approvals_get_permit_application and pass the complete json field. Verify THREATLOCKER_API_KEY has Approve permissions.',
         });
       }
     }

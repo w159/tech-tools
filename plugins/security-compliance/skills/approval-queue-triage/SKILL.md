@@ -26,5 +26,9 @@ description: Triage pending ThreatLocker approval requests with file-history, co
 
 ## Rules
 
-- NEVER auto-approve. Output verdicts only; user confirms each.
+- NEVER auto-approve. Output verdicts only. For each approve verdict,
+  wait for explicit per-request user confirmation before calling
+  `threatlocker_approvals_approve` (DESTRUCTIVE: creates a permanent
+  allow policy). Deny verdicts cannot be executed via API -- direct
+  the user to the ThreatLocker Portal UI for those.
 - Always include the audit/file-history evidence summary inline.
