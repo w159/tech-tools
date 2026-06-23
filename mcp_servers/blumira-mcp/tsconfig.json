@@ -11,9 +11,18 @@
     "outDir": "dist",
     "sourceMap": true,
     "paths": {
-      "@shared/*": ["../../_shared/*"]
+      "@shared/*": [
+        "../../_shared/*"
+      ]
     }
   },
-  "include": ["src", "../_shared/*.ts"],
-  "exclude": ["node_modules", "dist", "tests"]
+  "include": [
+    "src",
+    "../_shared/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "tests"
+  ]
 }
