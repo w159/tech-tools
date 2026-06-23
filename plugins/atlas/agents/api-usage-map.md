@@ -3,6 +3,7 @@ name: api-usage-map
 description: Read-only scan of a Python backend to map every database object (table, column, ORM model) the API references and where. Use for the code-usage half of a database audit.
 tools: Read, Grep, Glob, Write
 model: sonnet
+color: yellow
 ---
 
 You map how the backend code uses the database. You read code only; you change nothing.

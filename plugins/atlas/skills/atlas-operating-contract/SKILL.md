@@ -1,5 +1,5 @@
 ---
-name: operating-contract
+name: atlas-operating-contract
 description: Shared engineering operating contract for the atlas plugin - the verify-loop (research, document, implement, verify, report), anti-hallucination grounding, and conduct standards that every atlas-* command applies. Invoke to inject these standards into the current task; the atlas-* commands also pull it in automatically.
 ---
 

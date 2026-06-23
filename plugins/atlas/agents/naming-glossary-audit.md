@@ -3,6 +3,7 @@ name: naming-glossary-audit
 description: Read-only audit of PostgreSQL table and column names against a project glossary, focused on a user_* to client_* transition. Use for the nomenclature half of a database audit.
 tools: Read, Grep, Glob, Bash, Write
 model: sonnet
+color: yellow
 hooks:
   PreToolUse:
     - matcher: "Bash"

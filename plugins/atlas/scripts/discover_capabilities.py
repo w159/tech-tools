@@ -43,6 +43,18 @@ RULES = [
      "reason": "Dockerfiles or k8s manifests found; container build/deploy awareness.",
      "cmd": "claude plugin install <container-skill>",
      "match": lambda c: c["containers"]},
+    {"id": "ponytail", "type": "plugin",
+     "reason": "Lazy-senior-dev mode; ~54% less code while keeping safety. Session-augmentation tier.",
+     "cmd": "copilot plugin marketplace add DietrichGebert/ponytail && copilot plugin install ponytail@ponytail",
+     "match": lambda c: True},
+    {"id": "loop-library (atlas-loop)", "type": "note",
+     "reason": "Built-in curated loops; use the atlas-loop skill.",
+     "cmd": "(already shipped with atlas)",
+     "match": lambda c: True},
+    {"id": "connectors (atlas-connectors)", "type": "note",
+     "reason": "Built-in vendor MCP connectors, disabled by default; enable with atlas-connectors.",
+     "cmd": "(already shipped with atlas)",
+     "match": lambda c: c["has_mcp_servers"]},
 ]
 
 SKIP_DIRS = {".git", "node_modules", ".venv", ".venv.nosync.noindex", "venv",
@@ -51,12 +63,17 @@ SKIP_DIRS = {".git", "node_modules", ".venv", ".venv.nosync.noindex", "venv",
 
 def scan(root):
     c = {"dep_count": 0, "frontend": False, "terraform": False, "containers": False,
-         "microsoft": False, "has_logs": False, "big_files": False, "files": 0}
+         "microsoft": False, "has_logs": False, "big_files": False,
+         "has_mcp_servers": False, "has_loops": True, "files": 0}
     for dp, dns, fns in os.walk(root):
         dns[:] = [d for d in dns if d not in SKIP_DIRS]
+        if "mcp_servers" in dns:
+            c["has_mcp_servers"] = True
         for fn in fns:
             c["files"] += 1
             low = fn.lower()
+            if low.endswith(".mcpb"):
+                c["has_mcp_servers"] = True
             if low.endswith(".tf"):
                 c["terraform"] = True
             if low.endswith(".log"):
