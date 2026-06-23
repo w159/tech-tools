@@ -24,7 +24,7 @@ This `docs/` tree is created and maintained **in the target project being worked
 | `docs/.run/findings.json` | Per-run findings and verdicts (schema in `scaffolding.md`) | no (gitignored) |
 | `docs/.run/work-log.md` | Resumability log; re-read before any continuation | no (gitignored) |
 
-`docs/.run/` is the only ephemeral subtree. Everything else is committed. Add `docs/.run/` to `.gitignore`.
+`docs/.run/` is the only ephemeral subtree. Everything else is committed, so `docs/` MUST be git-tracked. Under a deny-by-default `.gitignore`, allowlist the SSOT subtree explicitly (`!docs/`, `!docs/*.md`, and each durable subfolder as `!dir/` + `!dir/**`) and re-exclude `docs/.run/` after it. Never blanket-allow `!docs/**`: vendored doc-site clones under docs/ carry their own nested .git and must stay ignored (re-exclude `docs/**/.git/`). Verify with `git check-ignore docs/CHANGELOG.md` (must report NOT ignored).
 
 ## Ownership: who writes what
 

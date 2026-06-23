@@ -34,8 +34,14 @@ Two entry points share this methodology:
    completion gate, nudge). Outside a plugin install, offer `scripts/install_hooks.py`.
 4. Config. Write or update `.claude/atlas.local.md` (schema below). Show the diff and
    confirm before writing.
-5. Docs seed. If `docs/` lacks the SSOT scaffold, offer to seed it per
-   `../atlas-engine/references/docs-ssot.md`. Confirm first.
+5. Docs seed and tracking. If `docs/` lacks the SSOT scaffold, offer to seed it per
+   `../atlas-engine/references/docs-ssot.md`. Confirm first. Then ensure docs/ is
+   git-tracked: atlas maintains docs/ as the project SSOT, so a deny-by-default
+   `.gitignore` MUST allowlist the SSOT subtree (root `*.md` plus architecture/,
+   features/, specs/, audits/, lessons/, wiki/, plans/, evidence/, reference_files/),
+   keep `docs/.run/` ignored, and never blanket-allow `docs/**` (that would try to
+   commit vendored doc clones that carry their own nested .git). Verify with
+   `git check-ignore docs/CHANGELOG.md` (should NOT be ignored).
 6. Report. Dependency state, capabilities installed vs declined, hooks active, config
    path, docs/ state, and the next recommended command.
 

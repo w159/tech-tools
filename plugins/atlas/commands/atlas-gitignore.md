@@ -24,6 +24,7 @@ The file must:
 - Cover the named stack's build output, dependency directories, caches, OS cruft, and editor files.
 - Re-exclude secrets and env files AFTER the allowlist so a later broad include cannot leak them. Re-include only the safe templates (for example `!.env.example`).
 - Account for cloud or synced-drive artifacts generically (for example `*.nosync*` patterns) only if the stack mentions a synced or cloud-backed drive.
+- If the project keeps a `docs/` tree, atlas maintains it as the documentation SSOT, so allowlist the SSOT subtree explicitly: `!docs/` plus `!docs/*.md` and the durable subfolders (architecture/, features/, specs/, audits/, lessons/, wiki/, plans/, evidence/, reference_files/), each a paired `!dir/` + `!dir/**`. Re-exclude `docs/.run/` after the allowlist. NEVER use a blanket `!docs/**`: vendored doc-site clones under docs/ carry their own nested .git and must stay ignored, so also re-exclude `docs/**/.git/` as belt-and-suspenders.
 
 Do not invent ignore rules for tools that are not in the named stack.
 
@@ -32,6 +33,7 @@ VERIFY before reporting:
 - Confirm every `!path/` has a paired `!path/**`.
 - Confirm secret and env rules sit AFTER the allowlist, so `git check-ignore -v .env` would report the file as ignored.
 - Confirm no existing tracked file the user intends to keep would now be ignored: spot-check the allowlist against the named stack's source layout.
+- If `docs/` is tracked, confirm `git check-ignore docs/CHANGELOG.md` reports it NOT ignored while a vendored clone like `docs/<tool>/` stays ignored.
 
 REPORT:
 - The path to the .gitignore written.

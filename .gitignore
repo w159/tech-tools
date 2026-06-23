@@ -188,6 +188,39 @@ firebase-adminsdk*.json
 !.claude-plugin/
 !.claude-plugin/**
 
+# ---- docs — atlas documentation SSOT (CHANGELOG, ROADMAP, plans, specs, evidence,
+#      architecture, features, lessons, audits, wiki, reference_files). Atlas builds and
+#      maintains these as the project's single source of truth, so they must be tracked.
+#      Only the SSOT subtree is allowlisted: large vendored doc-site clones under docs/
+#      (cline, aider, vendors, gemini-cli, frameworks, claude-code, ...), each with its own
+#      nested .git, stay ignored as local reference material, not project history.
+#      Do NOT add a blanket !docs/** — that would try to commit those nested repos.
+!docs/
+!docs/*.md
+!docs/architecture/
+!docs/architecture/**
+!docs/features/
+!docs/features/**
+!docs/specs/
+!docs/specs/**
+!docs/audits/
+!docs/audits/**
+!docs/lessons/
+!docs/lessons/**
+!docs/wiki/
+!docs/wiki/**
+!docs/plans/
+!docs/plans/**
+!docs/evidence/
+!docs/evidence/**
+!docs/reference_files/
+!docs/reference_files/**
+# This repo's existing owned doc dirs (small, no nested repo):
+!docs/standards/
+!docs/standards/**
+!docs/superpowers/
+!docs/superpowers/**
+
 
 # ============================================================================
 # SECTION 5 — Re-exclude generated, local, and machine-specific artifacts
@@ -200,6 +233,17 @@ firebase-adminsdk*.json
 **/node_modules.nosync.noindex/
 **/node_modules.nosync.noindex/**
 **/node_modules.nosync.noindex
+
+# ---- Atlas ephemeral run state (orchestration scratch; never durable) ----
+docs/.run/
+docs/.run/**
+
+# ---- Safety: keep any nested git repo / vendored doc-site clone under docs/ out ----
+# The docs allowlist above never includes these; this is belt-and-suspenders so a
+# future blanket !docs/** can never drag a gigabyte of nested .git repos into history.
+docs/**/.git/
+docs/**/.git/**
+
 **/dist/
 **/dist/**
 **/build/
