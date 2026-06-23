@@ -1,5 +1,5 @@
 ---
-name: uxt-swarm
+name: atlas-uxt-swarm
 description: Use when asked to run a UX test swarm, full UI/UX test pass, persona testing review, or pre-release frontend sweep on the first responders app, or to re-test after fixes from a previous run. Drives persona generation, scripted data entry, real-browser walkthroughs, fuzzing, and an independent calc oracle, then gates on whether the CLIENT surface (the profile the app reads + resolving dashboard cards) is actually correct.
 ---
 
@@ -12,7 +12,7 @@ enforces three hard gates before reporting a verdict.
 
 You orchestrate and verify only. Never navigate the app, enter data, or edit app source
 yourself. The swarm DETECTS and REPORTS app bugs with evidence; it never fixes
-`frontend/`/`backend/` code. Your only writes are under `.claude/skills/uxt-swarm/`,
+`frontend/`/`backend/` code. Your only writes are under `.claude/skills/atlas-uxt-swarm/`,
 `docs/claude_testers/harness/`, `templates/`, and the run dir.
 
 ## Why this exists

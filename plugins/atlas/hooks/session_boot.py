@@ -8,6 +8,7 @@ silently.
 """
 
 import json
+import os
 import shutil
 import sys
 
@@ -34,8 +35,17 @@ def main():
     mem = detect_dep("claude_mem") or has_cmd("claude-mem")
     ctx = detect_dep("context_mode") or has_cmd("context-mode")
 
+    pony = has_cmd("ponytail")
+    if not pony:
+        try:
+            pony = os.path.exists(
+                os.path.expanduser("~/.config/ponytail/config.json")
+            )
+        except Exception:
+            pony = False
+
     lines = [
-        "Atlas runtime active. The operating-contract and atlas-engine methodology apply:",
+        "Atlas runtime active. The atlas-operating-contract and atlas-engine methodology apply:",
         "research -> theory -> test -> validate -> implement -> test -> verify; evidence before any done claim.",
         "This session is the atlas orchestrator. Substantive implementation is routed to atlas:<role> subagents "
         "(atlas:explorer, atlas:implementer, atlas:verifier, etc.); the orchestrator plans, delegates, "
@@ -55,6 +65,16 @@ def main():
             else "absent - run /atlas to install for large-output work"
         )
         + ".",
+        "Less-code mode (ponytail): "
+        + (
+            "available"
+            if pony
+            else "absent - run /atlas to install for less-code mode"
+        )
+        + ".",
+        "No-prompt scan: run /atlas, or any atlas skill with no task, to scan this project "
+        "and report what is missing to reach atlas standard (claude-mem + context-mode + ponytail, "
+        "loop-library, connectors, hooks, docs/ SSOT).",
     ]
     out = {
         "additionalContext": "\n".join(lines)[:9000],

@@ -3,6 +3,7 @@ name: schema-inventory
 description: Read-only PostgreSQL catalog inventory. Enumerates tables, columns, types, constraints, indexes, and RLS flags from the live database. Use for the schema half of a database audit.
 tools: Bash, Write
 model: haiku
+color: yellow
 hooks:
   PreToolUse:
     - matcher: "Bash"

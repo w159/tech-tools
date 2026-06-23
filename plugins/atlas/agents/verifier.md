@@ -2,7 +2,7 @@
 name: verifier
 description: Adversarial verifier for the atlas-engine skill. Use to independently confirm or REFUTE a claimed finding or fix in a fresh context - re-open the cited lines, re-run the test, re-query the data, re-read the diff. Defaults to skeptical. Never fixes anything; only verifies and returns a verdict backed by evidence.
 model: sonnet
-color: yellow
+color: red
 disallowedTools: [Write, Edit, MultiEdit, NotebookEdit]
 ---
 

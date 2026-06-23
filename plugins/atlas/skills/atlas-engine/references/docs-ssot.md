@@ -91,7 +91,7 @@ Newest entries go at the top, directly under the heading. Keep the file append-a
 
 ### ROADMAP.md item (with status)
 
-Statuses: `planned | in-progress | blocked | deferred | done`. Move `done` items to CHANGELOG and drop them from here on the next pass.
+Statuses: `planned | in-progress | blocked | deferred | done`. Move `done` items to CHANGELOG and drop them from here on the next pass. Session-start reconcile and session-end curate are defined in `session-lifecycle.md`.
 
 ```markdown
 ## Backlog

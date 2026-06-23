@@ -1,5 +1,5 @@
 ---
-name: self-improving
+name: atlas-self-improving
 description: "Use to make Atlas gradually better in a codebase as it is worked - capture a reusable lesson (decision, fix, gotcha, preference) to claude-mem and committed .agents/ notes, surface a relevant past lesson before re-deriving it, and run the look-back loop on resume. Triggers when the user corrects the agent, when a non-obvious fix or pattern is found, after notable work, and on session resume. The atlas Stop/SubagentStop nudge hook points here."
 ---
 
