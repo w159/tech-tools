@@ -18,7 +18,7 @@ Drive a pull request through review rounds until it is approved and mergeable. E
 
 1. **Read the round.** Pull current review comments and CI status from `feedback_source`. Separate actionable change requests from questions and nits.
 2. **Address every actionable item.** Route the changes to `address_owner`. For each comment, make the change or reply with the reason it should not change - never leave an actionable comment silently unaddressed.
-3. **Verify locally.** Run the project gate (lint/typecheck/test/build) before pushing so the next CI round is not a re-run of the same failure.
+3. **Verify locally.** Run the project gate (lint/typecheck/test/build) before pushing so the next CI round is not a re-run of the same failure. Per atlas-engine law 5, confirm the gate result with an independent re-run in a fresh context (dispatch `atlas:verifier`) rather than `address_owner` self-attesting that the round is green before push.
 4. **Push and re-request.** Push the round, re-request review, update the PR description if scope shifted.
 5. **Decide (self-pace).** If approved and CI is green, finish (gate before merge). If new feedback arrived, go to step 1 for the next round.
 

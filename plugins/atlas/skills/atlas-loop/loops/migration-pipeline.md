@@ -18,7 +18,7 @@ Run a multi-step data or schema migration one stage at a time, proving each stag
 
 1. **Order the stages.** Lay out `stages` in dependency order. Each stage is reversible via `rollback` and provable via `per_stage_check`.
 2. **Apply one stage.** Execute the current stage. This is a write - gate for approval before the first mutating stage and before any irreversible one (cutover, drop).
-3. **Verify the stage.** Run `per_stage_check`. Read the new state back to prove it; do not assume the command succeeding means the data is correct.
+3. **Verify the stage.** Run `per_stage_check`. Read the new state back to prove it; do not assume the command succeeding means the data is correct. Per atlas-engine law 5, run `per_stage_check` as an independent read-back in a fresh context (dispatch `atlas:verifier` or `atlas:db-prober`) rather than the agent that applied the stage self-attesting it landed.
 4. **Branch.** If the check is green, advance to the next stage. If it is red, run `rollback` for this stage, report the failure with evidence, and stop - do not advance on a failed stage.
 5. **Advance (self-pace).** Repeat until the last stage passes its check.
 

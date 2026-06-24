@@ -20,7 +20,7 @@ Re-run a suspect test over and over to make an intermittent failure show itself,
 2. **Repeat on the timer.** Each tick re-runs the same test under identical inputs. The spacing helps surface timing- and order-dependent flakes.
 3. **Catch the failure.** On any failure, capture `capture_on_fail` (random seed, test order, wall-clock timing, env vars, full output) - this is the evidence that makes the flake reproducible.
 4. **Count the streak.** Track consecutive passes. A long clean streak is weak evidence of stability; a single failure is strong evidence of flakiness.
-5. **Stop and report.** Stop on the first captured failure (you have what you need to fix it) or after `run_count` clean repeats. Report the failure rate and the captured conditions.
+5. **Stop and report.** Stop on the first captured failure (you have what you need to fix it) or after `run_count` clean repeats. Report the failure rate and the captured conditions. Per atlas-engine law 5, a captured failure must be reproducible by a different agent: dispatch `atlas:verifier` to re-run `test_target` under the captured conditions in a fresh context and independently confirm the flake (or the clean streak), rather than the hunting agent self-attesting the result.
 
 ## Stop condition
 

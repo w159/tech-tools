@@ -33,9 +33,25 @@ The loop runs forward AND backward. If a fix at stage N invalidates an earlier s
 
 The cost of catching an error one stage back is trivial. The cost of catching it after five more stages built on top of it is catastrophic. Pay the trivial cost.
 
+## The per-stage gate
+
+A stage's dependents do not start until that stage is `verified`. The mark is written by an *independent* `atlas:verifier` (or specialist) running its own failable check in a *fresh* context, per law 5 in `SKILL.md`, and recorded in `docs/.run/findings.json`:
+
+```
+Stage N completes -> independent verifier runs Stage N's failable check in a fresh context
+    verified -> dependents of Stage N may now dispatch
+    rejected -> Stage N BLOCKS its dependents; re-implement (fresh implementer, failure attached) and re-verify first
+```
+
+This is the Verify step (`SKILL.md` step 3) applied per stage, not only at end-of-session. A `rejected` stage is a hard stop for everything downstream of it: do not run a dependent against an unverified or rejected predecessor, even to "save a round trip." Three failed verify cycles on the same stage -> mark `needs-human`, defer it, and proceed only with stages that do not depend on it.
+
 ## Delegation decision
 
-Spawn stages concurrently ONLY when they are genuinely independent - no shared state, no ordering dependency, neither needs the other's output. Do not split a single coherent thought across subagents just to "use parallelism." Over-fan-out fragments a line of reasoning into pieces no one holds, and the orchestrator pays to reassemble them. One coherent investigation belongs in one agent.
+Independent stages are the default fan-out unit: when two or more stages are genuinely independent - no shared state, no ordering dependency, neither needs the other's output - they MUST be dispatched in a *single message* so they run concurrently (~4-6 in flight). Single-message concurrent dispatch is the default; sequential, one-stage-per-message dispatch is reserved for a *real* data/ordering dependency where a stage needs an earlier stage's output. Do not invent a dependency to serialize work that could run in parallel.
+
+The independence test still governs what counts as a separate stage: do not split a single coherent thought across subagents just to "use parallelism." Over-fan-out fragments a line of reasoning into pieces no one holds, and the orchestrator pays to reassemble them. One coherent investigation belongs in one agent.
+
+When concurrent stages may edit the same files, give each subagent the dispatch-time `isolation: "worktree"` option (see `subagent-kit.md`) so their edits land in isolated worktrees and cannot collide. Read-only concurrent stages need no isolation.
 
 When you do delegate, every subagent gets a 4-part brief:
 

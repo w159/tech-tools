@@ -19,7 +19,7 @@ Keep running the same probe until it stops finding anything new. The classic dis
 1. **Seed.** Define `search_space` and the `probe_command` that surfaces findings for one pass. Record a baseline set (could be empty).
 2. **Probe.** Run one pass. Collect findings. Send any large output through `context-mode` so raw bytes stay out of context.
 3. **Diff.** Compare this pass against the running set. Anything new gets appended with its evidence (`file:line`, a row, a URL).
-4. **Decide (self-pace).** If this pass added something new and you are under `cap`, refine the probe (widen the net, follow a new lead) and go to step 2. If it added nothing new, or you hit `cap`, stop.
+4. **Decide (self-pace).** If this pass added something new and you are under `cap`, refine the probe (widen the net, follow a new lead) and go to step 2. If it added nothing new, or you hit `cap`, stop. Before declaring the loop dry, dispatch `atlas:verifier` in a fresh context to re-run the probe independently per atlas-engine law 5 and confirm the pass truly returned no new findings, rather than self-attesting that the search is exhausted.
 5. **Report.** Emit the full deduplicated finding set with evidence and state the dry condition that ended the loop.
 
 ## Stop condition

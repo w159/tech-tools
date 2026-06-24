@@ -19,7 +19,7 @@ Profile the workload, fix the single biggest hotspot, re-profile, repeat - until
 1. **Baseline.** Run `workload` under `profiler`. Record the current metric and the top hotspot with evidence (the flamegraph frame, the slow query, the trace span).
 2. **Fix the top hotspot only.** Make the one change the profile points at. Resist fixing things the profile did not flag.
 3. **Re-profile.** Run `workload` under `profiler` again. Compare the metric to baseline and confirm the hotspot actually moved (sometimes a fix shifts cost elsewhere instead of removing it).
-4. **Guard correctness.** Run `regression_guard` to confirm the fix did not break behavior. A faster wrong answer is a regression.
+4. **Guard correctness.** Run `regression_guard` to confirm the fix did not break behavior. A faster wrong answer is a regression. Per atlas-engine law 5, confirm both the measured improvement and `regression_guard` with an independent re-run in a fresh context (dispatch `atlas:verifier`) rather than the iterating agent self-attesting the before/after.
 5. **Decide (self-pace).** If the metric is at `target`, stop. If not, the new profile names the next hotspot - go to step 2.
 
 ## Stop condition

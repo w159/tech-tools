@@ -18,7 +18,7 @@ Build a feature or fix one requirement at a time, test-first. Each iteration: wr
 
 1. **Decompose.** Turn `requirement` into an ordered list of small testable assertions.
 2. **Red.** Write a test for the next assertion. Run `test_command`. Confirm it fails, and that it fails for the intended reason (not a typo or a missing import).
-3. **Green.** Make the smallest change in `source_target` to pass. Run `test_command`. Confirm the new test passes and no prior test regressed.
+3. **Green.** Make the smallest change in `source_target` to pass. Run `test_command`. Confirm the new test passes and no prior test regressed. Per atlas-engine law 5, the green verdict that lets you advance is not self-attested: dispatch `atlas:verifier` (or otherwise re-run `test_command` in a fresh context) to independently confirm the assertion is green before moving on.
 4. **Refactor.** Clean up names and structure with the suite green. Re-run to confirm still green.
 5. **Advance (self-pace).** If assertions remain, go to step 2 with the next one. If all are covered and green, stop.
 

@@ -20,7 +20,7 @@ Poll a live incident source on a timer and re-triage as the situation changes. I
 2. **Classify.** Apply `triage_rules` to rank severity and assign a class (e.g. investigating / mitigating / monitoring / resolved).
 3. **Act or recommend.** Each class maps to an action. Read-only sources just report; an action that writes or pages others gates for approval first (mark it VISIBLE-TO-OTHERS).
 4. **Log the tick.** Record the timestamp, the class, what changed since last tick, and the action taken.
-5. **Next tick.** The interval timer re-runs the body until `resolved_definition` holds, then stops.
+5. **Next tick.** The interval timer re-runs the body until `resolved_definition` holds, then stops. Before declaring the incident resolved, confirm `resolved_definition` with an independent read of `source` in a fresh context (dispatch `atlas:verifier`) per atlas-engine law 5, rather than the polling agent self-attesting that state cleared.
 
 ## Stop condition
 

@@ -20,7 +20,7 @@ Watch a failing or flaky build, diagnose each failure as it surfaces, apply the 
 2. **Read the result.** If green and stable, you are done. If red, extract the first real failure (compile error, failing test, missing dep) - not a downstream cascade.
 3. **Diagnose.** Localize the failure to the file/symbol that owns it with evidence. Distinguish a real break from infra flakiness (timeout, runner died) - the fix differs.
 4. **Fix.** Hand the bounded change to `fix_owner`. Pull version-correct docs for any library involved before editing.
-5. **Re-run next tick.** The interval re-triggers the build. Repeat until `green_definition` holds for a clean run.
+5. **Re-run next tick.** The interval re-triggers the build. Repeat until `green_definition` holds for a clean run. Before declaring the build green, confirm `green_definition` with an independent run of `build_command` in a fresh context (dispatch `atlas:verifier`) per atlas-engine law 5, rather than the fixing agent self-attesting the clean run.
 
 ## Stop condition
 
