@@ -53,6 +53,8 @@ On resume or after compaction, query memory before re-discovering anything:
 - `.agents/` notes for project conventions,
 - cite the source when you act on a recalled lesson ("using X, from .agents/notes.md").
 
+This look-back is enforced as a hard gate in the orchestrator: atlas-engine step 0 (Orient) makes recall a precondition to planning - cite prior work or state "no prior work found" before decomposing any substantive task.
+
 ## Transparency and traps
 
 Cite the source of any memory-derived action. Keep new lessons tentative until they

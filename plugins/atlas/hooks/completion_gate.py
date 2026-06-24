@@ -95,23 +95,35 @@ def _reason(missing_a: bool, missing_b: bool, missing_c: bool) -> str:
     if missing_a:
         parts.append(
             "  (a) No files found under docs/evidence/. Capture observed-behavior proof "
-            "(test output, DB read-back, endpoint response, or UI screenshot) there first."
+            "(test output, DB read-back, endpoint response, or UI screenshot) there first. "
+            "-> Dispatch the relevant atlas specialist (atlas:implementer to re-run and "
+            "capture, atlas:ui-runtime-tester for a live UI screenshot, or atlas:db-prober "
+            "for a DB read-back) to produce and save that artifact under docs/evidence/."
         )
     if missing_b:
         parts.append(
             "  (b) docs/.run/findings.json is missing or has no entry with status "
-            '"verified". Record an independent atlas:verifier result before stopping.'
+            '"verified". Record an independent atlas:verifier result before stopping. '
+            "-> Dispatch atlas:verifier for the shipping stage to independently confirm "
+            "or refute the claim, then write its verdict (status=\"verified\") into "
+            "docs/.run/findings.json."
         )
     if missing_c:
         parts.append(
             "  (c) docs/CHANGELOG.md is missing or empty. docs/ must be current -- "
-            "update CHANGELOG.md (and ROADMAP/affected subfolders) to reflect this run."
+            "update CHANGELOG.md (and ROADMAP/affected subfolders) to reflect this run. "
+            "-> Dispatch atlas:docs-curator to bring docs/ current (CHANGELOG, ROADMAP, "
+            "affected subfolders) citing file:line evidence."
         )
     failed = "\n".join(parts)
     return (
         "[atlas] Definition-of-done gate: the following condition(s) are not met:\n"
         + failed
-        + "\n\nAll three must hold before this run can be declared done. "
+        + "\n\nClose the gap proactively, do not just refuse: first dispatch "
+        "atlas:completeness-critic to pinpoint exactly which evidence and verification "
+        "are still missing, then dispatch the specialist named beside each failed "
+        "condition above to produce it, then retry Stop.\n\n"
+        "All three must hold before this run can be declared done. "
         "If the work is genuinely not done, say so explicitly -- what is unverified "
         "and the exact command + expected output to verify it. Do not declare success.\n"
         '"Unverified" is not a completion state. A diff or a file:line is not proof that it works.'
