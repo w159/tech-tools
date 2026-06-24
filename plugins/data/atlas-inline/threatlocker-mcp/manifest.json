@@ -1,0 +1,75 @@
+{
+  "manifest_version": "0.3",
+  "name": "threatlocker-mcp",
+  "version": "1.3.0",
+  "display_name": "ThreatLocker MCP Server",
+  "description": "Query and manage ThreatLocker endpoint application-control data — computers, groups, approval requests, and audit logs — for MSP security AI agents.",
+  "long_description": "Use this server when you need to automate ThreatLocker Portal operations. List and filter computers and computer groups by organization; retrieve software approval requests and approve them (creating an allow policy for the requesting application); search the audit log for blocked application events; and manage organizations (MSP child tenants). Note: the ThreatLocker Portal API does not expose a deny endpoint — deny operations must be performed in the portal UI. Supports scoping to a specific managed organization via the optional THREATLOCKER_ORGANIZATION_ID config, or acting as the primary org by default.",
+  "author": {
+    "name": "w159",
+    "url": "https://github.com/w159"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/w159/tech-tools"
+  },
+  "homepage": "https://github.com/w159/tech-tools/tree/main/mcp_servers/threatlocker-mcp",
+  "license": "Apache-2.0",
+  "keywords": [
+    "threatlocker",
+    "security",
+    "endpoint",
+    "application-control",
+    "msp",
+    "computers"
+  ],
+  "server": {
+    "type": "node",
+    "entry_point": "dist/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/dist/index.js"
+      ],
+      "env": {
+        "THREATLOCKER_API_KEY": "${user_config.threatlocker_api_key}",
+        "THREATLOCKER_ORGANIZATION_ID": "${user_config.threatlocker_organization_id}",
+        "THREATLOCKER_BASE_URL": "${user_config.threatlocker_base_url}",
+        "MCP_TRANSPORT": "stdio"
+      }
+    }
+  },
+  "tools_generated": true,
+  "user_config": {
+    "threatlocker_api_key": {
+      "type": "string",
+      "title": "ThreatLocker API Key",
+      "description": "Your ThreatLocker Portal API key (Portal -> Administrators -> API Users). Sent as the Authorization header value with no Bearer prefix.",
+      "required": true,
+      "sensitive": true
+    },
+    "threatlocker_organization_id": {
+      "type": "string",
+      "title": "Managed Organization ID (optional)",
+      "description": "Optional. The GUID of a managed/child organization to scope every request to. Leave blank to act as the API user's primary org. Sent as the managedOrganizationId header.",
+      "required": false
+    },
+    "threatlocker_base_url": {
+      "type": "string",
+      "title": "Portal API base URL",
+      "description": "Optional. Leave blank to use the vendor default (https://portalapi.g.threatlocker.com/portalapi). Only set for non-default shards (e.g. https://portalapi.eu.threatlocker.com/portalapi). Locate your region at https://threatlocker.kb.help/locating-your-organizations-instance/",
+      "required": false
+    }
+  },
+  "compatibility": {
+    "platforms": [
+      "darwin",
+      "win32",
+      "linux"
+    ],
+    "runtimes": {
+      "node": ">=18.0.0"
+    },
+    "claude_desktop": ">=0.10.0"
+  }
+}

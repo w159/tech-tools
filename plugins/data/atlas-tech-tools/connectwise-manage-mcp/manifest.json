@@ -1,0 +1,94 @@
+{
+  "manifest_version": "0.3",
+  "name": "connectwise-manage-mcp",
+  "display_name": "ConnectWise Manage MCP Server",
+  "version": "1.5.1",
+  "description": "Query and manage ConnectWise Manage PSA data - tickets, companies, contacts, projects, and billing - for MSP AI agents.",
+  "long_description": "Use this server when you need to automate or query ConnectWise Manage PSA. Covers the full service board workflow: search and create tickets using CW query syntax, update ticket fields via JSON Patch, add notes, log time entries, and close tickets. Also exposes companies, contacts, configurations, agreements, project tickets, activity records, catalog items, and member lookups. Authentication requires Company ID, public key, private key, and client ID.",
+  "author": {
+    "name": "w159",
+    "url": "https://github.com/w159"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/w159/tech-tools"
+  },
+  "homepage": "https://github.com/w159/tech-tools/tree/main/mcp_servers/connectwise-manage-mcp",
+  "license": "Apache-2.0",
+  "keywords": [
+    "connectwise",
+    "manage",
+    "psa",
+    "msp",
+    "tickets",
+    "it-management"
+  ],
+  "server": {
+    "type": "node",
+    "entry_point": "dist/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/dist/index.js"
+      ],
+      "env": {
+        "CW_MANAGE_COMPANY_ID": "${user_config.cw_manage_company_id}",
+        "CW_MANAGE_PUBLIC_KEY": "${user_config.cw_manage_public_key}",
+        "CW_MANAGE_PRIVATE_KEY": "${user_config.cw_manage_private_key}",
+        "CW_MANAGE_CLIENT_ID": "${user_config.cw_manage_client_id}",
+        "CW_MANAGE_URL": "${user_config.cw_manage_base_url}",
+        "MCP_TRANSPORT": "stdio"
+      }
+    }
+  },
+  "tools_generated": true,
+  "user_config": {
+    "cw_manage_company_id": {
+      "type": "string",
+      "title": "Company ID",
+      "description": "Your ConnectWise Manage company ID",
+      "sensitive": false,
+      "required": true
+    },
+    "cw_manage_public_key": {
+      "type": "string",
+      "title": "Public Key",
+      "description": "Your ConnectWise Manage API public key",
+      "sensitive": true,
+      "required": true
+    },
+    "cw_manage_private_key": {
+      "type": "string",
+      "title": "Private Key",
+      "description": "Your ConnectWise Manage API private key",
+      "sensitive": true,
+      "required": true
+    },
+    "cw_manage_client_id": {
+      "type": "string",
+      "title": "Client ID",
+      "description": "Your ConnectWise Manage client ID",
+      "sensitive": true,
+      "required": true
+    },
+    "cw_manage_base_url": {
+      "type": "string",
+      "title": "Base URL",
+      "description": "ConnectWise Manage API base URL. Prefilled with the NA cloud default. Other regions: https://api-eu.myconnectwise.net, https://api-au.myconnectwise.net, https://api-staging.connectwisedev.com. For on-prem, use your portal URL (e.g. https://cwm.yourcompany.com). Edit freely.",
+      "sensitive": false,
+      "required": false,
+      "default": "https://api-na.myconnectwise.net"
+    }
+  },
+  "compatibility": {
+    "platforms": [
+      "darwin",
+      "win32",
+      "linux"
+    ],
+    "runtimes": {
+      "node": ">=18.0.0"
+    },
+    "claude_desktop": ">=0.10.0"
+  }
+}

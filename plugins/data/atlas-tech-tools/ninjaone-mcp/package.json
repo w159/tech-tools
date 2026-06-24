@@ -1,0 +1,14 @@
+{
+  "name": "ninjaone-mcp",
+  "version": "1.6.1",
+  "description": "NinjaOne MCP server with decision tree architecture for Claude",
+  "type": "module",
+  "main": "dist/mcp_servers/ninjaone-mcp/src/index.js",
+  "bin": {
+    "ninjaone-mcp": "./dist/mcp_servers/ninjaone-mcp/src/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.25.3",
+    "node-ninjaone": "file:../../mcp_node/node-ninjaone"
+  }
+}
