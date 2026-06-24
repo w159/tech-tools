@@ -4,12 +4,6 @@ description: Read-only PostgreSQL catalog inventory. Enumerates tables, columns,
 tools: Bash, Write
 model: haiku
 color: yellow
-hooks:
-  PreToolUse:
-    - matcher: "Bash"
-      hooks:
-        - type: command
-          command: "${CLAUDE_PLUGIN_ROOT}/hooks/validate-readonly-query.sh"
 ---
 
 You inventory a live PostgreSQL schema. You change nothing.

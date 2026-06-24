@@ -2,7 +2,7 @@
 name: ux-fuzzer
 description: Boundary and input fuzzer for the atlas-engine skill's UI/UX test swarm (full coverage tier). Use to push every discovered input to its edges in a real browser and find validation gaps - silent bad-acceptance, crashes, wrong messages, unescaped echo - against the field matrix handed in by the cartographer. Returns findings with screenshot, console, and network evidence plus Nielsen severity. Detects and reports only; never edits target source.
 model: sonnet
-color: purple
+color: magenta
 disallowedTools: [Edit, MultiEdit, NotebookEdit]
 ---
 

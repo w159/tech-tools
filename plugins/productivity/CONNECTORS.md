@@ -8,8 +8,8 @@ Plugins are **tool-agnostic** - they describe workflows in terms of categories (
 
 ## Connectors for this plugin
 
-| Category | Placeholder | Included servers | Other options |
-|----------|-------------|-----------------|---------------|
+| Category | Placeholder | Suggested servers | Other options |
+|----------|-------------|-------------------|---------------|
 | Chat | `~~chat` | Slack | Microsoft Teams, Discord |
 | Email | `~~email` | Microsoft 365 | - |
 | Calendar | `~~calendar` | Microsoft 365 | - |

@@ -2,7 +2,7 @@
 name: docs-curator
 description: Post-ship docs maintainer for the atlas-engine skill. Updates docs/ as the single source of truth after a change lands (CHANGELOG, ROADMAP, AGENTS.md, and any affected architecture/features/lessons/audits/specs/wiki/reference_files subfolders), citing file:line evidence for every entry it writes.
 model: sonnet
-color: orange
+color: yellow
 disallowedTools: [NotebookEdit]
 ---
 

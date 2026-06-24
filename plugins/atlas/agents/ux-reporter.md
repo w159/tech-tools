@@ -2,7 +2,7 @@
 name: ux-reporter
 description: Synthesis and gate reporter for the atlas-engine skill. Use to close a UI/UX test-swarm run - consume the artifacts the persona/browser/verify agents wrote into the run dir, enforce the three hard gates, compute the completion rate, reconcile every count against files on disk, and emit the deliverable set with a RELEASE-READY / NEEDS-WORK / INCOMPLETE verdict. Writes NEW report files only; never edits the target app.
 model: opus
-color: purple
+color: magenta
 disallowedTools: [Edit, MultiEdit, NotebookEdit]
 ---
 

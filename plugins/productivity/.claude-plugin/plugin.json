@@ -1,6 +1,6 @@
 {
   "name": "productivity",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Workplace productivity utilities: two-tier memory management and task tracking, plus enterprise search and knowledge synthesis, PDF viewing/form-filling/signing, brand-voice enforcement, and nudge reminders.",
   "mcpServers": "./.mcp.json",
   "keywords": [

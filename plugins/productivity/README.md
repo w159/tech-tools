@@ -83,14 +83,14 @@ No clarifying questions. No round trips.
 
 > If you see unfamiliar placeholders or need to check which tools are connected, see [CONNECTORS.md](CONNECTORS.md).
 
-Connect your communication and project management tools for the best experience. Without them, manage tasks and memory manually.
+Connect your communication and project management tools for the best experience. Without them, manage tasks and memory manually. This plugin ships only the `pdf` MCP server; the connectors below are suggested compatible MCP servers you can add yourself.
 
-**Included MCP connections:**
+**Suggested / compatible MCP connections:**
 - Chat (Slack) for team context and message scanning
 - Email and calendar (Microsoft 365) for action item discovery
 - Knowledge base (Notion) for reference documents
 - Project tracker (Asana, Linear, Atlassian, monday.com, ClickUp) for task syncing
 - Office suite (Microsoft 365) for documents
 
-**Additional options:**
+**Other options:**
 - See [CONNECTORS.md](CONNECTORS.md) for alternative tools in each category

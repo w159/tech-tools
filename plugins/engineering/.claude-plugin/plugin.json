@@ -1,6 +1,6 @@
 {
   "name": "engineering",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Software engineering skills: code review, system design, incident response, testing strategy, and tech-debt management, plus Cowork plugin authoring and customization tooling.",
   "keywords": [
     "engineering",

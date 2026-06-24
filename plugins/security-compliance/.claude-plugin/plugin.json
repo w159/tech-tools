@@ -1,6 +1,6 @@
 {
   "name": "security-compliance",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Security and compliance operations. Bundles Vanta (SOC 2/ISO/HIPAA GRC), KnowBe4 (security awareness), ThreatLocker (zero-trust endpoint), and Blumira (SIEM and detection), alongside core audit-readiness, evidence-gap, risk-heatmap, and approval-triage skills.",
   "mcpServers": "./.mcp.json",
   "author": {

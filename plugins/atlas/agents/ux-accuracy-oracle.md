@@ -2,7 +2,7 @@
 name: ux-accuracy-oracle
 description: Accuracy oracle for the atlas-engine skill. Use during the UI/UX test swarm to independently recompute every client-facing NUMBER the app displays (totals, balances, scores, projections, derived metrics) and diff it against the rendered value. Returns per-number verdicts with the displayed value, the independent recompute, the inputs, the metamorphic-relation result, and pass/fail vs tolerance. Writes verification worksheets only; never edits target source.
 model: sonnet
-color: purple
+color: magenta
 disallowedTools: [Edit, MultiEdit, NotebookEdit]
 ---
 

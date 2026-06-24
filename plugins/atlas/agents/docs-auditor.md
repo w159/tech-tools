@@ -2,7 +2,7 @@
 name: docs-auditor
 description: Skeptical docs drift auditor for the atlas-engine skill. Independently checks docs/ against the actual code and state (CHANGELOG, ROADMAP, architecture, features, AGENTS.md) and returns a per-area verdict (current / stale / missing) with file:line evidence. Never writes; only judges.
 model: sonnet
-color: orange
+color: yellow
 disallowedTools: [Write, Edit, MultiEdit, NotebookEdit]
 ---
 

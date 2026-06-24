@@ -1,6 +1,6 @@
 {
   "name": "it-operations",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "MSP IT operations across RMM, PSA, networking, and backup. Bundles NinjaOne (RMM), ConnectWise PSA (tickets, time, agreements), Auvik (network monitoring), and Kaseya Spanning (M365/Google backup), plus core operations skills: change management, process optimization, resource planning, risk assessment, compliance tracking, and vendor management.",
   "mcpServers": "./.mcp.json",
   "keywords": [
@@ -95,7 +95,8 @@
     "cw_manage_base_url": {
       "type": "string",
       "title": "ConnectWise base URL",
-      "description": "ConnectWise site, e.g. na.myconnectwise.net (required for ConnectWise)."
+      "description": "ConnectWise site, e.g. na.myconnectwise.net (required for ConnectWise).",
+      "required": true
     },
     "spanning_admin_email": {
       "type": "string",

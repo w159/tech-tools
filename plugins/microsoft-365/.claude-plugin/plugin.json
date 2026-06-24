@@ -1,6 +1,6 @@
 {
   "name": "microsoft-365",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Microsoft 365 administration and identity. Bundles native M365 management (users, mailboxes, Teams, OneDrive, licensing, security posture), Microsoft Graph and Entra reporting, and CIPP multi-tenant management (tenant health, standards drift, secure score, offboarding).",
   "mcpServers": "./.mcp.json",
   "author": {

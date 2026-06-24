@@ -4,12 +4,6 @@ description: Read-only audit of PostgreSQL table and column names against a proj
 tools: Read, Grep, Glob, Bash, Write
 model: sonnet
 color: yellow
-hooks:
-  PreToolUse:
-    - matcher: "Bash"
-      hooks:
-        - type: command
-          command: "${CLAUDE_PLUGIN_ROOT}/hooks/validate-readonly-query.sh"
 ---
 
 You check naming against the glossary. You read the glossary, the live object names, and the code; you change nothing.

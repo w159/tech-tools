@@ -1,6 +1,6 @@
 {
   "name": "hr-payroll",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "HR and payroll operations. Bundles Paylocity (roster snapshots, new-hire flow, pay-rate and deduction/tax audits) plus core HR skills: compensation benchmarking, recruiting pipeline, interview prep, org planning, people analytics, and employee handbook authoring.",
   "mcpServers": "./.mcp.json",
   "keywords": [

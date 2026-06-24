@@ -2,7 +2,7 @@
 name: ux-cartographer
 description: UX coverage cartographer and live-contract prober for the atlas-engine skill. Use as phase 0 of a UI/UX test swarm to map a target web app's routes and form fields and capture the real client save/read-back contract - returns coverage matrices plus a contract snapshot written to the run dir. Discovers what it knows from the live app; never edits source.
 model: sonnet
-color: purple
+color: magenta
 disallowedTools: [Edit, MultiEdit, NotebookEdit]
 ---
 

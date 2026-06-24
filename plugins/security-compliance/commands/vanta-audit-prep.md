@@ -1,4 +1,5 @@
 ---
+name: vanta-audit-prep
 description: "Audit-prep dossier for a specific Vanta framework. Usage: /vanta-audit-prep <framework-id-or-name>"
 ---
 

@@ -7,7 +7,7 @@ argument-hint: "<Figma URL, screenshot, or description>"
 
 > If you see unfamiliar placeholders or need to check which tools are connected, see [CONNECTORS.md](../CONNECTORS.md).
 
-Get structured design feedback across multiple dimensions. See the **design-critique** skill for the evaluation framework and feedback principles.
+Get structured design feedback across multiple dimensions: usability, visual hierarchy, consistency, and accessibility. The evaluation framework and feedback principles are defined inline in the Output section below.
 
 ## Usage
 

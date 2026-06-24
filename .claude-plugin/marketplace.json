@@ -2,7 +2,7 @@
     "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
     "name": "tech-tools",
     "description": "Henssler IT domain-cluster plugins: MSP operations, security and compliance, Microsoft 365, HR/payroll, finance, plus engineering, design, data, support, product, and productivity, with the atlas multi-agent coding meta-agent. Each vendor tool is bundled into the business domain it serves.",
-    "version": "1.5.9",
+    "version": "1.6.0",
     "owner": {
         "name": "w159",
         "url": "https://github.com/w159"

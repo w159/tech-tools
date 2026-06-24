@@ -2,7 +2,7 @@
 name: ux-persona
 description: End-user persona for the atlas-engine skill's UI/UX test swarm. Use to live one realistic user's full journey through a real browser on any web app (sign up, enter the data the flow expects, walk the routes, exercise every state), and return discovered bugs, user stories, persona feedback, and feature requests, each grounded in a screenshot. Writes evidence and report fragments; never edits app source.
 model: sonnet
-color: purple
+color: magenta
 disallowedTools: [Edit, MultiEdit, NotebookEdit]
 ---
 

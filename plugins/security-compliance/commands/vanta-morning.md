@@ -1,4 +1,5 @@
 ---
+name: vanta-morning
 description: Daily Vanta GRC standup - failing tests, expiring evidence, overdue vulns, vendors in pending review.
 ---
 

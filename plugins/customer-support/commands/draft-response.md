@@ -65,7 +65,7 @@ Gather relevant background from available sources:
 
 ### 3. Generate the Draft
 
-Produce a response tailored to the situation:
+Using the tone, structure, and channel-adaptation best practices from the **response-drafting** skill, produce a response tailored to the situation:
 
 ```
 ## Draft Response

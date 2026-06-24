@@ -4,7 +4,7 @@
 
 Plugin files use `~~category` as a placeholder for whatever tool the user connects in that category. For example, `~~source control` might mean GitHub, GitLab, or any other VCS with an MCP server.
 
-Plugins are **tool-agnostic**  -  they describe workflows in terms of categories (source control, CI/CD, monitoring, etc.) rather than specific products. The `.mcp.json` pre-configures specific MCP servers, but any MCP server in that category works.
+Plugins are **tool-agnostic**  -  they describe workflows in terms of categories (source control, CI/CD, monitoring, etc.) rather than specific products. This plugin does not bundle connectors, so users connect their own MCP servers in each matching category (for example Sentry, Datadog, or PagerDuty). Any MCP server in the category works.
 
 ## Connectors for this plugin
 

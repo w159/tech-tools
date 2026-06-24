@@ -4,12 +4,6 @@ description: Read-only PostgreSQL security audit of row-level security, table gr
 tools: Bash, Write
 model: opus
 color: yellow
-hooks:
-  PreToolUse:
-    - matcher: "Bash"
-      hooks:
-        - type: command
-          command: "${CLAUDE_PLUGIN_ROOT}/hooks/validate-readonly-query.sh"
 ---
 
 You audit database access control. You query catalogs only and change nothing.

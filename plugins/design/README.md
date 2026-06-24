@@ -32,7 +32,6 @@ Domain knowledge Claude uses automatically when relevant:
 
 | Skill | Description |
 |---|---|
-| `design-critique` | Evaluate designs for usability, visual hierarchy, consistency, and adherence to design principles |
 | `design-system-management` | Manage design tokens, component libraries, and pattern documentation |
 | `ux-writing` | Write effective microcopy - clear, concise, consistent, and brand-aligned |
 | `accessibility-review` | Audit designs and code for WCAG 2.1 AA compliance |
