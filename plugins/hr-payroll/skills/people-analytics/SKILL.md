@@ -35,7 +35,7 @@ Analyze workforce data to surface trends, risks, and opportunities.
 ## Approach
 
 1. Understand what question the user is trying to answer.
-2. Identify the right data (upload, paste, or pull from Paylocity via `/roster-snapshot`).
+2. Identify the right data (upload, paste, or pull from Paylocity via `/paylocity-roster-snapshot`).
 3. Analyze with appropriate statistical methods in `ctx_execute`.
 4. Present findings with context and caveats.
 5. Recommend specific actions based on data.

@@ -24,7 +24,7 @@ Benchmark compensation against market data for hiring, retention, and equity pla
 
 ## Data Sources
 
-If Paylocity is available, pull current pay data via `/pay-rate-audit` for the internal anchor. For external benchmarks, use web research, public salary data, and user-provided context. Always note data freshness and source limitations.
+If Paylocity is available, pull current pay data via `/paylocity-pay-rate-audit` for the internal anchor. For external benchmarks, use web research, public salary data, and user-provided context. Always note data freshness and source limitations.
 
 ## Output
 
