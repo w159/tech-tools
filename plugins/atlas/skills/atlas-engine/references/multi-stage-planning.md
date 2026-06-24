@@ -51,7 +51,12 @@ Independent stages are the default fan-out unit: when two or more stages are gen
 
 The independence test still governs what counts as a separate stage: do not split a single coherent thought across subagents just to "use parallelism." Over-fan-out fragments a line of reasoning into pieces no one holds, and the orchestrator pays to reassemble them. One coherent investigation belongs in one agent.
 
-When concurrent stages may edit the same files, give each subagent the dispatch-time `isolation: "worktree"` option (see `subagent-kit.md`) so their edits land in isolated worktrees and cannot collide. Read-only concurrent stages need no isolation.
+"Genuinely independent" is a precondition you confirm, not a feeling. Before dispatching any parallel wave, run a CONFLICT-CHECK: for each subagent in the wave, list its expected write/touch set (the files or paths it will create or modify) and any ordering need (whether it consumes another agent's output). Then compare the sets across the wave. If two agents would write the same file or path, or one needs another's output, they are NOT independent for that wave - so you MUST either:
+
+- (a) give the colliding agents the dispatch-time `isolation: "worktree"` option (see `subagent-kit.md`) so their edits land in isolated worktrees and cannot collide, OR
+- (b) serialize just those agents (run them in order so the dependency or the shared write resolves), while still fanning out every non-colliding agent in the same wave concurrently.
+
+`isolation: "worktree"` is a dispatch-time Agent option, not agent-file frontmatter. When concurrent stages may edit the same files, give each colliding subagent that option so their edits land in isolated worktrees and cannot collide. Read-only concurrent stages have no write set, so they pass the CONFLICT-CHECK automatically and need no isolation.
 
 When you do delegate, every subagent gets a 4-part brief:
 

@@ -31,6 +31,55 @@ On session boot or resume, before planning or dispatching any new work:
 against `git log` plus the docs/ tree alone. The diff-and-correct steps are unchanged;
 only the recall source is narrower.
 
+## RESUMING ACROSS SESSIONS - a multi-wave run picks up where it stopped
+
+A large audit, refactor, or migration that spans waves will outlive a single session.
+For that in-flight work the orchestrator maintains a durable run-state under `docs/.run/`
+so the next session continues from the next pending stage instead of re-planning from
+scratch. This is a specialization of the START reconcile above, not a second flow.
+
+1. **The durable run-state the orchestrator keeps.** While a multi-wave task is in flight,
+   the orchestrator keeps these current (paths and roles per `docs-ssot.md`):
+   - `docs/.run/STATE.md` - the live map of the run: the current wave, the stages already
+     completed, the stages still pending, and, for each stage, its verdict (`verified` or
+     `rejected`) mirrored from `findings.json`. STATE.md is the at-a-glance answer to
+     "where did we stop and what is left".
+   - `docs/.run/findings.json` - the authoritative per-stage findings and verdicts (schema
+     in `scaffolding.md`). STATE.md mirrors its verdicts; on any disagreement
+     `findings.json` wins, because the verdict there was written by an independent verifier.
+   - `docs/.run/work-log.md` - an append-only log of what each wave dispatched, what it
+     proved, and what it decided. It is never rewritten, only appended, so the trail of a
+     long run stays intact across sessions.
+
+2. **The resume protocol on boot or resume.** When a session opens onto an in-flight run:
+   - **Read the run-state first.** Re-read `docs/.run/work-log.md`, then `STATE.md`, then
+     `findings.json` - the same order `docs-ssot.md` requires before dispatching anything.
+   - **Reconcile it against reality.** Confirm the run-state matches the actual repo and
+     docs/ state: a stage STATE.md calls done must be backed by a `verified` entry in
+     `findings.json` and by the real artifact on disk (`file:line`, a passing test, a
+     committed change). Where the run-state and reality disagree, reality wins - correct the
+     run-state and cite the evidence, exactly as the START flow corrects drifted docs.
+   - **Continue from the next pending stage.** Resume at the first stage STATE.md lists as
+     pending (respecting stage dependencies in `multi-stage-planning.md`). Do not re-plan
+     the whole task and do not re-run stages already `verified`; a `rejected` stage is
+     re-attempted, not skipped.
+
+3. **Archive on completion so history persists.** When the run finishes, copy the final
+   `STATE.md` and `findings.json` into a committed, per-run archive - `docs/runs/<id>/`
+   (use the run id or a `<YYYY-MM-DD>-<slug>`) - so the decisions and verdicts of the run
+   survive after `docs/.run/` is cleared for the next task. The durable narrative still
+   lands in CHANGELOG and the affected subfolders via the END curate flow below; the
+   archive preserves the raw run record those entries were drawn from.
+
+**Durable vs ephemeral - the intended reading.** `docs-ssot.md` classifies `docs/.run/` as
+the one ephemeral, gitignored subtree, and that holds: nothing in `docs/.run/` is committed.
+The run-state is durable in a different sense - it is intentionally kept on disk, intact,
+across sessions for the lifetime of one in-flight multi-session run, which is exactly what
+makes resume possible. Completion resolves the two: `docs/.run/` is cleared (ephemeral as
+promised), the committed `docs/runs/<id>/` archive carries the history forward, and the SSOT
+durable subfolders carry the outcome. There is no contradiction - the gitignored scratch
+lives long enough to finish the job, then its record is archived and the scratch is reset.
+
 ## DURING - work is tracked in ROADMAP
 
 While the work runs, each task lives as a ROADMAP.md item moving through its status

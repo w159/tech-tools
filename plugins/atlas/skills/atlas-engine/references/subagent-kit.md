@@ -78,6 +78,7 @@ Match field names across a wave so results stack. For a verification dispatch, a
 
 - **In flight:** ~4-6 max. As each returns, read its report, then dispatch dependents.
 - **Independent vs related:** only parallelize truly independent jobs. Related failures (one fix may resolve several) go to one agent first.
+- **CONFLICT-CHECK before every wave (required):** for each agent in the wave, list its expected write/touch set (files/paths it will create or modify) and any ordering need (whether it consumes another agent's output). If two agents would write the same file or one needs another's output, they are not independent for that wave - either give the colliding agents the dispatch-time `isolation: "worktree"` option (a dispatch-time Agent option, not agent-file frontmatter) so their edits land in isolated worktrees, OR serialize just those agents while still fanning out the rest. Read-only agents have no write set and pass automatically. See `multi-stage-planning.md` for the full precondition.
 - **Integrate:** after a wave, check for conflicting edits, run the affected gate, then mark findings. A verifier's `rejected` sends the item back to a *fresh* implementer with the failure attached: three failed attempts -> mark `needs-human`, defer, move on.
 
 ## Anti-patterns
