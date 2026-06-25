@@ -78,12 +78,11 @@ class TripwireTest(unittest.TestCase):
         import json, os
 
         hj = os.path.join(os.path.dirname(__file__), "hooks.json")
-        data = json.load(open(hj))
+        with open(hj) as f:
+            data = json.load(f)
         entries = json.dumps(data)
         self.assertIn("dispatch_tripwire.py", entries)
         # find the matcher string that co-occurs with dispatch_tripwire
-        import re
-
         blob = json.dumps(data)
         self.assertIn("Agent", blob)
         self.assertIn("Task", blob)
