@@ -4,6 +4,56 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
+## 2026-06-25 -- Atlas Phase 4: final 8-skill redesign, observability DB, de-hardcoded swarms
+
+Completed the atlas plugin skill-set redesign. Every skill is now canonically named under the
+`atlas-*` prefix; the five retired names (atlas-loop, atlas-connectors, atlas-self-improving,
+atlas-uxt-swarm, atlas-operating-contract) no longer appear in the plugin or its docs except in
+historical CHANGELOG entries below.
+
+### Skill renames and retirements
+
+- `atlas-loop` -> `atlas-orbit`: same loop library, canonical name dropped the ambiguous "loop" suffix.
+- `atlas-connectors` -> `atlas-harbor`: vendor MCP connector setup skill; name reflects the "safe harbor"
+  for external integrations.
+- `atlas-self-improving` retired; replaced by `atlas-sextant`: the new skill reads a SQLite observability
+  DB (`.atlas/runs.db`) populated by the nudge hook, computes wall-clock, inline-ops, dispatches, parallel
+  waves, context, recall, and verifier-coverage scores, and proposes metric-backed improvement targets
+  (baseline -> target). Measurable; not motivational.
+- `atlas-uxt-swarm` retired; its pipeline (cartographer -> persona -> fuzzer -> oracle -> reporter) is now
+  the implementation detail of `atlas-expedition`. atlas-expedition adds app-discovery: it auto-finds
+  routes and form fields in any live web app with no hardcoded paths, so it works on any project.
+- `atlas-operating-contract` retired; the operating contract itself (`operating-contract.md`) still ships
+  as a reference file under atlas-engine/references/. The skill wrapper was not necessary.
+
+### New skills
+
+- `atlas-cartographer`: produces an evidence-grounded architecture map of any codebase, identifies
+  structural duplicates (DRY-at-the-module level), and writes `docs/architecture/boundaries.md` as a
+  persistent artifact a future agent can load instead of re-discovering structure.
+- `atlas-expedition`: app-discovering UX swarm. Discovers routes/fields from a live app via a cartographer
+  phase, then runs the full persona + fuzz + accuracy-oracle + reporter pipeline. No hardcoded paths;
+  works on any web app.
+- `atlas-survey`: discovery-first comprehensive quality and security audit swarm. Covers code quality
+  (complexity, dead code, test coverage, error handling), security (OWASP Top 10, SANS 25, secrets,
+  auth, injection, SSRF), and dependency risk. Returns severity-graded findings and an actionable
+  remediation plan.
+- `atlas-sextant` (detailed above).
+
+### Manifest and docs reconciliation
+
+- `plugins/atlas/.claude-plugin/plugin.json` bumped 1.2.1 -> 1.3.0; description updated to enumerate
+  all 8 skills with their one-line purpose; 5 new keywords added (observability-db, architecture-audit,
+  owasp, security-audit, ux-swarm).
+- `plugins/atlas/README.md` updated: "What ships" table expanded to all 8 skill rows; layout tree
+  updated to show all 8 skill directories.
+- `plugins/atlas/skills/atlas-engine/references/capability-catalog.md` updated: 3 new signal rows added
+  for atlas-cartographer, atlas-survey, atlas-expedition.
+- `plugins/atlas/skills/atlas-engine/references/capability-routing.md` updated: atlas-expedition added
+  to the UX-sweep row; 6 new routing rows added for atlas-survey, atlas-cartographer, atlas-orbit,
+  atlas-harbor, atlas-sextant, and the app-routes-unknown expedition path.
+- `.claude-plugin/marketplace.json` atlas entry updated: description and keywords now match plugin.json.
+
 ## 2026-06-23 -- Connector .mcpb bloat fixed; marketplace install repaired; atlas connectors made standalone-resolvable
 
 Diagnosed why connector-heavy plugins did not appear (or appeared empty) when adding the marketplace in

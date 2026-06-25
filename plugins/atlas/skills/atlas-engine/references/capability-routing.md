@@ -20,10 +20,16 @@ Pass the chosen capabilities into each subagent's spec as directives, **and** te
 | Implement a feature / bounded change | `atlas:implementer`, `frontend-developer`, `backend-architect` | `superpowers:test-driven-development`, `frontend-design`/`ui-ux-pro-max` | `context7` (mandatory), `serena`, LSP | sonnet |
 | Fix a bug / regression / incident | `debugger` | `superpowers:systematic-debugging` | `serena`, `context-mode`, Sentry MCP if present | sonnet |
 | Run & validate behavior (FE/BE/DB) | `atlas:ui-runtime-tester`, `test-executor`, `test-engineer` | `verify`, `run`, `webapp-testing`, `python-testing-patterns` | Claude_Preview MCP, `context-mode`, curl, playwright | sonnet |
-| Full UI/UX test pass / persona testing / pre-release UX sweep | `atlas:ux-cartographer`, `atlas:ux-persona`, `atlas:ux-fuzzer`, `atlas:ux-accuracy-oracle`, `atlas:ux-reporter` | `references/ux-test-swarm.md`, `webapp-testing` | Chrome DevTools MCP / Claude_Preview MCP / `browser-harness` / playwright, `context-mode` | sonnet; opus for the reporter |
+| Full UI/UX test pass / persona testing / pre-release UX sweep (app routes known) | `atlas:ux-cartographer`, `atlas:ux-persona`, `atlas:ux-fuzzer`, `atlas:ux-accuracy-oracle`, `atlas:ux-reporter` | `atlas-expedition`, `references/ux-test-swarm.md`, `webapp-testing` | Chrome DevTools MCP / Claude_Preview MCP / `browser-harness` / playwright, `context-mode` | sonnet; opus for the reporter |
+| UX sweep where app routes / fields are unknown or not yet mapped | (orchestrator dispatches atlas-expedition) | `atlas-expedition` | Chrome DevTools MCP / playwright; expedition auto-discovers routes | sonnet |
 | Probe the database (read-only) | `atlas:db-prober` | - | read-only `psql`, `whodb`/data-agent-kit plugin if present, `gcloud` | sonnet |
 | Verify a finding / fix (adversarial) | `atlas:verifier`, `secondary-expert-validator` | `superpowers:requesting-code-review` | re-run tests/queries; `codex` for a true second opinion | sonnet -> opus if critical |
 | Security review | `security-engineer` | `security-review`, `security-best-practices`; `backend-security-skills`/`vibeguard` plugins if present | `context7`, `serena` | opus |
+| Comprehensive quality + security + OWASP audit (full codebase sweep) | (orchestrator dispatches atlas-survey) | `atlas-survey` | `serena`, `context7`, `context-mode`; no browser needed | sonnet (multi-swarm) |
+| Architecture map / structural dedup / boundaries doc missing | (orchestrator dispatches atlas-cartographer) | `atlas-cartographer` | `serena`, LSP, `context-mode` | sonnet |
+| Recurring or iterative task / needs a reusable loop | (orchestrator dispatches atlas-orbit) | `atlas-orbit` | - | sonnet |
+| Vendor MCP connector setup / credentials to wire | (orchestrator dispatches atlas-harbor) | `atlas-harbor` | - | sonnet |
+| Measure run health / self-improvement from observability data | (orchestrator dispatches atlas-sextant) | `atlas-sextant` | SQLite observability DB (`.atlas/runs.db`) | sonnet |
 | Review a diff / PR | `code-reviewer` | `code-review` (`--fix` to apply), `superpowers:requesting-code-review` | `serena`, LSP | sonnet |
 | Library / framework / SDK questions | (inline or any) | `openai-docs`, `claude-api`, `microsoft-foundry` | `context7` (general), `microsoft-docs` (Azure/.NET/M365/Entra) | - |
 | UI / design build or critique | `frontend-developer` | `ui-ux-pro-max`, `frontend-design`, `design:*` | `magic` MCP, Claude_Preview to verify | sonnet |
