@@ -61,7 +61,8 @@ This repo is a monorepo (see `CLAUDE.md`): the propagation rule means a vendor c
 ## The decision gate (mechanical - run this FIRST, every task)
 
 Answer three yes/no questions before any other action:
-1. More than one stage? 2. More than one surface (frontend/backend/db/config)?
+1. More than one stage?
+2. More than one surface (frontend/backend/db/config)?
 3. Whole-repo or audit-scale?
 
 If ANY is yes: your first move is to author a Workflow (see

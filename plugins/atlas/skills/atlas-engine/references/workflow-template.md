@@ -130,6 +130,24 @@ if (rejected.length > 0) {
 
 ---
 
+## Shape: pipeline (the default for multi-stage per-item work)
+
+Each item flows through every stage independently, with NO barrier between stages -
+item A can be in verify while item B is still in review. Reach for this (not parallel)
+whenever you have a list of items each needing the same sequence of steps.
+
+    const results = await pipeline(
+      files,
+      (f) => agent(`review ${f} for bugs`, { label: `review:${f}`, schema: FINDINGS }),
+      (review) => agent(`fix the confirmed findings: ${JSON.stringify(review)}`,
+                        { label: `fix:${review.file}`, model: "sonnet" }),
+    )
+
+Use parallel() instead only when a stage genuinely needs ALL prior results at once
+(dedup, early-exit on zero, cross-item comparison).
+
+---
+
 ## Shape: loop-until-dry
 
 Use this when you need to drain a queue and stop when it is empty. Replace the `while`
