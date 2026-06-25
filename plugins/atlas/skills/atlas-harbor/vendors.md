@@ -60,4 +60,4 @@ export ATLAS_MCP_SOURCE_DIR=/path/to/tech-tools/built-mcpb
 
 If no bundle is found, the connector stays declared but not set up, and its
 launcher exits with: "Connector <svc-dir> is declared but not set up. Run
-/atlas-connectors and complete setup for <svc-dir>." It never crashes.
+/atlas-harbor and complete setup for <svc-dir>." It never crashes.

@@ -83,9 +83,9 @@ RULES = [
         "match": lambda c: True,
     },
     {
-        "id": "connectors (atlas-connectors)",
+        "id": "connectors (atlas-harbor)",
         "type": "note",
-        "reason": "Built-in vendor MCP connectors, disabled by default; enable with atlas-connectors.",
+        "reason": "Built-in vendor MCP connectors, disabled by default; enable with atlas-harbor.",
         "cmd": "(already shipped with atlas)",
         "match": lambda c: c["has_mcp_servers"],
     },

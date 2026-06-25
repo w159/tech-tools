@@ -1,5 +1,5 @@
 ---
-name: atlas-connectors
+name: atlas-harbor
 description: 'Guided setup for the ten vendor MCP connectors bundled with atlas (Auvik, Blumira, CIPP, ConnectWise Manage, Spanning, KnowBe4, NinjaOne, Paylocity, ThreatLocker, Vanta). Use to see which connectors are enabled vs disabled, enable one by collecting only the credentials it needs, and make its bundle available for extract-on-demand. All connectors ship inert; this is how an operator turns one on.'
 ---
 

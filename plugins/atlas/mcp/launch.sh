@@ -9,7 +9,7 @@
 # on the connector's entry point.
 #
 # If no bundle can be found, the connector is "declared but not set up": this
-# script exits with a clear, single-line message pointing at /atlas-connectors,
+# script exits with a clear, single-line message pointing at /atlas-harbor,
 # and never crashes with a stack trace.
 #
 # Usage: launch.sh <name> <entry-relative-path>
@@ -26,13 +26,13 @@ ENTRY="${2:?entry path required}"
 # Ensure the bundle is extracted (stderr only). extract.sh exits 2 when no
 # bundle is found anywhere in its search order.
 if ! bash "$MCP_DIR/extract.sh" "$NAME" >&2; then
-  echo "Connector $NAME is declared but not set up. Run /atlas-connectors and complete setup for $NAME." >&2
+  echo "Connector $NAME is declared but not set up. Run /atlas-harbor and complete setup for $NAME." >&2
   exit 1
 fi
 
 TARGET="$DATA_ROOT/$NAME/$ENTRY"
 if [ ! -f "$TARGET" ]; then
-  echo "Connector $NAME is declared but not set up (entry $ENTRY missing after extract). Run /atlas-connectors and complete setup for $NAME." >&2
+  echo "Connector $NAME is declared but not set up (entry $ENTRY missing after extract). Run /atlas-harbor and complete setup for $NAME." >&2
   exit 1
 fi
 
