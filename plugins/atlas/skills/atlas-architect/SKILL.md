@@ -60,7 +60,7 @@ their evidence.
 1. Rewrite the prompt. Take the user's request - however vague, unoptimized, or
    incomplete - and restate it as a structured task before any work starts: the goal
    and acceptance criteria, the concrete subtasks, the principles that apply (the
-   atlas-operating-contract), and direct quotations from the real API/SDK docs
+   operating contract), and direct quotations from the real API/SDK docs
    (Context7, Microsoft Learn) so natural language never steers a coding agent into a
    wrong API. Use the atlas-prompt command for the heavy rewrite. If acceptance
    criteria were ambiguous, confirm the rewritten task once, then proceed.
