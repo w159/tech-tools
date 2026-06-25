@@ -1,6 +1,6 @@
 ---
 name: atlas-architect
-description: "Use to boot and configure a project so the full atlas runtime is active - verify and install claude-mem and context-mode, scan the stack and recommend skills/plugins/MCP to install (recommend then confirm), confirm the automation hooks are wired, write the project config, and seed the docs/ single source of truth. This is the methodology the /atlas command and the SessionStart boot both lean on. Triggers on project bootstrap, onboarding a repo to atlas, or a request to configure tooling for a codebase. It also activates Architect Mode for the session: rewrite vague or incomplete prompts into structured, reference-backed tasks and route all execution to atlas-engine subagents while keeping the main context minimal. Configuration and the orchestration posture live here; use atlas-engine directly to run an already-scoped build/fix/audit/refactor."
+description: "Use to boot and configure a project so the full atlas runtime is active - verify and install claude-mem and context-mode, scan the stack and recommend skills/plugins/MCP to install (recommend then confirm), confirm the automation hooks are wired, write the project config, and seed the docs/ single source of truth. This is the methodology the /atlas command and the SessionStart boot both lean on. Triggers on project bootstrap, onboarding a repo to atlas, or a request to configure tooling for a codebase. Orchestration posture lives in atlas-engine; the architect boots and configures only. Use atlas-engine directly to run an already-scoped build/fix/audit/refactor."
 ---
 
 # atlas-architect
@@ -27,8 +27,11 @@ Two entry points share this methodology:
    signals against `../atlas-engine/references/capability-catalog.md`. Present a
    ranked list (skill / plugin / mcp) with a reason and the exact install command
    per item. Also surface the built-ins this project can use now: the loop-library
-   (via atlas-orbit) and the vendor connectors (via atlas-harbor, disabled until
-   setup). Install only confirmed items.
+   (via atlas-orbit), vendor connectors (via atlas-harbor, disabled until setup),
+   architecture mapping and structural dedup (atlas-cartographer), comprehensive
+   quality and security audit (atlas-survey), UX runtime swarm (atlas-expedition),
+   and measurable self-improvement with observability (atlas-sextant). Install only
+   confirmed items.
 3. Hooks. A plugin install auto-loads `hooks/hooks.json`. Verify the seven hooks are
    active (boot, prompt optimizer, bash guard, read-only SQL guard, format-after-edit,
    completion gate, nudge). Outside a plugin install, offer `scripts/install_hooks.py`.
@@ -51,32 +54,7 @@ Every install and every write outside `docs/` and `.claude/` is gated on the use
 explicit OK. The discovery script is read-only and side-effect free. Present the
 shopping list; let the user choose; install only what they pick.
 
-## Architect Mode
-
-Once atlas is booted, the architect turns the active session into a pure orchestrator:
-it does no production work in its own context; it directs subagents and synthesizes
-their evidence.
-
-1. Rewrite the prompt. Take the user's request - however vague, unoptimized, or
-   incomplete - and restate it as a structured task before any work starts: the goal
-   and acceptance criteria, the concrete subtasks, the principles that apply (the
-   operating contract), and direct quotations from the real API/SDK docs
-   (Context7, Microsoft Learn) so natural language never steers a coding agent into a
-   wrong API. Use the atlas-prompt command for the heavy rewrite. If acceptance
-   criteria were ambiguous, confirm the rewritten task once, then proceed.
-2. Delegate everything. Research, implementation, and testing each go to parallel
-   subagents (atlas-engine standing-consent orchestration). The orchestrator keeps
-   only conclusions, not file contents - context stays minimal.
-3. Adversarial evidence. Hand every claimed change to a second, independent subagent
-   that tries to refute it and must capture observed-behavior evidence (red -> green)
-   before the change counts as done. No self-verification.
-4. Synthesize and gate. Update docs/ via the docs-curator, reconcile ROADMAP/CHANGELOG
-   per `../atlas-engine/references/session-lifecycle.md`, and present any
-   write/migration with its blast radius before it runs.
-
-The mechanics live in atlas-engine; the architect is the front door that rewrites the
-ask and holds the orchestration posture. Say "mode off" to drop back to ordinary
-inline behavior.
+Orchestration posture lives in atlas-engine (see its `## Orchestration posture` section). The architect only boots and configures; it does not run work.
 
 ## No-args behavior (standard scan)
 
@@ -86,8 +64,10 @@ recommend-then-confirm. Check, in order:
 
 - the session-augmentation trio - claude-mem (memory), context-mode (context
   protection), ponytail (less-code mode);
-- the built-ins - loop-library (surfaced by atlas-orbit) and connectors (enabled via
-  atlas-harbor when MSP/vendor signals are present);
+- the built-ins - loop-library (surfaced by atlas-orbit), connectors (enabled via
+  atlas-harbor when MSP/vendor signals are present), atlas-cartographer (architecture
+  map + structural dedup), atlas-survey (quality and security audit), atlas-expedition
+  (UX runtime swarm), and atlas-sextant (measurable self-improvement + observability);
 - the seven automation hooks (boot, prompt optimizer, bash guard, read-only SQL guard,
   format-after-edit, completion gate, nudge);
 - the docs/ SSOT scaffold, and whether CHANGELOG.md and ROADMAP.md are current.
