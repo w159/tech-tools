@@ -22,6 +22,9 @@ Columns: signal, asset, type (skill / plugin / mcp), why, install command.
 | Any multi-session repo | ponytail | plugin | Lazy-senior-dev mode: writes far less code (~54% less, ~20% cheaper) while keeping safety. Session-augmentation tier with claude-mem/context-mode. | `copilot plugin marketplace add DietrichGebert/ponytail` then `copilot plugin install ponytail@ponytail` |
 | Recurring or iterative task | loop-library (via atlas-orbit) | note | Built-in curated loops; use the atlas-orbit skill to pick and instantiate one. | (already shipped with atlas) |
 | MSP/vendor signals (mcp_servers/, *.mcpb, vendor API usage) | connectors (via atlas-harbor) | note | Built-in vendor MCP connectors, disabled by default; use atlas-harbor to enable. | (already shipped with atlas) |
+| Architecture review / codebase structure unclear / structural duplication suspected | atlas-cartographer | note | Produces an evidence-grounded architecture map and writes docs/architecture/boundaries.md; identifies structural duplicates so the orchestrator routes edits to the right layer. | (already shipped with atlas) |
+| Code quality audit / security scan / OWASP check / pre-release hardening review | atlas-survey | note | Discovery-first multi-swarm audit: quality, security (OWASP Top 10 + SANS 25), coverage, and severity-graded remediation plan. No hardcoded file paths; works on any codebase. | (already shipped with atlas) |
+| Frontend app needs UX validation / pre-release UX sweep / app routes unknown | atlas-expedition | note | App-discovering UX swarm: auto-finds routes and form fields in the live app, then runs cartographer -> persona -> fuzzer -> oracle -> reporter without needing hardcoded paths. | (already shipped with atlas) |
 
 Maintenance: when the discovery script learns a new signal, add a row here with the
 same signal wording the script emits, so the two stay in lockstep. Placeholder

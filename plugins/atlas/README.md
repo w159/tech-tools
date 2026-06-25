@@ -15,7 +15,12 @@ a codebase the more it is used.
 | SessionStart boot | A fast, crash-proof hook that activates the runtime every session: injects the operating contract and atlas-engine methodology, reports dependency state, and surfaces relevant past lessons. Never blocks a session. |
 | atlas-engine skill | The orchestrator playbook: decompose a task, route every code edit to a subagent, demand execution evidence, verify with a second agent, keep docs/ as the single source of truth, and protect the context window. Triggers on whole-codebase build/fix/audit/refactor/investigate work. |
 | atlas-architect skill | The methodology behind `/atlas` and the boot hook: dependencies, capability discovery, hooks, config, docs seed. |
+| atlas-cartographer skill | Produce an evidence-grounded architecture map of any codebase, identify structural duplicates, and write a `docs/architecture/boundaries.md` that a fresh agent can load instead of re-discovering the layout. |
 | atlas-sextant skill | Measure run health from the SQLite observability DB and propose metric-backed improvements (baseline -> target). Emits wall-clock, inline-ops, dispatches, parallel waves, context, recall, and verifier-coverage scores. The Stop/SubagentStop nudge hook points here. |
+| atlas-orbit skill | Pick and instantiate the best-fit reusable loop for any recurring or iterative task (loop-until-dry, fan-out-adversarial-verify, red-green-tdd, doc-reconcile, incident-triage, and more). |
+| atlas-harbor skill | Guided vendor MCP connector setup: enable, configure, and verify any of the 10 bundled MCP connectors (NinjaOne, Auvik, CIPP, ConnectWise, Spanning, KnowBe4, Vanta, ThreatLocker, Paylocity, Blumira). |
+| atlas-expedition skill | App-discovering UX swarm: auto-finds routes and form fields in any running web app, then runs the full cartographer -> persona -> fuzzer -> oracle -> reporter pipeline with no hardcoded paths. |
+| atlas-survey skill | Comprehensive quality, security, and OWASP audit swarm: discovery-first scan of the full codebase, severity-graded findings, coverage report, and an actionable remediation plan. |
 | Command library | Fifteen verification-gated `/atlas-*` launchers, each injecting the operating contract and driving a specific task through the squad. |
 | Subagent squad | Eighteen `atlas:<role>` subagents, including a five-agent browser-driven UI/UX test swarm. |
 | Capability discovery | A read-only scanner plus a maintained catalog that recommend the skills/plugins/MCP a project needs, with exact install commands. |
@@ -76,7 +81,12 @@ atlas/
 `-- skills/
     |-- atlas-engine/              # SKILL.md + references/ (incl. operating-contract.md, capability-catalog.md)
     |-- atlas-architect/           # SKILL.md - the boot/discovery methodology
-    `-- atlas-sextant/                   # SKILL.md - SQLite-backed measurable run health and improvements
+    |-- atlas-cartographer/        # SKILL.md - architecture map + structural dedup -> docs/architecture/boundaries.md
+    |-- atlas-sextant/             # SKILL.md - SQLite observability DB: measurable self-improvement
+    |-- atlas-orbit/               # SKILL.md - recurring/iterative task loop library (12+ loops)
+    |-- atlas-harbor/              # SKILL.md - guided vendor MCP connector setup (10 connectors)
+    |-- atlas-expedition/          # SKILL.md - app-discovering UX swarm (no hardcoded paths)
+    `-- atlas-survey/              # SKILL.md - comprehensive quality/security/OWASP audit swarm
 ```
 
 ## Getting started

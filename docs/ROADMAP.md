@@ -13,6 +13,20 @@ Surface autocompact and thinking-token budgets plus model routing as recommend-t
 
 ## Done
 
+### Atlas redesign -- final 8-skill set, observability DB, de-hardcoded swarms (resolved 2026-06-25)
+
+atlas-loop renamed to atlas-orbit, atlas-connectors renamed to atlas-harbor, atlas-self-improving
+replaced by atlas-sextant (SQLite observability DB + metric-backed improvement proposals).
+atlas-uxt-swarm and atlas-operating-contract removed; their work absorbed by atlas-expedition and
+atlas-engine respectively. Two new swarms added: atlas-expedition (app-discovering UX swarm with
+no hardcoded routes) and atlas-survey (discovery-first quality/security/OWASP audit swarm).
+Manifests, README, capability-catalog, capability-routing, and marketplace.json all reconciled to
+the final 8-skill set. plugin.json bumped 1.2.1 -> 1.3.0.
+(`plugins/atlas/.claude-plugin/plugin.json`, `plugins/atlas/README.md`,
+`plugins/atlas/skills/atlas-engine/references/capability-catalog.md`,
+`plugins/atlas/skills/atlas-engine/references/capability-routing.md`,
+`.claude-plugin/marketplace.json`)
+
 ### Connector .mcpb bloat fixed + marketplace install repaired (resolved 2026-06-23)
 
 The canonical packer dragged each file:-linked vendor lib's iCloud
