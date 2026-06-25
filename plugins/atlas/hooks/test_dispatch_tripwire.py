@@ -67,6 +67,13 @@ class TripwireTest(unittest.TestCase):
         )
         self.assertEqual(p.returncode, 0)
 
+    def test_threshold_override(self):
+        env = dict(self.env, ATLAS_TRIPWIRE_THRESHOLD="2")
+        r = run_hook(self._payload("Read"), env)
+        self.assertEqual(r.stdout.strip(), "")  # 1 op: silent
+        r = run_hook(self._payload("Read"), env)
+        self.assertIn("STOP", r.stdout)  # 2nd op: trips at override
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -12,7 +12,7 @@ import sys
 INLINE_TOOLS = {"Read", "Grep", "Glob", "Edit", "Write", "Bash"}
 DISPATCH_TOOLS = {"Agent", "Task"}
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit"}
-ORCH_PREFIXES = ("docs/.run/", "docs/plans/", "docs/evidence/", "docs/")
+ORCH_MARKERS = ("docs/",)
 
 
 def _threshold():
@@ -26,7 +26,7 @@ def _is_orchestration_path(path):
     if not path:
         return True  # unknown path -> do not punish
     norm = path.replace("\\", "/")
-    return any(seg in norm for seg in ORCH_PREFIXES)
+    return norm.startswith("docs/") or "/docs/" in norm
 
 
 def main():
