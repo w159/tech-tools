@@ -58,6 +58,29 @@ This repo is a monorepo (see `CLAUDE.md`): the propagation rule means a vendor c
 6. **Gate writes - and gate completion.** Subagents may freely **run and read** (start dev servers, hit routes, drive the browser, run the suite, issue read-only DB queries). Stop for explicit approval before anything that **writes**: edits committed as a deliverable, migrations, deletes, `git push`, dependency installs, `.env*` changes, or anything crossing >1 service boundary. Completion is gated too - see "Definition of done."
 7. **Scaffold per-root, never the workspace root.** Detect the *project root* and the *codebase roots* inside it; artifacts live under those (`docs/` per root), never in a parent holding multiple unrelated projects. See `references/scaffolding.md`.
 
+## The decision gate (mechanical - run this FIRST, every task)
+
+Answer three yes/no questions before any other action:
+1. More than one stage? 2. More than one surface (frontend/backend/db/config)?
+3. Whole-repo or audit-scale?
+
+If ANY is yes: your first move is to author a Workflow (see
+`references/workflow-template.md`) OR dispatch a parallel wave in ONE message.
+You may NOT proceed inline. This is a checklist, not a judgment call - the
+`dispatch_tripwire.py` hook will STOP you at 4 inline ops regardless.
+
+If ALL are no (a single trivial single-surface change): inline is allowed, but the
+first investigative read still goes to `atlas:explorer` if it would exceed a glance.
+
+## Orchestration posture (single owner)
+
+The engine is the sole owner of the delegate-everything / adversarial-evidence /
+synthesize-and-gate posture. Do not reproduce this contract in other skills (it was
+previously duplicated in atlas-architect; that duplication is gone). The engine
+delegates all execution, demands independent verification on every shipping change,
+and synthesizes only after evidence is in hand. Subagents report distilled findings;
+the engine gates, routes, and narrates. No other skill drives this loop.
+
 ## The loop
 
 Flex the shape to the task; a quick fix may collapse to two waves, a full audit may iterate 1-4 many times. The loop runs **forward and backward** - if a later fix invalidates an earlier check, re-run that earlier check before proceeding. **No step is optional for a shipping change.**
@@ -73,7 +96,7 @@ Flex the shape to the task; a quick fix may collapse to two waves, a full audit 
 
 ## Mechanisms for repetition and large fan-out
 
-When the work is *recurring or iterative* (poll a deploy, refine until a condition converges, sweep a backlog), do not hand-roll the cadence: invoke the `atlas-loop` skill to match the task to a curated **loop-library** entry and instantiate it - interval and self-paced loops hand off to the built-in `/loop` skill; fan-out loops run as a bounded parallel-plus-verify wave. For a *large deterministic fan-out/verify pass* (an audit, a sweep over many items, the same check applied across a whole surface), run it as a **Workflow**: the atlas fan-out pattern dispatches N independent subagents in a single message (concurrency-capped ~4-6 in flight), closes each wave with an independent adversarial `atlas:verifier`, and repeats wave-by-wave until the queue is drained - resumable from `docs/.run/work-log.md` and `findings.json` if interrupted. The per-stage gate (step 3) governs each wave: a stage's dependents wait on its `verified` mark.
+When the work is *recurring or iterative* (poll a deploy, refine until a condition converges, sweep a backlog), do not hand-roll the cadence: invoke the `atlas-orbit` skill to match the task to a curated **loop-library** entry and instantiate it - interval and self-paced loops hand off to the built-in `/loop` skill; fan-out loops run as a bounded parallel-plus-verify wave. For a *large deterministic fan-out/verify pass* (an audit, a sweep over many items, the same check applied across a whole surface), run it as a **Workflow**: the atlas fan-out pattern dispatches N independent subagents in a single message (concurrency-capped ~4-6 in flight), closes each wave with an independent adversarial `atlas:verifier`, and repeats wave-by-wave until the queue is drained - resumable from `docs/.run/work-log.md` and `findings.json` if interrupted. The per-stage gate (step 3) governs each wave: a stage's dependents wait on its `verified` mark.
 
 ## Definition of done - the completion gate
 
@@ -122,15 +145,16 @@ Dispatch constantly. Three complementary sets:
 
 - **Orchestrator companions** (carry this skill's discipline): `atlas:explorer` (read-only mapping), `atlas:implementer` (one bounded change), `atlas:verifier` (adversarial confirmation), `atlas:db-prober` (read-only DB), `atlas:ui-runtime-tester` (live frontend behavior), `atlas:planner` (multi-stage decomposition + stage maps), `atlas:docs-curator` (maintains docs/ SSOT; writes only under `docs/`), `atlas:docs-auditor` (audits docs/ for drift against code), `atlas:completeness-critic` ("what did we miss" gap pass before done).
 - **UI/UX test swarm** (project-independent, browser-driven, detect+report only): `atlas:ux-cartographer` (discover routes/fields + the live save/read-back contract), `atlas:ux-persona` (generate a persona, enroll, enter data, walk the UI, file bugs/user-stories/feedback/feature-requests), `atlas:ux-fuzzer` (boundary/fuzz the discovered inputs), `atlas:ux-accuracy-oracle` (independently recompute every client-facing number), `atlas:ux-reporter` (synthesis + the three hard gates + deliverables). The full runbook is `references/ux-test-swarm.md`.
+- **Atlas meta-skills** (broader-scope orchestration companions): `atlas-orbit` (loop-library matcher; recurring/iterative work), `atlas-harbor` (vendor MCP setup and connector wiring), `atlas-sextant` (measurable self-improvement; reads the observability DB), `atlas-expedition` (UX runtime swarm; app-discovering), `atlas-cartographer` (architecture map, structural dedup, unify), `atlas-survey` (comprehensive quality/OWASP/security/principles audit swarm).
 - **Domain specialists already installed** (route here for depth): `backend-architect`, `frontend-developer`, `security-engineer`, `debugger`, `devops-automator`, `code-reviewer`, `test-engineer`, `test-executor`, `secondary-expert-validator`, `codebase-explorer`. Plus built-ins `Explore`/`Plan`/`general-purpose`.
 
 `references/capability-routing.md` maps task signals -> the right agent + skill + MCP + model.
 
-This skill ships as part of the **atlas plugin**: the fourteen `atlas:*` companions live in the plugin's top-level `agents/` directory (`plugins/atlas/agents/`) and are auto-discovered by Claude Code; the seven automation hooks under `hooks/` auto-load via `hooks/hooks.json` on install (no manual step).
+This skill ships as part of the **atlas plugin**: the `atlas:*` companions live in the plugin's top-level `agents/` directory (`plugins/atlas/agents/`) and are auto-discovered by Claude Code; the eight automation hooks under `hooks/` auto-load via `hooks/hooks.json` on install (no manual step).
 
 ## Automation: hooks enforce the discipline
 
-The rules above must not depend on you remembering them. The seven hooks auto-load from `hooks/hooks.json` when the plugin is installed; all are stdlib-only and fail-open, so any internal error exits 0 and a hook never blocks a session. For non-plugin installs, `scripts/install_hooks.py` (dry-run by default, merges without clobbering, backs up first) wires them manually.
+The rules above must not depend on you remembering them. The eight hooks auto-load from `hooks/hooks.json` when the plugin is installed; all are stdlib-only and fail-open, so any internal error exits 0 and a hook never blocks a session. For non-plugin installs, `scripts/install_hooks.py` (dry-run by default, merges without clobbering, backs up first) wires them manually.
 
 - **`session_boot.py`** (`SessionStart`) - activates the runtime each session: injects this contract and methodology, reports claude-mem/context-mode state, and surfaces relevant past lessons. Crash-proof.
 - **`prompt_optimizer.py`** (`UserPromptSubmit`) - sharpens the prompt before any token is spent on it; trigger-gated (`opt:` / `++`), augments never replaces.
@@ -138,7 +162,8 @@ The rules above must not depend on you remembering them. The seven hooks auto-lo
 - **`validate-readonly-query.sh`** (`PreToolUse` Bash) - blocks SQL writes, DDL, and GRANT/REVOKE during read-only audits. Wired by the DB-audit subagents themselves (schema-inventory, rls-privilege-audit, naming-glossary-audit), not the global session, so ordinary shell work is never gated by it.
 - **`format_after_edit.py`** (`PostToolUse` Edit|Write) - auto-formats the edited file with the repo's own formatter so diffs stay minimal.
 - **`completion_gate.py`** (`Stop`, opt-out) - machine enforcement of "Definition of done": blocks stopping until the evidence artifact, the independent verifier report, and current docs/ all exist. Fail-open. Runs by default when a `docs/` tree exists; disable with `ATLAS_GATE=off`.
-- **`nudge.py`** (`Stop`, `SubagentStop`) - self-improvement: surfaces a relevant past lesson and prompts to capture new ones; throttled and non-blocking. See the atlas-self-improving skill.
+- **`nudge.py`** (`Stop`, `SubagentStop`) - self-improvement: surfaces a relevant past lesson and prompts to capture new ones; throttled and non-blocking. See the atlas-sextant skill.
+- **`dispatch_tripwire.py`** (`PostToolUse`) - counts inline tool calls during an active session and STOPs at the threshold (default 4) to force a Workflow or parallel-wave dispatch. Logs every trip to `atlas.db`. Tunable via `ATLAS_TRIPWIRE` (on/off) and `ATLAS_TRIPWIRE_THRESHOLD` (integer). Works in concert with the decision gate above.
 
 Full contract, config env vars, and install commands: `references/hooks-automation.md`.
 
@@ -162,6 +187,7 @@ Full contract, config env vars, and install commands: `references/hooks-automati
 | `references/codeql.md` | configuring CodeQL code scanning via GitHub Actions or the CodeQL CLI, SARIF output, troubleshooting analysis failures |
 | `references/pytest-coverage.md` | running pytest with coverage, reading annotated reports, driving coverage to 100% |
 | `references/self-improving.md` | agent self-reflection, persistent corrections memory in `~/self-improving/`, tiered storage, learning signals |
+| `references/workflow-template.md` | authoring a Workflow orchestration script (meta block, pipeline, parallel, squad agents, loop-until-dry, adversarial-verify) |
 
 > Cross-agent workspace maintenance (porting MCP/skills across the six coding agents, the `doctor`/`setup`/`port`/`sync` verbs) is no longer part of this skill - it lives in the separate workspace maintenance skills (`orc-setup`, `orc-sync`, `orc-port`, `orc-doctor`, `orc-validate`, `orc-audit`), which are unrelated to this plugin's `/atlas-*` commands. This skill is now purely the coding-session orchestrator.
 
