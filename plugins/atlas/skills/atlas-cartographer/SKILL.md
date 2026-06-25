@@ -23,7 +23,9 @@ This skill runs as a Workflow following the skeleton in atlas-engine/references/
 
 ### Phase 0 - Boundary discovery (sequential, orchestrator-gated)
 
-One atlas:explorer proposes feature boundaries. Orchestrator approves. This is the only sequential gate; all subsequent phases fan out.
+One atlas:explorer surveys the source tree and proposes feature boundaries. atlas:planner then decomposes the explorer's raw boundary proposal into the approved feature list, merging, splitting, or renaming entries as needed to produce a clean, non-overlapping set. The orchestrator reviews and finalizes that list before any fan-out begins. This is the only sequential gate; all subsequent phases fan out.
+
+The orchestrator writes the approved boundary list to docs/audits/atlas-cartographer-<date>/boundaries.md before dispatching Phase 1.
 
 ### Phase 1 - Per-feature flowchart (parallel)
 
@@ -37,18 +39,18 @@ The orchestrator collects all charts and writes them to docs/audits/atlas-cartog
 
 ### Phase 2 - Duplication hunting (parallel)
 
-Two atlas:explorer agents dispatched concurrently:
+Two atlas:verifier agents dispatched concurrently. Duplication hunting is adversarial verification: each hunter compares two code paths and confirms whether they are structurally the same. atlas:verifier is the right agent for this work.
 
 - Within-feature hunter: finds repeated subgraph patterns inside a single feature (same data flow, same transformation, same validation logic at two file:line locations within one feature).
 - Cross-feature hunter: finds parallel subsystems across features that do the same structural job (two features each owning their own auth middleware, two independent retry loops, two separate error-boundary wrappers at distinct file:line locations).
 
-Each hunter returns JSON: { "duplications": [ { "label": "...", "locations": ["file:line", "file:line", ...], "similarity": "..." } ] }. Any duplication claim that does not cite at least two file:line locations is invalid and triggers a redeploy.
+Each atlas:verifier hunter returns JSON: { "duplications": [ { "label": "...", "locations": ["file:line", "file:line", ...], "similarity": "..." } ] }. atlas:verifier enforces the evidence rule: any duplication claim that does not cite at least two file:line locations is invalid. The hunter discards it and does not return it.
 
 The orchestrator writes the merged duplication list to docs/audits/atlas-cartographer-<date>/duplications.md.
 
 ### Phase 3 - Unified proposal (orchestrator only)
 
-The orchestrator synthesizes the feature charts and duplication list into a single unified architecture proposal. This phase is never delegated. The orchestrator:
+The orchestrator synthesizes the feature charts and duplication list into a single unified architecture proposal. This phase is never delegated. The orchestrator may ask atlas:planner to draft the unification sequencing plan (the order in which duplicated subsystems should be collapsed), then use that draft as input when writing the final proposal. The orchestrator:
 
 1. Identifies which duplicated subsystems can be collapsed into one canonical location.
 2. Names the canonical location with a file:line target (existing or proposed new path).
