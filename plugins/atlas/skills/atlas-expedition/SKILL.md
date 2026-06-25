@@ -1,6 +1,6 @@
 ---
-name: atlas-uxt-swarm
-description: Use when asked to run a UX test swarm, full UI/UX test pass, persona testing review, or pre-release frontend sweep on the first responders app, or to re-test after fixes from a previous run. Drives persona generation, scripted data entry, real-browser walkthroughs, fuzzing, and an independent calc oracle, then gates on whether the CLIENT surface (the profile the app reads + resolving dashboard cards) is actually correct.
+name: atlas-expedition
+description: Use when asked to run a UX test swarm, full UI/UX test pass, persona testing review, or pre-release frontend sweep on any web app, or to re-test after fixes from a previous run. Discovers the target app from the repo automatically and adapts to any frontend stack. Drives persona generation, scripted data entry, real-browser walkthroughs, fuzzing, and an independent calc oracle, then gates on whether the CLIENT surface is actually correct.
 ---
 
 # UX Test Swarm
@@ -12,7 +12,7 @@ enforces three hard gates before reporting a verdict.
 
 You orchestrate and verify only. Never navigate the app, enter data, or edit app source
 yourself. The swarm DETECTS and REPORTS app bugs with evidence; it never fixes
-`frontend/`/`backend/` code. Your only writes are under `.claude/skills/atlas-uxt-swarm/`,
+`frontend/`/`backend/` code. Your only writes are under `.claude/skills/atlas-expedition/`,
 `docs/claude_testers/harness/`, `templates/`, and the run dir.
 
 ## Why this exists
@@ -60,18 +60,71 @@ Default is `standard`.
 Each phase records start/end epoch into `RUN_DIR/notes/timing.json`. A phase with no work
 for the chosen tier is recorded as `skipped`, never silently absent.
 
-## Discover first (non-negotiable)
+## Phase 0 - discover the app (non-negotiable)
 
-Before ANY data entry, phase 0 must:
+Before ANY data entry, phase 0 must discover the target app from the repo. Do NOT use
+baked-in URLs or endpoint constants. All values come from reading the repo.
 
-1. Regenerate the route + field coverage matrices from `frontend/src` (cartographer).
-2. Probe the LIVE client contract: read `frontend/src` for the real onboarding/profile-save
-   call that populates `profile.current_salary` (endpoint, method, payload field names) and
-   write it to `RUN_DIR/coverage/contract-snapshot.json`.
+### 0a. Find the dev URL
 
-The scripted harness MUST mirror that exact call. Do NOT assume the backend derives salary
-from grade; it does not. Skipping this step is how the swarm graded the wrong surface last
-time. See `references/discovery.md`.
+Read the repo to discover how and where the app is served in development:
+- Check `package.json` scripts (dev, start, serve), `vite.config.ts` / `next.config.js` /
+  `angular.json` / `webpack.config.js`, `.env.development`, `.env.local`, `.env`,
+  `firebase.json` / `vercel.json` / `netlify.toml`, and any CI scripts that launch the app.
+- Extract the hostname and port (e.g. `localhost:5173`, a Firebase Hosting preview URL, a
+  Cloud Run URL from `.env.development`).
+- If the dev URL cannot be determined from the repo alone, ask the user for it once and
+  record it in `RUN_DIR/notes/discovery.json` as `"dev_url_source": "user-provided"`.
+- Target the DEV environment only, never production.
+
+### 0b. Find the API base
+
+Read the repo to discover the API base URL used by the frontend:
+- Check `frontend/src/utils/api.ts` (or equivalent), `.env.development`, `.env`,
+  `vite.config.ts` proxy/rewrite rules, `next.config.js` rewrites, and any config files
+  that set `VITE_API_URL`, `REACT_APP_API_URL`, `NEXT_PUBLIC_API_URL`, or equivalent.
+- If the app is a SPA with a backend-for-frontend on the same host, the API base may be
+  relative (e.g. `/api`); record that.
+- If the API base cannot be determined from the repo alone, ask the user for it once.
+
+### 0c. Probe the REAL save/read-back contract
+
+Read `frontend/src` (or equivalent) to capture how the real client persists the primary
+onboarding/profile record and reads it back (the surface the dashboard displays). This
+probe prevents the swarm from grading the wrong surface:
+- Start at the setup/onboarding wizard entry point. Find the component(s) that drive the
+  primary data-entry flow (look for `Setup`, `Onboarding`, `Wizard`, or `Profile` in
+  component names under the frontend source tree).
+- Trace each form submission to its API client call: endpoint, HTTP method, and exact
+  payload field names.
+- Find the read-back endpoint the client uses to display the submitted values on the
+  dashboard or profile screen.
+- Record whether any derived value is sent explicitly or assumed computed by the backend.
+  Never assume the backend derives a value from another field; verify from source.
+- Cite `file:line` for every claim. Write `"unknown"` rather than guess.
+- Write the result to `RUN_DIR/coverage/contract-snapshot.json`:
+  ```json
+  {
+    "dev_url": "<discovered or user-provided>",
+    "api_base": "<discovered or relative path>",
+    "primary_write": {"endpoint": "...", "method": "...", "payload_fields": [...]},
+    "secondary_writes": [...],
+    "primary_read": {"endpoint": "...", "fields": [...]},
+    "derived_fields": {},
+    "source_refs": ["file:line", ...]
+  }
+  ```
+
+### 0d. Coverage cartography
+
+1. Regenerate the route + field coverage matrices from the frontend source (cartographer).
+2. Copy both into `RUN_DIR/coverage/` with two extra columns: `status` (init `untested`)
+   and `evidence_ref` (empty).
+
+All downstream phases consume `contract-snapshot.json`. If any field in the snapshot is
+`"unknown"`, that is a blocker for data entry; resolve it before running phase 2.
+
+See `references/discovery.md`.
 
 ## Agent roster
 
@@ -94,10 +147,9 @@ claim with no resolvable evidence path is not a result.
 ## The three hard gates (synthesis-reporter enforces)
 
 G1 CLIENT-SURFACE SUCCESS. A persona counts as "setup complete" ONLY when the
-profile/setup-status endpoint the client reads returns a fully populated record (salary,
-filing/tax, net worth, debt, household) AND, in standard+/full, a screenshot shows the
-dashboard cards resolving. HTTP 200 on a write is necessary, never sufficient. "Route
-visited" is not "client sees correct data".
+profile/setup-status endpoint the client reads returns a fully populated record AND, in
+standard+/full, a screenshot shows the dashboard cards resolving. HTTP 200 on a write is
+necessary, never sufficient. "Route visited" is not "client sees correct data".
 
 G2 EVIDENCE-COMPLETE. Every bug entry MUST carry: before + after screenshot path, repro
 steps, expected-vs-actual, Nielsen severity, route + selector, persona id. Missing any
@@ -112,12 +164,10 @@ mismatches.
 Headline metric = completion rate (personas meeting G1 / total). Counts in every report
 MUST reconcile with files on disk; `aggregate_results.py` asserts this.
 
-## Setup
+## Run setup
 
-1. Target the DEV environment only, never production. Known dev defaults:
-   `BASE_URL=https://first-responders-dev.firebaseapp.com`,
-   `API_BASE=https://firstresponders-api-dev-decm6u6gqa-uc.a.run.app/api`. Ask the user for
-   a base URL only if it is not already known this session.
+1. Run phase 0 (discover) first. All URLs and contracts come from discovery, not from
+   constants in this file.
 2. Create `docs/claude_testers/run-YYYYMMDD[-nn]/` with subdirs
    `coverage/ harness/ evidence/ notes/ reports/`. If `run-YYYYMMDD` exists for today,
    suffix `-02`, `-03`, and so on (the unsuffixed dir is the day's first run).
