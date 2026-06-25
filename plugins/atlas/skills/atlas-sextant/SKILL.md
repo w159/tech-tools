@@ -62,6 +62,7 @@ No qualitative-only entries.
 Example workflow:
 
 ```python
+# requires plugins/atlas/scripts on sys.path (the hooks insert it; do the same here)
 import atlas_db, os
 
 conn = atlas_db.connect(os.environ.get("ATLAS_DB", os.path.expanduser("~/.atlas/atlas.db")))
@@ -95,6 +96,8 @@ law (1-7 in atlas-engine) that the metric signals was violated.
 
 ## Trends (no-arg)
 
+Pass the open DB connection: `trends(conn, limit=20)`. It is called the no-arg path because the user supplies no arguments and no run_id is needed, not because `conn` is optional.
+
 When called with no run context, run `trends(conn, limit=20)` and summarize
 cross-run and cross-project direction:
 
@@ -112,7 +115,7 @@ subsequent runs -- that improvement is stalled and needs a different approach.
 The `nudge.py` hook (`hooks/nudge.py`) fires on `Stop` and `SubagentStop`, at
 most once per 15-minute window. It asks: did this turn produce a reusable lesson?
 If yes, use `record_improvement` to persist a metric-backed entry AND capture a
-claude-mem lesson only when the pattern has repeated at least twice and is not
+claude-mem lesson only when the pattern has repeated at least 3 times and is not
 already in memory.
 
 When to capture a claude-mem lesson:
