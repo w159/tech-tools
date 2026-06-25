@@ -59,7 +59,7 @@ def main():
             pony = False
 
     lines = [
-        "Atlas runtime active. The atlas-operating-contract and atlas-engine methodology apply:",
+        "Atlas runtime active. The atlas-engine methodology and operating contract apply:",
         "research -> theory -> test -> validate -> implement -> test -> verify; evidence before any done claim.",
         "This session is the atlas orchestrator. Substantive implementation is routed to atlas:<role> subagents "
         "(atlas:explorer, atlas:implementer, atlas:verifier, etc.); the orchestrator plans, delegates, "

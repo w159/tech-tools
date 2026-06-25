@@ -16,7 +16,6 @@ a codebase the more it is used.
 | atlas-engine skill | The orchestrator playbook: decompose a task, route every code edit to a subagent, demand execution evidence, verify with a second agent, keep docs/ as the single source of truth, and protect the context window. Triggers on whole-codebase build/fix/audit/refactor/investigate work. |
 | atlas-architect skill | The methodology behind `/atlas` and the boot hook: dependencies, capability discovery, hooks, config, docs seed. |
 | atlas-self-improving skill | Capture lessons (decisions, fixes, gotchas) to claude-mem and committed `.agents/` notes; surface them on resume. The Stop/SubagentStop nudge hook points here. |
-| atlas-operating-contract skill | The neutral engineering contract every launcher injects (research, document, implement, verify, report). Set your stack, brand tokens, and compliance framework in your project `CLAUDE.md`/`AGENTS.md` and the launchers honor it. |
 | Command library | Fifteen verification-gated `/atlas-*` launchers, each injecting the operating contract and driving a specific task through the squad. |
 | Subagent squad | Eighteen `atlas:<role>` subagents, including a five-agent browser-driven UI/UX test swarm. |
 | Capability discovery | A read-only scanner plus a maintained catalog that recommend the skills/plugins/MCP a project needs, with exact install commands. |
@@ -77,7 +76,6 @@ atlas/
 `-- skills/
     |-- atlas-engine/              # SKILL.md + references/ (incl. operating-contract.md, capability-catalog.md)
     |-- atlas-architect/           # SKILL.md - the boot/discovery methodology
-    |-- atlas-operating-contract/        # SKILL.md - the shared contract every launcher injects
     `-- atlas-self-improving/            # SKILL.md - capture and recall lessons across sessions
 ```
 
