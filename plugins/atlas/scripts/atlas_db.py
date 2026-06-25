@@ -31,8 +31,6 @@ CREATE TABLE IF NOT EXISTS improvements (
   dimension TEXT, baseline TEXT, target TEXT, note TEXT);
 """
 
-DISPATCH_TOOLS = ("Agent", "Task")
-
 
 def db_path():
     return os.environ.get("ATLAS_DB") or os.path.expanduser("~/.atlas/atlas.db")
@@ -137,15 +135,11 @@ def finalize_run(conn, run_id, wall_clock_s=None):
 
 
 def run_metrics(conn, run_id):
-    row = conn.execute("SELECT * FROM metrics WHERE run_id=?", (run_id,)).fetchone()
+    cur = conn.execute("SELECT * FROM metrics WHERE run_id=?", (run_id,))
+    row = cur.fetchone()
     if not row:
         return {}
-    cols = [
-        c[0]
-        for c in conn.execute(
-            "SELECT * FROM metrics WHERE run_id=?", (run_id,)
-        ).description
-    ]
+    cols = [c[0] for c in cur.description]
     return dict(zip(cols, row))
 
 
