@@ -26,7 +26,7 @@ The seven dimensions:
 3. **SOLID / DRY / KISS + best practices** - single-responsibility violations, open/closed violations, leaky abstractions, unnecessary complexity, local code-smell duplication (repeated logic within one module or closely coupled files). Composes the `quality-playbook` skill for structured quality analysis.
 4. **Risk hotspots** - files/modules with the highest churn rate, highest coupling, or fewest tests relative to their complexity. The graph's god nodes and bridge nodes are the starting point.
 5. **Dead code** - unreachable branches, unused exports, orphaned modules, commented-out blocks that shipped.
-6. **Test-coverage gaps** - behaviors with no test, critical paths exercised only by integration tests, edge cases not covered, NinjaOne-style CHECK/SET/VERIFY patterns missing verify steps.
+6. **Test-coverage gaps** - behaviors with no test, critical paths exercised only by integration tests, edge cases not covered, remediation or idempotent scripts missing a post-change verification step.
 7. **Code-vs-docs drift** - discrepancies between docs/ (the SSOT read in Phase 1) and actual implemented behavior: missing docs for live features, documented features that no longer exist, stale examples.
 
 Structural and architectural duplication - parallel subsystems across features doing the same structural job - is out of scope for this dimension list. That work belongs to `atlas-cartographer`. See the Boundary section.
@@ -58,7 +58,7 @@ The boundary is symmetric by design. If a survey dimension reviewer surfaces a s
 
 ## Output
 
-All artifacts land under docs/audits/atlas-survey-<date>/ as the single source of truth. No loose files in the repo root.
+All artifacts land under docs/audits/atlas-survey-<date>/ as the single source of truth. No loose files in the repo root. Every findings file and report.md use the same severity scale: HIGH / MED / LOW.
 
 ```
 docs/audits/atlas-survey-<date>/
@@ -100,4 +100,4 @@ As each dimension reviewer completes, its findings flow into a per-finding verif
 
 ### Phase 4 - Synthesize and output (orchestrator only)
 
-The orchestrator collects all verified findings, assigns final severity ordering (HIGH first), writes report.md, and generates handoff prompts for accepted findings. Synthesis is never delegated. The orchestrator dispatches `atlas:docs-curator` to record the audit run in docs/CHANGELOG.md and docs/audits/.
+The orchestrator collects all verified findings, assigns final severity ordering (HIGH first), writes report.md, and generates handoff prompts for accepted findings. Synthesis is never delegated. If atlas:docs-curator is available, the orchestrator dispatches it to record the audit run in docs/CHANGELOG.md and under docs/audits/; if it is not available, the orchestrator writes those entries itself. (atlas:docs-curator is the only writer of durable docs/ content when present.)
