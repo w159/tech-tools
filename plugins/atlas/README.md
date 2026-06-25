@@ -15,7 +15,7 @@ a codebase the more it is used.
 | SessionStart boot | A fast, crash-proof hook that activates the runtime every session: injects the operating contract and atlas-engine methodology, reports dependency state, and surfaces relevant past lessons. Never blocks a session. |
 | atlas-engine skill | The orchestrator playbook: decompose a task, route every code edit to a subagent, demand execution evidence, verify with a second agent, keep docs/ as the single source of truth, and protect the context window. Triggers on whole-codebase build/fix/audit/refactor/investigate work. |
 | atlas-architect skill | The methodology behind `/atlas` and the boot hook: dependencies, capability discovery, hooks, config, docs seed. |
-| atlas-self-improving skill | Capture lessons (decisions, fixes, gotchas) to claude-mem and committed `.agents/` notes; surface them on resume. The Stop/SubagentStop nudge hook points here. |
+| atlas-sextant skill | Measure run health from the SQLite observability DB and propose metric-backed improvements (baseline -> target). Emits wall-clock, inline-ops, dispatches, parallel waves, context, recall, and verifier-coverage scores. The Stop/SubagentStop nudge hook points here. |
 | Command library | Fifteen verification-gated `/atlas-*` launchers, each injecting the operating contract and driving a specific task through the squad. |
 | Subagent squad | Eighteen `atlas:<role>` subagents, including a five-agent browser-driven UI/UX test swarm. |
 | Capability discovery | A read-only scanner plus a maintained catalog that recommend the skills/plugins/MCP a project needs, with exact install commands. |
@@ -76,7 +76,7 @@ atlas/
 `-- skills/
     |-- atlas-engine/              # SKILL.md + references/ (incl. operating-contract.md, capability-catalog.md)
     |-- atlas-architect/           # SKILL.md - the boot/discovery methodology
-    `-- atlas-self-improving/            # SKILL.md - capture and recall lessons across sessions
+    `-- atlas-sextant/                   # SKILL.md - SQLite-backed measurable run health and improvements
 ```
 
 ## Getting started

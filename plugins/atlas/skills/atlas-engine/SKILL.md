@@ -187,7 +187,6 @@ Full contract, config env vars, and install commands: `references/hooks-automati
 | `references/verification-and-grounding.md` | the failable-gate (step 3) vs skeptical self-critique (step 4) split, introspection-is-not-verification, the adversarial wave, the completeness critic, and anti-hallucination grounding rules |
 | `references/codeql.md` | configuring CodeQL code scanning via GitHub Actions or the CodeQL CLI, SARIF output, troubleshooting analysis failures |
 | `references/pytest-coverage.md` | running pytest with coverage, reading annotated reports, driving coverage to 100% |
-| `references/self-improving.md` | agent self-reflection, persistent corrections memory in `~/self-improving/`, tiered storage, learning signals |
 | `references/workflow-template.md` | authoring a Workflow orchestration script (meta block, pipeline, parallel, squad agents, loop-until-dry, adversarial-verify) |
 
 > Cross-agent workspace maintenance (porting MCP/skills across the six coding agents, the `doctor`/`setup`/`port`/`sync` verbs) is no longer part of this skill - it lives in the separate workspace maintenance skills (`orc-setup`, `orc-sync`, `orc-port`, `orc-doctor`, `orc-validate`, `orc-audit`), which are unrelated to this plugin's `/atlas-*` commands. This skill is now purely the coding-session orchestrator.
