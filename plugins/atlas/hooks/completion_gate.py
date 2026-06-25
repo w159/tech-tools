@@ -166,10 +166,7 @@ def main() -> int:
 def _finalize_db(session_id: str) -> None:
     """Finalize the observability run for this session. Fail-open."""
     try:
-        import sys as _sys
-        import os as _os
-
-        _sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), "..", "scripts"))
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         import atlas_db
 
         _conn = atlas_db.connect()
