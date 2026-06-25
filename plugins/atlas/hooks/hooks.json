@@ -13,7 +13,8 @@
       ] }
     ],
     "PostToolUse": [
-      { "matcher": "Edit|Write|MultiEdit", "hooks": [ { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/format_after_edit.py" } ] }
+      { "matcher": "Edit|Write|MultiEdit", "hooks": [ { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/format_after_edit.py" } ] },
+      { "matcher": "Read|Grep|Glob|Edit|Write|Bash", "hooks": [ { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/dispatch_tripwire.py" } ] }
     ],
     "Stop": [
       { "matcher": "*", "hooks": [
