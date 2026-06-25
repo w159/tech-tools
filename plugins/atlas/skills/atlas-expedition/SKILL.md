@@ -18,7 +18,7 @@ yourself. The swarm DETECTS and REPORTS app bugs with evidence; it never fixes
 ## Why this exists
 
 A prior run wrote salary to budget/planner tables, read those back, saw HTTP 200, and
-declared "COMPLETE" while `profile.current_salary` was null for all personas and the app
+declared "COMPLETE" while the primary profile field was null for all personas and the app
 showed "needs work". It graded the wrong surface. Every rule below makes the swarm grade
 the surface the CLIENT actually reads.
 
@@ -186,7 +186,7 @@ List the test accounts created (`notes/test-accounts-created.txt`) when you repo
   `coverage/contract-snapshot.json` output.
 - `references/personas.md` - `datagen.py` generation, the 42-column schema, profile/seed
   semantics, user-count presets.
-- `references/data-entry-contract.md` - the corrected ordered API contract; the canonical
+- `references/data-entry-contract.md` - the canonical ordered API contract; the canonical
   reference the scripted role and harness both obey.
 - `references/evidence-severity.md` - evidence requirements, Nielsen 0-4 severity, the
   bug/story/feedback template required fields.
