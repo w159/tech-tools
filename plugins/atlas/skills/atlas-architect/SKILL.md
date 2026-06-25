@@ -27,7 +27,7 @@ Two entry points share this methodology:
    signals against `../atlas-engine/references/capability-catalog.md`. Present a
    ranked list (skill / plugin / mcp) with a reason and the exact install command
    per item. Also surface the built-ins this project can use now: the loop-library
-   (via atlas-loop) and the vendor connectors (via atlas-connectors, disabled until
+   (via atlas-orbit) and the vendor connectors (via atlas-connectors, disabled until
    setup). Install only confirmed items.
 3. Hooks. A plugin install auto-loads `hooks/hooks.json`. Verify the seven hooks are
    active (boot, prompt optimizer, bash guard, read-only SQL guard, format-after-edit,
@@ -86,7 +86,7 @@ recommend-then-confirm. Check, in order:
 
 - the session-augmentation trio - claude-mem (memory), context-mode (context
   protection), ponytail (less-code mode);
-- the built-ins - loop-library (surfaced by atlas-loop) and connectors (enabled via
+- the built-ins - loop-library (surfaced by atlas-orbit) and connectors (enabled via
   atlas-connectors when MSP/vendor signals are present);
 - the seven automation hooks (boot, prompt optimizer, bash guard, read-only SQL guard,
   format-after-edit, completion gate, nudge);

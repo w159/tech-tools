@@ -20,7 +20,7 @@ Columns: signal, asset, type (skill / plugin / mcp), why, install command.
 | .sql / Prisma / Drizzle schema | atlas:db-prober (built in) | agent | Use the bundled read-only DB prober for schema, RLS, grants, indexes, and EXPLAIN plans. | (already shipped with atlas) |
 | CI files (.github/workflows, gitlab-ci) | (review awareness) | note | Make reviews CI-aware; mirror the pipeline's lint/test/build gate locally. | (no install; routing note) |
 | Any multi-session repo | ponytail | plugin | Lazy-senior-dev mode: writes far less code (~54% less, ~20% cheaper) while keeping safety. Session-augmentation tier with claude-mem/context-mode. | `copilot plugin marketplace add DietrichGebert/ponytail` then `copilot plugin install ponytail@ponytail` |
-| Recurring or iterative task | loop-library (via atlas-loop) | note | Built-in curated loops; use the atlas-loop skill to pick and instantiate one. | (already shipped with atlas) |
+| Recurring or iterative task | loop-library (via atlas-orbit) | note | Built-in curated loops; use the atlas-orbit skill to pick and instantiate one. | (already shipped with atlas) |
 | MSP/vendor signals (mcp_servers/, *.mcpb, vendor API usage) | connectors (via atlas-connectors) | note | Built-in vendor MCP connectors, disabled by default; use atlas-connectors to enable. | (already shipped with atlas) |
 
 Maintenance: when the discovery script learns a new signal, add a row here with the

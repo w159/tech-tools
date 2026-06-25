@@ -1,6 +1,6 @@
 # Loop library - INDEX
 
-The catalog the `atlas-loop` skill reads first. Match a task to a loop by its `when-to-use`, then open that one file for full steps and a ready-to-paste template. Do not preload the loop files; this table is enough to choose.
+The catalog the `atlas-orbit` skill reads first. Match a task to a loop by its `when-to-use`, then open that one file for full steps and a ready-to-paste template. Do not preload the loop files; this table is enough to choose.
 
 Cadence legend: **interval** (timer-driven `/loop`), **self-paced** (`/loop` with model self-pacing), **fan-out** (parallel subagents + adversarial verify Workflow).
 

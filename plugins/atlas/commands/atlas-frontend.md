@@ -22,7 +22,7 @@ Inputs to read from `$ARGUMENTS`: the project (name, what it is), scope (screens
 - Look up any unfamiliar UI library or framework API via Context7 (or Microsoft Learn for Microsoft services) before using it.
 
 ## Pick the shape: loop or single pass
-- If this work is recurring or iterative (a sweep across many screens or components, a build-fix cycle, an until-dry discovery pass, a migration, or a review round), invoke the `atlas-loop` skill to select and instantiate the best-fit loop from the loop-library, then run that loop. Otherwise dispatch the squad directly for a single pass.
+- If this work is recurring or iterative (a sweep across many screens or components, a build-fix cycle, an until-dry discovery pass, a migration, or a review round), invoke the `atlas-orbit` skill to select and instantiate the best-fit loop from the loop-library, then run that loop. Otherwise dispatch the squad directly for a single pass.
 
 ## Execute through the squad (parallel where independent)
 Dispatch all independent jobs in ONE message (multiple Agent calls in a single message) so they run concurrently; keep roughly 4-6 in flight. ALWAYS close the wave with an independent atlas:verifier in a fresh context before integrating results.

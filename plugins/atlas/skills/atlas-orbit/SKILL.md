@@ -1,9 +1,9 @@
 ---
-name: atlas-loop
+name: atlas-orbit
 description: 'Match a recurring or iterative task to the best-fit reusable loop from a curated loop-library and instantiate it, handing interval/self-paced loops to the built-in /loop skill and running fan-out loops as a parallel adversarial-verify Workflow. Use when the user wants to run something repeatedly, poll for status, iterate until a condition is met, sweep a backlog, or stand up a recurring/scheduled workflow.'
 ---
 
-# atlas-loop - the loop matcher
+# atlas-orbit - the loop matcher
 
 A **loop** is a reusable, parameterized iterative workflow: a body of work plus a **cadence** that decides how it repeats. This skill does not invent a loop from scratch each time. It reads a curated library, matches the user's task to the closest loop by its `when-to-use`, presents the top candidates, then **instantiates** the chosen one by filling its inputs and dispatching it on the right cadence.
 
