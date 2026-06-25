@@ -4,7 +4,7 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
-## 2026-06-25 -- Atlas Phase 4: final 8-skill redesign, observability DB, de-hardcoded swarms
+## 2026-06-25 -- Atlas v2.0.0: final 8-skill redesign, observability DB, de-hardcoded swarms
 
 Completed the atlas plugin skill-set redesign. Every skill is now canonically named under the
 `atlas-*` prefix; the five retired names (atlas-loop, atlas-connectors, atlas-self-improving,
@@ -17,7 +17,7 @@ historical CHANGELOG entries below.
 - `atlas-connectors` -> `atlas-harbor`: vendor MCP connector setup skill; name reflects the "safe harbor"
   for external integrations.
 - `atlas-self-improving` retired; replaced by `atlas-sextant`: the new skill reads a SQLite observability
-  DB (`.atlas/runs.db`) populated by the nudge hook, computes wall-clock, inline-ops, dispatches, parallel
+  DB (`~/.atlas/atlas.db`) populated by the session/tripwire/completion hooks, computes wall-clock, inline-ops, dispatches, parallel
   waves, context, recall, and verifier-coverage scores, and proposes metric-backed improvement targets
   (baseline -> target). Measurable; not motivational.
 - `atlas-uxt-swarm` retired; its pipeline (cartographer -> persona -> fuzzer -> oracle -> reporter) is now
@@ -42,9 +42,10 @@ historical CHANGELOG entries below.
 
 ### Manifest and docs reconciliation
 
-- `plugins/atlas/.claude-plugin/plugin.json` bumped 1.2.1 -> 1.3.0; description updated to enumerate
-  all 8 skills with their one-line purpose; 5 new keywords added (observability-db, architecture-audit,
-  owasp, security-audit, ux-swarm).
+- `plugins/atlas/.claude-plugin/plugin.json` bumped 1.2.1 -> 2.0.0 (MAJOR: breaking change - four skills
+  renamed and `atlas-operating-contract` removed, so any external reference to an old skill name breaks);
+  description updated to enumerate all 8 skills with their one-line purpose and the 8-hook count; 5 new
+  keywords added (observability-db, architecture-audit, owasp, security-audit, ux-swarm).
 - `plugins/atlas/README.md` updated: "What ships" table expanded to all 8 skill rows; layout tree
   updated to show all 8 skill directories.
 - `plugins/atlas/skills/atlas-engine/references/capability-catalog.md` updated: 3 new signal rows added
