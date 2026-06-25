@@ -136,6 +136,8 @@ def main() -> int:
         data = json.loads(raw) if raw.strip() else {}
     except (json.JSONDecodeError, ValueError):
         return 0
+    if not isinstance(data, dict):
+        data = {}
     # Finalize the observability run regardless of gate outcome.
     _finalize_db(data.get("session_id", ""))
     try:

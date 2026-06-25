@@ -151,11 +151,11 @@ Dispatch constantly. Three complementary sets:
 
 `references/capability-routing.md` maps task signals -> the right agent + skill + MCP + model.
 
-This skill ships as part of the **atlas plugin**: the `atlas:*` companions live in the plugin's top-level `agents/` directory (`plugins/atlas/agents/`) and are auto-discovered by Claude Code; the eight automation hooks under `hooks/` auto-load via `hooks/hooks.json` on install (no manual step).
+This skill ships as part of the **atlas plugin**: the `atlas:*` companions live in the plugin's top-level `agents/` directory (`plugins/atlas/agents/`) and are auto-discovered by Claude Code; eight hooks total ship under `hooks/`; seven auto-load via `hooks/hooks.json` on install (no manual step); the read-only SQL guard is wired by the DB-audit subagents, not hooks.json.
 
 ## Automation: hooks enforce the discipline
 
-The rules above must not depend on you remembering them. The eight hooks auto-load from `hooks/hooks.json` when the plugin is installed; all are stdlib-only and fail-open, so any internal error exits 0 and a hook never blocks a session. For non-plugin installs, `scripts/install_hooks.py` (dry-run by default, merges without clobbering, backs up first) wires them manually.
+The rules above must not depend on you remembering them. Eight hooks total ship with the plugin; seven auto-load from `hooks/hooks.json` when the plugin is installed (the read-only SQL guard is wired by the DB-audit subagents instead); all are stdlib-only and fail-open, so any internal error exits 0 and a hook never blocks a session. For non-plugin installs, `scripts/install_hooks.py` (dry-run by default, merges without clobbering, backs up first) wires them manually.
 
 - **`session_boot.py`** (`SessionStart`) - activates the runtime each session: injects this contract and methodology, reports claude-mem/context-mode state, and surfaces relevant past lessons. Crash-proof.
 - **`prompt_optimizer.py`** (`UserPromptSubmit`) - sharpens the prompt before any token is spent on it; trigger-gated (`opt:` / `++`), augments never replaces.

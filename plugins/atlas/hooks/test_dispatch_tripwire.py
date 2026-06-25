@@ -74,6 +74,29 @@ class TripwireTest(unittest.TestCase):
         r = run_hook(self._payload("Read"), env)
         self.assertIn("STOP", r.stdout)  # 2nd op: trips at override
 
+    def test_hooks_json_matcher_includes_dispatch_tools(self):
+        import json, os
+
+        hj = os.path.join(os.path.dirname(__file__), "hooks.json")
+        data = json.load(open(hj))
+        entries = json.dumps(data)
+        self.assertIn("dispatch_tripwire.py", entries)
+        # find the matcher string that co-occurs with dispatch_tripwire
+        import re
+
+        blob = json.dumps(data)
+        self.assertIn("Agent", blob)
+        self.assertIn("Task", blob)
+        # stronger: the tripwire group's matcher must include Agent and Task
+        ok = False
+        for grp in data.get("hooks", {}).get("PostToolUse", []):
+            hooks = json.dumps(grp.get("hooks", grp))
+            if "dispatch_tripwire.py" in hooks:
+                self.assertIn("Agent", grp.get("matcher", ""))
+                self.assertIn("Task", grp.get("matcher", ""))
+                ok = True
+        self.assertTrue(ok, "dispatch_tripwire entry not found in PostToolUse")
+
 
 if __name__ == "__main__":
     unittest.main()

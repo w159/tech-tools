@@ -66,7 +66,7 @@ def main():
             )
         else:
             msg = (
-                "STOP - %d inline ops this turn with no dispatch. This is "
+                "STOP - %d inline ops since your last dispatch with no dispatch. This is "
                 "orchestrator drift. Dispatch the next investigative or edit "
                 "step to a subagent (atlas:explorer / atlas:implementer)." % count
             )

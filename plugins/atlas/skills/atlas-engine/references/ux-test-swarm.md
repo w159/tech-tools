@@ -1,5 +1,11 @@
 # UX Test Swarm
 
+> **CANONICAL HOME:** The current, maintained runbook for the UX test swarm is the
+> `atlas-expedition` skill. Use `/atlas-expedition` (or dispatch atlas-expedition) for
+> all new UX swarm runs. This file is retained as an engine-orchestration reference for
+> the swarm's internal phase contract, agent roster, and gate definitions, which
+> atlas-expedition implements. Do not treat this file as a competing entry point.
+
 The UX test swarm is a multi-persona, browser-driven, full UI/UX test pass over any web app the orchestrator points it at. It synthesizes personas, drives the real sign-up and data-entry flow through a live browser, walks the UI capturing screenshots, fuzzes boundaries, and independently recomputes every client-facing number with its own oracle, then gates on whether the surface the CLIENT actually reads is correct. The orchestrator coordinates and verifies only. It never navigates the app, enters data, or edits the target app's source. The swarm DETECTS and REPORTS app bugs with evidence backed by screenshots and reproduction steps; fixing the app is out of scope. The only writes the orchestrator and its agents make are to the run dir and the durable audit dir described below.
 
 ## Discover first (non-negotiable)

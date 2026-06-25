@@ -23,18 +23,18 @@ record.
 
 Public functions in `atlas_db.py`:
 
-- `connect(path)` -- open the DB (creates if absent)
+- `connect(path=None)` -- open the DB (creates if absent)
 - `init(conn)` -- create schema
-- `register_project(conn, name, root)` -- upsert project row
-- `start_run(conn, project_id, model, session_id)` -- open a run, returns run_id
-- `current_run_id(conn)` -- most recent open run for this session
-- `log_event(conn, run_id, kind, detail)` -- append an event
-- `log_dispatch(conn, run_id, agent_type, wave, prompt_tokens)` -- record a dispatch
+- `register_project(conn, root_path, name=None, stack=None) -> int` -- upsert project row, returns project_id
+- `start_run(conn, project_id, session_id, task_summary=None, model=None) -> int` -- open a run, returns run_id
+- `current_run_id(conn, session_id) -> int | None` -- most recent open run for this session
+- `log_event(conn, run_id, tool, context, is_inline_op, path=None) -> int` -- append an event
+- `log_dispatch(conn, run_id, agent_type, model=None, wave_id=None) -> int` -- record a dispatch
 - `inline_ops_since_last_dispatch(conn, run_id)` -- count inline ops since the last dispatch
-- `finalize_run(conn, run_id, status)` -- close the run
+- `finalize_run(conn, run_id, wall_clock_s=None) -> None` -- close the run
 - `run_metrics(conn, run_id) -> dict` -- return the metrics row for a run
-- `record_improvement(conn, run_id, dimension, baseline, target, note)` -- persist a proposed improvement
-- `trends(conn, limit) -> list` -- cross-run/cross-project trend rows (most recent `limit` runs)
+- `record_improvement(conn, run_id, dimension, baseline, target, note) -> int` -- persist a proposed improvement
+- `trends(conn, limit=20) -> list` -- cross-run/cross-project trend rows (most recent `limit` runs)
 
 ## What it measures
 
@@ -66,7 +66,8 @@ Example workflow:
 import atlas_db, os
 
 conn = atlas_db.connect(os.environ.get("ATLAS_DB", os.path.expanduser("~/.atlas/atlas.db")))
-run_id = atlas_db.current_run_id(conn)
+session_id = os.environ.get("CLAUDE_SESSION_ID", "")
+run_id = atlas_db.current_run_id(conn, session_id)
 metrics = atlas_db.run_metrics(conn, run_id)
 
 # Example: verifier coverage was 0.6 this run

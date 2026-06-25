@@ -33,8 +33,10 @@ Two entry points share this methodology:
    and measurable self-improvement with observability (atlas-sextant). Install only
    confirmed items.
 3. Hooks. A plugin install auto-loads `hooks/hooks.json`. Verify the seven hooks are
-   active (boot, prompt optimizer, bash guard, read-only SQL guard, format-after-edit,
-   completion gate, nudge). Outside a plugin install, offer `scripts/install_hooks.py`.
+   active (boot, prompt optimizer, bash guard, format-after-edit, completion gate, nudge,
+   dispatch tripwire). The read-only SQL guard is wired by the DB-audit subagents
+   (schema-inventory, rls-privilege-audit, naming-glossary-audit), not hooks.json.
+   Outside a plugin install, offer `scripts/install_hooks.py`.
 4. Config. Write or update `.claude/atlas.local.md` (schema below). Show the diff and
    confirm before writing.
 5. Docs seed and tracking. If `docs/` lacks the SSOT scaffold, offer to seed it per
@@ -68,8 +70,9 @@ recommend-then-confirm. Check, in order:
   atlas-harbor when MSP/vendor signals are present), atlas-cartographer (architecture
   map + structural dedup), atlas-survey (quality and security audit), atlas-expedition
   (UX runtime swarm), and atlas-sextant (measurable self-improvement + observability);
-- the seven automation hooks (boot, prompt optimizer, bash guard, read-only SQL guard,
-  format-after-edit, completion gate, nudge);
+- the seven automation hooks that auto-load via hooks.json (boot, prompt optimizer,
+  bash guard, format-after-edit, completion gate, nudge, dispatch tripwire); note the
+  read-only SQL guard is wired by the DB-audit subagents, not hooks.json;
 - the docs/ SSOT scaffold, and whether CHANGELOG.md and ROADMAP.md are current.
 
 Report each as present or missing with the exact remediation. Install nothing without
