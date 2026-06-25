@@ -27,10 +27,26 @@ def detect_dep(module_marker):
 
 
 def main():
+    payload = {}
     try:
-        _ = sys.stdin.read()  # consume stdin; payload unused for boot
+        raw = sys.stdin.read()
+        payload = json.loads(raw) if raw.strip() else {}
     except Exception:
         pass
+
+    # Observability DB lifecycle -- fail-open; must not block boot.
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db
+
+        _conn = atlas_db.connect()
+        atlas_db.init(_conn)
+        _root = payload.get("cwd") or os.getcwd()
+        _pid = atlas_db.register_project(_conn, _root, os.path.basename(_root))
+        if atlas_db.current_run_id(_conn, payload.get("session_id", "")) is None:
+            atlas_db.start_run(_conn, _pid, payload.get("session_id", ""))
+    except Exception:
+        pass  # observability is best-effort; never block boot
 
     mem = detect_dep("claude_mem") or has_cmd("claude-mem")
     ctx = detect_dep("context_mode") or has_cmd("context-mode")
@@ -38,9 +54,7 @@ def main():
     pony = has_cmd("ponytail")
     if not pony:
         try:
-            pony = os.path.exists(
-                os.path.expanduser("~/.config/ponytail/config.json")
-            )
+            pony = os.path.exists(os.path.expanduser("~/.config/ponytail/config.json"))
         except Exception:
             pony = False
 
@@ -66,11 +80,7 @@ def main():
         )
         + ".",
         "Less-code mode (ponytail): "
-        + (
-            "available"
-            if pony
-            else "absent - run /atlas to install for less-code mode"
-        )
+        + ("available" if pony else "absent - run /atlas to install for less-code mode")
         + ".",
         "No-prompt scan: run /atlas, or any atlas skill with no task, to scan this project "
         "and report what is missing to reach atlas standard (claude-mem + context-mode + ponytail, "

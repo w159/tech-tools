@@ -105,7 +105,7 @@ def _reason(missing_a: bool, missing_b: bool, missing_c: bool) -> str:
             "  (b) docs/.run/findings.json is missing or has no entry with status "
             '"verified". Record an independent atlas:verifier result before stopping. '
             "-> Dispatch atlas:verifier for the shipping stage to independently confirm "
-            "or refute the claim, then write its verdict (status=\"verified\") into "
+            'or refute the claim, then write its verdict (status="verified") into '
             "docs/.run/findings.json."
         )
     if missing_c:
@@ -136,6 +136,8 @@ def main() -> int:
         data = json.loads(raw) if raw.strip() else {}
     except (json.JSONDecodeError, ValueError):
         return 0
+    # Finalize the observability run regardless of gate outcome.
+    _finalize_db(data.get("session_id", ""))
     try:
         if os.environ.get("ATLAS_GATE", "").lower() == "off":
             return 0
@@ -159,6 +161,23 @@ def main() -> int:
     except Exception:  # noqa: BLE001 -- a Stop hook must never wedge the session
         return 0
     return 0
+
+
+def _finalize_db(session_id: str) -> None:
+    """Finalize the observability run for this session. Fail-open."""
+    try:
+        import sys as _sys
+        import os as _os
+
+        _sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db
+
+        _conn = atlas_db.connect()
+        _rid = atlas_db.current_run_id(_conn, session_id)
+        if _rid is not None:
+            atlas_db.finalize_run(_conn, _rid)
+    except Exception:
+        pass  # observability is best-effort; never block stop
 
 
 if __name__ == "__main__":
