@@ -1,6 +1,6 @@
 ---
 name: atlas-sextant
-description: Use to measure atlas's own run health from the SQLite observability DB and propose metric-backed improvements to atlas's behavior. Emits RUN METRICS (wall-clock, inline-ops, dispatches, parallel waves, context, recall, verifier coverage) and MEASURABLE IMPROVEMENTS (baseline -> target). On no args, reports cross-run/cross-project trends. The atlas Stop/SubagentStop nudge hook points here.
+description: Use to measure atlas's own run health AND to audit context/asset waste AND to mine the indexed session transcripts. Three lenses. RUN HEALTH reads the SQLite observability DB and emits RUN METRICS (wall-clock, inline-ops, dispatches, parallel waves, context, recall, verifier coverage) plus MEASURABLE IMPROVEMENTS (baseline -> target). ASSET/CONTEXT AUDIT (scripts/asset_audit.py) inventories every context-loaded skill/agent/plugin, estimates each one's token cost, detects the project's stack, scores relevance, and decides the most effective LEVEL to act at (disable-here vs relocate-global) - it learns from restores so it never re-flags an asset you kept. SESSION FORENSICS reads the transcript mirror (messages/tool_calls/user_prompts/signals, populated by the ingest hook from the jsonl/json session logs) to find which tools/skills/mcp/agents are and are not used, whether context-mode/claude-mem/ponytail are actually helping, repeated user requests, and behavioral issues like assumption-admissions or unverified claims - each becoming a CLAUDE.md/rule proposal. On no args, reports cross-run/cross-project trends. The atlas Stop/SubagentStop nudge hook points here.
 ---
 
 # atlas-sextant
@@ -33,6 +33,7 @@ Public functions in `atlas_db.py`:
 - `inline_ops_since_last_dispatch(conn, run_id)` -- count inline ops since the last dispatch
 - `finalize_run(conn, run_id, wall_clock_s=None) -> None` -- close the run
 - `run_metrics(conn, run_id) -> dict` -- return the metrics row for a run
+- `derive_run_metrics(conn, run_id, session_id) -> dict` -- compute the metrics no live hook can fill (est_context_tokens, verifier_coverage, parallel_waves, in_flight_peak, wall_clock_s) from the transcript mirror and write them onto the run's metrics row. Call this after `finalize_run` (or before reading metrics for a session that has mirror rows). It does NOT touch recall_hits/recall_misses.
 - `record_improvement(conn, run_id, dimension, baseline, target, note) -> int` -- persist a proposed improvement
 - `trends(conn, limit=20) -> list` -- cross-run/cross-project trend rows (most recent `limit` runs)
 
@@ -52,6 +53,17 @@ signal:
 | `recall_misses` | Times memory was queried and returned nothing useful | High miss rate on a mature project = lessons not being captured |
 | `verifier_coverage` | Fraction of dispatched changes that received an independent verifier | Below 1.0 = unverified changes shipping |
 | `wall_clock_s` | Elapsed seconds for the run | Baseline for tracking improvement over time |
+
+How these are populated: `inline_ops` and `dispatches` come live from the
+PostToolUse tripwire (`events` table). `est_context_tokens`, `verifier_coverage`,
+`parallel_waves`, `in_flight_peak`, and `wall_clock_s` are computed from the
+transcript mirror by `derive_run_metrics(conn, run_id, session_id)` - call it
+after `finalize_run`, or they read NULL. `recall_hits` / `recall_misses` are
+**not auto-derived**: counting memory tool calls is easy, but judging whether a
+returned lesson was actually *usable* is semantic, so this skill sets them by
+reading the messages (the memory-tool call plus whether its result changed the
+next action) rather than from a blind count. Treat a NULL here as "not yet
+assessed", not zero.
 
 ## Measurable improvements
 
@@ -94,6 +106,124 @@ if metrics["inline_ops"] > 4:
 Dimension keys map directly to the metrics columns above. A note explains the
 behavioral root cause and the concrete change to make. When in doubt, name the
 law (1-7 in atlas-engine) that the metric signals was violated.
+
+## Asset/context audit (the context-cost lens)
+
+Run health asks "is atlas behaving?". This lens asks "is the session carrying
+weight it does not need here?". A fresh session pays for every globally-loaded
+skill, agent, and enabled plugin whether or not it is relevant to the project.
+
+Driver: `scripts/asset_audit.py [project_root] [--json] [--apply]`.
+
+What it does:
+
+1. **Inventory** every context-loaded asset (skills under `~/.claude/skills`,
+   agents under `~/.claude/agents` - both may be symlinks; it follows them) and
+   estimates each one's context cost (chars/4, surfaced as an estimate).
+2. **Detect the project stack** from files and `package.json` deps (mcp,
+   node-ts, python, dotnet, azure, frontend, terraform, ...).
+3. **Score relevance**: an asset with no tech tag is universal (always kept);
+   a tagged asset is kept if its tags meet the project, else flagged.
+4. **Choose the LEVEL** - the part that matters:
+   - off-stack here but on-stack for another known project -> `disable-here`
+     (project `settings.local.json`), never a global cut.
+   - off-stack everywhere -> `relocate-global` candidate.
+5. **Tier by risk**: `AUTO` (novelty/off-stack-everywhere, safe to relocate)
+   vs `CONFIRM` (everything else). `--apply` relocates only AUTO items, by
+   moving (never deleting) into `~/.claude/{skills,agents}-disabled` with a
+   restore manifest under `~/.claude/.context-cleanup-manifests/`.
+
+**Learning loop.** Verdicts persist to `asset_verdicts` (see `atlas_db.py`).
+When you restore a flagged asset, call `atlas_db.note_asset_restore(conn, kind,
+key)` - that asset is then suppressed and never re-flagged. Track quality with
+`atlas_db.asset_audit_summary(conn)` (`false_positive_rate`): a rising rate
+means the taxonomy is over-flagging and needs tightening, not more applying.
+
+Public functions in `atlas_db.py` for this lens: `record_asset_verdicts`,
+`mark_asset_applied`, `note_asset_restore`, `suppressed_assets`,
+`asset_audit_summary`.
+
+Apply discipline: AUTO auto-applies under `--apply`; everything in CONFIRM is
+presented to the user with its reason and the level (disable-here vs
+relocate-global) before any move. Disabling at the project level is preferred
+over a global relocate whenever the asset serves another project.
+
+## Session forensics (the transcript-mirror lens)
+
+Run health asks "is atlas behaving?"; the asset audit asks "is the session
+carrying dead weight?". This lens asks "what actually happened across every
+session, and what should change because of it?". It reads the rich mirror of the
+on-disk session transcripts that `hooks/ingest_session.py` and
+`scripts/session_ingest.py --backfill` land in the DB. The sparse `events` table
+never held this; these tables do.
+
+### Tables
+
+- `session_logs` - one row per transcript: project, cwd, model, token totals
+  (input/output/cache_read/cache_creation), counts, error_count, and the ingest
+  cursor. Token totals are recomputed from child rows, so they are correct
+  regardless of re-ingest.
+- `messages` - every user/assistant/system message: role, `is_sidechain`
+  (subagent), `thinking`, `text`, per-message `usage` tokens, model.
+- `tool_calls` - every tool invocation: `tool_name`, `kind`
+  (builtin|skill|mcp|agent), `target` (tool name / skill / `server.tool` /
+  subagent type), `server`, secret-scrubbed `input_summary`, `input_bytes`
+  (true size = context cost proxy), `is_error`, `result_bytes`.
+- `user_prompts` - the user's actual typed prompts (tool-result messages
+  excluded), with a `norm` clustering key.
+- `signals` - behavioral flags tagged at ingest: `assumption_admission`,
+  `unverified_claim`, `user_correction`, each with a snippet and a message link.
+
+### Read helpers in `atlas_db.py`
+
+Use these; do not re-parse transcripts.
+
+- `tool_usage(conn, kind=None, project_id=None)` - per-target rollup: calls,
+  errors, sessions, input_bytes.
+- `idle_assets(conn, kind, known_keys)` - of the assets present in this
+  environment, which were NEVER invoked in any session (the unused set).
+- `context_tool_health(conn)` - cache-hit ratio plus call/error counts for
+  context-mode, claude-mem, and ponytail.
+- `signal_counts(conn)` / `signal_rollup(conn, signal_type=None)` - the
+  behavioral-issue rollup and the per-incident snippets.
+- `repeated_prompts(conn, min_count=3)` - normalized prompts that recur across
+  sessions (the repetitive-task signal).
+
+### The four questions to answer, and the action each produces
+
+1. **Which tools/skills/MCP/agents are used vs idle?** Compare
+   `tool_usage(conn, kind=...)` against the installed inventory
+   (`discover_capabilities.py` / `asset_audit.py`); feed the unused set to
+   `idle_assets`. A skill/agent/MCP with zero calls across many sessions is a
+   relocate-global or removal candidate (route through the asset-audit apply
+   discipline). A high-error `target` is a description/schema bug - file an
+   improvement against that tool, not the model.
+2. **Is the context layer actually helping?** Read `context_tool_health`. A low
+   `cache_hit_ratio`, or context-mode/claude-mem/ponytail with near-zero calls
+   on large-output sessions, means the protection is configured but unused -
+   propose a CLAUDE.md nudge or a hook, with the ratio as the baseline.
+3. **What is being asked repeatedly?** `repeated_prompts` clusters re-typed
+   requests. A cluster of 3+ is a workflow that should become a skill/command or
+   a standing CLAUDE.md rule so the user stops re-asking.
+4. **Where did atlas mislead the user?** `signal_counts` /
+   `signal_rollup('assumption_admission')` surface the exact class of issue that
+   motivated this lens: a claim made without testing, a callback "wired" only in
+   a plan, a "should work" with no evidence. Each confirmed incident becomes a
+   `record_improvement` AND, when it recurs across 3+ sessions, a concrete
+   CLAUDE.md / rules edit (e.g. strengthen the verification-protocol clause the
+   incident violated). Quote the snippet and cite the session as evidence.
+
+Every output of this lens still obeys the measurable-improvement rule: persist a
+`record_improvement(conn, run_id, dimension, baseline, target, note)` with a
+real baseline (the count, the ratio, the error rate) and a target. Signals are
+candidate findings, not proof - confirm against the linked message text before
+proposing a rule change, the same way a human would re-read the transcript.
+
+### Refresh + backfill
+
+The ingest hook keeps the mirror current. To (re)index history on demand:
+`python3 scripts/session_ingest.py --backfill [~/.claude/projects]` (idempotent),
+or one session: `python3 scripts/session_ingest.py <transcript.jsonl>`.
 
 ## Trends (no-arg)
 

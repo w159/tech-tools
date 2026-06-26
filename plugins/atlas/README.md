@@ -16,7 +16,7 @@ a codebase the more it is used.
 | atlas-engine skill | The orchestrator playbook: decompose a task, route every code edit to a subagent, demand execution evidence, verify with a second agent, keep docs/ as the single source of truth, and protect the context window. Triggers on whole-codebase build/fix/audit/refactor/investigate work. |
 | atlas-architect skill | The methodology behind `/atlas` and the boot hook: dependencies, capability discovery, hooks, config, docs seed. |
 | atlas-cartographer skill | Produce an evidence-grounded architecture map of any codebase, identify structural duplicates, and write a `docs/architecture/boundaries.md` that a fresh agent can load instead of re-discovering the layout. |
-| atlas-sextant skill | Measure run health from the SQLite observability DB and propose metric-backed improvements (baseline -> target). Emits wall-clock, inline-ops, dispatches, parallel waves, context, recall, and verifier-coverage scores. The Stop/SubagentStop nudge hook points here. |
+| atlas-sextant skill | Measure run health from the SQLite observability DB and propose metric-backed improvements (baseline -> target). Three lenses: run metrics (wall-clock, inline-ops, dispatches, parallel waves, context, recall, verifier coverage), asset/context-cost audit, and session forensics over the indexed transcripts (used-vs-idle tools/skills/MCP/agents, context-tool health, repeated requests, behavioral issues). The Stop/SubagentStop nudge hook points here. |
 | atlas-orbit skill | Pick and instantiate the best-fit reusable loop for any recurring or iterative task (loop-until-dry, fan-out-adversarial-verify, red-green-tdd, doc-reconcile, incident-triage, and more). |
 | atlas-harbor skill | Guided vendor MCP connector setup: enable, configure, and verify any of the 10 bundled MCP connectors (NinjaOne, Auvik, CIPP, ConnectWise, Spanning, KnowBe4, Vanta, ThreatLocker, Paylocity, Blumira). |
 | atlas-expedition skill | App-discovering UX swarm: auto-finds routes and form fields in any running web app, then runs the full cartographer -> persona -> fuzzer -> oracle -> reporter pipeline with no hardcoded paths. |
@@ -29,15 +29,17 @@ a codebase the more it is used.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json     # manifest (name: atlas, v2.0.0)
-|-- hooks/                         # 8 hooks (7 auto-load via hooks.json on install)
+|-- .claude-plugin/plugin.json     # manifest (name: atlas, v2.2.1)
+|-- hooks/                         # 9 hooks (8 auto-load via hooks.json on install)
 |   |-- hooks.json                 #   wires every hook below
 |   |-- session_boot.py            #   SessionStart: activate runtime, surface lessons
 |   |-- prompt_optimizer.py        #   UserPromptSubmit: optional local-model rewrite
 |   |-- bash_advisor.py            #   PreToolUse(Bash): advisory only, warns on catastrophic commands (never denies)
 |   |-- validate-readonly-query.sh #   per DB-audit subagent: block writes in read-only audits
 |   |-- format_after_edit.py       #   PostToolUse(Edit/Write): format after edits
+|   |-- dispatch_tripwire.py       #   PostToolUse: count inline ops, flag orchestrator drift
 |   |-- completion_gate.py         #   Stop: block premature "done" (opt-in via ATLAS_GATE)
+|   |-- ingest_session.py          #   Stop/SubagentStop/SessionEnd/PreCompact: mirror transcript to DB
 |   `-- nudge.py                   #   Stop/SubagentStop: self-improvement nudge (throttled)
 |-- scripts/
 |   |-- discover_capabilities.py   #   read-only stack scan -> ranked recommendations
@@ -129,7 +131,7 @@ the command ask once for anything missing.
 
 ## Hooks
 
-The seven hooks auto-load from `hooks/hooks.json` when the plugin is installed - no
+The eight hooks auto-load from `hooks/hooks.json` when the plugin is installed - no
 manual step. Each is stdlib-only and fails safe: any internal error exits 0, so a hook
 can never block a session.
 
@@ -140,7 +142,9 @@ can never block a session.
 | `bash_advisor.py` | `PreToolUse` (Bash) | Advisory only: warns on catastrophic, near-irreversible patterns (`rm -rf /`, `mkfs`, `dd` to a disk, fork bomb). Never denies or forces an ask; the normal permission flow is preserved |
 | `validate-readonly-query.sh` | `PreToolUse` (Bash), per DB-audit subagent | Block writes/DDL/grants during read-only audits (wired by the audit agents, not the global session) |
 | `format_after_edit.py` | `PostToolUse` (Edit/Write) | Run the formatter after edits |
+| `dispatch_tripwire.py` | `PostToolUse` | Count inline ops since the last dispatch and flag orchestrator drift (advisory; `ATLAS_TRIPWIRE=off`) |
 | `completion_gate.py` | `Stop` | Block a premature "done" until verification evidence exists (opt-in via `ATLAS_GATE`) |
+| `ingest_session.py` | `Stop`, `SubagentStop`, `SessionEnd`, `PreCompact` | Mirror the session transcript into the observability DB for the sextant session-forensics lens (`ATLAS_INGEST=off`) |
 | `nudge.py` | `Stop`, `SubagentStop` | Self-improvement: prompt to capture a lesson and check docs drift (throttled) |
 
 For installs outside a plugin (a copied skill or bare agent), `scripts/install_hooks.py`

@@ -63,6 +63,77 @@ class AtlasDbTest(unittest.TestCase):
         self.assertEqual(rows[0], 1)
         self.assertGreaterEqual(len(atlas_db.trends(self.conn)), 1)
 
+    def test_derive_run_metrics_from_mirror(self):
+        pid = atlas_db.register_project(self.conn, "/repo/x")
+        rid = atlas_db.start_run(self.conn, pid, "sess-d")
+        atlas_db.upsert_session_log(
+            self.conn, "sess-d", project_id=pid, started_at=100.0, ended_at=160.0
+        )
+        # main-thread context peak = 1000 + 200; a sidechain msg must be ignored
+        atlas_db.insert_message(
+            self.conn,
+            "sess-d",
+            {
+                "uuid": "m1",
+                "role": "assistant",
+                "is_sidechain": 0,
+                "input_tokens": 1000,
+                "cache_read_tokens": 200,
+            },
+        )
+        atlas_db.insert_message(
+            self.conn,
+            "sess-d",
+            {
+                "uuid": "m2",
+                "role": "assistant",
+                "is_sidechain": 1,
+                "input_tokens": 9999,
+                "cache_read_tokens": 9999,
+            },
+        )
+        # two implementer dispatches, one verifier -> coverage 0.5
+        atlas_db.insert_tool_call(
+            self.conn,
+            "sess-d",
+            {
+                "tool_use_id": "t1",
+                "kind": "agent",
+                "target": "atlas:implementer",
+                "ts": 100.0,
+            },
+        )
+        atlas_db.insert_tool_call(
+            self.conn,
+            "sess-d",
+            {
+                "tool_use_id": "t2",
+                "kind": "agent",
+                "target": "atlas:implementer",
+                "ts": 101.0,
+            },
+        )
+        atlas_db.insert_tool_call(
+            self.conn,
+            "sess-d",
+            {
+                "tool_use_id": "t3",
+                "kind": "agent",
+                "target": "atlas:verifier",
+                "ts": 102.0,
+            },
+        )
+        self.conn.commit()
+        d = atlas_db.derive_run_metrics(self.conn, rid, "sess-d")
+        self.assertEqual(d["est_context_tokens"], 1200)  # sidechain excluded
+        self.assertEqual(d["verifier_coverage"], 0.5)
+        self.assertEqual(d["in_flight_peak"], 3)  # all 3 within 10s
+        self.assertEqual(d["parallel_waves"], 1)
+        self.assertEqual(d["wall_clock_s"], 60.0)
+        m = atlas_db.run_metrics(self.conn, rid)
+        self.assertEqual(m["est_context_tokens"], 1200)
+        self.assertIsNone(m["recall_hits"])  # never auto-derived
+
 
 if __name__ == "__main__":
     unittest.main()
