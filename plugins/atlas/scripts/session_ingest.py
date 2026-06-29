@@ -257,6 +257,16 @@ def ingest_transcript(path, conn=None, session_id=None, force=False):
             last_ingest_at=time.time(),
         )
         atlas_db.refresh_session_aggregates(conn, session_id)
+        # The mirror is now current for this session, so the run-health columns
+        # that no live hook can fill (est_context_tokens, verifier_coverage,
+        # parallel_waves, in_flight_peak) can be derived. Attach to the latest
+        # run for the session whether or not the Stop hook already closed it.
+        try:
+            rid = atlas_db.latest_run_id(conn, session_id)
+            if rid is not None:
+                atlas_db.derive_run_metrics(conn, rid, session_id)
+        except Exception:
+            pass  # derivation is best-effort; never break ingest
         conn.commit()
     finally:
         if own:

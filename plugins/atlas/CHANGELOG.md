@@ -1,5 +1,32 @@
 # Changelog
 
+## 2.2.2
+
+Makes the run-health metrics from 2.2.1 actually populate operationally, and
+corrects three defects found by end-to-end testing against the live hooks.
+
+- **`derive_run_metrics` is now wired into ingest.** 2.2.1 added the function but
+  nothing called it outside tests, so `est_context_tokens`, `verifier_coverage`,
+  `parallel_waves`, and `in_flight_peak` stayed NULL on every real run.
+  `session_ingest.ingest_transcript` now calls it after each mirror refresh, so
+  live runs populate on their own (Stop / SubagentStop / SessionEnd / PreCompact).
+- **`finalize_run` defaults `wall_clock_s`.** The Stop hook calls
+  `finalize_run(run_id)` with no duration, so `wall_clock_s` was NULL on every
+  historical run. It now defaults to the run's elapsed time (`now - started_at`).
+- **`derive_run_metrics` no longer clobbers a finalized wall clock.** Its upsert
+  used `COALESCE(excluded.wall_clock_s, wall_clock_s)`, overwriting finalize's
+  authoritative value with the (often zero) transcript span. Flipped to
+  `COALESCE(wall_clock_s, excluded.wall_clock_s)` so derive only fills a
+  wall-clock that finalize never set (backfill-only sessions).
+- **`trends()` returns the full metric set.** It selected three metric columns
+  while the `atlas-sextant` Trends table compares dimensions like
+  `verifier_coverage` and `parallel_waves`; it now returns all of them.
+- **`latest_run_id(conn, session_id)`** added: resolves the most recent run open
+  OR closed, so post-Stop metric derivation attaches regardless of hook ordering.
+- `atlas-sextant` SKILL.md corrected: `derive_run_metrics` marked auto-wired,
+  `latest_run_id` documented, the Trends column list and the example (which used
+  `current_run_id`, NULL after Stop) fixed.
+
 ## 2.2.1
 
 Fixes a hook-spam bug and fills run-health metrics that were never populated.

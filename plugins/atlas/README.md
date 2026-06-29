@@ -29,7 +29,7 @@ a codebase the more it is used.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json     # manifest (name: atlas, v2.2.1)
+|-- .claude-plugin/plugin.json     # manifest (name: atlas, v2.2.2)
 |-- hooks/                         # 9 hooks (8 auto-load via hooks.json on install)
 |   |-- hooks.json                 #   wires every hook below
 |   |-- session_boot.py            #   SessionStart: activate runtime, surface lessons

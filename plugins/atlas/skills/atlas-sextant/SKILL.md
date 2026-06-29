@@ -27,15 +27,16 @@ Public functions in `atlas_db.py`:
 - `init(conn)` -- create schema
 - `register_project(conn, root_path, name=None, stack=None) -> int` -- upsert project row, returns project_id
 - `start_run(conn, project_id, session_id, task_summary=None, model=None) -> int` -- open a run, returns run_id
-- `current_run_id(conn, session_id) -> int | None` -- most recent open run for this session
+- `current_run_id(conn, session_id) -> int | None` -- most recent OPEN run for this session (None once the Stop hook has finalized it)
+- `latest_run_id(conn, session_id) -> int | None` -- most recent run for this session, open OR closed; use this when reading/deriving metrics after the run has been finalized
 - `log_event(conn, run_id, tool, context, is_inline_op, path=None) -> int` -- append an event
 - `log_dispatch(conn, run_id, agent_type, model=None, wave_id=None) -> int` -- record a dispatch
 - `inline_ops_since_last_dispatch(conn, run_id)` -- count inline ops since the last dispatch
 - `finalize_run(conn, run_id, wall_clock_s=None) -> None` -- close the run
 - `run_metrics(conn, run_id) -> dict` -- return the metrics row for a run
-- `derive_run_metrics(conn, run_id, session_id) -> dict` -- compute the metrics no live hook can fill (est_context_tokens, verifier_coverage, parallel_waves, in_flight_peak, wall_clock_s) from the transcript mirror and write them onto the run's metrics row. Call this after `finalize_run` (or before reading metrics for a session that has mirror rows). It does NOT touch recall_hits/recall_misses.
+- `derive_run_metrics(conn, run_id, session_id) -> dict` -- compute the metrics no live hook can fill (est_context_tokens, verifier_coverage, parallel_waves, in_flight_peak, wall_clock_s) from the transcript mirror and write them onto the run's metrics row. The ingest hook now calls this automatically after every mirror refresh (Stop/SubagentStop/SessionEnd/PreCompact), so live runs populate on their own. Call it manually only for a session whose mirror you just backfilled. It does NOT touch recall_hits/recall_misses.
 - `record_improvement(conn, run_id, dimension, baseline, target, note) -> int` -- persist a proposed improvement
-- `trends(conn, limit=20) -> list` -- cross-run/cross-project trend rows (most recent `limit` runs)
+- `trends(conn, limit=20) -> list` -- cross-run/cross-project trend rows over the FULL metric set (run_id, root_path, inline_ops, dispatches, parallel_waves, in_flight_peak, est_context_tokens, recall_hits, recall_misses, verifier_coverage, wall_clock_s); most recent `limit` runs. Mirror-derived columns read NULL for any run whose session has no ingested transcript.
 
 ## What it measures
 
@@ -55,10 +56,14 @@ signal:
 | `wall_clock_s` | Elapsed seconds for the run | Baseline for tracking improvement over time |
 
 How these are populated: `inline_ops` and `dispatches` come live from the
-PostToolUse tripwire (`events` table). `est_context_tokens`, `verifier_coverage`,
-`parallel_waves`, `in_flight_peak`, and `wall_clock_s` are computed from the
-transcript mirror by `derive_run_metrics(conn, run_id, session_id)` - call it
-after `finalize_run`, or they read NULL. `recall_hits` / `recall_misses` are
+PostToolUse tripwire (`events` table) and are written by `finalize_run` on Stop,
+which also defaults `wall_clock_s` to the run's elapsed time. `est_context_tokens`,
+`verifier_coverage`, `parallel_waves`, and `in_flight_peak` are computed from the
+transcript mirror by `derive_run_metrics(conn, run_id, session_id)`, which the
+ingest hook now runs automatically after each mirror refresh - so they fill on
+their own for any session whose transcript is ingested. A run whose session was
+never ingested still reads NULL for those four; backfill the transcript and call
+`derive_run_metrics` to fill it. `recall_hits` / `recall_misses` are
 **not auto-derived**: counting memory tool calls is easy, but judging whether a
 returned lesson was actually *usable* is semantic, so this skill sets them by
 reading the messages (the memory-tool call plus whether its result changed the
@@ -79,7 +84,8 @@ import atlas_db, os
 
 conn = atlas_db.connect(os.environ.get("ATLAS_DB", os.path.expanduser("~/.atlas/atlas.db")))
 session_id = os.environ.get("CLAUDE_SESSION_ID", "")
-run_id = atlas_db.current_run_id(conn, session_id)
+# latest_run_id (not current_run_id) so this still resolves after Stop finalized the run
+run_id = atlas_db.latest_run_id(conn, session_id)
 metrics = atlas_db.run_metrics(conn, run_id)
 
 # Example: verifier coverage was 0.6 this run
