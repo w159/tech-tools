@@ -135,6 +135,17 @@ def current_run_id(conn, session_id):
     return row[0] if row else None
 
 
+def latest_run_id(conn, session_id):
+    """Most recent run for a session, open OR closed. Unlike current_run_id this
+    still resolves after the Stop hook has finalized the run, so the post-ingest
+    metric derivation can attach to it regardless of hook ordering."""
+    row = conn.execute(
+        "SELECT id FROM runs WHERE session_id=? ORDER BY id DESC LIMIT 1",
+        (session_id,),
+    ).fetchone()
+    return row[0] if row else None
+
+
 def log_event(conn, run_id, tool, context, is_inline_op, path=None):
     cur = conn.execute(
         "INSERT INTO events(run_id,ts,tool,context,is_inline_op,path) "
@@ -166,6 +177,15 @@ def inline_ops_since_last_dispatch(conn, run_id):
 
 
 def finalize_run(conn, run_id, wall_clock_s=None):
+    # Default the wall clock to the run's own elapsed time. Callers (the Stop
+    # hook) rarely have a precomputed duration, and a NULL here is why
+    # wall_clock_s was empty on every historical run.
+    if wall_clock_s is None:
+        started = conn.execute(
+            "SELECT started_at FROM runs WHERE id=?", (run_id,)
+        ).fetchone()
+        if started and started[0] is not None:
+            wall_clock_s = max(0.0, time.time() - started[0])
     inline = conn.execute(
         "SELECT COUNT(*) FROM events WHERE run_id=? AND is_inline_op=1",
         (run_id,),
@@ -250,7 +270,10 @@ def derive_run_metrics(conn, run_id, session_id, window_s=10.0):
         "ON CONFLICT(run_id) DO UPDATE SET est_context_tokens=excluded.est_context_tokens,"
         "parallel_waves=excluded.parallel_waves,in_flight_peak=excluded.in_flight_peak,"
         "verifier_coverage=excluded.verifier_coverage,"
-        "wall_clock_s=COALESCE(excluded.wall_clock_s,wall_clock_s)",
+        # finalize_run's elapsed time is authoritative; the transcript-span value
+        # derived here only fills a wall_clock that finalize never set (e.g. a
+        # backfill-only session). Existing value wins, so derive never clobbers it.
+        "wall_clock_s=COALESCE(wall_clock_s,excluded.wall_clock_s)",
         (run_id, peak, parallel_waves, in_flight_peak, coverage, wall),
     )
     conn.commit()
@@ -292,23 +315,35 @@ def record_improvement(conn, run_id, dimension, baseline, target, note):
     return cur.lastrowid
 
 
+TREND_COLUMNS = (
+    "run_id",
+    "root_path",
+    "inline_ops",
+    "dispatches",
+    "parallel_waves",
+    "in_flight_peak",
+    "est_context_tokens",
+    "recall_hits",
+    "recall_misses",
+    "verifier_coverage",
+    "wall_clock_s",
+)
+
+
 def trends(conn, limit=20):
+    """Cross-run/cross-project rows over the FULL metric set. The skill's Trends
+    table compares dimensions like verifier_coverage and parallel_waves, so every
+    derived column is returned here - not just the three the live hooks write."""
     rows = conn.execute(
-        "SELECT r.id, p.root_path, m.inline_ops, m.dispatches, m.wall_clock_s "
+        "SELECT r.id, p.root_path, m.inline_ops, m.dispatches, m.parallel_waves, "
+        "m.in_flight_peak, m.est_context_tokens, m.recall_hits, m.recall_misses, "
+        "m.verifier_coverage, m.wall_clock_s "
         "FROM runs r JOIN projects p ON p.id=r.project_id "
         "LEFT JOIN metrics m ON m.run_id=r.id "
         "ORDER BY r.id DESC LIMIT ?",
         (limit,),
     ).fetchall()
-    return [
-        dict(
-            zip(
-                ("run_id", "root_path", "inline_ops", "dispatches", "wall_clock_s"),
-                r,
-            )
-        )
-        for r in rows
-    ]
+    return [dict(zip(TREND_COLUMNS, r)) for r in rows]
 
 
 # --- asset/context audit (the context-cost lens) ------------------------------
