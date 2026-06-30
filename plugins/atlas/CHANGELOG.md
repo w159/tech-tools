@@ -1,5 +1,41 @@
 # Changelog
 
+## 2.3.0
+
+Atlas cohesion program (WS1-WS5) plus adoption follow-ups; each workstream independently
+reviewed before merge. Plans/evidence under `docs/audits/atlas-cohesion-2026-06-29/`.
+
+- **Orchestration marker (WS1).** Per-session `runs.orchestrating` flag set via the
+  `mark-orchestrating` CLI; dispatch tripwire, completion gate, and nudge gate on it so
+  non-orchestration sessions are never nagged or blocked. Hook inventory reconciled to 8.
+- **Recall signal (WS2).** `record_recall` + `record-recall <session> hit|miss` CLI; the
+  engine Orient step records recall hit/miss. Survives `derive_run_metrics`.
+- **graphify scoping (WS3).** Per-root scoping + non-interactive size gate
+  (`GRAPHIFY_NONINTERACTIVE`); repo `.graphifyignore`. Audits no longer stall on monorepo scope.
+- **Knowledge-graph hub + launcher (WS4).** `scripts/build_hub.py` (file-granular
+  node<->finding manifest + branded hub HTML) and the new `/atlas-launch` command closing the
+  audit->remediation loop. 16 launchers.
+- **Adoption (WS5).** `/atlas menu` discoverability mode; `references/memory-access.md` codifying
+  claude-mem worker-runtime call conventions.
+
+### Sextant self-improvement follow-up (post-WS5)
+
+- **Fixed: `dispatches` metric was a stale snapshot.** `derive_run_metrics` now recomputes
+  `dispatches = COUNT(*) FROM dispatches WHERE run_id=?` instead of trusting the one-shot snapshot
+  `finalize_run` takes at the first Stop, which missed dispatches landing in later turns of the
+  same session. Across the DB, 46 dispatch rows existed across 10 runs but only 3 metrics rows
+  showed `dispatches>0`; this was a reporting bug, not a delegation gap.
+  (`scripts/atlas_db.py:380-397`)
+- **Added: auto-derived session resume on SessionStart.** `session_boot.py` gained
+  `resume_block(root)` and three helpers (198 lines) that derive a "Resuming &lt;project&gt;" block
+  from claude-mem and the atlas mirror, with zero user input required. Fail-silent. The Stop-time
+  `next_step` signal needed to close the remaining gap is intentionally deferred, not shipped.
+  (`hooks/session_boot.py:31-216`)
+- The WS5 `memory-access.md` calling convention was promoted to the user's global
+  `~/.claude/CLAUDE.md` after two further sessions still mis-called `observation_search` in worker
+  runtime; the skill-scoped reference alone did not reliably load. See
+  `skills/atlas-engine/references/memory-access.md:36`.
+
 ## 2.2.3
 
 Extends the observability layer with run-kind tagging, a docs-freshness advisory

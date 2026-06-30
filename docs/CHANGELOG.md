@@ -4,7 +4,70 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
-## [Unreleased] -- Atlas v2.2.3 (in progress as of 2026-06-29)
+## Atlas v2.3.0 -- cohesion program (2026-06-30)
+
+The five-workstream Atlas cohesion program plus three adoption follow-ups. Each workstream was
+independently reviewed before merge. Plans + evidence under `docs/audits/atlas-cohesion-2026-06-29/`.
+
+- **WS1 - hook misfires**: per-session orchestration marker (`runs.orchestrating` + `mark-orchestrating`
+  CLI). The dispatch tripwire, completion gate, and nudge now gate on it, so non-orchestration sessions
+  are never nagged or blocked. Hook inventory reconciled to the real 8 across all surfaces.
+  (`plugins/atlas/hooks/*`, `plugins/atlas/scripts/atlas_db.py`)
+- **WS2 - instrumentation**: most was already shipped in v2.2.3 (dispatch logging, metric derivation,
+  classifier). Net-new: a `record_recall` signal (`record-recall <session> hit|miss` CLI) so the engine
+  Orient step records recall hit/miss. Validated to survive `derive_run_metrics`.
+- **WS3 - graphify scoping**: per-root scoping + a non-interactive size gate (`GRAPHIFY_NONINTERACTIVE`)
+  so audits never stall on whole-monorepo scope; repo `.graphifyignore`. (`skills/graphify/SKILL.md`,
+  `plugins/atlas/skills/atlas-survey/SKILL.md`)
+- **WS4 - knowledge-graph hub + launcher**: `scripts/build_hub.py` (file-granular node<->finding
+  manifest + branded Atlas hub HTML) and the new `/atlas-launch` command closing the audit->remediation
+  loop. Survey/cartographer/engine wired. (15 -> 16 launchers)
+- **WS5 - adoption**: memo with user-confirmed verdicts (no assets pruned). Follow-ups landed:
+  `/atlas menu` discoverability mode; claude-mem worker-runtime call conventions
+  (`references/memory-access.md`) fixing the 44% error rate; supermemory pointed at cloud.
+
+### Sextant self-improvement run (2026-06-30, post-WS5)
+
+Two further fixes from an `atlas-sextant` self-improvement pass, plus two related changes outside
+the plugin.
+
+- **Fixed: the `dispatches` run-health metric was a stale snapshot, not a delegation gap.**
+  `derive_run_metrics` now recomputes `dispatches = COUNT(*) FROM dispatches WHERE run_id=?` onto
+  the metrics row instead of trusting the one-shot snapshot `finalize_run` takes at the first Stop.
+  Dispatches landing in later turns of the same session (via the `dispatch_tripwire` last-run
+  fallback) were never recounted, so `metrics.dispatches` read 0 even when the `dispatches` table
+  had rows -- across the DB, 46 dispatch rows existed across 10 runs but only 3 metrics rows showed
+  `dispatches>0`; run 52 had 7 dispatch rows with `metrics.dispatches=0`, now corrected to 7. This
+  reframes the recurring "zero subagent dispatches" investigations from prior sessions (the v2.2.3
+  work) as chasing a REPORTING bug, not a delegation failure -- delegation was happening; the metric
+  was not counting it.
+  (`plugins/atlas/scripts/atlas_db.py:380-397`)
+- **Added: auto-derived session resume on SessionStart.** `session_boot.py` gained `resume_block(root)`
+  plus helpers `_relative_time`, `_claude_mem_summary`, `_atlas_session_context` (198 lines added).
+  On boot it derives and prints a "## Resuming &lt;project&gt;" block from three read-only sources:
+  claude-mem's `session_summaries`/observations, the atlas mirror (last session, last user prompt,
+  last edited file, unverified-claim count), and the newest transcript mtime for freshness.
+  Fail-silent; never blocks boot. Deliberately replaces a rejected "continue from last session"
+  command -- resume state is derived, never re-typed by the user. Known gap, intentionally
+  deferred: there is no Stop-time `next_step` signal, so the part of resume state that depends on
+  what-to-do-next still relies on claude-mem's `session_summaries.next_steps` field rather than a
+  dedicated atlas signal.
+  (`plugins/atlas/hooks/session_boot.py:31-216`)
+- The claude-mem worker-runtime calling convention shipped in WS5 above
+  (`plugins/atlas/skills/atlas-engine/references/memory-access.md`) proved insufficient on its own:
+  two sessions after that commit still mis-called `observation_search` in worker runtime. The rule
+  was promoted to the user's global, always-loaded `~/.claude/CLAUDE.md` so it loads regardless of
+  whether the skill is in context. Cross-referenced, not duplicated, in `memory-access.md`.
+  (`plugins/atlas/skills/atlas-engine/references/memory-access.md:36`)
+- The user's global verification protocol (`agentic-tools/rules/verification-protocol.md`, outside
+  this repo) was independently strengthened in response to mined signals -- 29 unverified-claim
+  findings across 7 projects and 64 assumption-admission findings across 12 -- closing a
+  prediction-phrase loophole and adding an assumption gate and claim-evidence adjacency requirement.
+  No file in this repo changed for this item; noted here for cross-project traceability. See
+  `plugins/atlas/skills/atlas-engine/references/verification-and-grounding.md:78` for the
+  cross-reference.
+
+## Atlas v2.2.3 (released 2026-06-29)
 
 Four work items extending the observability layer shipped in v2.2.1/2.2.2. Not yet released.
 

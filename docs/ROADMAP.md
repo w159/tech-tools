@@ -13,9 +13,28 @@ Surface autocompact and thinking-token budgets plus model routing as recommend-t
 
 ## In Progress
 
-### Atlas v2.2.3 -- run-kind tagging, docs-freshness gate, late-dispatch hardening, docs SSOT backfill
+Nothing in progress.
 
-Four items extending the observability work from v2.2.1/2.2.2. None released yet.
+## Done
+
+### Atlas v2.3.0 -- cohesion program (resolved 2026-06-30)
+
+WS1 orchestration marker + hook gating; WS2 recall signal; WS3 graphify per-root scoping +
+non-interactive size gate; WS4 knowledge-graph hub + `/atlas-launch` (15 -> 16 launchers); WS5
+adoption memo + `/atlas menu` + claude-mem worker-runtime conventions + supermemory-to-cloud. Each
+workstream independently reviewed before merge. Plans/evidence under
+`docs/audits/atlas-cohesion-2026-06-29/`.
+
+A follow-on `atlas-sextant` self-improvement pass (post-WS5) added two more fixes under the same
+2.3.0 release: the `dispatches` run-health metric was recomputed from a live `COUNT(*)` instead of
+a stale first-Stop snapshot (`plugins/atlas/scripts/atlas_db.py:380-397`), and `session_boot.py`
+gained an auto-derived "Resuming &lt;project&gt;" block on SessionStart
+(`plugins/atlas/hooks/session_boot.py:31-216`). See `docs/CHANGELOG.md` for full detail and the
+related global-instructions cross-references.
+
+### Atlas v2.2.3 -- run-kind tagging, docs-freshness gate, late-dispatch hardening, docs SSOT backfill (released 2026-06-29)
+
+Four items extending the observability work from v2.2.1/2.2.2.
 
 - Run-kind tagging: add `run_kind` (orchestrator/worker) to the `runs` table so Trends aggregates
   exclude leaf worker sessions from run-health metrics.
@@ -30,8 +49,6 @@ Four items extending the observability work from v2.2.1/2.2.2. None released yet
 - Docs SSOT backfill: bring `docs/CHANGELOG.md`, `docs/ROADMAP.md`, and `docs/AGENTS.md` current
   with v2.2.1 and v2.2.2 (previously only in `plugins/atlas/CHANGELOG.md`).
   (`docs/CHANGELOG.md`, `docs/ROADMAP.md`, `docs/AGENTS.md`)
-
-## Done
 
 ### Atlas v2.2.2 -- run-metrics population fix and defect corrections (resolved 2026-06-29)
 
