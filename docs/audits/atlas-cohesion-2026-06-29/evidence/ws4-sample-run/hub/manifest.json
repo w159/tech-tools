@@ -5,8 +5,8 @@
     "file": "package.json",
     "line": 14,
     "severity": "HIGH",
-    "node_id": "auvik_mcp_package_bugs_url",
-    "node_match": "exact",
+    "node_id": "package_json",
+    "node_match": "file",
     "handoff_path": "handoffs/auvik-token-refresh.md",
     "prompt_summary": "Harden Auvik token refresh"
   },
@@ -16,8 +16,8 @@
     "file": "src/index.ts",
     "line": 42,
     "severity": "MED",
-    "node_id": "src_index",
-    "node_match": "exact",
+    "node_id": "src_index_ts",
+    "node_match": "file",
     "handoff_path": "handoffs/device-pagination.md",
     "prompt_summary": "Validate device pagination"
   }

@@ -41,9 +41,11 @@ class BuildHubTest(unittest.TestCase):
         entries = build_hub.build_manifest(self.run_dir, self._graphs())
         e1 = next(e for e in entries if e["id"] == "finding-1")
         e2 = next(e for e in entries if e["id"] == "finding-2")
-        # package.json is a real node in the auvik graph -> resolves
+        # package.json is a real file in the auvik graph -> resolves to its container node
         self.assertIsNotNone(e1["node_id"])
-        self.assertIn(e1["node_match"], ("exact", "suffix"))
+        self.assertIn(e1["node_match"], ("file", "file-suffix"))
+        # first-wins index picks the file-container node, not an arbitrary sub-node
+        self.assertEqual(e1["node_id"], "package_json")
         # the made-up file is absent -> explicit none, never a wrong guess
         self.assertIsNone(e2["node_id"])
         self.assertEqual(e2["node_match"], "none")
@@ -54,9 +56,11 @@ class BuildHubTest(unittest.TestCase):
         idx = os.path.join(self.run_dir, "hub", "index.html")
         self.assertTrue(os.path.exists(man))
         self.assertTrue(os.path.exists(idx))
-        data = json.load(open(man))
+        with open(man) as fh:
+            data = json.load(fh)
         self.assertEqual(len(data), 2)
-        htmldoc = open(idx).read()
+        with open(idx) as fh:
+            htmldoc = fh.read()
         self.assertIn("Atlas Expedition Map", htmldoc)
         self.assertIn("atlas-launch finding-1", htmldoc)
         # HIGH sorts before LOW

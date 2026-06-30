@@ -6,8 +6,9 @@ remediation prompts and optional `report.md`/`findings/*.md`, plus one or more g
 `graph.json` graphs, produce:
 
   <run_dir>/hub/manifest.json  - the node<->finding bridge: one entry per handoff, each
-                                 mapped to the graphify node for its file (file-granular;
-                                 graphify nodes carry source_file, not line spans).
+                                 mapped to its file's representative (container) node.
+                                 graphify nodes are SUB-FILE (one per symbol/key) and carry
+                                 no line spans, so the bridge is file-granular, not exact.
   <run_dir>/hub/index.html     - a branded Atlas "expedition map": actionable nodes as
                                  cards with severity, the finding, the handoff excerpt,
                                  and the exact `atlas-launch <id>` command to remediate.
@@ -27,11 +28,20 @@ import sys
 
 SEVERITY_RANK = {"HIGH": 0, "MED": 1, "MEDIUM": 1, "LOW": 2}
 _FILE_LINE = re.compile(r"`?([\w./\-]+\.\w+):(\d+)`?")
-_SEVERITY = re.compile(r"\b(HIGH|MED|MEDIUM|LOW)\b")
+# Case-SENSITIVE: severity labels are written uppercase (HIGH/MED/LOW), so lowercase
+# prose like "low-level API" is ignored while a real "HIGH severity"/"MED"/"Severity: LOW"
+# label is read. Avoids prose flipping the badge without needing the word "severity".
+_SEVERITY = re.compile(r"\b(HIGH|MEDIUM|MED|LOW)\b")
 
 
-def _index_nodes_by_file(graph_paths):
-    """Map source_file -> node id across all supplied graphs (last wins on dup)."""
+def _index_file_nodes(graph_paths):
+    """Map source_file -> the file's REPRESENTATIVE (container) node id.
+
+    Graphify emits SUB-FILE nodes (one per symbol/import/JSON key), so a single file
+    owns many nodes (e.g. package.json -> ~40 nodes). The manifest is file-granular: we
+    keep the first node seen for each file, which is graphify's file-container node
+    (verified on the auvik fixture: package.json -> `package_json`, not `..._bugs_url`).
+    We do NOT claim node-level precision - there are no line spans to match against."""
     by_file = {}
     for gp in graph_paths:
         try:
@@ -42,26 +52,33 @@ def _index_nodes_by_file(graph_paths):
         for n in g.get("nodes", []):
             sf = n.get("source_file")
             if sf:
-                by_file[sf] = n.get("id")
+                by_file.setdefault(sf, n.get("id"))  # first wins = file-container node
     return by_file
 
 
 def _match_node(file_path, by_file):
-    """(node_id, match_kind) for a finding file path against the node index.
-    Graphify source_file is relative to its own scan root, so a finding path like
-    mcp_servers/x/src/a.ts matches a node source_file src/a.ts by suffix."""
+    """(node_id, match_kind) mapping a finding's file path to that file's container node.
+    match_kind is about how the PATH matched the graph's file set, never node precision:
+      'file'        - the finding path equals a graph source_file
+      'file-suffix' - one is a multi-segment path-suffix of the other (graphify paths are
+                      relative to their own scan root, so mcp_servers/x/src/a.ts matches a
+                      node source_file src/a.ts). Bare basenames are rejected to avoid a
+                      foo/index.ts vs bar/index.ts false match.
+      'none'        - the file is absent from the graph (never guessed)."""
     if not file_path:
         return None, "none"
     if file_path in by_file:
-        return by_file[file_path], "exact"
-    # longest-suffix match: the node file is a tail of the finding path (or vice versa)
+        return by_file[file_path], "file"
     best, best_len = None, 0
     for sf, nid in by_file.items():
+        shorter = sf if len(sf) <= len(file_path) else file_path
+        if "/" not in shorter:
+            continue  # require a multi-segment suffix; a bare basename is not a path match
         if (file_path.endswith("/" + sf) or sf.endswith("/" + file_path)) and len(
             sf
         ) > best_len:
             best, best_len = nid, len(sf)
-    return (best, "suffix") if best else (None, "none")
+    return (best, "file-suffix") if best else (None, "none")
 
 
 def _summarize(text):
@@ -81,7 +98,9 @@ def _parse_handoff(path):
     except Exception:
         text = ""
     fm = _FILE_LINE.search(text)
-    sev = _SEVERITY.search(text)
+    sev = _SEVERITY.search(
+        text
+    )  # uppercase-only, so lowercase prose can't flip the badge
     return {
         "file": fm.group(1) if fm else None,
         "line": int(fm.group(2)) if fm else None,
@@ -92,7 +111,7 @@ def _parse_handoff(path):
 
 def build_manifest(run_dir, graph_paths):
     """Build the manifest list (does not write). One entry per handoffs/<id>.md."""
-    by_file = _index_nodes_by_file(graph_paths)
+    by_file = _index_file_nodes(graph_paths)
     handoff_dir = os.path.join(run_dir, "handoffs")
     entries = []
     if os.path.isdir(handoff_dir):
@@ -207,8 +226,8 @@ def render_html(run_label, entries, communities):
         "<div class='legend'>%s</div>"
         "<main>%s</main>"
         "<footer>Each card is a charted finding. Run its <code>atlas-launch &lt;id&gt;</code> to "
-        "start a pre-loaded remediation expedition. Graph overlay is file-granular "
-        "(graphify nodes map to files, not line spans).</footer>"
+        "start a pre-loaded remediation expedition. Graph overlay is file-granular: graphify "
+        "nodes are sub-file, so each finding maps to its file's container node.</footer>"
         "<script>%s</script></body></html>"
         % (esc(run_label), _ATLAS_CSS, esc(run_label), legend, body, _ATLAS_JS)
     )
