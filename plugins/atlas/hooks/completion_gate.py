@@ -198,6 +198,8 @@ def main() -> int:
         docs = _find_docs(cwd)
         if docs is None:
             return 0  # no docs/ dir in tree -> not an atlas run -> silent no-op
+        if not _session_is_orchestrating(data.get("session_id", "")):
+            return 0  # WS1: only real orchestration runs are gated; never block a chat/audit turn
         ok_a = _check_evidence(docs)
         ok_b = _check_findings(docs)
         ok_c = _check_changelog(docs)
@@ -249,6 +251,19 @@ def _finalize_db(session_id: str) -> None:
             atlas_db.finalize_run(_conn, _rid)
     except Exception:
         pass  # observability is best-effort; never block stop
+
+
+def _session_is_orchestrating(session_id: str) -> bool:
+    """True only when this session has a run flagged orchestrating. Fail-open to
+    False: if the DB is unreadable we do NOT gate (never block on uncertainty)."""
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db
+
+        conn = atlas_db.connect()
+        return atlas_db.is_orchestrating(conn, session_id)
+    except Exception:
+        return False
 
 
 if __name__ == "__main__":
