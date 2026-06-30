@@ -16,18 +16,20 @@ Date: 2026-06-30. Branch: atlas-ws4-hub.
 
 ## Design correction (honest, verified against the engine)
 
-graphify `graph.json` nodes carry `source_file` but NO line spans (verified: `mcp_servers/auvik-mcp/
-graphify-out/graph.json`, 387 nodes, zero line fields). So the manifest is **file-granular**: a
-finding at `path:line` maps to the node whose `source_file` matches `path` (exact or longest-suffix),
-else `node_match:"none"`. D3's "nearest-enclosing line span" is not achievable on file-level graphs,
-and the hub HTML says so.
+graphify `graph.json` nodes are **sub-file** - one per symbol/import/JSON key, NOT one per file
+(verified: `mcp_servers/auvik-mcp/graphify-out/graph.json` has 387 nodes across only 35 files; e.g.
+`package.json` owns ~40 nodes), and they carry no line spans. So the manifest is **file-granular**:
+a finding at `path:line` maps to that file's representative (container) node - `build_hub` keeps the
+first node per `source_file` (graphify emits the file-container node first), with `node_match` =
+`file` | `file-suffix` | `none`. It never claims a node-`exact` precision the graph cannot support,
+and D3's "nearest-enclosing line span" is honestly out of reach.
 
 ## Proof - build_hub against the real auvik graph
 
 ```
 $ build_hub.py <sample-run> mcp_servers/auvik-mcp/graphify-out/graph.json
-HIGH auvik-token-refresh -> auvik_mcp_package_bugs_url (exact)
-MED  device-pagination   -> src_index (exact)
+HIGH auvik-token-refresh -> package_json (file)     # container node, not an arbitrary sub-node
+MED  device-pagination   -> src_index_ts (file)
 ```
 
 A finding whose file is absent from the graph resolves to `node_id=null, node_match="none"` - it is

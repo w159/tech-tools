@@ -18,8 +18,9 @@ starts an atlas-engine session pre-loaded with that finding's handoff. No more d
   its name; the new launcher is `atlas-launch`. Add a one-line disambiguation in each skill.
 - graphify `graph.json` nodes carry `source_file` (all nodes) and `id`/`label`/`community`/
   `file_type`, but **no line spans** (verified on `mcp_servers/auvik-mcp/graphify-out/graph.json`,
-  387 nodes, zero line fields). So D3's "nearest-enclosing span by file:line" degrades honestly to
-  **file-level** matching: a finding at `path:line` maps to the node whose `source_file == path`
+  387 nodes across only 35 files, zero line fields - graphify nodes are SUB-FILE, one per
+  symbol/key). So D3's "nearest-enclosing span by file:line" degrades honestly to **file-granular**
+  matching: a finding at `path:line` maps to that file's representative (container) node
   (or the longest suffix match). The manifest records this is file-granular.
 - 15 `/atlas-*` launchers today; no `atlas-launch`, no `hub/`.
 
@@ -92,4 +93,5 @@ machinery.)
 ## Out of scope (YAGNI)
 - No live web server / cockpit (companion-skill launch model only).
 - No second graph substrate (overlay the graphify graph).
-- Line-level node matching (graphify graphs are file-level; manifest is file-granular and says so).
+- Line-level node matching (graphify graphs are sub-file with no line spans; the manifest collapses
+  each file's many nodes to its container node, file-granular, and says so).
