@@ -47,8 +47,10 @@ total_files: 2  names: ['a.py', 'b.ts']
 PASS: .graphifyignore keeps source, excludes .mcpb / docs-audits / .superpowers / *.min.js at all depths
 ```
 
-Source files (`a.py`, `b.ts`) are kept; `conn.mcpb`, `docs/audits/old.md`,
-`.superpowers/sdd/progress.md`, and both root- and nested-level `*.min.js` are excluded.
+Source files (`a.py`, `b.ts`) are kept; `docs/audits/old.md`, `.superpowers/sdd/progress.md`, and
+both root- and nested-level `*.min.js` are excluded by the `.graphifyignore` patterns. (`conn.mcpb`
+is also absent, but `.mcpb` is not a recognized source type so the engine skips it regardless - the
+`*.mcpb` rule is defense-in-depth, not load-bearing.)
 
 Gotcha captured: graphify's `**/*.ext` does NOT match repo-root-level files (only nested). The
 gitignore-idiomatic slash-less `*.ext` matches at every depth, so `.graphifyignore` uses `*.mcpb`

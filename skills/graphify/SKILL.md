@@ -115,8 +115,9 @@ Then act on it:
   - **Interactive** (a TTY is attached and `GRAPHIFY_NONINTERACTIVE` is unset): show the warning
     and the top 5 subdirectories by file count, then ask which subfolder to run on. Wait for the
     user's answer before proceeding.
-  - **Non-interactive** (`GRAPHIFY_NONINTERACTIVE=1`, or stdin is not a TTY - e.g. a Workflow or
-    orchestrated run): do NOT ask and do NOT wait. Auto-scope to the single largest subdirectory
+  - **Non-interactive** (`GRAPHIFY_NONINTERACTIVE=1` is the authoritative signal; a non-TTY stdin
+    is a best-effort fallback - e.g. a Workflow or orchestrated run sets the env var): do NOT ask
+    and do NOT wait. Auto-scope to the single largest subdirectory
     by file count, re-run Step 2 detect on that subdirectory, and proceed - printing
     `auto-scoped to <subdir> (N files); pass an explicit path or --exclude to change scope.` If
     that largest subdirectory is itself still over the gate, STOP with an explicit instruction
