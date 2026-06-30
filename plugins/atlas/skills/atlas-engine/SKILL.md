@@ -151,20 +151,22 @@ Dispatch constantly. Three complementary sets:
 
 `references/capability-routing.md` maps task signals -> the right agent + skill + MCP + model.
 
-This skill ships as part of the **atlas plugin**: the `atlas:*` companions live in the plugin's top-level `agents/` directory (`plugins/atlas/agents/`) and are auto-discovered by Claude Code; eight hooks total ship under `hooks/`; seven auto-load via `hooks/hooks.json` on install (no manual step); the read-only SQL guard is wired by the DB-audit subagents, not hooks.json.
+This skill ships as part of the **atlas plugin**: the `atlas:*` companions live in the plugin's top-level `agents/` directory (`plugins/atlas/agents/`) and are auto-discovered by Claude Code; eight hooks total ship under `hooks/` and all eight auto-load via `hooks/hooks.json` on install (no manual step).
 
 ## Automation: hooks enforce the discipline
 
-The rules above must not depend on you remembering them. Eight hooks total ship with the plugin; seven auto-load from `hooks/hooks.json` when the plugin is installed (the read-only SQL guard is wired by the DB-audit subagents instead); all are stdlib-only and fail-open, so any internal error exits 0 and a hook never blocks a session. For non-plugin installs, `scripts/install_hooks.py` (dry-run by default, merges without clobbering, backs up first) wires them manually.
+The rules above must not depend on you remembering them. Eight hooks total ship with the plugin and all eight auto-load from `hooks/hooks.json` when the plugin is installed; all are stdlib-only and fail-open, so any internal error exits 0 and a hook never blocks a session. The dispatch tripwire and completion gate additionally gate on the per-session orchestration marker, so they stay inert outside an orchestration run. For non-plugin installs, `scripts/install_hooks.py` (dry-run by default, merges without clobbering, backs up first) wires them manually.
 
 - **`session_boot.py`** (`SessionStart`) - activates the runtime each session: injects this contract and methodology, reports claude-mem/context-mode state, and surfaces relevant past lessons. Crash-proof.
 - **`prompt_optimizer.py`** (`UserPromptSubmit`) - sharpens the prompt before any token is spent on it; trigger-gated (`opt:` / `++`), augments never replaces.
 - **`bash_advisor.py`** (`PreToolUse` Bash) - advisory-only; never alters approval. Emits an `additionalContext` factual warning only on catastrophic, near-irreversible commands (rm -rf /, fork bomb, mkfs, dd to raw disk). All other commands pass through silently.
-- **`validate-readonly-query.sh`** (`PreToolUse` Bash) - blocks SQL writes, DDL, and GRANT/REVOKE during read-only audits. Wired by the DB-audit subagents themselves (schema-inventory, rls-privilege-audit, naming-glossary-audit), not the global session, so ordinary shell work is never gated by it.
 - **`format_after_edit.py`** (`PostToolUse` Edit|Write) - auto-formats the edited file with the repo's own formatter so diffs stay minimal.
-- **`completion_gate.py`** (`Stop`, opt-out) - machine enforcement of "Definition of done": blocks stopping until the evidence artifact, the independent verifier report, and current docs/ all exist. Fail-open. Runs by default when a `docs/` tree exists; disable with `ATLAS_GATE=off`.
-- **`nudge.py`** (`Stop`, `SubagentStop`) - self-improvement: surfaces a relevant past lesson and prompts to capture new ones; throttled and non-blocking. See the atlas-sextant skill.
-- **`dispatch_tripwire.py`** (`PostToolUse`) - counts inline tool calls during an active session and STOPs at the threshold (default 4) to force a Workflow or parallel-wave dispatch. Logs every trip to `atlas.db`. Tunable via `ATLAS_TRIPWIRE` (on/off) and `ATLAS_TRIPWIRE_THRESHOLD` (integer). Works in concert with the decision gate above.
+- **`completion_gate.py`** (`Stop`, opt-out) - machine enforcement of "Definition of done": blocks stopping until the evidence artifact, the independent verifier report, and current docs/ all exist. Gated on the orchestration marker, so it only engages during an orchestration run. Fail-open. Runs by default when a `docs/` tree exists; disable with `ATLAS_GATE=off`.
+- **`nudge.py`** (`Stop`, `SubagentStop`) - self-improvement: surfaces a relevant past lesson and prompts to capture new ones; gated on the orchestration marker, throttled, and non-blocking. See the atlas-sextant skill.
+- **`dispatch_tripwire.py`** (`PostToolUse`) - counts inline tool calls during an active orchestration run and STOPs at the threshold (default 4) to force a Workflow or parallel-wave dispatch; gated on the orchestration marker so non-orchestration sessions are never nagged. Logs every trip to `atlas.db`. Tunable via `ATLAS_TRIPWIRE` (on/off) and `ATLAS_TRIPWIRE_THRESHOLD` (integer). Works in concert with the decision gate above.
+- **`ingest_session.py`** (`Stop`, `SubagentStop`, `SessionEnd`, `PreCompact`) - indexes the session transcript into the observability store so atlas-sextant can mine past runs. Throttled and fail-open.
+
+A separate script, `hooks/validate-readonly-query.sh`, is NOT auto-loaded by `hooks.json`; it is a read-only SQL guard (blocks writes, DDL, GRANT/REVOKE) available for DB-audit subagents to invoke during read-only audits, so ordinary shell work is never gated by it.
 
 Full contract, config env vars, and install commands: `references/hooks-automation.md`.
 

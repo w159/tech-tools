@@ -35,9 +35,9 @@ hooks, config), run only that one. Default is all.
 ## 3. Hooks
 
 - A plugin install auto-loads `hooks/hooks.json`, so the hooks are normally already
-  active. Verify they are wired (SessionStart boot, prompt optimizer, bash guard,
-  read-only SQL guard, format-after-edit, completion gate, self-improvement nudge)
-  and report.
+  active. Verify all eight are wired (SessionStart boot, prompt optimizer, bash advisor,
+  format-after-edit, dispatch tripwire, completion gate, self-improvement nudge, and
+  session-transcript ingest) and report.
 - If atlas is running outside a plugin install (copied skill, bare agent), offer to
   run `${CLAUDE_PLUGIN_ROOT}/scripts/install_hooks.py` to wire them into settings.
 

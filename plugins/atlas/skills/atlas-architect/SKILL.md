@@ -32,10 +32,12 @@ Two entry points share this methodology:
    quality and security audit (atlas-survey), UX runtime swarm (atlas-expedition),
    and measurable self-improvement with observability (atlas-sextant). Install only
    confirmed items.
-3. Hooks. A plugin install auto-loads `hooks/hooks.json`. Verify the seven hooks are
-   active (boot, prompt optimizer, bash guard, format-after-edit, completion gate, nudge,
-   dispatch tripwire). The read-only SQL guard is wired by the DB-audit subagents
-   (schema-inventory, rls-privilege-audit, naming-glossary-audit), not hooks.json.
+3. Hooks. A plugin install auto-loads `hooks/hooks.json`. Verify all eight hooks are
+   active (session boot, prompt optimizer, bash advisor, format-after-edit, dispatch
+   tripwire, completion gate, self-improvement nudge, session-transcript ingest).
+   A separate `hooks/validate-readonly-query.sh` SQL guard ships for the DB-audit
+   subagents (schema-inventory, rls-privilege-audit, naming-glossary-audit) to use
+   during read-only audits; it is not auto-loaded by hooks.json.
    Outside a plugin install, offer `scripts/install_hooks.py`.
 4. Config. Write or update `.claude/atlas.local.md` (schema below). Show the diff and
    confirm before writing.
@@ -70,9 +72,9 @@ recommend-then-confirm. Check, in order:
   atlas-harbor when MSP/vendor signals are present), atlas-cartographer (architecture
   map + structural dedup), atlas-survey (quality and security audit), atlas-expedition
   (UX runtime swarm), and atlas-sextant (measurable self-improvement + observability);
-- the seven automation hooks that auto-load via hooks.json (boot, prompt optimizer,
-  bash guard, format-after-edit, completion gate, nudge, dispatch tripwire); note the
-  read-only SQL guard is wired by the DB-audit subagents, not hooks.json;
+- the eight automation hooks that auto-load via hooks.json (session boot, prompt
+  optimizer, bash advisor, format-after-edit, dispatch tripwire, completion gate,
+  self-improvement nudge, session-transcript ingest);
 - the docs/ SSOT scaffold, and whether CHANGELOG.md and ROADMAP.md are current.
 
 Report each as present or missing with the exact remediation. Install nothing without

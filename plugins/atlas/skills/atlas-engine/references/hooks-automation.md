@@ -1,16 +1,27 @@
 # Hooks - make the discipline automatic
 
 Hooks turn the orchestrator's rules into things that *happen on their own* instead of things
-you have to remember. This skill ships four (three on by default, one opt-in), plus a gated
-installer. They are stdlib-only Python, self-contained under `hooks/`, and every one fails safe
-(any error -> silent passthrough; none can break a prompt, a tool call, or wedge a session).
+you have to remember. The plugin ships **eight** hooks, and all eight auto-load via
+`hooks/hooks.json` on install (no manual step). They are stdlib-only Python, self-contained
+under `hooks/`, and every one fails safe (any error -> silent passthrough; none can break a
+prompt, a tool call, or wedge a session).
 
 | id | event | script | what it does |
 |---|---|---|---|
-| `optimizer` | `UserPromptSubmit` | `hooks/prompt_optimizer.py` | optimize the prompt through a local model before Claude sees it |
-| `format` | `PostToolUse` (Edit\|Write\|MultiEdit) | `hooks/format_after_edit.py` | auto-format the edited file (ruff/prettier/gofmt/rustfmt), async |
+| `session-boot` | `SessionStart` | `hooks/session_boot.py` | activate the runtime: inject the contract/methodology, report claude-mem/context-mode state, surface past lessons |
+| `optimizer` | `UserPromptSubmit` | `hooks/prompt_optimizer.py` | optimize the prompt through a local model before Claude sees it; trigger-gated |
 | `advisor` | `PreToolUse` (Bash) | `hooks/bash_advisor.py` | advisory-only; emits a warning on catastrophic, near-irreversible commands only |
-| `completion-gate` | `Stop` | `hooks/completion_gate.py` | **opt-out.** block stopping an atlas run until evidence is captured (on by default when docs/ exists; disable with ATLAS_GATE=off) |
+| `format` | `PostToolUse` (Edit\|Write\|MultiEdit) | `hooks/format_after_edit.py` | auto-format the edited file (ruff/prettier/gofmt/rustfmt), async |
+| `dispatch-tripwire` | `PostToolUse` | `hooks/dispatch_tripwire.py` | count inline tool calls during an orchestration run and STOP at the threshold to force a dispatch; marker-gated |
+| `completion-gate` | `Stop` | `hooks/completion_gate.py` | **opt-out.** block stopping an orchestration run until evidence is captured; marker-gated, on by default when docs/ exists (disable with ATLAS_GATE=off) |
+| `nudge` | `Stop`, `SubagentStop` | `hooks/nudge.py` | self-improvement: surface a past lesson and prompt to capture new ones; marker-gated, throttled |
+| `ingest-session` | `Stop`, `SubagentStop`, `SessionEnd`, `PreCompact` | `hooks/ingest_session.py` | index the session transcript into the observability store for atlas-sextant |
+
+The dispatch tripwire, completion gate, and nudge additionally gate on the per-session
+orchestration marker (set by atlas-engine via `mark-orchestrating`), so they are inert in
+ordinary non-orchestration sessions. A ninth script, `hooks/validate-readonly-query.sh`, is
+**not** auto-loaded by hooks.json; it is a read-only SQL guard available for the DB-audit
+subagents to invoke during read-only audits.
 
 ## Install (gated, idempotent)
 
@@ -101,5 +112,5 @@ orchestrator rationalizes "I'll mark it unverified and move on"); this is the ma
 Audit which lifecycle events have handlers and where the leverage is (formatter, guard, session
 orientation, idle notify, compaction state) in `references/claude-code-tuning.md`. To add a hook,
 drop a stdlib script in `hooks/`, add a `HOOK_SPECS` entry in `scripts/install_hooks.py`, and a
-guard test in `tests/`. Keep the fail-safe contract: a hook must never block or break the action
-it observes.
+guard test alongside the others in `hooks/` (`test_*.py`). Keep the fail-safe contract: a hook
+must never block or break the action it observes.
