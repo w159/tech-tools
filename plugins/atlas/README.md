@@ -112,7 +112,7 @@ the command ask once for anything missing.
 
 | Command | Use it to |
 | --- | --- |
-| `/atlas` | Boot and configure the workspace: dependencies, capability discovery, hooks, config, docs seed |
+| `/atlas` | Boot and configure the workspace: dependencies, capability discovery, hooks, config, docs seed. `/atlas menu` lists every atlas skill/launcher grouped by intent (and `/atlas menu <need>` recommends the best-fit one). |
 | `/atlas-feature` | Build a full-stack feature across UI, API, and data with curl + read-back evidence |
 | `/atlas-frontend` | Build or refactor UI on one design system (shadcn/ui + Tailwind + Radix), all four states |
 | `/atlas-component` | Build a reusable component resilient to latency, cancellation, and partial failure |
