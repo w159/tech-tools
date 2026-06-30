@@ -31,10 +31,11 @@ Public functions in `atlas_db.py`:
 - `latest_run_id(conn, session_id) -> int | None` -- most recent run for this session, open OR closed; use this when reading/deriving metrics after the run has been finalized
 - `log_event(conn, run_id, tool, context, is_inline_op, path=None) -> int` -- append an event
 - `log_dispatch(conn, run_id, agent_type, model=None, wave_id=None) -> int` -- record a dispatch
+- `record_recall(conn, run_id, hit) -> None` -- increment `recall_hits` (hit=True) or `recall_misses` (hit=False) for the run; the engine Orient step calls this once per run via the `record-recall <session> hit|miss` CLI. Touches only the recall columns, so it survives `derive_run_metrics` refreshes.
 - `inline_ops_since_last_dispatch(conn, run_id)` -- count inline ops since the last dispatch
 - `finalize_run(conn, run_id, wall_clock_s=None) -> None` -- close the run
 - `run_metrics(conn, run_id) -> dict` -- return the metrics row for a run
-- `derive_run_metrics(conn, run_id, session_id) -> dict` -- compute the metrics no live hook can fill (est_context_tokens, verifier_coverage, parallel_waves, in_flight_peak, wall_clock_s) from the transcript mirror and write them onto the run's metrics row. The ingest hook now calls this automatically after every mirror refresh (Stop/SubagentStop/SessionEnd/PreCompact), so live runs populate on their own. Call it manually only for a session whose mirror you just backfilled. It does NOT touch recall_hits/recall_misses.
+- `derive_run_metrics(conn, run_id, session_id) -> dict` -- compute the metrics no live hook can fill (est_context_tokens, verifier_coverage, parallel_waves, in_flight_peak, wall_clock_s) from the transcript mirror and write them onto the run's metrics row. The ingest hook now calls this automatically after every mirror refresh (Stop/SubagentStop/SessionEnd/PreCompact), so live runs populate on their own. Call it manually only for a session whose mirror you just backfilled. It deliberately does NOT touch recall_hits/recall_misses (those are recorded live by the engine Orient signal via `record_recall`), so a derive refresh never clobbers them.
 - `record_improvement(conn, run_id, dimension, baseline, target, note) -> int` -- persist a proposed improvement
 - `trends(conn, limit=20) -> list` -- cross-run/cross-project trend rows over the FULL metric set (run_id, root_path, inline_ops, dispatches, parallel_waves, in_flight_peak, est_context_tokens, recall_hits, recall_misses, verifier_coverage, wall_clock_s); most recent `limit` runs. Mirror-derived columns read NULL for any run whose session has no ingested transcript.
 
@@ -64,11 +65,13 @@ ingest hook now runs automatically after each mirror refresh - so they fill on
 their own for any session whose transcript is ingested. A run whose session was
 never ingested still reads NULL for those four; backfill the transcript and call
 `derive_run_metrics` to fill it. `recall_hits` / `recall_misses` are
-**not auto-derived**: counting memory tool calls is easy, but judging whether a
-returned lesson was actually *usable* is semantic, so this skill sets them by
-reading the messages (the memory-tool call plus whether its result changed the
-next action) rather than from a blind count. Treat a NULL here as "not yet
-assessed", not zero.
+**recorded live by the engine**: at Orient the engine queries memory and then calls
+`record-recall <session> hit|miss` - hit when the lookup surfaced a usable lesson,
+miss when it ran but returned nothing usable. This is a self-report by the agent that
+did the lookup, not a blind count of memory tool calls. A run that never reached an
+engine Orient step (e.g. a plain chat session) reads NULL here; treat NULL as "no
+orchestration recall recorded", not zero. This skill may still refine the values by
+reading the messages when it audits a run.
 
 ## Measurable improvements
 
