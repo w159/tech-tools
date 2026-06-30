@@ -59,11 +59,17 @@ The orchestrator synthesizes the feature charts and duplication list into a sing
 
 The proposal is written to docs/audits/atlas-cartographer-<date>/proposal.md.
 
-### Phase 4 - Handoff prompts (orchestrator only)
+### Phase 4 - Handoff prompts + hub (orchestrator only)
 
-For each system the proposal targets for unification, the orchestrator writes a /atlas-engine handoff prompt to docs/audits/atlas-cartographer-<date>/handoffs/<system>.md. Each prompt is self-contained: it names the target, cites file:line evidence from the duplication report, states the acceptance criterion, and specifies which atlas squad agent should lead the work.
+For each system the proposal targets for unification, the orchestrator writes a handoff prompt to docs/audits/atlas-cartographer-<date>/handoffs/<system>.md. Each prompt is self-contained: it names the target, cites file:line evidence from the duplication report, states the acceptance criterion, specifies which atlas squad agent should lead the work, and ends with the launch line `Remediate with: atlas-launch <system>`.
 
-Do not write /make-plan handoffs. These are atlas-native Workflows - hand off to /atlas-engine.
+Then build the knowledge-graph hub so the findings are navigable and launchable:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/build_hub.py" "docs/audits/atlas-cartographer-<date>" <each per-root graphify-out/graph.json>
+```
+
+This writes `hub/manifest.json` (each handoff mapped to its graphify node, file-granular) and a branded `hub/index.html`. Each charted system is then remediated in one step with `atlas-launch <system>`, which loads its handoff into the `atlas-engine` skill. Do not write /make-plan handoffs - these are atlas-native Workflows launched via `atlas-launch`. (`atlas-launch` is the remediation launcher; `atlas-handoff` is the separate session-resume checkpoint.)
 
 ## Evidence contract
 
@@ -102,7 +108,10 @@ docs/audits/atlas-cartographer-<date>/
   duplications.md        - merged within-feature and cross-feature duplication report
   proposal.md            - unified architecture proposal with file:line evidence
   handoffs/
-    <system>.md          - one /atlas-engine handoff prompt per targeted system
+    <system>.md          - one handoff prompt per targeted system (ends with `atlas-launch <system>`)
+  hub/
+    manifest.json        - node<->finding bridge (each handoff mapped to its graphify node)
+    index.html           - branded Atlas expedition map; click a node -> finding + atlas-launch cmd
 ```
 
 The orchestrator writes a short index entry to docs/audits/atlas-cartographer-<date>/index.md listing the run date, feature count, duplication count, and proposal summary (one sentence per merged subsystem).

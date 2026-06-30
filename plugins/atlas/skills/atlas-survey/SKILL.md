@@ -74,12 +74,21 @@ docs/audits/atlas-survey-<date>/
     docs-drift.md           - verified code-vs-docs drift findings (file:line)
   report.md                 - prioritized master list: all verified findings, severity HIGH/MED/LOW
   handoffs/
-    <finding-id>.md         - one /atlas-engine handoff prompt per finding the team accepts
+    <finding-id>.md         - one handoff prompt per accepted finding (ends with `atlas-launch <finding-id>`)
+  hub/
+    manifest.json           - node<->finding bridge (each handoff mapped to its graphify node)
+    index.html              - branded Atlas expedition map; click a node -> finding + atlas-launch cmd
 ```
 
 Each finding in report.md carries: dimension, severity (HIGH / MED / LOW), file:line, a one-sentence description of the flaw, and the verifier's evidence. Rejected findings are not mentioned.
 
-The orchestrator writes handoff prompts only for findings the user accepts for remediation. Each handoff is self-contained: it names the file:line, states the flaw and acceptance criterion, and specifies which atlas squad agent should lead the fix.
+The orchestrator writes handoff prompts only for findings the user accepts for remediation. Each handoff is self-contained: it names the file:line, states the flaw and acceptance criterion, specifies which atlas squad agent should lead the fix, and ends with `Remediate with: atlas-launch <finding-id>`. After writing handoffs/, the orchestrator builds the hub so findings are navigable and one-command launchable:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/build_hub.py" "docs/audits/atlas-survey-<date>" <each per-root graphify-out/graph.json>
+```
+
+`atlas-launch <finding-id>` then loads that handoff into the `atlas-engine` skill to remediate it. (`atlas-launch` is the remediation launcher; `atlas-handoff` is the separate session-resume checkpoint.)
 
 ## Workflow shape
 

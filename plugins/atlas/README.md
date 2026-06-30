@@ -21,7 +21,7 @@ a codebase the more it is used.
 | atlas-harbor skill | Guided vendor MCP connector setup: enable, configure, and verify any of the 10 bundled MCP connectors (NinjaOne, Auvik, CIPP, ConnectWise, Spanning, KnowBe4, Vanta, ThreatLocker, Paylocity, Blumira). |
 | atlas-expedition skill | App-discovering UX swarm: auto-finds routes and form fields in any running web app, then runs the full cartographer -> persona -> fuzzer -> oracle -> reporter pipeline with no hardcoded paths. |
 | atlas-survey skill | Comprehensive quality, security, and OWASP audit swarm: discovery-first scan of the full codebase, severity-graded findings, coverage report, and an actionable remediation plan. |
-| Command library | Fifteen verification-gated `/atlas-*` launchers, each injecting the operating contract and driving a specific task through the squad. |
+| Command library | Sixteen verification-gated `/atlas-*` launchers, each injecting the operating contract and driving a specific task through the squad. Includes `/atlas-launch`, which opens a remediation session from an audit hub. |
 | Subagent squad | Eighteen `atlas:<role>` subagents, including a five-agent browser-driven UI/UX test swarm. |
 | Capability discovery | A read-only scanner plus a maintained catalog that recommend the skills/plugins/MCP a project needs, with exact install commands. |
 
@@ -63,7 +63,7 @@ atlas/
 |   |-- ux-fuzzer.md               #   UX swarm: boundary/fuzz the discovered inputs
 |   |-- ux-accuracy-oracle.md      #   UX swarm: independent recompute of client numbers
 |   `-- ux-reporter.md             #   UX swarm: synthesis + three hard gates + deliverables
-|-- commands/                      # 16 commands (/atlas + 15 launchers)
+|-- commands/                      # 17 commands (/atlas + 16 launchers)
 |   |-- atlas.md                   #   the architect: boot + configure the workspace
 |   |-- atlas-prompt.md            #   prompt optimizer
 |   |-- atlas-feature.md           #   full-stack feature build
@@ -121,6 +121,7 @@ the command ask once for anything missing.
 | `/atlas-readme` | Generate an onboarding README grounded in the actual repo, every claim traceable |
 | `/atlas-gitignore` | Generate a zero-trust deny-by-default `.gitignore` for a named stack |
 | `/atlas-handoff` | Produce a high-density session handoff so a fresh session resumes with zero re-discovery |
+| `/atlas-launch` | Open a remediation session pre-loaded with a finding's handoff from the latest audit hub (no args lists the actionable findings) |
 | `/atlas-db-audit` | Run a strictly read-only parallel DB audit and hand back a remediation plan to approve |
 | `/atlas-grafana` | Build or fix a Grafana SQL panel for any datasource and dialect |
 | `/atlas-m365` | Deliver a Microsoft 365 / Entra / Graph / Intune config with least-privilege scopes and read-back |
