@@ -52,6 +52,22 @@ class AtlasDbTest(unittest.TestCase):
         self.assertEqual(m["dispatches"], 1)
         self.assertEqual(m["wall_clock_s"], 42.0)
 
+    def test_record_recall_increments_and_survives_derive(self):
+        pid = atlas_db.register_project(self.conn, "/repo/x")
+        rid = atlas_db.start_run(self.conn, pid, "sess-recall")
+        atlas_db.record_recall(self.conn, rid, True)
+        atlas_db.record_recall(self.conn, rid, True)
+        atlas_db.record_recall(self.conn, rid, False)
+        m = atlas_db.run_metrics(self.conn, rid)
+        self.assertEqual(m["recall_hits"], 2)
+        self.assertEqual(m["recall_misses"], 1)
+        # A derive refresh must NOT clobber recall (it upserts only mirror-derived
+        # columns), so recall survives every Stop/SubagentStop cycle.
+        atlas_db.derive_run_metrics(self.conn, rid, "sess-recall")
+        m2 = atlas_db.run_metrics(self.conn, rid)
+        self.assertEqual(m2["recall_hits"], 2)
+        self.assertEqual(m2["recall_misses"], 1)
+
     def test_record_improvement_and_trends(self):
         pid = atlas_db.register_project(self.conn, "/repo/x")
         rid = atlas_db.start_run(self.conn, pid, "sess-1")

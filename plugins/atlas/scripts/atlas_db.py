@@ -262,6 +262,22 @@ def log_dispatch(conn, run_id, agent_type, model=None, wave_id=None):
     return eid
 
 
+def record_recall(conn, run_id, hit):
+    """Record a memory-recall outcome from the engine Orient step. hit=True increments
+    recall_hits (the memory lookup returned a usable lesson); hit=False increments
+    recall_misses (the lookup ran but returned nothing usable). Creates the run's metrics
+    row if absent. Touches only the recall columns - the derive_run_metrics upsert omits
+    them - so recall survives every mirror-refresh derive cycle."""
+    col = "recall_hits" if hit else "recall_misses"
+    # `col` is one of two fixed internal literals, never user input - safe to interpolate.
+    conn.execute(
+        "INSERT INTO metrics(run_id,%s) VALUES(?,1) "
+        "ON CONFLICT(run_id) DO UPDATE SET %s=COALESCE(%s,0)+1" % (col, col, col),
+        (run_id,),
+    )
+    conn.commit()
+
+
 def inline_ops_since_last_dispatch(conn, run_id):
     last = conn.execute(
         "SELECT COALESCE(MAX(id),0) FROM events WHERE run_id=? AND is_inline_op=0",
@@ -816,3 +832,15 @@ if __name__ == "__main__":
         init(_c)
         _rid = mark_orchestrating(_c, _session, _cwd)
         print("orchestrating run %s for session %s" % (_rid, _session))
+
+    elif len(_sys.argv) >= 4 and _sys.argv[1] == "record-recall":
+        _session = _sys.argv[2]
+        _outcome = _sys.argv[3]  # "hit" or "miss"
+        _c = connect()
+        init(_c)
+        _rid = current_run_id(_c, _session) or latest_run_id(_c, _session)
+        if _rid is None:
+            print("no run for session %s; recall not recorded" % _session)
+        else:
+            record_recall(_c, _rid, _outcome == "hit")
+            print("recorded recall %s for run %s" % (_outcome, _rid))
