@@ -9,7 +9,7 @@ Discovery-first, comprehensive audit swarm. You supply no arguments. The survey 
 
 ## Zero-arg discovery
 
-The user invokes this skill with no arguments. Phase 1 runs the `graphify` skill to build the codebase knowledge graph: community structure, god nodes (high in-degree, high coupling), and high-centrality hot spots (bridges between modules). In parallel, the orchestrator reads docs/ as the SSOT for intended behavior - these docs become the baseline against which code-vs-docs drift is measured.
+The user invokes this skill with no arguments. Phase 1 first discovers the codebase roots (a single-package repo yields one root; a monorepo yields one per package - MCP server, node lib, plugin), then runs the `graphify` skill **scoped per root** to build the codebase knowledge graph: community structure, god nodes (high in-degree, high coupling), and high-centrality hot spots (bridges between modules). Scoping per root keeps each graphify run under its size gate so the build never stalls on a whole-monorepo scope. In parallel, the orchestrator reads docs/ as the SSOT for intended behavior - these docs become the baseline against which code-vs-docs drift is measured.
 
 The graph output determines WHERE each dimension reviewer focuses. Reviewers are not pointed at the whole codebase; they are aimed at the nodes and communities the graph flagged as highest risk. This is what makes the survey comprehensive without being shallow.
 
@@ -62,7 +62,8 @@ All artifacts land under docs/audits/atlas-survey-<date>/ as the single source o
 
 ```
 docs/audits/atlas-survey-<date>/
-  graph-summary.md          - hot spots and communities surfaced by graphify (file:line)
+  graph-summary.md          - merged hot spots and communities surfaced by graphify across all roots (file:line)
+                              (per-root graphs live in each root's own graphify-out/, not under this audit dir)
   findings/
     correctness.md          - verified correctness/bug findings (file:line + severity)
     security.md             - verified OWASP/security findings (file:line + severity)
@@ -86,7 +87,16 @@ This skill runs as a Workflow following the skeleton in atlas-engine/references/
 
 ### Phase 1 - Graph and docs baseline (sequential, orchestrator-gated)
 
-The orchestrator invokes the `graphify` skill to build the codebase knowledge graph and reads docs/ for the intended-behavior baseline. This phase completes before any dimension fans out. The orchestrator records the top-N hot spot nodes (file:line) and the docs baseline to disk before dispatching Phase 2.
+The orchestrator first discovers the codebase roots dynamically - a discovery pass (an
+`atlas:explorer` over the tree plus graphify's own `detect()` for a minimal-context read of where
+the real packages are), not a static or config-supplied list. A single-package repo resolves to
+one root; this monorepo resolves to one root per MCP server / node lib / plugin. The orchestrator
+then runs the `graphify` skill **scoped per discovered root** (with `GRAPHIFY_NONINTERACTIVE=1` set
+so a root that still trips the size gate auto-scopes instead of blocking), writing a `graphify-out/`
+under each root. It merges each root's hot-spot nodes into a single top-N list and reads docs/ for
+the intended-behavior baseline. This phase completes before any dimension fans out. The orchestrator
+records the merged top-N hot spot nodes (file:line) and the docs baseline to disk before dispatching
+Phase 2.
 
 ### Phase 2 - Dimension review (pipeline)
 

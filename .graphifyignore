@@ -1,0 +1,22 @@
+# .graphifyignore - extra excludes for `graphify` knowledge-graph scans of this repo.
+# gitignore syntax. This is an ADDITIVE exclude list (not the zero-trust .gitignore allowlist).
+#
+# graphify's engine already prunes node_modules, .venv/venv, dist, build, target,
+# __pycache__, .ruff_cache, .next/.nuxt/.turbo, graphify-out, and .worktrees via its
+# built-in _SKIP_DIRS - do NOT re-list those here. Only repo-specific generated/bundled
+# noise that the engine would otherwise read goes below.
+
+# Bundled connector archives (large binary blobs, not source).
+# NOTE: graphify's `**/` does not match repo-root-level files; use the slash-less
+# `*.ext` form, which gitignore matches at every depth (root included).
+*.mcpb
+
+# Generated audit + runtime outputs (this program writes here; not architecture)
+docs/audits/
+docs/.run/
+
+# SDD progress ledgers (process state, not codebase)
+.superpowers/
+
+# Minified/generated JS
+*.min.js

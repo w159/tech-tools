@@ -136,6 +136,7 @@ firebase-adminsdk*.json
 # ---- Repo / meta ----
 !.gitignore
 !.gitattributes
+!.graphifyignore
 !.fallowrc.json
 !.env.template
 !README.md
