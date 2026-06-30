@@ -117,8 +117,9 @@ Acceptance: a scripted session that dispatches 2 agents and 1 verifier yields
 showing the builtins with correct error flags. Verified by a new
 `hooks/test_dispatch_logging.py` and a `scripts/session_ingest.py` classifier unit test.
 
-Propagation: update the sextant SKILL where it claims auto-derivation; add the new hook to the
-inventory (count becomes 9) and to all four hook-description surfaces.
+Propagation: update the sextant SKILL where it claims auto-derivation. NOTE (reconciled during
+WS2 execution): no new hook was needed - dispatch logging already rides `dispatch_tripwire`, so the
+hook count stays 8, not 9. The only net-new wiring is the engine recall signal (`record_recall`).
 
 ### WS3 — graphify scoping
 

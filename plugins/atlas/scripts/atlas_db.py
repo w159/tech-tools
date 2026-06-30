@@ -835,12 +835,20 @@ if __name__ == "__main__":
 
     elif len(_sys.argv) >= 4 and _sys.argv[1] == "record-recall":
         _session = _sys.argv[2]
-        _outcome = _sys.argv[3]  # "hit" or "miss"
-        _c = connect()
-        init(_c)
-        _rid = current_run_id(_c, _session) or latest_run_id(_c, _session)
-        if _rid is None:
-            print("no run for session %s; recall not recorded" % _session)
+        _outcome = _sys.argv[3]  # must be exactly "hit" or "miss"
+        if _outcome not in ("hit", "miss"):
+            # Reject anything else rather than silently counting it as a miss, so an
+            # improvised outcome word can't pollute recall_misses.
+            print(
+                "recall outcome must be 'hit' or 'miss', got %r; not recorded"
+                % _outcome
+            )
         else:
-            record_recall(_c, _rid, _outcome == "hit")
-            print("recorded recall %s for run %s" % (_outcome, _rid))
+            _c = connect()
+            init(_c)
+            _rid = current_run_id(_c, _session) or latest_run_id(_c, _session)
+            if _rid is None:
+                print("no run for session %s; recall not recorded" % _session)
+            else:
+                record_recall(_c, _rid, _outcome == "hit")
+                print("recorded recall %s for run %s" % (_outcome, _rid))
