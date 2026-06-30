@@ -26,6 +26,9 @@ class TripwireTest(unittest.TestCase):
         atlas_db.init(conn)
         pid = atlas_db.register_project(conn, "/repo/x")
         atlas_db.start_run(conn, pid, "sess-1")
+        atlas_db.mark_orchestrating(
+            conn, "sess-1"
+        )  # WS1: tripwire only nags in orchestration runs
         conn.close()
 
     def _payload(self, tool, tinput=None):
@@ -50,6 +53,30 @@ class TripwireTest(unittest.TestCase):
         run_hook(self._payload("Task", {"subagent_type": "atlas:explorer"}), self.env)
         r = run_hook(self._payload("Read"), self.env)  # 1 since reset
         self.assertEqual(r.stdout.strip(), "")
+
+    def test_no_trip_when_not_orchestrating(self):
+        # A fresh non-orchestration session: boot-created run, never marked.
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db
+
+        conn = atlas_db.connect(self.env["ATLAS_DB"])
+        pid = atlas_db.register_project(conn, "/repo/x")
+        atlas_db.start_run(conn, pid, "sess-chat")
+        conn.close()
+        last = None
+        for _ in range(6):
+            last = run_hook(
+                {
+                    "session_id": "sess-chat",
+                    "tool_name": "Read",
+                    "tool_input": {"file_path": "a.py"},
+                },
+                self.env,
+            )
+        self.assertEqual(last.returncode, 0)
+        self.assertEqual(
+            last.stdout.strip(), ""
+        )  # no nag for a non-orchestration session
 
     def test_off_switch(self):
         env = dict(self.env, ATLAS_TRIPWIRE="off")

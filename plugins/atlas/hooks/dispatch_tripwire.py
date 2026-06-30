@@ -67,6 +67,8 @@ def main():
 
     edit_to_target = tool in EDIT_TOOLS and not _is_orchestration_path(path)
     if count >= _threshold() or edit_to_target:
+        if not atlas_db.is_orchestrating(conn, session):
+            return  # WS1: non-orchestration sessions are logged but never nagged
         if edit_to_target:
             msg = (
                 "STOP - atlas orchestrators never edit target code inline. "
