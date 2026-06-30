@@ -74,6 +74,33 @@ class TripwireTest(unittest.TestCase):
         r = run_hook(self._payload("Read"), env)
         self.assertIn("STOP", r.stdout)  # 2nd op: trips at override
 
+    def test_dispatch_logged_after_run_finalized(self):
+        """A dispatch arriving after the run is finalized must still be logged."""
+        import atlas_db
+
+        # Finalize the run so current_run_id returns None.
+        conn = atlas_db.connect(self.env["ATLAS_DB"])
+        atlas_db.init(conn)
+        run_id = atlas_db.current_run_id(conn, "sess-1")
+        atlas_db.finalize_run(conn, run_id)
+        conn.close()
+
+        # Fire a dispatch -- should not silently drop even though run is closed.
+        r = run_hook(
+            self._payload("Agent", {"subagent_type": "atlas:implementer"}), self.env
+        )
+        self.assertEqual(r.returncode, 0)
+
+        # Confirm the dispatch was persisted via the fallback resolver.
+        conn2 = atlas_db.connect(self.env["ATLAS_DB"])
+        fallback_id = atlas_db.current_or_last_run_id(conn2, "sess-1")
+        self.assertIsNotNone(fallback_id)
+        rows = conn2.execute(
+            "SELECT COUNT(*) FROM dispatches WHERE run_id=?", (fallback_id,)
+        ).fetchone()
+        conn2.close()
+        self.assertGreater(rows[0], 0, "dispatch not logged after run finalized")
+
     def test_hooks_json_matcher_includes_dispatch_tools(self):
         import json, os
 

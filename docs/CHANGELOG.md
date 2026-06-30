@@ -4,6 +4,122 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
+## [Unreleased] -- Atlas v2.2.3 (in progress as of 2026-06-29)
+
+Four work items extending the observability layer shipped in v2.2.1/2.2.2. Not yet released.
+
+- **Run-kind tagging**: tag each session/run as orchestrator or worker so Trends aggregates exclude
+  short-lived sidechain worker sessions from run-health metrics. Requires a `run_kind` column in
+  the `runs` table and hook-side detection of background/subagent launches.
+  (`plugins/atlas/scripts/atlas_db.py`)
+- **Docs-freshness advisory completion gate**: `completion_gate.py` will emit a one-time advisory
+  when `docs/CHANGELOG.md` or `docs/ROADMAP.md` have not been updated since the last run that
+  touched skill or hook files. Advisory only; fail-open; disable with `ATLAS_GATE=off`.
+  (`plugins/atlas/hooks/completion_gate.py`)
+- **Late-dispatch drop hardening**: a `current_or_last_run_id` helper to replace the
+  `current_run_id`-after-Stop NULL pattern that caused the 2.2.2 `latest_run_id` fix; ensures
+  post-Stop hooks attach metric derivation regardless of hook ordering.
+  (`plugins/atlas/scripts/atlas_db.py`)
+- **Docs SSOT backfill**: repo-level `docs/CHANGELOG.md`, `docs/ROADMAP.md`, and `docs/AGENTS.md`
+  brought current with v2.2.1 and v2.2.2 (previously recorded only in `plugins/atlas/CHANGELOG.md`).
+  (`docs/CHANGELOG.md`, `docs/ROADMAP.md`, `docs/AGENTS.md`)
+
+---
+
+## 2026-06-29 -- Atlas v2.2.2: run-metrics population fix and defect corrections
+
+Commit 1d0f6c4. Corrects three defects found by end-to-end testing against the live hooks that
+left `est_context_tokens`, `verifier_coverage`, `parallel_waves`, `in_flight_peak`, and
+`wall_clock_s` NULL on every real (non-test) run after v2.2.1.
+
+- `derive_run_metrics` wired into `ingest_transcript`: v2.2.1 added the function but nothing
+  called it outside tests, so the four computed metrics stayed NULL on every live run. Now called
+  after each mirror refresh (Stop / SubagentStop / SessionEnd / PreCompact).
+  (`plugins/atlas/scripts/session_ingest.py`)
+- `finalize_run` defaults `wall_clock_s`: the Stop hook called `finalize_run(run_id)` with no
+  duration, so `wall_clock_s` was NULL on every historical run. It now defaults to
+  `max(0.0, time.time() - started_at)` when the argument is omitted.
+  (`plugins/atlas/scripts/atlas_db.py:179`)
+- COALESCE order corrected in `derive_run_metrics` upsert: the previous form
+  `COALESCE(excluded.wall_clock_s, wall_clock_s)` overwrote finalize's authoritative value with
+  the (often zero) transcript span. Flipped to `COALESCE(wall_clock_s, excluded.wall_clock_s)`
+  so derive only fills a wall clock that finalize never set (backfill-only sessions).
+  (`plugins/atlas/scripts/atlas_db.py:276`)
+- `trends()` now returns the full metric set: the selector previously chose three columns while
+  the `atlas-sextant` Trends table compares five; it now returns all metrics including
+  `verifier_coverage` and `parallel_waves`.
+  (`plugins/atlas/scripts/atlas_db.py:325`)
+- `latest_run_id(conn, session_id)` added: resolves the most recent run open or closed so
+  post-Stop metric derivation attaches regardless of hook ordering.
+  (`plugins/atlas/scripts/atlas_db.py`)
+- `atlas-sextant` SKILL.md corrected: `derive_run_metrics` marked auto-wired, `latest_run_id`
+  documented, Trends column list and the example (which used `current_run_id`, NULL after Stop)
+  fixed.
+  (`plugins/atlas/skills/atlas-sextant/SKILL.md`)
+
+---
+
+## 2026-06-26 -- Atlas v2.2.1: session transcript ingestion, hook exec-bit fix, run metrics
+
+Commit 0c792dd. Adds a session-forensics lens to atlas-sextant: the observability DB now indexes
+the lossless JSONL session transcripts Claude Code writes, so sextant can see every message,
+tool call, and token-usage number instead of only the sparse live-event counters. Also fixes a
+hook exec-bit defect that logged "Permission denied" on every PostToolUse call, and adds
+`derive_run_metrics()` to compute `wall_clock_s` and `est_context_tokens` per run.
+
+### Session transcript ingestion
+
+- New `scripts/session_ingest.py`: parses transcripts incrementally by byte cursor (reads only
+  new lines per call), classifies each tool call as builtin/skill/mcp/agent, scrubs secrets from
+  input summaries, records per-message token and cache usage, and tags three behavioral signals
+  (assumption_admission, unverified_claim, user_correction). `--backfill` walks
+  `~/.claude/projects` idempotently; single-session mode for the hook.
+  (`plugins/atlas/scripts/session_ingest.py`)
+- New `hooks/ingest_session.py` wired in `hooks.json` on Stop, SubagentStop, SessionEnd, and
+  PreCompact; fail-open and fast (reads only new bytes). Disable with `ATLAS_INGEST=off`.
+  (`plugins/atlas/hooks/ingest_session.py`, `plugins/atlas/hooks/hooks.json`)
+- Five new mirror tables in the observability DB, joinable to `projects`/`runs` by `session_id`:
+  - `session_logs`: one row per transcript file with byte cursor and file size.
+    (`plugins/atlas/scripts/atlas_db.py:44`)
+  - `messages`: per-message token/cache usage and sidechain flag.
+    (`plugins/atlas/scripts/atlas_db.py:56`)
+  - `tool_calls`: per-call classification (kind, target, server), input summary, result excerpt.
+    (`plugins/atlas/scripts/atlas_db.py:64`)
+  - `user_prompts`: normalized human prompts with machine-generated openings excluded.
+    (`plugins/atlas/scripts/atlas_db.py:73`)
+  - `signals`: behavioral signals deduped per message per signal_type.
+    (`plugins/atlas/scripts/atlas_db.py:79`)
+- Six read helpers added to `atlas_db.py`: `tool_usage`, `idle_assets`, `context_tool_health`,
+  `signal_counts`, `signal_rollup`, `repeated_prompts`. Token totals recomputed from child rows
+  so re-ingest never double-counts. Machine-generated openings excluded from `user_prompts` so
+  the repeated-request signal reflects real human asks.
+  (`plugins/atlas/scripts/atlas_db.py`)
+
+### Hook exec-bit fix
+
+`hooks.json` previously invoked hooks by bare path, requiring the execute bit.
+`dispatch_tripwire.py` shipped mode 0644 (no execute bit), so every PostToolUse call logged
+"Permission denied" and the tripwire did not fire. All hooks now invoked as
+`python3 "${CLAUDE_PLUGIN_ROOT}/hooks/X.py"`, making them exec-bit-independent and
+path-space-safe.
+(`plugins/atlas/hooks/hooks.json`)
+
+### Run metrics
+
+`derive_run_metrics()` added to `atlas_db.py`: derives `est_context_tokens` (peak input+cache_read
+over main-thread messages) and `wall_clock_s` (session span from the mirror) and upserts them into
+the `metrics` table. Recall hits/misses stay NULL and are filled by atlas-sextant on demand.
+(`plugins/atlas/scripts/atlas_db.py:268`)
+
+### Tests and version
+
+New `scripts/test_session_ingest.py` covers classification, secret redaction, result join, signal
+detection, token aggregates, idempotency/incremental, truncation reset, and machine-prompt
+filtering. Derive test added to `test_atlas_db.py`. Full suite: 15 tests green. Plugin bumped
+2.0.0 -> 2.2.1.
+(`plugins/atlas/scripts/test_session_ingest.py`, `plugins/atlas/scripts/test_atlas_db.py`,
+`plugins/atlas/.claude-plugin/plugin.json`)
+
 ## 2026-06-25 -- Atlas v2.0.0: final 8-skill redesign, observability DB, de-hardcoded swarms
 
 Completed the atlas plugin skill-set redesign. Every skill is now canonically named under the

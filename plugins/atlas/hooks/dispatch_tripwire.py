@@ -44,13 +44,21 @@ def main():
 
     conn = atlas_db.connect()
     atlas_db.init(conn)
-    run_id = atlas_db.current_run_id(conn, session)
-    if run_id is None:
-        return  # no active run; boot hook will create one
 
     if tool in DISPATCH_TOOLS:
-        atlas_db.log_dispatch(conn, run_id, tinput.get("subagent_type", tool))
+        # Dispatches may arrive after the run is finalized; use the fallback
+        # resolver so late Agent/Task PostToolUse events are still logged.
+        dispatch_run_id = atlas_db.current_or_last_run_id(conn, session)
+        if dispatch_run_id is not None:
+            atlas_db.log_dispatch(
+                conn, dispatch_run_id, tinput.get("subagent_type", tool)
+            )
         return
+
+    run_id = atlas_db.current_run_id(conn, session)
+    if run_id is None:
+        return  # no active run for inline ops; boot hook will create one
+
     if tool not in INLINE_TOOLS:
         return
 

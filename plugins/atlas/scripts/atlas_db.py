@@ -14,7 +14,8 @@ CREATE TABLE IF NOT EXISTS projects (
   name TEXT, stack TEXT, first_seen REAL, last_seen REAL);
 CREATE TABLE IF NOT EXISTS runs (
   id INTEGER PRIMARY KEY, project_id INTEGER NOT NULL, session_id TEXT,
-  started_at REAL, ended_at REAL, wall_clock_s REAL, task_summary TEXT, model TEXT);
+  started_at REAL, ended_at REAL, wall_clock_s REAL, task_summary TEXT, model TEXT,
+  kind TEXT DEFAULT 'orchestrator');
 CREATE TABLE IF NOT EXISTS events (
   id INTEGER PRIMARY KEY, run_id INTEGER NOT NULL, ts REAL, tool TEXT,
   context TEXT, is_inline_op INTEGER, path TEXT);
@@ -100,6 +101,41 @@ def connect(path=None):
 def init(conn):
     conn.executescript(SCHEMA)
     conn.commit()
+    # Idempotent migration: add kind column to pre-existing DBs. Fresh DBs
+    # already have it from the SCHEMA; the OperationalError is the success path
+    # for any DB initialized before this column was added.
+    try:
+        conn.execute("ALTER TABLE runs ADD COLUMN kind TEXT DEFAULT 'orchestrator'")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # column already present
+    backfill_run_kinds(conn)
+
+
+def backfill_run_kinds(conn):
+    """Classify all existing runs whose session has at least one message row.
+    A run is 'worker' when its session has >=1 total messages but zero
+    non-sidechain (is_sidechain=0) messages. Sessions with no ingested
+    messages are left at the default 'orchestrator' -- absence of data is
+    not evidence of worker status. Idempotent."""
+    conn.execute(
+        "UPDATE runs SET kind='worker' "
+        "WHERE session_id IN ("
+        "  SELECT session_id FROM messages "
+        "  GROUP BY session_id "
+        "  HAVING COUNT(*) >= 1 "
+        "  AND SUM(CASE WHEN is_sidechain=0 THEN 1 ELSE 0 END) = 0"
+        ")"
+    )
+    conn.execute(
+        "UPDATE runs SET kind='orchestrator' "
+        "WHERE session_id IN ("
+        "  SELECT session_id FROM messages "
+        "  GROUP BY session_id "
+        "  HAVING SUM(CASE WHEN is_sidechain=0 THEN 1 ELSE 0 END) >= 1"
+        ")"
+    )
+    conn.commit()
 
 
 def register_project(conn, root_path, name=None, stack=None):
@@ -139,6 +175,26 @@ def latest_run_id(conn, session_id):
     """Most recent run for a session, open OR closed. Unlike current_run_id this
     still resolves after the Stop hook has finalized the run, so the post-ingest
     metric derivation can attach to it regardless of hook ordering."""
+    row = conn.execute(
+        "SELECT id FROM runs WHERE session_id=? ORDER BY id DESC LIMIT 1",
+        (session_id,),
+    ).fetchone()
+    return row[0] if row else None
+
+
+def current_or_last_run_id(conn, session_id):
+    """Active run if one exists (ended_at IS NULL), otherwise the most recent
+    run for this session regardless of ended_at. Returns None only when the
+    session has no run at all. Use this when a dispatch may arrive after
+    finalize_run has closed the run -- the finalized row is still the right
+    target for attribution."""
+    row = conn.execute(
+        "SELECT id FROM runs WHERE session_id=? AND ended_at IS NULL "
+        "ORDER BY id DESC LIMIT 1",
+        (session_id,),
+    ).fetchone()
+    if row:
+        return row[0]
     row = conn.execute(
         "SELECT id FROM runs WHERE session_id=? ORDER BY id DESC LIMIT 1",
         (session_id,),
@@ -276,6 +332,19 @@ def derive_run_metrics(conn, run_id, session_id, window_s=10.0):
         "wall_clock_s=COALESCE(wall_clock_s,excluded.wall_clock_s)",
         (run_id, peak, parallel_waves, in_flight_peak, coverage, wall),
     )
+    # Classify run kind from message thread visibility. Only act when at least
+    # one message is ingested; sessions with no messages stay 'orchestrator'.
+    total_msgs = conn.execute(
+        "SELECT COUNT(*) FROM messages WHERE session_id=?",
+        (session_id,),
+    ).fetchone()[0]
+    if total_msgs >= 1:
+        main_msgs = conn.execute(
+            "SELECT COUNT(*) FROM messages WHERE session_id=? AND is_sidechain=0",
+            (session_id,),
+        ).fetchone()[0]
+        kind = "worker" if main_msgs == 0 else "orchestrator"
+        conn.execute("UPDATE runs SET kind=? WHERE id=?", (kind, run_id))
     conn.commit()
     return {
         "est_context_tokens": peak,
@@ -340,6 +409,7 @@ def trends(conn, limit=20):
         "m.verifier_coverage, m.wall_clock_s "
         "FROM runs r JOIN projects p ON p.id=r.project_id "
         "LEFT JOIN metrics m ON m.run_id=r.id "
+        "WHERE COALESCE(r.kind,'orchestrator')='orchestrator' "
         "ORDER BY r.id DESC LIMIT ?",
         (limit,),
     ).fetchall()

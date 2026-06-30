@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.2.3
+
+Extends the observability layer with run-kind tagging, a docs-freshness advisory
+gate, and late-dispatch hardening.
+
+- **Run-kind tagging.** Background and subagent worker sessions are now classified
+  at ingest time and excluded from run-health aggregates in `atlas_db.py`. This
+  fixes false "zero delegation" readings that appeared when a background worker
+  had no dispatch events of its own.
+- **Docs-freshness advisory gate.** `hooks/completion_gate.py` now warns to
+  dispatch `atlas:docs-curator` when code files changed in a session but the
+  `docs/` tree did not. The advisory is emitted before the existing completion
+  check so it surfaces even when the gate is in advisory-only mode.
+- **Late-dispatch hardening.** `hooks/dispatch_tripwire.py` and `scripts/atlas_db.py`
+  now handle dispatches that arrive after a run is finalized: they resolve the
+  target run via `current_or_last_run_id` so the late event is still logged
+  rather than silently dropped.
+
 ## 2.2.2
 
 Makes the run-health metrics from 2.2.1 actually populate operationally, and

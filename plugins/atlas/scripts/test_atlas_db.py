@@ -189,6 +189,53 @@ class AtlasDbTest(unittest.TestCase):
         ):
             self.assertIn(col, row)  # documented dimensions must be selectable
 
+    def test_kind_column_migration_is_idempotent(self):
+        # init() was called in setUp; calling it again must not raise even
+        # though the kind column already exists (ALTER TABLE would conflict).
+        atlas_db.init(self.conn)  # second call
+        atlas_db.init(self.conn)  # third call for extra certainty
+        cols = {r[1] for r in self.conn.execute("PRAGMA table_info(runs)")}
+        self.assertIn("kind", cols)
+
+    def test_worker_run_excluded_from_trends(self):
+        pid = atlas_db.register_project(self.conn, "/repo/x")
+        # orchestrator run: session has a non-sidechain message
+        rid_orc = atlas_db.start_run(self.conn, pid, "sess-orc")
+        atlas_db.finalize_run(self.conn, rid_orc)
+        atlas_db.insert_message(
+            self.conn,
+            "sess-orc",
+            {"uuid": "mo1", "role": "assistant", "is_sidechain": 0},
+        )
+        self.conn.commit()
+        # worker run: session has only sidechain messages
+        rid_wkr = atlas_db.start_run(self.conn, pid, "sess-wkr")
+        atlas_db.finalize_run(self.conn, rid_wkr)
+        atlas_db.insert_message(
+            self.conn,
+            "sess-wkr",
+            {"uuid": "mw1", "role": "assistant", "is_sidechain": 1},
+        )
+        self.conn.commit()
+        # derive classifies both runs
+        atlas_db.derive_run_metrics(self.conn, rid_orc, "sess-orc")
+        atlas_db.derive_run_metrics(self.conn, rid_wkr, "sess-wkr")
+        ids = [r["run_id"] for r in atlas_db.trends(self.conn)]
+        self.assertIn(rid_orc, ids)  # orchestrator is visible in trends
+        self.assertNotIn(rid_wkr, ids)  # worker is excluded from trends
+
+    def test_current_or_last_run_id_fallback(self):
+        pid = atlas_db.register_project(self.conn, "/repo/x")
+        rid = atlas_db.start_run(self.conn, pid, "sess-col")
+        # before finalize: open run is found
+        self.assertEqual(atlas_db.current_or_last_run_id(self.conn, "sess-col"), rid)
+        atlas_db.finalize_run(self.conn, rid)
+        # after finalize: current_run_id returns None, fallback returns the closed run
+        self.assertIsNone(atlas_db.current_run_id(self.conn, "sess-col"))
+        self.assertEqual(atlas_db.current_or_last_run_id(self.conn, "sess-col"), rid)
+        # unknown session: returns None
+        self.assertIsNone(atlas_db.current_or_last_run_id(self.conn, "sess-none"))
+
 
 if __name__ == "__main__":
     unittest.main()

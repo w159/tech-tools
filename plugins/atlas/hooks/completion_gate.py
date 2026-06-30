@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -88,6 +89,53 @@ def _check_changelog(docs: Path) -> bool:
         return changelog.is_file() and changelog.stat().st_size > 0
     except OSError:
         return True  # can't stat -> fail open
+
+
+def _docs_drift(changed_paths: list) -> bool:
+    """Return True when >=1 non-docs file was changed and 0 docs files were changed.
+
+    A path is 'docs' if it starts with 'docs/' or contains '/docs/'.
+    Pure helper: takes a list of relative path strings, does no I/O.
+    """
+    if not changed_paths:
+        return False
+    for p in changed_paths:
+        if p.startswith("docs/") or "/docs/" in p:
+            return False  # at least one docs path -> no drift
+    return True  # paths present, none are docs
+
+
+def _git_changed_paths(docs: Path) -> list:
+    """Return changed file paths from git diff HEAD and the staged index.
+
+    Uses the repo root detected from the docs/ directory. Fails open: any
+    subprocess error, missing git binary, or non-repo path returns an empty
+    list so the caller treats it as no drift.
+    """
+    try:
+        root_bytes = subprocess.check_output(
+            ["git", "-C", str(docs), "rev-parse", "--show-toplevel"],
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+        )
+        repo_root = root_bytes.decode(errors="replace").strip()
+    except Exception:
+        return []
+
+    paths: set = set()
+    for args in (
+        ["git", "-C", repo_root, "diff", "--name-only", "HEAD"],
+        ["git", "-C", repo_root, "diff", "--name-only", "--cached"],
+    ):
+        try:
+            out = subprocess.check_output(args, stderr=subprocess.DEVNULL, timeout=5)
+            for line in out.decode(errors="replace").splitlines():
+                line = line.strip()
+                if line:
+                    paths.add(line)
+        except Exception:
+            pass  # fail-open: any git error -> treat as no new paths
+    return list(paths)
 
 
 def _reason(missing_a: bool, missing_b: bool, missing_c: bool) -> str:
@@ -153,13 +201,37 @@ def main() -> int:
         ok_a = _check_evidence(docs)
         ok_b = _check_findings(docs)
         ok_c = _check_changelog(docs)
+        # Advisory docs-freshness signal: warn when non-docs files changed but
+        # docs/ was not touched. Never blocks on its own (always fail-open).
+        drift_advisory = None
+        try:
+            changed = _git_changed_paths(docs)
+            if _docs_drift(changed):
+                drift_advisory = (
+                    "[atlas] Docs-freshness advisory: non-docs files changed but no "
+                    "docs/ files are in the diff. Dispatch atlas:docs-curator to "
+                    "reconcile docs/ (CHANGELOG, ROADMAP, affected subfolders) before "
+                    "declaring this run done."
+                )
+        except Exception:
+            pass  # fail-open: drift advisory must never block
         if ok_a and ok_b and ok_c:
+            if drift_advisory:
+                print(
+                    json.dumps(
+                        {
+                            "hookSpecificOutput": {
+                                "hookEventName": "Stop",
+                                "additionalContext": drift_advisory,
+                            }
+                        }
+                    )
+                )
             return 0
-        print(
-            json.dumps(
-                {"decision": "block", "reason": _reason(not ok_a, not ok_b, not ok_c)}
-            )
-        )
+        block_reason = _reason(not ok_a, not ok_b, not ok_c)
+        if drift_advisory:
+            block_reason += "\n\n" + drift_advisory
+        print(json.dumps({"decision": "block", "reason": block_reason}))
     except Exception:  # noqa: BLE001 -- a Stop hook must never wedge the session
         return 0
     return 0
