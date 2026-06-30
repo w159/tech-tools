@@ -804,3 +804,15 @@ def idle_assets(conn, kind, known_keys):
         ).fetchall()
     }
     return sorted(k for k in known_keys if k not in used)
+
+
+if __name__ == "__main__":
+    import sys as _sys
+
+    if len(_sys.argv) >= 3 and _sys.argv[1] == "mark-orchestrating":
+        _session = _sys.argv[2]
+        _cwd = _sys.argv[3] if len(_sys.argv) >= 4 else os.getcwd()
+        _c = connect()
+        init(_c)
+        _rid = mark_orchestrating(_c, _session, _cwd)
+        print("orchestrating run %s for session %s" % (_rid, _session))

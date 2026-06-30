@@ -6,6 +6,7 @@ Encourages capturing a lesson to claude-mem / .agents and a light docs-drift
 check. Self-throttles via a timestamp marker so it fires at most once per
 window. Any error exits 0 silently.
 """
+
 import json
 import os
 import sys
@@ -15,7 +16,8 @@ WINDOW_SECONDS = 900  # at most once per 15 minutes
 
 
 def marker_path(cwd):
-    base = os.path.join(cwd or ".", ".claude")
+    # WS1: write under ~/.atlas/ so the throttle marker never enters the source tree
+    base = os.path.join(os.path.expanduser("~"), ".atlas")
     try:
         os.makedirs(base, exist_ok=True)
     except Exception:
@@ -49,6 +51,16 @@ def main():
     except Exception:
         payload = {}
     cwd = payload.get("cwd", ".")
+
+    session = payload.get("session_id", "")
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db
+
+        if not atlas_db.is_orchestrating(atlas_db.connect(), session):
+            sys.exit(0)  # WS1: only nudge after real orchestration turns
+    except Exception:
+        pass  # fail-open: if we cannot tell, fall through to the throttle
 
     if throttled(marker_path(cwd)):
         sys.exit(0)

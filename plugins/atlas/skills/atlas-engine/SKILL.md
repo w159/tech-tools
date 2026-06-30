@@ -191,6 +191,18 @@ Full contract, config env vars, and install commands: `references/hooks-automati
 
 > Cross-agent workspace maintenance (porting MCP/skills across the six coding agents, the `doctor`/`setup`/`port`/`sync` verbs) is no longer part of this skill - it lives in the separate workspace maintenance skills (`orc-setup`, `orc-sync`, `orc-port`, `orc-doctor`, `orc-validate`, `orc-audit`), which are unrelated to this plugin's `/atlas-*` commands. This skill is now purely the coding-session orchestrator.
 
+## Mark the orchestration run (required first action)
+
+Before any dispatch, flag this session as a real orchestration run so the
+discipline hooks (dispatch tripwire, completion gate) engage. Run once:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_db.py" mark-orchestrating "$CLAUDE_SESSION_ID" "$(pwd)"
+```
+
+If the command is unavailable, continue; the hooks simply stay advisory-off for
+this session rather than blocking it.
+
 ## First move
 
 Run **Orient** (step 0) - a handful of cheap calls. Present the orientation + proposed plan and **wait for go-ahead before any write**. Do not edit, migrate, or install on your own initiative - discover, propose, gate, then route to subagents.
