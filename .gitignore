@@ -315,6 +315,12 @@ desktop.ini
 **/.mypy_cache/
 **/.ruff_cache/
 
+# ---- Atlas runtime state must never be tracked (written by hooks at runtime) ----
+**/.atlas_nudge
+plugins/atlas/**/.claude/.atlas_nudge
+**/__pycache__/
+**/.ruff_cache/
+
 
 # ============================================================================
 # Pre-commit verification checklist:
