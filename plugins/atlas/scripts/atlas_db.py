@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS projects (
 CREATE TABLE IF NOT EXISTS runs (
   id INTEGER PRIMARY KEY, project_id INTEGER NOT NULL, session_id TEXT,
   started_at REAL, ended_at REAL, wall_clock_s REAL, task_summary TEXT, model TEXT,
-  kind TEXT DEFAULT 'orchestrator');
+  kind TEXT DEFAULT 'orchestrator', orchestrating INTEGER DEFAULT 0);
 CREATE TABLE IF NOT EXISTS events (
   id INTEGER PRIMARY KEY, run_id INTEGER NOT NULL, ts REAL, tool TEXT,
   context TEXT, is_inline_op INTEGER, path TEXT);
@@ -109,6 +109,11 @@ def init(conn):
         conn.commit()
     except sqlite3.OperationalError:
         pass  # column already present
+    try:
+        conn.execute("ALTER TABLE runs ADD COLUMN orchestrating INTEGER DEFAULT 0")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # column already present
     backfill_run_kinds(conn)
 
 
@@ -180,6 +185,42 @@ def latest_run_id(conn, session_id):
         (session_id,),
     ).fetchone()
     return row[0] if row else None
+
+
+def mark_orchestrating(conn, session_id, cwd=None):
+    """Flag this session's run as a real atlas orchestration run. Idempotent.
+    Creates a run if none exists yet (e.g. the boot hook has not fired).
+    Optionally writes an advisory sentinel under <cwd>/docs/.run/."""
+    rid = current_run_id(conn, session_id) or latest_run_id(conn, session_id)
+    if rid is None:
+        base = cwd or "."
+        pid = register_project(conn, base, os.path.basename(os.path.abspath(base)))
+        rid = start_run(conn, pid, session_id)
+    conn.execute("UPDATE runs SET orchestrating=1 WHERE id=?", (rid,))
+    conn.commit()
+    if cwd:
+        _write_orchestration_sentinel(cwd)
+    return rid
+
+
+def is_orchestrating(conn, session_id):
+    """True when this session's current-or-latest run is flagged orchestrating."""
+    rid = current_run_id(conn, session_id) or latest_run_id(conn, session_id)
+    if rid is None:
+        return False
+    row = conn.execute("SELECT orchestrating FROM runs WHERE id=?", (rid,)).fetchone()
+    return bool(row and row[0])
+
+
+def _write_orchestration_sentinel(cwd):
+    """Advisory only. Never read for gating; a stale file must not enable a gate."""
+    try:
+        run_dir = os.path.join(cwd, "docs", ".run")
+        os.makedirs(run_dir, exist_ok=True)
+        with open(os.path.join(run_dir, "atlas-engine.active"), "w") as f:
+            f.write(str(time.time()))
+    except Exception:
+        pass  # sentinel is best-effort
 
 
 def current_or_last_run_id(conn, session_id):

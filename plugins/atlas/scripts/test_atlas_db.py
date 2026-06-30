@@ -237,5 +237,41 @@ class AtlasDbTest(unittest.TestCase):
         self.assertIsNone(atlas_db.current_or_last_run_id(self.conn, "sess-none"))
 
 
+class OrchestratingMarkerTest(unittest.TestCase):
+    def setUp(self):
+        import tempfile, os
+
+        self.tmp = tempfile.mkdtemp()
+        self.db = os.path.join(self.tmp, "atlas.db")
+
+    def _conn(self):
+        c = atlas_db.connect(self.db)
+        atlas_db.init(c)
+        return c
+
+    def test_default_run_is_not_orchestrating(self):
+        c = self._conn()
+        pid = atlas_db.register_project(c, "/repo/x")
+        atlas_db.start_run(c, pid, "sess-A")
+        self.assertFalse(atlas_db.is_orchestrating(c, "sess-A"))
+
+    def test_mark_sets_flag(self):
+        c = self._conn()
+        pid = atlas_db.register_project(c, "/repo/x")
+        atlas_db.start_run(c, pid, "sess-B")
+        atlas_db.mark_orchestrating(c, "sess-B")
+        self.assertTrue(atlas_db.is_orchestrating(c, "sess-B"))
+
+    def test_mark_creates_run_when_none(self):
+        c = self._conn()
+        rid = atlas_db.mark_orchestrating(c, "sess-C", cwd=self.tmp)
+        self.assertIsNotNone(rid)
+        self.assertTrue(atlas_db.is_orchestrating(c, "sess-C"))
+
+    def test_unknown_session_is_not_orchestrating(self):
+        c = self._conn()
+        self.assertFalse(atlas_db.is_orchestrating(c, "no-such-session"))
+
+
 if __name__ == "__main__":
     unittest.main()
