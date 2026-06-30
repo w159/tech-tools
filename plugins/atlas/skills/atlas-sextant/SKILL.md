@@ -83,7 +83,7 @@ Example workflow:
 import atlas_db, os
 
 conn = atlas_db.connect(os.environ.get("ATLAS_DB", os.path.expanduser("~/.atlas/atlas.db")))
-session_id = os.environ.get("CLAUDE_SESSION_ID", "")
+session_id = os.environ.get("CLAUDE_CODE_SESSION_ID", "")
 # latest_run_id (not current_run_id) so this still resolves after Stop finalized the run
 run_id = atlas_db.latest_run_id(conn, session_id)
 metrics = atlas_db.run_metrics(conn, run_id)

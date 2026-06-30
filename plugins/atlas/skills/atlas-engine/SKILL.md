@@ -199,7 +199,7 @@ Before any dispatch, flag this session as a real orchestration run so the
 discipline hooks (dispatch tripwire, completion gate) engage. Run once:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_db.py" mark-orchestrating "$CLAUDE_SESSION_ID" "$(pwd)"
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_db.py" mark-orchestrating "${CLAUDE_CODE_SESSION_ID}" "$(pwd)"
 ```
 
 If the command is unavailable, continue; the hooks simply stay advisory-off for

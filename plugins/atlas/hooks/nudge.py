@@ -15,7 +15,7 @@ import time
 WINDOW_SECONDS = 900  # at most once per 15 minutes
 
 
-def marker_path(cwd):
+def marker_path():
     # WS1: write under ~/.atlas/ so the throttle marker never enters the source tree
     base = os.path.join(os.path.expanduser("~"), ".atlas")
     try:
@@ -50,7 +50,6 @@ def main():
         payload = json.loads(raw) if raw.strip() else {}
     except Exception:
         payload = {}
-    cwd = payload.get("cwd", ".")
 
     session = payload.get("session_id", "")
     try:
@@ -62,7 +61,7 @@ def main():
     except Exception:
         pass  # fail-open: if we cannot tell, fall through to the throttle
 
-    if throttled(marker_path(cwd)):
+    if throttled(marker_path()):
         sys.exit(0)
 
     msg = (
