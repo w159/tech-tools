@@ -56,10 +56,16 @@ signal:
 | `verifier_coverage` | Fraction of dispatched changes that received an independent verifier | Below 1.0 = unverified changes shipping |
 | `wall_clock_s` | Elapsed seconds for the run | Baseline for tracking improvement over time |
 
-How these are populated: `inline_ops` and `dispatches` come live from the
-PostToolUse tripwire (`events` table) and are written by `finalize_run` on Stop,
-which also defaults `wall_clock_s` to the run's elapsed time. `est_context_tokens`,
-`verifier_coverage`, `parallel_waves`, and `in_flight_peak` are computed from the
+How these are populated: `inline_ops` comes live from the PostToolUse tripwire
+(`events` table) and is written by `finalize_run` on Stop, which also defaults
+`wall_clock_s` to the run's elapsed time. `dispatches` is ALSO written by
+`finalize_run` at Stop, but that value is a one-shot snapshot - dispatches landing
+in later turns of the same session (via the `dispatch_tripwire` last-run fallback)
+never reached it, so the column could read 0 even when the `dispatches` table had
+rows for the run. `derive_run_metrics` now recomputes `dispatches` as a live
+`COUNT(*) FROM dispatches WHERE run_id=?` on every call, so the stored value always
+reflects every dispatch ingested by the time it runs (`plugins/atlas/scripts/atlas_db.py:380-397`).
+`est_context_tokens`, `verifier_coverage`, `parallel_waves`, and `in_flight_peak` are computed from the
 transcript mirror by `derive_run_metrics(conn, run_id, session_id)`, which the
 ingest hook now runs automatically after each mirror refresh - so they fill on
 their own for any session whose transcript is ingested. A run whose session was

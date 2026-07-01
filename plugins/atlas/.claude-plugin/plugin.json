@@ -1,6 +1,6 @@
 {
   "name": "atlas",
-  "version": "2.2.3",
+  "version": "2.3.0",
   "description": "Atlas is a self-configuring multi-agent coding architect. Boots on /atlas and SessionStart: 18-agent squad, 8 automation hooks (incl. the dispatch tripwire), atlas-engine methodology (research -> test -> validate -> implement -> verify; evidence before any done claim), and 16 verification-gated /atlas-* launchers (incl. atlas-launch, which opens a remediation session from an audit hub). Eight skills: atlas-engine (orchestration), atlas-architect (boot/discovery), atlas-cartographer (architecture map + structural dedup), atlas-sextant (measurable self-improvement via observability DB), atlas-orbit (recurring loops), atlas-harbor (vendor MCP connectors), atlas-expedition (app-discovering UX swarm), atlas-survey (comprehensive quality/security/OWASP audit). Integrates claude-mem and context-mode; recommends skills/plugins/MCPs the project needs.",
   "author": {
     "name": "w159",

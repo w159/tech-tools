@@ -377,17 +377,25 @@ def derive_run_metrics(conn, run_id, session_id, window_s=10.0):
         (session_id,),
     ).fetchone()
     wall = span[0] if span else None
+    # finalize_run's dispatches count is a one-shot snapshot taken at the first
+    # Stop hook; dispatches landing in later turns of the same session (via the
+    # dispatch_tripwire last-run fallback) never reach it. Recompute here so the
+    # metrics row reflects every dispatch row ingested by the time this runs.
+    disp = conn.execute(
+        "SELECT COUNT(*) FROM dispatches WHERE run_id=?", (run_id,)
+    ).fetchone()[0]
     conn.execute(
         "INSERT INTO metrics(run_id,est_context_tokens,parallel_waves,"
-        "in_flight_peak,verifier_coverage,wall_clock_s) VALUES(?,?,?,?,?,?) "
+        "in_flight_peak,verifier_coverage,wall_clock_s,dispatches) VALUES(?,?,?,?,?,?,?) "
         "ON CONFLICT(run_id) DO UPDATE SET est_context_tokens=excluded.est_context_tokens,"
         "parallel_waves=excluded.parallel_waves,in_flight_peak=excluded.in_flight_peak,"
         "verifier_coverage=excluded.verifier_coverage,"
         # finalize_run's elapsed time is authoritative; the transcript-span value
         # derived here only fills a wall_clock that finalize never set (e.g. a
         # backfill-only session). Existing value wins, so derive never clobbers it.
-        "wall_clock_s=COALESCE(wall_clock_s,excluded.wall_clock_s)",
-        (run_id, peak, parallel_waves, in_flight_peak, coverage, wall),
+        "wall_clock_s=COALESCE(wall_clock_s,excluded.wall_clock_s),"
+        "dispatches=excluded.dispatches",
+        (run_id, peak, parallel_waves, in_flight_peak, coverage, wall, disp),
     )
     # Classify run kind from message thread visibility. Only act when at least
     # one message is ingested; sessions with no messages stay 'orchestrator'.

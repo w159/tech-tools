@@ -32,3 +32,12 @@ Flow: `search` (get IDs) -> `timeline` (context around an anchor) -> `get_observ
 
 When recall succeeds with these, record `record-recall ... hit`; when it genuinely returns nothing
 usable, record `... miss` (see the Orient step). A tool ERROR is neither - fix the call and retry.
+
+## Promoted to global instructions (2026-06-30)
+
+This file alone did not fix the error rate: two sessions after it shipped still mis-called
+`observation_search` in worker runtime, because a skill-scoped reference does not always load. The
+calling convention above is now also codified in the user's global, always-loaded
+`~/.claude/CLAUDE.md` so it applies even when this skill is out of context. This file remains the
+authoritative detail (tables, exact bad/good calls); the global copy is the always-on enforcement
+layer, not a duplicate to maintain in parallel.

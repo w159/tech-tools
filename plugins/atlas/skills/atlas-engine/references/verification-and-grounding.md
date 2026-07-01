@@ -75,4 +75,13 @@ Tried: [A, B, C]
 Need: [decision / credential / access / clarification]
 ```
 
+## Related: global verification protocol (2026-06-30)
+
+The user's global, always-loaded verification protocol (`agentic-tools/rules/verification-protocol.md`,
+outside this repo) was independently strengthened on 2026-06-30: it closed a prediction-phrase
+loophole, added an assumption gate, and now requires evidence to sit directly adjacent to any
+completion claim. It applies on top of the doctrine in this file in every session, atlas or not.
+Not duplicated here - this file stays the atlas-specific detail (the Step-3/Step-4 split, the
+adversarial verification wave, the anti-hallucination guards above).
+
 Shipping "should work" is the failure this whole file exists to prevent.
