@@ -4,6 +4,23 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
+## Atlas v2.4.0 -- atlas-doctor installation self-repair (2026-07-01)
+
+Root-caused and fixed the plugin-rollback incident: the tech-tools marketplace entry in
+`~/.claude/plugins/known_marketplaces.json` tracked the stale henssler-financial fork with
+autoUpdate on, so `/plugin` updates silently rolled atlas back to 1.0.1 (no subagents, no
+hooks, no engine). Marketplace repointed to w159/tech-tools; atlas re-registered.
+
+- **atlas-doctor** (`scripts/atlas_doctor.py`, `/atlas-doctor`): eight-check CHECK/SET/VERIFY
+  health pass over the installation itself -- marketplace source vs the canonical repo from
+  the plugin's own manifest, clone remote, version sync, rollback high-water mark
+  (`~/.atlas/doctor-state.json`), `.orphaned_at` GC markers, hooks wiring, asset inventory.
+  `--fix` auto-repairs; 7 sandbox unit tests recreate the incident.
+- **SessionStart rollback guard**: `atlas_doctor.py --hook` (warn-only, exit 0) added to
+  `hooks/hooks.json` so any future downgrade is announced at the top of the session.
+- Marketplace manifest 1.6.1; counts reconciled (17 launchers, doctor hook) across
+  plugin.json, marketplace.json, and the plugin README.
+
 ## Atlas v2.3.0 -- cohesion program (2026-06-30)
 
 The five-workstream Atlas cohesion program plus three adoption follow-ups. Each workstream was

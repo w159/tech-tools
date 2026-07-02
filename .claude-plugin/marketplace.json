@@ -2,7 +2,7 @@
     "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
     "name": "tech-tools",
     "description": "Henssler IT domain-cluster plugins: MSP operations, security and compliance, Microsoft 365, HR/payroll, finance, plus engineering, design, data, support, product, and productivity, with the atlas multi-agent coding meta-agent. Each vendor tool is bundled into the business domain it serves.",
-    "version": "1.6.0",
+    "version": "1.6.1",
     "owner": {
         "name": "w159",
         "url": "https://github.com/w159"
@@ -11,7 +11,7 @@
         {
             "name": "atlas",
             "source": "./plugins/atlas",
-            "description": "Atlas is a self-configuring multi-agent coding architect. Boots on /atlas and SessionStart: 18-agent squad, 7 automation hooks, atlas-engine methodology (research -> test -> validate -> implement -> verify; evidence before any done claim), and 16 verification-gated /atlas-* launchers. Eight skills: atlas-engine (orchestration), atlas-architect (boot/discovery), atlas-cartographer (architecture map + structural dedup), atlas-sextant (measurable self-improvement via observability DB), atlas-orbit (recurring loops), atlas-harbor (vendor MCP connectors), atlas-expedition (app-discovering UX swarm), atlas-survey (comprehensive quality/security/OWASP audit). Integrates claude-mem and context-mode; recommends skills/plugins/MCPs the project needs.",
+            "description": "Atlas is a self-configuring multi-agent coding architect. Boots on /atlas and SessionStart: 18-agent squad, 8 automation hooks plus the atlas-doctor rollback guard, atlas-engine methodology (research -> test -> validate -> implement -> verify; evidence before any done claim), and 17 verification-gated /atlas-* launchers (incl. atlas-doctor installation self-repair). Eight skills: atlas-engine (orchestration), atlas-architect (boot/discovery), atlas-cartographer (architecture map + structural dedup), atlas-sextant (measurable self-improvement via observability DB), atlas-orbit (recurring loops), atlas-harbor (vendor MCP connectors), atlas-expedition (app-discovering UX swarm), atlas-survey (comprehensive quality/security/OWASP audit). Integrates claude-mem and context-mode; recommends skills/plugins/MCPs the project needs.",
             "category": "developer-tools",
             "keywords": [
                 "atlas",

@@ -21,7 +21,7 @@ a codebase the more it is used.
 | atlas-harbor skill | Guided vendor MCP connector setup: enable, configure, and verify any of the 10 bundled MCP connectors (NinjaOne, Auvik, CIPP, ConnectWise, Spanning, KnowBe4, Vanta, ThreatLocker, Paylocity, Blumira). |
 | atlas-expedition skill | App-discovering UX swarm: auto-finds routes and form fields in any running web app, then runs the full cartographer -> persona -> fuzzer -> oracle -> reporter pipeline with no hardcoded paths. |
 | atlas-survey skill | Comprehensive quality, security, and OWASP audit swarm: discovery-first scan of the full codebase, severity-graded findings, coverage report, and an actionable remediation plan. |
-| Command library | Sixteen verification-gated `/atlas-*` launchers, each injecting the operating contract and driving a specific task through the squad. Includes `/atlas-launch`, which opens a remediation session from an audit hub. |
+| Command library | Seventeen verification-gated `/atlas-*` launchers, each injecting the operating contract and driving a specific task through the squad. Includes `/atlas-launch`, which opens a remediation session from an audit hub, and `/atlas-doctor`, which diagnoses and repairs the plugin installation itself. |
 | Subagent squad | Eighteen `atlas:<role>` subagents, including a five-agent browser-driven UI/UX test swarm. |
 | Capability discovery | A read-only scanner plus a maintained catalog that recommend the skills/plugins/MCP a project needs, with exact install commands. |
 
@@ -29,8 +29,8 @@ a codebase the more it is used.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json     # manifest (name: atlas, v2.3.0)
-|-- hooks/                         # 8 auto-loaded hooks + validate-readonly-query.sh guard
+|-- .claude-plugin/plugin.json     # manifest (name: atlas, v2.4.0)
+|-- hooks/                         # 8 auto-loaded hooks + validate-readonly-query.sh guard + doctor rollback guard
 |   |-- hooks.json                 #   wires every hook below
 |   |-- session_boot.py            #   SessionStart: activate runtime, surface lessons
 |   |-- prompt_optimizer.py        #   UserPromptSubmit: optional local-model rewrite
@@ -43,6 +43,7 @@ atlas/
 |   `-- nudge.py                   #   Stop/SubagentStop: self-improvement nudge (throttled)
 |-- scripts/
 |   |-- discover_capabilities.py   #   read-only stack scan -> ranked recommendations
+|   |-- atlas_doctor.py            #   installation health check + auto-repair (/atlas-doctor, SessionStart guard)
 |   `-- install_hooks.py           #   fallback wiring for non-plugin installs
 |-- agents/                        # 18 subagents (atlas:<role>), auto-registered
 |   |-- explorer.md                #   read-only codebase mapping
@@ -63,7 +64,7 @@ atlas/
 |   |-- ux-fuzzer.md               #   UX swarm: boundary/fuzz the discovered inputs
 |   |-- ux-accuracy-oracle.md      #   UX swarm: independent recompute of client numbers
 |   `-- ux-reporter.md             #   UX swarm: synthesis + three hard gates + deliverables
-|-- commands/                      # 17 commands (/atlas + 16 launchers)
+|-- commands/                      # 18 commands (/atlas + 17 launchers)
 |   |-- atlas.md                   #   the architect: boot + configure the workspace
 |   |-- atlas-prompt.md            #   prompt optimizer
 |   |-- atlas-feature.md           #   full-stack feature build
@@ -79,6 +80,7 @@ atlas/
 |   |-- atlas-m365.md              #   M365/Entra/Graph/Intune identity task
 |   |-- atlas-vendor-assessment.md #   evidence-based vendor security assessment
 |   |-- atlas-harden.md            #   idempotent CHECK/SET/VERIFY hardening script
+|   |-- atlas-doctor.md            #   diagnose/repair the atlas installation itself
 |   `-- atlas-validate.md          #   validation-gated plugin/skill review (reports, no auto-fix)
 `-- skills/
     |-- atlas-engine/              # SKILL.md + references/ (incl. operating-contract.md, capability-catalog.md)
@@ -129,16 +131,18 @@ the command ask once for anything missing.
 | `/atlas-harden` | Write an idempotent CHECK/SET/VERIFY endpoint hardening script for RMM/MDM deployment |
 | `/atlas-prompt` | Rewrite a vague request into a structured, environment-aware, verification-gated prompt |
 | `/atlas-validate` | Run plugin-dev:plugin-validator and plugin-dev:skill-reviewer over a target plugin; reports findings without auto-fixing |
+| `/atlas-doctor` | Diagnose the atlas installation itself (marketplace source, version rollback, orphaned cache, hooks, assets) and auto-repair with `--fix` |
 
 ## Hooks
 
-The eight hooks auto-load from `hooks/hooks.json` when the plugin is installed - no
+The hooks auto-load from `hooks/hooks.json` when the plugin is installed - no
 manual step. Each is stdlib-only and fails safe: any internal error exits 0, so a hook
 can never block a session.
 
 | Hook | Event | Purpose |
 | --- | --- | --- |
 | `session_boot.py` | `SessionStart` | Activate the runtime, report dependency state, surface relevant lessons |
+| `atlas_doctor.py --hook` | `SessionStart` | Rollback guard: warn loudly if the installed plugin was downgraded, the marketplace points at a fork, or hooks/assets are missing (warn-only, always exits 0) |
 | `prompt_optimizer.py` | `UserPromptSubmit` | Optional local-model prompt rewrite (trigger-gated; augments, never replaces) |
 | `bash_advisor.py` | `PreToolUse` (Bash) | Advisory only: warns on catastrophic, near-irreversible patterns (`rm -rf /`, `mkfs`, `dd` to a disk, fork bomb). Never denies or forces an ask; the normal permission flow is preserved |
 | `validate-readonly-query.sh` | `PreToolUse` (Bash), per DB-audit subagent | Block writes/DDL/grants during read-only audits (wired by the audit agents, not the global session) |

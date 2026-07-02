@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.4.0
+
+atlas-doctor: detect and repair the plugin-rollback failure mode found 2026-07-01, where
+the tech-tools marketplace entry tracked a stale fork (henssler-financial) with autoUpdate
+on, so every marketplace update silently rolled atlas back to 1.0.1 and the subagent
+engine, hooks, and skills disappeared with no error.
+
+- **`scripts/atlas_doctor.py`.** Eight checks (CHECK), auto-repair with `--fix` (SET),
+  re-check after fixing (VERIFY): marketplace source vs the canonical repo named in the
+  plugin's own manifest, clone remote, installed-vs-marketplace version sync, rollback
+  tripwire against a high-water mark in `~/.atlas/doctor-state.json`, install-path
+  integrity incl. `.orphaned_at` GC markers, hooks wiring, and asset inventory.
+  Exit 0 healthy/remediated, 1 problems remain, 2 internal error. 7 unit tests
+  (`scripts/test_atlas_doctor.py`) recreate the incident in a sandbox.
+- **`/atlas-doctor` command.** Runs the script, explains each PASS/FAIL, offers `--fix`,
+  and reminds that `/reload-plugins` is needed after repair.
+- **SessionStart rollback guard.** `atlas_doctor.py --hook` wired as a second SessionStart
+  hook: warn-only, always exits 0, so a future downgrade announces itself at the top of
+  the session instead of silently degrading atlas.
+
 ## 2.3.0
 
 Atlas cohesion program (WS1-WS5) plus adoption follow-ups; each workstream independently
