@@ -4,6 +4,26 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
+## Atlas v2.5.0 -- deterministic orchestration wiring + docs gate widened (2026-07-03)
+
+Session audit found the plugin's connective tissue was prose, not machinery: the
+orchestration marker was never set automatically (so the tripwire and completion gate
+stayed inert in normal use), the gate ignored ROADMAP/README/docs-drift, both
+atlas-engine and /atlas-prompt explicitly forbade asking the user scoping questions, and
+five orphan pre-rename skill dirs plus cache debris sat on disk. All fixed in
+`plugins/atlas/CHANGELOG.md` 2.5.0: auto-marking via the dispatch tripwire (Skill +
+`atlas:*` dispatch signals), a 6-condition completion gate with blocking docs-drift,
+one-round AskUserQuestion elicitation, docs-curator-owned graphify regeneration, and
+leftover removal. Expanded in the same session: new atlas-stacks skill/command
+(AskUserQuestion-driven skill stacking), elicitation guidance in all nine skills plus a
+subagent DECISION-NEEDED bubbling rule, atlas-doctor `stale-assets` +
+`orchestration-wiring` checks with quarantine-based --fix and an asset-count fix
+(.DS_Store no longer counted as a skill), and quarantine of the ghost pre-atlas assets
+(orchestrate.backup-*, uxt-swarm, self-improving, connector-ops skeletons and 36 orc-*
+agent files) that polluted the slash/agent pickers. 73 hook/script tests pass. Also
+repaired the dev repo itself: `.git/HEAD` + `.git/config` were missing (MEGA sync loss)
+and 276 deleted tracked files were restored via `git restore`.
+
 ## Atlas v2.4.0 -- atlas-doctor installation self-repair (2026-07-01)
 
 Root-caused and fixed the plugin-rollback incident: the tech-tools marketplace entry in

@@ -9,6 +9,8 @@ A **loop** is a reusable, parameterized iterative workflow: a body of work plus 
 
 Your job is selection and instantiation, not improvisation. Push the per-loop detail into the loop files; keep this file about routing.
 
+**Elicitation:** present the top loop candidates via **AskUserQuestion** (best match first, marked recommended), not as prose the user must answer free-form. If the chosen loop has a cadence or bound the task did not fix (interval, max iterations, dry-run threshold), fold it into the same round as a second question with concrete option values. One round total; discoverable inputs (paths, test commands, current failure count) are detected, never asked.
+
 ## The three cadences
 
 Every loop runs on exactly one cadence. The cadence decides who drives the repetition.

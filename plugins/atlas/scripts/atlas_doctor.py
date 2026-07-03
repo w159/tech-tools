@@ -19,6 +19,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 
 # --- environment (overridable so tests never touch the real install) ---
@@ -85,6 +86,121 @@ def marketplace_plugin_version(clone_dir, plugin_name):
 
 
 # --- checks: each appends (check_id, ok, detail) ---
+
+
+# Renamed/deprecated asset names that must not shadow the live set anywhere.
+# Plugin-era renames (left) and pre-plugin ancestors (right) both linger as
+# ghost slash-commands/agents when a stale copy survives an upgrade.
+DEPRECATED_SKILLS = {
+    "atlas-connectors",
+    "atlas-loop",
+    "atlas-operating-contract",
+    "atlas-self-improving",
+    "atlas-uxt-swarm",
+    "orchestrate",
+    "uxt-swarm",
+    "self-improving",
+    "connector-ops",
+}
+DEPRECATED_AGENTS = {
+    "orc-completeness-critic",
+    "orc-db-prober",
+    "orc-docs-auditor",
+    "orc-docs-curator",
+    "orc-explorer",
+    "orc-implementer",
+    "orc-planner",
+    "orc-ui-runtime-tester",
+    "orc-verifier",
+}
+
+
+def count_assets(ip):
+    """Count only real assets: .md files for commands/agents, dirs holding a
+    SKILL.md for skills - so .DS_Store or stray files never skew the count."""
+    counts = {}
+    for d in ("commands", "agents"):
+        p = os.path.join(ip, d)
+        counts[d] = (
+            len([f for f in os.listdir(p) if f.endswith(".md")])
+            if os.path.isdir(p)
+            else 0
+        )
+    sp = os.path.join(ip, "skills")
+    counts["skills"] = (
+        len(
+            [
+                s
+                for s in os.listdir(sp)
+                if os.path.isfile(os.path.join(sp, s, "SKILL.md"))
+            ]
+        )
+        if os.path.isdir(sp)
+        else 0
+    )
+    return counts
+
+
+def find_stale_assets(ip, clone, plugin_name, user_skills=None, user_agents=None):
+    """Locate deprecated/renamed skill dirs and agent files that still exist.
+
+    Scans the installed copy, the marketplace clone's plugin dir, and the
+    user-level ~/.claude/skills and ~/.claude/agents dirs (symlinks resolved).
+    Returns absolute paths; the fixer quarantines them (reversible move)."""
+    stale = []
+    plugin_roots = [ip]
+    if clone:
+        plugin_roots.append(os.path.join(clone, "plugins", plugin_name))
+    for root in plugin_roots:
+        sk = os.path.join(root or "", "skills")
+        if os.path.isdir(sk):
+            for name in sorted(os.listdir(sk)):
+                if name.split(".backup-")[0] in DEPRECATED_SKILLS:
+                    stale.append(os.path.join(sk, name))
+    # Derive user-level dirs as siblings of PLUGINS_DIR (~/.claude/plugins ->
+    # ~/.claude/{skills,agents}) so tests that patch PLUGINS_DIR stay sandboxed.
+    claude_home = os.path.dirname(os.path.realpath(PLUGINS_DIR))
+    user_skills = user_skills or os.path.join(claude_home, "skills")
+    if os.path.isdir(user_skills):
+        for name in sorted(os.listdir(user_skills)):
+            if name.split(".backup-")[0] in DEPRECATED_SKILLS:
+                stale.append(os.path.join(user_skills, name))
+    user_agents = user_agents or os.path.join(claude_home, "agents")
+    if os.path.isdir(user_agents):
+        for name in sorted(os.listdir(user_agents)):
+            if name.split(".", 1)[0] in DEPRECATED_AGENTS:
+                stale.append(os.path.join(user_agents, name))
+    return stale
+
+
+def check_orchestration_wiring(ip):
+    """Verify the wiring that makes subagent discipline actually engage:
+    the tripwire must see Skill/Agent/Task events and auto-set the
+    orchestration marker - otherwise the gates silently never fire."""
+    problems = []
+    hooks_file = os.path.join(ip, "hooks", "hooks.json")
+    try:
+        blob = _load_json(hooks_file)
+        matcher = ""
+        for grp in blob.get("hooks", {}).get("PostToolUse", []):
+            if "dispatch_tripwire.py" in json.dumps(grp):
+                matcher = grp.get("matcher", "")
+        for tool in ("Agent", "Task", "Skill"):
+            if tool not in matcher:
+                problems.append(f"PostToolUse matcher missing {tool}")
+    except Exception as e:
+        problems.append(f"hooks.json unreadable: {e}")
+    tripwire = os.path.join(ip, "hooks", "dispatch_tripwire.py")
+    try:
+        with open(tripwire, encoding="utf-8") as f:
+            src = f.read()
+        if "ORCH_SKILLS" not in src:
+            problems.append("dispatch_tripwire.py lacks ORCH_SKILLS auto-marking")
+        if "mark_orchestrating" not in src:
+            problems.append("dispatch_tripwire.py never calls mark_orchestrating")
+    except Exception as e:
+        problems.append(f"dispatch_tripwire.py unreadable: {e}")
+    return problems
 
 
 def run_checks(plugin_name="atlas"):
@@ -198,13 +314,27 @@ def run_checks(plugin_name="atlas"):
         add("hooks-wired", False, "hooks/hooks.json absent from installed copy")
 
     # C7: the engine's moving parts are actually there
-    counts = {
-        d: len(os.listdir(os.path.join(ip, d)))
-        if os.path.isdir(os.path.join(ip, d))
-        else 0
-        for d in ("commands", "agents", "skills")
-    }
+    counts = count_assets(ip)
     add("assets", all(counts.values()), json.dumps(counts))
+
+    # C8: no deprecated/renamed asset may shadow the live set anywhere
+    stale = find_stale_assets(ip, clone, plugin_name)
+    ctx["stale_assets"] = stale
+    add(
+        "stale-assets",
+        not stale,
+        f"{len(stale)} deprecated asset(s): {stale[:4]}" if stale else "none found",
+    )
+
+    # C9: the subagent-discipline wiring must be able to engage
+    wiring = check_orchestration_wiring(ip)
+    add(
+        "orchestration-wiring",
+        not wiring,
+        "; ".join(wiring)
+        if wiring
+        else "tripwire sees Skill/Agent/Task and auto-marks",
+    )
     return results, ctx
 
 
@@ -259,6 +389,18 @@ def apply_fixes(ctx, plugin_name="atlas"):
         )
         _save_json(installed_path, installed)
         actions.append(f"re-registered {key} at {mkt_ver}")
+
+    stale = ctx.get("stale_assets") or []
+    if stale:
+        trash = os.path.join(PLUGINS_DIR, f".trash-atlas-doctor-{int(time.time())}")
+        os.makedirs(trash, exist_ok=True)
+        for p in stale:
+            dest = os.path.join(trash, os.path.basename(p.rstrip("/")))
+            try:
+                shutil.move(p, dest)
+                actions.append(f"quarantined stale asset {p} -> {dest}")
+            except Exception as e:
+                actions.append(f"could not quarantine {p}: {e}")
 
     if reg:
         orphan = os.path.join(reg.get("installPath", ""), ".orphaned_at")

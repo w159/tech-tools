@@ -147,8 +147,8 @@ can never block a session.
 | `bash_advisor.py` | `PreToolUse` (Bash) | Advisory only: warns on catastrophic, near-irreversible patterns (`rm -rf /`, `mkfs`, `dd` to a disk, fork bomb). Never denies or forces an ask; the normal permission flow is preserved |
 | `validate-readonly-query.sh` | `PreToolUse` (Bash), per DB-audit subagent | Block writes/DDL/grants during read-only audits (wired by the audit agents, not the global session) |
 | `format_after_edit.py` | `PostToolUse` (Edit/Write) | Run the formatter after edits |
-| `dispatch_tripwire.py` | `PostToolUse` | Count inline ops since the last dispatch and flag orchestrator drift (advisory; `ATLAS_TRIPWIRE=off`) |
-| `completion_gate.py` | `Stop` | Block a premature "done" until verification evidence exists (opt-in via `ATLAS_GATE`) |
+| `dispatch_tripwire.py` | `PostToolUse` | Auto-flag the session orchestrating on orchestration-skill invocation or `atlas:*` dispatch; count inline ops since the last dispatch and flag orchestrator drift (advisory; `ATLAS_TRIPWIRE=off`) |
+| `completion_gate.py` | `Stop` | Block a premature "done" until all six definition-of-done conditions hold: evidence/, verified finding, CHANGELOG, ROADMAP, root README, and no code-changed-but-docs-didn't drift (orchestrating sessions only; `ATLAS_GATE=off`) |
 | `ingest_session.py` | `Stop`, `SubagentStop`, `SessionEnd`, `PreCompact` | Mirror the session transcript into the observability DB for the sextant session-forensics lens (`ATLAS_INGEST=off`) |
 | `nudge.py` | `Stop`, `SubagentStop` | Self-improvement: prompt to capture a lesson and check docs drift (throttled) |
 

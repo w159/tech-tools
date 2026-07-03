@@ -11,6 +11,13 @@ skill reads those signals, surfaces the run's health scores, and proposes
 improvements that carry explicit baselines and targets -- no qualitative-only
 entries accepted.
 
+**Elicitation:** when invoked without a clear lens, ask ONE AskUserQuestion - run
+health (recommended after an orchestration run), asset/context audit, session
+forensics, or cross-run trends - instead of guessing or running all three at full
+depth. When the asset audit proposes disabling/relocating assets, present the verdicts
+as a multiSelect AskUserQuestion (keep/apply per asset) rather than applying anything
+silently; the learn-from-restores rule depends on explicit user choices.
+
 ## Single source of truth
 
 The global SQLite DB at `~/.atlas/atlas.db` (env `ATLAS_DB`), populated by the

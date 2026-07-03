@@ -10,6 +10,14 @@ the right capabilities recommended, hooks wired, config written, docs/ seeded. I
 never installs or writes outside `docs/` and `.claude/` without explicit
 confirmation.
 
+**Elicitation:** consent decisions go through the **AskUserQuestion tool**, not prose
+offers the user must parse. Recommend-then-confirm means: present the install shortlist
+(skills/plugins/MCP) as one multiSelect question with recommended items first; when
+docs/ lacks the SSOT scaffold, ask one question - seed full scaffold (recommended),
+seed minimal (CHANGELOG/ROADMAP only), or skip. Ask only about actions needing consent;
+anything discoverable (stack, existing config, dependency presence) is detected, never
+asked.
+
 Two entry points share this methodology:
 - the `/atlas` command (heavy, on demand) runs all stages,
 - the SessionStart boot hook (`hooks/session_boot.py`) does the fast read-only

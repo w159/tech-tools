@@ -1,5 +1,65 @@
 # Changelog
 
+## 2.5.0
+
+Connective-tissue release: the orchestration machinery now engages deterministically
+instead of depending on the model remembering prose, and the definition-of-done gate
+covers the full docs contract (audit findings 2026-07-03).
+
+- **Auto-set orchestration marker.** `hooks/dispatch_tripwire.py` now flags the session
+  orchestrating when an orchestration skill (atlas-engine, atlas-survey,
+  atlas-cartographer, atlas-expedition, atlas-orbit) is invoked via the Skill tool or when
+  an `atlas:*` subagent is dispatched. The manual `mark-orchestrating` CLI remains as a
+  fallback. hooks.json PostToolUse matcher extended with `Skill`. 4 new tests.
+- **Completion gate widened 3 -> 6 conditions.** `hooks/completion_gate.py` now also
+  requires `docs/ROADMAP.md` non-empty (d), root `README.md` non-empty (e), and no docs
+  drift (f): if non-docs files changed this run but no `docs/` file did, the Stop blocks
+  once and directs an `atlas:docs-curator` dispatch - drift was previously advisory-only.
+  4 new tests incl. an end-to-end git-drift case.
+- **Elicitation posture reversed.** atlas-engine SKILL.md and `/atlas-prompt` previously
+  forbade asking the user anything; both now run one AskUserQuestion round (max 3
+  questions, options + recommendation) when goal/scope/acceptance stay ambiguous after
+  discovery. Discovery still answers "where/what is broken"; the user answers "what
+  outcome do you want."
+- **Living knowledge graph hook-in.** `agents/docs-curator.md` step 5: regenerate
+  `graphify-out/graph.json` via the graphify skill whenever shipped changes touched source
+  and a graph exists - the gate's drift condition makes this deterministic instead of
+  optional.
+- **Leftovers removed.** Deleted 5 orphan pre-rename skill dirs (atlas-connectors,
+  atlas-loop, atlas-operating-contract, atlas-self-improving, atlas-uxt-swarm),
+  `__pycache__`/`.ruff_cache` debris, and stale installed caches (1.0.1, 1.2.0) plus the
+  obsolete w159-tech-tools marketplace clones. Verified dispatch logging live
+  (90 rows in `~/.atlas/atlas.db` dispatches, incl. same-session Agent dispatches).
+- **New skill + command: atlas-stacks.** AskUserQuestion-driven skill stacking: elicits
+  the goal (one round), inventories the skills actually installed this session, composes
+  an ordered Skill-invocation chain (atlas-engine rides along for anything substantive),
+  confirms the stack with the user, then executes stage by stage. Counts: 9 skills,
+  18 launchers.
+- **Elicitation across every skill.** All nine skills now state when to use
+  AskUserQuestion dynamically - architect (install/seed consent as multiSelect),
+  cartographer (multi-root pick), survey (audit depth), expedition (target/tier),
+  orbit (loop candidates + cadence), sextant (lens pick, asset-audit verdicts),
+  harbor (connector multiSelect), engine + stacks (goal/scope/acceptance) - always
+  "ask what only the user owns, discover everything else, one round max."
+  `references/subagent-kit.md`: subagents never AskUserQuestion; they return
+  `DECISION NEEDED:` lines the orchestrator batches into one question round.
+- **atlas-doctor: two new checks + counting fix.** `stale-assets` scans the installed
+  copy, marketplace clone, and user-level skills/agents dirs for renamed/deprecated
+  ghosts (atlas-connectors/loop/operating-contract/self-improving/uxt-swarm, pre-plugin
+  orchestrate/uxt-swarm/self-improving/connector-ops, and the orc-* agent squad);
+  `--fix` quarantines them into a timestamped trash dir (reversible move, never rm).
+  `orchestration-wiring` verifies the tripwire sees Skill/Agent/Task and auto-marks -
+  the exact wiring whose absence made subagent discipline silently never engage.
+  `count_assets` now counts only real assets (dirs with SKILL.md, .md files), fixing
+  the phantom "skills": 9 caused by .DS_Store. 5 new tests.
+- **Ghost cleanup executed.** Quarantined from the live user dirs: skills
+  orchestrate.backup-*, uxt-swarm, self-improving, connector-ops (SKILL.md-less
+  skeletons) and 36 orc-* agent files (the deprecated pre-atlas squad) - these were the
+  "old variants" polluting the slash/agent pickers.
+- Docs reconciled: `references/hooks-automation.md` (6-condition gate, auto-marker incl.
+  atlas-stacks), SKILL.md definition-of-done and first-action sections, plugin.json and
+  marketplace.json descriptions (nine skills, 18 launchers, elicitation posture).
+
 ## 2.4.0
 
 atlas-doctor: detect and repair the plugin-rollback failure mode found 2026-07-01, where

@@ -10,6 +10,13 @@ This skill is the single authority for the UX test swarm. It supersedes the old
 scripted data entry, real-browser walks, fuzzing, and an independent calc oracle, then
 enforces three hard gates before reporting a verdict.
 
+**Elicitation:** if discovery cannot settle the target unambiguously - multiple runnable
+apps in the repo, an already-running instance vs a fresh boot, prod-like vs local URL -
+ask ONE AskUserQuestion naming the real candidates before the swarm launches. Fold in a
+tier question (full swarm - recommended pre-release - vs smoke-tier persona walk) when
+the ask did not fix it. Everything the live app can reveal (routes, forms, stack) is
+discovered by the cartographer phase, never asked.
+
 You orchestrate and verify only. Never navigate the app, enter data, or edit app source
 yourself. The swarm DETECTS and REPORTS app bugs with evidence; it never fixes
 `frontend/`/`backend/` code. Your only writes are under `.claude/skills/atlas-expedition/`,

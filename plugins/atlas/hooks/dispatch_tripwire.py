@@ -13,6 +13,17 @@ INLINE_TOOLS = {"Read", "Grep", "Glob", "Edit", "Write", "Bash"}
 DISPATCH_TOOLS = {"Agent", "Task"}
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit"}
 ORCH_MARKERS = ("docs/",)
+# Skills whose invocation means the session IS an atlas orchestration run.
+# Deliberately excludes advisory/config skills (atlas-architect, atlas-harbor)
+# so casual sessions never trip the completion gate.
+ORCH_SKILLS = {
+    "atlas-engine",
+    "atlas-survey",
+    "atlas-cartographer",
+    "atlas-expedition",
+    "atlas-orbit",
+    "atlas-stacks",
+}
 
 
 def _threshold():
@@ -45,6 +56,14 @@ def main():
     conn = atlas_db.connect()
     atlas_db.init(conn)
 
+    if tool == "Skill":
+        # Invoking an orchestration skill flags the run deterministically -
+        # nothing else guarantees the model runs `atlas_db.py mark-orchestrating`.
+        skill = str(tinput.get("skill", "")).split(":")[-1]
+        if skill in ORCH_SKILLS:
+            atlas_db.mark_orchestrating(conn, session, payload.get("cwd"))
+        return
+
     if tool in DISPATCH_TOOLS:
         # Dispatches may arrive after the run is finalized; use the fallback
         # resolver so late Agent/Task PostToolUse events are still logged.
@@ -53,6 +72,10 @@ def main():
             atlas_db.log_dispatch(
                 conn, dispatch_run_id, tinput.get("subagent_type", tool)
             )
+        agent_type = str(tinput.get("subagent_type", ""))
+        if agent_type.startswith(("atlas:", "atlas-")):
+            # Dispatching an atlas squad agent is unambiguous orchestration.
+            atlas_db.mark_orchestrating(conn, session, payload.get("cwd"))
         return
 
     run_id = atlas_db.current_run_id(conn, session)

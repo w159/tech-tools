@@ -18,8 +18,10 @@ prompt, a tool call, or wedge a session).
 | `ingest-session` | `Stop`, `SubagentStop`, `SessionEnd`, `PreCompact` | `hooks/ingest_session.py` | index the session transcript into the observability store for atlas-sextant |
 
 The dispatch tripwire, completion gate, and nudge additionally gate on the per-session
-orchestration marker (set by atlas-engine via `mark-orchestrating`), so they are inert in
-ordinary non-orchestration sessions. A ninth script, `hooks/validate-readonly-query.sh`, is
+orchestration marker. The tripwire sets that marker automatically when an orchestration
+skill (atlas-engine, atlas-survey, atlas-cartographer, atlas-expedition, atlas-orbit,
+atlas-stacks) is invoked or an `atlas:*` subagent is dispatched; `mark-orchestrating`
+remains as a manual fallback. The gates stay inert in ordinary non-orchestration sessions. A ninth script, `hooks/validate-readonly-query.sh`, is
 **not** auto-loaded by hooks.json; it is a read-only SQL guard available for the DB-audit
 subagents to invoke during read-only audits.
 
@@ -91,13 +93,19 @@ an independent agent verified it* -- as a `Stop` hook. Prose alone doesn't enfor
 orchestrator rationalizes "I'll mark it unverified and move on"); this is the machine backstop.
 
 - **Scoped.** Engages only when a `docs/` directory is found at or above the working dir (walked
-  up to 6 levels). In any other session it is a silent no-op, so it is safe to leave installed.
-- **What satisfies it.** All three conditions must hold:
+  up to 6 levels) AND the session's run is flagged orchestrating in the atlas DB (the
+  dispatch-tripwire hook sets that flag automatically when an orchestration skill is invoked or
+  an `atlas:*` subagent is dispatched). In any other session it is a silent no-op.
+- **What satisfies it.** All six conditions must hold:
   - (a) At least one file under `docs/evidence/` (observed-behavior proof captured).
   - (b) `docs/.run/findings.json` exists and records at least one entry with status `verified`
     (independent atlas:verifier result present).
-  - (c) `docs/CHANGELOG.md` exists and is non-empty (docs/ is current -- CHANGELOG, ROADMAP,
-    and affected subfolders must reflect this run before the gate passes).
+  - (c) `docs/CHANGELOG.md` exists and is non-empty.
+  - (d) `docs/ROADMAP.md` exists and is non-empty.
+  - (e) `README.md` at the project root exists and is non-empty.
+  - (f) No docs drift: if non-docs files changed this run (git diff HEAD + staged), at least
+    one `docs/` file changed too -- the deterministic trigger forcing an `atlas:docs-curator`
+    dispatch before "done".
   The block message names exactly which condition(s) are missing.
 - **Single nudge, never a wedge.** It blocks the stop at most **once** (the `stop_hook_active`
   loop-guard), then lets the continuation through. Fail-open on any error. Disable entirely with

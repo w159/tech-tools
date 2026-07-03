@@ -10,15 +10,19 @@ It is **scoped**: it only engages when the working directory (or a detected proj
 root above it) holds a `docs/` directory -- i.e. the docs/ single source of truth is
 present. In any other session it is a silent no-op, so it is safe to leave installed.
 
-Three conditions must ALL hold before the gate passes (else block ONCE):
+Six conditions must ALL hold before the gate passes (else block ONCE):
   (a) At least one file exists under `docs/evidence/`.
   (b) `docs/.run/findings.json` exists and contains at least one entry with
       status "verified".
   (c) `docs/CHANGELOG.md` exists and is non-empty (docs-current backstop).
+  (d) `docs/ROADMAP.md` exists and is non-empty.
+  (e) `README.md` at the project root exists and is non-empty.
+  (f) No docs drift: if non-docs files changed this run (git diff HEAD +
+      staged), at least one docs/ file changed too -- this is the deterministic
+      trigger that forces an atlas:docs-curator dispatch before "done".
 
-If any of the three are missing the hook blocks and names exactly which condition
-failed and that docs/ must be current (CHANGELOG, ROADMAP, affected subfolders)
-before calling the work done.
+If any condition is missing the hook blocks and names exactly which condition
+failed and which specialist closes it.
 
 Fail-open by construction: any error, missing dir, or unparseable input lets the
 stop proceed. Disable entirely with ATLAS_GATE=off. Opt-out (on by default when
@@ -82,13 +86,27 @@ def _check_findings(docs: Path) -> bool:
         return True  # malformed -> fail open
 
 
-def _check_changelog(docs: Path) -> bool:
-    """(c) docs/CHANGELOG.md exists and is non-empty."""
-    changelog = docs / "CHANGELOG.md"
+def _check_nonempty(path: Path) -> bool:
+    """A required markdown file exists and is non-empty. Fail-open on OSError."""
     try:
-        return changelog.is_file() and changelog.stat().st_size > 0
+        return path.is_file() and path.stat().st_size > 0
     except OSError:
         return True  # can't stat -> fail open
+
+
+def _check_changelog(docs: Path) -> bool:
+    """(c) docs/CHANGELOG.md exists and is non-empty."""
+    return _check_nonempty(docs / "CHANGELOG.md")
+
+
+def _check_roadmap(docs: Path) -> bool:
+    """(d) docs/ROADMAP.md exists and is non-empty."""
+    return _check_nonempty(docs / "ROADMAP.md")
+
+
+def _check_readme(docs: Path) -> bool:
+    """(e) README.md at the project root (the docs/ dir's parent) is non-empty."""
+    return _check_nonempty(docs.parent / "README.md")
 
 
 def _docs_drift(changed_paths: list) -> bool:
@@ -138,7 +156,14 @@ def _git_changed_paths(docs: Path) -> list:
     return list(paths)
 
 
-def _reason(missing_a: bool, missing_b: bool, missing_c: bool) -> str:
+def _reason(
+    missing_a: bool,
+    missing_b: bool,
+    missing_c: bool,
+    missing_d: bool = False,
+    missing_e: bool = False,
+    drift: bool = False,
+) -> str:
     parts = []
     if missing_a:
         parts.append(
@@ -163,6 +188,26 @@ def _reason(missing_a: bool, missing_b: bool, missing_c: bool) -> str:
             "-> Dispatch atlas:docs-curator to bring docs/ current (CHANGELOG, ROADMAP, "
             "affected subfolders) citing file:line evidence."
         )
+    if missing_d:
+        parts.append(
+            "  (d) docs/ROADMAP.md is missing or empty. The roadmap is part of the "
+            "docs/ single source of truth. -> Dispatch atlas:docs-curator to write or "
+            "update ROADMAP.md reflecting shipped, in-flight, and planned work."
+        )
+    if missing_e:
+        parts.append(
+            "  (e) README.md at the project root is missing or empty. "
+            "-> Dispatch atlas:docs-curator to write or refresh the root README so it "
+            "matches the current state of the code."
+        )
+    if drift:
+        parts.append(
+            "  (f) Docs drift: non-docs files changed this run but no docs/ file is "
+            "in the diff. The docs/ tree is the single source of truth and must move "
+            "with the code. -> Dispatch atlas:docs-curator to reconcile docs/ "
+            "(CHANGELOG, ROADMAP, affected subfolders) citing file:line evidence, "
+            "then retry Stop."
+        )
     failed = "\n".join(parts)
     return (
         "[atlas] Definition-of-done gate: the following condition(s) are not met:\n"
@@ -171,7 +216,7 @@ def _reason(missing_a: bool, missing_b: bool, missing_c: bool) -> str:
         "atlas:completeness-critic to pinpoint exactly which evidence and verification "
         "are still missing, then dispatch the specialist named beside each failed "
         "condition above to produce it, then retry Stop.\n\n"
-        "All three must hold before this run can be declared done. "
+        "All conditions must hold before this run can be declared done. "
         "If the work is genuinely not done, say so explicitly -- what is unverified "
         "and the exact command + expected output to verify it. Do not declare success.\n"
         '"Unverified" is not a completion state. A diff or a file:line is not proof that it works.'
@@ -203,36 +248,19 @@ def main() -> int:
         ok_a = _check_evidence(docs)
         ok_b = _check_findings(docs)
         ok_c = _check_changelog(docs)
-        # Advisory docs-freshness signal: warn when non-docs files changed but
-        # docs/ was not touched. Never blocks on its own (always fail-open).
-        drift_advisory = None
+        ok_d = _check_roadmap(docs)
+        ok_e = _check_readme(docs)
+        # (f) Docs drift BLOCKS: code moved but docs/ did not. This is the
+        # deterministic trigger that forces an atlas:docs-curator dispatch.
+        # Fail-open: any git error yields an empty path list -> no drift.
+        drift = False
         try:
-            changed = _git_changed_paths(docs)
-            if _docs_drift(changed):
-                drift_advisory = (
-                    "[atlas] Docs-freshness advisory: non-docs files changed but no "
-                    "docs/ files are in the diff. Dispatch atlas:docs-curator to "
-                    "reconcile docs/ (CHANGELOG, ROADMAP, affected subfolders) before "
-                    "declaring this run done."
-                )
+            drift = _docs_drift(_git_changed_paths(docs))
         except Exception:
-            pass  # fail-open: drift advisory must never block
-        if ok_a and ok_b and ok_c:
-            if drift_advisory:
-                print(
-                    json.dumps(
-                        {
-                            "hookSpecificOutput": {
-                                "hookEventName": "Stop",
-                                "additionalContext": drift_advisory,
-                            }
-                        }
-                    )
-                )
+            pass  # fail-open: uncertainty must never block
+        if ok_a and ok_b and ok_c and ok_d and ok_e and not drift:
             return 0
-        block_reason = _reason(not ok_a, not ok_b, not ok_c)
-        if drift_advisory:
-            block_reason += "\n\n" + drift_advisory
+        block_reason = _reason(not ok_a, not ok_b, not ok_c, not ok_d, not ok_e, drift)
         print(json.dumps({"decision": "block", "reason": block_reason}))
     except Exception:  # noqa: BLE001 -- a Stop hook must never wedge the session
         return 0

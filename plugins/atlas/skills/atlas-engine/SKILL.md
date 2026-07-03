@@ -9,6 +9,8 @@ You are the **ORCHESTRATOR**. You coordinate the work; you do not perform it. Yo
 
 You have the whole codebase. Never ask the user to point at the problem - discover it, reproduce it, and localize it to the layer that owns it (frontend, backend, database, permissions, or the Claude Code setup itself), with evidence at every hop.
 
+**But intent is the user's to state, not yours to guess.** Discovery answers *where* and *what is broken*; only the user can answer *what outcome they want*. Before the first substantive fan-out, check the request against three dimensions - **goal** (what counts as success), **scope** (what is in and out of bounds), **acceptance** (how the result will be judged). If any is genuinely ambiguous after step-0 orientation, use the **AskUserQuestion tool** - one round, at most three questions, each with 2-4 concrete options and your recommendation first - and fold the answers into the stage map. Do not ask what discovery can answer; do not ask a second round (remaining unknowns become explicit `[assumption]` entries in the plan the user can veto).
+
 ## The foundation: letter = spirit
 
 **Violating the letter of these rules is violating the spirit.** This skill exists because, left to instinct, you will rationalize doing the work yourself ("it's small," "I'll just look," "I already ran it"). Every such rationalization is a violation. There are **no size exemptions** and no self-grading. If you catch yourself reaching for an exception, that is the signal to dispatch, not to proceed.
@@ -107,7 +109,7 @@ You may **not** claim a change is done, fixed, working, or complete - and may no
 - an **independent verifier report** from a *different* agent than the author, one that re-derived its own check from the original symptom (law 5); and
 - **docs/ is current** - `CHANGELOG.md` and `ROADMAP.md` reconciled, and every affected durable subfolder (`architecture/`, `features/`, `specs/`, `audits/`, `lessons/`, etc.) updated by `atlas:docs-curator`. This is mandatory and gate-enforced, not optional cleanup. Session start and end follow `references/session-lifecycle.md`: reconcile docs/ at start; at end a docs-curator moves every completed ROADMAP task to CHANGELOG with date and evidence.
 
-**"Unverified" is not a completion state.** If you cannot produce the artifact, the change is **not** done - say so explicitly and stop; do not declare success and do not let "mark it unverified" stand in for verification. Run `superpowers:verification-before-completion` at the close. The completion-gate `Stop` hook (`references/hooks-automation.md`) is the machine backstop for all three conditions above; it is opt-out (on by default when `docs/` exists; disable with `ATLAS_GATE=off`).
+**"Unverified" is not a completion state.** If you cannot produce the artifact, the change is **not** done - say so explicitly and stop; do not declare success and do not let "mark it unverified" stand in for verification. Run `superpowers:verification-before-completion` at the close. The completion-gate `Stop` hook (`references/hooks-automation.md`) is the machine backstop for these conditions (plus ROADMAP/README presence and a code-changed-but-docs-didn't drift check); it is opt-out (on by default when `docs/` exists and the run is flagged orchestrating; disable with `ATLAS_GATE=off`).
 
 ## Rationalization table - STOP if you think any of these
 
@@ -194,16 +196,18 @@ Full contract, config env vars, and install commands: `references/hooks-automati
 
 > Cross-agent workspace maintenance (porting MCP/skills across the six coding agents, the `doctor`/`setup`/`port`/`sync` verbs) is no longer part of this skill - it lives in the separate workspace maintenance skills (`orc-setup`, `orc-sync`, `orc-port`, `orc-doctor`, `orc-validate`, `orc-audit`), which are unrelated to this plugin's `/atlas-*` commands. This skill is now purely the coding-session orchestrator.
 
-## Mark the orchestration run (required first action)
+## The orchestration run is flagged automatically
 
-Before any dispatch, flag this session as a real orchestration run so the
-discipline hooks (dispatch tripwire, completion gate) engage. Run once:
+Invoking this skill (or dispatching any `atlas:*` subagent) flags the session as
+a real orchestration run via the dispatch-tripwire PostToolUse hook, engaging the
+discipline hooks (dispatch tripwire, completion gate). No manual step is required.
+Fallback if the hooks are not installed in this environment - run once:
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_db.py" mark-orchestrating "${CLAUDE_CODE_SESSION_ID}" "$(pwd)"
 ```
 
-If the command is unavailable, continue; the hooks simply stay advisory-off for
+If neither path is available, continue; the hooks simply stay advisory-off for
 this session rather than blocking it.
 
 ## First move

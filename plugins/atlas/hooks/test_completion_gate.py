@@ -71,6 +71,74 @@ class GateOrchestrationTest(unittest.TestCase):
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertIn('"decision": "block"', r.stdout)
 
+    def _satisfy_all_conditions(self):
+        docs = os.path.join(self.tmp, "docs")
+        os.makedirs(os.path.join(docs, "evidence"), exist_ok=True)
+        os.makedirs(os.path.join(docs, ".run"), exist_ok=True)
+        with open(os.path.join(docs, "evidence", "run.txt"), "w") as f:
+            f.write("observed output")
+        with open(os.path.join(docs, ".run", "findings.json"), "w") as f:
+            json.dump([{"claim": "x works", "status": "verified"}], f)
+        for name in ("CHANGELOG.md", "ROADMAP.md"):
+            with open(os.path.join(docs, name), "w") as f:
+                f.write("# %s\ncontent\n" % name)
+        with open(os.path.join(self.tmp, "README.md"), "w") as f:
+            f.write("# project\n")
+
+    def test_all_conditions_met_passes(self):
+        self._satisfy_all_conditions()
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertEqual(r.returncode, 0)
+        self.assertNotIn('"decision": "block"', r.stdout)
+
+    def test_missing_roadmap_blocks_with_condition_d(self):
+        self._satisfy_all_conditions()
+        os.remove(os.path.join(self.tmp, "docs", "ROADMAP.md"))
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertIn('"decision": "block"', r.stdout)
+        self.assertIn("ROADMAP.md is missing", r.stdout)
+
+    def test_missing_readme_blocks_with_condition_e(self):
+        self._satisfy_all_conditions()
+        os.remove(os.path.join(self.tmp, "README.md"))
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertIn('"decision": "block"', r.stdout)
+        self.assertIn("README.md at the project root is missing", r.stdout)
+
+    def test_docs_drift_blocks_with_condition_f(self):
+        self._satisfy_all_conditions()
+        subprocess.run(["git", "init", "-q", self.tmp], check=True, capture_output=True)
+        genv = dict(
+            os.environ,
+            GIT_AUTHOR_NAME="t",
+            GIT_AUTHOR_EMAIL="t@t",
+            GIT_COMMITTER_NAME="t",
+            GIT_COMMITTER_EMAIL="t@t",
+        )
+        subprocess.run(
+            ["git", "-C", self.tmp, "add", "-A"], check=True, capture_output=True
+        )
+        subprocess.run(
+            ["git", "-C", self.tmp, "commit", "-qm", "base"],
+            check=True,
+            capture_output=True,
+            env=genv,
+        )
+        # change code only -> drift
+        with open(os.path.join(self.tmp, "app.py"), "w") as f:
+            f.write("print('x')\n")
+        subprocess.run(
+            ["git", "-C", self.tmp, "add", "app.py"], check=True, capture_output=True
+        )
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertIn('"decision": "block"', r.stdout)
+        self.assertIn("Docs drift", r.stdout)
+        # touching a docs file clears the drift block
+        with open(os.path.join(self.tmp, "docs", "CHANGELOG.md"), "a") as f:
+            f.write("- change\n")
+        r2 = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertNotIn('"decision": "block"', r2.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

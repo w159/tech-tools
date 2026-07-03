@@ -7,6 +7,8 @@ description: Use for a comprehensive, discovery-first code-quality and security 
 
 Discovery-first, comprehensive audit swarm. You supply no arguments. The survey builds a knowledge graph of the codebase, aims every dimension reviewer at the hottest nodes that graph surfaces, verifies every finding adversarially, and delivers a prioritized, file:line-anchored report under docs/audits/atlas-survey-<date>/.
 
+**Elicitation:** before building the graph, if the user's ask did not fix the tier, ask ONE AskUserQuestion: audit depth - comprehensive sweep (recommended for "audit this"), hotspot-only quick pass, or a named-dimension focus (security/OWASP only, correctness only). Depth changes swarm size and wall-clock materially, so it is the user's call; which files are hot is discovery's call, never a question.
+
 ## Zero-arg discovery
 
 The user invokes this skill with no arguments. Phase 1 first discovers the codebase roots (a single-package repo yields one root; a monorepo yields one per package - MCP server, node lib, plugin), then runs the `graphify` skill **scoped per root** to build the codebase knowledge graph: community structure, god nodes (high in-degree, high coupling), and high-centrality hot spots (bridges between modules). Scoping per root keeps each graphify run under its size gate so the build never stalls on a whole-monorepo scope. In parallel, the orchestrator reads docs/ as the SSOT for intended behavior - these docs become the baseline against which code-vs-docs drift is measured.

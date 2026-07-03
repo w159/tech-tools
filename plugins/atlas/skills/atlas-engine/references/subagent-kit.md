@@ -39,6 +39,11 @@ For how to slice work into stages and when to fan out at all, see `multi-stage-p
 - Read-only roles (explore, verify, db-probe, ui-test) -> `disallowedTools: [Write, Edit, MultiEdit, NotebookEdit]`.
 - Parallel editors of the same tree -> `isolation: "worktree"` so they don't collide.
 - Cap long/background jobs with a turn budget. Spawn all independent jobs in ONE message.
+- **Subagents never talk to the user.** They cannot use AskUserQuestion; a subagent that
+  hits a genuinely user-owned decision (destructive action, scope fork, missing
+  credential) STOPS and returns a `DECISION NEEDED: <question + options>` line in its
+  report instead of guessing. The orchestrator collects these and asks the user itself
+  via AskUserQuestion - batching related decisions into one round where possible.
 
 ## Companion agents (this skill's core squad)
 

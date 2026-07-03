@@ -11,6 +11,12 @@ credentials each server fails its own credential check and never loads. No
 conditional logic gates them; empty config is the off switch. Filling a vendor's
 required keys is what enables it.
 
+**Elicitation:** when the user has not named a vendor, ask ONE multiSelect
+AskUserQuestion listing the connectors with their current enabled/disabled state
+(detected, not guessed) so they pick what to turn on. Credentials themselves are
+collected via `/plugin` config per the vendor table - never through free-text chat, and
+never echoed back.
+
 Atlas does NOT bundle the vendor `.mcpb` archives. Each bundle is located and
 extracted on demand the first time its connector is used. The full per-vendor
 table (keys, defaults, where to get each credential, doc paths) lives in

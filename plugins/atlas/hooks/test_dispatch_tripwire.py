@@ -147,8 +147,74 @@ class TripwireTest(unittest.TestCase):
             if "dispatch_tripwire.py" in hooks:
                 self.assertIn("Agent", grp.get("matcher", ""))
                 self.assertIn("Task", grp.get("matcher", ""))
+                self.assertIn("Skill", grp.get("matcher", ""))
                 ok = True
         self.assertTrue(ok, "dispatch_tripwire entry not found in PostToolUse")
+
+    def _fresh_unmarked_session(self, session_id):
+        import atlas_db
+
+        conn = atlas_db.connect(self.env["ATLAS_DB"])
+        pid = atlas_db.register_project(conn, "/repo/x")
+        atlas_db.start_run(conn, pid, session_id)
+        conn.close()
+
+    def _is_orchestrating(self, session_id):
+        import atlas_db
+
+        conn = atlas_db.connect(self.env["ATLAS_DB"])
+        flag = atlas_db.is_orchestrating(conn, session_id)
+        conn.close()
+        return flag
+
+    def test_orchestration_skill_marks_session(self):
+        self._fresh_unmarked_session("sess-skill")
+        r = run_hook(
+            {
+                "session_id": "sess-skill",
+                "tool_name": "Skill",
+                "tool_input": {"skill": "atlas:atlas-engine"},
+            },
+            self.env,
+        )
+        self.assertEqual(r.returncode, 0)
+        self.assertTrue(self._is_orchestrating("sess-skill"))
+
+    def test_config_skill_does_not_mark_session(self):
+        self._fresh_unmarked_session("sess-arch")
+        run_hook(
+            {
+                "session_id": "sess-arch",
+                "tool_name": "Skill",
+                "tool_input": {"skill": "atlas:atlas-architect"},
+            },
+            self.env,
+        )
+        self.assertFalse(self._is_orchestrating("sess-arch"))
+
+    def test_atlas_agent_dispatch_marks_session(self):
+        self._fresh_unmarked_session("sess-disp")
+        run_hook(
+            {
+                "session_id": "sess-disp",
+                "tool_name": "Agent",
+                "tool_input": {"subagent_type": "atlas:explorer"},
+            },
+            self.env,
+        )
+        self.assertTrue(self._is_orchestrating("sess-disp"))
+
+    def test_generic_agent_dispatch_does_not_mark_session(self):
+        self._fresh_unmarked_session("sess-gen")
+        run_hook(
+            {
+                "session_id": "sess-gen",
+                "tool_name": "Agent",
+                "tool_input": {"subagent_type": "Explore"},
+            },
+            self.env,
+        )
+        self.assertFalse(self._is_orchestrating("sess-gen"))
 
 
 if __name__ == "__main__":

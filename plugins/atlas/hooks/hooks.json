@@ -49,7 +49,7 @@
         ]
       },
       {
-        "matcher": "Read|Grep|Glob|Edit|Write|Bash|Agent|Task|MultiEdit",
+        "matcher": "Read|Grep|Glob|Edit|Write|Bash|Agent|Task|MultiEdit|Skill",
         "hooks": [
           {
             "type": "command",
