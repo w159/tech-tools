@@ -18,7 +18,7 @@ a codebase the more it is used.
 | atlas-cartographer skill | Produce an evidence-grounded architecture map of any codebase, identify structural duplicates, and write a `docs/architecture/boundaries.md` that a fresh agent can load instead of re-discovering the layout. |
 | atlas-sextant skill | Measure run health from the SQLite observability DB and propose metric-backed improvements (baseline -> target). Three lenses: run metrics (wall-clock, inline-ops, dispatches, parallel waves, context, recall, verifier coverage), asset/context-cost audit, and session forensics over the indexed transcripts (used-vs-idle tools/skills/MCP/agents, context-tool health, repeated requests, behavioral issues). The Stop/SubagentStop nudge hook points here. |
 | atlas-orbit skill | Pick and instantiate the best-fit reusable loop for any recurring or iterative task (loop-until-dry, fan-out-adversarial-verify, red-green-tdd, doc-reconcile, incident-triage, and more). |
-| atlas-harbor skill | Guided vendor MCP connector setup: enable, configure, and verify any of the 10 bundled MCP connectors (NinjaOne, Auvik, CIPP, ConnectWise, Spanning, KnowBe4, Vanta, ThreatLocker, Paylocity, Blumira). |
+| atlas-harbor skill | Guided cross-plugin setup for the 10 vendor MCP connectors (NinjaOne, Auvik, CIPP, ConnectWise, Spanning, KnowBe4, Vanta, ThreatLocker, Paylocity, Blumira), which live in their owning domain plugins (it-operations, security-compliance, microsoft-365, hr-payroll) - atlas ships none of them itself. Detects installed domain plugins, shows enabled/disabled state, and directs credential setup to the owning plugin's `/plugin config`. |
 | atlas-expedition skill | App-discovering UX swarm: auto-finds routes and form fields in any running web app, then runs the full cartographer -> persona -> fuzzer -> oracle -> reporter pipeline with no hardcoded paths. |
 | atlas-survey skill | Comprehensive quality, security, and OWASP audit swarm: discovery-first scan of the full codebase, severity-graded findings, coverage report, and an actionable remediation plan. |
 | Command library | Seventeen verification-gated `/atlas-*` launchers, each injecting the operating contract and driving a specific task through the squad. Includes `/atlas-launch`, which opens a remediation session from an audit hub, and `/atlas-doctor`, which diagnoses and repairs the plugin installation itself. |
@@ -88,7 +88,7 @@ atlas/
     |-- atlas-cartographer/        # SKILL.md - architecture map + structural dedup -> docs/architecture/boundaries.md
     |-- atlas-sextant/             # SKILL.md - SQLite observability DB: measurable self-improvement
     |-- atlas-orbit/               # SKILL.md - recurring/iterative task loop library (12+ loops)
-    |-- atlas-harbor/              # SKILL.md - guided vendor MCP connector setup (10 connectors)
+    |-- atlas-harbor/              # SKILL.md - guided cross-plugin vendor connector setup (10 connectors, owned by domain plugins)
     |-- atlas-expedition/          # SKILL.md - app-discovering UX swarm (no hardcoded paths)
     `-- atlas-survey/              # SKILL.md - comprehensive quality/security/OWASP audit swarm
 ```

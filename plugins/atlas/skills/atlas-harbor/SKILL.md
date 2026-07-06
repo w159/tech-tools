@@ -1,51 +1,61 @@
 ---
 name: atlas-harbor
-description: 'Guided setup for the ten vendor MCP connectors bundled with atlas (Auvik, Blumira, CIPP, ConnectWise Manage, Spanning, KnowBe4, NinjaOne, Paylocity, ThreatLocker, Vanta). Use to see which connectors are enabled vs disabled, enable one by collecting only the credentials it needs, and make its bundle available for extract-on-demand. All connectors ship inert; this is how an operator turns one on.'
+description: 'Guided cross-plugin setup for the ten vendor MCP connectors (Auvik, Blumira, CIPP, ConnectWise Manage, Spanning, KnowBe4, NinjaOne, Paylocity, ThreatLocker, Vanta). The connectors live in their owning domain plugins - it-operations, security-compliance, microsoft-365, hr-payroll - not in atlas. Use to detect which domain plugins are installed, see which connectors are enabled vs disabled, and direct the user to the owning plugin''s /plugin config to enter credentials. Atlas ships zero vendor connectors itself.'
 ---
 
-# Atlas connectors setup
+# Atlas connectors setup guide
 
-Atlas bundles ten vendor MCP connectors. They ship INERT: in
-`.claude-plugin/plugin.json` every `userConfig` key defaults to `""`, so with no
-credentials each server fails its own credential check and never loads. No
-conditional logic gates them; empty config is the off switch. Filling a vendor's
-required keys is what enables it.
+Atlas does not bundle any vendor MCP connector. The ten connectors are single-sourced
+in their owning domain plugins:
+
+| Domain plugin | Connectors |
+| --- | --- |
+| it-operations | auvik, connectwise-manage, ninjaone, spanning |
+| security-compliance | blumira, knowbe4, threatlocker, vanta |
+| microsoft-365 | cipp |
+| hr-payroll | paylocity |
+
+Each domain plugin declares its own `userConfig` credential keys in its
+`.claude-plugin/plugin.json` and its own `.mcp.json` launching the connector. They ship
+INERT: every `userConfig` key defaults to `""`, so with no credentials the server fails
+its own credential check and never loads. Filling a vendor's required keys on the
+**owning plugin** is what enables it - not atlas.
 
 **Elicitation:** when the user has not named a vendor, ask ONE multiSelect
 AskUserQuestion listing the connectors with their current enabled/disabled state
 (detected, not guessed) so they pick what to turn on. Credentials themselves are
-collected via `/plugin` config per the vendor table - never through free-text chat, and
-never echoed back.
+collected via `/plugin` config on the owning domain plugin per the vendor table -
+never through free-text chat, and never echoed back.
 
-Atlas does NOT bundle the vendor `.mcpb` archives. Each bundle is located and
-extracted on demand the first time its connector is used. The full per-vendor
-table (keys, defaults, where to get each credential, doc paths) lives in
-`vendors.md` next to this file. Read it before guiding any setup.
+The full per-vendor table (keys, defaults, where to get each credential, doc paths,
+owning plugin) lives in `vendors.md` next to this file. Read it before guiding any
+setup.
 
 ## The ten connectors
 
 auvik, blumira, cipp, connectwise-manage, spanning, knowbe4, ninjaone,
-paylocity, threatlocker, vanta. The connector's svc dir and `.mcpb` basename are
-listed in `vendors.md`.
+paylocity, threatlocker, vanta. The owning plugin and connector's svc dir are listed
+in `vendors.md`.
 
 ## No-args behavior: status scan
 
-When invoked with no specific vendor, report which connectors are set up vs not.
-A connector is ENABLED when its required `userConfig` keys (see `vendors.md`,
-"Required to enable") are all non-empty in the user's plugin config, AND its
-bundle is reachable for extraction.
+When invoked with no specific vendor, report which connectors are set up vs not,
+across every domain plugin that is installed.
 
-1. Read `${CLAUDE_PLUGIN_ROOT}/../../.claude-plugin/plugin.json` (or the effective
-   merged plugin config) and inspect the `userConfig` values the user has set.
-2. For each of the ten connectors, mark ENABLED if its required keys are non-empty,
+1. Detect installed plugins: read `~/.claude/plugins/installed_plugins.json` if
+   present. If it cannot be read or parsed, fall back to advising the user to run
+   `/plugin` and read the list from there.
+2. For each of the ten connectors, resolve its owning domain plugin (see the table
+   above / `vendors.md`). If the owning plugin is not installed, mark the connector
+   NOT INSTALLED and skip the enabled check - there is nothing to configure yet.
+3. For connectors whose owning plugin is installed, read that plugin's effective
+   `userConfig` values (the merged plugin config) and mark the connector ENABLED if
+   all of its required keys (see `vendors.md`, "Required to enable") are non-empty,
    otherwise DISABLED.
-3. For each, also check whether a bundle is reachable in the extract-on-demand
-   search order (see `vendors.md`): `${CLAUDE_PLUGIN_DATA}/mcp/<svc>.mcpb`, then
-   `${ATLAS_MCP_SOURCE_DIR}/<svc>.mcpb`, then
-   `<repo>/mcp_servers/<svc>/<svc>.mcpb`. Mark the bundle as AVAILABLE or MISSING.
-4. Print a compact table: connector | enabled/disabled | bundle available/missing.
-   Then say which connectors are fully ready, which have creds but a missing
-   bundle, and which are off.
+4. Print a compact table: connector | owning plugin | installed/not installed |
+   enabled/disabled. Then say which connectors are fully ready, which have an
+   installed-but-unconfigured owning plugin, and which need the owning plugin
+   installed first.
 
 ## Guided enable (a vendor was named, or the user picks one)
 
@@ -53,28 +63,19 @@ Work one connector at a time.
 
 1. Open `vendors.md` and find the connector's row. Tell the user EXACTLY what
    that connector needs and nothing else:
-   - the `userConfig` keys, flagged required vs optional;
+   - the owning domain plugin (install it first via `/plugin` if not already
+     installed);
+   - the `userConfig` keys on that plugin, flagged required vs optional;
    - where to get each credential (the "Where to get credentials" column and the
      `docs/vendors/<dir>/` path);
    - the base-url / region default, and that the optional `*_base_url` key can be
      left blank to use it.
-2. Tell the user to set those keys in the atlas plugin config (the plugin's
-   `userConfig`). Required keys must be non-empty; optional keys, including every
-   base URL, may stay blank.
-3. Make the bundle available for extract-on-demand. Give the exact command from
-   `vendors.md`, e.g. copy the bundle into the plugin data dir:
-
-   ```
-   mkdir -p "${CLAUDE_PLUGIN_DATA}/mcp"
-   cp /path/to/tech-tools/mcp_servers/<svc>/<svc>.mcpb "${CLAUDE_PLUGIN_DATA}/mcp/"
-   ```
-
-   or set `ATLAS_MCP_SOURCE_DIR` to a directory of bundles. Use the svc-dir
-   bundle name (e.g. `auvik-mcp.mcpb`, `kaseya-spanning-backup-mcp.mcpb`).
-4. Confirm: restate which keys were set, confirm the bundle is now reachable, and
-   note that the connector loads on next use. The launcher extracts on first use;
-   if a bundle is still missing it exits with a clear "declared but not set up"
-   message pointing back at this skill, and never crashes.
+2. Tell the user to set those keys via `/plugin config` on the **owning domain
+   plugin** - not on atlas. Required keys must be non-empty; optional keys,
+   including every base URL, may stay blank.
+3. Confirm: restate which keys were set on which plugin, and note that the
+   connector loads on next use of that plugin's MCP server. If the owning plugin
+   isn't installed yet, say so and give the install step first.
 
 ## Guardrails
 
@@ -82,5 +83,6 @@ Work one connector at a time.
 - Only collect the keys a chosen connector actually needs; do not over-ask.
 - Leaving an optional base-url key blank is correct and expected; do not push the
   user to set it.
-- Never copy a `.mcpb` into the atlas plugin folder itself. Bundles live in the
-  plugin DATA dir, an external source dir, or the source checkout.
+- Never direct credentials at atlas's own plugin config - atlas has no
+  connector-related `userConfig` keys. Credentials always go on the owning domain
+  plugin.

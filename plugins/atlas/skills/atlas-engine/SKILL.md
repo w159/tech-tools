@@ -40,7 +40,7 @@ The `docs/` tree is the project's authoritative memory, and this skill keeps it 
 
 `atlas:docs-curator` is the only writer of durable `docs/` content (it writes nowhere else); `atlas:docs-auditor` reads the tree against the code and reports drift. Keeping docs/ current is **gate-enforced** at completion, not optional cleanup. Taxonomy and templates: `references/docs-ssot.md`. Per-root placement: `references/scaffolding.md`.
 
-This repo is a monorepo (see `CLAUDE.md`): the propagation rule means a vendor change spans the node library, MCP server domain handler, manifest, `.mcpb` bundle, plugin commands/skills, plugin manifest, root README, `.env.template`, `test-mcp-tools.mjs`, and `docs/vendors/<svc>.md`. Treat docs/ reconciliation as covering every layer a change touched, not just the code one.
+This repo is a monorepo (see `CLAUDE.md`): the propagation rule means a vendor change spans the node library, MCP server domain handler, manifest, packaged connector bundle, plugin commands/skills, plugin manifest, root README, `.env.template`, `test-mcp-tools.mjs`, and `docs/vendors/<svc>.md`. Treat docs/ reconciliation as covering every layer a change touched, not just the code one.
 
 ## Token discipline
 

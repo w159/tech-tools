@@ -4,6 +4,29 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
+## Atlas v2.6.0 -- vendor connectors single-sourced to domain plugins (2026-07-03)
+
+All 10 vendor `.mcpb` bundles atlas carried in `plugins/atlas/mcp/` were confirmed
+byte-identical (SHA-256) to the copies already shipped by the four domain plugins that
+own each vendor - it-operations (auvik, connectwise-manage, ninjaone, spanning),
+security-compliance (blumira, knowbe4, threatlocker, vanta), microsoft-365 (cipp), and
+hr-payroll (paylocity). Atlas now stops carrying them: `plugins/atlas/mcp/` (10 `.mcpb`
+files + `extract.sh` + `launch.sh`, ~27 MB) and `plugins/atlas/.mcp.json` are removed,
+and `plugins/atlas/.claude-plugin/plugin.json` drops the `mcpServers` key and the
+entire `userConfig` block of vendor credential keys (version bumped to 2.6.0). The
+domain plugins already declare their own `userConfig`/`.mcp.json` per vendor and are
+now the single source. `atlas-harbor` is rewritten from "enable atlas's bundled
+connectors" to a cross-plugin setup guide: it detects which domain plugins are
+installed, shows enabled/disabled state per vendor against the *owning* plugin's
+config, and directs credential entry to that plugin's `/plugin config`; `vendors.md`
+updated to match, with a migration note. Stale bundling/`.mcpb`/`userConfig` claims
+swept from `capability-catalog.md`, `atlas-engine/SKILL.md`,
+`scripts/discover_capabilities.py`, `commands/atlas.md`, and `README.md`. The
+marketplace entry description for atlas was re-synced from the updated plugin
+manifest. MIGRATION: credentials previously entered on atlas's own plugin config
+(e.g. `paylocity_client_id`) must be re-entered on the owning domain plugin via
+`/plugin` - atlas's copies of those keys no longer exist.
+
 ## Atlas v2.5.0 -- deterministic orchestration wiring + docs gate widened (2026-07-03)
 
 Session audit found the plugin's connective tissue was prose, not machinery: the

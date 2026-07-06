@@ -85,7 +85,9 @@ RULES = [
     {
         "id": "connectors (atlas-harbor)",
         "type": "note",
-        "reason": "Built-in vendor MCP connectors, disabled by default; enable with atlas-harbor.",
+        "reason": "Vendor MCP connectors live in the domain plugins (it-operations, "
+        "security-compliance, microsoft-365, hr-payroll), disabled by default; use "
+        "atlas-harbor as the cross-plugin setup guide.",
         "cmd": "(already shipped with atlas)",
         "match": lambda c: c["has_mcp_servers"],
     },

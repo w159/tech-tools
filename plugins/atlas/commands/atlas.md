@@ -111,7 +111,7 @@ Data, cloud & vendors
 
 Recurring work, connectors & self-improvement
   atlas-orbit            select/run a recurring loop from the loop-library
-  atlas-harbor           enable vendor MCP connectors (MSP/vendor signals)
+  atlas-harbor           guide vendor connector setup across domain plugins (MSP/vendor signals)
   atlas-expedition       app-discovering UX runtime test swarm
   atlas-sextant          measure atlas's own run health + audit context/asset waste
 ```

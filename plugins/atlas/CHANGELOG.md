@@ -1,5 +1,33 @@
 # Changelog
 
+## 2.6.0
+
+Single-sourcing release: atlas no longer carries its own copy of the ten vendor MCP
+connectors. All ten `.mcpb` bundles (plus `mcp/launch.sh` and `mcp/extract.sh`, ~27 MB
+total) were byte-identical duplicates of the copies already shipped by the domain
+plugins (verified by SHA-256) - the domain plugins are now the single source.
+
+- **Removed.** `plugins/atlas/mcp/` (10 `.mcpb` bundles + `extract.sh` + `launch.sh`)
+  and `plugins/atlas/.claude-plugin`'s `mcpServers` key and its `.mcp.json`. The
+  `userConfig` block (all vendor credential keys) was removed from
+  `.claude-plugin/plugin.json` - those keys belong to the domain plugin that owns
+  each vendor: it-operations (auvik, connectwise-manage, ninjaone, spanning),
+  security-compliance (blumira, knowbe4, threatlocker, vanta), microsoft-365 (cipp),
+  hr-payroll (paylocity).
+- **atlas-harbor rewritten** as the cross-plugin connector setup guide: detects which
+  domain plugins are installed (`~/.claude/plugins/installed_plugins.json`, or advises
+  `/plugin`), shows enabled/disabled state per vendor by reading the *owning* plugin's
+  config, and directs credential entry to that plugin's `/plugin config` - never to
+  atlas. `vendors.md` updated to the same model, plus a migration note.
+- **Stale references swept**: `skills/atlas-engine/references/capability-catalog.md`,
+  `skills/atlas-engine/SKILL.md`, `scripts/discover_capabilities.py`,
+  `commands/atlas.md`, and `README.md` no longer claim atlas ships or bundles vendor
+  connectors.
+- **MIGRATION.** Credentials previously configured on atlas's own plugin config (e.g.
+  `paylocity_client_id`) must be re-entered on the owning domain plugin via `/plugin`
+  config - atlas's copies of those `userConfig` keys are gone. Run atlas-harbor's
+  no-args status scan to see current enabled/disabled state per connector.
+
 ## 2.5.0
 
 Connective-tissue release: the orchestration machinery now engages deterministically
