@@ -1,6 +1,6 @@
 # Agent operating rules for this repo
 
-This file is the canonical AGENTS.md directive set for any AI agent (Claude Code, Codex, Cursor, Copilot, custom orchestrators) operating in this repository. It is loaded every session.
+This file is the canonical AGENTS.md directive set for any AI agent (Claude Code, Codex, Cursor, Copilot, Kimi Code CLI, custom orchestrators) operating in this repository. It is loaded every session.
 
 ## 1. Definition of "tools" in this repo
 

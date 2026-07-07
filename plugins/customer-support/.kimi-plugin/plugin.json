@@ -1,0 +1,23 @@
+{
+  "name": "customer-support",
+  "version": "1.1.1",
+  "description": "Triage tickets, draft responses, research customer questions, manage escalations, and build knowledge-base articles for support teams.",
+  "keywords": [
+    "customer-support",
+    "tickets",
+    "triage",
+    "knowledge-base",
+    "escalation"
+  ],
+  "author": {
+    "name": "w159",
+    "url": "https://github.com/w159"
+  },
+  "homepage": "https://github.com/w159/tech-tools/tree/main/plugins/customer-support",
+  "license": "Apache-2.0",
+  "interface": {
+    "displayName": "Customer Support",
+    "shortDescription": "Customer support co-pilot for ticket triage, response drafting, research, escalations, and knowledge base articles."
+  },
+  "skills": "./skills/"
+}

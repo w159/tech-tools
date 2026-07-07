@@ -1,0 +1,24 @@
+{
+  "name": "data",
+  "version": "1.0.1",
+  "description": "Explore datasets, write SQL queries, validate data quality, build visualizations, and generate interactive dashboards.",
+  "keywords": [
+    "data",
+    "sql",
+    "analytics",
+    "visualization",
+    "dashboard",
+    "statistics"
+  ],
+  "author": {
+    "name": "w159",
+    "url": "https://github.com/w159"
+  },
+  "homepage": "https://github.com/w159/tech-tools/tree/main/plugins/data",
+  "license": "Apache-2.0",
+  "interface": {
+    "displayName": "Data",
+    "shortDescription": "Explore datasets, write SQL queries, validate data quality, build visualizations, and generate interactive dashboards."
+  },
+  "skills": "./skills/"
+}

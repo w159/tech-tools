@@ -1,0 +1,34 @@
+{
+  "name": "it-operations",
+  "version": "1.2.3",
+  "description": "MSP IT operations across RMM, PSA, networking, and backup. Bundles NinjaOne (RMM), ConnectWise PSA (tickets, time, agreements), Auvik (network monitoring), and Kaseya Spanning (M365/Google backup), plus core operations skills: change management, process optimization, resource planning, risk assessment, compliance tracking, and vendor management.",
+  "keywords": [
+    "operations",
+    "change-management",
+    "process",
+    "risk",
+    "compliance",
+    "vendor-management",
+    "auvik",
+    "msp",
+    "rmm",
+    "psa",
+    "ninjaone",
+    "connectwise",
+    "spanning",
+    "backup",
+    "networking",
+    "endpoint"
+  ],
+  "author": {
+    "name": "w159",
+    "url": "https://github.com/w159"
+  },
+  "homepage": "https://github.com/w159/tech-tools/tree/main/plugins/it-operations",
+  "license": "Apache-2.0",
+  "interface": {
+    "displayName": "IT Operations",
+    "shortDescription": "MSP IT operations across RMM, PSA, networking, and backup."
+  },
+  "skills": "./skills/"
+}

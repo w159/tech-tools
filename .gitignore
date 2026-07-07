@@ -184,10 +184,14 @@ firebase-adminsdk*.json
 !skills/
 !skills/**
 
-# ---- .claude-plugin — root marketplace manifest ----
+# ---- .claude-plugin — root Claude Code marketplace manifest ----
 # Note: /.* and /.*/ in SECTION 2 block root-level dotdirs; we must re-allow this one.
 !.claude-plugin/
 !.claude-plugin/**
+
+# ---- .kimi-plugin — root Kimi Code CLI marketplace manifest ----
+!.kimi-plugin/
+!.kimi-plugin/**
 
 # ---- docs — atlas documentation SSOT (CHANGELOG, ROADMAP, plans, specs, evidence,
 #      architecture, features, lessons, audits, wiki, reference_files). Atlas builds and
