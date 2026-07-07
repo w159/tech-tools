@@ -45,7 +45,7 @@ atlas/
 |   |-- discover_capabilities.py   #   read-only stack scan -> ranked recommendations
 |   |-- atlas_doctor.py            #   installation health check + auto-repair (/atlas-doctor, SessionStart guard)
 |   `-- install_hooks.py           #   fallback wiring for non-plugin installs
-|-- agents/                        # 18 subagents (atlas:<role>), auto-registered
+|-- agents/                        # 12 subagents (atlas:<role>), auto-registered
 |   |-- explorer.md                #   read-only codebase mapping
 |   |-- implementer.md             #   bounded, verified code edits
 |   |-- verifier.md                #   adversarial confirm/refute
@@ -53,17 +53,11 @@ atlas/
 |   |-- schema-inventory.md        #   PostgreSQL catalog inventory (tables, columns, indexes)
 |   |-- rls-privilege-audit.md     #   read-only RLS/grants/privilege audit
 |   |-- naming-glossary-audit.md   #   table/column name audit against project glossary
-|   |-- api-usage-map.md           #   map every DB object the API references
 |   |-- ui-runtime-tester.md       #   live browser/runtime behavior
 |   |-- planner.md                 #   multi-stage decomposition + stage maps
 |   |-- docs-curator.md            #   maintains the docs/ single source of truth
 |   |-- docs-auditor.md            #   audits docs/ for drift against code
-|   |-- completeness-critic.md     #   "what did we miss" gap pass before done
-|   |-- ux-cartographer.md         #   UX swarm: discover routes/fields + save contract
-|   |-- ux-persona.md              #   UX swarm: enroll, enter data, walk UI, file findings
-|   |-- ux-fuzzer.md               #   UX swarm: boundary/fuzz the discovered inputs
-|   |-- ux-accuracy-oracle.md      #   UX swarm: independent recompute of client numbers
-|   `-- ux-reporter.md             #   UX swarm: synthesis + three hard gates + deliverables
+|   `-- completeness-critic.md     #   "what did we miss" gap pass before done
 |-- commands/                      # 18 commands (/atlas + 17 launchers)
 |   |-- atlas.md                   #   the architect: boot + configure the workspace
 |   |-- atlas-prompt.md            #   prompt optimizer

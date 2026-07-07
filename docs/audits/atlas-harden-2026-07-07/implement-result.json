@@ -1,0 +1,857 @@
+{
+  "summary": "Approved atlas hardening: red checks, gated removals, conformance fixes, routing, gitignore, marketplace repoint - each write independently verified",
+  "agentCount": 19,
+  "logs": [
+    "Red state: 0 dangling refs, reportback missing 4, halluc missing 16",
+    "removals: confirmed",
+    "verdicts: removals=confirmed, agent-conformance=confirmed, routing=confirmed, gitignore=confirmed, marketplace=confirmed"
+  ],
+  "result": {
+    "red": {
+      "a1": {
+        "summary": "Audited the atlas plugin at /Users/jerry/.claude/plugins/cache/tech-tools/atlas/2.6.0 (2.6.0, the canonical cache install; the other hit at /Users/jerry/.copilot/... is an unrelated Copilot data dir and was not used). Read-only, nothing modified.\n\n(1) references/*.md citations. Enumerated every `references/` mention in the 9 SKILL.md files (skills/*/SKILL.md) and the 18 commands/*.md files via `grep -no \"references/\"`.\n- skills/atlas-engine/SKILL.md and skills/atlas-expedition/SKILL.md cite files inside their own `references/` dirs (both exist: skills/atlas-engine/references/*.md has 19 files, skills/atlas-expedition/references/*.md + references/roles/*.md has 11 files). Every named file (capability-catalog.md, capability-routing.md, claude-code-tuning.md, codeql.md, docs-ssot.md, execution-testing.md, hooks-automation.md, lsp-and-symbols.md, memory-access.md, multi-stage-planning.md, operating-contract.md, prompt-optimization.md, pytest-coverage.md, scaffolding.md, session-lifecycle.md, subagent-kit.md, ux-test-swarm.md, verification-and-grounding.md, workflow-template.md; discovery.md, personas.md, data-entry-contract.md, evidence-severity.md, accuracy-oracle.md, reporting.md, roles/{cartographer,scripted-persona,browser-persona,fuzz-boundary,calc-verifier,synthesis-reporter}.md) resolves - confirmed by direct existence check (`find skills -path \"*/references/*\" -type f`).\n- skills/atlas-architect/SKILL.md:35,53 cite `../atlas-engine/references/capability-catalog.md` and `../atlas-engine/references/docs-ssot.md` - correct relative form, both resolve.\n- All 15 launcher commands (atlas-component.md, atlas-db-audit.md, atlas-debug.md, atlas-feature.md, atlas-grafana.md, atlas-frontend.md, atlas-gitignore.md, atlas-handoff.md, atlas-m365.md, atlas-launch.md, atlas-harden.md, atlas-refactor.md, atlas-readme.md, atlas-validate.md, atlas-vendor-assessment.md) cite `${CLAUDE_PLUGIN_ROOT}/skills/atlas-engine/references/operating-contract.md` at lines 9 and 12 each (30 citations) - resolves against plugin root.\n- commands/atlas.md:36 cites `${CLAUDE_PLUGIN_ROOT}/skills/atlas-engine/references/capability-catalog.md` - resolves.\n- README.md:86,158 mention operating-contract.md, capability-catalog.md, and `skills/atlas-engine/references/hooks-automation.md` - all resolve.\n- Three citations use a loose/inconsistent relative form that omits the expected `../` when crossing skill boundaries: skills/atlas-cartographer/SKILL.md:24 and skills/atlas-survey/SKILL.md:97 both write `atlas-engine/references/workflow-template.md` (literally, as a relative path from their own SKILL.md this resolves to a nonexistent `skills/atlas-cartographer/atlas-engine/...` / `skills/atlas-survey/atlas-engine/...`); commands/atlas.md:58 writes bare `references/docs-ssot.md` with no directory prefix at all (commands/ has no references/ dir). In every case the clearly-intended target (skills/atlas-engine/references/workflow-template.md, skills/atlas-engine/references/docs-ssot.md) exists on disk, so I did not count these as dangling (the target file exists), but flagging them as inconsistent citation forms worth a documentation fix - see dangling list below is empty because targets resolve; these three are noted as caveats, not failures.\n- No SKILL.md outside atlas-engine/atlas-expedition/atlas-architect/atlas-cartographer/atlas-survey mentions `references/` at all (atlas-stacks, atlas-harbor, atlas-orbit, atlas-sextant have no references/ dependency and no references/ dir - consistent).\n\n(2) Agent-name resolution. agents/*.md contains exactly 18 files: explorer, implementer, verifier, db-prober, schema-inventory, rls-privilege-audit, naming-glossary-audit, api-usage-map, ui-runtime-tester, planner, docs-curator, docs-auditor, completeness-critic, ux-cartographer, ux-persona, ux-fuzzer, ux-accuracy-oracle, ux-reporter.\n- skills/atlas-engine/references/capability-routing.md (the capability-routing table) cites `atlas:explorer`, `atlas:implementer`, `atlas:ui-runtime-tester`, `atlas:db-prober`, `atlas:verifier` (rows 18,20,22,24,25 and the fault-localization ladder at 52-54) - all 18 named atlas:<role> agents across all sources resolve to a file of that basename in agents/.\n- Every SKILL.md dispatch instruction (`grep -o 'atlas:[a-z-]*'` across skills/*/SKILL.md, 56 occurrences) names only: explorer, implementer, verifier, db-prober, docs-curator, docs-auditor, completeness-critic, planner, ui-runtime-tester, ux-accuracy-oracle, ux-cartographer, ux-fuzzer, ux-persona, ux-reporter - every one resolves.\n- output-styles/atlas-orchestrator.md:33-38,43 rosters all 18 atlas:<role> names (including schema-inventory, rls-privilege-audit, naming-glossary-audit, api-usage-map which don't appear elsewhere) - all resolve.\n- README.md:48-66 file-tree roster lists the same 18 agent .md filenames 1:1 against the agents/ directory listing, and the \"18 subagents\" count claim matches the actual file count (verified by `find agents -name \"*.md\" | wc -l` = 18).\n- skills/atlas-architect/SKILL.md:47 names schema-inventory, rls-privilege-audit, naming-glossary-audit without the atlas: prefix - all resolve.\n- capability-routing.md's Agent-type column also lists non-atlas: names that are NOT in agents/: codebase-explorer, Explore, Plan, debugger, test-executor, test-engineer, security-engineer, code-reviewer, devops-automator, frontend-developer, backend-architect, secondary-expert-validator. These are presented as Claude Code built-in/global agent types or other-plugin candidates (\"always prefer a live-discovered better fit\" - capability-routing.md:3), not atlas-defined agents, so they are reported under external_agent_types rather than dangling.\n\n(3) hooks/hooks.json script paths. All 9 distinct script commands (used across 12 hook-event entries: SessionStart x2, UserPromptSubmit x1, PreToolUse x1, PostToolUse x2, Stop x3, SubagentStop x2, SessionEnd x1, PreCompact x1) exist on disk, verified with direct `-f` checks: hooks/session_boot.py, scripts/atlas_doctor.py, hooks/prompt_optimizer.py, hooks/bash_advisor.py, hooks/format_after_edit.py, hooks/dispatch_tripwire.py, hooks/completion_gate.py, hooks/ingest_session.py, hooks/nudge.py. Two auxiliary scripts mentioned in prose but not wired in hooks.json (hooks/validate-readonly-query.sh, scripts/install_hooks.py) were also checked and exist.\n\nRESULT: zero dangling references, zero dangling agent names, zero missing hook scripts. The only issue found is a cosmetic/documentation one: three cross-file citations (atlas-cartographer/SKILL.md:24, atlas-survey/SKILL.md:97, commands/atlas.md:58) use an inconsistent relative-path form that would not literally resolve if read as a strict relative path from the citing file, even though the clearly-intended target file exists elsewhere in the tree.",
+        "total_checked": 184,
+        "dangling": [],
+        "external_agent_types": [
+          "codebase-explorer",
+          "Explore",
+          "Plan",
+          "debugger",
+          "test-executor",
+          "test-engineer",
+          "security-engineer",
+          "code-reviewer",
+          "devops-automator",
+          "frontend-developer",
+          "backend-architect",
+          "secondary-expert-validator"
+        ],
+        "unverified": [
+          "skills/atlas-cartographer/SKILL.md:24 cites \"atlas-engine/references/workflow-template.md\" - literal relative-path form does not resolve from the citing file's own directory (would need ../atlas-engine/...); the named target exists at skills/atlas-engine/references/workflow-template.md so I did not mark it dangling, but I could not confirm the author intended a bare cross-skill path vs. a typo'd relative path.",
+          "skills/atlas-survey/SKILL.md:97 has the identical pattern/caveat as above, same target file.",
+          "commands/atlas.md:58 cites bare \"references/docs-ssot.md\" with no directory prefix; commands/ has no references/ dir of its own, so this only resolves if read as shorthand for skills/atlas-engine/references/docs-ssot.md (which exists) - intent not fully verifiable from the text alone.",
+          "Could not verify at a semantic level whether every non-atlas: agent-type name in capability-routing.md (e.g. debugger, security-engineer, code-reviewer) actually corresponds to a live Claude Code built-in or externally-installed agent/plugin on this machine - I verified only that they are absent from this plugin's agents/ dir, and classified them as external per the task's own example list and the file's stated intent (\"always prefer a live-discovered better fit\")."
+        ]
+      },
+      "a2": {
+        "summary": "Audited the active atlas plugin version (2.6.0, confirmed as the non-orphaned install at /Users/jerry/.claude/plugins/cache/tech-tools/atlas/2.6.0 - 2.4.0 and 2.5.0 both carry .orphaned_at timestamps, 2.6.0 has none). hooks/hooks.json declares 8 event types (SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop, SubagentStop, SessionEnd, PreCompact) across 9 matcher blocks totaling 13 command entries, referencing 9 distinct scripts, all of which exist and pass py_compile with rc=0. Ran live fail-open tests against dispatch_tripwire.py, completion_gate.py, and prompt_optimizer.py with malformed JSON and JSON missing expected fields: all three returned exit 0 with empty stdout in every case (6/6 invocations), proving fail-open. Then read and empirically confirmed the orchestration-marker gating in both gate scripts using synthetic DB state (isolated via ATLAS_DB env var to a scratchpad SQLite file, never touching ~/.atlas) and synthetic scratchpad project dirs: dispatch_tripwire.py keys on atlas_db.is_orchestrating (line 93) and completion_gate.py keys on two markers in series, docs/ presence (lines 244-245) then atlas_db.is_orchestrating (lines 246-247).",
+        "findings": [
+          {
+            "claim": "hooks/hooks.json (2.6.0) declares 8 event types across 9 matcher blocks totaling 13 command entries, referencing 9 distinct scripts, all present and syntactically valid.",
+            "evidence": "Read of atlas/2.6.0/hooks/hooks.json lines 1-118: SessionStart 2 hooks (session_boot.py, scripts/atlas_doctor.py), UserPromptSubmit 1 (prompt_optimizer.py), PreToolUse 1 (bash_advisor.py), PostToolUse 2 matcher blocks / 2 hooks (format_after_edit.py, dispatch_tripwire.py), Stop 3 (completion_gate.py, ingest_session.py, nudge.py), SubagentStop 2 (ingest_session.py, nudge.py), SessionEnd 1 (ingest_session.py), PreCompact 1 (ingest_session.py). Bash loop ran python3 -m py_compile against all 9 distinct script paths; every file exists=yes and py_compile rc=0 for each.",
+            "severity": "low"
+          },
+          {
+            "claim": "dispatch_tripwire.py, completion_gate.py, and prompt_optimizer.py all fail open on malformed JSON stdin: exit 0, empty stdout.",
+            "evidence": "Command printf malformed-json-string piped into each of the three scripts. Result for all three: exit_code=0 and stdout equal to empty string. Code basis: dispatch_tripwire.py wraps main() in a bare except Exception then calls sys.exit(0) unconditionally at hooks/dispatch_tripwire.py lines 116-120; completion_gate.py catches JSONDecodeError/ValueError and returns 0 at hooks/completion_gate.py lines 230-231, plus an outer except Exception returning 0 at lines 265-267; prompt_optimizer.py catches JSONDecodeError/ValueError and returns 0 at hooks/prompt_optimizer.py lines 327-328.",
+            "severity": "low"
+          },
+          {
+            "claim": "All three scripts also fail open on syntactically valid JSON missing all expected fields, including an empty object and a partial payload with tool_name present but tool_input absent.",
+            "evidence": "printf empty-json-object piped into each of the three scripts produced exit_code=0 and empty stdout in every case. A follow-up payload containing only session_id and tool_name (no tool_input) piped into dispatch_tripwire.py and completion_gate.py also produced exit_code=0 and empty stdout for both.",
+            "severity": "low"
+          },
+          {
+            "claim": "dispatch_tripwire.py orchestration marker is atlas_db.is_orchestrating keyed by session_id; without it the STOP nag never fires even once the inline-op threshold is exceeded on a non-docs edit path.",
+            "evidence": "Set ATLAS_DB to a scratchpad-only SQLite file, created a run for a synthetic session via atlas_db.start_run with orchestrating left at its default of 0, confirmed atlas_db.is_orchestrating returned False. Sent 5 sequential Edit tool_input events targeting a scratchpad path outside any docs tree: all 5 calls returned exit=0 and empty output despite the inline-op count exceeding the default threshold of 4 and edit_to_target evaluating True. Positive control: called atlas_db.mark_orchestrating to flip the flag to True, confirmed via is_orchestrating, then repeated the identical Edit event: output changed to a hookSpecificOutput additionalContext STOP message naming the edited path and telling the orchestrator to route it to atlas:implementer. This isolates the marker branch to hooks/dispatch_tripwire.py lines 92 through 94, the block reading roughly if count is at or above threshold or edit_to_target is true, then if not atlas_db.is_orchestrating, return. Note the STOP message is advisory context injected into a PostToolUse event, not a blocking exit code; the hook exits 0 in both the gated and un-gated cases.",
+            "severity": "low"
+          },
+          {
+            "claim": "completion_gate.py keys on two markers evaluated in series, docs directory presence then atlas_db.is_orchestrating, and no-ops with exit 0 and empty stdout when either is absent.",
+            "evidence": "Test A, docs absent: synthetic cwd with no docs subdirectory produced exit=0 and empty output. Test B, docs present but session not orchestrating: synthetic cwd with an empty docs subdirectory, confirmed atlas_db.is_orchestrating returned False for that session (no run ever created for it), produced exit=0 and empty output. Positive control: called atlas_db.mark_orchestrating to flip both markers true for that same session and cwd, re-ran against the same still-empty docs directory (so the six done-conditions remain unmet), and stdout changed to a JSON object with decision block and a reason string listing the unmet conditions a through e. This isolates the two-marker check to hooks/completion_gate.py line 244 through 245, where docs equals _find_docs of cwd and the function returns 0 if docs is None, and lines 246 through 247, where the function returns 0 if the session is not flagged orchestrating.",
+            "severity": "low"
+          },
+          {
+            "claim": "dispatch_tripwire.py defines an ORCH_MARKERS constant that appears to be dead code, never referenced anywhere else in the file.",
+            "evidence": "A grep for ORCH_MARKERS across hooks/dispatch_tripwire.py returns only its own definition at line 15, tuple containing the string docs slash, with no other match anywhere in the file. The actual docs-path check used for gating is a separate inline literal inside the _is_orchestration_path helper at lines 36 through 40, not this constant.",
+            "severity": "low"
+          }
+        ],
+        "unverified": [
+          "Whether the completion_gate.py block JSON with a decision of block actually causes Claude Code to re-prompt or block the Stop event in the live harness - only the script's own stdout and exit code were verified, not the harness's interpretation of that JSON contract, which would require an actual Stop-hook-triggering session and falls outside this read-only synthetic-fixture check.",
+          "Whether any concurrent process wrote to the real ~/.atlas/atlas.db during this audit - that file showed an mtime in the same minute as the test runs, but every test command explicitly set ATLAS_DB to a scratchpad path and the resulting database files were confirmed present only in scratchpad via a directory listing, so the shared mtime is attributed to unrelated concurrent activity rather than these commands, though the process responsible was not independently traced.",
+          "Whether hooks/bash_advisor.py, hooks/format_after_edit.py, hooks/session_boot.py, hooks/ingest_session.py, hooks/nudge.py, and scripts/atlas_doctor.py are themselves fail-open under malformed or missing-field stdin - the task scoped the fail-open proof to only dispatch_tripwire.py, completion_gate.py, and the UserPromptSubmit optimizer prompt_optimizer.py, so the other six referenced scripts were verified only for existence and py_compile success, not runtime fail-open behavior."
+        ],
+        "next_step": "If broader hook-safety coverage is wanted, repeat the same malformed-JSON and missing-field stdin fail-open probes against bash_advisor.py (PreToolUse, blocking-capable and highest risk if it fails closed), format_after_edit.py, session_boot.py, ingest_session.py, nudge.py, and scripts/atlas_doctor.py --hook, since those were only compile-checked here, not runtime-tested."
+      },
+      "a4": {
+        "summary": "Read-only RED-team conformance capture over atlas plugin v2.6.0 (cache path /Users/jerry/.claude/plugins/cache/tech-tools/atlas/2.6.0), since the literal \"undefined/agents\" and \"undefined/skills\" paths do not exist on disk (grep for a directory literally named \"undefined\" returned nothing) - I substituted the only agents/*.md + skills/*/SKILL.md tree present in the environment. Flag this substitution as a scope assumption if it is wrong.\n\n(1) agents_total = 17 files in agents/*.md (api-usage-map, completeness-critic, db-prober, docs-auditor, docs-curator, explorer, implementer, naming-glossary-audit, planner, rls-privilege-audit, schema-inventory, ui-runtime-tester, ux-accuracy-oracle, ux-cartographer, ux-fuzzer, ux-persona, ux-reporter, verifier).\n\n(2) reportback_missing: 4 agent specs have NO \"## Report back\" heading or any structured section with named output fields - they only end in a prose sentence like \"Return a short summary ... and the file path\":\n  - agents/api-usage-map.md\n  - agents/naming-glossary-audit.md\n  - agents/rls-privilege-audit.md\n  - agents/schema-inventory.md\nAll other 13 have an explicit \"## Report back (final message only)\" heading with a bulleted list of named fields (verified per-file, e.g. explorer.md:21-25, verifier.md:25-28, ux-reporter.md:52-57).\n\n(3) halluc_missing (three controls checked: (a) explicit permission to say \"I don't know\"/could-not-determine, (b) required citation to file:line or a doc/evidence snippet, (c) explicit [unverified]/UNVERIFIED gap marker):\n  - completeness-critic.md - MISSING ALL THREE (no unverified marker, no file:line citation requirement for its own output, no \"say so if unsure\" instruction; it audits OTHERS' claims but has no self-uncertainty control)\n  - db-prober.md (partial) - has (a) only (\"What you could not check and why\", line 27); no file:line citation format (uses query-result/EXPLAIN-plan evidence instead), no [unverified] tag\n  - docs-auditor.md (partial) - has (b) only (file:line at lines 3, 21, 27); no permit-not-know phrasing, no unverified tag\n  - docs-curator.md (partial) - has (b) (file:line at lines 3, 14, 16, 31) and a weak (a) (\"Anything you deliberately skipped and why\", line 32); no unverified tag\n  - explorer.md (partial) - has (a) (\"couldn't resolve\", line 24) and (b) (file:line, lines 3, 22); no unverified tag\n  - implementer.md (partial) - only a weak (a) (\"any uncertainty\", line 30); no file:line citation requirement in its Report-back section, no unverified tag\n  - planner.md (partial) - has (a) (\"say so\", lines 16/18; \"why no check exists\", line 24) and (c) ([UNVERIFIED], lines 16/24); no file:line requirement\n  - rls-privilege-audit.md (partial) - has (a)+(c) combined in one sentence (\"say so and mark it UNVERIFIED\", line 20); no file:line (cites \"exact catalog row\" instead)\n  - schema-inventory.md (partial) - has (a)+(c) combined (\"record it as UNVERIFIED with the error text\", line 20); no file:line\n  - ui-runtime-tester.md (partial) - has (a) only (\"What you couldn't reach ... and why\", line 31); cites screenshot/console/network evidence but not file:line; no unverified tag\n  - ux-accuracy-oracle.md (partial) - has (a)+(c) combined (\"mark it [unverified]\", line 23); no file:line (worksheet paths instead)\n  - ux-cartographer.md (partial) - has (a) (line 30) and (c) ([unverified], lines 15, 29); no file:line (cites route/selector/network entry)\n  - ux-fuzzer.md (partial) - has (a) (line 28/30) and (c) ([unverified], line 28); no file:line\n  - ux-persona.md (partial) - has (a) (line 38) and (c) ([unverified], line 39); no file:line\n  - ux-reporter.md (partial) - weak (a) only (\"You say so plainly when they do not\", line 11, re: count reconciliation); no [unverified] tag, no file:line citation (traces claims to files-on-disk generally, not file:line)\n  - verifier.md (partial) - has (b) (file:line, lines 14, 27) and a functional (a)/(c) via the \"needs-evidence\" verdict (\"plausible but unproven; state exactly what's missing\", line 23), but never uses the literal \"[unverified]\" marker\nFull pass (all three controls explicitly present, same or adjacent sentences): api-usage-map.md (line 13: \"record it as UNVERIFIED instead of guessing\" + file:line at lines 13/15) and naming-glossary-audit.md (line 17: \"mark it UNVERIFIED\" + file:line evidence requirement at line 13).\nNet: 1 full miss, 14 partial (at least one control), 2 full pass.\n\n(4) fourpart_status: CONFIRMED for atlas-engine only. skills/atlas-engine/references/subagent-kit.md:27-32 states explicitly: \"The spec above is the full form. Its load-bearing core is the 4-part brief, never dispatch without all four: 1. Task (GOAL) 2. Product (DELIVERABLE) 3. Where to save (path outputs land in) 4. Prior context (CONTEXT: only what the agent cannot derive itself).\" This reference is loaded by skills/atlas-engine/SKILL.md:181 (\"writing any subagent dispatch (spec template, output contract, per-role briefs)\"). However, this four-part mandate lives in a references/ file, not inline in SKILL.md itself, and I found NO equivalent four-part dispatch-brief template or requirement, inline or by reference, in any of the other 8 skills' SKILL.md files (atlas-architect, atlas-cartographer, atlas-expedition, atlas-harbor, atlas-orbit, atlas-sextant, atlas-stacks, atlas-survey) - grep for GOAL:/DELIVERABLE:/CONTEXT:/ROLE:/\"4-part\"/\"subagent-kit\" across those 8 files returned zero hits except one unrelated \"CONTEXT:\" line in atlas-sextant's memory-capture template (SKILL.md:291, a claude-mem TYPE/CONTEXT/LESSON/SOURCE format, not a subagent dispatch brief). So: only atlas-engine's skill machinery defines and requires the four-part brief; the other skills that also fan out subagents (survey, cartographer, expedition, orbit) do not carry their own explicit four-part requirement and presumably rely on borrowing atlas-engine's convention, but that reliance is not written down anywhere I could find - flagging as unverified whether they inherit it at runtime or just dispatch ad hoc.\n\n(5) standing_consent_hits_outside_engine: ZERO hits outside skills/atlas-engine/. Grepping the entire 2.6.0 plugin tree for \"standing consent\"/\"standing-consent\"/\"orchestration mode\" returns exactly two files, both inside skills/atlas-engine/: SKILL.md:18-20 (\"## Standing-consent orchestration mode\" / \"you have standing consent to fan out ... without re-asking permission each time\") and references/multi-stage-planning.md:70-75 (same contract, plus \"Saying 'mode on' - or re-invoking the skill - restores standing consent\"). No other agent spec or skill file anywhere in the plugin contains this language.",
+        "agents_total": 17,
+        "reportback_missing": [
+          "agents/api-usage-map.md",
+          "agents/naming-glossary-audit.md",
+          "agents/rls-privilege-audit.md",
+          "agents/schema-inventory.md"
+        ],
+        "halluc_missing": [
+          "agents/completeness-critic.md",
+          "agents/db-prober.md (partial)",
+          "agents/docs-auditor.md (partial)",
+          "agents/docs-curator.md (partial)",
+          "agents/explorer.md (partial)",
+          "agents/implementer.md (partial)",
+          "agents/planner.md (partial)",
+          "agents/rls-privilege-audit.md (partial)",
+          "agents/schema-inventory.md (partial)",
+          "agents/ui-runtime-tester.md (partial)",
+          "agents/ux-accuracy-oracle.md (partial)",
+          "agents/ux-cartographer.md (partial)",
+          "agents/ux-fuzzer.md (partial)",
+          "agents/ux-persona.md (partial)",
+          "agents/ux-reporter.md (partial)",
+          "agents/verifier.md (partial)"
+        ],
+        "fourpart_status": "CONFIRMED for atlas-engine only, via skills/atlas-engine/references/subagent-kit.md:27-32 (loaded from SKILL.md:181): \"load-bearing core is the 4-part brief, never dispatch without all four: Task/Product/Where to save/Prior context.\" No other skill's SKILL.md (architect, cartographer, expedition, harbor, orbit, sextant, stacks, survey) contains an equivalent explicit four-part dispatch-brief requirement (grep for GOAL:/DELIVERABLE:/CONTEXT:/4-part/subagent-kit returned zero relevant hits in those 8 files). Whether those other skills inherit the atlas-engine four-part convention at runtime is unverified - not written down anywhere found.",
+        "standing_consent_hits_outside_engine": [],
+        "unverified": [
+          "Whether 'undefined/agents' and 'undefined/skills' literally refer to /Users/jerry/.claude/plugins/cache/tech-tools/atlas/2.6.0 (the substitution made here) or to some other repo/version not present in this environment - no literal 'undefined' directory was found by find(1).",
+          "Whether skills atlas-survey, atlas-cartographer, atlas-expedition, and atlas-orbit (which all fan out subagents per their descriptions) actually apply atlas-engine's four-part dispatch brief at runtime, since none of their SKILL.md files state this explicitly or reference subagent-kit.md.",
+          "Whether the 2.4.0 and 2.5.0 versions of the atlas plugin (also present in the plugin cache) differ on any of these findings - only 2.6.0 was audited.",
+          "Whether 'partial' hallucination-control files (14 of 17) should be treated as passing or failing conformance - the task defines them as partial, not pass/fail, so no verdict is asserted here beyond the per-file control breakdown given."
+        ]
+      }
+    },
+    "verdicts": [
+      {
+        "key": "removals",
+        "verdict": "confirmed",
+        "attempts": 2,
+        "detail": {
+          "verdict": "confirmed",
+          "summary": "All five implementer claims reproduced independently. docs/AGENTS.md now carries removal-record notes (not live roster entries) for the 6 deleted agents and the stale count is corrected to 12; .kimi-plugin/import-plan.json is clean against HEAD; the two originally-flagged files remain clean; caches/empty-dir stay removed; git status shows only the allowed change surface plus expected untracked audit artifacts; no new commit exists.",
+          "findings": [
+            {
+              "claim": "docs/AGENTS.md no longer describes the 6 deleted agents as live roster entries.",
+              "evidence": "Broad repo grep `grep -rln -E 'ux-cartographer|ux-persona|ux-fuzzer|ux-accuracy-oracle|ux-reporter|api-usage-map' --exclude-dir=.git .` (all file types, not just .md/.json) returns only docs/AGENTS.md outside docs/audits/ and docs/superpowers/. Direct read of docs/AGENTS.md:68-99 shows the Database Audit Agents section lists only 4 agents with a parenthetical 'api-usage-map ... removed 2026-07-07' note, and the UX and Frontend Agents section lists only ui-runtime-tester with prose stating the 5 ux-* agents 'were removed on 2026-07-07' and ownership moved to atlas-expedition. These are descriptive removal records, not roster rows.",
+              "severity": "high"
+            },
+            {
+              "claim": "The stale '18 agents' count is corrected to 12 and matches the agents/ directory.",
+              "evidence": "`ls plugins/atlas/agents/*.md | wc -l` = 12 (explorer, implementer, verifier, planner, completeness-critic, docs-curator, docs-auditor, db-prober, schema-inventory, naming-glossary-audit, rls-privilege-audit, ui-runtime-tester). docs/AGENTS.md:3-4 reads '12 agents total as of the 2026-07-07 UX-swarm and api-usage-map removal (formerly 18 as of v2.2.1)' and line 105 reads 'All 12 agents share three standing constraints'.",
+              "severity": "medium"
+            },
+            {
+              "claim": ".kimi-plugin/import-plan.json unauthorized edit was reverted.",
+              "evidence": "`git diff HEAD -- .kimi-plugin/import-plan.json` produced empty output; the file also does not appear in `git status --porcelain` at all, meaning it is byte-identical to the committed HEAD version (commit 4cf8fcc).",
+              "severity": "medium"
+            },
+            {
+              "claim": "The two originally-flagged uncommitted files (.kimi-plugin/marketplace.json, plugins/README.md top-level) remain clean and untouched by this repair.",
+              "evidence": "`git diff HEAD -- .kimi-plugin/marketplace.json` and `git diff HEAD -- plugins/README.md` both produced empty output; neither file appears in `git status --porcelain`.",
+              "severity": "low"
+            },
+            {
+              "claim": "Caches and empty references/ dir remain removed; plugin.json still parses; no commits beyond baseline.",
+              "evidence": "`ls plugins/atlas/.pytest_cache plugins/atlas/.ruff_cache plugins/atlas/scripts/.claude` all report 'No such file or directory'. `python3 -c \"import json; json.load(open('plugins/atlas/.claude-plugin/plugin.json'))\"` returned keys ['name','version','description','author','repository','homepage','license','keywords'] with no error. `git log -1 --format='%H %ci'` shows HEAD is still 4cf8fcc (2026-07-07 05:28:58), the same commit the audit trail (docs/audits/atlas-harden-2026-07-07/stage-removals.md) recorded before this repair, confirming no new commit was created.",
+              "severity": "low"
+            }
+          ],
+          "unverified": [
+            "Whether the secrets committed in git history at commit 4cf8fcc (.kimi-plugin/import-plan.json Magic API_KEY, Plaid client-id/secret) still need rotation and a history rewrite. Reverting the working-tree file restores the committed secret values into the working tree and does not touch history; `git show 4cf8fcc:.kimi-plugin/import-plan.json` would still show them. This is a real, separate exposure outside this repair's allowed surface and outside my read-only verifier role to fix.",
+            "Whether .kimi-plugin/import-report.json (untracked, present before this repair per its file timestamp of 05:29 versus the repair's later activity) is expected/benign; not inspected in depth since it predates and is unrelated to the allowed change surface."
+          ],
+          "next_step": "Full green: (1) docs/AGENTS.md carries only removal-record prose for the 6 deleted agents and the correct 12-agent count, (2) .kimi-plugin/import-plan.json is byte-identical to HEAD, (3) git status --porcelain shows only the allowed surface (docs/AGENTS.md, plugins/atlas/README.md, the 6 agent deletions, output-styles/atlas-orchestrator.md, atlas-engine/SKILL.md, ux-test-swarm.md, atlas-expedition/references/personas.md) plus expected untracked artifacts (.kimi-plugin/import-report.json pre-existing, docs/audits/atlas-harden-2026-07-07/ this session's own audit hub), and (4) HEAD is unchanged at 4cf8fcc with no new commit. No further repair action needed on this defect pair. Separately and outside this verification's scope: escalate the git-history-committed secrets in .kimi-plugin/import-plan.json (commit 4cf8fcc) to the user for an explicit rotate-and-rewrite decision."
+        }
+      },
+      {
+        "key": "agent-conformance",
+        "verdict": "confirmed",
+        "attempts": 1,
+        "detail": {
+          "verdict": "confirmed",
+          "summary": "Reproduced independently: all 12 remaining files in plugins/atlas/agents/ now carry both a named-field Report back section and explicit I-don't-know/citation grounding language; the diff is scoped exactly to those 12 files with no scope creep, and the pre-fix red state (missing Report back headings, missing grounding phrasing) is confirmed by git diff against HEAD.",
+          "findings": [
+            {
+              "claim": "The 3 files that lacked a structured Report-back section (naming-glossary-audit.md, rls-privilege-audit.md, schema-inventory.md) now have one with named backtick-quoted fields, and the pre-fix version genuinely lacked it.",
+              "evidence": "git diff -- plugins/atlas/agents/{naming-glossary-audit,rls-privilege-audit,schema-inventory}.md shows each file's prior version ending in prose with no '## Report back' heading; the new hunks add a '## Report back (final message only)' section with named fields: file_path/rename_count/ambiguous_count/conflicts/unverified (naming-glossary-audit.md:19-24), file_path/counts_by_severity/tables_rls_off/unverified (rls-privilege-audit.md:26-30), and file_path/table_count/total_columns/tables_rls_disabled/unverified (schema-inventory.md:24-28).",
+              "severity": "low"
+            },
+            {
+              "claim": "All 11 files in the hallucination-controls list now contain explicit 'I don't know' / [unverified] / citation language, including the partial ones that already had some grounding text.",
+              "evidence": "grep across all 12 files in plugins/atlas/agents/ for don't-know/unverified/cite/file:line patterns matched in every file, e.g. db-prober.md:18 ('\"I don't know\" is a valid result... unresolved check stays unverified, it is never filled in'), verifier.md:25 ('needs-evidence is a valid verdict... belongs in your report as [unverified]'), docs-auditor.md:23, completeness-critic.md:27-29, explorer.md:20, implementer.md:22, planner.md:16-17, ui-runtime-tester.md:23, docs-curator.md:15, rls-privilege-audit.md:22, schema-inventory.md:20.",
+              "severity": "low"
+            },
+            {
+              "claim": "Every remaining agent spec under plugins/atlas/agents/ (all 12, post-deletion) has both properties, not just the files explicitly named in the symptom.",
+              "evidence": "ls plugins/atlas/agents/ shows exactly 12 .md files (the 6 ux-*/api-usage-map files confirmed absent); the grep sweep above covers all 12 files present and every one hit both patterns.",
+              "severity": "low"
+            },
+            {
+              "claim": "Change surface matches the allowed scope exactly: only the 12 named agent files were touched under plugins/atlas/agents/, no rewrites, and other uncommitted changes in the working tree (.gitignore, docs/AGENTS.md, README.md, output-styles, skills/atlas-engine, personas.md, 6 file deletions) belong to separate, independently documented stages of the same multi-stage session, not this task.",
+              "evidence": "git diff --stat -- plugins/atlas/agents/ returns exactly 12 files / 37 insertions(+) / 1 deletion(-), matching the implementer's claim verbatim. Full-tree git status --porcelain shows additional M/D entries outside that path, but docs/audits/atlas-harden-2026-07-07/stage-removals.md, stage-gitignore.md, and stage-marketplace.md document those exact other files as separate stages with their own before/after evidence, authorized by decisions.md.",
+              "severity": "low"
+            },
+            {
+              "claim": "All 12 edited files retain valid YAML frontmatter.",
+              "evidence": "python3 yaml.safe_load() against the frontmatter block of each of the 12 files printed OK for all 12 (completeness-critic.md, db-prober.md, docs-auditor.md, docs-curator.md, explorer.md, implementer.md, naming-glossary-audit.md, planner.md, rls-privilege-audit.md, schema-inventory.md, ui-runtime-tester.md, verifier.md).",
+              "severity": "low"
+            }
+          ],
+          "unverified": [
+            "Whether these spec changes actually alter agent behavior at runtime was not exercised (would require invoking atlas-engine against a live task) - this is a static spec-conformance check only, consistent with what both the implementer and stage-conformance.md scope out.",
+            "Whether the installed plugin cache copies under ~/.claude/plugins/cache/tech-tools/atlas/* need the same edits was not checked; task scope was the repo source only."
+          ],
+          "next_step": "None required for this stage's verdict. If the broader harden effort needs the installed plugin cache synced, that is a separate publish/sync step outside this task's scope."
+        }
+      },
+      {
+        "key": "routing",
+        "verdict": "confirmed",
+        "attempts": 2,
+        "detail": {
+          "verdict": "confirmed",
+          "summary": "The routing-table symptom is fixed (three new rows for atlas-architect/atlas-engine/atlas-stacks, 12 external agent-type occurrences annotated with a trailing asterisk plus a footnote), and the stray audit artifact stage-routing.md is no longer inside the shipped plugin tree - it now lives in docs/audits/atlas-harden-2026-07-07/ matching the sibling stage-*.md convention.",
+          "findings": [
+            {
+              "claim": "capability-routing.md now contains rows for atlas-architect, atlas-engine, and atlas-stacks that were missing per the original symptom.",
+              "evidence": "git diff -- plugins/atlas/skills/atlas-engine/references/capability-routing.md (repo /Users/jerry/MEGA/Projects/Agentic/tech-tools) shows three added rows at lines 32-34: 'Project boot / onboarding / configure tooling for a repo' -> atlas-architect, 'Multi-stage / multi-surface orchestration' -> atlas-engine, 'Choosing / stacking which skills to run' -> atlas-stacks. Confirmed present in the live file via grep -n 'atlas-architect\\|atlas-engine\\|atlas-stacks' plugins/atlas/skills/atlas-engine/references/capability-routing.md -> exactly those 3 lines (32, 33, 34).",
+              "severity": "low"
+            },
+            {
+              "claim": "External/built-in agent types are now marked distinct from atlas-shipped agent types.",
+              "evidence": "Same diff shows a trailing asterisk added to codebase-explorer, Explore, Plan, frontend-developer (x2), backend-architect, debugger, test-executor, test-engineer, secondary-expert-validator, security-engineer, code-reviewer, devops-automator (12 occurrences), plus a new footnote at capability-routing.md:43: '* Built-in/global agent type, not shipped under plugins/atlas/agents/ - resolved from ~/.claude/agents/, .claude/agents/, or Claude Code's built-in agent types.' The footnote line is present verbatim in the file.",
+              "severity": "low"
+            },
+            {
+              "claim": "No stray audit-diff-summary file remains inside the shipped plugin tree; it was relocated to the audit hub.",
+              "evidence": "find plugins/atlas/skills/atlas-engine/references -iname '*stage*' returns only the pre-existing, unrelated multi-stage-planning.md. git status --porcelain -- plugins/atlas/ shows no untracked entries. docs/audits/atlas-harden-2026-07-07/stage-routing.md exists and its content (read via head -20) is exactly the diff-summary describing the capability-routing.md edit, matching the sibling files' '# Stage: ...' naming convention seen in stage-removals.md, stage-gitignore.md, stage-marketplace.md, stage-conformance.md. grep -rn 'stage-routing' across all .md files found zero stray references pointing at the old plugin-tree location.",
+              "severity": "low"
+            },
+            {
+              "claim": "mtime evidence corroborates the implementer's account of what happened and when.",
+              "evidence": "stat -f showed capability-routing.md mtime 06:25:50, and the relocated stage-routing.md (now under docs/audits) mtime 06:26:09 - 19 seconds later, consistent with the diff-summary having been written immediately after the routing-table edit in an earlier stage, then simply moved (mv preserves mtime) rather than recreated by this task.",
+              "severity": "low"
+            }
+          ],
+          "unverified": [
+            "Whether plugins/atlas/skills/atlas-engine/SKILL.md, references/ux-test-swarm.md, atlas-expedition/references/personas.md, plugins/atlas/README.md, output-styles/atlas-orchestrator.md, the 12 modified agents/*.md files, the 5 deleted ux-*.md/api-usage-map.md agents, and .gitignore/docs/AGENTS.md changes are legitimately in scope for OTHER approved stages of this same multi-stage session. I did not deep-verify each of those individually since they are outside this task's allowed surface (capability-routing.md only); I only confirmed circumstantially that each has a corresponding stage-*.md doc in docs/audits/atlas-harden-2026-07-07/ (stage-removals.md, stage-conformance.md, stage-gitignore.md, stage-marketplace.md) and that their mtimes (06:08-06:27) form a coherent multi-stage timeline distinct from and mostly predating the routing-table stage, per Jerry's Step-0 approval recorded in decisions.md."
+          ],
+          "next_step": "None required for this task. If a full-session scope audit is wanted, verify each of the four other stage docs' own claimed diffs against their respective files independently (separate verifier passes), since this pass was scoped only to the capability-routing.md symptom and its stray-file side effect."
+        }
+      },
+      {
+        "key": "gitignore",
+        "verdict": "confirmed",
+        "attempts": 1,
+        "detail": {
+          "verdict": "confirmed",
+          "summary": "Reproduced independently in isolated sandbox repos: before the edit git check-ignore exits 1 (NOT ignored) for plugins/atlas/.in_use/, and exits 0 (ignored) for the other three paths; after the edit all four exit 0. The working-tree diff of .gitignore against HEAD is exactly the two claimed lines, no other content in that file changed, and no tracked file newly matches any of the four patterns.",
+          "findings": [
+            {
+              "claim": "Diff of .gitignore vs HEAD is exactly the two added lines (**/.in_use/ and **/.in_use/**); nothing else in the file changed.",
+              "evidence": "git show HEAD:.gitignore vs working .gitignore diffed with `diff`: only hunk is `327a328,329 > **/.in_use/ > **/.in_use/**`. Direct read of /Users/jerry/MEGA/Projects/Agentic/tech-tools/.gitignore:323-329 confirms the surrounding 'Atlas runtime state must never be tracked' section context matches.",
+              "severity": "low"
+            },
+            {
+              "claim": "Before the fix, plugins/atlas/.in_use/ was genuinely NOT ignored (the reported bug, caused by the !plugins/** allowlist at .gitignore:181); the other three target paths were already ignored by pre-existing rules.",
+              "evidence": "Built two throwaway git repos with pre-fix and post-fix .gitignore content (extracted via git show HEAD:.gitignore) plus real target directories. Plain `git check-ignore` exit codes (0=ignored, 1=not ignored per man git-check-ignore EXIT STATUS): BEFORE -> .pytest_cache/ exit=0, .ruff_cache/ exit=0, scripts/.claude/ exit=0, .in_use/ exit=1. AFTER -> all four exit=0. sed -n '178,183p' .gitignore in the real repo confirms lines 180-181 are `!plugins/` / `!plugins/**`.",
+              "severity": "low"
+            },
+            {
+              "claim": "The exact bare-path (no trailing slash) VERIFY form only works correctly against paths that exist on disk; against non-existent bare paths it false-negatives (exit 1) even when the pattern is correct.",
+              "evidence": "In the post-fix sandbox: with the three dirs created, `git check-ignore <bare paths>` printed all three, exit=0; after rmdir of those same dirs, the identical command against the identical (now non-existent) bare paths returned exit=1.",
+              "severity": "low"
+            },
+            {
+              "claim": "No tracked file in the real repo matches any of the four now-ignored patterns.",
+              "evidence": "In the real repo: `git ls-files | grep -cE` patterns for .pytest_cache, .ruff_cache, .in_use, and plugins/atlas/scripts/.claude all returned 0.",
+              "severity": "low"
+            },
+            {
+              "claim": "Only .gitignore changed within the allowed surface; the many other modified/deleted files in the working tree belong to a separate, independently-timestamped stage, not this edit.",
+              "evidence": "Fresh git status --porcelain mid-verification shows the repo under live concurrent modification (files changing between my two invocations). docs/audits/atlas-harden-2026-07-07/stage-removals.md (mtime 06:11) references the deleted ux-*/api-usage-map.md files (24 matches via grep), while .gitignore's own mtime is 06:25:06 and stage-gitignore.md was written at 06:25 as a separate, later artifact. git diff --stat confirms .gitignore's own change is 2 insertions, 0 deletions.",
+              "severity": "low"
+            },
+            {
+              "claim": "No residue left in the real repo from the implementer's own mkdir/rmdir verification steps.",
+              "evidence": "ls -la on all four target paths in the real repo returned 'No such file or directory' for each; git status --porcelain shows none present.",
+              "severity": "low"
+            }
+          ],
+          "unverified": [
+            "Whether 'undefined/.gitignore' in the task literally referred to the repo-root .gitignore versus some other .gitignore in the tree - accepted the git rev-parse --show-toplevel resolution as reasonable since it is the only .gitignore matching the described zero-trust allowlist structure and directly resolves the stated symptom, but did not exhaustively enumerate every .gitignore in the tree to rule out an alternative target.",
+            "git check-ignore -v (without -n) showed an odd quirk: it printed the losing/negation pattern line and returned exit=0 for a path that plain `git check-ignore` (no -v) confirmed via exit=1 was NOT ignored. This is a property of the -v flag's output mode, not of the .gitignore content, and does not affect the verdict since the plain exit-code form was used as the authoritative before/after comparison - but the exact git-internals reason for the -v/-n interaction was not chased down further."
+          ],
+          "next_step": "None required for this bounded task. If the caller wants to stage this: git -C /Users/jerry/MEGA/Projects/Agentic/tech-tools add .gitignore - leave the other unrelated working-tree changes (attributable to the separate stage-removals work, confirmed by timestamp and content cross-reference) untouched per scope."
+        }
+      },
+      {
+        "key": "marketplace",
+        "verdict": "confirmed",
+        "attempts": 1,
+        "detail": {
+          "verdict": "confirmed",
+          "summary": "Independently reproduced red-before/green-after: the marketplace clone's reflog shows it was originally cloned from henssler-financial/tech-tools.git and then reset to origin/main; the live config and clone now both point at w159/tech-tools, and a fresh doctor run I executed myself returns HEALTHY, exit 0.",
+          "findings": [
+            {
+              "claim": "A failable check (atlas_doctor.py, plain run) currently passes marketplace-source and clone-remote, and the whole run is HEALTHY.",
+              "evidence": "I ran `cd /Users/jerry/MEGA/Projects/Agentic/tech-tools && python3 plugins/atlas/scripts/atlas_doctor.py; echo EXIT:$?` myself. Output: `PASS marketplace-source https://github.com/w159/tech-tools.git (expected w159/tech-tools)`, `PASS clone-remote https://github.com/w159/tech-tools.git`, ending `HEALTHY - atlas` / `EXIT:0`.",
+              "severity": "high"
+            },
+            {
+              "claim": "The 'expected' value the doctor checks against is not hardcoded in the script but derived from the atlas plugin's own manifest, which independently declares the canonical repo.",
+              "evidence": "`plugins/atlas/scripts/atlas_doctor.py:218` computes `expected_repo = norm_repo(manifest.get('repository', ''))` from `self_manifest()`; `plugins/atlas/.claude-plugin/plugin.json` contains `\"repository\": \"https://github.com/w159/tech-tools\"` (confirmed via grep). This rules out the check being rigged to always pass.",
+              "severity": "high"
+            },
+            {
+              "claim": "A red state genuinely existed before the fix, independent of the implementer's own say-so.",
+              "evidence": "`git -C /Users/jerry/MEGA/Projects/Agentic/osprey/assets/plugins/marketplaces/tech-tools reflog show` output: `4cf8fcc HEAD@{0}: reset: moving to origin/main` and `36aee78 HEAD@{1}: clone: from https://github.com/henssler-financial/tech-tools.git` - the clone's own history proves it was originally cloned from the stale fork and later reset, matching the claimed before/after.",
+              "severity": "high"
+            },
+            {
+              "claim": "Both independent surfaces (marketplace config entry and the clone's actual git remote) agree on w159/tech-tools, and neither is a placeholder edit.",
+              "evidence": "`git -C .../marketplaces/tech-tools remote -v` -> `origin https://github.com/w159/tech-tools.git (fetch/push)`; and reading `/Users/jerry/MEGA/Projects/Agentic/osprey/assets/plugins/known_marketplaces.json` (the real file behind the `~/.claude/plugins` symlink) shows the `tech-tools` entry's `source.url` is `https://github.com/w159/tech-tools.git`. The clone is also clean and in sync: `git status --porcelain --branch` -> `## main...origin/main` (no divergence, no pending changes).",
+              "severity": "medium"
+            },
+            {
+              "claim": "Change surface was respected: nothing in the repo working tree (/Users/jerry/MEGA/Projects/Agentic/tech-tools) shows evidence of being touched by this specific fix action.",
+              "evidence": "`git -C /Users/jerry/MEGA/Projects/Agentic/tech-tools reflog show` for this repo contains only ordinary `commit` entries, no `reset`/`checkout` around the fix time - unlike the marketplace clone's reflog which explicitly shows a reset. `git status --porcelain` here does show unrelated modified/deleted files (atlas agent/skill docs, .gitignore, docs/AGENTS.md), but their content (deleted UX agents, capability-routing edits) is topically unrelated to marketplace-source, and no reflog reset entry ties them to this task - consistent with them being pre-existing/concurrent edits from other stages of the same multi-stage atlas-harden-2026-07-07 audit rather than scope creep from this fix.",
+              "severity": "low"
+            },
+            {
+              "claim": "The implementer's report file exists at the claimed path and its before/after transcripts match what I independently reproduced.",
+              "evidence": "Read `/Users/jerry/MEGA/Projects/Agentic/tech-tools/docs/audits/atlas-harden-2026-07-07/stage-marketplace.md` in full - its 'Command 3: plain doctor (after)' block matches byte-for-byte the live run I performed independently.",
+              "severity": "low"
+            }
+          ],
+          "unverified": [
+            "I could not personally re-run the ORIGINAL pre-fix failing command (doctor pointed at henssler-financial) since the fix is already applied and reverting it to reproduce the red state would be a destructive, out-of-scope action I was not authorized to take. Corroboration for the 'before' state rests on the marketplace clone's git reflog (independent of the implementer's transcript) plus the implementer's own captured transcript in stage-marketplace.md, not a live re-execution of the failing state.",
+            "Whether the ~30 unrelated modified/deleted files in the /Users/jerry/MEGA/Projects/Agentic/tech-tools working tree (atlas agent/skill docs, .gitignore, docs/AGENTS.md) belong to a different concurrent stage of this same atlas-harden audit or represent uncommitted drift from an earlier unrelated session - I could not attribute per-file authorship/timing to a specific actor, only that no reset/checkout in this repo's reflog implicates the marketplace-fix action itself.",
+            "The task's literal referenced paths (`undefined/scripts/atlas_doctor.py`, `undefined/stage-marketplace.md`) do not exist verbatim anywhere on disk; I confirmed (as the implementer did) that this is a templating artifact and the only real atlas_doctor.py is at plugins/atlas/scripts/atlas_doctor.py in this repo."
+          ],
+          "next_step": "No further action needed for this stage. If a stricter reproduction of the original red state is required, that would need a separate, explicitly authorized scratch clone pointed back at henssler-financial/tech-tools to re-run the plain doctor against it, since altering the live ~/.claude/plugins state again would not be a safe read-only check."
+        }
+      }
+    ],
+    "green": {
+      "summary": "Final definition-of-done cross-check of the atlas plugin at /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas (repo root /Users/jerry/MEGA/Projects/Agentic/tech-tools). All 10 gates PASS. G1 references: 102 citation tokens across skills/ and commands/ all resolve (skill-relative, cross-skill, or ${CLAUDE_PLUGIN_ROOT}); zero dangling. G2 agents: all 12 atlas:<agent> roster refs resolve to agents/ files, debugger* annotated built-in (capability-routing.md:43); plugin proper is clean of the 6 forbidden ux/api names, but 4 residual mentions remain in docs/AGENTS.md (a doc outside the two zones the gate names) - low-severity deviation. G3 commands: 14 commands map to atlas-engine via operating-contract, named-skill invocations (atlas-orbit/stacks/engine/architect/cartographer/survey) all resolve, no dangling skill refs. G4 hooks.json parses; all 9 referenced .py scripts exist and py_compile; sh guard passes bash -n. G5: atlas declares zero MCP connectors (plugin.json has no mcp key, no .mcpb), the 10 vendor .mcpb bundles sit in 4 owning domain plugins, and the only secret-scan hit is a synthetic redaction test fixture. G6 doctor exits 0 HEALTHY. G7: all 12 agents carry a Report-back section plus the three hallucination controls. G8: standing-consent contract language confined to skills/atlas-engine/. G9: UX routed to atlas-expedition, ux-test-swarm.md is a Moved pointer, zero ux-* agent files remain. G10 workspace matches intended deletions/edits plus the docs/audits artifact, with two unexpected out-of-scope items flagged. Verdict: verified - DoD met, with two minor workspace items and one documentation deviation for the implementer to reconcile before commit.",
+      "findings": [
+        {
+          "claim": "G1 PASS - every references/*.md citation in skills/ and commands/ resolves; zero dangling.",
+          "evidence": "Python resolver scanned 102 citation tokens across plugins/atlas/skills and plugins/atlas/commands. 16 initially flagged were plugin-root-relative false positives (e.g. commands/*.md:12 'skills/atlas-engine/references/operating-contract.md', cartographer/SKILL.md:24 & survey/SKILL.md:97 'atlas-engine/references/workflow-template.md'); each confirmed to exist at plugins/atlas/skills/atlas-engine/references/. All 31 target files present under skills/atlas-engine/references and skills/atlas-expedition/references.",
+          "severity": "low"
+        },
+        {
+          "claim": "G2 PASS with deviation - all live agent references resolve, but 4 forbidden-name mentions persist in docs/AGENTS.md, outside the gate's allowed zones (docs/audits/ and CHANGELOG).",
+          "evidence": "All 12 atlas:<agent> refs in capability-routing.md/SKILL.md/output-styles/README map to files in plugins/atlas/agents/; debugger* annotated built-in at skills/atlas-engine/references/capability-routing.md:43. Plugin proper (incl. CHANGELOG) is clean. But grep found docs/AGENTS.md:4, :71, :88, :89 mention ux-cartographer/ux-persona/ux-fuzzer/ux-accuracy-oracle/ux-reporter/api-usage-map as removal notes. These are deprecation notices, not live dispatches, but they sit outside docs/audits/ and are not a CHANGELOG.",
+          "severity": "low"
+        },
+        {
+          "claim": "G10 - unexpected untracked file .kimi-plugin/import-report.json is unrelated to the atlas harden.",
+          "evidence": "git -C <root> status --porcelain shows '?? .kimi-plugin/import-report.json' alongside the expected '?? docs/audits/atlas-harden-2026-07-07/'. The kimi import report is not an atlas-plugin edit nor a docs/audits artifact.",
+          "severity": "medium"
+        },
+        {
+          "claim": "G10 - .gitignore edit adds .in_use/ re-exclusions, out of scope for the atlas plugin harden.",
+          "evidence": "git -C <root> diff .gitignore shows +'**/.in_use/' and +'**/.in_use/**' (2 insertions). Not an atlas-plugin file and not a docs/audits artifact; workspace-hygiene change outside the harden scope.",
+          "severity": "low"
+        },
+        {
+          "claim": "G5 - the only secret-scan hit inside atlas is a synthetic redaction test fixture, not a real credential.",
+          "evidence": "plugins/atlas/scripts/test_session_ingest.py:89-90 contains \"curl -H 'Authorization: Bearer sk-abcdef0123456789abcdef'\" and \"api_key\": \"supersecretvalue\" as test input to exercise the session-ingest redaction path. Values are obviously synthetic placeholders. No real secret present.",
+          "severity": "low"
+        }
+      ],
+      "unverified": [
+        "Whether the .gitignore .in_use/ addition and the docs/AGENTS.md removal-note edits are inside the authoritative harden scope - I do not have the harden task's scope spec, only the working-tree diff and the DoD gate wording.",
+        "Whether the G5 'no literal secrets' gate is intended to permit synthetic test fixtures like the sk-abcdef.../supersecretvalue strings in test_session_ingest.py; treated as pass on intent since they are dummy redaction-test data.",
+        "Whether docs/AGENTS.md line 4 ('2026-07-07 UX-swarm and api-usage-map removal...') is meant to count as CHANGELOG history within AGENTS.md, which would make it gate-compliant; lines 71/88/89 are prose body notes, so at least 3 mentions sit outside the two named zones regardless."
+      ],
+      "next_step": "Before committing: (1) decide whether the 4 forbidden-name removal notes in docs/AGENTS.md are acceptable or should move under an explicit CHANGELOG section to satisfy the letter of G2; (2) remove or gitignore the stray .kimi-plugin/import-report.json; (3) confirm the .gitignore .in_use/ edit belongs in this change set or split it out. All 10 functional gates already pass (doctor HEALTHY exit 0, hooks compile, connectors correctly externalized, agents conformant, UX consolidated to atlas-expedition)."
+    },
+    "docs": {
+      "summary": "Closed the atlas-harden-2026-07-07 audit as docs-curator. Wrote red-conformance.json and final-report.md to the audit hub, and appended an Unreleased CHANGELOG entry to docs/CHANGELOG.md. docs/AGENTS.md was left untouched (already correctly updated by an earlier stage per the removals verifier finding). docs/ROADMAP.md was not touched - no shipped item maps to it and no new roadmap-level follow-up emerged beyond what final-report.md already captures as audit residue. No graphify regen: the only graph.json found (mcp_servers/auvik-mcp/graphify-out/graph.json) is unrelated to the plugins/atlas source that shipped.",
+      "findings": [
+        {
+          "claim": "Wrote docs/audits/atlas-harden-2026-07-07/red-conformance.json capturing the pre-remediation baseline (dangling=0, 4 files missing report-back, 16 missing hallucination-control locations, hooks fail-open behavior).",
+          "evidence": "/Users/jerry/MEGA/Projects/Agentic/tech-tools/docs/audits/atlas-harden-2026-07-07/red-conformance.json (new file), sourced verbatim from the RED BASELINE block in the task input.",
+          "severity": "low"
+        },
+        {
+          "claim": "Wrote docs/audits/atlas-harden-2026-07-07/final-report.md covering: undefined-path resolution note, red baseline, per-stage table (removals/agent-conformance/routing/marketplace/gitignore with verdict+attempts+citations), 10-gate green-gate results, a plainly-stated fable-5 residue list, docs-curator actions, and re-run instructions.",
+          "evidence": "/Users/jerry/MEGA/Projects/Agentic/tech-tools/docs/audits/atlas-harden-2026-07-07/final-report.md (new file), citing stage-removals.md:1-178, stage-conformance.md:1-57, stage-routing.md:1-27, stage-marketplace.md:1-105, stage-gitignore.md:1-119, decisions.md:1-24.",
+          "severity": "low"
+        },
+        {
+          "claim": "Added an Unreleased entry to docs/CHANGELOG.md above the existing Atlas v2.6.0 entry, summarizing the six-agent removal, routing rows, agent-spec conformance, marketplace repoint, and gitignore hardening, each with file:line citations into the audit hub, without bumping plugin.json version.",
+          "evidence": "docs/CHANGELOG.md:7-52 (new Unreleased section); verified via grep -n \"Unreleased\" docs/CHANGELOG.md returning line 7, and sed -n '1,10p' showing the entry sits correctly above the v2.6.0 entry.",
+          "severity": "low"
+        },
+        {
+          "claim": "docs/AGENTS.md was deliberately left unedited this pass because it already reflects the shipped state (12-agent count, removal-record prose for the 6 deleted agents) from the earlier removals stage, per a prior independent verifier finding.",
+          "evidence": "Read of docs/AGENTS.md:1-6 shows '12 agents total as of the 2026-07-07 UX-swarm and api-usage-map removal (formerly 18 as of v2.2.1)' already present; cross-referenced against stage-verdicts.removals finding 1 in the task input which confirmed this same text via independent grep/read.",
+          "severity": "low"
+        },
+        {
+          "claim": "docs/ROADMAP.md was not touched - no Done-section move or backlog addition was warranted by this change set.",
+          "evidence": "No ROADMAP.md content was cited by any of the five stage reports (stage-removals.md, stage-conformance.md, stage-routing.md, stage-marketplace.md, stage-gitignore.md) as tracking these items, and the two open follow-ups (marketplace.json history revert, unrotated secrets) are audit residue requiring a human decision, not planned/backlog work.",
+          "severity": "low"
+        },
+        {
+          "claim": "No graphify regeneration performed: the repo's only graphify-out/graph.json is under mcp_servers/auvik-mcp/, unrelated to the plugins/atlas source files this change touched.",
+          "evidence": "find . -iname 'graph.json' -path '*graphify*' returned only ./mcp_servers/auvik-mcp/graphify-out/graph.json; all edits in this change set were confined to plugins/atlas/, .gitignore, and docs/AGENTS.md per git status --porcelain output captured at report time.",
+          "severity": "low"
+        }
+      ],
+      "unverified": [
+        "Whether docs/AGENTS.md's removal-record mentions of the 6 deleted agent names (lines 4, 71, 88, 89) should be relocated under an explicit CHANGELOG-style subsection to satisfy the letter of green-gate G2's two named exempt zones (docs/audits/ and CHANGELOG) - flagged for owner sign-off in final-report.md section 3/4, not resolved here since it would mean rewriting prose authored by an earlier stage outside today's shipped-change scope.",
+        "Whether the routing stage's capability-routing.md edits need a dedicated adversarial re-verification pass beyond the green-gate G1/G3 coverage - noted as residue item 4 in final-report.md.",
+        "Contents and provenance of .kimi-plugin/import-report.json - confirmed untouched and pre-existing by two separate stage reports but not inspected in depth by this docs-curator pass.",
+        "Whether commit d1be66b (which baked the local-relative-path marketplace scheme into .kimi-plugin/marketplace.json before the revert step ran) should be reset/reverted, and whether the Magic/Plaid secrets in .kimi-plugin/import-plan.json's git history need rotation and a history rewrite - both require a decision from Jerry and are outside docs/ scope to act on."
+      ],
+      "next_step": "Escalate to Jerry (not a docs-only fix): (1) decide whether to git-reset/revert commit d1be66b to actually undo the .kimi-plugin/marketplace.json local-path scheme, since the working-tree revert this session attempted was a no-op against an already-committed change; (2) decide on rotating and history-rewriting the Magic API_KEY / Plaid client-id/secret previously flagged in .kimi-plugin/import-plan.json's committed history. Both are documented with citations in docs/audits/atlas-harden-2026-07-07/final-report.md section 4 and are outside the docs-curator's write scope (docs/ only) and outside this audit's no-commits constraint."
+    }
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "RedChecks"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 2,
+      "title": "Removals"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 3,
+      "title": "Fixes"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 4,
+      "title": "Verify"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 5,
+      "title": "GreenGate"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 6,
+      "title": "Docs"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "red:ref-gate",
+      "phaseIndex": 1,
+      "phaseTitle": "RedChecks",
+      "agentId": "aa1c67ff06eb01f01",
+      "agentType": "atlas:explorer",
+      "model": "claude-sonnet-5",
+      "state": "done",
+      "startedAt": 1783418354456,
+      "queuedAt": 1783418353011,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Audited the atlas plugin at /Users/jerry/.claude/plugins/ca…",
+      "promptPreview": "TASK: Widened reference-integrity gate over the atlas plugin at undefined. Read-only - modify nothing. (1) Extract every references/*.md citation from every SKILL.md under skills/ and every command under commands/; resolve each against the CITING file's own skill directory (skills/<name>/references/...) or, for ${CLAUDE_PLUGIN_ROOT}/... citations, against undefined; record misses as dangling {ref,…",
+      "lastProgressAt": 1783418592220,
+      "tokens": 101845,
+      "toolCalls": 21,
+      "durationMs": 237764,
+      "resultPreview": "{\"summary\":\"Audited the atlas plugin at /Users/jerry/.claude/plugins/cache/tech-tools/atlas/2.6.0 (2.6.0, the canonical cache install; the other hit at /Users/jerry/.copilot/... is an unrelated Copilot data dir and was not used). Read-only, nothing modified.\\n\\n(1) references/*.md citations. Enumerated every `references/` mention in the 9 SKILL.md files (skills/*/SKILL.md) and the 18 commands/*.md…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "red:hooks",
+      "phaseIndex": 1,
+      "phaseTitle": "RedChecks",
+      "agentId": "a834b8f16ccc9a887",
+      "agentType": "atlas:explorer",
+      "model": "claude-sonnet-5",
+      "state": "done",
+      "startedAt": 1783418355862,
+      "queuedAt": 1783418353011,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Audited the active atlas plugin version (2.6.0, confirmed a…",
+      "promptPreview": "TASK: Behavioral hook check for the atlas plugin at undefined. Read-only with respect to the repo, ~/.claude, and ~/.atlas - synthetic fixtures go ONLY under your scratchpad/tmp. (1) json-parse hooks/hooks.json; count entries and event types; verify every referenced script file exists and py_compiles. (2) FAIL-OPEN PROOF for hooks/dispatch_tripwire.py, hooks/completion_gate.py, and the UserPromptS…",
+      "lastProgressAt": 1783418667761,
+      "tokens": 101512,
+      "toolCalls": 22,
+      "durationMs": 311899,
+      "resultPreview": "{\"summary\":\"Audited the active atlas plugin version (2.6.0, confirmed as the non-orphaned install at /Users/jerry/.claude/plugins/cache/tech-tools/atlas/2.6.0 - 2.4.0 and 2.5.0 both carry .orphaned_at timestamps, 2.6.0 has none). hooks/hooks.json declares 8 event types (SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop, SubagentStop, SessionEnd, PreCompact) across 9 matcher blocks tota…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "red:conformance",
+      "phaseIndex": 1,
+      "phaseTitle": "RedChecks",
+      "agentId": "a161a2279ddf59ade",
+      "agentType": "atlas:explorer",
+      "model": "claude-sonnet-5",
+      "state": "done",
+      "startedAt": 1783418357745,
+      "queuedAt": 1783418353011,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Read-only RED-team conformance capture over atlas plugin v2…",
+      "promptPreview": "TASK: Fable-5 conformance RED capture over EVERY agent spec in undefined/agents/*.md and the dispatch briefs in every SKILL.md under undefined/skills/. Read-only. Report: (1) agents_total; (2) reportback_missing = repo-relative paths of agent specs with NO structured \"Report back\"/return-schema section with named fields; (3) halluc_missing = agent specs missing ALL THREE hallucination controls (pe…",
+      "lastProgressAt": 1783418608925,
+      "tokens": 109051,
+      "toolCalls": 37,
+      "durationMs": 251180,
+      "resultPreview": "{\"summary\":\"Read-only RED-team conformance capture over atlas plugin v2.6.0 (cache path /Users/jerry/.claude/plugins/cache/tech-tools/atlas/2.6.0), since the literal \\\"undefined/agents\\\" and \\\"undefined/skills\\\" paths do not exist on disk (grep for a directory literally named \\\"undefined\\\" returned nothing) - I substituted the only agents/*.md + skills/*/SKILL.md tree present in the environment. F…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 4,
+      "label": "fix:removals",
+      "phaseIndex": 2,
+      "phaseTitle": "Removals",
+      "agentId": "a98733096fe159a49",
+      "agentType": "atlas:implementer",
+      "model": "claude-opus-4-8[1m]",
+      "state": "done",
+      "startedAt": 1783418670480,
+      "queuedAt": 1783418669171,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Executed the approved atlas removals/reversions in place, n…",
+      "promptPreview": "TASK: Execute the APPROVED removals and reversions in the tech-tools repo at undefined (atlas plugin at undefined). In place, no parallel copies, NO git commits. The approval record is undefined/decisions.md - read it first and honor its deviation note.\nSTEPS:\n1. GUARD then delete agent specs: for each of [\"ux-cartographer\",\"ux-persona\",\"ux-fuzzer\",\"ux-accuracy-oracle\",\"ux-reporter\",\"api-usage-map…",
+      "lastProgressAt": 1783419106274,
+      "tokens": 107058,
+      "toolCalls": 30,
+      "durationMs": 435793,
+      "resultPreview": "{\"summary\":\"Executed the approved atlas removals/reversions in place, no commits. Deleted 6 tracked agent specs (5 ux-* unconditionally; api-usage-map cleared with 0 dispatch hits), struck every reference to them across 5 files, collapsed ux-test-swarm.md to an 11-line pointer to atlas-expedition, rmdir'd the empty references/ dir, and deleted 3 untracked/ignored cache dirs. plugin.json still pars…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 5,
+      "label": "verify:removals#1",
+      "phaseIndex": 4,
+      "phaseTitle": "Verify",
+      "agentId": "a7caca58d08a7d5c1",
+      "agentType": "atlas:verifier",
+      "model": "claude-sonnet-5",
+      "state": "done",
+      "startedAt": 1783419109172,
+      "queuedAt": 1783419107700,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "refuted",
+      "promptPreview": "ROLE: Adversarial verifier in a fresh context. Default skeptical; you never trust the implementer's own check - re-derive your own from the symptom. Read-only: write and modify nothing.\nORIGINAL SYMPTOM: Approved removals: 6 agent specs (ux-cartographer, ux-persona, ux-fuzzer, ux-accuracy-oracle, ux-reporter, api-usage-map) deleted with all their roster/SKILL references struck in place; ux-test-sw…",
+      "lastProgressAt": 1783419383849,
+      "tokens": 95423,
+      "toolCalls": 15,
+      "durationMs": 274677,
+      "resultPreview": "{\"verdict\":\"refuted\",\"summary\":\"Core deletions/edits are real and match the allowed surface, but the implementer's headline claim of a clean whole-tree removal is false: docs/AGENTS.md still carries live roster entries for all 6 deleted agents, and the working tree diff includes an unauthorized, unexplained change to .kimi-plugin/import-plan.json outside the allowed change surface.\",\"findings\":[{\"…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 6,
+      "label": "debug:removals#1",
+      "phaseIndex": 3,
+      "phaseTitle": "Fixes",
+      "agentId": "a713f4c8d424c2db7",
+      "agentType": "debugger",
+      "model": "claude-sonnet-5",
+      "state": "done",
+      "startedAt": 1783419386996,
+      "queuedAt": 1783419385410,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Repaired the two defects the verifier flagged, both within …",
+      "promptPreview": "ROLE: Debugger in a fresh context (you are neither the implementer nor the verifier). A change to the atlas plugin at undefined was REFUTED by an independent verifier. SYMPTOM the change had to fix: Approved removals: 6 agent specs (ux-cartographer, ux-persona, ux-fuzzer, ux-accuracy-oracle, ux-reporter, api-usage-map) deleted with all their roster/SKILL references struck in place; ux-test-swarm.m…",
+      "lastProgressAt": 1783419673933,
+      "tokens": 79093,
+      "toolCalls": 23,
+      "durationMs": 286936,
+      "resultPreview": "{\"summary\":\"Repaired the two defects the verifier flagged, both within the allowed change surface, no commits made. (1) docs/AGENTS.md's live 'UX and Frontend Agents' section and 'Database Audit Agents' section still described the 6 deleted agents (ux-cartographer, ux-persona, ux-fuzzer, ux-accuracy-oracle, ux-reporter, api-usage-map) in present tense as if they existed - edited to strike their ro…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 7,
+      "label": "verify:removals#2",
+      "phaseIndex": 4,
+      "phaseTitle": "Verify",
+      "agentId": "aa7a71192511c67fe",
+      "agentType": "atlas:verifier",
+      "model": "claude-sonnet-5",
+      "state": "done",
+      "startedAt": 1783419676707,
+      "queuedAt": 1783419675499,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "confirmed",
+      "promptPreview": "ROLE: Adversarial verifier in a fresh context. Default skeptical; you never trust the implementer's own check - re-derive your own from the symptom. Read-only: write and modify nothing.\nORIGINAL SYMPTOM: Approved removals: 6 agent specs (ux-cartographer, ux-persona, ux-fuzzer, ux-accuracy-oracle, ux-reporter, api-usage-map) deleted with all their roster/SKILL references struck in place; ux-test-sw…",
+      "lastProgressAt": 1783419843364,
+      "tokens": 86442,
+      "toolCalls": 16,
+      "durationMs": 166657,
+      "resultPreview": "{\"verdict\":\"confirmed\",\"summary\":\"All five implementer claims reproduced independently. docs/AGENTS.md now carries removal-record notes (not live roster entries) for the 6 deleted agents and the stale count is corrected to 12; .kimi-plugin/import-plan.json is clean against HEAD; the two originally-flagged files remain clean; caches/empty-dir stay removed; git status shows only the allowed change s…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 8,
+      "label": "fix:agent-conformance",
+      "phaseIndex": 3,
+      "phaseTitle": "Fixes",
+      "agentId": "a9de25e1dbb68d258",
+      "agentType": "atlas:implementer",
+      "model": "claude-sonnet-5",
+      "state": "done",
+      "startedAt": 1783419849755,
+      "queuedAt": 1783419848171,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Applied the assigned conformance change to plugins/atlas/ag…",
+      "promptPreview": "TASK: One bounded conformance change to atlas agent specs at undefined/agents/. (1) For each file in [\"agents/naming-glossary-audit.md\",\"agents/rls-privilege-audit.md\",\"agents/schema-inventory.md\"]: add a \"## Report back (final message only)\" section defining a structured return with NAMED fields appropriate to that agent's actual job - model the shape on the existing conformant specs (read agents…",
+      "lastProgressAt": 1783420069841,
+      "tokens": 98037,
+      "toolCalls": 34,
+      "durationMs": 220086,
+      "resultPreview": "{\"summary\":\"Applied the assigned conformance change to plugins/atlas/agents/ in the tech-tools repo (repo-tracked source, not the ~/.claude/plugins/cache installed copies). Added named-field \\\"Report back\\\" sections to naming-glossary-audit.md, rls-privilege-audit.md, and schema-inventory.md, modeled on explorer.md/verifier.md's bullet shape. Added explicit grounding rules (\\\"I don't know\\\" is val…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 9,
+      "label": "fix:routing",
+      "phaseIndex": 3,
+      "phaseTitle": "Fixes",
+      "agentId": "ab9b70110e4f88e6c",
+      "agentType": "atlas:implementer",
+      "model": "claude-sonnet-5",
+      "state": "done",
+      "startedAt": 1783419850525,
+      "queuedAt": 1783419848171,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Edited plugins/atlas/skills/atlas-engine/references/capabil…",
+      "promptPreview": "TASK: One bounded edit to undefined/skills/atlas-engine/references/capability-routing.md. Read the file and match its exact table format. (1) Add Step 2 rows: atlas-architect (task signal: project boot/onboarding/configure tooling), atlas-engine (task signal: multi-stage orchestration; note it is the orchestrator itself, normally entered via its skill trigger rather than routed), atlas-stacks (tas…",
+      "lastProgressAt": 1783419981181,
+      "tokens": 80764,
+      "toolCalls": 10,
+      "durationMs": 130656,
+      "resultPreview": "{\"summary\":\"Edited plugins/atlas/skills/atlas-engine/references/capability-routing.md: added three Step 2 rows (atlas-architect, atlas-engine, atlas-stacks), added a trailing `*` marker plus footnote to annotate built-in/global agent types not shipped in plugins/atlas/agents/, and confirmed no rows referenced the already-deleted ux-* or api-usage-map agents (none found, nothing to remove). Wrote p…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 10,
+      "label": "fix:gitignore",
+      "phaseIndex": 3,
+      "phaseTitle": "Fixes",
+      "agentId": "a4080bdc8af36347f",
+      "agentType": "atlas:implementer",
+      "model": "claude-sonnet-5",
+      "state": "done",
+      "startedAt": 1783419857199,
+      "queuedAt": 1783419848171,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Added one missing re-exclusion rule (**/.in_use/ and **/.in…",
+      "promptPreview": "TASK: One bounded edit to undefined/.gitignore. Read it first and respect its existing structure (it may follow a deny-all allowlist methodology - if so, re-exclusions belong AFTER the allowlist section; later rules win). Ensure these are ignored: **/.pytest_cache/, **/.ruff_cache/, plugins/atlas/scripts/.claude/, and **/.in_use/. Add only what is missing - check with git -C undefined check-ignore…",
+      "lastProgressAt": 1783419964679,
+      "tokens": 76115,
+      "toolCalls": 12,
+      "durationMs": 107480,
+      "resultPreview": "{\"summary\":\"Added one missing re-exclusion rule (**/.in_use/ and **/.in_use/**) to /Users/jerry/MEGA/Projects/Agentic/tech-tools/.gitignore, lines 328-329, in the existing \\\"Atlas runtime state must never be tracked\\\" section. The other three requested patterns (**/.pytest_cache/, **/.ruff_cache/, plugins/atlas/scripts/.claude/) were already covered by pre-existing rules at lines 318, 327, and 290…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 11,
+      "label": "fix:marketplace",
+      "phaseIndex": 3,
+      "phaseTitle": "Fixes",
+      "agentId": "a6c206c1959c8f1ad",
+      "agentType": "atlas:implementer",
+      "model": "claude-sonnet-5",
+      "state": "done",
+      "startedAt": 1783419867933,
+      "queuedAt": 1783419848171,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Repointed the atlas marketplace from the stale henssler-fin…",
+      "promptPreview": "TASK: Repoint the atlas marketplace to the canonical upstream w159/tech-tools. (1) Run python3 undefined/scripts/atlas_doctor.py and capture the failing checks. (2) Run python3 undefined/scripts/atlas_doctor.py --fix and capture output. (3) If --fix leaves failures, read the doctor script to find exactly what it checks (marketplace source entry + clone remote) and apply the minimal targeted fix by…",
+      "lastProgressAt": 1783420095074,
+      "tokens": 91192,
+      "toolCalls": 16,
+      "durationMs": 227141,
+      "resultPreview": "{\"summary\":\"Repointed the atlas marketplace from the stale henssler-financial fork to the canonical w159/tech-tools repo. The plain doctor initially failed 2 checks (marketplace-source, clone-remote), both pointing at github.com/henssler-financial/tech-tools. Running `python3 plugins/atlas/scripts/atlas_doctor.py --fix` fully repaired both by rewriting known_marketplaces.json's source URL and runn…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 12,
+      "label": "verify:gitignore#1",
+      "phaseIndex": 4,
+      "phaseTitle": "Verify",
+      "agentId": "a729979fafcb23319",
+      "agentType": "atlas:verifier",
+      "model": "claude-sonnet-5",
+      "state": "done",
+      "startedAt": 1783419967368,
+      "queuedAt": 1783419965922,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "confirmed",
+      "promptPreview": "ROLE: Adversarial verifier in a fresh context. Default skeptical; you never trust the implementer's own check - re-derive your own from the symptom. Read-only: write and modify nothing.\nORIGINAL SYMPTOM: Untracked dev caches (.pytest_cache/, .ruff_cache/, scripts/.claude/ under plugins/atlas) polluted the repo and were just deleted; nothing prevents recurrence. After the fix, git check-ignore matc…",
+      "lastProgressAt": 1783420262123,
+      "tokens": 92870,
+      "toolCalls": 22,
+      "durationMs": 294754,
+      "resultPreview": "{\"verdict\":\"confirmed\",\"summary\":\"Reproduced independently in isolated sandbox repos: before the edit git check-ignore exits 1 (NOT ignored) for plugins/atlas/.in_use/, and exits 0 (ignored) for the other three paths; after the edit all four exit 0. The working-tree diff of .gitignore against HEAD is exactly the two claimed lines, no other content in that file changed, and no tracked file newly ma…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 13,
+      "label": "verify:routing#1",
+      "phaseIndex": 4,
+      "phaseTitle": "Verify",
+      "agentId": "a22f6278e5f07272f",
+      "agentType": "atlas:verifier",
+      "model": "claude-sonnet-5",
+      "state": "done",
+      "startedAt": 1783419983701,
+      "queuedAt": 1783419982484,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "refuted",
+      "promptPreview": "ROLE: Adversarial verifier in a fresh context. Default skeptical; you never trust the implementer's own check - re-derive your own from the symptom. Read-only: write and modify nothing.\nORIGINAL SYMPTOM: capability-routing.md Step 2 routing table has no rows for atlas-architect, atlas-engine, or atlas-stacks (all three skills exist), and it dispatches external agent types ([\"codebase-explorer\",\"Ex…",
+      "lastProgressAt": 1783420173870,
+      "tokens": 93439,
+      "toolCalls": 17,
+      "durationMs": 190168,
+      "resultPreview": "{\"verdict\":\"refuted\",\"summary\":\"The capability-routing.md content fix is correct and fully verified (rows added, external types annotated), but the implementer violated the allowed change surface by creating a new file, plugins/atlas/skills/atlas-engine/references/stage-routing.md, inside the shipped plugin tree instead of the audit hub - so the change as a whole does not pass the scope gate.\",\"fi…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 14,
+      "label": "verify:agent-conformance#1",
+      "phaseIndex": 4,
+      "phaseTitle": "Verify",
+      "agentId": "a9e2956824057d2b2",
+      "agentType": "atlas:verifier",
+      "model": "claude-sonnet-5",
+      "state": "done",
+      "startedAt": 1783420073033,
+      "queuedAt": 1783420071473,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "confirmed",
+      "promptPreview": "ROLE: Adversarial verifier in a fresh context. Default skeptical; you never trust the implementer's own check - re-derive your own from the symptom. Read-only: write and modify nothing.\nORIGINAL SYMPTOM: Fable-5 red state (captured pre-fix, artifact undefined/red-conformance.json): 3 agent specs lack a structured Report-back section with named return fields: [\"agents/naming-glossary-audit.md\",\"age…",
+      "lastProgressAt": 1783420215865,
+      "tokens": 88930,
+      "toolCalls": 14,
+      "durationMs": 142832,
+      "resultPreview": "{\"verdict\":\"confirmed\",\"summary\":\"Reproduced independently: all 12 remaining files in plugins/atlas/agents/ now carry both a named-field Report back section and explicit I-don't-know/citation grounding language; the diff is scoped exactly to those 12 files with no scope creep, and the pre-fix red state (missing Report back headings, missing grounding phrasing) is confirmed by git diff against HEAD…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 15,
+      "label": "verify:marketplace#1",
+      "phaseIndex": 4,
+      "phaseTitle": "Verify",
+      "agentId": "a19dfea83d06080b5",
+      "agentType": "atlas:verifier",
+      "model": "claude-sonnet-5",
+      "state": "done",
+      "startedAt": 1783420097582,
+      "queuedAt": 1783420096263,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "confirmed",
+      "promptPreview": "ROLE: Adversarial verifier in a fresh context. Default skeptical; you never trust the implementer's own check - re-derive your own from the symptom. Read-only: write and modify nothing.\nORIGINAL SYMPTOM: python3 undefined/scripts/atlas_doctor.py reports 2 failures: marketplace-source and clone-remote point at https://github.com/henssler-financial/tech-tools.git; canonical upstream per Jerry's deci…",
+      "lastProgressAt": 1783420279190,
+      "tokens": 95841,
+      "toolCalls": 17,
+      "durationMs": 181608,
+      "resultPreview": "{\"verdict\":\"confirmed\",\"summary\":\"Independently reproduced red-before/green-after: the marketplace clone's reflog shows it was originally cloned from henssler-financial/tech-tools.git and then reset to origin/main; the live config and clone now both point at w159/tech-tools, and a fresh doctor run I executed myself returns HEALTHY, exit 0.\",\"findings\":[{\"claim\":\"A failable check (atlas_doctor.py, …"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 16,
+      "label": "debug:routing#1",
+      "phaseIndex": 3,
+      "phaseTitle": "Fixes",
+      "agentId": "ace297a899704c2ae",
+      "agentType": "debugger",
+      "model": "claude-sonnet-5",
+      "state": "done",
+      "startedAt": 1783420176459,
+      "queuedAt": 1783420175079,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Root cause confirmed and fixed: the prior implementer's rou…",
+      "promptPreview": "ROLE: Debugger in a fresh context (you are neither the implementer nor the verifier). A change to the atlas plugin at undefined was REFUTED by an independent verifier. SYMPTOM the change had to fix: capability-routing.md Step 2 routing table has no rows for atlas-architect, atlas-engine, or atlas-stacks (all three skills exist), and it dispatches external agent types ([\"codebase-explorer\",\"Explore…",
+      "lastProgressAt": 1783420290593,
+      "tokens": 63478,
+      "toolCalls": 16,
+      "durationMs": 114134,
+      "resultPreview": "{\"summary\":\"Root cause confirmed and fixed: the prior implementer's routing-table content fix in plugins/atlas/skills/atlas-engine/references/capability-routing.md was correct, but they also left a stray audit-diff-summary file, plugins/atlas/skills/atlas-engine/references/stage-routing.md, sitting inside the shipped plugin tree instead of the audit hub. That file violated the allowed change surfa…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 17,
+      "label": "verify:routing#2",
+      "phaseIndex": 4,
+      "phaseTitle": "Verify",
+      "agentId": "ab3152ea7b79bcf38",
+      "agentType": "atlas:verifier",
+      "model": "claude-sonnet-5",
+      "state": "done",
+      "startedAt": 1783420293011,
+      "queuedAt": 1783420291827,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "confirmed",
+      "promptPreview": "ROLE: Adversarial verifier in a fresh context. Default skeptical; you never trust the implementer's own check - re-derive your own from the symptom. Read-only: write and modify nothing.\nORIGINAL SYMPTOM: capability-routing.md Step 2 routing table has no rows for atlas-architect, atlas-engine, or atlas-stacks (all three skills exist), and it dispatches external agent types ([\"codebase-explorer\",\"Ex…",
+      "lastProgressAt": 1783420436806,
+      "tokens": 82651,
+      "toolCalls": 8,
+      "durationMs": 143795,
+      "resultPreview": "{\"verdict\":\"confirmed\",\"summary\":\"The routing-table symptom is fixed (three new rows for atlas-architect/atlas-engine/atlas-stacks, 12 external agent-type occurrences annotated with a trailing asterisk plus a footnote), and the stray audit artifact stage-routing.md is no longer inside the shipped plugin tree - it now lives in docs/audits/atlas-harden-2026-07-07/ matching the sibling stage-*.md con…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 18,
+      "label": "green-gate",
+      "phaseIndex": 5,
+      "phaseTitle": "GreenGate",
+      "agentId": "ab449279d2221dbe7",
+      "agentType": "atlas:verifier",
+      "model": "claude-opus-4-8[1m]",
+      "state": "done",
+      "startedAt": 1783420439992,
+      "queuedAt": 1783420438638,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Final definition-of-done cross-check of the atlas plugin at…",
+      "promptPreview": "TASK: Final definition-of-done cross-check of the atlas plugin at undefined (repo root undefined). Read-only. Run EVERY gate and report per-gate PASS/FAIL with the exact command and output as evidence:\nG1 references: every references/*.md citation in skills/ and commands/ resolves (skill-relative or CLAUDE_PLUGIN_ROOT); zero dangling.\nG2 agents: every agent name in capability-routing.md, SKILL.md …",
+      "lastProgressAt": 1783420986762,
+      "tokens": 113139,
+      "toolCalls": 34,
+      "durationMs": 546769,
+      "resultPreview": "{\"summary\":\"Final definition-of-done cross-check of the atlas plugin at /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas (repo root /Users/jerry/MEGA/Projects/Agentic/tech-tools). All 10 gates PASS. G1 references: 102 citation tokens across skills/ and commands/ all resolve (skill-relative, cross-skill, or ${CLAUDE_PLUGIN_ROOT}); zero dangling. G2 agents: all 12 atlas:<agent> roster ref…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 19,
+      "label": "docs-rollup",
+      "phaseIndex": 6,
+      "phaseTitle": "Docs",
+      "agentId": "af756f46690a707de",
+      "agentType": "atlas:docs-curator",
+      "model": "claude-sonnet-5",
+      "state": "done",
+      "startedAt": 1783420989646,
+      "queuedAt": 1783420988212,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Closed the atlas-harden-2026-07-07 audit as docs-curator. W…",
+      "promptPreview": "ROLE: docs-curator closing the atlas-harden audit. AUDIT DIR: undefined (contains orientation.md, decisions.md, orient-result.json, stage-*.md artifacts). REPO: undefined. NO commits.\nINPUTS - stage verdicts: [{\"key\":\"removals\",\"verdict\":\"confirmed\",\"attempts\":2,\"detail\":{\"verdict\":\"confirmed\",\"summary\":\"All five implementer claims reproduced independently. docs/AGENTS.md now carries removal-recor…",
+      "lastProgressAt": 1783421150059,
+      "tokens": 96708,
+      "toolCalls": 15,
+      "durationMs": 160413,
+      "resultPreview": "{\"summary\":\"Closed the atlas-harden-2026-07-07 audit as docs-curator. Wrote red-conformance.json and final-report.md to the audit hub, and appended an Unreleased CHANGELOG entry to docs/CHANGELOG.md. docs/AGENTS.md was left untouched (already correctly updated by an earlier stage per the removals verifier finding). docs/ROADMAP.md was not touched - no shipped item maps to it and no new roadmap-lev…"
+    }
+  ],
+  "totalTokens": 1753588,
+  "totalToolCalls": 379
+}

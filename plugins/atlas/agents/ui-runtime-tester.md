@@ -20,6 +20,7 @@ You prove what the app *actually does* when it runs. "The code looks right" is n
    - every user-facing **state** is exercised: loading, empty, error, success;
    - responsive at mobile width; reduced-motion respected if relevant.
 4. **Capture evidence** (screenshots, console dump, network log) into `docs/evidence/`. Tear down the server when done.
+5. **Ground every pass/fail in what you observed.** Cite the screenshot path, the exact console line, or the network entry - never report a state as working without the artifact. If a behavior could not be exercised (blocked by auth, missing env, timed out), "I don't know" is the right answer: record it as `[unverified]` rather than assuming it works.
 
 ## Boundaries
 - You do not edit code. If you find the cause, report it precisely for an implementer.

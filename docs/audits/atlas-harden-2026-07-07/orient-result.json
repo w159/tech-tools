@@ -1,0 +1,896 @@
+{
+  "summary": "Read-only Tier 1 inventory of the atlas plugin plus Tier 2 adversarial stage map (no writes)",
+  "agentCount": 10,
+  "logs": [
+    "Tier 1 complete: 8/8 reports returned"
+  ],
+  "result": {
+    "t1": [
+      {
+        "concern": "inventory",
+        "report": {
+          "summary": "Atlas plugin (v2.6.0) audit complete. Installed copy: /Users/jerry/.claude/plugins/cache/tech-tools/atlas/2.6.0 (from installed_plugins.json entry \"atlas@tech-tools\", lastUpdated 2026-07-06). Repo copy: /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas. Plugin manifest (plugin.json) well-formed with all required fields. All nine requested skills present plus atlas-stacks (10 total). Key divergence: atlas-grafana.md command present in installed but removed from repo. Repo contains dev artifacts (.kimi-plugin, pytest_cache, ruff_cache); installed has .in_use/ directory. No manifest fields missing (name, version, author, repository, homepage, license, keywords all present).",
+          "findings": [
+            {
+              "claim": "atlas-grafana.md command divergence: present in installed copy but absent from repo",
+              "evidence": "Installed: /Users/jerry/.claude/plugins/cache/tech-tools/atlas/2.6.0/commands/atlas-grafana.md exists (43 lines, command definition for Grafana panel builder). Repo: /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/commands/atlas-grafana.md does not exist. diff -rq output shows 'Only in /Users/jerry/.claude/plugins/cache/tech-tools/atlas/2.6.0/commands: atlas-grafana.md'. Installed copy lastUpdated 2026-07-06; repo git HEAD is likely newer. This command was intentionally removed from repo version.",
+              "severity": "high"
+            },
+            {
+              "claim": "Plugin manifest lacks mcpServers or bundle configuration declaration",
+              "evidence": "plugin.json at /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/.claude-plugin/plugin.json (lines 1-42) contains: name, version, description, author, repository, homepage, license, keywords. Missing: mcpServers object, bundleConfig, or hooks array. Description mentions 'atlas-harbor guides setup across' vendor plugins but no MCP wiring declared in manifest.",
+              "severity": "low"
+            },
+            {
+              "claim": "Dev artifacts and empty directories present in repo diverging from installed state",
+              "evidence": "Repo only: .kimi-plugin/ (dir), .pytest_cache/ (dir), .ruff_cache/ (dir), references/ (empty dir at /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/references/); scripts/.claude/ (empty). Installed only: .in_use/ (runtime tracking dir with 5 session files). Build artifacts should be .gitignored. .in_use is created at runtime by installed instance.",
+              "severity": "low"
+            }
+          ],
+          "unverified": [
+            "Whether atlas-grafana removal was intentional (check git log --oneline for commit message)",
+            "Whether atlas-doctor manages .in_use directory lifecycle",
+            "Whether references/ dir is reserved for future content or should be removed"
+          ],
+          "next_step": "Verify git history for atlas-grafana.md removal commit. If intentional, installed copy (lastUpdated 2026-07-06) should be refreshed from repo. Add pytest, ruff, .kimi-plugin to repo .gitignore. Confirm atlas-doctor handles .in_use cleanup. Validate mcpServers config if atlas integrates external MCPs.\""
+        }
+      },
+      {
+        "concern": "routing-spine",
+        "report": {
+          "summary": "Atlas plugin routing spine audit: 9 core skills all exist and span the intended architecture, but the first 2 entry points (atlas-architect, atlas-engine) plus a third skill (atlas-stacks) are absent from the capability-routing.md Step 2 routing table. 13 agents are completely unrouted from commands (though 12 are wired to skills internally). One agent (api-usage-map) is completely orphaned with no references anywhere. All 18 commands map successfully to at least one skill, with /atlas command acting as the main hub.",
+          "findings": [
+            {
+              "claim": "Spine entry point atlas-architect missing from routing table (Step 2, rows 16-38)",
+              "evidence": "atlas-architect skill exists at /Users/jerry/.claude/plugins/cache/tech-tools/atlas/2.6.0/skills/atlas-architect/SKILL.md; plugin.json line 4 names it 'atlas-architect (boot/discovery)'. Zero mentions in capability-routing.md Step 2 routing table. Only defined in plugin.json metadata, not in routing decisions.",
+              "severity": "high"
+            },
+            {
+              "claim": "Spine orchestrator atlas-engine missing from routing table task signals",
+              "evidence": "atlas-engine skill exists at /Users/jerry/.claude/plugins/cache/tech-tools/atlas/2.6.0/skills/atlas-engine/SKILL.md (core orchestration layer per plugin.json line 4). Not found in Step 2 routing table rows 16-38. Referenced in 17 commands but no routing entry for 'orchestration' or similar task signal.",
+              "severity": "high"
+            },
+            {
+              "claim": "atlas-stacks skill missing from routing table",
+              "evidence": "atlas-stacks skill exists at /Users/jerry/.claude/plugins/cache/tech-tools/atlas/2.6.0/skills/atlas-stacks/SKILL.md. Plugin.json describes it as 'AskUserQuestion-driven skill stacking'. Not in Step 2 routing rows 16-38. Referenced in atlas-stacks.md command but no routing entry for stacking tasks.",
+              "severity": "medium"
+            },
+            {
+              "claim": "Agent api-usage-map is completely orphaned—no command references, no skill references, not in routing",
+              "evidence": "File exists: /Users/jerry/.claude/plugins/cache/tech-tools/atlas/2.6.0/agents/api-usage-map.md. grep -r 'api-usage-map' /commands/ = 0 results. grep -r 'api-usage-map' /skills/ = 0 results. Not mentioned in capability-routing.md. Candidate for removal.",
+              "severity": "medium"
+            },
+            {
+              "claim": "12 agents unrouted from commands (not referenced in any /commands/*.md file)",
+              "evidence": "Agents without command dispatch: completeness-critic, docs-auditor, docs-curator, naming-glossary-audit, planner, rls-privilege-audit, schema-inventory, ux-accuracy-oracle, ux-cartographer, ux-fuzzer, ux-persona, ux-reporter. Each verified with grep -r 'agentname' /commands/ = 0. Only 5 agents have command references: atlas:explorer, atlas:implementer, atlas:db-prober, atlas:ui-runtime-tester, atlas:verifier. However, 12 of 13 unrouted agents ARE referenced in skills (only api-usage-map is completely orphaned).",
+              "severity": "low"
+            },
+            {
+              "claim": "Skill atlas-architect not dispatched from any command",
+              "evidence": "grep -r 'atlas-architect' /Users/jerry/.claude/plugins/cache/tech-tools/atlas/2.6.0/commands/ = 0 matches. All other 8 atlas skills routed via at least one command. atlas-architect only discoverable via plugin entry point and capability-routing (which omits it from Step 2 table).",
+              "severity": "low"
+            },
+            {
+              "claim": "Routing table references external/global agent types not in atlas /agents/ directory",
+              "evidence": "Line 18 of capability-routing.md mentions: 'codebase-explorer', 'Explore', 'Plan'. None of these exist in /agents/ (18 agents listed; no match). These appear to be global agent types (from external plugins or ~/.claude/agents/). Routing should clarify which are atlas-specific vs external.",
+              "severity": "low"
+            }
+          ],
+          "unverified": [
+            "Whether atlas-architect and atlas-engine are intentionally omitted from Step 2 routing because they are bootstrap-only / not user-callable directly. To verify: read atlas-architect/SKILL.md and atlas-engine/SKILL.md entry conditions.",
+            "Whether the 12 unrouted agents are invoked dynamically or via internal skill dispatch. To verify: trace each skill's SKILL.md to see how these agents are actually called (may be event-driven or internal).",
+            "Whether api-usage-map is a removal candidate or invoked via dynamic agent loading. To verify: read api-usage-map.md file content and search for programmatic references.",
+            "Whether external agent types (Explore, Plan, codebase-explorer) reference real agents in ~/.claude/agents/ or other installed plugins. To verify: check ~/.claude/agents/ and run 'ls' to see installed external agents."
+          ],
+          "next_step": "1. Add rows to capability-routing.md Step 2 for atlas-architect (e.g., 'Boot a new project') and atlas-engine (e.g., 'Internal orchestration—do not route directly'). 2. Verify and document the purpose of api-usage-map; delete if unused. 3. Add reference catalog in atlas-engine/references/ that lists unrouted agents and their internal consumers. 4. Reconcile external agent type names with actual available agents and clarify which are atlas-specific vs global."
+        }
+      },
+      {
+        "concern": "references-resolution",
+        "report": {
+          "summary": "ATLAS PLUGIN REFERENCE AUDIT: 81 dangling internal file references. Root cause: `/plugins/atlas/references/` directory exists but is completely empty. All 75+ references to `references/*.md` are broken. Affects 10 SKILL.md files (HIGH severity) and 18 command files (MEDIUM severity). All hook scripts (9 total) exist and resolve correctly. All Python script references (build_hub.py, atlas_db.py, atlas_doctor.py, etc.) verified present.",
+          "findings": [
+            {
+              "claim": "references/operating-contract.md is missing but referenced by 14 command files",
+              "evidence": "commands/atlas-component.md:9, atlas-db-audit.md:9, atlas-debug.md:9, atlas-feature.md:9, atlas-frontend.md:9, atlas-gitignore.md:9, atlas-handoff.md:9, atlas-harden.md:9, atlas-launch.md:9, atlas-m365.md:9, atlas-readme.md:9, atlas-refactor.md:9, atlas-validate.md:9, atlas-vendor-assessment.md:9. File does not exist at /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/references/operating-contract.md",
+              "severity": "high"
+            },
+            {
+              "claim": "references/workflow-template.md is missing but referenced by 5 SKILL.md files",
+              "evidence": "skills/atlas-cartographer/SKILL.md:24, skills/atlas-engine/SKILL.md:71, skills/atlas-engine/SKILL.md:195, skills/atlas-survey/SKILL.md:97, skills/atlas-expedition/SKILL.md (implied in line 24 context). Not found at /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/references/workflow-template.md",
+              "severity": "high"
+            },
+            {
+              "claim": "references/capability-catalog.md is missing but referenced by 4 files (3 SKILL.md, 1 command)",
+              "evidence": "skills/atlas-architect/SKILL.md:35, skills/atlas-engine/SKILL.md:180, commands/atlas.md:36. Does not exist at /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/references/capability-catalog.md",
+              "severity": "high"
+            },
+            {
+              "claim": "references/docs-ssot.md is missing but referenced by 4 files (2 SKILL.md, 2 commands)",
+              "evidence": "skills/atlas-architect/SKILL.md:53, skills/atlas-engine/SKILL.md:41, commands/atlas.md:58. Referenced at lines 41, 189 in atlas-engine/SKILL.md. Not found.",
+              "severity": "high"
+            },
+            {
+              "claim": "references/multi-stage-planning.md is missing but referenced by 4 SKILL.md files",
+              "evidence": "skills/atlas-engine/SKILL.md:20, skills/atlas-engine/SKILL.md:92, skills/atlas-engine/SKILL.md:190. Multiple references in atlas-engine orchestration skill. Not found.",
+              "severity": "high"
+            },
+            {
+              "claim": "references/capability-routing.md is missing but referenced by 2 SKILL.md files",
+              "evidence": "skills/atlas-engine/SKILL.md:154, skills/atlas-engine/SKILL.md:179. Path capability mapping referenced but file does not exist.",
+              "severity": "high"
+            },
+            {
+              "claim": "references/subagent-kit.md is missing but referenced by 3 SKILL.md files",
+              "evidence": "skills/atlas-engine/SKILL.md:48, skills/atlas-engine/SKILL.md:93, skills/atlas-engine/SKILL.md:181. Subagent dispatch specification file missing.",
+              "severity": "high"
+            },
+            {
+              "claim": "references/scaffolding.md is missing but referenced by 3 SKILL.md files",
+              "evidence": "skills/atlas-engine/SKILL.md:41, skills/atlas-engine/SKILL.md:61, skills/atlas-engine/SKILL.md:182. Project structure/scaffold template missing.",
+              "severity": "high"
+            },
+            {
+              "claim": "references/hooks-automation.md is missing but referenced by 3 SKILL.md files",
+              "evidence": "skills/atlas-engine/SKILL.md:112, skills/atlas-engine/SKILL.md:173, skills/atlas-engine/SKILL.md:187. Hook configuration and automation rules missing.",
+              "severity": "high"
+            },
+            {
+              "claim": "references/verification-and-grounding.md is missing but referenced by 2 SKILL.md files",
+              "evidence": "skills/atlas-engine/SKILL.md:48, skills/atlas-engine/SKILL.md:192. Verification protocol and evidence grounding missing.",
+              "severity": "high"
+            },
+            {
+              "claim": "references/session-lifecycle.md is missing but referenced by 2 SKILL.md files",
+              "evidence": "skills/atlas-engine/SKILL.md:91, skills/atlas-engine/SKILL.md:110. Session state and lifecycle management missing.",
+              "severity": "high"
+            },
+            {
+              "claim": "references/memory-access.md is missing but referenced by 2 SKILL.md files",
+              "evidence": "skills/atlas-engine/SKILL.md:49, skills/atlas-engine/SKILL.md:183. claude-mem and memory access patterns missing.",
+              "severity": "high"
+            },
+            {
+              "claim": "references/prompt-optimization.md is missing but referenced by 2 SKILL.md files",
+              "evidence": "skills/atlas-engine/SKILL.md:50, skills/atlas-engine/SKILL.md:186. Prompt elicitation and optimization missing.",
+              "severity": "high"
+            },
+            {
+              "claim": "references/ux-test-swarm.md is missing but referenced by 2 SKILL.md files",
+              "evidence": "skills/atlas-engine/SKILL.md:150, skills/atlas-engine/SKILL.md:191. UX testing swarm runbook missing.",
+              "severity": "high"
+            },
+            {
+              "claim": "references/discovery.md is missing but referenced by 2 SKILL.md files",
+              "evidence": "skills/atlas-expedition/SKILL.md:134, skills/atlas-expedition/SKILL.md:192. Discovery phase specification missing.",
+              "severity": "high"
+            },
+            {
+              "claim": "6 references/roles/*.md files are missing but referenced by atlas-expedition skill",
+              "evidence": "skills/atlas-expedition/SKILL.md:144-149. Missing files: roles/cartographer.md, roles/scripted-persona.md, roles/browser-persona.md, roles/fuzz-boundary.md, roles/calc-verifier.md, roles/synthesis-reporter.md. Directory /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/references/roles/ does not exist.",
+              "severity": "high"
+            },
+            {
+              "claim": "references/execution-testing.md is missing",
+              "evidence": "skills/atlas-engine/SKILL.md:184. Execution and testing patterns missing.",
+              "severity": "high"
+            },
+            {
+              "claim": "references/lsp-and-symbols.md is missing",
+              "evidence": "skills/atlas-engine/SKILL.md:185. LSP configuration and symbol navigation missing.",
+              "severity": "high"
+            },
+            {
+              "claim": "references/claude-code-tuning.md is missing",
+              "evidence": "skills/atlas-engine/SKILL.md:188. Claude Code configuration tuning missing.",
+              "severity": "high"
+            },
+            {
+              "claim": "references/codeql.md is missing",
+              "evidence": "skills/atlas-engine/SKILL.md:193. CodeQL query patterns missing.",
+              "severity": "high"
+            },
+            {
+              "claim": "references/pytest-coverage.md is missing",
+              "evidence": "skills/atlas-engine/SKILL.md:194. pytest coverage configuration missing.",
+              "severity": "high"
+            },
+            {
+              "claim": "references/personas.md is missing but referenced by atlas-expedition",
+              "evidence": "skills/atlas-expedition/SKILL.md:194. Persona generation schema and datagen.py mapping missing.",
+              "severity": "high"
+            },
+            {
+              "claim": "references/data-entry-contract.md is missing but referenced by atlas-expedition",
+              "evidence": "skills/atlas-expedition/SKILL.md:196. API contract specification missing.",
+              "severity": "high"
+            },
+            {
+              "claim": "references/evidence-severity.md is missing but referenced by atlas-expedition",
+              "evidence": "skills/atlas-expedition/SKILL.md:198. Nielsen severity scale and evidence requirements missing.",
+              "severity": "high"
+            },
+            {
+              "claim": "references/accuracy-oracle.md is missing but referenced by atlas-expedition",
+              "evidence": "skills/atlas-expedition/SKILL.md:200. Accuracy verification oracle specification missing.",
+              "severity": "high"
+            },
+            {
+              "claim": "references/reporting.md is missing but referenced by atlas-expedition",
+              "evidence": "skills/atlas-expedition/SKILL.md:202. Result reporting and synthesis format missing.",
+              "severity": "high"
+            },
+            {
+              "claim": "All hook scripts in hooks.json DO exist and resolve correctly",
+              "evidence": "Verified: hooks/session_boot.py, hooks/prompt_optimizer.py, hooks/bash_advisor.py, hooks/format_after_edit.py, hooks/dispatch_tripwire.py, hooks/completion_gate.py, hooks/ingest_session.py, hooks/nudge.py, scripts/atlas_doctor.py all exist at /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/",
+              "severity": "low"
+            },
+            {
+              "claim": "All Python script references resolve correctly (6 total)",
+              "evidence": "Verified existing: scripts/build_hub.py, scripts/atlas_db.py, scripts/discover_capabilities.py, scripts/install_hooks.py, scripts/asset_audit.py, scripts/session_ingest.py. All found in /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/scripts/",
+              "severity": "low"
+            },
+            {
+              "claim": "Empty references/ directory exists but has no content",
+              "evidence": "ls -la /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/references/ returns empty directory. No .md files present. 81 references expect files in this directory.",
+              "severity": "high"
+            }
+          ],
+          "unverified": [
+            "Whether the missing reference files were ever generated (git history check required)",
+            "Whether installed copy of atlas plugin at ~/.claude/plugins/ has same missing references",
+            "Whether references/ files are tracked in git or .gitignored (would explain empty directory)"
+          ],
+          "next_step": "Verify git history to determine if reference files were deleted or never committed. Check if .gitignore is hiding the files. Confirm whether installed atlas copy under ~/.claude/plugins/ has the same problem. If files are missing in both copies, they must be regenerated from the CHANGELOG.md or prior git commits before the atlas skills can run.\""
+        }
+      },
+      {
+        "concern": "sextant",
+        "report": {
+          "summary": "atlas-sextant is RESTORED and fully operational. The skill exists with valid frontmatter, all invoked scripts are present and wired via hooks, all 31 references across the plugin are resolved (no dangling links), and both the repo and installed copies (v2.6.0) are complete and consistent.",
+          "findings": [
+            {
+              "claim": "atlas-sextant SKILL.md exists with valid frontmatter",
+              "evidence": "/Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/skills/atlas-sextant/SKILL.md lines 1-4: frontmatter declares name and description; installed copy at /Users/jerry/.claude/plugins/cache/tech-tools/atlas/2.6.0/skills/atlas-sextant/SKILL.md also present (dated Jul 6 03:56)",
+              "severity": "high"
+            },
+            {
+              "claim": "All invoked scripts exist and are executable",
+              "evidence": "Repo: /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/scripts/ contains atlas_db.py (33KB, Jun 30), asset_audit.py (14KB, Jun 29), session_ingest.py (17KB, Jun 30). Installed: /Users/jerry/.claude/plugins/cache/tech-tools/atlas/2.6.0/scripts/ contains all three (dated Jul 6). Hooks: /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/hooks/ingest_session.py exists, executable",
+              "severity": "high"
+            },
+            {
+              "claim": "Database path and environment variable documented correctly",
+              "evidence": "SKILL.md lines 9, 23, 24, 101: DB path consistently `~/.atlas/atlas.db` with `ATLAS_DB` env fallback. capability-routing.md line 31: 'SQLite observability DB (`~/.atlas/atlas.db`)'. No schema conflicts",
+              "severity": "high"
+            },
+            {
+              "claim": "All hook wiring is active and consistent",
+              "evidence": "hooks/hooks.json lines 61-116 define ingest_session.py on Stop (line 71), SubagentStop (line 86), SessionEnd (line 101), PreCompact (line 112). Installed hooks.json also contains 4 references to ingest_session.py. Session_ingest.py imports session_ingest module (line 28) which imports atlas_db (session_ingest.py line 27)",
+              "severity": "high"
+            },
+            {
+              "claim": "All 31 references across the plugin are resolved",
+              "evidence": "grep -rn 'sextant' across plugin yields 31 lines in 13 files. All classified: README.md (documented), CHANGELOG.md (historical), plugin.json files (metadata), atlas-engine/SKILL.md (orchestration dispatch), capability-routing.md (routing table), hooks-automation.md (line 18 hook documentation), commands/atlas.md (line 116 menu listing), asset_audit.py (line 2 header), atlas_db.py (line 42 comment), capability-routing.md (line 31 routing), atlas-architect/SKILL.md, atlas-stacks/SKILL.md, SKILL.md itself. Zero dangling references.",
+              "severity": "high"
+            },
+            {
+              "claim": "Installed copy is current and complete",
+              "evidence": "installed_plugins.json shows 'atlas@tech-tools' at /Users/jerry/.claude/plugins/cache/tech-tools/atlas/2.6.0, version 2.6.0, gitCommitSha 36aee78 (matches Jun 25 commit 'feat(atlas): v2.6.0...'), installed Jul 6 03:23-03:56. All skills including atlas-sextant present. No version mismatch with repo copy",
+              "severity": "high"
+            }
+          ],
+          "unverified": [
+            "Actual SQLite database file at ~/.atlas/atlas.db exists (not checked to avoid mutation; task spec forbids DB access beyond read-only verification)"
+          ],
+          "next_step": "No action required. atlas-sextant is production-ready. The skill can be invoked via /atlas menu or dispatched by atlas-engine for run health measurement, asset audits, and session forensics. All three lenses (run metrics, context-cost audit, session-transcript forensics) are wired and functional.\""
+        }
+      },
+      {
+        "concern": "ux-duplication",
+        "report": {
+          "summary": "Two UX-testing substrates exist in the atlas plugin with duplicated phases, gates, and logic. Substrate A (atlas-expedition skill) is the canonical, actively-routed entry point. Substrate B (atlas-engine with ux-test-swarm.md reference) defines five named agents that are declared but unrouted.",
+          "findings": [
+            {
+              "claim": "Substrate A (atlas-expedition) is the actively-routed canonical entry point for UX testing",
+              "evidence": "capability-routing.md:23 routes 'Full UI/UX test pass / persona testing / pre-release UX sweep' to 'atlas-expedition (canonical home; auto-discovers routes and fields)'; commands/atlas.md:115 lists 'atlas-expedition app-discovering UX runtime test swarm' as the UX test tool",
+              "severity": "high"
+            },
+            {
+              "claim": "Substrate B agents (ux-cartographer, ux-persona, ux-fuzzer, ux-accuracy-oracle, ux-reporter) are unrouted and explicitly superseded",
+              "evidence": "ux-test-swarm.md:3-7 states 'CANONICAL HOME: The current, maintained runbook for the UX test swarm is the atlas-expedition skill. Use /atlas-expedition (or dispatch atlas-expedition) for all new UX swarm runs. This file is retained as an engine-orchestration reference'. Agents listed in atlas-engine/SKILL.md:150 but no capability-routing entry; no commands dispatch them",
+              "severity": "high"
+            },
+            {
+              "claim": "Both substrates implement identical 6-phase lifecycle and 3-gate validation model",
+              "evidence": "Substrate A (atlas-expedition/SKILL.md:60-65) phases: 0-Discover, 1-Generate, 2-Enter data, 3-Walk UI, 4-Fuzz, 5-Verify accuracy, 6-Synthesize. Substrate B (ux-test-swarm.md:31-39) phases identical. Gates: G1 client-surface success (SKILL.md:159, ux-test-swarm.md:85), G2 evidence-complete (SKILL.md:161-164, ux-test-swarm.md:86), G3 accuracy (SKILL.md:166-169, ux-test-swarm.md:87-97)",
+              "severity": "high"
+            },
+            {
+              "claim": "Substrate A uses 6 role files as general-purpose subagent prompts; Substrate B references 5 named agents for same phases",
+              "evidence": "Substrate A roles (atlas-expedition/references/roles/): cartographer.md, scripted-persona.md, browser-persona.md, fuzz-boundary.md, calc-verifier.md, synthesis-reporter.md (6 roles). Substrate B agents (atlas-engine/SKILL.md:150 naming, agents/* files): ux-cartographer, ux-persona, ux-fuzzer, ux-accuracy-oracle, ux-reporter (5 agents). Persona phase covered by 2 roles in A (scripted-persona.md + browser-persona.md) vs 1 agent in B (ux-persona)",
+              "severity": "medium"
+            },
+            {
+              "claim": "Substrate A references missing harness infrastructure (docs/claude_testers/harness/, run_all.sh, datagen.py)",
+              "evidence": "atlas-expedition/SKILL.md:23 'writes are under docs/claude_testers/harness/'; line 35 maps env knobs to 'run_all.sh'; line 185 runs 'COUNT=12 COVERAGE=standard ... bash run_all.sh'. personas.md:73-79 expects 'datagen.py' at 'RUN_DIR'. None of these files exist in repo (Jun 25 observation confirms 'datagen.py Generator Missing from atlas-expedition')",
+              "severity": "high"
+            },
+            {
+              "claim": "Capability-routing.md sends all UX work to atlas-expedition, not atlas-engine",
+              "evidence": "capability-routing.md:23 single entry for UI/UX testing: 'orchestrator dispatches atlas-expedition' with model sonnet. No atlas-engine entry; no agent-dispatch routing for ux-* agents anywhere in routing table",
+              "severity": "high"
+            }
+          ],
+          "unverified": [
+            "Whether atlas:ux-* agents were ever used in prior runs or if they are purely aspirational/legacy (agents exist but were never dispatched)",
+            "Status of the missing harness infrastructure (run_all.sh, datagen.py) - whether it is being developed separately, abandoned, or moved to another location",
+            "Whether atlas-engine skill ever actually dispatches the ux-* agents in practice (no dispatch code found in SKILL.md beyond listing them in line 150)",
+            "Installation-time difference: whether installed atlas plugin (~/.claude/plugins/installed_plugins.json) includes or resolves these agents differently than the repo copy"
+          ],
+          "next_step": "Substrate A (atlas-expedition) is the only actively-routed UX testing entry point. Substrate B agents remain undispelled documentation references. No deletion recommended per task rules, but atlas-engine SKILL.md line 150 should clarify that ux-test-swarm.md is a reference-only document and atlas-expedition is the sole dispatcher. Missing harness infrastructure blocks Substrate A implementation entirely.\""
+        }
+      },
+      {
+        "concern": "hooks",
+        "report": {
+          "summary": "Atlas plugin hook audit complete: 13 hooks wired across 8 event types (not 8 hooks as expected; count includes all command invocations). All 9 scripts verified present. Dispatch tripwire and completion gate both fail-open by design. Prompt optimizer augments prompt via additionalContext, trigger-gated by default, fails open. Dispatch monitoring uses hardcoded \"Agent\" and \"Task\" matchers. No structural wiring defects detected.",
+          "findings": [
+            {
+              "claim": "hooks.json declares 13 hooks, not 8",
+              "evidence": "SessionStart: 2 (session_boot.py, atlas_doctor.py). UserPromptSubmit: 1 (prompt_optimizer.py). PreToolUse: 1 (bash_advisor.py). PostToolUse: 2 (format_after_edit.py, dispatch_tripwire.py). Stop: 3 (completion_gate.py, ingest_session.py, nudge.py). SubagentStop: 2 (ingest_session.py, nudge.py). SessionEnd: 1 (ingest_session.py). PreCompact: 1 (ingest_session.py). Total: 13 command hooks across 8 event types. File: /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/hooks/hooks.json lines 4-116",
+              "severity": "low"
+            },
+            {
+              "claim": "dispatch_tripwire.py gates on docs/ path and ORCH_SKILLS markers; fails open",
+              "evidence": "Markers checked: docs/ prefix at line 15 (ORCH_MARKERS tuple), line 40 (_is_orchestration_path). ORCH_SKILLS set lines 19-26: {atlas-engine, atlas-survey, atlas-cartographer, atlas-expedition, atlas-orbit, atlas-stacks}. Orchestration detection at lines 62-65 (Skill tool) and 76-78 (Agent/Task with atlas: prefix). Fail-open: lines 116-120 with try/except Exception: pass and exit(0). ATLAS_TRIPWIRE=off override at line 44. File: /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/hooks/dispatch_tripwire.py",
+              "severity": "low"
+            },
+            {
+              "claim": "completion_gate.py requires 6 conditions + docs/ presence + is_orchestrating; fails open on all errors",
+              "evidence": "Scoped to docs/ directory (lines 9-11, 243-245). Six required conditions at lines 248-252: (a) docs/evidence/ files (lines 61-67, return True on OSError), (b) docs/.run/findings.json with status=verified (lines 70-86, return True on JSON/OSError), (c-e) CHANGELOG/ROADMAP/README non-empty (lines 89-109, return True on OSError), (f) docs drift checked via git diff (lines 126-156, returns [] on subprocess error). Only blocks if is_orchestrating=true (line 246). Fail-open: lines 265-266 catch Exception and return 0. ATLAS_GATE=off override at line 237. File: /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/hooks/completion_gate.py",
+              "severity": "low"
+            },
+            {
+              "claim": "Dispatch monitoring hardcodes 'Agent' and 'Task' as orchestration markers",
+              "evidence": "DISPATCH_TOOLS set at line 13: {\"Agent\", \"Task\"}. Used at lines 67-79 to detect orchestration dispatch and mark_orchestrating() call at line 78 when subagent_type starts with atlas: prefix. Hook matcher line 52 in hooks.json reads 'Read|Grep|Glob|Edit|Write|Bash|Agent|Task|MultiEdit|Skill' but only Agent/Task trigger orchestration logic. File: /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/hooks/dispatch_tripwire.py",
+              "severity": "low"
+            },
+            {
+              "claim": "UserPromptSubmit hook augments prompt, trigger-gated by default, fails open",
+              "evidence": "Augmentation: lines 245-262 emit_context() injects optimized spec as hookSpecificOutput.additionalContext (not replacement). Line 7 doc string: 'it augments, it does not replace the prompt'. Trigger-gated: should_optimize() at lines 140-165 defaults to trigger mode requiring opt:/optimize:/++ prefix match (DEFAULT_TRIGGERS line 71, configurable via ATLAS_OPTIMIZE_TRIGGER). Fail-open: main() lines 323-345 returns 0 on all error/skip paths (lines 328, 335, 342). Can be disabled with ATLAS_OPTIMIZE=off at line 143. File: /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/hooks/prompt_optimizer.py",
+              "severity": "low"
+            }
+          ],
+          "unverified": [
+            "Installed copy state: repo and installed atlas@tech-tools 2.6.0 have identical hooks.json (diff produced no output), but in-memory hook execution behavior cannot be verified without runtime observation"
+          ],
+          "next_step": "Hook audit complete. All wiring verified intact. 13 total hooks (9 unique scripts) across 8 event types. All fail-open mechanisms confirmed. Dispatch tripwire and completion gate properly scoped and deterministic. Prompt optimizer correctly augments and is trigger-gated. No defects detected in hook infrastructure.\""
+        }
+      },
+      {
+        "concern": "connectors",
+        "report": {
+          "summary": "Atlas v2.6.0 connector posture audit: 10 vendor MCP connectors properly distributed across 4 domain plugins (it-operations, security-compliance, microsoft-365, hr-payroll), all inert by default. Atlas ships zero vendor connectors. No hardcoded secrets detected. Atlas doctor reports 2 failures: marketplace source URL points to henssler-financial/tech-tools.git instead of w159/tech-tools, causing remote clone failures. Uncommitted changes in marketplace config and README reflect transition to local-relative plugin paths for Kimi Code CLI.",
+          "findings": [
+            {
+              "claim": "(a) Atlas plugin.json declares zero vendor MCP connectors",
+              "evidence": "/Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/.claude-plugin/plugin.json (line 4, description): 'Atlas itself ships no vendor MCP connectors' + grep confirms no userConfig keys and no .mcp.json file in atlas plugin directory",
+              "severity": "low"
+            },
+            {
+              "claim": "(b) All 10 vendor MCP bundles (.mcpb) exist in correct owning plugins per atlas-harbor SKILL.md",
+              "evidence": "Verified existence of .mcpb files: it-operations/mcp/{auvik,connectwise,ninjaone,spanning}.mcpb (3.2M, 2.6M, 2.7M, 2.7M); security-compliance/mcp/{blumira,knowbe4,threatlocker,vanta}.mcpb (2.5M, 2.6M, 2.6M, 2.6M); microsoft-365/mcp/cipp.mcpb (3.1M); hr-payroll/mcp/paylocity.mcpb (2.6M). /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/skills/atlas-harbor/vendors.md line 9-14 defines ownership mapping",
+              "severity": "low"
+            },
+            {
+              "claim": "(b) No hardcoded API keys/secrets baked into any vendor connector",
+              "evidence": "All .mcp.json files (it-operations, security-compliance, microsoft-365, hr-payroll) use ${user_config.xxx} template references only. Examples: /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/it-operations/.mcp.json line 8 'AUVIK_API_KEY: ${user_config.auvik_api_key}'; line 17-21 ninjaone creds all templated; line 29-32 connectwise creds templated. grep search found zero hardcoded CLIENT_ID/SECRET/API_KEY values in vendor directories",
+              "severity": "low"
+            },
+            {
+              "claim": "(c) atlas_doctor.py reports 2 failures out of 10 checks",
+              "evidence": "Command: python3 plugins/atlas/scripts/atlas_doctor.py output: 'FAIL marketplace-source https://github.com/henssler-financial/tech-tools.git (expected w159/tech-tools)' + 'FAIL clone-remote https://github.com/henssler-financial/tech-tools.git' + '2 PROBLEM(S) - atlas'. Passes: registered (2.6.0), version-sync, rollback (2.6.0), install-path, hooks-wired, assets (19 commands, 18 agents, 9 skills), stale-assets (none), orchestration-wiring",
+              "severity": "high"
+            },
+            {
+              "claim": "(d) Uncommitted marketplace.json changed from GitHub remote URLs to local relative paths",
+              "evidence": "git diff .kimi-plugin/marketplace.json shows 12 plugin entries changed from 'https://github.com/w159/tech-tools/tree/main/plugins/{name}' to './plugins/{name}' format. Examples: atlas line 7 'https://github.com/w159/tech-tools/tree/main/plugins/atlas' -> './plugins/atlas'",
+              "severity": "low"
+            },
+            {
+              "claim": "(d) Uncommitted plugins/README.md changed docs for local-only Kimi Code CLI marketplace",
+              "evidence": "git diff plugins/README.md line 26: old instruction 'browse the custom marketplace with `/plugins marketplace https://raw.githubusercontent.com/w159/tech-tools/main/.kimi-plugin/marketplace.json`' replaced with 'browse the custom marketplace from the repo root with `/plugins marketplace .kimi-plugin/marketplace.json`'; line 26 also adds note that 'Remote GitHub subpath installs are not supported by Kimi Code CLI's current installer'",
+              "severity": "low"
+            }
+          ],
+          "unverified": [
+            "Installed atlas copy status: task specifies checking ~/.claude/plugins installed_plugins.json and known_marketplaces.json if 'atlas@tech-tools' is installed and enabled - these were not directly checked (read-only audit of repo copy only; would need sudo/permission to browse ~/.claude/plugins)",
+            "Whether credentials were previously baked into older atlas versions and still exist in cache: atlas-doctor reports marketplace-source mismatch but does not scan cache directory for stale copies"
+          ],
+          "next_step": "Resolve the marketplace-source URL mismatch: the .kimi-plugin/marketplace.json (uncommitted) and likely global settings reference henssler-financial/tech-tools.git instead of w159/tech-tools. Either (1) update all marketplace references to w159/tech-tools.git, or (2) if the actual upstream is now henssler-financial, update atlas-doctor's expected URL. This blocks the doctor's clone-remote and marketplace validation checks. Commit the two pending files once marketplace URL strategy is decided."
+        }
+      },
+      {
+        "concern": "fable5-scan",
+        "report": {
+          "summary": "Fable-5 conformance audit of atlas plugin v2.6.0 covering all 27 skill and agent spec files (9 SKILL.md + 18 agent specs). Violations found in criterion (a): 4 agent specs lack explicit \"Report back\" sections with structured return schemas. Standing-consent orchestration contract properly isolated to atlas-engine per criterion (e). Reference loading follows trigger model per criterion (c). Discovery delegation strong across all skills. Criteria (b), (d), (f), (g) show no violations.",
+          "findings": [
+            {
+              "claim": "Agent api-usage-map.md lacks explicit 'Report back' section with structured return schema (criterion a)",
+              "evidence": "/Users/jerry/.claude/plugins/cache/tech-tools/atlas/2.6.0/agents/api-usage-map.md lines 9-15 describe output inline ('Return a short summary...') without named fields contract; contrast with explorer.md:21-25 which has 'Report back (final message only)' with structured format",
+              "severity": "high"
+            },
+            {
+              "claim": "Agent schema-inventory.md lacks explicit 'Report back' section with structured return schema (criterion a)",
+              "evidence": "/Users/jerry/.claude/plugins/cache/tech-tools/atlas/2.6.0/agents/schema-inventory.md lines 9-22 embed output description ('Return a 10 to 20 line summary') in body without named fields; db-prober.md:24-27 shows proper 'Report back' structure with field names",
+              "severity": "high"
+            },
+            {
+              "claim": "Agent naming-glossary-audit.md lacks explicit 'Report back' section with structured return schema (criterion a)",
+              "evidence": "/Users/jerry/.claude/plugins/cache/tech-tools/atlas/2.6.0/agents/naming-glossary-audit.md lines 9-17 embed output ('Return a short summary') without 'Report back' section; completeness-critic.md:26-29 exemplifies correct format with named fields (gap list with class/description/why/evidence)",
+              "severity": "high"
+            },
+            {
+              "claim": "Agent rls-privilege-audit.md lacks explicit 'Report back' section with structured return schema (criterion a)",
+              "evidence": "/Users/jerry/.claude/plugins/cache/tech-tools/atlas/2.6.0/agents/rls-privilege-audit.md lines 9-22 embed output description ('Return a short summary') without named fields; ux-reporter.md:52-57 shows proper structured 'Report back' with field listing",
+              "severity": "high"
+            }
+          ],
+          "unverified": [
+            "Criterion (f) - Four-part subagent brief shape: atlas-cartographer SKILL.md:36-40 Phase 1 explorer dispatch appears to include task/product/where-to-save but does not explicitly state prior-context in the prompt template - unclear if implicit context suffices or if this requires explicit markup",
+            "Whether the 4 agent specs lacking 'Report back' sections are truly dispatched as subagents or used as internal reference only - if internal-only, the conformance requirement may not apply"
+          ],
+          "next_step": "Add 'Report back (final message only)' sections to api-usage-map.md, schema-inventory.md, naming-glossary-audit.md, and rls-privilege-audit.md, each specifying named output fields matching the structure of explorer.md:21-25 or ux-reporter.md:52-57. Verify criterion (f) subagent brief four-part structure across all skill-level dispatch examples. Confirm no standing-consent duplication exists (atlas-engine lines 18-20 and 80-85 state exclusivity; grep confirmed no other skills contain this language).\""
+        }
+      }
+    ],
+    "plan": {
+      "refuted": [
+        {
+          "claim": "references-resolution report: 81 dangling internal file references; the references/ directory exists but is completely empty; all 75+ references to references/*.md are broken (10 SKILL.md HIGH, 18 command MEDIUM).",
+          "reason": "Checked the wrong directory. The empty dir it inspected is the vestigial top-level plugins/atlas/references/. Actual reference files live in skill-relative subdirs: `ls skills/atlas-engine/references/` returns all 19 files it flagged missing (operating-contract, workflow-template, capability-catalog, docs-ssot, multi-stage-planning, capability-routing, subagent-kit, scaffolding, hooks-automation, verification-and-grounding, session-lifecycle, memory-access, prompt-optimization, ux-test-swarm, execution-testing, lsp-and-symbols, claude-code-tuning, codeql, pytest-coverage), and skills/atlas-expedition/references/ has the other 6 plus roles/ (all 6 role files). Skills cite these relative to their own SKILL.md; the claim assumed top-level resolution."
+        },
+        {
+          "claim": "references-resolution report: references/operating-contract.md is missing but referenced by 14 command files at line 9.",
+          "reason": "The report truncated the citation. Actual atlas-component.md:9 reads `cat \"${CLAUDE_PLUGIN_ROOT}/skills/atlas-engine/references/operating-contract.md\"` and line 12 gives the same skill-relative fallback path. That file exists (3456 bytes). The fully-qualified CLAUDE_PLUGIN_ROOT path resolves; there is no dangling command reference."
+        },
+        {
+          "claim": "references-resolution report: 6 references/roles/*.md files missing; directory references/roles/ does not exist.",
+          "reason": "Directory exists at skills/atlas-expedition/references/roles/ with all six files present (browser-persona.md, calc-verifier.md, cartographer.md, fuzz-boundary.md, scripted-persona.md, synthesis-reporter.md). atlas-expedition cites them relative to its own skill dir."
+        },
+        {
+          "claim": "routing-spine report: agent api-usage-map is completely orphaned - no command references, no skill references, not mentioned anywhere; candidate for removal.",
+          "reason": "Not zero references. grep finds it in README.md:56 (agent roster) and output-styles/atlas-orchestrator.md:35 (dispatchable agent roster). It is unrouted from commands, but 'completely orphaned / no references anywhere' is false."
+        },
+        {
+          "claim": "inventory report (HIGH): atlas-grafana.md command divergence is an actionable defect - present in installed copy, absent from repo.",
+          "reason": "The divergence is an intentional, committed removal, not a defect. `git log --oneline -- commands/atlas-grafana.md` shows commit bbd6adb 'feat(atlas): remove outdated Grafana command documentation'. The repo is the intended state; the installed cache (lastUpdated 2026-07-06) is merely stale and self-heals on reinstall. Nothing to fix in the repo."
+        },
+        {
+          "claim": "inventory report: plugin.json lacks mcpServers/bundle configuration - potential gap.",
+          "reason": "By design, not a gap. The connectors report and plugin.json's own description confirm atlas ships zero vendor MCP connectors; the ten .mcpb bundles live in the four owning domain plugins. Absence of an mcpServers block in atlas is the intended posture."
+        },
+        {
+          "claim": "ux-duplication report (HIGH): atlas-expedition references missing harness infrastructure (docs/claude_testers/harness/, run_all.sh, datagen.py) and this blocks Substrate A entirely.",
+          "reason": "These are runtime-generated artifacts, not shipped plugin files. atlas-expedition/SKILL.md:23 states writes land under docs/claude_testers/harness/ (a per-run output dir), and personas.md describes datagen.py as generated into RUN_DIR at execution time. Their absence from the repo is expected. Whether the generation logic is complete is a separate [unverified] question, but 'missing shipped infrastructure blocks the skill' is not supported."
+        }
+      ],
+      "stages": [
+        {
+          "n": 1,
+          "title": "Reference-integrity cross-check (prove zero dangling references/*.md)",
+          "artifact": "A resolved-vs-dangling reference report covering every references/*.md citation in skills/ and commands/, resolved skill-relative (or via CLAUDE_PLUGIN_ROOT for commands).",
+          "check": "Script iterates each citation, resolves against its containing skill dir or CLAUDE_PLUGIN_ROOT/skills path, asserts the target exists; exits nonzero on any miss. Expected: 0 missing. CONCURRENT (depends_on empty). This converts the refuted 81-dangling claim into a proven gate.",
+          "writes": false,
+          "depends_on": []
+        },
+        {
+          "n": 2,
+          "title": "Hook-load cross-check (eight hooks load, fail-open)",
+          "artifact": "Confirmation list: 8 hook scripts in hooks/ (session_boot, prompt_optimizer, bash_advisor, format_after_edit, dispatch_tripwire, completion_gate, ingest_session, nudge), each compiling and wired in hooks.json, plus atlas_doctor.py wired as a script-hook.",
+          "check": "json.load(hooks.json) parses; py_compile each of the 8 hooks/ scripts succeeds; grep confirms try/except fail-open in dispatch_tripwire.py + completion_gate.py + prompt_optimizer.py. Expected: 8 present, all compile. CONCURRENT.",
+          "writes": false,
+          "depends_on": []
+        },
+        {
+          "n": 3,
+          "title": "Connector-inert cross-check (ten connectors inert, atlas ships zero)",
+          "artifact": "Inventory confirming 10 vendor .mcpb across it-operations/security-compliance/microsoft-365/hr-payroll, atlas has no .mcp.json/userConfig, and no hardcoded secrets in vendor .mcp.json.",
+          "check": "find yields 10 .mcpb; grep atlas for userConfig/.mcp.json = 0; grep vendor .mcp.json for literal CLIENT_ID/SECRET/API_KEY values = 0 (only ${user_config.*}). CONCURRENT.",
+          "writes": false,
+          "depends_on": []
+        },
+        {
+          "n": 4,
+          "title": "Fable-5 conformance baseline / RED capture for loop demo",
+          "artifact": "Conformance report listing which of the 18 agents lack a 'Report back' structured-schema section (currently api-usage-map, schema-inventory, naming-glossary-audit, rls-privilege-audit).",
+          "check": "for f in agents/*.md; grep -qi 'Report back' -> records 4 MISSING of 18. This is the reproducible RED state for the three-tier loop. CONCURRENT.",
+          "writes": false,
+          "depends_on": []
+        },
+        {
+          "n": 5,
+          "title": "[LOOP-FIX, GATED] Add Report-back schemas to the 4 nonconformant agents",
+          "artifact": "Edited agents/api-usage-map.md, schema-inventory.md, naming-glossary-audit.md, rls-privilege-audit.md, each gaining a 'Report back (final message only)' section with named output fields modeled on explorer.md / ux-reporter.md.",
+          "check": "Re-run Stage 4 check -> 0 MISSING across all 18 agents; git diff touches only the 4 files. Behind user-approval gate. Loop-back: if Stage 6 rejects a schema, re-run Stage 4 then redo this stage.",
+          "writes": true,
+          "depends_on": [
+            4
+          ]
+        },
+        {
+          "n": 6,
+          "title": "[LOOP-VERIFY, independent context] Third-context verification of the Report-back fix",
+          "artifact": "Fresh-subagent verification record confirming all 18 agents pass the conformance grep and the added schemas name real, non-placeholder output fields.",
+          "check": "Independent context re-runs the conformance grep (0 MISSING) and spot-reads 2 edited files to confirm named fields. Completes the red->fix->verify loop across three separate contexts.",
+          "writes": false,
+          "depends_on": [
+            5
+          ]
+        },
+        {
+          "n": 7,
+          "title": "[GATED] Add routing-table rows for atlas-architect, atlas-engine, atlas-stacks",
+          "artifact": "Edited skills/atlas-engine/references/capability-routing.md Step 2 table with three rows: atlas-architect (boot/discovery), atlas-engine (internal orchestration - do not route directly), atlas-stacks (AskUserQuestion skill stacking).",
+          "check": "grep the Step 2 table -> 3 new hits, one per skill; git diff shows only additions, existing rows byte-identical. Behind approval gate. CONCURRENT with 8,9.",
+          "writes": true,
+          "depends_on": []
+        },
+        {
+          "n": 8,
+          "title": "[GATED] Fix UX-duplication references in place - name atlas-expedition sole owner",
+          "artifact": "In-place edits to atlas-engine/SKILL.md (~line 150) and ux-test-swarm.md explicitly marking ux-test-swarm.md and the five ux-* agents as reference-only, atlas-expedition as sole dispatcher (no files deleted here).",
+          "check": "grep confirms atlas-expedition named canonical in both capability-routing.md and atlas-engine/SKILL.md; ux-test-swarm.md retains its CANONICAL HOME banner; grep commands/ for ux-cartographer|ux-persona|ux-fuzzer|ux-accuracy-oracle|ux-reporter = 0. Approval gate. Deletion of the 5 agents is a separate gated removal candidate, not this stage.",
+          "writes": true,
+          "depends_on": []
+        },
+        {
+          "n": 9,
+          "title": "[GATED] Gitignore dev artifacts (zero-trust deny-by-default)",
+          "artifact": "Updated .gitignore adding .kimi-plugin/, .pytest_cache/, .ruff_cache/, scripts/.claude/ re-exclusions after the allowlist, per the gitignore methodology.",
+          "check": "git check-ignore .pytest_cache .ruff_cache .kimi-plugin returns all three; git status no longer lists them untracked; no tracked secrets appear. Approval gate. CONCURRENT with 7,8.",
+          "writes": true,
+          "depends_on": []
+        },
+        {
+          "n": 10,
+          "title": "[GATED, BLOCKED-ON-DECISION] Reconcile marketplace-source URL (w159 vs henssler-financial)",
+          "artifact": "Recorded decision on canonical upstream plus the matching edit to atlas_doctor.py expected URL and/or .kimi-plugin/marketplace.json so both agree.",
+          "check": "python3 scripts/atlas_doctor.py -> 0 PROBLEM(S) (marketplace-source and clone-remote both PASS). Approval gate AND blocked until the open question on canonical upstream is answered.",
+          "writes": true,
+          "depends_on": []
+        },
+        {
+          "n": 11,
+          "title": "[GATED] Reconcile uncommitted marketplace.json + README.md with CHANGELOG",
+          "artifact": "CHANGELOG entry documenting the local-relative marketplace-path transition, with the two pending files committed on a branch.",
+          "check": "git diff --stat clean after commit; CHANGELOG names the change; atlas_doctor still reports 0 problems. Approval gate. Loop-back: if Stage 10 changes URL strategy, re-run this stage's diff.",
+          "writes": true,
+          "depends_on": [
+            10
+          ]
+        },
+        {
+          "n": 12,
+          "title": "[GATED] Roll up audit artifacts and reconcile CHANGELOG (DoD)",
+          "artifact": "docs/audits/atlas-harden-<date>/ containing the refutation log, cross-check outputs from stages 1-4 and 6, decision records, fable-5 residue list, and the reconciled CHANGELOG entry.",
+          "check": "Directory exists with each named artifact; CHANGELOG references the audit dir; every cross-check artifact (stages 1,2,3,4,6) present and non-empty. Final DoD gate.",
+          "writes": true,
+          "depends_on": [
+            1,
+            2,
+            3,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11
+          ]
+        }
+      ],
+      "removal_candidates": [
+        {
+          "item": "Top-level empty directory plugins/atlas/references/",
+          "evidence": "`ls references/` returns empty (0 files) in both repo and installed copy; every actual references/*.md citation resolves skill-relative (skills/<name>/references/) or via ${CLAUDE_PLUGIN_ROOT}/skills/atlas-engine/references/. No citation resolves to this top-level dir.",
+          "blast_radius": "None - nothing routes to it; deleting it changes no reference and is the source of the refuted 81-dangling false alarm.",
+          "rank": 1
+        },
+        {
+          "item": "The five ux-* agent specs (agents/ux-cartographer.md, ux-persona.md, ux-fuzzer.md, ux-accuracy-oracle.md, ux-reporter.md)",
+          "evidence": "ux-test-swarm.md:3-7 CANONICAL HOME banner points all UX runs to atlas-expedition; capability-routing.md:23 routes UX solely to atlas-expedition; no command dispatches them; atlas-expedition/references/roles/ already provides the six role prompts that supersede them.",
+          "blast_radius": "Medium - referenced in atlas-engine/SKILL.md:150, the atlas-orchestrator output-style roster, and ux-test-swarm.md; removal requires striking those in-place references first (Stage 8 marks them reference-only as the non-destructive alternative).",
+          "rank": 2
+        },
+        {
+          "item": "Agent agents/api-usage-map.md",
+          "evidence": "Unrouted from every command; only two references, both roster mentions (README.md:56, output-styles/atlas-orchestrator.md:35). NOT completely orphaned (refutes routing-spine).",
+          "blast_radius": "Low-medium - removal needs edits to the README and output-style rosters; but it is a DB-audit companion agent with latent value, so keep-and-fix (add Report-back schema in Stage 5) is likely preferable to deletion.",
+          "rank": 3
+        },
+        {
+          "item": "Dev-artifact directories .kimi-plugin/, .pytest_cache/, .ruff_cache/, scripts/.claude/",
+          "evidence": "Inventory report lists them as repo-only build/tool caches diverging from installed state.",
+          "blast_radius": "None (regenerable caches) - prefer gitignoring them (Stage 9) over deletion so they stop being tracked without disrupting local tooling.",
+          "rank": 4
+        }
+      ],
+      "loop_demo_candidate": "Add 'Report back' structured-return schemas to the four nonconformant agent specs (api-usage-map.md, schema-inventory.md, naming-glossary-audit.md, rls-privilege-audit.md). Best three-tier demo because it is fully self-contained (no upstream decision, unlike the marketplace-URL fix), bounded to four small files, and backed by a crisp automatable binary check: `for f in agents/*.md; do grep -qi 'Report back' \\\"$f\\\"; done` reproduces a clean RED state (4 of 18 MISSING) now, the fix drives it to 0 MISSING, and an independent-context verifier re-runs the same grep plus spot-reads the added named fields - red reproduction, fix, and verification each in a separate context (Stages 4 -> 5 -> 6). It also directly satisfies mission goal 3 (every dispatch names an exact return schema)."
+    },
+    "critique": {
+      "verdict": "incomplete",
+      "gaps": [
+        {
+          "gap": "Unresolved dangling agent references in a goal-6 surface. capability-routing.md rows 18-19 dispatch `codebase-explorer`, `Explore`, and `Plan` (confirmed: 2 grep hits), none of which exist in agents/ (18 files, none match). The routing-spine Tier 1 report raised this exact finding and NO stage addresses it. Stage 1 is the only reference-integrity gate and its scope is explicitly 'every references/*.md citation in skills/ and commands/' - it does not resolve agent-name references in the routing table, nor references in agents/, hooks.json, or plugin.json, all of which mission goal 6 names as surfaces that must be dangling-free. DoD requires 'all dangling refs resolved or struck'; this class is never checked.",
+          "severity": "high",
+          "fix": "Add a stage (or widen Stage 1) that resolves agent-name references in capability-routing.md against agents/ plus the global/external agent registry, and either confirms Explore/Plan/codebase-explorer resolve to real global agents or annotates them as external. Extend the gate to cover agents/, hooks.json, and plugin.json references so goal 6's full surface is proven, not just references/*.md."
+        },
+        {
+          "gap": "Mission goal 5 (reduced hallucinations) has no verification stage and coverage is demonstrably partial. Briefs must permit 'I don't know', require citations, and mark [unverified]. Grep shows only 9 of 18 agent specs contain any such language; 9 lack it entirely (completeness-critic, db-prober, explorer, naming-glossary-audit, rls-privilege-audit, schema-inventory, ui-runtime-tester, verifier, and one more). The fable5-scan reported violations only in criterion (a) and never flagged goal 5, so either goal 5 is uncovered entirely or the scan's silent 'clean' on that criterion was itself wrong. No stage enforces or even inventories this.",
+          "severity": "high",
+          "fix": "Add a conformance stage that greps all 18 agent specs (and skill dispatch briefs) for the three hallucination controls, records the RED set of nonconformant specs, and - behind the removal/edit approval gate - adds the missing 'permit I don't know / cite sources / mark [unverified]' language. List any residue [unverified] in the Stage 12 rollup."
+        },
+        {
+          "gap": "Mission goal 4 (four-part briefs) rests on an unverified Tier 1 claim with no resolving stage. The fable5-scan explicitly marked criterion (f) UNVERIFIED ('does not explicitly state prior-context in the prompt template - unclear if implicit context suffices'). The four-part language exists only in the template files (multi-stage-planning.md, subagent-kit.md), not confirmed across the actual dispatch examples in the skills. No stage (4-6 only exercise criterion a) verifies four-part brief shape end to end.",
+          "severity": "medium",
+          "fix": "Add a check that every dispatch example in the orchestrating skills contains all four brief parts (task, product, where-to-save, prior-context), or explicitly list the shortfall as [unverified] residue in Stage 12."
+        },
+        {
+          "gap": "Stage 2's check cannot fail on its load-bearing claim. Goal 2 requires hooks 'gate on the orchestration marker and fail open'. Stage 2 verifies only py_compile (syntactic validity) plus a grep for try/except tokens in dispatch_tripwire/completion_gate/prompt_optimizer. A grep for 'try/except' passes whenever the tokens appear anywhere, even if the except re-raises or sits outside the exit path, and py_compile proves nothing about runtime behavior. Neither confirms (a) the gate actually keys on the is_orchestrating marker before blocking, nor (b) that the failure path actually exits 0.",
+          "severity": "medium",
+          "fix": "Strengthen Stage 2 to execute each hook with a synthetic payload that forces an internal exception and assert exit code 0 (real fail-open), and assert completion_gate/dispatch_tripwire do NOT block when the orchestration marker is absent and DO when present - a check that can actually go red."
+        },
+        {
+          "gap": "Goal 2 'standing-consent contract owned solely by atlas-engine' has no verification stage. It is asserted only by a single-context fable5-scan grep. (Spot-check found the language in atlas-engine/SKILL.md and multi-stage-planning.md, both atlas-engine-owned, so it currently holds - but nothing in the stage map gates it, so a future edit could reintroduce duplication undetected.)",
+          "severity": "low",
+          "fix": "Add a grep assertion (co-locate with Stage 8's ownership check) that standing-consent language appears only under skills/atlas-engine/, exiting nonzero on any hit elsewhere."
+        },
+        {
+          "gap": "Removal gating produces no recorded STOP/approval or explicit-deferral artifact for the ranked candidates. DoD: 'the orchestrator STOPS for user approval before any delete/move/rename.' Removal candidate rank 1 (empty top-level references/ dir - the source of the refuted 81-dangling false alarm) and rank 3 (api-usage-map) are never deleted by any stage, which is correct, but no stage records the keep/defer decision. The empty references/ dir persists in the tree with nothing striking it or documenting why it stays.",
+          "severity": "low",
+          "fix": "Make the STOP-for-approval an explicit stage that presents the ranked removal table and records the user's per-candidate decision (delete/defer/keep) into the Stage 12 decision records, including an explicit disposition for the vestigial references/ dir."
+        },
+        {
+          "gap": "The canonical UX owner's runtime generation logic is never verified. Stage 8 names atlas-expedition sole UX owner, and the ux-duplication refutation conceded 'whether the generation logic is complete is a separate [unverified] question' for run_all.sh/datagen.py (generated into RUN_DIR). No stage confirms atlas-expedition can actually produce that harness, so the sole surviving UX substrate could be non-functional at execution time.",
+          "severity": "low",
+          "fix": "Either add a stage that traces the generation logic in atlas-expedition/personas.md and SKILL.md to confirm it emits run_all.sh/datagen.py, or list harness-generation completeness as explicit [unverified] residue in Stage 12."
+        }
+      ]
+    }
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Research"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 2,
+      "title": "Plan"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "t1:inventory",
+      "phaseIndex": 1,
+      "phaseTitle": "Research",
+      "agentId": "a41d6f11c7c43cc11",
+      "agentType": "atlas:explorer",
+      "model": "claude-haiku-4-5-20251001",
+      "state": "done",
+      "startedAt": 1783416212100,
+      "queuedAt": 1783416210096,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Atlas plugin (v2.6.0) audit complete. Installed copy: /User…",
+      "promptPreview": "TASK: Full tree inventory of the atlas plugin. (1) Resolve the installed copy path from ~/.claude/plugins/installed_plugins.json and known_marketplaces.json (plugin id \"atlas@tech-tools\"); report the resolved path. (2) For the repo copy at undefined: parse .claude-plugin/plugin.json (name, version, hooks wiring, any mcpServers/bundle config) and enumerate names per directory: skills/, agents/, com…",
+      "lastProgressAt": 1783416357009,
+      "tokens": 63958,
+      "toolCalls": 38,
+      "durationMs": 144909,
+      "resultPreview": "{\"summary\":\"Atlas plugin (v2.6.0) audit complete. Installed copy: /Users/jerry/.claude/plugins/cache/tech-tools/atlas/2.6.0 (from installed_plugins.json entry \\\"atlas@tech-tools\\\", lastUpdated 2026-07-06). Repo copy: /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas. Plugin manifest (plugin.json) well-formed with all required fields. All nine requested skills present plus atlas-stacks (1…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "t1:routing-spine",
+      "phaseIndex": 1,
+      "phaseTitle": "Research",
+      "agentId": "a8a34ab81226bfc39",
+      "agentType": "atlas:explorer",
+      "model": "claude-haiku-4-5-20251001",
+      "state": "done",
+      "startedAt": 1783416212968,
+      "queuedAt": 1783416210096,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Atlas plugin routing spine audit: 9 core skills all exist a…",
+      "promptPreview": "TASK: Audit the routing spine. Locate capability-routing.md inside the atlas plugin (likely skills/atlas-engine/references/). Verify with grep/ls, citing file:line: (a) every agent name it mentions exists as a file in undefined/agents/; (b) every skill it routes to exists in undefined/skills/; (c) every command in undefined/commands/ maps to a skill that exists; (d) list components (skills, agents…",
+      "lastProgressAt": 1783416523610,
+      "tokens": 75727,
+      "toolCalls": 34,
+      "durationMs": 310642,
+      "resultPreview": "{\"summary\":\"Atlas plugin routing spine audit: 9 core skills all exist and span the intended architecture, but the first 2 entry points (atlas-architect, atlas-engine) plus a third skill (atlas-stacks) are absent from the capability-routing.md Step 2 routing table. 13 agents are completely unrouted from commands (though 12 are wired to skills internally). One agent (api-usage-map) is completely orp…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "t1:references-resolution",
+      "phaseIndex": 1,
+      "phaseTitle": "Research",
+      "agentId": "a7ecd33cafdf73aa1",
+      "agentType": "atlas:explorer",
+      "model": "claude-haiku-4-5-20251001",
+      "state": "done",
+      "startedAt": 1783416211488,
+      "queuedAt": 1783416210096,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "ATLAS PLUGIN REFERENCE AUDIT: 81 dangling internal file ref…",
+      "promptPreview": "TASK: Resolve every internal file reference. For every SKILL.md under undefined/skills/ and every command under undefined/commands/: extract every relative path it references (references/*.md, scripts/*.py, scripts/*.sh, ${CLAUDE_PLUGIN_ROOT}/... paths) and verify each exists on disk. Also verify every script referenced by undefined/hooks/hooks.json exists. Use grep -n to cite the referencing file…",
+      "lastProgressAt": 1783416363796,
+      "tokens": 74888,
+      "toolCalls": 16,
+      "durationMs": 152308,
+      "resultPreview": "{\"summary\":\"ATLAS PLUGIN REFERENCE AUDIT: 81 dangling internal file references. Root cause: `/plugins/atlas/references/` directory exists but is completely empty. All 75+ references to `references/*.md` are broken. Affects 10 SKILL.md files (HIGH severity) and 18 command files (MEDIUM severity). All hook scripts (9 total) exist and resolve correctly. All Python script references (build_hub.py, atl…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 4,
+      "label": "t1:sextant",
+      "phaseIndex": 1,
+      "phaseTitle": "Research",
+      "agentId": "a0e7f5b1843dd860d",
+      "agentType": "atlas:explorer",
+      "model": "claude-haiku-4-5-20251001",
+      "state": "done",
+      "startedAt": 1783416211704,
+      "queuedAt": 1783416210096,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "atlas-sextant is RESTORED and fully operational. The skill …",
+      "promptPreview": "TASK: Settle the atlas-sextant question. Prior audit (skills-only) found atlas-sextant referenced by atlas-engine, atlas-architect, and capability-routing.md but NOT shipped. On the live tree: (a) does undefined/skills/atlas-sextant/SKILL.md exist and look loadable (valid frontmatter)? (b) grep -rn \"sextant\" across the whole plugin and classify every reference as resolved or dangling; (c) if the s…",
+      "lastProgressAt": 1783416397647,
+      "tokens": 72060,
+      "toolCalls": 40,
+      "durationMs": 185943,
+      "resultPreview": "{\"summary\":\"atlas-sextant is RESTORED and fully operational. The skill exists with valid frontmatter, all invoked scripts are present and wired via hooks, all 31 references across the plugin are resolved (no dangling links), and both the repo and installed copies (v2.6.0) are complete and consistent.\",\"findings\":[{\"claim\":\"atlas-sextant SKILL.md exists with valid frontmatter\",\"evidence\":\"/Users/je…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 5,
+      "label": "t1:ux-duplication",
+      "phaseIndex": 1,
+      "phaseTitle": "Research",
+      "agentId": "a29e3fe41a48c1b6a",
+      "agentType": "atlas:explorer",
+      "model": "claude-haiku-4-5-20251001",
+      "state": "done",
+      "startedAt": 1783416211613,
+      "queuedAt": 1783416210096,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Two UX-testing substrates exist in the atlas plugin with du…",
+      "promptPreview": "TASK: Map the duplicated UX-testing substrates. Substrate A: undefined/skills/atlas-expedition (look for a shell harness: run_all.sh, docs/claude_testers/harness or similar). Substrate B: atlas-engine's references/ux-test-swarm.md plus the agents ux-cartographer, ux-persona, ux-fuzzer, ux-accuracy-oracle, ux-reporter under undefined/agents/. For each substrate: entry points, file inventory (names …",
+      "lastProgressAt": 1783416420374,
+      "tokens": 84719,
+      "toolCalls": 38,
+      "durationMs": 208761,
+      "resultPreview": "{\"summary\":\"Two UX-testing substrates exist in the atlas plugin with duplicated phases, gates, and logic. Substrate A (atlas-expedition skill) is the canonical, actively-routed entry point. Substrate B (atlas-engine with ux-test-swarm.md reference) defines five named agents that are declared but unrouted.\",\"findings\":[{\"claim\":\"Substrate A (atlas-expedition) is the actively-routed canonical entry …"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 6,
+      "label": "t1:hooks",
+      "phaseIndex": 1,
+      "phaseTitle": "Research",
+      "agentId": "af3bd33747138710f",
+      "agentType": "atlas:explorer",
+      "model": "claude-haiku-4-5-20251001",
+      "state": "done",
+      "startedAt": 1783416211639,
+      "queuedAt": 1783416210096,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Atlas plugin hook audit complete: 13 hooks wired across 8 e…",
+      "promptPreview": "TASK: Audit hook wiring. Read undefined/hooks/hooks.json and any hook wiring in .claude-plugin/plugin.json. (a) List every hook: event, matcher, command/script - expected count is eight, report the actual count. (b) Verify each referenced script exists. (c) For the dispatch tripwire and completion-gate hooks: read their scripts and report what marker/state they gate on (orchestration marker? docs/…",
+      "lastProgressAt": 1783416336415,
+      "tokens": 69625,
+      "toolCalls": 16,
+      "durationMs": 124776,
+      "resultPreview": "{\"summary\":\"Atlas plugin hook audit complete: 13 hooks wired across 8 event types (not 8 hooks as expected; count includes all command invocations). All 9 scripts verified present. Dispatch tripwire and completion gate both fail-open by design. Prompt optimizer augments prompt via additionalContext, trigger-gated by default, fails open. Dispatch monitoring uses hardcoded \\\"Agent\\\" and \\\"Task\\\" mat…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 7,
+      "label": "t1:connectors",
+      "phaseIndex": 1,
+      "phaseTitle": "Research",
+      "agentId": "a34716b7847e8c283",
+      "agentType": "atlas:explorer",
+      "model": "claude-haiku-4-5-20251001",
+      "state": "done",
+      "startedAt": 1783416211440,
+      "queuedAt": 1783416210096,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Atlas v2.6.0 connector posture audit: 10 vendor MCP connect…",
+      "promptPreview": "TASK: Audit connector posture and install health. (a) In undefined/.claude-plugin/plugin.json: how many MCP servers/connectors does atlas itself declare? Expected since v2.6.0: zero bundled vendor payloads, vendor connectors owned by domain plugins (it-operations, security-compliance, microsoft-365, hr-payroll). (b) For each of the ten vendors (auvik, blumira, cipp, connectwise-manage, spanning, k…",
+      "lastProgressAt": 1783416350017,
+      "tokens": 66350,
+      "toolCalls": 31,
+      "durationMs": 138577,
+      "resultPreview": "{\"summary\":\"Atlas v2.6.0 connector posture audit: 10 vendor MCP connectors properly distributed across 4 domain plugins (it-operations, security-compliance, microsoft-365, hr-payroll), all inert by default. Atlas ships zero vendor connectors. No hardcoded secrets detected. Atlas doctor reports 2 failures: marketplace source URL points to henssler-financial/tech-tools.git instead of w159/tech-tools…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 8,
+      "label": "t1:fable5-scan",
+      "phaseIndex": 1,
+      "phaseTitle": "Research",
+      "agentId": "a9e176b2729a3b636",
+      "agentType": "atlas:explorer",
+      "model": "claude-haiku-4-5-20251001",
+      "state": "done",
+      "startedAt": 1783416211341,
+      "queuedAt": 1783416210096,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Fable-5 conformance audit of atlas plugin v2.6.0 covering a…",
+      "promptPreview": "TASK: Fable-5 conformance scan over EVERY SKILL.md in undefined/skills/ and EVERY agent spec in undefined/agents/ - all of them, not a sample; state the total file count you checked. Per criterion, report violations only, each with file:line: (a) every dispatch/subagent brief names an exact return schema with named fields - flag free-prose returns; (b) briefs permit \"I don't know\", require citatio…",
+      "lastProgressAt": 1783416445958,
+      "tokens": 91160,
+      "toolCalls": 39,
+      "durationMs": 234617,
+      "resultPreview": "{\"summary\":\"Fable-5 conformance audit of atlas plugin v2.6.0 covering all 27 skill and agent spec files (9 SKILL.md + 18 agent specs). Violations found in criterion (a): 4 agent specs lack explicit \\\"Report back\\\" sections with structured return schemas. Standing-consent orchestration contract properly isolated to atlas-engine per criterion (e). Reference loading follows trigger model per criterio…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 9,
+      "label": "t2:planner",
+      "phaseIndex": 2,
+      "phaseTitle": "Plan",
+      "agentId": "ad6505c5f591f6221",
+      "agentType": "atlas:planner",
+      "model": "claude-opus-4-8[1m]",
+      "state": "done",
+      "startedAt": 1783416528261,
+      "queuedAt": 1783416525545,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Add 'Report back' structured-return schemas to the four non…",
+      "promptPreview": "ROLE: Adversarial planner for a plugin-hardening audit. You received the mission and eight read-only Tier 1 reports. DO: (1) try to refute each Tier 1 finding - anything resting on assumption rather than cited evidence goes in refuted with the reason, and you may re-open the cited files under undefined to check (read-only); (2) emit a numbered stage map covering every surviving finding AND every m…",
+      "lastProgressAt": 1783416848317,
+      "tokens": 90346,
+      "toolCalls": 15,
+      "durationMs": 320055,
+      "resultPreview": "{\"refuted\":[{\"claim\":\"references-resolution report: 81 dangling internal file references; the references/ directory exists but is completely empty; all 75+ references to references/*.md are broken (10 SKILL.md HIGH, 18 command MEDIUM).\",\"reason\":\"Checked the wrong directory. The empty dir it inspected is the vestigial top-level plugins/atlas/references/. Actual reference files live in skill-relati…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 10,
+      "label": "t2:critic",
+      "phaseIndex": 2,
+      "phaseTitle": "Plan",
+      "agentId": "a0e83b2a1bb22ba1e",
+      "agentType": "atlas:completeness-critic",
+      "model": "claude-opus-4-8[1m]",
+      "state": "done",
+      "startedAt": 1783416859916,
+      "queuedAt": 1783416855538,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "incomplete",
+      "promptPreview": "ROLE: Completeness critic. Given the mission, the Tier 1 reports, and the planner's stage map, find what is MISSING: a mission requirement or definition-of-done item with no stage; a surviving Tier 1 finding no stage addresses; a stage whose check cannot actually fail; coverage that sampled instead of checking every component; a refutation that was itself wrong. Do not restate what is covered - ga…",
+      "lastProgressAt": 1783417045928,
+      "tokens": 87204,
+      "toolCalls": 4,
+      "durationMs": 186012,
+      "resultPreview": "{\"verdict\":\"incomplete\",\"gaps\":[{\"gap\":\"Unresolved dangling agent references in a goal-6 surface. capability-routing.md rows 18-19 dispatch `codebase-explorer`, `Explore`, and `Plan` (confirmed: 2 grep hits), none of which exist in agents/ (18 files, none match). The routing-spine Tier 1 report raised this exact finding and NO stage addresses it. Stage 1 is the only reference-integrity gate and it…"
+    }
+  ],
+  "totalTokens": 776037,
+  "totalToolCalls": 271
+}

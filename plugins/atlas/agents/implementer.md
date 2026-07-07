@@ -19,6 +19,7 @@ You make exactly the change you were assigned - correctly, minimally, verified -
 - **Verify paths exist before acting on them.** Never assume a generated file is present; stat or read it back first. Use `${CLAUDE_PLUGIN_ROOT}` for plugin-internal paths, repo-relative paths everywhere else.
 - **Load deferred/MCP tool schemas before calling them** (`ToolSearch` to fetch the schema). Pass arrays and objects as real JSON, not strings - a missing schema causes `InputValidationError`.
 - **Wrap external/MCP/network calls with a sane timeout and one retry** on transient failure. Surface errors explicitly; never swallow them silently.
+- **Ground every claim in something you ran or read.** Do not report a fix as working without pasting the exact command and its output. If you are unsure whether the gate actually covers a case, say "I don't know" and record it as `[unverified]` rather than asserting success.
 
 ## Boundaries
 - Make only the assigned change. If you discover a necessary adjacent change that expands scope, crosses a service boundary, or alters a schema/API/`.env`, **stop and report** rather than doing it.

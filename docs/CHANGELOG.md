@@ -4,6 +4,56 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
+## Unreleased -- atlas harden: agent-roster cleanup, spec conformance, routing, marketplace repoint (2026-07-07)
+
+Audit: `docs/audits/atlas-harden-2026-07-07/` (orientation, decisions, per-stage
+reports, red baseline, green-gate cross-check, final report). No plugin.json version
+bump in this pass - release timing left to Jerry.
+
+- Removed the five `ux-*` agent specs (`ux-cartographer`, `ux-persona`, `ux-fuzzer`,
+  `ux-accuracy-oracle`, `ux-reporter`) and `api-usage-map`, guarded by a pre-delete grep
+  for live skill/command dispatches (`docs/audits/atlas-harden-2026-07-07/stage-removals.md:13-41`).
+  UX testing's canonical owner is now `atlas-expedition`; `ux-test-swarm.md` collapsed
+  to an 11-line pointer at that skill (`stage-removals.md:75-78`). Struck all
+  references to the six removed names from `plugins/atlas/README.md` (roster count
+  corrected 18 -> 12), `output-styles/atlas-orchestrator.md`,
+  `skills/atlas-engine/SKILL.md`, and `skills/atlas-expedition/references/personas.md`
+  (`stage-removals.md:46-84`).
+- Added three routing rows to
+  `plugins/atlas/skills/atlas-engine/references/capability-routing.md` for
+  atlas-architect (project boot/onboarding), atlas-engine's own self-entry
+  (orchestration), and atlas-stacks (skill selection); annotated 12 built-in/global
+  agent-type mentions (`codebase-explorer`, `Explore`, `Plan`, `debugger`, etc.) with a
+  `*` footnote marking them as not shipped under `plugins/atlas/agents/`
+  (`docs/audits/atlas-harden-2026-07-07/stage-routing.md:6-14`).
+- Added named-field Report-back sections to the three agent specs that lacked one
+  (`naming-glossary-audit.md`, `rls-privilege-audit.md`, `schema-inventory.md`) and
+  explicit hallucination-control grounding language ("I don't know" is a valid
+  result, cite what was actually read, unproven gaps stay `[unverified]`) across all
+  12 remaining agent specs
+  (`docs/audits/atlas-harden-2026-07-07/stage-conformance.md:7-36`).
+- Repointed the tech-tools marketplace registration from the stale
+  `henssler-financial/tech-tools` fork to canonical `w159/tech-tools` via
+  `atlas_doctor.py --fix`, which rewrote `known_marketplaces.json`'s source URL and
+  reset the marketplace clone's git remote/HEAD; doctor now reports `HEALTHY - atlas`
+  with 0 problems (`docs/audits/atlas-harden-2026-07-07/stage-marketplace.md:37-105`).
+- Hardened repo-root `.gitignore`: added a re-exclusion for `**/.in_use/` (and
+  `**/.in_use/**`) after the `!plugins/**` allowlist, the one dev-runtime pattern of
+  four checked that was not already covered
+  (`docs/audits/atlas-harden-2026-07-07/stage-gitignore.md:19-39`).
+- Deleted untracked dev caches (`plugins/atlas/.pytest_cache`,
+  `plugins/atlas/.ruff_cache`, `plugins/atlas/scripts/.claude`) and the empty
+  `plugins/atlas/references/` directory; no tracked file was affected
+  (`docs/audits/atlas-harden-2026-07-07/stage-removals.md:96-107`).
+- Known residue carried into the audit's final report for owner follow-up (not fixed
+  in this pass; see `docs/audits/atlas-harden-2026-07-07/final-report.md` section 4):
+  a prior commit (`d1be66b`) already baked the local-relative-path marketplace scheme
+  into `.kimi-plugin/marketplace.json` before this session's revert step ran, so the
+  intended revert was a no-op and reverting it now requires a history-changing commit
+  outside this audit's authority; and the Magic/Plaid credential strings previously
+  flagged in `.kimi-plugin/import-plan.json`'s git history remain unrotated and
+  unrewritten.
+
 ## Atlas v2.6.0 -- vendor connectors single-sourced to domain plugins (2026-07-03)
 
 All 10 vendor `.mcpb` bundles atlas carried in `plugins/atlas/mcp/` were confirmed

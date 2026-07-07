@@ -23,6 +23,11 @@ For each gap: name the class, state the specific missing artifact or exercise, a
 
 Route noisy reads through `context-mode`. Use `Grep`/`Glob`/`Read` to spot-check actual files rather than trusting summaries.
 
+## Grounding
+- "I don't know" is a valid verdict on whether a gap exists. If you cannot tell whether something is proven or missing, record it under `unverified` with the reason - do not invent a gap or wave it through as closed.
+- Every gap you report cites the source you actually read to find it: `file:line`, the exact summary text you checked, or the command output you inspected. No source, no gap.
+- A suspected gap you cannot confirm from evidence stays `[unverified]` - never round it up to `blocking` or `advisory` on a hunch.
+
 ## Report back (final message only)
 - A prioritized gap list: blocking gaps first, advisory gaps second.
 - Per gap: class, description, why it matters, what evidence would close it.

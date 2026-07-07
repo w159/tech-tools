@@ -1,0 +1,13 @@
+{
+  "captured_by": "atlas-harden-2026-07-07 orientation pass (pre-remediation baseline)",
+  "dangling_references": 0,
+  "reportback_missing": [
+    "agents/api-usage-map.md",
+    "agents/naming-glossary-audit.md",
+    "agents/rls-privilege-audit.md",
+    "agents/schema-inventory.md"
+  ],
+  "hallucination_controls_missing_count": 16,
+  "hooks_behavioral_summary": "Audited the active atlas plugin version (2.6.0, confirmed as the non-orphaned install at /Users/jerry/.claude/plugins/cache/tech-tools/atlas/2.6.0 - 2.4.0 and 2.5.0 both carry .orphaned_at timestamps, 2.6.0 has none). hooks/hooks.json declares 8 event types (SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop, SubagentStop, SessionEnd, PreCompact) across 9 matcher blocks totaling 13 command entries, referencing 9 distinct scripts, all of which exist and pass py_compile with rc=0. Ran live fail-open tests against dispatch_tripwire.py, completion_gate.py, and prompt_optimizer.py with malformed JSON and JSON missing expected fields: all three returned exit 0 with empty stdout in every case (6/6 invocations), proving fail-open. Then read and empirically confirmed the orchestration-marker gating in both gate scripts using synthetic DB state (isolated via ATLAS_DB env var to a scratchpad SQLite file, never touching ~/.atlas) and synthetic scratchpad project dirs: dispatch_tripwire.py keys on atlas_db.is_orchestrating (line 93) and completion_gate.py keys on two markers in series, docs/ presence (lines 244-245) then atlas_db.is_orchestrating (lines 246-247).",
+  "note": "api-usage-map.md is listed in reportback_missing as part of the red baseline; it was subsequently deleted (decisions.md item 2, stage-removals.md Step 1) rather than repaired, since no live skill/command dispatch referenced it. The other three files (naming-glossary-audit.md, rls-privilege-audit.md, schema-inventory.md) were repaired in place - see stage-conformance.md."
+}

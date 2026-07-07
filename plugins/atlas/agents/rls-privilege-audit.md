@@ -19,4 +19,12 @@ Read-only sources to use:
 
 Flag least-privilege violations: a table with RLS off that holds client data, a grant to PUBLIC, an application role with rights broader than its routes need, a role with bypassrls or superuser used for normal application queries, and a policy that is permissive where it should be restrictive. State each violation as a finding backed by the exact catalog row you observed, ranked critical, warning, or note. Where intent is unclear (whether a table holds sensitive data, whether a grant is deliberate), say so and mark it UNVERIFIED rather than asserting a violation.
 
+"I don't know" is a valid answer here: if the catalogs do not settle whether a table is sensitive or a grant is deliberate, record it as UNVERIFIED with the reason rather than guessing at intent.
+
 Write the full audit to .audit/rls-privilege-audit.md: a per-table matrix (RLS state, policies, role grants) and a ranked findings list. Return a short summary (counts by severity, tables with RLS off) and the file path.
+
+## Report back (final message only)
+- `file_path`: the `.audit/rls-privilege-audit.md` path written.
+- `counts_by_severity`: number of findings at `critical`, `warning`, and `note`, each backed by the catalog row observed.
+- `tables_rls_off`: count and list of tables with RLS disabled that hold client data.
+- `unverified`: every finding where sensitivity or grant intent could not be confirmed from the catalogs, with the reason.

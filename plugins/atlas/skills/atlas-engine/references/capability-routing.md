@@ -15,27 +15,32 @@ Pass the chosen capabilities into each subagent's spec as directives, **and** te
 
 | Task signal | Agent type | Skill(s) | MCP / tools | Model |
 |---|---|---|---|---|
-| Understand a codebase / map a feature | `atlas:explorer`, `codebase-explorer`, `Explore` | `smart-explore`, `learn-codebase`, `graphify`, `pathfinder` | `serena`, LSP, `context-mode` | haiku |
-| Plan a feature / multi-step task | `Plan` | `superpowers:brainstorming` -> `make-plan` -> `writing-plans` | `sequentialthinking` | opus/sonnet |
-| Implement a feature / bounded change | `atlas:implementer`, `frontend-developer`, `backend-architect` | `superpowers:test-driven-development`, `frontend-design`/`ui-ux-pro-max` | `context7` (mandatory), `serena`, LSP | sonnet |
-| Fix a bug / regression / incident | `debugger` | `superpowers:systematic-debugging` | `serena`, `context-mode`, Sentry MCP if present | sonnet |
-| Run & validate behavior (FE/BE/DB) | `atlas:ui-runtime-tester`, `test-executor`, `test-engineer` | `verify`, `run`, `webapp-testing`, `python-testing-patterns` | Claude_Preview MCP, `context-mode`, curl, playwright | sonnet |
+| Understand a codebase / map a feature | `atlas:explorer`, `codebase-explorer`*, `Explore`* | `smart-explore`, `learn-codebase`, `graphify`, `pathfinder` | `serena`, LSP, `context-mode` | haiku |
+| Plan a feature / multi-step task | `Plan`* | `superpowers:brainstorming` -> `make-plan` -> `writing-plans` | `sequentialthinking` | opus/sonnet |
+| Implement a feature / bounded change | `atlas:implementer`, `frontend-developer`*, `backend-architect`* | `superpowers:test-driven-development`, `frontend-design`/`ui-ux-pro-max` | `context7` (mandatory), `serena`, LSP | sonnet |
+| Fix a bug / regression / incident | `debugger`* | `superpowers:systematic-debugging` | `serena`, `context-mode`, Sentry MCP if present | sonnet |
+| Run & validate behavior (FE/BE/DB) | `atlas:ui-runtime-tester`, `test-executor`*, `test-engineer`* | `verify`, `run`, `webapp-testing`, `python-testing-patterns` | Claude_Preview MCP, `context-mode`, curl, playwright | sonnet |
 | Full UI/UX test pass / persona testing / pre-release UX sweep (any app) | (orchestrator dispatches atlas-expedition) | `atlas-expedition` (canonical home; auto-discovers routes and fields) | Chrome DevTools MCP / Claude_Preview MCP / `browser-harness` / playwright, `context-mode` | sonnet; opus for the reporter |
 | Probe the database (read-only) | `atlas:db-prober` | - | read-only `psql`, `whodb`/data-agent-kit plugin if present, `gcloud` | sonnet |
-| Verify a finding / fix (adversarial) | `atlas:verifier`, `secondary-expert-validator` | `superpowers:requesting-code-review` | re-run tests/queries; `codex` for a true second opinion | sonnet -> opus if critical |
-| Security review | `security-engineer` | `security-review`, `security-best-practices`; `backend-security-skills`/`vibeguard` plugins if present | `context7`, `serena` | opus |
+| Verify a finding / fix (adversarial) | `atlas:verifier`, `secondary-expert-validator`* | `superpowers:requesting-code-review` | re-run tests/queries; `codex` for a true second opinion | sonnet -> opus if critical |
+| Security review | `security-engineer`* | `security-review`, `security-best-practices`; `backend-security-skills`/`vibeguard` plugins if present | `context7`, `serena` | opus |
 | Comprehensive quality + security + OWASP audit (full codebase sweep) | (orchestrator dispatches atlas-survey) | `atlas-survey` | `serena`, `context7`, `context-mode`; no browser needed | sonnet (multi-swarm) |
 | Architecture map / structural dedup / boundaries doc missing | (orchestrator dispatches atlas-cartographer) | `atlas-cartographer` | `serena`, LSP, `context-mode` | sonnet |
 | Recurring or iterative task / needs a reusable loop | (orchestrator dispatches atlas-orbit) | `atlas-orbit` | - | sonnet |
 | Vendor MCP connector setup / credentials to wire | (orchestrator dispatches atlas-harbor) | `atlas-harbor` | - | sonnet |
 | Measure run health / self-improvement from observability data | (orchestrator dispatches atlas-sextant) | `atlas-sextant` | SQLite observability DB (`~/.atlas/atlas.db`) | sonnet |
-| Review a diff / PR | `code-reviewer` | `code-review` (`--fix` to apply), `superpowers:requesting-code-review` | `serena`, LSP | sonnet |
+| Project boot / onboarding / configure tooling for a repo | (orchestrator dispatches atlas-architect) | `atlas-architect` | `serena`, hook/config wiring | sonnet |
+| Multi-stage / multi-surface orchestration (build/fix/audit/refactor spanning several subagents) | (this skill is the orchestrator itself - normally entered via its own skill trigger, not routed to from within a session) | `atlas-engine` | whatever Step 1 discovers live | sonnet |
+| Choosing / stacking which skills to run for a goal or stack | (orchestrator dispatches atlas-stacks) | `atlas-stacks` | - | sonnet |
+| Review a diff / PR | `code-reviewer`* | `code-review` (`--fix` to apply), `superpowers:requesting-code-review` | `serena`, LSP | sonnet |
 | Library / framework / SDK questions | (inline or any) | `openai-docs`, `claude-api`, `microsoft-foundry` | `context7` (general), `microsoft-docs` (Azure/.NET/M365/Entra) | - |
-| UI / design build or critique | `frontend-developer` | `ui-ux-pro-max`, `frontend-design`, `design:*` | `magic` MCP, Claude_Preview to verify | sonnet |
-| Infra / deploy / CI | `devops-automator` | - | `gcloud`, `gcp-devkit`/`firebase-development` plugins if present | sonnet |
+| UI / design build or critique | `frontend-developer`* | `ui-ux-pro-max`, `frontend-design`, `design:*` | `magic` MCP, Claude_Preview to verify | sonnet |
+| Infra / deploy / CI | `devops-automator`* | - | `gcloud`, `gcp-devkit`/`firebase-development` plugins if present | sonnet |
 | Large output / logs / data crunching | (any) | - | `context-mode` (`ctx_batch_execute`/`ctx_execute`) - never raw Bash | haiku |
 | "Did we solve this before?" | (you) | `mem-search` | `claude-mem`, `ctx_search` | - |
 | Claude Code setup feels limiting | (you) | `agentic-tools`, `orc-audit` | read `~/.claude` settings/agents/plugins | -> `claude-code-tuning.md` |
+
+\* Built-in/global agent type, not shipped under `plugins/atlas/agents/` - resolved from `~/.claude/agents/`, `.claude/agents/`, or Claude Code's built-in agent types.
 
 ## Step 3 - Hard rules that override convenience
 

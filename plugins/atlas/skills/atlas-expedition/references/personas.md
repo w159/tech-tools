@@ -2,7 +2,7 @@
 
 Personas are synthesized by the harness script datagen.py, not hand-authored. The
 generator reads the discovered field matrix and contract-snapshot.json produced by
-Phase 0 (atlas:ux-cartographer), so it adapts to whatever web app is under test.
+Phase 0 discovery, so it adapts to whatever web app is under test.
 Generation is deterministic: the same seed yields identical rows, so a run is
 repeatable and diffable.
 

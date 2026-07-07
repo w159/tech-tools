@@ -1,6 +1,7 @@
 # Atlas Subagent Roster
 
-Authoritative list of subagents shipped in `plugins/atlas/agents/`. 18 agents total as of v2.2.1.
+Authoritative list of subagents shipped in `plugins/atlas/agents/`. 12 agents total as of the
+2026-07-07 UX-swarm and api-usage-map removal (formerly 18 as of v2.2.1).
 Source: `plugins/atlas/agents/*.md` (each file's `name:` and `description:` frontmatter fields).
 
 ---
@@ -66,44 +67,42 @@ Source: `plugins/atlas/agents/docs-curator.md`, `docs-auditor.md`.
 
 ## Database Audit Agents
 
-Five read-only agents for structured database audits. Strictly no writes, no migrations, no DDL.
+Four read-only agents for structured database audits. Strictly no writes, no migrations, no DDL.
+(The former `atlas:api-usage-map` code-usage scanner was removed on 2026-07-07; its responsibility
+folds into the domain plugins' own MCP-backed audits. There is no remaining code-usage-map agent.)
 
 | Agent | One-line role |
 |---|---|
 | **atlas:db-prober** | Read-only DB inspector: queries schema, RLS policies, GRANTs for the runtime role, indexes, constraints, defaults, and EXPLAIN plans; proposes but never applies changes. |
 | **atlas:schema-inventory** | PostgreSQL catalog inventory: enumerates tables, columns, types, constraints, indexes, and RLS flags from the live database for the schema half of a DB audit. |
-| **atlas:api-usage-map** | Code-usage scanner: maps every database object (table, column, ORM model) the API references and where, for the code-usage half of a database audit. |
 | **atlas:naming-glossary-audit** | Nomenclature auditor: checks PostgreSQL table and column names against a project glossary; focused on user_* to client_* transition or similar rename passes. |
 | **atlas:rls-privilege-audit** | RLS security auditor: checks row-level security policies, table grants, and roles against least privilege for the security half of a DB audit in regulated environments. |
 
-Source: `plugins/atlas/agents/db-prober.md`, `schema-inventory.md`, `api-usage-map.md`,
+Source: `plugins/atlas/agents/db-prober.md`, `schema-inventory.md`,
 `naming-glossary-audit.md`, `rls-privilege-audit.md`.
 
 ---
 
 ## UX and Frontend Agents
 
-Six agents for the UX test swarm launched by `atlas-expedition`. Phase order:
-cartographer -> persona + fuzzer + accuracy-oracle (parallel) -> reporter.
-The `ui-runtime-tester` is a general-purpose browser validation agent used outside the swarm as well.
+One agent remains in this roster. The dedicated UX test swarm agents (`ux-cartographer`,
+`ux-persona`, `ux-fuzzer`, `ux-accuracy-oracle`, `ux-reporter`) were removed on 2026-07-07.
+UX/UI test-swarm runs now live solely in the `atlas-expedition` skill (invoke with
+`/atlas-expedition`); see `plugins/atlas/skills/atlas-engine/references/ux-test-swarm.md` for
+the pointer. The `ui-runtime-tester` agent below was not part of the removed swarm and is
+retained as a general-purpose browser validation agent used outside the swarm.
 
 | Agent | One-line role |
 |---|---|
 | **atlas:ui-runtime-tester** | Live browser validator: starts the web app and validates observed behavior (render, clean console, network calls, loading/empty/error/success states) via the Claude_Preview MCP or webapp-testing skill; captures screenshots, console, and network as evidence. Does not edit code. |
-| **atlas:ux-cartographer** | Phase 0 coverage cartographer: maps routes and form fields from a live app and captures the real client save/read-back contract; returns coverage matrices and a contract snapshot. Discovers from the live app; never edits source. |
-| **atlas:ux-persona** | End-user persona: lives one realistic user journey through a real browser (sign up, enter data, walk routes, exercise every state) and returns discovered bugs, user stories, persona feedback, and feature requests grounded in screenshots. Never edits app source. |
-| **atlas:ux-fuzzer** | Boundary and input fuzzer: pushes every discovered input to its edges in a real browser to find validation gaps (silent bad-acceptance, crashes, wrong messages, unescaped echo); returns findings with screenshot, console, and network evidence plus Nielsen severity. Never edits target source. |
-| **atlas:ux-accuracy-oracle** | Numeric accuracy verifier: independently recomputes every client-facing number the app displays (totals, balances, scores, projections) and diffs it against the rendered value; returns per-number verdicts with displayed value, recompute, inputs, and pass/fail. Writes verification worksheets only; never edits source. |
-| **atlas:ux-reporter** | Swarm synthesis and gate reporter: closes a UX test run by consuming artifacts from the persona/fuzzer/oracle agents, enforcing the three hard gates, computing a completion rate, and emitting a RELEASE-READY / NEEDS-WORK / INCOMPLETE verdict. Writes new report files only; never edits the target app. |
 
-Source: `plugins/atlas/agents/ui-runtime-tester.md`, `ux-cartographer.md`, `ux-persona.md`,
-`ux-fuzzer.md`, `ux-accuracy-oracle.md`, `ux-reporter.md`.
+Source: `plugins/atlas/agents/ui-runtime-tester.md`.
 
 ---
 
 ## Agent Constraints
 
-All 18 agents share three standing constraints regardless of the task:
+All 12 agents share three standing constraints regardless of the task:
 
 1. **Never fix what you are auditing.** Auditor, verifier, critic, oracle, and prober agents
    return findings only. They do not carry Write, Edit, or MultiEdit permissions.

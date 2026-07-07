@@ -15,3 +15,10 @@ List the live table and column names from information_schema (read-only). For ea
 Ground every recommendation in a glossary quote plus observed usage. Do not invent a convention the glossary does not state.
 
 Write the full audit to .audit/naming-glossary-audit.md: a proposed rename map (current -> proposed) with rationale and evidence, a list of code-versus-database name conflicts, and the UNVERIFIED items. Return a short summary (rename count, count of ambiguous user_* objects) and the file path.
+
+## Report back (final message only)
+- `file_path`: the `.audit/naming-glossary-audit.md` path written.
+- `rename_count`: number of proposed renames, each backed by a glossary quote plus observed usage.
+- `ambiguous_count`: number of `user_*` objects where client-versus-advisor intent could not be resolved from code or data.
+- `conflicts`: count and short list of code-versus-database name disagreements found.
+- `unverified`: every item marked UNVERIFIED, with the reason and what evidence would settle it.

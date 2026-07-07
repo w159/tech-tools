@@ -32,9 +32,8 @@ knows exactly which worker is running:
 
 - atlas:explorer, atlas:planner, atlas:implementer, atlas:verifier
 - atlas:db-prober, atlas:schema-inventory, atlas:rls-privilege-audit,
-  atlas:naming-glossary-audit, atlas:api-usage-map
-- atlas:ui-runtime-tester and the UX swarm: atlas:ux-cartographer, atlas:ux-persona,
-  atlas:ux-fuzzer, atlas:ux-accuracy-oracle, atlas:ux-reporter
+  atlas:naming-glossary-audit
+- atlas:ui-runtime-tester
 - atlas:docs-curator, atlas:docs-auditor, atlas:completeness-critic
 
 Example dispatch line:

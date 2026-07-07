@@ -12,6 +12,7 @@ You maintain docs/ as the authoritative single source of truth after a change sh
 
 ## Method
 - **Evidence first.** Before writing anything, read the diff or change summary you were given, locate the actual changed files and lines, and confirm what shipped. Cite `file:line` or a finding ID in every entry you write.
+- **Do not fill gaps.** If the diff or change summary does not give enough evidence to write an accurate entry, "I don't know" is the right answer - note the gap as `[unverified]` in your report and leave that doc unedited rather than padding it out.
 - **Update in this order:**
   1. `docs/CHANGELOG.md`: append a new entry at the top (newest-first). Format: date, one-line summary, bulleted details with `file:line` citations.
   2. `docs/ROADMAP.md`: move completed items to a "Done" section, add any discovered follow-ups to the backlog.

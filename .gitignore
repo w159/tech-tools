@@ -325,6 +325,8 @@ desktop.ini
 plugins/atlas/**/.claude/.atlas_nudge
 **/__pycache__/
 **/.ruff_cache/
+**/.in_use/
+**/.in_use/**
 
 
 # ============================================================================

@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+Agent-roster and spec-conformance hardening pass (audit:
+`docs/audits/atlas-harden-2026-07-07/`). No version bump in this pass - release
+timing left to Jerry.
+
+- **Removed.** The five `ux-*` agent specs (`ux-cartographer`, `ux-persona`,
+  `ux-fuzzer`, `ux-accuracy-oracle`, `ux-reporter`) and `api-usage-map`, each
+  checked for live skill/command dispatches before deletion. `atlas-expedition` is
+  now the sole canonical owner of UX testing; `ux-test-swarm.md` collapsed to a
+  short pointer at that skill.
+- **Routing gained three rows.** `skills/atlas-engine/references/capability-routing.md`
+  now routes to atlas-architect (project boot/onboarding), atlas-engine's own
+  self-entry (orchestration), and atlas-stacks (skill selection), and annotates the
+  built-in/global agent-type mentions it references (`codebase-explorer`, `Explore`,
+  `Plan`, `debugger`, etc.) as external to `plugins/atlas/agents/`.
+- **Spec conformance.** All 12 remaining agent specs gained a structured
+  Report-back section and explicit grounding rules: "I don't know" is a valid
+  result, every claim must cite what was actually read, and unproven gaps stay
+  marked `[unverified]`.
+- **Marketplace repointed** from the stale fork to canonical `w159/tech-tools`;
+  `atlas_doctor` now reports healthy with 0 problems.
+- **Dev caches gitignored** so pytest/ruff cache debris and similar runtime
+  artifacts stop showing up as untracked noise.
+
 ## 2.6.0
 
 Single-sourcing release: atlas no longer carries its own copy of the ten vendor MCP
