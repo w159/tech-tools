@@ -4,62 +4,62 @@
     {
       "id": "atlas",
       "displayName": "Atlas",
-      "source": "./plugins/atlas"
+      "source": "https://github.com/w159/tech-tools/tree/main/plugins/atlas"
     },
     {
       "id": "it-operations",
       "displayName": "IT Operations",
-      "source": "./plugins/it-operations"
+      "source": "https://github.com/w159/tech-tools/tree/main/plugins/it-operations"
     },
     {
       "id": "security-compliance",
       "displayName": "Security & Compliance",
-      "source": "./plugins/security-compliance"
+      "source": "https://github.com/w159/tech-tools/tree/main/plugins/security-compliance"
     },
     {
       "id": "microsoft-365",
       "displayName": "Microsoft 365",
-      "source": "./plugins/microsoft-365"
+      "source": "https://github.com/w159/tech-tools/tree/main/plugins/microsoft-365"
     },
     {
       "id": "hr-payroll",
       "displayName": "HR & Payroll",
-      "source": "./plugins/hr-payroll"
+      "source": "https://github.com/w159/tech-tools/tree/main/plugins/hr-payroll"
     },
     {
       "id": "finance",
       "displayName": "Finance",
-      "source": "./plugins/finance"
+      "source": "https://github.com/w159/tech-tools/tree/main/plugins/finance"
     },
     {
       "id": "engineering",
       "displayName": "Engineering",
-      "source": "./plugins/engineering"
+      "source": "https://github.com/w159/tech-tools/tree/main/plugins/engineering"
     },
     {
       "id": "data",
       "displayName": "Data",
-      "source": "./plugins/data"
+      "source": "https://github.com/w159/tech-tools/tree/main/plugins/data"
     },
     {
       "id": "design",
       "displayName": "Design",
-      "source": "./plugins/design"
+      "source": "https://github.com/w159/tech-tools/tree/main/plugins/design"
     },
     {
       "id": "customer-support",
       "displayName": "Customer Support",
-      "source": "./plugins/customer-support"
+      "source": "https://github.com/w159/tech-tools/tree/main/plugins/customer-support"
     },
     {
       "id": "product-management",
       "displayName": "Product Management",
-      "source": "./plugins/product-management"
+      "source": "https://github.com/w159/tech-tools/tree/main/plugins/product-management"
     },
     {
       "id": "productivity",
       "displayName": "Productivity",
-      "source": "./plugins/productivity"
+      "source": "https://github.com/w159/tech-tools/tree/main/plugins/productivity"
     }
   ]
 }
