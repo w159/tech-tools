@@ -1,0 +1,2855 @@
+{
+  "kimi_home": "/Users/jerry/.kimi-code",
+  "project": "/Users/jerry/MEGA/Projects/Agentic/tech-tools",
+  "instructions": [
+    {
+      "source": "/Users/jerry/.claude/AGENTS.md",
+      "target": "/Users/jerry/.kimi-code/AGENTS.md",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "AGENTS.md",
+      "size": 6276,
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/CLAUDE.md",
+      "target": "/Users/jerry/.kimi-code/AGENTS.md",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "CLAUDE.md",
+      "size": 81,
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.codex/AGENTS.md",
+      "target": "/Users/jerry/.kimi-code/AGENTS.md",
+      "scope": "user",
+      "from": "Codex",
+      "type": "AGENTS.md",
+      "size": 8925,
+      "symlink": false
+    }
+  ],
+  "skills": [
+    {
+      "source": "/Users/jerry/.claude/skills/acquire-codebase-knowledge",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/acquire-codebase-knowledge",
+      "target": "/Users/jerry/.kimi-code/skills/acquire-codebase-knowledge",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/acreadiness-assess",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/acreadiness-assess",
+      "target": "/Users/jerry/.kimi-code/skills/acreadiness-assess",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/acreadiness-generate-instructions",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/acreadiness-generate-instructions",
+      "target": "/Users/jerry/.kimi-code/skills/acreadiness-generate-instructions",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/acreadiness-policy",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/acreadiness-policy",
+      "target": "/Users/jerry/.kimi-code/skills/acreadiness-policy",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/add-educational-comments",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/add-educational-comments",
+      "target": "/Users/jerry/.kimi-code/skills/add-educational-comments",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/adobe-illustrator-scripting",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/adobe-illustrator-scripting",
+      "target": "/Users/jerry/.kimi-code/skills/adobe-illustrator-scripting",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/agent-browser",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/agent-browser",
+      "target": "/Users/jerry/.kimi-code/skills/agent-browser",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/agent-governance",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/agent-governance",
+      "target": "/Users/jerry/.kimi-code/skills/agent-governance",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/agent-owasp-compliance",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/agent-owasp-compliance",
+      "target": "/Users/jerry/.kimi-code/skills/agent-owasp-compliance",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/agent-supply-chain",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/agent-supply-chain",
+      "target": "/Users/jerry/.kimi-code/skills/agent-supply-chain",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/agentic-eval",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/agentic-eval",
+      "target": "/Users/jerry/.kimi-code/skills/agentic-eval",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/ai-prompt-engineering-safety-review",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/ai-prompt-engineering-safety-review",
+      "target": "/Users/jerry/.kimi-code/skills/ai-prompt-engineering-safety-review",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/ai-ready",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/ai-ready",
+      "target": "/Users/jerry/.kimi-code/skills/ai-ready",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/ai-team-orchestration",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/ai-team-orchestration",
+      "target": "/Users/jerry/.kimi-code/skills/ai-team-orchestration",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/appinsights-instrumentation",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/appinsights-instrumentation",
+      "target": "/Users/jerry/.kimi-code/skills/appinsights-instrumentation",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/apple-appstore-reviewer",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/apple-appstore-reviewer",
+      "target": "/Users/jerry/.kimi-code/skills/apple-appstore-reviewer",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/arch-linux-triage",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/arch-linux-triage",
+      "target": "/Users/jerry/.kimi-code/skills/arch-linux-triage",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/architecture-blueprint-generator",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/architecture-blueprint-generator",
+      "target": "/Users/jerry/.kimi-code/skills/architecture-blueprint-generator",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/ascii-art",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/ascii-art",
+      "target": "/Users/jerry/.kimi-code/skills/ascii-art",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/audit-integrity",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/audit-integrity",
+      "target": "/Users/jerry/.kimi-code/skills/audit-integrity",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/automate-this",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/automate-this",
+      "target": "/Users/jerry/.kimi-code/skills/automate-this",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/autoresearch",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/autoresearch",
+      "target": "/Users/jerry/.kimi-code/skills/autoresearch",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/aws-cdk-python-setup",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/aws-cdk-python-setup",
+      "target": "/Users/jerry/.kimi-code/skills/aws-cdk-python-setup",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/aws-cost-optimize",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/aws-cost-optimize",
+      "target": "/Users/jerry/.kimi-code/skills/aws-cost-optimize",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/aws-resource-health-diagnose",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/aws-resource-health-diagnose",
+      "target": "/Users/jerry/.kimi-code/skills/aws-resource-health-diagnose",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/aws-resource-query",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/aws-resource-query",
+      "target": "/Users/jerry/.kimi-code/skills/aws-resource-query",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/aws-well-architected-review",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/aws-well-architected-review",
+      "target": "/Users/jerry/.kimi-code/skills/aws-well-architected-review",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/az-cost-optimize",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/az-cost-optimize",
+      "target": "/Users/jerry/.kimi-code/skills/az-cost-optimize",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/azure-architecture-autopilot",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/azure-architecture-autopilot",
+      "target": "/Users/jerry/.kimi-code/skills/azure-architecture-autopilot",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/azure-deployment-preflight",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/azure-deployment-preflight",
+      "target": "/Users/jerry/.kimi-code/skills/azure-deployment-preflight",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/azure-devops-cli",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/azure-devops-cli",
+      "target": "/Users/jerry/.kimi-code/skills/azure-devops-cli",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/azure-pricing",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/azure-pricing",
+      "target": "/Users/jerry/.kimi-code/skills/azure-pricing",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/azure-resource-health-diagnose",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/azure-resource-health-diagnose",
+      "target": "/Users/jerry/.kimi-code/skills/azure-resource-health-diagnose",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/azure-resource-visualizer",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/azure-resource-visualizer",
+      "target": "/Users/jerry/.kimi-code/skills/azure-resource-visualizer",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/azure-role-selector",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/azure-role-selector",
+      "target": "/Users/jerry/.kimi-code/skills/azure-role-selector",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/azure-smart-city-iot-solution-builder",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/azure-smart-city-iot-solution-builder",
+      "target": "/Users/jerry/.kimi-code/skills/azure-smart-city-iot-solution-builder",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/azure-static-web-apps",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/azure-static-web-apps",
+      "target": "/Users/jerry/.kimi-code/skills/azure-static-web-apps",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/batch-files",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/batch-files",
+      "target": "/Users/jerry/.kimi-code/skills/batch-files",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/bigquery-pipeline-audit",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/bigquery-pipeline-audit",
+      "target": "/Users/jerry/.kimi-code/skills/bigquery-pipeline-audit",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/boost-prompt",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/boost-prompt",
+      "target": "/Users/jerry/.kimi-code/skills/boost-prompt",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/brag-sheet",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/brag-sheet",
+      "target": "/Users/jerry/.kimi-code/skills/brag-sheet",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/breakdown-epic-arch",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/breakdown-epic-arch",
+      "target": "/Users/jerry/.kimi-code/skills/breakdown-epic-arch",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/breakdown-epic-pm",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/breakdown-epic-pm",
+      "target": "/Users/jerry/.kimi-code/skills/breakdown-epic-pm",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/breakdown-feature-implementation",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/breakdown-feature-implementation",
+      "target": "/Users/jerry/.kimi-code/skills/breakdown-feature-implementation",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/breakdown-feature-prd",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/breakdown-feature-prd",
+      "target": "/Users/jerry/.kimi-code/skills/breakdown-feature-prd",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/breakdown-plan",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/breakdown-plan",
+      "target": "/Users/jerry/.kimi-code/skills/breakdown-plan",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/breakdown-test",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/breakdown-test",
+      "target": "/Users/jerry/.kimi-code/skills/breakdown-test",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/centos-linux-triage",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/centos-linux-triage",
+      "target": "/Users/jerry/.kimi-code/skills/centos-linux-triage",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/chrome-devtools",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/chrome-devtools",
+      "target": "/Users/jerry/.kimi-code/skills/chrome-devtools",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/cli-mastery",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/cli-mastery",
+      "target": "/Users/jerry/.kimi-code/skills/cli-mastery",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/cloud-design-patterns",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/cloud-design-patterns",
+      "target": "/Users/jerry/.kimi-code/skills/cloud-design-patterns",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/code-exemplars-blueprint-generator",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/code-exemplars-blueprint-generator",
+      "target": "/Users/jerry/.kimi-code/skills/code-exemplars-blueprint-generator",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/code-tour",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/code-tour",
+      "target": "/Users/jerry/.kimi-code/skills/code-tour",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/codeql",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/codeql",
+      "target": "/Users/jerry/.kimi-code/skills/codeql",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/comment-code-generate-a-tutorial",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/comment-code-generate-a-tutorial",
+      "target": "/Users/jerry/.kimi-code/skills/comment-code-generate-a-tutorial",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/commit-message-storyteller",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/commit-message-storyteller",
+      "target": "/Users/jerry/.kimi-code/skills/commit-message-storyteller",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/containerize-aspnet-framework",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/containerize-aspnet-framework",
+      "target": "/Users/jerry/.kimi-code/skills/containerize-aspnet-framework",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/containerize-aspnetcore",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/containerize-aspnetcore",
+      "target": "/Users/jerry/.kimi-code/skills/containerize-aspnetcore",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/content-management-systems",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/content-management-systems",
+      "target": "/Users/jerry/.kimi-code/skills/content-management-systems",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/context-map",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/context-map",
+      "target": "/Users/jerry/.kimi-code/skills/context-map",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/conventional-branch",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/conventional-branch",
+      "target": "/Users/jerry/.kimi-code/skills/conventional-branch",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/conventional-commit",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/conventional-commit",
+      "target": "/Users/jerry/.kimi-code/skills/conventional-commit",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/convert-plaintext-to-md",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/convert-plaintext-to-md",
+      "target": "/Users/jerry/.kimi-code/skills/convert-plaintext-to-md",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/copilot-cli-quickstart",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/copilot-cli-quickstart",
+      "target": "/Users/jerry/.kimi-code/skills/copilot-cli-quickstart",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/copilot-instructions-blueprint-generator",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/copilot-instructions-blueprint-generator",
+      "target": "/Users/jerry/.kimi-code/skills/copilot-instructions-blueprint-generator",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/copilot-sdk",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/copilot-sdk",
+      "target": "/Users/jerry/.kimi-code/skills/copilot-sdk",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/copilot-spaces",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/copilot-spaces",
+      "target": "/Users/jerry/.kimi-code/skills/copilot-spaces",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/copilot-usage-metrics",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/copilot-usage-metrics",
+      "target": "/Users/jerry/.kimi-code/skills/copilot-usage-metrics",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/create-agentsmd",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/create-agentsmd",
+      "target": "/Users/jerry/.kimi-code/skills/create-agentsmd",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/create-architectural-decision-record",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/create-architectural-decision-record",
+      "target": "/Users/jerry/.kimi-code/skills/create-architectural-decision-record",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/daily-prep",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/daily-prep",
+      "target": "/Users/jerry/.kimi-code/skills/daily-prep",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/dependabot",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/dependabot",
+      "target": "/Users/jerry/.kimi-code/skills/dependabot",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/diagnose",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/diagnose",
+      "target": "/Users/jerry/.kimi-code/skills/diagnose",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/documentation-writer",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/documentation-writer",
+      "target": "/Users/jerry/.kimi-code/skills/documentation-writer",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/doublecheck",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/doublecheck",
+      "target": "/Users/jerry/.kimi-code/skills/doublecheck",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/editorconfig",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/editorconfig",
+      "target": "/Users/jerry/.kimi-code/skills/editorconfig",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/email-drafter",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/email-drafter",
+      "target": "/Users/jerry/.kimi-code/skills/email-drafter",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/entra-agent-user",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/entra-agent-user",
+      "target": "/Users/jerry/.kimi-code/skills/entra-agent-user",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/eval-driven-dev",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/eval-driven-dev",
+      "target": "/Users/jerry/.kimi-code/skills/eval-driven-dev",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/exam-ready",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/exam-ready",
+      "target": "/Users/jerry/.kimi-code/skills/exam-ready",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/excel-xlsx",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/excel-xlsx",
+      "target": "/Users/jerry/.kimi-code/skills/excel-xlsx",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/eyeball",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/eyeball",
+      "target": "/Users/jerry/.kimi-code/skills/eyeball",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/finalize-agent-prompt",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/finalize-agent-prompt",
+      "target": "/Users/jerry/.kimi-code/skills/finalize-agent-prompt",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/from-the-other-side-anitta",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/from-the-other-side-anitta",
+      "target": "/Users/jerry/.kimi-code/skills/from-the-other-side-anitta",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/from-the-other-side-quinn",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/from-the-other-side-quinn",
+      "target": "/Users/jerry/.kimi-code/skills/from-the-other-side-quinn",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/from-the-other-side-vega",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/from-the-other-side-vega",
+      "target": "/Users/jerry/.kimi-code/skills/from-the-other-side-vega",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/from-the-other-side-wiggins",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/from-the-other-side-wiggins",
+      "target": "/Users/jerry/.kimi-code/skills/from-the-other-side-wiggins",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/frontend-design",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/frontend-design",
+      "target": "/Users/jerry/.kimi-code/skills/frontend-design",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/game-engine",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/game-engine",
+      "target": "/Users/jerry/.kimi-code/skills/game-engine",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/gdpr-compliant",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/gdpr-compliant",
+      "target": "/Users/jerry/.kimi-code/skills/gdpr-compliant",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/gen-specs-as-issues",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/gen-specs-as-issues",
+      "target": "/Users/jerry/.kimi-code/skills/gen-specs-as-issues",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/generate-custom-instructions-from-codebase",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/generate-custom-instructions-from-codebase",
+      "target": "/Users/jerry/.kimi-code/skills/generate-custom-instructions-from-codebase",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/generate-image",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/generate-image",
+      "target": "/Users/jerry/.kimi-code/skills/generate-image",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/geofeed-tuner",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/geofeed-tuner",
+      "target": "/Users/jerry/.kimi-code/skills/geofeed-tuner",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/gsap-framer-scroll-animation",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/gsap-framer-scroll-animation",
+      "target": "/Users/jerry/.kimi-code/skills/gsap-framer-scroll-animation",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/harness-engineering",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/harness-engineering",
+      "target": "/Users/jerry/.kimi-code/skills/harness-engineering",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/image-annotations",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/image-annotations",
+      "target": "/Users/jerry/.kimi-code/skills/image-annotations",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/image-manipulation-image-magick",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/image-manipulation-image-magick",
+      "target": "/Users/jerry/.kimi-code/skills/image-manipulation-image-magick",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/impediment-prioritization",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/impediment-prioritization",
+      "target": "/Users/jerry/.kimi-code/skills/impediment-prioritization",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/import-infrastructure-as-code",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/import-infrastructure-as-code",
+      "target": "/Users/jerry/.kimi-code/skills/import-infrastructure-as-code",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/init",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/init",
+      "target": "/Users/jerry/.kimi-code/skills/init",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/integrate-context-matic",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/integrate-context-matic",
+      "target": "/Users/jerry/.kimi-code/skills/integrate-context-matic",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/issue-fields-migration",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/issue-fields-migration",
+      "target": "/Users/jerry/.kimi-code/skills/issue-fields-migration",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/java-add-graalvm-native-image-support",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/java-add-graalvm-native-image-support",
+      "target": "/Users/jerry/.kimi-code/skills/java-add-graalvm-native-image-support",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/java-docs",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/java-docs",
+      "target": "/Users/jerry/.kimi-code/skills/java-docs",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/java-junit",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/java-junit",
+      "target": "/Users/jerry/.kimi-code/skills/java-junit",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/java-mcp-server-generator",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/java-mcp-server-generator",
+      "target": "/Users/jerry/.kimi-code/skills/java-mcp-server-generator",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/java-refactoring-extract-method",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/java-refactoring-extract-method",
+      "target": "/Users/jerry/.kimi-code/skills/java-refactoring-extract-method",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/java-refactoring-remove-parameter",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/java-refactoring-remove-parameter",
+      "target": "/Users/jerry/.kimi-code/skills/java-refactoring-remove-parameter",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/java-springboot",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/java-springboot",
+      "target": "/Users/jerry/.kimi-code/skills/java-springboot",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/javascript-typescript-jest",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/javascript-typescript-jest",
+      "target": "/Users/jerry/.kimi-code/skills/javascript-typescript-jest",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/linkedin-post-formatter",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/linkedin-post-formatter",
+      "target": "/Users/jerry/.kimi-code/skills/linkedin-post-formatter",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/lsp-setup",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/lsp-setup",
+      "target": "/Users/jerry/.kimi-code/skills/lsp-setup",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/make-repo-contribution",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/make-repo-contribution",
+      "target": "/Users/jerry/.kimi-code/skills/make-repo-contribution",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/markdown-to-html",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/markdown-to-html",
+      "target": "/Users/jerry/.kimi-code/skills/markdown-to-html",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/mcp-cli",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/mcp-cli",
+      "target": "/Users/jerry/.kimi-code/skills/mcp-cli",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/mcp-copilot-studio-server-generator",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/mcp-copilot-studio-server-generator",
+      "target": "/Users/jerry/.kimi-code/skills/mcp-copilot-studio-server-generator",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/mcp-create-adaptive-cards",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/mcp-create-adaptive-cards",
+      "target": "/Users/jerry/.kimi-code/skills/mcp-create-adaptive-cards",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/mcp-create-declarative-agent",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/mcp-create-declarative-agent",
+      "target": "/Users/jerry/.kimi-code/skills/mcp-create-declarative-agent",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/mcp-deploy-manage-agents",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/mcp-deploy-manage-agents",
+      "target": "/Users/jerry/.kimi-code/skills/mcp-deploy-manage-agents",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/mcp-security-audit",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/mcp-security-audit",
+      "target": "/Users/jerry/.kimi-code/skills/mcp-security-audit",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/md-to-docx",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/md-to-docx",
+      "target": "/Users/jerry/.kimi-code/skills/md-to-docx",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/meeting-minutes",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/meeting-minutes",
+      "target": "/Users/jerry/.kimi-code/skills/meeting-minutes",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/memory-merger",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/memory-merger",
+      "target": "/Users/jerry/.kimi-code/skills/memory-merger",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/mentoring-juniors",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/mentoring-juniors",
+      "target": "/Users/jerry/.kimi-code/skills/mentoring-juniors",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/microsoft-agent-framework",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/microsoft-agent-framework",
+      "target": "/Users/jerry/.kimi-code/skills/microsoft-agent-framework",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/microsoft-code-reference",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/microsoft-code-reference",
+      "target": "/Users/jerry/.kimi-code/skills/microsoft-code-reference",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/microsoft-docs",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/microsoft-docs",
+      "target": "/Users/jerry/.kimi-code/skills/microsoft-docs",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/microsoft-foundry",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/microsoft-foundry",
+      "target": "/Users/jerry/.kimi-code/skills/microsoft-foundry",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/microsoft-skill-creator",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/microsoft-skill-creator",
+      "target": "/Users/jerry/.kimi-code/skills/microsoft-skill-creator",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/migrating-oracle-to-postgres-stored-procedures",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/migrating-oracle-to-postgres-stored-procedures",
+      "target": "/Users/jerry/.kimi-code/skills/migrating-oracle-to-postgres-stored-procedures",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/minecraft-plugin-development",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/minecraft-plugin-development",
+      "target": "/Users/jerry/.kimi-code/skills/minecraft-plugin-development",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/mini-context-graph",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/mini-context-graph",
+      "target": "/Users/jerry/.kimi-code/skills/mini-context-graph",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/mkdocs-translations",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/mkdocs-translations",
+      "target": "/Users/jerry/.kimi-code/skills/mkdocs-translations",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/msgraph-sdk",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/msgraph-sdk",
+      "target": "/Users/jerry/.kimi-code/skills/msgraph-sdk",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/msstore-cli",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/msstore-cli",
+      "target": "/Users/jerry/.kimi-code/skills/msstore-cli",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/multi-stage-dockerfile",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/multi-stage-dockerfile",
+      "target": "/Users/jerry/.kimi-code/skills/multi-stage-dockerfile",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/mvvm-toolkit",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/mvvm-toolkit",
+      "target": "/Users/jerry/.kimi-code/skills/mvvm-toolkit",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/mvvm-toolkit-di",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/mvvm-toolkit-di",
+      "target": "/Users/jerry/.kimi-code/skills/mvvm-toolkit-di",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/mvvm-toolkit-messenger",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/mvvm-toolkit-messenger",
+      "target": "/Users/jerry/.kimi-code/skills/mvvm-toolkit-messenger",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/namecheap",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/namecheap",
+      "target": "/Users/jerry/.kimi-code/skills/namecheap",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/nano-banana-pro-openrouter",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/nano-banana-pro-openrouter",
+      "target": "/Users/jerry/.kimi-code/skills/nano-banana-pro-openrouter",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/napkin",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/napkin",
+      "target": "/Users/jerry/.kimi-code/skills/napkin",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/next-intl-add-language",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/next-intl-add-language",
+      "target": "/Users/jerry/.kimi-code/skills/next-intl-add-language",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/noob-mode",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/noob-mode",
+      "target": "/Users/jerry/.kimi-code/skills/noob-mode",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/nuget-manager",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/nuget-manager",
+      "target": "/Users/jerry/.kimi-code/skills/nuget-manager",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/onboard-context-matic",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/onboard-context-matic",
+      "target": "/Users/jerry/.kimi-code/skills/onboard-context-matic",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/oo-component-documentation",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/oo-component-documentation",
+      "target": "/Users/jerry/.kimi-code/skills/oo-component-documentation",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/openapi-to-application-code",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/openapi-to-application-code",
+      "target": "/Users/jerry/.kimi-code/skills/openapi-to-application-code",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/optimize-simplicite-logs",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/optimize-simplicite-logs",
+      "target": "/Users/jerry/.kimi-code/skills/optimize-simplicite-logs",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/orchestration",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/orchestration",
+      "target": "/Users/jerry/.kimi-code/skills/orchestration",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/pdftk-server",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/pdftk-server",
+      "target": "/Users/jerry/.kimi-code/skills/pdftk-server",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/penpot-uiux-design",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/penpot-uiux-design",
+      "target": "/Users/jerry/.kimi-code/skills/penpot-uiux-design",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/performance-review-writer",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/performance-review-writer",
+      "target": "/Users/jerry/.kimi-code/skills/performance-review-writer",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/plantuml-ascii",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/plantuml-ascii",
+      "target": "/Users/jerry/.kimi-code/skills/plantuml-ascii",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/playwright-automation-fill-in-form",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/playwright-automation-fill-in-form",
+      "target": "/Users/jerry/.kimi-code/skills/playwright-automation-fill-in-form",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/playwright-explore-website",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/playwright-explore-website",
+      "target": "/Users/jerry/.kimi-code/skills/playwright-explore-website",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/playwright-generate-test",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/playwright-generate-test",
+      "target": "/Users/jerry/.kimi-code/skills/playwright-generate-test",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/postgresql-code-review",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/postgresql-code-review",
+      "target": "/Users/jerry/.kimi-code/skills/postgresql-code-review",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/postgresql-optimization",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/postgresql-optimization",
+      "target": "/Users/jerry/.kimi-code/skills/postgresql-optimization",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/power-apps-code-app-scaffold",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/power-apps-code-app-scaffold",
+      "target": "/Users/jerry/.kimi-code/skills/power-apps-code-app-scaffold",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/power-bi-dax-optimization",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/power-bi-dax-optimization",
+      "target": "/Users/jerry/.kimi-code/skills/power-bi-dax-optimization",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/power-bi-model-design-review",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/power-bi-model-design-review",
+      "target": "/Users/jerry/.kimi-code/skills/power-bi-model-design-review",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/power-bi-performance-troubleshooting",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/power-bi-performance-troubleshooting",
+      "target": "/Users/jerry/.kimi-code/skills/power-bi-performance-troubleshooting",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/power-bi-report-design-consultation",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/power-bi-report-design-consultation",
+      "target": "/Users/jerry/.kimi-code/skills/power-bi-report-design-consultation",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/power-platform-architect",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/power-platform-architect",
+      "target": "/Users/jerry/.kimi-code/skills/power-platform-architect",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/power-platform-mcp-connector-suite",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/power-platform-mcp-connector-suite",
+      "target": "/Users/jerry/.kimi-code/skills/power-platform-mcp-connector-suite",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/powerbi-modeling",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/powerbi-modeling",
+      "target": "/Users/jerry/.kimi-code/skills/powerbi-modeling",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/powerpoint-pptx",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/powerpoint-pptx",
+      "target": "/Users/jerry/.kimi-code/skills/powerpoint-pptx",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/pr-dashboard",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/pr-dashboard",
+      "target": "/Users/jerry/.kimi-code/skills/pr-dashboard",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/pr-screenshots",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/pr-screenshots",
+      "target": "/Users/jerry/.kimi-code/skills/pr-screenshots",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/prd",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/prd",
+      "target": "/Users/jerry/.kimi-code/skills/prd",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/premium-frontend-ui",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/premium-frontend-ui",
+      "target": "/Users/jerry/.kimi-code/skills/premium-frontend-ui",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/project-workflow-analysis-blueprint-generator",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/project-workflow-analysis-blueprint-generator",
+      "target": "/Users/jerry/.kimi-code/skills/project-workflow-analysis-blueprint-generator",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/publish-to-pages",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/publish-to-pages",
+      "target": "/Users/jerry/.kimi-code/skills/publish-to-pages",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/pytest-coverage",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/pytest-coverage",
+      "target": "/Users/jerry/.kimi-code/skills/pytest-coverage",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/python-azure-iot-edge-modules",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/python-azure-iot-edge-modules",
+      "target": "/Users/jerry/.kimi-code/skills/python-azure-iot-edge-modules",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/python-mcp-server-generator",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/python-mcp-server-generator",
+      "target": "/Users/jerry/.kimi-code/skills/python-mcp-server-generator",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/python-pypi-package-builder",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/python-pypi-package-builder",
+      "target": "/Users/jerry/.kimi-code/skills/python-pypi-package-builder",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/quality-playbook",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/quality-playbook",
+      "target": "/Users/jerry/.kimi-code/skills/quality-playbook",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/quasi-coder",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/quasi-coder",
+      "target": "/Users/jerry/.kimi-code/skills/quasi-coder",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/react-audit-grep-patterns",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/react-audit-grep-patterns",
+      "target": "/Users/jerry/.kimi-code/skills/react-audit-grep-patterns",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/react-container-presentation-component",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/react-container-presentation-component",
+      "target": "/Users/jerry/.kimi-code/skills/react-container-presentation-component",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/react19-concurrent-patterns",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/react19-concurrent-patterns",
+      "target": "/Users/jerry/.kimi-code/skills/react19-concurrent-patterns",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/react19-source-patterns",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/react19-source-patterns",
+      "target": "/Users/jerry/.kimi-code/skills/react19-source-patterns",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/react19-test-patterns",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/react19-test-patterns",
+      "target": "/Users/jerry/.kimi-code/skills/react19-test-patterns",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/readme-blueprint-generator",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/readme-blueprint-generator",
+      "target": "/Users/jerry/.kimi-code/skills/readme-blueprint-generator",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/refactor",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/refactor",
+      "target": "/Users/jerry/.kimi-code/skills/refactor",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/refactor-method-complexity-reduce",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/refactor-method-complexity-reduce",
+      "target": "/Users/jerry/.kimi-code/skills/refactor-method-complexity-reduce",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/refactor-plan",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/refactor-plan",
+      "target": "/Users/jerry/.kimi-code/skills/refactor-plan",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/remember",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/remember",
+      "target": "/Users/jerry/.kimi-code/skills/remember",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/remember-interactive-programming",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/remember-interactive-programming",
+      "target": "/Users/jerry/.kimi-code/skills/remember-interactive-programming",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/repo-story-time",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/repo-story-time",
+      "target": "/Users/jerry/.kimi-code/skills/repo-story-time",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/research",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/research",
+      "target": "/Users/jerry/.kimi-code/skills/research",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/resemble-detect",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/resemble-detect",
+      "target": "/Users/jerry/.kimi-code/skills/resemble-detect",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/review-and-refactor",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/review-and-refactor",
+      "target": "/Users/jerry/.kimi-code/skills/review-and-refactor",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/reviewing-oracle-to-postgres-migration",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/reviewing-oracle-to-postgres-migration",
+      "target": "/Users/jerry/.kimi-code/skills/reviewing-oracle-to-postgres-migration",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/rhino3d-scripts",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/rhino3d-scripts",
+      "target": "/Users/jerry/.kimi-code/skills/rhino3d-scripts",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/roundup",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/roundup",
+      "target": "/Users/jerry/.kimi-code/skills/roundup",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/roundup-setup",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/roundup-setup",
+      "target": "/Users/jerry/.kimi-code/skills/roundup-setup",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/ruby-mcp-server-generator",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/ruby-mcp-server-generator",
+      "target": "/Users/jerry/.kimi-code/skills/ruby-mcp-server-generator",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/ruff-recursive-fix",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/ruff-recursive-fix",
+      "target": "/Users/jerry/.kimi-code/skills/ruff-recursive-fix",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/rust-mcp-server-generator",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/rust-mcp-server-generator",
+      "target": "/Users/jerry/.kimi-code/skills/rust-mcp-server-generator",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/sandbox-npm-install",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/sandbox-npm-install",
+      "target": "/Users/jerry/.kimi-code/skills/sandbox-npm-install",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/scoutqa-test",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/scoutqa-test",
+      "target": "/Users/jerry/.kimi-code/skills/scoutqa-test",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/screen-recording",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/screen-recording",
+      "target": "/Users/jerry/.kimi-code/skills/screen-recording",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/secret-scanning",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/secret-scanning",
+      "target": "/Users/jerry/.kimi-code/skills/secret-scanning",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/security-review",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/security-review",
+      "target": "/Users/jerry/.kimi-code/skills/security-review",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/semantic-kernel",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/semantic-kernel",
+      "target": "/Users/jerry/.kimi-code/skills/semantic-kernel",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/setup-my-iq",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/setup-my-iq",
+      "target": "/Users/jerry/.kimi-code/skills/setup-my-iq",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/shuffle-json-data",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/shuffle-json-data",
+      "target": "/Users/jerry/.kimi-code/skills/shuffle-json-data",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/slang-shader-engineer",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/slang-shader-engineer",
+      "target": "/Users/jerry/.kimi-code/skills/slang-shader-engineer",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/snowflake-semanticview",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/snowflake-semanticview",
+      "target": "/Users/jerry/.kimi-code/skills/snowflake-semanticview",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/sponsor-finder",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/sponsor-finder",
+      "target": "/Users/jerry/.kimi-code/skills/sponsor-finder",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/spring-boot-testing",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/spring-boot-testing",
+      "target": "/Users/jerry/.kimi-code/skills/spring-boot-testing",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/sql-code-review",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/sql-code-review",
+      "target": "/Users/jerry/.kimi-code/skills/sql-code-review",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/sql-optimization",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/sql-optimization",
+      "target": "/Users/jerry/.kimi-code/skills/sql-optimization",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/sql-server-table-reconciliation",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/sql-server-table-reconciliation",
+      "target": "/Users/jerry/.kimi-code/skills/sql-server-table-reconciliation",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/ssma-console",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/ssma-console",
+      "target": "/Users/jerry/.kimi-code/skills/ssma-console",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/structured-autonomy-generate",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/structured-autonomy-generate",
+      "target": "/Users/jerry/.kimi-code/skills/structured-autonomy-generate",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/structured-autonomy-implement",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/structured-autonomy-implement",
+      "target": "/Users/jerry/.kimi-code/skills/structured-autonomy-implement",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/structured-autonomy-plan",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/structured-autonomy-plan",
+      "target": "/Users/jerry/.kimi-code/skills/structured-autonomy-plan",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/suggest-awesome-github-copilot-agents",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/suggest-awesome-github-copilot-agents",
+      "target": "/Users/jerry/.kimi-code/skills/suggest-awesome-github-copilot-agents",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/suggest-awesome-github-copilot-instructions",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/suggest-awesome-github-copilot-instructions",
+      "target": "/Users/jerry/.kimi-code/skills/suggest-awesome-github-copilot-instructions",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/suggest-awesome-github-copilot-skills",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/suggest-awesome-github-copilot-skills",
+      "target": "/Users/jerry/.kimi-code/skills/suggest-awesome-github-copilot-skills",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/swift-mcp-server-generator",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/swift-mcp-server-generator",
+      "target": "/Users/jerry/.kimi-code/skills/swift-mcp-server-generator",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/technology-stack-blueprint-generator",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/technology-stack-blueprint-generator",
+      "target": "/Users/jerry/.kimi-code/skills/technology-stack-blueprint-generator",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/terraform-azurerm-set-diff-analyzer",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/terraform-azurerm-set-diff-analyzer",
+      "target": "/Users/jerry/.kimi-code/skills/terraform-azurerm-set-diff-analyzer",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/threat-model-analyst",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/threat-model-analyst",
+      "target": "/Users/jerry/.kimi-code/skills/threat-model-analyst",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/tldr-prompt",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/tldr-prompt",
+      "target": "/Users/jerry/.kimi-code/skills/tldr-prompt",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/transloadit-media-processing",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/transloadit-media-processing",
+      "target": "/Users/jerry/.kimi-code/skills/transloadit-media-processing",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/typescript-mcp-server-generator",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/typescript-mcp-server-generator",
+      "target": "/Users/jerry/.kimi-code/skills/typescript-mcp-server-generator",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/typespec-api-operations",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/typespec-api-operations",
+      "target": "/Users/jerry/.kimi-code/skills/typespec-api-operations",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/typespec-create-agent",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/typespec-create-agent",
+      "target": "/Users/jerry/.kimi-code/skills/typespec-create-agent",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/typespec-create-api-plugin",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/typespec-create-api-plugin",
+      "target": "/Users/jerry/.kimi-code/skills/typespec-create-api-plugin",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/ui-screenshots",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/ui-screenshots",
+      "target": "/Users/jerry/.kimi-code/skills/ui-screenshots",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/unit-test-vue-pinia",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/unit-test-vue-pinia",
+      "target": "/Users/jerry/.kimi-code/skills/unit-test-vue-pinia",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/update-avm-modules-in-bicep",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/update-avm-modules-in-bicep",
+      "target": "/Users/jerry/.kimi-code/skills/update-avm-modules-in-bicep",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/update-implementation-plan",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/update-implementation-plan",
+      "target": "/Users/jerry/.kimi-code/skills/update-implementation-plan",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/update-llms",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/update-llms",
+      "target": "/Users/jerry/.kimi-code/skills/update-llms",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/update-markdown-file-index",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/update-markdown-file-index",
+      "target": "/Users/jerry/.kimi-code/skills/update-markdown-file-index",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/update-specification",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/update-specification",
+      "target": "/Users/jerry/.kimi-code/skills/update-specification",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/vardoger-analyze",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/vardoger-analyze",
+      "target": "/Users/jerry/.kimi-code/skills/vardoger-analyze",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/vscode-ext-commands",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/vscode-ext-commands",
+      "target": "/Users/jerry/.kimi-code/skills/vscode-ext-commands",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/vscode-ext-localization",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/vscode-ext-localization",
+      "target": "/Users/jerry/.kimi-code/skills/vscode-ext-localization",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/web-design-reviewer",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/web-design-reviewer",
+      "target": "/Users/jerry/.kimi-code/skills/web-design-reviewer",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/webapp-testing",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/webapp-testing",
+      "target": "/Users/jerry/.kimi-code/skills/webapp-testing",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/what-context-needed",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/what-context-needed",
+      "target": "/Users/jerry/.kimi-code/skills/what-context-needed",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/winmd-api-search",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/winmd-api-search",
+      "target": "/Users/jerry/.kimi-code/skills/winmd-api-search",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/word-docx",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/word-docx",
+      "target": "/Users/jerry/.kimi-code/skills/word-docx",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/workiq-copilot",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/workiq-copilot",
+      "target": "/Users/jerry/.kimi-code/skills/workiq-copilot",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/write-coding-standards-from-file",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/write-coding-standards-from-file",
+      "target": "/Users/jerry/.kimi-code/skills/write-coding-standards-from-file",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/zen-comprehensive-review",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/zen-comprehensive-review",
+      "target": "/Users/jerry/.kimi-code/skills/zen-comprehensive-review",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/zen-discovery",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/zen-discovery",
+      "target": "/Users/jerry/.kimi-code/skills/zen-discovery",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/zen-office-docx",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/zen-office-docx",
+      "target": "/Users/jerry/.kimi-code/skills/zen-office-docx",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/zen-office-pdf",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/zen-office-pdf",
+      "target": "/Users/jerry/.kimi-code/skills/zen-office-pdf",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/zen-office-pptx",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/zen-office-pptx",
+      "target": "/Users/jerry/.kimi-code/skills/zen-office-pptx",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/zen-office-xlsx",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/zen-office-xlsx",
+      "target": "/Users/jerry/.kimi-code/skills/zen-office-xlsx",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/zen-review",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/zen-review",
+      "target": "/Users/jerry/.kimi-code/skills/zen-review",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/zen-sentry",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/zen-sentry",
+      "target": "/Users/jerry/.kimi-code/skills/zen-sentry",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/zenflow-brainstormer",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/zenflow-brainstormer",
+      "target": "/Users/jerry/.kimi-code/skills/zenflow-brainstormer",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/zenflow-codebase-explorer",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/zenflow-codebase-explorer",
+      "target": "/Users/jerry/.kimi-code/skills/zenflow-codebase-explorer",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/zenflow-fixer",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/zenflow-fixer",
+      "target": "/Users/jerry/.kimi-code/skills/zenflow-fixer",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/zenflow-implementer",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/zenflow-implementer",
+      "target": "/Users/jerry/.kimi-code/skills/zenflow-implementer",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/zenflow-plan-designer",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/zenflow-plan-designer",
+      "target": "/Users/jerry/.kimi-code/skills/zenflow-plan-designer",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/zenflow-plan-orchestrator",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/zenflow-plan-orchestrator",
+      "target": "/Users/jerry/.kimi-code/skills/zenflow-plan-orchestrator",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/zenflow-planner",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/zenflow-planner",
+      "target": "/Users/jerry/.kimi-code/skills/zenflow-planner",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/zenflow-researcher",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/zenflow-researcher",
+      "target": "/Users/jerry/.kimi-code/skills/zenflow-researcher",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/zenflow-review-orchestrator",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/zenflow-review-orchestrator",
+      "target": "/Users/jerry/.kimi-code/skills/zenflow-review-orchestrator",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    },
+    {
+      "source": "/Users/jerry/.claude/skills/zenflow-review-worker",
+      "real_source": "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/skills/zenflow-review-worker",
+      "target": "/Users/jerry/.kimi-code/skills/zenflow-review-worker",
+      "scope": "user",
+      "from": "Claude Code",
+      "type": "directory",
+      "symlink": true
+    }
+  ],
+  "mcp": [
+    {
+      "source": "/Users/jerry/.claude.json",
+      "scope": "user",
+      "from": "Claude Code"
+    },
+    {
+      "source": "/Users/jerry/.codex/config.toml",
+      "scope": "user",
+      "from": "Codex"
+    }
+  ],
+  "warnings": [],
+  "skipped": [
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/acquire-codebase-knowledge -> /Users/jerry/.kimi-code/skills/acquire-codebase-knowledge",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/acreadiness-assess -> /Users/jerry/.kimi-code/skills/acreadiness-assess",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/acreadiness-generate-instructions -> /Users/jerry/.kimi-code/skills/acreadiness-generate-instructions",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/acreadiness-policy -> /Users/jerry/.kimi-code/skills/acreadiness-policy",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/add-educational-comments -> /Users/jerry/.kimi-code/skills/add-educational-comments",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/adobe-illustrator-scripting -> /Users/jerry/.kimi-code/skills/adobe-illustrator-scripting",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/agent-browser -> /Users/jerry/.kimi-code/skills/agent-browser",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/agent-governance -> /Users/jerry/.kimi-code/skills/agent-governance",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/agent-owasp-compliance -> /Users/jerry/.kimi-code/skills/agent-owasp-compliance",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/agent-supply-chain -> /Users/jerry/.kimi-code/skills/agent-supply-chain",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/agentic-eval -> /Users/jerry/.kimi-code/skills/agentic-eval",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/ai-prompt-engineering-safety-review -> /Users/jerry/.kimi-code/skills/ai-prompt-engineering-safety-review",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/ai-ready -> /Users/jerry/.kimi-code/skills/ai-ready",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/ai-team-orchestration -> /Users/jerry/.kimi-code/skills/ai-team-orchestration",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/appinsights-instrumentation -> /Users/jerry/.kimi-code/skills/appinsights-instrumentation",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/apple-appstore-reviewer -> /Users/jerry/.kimi-code/skills/apple-appstore-reviewer",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/arch-linux-triage -> /Users/jerry/.kimi-code/skills/arch-linux-triage",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/architecture-blueprint-generator -> /Users/jerry/.kimi-code/skills/architecture-blueprint-generator",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/ascii-art -> /Users/jerry/.kimi-code/skills/ascii-art",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/audit-integrity -> /Users/jerry/.kimi-code/skills/audit-integrity",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/automate-this -> /Users/jerry/.kimi-code/skills/automate-this",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/autoresearch -> /Users/jerry/.kimi-code/skills/autoresearch",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/aws-cdk-python-setup -> /Users/jerry/.kimi-code/skills/aws-cdk-python-setup",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/aws-cost-optimize -> /Users/jerry/.kimi-code/skills/aws-cost-optimize",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/aws-resource-health-diagnose -> /Users/jerry/.kimi-code/skills/aws-resource-health-diagnose",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/aws-resource-query -> /Users/jerry/.kimi-code/skills/aws-resource-query",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/aws-well-architected-review -> /Users/jerry/.kimi-code/skills/aws-well-architected-review",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/az-cost-optimize -> /Users/jerry/.kimi-code/skills/az-cost-optimize",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/azure-architecture-autopilot -> /Users/jerry/.kimi-code/skills/azure-architecture-autopilot",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/azure-deployment-preflight -> /Users/jerry/.kimi-code/skills/azure-deployment-preflight",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/azure-devops-cli -> /Users/jerry/.kimi-code/skills/azure-devops-cli",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/azure-pricing -> /Users/jerry/.kimi-code/skills/azure-pricing",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/azure-resource-health-diagnose -> /Users/jerry/.kimi-code/skills/azure-resource-health-diagnose",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/azure-resource-visualizer -> /Users/jerry/.kimi-code/skills/azure-resource-visualizer",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/azure-role-selector -> /Users/jerry/.kimi-code/skills/azure-role-selector",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/azure-smart-city-iot-solution-builder -> /Users/jerry/.kimi-code/skills/azure-smart-city-iot-solution-builder",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/azure-static-web-apps -> /Users/jerry/.kimi-code/skills/azure-static-web-apps",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/batch-files -> /Users/jerry/.kimi-code/skills/batch-files",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/bigquery-pipeline-audit -> /Users/jerry/.kimi-code/skills/bigquery-pipeline-audit",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/boost-prompt -> /Users/jerry/.kimi-code/skills/boost-prompt",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/brag-sheet -> /Users/jerry/.kimi-code/skills/brag-sheet",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/breakdown-epic-arch -> /Users/jerry/.kimi-code/skills/breakdown-epic-arch",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/breakdown-epic-pm -> /Users/jerry/.kimi-code/skills/breakdown-epic-pm",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/breakdown-feature-implementation -> /Users/jerry/.kimi-code/skills/breakdown-feature-implementation",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/breakdown-feature-prd -> /Users/jerry/.kimi-code/skills/breakdown-feature-prd",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/breakdown-plan -> /Users/jerry/.kimi-code/skills/breakdown-plan",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/breakdown-test -> /Users/jerry/.kimi-code/skills/breakdown-test",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/centos-linux-triage -> /Users/jerry/.kimi-code/skills/centos-linux-triage",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/chrome-devtools -> /Users/jerry/.kimi-code/skills/chrome-devtools",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/cli-mastery -> /Users/jerry/.kimi-code/skills/cli-mastery",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/cloud-design-patterns -> /Users/jerry/.kimi-code/skills/cloud-design-patterns",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/code-exemplars-blueprint-generator -> /Users/jerry/.kimi-code/skills/code-exemplars-blueprint-generator",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/code-tour -> /Users/jerry/.kimi-code/skills/code-tour",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/codeql -> /Users/jerry/.kimi-code/skills/codeql",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/comment-code-generate-a-tutorial -> /Users/jerry/.kimi-code/skills/comment-code-generate-a-tutorial",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/commit-message-storyteller -> /Users/jerry/.kimi-code/skills/commit-message-storyteller",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/containerize-aspnet-framework -> /Users/jerry/.kimi-code/skills/containerize-aspnet-framework",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/containerize-aspnetcore -> /Users/jerry/.kimi-code/skills/containerize-aspnetcore",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/content-management-systems -> /Users/jerry/.kimi-code/skills/content-management-systems",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/context-map -> /Users/jerry/.kimi-code/skills/context-map",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/conventional-branch -> /Users/jerry/.kimi-code/skills/conventional-branch",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/conventional-commit -> /Users/jerry/.kimi-code/skills/conventional-commit",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/convert-plaintext-to-md -> /Users/jerry/.kimi-code/skills/convert-plaintext-to-md",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/copilot-cli-quickstart -> /Users/jerry/.kimi-code/skills/copilot-cli-quickstart",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/copilot-instructions-blueprint-generator -> /Users/jerry/.kimi-code/skills/copilot-instructions-blueprint-generator",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/copilot-sdk -> /Users/jerry/.kimi-code/skills/copilot-sdk",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/copilot-spaces -> /Users/jerry/.kimi-code/skills/copilot-spaces",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/copilot-usage-metrics -> /Users/jerry/.kimi-code/skills/copilot-usage-metrics",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/create-agentsmd -> /Users/jerry/.kimi-code/skills/create-agentsmd",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/create-architectural-decision-record -> /Users/jerry/.kimi-code/skills/create-architectural-decision-record",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/daily-prep -> /Users/jerry/.kimi-code/skills/daily-prep",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/dependabot -> /Users/jerry/.kimi-code/skills/dependabot",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/diagnose -> /Users/jerry/.kimi-code/skills/diagnose",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/documentation-writer -> /Users/jerry/.kimi-code/skills/documentation-writer",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/doublecheck -> /Users/jerry/.kimi-code/skills/doublecheck",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/editorconfig -> /Users/jerry/.kimi-code/skills/editorconfig",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/email-drafter -> /Users/jerry/.kimi-code/skills/email-drafter",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/entra-agent-user -> /Users/jerry/.kimi-code/skills/entra-agent-user",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/eval-driven-dev -> /Users/jerry/.kimi-code/skills/eval-driven-dev",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/exam-ready -> /Users/jerry/.kimi-code/skills/exam-ready",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/excel-xlsx -> /Users/jerry/.kimi-code/skills/excel-xlsx",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/eyeball -> /Users/jerry/.kimi-code/skills/eyeball",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/finalize-agent-prompt -> /Users/jerry/.kimi-code/skills/finalize-agent-prompt",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/from-the-other-side-anitta -> /Users/jerry/.kimi-code/skills/from-the-other-side-anitta",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/from-the-other-side-quinn -> /Users/jerry/.kimi-code/skills/from-the-other-side-quinn",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/from-the-other-side-vega -> /Users/jerry/.kimi-code/skills/from-the-other-side-vega",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/from-the-other-side-wiggins -> /Users/jerry/.kimi-code/skills/from-the-other-side-wiggins",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/frontend-design -> /Users/jerry/.kimi-code/skills/frontend-design",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/game-engine -> /Users/jerry/.kimi-code/skills/game-engine",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/gdpr-compliant -> /Users/jerry/.kimi-code/skills/gdpr-compliant",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/gen-specs-as-issues -> /Users/jerry/.kimi-code/skills/gen-specs-as-issues",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/generate-custom-instructions-from-codebase -> /Users/jerry/.kimi-code/skills/generate-custom-instructions-from-codebase",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/generate-image -> /Users/jerry/.kimi-code/skills/generate-image",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/geofeed-tuner -> /Users/jerry/.kimi-code/skills/geofeed-tuner",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/gsap-framer-scroll-animation -> /Users/jerry/.kimi-code/skills/gsap-framer-scroll-animation",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/harness-engineering -> /Users/jerry/.kimi-code/skills/harness-engineering",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/image-annotations -> /Users/jerry/.kimi-code/skills/image-annotations",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/image-manipulation-image-magick -> /Users/jerry/.kimi-code/skills/image-manipulation-image-magick",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/impediment-prioritization -> /Users/jerry/.kimi-code/skills/impediment-prioritization",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/import-infrastructure-as-code -> /Users/jerry/.kimi-code/skills/import-infrastructure-as-code",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/init -> /Users/jerry/.kimi-code/skills/init",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/integrate-context-matic -> /Users/jerry/.kimi-code/skills/integrate-context-matic",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/issue-fields-migration -> /Users/jerry/.kimi-code/skills/issue-fields-migration",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/java-add-graalvm-native-image-support -> /Users/jerry/.kimi-code/skills/java-add-graalvm-native-image-support",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/java-docs -> /Users/jerry/.kimi-code/skills/java-docs",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/java-junit -> /Users/jerry/.kimi-code/skills/java-junit",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/java-mcp-server-generator -> /Users/jerry/.kimi-code/skills/java-mcp-server-generator",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/java-refactoring-extract-method -> /Users/jerry/.kimi-code/skills/java-refactoring-extract-method",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/java-refactoring-remove-parameter -> /Users/jerry/.kimi-code/skills/java-refactoring-remove-parameter",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/java-springboot -> /Users/jerry/.kimi-code/skills/java-springboot",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/javascript-typescript-jest -> /Users/jerry/.kimi-code/skills/javascript-typescript-jest",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/linkedin-post-formatter -> /Users/jerry/.kimi-code/skills/linkedin-post-formatter",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/lsp-setup -> /Users/jerry/.kimi-code/skills/lsp-setup",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/make-repo-contribution -> /Users/jerry/.kimi-code/skills/make-repo-contribution",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/markdown-to-html -> /Users/jerry/.kimi-code/skills/markdown-to-html",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/mcp-cli -> /Users/jerry/.kimi-code/skills/mcp-cli",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/mcp-copilot-studio-server-generator -> /Users/jerry/.kimi-code/skills/mcp-copilot-studio-server-generator",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/mcp-create-adaptive-cards -> /Users/jerry/.kimi-code/skills/mcp-create-adaptive-cards",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/mcp-create-declarative-agent -> /Users/jerry/.kimi-code/skills/mcp-create-declarative-agent",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/mcp-deploy-manage-agents -> /Users/jerry/.kimi-code/skills/mcp-deploy-manage-agents",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/mcp-security-audit -> /Users/jerry/.kimi-code/skills/mcp-security-audit",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/md-to-docx -> /Users/jerry/.kimi-code/skills/md-to-docx",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/meeting-minutes -> /Users/jerry/.kimi-code/skills/meeting-minutes",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/memory-merger -> /Users/jerry/.kimi-code/skills/memory-merger",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/mentoring-juniors -> /Users/jerry/.kimi-code/skills/mentoring-juniors",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/microsoft-agent-framework -> /Users/jerry/.kimi-code/skills/microsoft-agent-framework",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/microsoft-code-reference -> /Users/jerry/.kimi-code/skills/microsoft-code-reference",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/microsoft-docs -> /Users/jerry/.kimi-code/skills/microsoft-docs",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/microsoft-foundry -> /Users/jerry/.kimi-code/skills/microsoft-foundry",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/microsoft-skill-creator -> /Users/jerry/.kimi-code/skills/microsoft-skill-creator",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/migrating-oracle-to-postgres-stored-procedures -> /Users/jerry/.kimi-code/skills/migrating-oracle-to-postgres-stored-procedures",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/minecraft-plugin-development -> /Users/jerry/.kimi-code/skills/minecraft-plugin-development",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/mini-context-graph -> /Users/jerry/.kimi-code/skills/mini-context-graph",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/mkdocs-translations -> /Users/jerry/.kimi-code/skills/mkdocs-translations",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/msgraph-sdk -> /Users/jerry/.kimi-code/skills/msgraph-sdk",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/msstore-cli -> /Users/jerry/.kimi-code/skills/msstore-cli",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/multi-stage-dockerfile -> /Users/jerry/.kimi-code/skills/multi-stage-dockerfile",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/mvvm-toolkit -> /Users/jerry/.kimi-code/skills/mvvm-toolkit",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/mvvm-toolkit-di -> /Users/jerry/.kimi-code/skills/mvvm-toolkit-di",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/mvvm-toolkit-messenger -> /Users/jerry/.kimi-code/skills/mvvm-toolkit-messenger",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/namecheap -> /Users/jerry/.kimi-code/skills/namecheap",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/nano-banana-pro-openrouter -> /Users/jerry/.kimi-code/skills/nano-banana-pro-openrouter",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/napkin -> /Users/jerry/.kimi-code/skills/napkin",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/next-intl-add-language -> /Users/jerry/.kimi-code/skills/next-intl-add-language",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/noob-mode -> /Users/jerry/.kimi-code/skills/noob-mode",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/nuget-manager -> /Users/jerry/.kimi-code/skills/nuget-manager",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/onboard-context-matic -> /Users/jerry/.kimi-code/skills/onboard-context-matic",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/oo-component-documentation -> /Users/jerry/.kimi-code/skills/oo-component-documentation",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/openapi-to-application-code -> /Users/jerry/.kimi-code/skills/openapi-to-application-code",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/optimize-simplicite-logs -> /Users/jerry/.kimi-code/skills/optimize-simplicite-logs",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/orchestration -> /Users/jerry/.kimi-code/skills/orchestration",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/pdftk-server -> /Users/jerry/.kimi-code/skills/pdftk-server",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/penpot-uiux-design -> /Users/jerry/.kimi-code/skills/penpot-uiux-design",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/performance-review-writer -> /Users/jerry/.kimi-code/skills/performance-review-writer",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/plantuml-ascii -> /Users/jerry/.kimi-code/skills/plantuml-ascii",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/playwright-automation-fill-in-form -> /Users/jerry/.kimi-code/skills/playwright-automation-fill-in-form",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/playwright-explore-website -> /Users/jerry/.kimi-code/skills/playwright-explore-website",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/playwright-generate-test -> /Users/jerry/.kimi-code/skills/playwright-generate-test",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/postgresql-code-review -> /Users/jerry/.kimi-code/skills/postgresql-code-review",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/postgresql-optimization -> /Users/jerry/.kimi-code/skills/postgresql-optimization",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/power-apps-code-app-scaffold -> /Users/jerry/.kimi-code/skills/power-apps-code-app-scaffold",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/power-bi-dax-optimization -> /Users/jerry/.kimi-code/skills/power-bi-dax-optimization",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/power-bi-model-design-review -> /Users/jerry/.kimi-code/skills/power-bi-model-design-review",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/power-bi-performance-troubleshooting -> /Users/jerry/.kimi-code/skills/power-bi-performance-troubleshooting",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/power-bi-report-design-consultation -> /Users/jerry/.kimi-code/skills/power-bi-report-design-consultation",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/power-platform-architect -> /Users/jerry/.kimi-code/skills/power-platform-architect",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/power-platform-mcp-connector-suite -> /Users/jerry/.kimi-code/skills/power-platform-mcp-connector-suite",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/powerbi-modeling -> /Users/jerry/.kimi-code/skills/powerbi-modeling",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/powerpoint-pptx -> /Users/jerry/.kimi-code/skills/powerpoint-pptx",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/pr-dashboard -> /Users/jerry/.kimi-code/skills/pr-dashboard",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/pr-screenshots -> /Users/jerry/.kimi-code/skills/pr-screenshots",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/prd -> /Users/jerry/.kimi-code/skills/prd",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/premium-frontend-ui -> /Users/jerry/.kimi-code/skills/premium-frontend-ui",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/project-workflow-analysis-blueprint-generator -> /Users/jerry/.kimi-code/skills/project-workflow-analysis-blueprint-generator",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/publish-to-pages -> /Users/jerry/.kimi-code/skills/publish-to-pages",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/pytest-coverage -> /Users/jerry/.kimi-code/skills/pytest-coverage",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/python-azure-iot-edge-modules -> /Users/jerry/.kimi-code/skills/python-azure-iot-edge-modules",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/python-mcp-server-generator -> /Users/jerry/.kimi-code/skills/python-mcp-server-generator",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/python-pypi-package-builder -> /Users/jerry/.kimi-code/skills/python-pypi-package-builder",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/quality-playbook -> /Users/jerry/.kimi-code/skills/quality-playbook",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/quasi-coder -> /Users/jerry/.kimi-code/skills/quasi-coder",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/react-audit-grep-patterns -> /Users/jerry/.kimi-code/skills/react-audit-grep-patterns",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/react-container-presentation-component -> /Users/jerry/.kimi-code/skills/react-container-presentation-component",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/react19-concurrent-patterns -> /Users/jerry/.kimi-code/skills/react19-concurrent-patterns",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/react19-source-patterns -> /Users/jerry/.kimi-code/skills/react19-source-patterns",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/react19-test-patterns -> /Users/jerry/.kimi-code/skills/react19-test-patterns",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/readme-blueprint-generator -> /Users/jerry/.kimi-code/skills/readme-blueprint-generator",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/refactor -> /Users/jerry/.kimi-code/skills/refactor",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/refactor-method-complexity-reduce -> /Users/jerry/.kimi-code/skills/refactor-method-complexity-reduce",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/refactor-plan -> /Users/jerry/.kimi-code/skills/refactor-plan",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/remember -> /Users/jerry/.kimi-code/skills/remember",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/remember-interactive-programming -> /Users/jerry/.kimi-code/skills/remember-interactive-programming",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/repo-story-time -> /Users/jerry/.kimi-code/skills/repo-story-time",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/research -> /Users/jerry/.kimi-code/skills/research",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/resemble-detect -> /Users/jerry/.kimi-code/skills/resemble-detect",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/review-and-refactor -> /Users/jerry/.kimi-code/skills/review-and-refactor",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/reviewing-oracle-to-postgres-migration -> /Users/jerry/.kimi-code/skills/reviewing-oracle-to-postgres-migration",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/rhino3d-scripts -> /Users/jerry/.kimi-code/skills/rhino3d-scripts",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/roundup -> /Users/jerry/.kimi-code/skills/roundup",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/roundup-setup -> /Users/jerry/.kimi-code/skills/roundup-setup",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/ruby-mcp-server-generator -> /Users/jerry/.kimi-code/skills/ruby-mcp-server-generator",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/ruff-recursive-fix -> /Users/jerry/.kimi-code/skills/ruff-recursive-fix",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/rust-mcp-server-generator -> /Users/jerry/.kimi-code/skills/rust-mcp-server-generator",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/sandbox-npm-install -> /Users/jerry/.kimi-code/skills/sandbox-npm-install",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/scoutqa-test -> /Users/jerry/.kimi-code/skills/scoutqa-test",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/screen-recording -> /Users/jerry/.kimi-code/skills/screen-recording",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/secret-scanning -> /Users/jerry/.kimi-code/skills/secret-scanning",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/security-review -> /Users/jerry/.kimi-code/skills/security-review",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/semantic-kernel -> /Users/jerry/.kimi-code/skills/semantic-kernel",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/setup-my-iq -> /Users/jerry/.kimi-code/skills/setup-my-iq",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/shuffle-json-data -> /Users/jerry/.kimi-code/skills/shuffle-json-data",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/slang-shader-engineer -> /Users/jerry/.kimi-code/skills/slang-shader-engineer",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/snowflake-semanticview -> /Users/jerry/.kimi-code/skills/snowflake-semanticview",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/sponsor-finder -> /Users/jerry/.kimi-code/skills/sponsor-finder",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/spring-boot-testing -> /Users/jerry/.kimi-code/skills/spring-boot-testing",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/sql-code-review -> /Users/jerry/.kimi-code/skills/sql-code-review",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/sql-optimization -> /Users/jerry/.kimi-code/skills/sql-optimization",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/sql-server-table-reconciliation -> /Users/jerry/.kimi-code/skills/sql-server-table-reconciliation",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/ssma-console -> /Users/jerry/.kimi-code/skills/ssma-console",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/structured-autonomy-generate -> /Users/jerry/.kimi-code/skills/structured-autonomy-generate",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/structured-autonomy-implement -> /Users/jerry/.kimi-code/skills/structured-autonomy-implement",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/structured-autonomy-plan -> /Users/jerry/.kimi-code/skills/structured-autonomy-plan",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/suggest-awesome-github-copilot-agents -> /Users/jerry/.kimi-code/skills/suggest-awesome-github-copilot-agents",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/suggest-awesome-github-copilot-instructions -> /Users/jerry/.kimi-code/skills/suggest-awesome-github-copilot-instructions",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/suggest-awesome-github-copilot-skills -> /Users/jerry/.kimi-code/skills/suggest-awesome-github-copilot-skills",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/swift-mcp-server-generator -> /Users/jerry/.kimi-code/skills/swift-mcp-server-generator",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/technology-stack-blueprint-generator -> /Users/jerry/.kimi-code/skills/technology-stack-blueprint-generator",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/terraform-azurerm-set-diff-analyzer -> /Users/jerry/.kimi-code/skills/terraform-azurerm-set-diff-analyzer",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/threat-model-analyst -> /Users/jerry/.kimi-code/skills/threat-model-analyst",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/tldr-prompt -> /Users/jerry/.kimi-code/skills/tldr-prompt",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/transloadit-media-processing -> /Users/jerry/.kimi-code/skills/transloadit-media-processing",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/typescript-mcp-server-generator -> /Users/jerry/.kimi-code/skills/typescript-mcp-server-generator",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/typespec-api-operations -> /Users/jerry/.kimi-code/skills/typespec-api-operations",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/typespec-create-agent -> /Users/jerry/.kimi-code/skills/typespec-create-agent",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/typespec-create-api-plugin -> /Users/jerry/.kimi-code/skills/typespec-create-api-plugin",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/ui-screenshots -> /Users/jerry/.kimi-code/skills/ui-screenshots",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/unit-test-vue-pinia -> /Users/jerry/.kimi-code/skills/unit-test-vue-pinia",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/update-avm-modules-in-bicep -> /Users/jerry/.kimi-code/skills/update-avm-modules-in-bicep",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/update-implementation-plan -> /Users/jerry/.kimi-code/skills/update-implementation-plan",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/update-llms -> /Users/jerry/.kimi-code/skills/update-llms",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/update-markdown-file-index -> /Users/jerry/.kimi-code/skills/update-markdown-file-index",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/update-specification -> /Users/jerry/.kimi-code/skills/update-specification",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/vardoger-analyze -> /Users/jerry/.kimi-code/skills/vardoger-analyze",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/vscode-ext-commands -> /Users/jerry/.kimi-code/skills/vscode-ext-commands",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/vscode-ext-localization -> /Users/jerry/.kimi-code/skills/vscode-ext-localization",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/web-design-reviewer -> /Users/jerry/.kimi-code/skills/web-design-reviewer",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/webapp-testing -> /Users/jerry/.kimi-code/skills/webapp-testing",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/what-context-needed -> /Users/jerry/.kimi-code/skills/what-context-needed",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/winmd-api-search -> /Users/jerry/.kimi-code/skills/winmd-api-search",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/word-docx -> /Users/jerry/.kimi-code/skills/word-docx",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/workiq-copilot -> /Users/jerry/.kimi-code/skills/workiq-copilot",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/write-coding-standards-from-file -> /Users/jerry/.kimi-code/skills/write-coding-standards-from-file",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/zen-comprehensive-review -> /Users/jerry/.kimi-code/skills/zen-comprehensive-review",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/zen-discovery -> /Users/jerry/.kimi-code/skills/zen-discovery",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/zen-office-docx -> /Users/jerry/.kimi-code/skills/zen-office-docx",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/zen-office-pdf -> /Users/jerry/.kimi-code/skills/zen-office-pdf",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/zen-office-pptx -> /Users/jerry/.kimi-code/skills/zen-office-pptx",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/zen-office-xlsx -> /Users/jerry/.kimi-code/skills/zen-office-xlsx",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/zen-review -> /Users/jerry/.kimi-code/skills/zen-review",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/zen-sentry -> /Users/jerry/.kimi-code/skills/zen-sentry",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/zenflow-brainstormer -> /Users/jerry/.kimi-code/skills/zenflow-brainstormer",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/zenflow-codebase-explorer -> /Users/jerry/.kimi-code/skills/zenflow-codebase-explorer",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/zenflow-fixer -> /Users/jerry/.kimi-code/skills/zenflow-fixer",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/zenflow-implementer -> /Users/jerry/.kimi-code/skills/zenflow-implementer",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/zenflow-plan-designer -> /Users/jerry/.kimi-code/skills/zenflow-plan-designer",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/zenflow-plan-orchestrator -> /Users/jerry/.kimi-code/skills/zenflow-plan-orchestrator",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/zenflow-planner -> /Users/jerry/.kimi-code/skills/zenflow-planner",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/zenflow-researcher -> /Users/jerry/.kimi-code/skills/zenflow-researcher",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/zenflow-review-orchestrator -> /Users/jerry/.kimi-code/skills/zenflow-review-orchestrator",
+    "Duplicate skill target (kept first): /Users/jerry/.codex/skills/zenflow-review-worker -> /Users/jerry/.kimi-code/skills/zenflow-review-worker"
+  ],
+  "mcp_normalized": {
+    "mcpServers": {
+      "magic": {
+        "command": "npx",
+        "env": {
+          "API_KEY": "4a4e4bab39eddf5b55daa0e98d9ec956a07cae4025e4d589d50aee7c5a5dc9d4"
+        },
+        "args": [
+          "-y",
+          "@21st-dev/magic@latest"
+        ]
+      },
+      "sequentialthinking": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "@modelcontextprotocol/server-sequential-thinking"
+        ]
+      },
+      "serena": {
+        "command": "/Users/jerry/.local/bin/serena",
+        "args": [
+          "start-mcp-server",
+          "--context",
+          "claude-code"
+        ]
+      },
+      "microsoft-docs": {
+        "command": "npx",
+        "args": [
+          "mcp-remote",
+          "https://learn.microsoft.com/api/mcp"
+        ]
+      },
+      "plaid": {
+        "command": "uvx",
+        "env": {},
+        "args": [
+          "mcp-server-plaid",
+          "--client-id",
+          "68afd1094e74af00257f278b",
+          "--secret",
+          "7e64bb2dd54b117a748f44d9c1c27c"
+        ]
+      },
+      "clippy": {
+        "url": "http://127.0.0.1:6015/mcp"
+      },
+      "claude-mem": {
+        "command": "node",
+        "args": [
+          "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/plugins/cache/thedotmack/claude-mem/13.9.3/scripts/mcp-server.cjs"
+        ]
+      },
+      "sonarqube": {
+        "command": "sonar",
+        "args": [
+          "run",
+          "mcp"
+        ]
+      }
+    }
+  },
+  "mcp_source_order": [
+    {
+      "name": "magic",
+      "source": "/Users/jerry/.claude.json",
+      "from": "Claude Code"
+    },
+    {
+      "name": "sequentialthinking",
+      "source": "/Users/jerry/.claude.json",
+      "from": "Claude Code"
+    },
+    {
+      "name": "serena",
+      "source": "/Users/jerry/.claude.json",
+      "from": "Claude Code"
+    },
+    {
+      "name": "microsoft-docs",
+      "source": "/Users/jerry/.claude.json",
+      "from": "Claude Code"
+    },
+    {
+      "name": "plaid",
+      "source": "/Users/jerry/.claude.json",
+      "from": "Claude Code"
+    },
+    {
+      "name": "clippy",
+      "source": "/Users/jerry/.claude.json",
+      "from": "Claude Code"
+    },
+    {
+      "name": "claude-mem",
+      "source": "/Users/jerry/.codex/config.toml",
+      "from": "Codex"
+    },
+    {
+      "name": "sonarqube",
+      "source": "/Users/jerry/.codex/config.toml",
+      "from": "Codex"
+    }
+  ]
+}
