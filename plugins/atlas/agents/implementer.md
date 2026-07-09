@@ -1,6 +1,6 @@
 ---
 name: implementer
-description: Focused implementer for the atlas-engine skill. Use to make ONE bounded, well-specified change correctly - minimal diff, documentation-checked, then run the project's own gate (lint/typecheck/test/build) and report the result with evidence. Does not refactor opportunistically or expand scope.
+description: "Focused implementer. Makes ONE bounded, well-specified change as a minimal diff, checks docs, then runs the project's gate (lint/typecheck/test/build) and reports the result with evidence. Never expands scope."
 model: sonnet
 color: green
 disallowedTools: [NotebookEdit]

@@ -1,5 +1,5 @@
 ---
-description: Deliver a production-ready Microsoft 365 / Entra / Graph / Intune / Exchange Online identity or endpoint configuration with verified read-back. Use when you must change tenant state and prove it applied, not "should work".
+description: "Deliver a production-ready Microsoft 365/Entra/Graph/Intune/Exchange config with verified read-back. Use when you must change tenant state and prove it applied."
 argument-hint: "[outcome wanted] [surface: Graph/portal/Intune/EXO PowerShell] [tenant constraints]"
 ---
 

@@ -1,5 +1,5 @@
 ---
-description: 'Diagnose and repair the atlas plugin installation itself: verify the marketplace tracks the canonical repo, detect version rollbacks from stale forks, confirm hooks/agents/skills are present in the installed copy, and optionally auto-fix. Run when atlas commands stop launching subagents or behave like an older version.'
+description: "Repair the atlas plugin install: marketplace, rollbacks, hooks/agents/skills, auto-fix. Run when atlas stops launching subagents or acts like an older version."
 argument-hint: "[--fix to auto-repair] [plugin name, default atlas]"
 ---
 

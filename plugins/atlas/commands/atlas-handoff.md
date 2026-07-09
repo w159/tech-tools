@@ -1,5 +1,5 @@
 ---
-description: Produce a high-density session handoff so a fresh session resumes with zero re-discovery; use at a checkpoint before context fills, a break, or handing work to another session.
+description: "Produce a dense session handoff so a fresh session resumes with zero re-discovery. Use at a checkpoint before context fills, a break, or handing off work."
 argument-hint: (no args; run at a checkpoint)
 ---
 

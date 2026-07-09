@@ -1,6 +1,6 @@
 ---
 name: db-prober
-description: Read-only database prober for the atlas-engine skill. Use to inspect SQL/Postgres schema, row-level-security policies, GRANTs for the runtime role, indexes, constraints, defaults, and EXPLAIN plans. Strictly read-only - zero writes, no migrations, no CREATE INDEX (even CONCURRENTLY); it only proposes them. Returns findings with captured evidence.
+description: "Read-only database prober. Inspects SQL/Postgres schema, RLS policies, runtime-role GRANTs, indexes, constraints, and EXPLAIN plans. Read-only: no writes or migrations, only proposals. Returns findings with evidence."
 model: sonnet
 color: yellow
 disallowedTools: [Write, Edit, MultiEdit, NotebookEdit]

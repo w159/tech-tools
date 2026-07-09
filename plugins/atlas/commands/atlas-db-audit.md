@@ -1,5 +1,5 @@
 ---
-description: "Run a strictly read-only database audit via parallel subagents and produce a findings report plus a remediation plan; use when you need to inventory a live schema, reconcile it against the code, and check privileges and naming before changing anything."
+description: "Read-only database audit via parallel subagents: inventory a live schema, reconcile it against the code, and check privileges and naming before any change."
 argument-hint: "[repo path] [db connection] [glossary path] [naming-convention notes]"
 ---
 

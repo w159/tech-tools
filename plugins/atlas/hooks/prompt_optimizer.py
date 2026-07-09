@@ -241,9 +241,166 @@ def run_optimizer(prompt: str) -> str | None:
     return None
 
 
-def emit_context(optimized: str) -> None:
-    """Print the UserPromptSubmit JSON that injects the optimized spec into Claude's context."""
-    framing = (
+# --- orchestration arming: classify substantive engineering prompts -----------
+#
+# The orchestration flag (atlas_db.mark_orchestrating) used to be set only AFTER a
+# dispatch had already happened, so a session that opened with real engineering work
+# but never dispatched was never nudged to dispatch. This classifier arms the flag up
+# front from the UserPromptSubmit text alone. It is deliberately CONSERVATIVE: a
+# wrongly-armed chat session gets denied by the dispatch tripwire, so a false positive
+# costs more than a false negative. The default verdict is "trivial" unless a real
+# engineering signal (an error report, or a strong action verb anchored to code or
+# multiple steps) is present. mark_orchestrating stays the single writer of the flag.
+
+ENGINE_NUDGE = (
+    "[atlas-engine] This prompt reads as substantive, multi-step engineering work, so "
+    "this session has been armed as an atlas orchestration run. It qualifies for the "
+    "atlas-engine loop: invoke the atlas:atlas-engine skill and dispatch wave 1 to "
+    "subagents (explorer / implementer / verifier) instead of doing the work inline."
+)
+
+# Bare acknowledgements / greetings - always trivial regardless of other signals.
+_TRIVIAL_ACKS = {
+    "thanks",
+    "thank you",
+    "ty",
+    "thx",
+    "ok",
+    "okay",
+    "k",
+    "kk",
+    "cool",
+    "nice",
+    "great",
+    "perfect",
+    "awesome",
+    "yes",
+    "no",
+    "yep",
+    "nope",
+    "yeah",
+    "sure",
+    "got it",
+    "gotcha",
+    "done",
+    "lgtm",
+    "hi",
+    "hello",
+    "hey",
+    "yo",
+    "sup",
+}
+
+# Strong engineering verbs: unambiguously technical intent on their own. A prompt
+# carrying one of these is a work order even without a named file. Deliberately
+# excludes verbs that also read as everyday chores in any domain.
+_STRONG_ENGINEERING_VERBS = re.compile(
+    r"\b(rebuild|implement|debug|refactor|audit|investigate|migrate|"
+    r"optimi[sz]e|rewrite|integrate|deploy|patch|diagnose|troubleshoot|harden|"
+    r"configure|scaffold|instrument|paralleli[sz]e|redesign|restructure|"
+    r"reorgani[sz]e|provision|benchmark|profile)\b",
+    re.IGNORECASE,
+)
+
+# Common action verbs that dominate everyday, non-engineering chatter as much as
+# code work ("fix a sandwich", "add a bow", "remove the onions", "build a
+# treehouse"). These signal engineering ONLY when anchored to a concrete code
+# reference; on their own - even stacked into a multi-step list - they are chat.
+_COMMON_VERBS = re.compile(
+    r"\b(build|fix|add|remove|delete|create|resolve|wire\s+up)\b",
+    re.IGNORECASE,
+)
+
+# Error-report / failing-command signals - a strong standalone signal.
+_ERROR_SIGNAL = re.compile(
+    r"(traceback \(most recent call last\)"
+    r"|\b\w*(?:error|exception)\b\s*:"
+    r"|\bfile \".*\", line \d+"
+    r"|(?:^|\s)at\s+\S+\(.*:\d+\)"
+    r"|\b[\w./-]+\.\w{1,5}:\d+\b"
+    r"|command not found"
+    r"|npm err!"
+    r"|\bexit(?:ed)?\s+(?:code|status)\s+\d+"
+    r"|segmentation fault"
+    r"|\bpanic:"
+    r"|assertionerror|stack ?trace)",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+# Concrete code references: filenames with code extensions, source paths, call
+# syntax, declarations, or schema/service domain nouns.
+_CODE_REFERENCE = re.compile(
+    r"(\b[\w./-]+\.(?:py|ts|tsx|js|jsx|go|rs|java|rb|php|sql|json|ya?ml|toml|sh|"
+    r"c|cc|cpp|h|hpp|css|scss|html|vue|svelte)\b"
+    r"|(?:^|[\s(])(?:src|lib|app|components?|hooks?|scripts?|services?|routes?|"
+    r"models?|pages?|api|backend|frontend|tests?|migrations?)/[\w./-]+"
+    r"|\b(?:class|def|function|interface|struct|enum)\s+\w+"
+    r"|\b(?:endpoint|schema|migration|database|table|column|component|module|"
+    r"service|route|handler|middleware|pipeline)\b)",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def looks_substantive(prompt: str) -> bool:
+    """Conservative classifier: True only for real engineering work. Defaults to
+    False. A prompt arms orchestration only when it carries an unmistakable
+    engineering signal, in priority order:
+      1. an error report / failing command (a stack trace is unambiguous), or
+      2. a strong engineering verb (refactor / audit / investigate / deploy / ...), or
+      3. a common action verb (fix / add / remove / build / ...) ANCHORED to a
+         concrete code reference.
+    Common verbs on their own describe chores in any domain ("fix a sandwich",
+    "add a bow", "buy tomatoes then add basil") - and stacking them into a
+    numbered or sequenced list does NOT make them engineering. Multi-step
+    structure was the old false-positive trap, so it is no longer a signal by
+    itself; the code anchor is the hard gate."""
+    text = prompt.strip()
+    if len(text) < 20:
+        return False  # greetings, acks, one-word follow-ups
+    if text.lower().strip(" .!?,") in _TRIVIAL_ACKS:
+        return False
+    if _ERROR_SIGNAL.search(text):
+        return True  # a stack trace / failing command is unambiguous engineering
+    if _STRONG_ENGINEERING_VERBS.search(text):
+        return True  # a technical verb is a work order on its own
+    # Common verbs count as engineering only when anchored to code. This gate is
+    # what keeps conversational multi-step prompts from arming a chat session.
+    has_common = _COMMON_VERBS.search(text) is not None
+    has_code = _CODE_REFERENCE.search(text) is not None
+    return has_common and has_code
+
+
+def arm_orchestration(data: dict, prompt: str) -> str | None:
+    """Flag this session's run as an atlas orchestration run when the prompt is
+    substantive engineering work, and return the engine nudge. Trivial or
+    conversational prompts return None and touch nothing. Fully self-guarded: any
+    failure (unreadable DB, missing module) returns None so the prompt is never
+    blocked. Disable entirely with ATLAS_ENGINE_ARM=off."""
+    if os.environ.get("ATLAS_ENGINE_ARM", "on").strip().lower() == "off":
+        return None
+    if prompt.lstrip().startswith("/"):
+        return None  # slash commands expand downstream and self-orchestrate
+    if not looks_substantive(prompt):
+        return None
+    session = (data.get("session_id") or "").strip()
+    if not session:
+        return None
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db  # stdlib-only observability store
+
+        conn = atlas_db.connect()
+        atlas_db.init(conn)
+        atlas_db.mark_orchestrating(conn, session, data.get("cwd"))
+        conn.close()
+    except Exception:
+        return None  # fail-open: never block a prompt over a DB hiccup
+    return ENGINE_NUDGE
+
+
+def optimizer_framing(optimized: str) -> str:
+    """The system-reminder framing that wraps an optimized spec."""
+    return (
         "[atlas - prompt-optimizer] The user opted to optimize this prompt. A local "
         "prompt-optimizer model rewrote their request into the expanded specification below. "
         "Treat it as the authoritative task spec for this turn; where it conflicts with the "
@@ -253,10 +410,19 @@ def emit_context(optimized: str) -> None:
         f"{optimized}\n"
         "----- END OPTIMIZED SPEC -----"
     )
+
+
+def emit_context(*parts: str) -> None:
+    """Print a single UserPromptSubmit JSON injecting the given context block(s).
+    Multiple parts (optimizer spec + orchestration nudge) are joined into one
+    additionalContext so the hook only ever emits one JSON object on stdout."""
+    blocks = [p for p in parts if p]
+    if not blocks:
+        return
     payload = {
         "hookSpecificOutput": {
             "hookEventName": "UserPromptSubmit",
-            "additionalContext": framing,
+            "additionalContext": "\n\n".join(blocks),
         }
     }
     print(json.dumps(payload))
@@ -330,18 +496,32 @@ def main() -> int:
     if not prompt:
         return 0
 
-    do_it, body = should_optimize(prompt)
-    if not do_it:
-        return 0  # instant passthrough - no output, no latency
+    # Arm the orchestration flag up front for substantive engineering prompts. This
+    # is independent of the optimizer: it runs whether or not the prompt opted in,
+    # and self-guards so a DB failure can never block the prompt.
+    nudge = arm_orchestration(data, prompt)
 
-    optimized = run_optimizer(body)
-    if optimized and is_skip(optimized):
-        optimized = None  # model judged the prompt trivial - pass the raw text through
-    audit(body, optimized)
-    if not optimized:
-        return 0  # unavailable / slow / empty / SKIP -> passthrough, never block
-    emit_context(optimized)
-    notify(optimized)
+    do_it, body = should_optimize(prompt)
+    optimized = None
+    if do_it:
+        optimized = run_optimizer(body)
+        if optimized and is_skip(optimized):
+            optimized = (
+                None  # model judged the prompt trivial - pass the raw text through
+            )
+        audit(body, optimized)
+
+    # One emission point: combine the optimizer spec (if any) and the engine nudge
+    # (if armed) into a single additionalContext block.
+    frames = []
+    if optimized:
+        frames.append(optimizer_framing(optimized))
+    if nudge:
+        frames.append(nudge)
+    if frames:
+        emit_context(*frames)
+    if optimized:
+        notify(optimized)
     return 0
 
 

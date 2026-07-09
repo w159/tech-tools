@@ -1,5 +1,5 @@
 ---
-description: 'Audit a Claude Code plugin for structural correctness, manifest validity, and content quality; reports findings with file:line evidence and a pass/fail per check without auto-applying destructive fixes.'
+description: "Audit a Claude Code plugin for structure, manifest validity, and content quality; reports file:line findings and pass/fail per check, without auto-fixing."
 argument-hint: "[plugin name or path (default: plugin in current working directory)]"
 ---
 

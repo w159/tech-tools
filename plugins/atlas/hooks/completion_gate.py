@@ -10,7 +10,7 @@ It is **scoped**: it only engages when the working directory (or a detected proj
 root above it) holds a `docs/` directory -- i.e. the docs/ single source of truth is
 present. In any other session it is a silent no-op, so it is safe to leave installed.
 
-Six conditions must ALL hold before the gate passes (else block ONCE):
+Seven conditions must ALL hold before the gate passes (else block ONCE):
   (a) At least one file exists under `docs/evidence/`.
   (b) `docs/.run/findings.json` exists and contains at least one entry with
       status "verified".
@@ -20,6 +20,10 @@ Six conditions must ALL hold before the gate passes (else block ONCE):
   (f) No docs drift: if non-docs files changed this run (git diff HEAD +
       staged), at least one docs/ file changed too -- this is the deterministic
       trigger that forces an atlas:docs-curator dispatch before "done".
+  (g) Law 5 -- verifier coverage: if non-docs code changed this run and there
+      are more implementer dispatches than verifier dispatches for the run
+      (atlas_db.unpaired_implementer_dispatches > 0), block -- shipping work
+      that never got an independent atlas:verifier pass.
 
 If any condition is missing the hook blocks and names exactly which condition
 failed and which specialist closes it.
@@ -123,6 +127,19 @@ def _docs_drift(changed_paths: list) -> bool:
     return True  # paths present, none are docs
 
 
+def _nondocs_changed(changed_paths: list) -> bool:
+    """Return True when at least one changed path is NOT a docs/ path.
+
+    Unlike _docs_drift this ignores whether docs also moved: it answers only
+    "did code change this run?" -- the trigger for the Law 5 verifier check (g).
+    A path is 'docs' if it starts with 'docs/' or contains '/docs/'.
+    """
+    for p in changed_paths:
+        if not (p.startswith("docs/") or "/docs/" in p):
+            return True
+    return False
+
+
 def _git_changed_paths(docs: Path) -> list:
     """Return changed file paths from git diff HEAD and the staged index.
 
@@ -163,6 +180,7 @@ def _reason(
     missing_d: bool = False,
     missing_e: bool = False,
     drift: bool = False,
+    unverified: int = 0,
 ) -> str:
     parts = []
     if missing_a:
@@ -207,6 +225,14 @@ def _reason(
             "with the code. -> Dispatch atlas:docs-curator to reconcile docs/ "
             "(CHANGELOG, ROADMAP, affected subfolders) citing file:line evidence, "
             "then retry Stop."
+        )
+    if unverified > 0:
+        parts.append(
+            "  (g) Law 5 -- verifier coverage: %d implementer dispatch(es) shipped "
+            "code this run with no independent atlas:verifier to check them. Every "
+            "shipping change gets an independent verifier. -> Dispatch atlas:verifier "
+            "for the unverified change(s) to confirm or refute the work in a fresh "
+            "context, then retry Stop." % unverified
         )
     failed = "\n".join(parts)
     return (
@@ -254,13 +280,27 @@ def main() -> int:
         # deterministic trigger that forces an atlas:docs-curator dispatch.
         # Fail-open: any git error yields an empty path list -> no drift.
         drift = False
+        code_changed = False
         try:
-            drift = _docs_drift(_git_changed_paths(docs))
+            changed = _git_changed_paths(docs)
+            drift = _docs_drift(changed)
+            code_changed = _nondocs_changed(changed)
         except Exception:
             pass  # fail-open: uncertainty must never block
-        if ok_a and ok_b and ok_c and ok_d and ok_e and not drift:
+        # (g) Law 5 -- verifier coverage. Only when non-docs code changed this
+        # run: block if implementer dispatches outnumber verifier dispatches.
+        # Fail-open: the helper returns 0 on any atlas_db import/DB error, so
+        # condition (g) silently passes and never crashes the session.
+        unverified = (
+            _unpaired_implementer_dispatches(data.get("session_id", ""))
+            if code_changed
+            else 0
+        )
+        if ok_a and ok_b and ok_c and ok_d and ok_e and not drift and unverified == 0:
             return 0
-        block_reason = _reason(not ok_a, not ok_b, not ok_c, not ok_d, not ok_e, drift)
+        block_reason = _reason(
+            not ok_a, not ok_b, not ok_c, not ok_d, not ok_e, drift, unverified
+        )
         print(json.dumps({"decision": "block", "reason": block_reason}))
     except Exception:  # noqa: BLE001 -- a Stop hook must never wedge the session
         return 0
@@ -292,6 +332,26 @@ def _session_is_orchestrating(session_id: str) -> bool:
         return atlas_db.is_orchestrating(conn, session_id)
     except Exception:
         return False
+
+
+def _unpaired_implementer_dispatches(session_id: str) -> int:
+    """(g) Implementer dispatches this run with no verifier to check them, via
+    atlas_db.unpaired_implementer_dispatches for the current-or-latest run.
+    Fail-open to 0: any atlas_db import or DB error means condition (g) silently
+    passes -- the gate must never crash a session over observability I/O."""
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db
+
+        conn = atlas_db.connect()
+        rid = atlas_db.current_run_id(conn, session_id) or atlas_db.latest_run_id(
+            conn, session_id
+        )
+        if rid is None:
+            return 0
+        return atlas_db.unpaired_implementer_dispatches(conn, rid)
+    except Exception:
+        return 0
 
 
 if __name__ == "__main__":

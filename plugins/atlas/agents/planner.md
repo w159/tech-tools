@@ -1,6 +1,6 @@
 ---
 name: planner
-description: Multi-stage decomposition specialist for the atlas-engine skill. Turns a task into a numbered stage map where each stage has exactly one failable check, flags concurrent stages, and marks any unverifiable output explicitly (so the orchestrator knows exactly what is proven and what is assumed).
+description: "Multi-stage decomposition specialist. Turns a task into a numbered stage map where each stage has one failable check, flags concurrent stages, and marks unverifiable output as proven versus assumed."
 model: sonnet
 color: blue
 disallowedTools: [Write, Edit, MultiEdit, NotebookEdit]

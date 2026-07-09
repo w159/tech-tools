@@ -1,6 +1,6 @@
 ---
 name: atlas-engine
-description: Use when starting any multi-step, multi-stage, multi-surface, or whole-codebase engineering task (build, fix, audit, refactor, investigate) in a codebase or monorepo - especially when the work should be driven through subagents with real execution and independent verification instead of done inline, and the docs/ tree must stay the single source of truth. Triggers on "orchestrate", whole-repo work, cross-layer (frontend/backend/database) bugs, and audits. To first install and configure atlas itself (memory, context-mode, capability discovery, hooks), use atlas-architect instead; this skill is for running the actual work.
+description: "Orchestrate any multi-step, multi-surface, or whole-codebase engineering task (build, fix, audit, refactor, investigate) through subagents with real execution and independent verification instead of inline work, keeping docs/ the single source of truth. Triggers on orchestrate, whole-repo work, cross-layer (frontend/backend/database) bugs, and audits. To first install and configure atlas itself, use atlas-architect."
 ---
 
 # atlas-engine - the orchestrator
@@ -70,7 +70,9 @@ Answer three yes/no questions before any other action:
 If ANY is yes: your first move is to author a Workflow (see
 `references/workflow-template.md`) OR dispatch a parallel wave in ONE message.
 You may NOT proceed inline. This is a checklist, not a judgment call - the
-`dispatch_tripwire.py` hook will STOP you at 4 inline ops regardless.
+`dispatch_tripwire.py` hook advises at 4 inline ops and, in orchestration
+sessions, DENIES the call outright at 8 inline ops or on any `Edit`/`Write`/
+`MultiEdit` to non-docs paths (escape: `ATLAS_TRIPWIRE_HARD=off`), regardless.
 
 If ALL are no (a single trivial single-surface change): inline is allowed, but the
 first investigative read still goes to `atlas:explorer` if it would exceed a glance.
@@ -150,6 +152,8 @@ Dispatch constantly. Three complementary sets:
 - **Atlas meta-skills** (broader-scope orchestration companions): `atlas-orbit` (loop-library matcher; recurring/iterative work), `atlas-harbor` (vendor MCP setup and connector wiring), `atlas-sextant` (measurable self-improvement; reads the observability DB), `atlas-expedition` (UX runtime swarm; app-discovering), `atlas-cartographer` (architecture map, structural dedup, unify), `atlas-survey` (comprehensive quality/OWASP/security/principles audit swarm).
 - **Domain specialists already installed** (route here for depth): `backend-architect`, `frontend-developer`, `security-engineer`, `debugger`, `devops-automator`, `code-reviewer`, `test-engineer`, `test-executor`, `secondary-expert-validator`, `codebase-explorer`. Plus built-ins `Explore`/`Plan`/`general-purpose`.
 
+**Fork history-heavy dispatches instead of re-explaining.** `planner`, `completeness-critic`, `docs-curator`, and synthesis dispatches SHOULD use `subagent_type: "fork"` (cheap, inherits this session's history) - `atlas:verifier` and `atlas:explorer` must NEVER fork (they need fresh, uncontaminated context). See `references/subagent-kit.md`.
+
 `references/capability-routing.md` maps task signals -> the right agent + skill + MCP + model.
 
 This skill ships as part of the **atlas plugin**: the `atlas:*` companions live in the plugin's top-level `agents/` directory (`plugins/atlas/agents/`) and are auto-discovered by Claude Code; eight hooks total ship under `hooks/` and all eight auto-load via `hooks/hooks.json` on install (no manual step).
@@ -159,12 +163,12 @@ This skill ships as part of the **atlas plugin**: the `atlas:*` companions live 
 The rules above must not depend on you remembering them. Eight hooks total ship with the plugin and all eight auto-load from `hooks/hooks.json` when the plugin is installed; all are stdlib-only and fail-open, so any internal error exits 0 and a hook never blocks a session. The dispatch tripwire and completion gate additionally gate on the per-session orchestration marker, so they stay inert outside an orchestration run. For non-plugin installs, `scripts/install_hooks.py` (dry-run by default, merges without clobbering, backs up first) wires them manually.
 
 - **`session_boot.py`** (`SessionStart`) - activates the runtime each session: injects this contract and methodology, reports claude-mem/context-mode state, and surfaces relevant past lessons. Crash-proof.
-- **`prompt_optimizer.py`** (`UserPromptSubmit`) - sharpens the prompt before any token is spent on it; trigger-gated (`opt:` / `++`), augments never replaces.
+- **`prompt_optimizer.py`** (`UserPromptSubmit`) - sharpens the prompt before any token is spent on it; trigger-gated (`opt:` / `++`), augments never replaces. Also runs an arm-early classifier that flags a prompt as substantive engineering work (error/stack-trace signal, a strong verb like `refactor`/`debug`/`audit`, or a common verb like `fix`/`add`/`build` anchored to a concrete code reference) and marks the session orchestrating *before* any dispatch happens. Disable with `ATLAS_ENGINE_ARM=off`.
 - **`bash_advisor.py`** (`PreToolUse` Bash) - advisory-only; never alters approval. Emits an `additionalContext` factual warning only on catastrophic, near-irreversible commands (rm -rf /, fork bomb, mkfs, dd to raw disk). All other commands pass through silently.
 - **`format_after_edit.py`** (`PostToolUse` Edit|Write) - auto-formats the edited file with the repo's own formatter so diffs stay minimal.
-- **`completion_gate.py`** (`Stop`, opt-out) - machine enforcement of "Definition of done": blocks stopping until the evidence artifact, the independent verifier report, and current docs/ all exist. Gated on the orchestration marker, so it only engages during an orchestration run. Fail-open. Runs by default when a `docs/` tree exists; disable with `ATLAS_GATE=off`.
+- **`completion_gate.py`** (`Stop`, opt-out) - machine enforcement of "Definition of done": blocks stopping until the evidence artifact, the independent verifier report, current docs/, and condition (g) - Law 5 verifier coverage (`atlas_db.unpaired_implementer_dispatches`, blocks when code shipped this run with more implementer than verifier dispatches) all hold. Gated on the orchestration marker, so it only engages during an orchestration run. Fail-open. Runs by default when a `docs/` tree exists; disable with `ATLAS_GATE=off`.
 - **`nudge.py`** (`Stop`, `SubagentStop`) - self-improvement: surfaces a relevant past lesson and prompts to capture new ones; gated on the orchestration marker, throttled, and non-blocking. See the atlas-sextant skill.
-- **`dispatch_tripwire.py`** (`PostToolUse`) - counts inline tool calls during an active orchestration run and STOPs at the threshold (default 4) to force a Workflow or parallel-wave dispatch; gated on the orchestration marker so non-orchestration sessions are never nagged. Logs every trip to `atlas.db`. Tunable via `ATLAS_TRIPWIRE` (on/off) and `ATLAS_TRIPWIRE_THRESHOLD` (integer). Works in concert with the decision gate above.
+- **`dispatch_tripwire.py`** (`PostToolUse` advisory + `PreToolUse` deny) - counts inline tool calls during an active orchestration run and advises at the threshold (default 4) to force a Workflow or parallel-wave dispatch; a second, independently-switchable `PreToolUse` tier DENIES the call outright at 8 inline ops since the last dispatch, or on any `Edit`/`Write`/`MultiEdit` to a non-docs path, in orchestration sessions only. Gated on the orchestration marker so non-orchestration sessions are never nagged or denied. Logs every trip to `atlas.db`. Tunable via `ATLAS_TRIPWIRE` (on/off, both tiers), `ATLAS_TRIPWIRE_THRESHOLD` (advisory integer), and `ATLAS_TRIPWIRE_HARD` (off disables only the deny tier). Works in concert with the decision gate above.
 - **`ingest_session.py`** (`Stop`, `SubagentStop`, `SessionEnd`, `PreCompact`) - indexes the session transcript into the observability store so atlas-sextant can mine past runs. Throttled and fail-open.
 
 A separate script, `hooks/validate-readonly-query.sh`, is NOT auto-loaded by `hooks.json`; it is a read-only SQL guard (blocks writes, DDL, GRANT/REVOKE) available for DB-audit subagents to invoke during read-only audits, so ordinary shell work is never gated by it.

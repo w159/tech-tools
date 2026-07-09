@@ -1,5 +1,5 @@
 ---
-description: "Generate an onboarding-grade README.md by inspecting the actual repo, with every claim traced to a real file; use when a repo has no README or its README is stale."
+description: "Generate an onboarding-grade README.md by inspecting the actual repo, every claim traced to a real file. Use when a repo has no README or its README is stale."
 argument-hint: "[repo path] [audience: contributors/internal/both]"
 ---
 

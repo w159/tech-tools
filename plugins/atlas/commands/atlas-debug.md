@@ -1,5 +1,5 @@
 ---
-description: "Chase down and fix a specific failing behavior or error; use when you have a reproducible bug, exception, or bad output and want the root cause fixed with evidence."
+description: "Chase down and fix a reproducible bug, exception, or bad output; use when you want the root cause fixed with evidence, not patched over."
 argument-hint: "[context] [stack] [symptom] [paste error/log]"
 ---
 

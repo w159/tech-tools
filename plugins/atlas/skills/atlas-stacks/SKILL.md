@@ -1,6 +1,6 @@
 ---
 name: atlas-stacks
-description: Interactive skill-stacking concierge. Use when the user knows roughly what they want but not which skills/tools to use, asks "what should I use for X", names several goals at once, or invokes /atlas-stacks. Elicits the goal with AskUserQuestion (one focused round), inventories the skills actually available this session, composes them into an ordered stack (chained Skill invocations with atlas verification riding along), confirms the stack with the user, then executes it stage by stage.
+description: "Interactive skill-stacking concierge. Use when the user knows roughly what they want but not which skills to use, asks 'what should I use for X', names several goals at once, or invokes /atlas-stacks. Elicits the goal with AskUserQuestion (one focused round), inventories the skills available this session, composes them into an ordered stack with atlas verification riding along, confirms it, then executes stage by stage."
 ---
 
 # atlas-stacks - compose skills into a stack

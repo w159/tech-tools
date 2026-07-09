@@ -1,5 +1,5 @@
 ---
-description: Write a production-ready, idempotent endpoint hardening or remediation script using a CHECK / SET / VERIFY pattern, suitable for RMM or MDM deployment. Use when you need a safe, repeatable script that proves whether it changed state or found the system already compliant.
+description: "Write an idempotent endpoint remediation script using a CHECK/SET/VERIFY pattern for RMM/MDM, proving whether it changed state or was already compliant."
 argument-hint: "[objective] [target OS/devices] [deployment context: RMM run-as, one-shot/scheduled, known GPO/MDM interactions]"
 ---
 

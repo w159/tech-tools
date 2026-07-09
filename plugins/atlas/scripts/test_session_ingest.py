@@ -276,6 +276,330 @@ class SessionIngestTest(unittest.TestCase):
             self.conn.execute("SELECT COUNT(*) FROM tool_calls").fetchone()[0], 1
         )
 
+    # --- synthetic-session exclusion -----------------------------------------
+
+    def test_normal_session_creates_one_session_log(self):
+        # Control for the exclusion tests: a normal transcript path still lands
+        # exactly one session_logs row (existing behavior).
+        self._ingest()
+        self.assertEqual(
+            self.conn.execute("SELECT COUNT(*) FROM session_logs").fetchone()[0], 1
+        )
+
+    def test_observer_session_path_is_excluded(self):
+        # A transcript under .claude-mem/observer-sessions is a synthetic mirror:
+        # zero session_logs rows, zero child rows, nothing ingested.
+        obs_dir = os.path.join(self.tmp, ".claude-mem", "observer-sessions")
+        os.makedirs(obs_dir, exist_ok=True)
+        obs_path = os.path.join(obs_dir, "obs-sess.jsonl")
+        with open(obs_path, "w") as f:
+            f.write("\n".join(FIXTURE) + "\n")
+        stats = session_ingest.ingest_transcript(
+            obs_path, conn=self.conn, session_id="obs-sess"
+        )
+        self.assertEqual(stats["messages"], 0)
+        self.assertEqual(
+            self.conn.execute("SELECT COUNT(*) FROM session_logs").fetchone()[0], 0
+        )
+        for tbl in ("messages", "tool_calls", "user_prompts", "signals"):
+            self.assertEqual(
+                self.conn.execute(f"SELECT COUNT(*) FROM {tbl}").fetchone()[0], 0
+            )
+
+    def test_observer_session_cwd_is_excluded(self):
+        # Defensive: even at a normal path, a transcript whose recorded cwd is
+        # under observer-sessions is excluded (other synthetic sources).
+        obs_cwd = os.path.join(self.tmp, ".claude-mem", "observer-sessions", "proj")
+        line = json.dumps(
+            {
+                "type": "user",
+                "uuid": "cwd1",
+                "sessionId": "cwd-sess",
+                "cwd": obs_cwd,
+                "timestamp": "2026-06-26T12:00:00Z",
+                "message": {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "a real prompt here"}],
+                },
+            }
+        )
+        tpath = os.path.join(self.tmp, "cwd-sess.jsonl")  # normal path
+        with open(tpath, "w") as f:
+            f.write(line + "\n")
+        stats = session_ingest.ingest_transcript(
+            tpath, conn=self.conn, session_id="cwd-sess"
+        )
+        self.assertEqual(stats["messages"], 0)
+        self.assertEqual(
+            self.conn.execute("SELECT COUNT(*) FROM session_logs").fetchone()[0], 0
+        )
+
+    def test_backfill_skips_observer_sessions(self):
+        # A temp tree with one observer + one normal transcript: only the normal
+        # one is ingested.
+        tree = tempfile.mkdtemp()
+        norm_dir = os.path.join(tree, "projects", "repo-demo")
+        os.makedirs(norm_dir)
+        with open(os.path.join(norm_dir, "normal.jsonl"), "w") as f:
+            f.write("\n".join(FIXTURE) + "\n")
+        obs_dir = os.path.join(tree, ".claude-mem", "observer-sessions")
+        os.makedirs(obs_dir)
+        with open(os.path.join(obs_dir, "observer.jsonl"), "w") as f:
+            f.write("\n".join(FIXTURE) + "\n")
+        totals = session_ingest.backfill(root=tree, conn=self.conn)
+        self.assertEqual(totals["files"], 1)  # observer skipped, only normal walked
+        self.assertEqual(
+            self.conn.execute("SELECT COUNT(*) FROM session_logs").fetchone()[0], 1
+        )
+
+
+# --- codex adapter fixtures ---------------------------------------------------
+
+# Codex rollout JSONL lines are {"timestamp","type","payload"}. These builders
+# reproduce the exact payload shapes observed in real
+# ~/.codex/sessions/**/rollout-*.jsonl files (session_meta / turn_context /
+# event_msg{user_message,token_count} / response_item{message,function_call,
+# function_call_output,custom_tool_call,custom_tool_call_output}). All content is
+# synthetic - no bytes copied from a real transcript - but structurally faithful.
+
+CX_TS = "2026-04-16T20:45:44.096Z"
+
+
+def _cx(typ, payload, ts=CX_TS):
+    return json.dumps({"timestamp": ts, "type": typ, "payload": payload})
+
+
+def _codex_session(sid, prompt, reply, tool_kind="function_call"):
+    """A minimal but representative single codex session: meta, model context,
+    a human prompt, a token_count, an assistant reply, and one tool call with a
+    secret-bearing argument plus its output."""
+    lines = [
+        _cx(
+            "session_meta",
+            {
+                "id": sid,
+                "timestamp": CX_TS,
+                "cwd": "/repo/codex-demo",
+                "originator": "codex-tui",
+                "cli_version": "0.121.0",
+                "model_provider": "custom",
+                "base_instructions": None,
+            },
+        ),
+        _cx("turn_context", {"cwd": "/repo/codex-demo", "model": "gpt-5.4"}),
+        _cx("event_msg", {"type": "user_message", "message": prompt}),
+        _cx(
+            "event_msg",
+            {
+                "type": "token_count",
+                "info": {
+                    "last_token_usage": {
+                        "input_tokens": 100,
+                        "cached_input_tokens": 40,
+                        "output_tokens": 25,
+                        "reasoning_output_tokens": 5,
+                        "total_tokens": 130,
+                    }
+                },
+            },
+        ),
+        _cx(
+            "response_item",
+            {
+                "type": "message",
+                "role": "assistant",
+                "content": [{"type": "output_text", "text": reply}],
+            },
+        ),
+    ]
+    if tool_kind == "function_call":
+        lines += [
+            _cx(
+                "response_item",
+                {
+                    "type": "function_call",
+                    "name": "exec_command",
+                    "call_id": f"{sid}-call1",
+                    "arguments": json.dumps(
+                        {"cmd": "pytest -q", "api_key": "supersecretvalue"}
+                    ),
+                },
+            ),
+            _cx(
+                "response_item",
+                {
+                    "type": "function_call_output",
+                    "call_id": f"{sid}-call1",
+                    "output": "3 passed",
+                },
+            ),
+        ]
+    else:  # custom_tool_call (e.g. an MCP-backed codex tool)
+        lines += [
+            _cx(
+                "response_item",
+                {
+                    "type": "custom_tool_call",
+                    "status": "completed",
+                    "call_id": f"{sid}-call1",
+                    "name": "apply_patch",
+                    "input": json.dumps({"patch": "diff --git a b"}),
+                },
+            ),
+            _cx(
+                "response_item",
+                {
+                    "type": "custom_tool_call_output",
+                    "call_id": f"{sid}-call1",
+                    "output": "applied",
+                },
+            ),
+        ]
+    return lines
+
+
+class CodexAdapterTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.dbpath = os.path.join(self.tmp, "atlas.db")
+        self.conn = atlas_db.connect(self.dbpath)
+        atlas_db.init(self.conn)
+        # a codex-style date tree: root/YYYY/MM/DD/rollout-<ts>-<uuid>.jsonl
+        self.root = os.path.join(self.tmp, "codex", "sessions")
+        self.daydir = os.path.join(self.root, "2026", "04", "16")
+        os.makedirs(self.daydir)
+        self._write(
+            "codex-aaaa",
+            "Refactor the auth module, please.",
+            "I never actually ran the tests.",
+        )
+        self._write(
+            "codex-bbbb",
+            "Add pagination to the users endpoint.",
+            "Done - applied the patch.",
+            tool_kind="custom_tool_call",
+        )
+
+    def tearDown(self):
+        self.conn.close()
+
+    def _write(self, sid, prompt, reply, tool_kind="function_call"):
+        p = os.path.join(self.daydir, f"rollout-2026-04-16T20-45-44-{sid}.jsonl")
+        with open(p, "w") as f:
+            f.write("\n".join(_codex_session(sid, prompt, reply, tool_kind)) + "\n")
+        return p
+
+    def test_backfill_ingests_codex_sessions(self):
+        totals = session_ingest.backfill_agent("codex", root=self.root, conn=self.conn)
+        self.assertEqual(totals["files"], 2)
+        # every session_logs row is tagged agent='codex'
+        agents = {
+            r[0] for r in self.conn.execute("SELECT DISTINCT agent FROM session_logs")
+        }
+        self.assertEqual(agents, {"codex"})
+        # two sessions, each: user + assistant message, one tool call, one prompt
+        self.assertEqual(
+            self.conn.execute("SELECT COUNT(*) FROM session_logs").fetchone()[0], 2
+        )
+        self.assertEqual(
+            self.conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0], 4
+        )
+        self.assertEqual(
+            self.conn.execute("SELECT COUNT(*) FROM tool_calls").fetchone()[0], 2
+        )
+        self.assertEqual(
+            self.conn.execute("SELECT COUNT(*) FROM user_prompts").fetchone()[0], 2
+        )
+
+    def test_codex_tokens_and_meta(self):
+        session_ingest.backfill_agent("codex", root=self.root, conn=self.conn)
+        row = self.conn.execute(
+            "SELECT agent, model, cwd, input_tokens, output_tokens, cache_read_tokens, "
+            "tool_call_count FROM session_logs WHERE session_id='codex-aaaa'"
+        ).fetchone()
+        self.assertEqual(row[0], "codex")
+        self.assertEqual(row[1], "gpt-5.4")  # from turn_context
+        self.assertEqual(row[2], "/repo/codex-demo")
+        self.assertEqual(row[3], 100)  # last_token_usage.input_tokens
+        self.assertEqual(row[4], 25)  # output_tokens
+        self.assertEqual(row[5], 40)  # cached_input_tokens -> cache_read_tokens
+        self.assertEqual(row[6], 1)
+
+    def test_codex_tool_call_scrubbed(self):
+        session_ingest.backfill_agent("codex", root=self.root, conn=self.conn)
+        summary = self.conn.execute(
+            "SELECT input_summary FROM tool_calls WHERE tool_use_id='codex-aaaa-call1'"
+        ).fetchone()[0]
+        self.assertNotIn("supersecretvalue", summary)  # secret-named key scrubbed
+        self.assertIn("***", summary)
+        # the tool result was joined back onto the call row
+        rbytes = self.conn.execute(
+            "SELECT result_bytes FROM tool_calls WHERE tool_use_id='codex-aaaa-call1'"
+        ).fetchone()[0]
+        self.assertGreater(rbytes, 0)
+
+    def test_codex_signal_detected(self):
+        session_ingest.backfill_agent("codex", root=self.root, conn=self.conn)
+        types = {r[0] for r in self.conn.execute("SELECT signal_type FROM signals")}
+        self.assertIn("assumption_admission", types)  # "I never actually ran"
+
+    def test_codex_backfill_is_idempotent(self):
+        session_ingest.backfill_agent("codex", root=self.root, conn=self.conn)
+        session_ingest.backfill_agent("codex", root=self.root, conn=self.conn)
+        # stable synthetic ids -> re-run dedupes rather than doubling
+        self.assertEqual(
+            self.conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0], 4
+        )
+        self.assertEqual(
+            self.conn.execute("SELECT COUNT(*) FROM tool_calls").fetchone()[0], 2
+        )
+
+    def test_codex_observer_cwd_excluded(self):
+        # A codex session whose recorded cwd is under observer-sessions must be
+        # skipped even through the new entry point (defense in depth).
+        p = os.path.join(self.daydir, "rollout-2026-04-16T20-45-44-codex-obs.jsonl")
+        lines = _codex_session("codex-obs", "hi", "there")
+        # rewrite the session_meta cwd to a synthetic path
+        meta = json.loads(lines[0])
+        meta["payload"]["cwd"] = "/home/u/.claude-mem/observer-sessions/proj"
+        lines[0] = json.dumps(meta)
+        with open(p, "w") as f:
+            f.write("\n".join(lines) + "\n")
+        stats = session_ingest.ingest_agent_session(
+            p, session_ingest.codex_adapter, conn=self.conn
+        )
+        self.assertEqual(stats["messages"], 0)
+        self.assertEqual(
+            self.conn.execute(
+                "SELECT COUNT(*) FROM session_logs WHERE session_id='codex-obs'"
+            ).fetchone()[0],
+            0,
+        )
+
+
+class ClaudeStillTaggedClaudeTest(unittest.TestCase):
+    """The existing claude path is unchanged and its rows land agent='claude'
+    via the column default - no agent value is passed on that path."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.dbpath = os.path.join(self.tmp, "atlas.db")
+        self.tpath = os.path.join(self.tmp, f"{SID}.jsonl")
+        with open(self.tpath, "w") as f:
+            f.write("\n".join(FIXTURE) + "\n")
+        self.conn = atlas_db.connect(self.dbpath)
+        atlas_db.init(self.conn)
+
+    def tearDown(self):
+        self.conn.close()
+
+    def test_claude_row_tagged_claude(self):
+        session_ingest.ingest_transcript(self.tpath, conn=self.conn, session_id=SID)
+        agent = self.conn.execute(
+            "SELECT agent FROM session_logs WHERE session_id=?", (SID,)
+        ).fetchone()[0]
+        self.assertEqual(agent, "claude")
+
 
 if __name__ == "__main__":
     unittest.main()

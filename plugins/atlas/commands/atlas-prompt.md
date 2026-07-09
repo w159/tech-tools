@@ -1,6 +1,6 @@
 ---
 name: atlas-prompt
-description: Turn a vague, bland, or problematic coding request into a structured, environment-aware, best-practices prompt that an AI coding agent can execute without further clarification. When the raw request is ambiguous on a load-bearing dimension (goal, scope, or acceptance), first asks the user up to three targeted questions via AskUserQuestion, then bakes the answers - plus the tools, skills, plugins, and subagents actually available this session, mandatory verification gates, methodology, a subagent plan, and acceptance criteria - into the rewrite. Mitigates mistakes, optimizes token/context usage, and demands validated, evidence-backed output.
+description: "Rewrite a vague coding request into a structured, environment-aware prompt an AI agent can execute; asks up to three questions first when scope is ambiguous."
 argument-hint: "<your rough prompt>"
 ---
 

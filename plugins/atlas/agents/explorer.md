@@ -1,6 +1,6 @@
 ---
 name: explorer
-description: Read-only codebase explorer for the atlas-engine skill. Use to map a feature, module, or call path, locate the file/symbol that owns a behavior, or summarize structure - cheaply, without reading whole files. Returns a compact structural map with file:line references, never file dumps.
+description: "Read-only codebase explorer. Maps a feature, module, or call path, locates the symbol owning a behavior, or summarizes structure without reading whole files. Returns a compact map with file:line refs, not dumps."
 model: haiku
 color: cyan
 disallowedTools: [Write, Edit, MultiEdit, NotebookEdit]

@@ -1,5 +1,5 @@
 ---
-description: Interactive skill-stacking - asks what you want to accomplish, then composes and runs the best ordered combination of the skills installed this session.
+description: "Dispatch the atlas-stacks skill: interactive skill-stacking that composes and runs the best ordered combination of skills installed this session."
 argument-hint: "[optional: rough goal]"
 ---
 

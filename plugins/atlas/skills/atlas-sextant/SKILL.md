@@ -1,6 +1,6 @@
 ---
 name: atlas-sextant
-description: Use to measure atlas's own run health AND to audit context/asset waste AND to mine the indexed session transcripts. Three lenses. RUN HEALTH reads the SQLite observability DB and emits RUN METRICS (wall-clock, inline-ops, dispatches, parallel waves, context, recall, verifier coverage) plus MEASURABLE IMPROVEMENTS (baseline -> target). ASSET/CONTEXT AUDIT (scripts/asset_audit.py) inventories every context-loaded skill/agent/plugin, estimates each one's token cost, detects the project's stack, scores relevance, and decides the most effective LEVEL to act at (disable-here vs relocate-global) - it learns from restores so it never re-flags an asset you kept. SESSION FORENSICS reads the transcript mirror (messages/tool_calls/user_prompts/signals, populated by the ingest hook from the jsonl/json session logs) to find which tools/skills/mcp/agents are and are not used, whether context-mode/claude-mem/ponytail are actually helping, repeated user requests, and behavioral issues like assumption-admissions or unverified claims - each becoming a CLAUDE.md/rule proposal. On no args, reports cross-run/cross-project trends. The atlas Stop/SubagentStop nudge hook points here.
+description: "Measure atlas's own run health, audit context/asset waste, and mine session transcripts. Three lenses: RUN HEALTH reads the observability DB for metrics (wall-clock, dispatches, verifier coverage) and baseline->target goals; ASSET AUDIT scores each context-loaded skill/agent/plugin by token cost and relevance to flag disable/relocate; SESSION FORENSICS mines transcripts for unused tools and unverified claims into rules. No args reports trends."
 ---
 
 # atlas-sextant
@@ -42,7 +42,9 @@ Public functions in `atlas_db.py`:
 - `inline_ops_since_last_dispatch(conn, run_id)` -- count inline ops since the last dispatch
 - `finalize_run(conn, run_id, wall_clock_s=None) -> None` -- close the run
 - `run_metrics(conn, run_id) -> dict` -- return the metrics row for a run
-- `derive_run_metrics(conn, run_id, session_id) -> dict` -- compute the metrics no live hook can fill (est_context_tokens, verifier_coverage, parallel_waves, in_flight_peak, wall_clock_s) from the transcript mirror and write them onto the run's metrics row. The ingest hook now calls this automatically after every mirror refresh (Stop/SubagentStop/SessionEnd/PreCompact), so live runs populate on their own. Call it manually only for a session whose mirror you just backfilled. It deliberately does NOT touch recall_hits/recall_misses (those are recorded live by the engine Orient signal via `record_recall`), so a derive refresh never clobbers them.
+- `derive_run_metrics(conn, run_id, session_id) -> dict` -- compute the metrics no live hook can fill and write them onto the run's metrics row: `est_context_tokens`, `parallel_waves`, and `in_flight_peak` from the transcript mirror; `wall_clock_s` if not already set; `verifier_coverage` from the `dispatches` table (agent_type pairing -- see below -- NOT from `tool_calls` or the transcript mirror). The ingest hook now calls this automatically after every mirror refresh (Stop/SubagentStop/SessionEnd/PreCompact), so live runs populate on their own. Call it manually only for a session whose mirror you just backfilled. It deliberately does NOT touch recall_hits/recall_misses (those are recorded live by the engine Orient signal via `record_recall`), so a derive refresh never clobbers them.
+- `unpaired_implementer_dispatches(conn, run_id) -> int` -- implementer-type dispatches beyond the verifier-type dispatches available to check them: `max(0, implementers - verifiers)`, using the same `dispatches`-table agent_type matching rule as `verifier_coverage`. The completion gate consumes this to flag shipping work that never got an independent verifier.
+- `purge_observer_sessions(conn) -> dict` -- one-shot cleanup of synthetic observer-session mirror rows (deletes the `session_logs` row plus its child rows in `messages`/`tool_calls`/`user_prompts`/`signals` for any transcript matching a known synthetic-session marker); touches only mirror tables, never `runs`/`dispatches`/`events`/`metrics`/`improvements`/`asset_verdicts`. CLI: `python3 scripts/atlas_db.py purge-observer-sessions`.
 - `record_improvement(conn, run_id, dimension, baseline, target, note) -> int` -- persist a proposed improvement
 - `trends(conn, limit=20) -> list` -- cross-run/cross-project trend rows over the FULL metric set (run_id, root_path, inline_ops, dispatches, parallel_waves, in_flight_peak, est_context_tokens, recall_hits, recall_misses, verifier_coverage, wall_clock_s); most recent `limit` runs. Mirror-derived columns read NULL for any run whose session has no ingested transcript.
 
@@ -72,12 +74,24 @@ never reached it, so the column could read 0 even when the `dispatches` table ha
 rows for the run. `derive_run_metrics` now recomputes `dispatches` as a live
 `COUNT(*) FROM dispatches WHERE run_id=?` on every call, so the stored value always
 reflects every dispatch ingested by the time it runs (`plugins/atlas/scripts/atlas_db.py:380-397`).
-`est_context_tokens`, `verifier_coverage`, `parallel_waves`, and `in_flight_peak` are computed from the
+`est_context_tokens`, `parallel_waves`, and `in_flight_peak` are computed from the
 transcript mirror by `derive_run_metrics(conn, run_id, session_id)`, which the
 ingest hook now runs automatically after each mirror refresh - so they fill on
 their own for any session whose transcript is ingested. A run whose session was
-never ingested still reads NULL for those four; backfill the transcript and call
-`derive_run_metrics` to fill it. `recall_hits` / `recall_misses` are
+never ingested still reads NULL for those three; backfill the transcript and call
+`derive_run_metrics` to fill it. `verifier_coverage` is computed differently: it is
+`min(1.0, verifiers/implementers)`, counting implementer-type vs verifier/validator-type
+dispatches directly from the `dispatches` table by matching `agent_type` (recorded
+live at dispatch time) - NOT from `tool_calls` or the transcript mirror, whose
+`target` values suffer a ~99% key-mismatch against real agent names. This means
+`verifier_coverage` does not require transcript ingestion, only the `dispatches`
+rows for the run. A value of `0.0` means implementer dispatches shipped with zero
+verifier dispatches to check them; `NULL` means there were zero implementer
+dispatches this run - verification coverage is not applicable, a materially
+different state from `0.0` and must not be conflated with it.
+`unpaired_implementer_dispatches(conn, run_id)` exposes the same pairing as a raw
+count (`max(0, implementers - verifiers)`) for the completion gate.
+`recall_hits` / `recall_misses` are
 **recorded live by the engine**: at Orient the engine queries memory and then calls
 `record-recall <session> hit|miss` - hit when the lookup surfaced a usable lesson,
 miss when it ran but returned nothing usable. This is a self-report by the agent that
@@ -105,7 +119,7 @@ run_id = atlas_db.latest_run_id(conn, session_id)
 metrics = atlas_db.run_metrics(conn, run_id)
 
 # Example: verifier coverage was 0.6 this run
-if metrics["verifier_coverage"] < 1.0:
+if metrics["verifier_coverage"] is not None and metrics["verifier_coverage"] < 1.0:
     atlas_db.record_improvement(
         conn, run_id,
         dimension="verifier_coverage",
@@ -184,7 +198,13 @@ never held this; these tables do.
 - `session_logs` - one row per transcript: project, cwd, model, token totals
   (input/output/cache_read/cache_creation), counts, error_count, and the ingest
   cursor. Token totals are recomputed from child rows, so they are correct
-  regardless of re-ingest.
+  regardless of re-ingest. Also carries an `agent` column ('claude' is the
+  schema default; 'codex' is written explicitly by the codex adapter) - slice
+  any of the read helpers below by joining on `session_logs.agent` to compare
+  behavior across coding agents. Transcripts under a known synthetic-session
+  marker (currently `.claude-mem/observer-sessions`, the per-session mirror
+  claude-mem writes for its own observer) are excluded at ingest and never
+  land a row here.
 - `messages` - every user/assistant/system message: role, `is_sidechain`
   (subagent), `thinking`, `text`, per-message `usage` tokens, model.
 - `tool_calls` - every tool invocation: `tool_name`, `kind`
@@ -243,9 +263,26 @@ proposing a rule change, the same way a human would re-read the transcript.
 
 ### Refresh + backfill
 
-The ingest hook keeps the mirror current. To (re)index history on demand:
-`python3 scripts/session_ingest.py --backfill [~/.claude/projects]` (idempotent),
-or one session: `python3 scripts/session_ingest.py <transcript.jsonl>`.
+The ingest hook keeps the mirror current for claude sessions. To (re)index
+history on demand: `python3 scripts/session_ingest.py --backfill
+[~/.claude/projects]` (idempotent), or one session: `python3
+scripts/session_ingest.py <transcript.jsonl>`.
+
+Codex sessions are never picked up by the claude Stop/SessionEnd hook path -
+backfill them explicitly: `python3 scripts/session_ingest.py --backfill-agent
+codex [root]` (root defaults to `~/.codex/sessions`). Caveat when comparing
+agents: codex's `token_count` events are per-event deltas that sum to
+`total_token_usage`, but codex emits far more of these events than assistant
+messages, and the adapter persists only the one nearest each stored message -
+so codex session totals systematically undercount what codex itself reports.
+Treat cross-agent token comparisons as directional, not exact, and note that
+`context_tool_health()` aggregates across all agents with no agent filter, so
+its totals blend regimes once codex rows exist.
+
+A backlog of pre-exclusion observer-session rows was purged from the live DB
+on 2026-07-09 after an audit found 96.6% of `session_logs` rows were this
+pollution; see `purge_observer_sessions(conn)` above and evidence at
+`docs/evidence/2026-07-09-observer-purge.md`.
 
 ## Trends (no-arg)
 

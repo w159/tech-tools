@@ -1,5 +1,5 @@
 ---
-description: "Launch a remediation session pre-loaded with a finding's handoff from the most recent audit hub; use after an atlas-survey or atlas-cartographer run to act on a charted finding. No args lists the actionable findings."
+description: "Launch a remediation session preloaded with a finding from the latest audit hub; use after atlas-survey or atlas-cartographer. No args lists findings."
 argument-hint: "[finding-id]  (no args: list actionable findings from the latest hub)"
 ---
 

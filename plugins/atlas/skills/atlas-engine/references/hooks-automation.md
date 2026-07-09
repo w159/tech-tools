@@ -12,7 +12,7 @@ prompt, a tool call, or wedge a session).
 | `optimizer` | `UserPromptSubmit` | `hooks/prompt_optimizer.py` | optimize the prompt through a local model before Claude sees it; trigger-gated |
 | `advisor` | `PreToolUse` (Bash) | `hooks/bash_advisor.py` | advisory-only; emits a warning on catastrophic, near-irreversible commands only |
 | `format` | `PostToolUse` (Edit\|Write\|MultiEdit) | `hooks/format_after_edit.py` | auto-format the edited file (ruff/prettier/gofmt/rustfmt), async |
-| `dispatch-tripwire` | `PostToolUse` | `hooks/dispatch_tripwire.py` | count inline tool calls during an orchestration run and STOP at the threshold to force a dispatch; marker-gated |
+| `dispatch-tripwire` | `PostToolUse` + `PreToolUse` | `hooks/dispatch_tripwire.py` | advisory STOP at the threshold (default 4); a second `PreToolUse` tier DENIES at 8 inline ops or on Edit/Write/MultiEdit to non-docs paths; marker-gated, orchestration sessions only |
 | `completion-gate` | `Stop` | `hooks/completion_gate.py` | **opt-out.** block stopping an orchestration run until evidence is captured; marker-gated, on by default when docs/ exists (disable with ATLAS_GATE=off) |
 | `nudge` | `Stop`, `SubagentStop` | `hooks/nudge.py` | self-improvement: surface a past lesson and prompt to capture new ones; marker-gated, throttled |
 | `ingest-session` | `Stop`, `SubagentStop`, `SessionEnd`, `PreCompact` | `hooks/ingest_session.py` | index the session transcript into the observability store for atlas-sextant |
@@ -21,7 +21,10 @@ The dispatch tripwire, completion gate, and nudge additionally gate on the per-s
 orchestration marker. The tripwire sets that marker automatically when an orchestration
 skill (atlas-engine, atlas-survey, atlas-cartographer, atlas-expedition, atlas-orbit,
 atlas-stacks) is invoked or an `atlas:*` subagent is dispatched; `mark-orchestrating`
-remains as a manual fallback. The gates stay inert in ordinary non-orchestration sessions. A ninth script, `hooks/validate-readonly-query.sh`, is
+remains as a manual fallback. The gates stay inert in ordinary non-orchestration sessions.
+The tripwire's `PreToolUse` deny tier is independently switchable from its `PostToolUse`
+advisory tier: `ATLAS_TRIPWIRE=off` disables both, `ATLAS_TRIPWIRE_HARD=off` disables only
+the deny tier and leaves the advisory nag in place. A ninth script, `hooks/validate-readonly-query.sh`, is
 **not** auto-loaded by hooks.json; it is a read-only SQL guard available for the DB-audit
 subagents to invoke during read-only audits.
 
@@ -52,6 +55,15 @@ read its output.
 Because the optimizer is slow and `UserPromptSubmit` is synchronous, it is **trigger-gated by
 default** - instant passthrough unless the prompt opts in - with a generous hook `timeout` so
 Claude Code doesn't kill it mid-run.
+
+The same hook also runs an **arm-early classifier** (`looks_substantive`), independent of the
+optimizer path: it flags a prompt as substantive engineering work - an error/stack-trace signal,
+a strong engineering verb (`refactor`/`audit`/`debug`/...) on its own, or a common verb
+(`fix`/`add`/`build`/...) anchored to a concrete code reference - and marks the session
+orchestrating via `atlas_db.mark_orchestrating` *before* any dispatch happens, injecting a nudge
+to invoke atlas-engine. Deliberately conservative (defaults to "trivial") since a false positive
+costs more than a false negative - a wrongly-armed session gets denied by the dispatch tripwire.
+Disable with `ATLAS_ENGINE_ARM=off`.
 
 Config (env vars, all optional):
 
@@ -96,7 +108,7 @@ orchestrator rationalizes "I'll mark it unverified and move on"); this is the ma
   up to 6 levels) AND the session's run is flagged orchestrating in the atlas DB (the
   dispatch-tripwire hook sets that flag automatically when an orchestration skill is invoked or
   an `atlas:*` subagent is dispatched). In any other session it is a silent no-op.
-- **What satisfies it.** All six conditions must hold:
+- **What satisfies it.** All seven conditions must hold:
   - (a) At least one file under `docs/evidence/` (observed-behavior proof captured).
   - (b) `docs/.run/findings.json` exists and records at least one entry with status `verified`
     (independent atlas:verifier result present).
@@ -106,6 +118,9 @@ orchestrator rationalizes "I'll mark it unverified and move on"); this is the ma
   - (f) No docs drift: if non-docs files changed this run (git diff HEAD + staged), at least
     one `docs/` file changed too -- the deterministic trigger forcing an `atlas:docs-curator`
     dispatch before "done".
+  - (g) Law 5 - verifier coverage: if non-docs code changed this run, block when implementer
+    dispatches outnumber verifier dispatches (`atlas_db.unpaired_implementer_dispatches > 0`) -
+    shipping work that never got an independent `atlas:verifier` pass.
   The block message names exactly which condition(s) are missing.
 - **Single nudge, never a wedge.** It blocks the stop at most **once** (the `stop_hook_active`
   loop-guard), then lets the continuation through. Fail-open on any error. Disable entirely with

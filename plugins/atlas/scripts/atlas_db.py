@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS session_logs (
   session_id TEXT UNIQUE NOT NULL,
   project_id INTEGER,
   transcript_path TEXT, cwd TEXT, git_branch TEXT, model TEXT,
+  agent TEXT DEFAULT 'claude',
   started_at REAL, ended_at REAL,
   message_count INTEGER DEFAULT 0, user_prompt_count INTEGER DEFAULT 0,
   tool_call_count INTEGER DEFAULT 0, error_count INTEGER DEFAULT 0,
@@ -111,6 +112,16 @@ def init(conn):
         pass  # column already present
     try:
         conn.execute("ALTER TABLE runs ADD COLUMN orchestrating INTEGER DEFAULT 0")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # column already present
+    # Idempotent migration: add the agent column to pre-existing DBs so the
+    # session_logs mirror can distinguish coding agents (claude, codex, ...).
+    # Fresh DBs already have it from the SCHEMA; the OperationalError is the
+    # success path for a DB initialized before this column existed. The DEFAULT
+    # 'claude' backfills every pre-existing row to the only agent ingested so far.
+    try:
+        conn.execute("ALTER TABLE session_logs ADD COLUMN agent TEXT DEFAULT 'claude'")
         conn.commit()
     except sqlite3.OperationalError:
         pass  # column already present
@@ -328,6 +339,41 @@ def run_metrics(conn, run_id):
     return dict(zip(cols, row))
 
 
+def _dispatch_coverage_counts(conn, run_id):
+    """Count implementer-type vs verifier-type dispatches for a run from the
+    `dispatches` table, whose agent_type is recorded at dispatch time (the reliable
+    source; tool_calls targets suffer a ~99% key-mismatch against real agent names).
+
+    Matching rule (case-insensitive substring on agent_type):
+      implementer-type: contains 'implementer' - covers atlas:implementer and any
+                        domain-prefixed specialist that ships changes
+                        (e.g. frontend-implementer, atlas:implementer).
+      verifier-type:    contains 'verifier' or 'validator' - covers atlas:verifier
+                        and secondary-expert-validator equivalents.
+    Returns (implementers, verifiers)."""
+    impl = conn.execute(
+        "SELECT COUNT(*) FROM dispatches WHERE run_id=? "
+        "AND LOWER(agent_type) LIKE '%implementer%'",
+        (run_id,),
+    ).fetchone()[0]
+    ver = conn.execute(
+        "SELECT COUNT(*) FROM dispatches WHERE run_id=? "
+        "AND (LOWER(agent_type) LIKE '%verifier%' "
+        "OR LOWER(agent_type) LIKE '%validator%')",
+        (run_id,),
+    ).fetchone()[0]
+    return impl, ver
+
+
+def unpaired_implementer_dispatches(conn, run_id):
+    """Implementer dispatches beyond the verifier dispatches available to check them
+    for a run: max(0, implementers - verifiers). The completion gate consumes this to
+    flag shipping work that never got an independent verification pass. Uses the same
+    dispatches-table matching rule as verifier_coverage."""
+    impl, ver = _dispatch_coverage_counts(conn, run_id)
+    return max(0, impl - ver)
+
+
 def derive_run_metrics(conn, run_id, session_id, window_s=10.0):
     """Compute the run-health columns that no live hook can fill, from the
     transcript mirror, and write them onto the metrics row. Fills the columns
@@ -335,8 +381,11 @@ def derive_run_metrics(conn, run_id, session_id, window_s=10.0):
 
       est_context_tokens - peak orchestrator context = max(input+cache_read) over
                            main-thread (non-sidechain) messages this session.
-      verifier_coverage  - verifier dispatches / implementer dispatches, capped
-                           at 1.0; None when nothing was dispatched to verify.
+      verifier_coverage  - verifier-type dispatches / implementer-type dispatches
+                           from the `dispatches` table (agent_type recorded at
+                           dispatch time - reliable, unlike tool_calls targets),
+                           capped at 1.0; None when zero implementer dispatches
+                           (no shipping change = coverage not applicable).
       parallel_waves     - count of dispatch clusters (>=2 agent dispatches inside
                            a `window_s` window). Approximate - timestamp-based.
       in_flight_peak     - max agent dispatches inside any `window_s` window.
@@ -351,16 +400,7 @@ def derive_run_metrics(conn, run_id, session_id, window_s=10.0):
         "FROM messages WHERE session_id=? AND is_sidechain=0",
         (session_id,),
     ).fetchone()[0]
-    impl = conn.execute(
-        "SELECT COUNT(*) FROM tool_calls WHERE session_id=? AND kind='agent' "
-        "AND target LIKE '%implementer%'",
-        (session_id,),
-    ).fetchone()[0]
-    ver = conn.execute(
-        "SELECT COUNT(*) FROM tool_calls WHERE session_id=? AND kind='agent' "
-        "AND target LIKE '%verifier%'",
-        (session_id,),
-    ).fetchone()[0]
+    impl, ver = _dispatch_coverage_counts(conn, run_id)
     coverage = min(1.0, ver / impl) if impl else None
     ts = [
         r[0]
@@ -566,9 +606,16 @@ def session_cursor(conn, session_id):
     return (row[0], row[1]) if row else (0, 0)
 
 
-def upsert_session_log(conn, session_id, **fields):
+def upsert_session_log(conn, session_id, agent=None, **fields):
     """Insert or update the per-session meta row. Only the keys passed in
-    `fields` are written; absent keys keep their stored value (COALESCE)."""
+    `fields` are written; absent keys keep their stored value (COALESCE).
+
+    `agent` is handled separately from the COALESCE columns: it is written into
+    the row only when a caller passes it explicitly. That is deliberate - the
+    claude ingest path never passes it, so on a fresh insert the column is
+    omitted and its SCHEMA DEFAULT 'claude' governs, rather than an inserted NULL
+    clobbering the default. The codex (and any future) adapter passes agent so
+    its rows land the correct value."""
     cols = (
         "project_id",
         "transcript_path",
@@ -583,13 +630,19 @@ def upsert_session_log(conn, session_id, **fields):
         "file_mtime",
         "last_ingest_at",
     )
-    vals = {c: fields.get(c) for c in cols}
+    insert_cols = list(cols)
+    insert_vals = [fields.get(c) for c in cols]
+    update_cols = list(cols)
+    if agent is not None:
+        insert_cols.append("agent")
+        insert_vals.append(agent)
+        update_cols.append("agent")
     conn.execute(
-        "INSERT INTO session_logs(session_id," + ",".join(cols) + ") "
-        "VALUES(?," + ",".join("?" for _ in cols) + ") "
+        "INSERT INTO session_logs(session_id," + ",".join(insert_cols) + ") "
+        "VALUES(?," + ",".join("?" for _ in insert_cols) + ") "
         "ON CONFLICT(session_id) DO UPDATE SET "
-        + ",".join(f"{c}=COALESCE(excluded.{c},{c})" for c in cols),
-        (session_id, *[vals[c] for c in cols]),
+        + ",".join(f"{c}=COALESCE(excluded.{c},{c})" for c in update_cols),
+        (session_id, *insert_vals),
     )
     conn.commit()
 
@@ -710,6 +763,52 @@ def reset_session_rows(conn, session_id):
     for tbl in ("messages", "tool_calls", "user_prompts", "signals"):
         conn.execute(f"DELETE FROM {tbl} WHERE session_id=?", (session_id,))
     conn.commit()
+
+
+# Path fragment identifying claude-mem observer transcripts. Kept in lockstep
+# with session_ingest.SYNTHETIC_SESSION_MARKERS (no import: session_ingest
+# depends on this module, not the reverse).
+OBSERVER_SESSION_MARKER = ".claude-mem/observer-sessions"
+
+
+def purge_observer_sessions(conn):
+    """One-shot cleanup of synthetic observer-session rows that the ingest-side
+    exclusion now prevents going forward. Deletes every session_logs row whose
+    transcript_path or cwd is under an observer-sessions directory, plus that
+    session's child rows in messages/tool_calls/user_prompts/signals (all keyed
+    on session_id; no FK constraints). Touches ONLY the mirror tables - never
+    runs, dispatches, events, metrics, improvements, or asset_verdicts.
+    Returns a dict of per-table deleted counts."""
+    like = f"%{OBSERVER_SESSION_MARKER}%"
+    sids = [
+        r[0]
+        for r in conn.execute(
+            "SELECT session_id FROM session_logs "
+            "WHERE transcript_path LIKE ? OR cwd LIKE ?",
+            (like, like),
+        ).fetchall()
+    ]
+    counts = {
+        "messages": 0,
+        "tool_calls": 0,
+        "user_prompts": 0,
+        "signals": 0,
+        "session_logs": 0,
+    }
+    if not sids:
+        return counts
+    placeholders = ",".join("?" for _ in sids)
+    for tbl in ("messages", "tool_calls", "user_prompts", "signals"):
+        cur = conn.execute(
+            f"DELETE FROM {tbl} WHERE session_id IN ({placeholders})", sids
+        )
+        counts[tbl] = cur.rowcount
+    cur = conn.execute(
+        f"DELETE FROM session_logs WHERE session_id IN ({placeholders})", sids
+    )
+    counts["session_logs"] = cur.rowcount
+    conn.commit()
+    return counts
 
 
 # --- session-log mirror: read path (the sextant session-forensics lens) -------
@@ -840,6 +939,14 @@ if __name__ == "__main__":
         init(_c)
         _rid = mark_orchestrating(_c, _session, _cwd)
         print("orchestrating run %s for session %s" % (_rid, _session))
+
+    elif len(_sys.argv) >= 2 and _sys.argv[1] == "purge-observer-sessions":
+        import json as _json
+
+        _c = connect()
+        init(_c)
+        _counts = purge_observer_sessions(_c)
+        print(_json.dumps(_counts, indent=2))
 
     elif len(_sys.argv) >= 4 and _sys.argv[1] == "record-recall":
         _session = _sys.argv[2]

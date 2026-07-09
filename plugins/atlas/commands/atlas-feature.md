@@ -1,5 +1,5 @@
 ---
-description: Build a full-stack feature across frontend and backend with verified evidence. Use when a request spans UI plus API plus data and must ship working, not "should work".
+description: "Build a full-stack feature with verified evidence. Use when a request spans UI, API, and data and must ship working, not 'should work'."
 argument-hint: "[feature] [acceptance criteria] [stack] [constraints]"
 ---
 

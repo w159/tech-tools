@@ -4,6 +4,73 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
+## Atlas v3.1.0 -- enforcement teeth, fork doctrine, sextant multi-agent chronicle, de-overlap (2026-07-09)
+
+Full overhaul of the atlas plugin as the load-bearing orchestration layer. Every
+shipping change carries an independent atlas:verifier record in
+`docs/.run/findings.json`; regression 115/115 tests green; version bumped
+3.0.2 -> 3.1.0 (`plugins/atlas/.claude-plugin/plugin.json:3`).
+
+- Arm-early classifier: `prompt_optimizer.py` now classifies each UserPromptSubmit
+  and arms the orchestration flag for substantive engineering prompts (error
+  signal / strong verb / common-verb-with-code-anchor tiers), injecting a one-line
+  engine nudge; trivial prompts untouched; `ATLAS_ENGINE_ARM=off` escape
+  (`plugins/atlas/hooks/prompt_optimizer.py:297-398`). Broke the chicken-and-egg
+  where the flag was only ever set after a dispatch happened. Looped back once:
+  the first verifier refuted the initial point-scoring design with conversational
+  false positives; the two-tier rework re-verified clean with one accepted,
+  documented residual (dual-use verbs like "audit"/"debug").
+- Tripwire deny tier: `dispatch_tripwire.py` gains a PreToolUse path that denies
+  the 9th undelegated inline op (`DENY_THRESHOLD = 8`) and any inline
+  Edit/Write/MultiEdit to non-docs production paths, orchestration-flagged
+  sessions only, using the documented `permissionDecision: "deny"` form;
+  `ATLAS_TRIPWIRE_HARD=off` disables only the deny tier; the PostToolUse advisory
+  at 4 is unchanged (`plugins/atlas/hooks/dispatch_tripwire.py:26,57-64,70`;
+  `plugins/atlas/hooks/hooks.json` PreToolUse registration).
+- Completion gate condition (g): Law 5 machine-enforced - Stop is blocked when
+  code changed and `atlas_db.unpaired_implementer_dispatches(conn, run_id) > 0`,
+  naming the count and atlas:verifier (`plugins/atlas/hooks/completion_gate.py:290-354`).
+- Verifier coverage re-sourced: `derive_run_metrics` computes `verifier_coverage`
+  from the `dispatches` table (agent_type pairing; NULL when zero implementer
+  dispatches) instead of the mismatch-prone `tool_calls` targets
+  (`plugins/atlas/scripts/atlas_db.py:342-411`).
+- Fork routing doctrine: `subagent-kit.md` documents `subagent_type: "fork"`
+  (full-history inheritance, prompt-cache reuse, `CLAUDE_CODE_FORK_SUBAGENT=1`,
+  dispatch-time only, no nested forks) routed to planner/completeness-critic/
+  docs-curator/synthesis; verifier and explorer stay fresh-context per Law 5
+  (`plugins/atlas/skills/atlas-engine/references/subagent-kit.md:60-82`). The env
+  var was enabled globally in `~/.claude/settings.json` (user-approved, verified
+  against live docs). Exercised live this run: the completeness critique and this
+  docs reconciliation both ran as forks.
+- Output style resurrected: `atlas-orchestrator.md` gains `force-for-plugin: true`
+  (auto-applies when the plugin is enabled) and was trimmed 66 -> 49 lines with a
+  fork-vs-fresh section; zero claude.ai behavior-prompt content
+  (`plugins/atlas/output-styles/atlas-orchestrator.md:1-5`).
+- Observer-session pollution fixed and purged: `is_synthetic_session` excludes
+  `.claude-mem/observer-sessions` transcripts at ingest
+  (`plugins/atlas/scripts/session_ingest.py:204-214`), and
+  `purge_observer_sessions` removed the existing 14,078 polluted session_logs
+  rows plus 98,940 child rows from the live DB (backup taken; runs/dispatches
+  untouched) - before/after capture in `docs/evidence/2026-07-09-observer-purge.md`.
+- Sextant chronicles codex: `session_logs` gains an `agent` column (default
+  'claude', idempotent migration) and a generic adapter registry with a codex
+  JSONL adapter; the gated real backfill ingested 170 codex sessions (68
+  observer-cwd files correctly excluded; claude rows byte-identical; idempotency
+  proven) - `docs/evidence/2026-07-09-codex-backfill.md`. Known limitation
+  documented: codex token deltas are only partially persisted (undercount), see
+  `plugins/atlas/skills/atlas-sextant/SKILL.md:270-280`.
+- De-overlap wave: 33 of 40 frontmatter descriptions rewritten to tight unique
+  triggers (plugin.json description 1548 -> 281 chars, sextant 1177 -> 447,
+  atlas-prompt 648 -> 157); zero duplicate or first-60-char-identical
+  descriptions; atlas-stacks command is routes-only; docs-auditor is the sole
+  owner of docs-drift; verifier confirmed every diff touched exactly the
+  description line. Two weakened triggers (m365 "Graph", doctor symptom clause)
+  were caught by the verifier and restored.
+- Docs synced to the new enforcement reality: engine SKILL.md, hooks-automation.md
+  ("seven conditions"), plugin README hook table, and the sextant public-API list
+  all reconciled against the shipped code by a dedicated pass, then re-verified
+  claim-by-claim against the implementation.
+
 ## Unreleased -- atlas harden: agent-roster cleanup, spec conformance, routing, marketplace repoint (2026-07-07)
 
 Audit: `docs/audits/atlas-harden-2026-07-07/` (orientation, decisions, per-stage

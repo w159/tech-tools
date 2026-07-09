@@ -1,5 +1,5 @@
 ---
-description: Build or refactor UI on a single design system (shadcn/ui + Tailwind + Radix by default) with every state handled and verified live. Use for screens, flows, or component work on the frontend.
+description: "Build or refactor UI on a single design system (shadcn/ui + Tailwind + Radix) with every state handled and verified live. Use for screens, flows, or components."
 argument-hint: "[project] [screens/flows] [design intent]"
 ---
 

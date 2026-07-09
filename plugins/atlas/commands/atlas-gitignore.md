@@ -1,5 +1,5 @@
 ---
-description: Generate a zero-trust deny-by-default .gitignore for a named stack, allowlisting only intended paths and re-excluding secrets last; use when starting a repo or hardening one against leaked credentials.
+description: "Generate a zero-trust, deny-by-default .gitignore for a named stack: allowlist intended paths, re-exclude secrets last. Use when starting or hardening a repo."
 argument-hint: [languages/frameworks/package managers/build tools/OS/editors]
 ---
 

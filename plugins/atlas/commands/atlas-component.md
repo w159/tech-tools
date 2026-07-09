@@ -1,5 +1,5 @@
 ---
-description: Build one reusable component that survives latency, cancellation, and partial failure (progress modal, upload widget, long-running job panel). Use when a single resilient UI piece must handle every backend state.
+description: "Build one reusable component that survives latency, cancellation, and partial failure (progress modal, upload widget, job panel), handling every backend state."
 argument-hint: "[component name+purpose] [props contract] [backend contract]"
 ---
 

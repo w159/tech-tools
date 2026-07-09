@@ -1,5 +1,44 @@
 # Changelog
 
+## 3.1.0 (2026-07-09)
+
+Enforcement teeth, fork doctrine, multi-agent chronicle, de-overlap. Every change
+independently verified (`docs/.run/findings.json` at repo root); 115/115 tests.
+
+- **Arm-early classifier.** `prompt_optimizer.py` arms the orchestration flag on
+  substantive engineering prompts (two-tier verb design; `ATLAS_ENGINE_ARM=off`)
+  and nudges engine invocation, ending the flag's dependence on a first dispatch.
+- **Tripwire deny tier.** `dispatch_tripwire.py` now also runs on PreToolUse:
+  denies the 9th undelegated inline op and inline edits to production paths,
+  orchestration sessions only; `ATLAS_TRIPWIRE_HARD=off` escape; the PostToolUse
+  advisory at 4 is unchanged.
+- **Gate condition (g).** `completion_gate.py` blocks Stop when implementer
+  dispatches lack paired verifier dispatches (Law 5, machine-enforced), via the
+  new `atlas_db.unpaired_implementer_dispatches`.
+- **Coverage re-sourced.** `verifier_coverage` derives from the `dispatches`
+  table (NULL when no implementer dispatches), replacing the mismatch-prone
+  `tool_calls` computation.
+- **Fork doctrine.** `subagent-kit.md` routes planner/critic/curator/synthesis
+  dispatches to `subagent_type: "fork"` (full-history inheritance,
+  `CLAUDE_CODE_FORK_SUBAGENT=1`); verifier/explorer stay fresh-context.
+- **Output style auto-applies.** `atlas-orchestrator.md` gains
+  `force-for-plugin: true`, trimmed 66 -> 49 lines.
+- **Observer pollution fixed + purged.** Ingest excludes
+  `.claude-mem/observer-sessions`; `purge_observer_sessions` removed 14,078
+  polluted session rows from the live DB (evidence at repo
+  `docs/evidence/2026-07-09-observer-purge.md`).
+- **Codex chronicle.** `session_logs.agent` column + adapter registry with a
+  codex JSONL adapter; `session_ingest.py --backfill-agent codex` ingested 170
+  real sessions (idempotent, observer-excluded, secret-scrubbed). Known
+  limitation: codex token deltas partially persisted (undercount) - see the
+  sextant skill's caveat.
+- **De-overlap.** 33/40 frontmatter descriptions rewritten to tight unique
+  triggers (plugin description 1548 -> 281 chars); atlas-stacks command is
+  routes-only; docs-auditor solely owns docs-drift; no functionality changed.
+- **Docs synced.** Engine SKILL.md, hooks-automation.md (seven conditions),
+  README hook table, and sextant public-API docs reconciled against the shipped
+  code and re-verified claim-by-claim.
+
 ## Unreleased
 
 Agent-roster and spec-conformance hardening pass (audit:

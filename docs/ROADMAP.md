@@ -6,6 +6,27 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 
 ## Backlog
 
+### Atlas v3.1.0 follow-ups (added 2026-07-09)
+
+- Post-release smoke test: reload plugins (installed cache is still 3.0.2), open a
+  fresh session, confirm the ATLAS output-style header appears without /config
+  selection and the arm/deny behavior engages live. Everything shipped is verified
+  at the code/test level but [unverified live] until the reload.
+- Codex token fidelity: persist all token_count deltas, not just the one nearest
+  each stored message (~59% of events currently discarded -> systematic
+  undercount; see `plugins/atlas/skills/atlas-sextant/SKILL.md:270-280`).
+- `context_tool_health()` agent filter: totals currently blend claude and codex
+  token regimes once codex rows exist (`plugins/atlas/scripts/atlas_db.py:846-854`).
+- Classifier arm-precision monitoring: use sextant (runs.orchestrating vs actual
+  dispatches) to measure real-world false-arm rate of the accepted dual-use-verb
+  residual (audit/investigate/debug/profile/harden).
+- atlas_doctor marketplace-source repair: pre-existing FAILs (installed cache
+  tracks henssler-financial remote, expected w159/tech-tools) - run
+  `python3 plugins/atlas/scripts/atlas_doctor.py --fix` then reload plugins.
+- Improvement #28 (user-gated): one-line global CLAUDE.md rule that the Skill tool
+  is only for listed skills (34 historical Skill(bash/read/write) misfires, 100%
+  error rate).
+
 ### Atlas context/cost tuning recommendations (carried from Phase 3)
 
 Surface autocompact and thinking-token budgets plus model routing as recommend-then-confirm options
@@ -16,6 +37,19 @@ Surface autocompact and thinking-token budgets plus model routing as recommend-t
 Nothing in progress.
 
 ## Done
+
+### Atlas v3.1.0 -- enforcement teeth, fork doctrine, multi-agent chronicle, de-overlap (resolved 2026-07-09)
+
+Eleven-stage orchestrated overhaul, every stage independently verified in a fresh
+context (`docs/.run/findings.json`): arm-early classifier + two-tier tripwire
+(PreToolUse deny) + completion-gate condition (g); verifier coverage re-sourced to
+the dispatches table; fork routing doctrine (CLAUDE_CODE_FORK_SUBAGENT=1 enabled
+globally, exercised live by the critic and curator forks this run);
+force-for-plugin output style; observer-session exclusion + purge of 14,078
+polluted rows (`docs/evidence/2026-07-09-observer-purge.md`); codex ingest adapter
++ 170-session backfill (`docs/evidence/2026-07-09-codex-backfill.md`); de-overlap
+of 33/40 asset descriptions; docs synced; 115/115 tests; 3.0.2 -> 3.1.0. See
+`docs/CHANGELOG.md` and `docs/plans/atlas-overhaul-3.1.0.md`.
 
 ### Atlas v2.3.0 -- cohesion program (resolved 2026-06-30)
 

@@ -63,6 +63,25 @@ Use these by name as `subagent_type`. They already carry the orchestrator's disc
 
 For domain depth, route instead to the installed specialists (`backend-architect`, `frontend-developer`, `security-engineer`, `debugger`, `devops-automator`, `code-reviewer`, `test-engineer`, `test-executor`, `secondary-expert-validator`, `codebase-explorer`), same spec shape.
 
+## Fork subagents (`subagent_type: "fork"`) - when to inherit history instead of starting fresh
+
+A fork inherits the full conversation history, the parent's system prompt, tools, and model - and its first request reuses the parent's prompt cache, so a forked dispatch is cheap. It requires `CLAUDE_CODE_FORK_SUBAGENT=1` (set globally on this machine). Fork is not a frontmatter field on an agent `.md` file - there is no such agent definition; `fork` is chosen at dispatch time, per call, by passing it as the `subagent_type`. A fork cannot spawn further forks.
+
+Route by whether the dispatch's value comes from everything already said this session:
+
+| Dispatch | Fork? | Why |
+|---|---|---|
+| `atlas:planner` | fork | decomposition needs the whole task history to be correct |
+| `atlas:completeness-critic` | fork | judges gaps against everything already claimed or done this session |
+| `atlas:docs-curator` | fork | writes docs reflecting the session's actual decisions, not a re-explained summary |
+| synthesis / summary dispatches | fork | the output IS a compression of this conversation |
+| `atlas:verifier` | never | law 5 independence requires a fresh context carrying none of the orchestrator's assumptions |
+| `atlas:explorer` | never | cheap haiku lookup with no history dependency - forking defeats the point of a light dispatch |
+
+**Fallback:** if fork is unavailable (env var unset, older CLI), dispatch the same role as a normal fresh subagent with a fuller brief - restate the relevant history in `CONTEXT` - and keep going. A missing fork never fails the wave.
+
+**Caution:** a fork inherits the orchestrator's assumptions verbatim, unexamined. Anything that needs independent judgment - a verifier, a second opinion, any check that must not be contaminated by what the orchestrator already believes - must not fork.
+
 ## Structured output (define the shape, every time)
 
 Every dispatch must specify the EXACT format the subagent returns: a named schema or a precise template. Unstructured reports are not comparable across a wave, and the orchestrator wastes context re-parsing prose. Define the shape up front so reports come back parseable and diffable.

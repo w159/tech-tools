@@ -1,5 +1,5 @@
 ---
-description: "Atlas architect: boot the workspace - verify/install claude-mem and context-mode, scan the project, recommend skills/plugins/MCP to install (confirm before installing), wire hooks, write project config, and seed docs/ SSOT."
+description: "Atlas architect: boot the workspace. Verify claude-mem and context-mode, scan the project, recommend tooling (confirm first), wire hooks, seed the docs/ SSOT."
 argument-hint: "[menu [described need] | deps | discover | hooks | config | all]"
 ---
 

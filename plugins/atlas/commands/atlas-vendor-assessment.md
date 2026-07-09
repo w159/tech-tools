@@ -1,5 +1,5 @@
 ---
-description: Conduct an evidence-based vendor security assessment against a control or regulatory framework you name, citing the provided documentation for every finding. Use when vetting a vendor and the output may be read by a reviewer or auditor.
+description: "Evidence-based vendor security assessment against a framework you name, citing provided docs per finding. Use when the output may reach an auditor or reviewer."
 argument-hint: "[vendor + services/data access] [framework(s)] [attach evidence: SOC 2, whitepaper, DPA, terms]"
 ---
 

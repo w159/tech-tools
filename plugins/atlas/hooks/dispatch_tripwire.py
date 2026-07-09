@@ -1,8 +1,16 @@
 #!/usr/bin/env python3
-"""PostToolUse tripwire: counts inline ops in the main session and STOPs drift.
+"""Dispatch tripwire: counts inline ops in the main session and curbs drift.
 
-Fail-open: any error exits 0. Logs to the atlas observability DB. Advisory only -
-it injects context, never blocks. Disable with ATLAS_TRIPWIRE=off.
+Two tiers, branched on the payload's hook_event_name:
+  - PostToolUse (advisory): after an op lands, injects a STOP nag at threshold.
+    This is the original behavior, unchanged.
+  - PreToolUse (deny): before an op lands, and ONLY in orchestration-flagged
+    sessions, DENIES the call when inline ops since the last dispatch reach the
+    hard limit, or when the op edits production target code inline.
+
+Fail-open: any error exits 0. Logs to the atlas observability DB.
+Disable both tiers with ATLAS_TRIPWIRE=off. Disable ONLY the deny tier (advisory
+persists) with ATLAS_TRIPWIRE_HARD=off. Non-orchestration sessions are never denied.
 """
 
 import json
@@ -13,6 +21,9 @@ INLINE_TOOLS = {"Read", "Grep", "Glob", "Edit", "Write", "Bash"}
 DISPATCH_TOOLS = {"Agent", "Task"}
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit"}
 ORCH_MARKERS = ("docs/",)
+# PreToolUse deny tier: the Nth inline op with no intervening dispatch is denied.
+# 8 prior ops means this call is the 9th -> deny.
+DENY_THRESHOLD = 8
 # Skills whose invocation means the session IS an atlas orchestration run.
 # Deliberately excludes advisory/config skills (atlas-architect, atlas-harbor)
 # so casual sessions never trip the completion gate.
@@ -40,6 +51,46 @@ def _is_orchestration_path(path):
     return norm.startswith("docs/") or "/docs/" in norm
 
 
+def _deny(reason):
+    # Documented PreToolUse blocking form (code.claude.com/docs/en/hooks.md):
+    # exit 0 with hookSpecificOutput.permissionDecision "deny" plus a reason.
+    out = {
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": reason,
+        }
+    }
+    print(json.dumps(out))
+
+
+def _pre_tool_use(conn, atlas_db, tool, session, path):
+    """Deny tier: fires before the op lands, orchestration-flagged sessions only."""
+    # The deny tier is independently kill-switchable; the advisory tier persists.
+    if os.environ.get("ATLAS_TRIPWIRE_HARD", "on").lower() == "off":
+        return
+    run_id = atlas_db.current_run_id(conn, session)
+    if run_id is None:
+        return  # no active run -> nothing to gate
+    if not atlas_db.is_orchestrating(conn, session):
+        return  # non-orchestration sessions are NEVER denied anything
+    # (b) Editing production target code inline is the sharpest violation.
+    if tool in EDIT_TOOLS and not _is_orchestration_path(path):
+        _deny(
+            "DENY - atlas orchestrators never edit target code inline. "
+            "Route this %s of %s to atlas:implementer." % (tool, path)
+        )
+        return
+    # (a) Too many inline ops with no intervening dispatch.
+    count = atlas_db.inline_ops_since_last_dispatch(conn, run_id)
+    if count >= DENY_THRESHOLD:
+        _deny(
+            "DENY - %d inline ops since your last dispatch. Orchestrators "
+            "delegate: dispatch the next step to atlas:explorer (investigation) "
+            "or atlas:implementer (edits) instead of acting inline." % count
+        )
+
+
 def main():
     if os.environ.get("ATLAS_TRIPWIRE", "on").lower() == "off":
         return
@@ -48,6 +99,8 @@ def main():
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
     import atlas_db
 
+    # Default missing event to PostToolUse so legacy payloads keep advisory behavior.
+    event = payload.get("hook_event_name", "PostToolUse")
     tool = payload.get("tool_name", "")
     tinput = payload.get("tool_input", {}) or {}
     session = payload.get("session_id", "")
@@ -55,6 +108,10 @@ def main():
 
     conn = atlas_db.connect()
     atlas_db.init(conn)
+
+    if event == "PreToolUse":
+        _pre_tool_use(conn, atlas_db, tool, session, path)
+        return
 
     if tool == "Skill":
         # Invoking an orchestration skill flags the run deterministically -

@@ -45,6 +45,8 @@ atlas/
 |   |-- discover_capabilities.py   #   read-only stack scan -> ranked recommendations
 |   |-- atlas_doctor.py            #   installation health check + auto-repair (/atlas-doctor, SessionStart guard)
 |   `-- install_hooks.py           #   fallback wiring for non-plugin installs
+|-- output-styles/
+|   `-- atlas-orchestrator.md      #   force-for-plugin: true - auto-applies whenever atlas is enabled
 |-- agents/                        # 12 subagents (atlas:<role>), auto-registered
 |   |-- explorer.md                #   read-only codebase mapping
 |   |-- implementer.md             #   bounded, verified code edits
@@ -137,14 +139,28 @@ can never block a session.
 | --- | --- | --- |
 | `session_boot.py` | `SessionStart` | Activate the runtime, report dependency state, surface relevant lessons |
 | `atlas_doctor.py --hook` | `SessionStart` | Rollback guard: warn loudly if the installed plugin was downgraded, the marketplace points at a fork, or hooks/assets are missing (warn-only, always exits 0) |
-| `prompt_optimizer.py` | `UserPromptSubmit` | Optional local-model prompt rewrite (trigger-gated; augments, never replaces) |
+| `prompt_optimizer.py` | `UserPromptSubmit` | Optional local-model prompt rewrite (trigger-gated; augments, never replaces). Also runs an arm-early classifier that flags substantive engineering prompts and marks the session orchestrating before any dispatch happens (`ATLAS_ENGINE_ARM=off`) |
 | `bash_advisor.py` | `PreToolUse` (Bash) | Advisory only: warns on catastrophic, near-irreversible patterns (`rm -rf /`, `mkfs`, `dd` to a disk, fork bomb). Never denies or forces an ask; the normal permission flow is preserved |
 | `validate-readonly-query.sh` | `PreToolUse` (Bash), per DB-audit subagent | Block writes/DDL/grants during read-only audits (wired by the audit agents, not the global session) |
 | `format_after_edit.py` | `PostToolUse` (Edit/Write) | Run the formatter after edits |
-| `dispatch_tripwire.py` | `PostToolUse` | Auto-flag the session orchestrating on orchestration-skill invocation or `atlas:*` dispatch; count inline ops since the last dispatch and flag orchestrator drift (advisory; `ATLAS_TRIPWIRE=off`) |
-| `completion_gate.py` | `Stop` | Block a premature "done" until all six definition-of-done conditions hold: evidence/, verified finding, CHANGELOG, ROADMAP, root README, and no code-changed-but-docs-didn't drift (orchestrating sessions only; `ATLAS_GATE=off`) |
+| `dispatch_tripwire.py` | `PostToolUse` + `PreToolUse` | Auto-flag the session orchestrating on orchestration-skill invocation or `atlas:*` dispatch; count inline ops since the last dispatch and advise at the threshold (advisory; `ATLAS_TRIPWIRE=off`). A `PreToolUse` deny tier DENIES the call at 8 inline ops or on any Edit/Write/MultiEdit to a non-docs path, orchestration sessions only (`ATLAS_TRIPWIRE_HARD=off` disables just this tier) |
+| `completion_gate.py` | `Stop` | Block a premature "done" until all seven definition-of-done conditions hold: evidence/, verified finding, CHANGELOG, ROADMAP, root README, no code-changed-but-docs-didn't drift, and condition (g) Law 5 verifier coverage (blocks when implementer dispatches outnumber verifier dispatches for the run) (orchestrating sessions only; `ATLAS_GATE=off`) |
 | `ingest_session.py` | `Stop`, `SubagentStop`, `SessionEnd`, `PreCompact` | Mirror the session transcript into the observability DB for the sextant session-forensics lens (`ATLAS_INGEST=off`) |
 | `nudge.py` | `Stop`, `SubagentStop` | Self-improvement: prompt to capture a lesson and check docs drift (throttled) |
+
+An `atlas-orchestrator` output style ships under `output-styles/` with
+`force-for-plugin: true` - it auto-applies whenever the atlas plugin is enabled (status-header
++ named-dispatch reporting; keeps Claude Code's own coding behavior intact). Fork routing is
+doctrine, not a style choice: `atlas:planner`, `atlas:completeness-critic`, and
+`atlas:docs-curator` dispatch as `subagent_type: "fork"` (requires `CLAUDE_CODE_FORK_SUBAGENT=1`
+set globally) to inherit history cheaply; `atlas:verifier` and `atlas:explorer` never fork, so
+their judgment stays uncontaminated. The observability DB's `session_logs` table carries an
+`agent` column (default `claude`) so the mirror can distinguish coding agents; a pluggable
+adapter layer backfills non-Claude sessions via `python3 scripts/session_ingest.py
+--backfill-agent codex [root]`. claude-mem's own per-session observer transcripts
+(`.claude-mem/observer-sessions`) are excluded from the mirror at ingest and a one-shot
+`python3 scripts/atlas_db.py purge-observer-sessions` cleans up any rows landed before the
+exclusion.
 
 For installs outside a plugin (a copied skill or bare agent), `scripts/install_hooks.py`
 wires the hooks into settings manually. The optional ollama-backed optimizer is

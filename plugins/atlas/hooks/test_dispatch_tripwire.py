@@ -34,6 +34,22 @@ class TripwireTest(unittest.TestCase):
     def _payload(self, tool, tinput=None):
         return {"session_id": "sess-1", "tool_name": tool, "tool_input": tinput or {}}
 
+    def _post_payload(self, tool, tinput=None, session="sess-1"):
+        return {
+            "session_id": session,
+            "hook_event_name": "PostToolUse",
+            "tool_name": tool,
+            "tool_input": tinput or {},
+        }
+
+    def _pre_payload(self, tool, tinput=None, session="sess-1"):
+        return {
+            "session_id": session,
+            "hook_event_name": "PreToolUse",
+            "tool_name": tool,
+            "tool_input": tinput or {},
+        }
+
     def test_under_threshold_is_silent(self):
         for _ in range(3):
             r = run_hook(self._payload("Read", {"file_path": "a.py"}), self.env)
@@ -215,6 +231,81 @@ class TripwireTest(unittest.TestCase):
             self.env,
         )
         self.assertFalse(self._is_orchestrating("sess-gen"))
+
+    # ---- PreToolUse deny tier ----
+
+    def test_pre_deny_at_ninth_inline_op(self):
+        # Seed 8 logged inline ops on the orchestrating session (setUp marks it).
+        for _ in range(8):
+            run_hook(self._post_payload("Read", {"file_path": "a.py"}), self.env)
+        r = run_hook(self._pre_payload("Read", {"file_path": "b.py"}), self.env)
+        self.assertEqual(r.returncode, 0)
+        self.assertIn('"permissionDecision": "deny"', r.stdout)
+        self.assertIn("atlas:explorer", r.stdout)
+        self.assertIn("atlas:implementer", r.stdout)
+
+    def test_pre_no_deny_when_not_orchestrating(self):
+        self._fresh_unmarked_session("sess-pre-noorch")
+        for _ in range(8):
+            run_hook(
+                self._post_payload(
+                    "Read", {"file_path": "a.py"}, session="sess-pre-noorch"
+                ),
+                self.env,
+            )
+        r = run_hook(
+            self._pre_payload("Read", {"file_path": "b.py"}, session="sess-pre-noorch"),
+            self.env,
+        )
+        self.assertEqual(r.returncode, 0)
+        self.assertEqual(r.stdout.strip(), "")
+
+    def test_pre_hard_off_disables_deny_only(self):
+        for _ in range(8):
+            run_hook(self._post_payload("Read", {"file_path": "a.py"}), self.env)
+        env = dict(self.env, ATLAS_TRIPWIRE_HARD="off")
+        r = run_hook(self._pre_payload("Read", {"file_path": "b.py"}), env)
+        self.assertEqual(r.returncode, 0)
+        self.assertEqual(r.stdout.strip(), "")  # deny tier suppressed
+
+    def test_pre_deny_prod_edit_allows_docs_edit(self):
+        r = run_hook(self._pre_payload("Edit", {"file_path": "src/foo.py"}), self.env)
+        self.assertEqual(r.returncode, 0)
+        self.assertIn('"permissionDecision": "deny"', r.stdout)
+        self.assertIn("atlas:implementer", r.stdout)
+        r2 = run_hook(self._pre_payload("Edit", {"file_path": "docs/x.md"}), self.env)
+        self.assertEqual(r2.returncode, 0)
+        self.assertEqual(r2.stdout.strip(), "")
+
+    def test_pre_fail_open_on_garbage_stdin(self):
+        p = subprocess.run(
+            [sys.executable, HOOK],
+            input='{"hook_event_name": "PreToolUse", not json',
+            capture_output=True,
+            text=True,
+            env=self.env,
+        )
+        self.assertEqual(p.returncode, 0)
+
+    def test_hooks_json_pretooluse_registers_tripwire_and_keeps_bash_advisor(self):
+        import json, os
+
+        hj = os.path.join(os.path.dirname(__file__), "hooks.json")
+        with open(hj) as f:
+            data = json.load(f)  # asserts hooks.json parses as JSON
+        pre = data["hooks"]["PreToolUse"]
+        # bash_advisor's Bash registration must be untouched.
+        bash_advisor_ok = any(
+            "bash_advisor.py" in json.dumps(g) and g.get("matcher") == "Bash"
+            for g in pre
+        )
+        self.assertTrue(bash_advisor_ok, "bash_advisor Bash registration disturbed")
+        # dispatch_tripwire must be registered on PreToolUse with the full matcher.
+        tw = [g for g in pre if "dispatch_tripwire.py" in json.dumps(g)]
+        self.assertTrue(tw, "dispatch_tripwire not registered on PreToolUse")
+        matcher = tw[0].get("matcher", "")
+        for t in ("Edit", "Write", "MultiEdit", "Read", "Grep", "Glob", "Bash"):
+            self.assertIn(t, matcher)
 
 
 if __name__ == "__main__":

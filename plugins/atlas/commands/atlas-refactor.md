@@ -1,5 +1,5 @@
 ---
-description: "Reorganize and clean up structure, naming, and layout of a codebase without changing observable behavior; use when code works but is messy, hard to navigate, or carries dead weight."
+description: "Reorganize structure, naming, and layout without changing observable behavior. Use when code works but is messy, hard to navigate, or carries dead weight."
 argument-hint: "[project] [description] [pain points]"
 ---
 

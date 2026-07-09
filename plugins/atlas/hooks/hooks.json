@@ -36,6 +36,15 @@
             "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/bash_advisor.py\""
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit|Read|Grep|Glob|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/dispatch_tripwire.py\""
+          }
+        ]
       }
     ],
     "PostToolUse": [

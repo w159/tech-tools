@@ -1,6 +1,6 @@
 ---
 name: completeness-critic
-description: Pre-done completeness auditor for the atlas-engine skill. Hunts for unverified claims, unread sources, unexercised paths, unsatisfied requirements from the original ask, and stale docs; returns a prioritized gap list and refutes "done" if any load-bearing gap remains. Never fixes; only finds and reports.
+description: "Pre-done completeness auditor. Hunts unverified claims, unread sources, unexercised paths, unmet requirements; returns a gap list and refutes 'done' on a load-bearing gap. Defers docs-drift to docs-auditor. Never fixes."
 model: sonnet
 color: red
 disallowedTools: [Write, Edit, MultiEdit, NotebookEdit]

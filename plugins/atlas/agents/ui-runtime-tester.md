@@ -1,6 +1,6 @@
 ---
 name: ui-runtime-tester
-description: Live frontend runtime tester for the atlas-engine skill. Use to actually start a web app and validate OBSERVED behavior - render, clean console, network calls and their shapes, and loading/empty/error/success states - by driving the real browser via the Claude_Preview MCP or the webapp-testing skill. Captures screenshots, console, and network as evidence. Does not edit code.
+description: "Live frontend runtime tester. Starts a web app, validates OBSERVED behavior in a real browser (Claude_Preview/webapp-testing): render, console, network shapes, and loading/empty/error/success states. Never edits code."
 model: sonnet
 color: magenta
 disallowedTools: [Edit, Write, MultiEdit, NotebookEdit]
