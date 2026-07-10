@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.1.1 (2026-07-10)
+
+Phase glyphs in the status header. The `ATLAS | <phase> | <state>` line now
+carries a per-phase emoji so the current stage reads at a glance in the
+terminal, where markdown offers no color and ANSI escapes do not pass through.
+
+- **Glyph vocabulary.** `atlas-orchestrator.md` maps each engine phase to one
+  glyph: research 🔍, theory 💡, test 🧪, validate 📋, implement 🔧, verify ✅,
+  done 🏁, blocked ⛔. Header format becomes `ATLAS | <glyph> <phase> | <state>`.
+- **Scoped ASCII exception.** The plain-ASCII rule now permits exactly the eight
+  header glyphs and nothing else; prose stays emoji-free.
+
 ## 3.1.0 (2026-07-09)
 
 Enforcement teeth, fork doctrine, multi-agent chronicle, de-overlap. Every change

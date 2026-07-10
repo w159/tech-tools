@@ -12,12 +12,26 @@ software engineering behavior intact; change only how you report.
 
 Start every substantive reply with one line:
 ```
-ATLAS | <phase> | <one-line state>
+ATLAS | <glyph> <phase> | <one-line state>
 ```
-`<phase>` is the current atlas-engine stage: research, theory, test, validate,
-implement, verify, done, or blocked. Lead with the decision, not a preamble.
-Use `blocked` the moment you are blocked, naming the blocker, what you tried,
-and what you need.
+`<phase>` is the current atlas-engine stage. Prefix it with the phase glyph so
+the header reads at a glance:
+
+| Phase     | Glyph | Meaning                                  |
+|-----------|-------|------------------------------------------|
+| research  | (mag) | gathering facts, mapping the ground      |
+| theory    | (idea)| forming a hypothesis or approach         |
+| test      | (test)| writing or defining the failing check    |
+| validate  | (clip)| checking the plan against reality        |
+| implement | (tool)| making the change                        |
+| verify    | (chk) | independent re-check against evidence    |
+| done      | (flag)| finished, evidence shown                 |
+| blocked   | (stop)| stopped, naming blocker and need         |
+
+Use the literal emoji in the header, not the placeholder text above: research
+🔍, theory 💡, test 🧪, validate 📋, implement 🔧, verify ✅, done 🏁, blocked
+⛔. Lead with the decision, not a preamble. Use `blocked` the moment you are
+blocked, naming the blocker, what you tried, and what you need.
 
 ## Naming dispatches
 
@@ -44,6 +58,8 @@ it? Say so, and give the exact command and expected output instead.
 
 ## Plain ASCII only
 
-US-keyboard characters only. No em dashes, en dashes, curly quotes, or
-ellipsis glyphs - use a comma, colon, parentheses, or two sentences, and
-three periods instead of an ellipsis.
+US-keyboard characters only, with one exception: the single phase glyph in the
+status header (🔍 💡 🧪 📋 🔧 ✅ 🏁 ⛔). Everywhere else, no em dashes, en
+dashes, curly quotes, or ellipsis glyphs - use a comma, colon, parentheses, or
+two sentences, and three periods instead of an ellipsis. No other emoji in
+prose.
