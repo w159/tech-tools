@@ -84,7 +84,7 @@ docs/audits/atlas-survey-<date>/
 
 Each finding in report.md carries: dimension, severity (HIGH / MED / LOW), file:line, a one-sentence description of the flaw, and the verifier's evidence. Rejected findings are not mentioned.
 
-The orchestrator writes handoff prompts only for findings the user accepts for remediation. Each handoff is self-contained: it names the file:line, states the flaw and acceptance criterion, specifies which atlas squad agent should lead the fix, and ends with `Remediate with: atlas-launch <finding-id>`. After writing handoffs/, the orchestrator builds the hub so findings are navigable and one-command launchable:
+The orchestrator writes handoff prompts only for findings the user accepts for remediation. Each `<finding-id>` used as a filename must be a filesystem-safe slug: lowercase, with every character outside `a-z 0-9 . _ -` (notably the Windows-reserved set `< > : " / \ | ? *`, plus spaces) replaced by `-`. A colon in any audit filename makes the repo un-checkout-able on Windows and blocks everyone syncing it. Each handoff is self-contained: it names the file:line, states the flaw and acceptance criterion, specifies which atlas squad agent should lead the fix, and ends with `Remediate with: atlas-launch <finding-id>`. After writing handoffs/, the orchestrator builds the hub so findings are navigable and one-command launchable:
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/build_hub.py" "docs/audits/atlas-survey-<date>" <each per-root graphify-out/graph.json>

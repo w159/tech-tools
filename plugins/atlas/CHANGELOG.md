@@ -1,5 +1,25 @@
 # Changelog
 
+## 3.1.2 (2026-07-10)
+
+Filesystem-safe audit filenames. atlas-cartographer and atlas-survey wrote
+per-feature and per-finding files from raw, model-chosen names. When a name
+carried a colon (e.g. `charts/frontend:public-site-and-auth.md`), Git on Windows
+rejected the whole checkout with `error: invalid path`, blocking everyone from
+syncing the repo. The generators now slug every filename before writing.
+
+- **Slug rule.** `atlas-cartographer/SKILL.md` gains a "Filename safety" section:
+  lowercase, replace any character outside `a-z 0-9 . _ -` (the Windows-reserved
+  set `< > : " / \ | ? *` plus spaces) with `-`, collapse and trim, guard against
+  reserved device names and slug collisions. The human-readable name still heads
+  the file, so nothing is lost.
+- **Both write points constrained.** Inline reminders at the `charts/<feature>.md`
+  and `handoffs/<system>.md` writes, plus slugged placeholders in the output tree.
+- **Sibling skill covered.** `atlas-survey/SKILL.md` shared the same latent
+  exposure via `handoffs/<finding-id>.md`; it now carries the matching constraint.
+- **Scope note.** `build_hub.py` only reads existing handoff files and writes
+  fixed names, so it was never a source; the fix is in the orchestrator prompts.
+
 ## 3.1.1 (2026-07-10)
 
 Phase glyphs in the status header. The `ATLAS | <phase> | <state>` line now

@@ -37,7 +37,7 @@ Explorer prompt template:
 
 > You are atlas:explorer. Map the "{feature}" feature. Return a Mermaid flowchart (graph TD) covering every significant entry point, branch, and data flow. Label EVERY node with its file:line. Do not describe code; chart it. Return: { "feature": "...", "chart": "graph TD\n..." }
 
-The orchestrator collects all charts and writes them to docs/audits/atlas-cartographer-<date>/charts/<feature>.md.
+The orchestrator collects all charts and writes them to docs/audits/atlas-cartographer-<date>/charts/<feature>.md. The `<feature>` filename must be a filesystem-safe slug (see "Filename safety" below) - never write a raw feature name containing a colon, slash, or space into a path.
 
 ### Phase 2 - Duplication hunting (parallel)
 
@@ -63,7 +63,7 @@ The proposal is written to docs/audits/atlas-cartographer-<date>/proposal.md.
 
 ### Phase 4 - Handoff prompts + hub (orchestrator only)
 
-For each system the proposal targets for unification, the orchestrator writes a handoff prompt to docs/audits/atlas-cartographer-<date>/handoffs/<system>.md. Each prompt is self-contained: it names the target, cites file:line evidence from the duplication report, states the acceptance criterion, specifies which atlas squad agent should lead the work, and ends with the launch line `Remediate with: atlas-launch <system>`.
+For each system the proposal targets for unification, the orchestrator writes a handoff prompt to docs/audits/atlas-cartographer-<date>/handoffs/<system>.md. The `<system>` filename must be a filesystem-safe slug (see "Filename safety" below); the human-readable system name still appears inside the file. Each prompt is self-contained: it names the target, cites file:line evidence from the duplication report, states the acceptance criterion, specifies which atlas squad agent should lead the work, and ends with the launch line `Remediate with: atlas-launch <system>`.
 
 Then build the knowledge-graph hub so the findings are navigable and launchable:
 
@@ -80,6 +80,19 @@ Every node in every Phase 1 flowchart must carry a file:line label. Every claim 
 Rejection protocol: if an atlas:explorer returns a chart with any unlabeled node, or a duplication report with a claim citing fewer than two file:line locations, the orchestrator logs "REJECTED: missing file:line evidence" and redeploys that agent with the same prompt plus an explicit reminder: "Every node requires file:line. Every duplication claim requires >=2 file:line citations. Return nothing without evidence."
 
 The orchestrator never patches evidence gaps itself. It only accepts or rejects.
+
+## Filename safety
+
+Every artifact this skill writes (`charts/<feature>.md`, `handoffs/<system>.md`, and any other named file) must have a filesystem-safe name, or the audit cannot be checked out on Windows and blocks anyone syncing the repo. A colon is the most common offender: `charts/frontend:public-site-and-auth.md` is rejected by Git on Windows with `error: invalid path`, which stops the whole checkout, not just that one file.
+
+Before writing any file, convert the feature or system name into a slug:
+
+1. Lowercase it.
+2. Replace every character that is not `a-z`, `0-9`, `.`, `_`, or `-` with a single `-`. This removes the Windows-reserved set `< > : " / \ | ? *`, plus spaces and control characters. A `layer:feature` name like `frontend:public-site-and-auth` becomes `frontend-public-site-and-auth`.
+3. Collapse any run of `-` into one, and strip leading and trailing `-` and `.`.
+4. If the result is empty or matches a Windows reserved device name (`con`, `prn`, `aux`, `nul`, `com1`-`com9`, `lpt1`-`lpt9`, case-insensitive), prefix it with `feature-` or `system-`.
+
+The slug is the filename only. The original human-readable name still appears as the heading inside the file, so no information is lost. Two different names that collapse to the same slug get a numeric suffix (`-2`, `-3`) so no file is silently overwritten.
 
 ## Boundary
 
@@ -106,11 +119,11 @@ All artifacts land under docs/audits/atlas-cartographer-<date>/ as the single so
 docs/audits/atlas-cartographer-<date>/
   boundaries.md          - approved feature boundary list with file:line roots
   charts/
-    <feature>.md         - Mermaid flowchart, one per feature, all nodes labeled file:line
+    <feature-slug>.md    - Mermaid flowchart, one per feature, all nodes labeled file:line (name slugged; no colons/spaces)
   duplications.md        - merged within-feature and cross-feature duplication report
   proposal.md            - unified architecture proposal with file:line evidence
   handoffs/
-    <system>.md          - one handoff prompt per targeted system (ends with `atlas-launch <system>`)
+    <system-slug>.md     - one handoff prompt per targeted system (name slugged; ends with `atlas-launch <system>`)
   hub/
     manifest.json        - node<->finding bridge (each handoff mapped to its graphify node)
     index.html           - branded Atlas expedition map; click a node -> finding + atlas-launch cmd
