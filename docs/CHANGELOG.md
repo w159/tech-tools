@@ -4,6 +4,65 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
+## Atlas v3.1.3 -- close the rest of the Windows invalid-path class (2026-07-10)
+
+An independent atlas:verifier (agentId a10e294b3d3b68c55) confirmed the 3.1.2 fix
+line by line but flagged that the "fixes the root cause" framing was overstated:
+the same defect was still live in three writers the 3.1.2 commit never touched.
+3.1.3 closes them. Version 3.1.2 -> 3.1.3
+(`plugins/atlas/.claude-plugin/plugin.json:3`).
+
+- Canonical slug rule added to `atlas-engine/references/docs-ssot.md` "Naming
+  conventions": one filesystem-safe algorithm (Windows-reserved set `< > : " / \
+  | ? *`, reserved device names) covering every `<slug>`/`<id>`/`<scope>` the
+  docs SSOT defines - `docs/plans/<slug>.md`, `docs/features/<feature-slug>.md`,
+  `docs/runs/<id>/`, evidence dirs, ADRs, lessons. This is load-bearing for all
+  atlas-engine output, so a raw `frontend:auth` task name flowing into a plan
+  path would have reproduced the identical checkout failure.
+- `atlas-orbit/SKILL.md` loop-creation (`loops/<id>.md`) and
+  `session-lifecycle.md` run-archive (`docs/runs/<id>/`) now require a
+  filesystem-safe id and point to the canonical rule.
+- Verifier verdict recorded at `docs/.run/findings.json` (status verified),
+  including the hole and its closure.
+
+## Atlas v3.1.2 -- filesystem-safe audit filenames (2026-07-10)
+
+atlas-cartographer and atlas-survey wrote per-feature and per-finding files from
+raw, model-chosen names. When a name carried a colon (e.g.
+`charts/frontend:public-site-and-auth.md`), Git on Windows rejected the entire
+checkout with `error: invalid path`, blocking everyone from syncing the repo.
+The generators now slug every filename before writing. Version 3.1.1 -> 3.1.2
+(`plugins/atlas/.claude-plugin/plugin.json:3`); commit `940087e`.
+
+- Slug rule added to `plugins/atlas/skills/atlas-cartographer/SKILL.md:84-95`
+  ("Filename safety"): lowercase; replace any character outside `a-z 0-9 . _ -`
+  (the Windows-reserved set `< > : " / \ | ? *` plus spaces) with `-`; collapse
+  and trim; guard reserved device names and slug collisions. The human-readable
+  name still heads the file, so nothing is lost.
+- Inline reminders at both write points (`SKILL.md:40` charts, `:66` handoffs)
+  plus slugged placeholders in the output tree.
+- `plugins/atlas/skills/atlas-survey/SKILL.md:87` carries the matching constraint
+  at its `handoffs/<finding-id>.md` write point (same latent exposure).
+- `build_hub.py` ruled out as a source: it only reads existing handoff files via
+  `os.listdir` (`build_hub.py:118`) and writes fixed names; the fix is in the
+  orchestrator prompts, not the script.
+- Observed-behavior proof: the documented slug rule applied to all seven real
+  colon filenames from the git error produces Windows-valid, colon-free,
+  collision-free names; edge-case guards (reserved device name, all-reserved
+  string, whitespace-only) fire. Evidence:
+  `docs/evidence/2026-07-10-cartographer-slug-fix.md`. Independently confirmed by
+  atlas:verifier (`docs/.run/findings.json`).
+- Scope: fixes the generator only. Files already committed to
+  `gwh-firstrespondersapp` still need renaming (colon -> hyphen) from a
+  macOS/Linux checkout; Windows cannot check that branch out to fix in place.
+
+## Atlas v3.1.1 -- phase glyphs in the status header (2026-07-10)
+
+The `ATLAS | <phase> | <state>` output-style header gained a per-phase emoji so
+the current engine stage reads at a glance in the terminal
+(`plugins/atlas/output-styles/atlas-orchestrator.md`). Scoped ASCII exception:
+the eight header glyphs are permitted; prose stays emoji-free. Commit `a9ba716`.
+
 ## Atlas v3.1.0 -- enforcement teeth, fork doctrine, sextant multi-agent chronicle, de-overlap (2026-07-09)
 
 Full overhaul of the atlas plugin as the load-bearing orchestration layer. Every

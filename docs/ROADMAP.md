@@ -4,6 +4,31 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 
 ---
 
+## Done
+
+### Atlas v3.1.2 + v3.1.3 -- Windows invalid-path filenames (2026-07-10)
+
+Fixed the Windows `git error: invalid path` that blocked syncing any repo
+containing atlas-generated files with colons in their names.
+
+- v3.1.2 (commit `940087e`): slugged the two audit-output writers -
+  `atlas-cartographer/SKILL.md:84-95` (charts + handoffs) and
+  `atlas-survey/SKILL.md:87` (finding handoffs).
+- v3.1.3: an independent atlas:verifier confirmed 3.1.2 but found the same
+  defect class still live in the general atlas-engine naming conventions and
+  atlas-orbit. Closed by defining one canonical filesystem-safe slug rule in
+  `atlas-engine/references/docs-ssot.md` "Naming conventions" and pointing
+  `atlas-orbit/SKILL.md` and `session-lifecycle.md` at it.
+
+Verified with observed-behavior proof
+(`docs/evidence/2026-07-10-cartographer-slug-fix.md`, all 7 real failing names
+become Windows-valid) and an independent atlas:verifier verdict
+(`docs/.run/findings.json`).
+
+Follow-up still open: rename the colon files already committed to
+`gwh-firstrespondersapp` (colon -> hyphen) from a macOS/Linux checkout - the
+generator fix does not touch files that already exist in that repo.
+
 ## Backlog
 
 ### Atlas v3.1.0 follow-ups (added 2026-07-09)

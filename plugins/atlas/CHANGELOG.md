@@ -1,5 +1,26 @@
 # Changelog
 
+## 3.1.3 (2026-07-10)
+
+Close the rest of the Windows-invalid-path class. An independent atlas:verifier
+confirmed the 3.1.2 fix but flagged that the same defect was still live in three
+untouched writers: atlas-orbit's `loops/<id>.md`, and the atlas-engine naming
+conventions (`docs/plans/<slug>.md`, `docs/features/<feature-slug>.md`,
+`docs/runs/<id>/`, etc.) that every atlas-engine task composes. 3.1.2 fixed only
+the two audit skills; 3.1.3 closes the general case.
+
+- **Canonical slug rule.** `atlas-engine/references/docs-ssot.md` "Naming
+  conventions" now defines one filesystem-safe slug algorithm for every `<slug>`,
+  `<id>`, `<scope>` it lists, with the Windows-reserved set and reserved device
+  names spelled out. This is the single source the other skills point to.
+- **atlas-orbit.** `SKILL.md` loop-creation step now requires `<id>` to be a
+  filesystem-safe slug and references the canonical rule.
+- **session-lifecycle.** The `docs/runs/<id>/` archive note now requires a
+  filesystem-safe id, referencing the canonical rule.
+- **Why it matters.** docs-ssot naming is load-bearing for all atlas-engine
+  output, not just audits; a raw `frontend:auth` task name flowing into
+  `docs/plans/` would have reproduced the exact same checkout failure.
+
 ## 3.1.2 (2026-07-10)
 
 Filesystem-safe audit filenames. atlas-cartographer and atlas-survey wrote

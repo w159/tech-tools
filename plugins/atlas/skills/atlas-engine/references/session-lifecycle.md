@@ -66,7 +66,9 @@ scratch. This is a specialization of the START reconcile above, not a second flo
 
 3. **Archive on completion so history persists.** When the run finishes, copy the final
    `STATE.md` and `findings.json` into a committed, per-run archive - `docs/runs/<id>/`
-   (use the run id or a `<YYYY-MM-DD>-<slug>`) - so the decisions and verdicts of the run
+   (use the run id or a `<YYYY-MM-DD>-<slug>`, filesystem-safe per the slug rule in
+   `docs-ssot.md` "Naming conventions" - no colon/slash/space, or Windows cannot check
+   out the repo) - so the decisions and verdicts of the run
    survive after `docs/.run/` is cleared for the next task. The durable narrative still
    lands in CHANGELOG and the affected subfolders via the END curate flow below; the
    archive preserves the raw run record those entries were drawn from.

@@ -58,6 +58,8 @@ Hard boundaries:
 - Lessons: `docs/lessons/<slug>.md`.
 - Files: `lowercase-kebab-case.md` except the all-caps root files (`CHANGELOG.md`, `ROADMAP.md`, `AGENTS.md`).
 
+**Every `<slug>`, `<id>`, `<scope>`, and `<*-slug>` above must be filesystem-safe before it goes into a path.** A path that a model composes from a raw feature, task, or finding name can carry a character Windows forbids, and a single bad name makes the whole repo un-checkout-able on Windows (`git error: invalid path` aborts the entire checkout, not just that file). A colon is the usual offender: `docs/plans/frontend:public-site.md` blocks every Windows clone. Derive the slug this way: lowercase; replace every character outside `a-z 0-9 . _ -` (this removes the Windows-reserved set `< > : " / \ | ? *` plus spaces and control characters) with a single `-`; collapse repeated `-` and trim leading/trailing `-` and `.`; if the result is empty or a Windows reserved device name (`con`, `prn`, `aux`, `nul`, `com1`-`com9`, `lpt1`-`lpt9`), prefix it with the artifact kind (`plan-`, `feature-`, `run-`). The human-readable name still goes in the file's heading, so nothing is lost.
+
 ## "docs-current": the completion gate definition
 
 A shipping change is **docs-current** only when all of the following are true:
