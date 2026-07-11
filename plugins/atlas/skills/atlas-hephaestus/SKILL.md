@@ -1,7 +1,9 @@
 ---
 name: atlas-hephaestus
-description: "Boot and configure a project so the full atlas runtime is active: verify and install claude-mem and context-mode, scan the stack, recommend then confirm tooling, confirm automation hooks are wired, write project config, and seed the .atlas/docs/ single source of truth. Triggers on project bootstrap, onboarding a repo to atlas, or configuring tooling for a codebase. Boots and configures only; run scoped build/fix/audit/refactor through atlas-metis."
+description: 'Boot and configure a project so the full atlas runtime is active: verify and install claude-mem and context-mode, scan the stack, recommend then confirm tooling, confirm automation hooks are wired, write project config, and seed the .atlas/docs/ single source of truth. Triggers on project bootstrap, onboarding a repo to atlas, or configuring tooling for a codebase. Boots and configures only; run scoped build/fix/audit/refactor through atlas-metis.'
+when_to_use: project bootstrap, onboarding a repo to atlas, or configuring tooling for a codebase. Boots and configures only; run scoped build/fix/audit/refactor through atlas-metis
 ---
+
 
 # atlas-hephaestus
 
@@ -32,7 +34,7 @@ Two entry points share this methodology:
    context-mode keeps large output out of context; ponytail (lite/full/ultra/off)
    writes far less code while keeping safety.
 2. Discover. Run `${CLAUDE_PLUGIN_ROOT}/scripts/discover_capabilities.py <root>` (read-only). Match its
-   signals against `../atlas-metis/references/capability-catalog.md`. Present a
+   signals against `..`atlas-metis`/references/capability-catalog.md`. Present a
    ranked list (skill / plugin / mcp) with a reason and the exact install command
    per item. Also surface the built-ins this project can use now: the loop-library
    (via atlas-chronos), vendor connectors (via atlas-hermes, disabled until setup),
@@ -50,7 +52,7 @@ Two entry points share this methodology:
 4. Config. Write or update `.claude/atlas.local.md` (schema below). Show the diff and
    confirm before writing.
 5. Docs seed and tracking. If `.atlas/docs/` lacks the SSOT scaffold, offer to seed it per
-   `../atlas-metis/references/docs-ssot.md`. Confirm first. Then ensure .atlas/docs/ is
+   `..`atlas-metis`/references/docs-ssot.md`. Confirm first. Then ensure .atlas/docs/ is
    git-tracked: atlas maintains .atlas/docs/ as the project SSOT, so a deny-by-default
    `.gitignore` MUST allowlist the SSOT subtree (root `*.md` plus architecture/,
    features/, specs/, audits/, lessons/, wiki/, plans/, evidence/, reference_files/),

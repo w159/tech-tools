@@ -12,13 +12,13 @@ Fixed the Windows `git error: invalid path` that blocked syncing any repo
 containing atlas-generated files with colons in their names.
 
 - v3.1.2 (commit `940087e`): slugged the two audit-output writers -
-  `atlas-cartographer/SKILL.md:84-95` (charts + handoffs) and
-  `atlas-survey/SKILL.md:87` (finding handoffs).
+  `atlas-ariadne/SKILL.md:84-95` (charts + handoffs) and
+  `atlas-athena/SKILL.md:87` (finding handoffs).
 - v3.1.3: an independent atlas:verifier confirmed 3.1.2 but found the same
-  defect class still live in the general atlas-engine naming conventions and
-  atlas-orbit. Closed by defining one canonical filesystem-safe slug rule in
-  `atlas-engine/references/docs-ssot.md` "Naming conventions" and pointing
-  `atlas-orbit/SKILL.md` and `session-lifecycle.md` at it.
+  defect class still live in the general atlas-metis naming conventions and
+  atlas-chronos. Closed by defining one canonical filesystem-safe slug rule in
+  `atlas-metis/references/docs-ssot.md` "Naming conventions" and pointing
+  `atlas-chronos/SKILL.md` and `session-lifecycle.md` at it.
 
 Verified with observed-behavior proof
 (`docs/evidence/2026-07-10-cartographer-slug-fix.md`, all 7 real failing names
@@ -39,7 +39,7 @@ generator fix does not touch files that already exist in that repo.
   at the code/test level but [unverified live] until the reload.
 - Codex token fidelity: persist all token_count deltas, not just the one nearest
   each stored message (~59% of events currently discarded -> systematic
-  undercount; see `plugins/atlas/skills/atlas-sextant/SKILL.md:270-280`).
+  undercount; see `plugins/atlas/skills/atlas-argus/SKILL.md:270-280`).
 - `context_tool_health()` agent filter: totals currently blend claude and codex
   token regimes once codex rows exist (`plugins/atlas/scripts/atlas_db.py:846-854`).
 - Classifier arm-precision monitoring: use sextant (runs.orchestrating vs actual
@@ -84,7 +84,7 @@ adoption memo + `/atlas menu` + claude-mem worker-runtime conventions + supermem
 workstream independently reviewed before merge. Plans/evidence under
 `docs/audits/atlas-cohesion-2026-06-29/`.
 
-A follow-on `atlas-sextant` self-improvement pass (post-WS5) added two more fixes under the same
+A follow-on `atlas-argus` self-improvement pass (post-WS5) added two more fixes under the same
 2.3.0 release: the `dispatches` run-health metric was recomputed from a live `COUNT(*)` instead of
 a stale first-Stop snapshot (`plugins/atlas/scripts/atlas_db.py:380-397`), and `session_boot.py`
 gained an auto-derived "Resuming &lt;project&gt;" block on SessionStart
@@ -122,7 +122,7 @@ Commit 1d0f6c4. (`plugins/atlas/scripts/atlas_db.py:179`, `plugins/atlas/scripts
 
 ### Atlas v2.2.1 -- session transcript ingestion, hook exec-bit fix, run metrics (resolved 2026-06-26)
 
-Adds a session-forensics lens to atlas-sextant: five new mirror tables (session_logs, messages,
+Adds a session-forensics lens to atlas-argus: five new mirror tables (session_logs, messages,
 tool_calls, user_prompts, signals) in the observability DB, populated by a new
 `hooks/ingest_session.py` wired on Stop/SubagentStop/SessionEnd/PreCompact, and six read helpers.
 Fixes the hook exec-bit defect (dispatch_tripwire.py shipped 0644; all hooks now invoked via
@@ -133,16 +133,16 @@ Commit 0c792dd. (`plugins/atlas/scripts/atlas_db.py:44-83`, `plugins/atlas/hooks
 
 ### Atlas redesign -- final 8-skill set, observability DB, de-hardcoded swarms (resolved 2026-06-25)
 
-atlas-loop renamed to atlas-orbit, atlas-connectors renamed to atlas-harbor, atlas-self-improving
-replaced by atlas-sextant (SQLite observability DB + metric-backed improvement proposals).
-atlas-uxt-swarm and atlas-operating-contract removed; their work absorbed by atlas-expedition and
-atlas-engine respectively. Two new swarms added: atlas-expedition (app-discovering UX swarm with
-no hardcoded routes) and atlas-survey (discovery-first quality/security/OWASP audit swarm).
+atlas-loop renamed to atlas-chronos, atlas-connectors renamed to atlas-hermes, atlas-self-improving
+replaced by atlas-argus (SQLite observability DB + metric-backed improvement proposals).
+atlas-uxt-swarm and atlas-operating-contract removed; their work absorbed by atlas-odysseus and
+atlas-metis respectively. Two new swarms added: atlas-odysseus (app-discovering UX swarm with
+no hardcoded routes) and atlas-athena (discovery-first quality/security/OWASP audit swarm).
 Manifests, README, capability-catalog, capability-routing, and marketplace.json all reconciled to
 the final 8-skill set. plugin.json bumped 1.2.1 -> 1.3.0.
 (`plugins/atlas/.claude-plugin/plugin.json`, `plugins/atlas/README.md`,
-`plugins/atlas/skills/atlas-engine/references/capability-catalog.md`,
-`plugins/atlas/skills/atlas-engine/references/capability-routing.md`,
+`plugins/atlas/skills/atlas-metis/references/capability-catalog.md`,
+`plugins/atlas/skills/atlas-metis/references/capability-routing.md`,
 `.claude-plugin/marketplace.json`)
 
 ### Connector .mcpb bloat fixed + marketplace install repaired (resolved 2026-06-23)
@@ -266,7 +266,7 @@ See `docs/CHANGELOG.md` entry dated 2026-06-22 and
   enumerated; marketplace description de-staled.
   (`plugins/atlas/.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`)
 - New `atlas-validate` launcher added.
-  (`plugins/atlas/commands/atlas-validate.md`)
+  (`plugins/atlas/skills/atlas-validate.md`)
 - Reliability guidance (path-exists, ToolSearch-before-deferred, timeout+retry) added to
   references and agent prompts.
   (`plugins/atlas/references/verification-and-grounding.md`,

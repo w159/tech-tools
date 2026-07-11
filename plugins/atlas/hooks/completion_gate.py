@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Stop hook -- the atlas "Definition of done" gate (opt-in).
 
-The atlas-engine skill's hardest rule is that a change is not *done* until observed
+The atlas-metis skill's hardest rule is that a change is not *done* until observed
 behavior is captured AND an independent agent has verified it. Prose alone does not
 enforce this (the orchestrator rationalizes "I'll mark it unverified and move on").
 This hook is the machine backstop.
@@ -12,7 +12,7 @@ present. In any other session it is a silent no-op, so it is safe to leave insta
 
 Seven conditions must ALL hold before the gate passes (else block ONCE):
   (a) At least one file exists under `docs/evidence/`.
-  (b) `docs/.run/findings.json` exists and contains at least one entry with
+  (b) `.atlas/docs/.run/findings.json` exists and contains at least one entry with
       status "verified".
   (c) `docs/CHANGELOG.md` exists and is non-empty (docs-current backstop).
   (d) `docs/ROADMAP.md` exists and is non-empty.
@@ -72,7 +72,7 @@ def _check_evidence(docs: Path) -> bool:
 
 
 def _check_findings(docs: Path) -> bool:
-    """(b) docs/.run/findings.json has at least one entry with status 'verified'."""
+    """(b) .atlas/docs/.run/findings.json has at least one entry with status 'verified'."""
     findings = docs / ".run" / "findings.json"
     try:
         if not findings.is_file():
@@ -193,11 +193,11 @@ def _reason(
         )
     if missing_b:
         parts.append(
-            "  (b) docs/.run/findings.json is missing or has no entry with status "
+            "  (b) .atlas/docs/.run/findings.json is missing or has no entry with status "
             '"verified". Record an independent atlas:verifier result before stopping. '
             "-> Dispatch atlas:verifier for the shipping stage to independently confirm "
             'or refute the claim, then write its verdict (status="verified") into '
-            "docs/.run/findings.json."
+            ".atlas/docs/.run/findings.json."
         )
     if missing_c:
         parts.append(

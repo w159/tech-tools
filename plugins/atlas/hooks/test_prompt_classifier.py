@@ -71,7 +71,7 @@ class PromptClassifierTest(unittest.TestCase):
         # stdout: a single JSON object whose additionalContext carries the nudge.
         out = json.loads(r.stdout)
         ctx = out["hookSpecificOutput"]["additionalContext"]
-        self.assertIn("atlas-engine", ctx)
+        self.assertIn("atlas-metis", ctx)
         self.assertIn("dispatch wave 1", ctx)
 
     # 1b. An error report (stack trace) is substantive too.
@@ -171,7 +171,7 @@ class PromptClassifierTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0)
         self.assertEqual(self._orchestrating_flag("sess-audit"), 1)
         out = json.loads(r.stdout)
-        self.assertIn("atlas-engine", out["hookSpecificOutput"]["additionalContext"])
+        self.assertIn("atlas-metis", out["hookSpecificOutput"]["additionalContext"])
 
     def test_endpoint_investigation_arms(self):
         payload = {

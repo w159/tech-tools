@@ -1,15 +1,20 @@
 ---
-description: "Read-only database audit via parallel subagents: inventory a live schema, reconcile it against the code, and check privileges and naming before any change."
-argument-hint: "[repo path] [db connection] [glossary path] [naming-convention notes]"
+name: atlas-db-audit
+description: 'Read-only database audit via parallel subagents: inventory a live schema, reconcile it against the code, and check privileges and naming before any change.'
+when_to_use: the task involves db audit
+disable-model-invocation: true
+argument-hint: '[repo path] [db connection] [glossary path] [naming-convention notes]'
 ---
+
+
 
 Apply the Operating Contract to this entire task. It is injected below.
 
 ```!
-cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-engine/references/operating-contract.md"
+cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-metis/references/operating-contract.md"
 ```
 
-If the contract did not load above, read `skills/atlas-engine/references/operating-contract.md` and apply it before proceeding.
+If the contract did not load above, read `skills/atlas-metis/references/operating-contract.md` and apply it before proceeding.
 
 Audit this database: $ARGUMENTS
 

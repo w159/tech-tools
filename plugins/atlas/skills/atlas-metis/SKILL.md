@@ -1,7 +1,9 @@
 ---
 name: atlas-metis
-description: "Orchestrate any multi-step, multi-surface, or whole-codebase engineering task (build, fix, audit, refactor, investigate) through subagents with real execution and independent verification instead of inline work, keeping .atlas/docs/ the single source of truth. Triggers on orchestrate, whole-repo work, cross-layer (frontend/backend/database) bugs, and audits. To first install and configure atlas itself, use atlas-hephaestus."
+description: Orchestrate any multi-step, multi-surface, or whole-codebase engineering task (build, fix, audit, refactor, investigate) through subagents with real execution and independent verification instead of inline work, keeping .atlas/docs/ the single source of truth. Triggers on orchestrate, whole-repo work, cross-layer (frontend/backend/database) bugs, and audits. To first install and configure atlas itself, use atlas-hephaestus.
+when_to_use: orchestrate, whole-repo work, cross-layer (frontend/backend/database) bugs, and audits. To first install and configure atlas itself, use atlas-hephaestus
 ---
+
 
 # atlas-metis - the orchestrator
 
@@ -40,7 +42,7 @@ The `.atlas/docs/` tree is the project's authoritative memory, and this skill ke
 
 `atlas:docs-curator` is the only writer of durable `.atlas/docs/` content (it writes nowhere else); `atlas:docs-auditor` reads the tree against the code and reports drift. Keeping .atlas/docs/ current is **gate-enforced** at completion, not optional cleanup. Taxonomy and templates: `references/docs-ssot.md`. Per-root placement: `references/scaffolding.md`.
 
-This repo is a monorepo (see `CLAUDE.md`): the propagation rule means a vendor change spans the node library, MCP server domain handler, manifest, packaged connector bundle, plugin commands/skills, plugin manifest, root README, `.env.template`, `test-mcp-tools.mjs`, and `docs/vendors/<svc>.md`. Treat .atlas/docs/ reconciliation as covering every layer a change touched, not just the code one.
+This repo is a monorepo (see `CLAUDE.md`): the propagation rule means a vendor change spans the node library, MCP server domain handler, manifest, packaged connector bundle, plugin skills, plugin manifest, root README, `.env.template`, `test-mcp-tools.mjs`, and `docs/vendors/<svc>.md`. Treat .atlas/docs/ reconciliation as covering every layer a change touched, not just the code one.
 
 ## Token discipline
 
@@ -209,7 +211,7 @@ Full contract, config env vars, and install commands: `references/hooks-automati
 | `references/pytest-coverage.md` | running pytest with coverage, reading annotated reports, driving coverage to 100% |
 | `references/workflow-template.md` | authoring a Workflow orchestration script (meta block, pipeline, parallel, squad agents, loop-until-dry, adversarial-verify) |
 
-> Cross-agent workspace maintenance (porting MCP/skills across the six coding agents, the `doctor`/`setup`/`port`/`sync` verbs) is no longer part of this skill - it lives in the separate workspace maintenance skills (`orc-setup`, `orc-sync`, `orc-port`, `orc-doctor`, `orc-validate`, `orc-audit`), which are unrelated to this plugin's `/atlas-*` commands. This skill is now purely the coding-session orchestrator.
+> Cross-agent workspace maintenance (porting MCP/skills across the six coding agents, the `doctor`/`setup`/`port`/`sync` verbs) is no longer part of this skill - it lives in the separate workspace maintenance skills (`orc-setup`, `orc-sync`, `orc-port`, `orc-doctor`, `orc-validate`, `orc-audit`), which are unrelated to this plugin's `atlas-*` skills. This skill is now purely the coding-session orchestrator.
 
 ## The orchestration run is flagged automatically
 

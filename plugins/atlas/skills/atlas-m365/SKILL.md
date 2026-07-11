@@ -1,17 +1,22 @@
 ---
-description: "Deliver a production-ready Microsoft 365/Entra/Graph/Intune/Exchange config with verified read-back. Use when you must change tenant state and prove it applied."
-argument-hint: "[outcome wanted] [surface: Graph/portal/Intune/EXO PowerShell] [tenant constraints]"
+name: atlas-m365
+description: Deliver a production-ready Microsoft 365/Entra/Graph/Intune/Exchange config with verified read-back. Use when you must change tenant state and prove it applied.
+when_to_use: you must change tenant state and prove it applied
+disable-model-invocation: true
+argument-hint: '[outcome wanted] [surface: Graph/portal/Intune/EXO PowerShell] [tenant constraints]'
 ---
+
+
 
 Apply the Operating Contract to this entire task. It is injected below.
 
 ```!
-cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-engine/references/operating-contract.md"
+cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-metis/references/operating-contract.md"
 ```
 
-If the contract did not load above, read `skills/atlas-engine/references/operating-contract.md` and apply it before proceeding.
+If the contract did not load above, read `skills/atlas-metis/references/operating-contract.md` and apply it before proceeding.
 
-# /atlas-m365
+# `atlas-m365`
 
 Deliver the Microsoft 365 / Entra / Graph / Intune / Exchange Online configuration described in `$ARGUMENTS`, with the exact permissions, the implementation steps or API requests, and a read-back that proves the new state.
 

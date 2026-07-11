@@ -1,17 +1,22 @@
 ---
-description: "Evidence-based vendor security assessment against a framework you name, citing provided docs per finding. Use when the output may reach an auditor or reviewer."
-argument-hint: "[vendor + services/data access] [framework(s)] [attach evidence: SOC 2, whitepaper, DPA, terms]"
+name: atlas-vendor-assessment
+description: Evidence-based vendor security assessment against a framework you name, citing provided docs per finding. Use when the output may reach an auditor or reviewer.
+when_to_use: the output may reach an auditor or reviewer
+disable-model-invocation: true
+argument-hint: '[vendor + services/data access] [framework(s)] [attach evidence: SOC 2, whitepaper, DPA, terms]'
 ---
+
+
 
 Apply the Operating Contract to this entire task. It is injected below.
 
 ```!
-cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-engine/references/operating-contract.md"
+cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-metis/references/operating-contract.md"
 ```
 
-If the contract did not load above, read `skills/atlas-engine/references/operating-contract.md` and apply it before proceeding.
+If the contract did not load above, read `skills/atlas-metis/references/operating-contract.md` and apply it before proceeding.
 
-# /atlas-vendor-assessment
+# `atlas-vendor-assessment`
 
 Assess the vendor described in `$ARGUMENTS` against the framework(s) the user names, basing every finding strictly on the evidence the user provides.
 

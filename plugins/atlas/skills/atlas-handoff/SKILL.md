@@ -1,15 +1,20 @@
 ---
-description: "Produce a dense session handoff so a fresh session resumes with zero re-discovery. Use at a checkpoint before context fills, a break, or handing off work."
+name: atlas-handoff
+description: Produce a dense session handoff so a fresh session resumes with zero re-discovery. Use at a checkpoint before context fills, a break, or handing off work.
+when_to_use: the task involves handoff
+disable-model-invocation: true
 argument-hint: (no args; run at a checkpoint)
 ---
+
+
 
 Apply the Operating Contract to this entire task. It is injected below.
 
 ```!
-cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-engine/references/operating-contract.md"
+cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-metis/references/operating-contract.md"
 ```
 
-If the contract did not load above, read `skills/atlas-engine/references/operating-contract.md` and apply it before proceeding.
+If the contract did not load above, read `skills/atlas-metis/references/operating-contract.md` and apply it before proceeding.
 
 Produce a session handoff for the current work.
 

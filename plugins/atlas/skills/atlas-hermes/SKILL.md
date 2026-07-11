@@ -1,7 +1,9 @@
 ---
 name: atlas-hermes
-description: "Guided cross-plugin setup for the ten vendor MCP connectors (Auvik, Blumira, CIPP, ConnectWise Manage, Spanning, KnowBe4, NinjaOne, Paylocity, ThreatLocker, Vanta), which live in their owning domain plugins (it-operations, security-compliance, microsoft-365, hr-payroll), not atlas. Detects installed domain plugins, shows enabled connectors, and points you to the owning plugin's /plugin config for credentials. Atlas ships no connectors itself."
+description: Guided cross-plugin setup for the ten vendor MCP connectors (Auvik, Blumira, CIPP, ConnectWise Manage, Spanning, KnowBe4, NinjaOne, Paylocity, ThreatLocker, Vanta), which live in their owning domain plugins (it-operations, security-compliance, microsoft-365, hr-payroll), not atlas. Detects installed domain plugins, shows enabled connectors, and points you to the owning plugin's /plugin config for credentials. Atlas ships no connectors itself.
+when_to_use: the task involves hermes
 ---
+
 
 # Atlas connectors setup guide
 

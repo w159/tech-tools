@@ -1,10 +1,11 @@
 {
   "name": "atlas",
-  "version": "2.6.0",
-  "description": "Atlas is a self-configuring multi-agent coding architect. Boots on /atlas and SessionStart: 18-agent squad, 8 automation hooks plus the atlas-doctor rollback guard (incl. the dispatch tripwire, which auto-flags orchestration runs so subagent discipline always engages), atlas-engine methodology (research -> test -> validate -> implement -> verify; evidence before any done claim), and 18 verification-gated /atlas-* launchers (incl. atlas-stacks for interactive skill stacking, atlas-launch, which opens a remediation session from an audit hub, and atlas-doctor, which diagnoses and repairs the plugin installation itself - including stale renamed-skill ghosts and broken orchestration wiring). Nine skills: atlas-engine (orchestration), atlas-stacks (AskUserQuestion-driven skill stacking), atlas-architect (boot/discovery), atlas-cartographer (architecture map + structural dedup), atlas-sextant (measurable self-improvement via observability DB), atlas-orbit (recurring loops), atlas-harbor (vendor-connector guide across the domain plugins), atlas-expedition (app-discovering UX swarm), atlas-survey (comprehensive quality/security/OWASP audit). Skills elicit user intent with AskUserQuestion when goal/scope/acceptance are genuinely the user's call. Integrates claude-mem and context-mode; recommends skills/plugins/MCPs the project needs. Atlas itself ships no vendor MCP connectors - the ten vendor connectors live in the domain plugins (it-operations, security-compliance, microsoft-365, hr-payroll); atlas-harbor guides setup across them.",
+  "version": "4.0.0",
+  "description": "Atlas is a self-configuring multi-agent coding architect implemented entirely as Claude Code skills. 28 skills total: 11 Greek-mythology core skills (atlas-metis orchestration, atlas-hephaestus boot/discovery, atlas-ariadne architecture mapping, atlas-athena security/quality audit, atlas-argus observability/forensics, atlas-chronos recurring loops, atlas-hermes vendor connector setup, atlas-odysseus UX test swarm, atlas-nestor skill stacking, atlas-armada org deployment, atlas-olympus workspace scaffolding/recommendations) plus 17 task skills (atlas-feature, atlas-debug, atlas-doctor, atlas-validate, atlas-refactor, atlas-launch, atlas-harden, etc.). 23 agents (12 core + 11 armada department agents), 15 hooks including dispatch tripwire and completion gate. The atlas-metis method demands evidence before any done claim. atlas-olympus analyzes sessions and recommends which skills to run next. atlas-armada provides organizational deployment with branding, policies, compliance, and department-specific connectors. Integrates claude-mem and context-mode.",
   "keywords": [
     "atlas",
     "architect",
+    "agent-skills",
     "observability",
     "claude-mem",
     "context-mode",
@@ -18,7 +19,6 @@
     "docs-as-code",
     "multi-stage-planning",
     "ux-testing",
-    "slash-commands",
     "operating-contract",
     "verify-loop",
     "observability-db",
@@ -30,17 +30,23 @@
     "asset-audit",
     "context-optimization",
     "session-forensics",
-    "self-improvement"
+    "self-improvement",
+    "atlas-armada",
+    "atlas-olympus",
+    "organization",
+    "branding",
+    "compliance",
+    "departments"
   ],
   "author": {
     "name": "w159",
     "url": "https://github.com/w159"
   },
-  "homepage": "https://github.com/w159/tech-tools/tree/main/plugins/atlas",
+  "homepage": "https://github.com/w159/atlas/tree/main/plugins/atlas",
   "license": "Apache-2.0",
   "interface": {
     "displayName": "Atlas",
-    "shortDescription": "Self-configuring multi-agent coding architect with verification-gated launchers and observability-driven self-improvement."
+    "shortDescription": "Self-configuring multi-agent coding architect with 28 Claude Code skills, 23 agents, and observability-driven self-improvement."
   },
   "skills": "./skills/"
 }

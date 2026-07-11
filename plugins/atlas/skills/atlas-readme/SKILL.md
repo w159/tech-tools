@@ -1,15 +1,20 @@
 ---
-description: "Generate an onboarding-grade README.md by inspecting the actual repo, every claim traced to a real file. Use when a repo has no README or its README is stale."
-argument-hint: "[repo path] [audience: contributors/internal/both]"
+name: atlas-readme
+description: Generate an onboarding-grade README.md by inspecting the actual repo, every claim traced to a real file. Use when a repo has no README or its README is stale.
+when_to_use: a repo has no README or its README is stale
+disable-model-invocation: true
+argument-hint: '[repo path] [audience: contributors/internal/both]'
 ---
+
+
 
 Apply the Operating Contract to this entire task. It is injected below.
 
 ```!
-cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-engine/references/operating-contract.md"
+cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-metis/references/operating-contract.md"
 ```
 
-If the contract did not load above, read `skills/atlas-engine/references/operating-contract.md` and apply it before proceeding.
+If the contract did not load above, read `skills/atlas-metis/references/operating-contract.md` and apply it before proceeding.
 
 Generate a README.md for: $ARGUMENTS
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Install the atlas-engine skill's automation hooks into a settings.json (GATED).
+"""Install the atlas-metis skill's automation hooks into a settings.json (GATED).
 
-The atlas-engine skill ships three hooks (under ../hooks/). This wires them into a Claude
+The atlas-metis skill ships three hooks (under ../hooks/). This wires them into a Claude
 Code settings file by MERGING - it never clobbers existing hooks, and it is idempotent
 (re-running is a no-op once installed). Dry-run by default; only --apply writes, and it
 backs the settings file up first.

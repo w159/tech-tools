@@ -1,7 +1,9 @@
 ---
 name: atlas-olympus
-description: "The home of the twelve gods -- the entry point that scaffolds the .atlas/ workspace, migrates the SSOT from .atlas/docs/ to .atlas/docs/, activates the skill fleet, and recommends what to run next. Use on first run to set up a project, on subsequent runs to get recommendations for improvements, or when you want atlas to analyze your workspace and tell you what to do. Triggers on project setup, workspace initialization, SSOT migration, skill recommendation, and 'what should I run' questions."
+description: The home of the twelve gods -- the entry point that scaffolds the .atlas/ workspace, migrates the SSOT from .atlas/docs/ to .atlas/docs/, activates the skill fleet, and recommends what to run next. Use on first run to set up a project, on subsequent runs to get recommendations for improvements, or when you want atlas to analyze your workspace and tell you what to do. Triggers on project setup, workspace initialization, SSOT migration, skill recommendation, and 'what should I run' questions.
+when_to_use: project setup, workspace initialization, SSOT migration, skill recommendation, and 'what should I run' questions
 ---
+
 
 # atlas-olympus - the home of the twelve gods
 

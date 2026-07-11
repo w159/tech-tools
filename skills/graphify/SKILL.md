@@ -140,7 +140,7 @@ Then act on it:
 
 For a monorepo, prefer scoping to one codebase root per run (e.g. one MCP server / package /
 plugin) over a single whole-repo run: each root stays under the size gate and produces its own
-`graphify-out/`, which is also how `atlas-survey` Phase 1 drives graphify.
+`graphify-out/`, which is also how `atlas-athena` Phase 1 drives graphify.
 
 ### Step 2.5 - Transcribe video / audio files (only if video files detected)
 

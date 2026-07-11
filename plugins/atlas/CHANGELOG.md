@@ -49,39 +49,39 @@ known_marketplaces.json format.
 
 Close the rest of the Windows-invalid-path class. An independent atlas:verifier
 confirmed the 3.1.2 fix but flagged that the same defect was still live in three
-untouched writers: atlas-orbit's `loops/<id>.md`, and the atlas-engine naming
+untouched writers: atlas-chronos's `loops/<id>.md`, and the atlas-metis naming
 conventions (`docs/plans/<slug>.md`, `docs/features/<feature-slug>.md`,
-`docs/runs/<id>/`, etc.) that every atlas-engine task composes. 3.1.2 fixed only
+`docs/runs/<id>/`, etc.) that every atlas-metis task composes. 3.1.2 fixed only
 the two audit skills; 3.1.3 closes the general case.
 
-- **Canonical slug rule.** `atlas-engine/references/docs-ssot.md` "Naming
+- **Canonical slug rule.** `atlas-metis/references/docs-ssot.md` "Naming
   conventions" now defines one filesystem-safe slug algorithm for every `<slug>`,
   `<id>`, `<scope>` it lists, with the Windows-reserved set and reserved device
   names spelled out. This is the single source the other skills point to.
-- **atlas-orbit.** `SKILL.md` loop-creation step now requires `<id>` to be a
+- **atlas-chronos.** `SKILL.md` loop-creation step now requires `<id>` to be a
   filesystem-safe slug and references the canonical rule.
 - **session-lifecycle.** The `docs/runs/<id>/` archive note now requires a
   filesystem-safe id, referencing the canonical rule.
-- **Why it matters.** docs-ssot naming is load-bearing for all atlas-engine
+- **Why it matters.** docs-ssot naming is load-bearing for all atlas-metis
   output, not just audits; a raw `frontend:auth` task name flowing into
   `docs/plans/` would have reproduced the exact same checkout failure.
 
 ## 3.1.2 (2026-07-10)
 
-Filesystem-safe audit filenames. atlas-cartographer and atlas-survey wrote
+Filesystem-safe audit filenames. atlas-ariadne and atlas-athena wrote
 per-feature and per-finding files from raw, model-chosen names. When a name
 carried a colon (e.g. `charts/frontend:public-site-and-auth.md`), Git on Windows
 rejected the whole checkout with `error: invalid path`, blocking everyone from
 syncing the repo. The generators now slug every filename before writing.
 
-- **Slug rule.** `atlas-cartographer/SKILL.md` gains a "Filename safety" section:
+- **Slug rule.** `atlas-ariadne/SKILL.md` gains a "Filename safety" section:
   lowercase, replace any character outside `a-z 0-9 . _ -` (the Windows-reserved
   set `< > : " / \ | ? *` plus spaces) with `-`, collapse and trim, guard against
   reserved device names and slug collisions. The human-readable name still heads
   the file, so nothing is lost.
 - **Both write points constrained.** Inline reminders at the `charts/<feature>.md`
   and `handoffs/<system>.md` writes, plus slugged placeholders in the output tree.
-- **Sibling skill covered.** `atlas-survey/SKILL.md` shared the same latent
+- **Sibling skill covered.** `atlas-athena/SKILL.md` shared the same latent
   exposure via `handoffs/<finding-id>.md`; it now carries the matching constraint.
 - **Scope note.** `build_hub.py` only reads existing handoff files and writes
   fixed names, so it was never a source; the fix is in the orchestrator prompts.
@@ -131,7 +131,7 @@ independently verified (`docs/.run/findings.json` at repo root); 115/115 tests.
   limitation: codex token deltas partially persisted (undercount) - see the
   sextant skill's caveat.
 - **De-overlap.** 33/40 frontmatter descriptions rewritten to tight unique
-  triggers (plugin description 1548 -> 281 chars); atlas-stacks command is
+  triggers (plugin description 1548 -> 281 chars); atlas-nestor command is
   routes-only; docs-auditor solely owns docs-drift; no functionality changed.
 - **Docs synced.** Engine SKILL.md, hooks-automation.md (seven conditions),
   README hook table, and sextant public-API docs reconciled against the shipped
@@ -145,12 +145,12 @@ timing left to Jerry.
 
 - **Removed.** The five `ux-*` agent specs (`ux-cartographer`, `ux-persona`,
   `ux-fuzzer`, `ux-accuracy-oracle`, `ux-reporter`) and `api-usage-map`, each
-  checked for live skill/command dispatches before deletion. `atlas-expedition` is
+  checked for live skill/command dispatches before deletion. `atlas-odysseus` is
   now the sole canonical owner of UX testing; `ux-test-swarm.md` collapsed to a
   short pointer at that skill.
-- **Routing gained three rows.** `skills/atlas-engine/references/capability-routing.md`
-  now routes to atlas-architect (project boot/onboarding), atlas-engine's own
-  self-entry (orchestration), and atlas-stacks (skill selection), and annotates the
+- **Routing gained three rows.** `skills/atlas-metis/references/capability-routing.md`
+  now routes to atlas-hephaestus (project boot/onboarding), atlas-metis's own
+  self-entry (orchestration), and atlas-nestor (skill selection), and annotates the
   built-in/global agent-type mentions it references (`codebase-explorer`, `Explore`,
   `Plan`, `debugger`, etc.) as external to `plugins/atlas/agents/`.
 - **Spec conformance.** All 12 remaining agent specs gained a structured
@@ -176,18 +176,18 @@ plugins (verified by SHA-256) - the domain plugins are now the single source.
   each vendor: it-operations (auvik, connectwise-manage, ninjaone, spanning),
   security-compliance (blumira, knowbe4, threatlocker, vanta), microsoft-365 (cipp),
   hr-payroll (paylocity).
-- **atlas-harbor rewritten** as the cross-plugin connector setup guide: detects which
+- **atlas-hermes rewritten** as the cross-plugin connector setup guide: detects which
   domain plugins are installed (`~/.claude/plugins/installed_plugins.json`, or advises
   `/plugin`), shows enabled/disabled state per vendor by reading the *owning* plugin's
   config, and directs credential entry to that plugin's `/plugin config` - never to
   atlas. `vendors.md` updated to the same model, plus a migration note.
-- **Stale references swept**: `skills/atlas-engine/references/capability-catalog.md`,
-  `skills/atlas-engine/SKILL.md`, `scripts/discover_capabilities.py`,
+- **Stale references swept**: `skills/atlas-metis/references/capability-catalog.md`,
+  `skills/atlas-metis/SKILL.md`, `scripts/discover_capabilities.py`,
   `commands/atlas.md`, and `README.md` no longer claim atlas ships or bundles vendor
   connectors.
 - **MIGRATION.** Credentials previously configured on atlas's own plugin config (e.g.
   `paylocity_client_id`) must be re-entered on the owning domain plugin via `/plugin`
-  config - atlas's copies of those `userConfig` keys are gone. Run atlas-harbor's
+  config - atlas's copies of those `userConfig` keys are gone. Run atlas-hermes's
   no-args status scan to see current enabled/disabled state per connector.
 
 ## 2.5.0
@@ -197,8 +197,8 @@ instead of depending on the model remembering prose, and the definition-of-done 
 covers the full docs contract (audit findings 2026-07-03).
 
 - **Auto-set orchestration marker.** `hooks/dispatch_tripwire.py` now flags the session
-  orchestrating when an orchestration skill (atlas-engine, atlas-survey,
-  atlas-cartographer, atlas-expedition, atlas-orbit) is invoked via the Skill tool or when
+  orchestrating when an orchestration skill (atlas-metis, atlas-athena,
+  atlas-ariadne, atlas-odysseus, atlas-chronos) is invoked via the Skill tool or when
   an `atlas:*` subagent is dispatched. The manual `mark-orchestrating` CLI remains as a
   fallback. hooks.json PostToolUse matcher extended with `Skill`. 4 new tests.
 - **Completion gate widened 3 -> 6 conditions.** `hooks/completion_gate.py` now also
@@ -206,7 +206,7 @@ covers the full docs contract (audit findings 2026-07-03).
   drift (f): if non-docs files changed this run but no `docs/` file did, the Stop blocks
   once and directs an `atlas:docs-curator` dispatch - drift was previously advisory-only.
   4 new tests incl. an end-to-end git-drift case.
-- **Elicitation posture reversed.** atlas-engine SKILL.md and `/atlas-prompt` previously
+- **Elicitation posture reversed.** atlas-metis SKILL.md and `/atlas-prompt` previously
   forbade asking the user anything; both now run one AskUserQuestion round (max 3
   questions, options + recommendation) when goal/scope/acceptance stay ambiguous after
   discovery. Discovery still answers "where/what is broken"; the user answers "what
@@ -220,9 +220,9 @@ covers the full docs contract (audit findings 2026-07-03).
   `__pycache__`/`.ruff_cache` debris, and stale installed caches (1.0.1, 1.2.0) plus the
   obsolete w159-tech-tools marketplace clones. Verified dispatch logging live
   (90 rows in `~/.atlas/atlas.db` dispatches, incl. same-session Agent dispatches).
-- **New skill + command: atlas-stacks.** AskUserQuestion-driven skill stacking: elicits
+- **New skill + command: atlas-nestor.** AskUserQuestion-driven skill stacking: elicits
   the goal (one round), inventories the skills actually installed this session, composes
-  an ordered Skill-invocation chain (atlas-engine rides along for anything substantive),
+  an ordered Skill-invocation chain (atlas-metis rides along for anything substantive),
   confirms the stack with the user, then executes stage by stage. Counts: 9 skills,
   18 launchers.
 - **Elicitation across every skill.** All nine skills now state when to use
@@ -247,7 +247,7 @@ covers the full docs contract (audit findings 2026-07-03).
   skeletons) and 36 orc-* agent files (the deprecated pre-atlas squad) - these were the
   "old variants" polluting the slash/agent pickers.
 - Docs reconciled: `references/hooks-automation.md` (6-condition gate, auto-marker incl.
-  atlas-stacks), SKILL.md definition-of-done and first-action sections, plugin.json and
+  atlas-nestor), SKILL.md definition-of-done and first-action sections, plugin.json and
   marketplace.json descriptions (nine skills, 18 launchers, elicitation posture).
 
 ## 2.4.0
@@ -304,7 +304,7 @@ reviewed before merge. Plans/evidence under `docs/audits/atlas-cohesion-2026-06-
 - The WS5 `memory-access.md` calling convention was promoted to the user's global
   `~/.claude/CLAUDE.md` after two further sessions still mis-called `observation_search` in worker
   runtime; the skill-scoped reference alone did not reliably load. See
-  `skills/atlas-engine/references/memory-access.md:36`.
+  `skills/atlas-metis/references/memory-access.md:36`.
 
 ## 2.2.3
 
@@ -343,11 +343,11 @@ corrects three defects found by end-to-end testing against the live hooks.
   `COALESCE(wall_clock_s, excluded.wall_clock_s)` so derive only fills a
   wall-clock that finalize never set (backfill-only sessions).
 - **`trends()` returns the full metric set.** It selected three metric columns
-  while the `atlas-sextant` Trends table compares dimensions like
+  while the `atlas-argus` Trends table compares dimensions like
   `verifier_coverage` and `parallel_waves`; it now returns all of them.
 - **`latest_run_id(conn, session_id)`** added: resolves the most recent run open
   OR closed, so post-Stop metric derivation attaches regardless of hook ordering.
-- `atlas-sextant` SKILL.md corrected: `derive_run_metrics` marked auto-wired,
+- `atlas-argus` SKILL.md corrected: `derive_run_metrics` marked auto-wired,
   `latest_run_id` documented, the Trends column list and the example (which used
   `current_run_id`, NULL after Stop) fixed.
 
@@ -365,18 +365,18 @@ Fixes a hook-spam bug and fills run-health metrics that were never populated.
 - **`atlas_db.derive_run_metrics(conn, run_id, session_id)`.** The `metrics`
   columns `est_context_tokens`, `verifier_coverage`, `parallel_waves`,
   `in_flight_peak`, and `wall_clock_s` had no writer and were always NULL, while
-  `atlas-sextant` documented them as live signals. They are now computed from the
+  `atlas-argus` documented them as live signals. They are now computed from the
   transcript mirror (peak main-thread context, verifier-vs-implementer dispatch
   ratio, timestamp-clustered dispatch waves, session span). `recall_hits` /
   `recall_misses` remain intentionally un-derived - judging whether a memory
   result was usable is semantic, not a count - and the skill now marks a NULL
   there as "not yet assessed".
-- `atlas-sextant` SKILL.md documents how each metric is populated and adds
+- `atlas-argus` SKILL.md documents how each metric is populated and adds
   `derive_run_metrics` to the public API.
 
 ## 2.2.0
 
-Added the session-forensics lens to `atlas-sextant`. atlas now indexes the
+Added the session-forensics lens to `atlas-argus`. atlas now indexes the
 jsonl/json session transcripts Claude Code writes - the lossless record of every
 message, tool call, tool result, and token-usage number - into the observability
 DB, so sextant can see what actually happened across every session instead of
@@ -398,7 +398,7 @@ trying it.
   read helpers `tool_usage`, `idle_assets`, `context_tool_health`,
   `signal_counts`, `signal_rollup`, and `repeated_prompts`. Token totals are
   recomputed from child rows, so re-ingest never double-counts.
-- `atlas-sextant` SKILL.md documents the third lens and the four questions it
+- `atlas-argus` SKILL.md documents the third lens and the four questions it
   answers: used-vs-idle tools/skills/MCP/agents, context-tool (context-mode /
   claude-mem / ponytail) health, repeated user requests, and behavioral issues
   that become CLAUDE.md / rule proposals.
@@ -411,7 +411,7 @@ trying it.
 
 ## 2.1.0
 
-Added the asset/context-cost lens to `atlas-sextant`. Previously the skill only
+Added the asset/context-cost lens to `atlas-argus`. Previously the skill only
 read run telemetry from `~/.atlas/atlas.db`; it had no awareness of the context
 weight a session carries. It now also audits installed assets.
 

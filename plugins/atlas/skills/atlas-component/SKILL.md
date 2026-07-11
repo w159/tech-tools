@@ -1,17 +1,22 @@
 ---
-description: "Build one reusable component that survives latency, cancellation, and partial failure (progress modal, upload widget, job panel), handling every backend state."
-argument-hint: "[component name+purpose] [props contract] [backend contract]"
+name: atlas-component
+description: Build one reusable component that survives latency, cancellation, and partial failure (progress modal, upload widget, job panel), handling every backend state.
+when_to_use: the task involves component
+disable-model-invocation: true
+argument-hint: '[component name+purpose] [props contract] [backend contract]'
 ---
+
+
 
 Apply the Operating Contract to this entire task. It is injected below.
 
 ```!
-cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-engine/references/operating-contract.md"
+cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-metis/references/operating-contract.md"
 ```
 
-If the contract did not load above, read `skills/atlas-engine/references/operating-contract.md` and apply it before proceeding.
+If the contract did not load above, read `skills/atlas-metis/references/operating-contract.md` and apply it before proceeding.
 
-# /atlas-component
+# `atlas-component`
 
 Build the single reusable component described in `$ARGUMENTS`, defining its contract first and proving every state renders.
 

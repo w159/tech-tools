@@ -1,7 +1,9 @@
 ---
 name: atlas-odysseus
 description: Use when asked to run a UX test swarm, full UI/UX test pass, persona testing review, or pre-release frontend sweep on any web app, or to re-test after fixes from a previous run. Discovers the target app from the repo automatically and adapts to any frontend stack. Drives persona generation, scripted data entry, real-browser walkthroughs, fuzzing, and an independent calc oracle, then gates on whether the CLIENT surface is actually correct.
+when_to_use: asked to run a UX test swarm, full UI/UX test pass, persona testing review, or pre-release frontend sweep on any web app, or to re-test after fixes from a previous run. Discovers the target app from the repo automatically and adapts to any frontend stack. Drives persona generation, scripted data entry, real-browser walkthroughs, fuzzing, and an independent calc oracle, then gates on whether the CLIENT surface is actually correct
 ---
+
 
 # UX Test Swarm
 

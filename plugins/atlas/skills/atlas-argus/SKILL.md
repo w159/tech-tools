@@ -1,7 +1,9 @@
 ---
 name: atlas-argus
-description: "Measure atlas's own run health, audit context/asset waste, and mine session transcripts. Three lenses: RUN HEALTH reads the observability DB for metrics (wall-clock, dispatches, verifier coverage) and baseline->target goals; ASSET AUDIT scores each context-loaded skill/agent/plugin by token cost and relevance to flag disable/relocate; SESSION FORENSICS mines transcripts for unused tools and unverified claims into rules. No args reports trends."
+description: 'Measure atlas''s own run health, audit context/asset waste, and mine session transcripts. Three lenses: RUN HEALTH reads the observability DB for metrics (wall-clock, dispatches, verifier coverage) and baseline->target goals; ASSET AUDIT scores each context-loaded skill/agent/plugin by token cost and relevance to flag disable/relocate; SESSION FORENSICS mines transcripts for unused tools and unverified claims into rules. No args reports trends.'
+when_to_use: the task involves argus
 ---
+
 
 # atlas-argus
 

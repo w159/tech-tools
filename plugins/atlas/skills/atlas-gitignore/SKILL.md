@@ -1,15 +1,21 @@
 ---
-description: "Generate a zero-trust, deny-by-default .gitignore for a named stack: allowlist intended paths, re-exclude secrets last. Use when starting or hardening a repo."
-argument-hint: [languages/frameworks/package managers/build tools/OS/editors]
+name: atlas-gitignore
+description: 'Generate a zero-trust, deny-by-default .gitignore for a named stack: allowlist intended paths, re-exclude secrets last. Use when starting or hardening a repo.'
+when_to_use: starting or hardening a repo
+disable-model-invocation: true
+argument-hint:
+- languages/frameworks/package managers/build tools/OS/editors
 ---
+
+
 
 Apply the Operating Contract to this entire task. It is injected below.
 
 ```!
-cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-engine/references/operating-contract.md"
+cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-metis/references/operating-contract.md"
 ```
 
-If the contract did not load above, read `skills/atlas-engine/references/operating-contract.md` and apply it before proceeding.
+If the contract did not load above, read `skills/atlas-metis/references/operating-contract.md` and apply it before proceeding.
 
 Generate a zero-trust .gitignore for this stack: $ARGUMENTS
 

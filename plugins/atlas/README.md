@@ -12,15 +12,15 @@ a codebase the more it is used.
 | Piece | What it is |
 | --- | --- |
 | `/atlas` architect | Boots and configures the workspace: verifies/installs claude-mem and context-mode (recommend then confirm), scans the stack and recommends skills/plugins/MCP to install, confirms hooks are wired, writes project config, and seeds the docs/ single source of truth. |
-| SessionStart boot | A fast, crash-proof hook that activates the runtime every session: injects the operating contract and atlas-engine methodology, reports dependency state, and surfaces relevant past lessons. Never blocks a session. |
-| atlas-engine skill | The orchestrator playbook: decompose a task, route every code edit to a subagent, demand execution evidence, verify with a second agent, keep docs/ as the single source of truth, and protect the context window. Triggers on whole-codebase build/fix/audit/refactor/investigate work. |
-| atlas-architect skill | The methodology behind `/atlas` and the boot hook: dependencies, capability discovery, hooks, config, docs seed. |
-| atlas-cartographer skill | Produce an evidence-grounded architecture map of any codebase, identify structural duplicates, and write a `docs/architecture/boundaries.md` that a fresh agent can load instead of re-discovering the layout. |
-| atlas-sextant skill | Measure run health from the SQLite observability DB and propose metric-backed improvements (baseline -> target). Three lenses: run metrics (wall-clock, inline-ops, dispatches, parallel waves, context, recall, verifier coverage), asset/context-cost audit, and session forensics over the indexed transcripts (used-vs-idle tools/skills/MCP/agents, context-tool health, repeated requests, behavioral issues). The Stop/SubagentStop nudge hook points here. |
-| atlas-orbit skill | Pick and instantiate the best-fit reusable loop for any recurring or iterative task (loop-until-dry, fan-out-adversarial-verify, red-green-tdd, doc-reconcile, incident-triage, and more). |
-| atlas-harbor skill | Guided cross-plugin setup for the 10 vendor MCP connectors (NinjaOne, Auvik, CIPP, ConnectWise, Spanning, KnowBe4, Vanta, ThreatLocker, Paylocity, Blumira), which live in their owning domain plugins (it-operations, security-compliance, microsoft-365, hr-payroll) - atlas ships none of them itself. Detects installed domain plugins, shows enabled/disabled state, and directs credential setup to the owning plugin's `/plugin config`. |
-| atlas-expedition skill | App-discovering UX swarm: auto-finds routes and form fields in any running web app, then runs the full cartographer -> persona -> fuzzer -> oracle -> reporter pipeline with no hardcoded paths. |
-| atlas-survey skill | Comprehensive quality, security, and OWASP audit swarm: discovery-first scan of the full codebase, severity-graded findings, coverage report, and an actionable remediation plan. |
+| SessionStart boot | A fast, crash-proof hook that activates the runtime every session: injects the operating contract and atlas-metis methodology, reports dependency state, and surfaces relevant past lessons. Never blocks a session. |
+| atlas-metis skill | The orchestrator playbook: decompose a task, route every code edit to a subagent, demand execution evidence, verify with a second agent, keep docs/ as the single source of truth, and protect the context window. Triggers on whole-codebase build/fix/audit/refactor/investigate work. |
+| atlas-hephaestus skill | The methodology behind `/atlas` and the boot hook: dependencies, capability discovery, hooks, config, docs seed. |
+| atlas-ariadne skill | Produce an evidence-grounded architecture map of any codebase, identify structural duplicates, and write a `docs/architecture/boundaries.md` that a fresh agent can load instead of re-discovering the layout. |
+| atlas-argus skill | Measure run health from the SQLite observability DB and propose metric-backed improvements (baseline -> target). Three lenses: run metrics (wall-clock, inline-ops, dispatches, parallel waves, context, recall, verifier coverage), asset/context-cost audit, and session forensics over the indexed transcripts (used-vs-idle tools/skills/MCP/agents, context-tool health, repeated requests, behavioral issues). The Stop/SubagentStop nudge hook points here. |
+| atlas-chronos skill | Pick and instantiate the best-fit reusable loop for any recurring or iterative task (loop-until-dry, fan-out-adversarial-verify, red-green-tdd, doc-reconcile, incident-triage, and more). |
+| atlas-hermes skill | Guided cross-plugin setup for the 10 vendor MCP connectors (NinjaOne, Auvik, CIPP, ConnectWise, Spanning, KnowBe4, Vanta, ThreatLocker, Paylocity, Blumira), which live in their owning domain plugins (it-operations, security-compliance, microsoft-365, hr-payroll) - atlas ships none of them itself. Detects installed domain plugins, shows enabled/disabled state, and directs credential setup to the owning plugin's `/plugin config`. |
+| atlas-odysseus skill | App-discovering UX swarm: auto-finds routes and form fields in any running web app, then runs the full cartographer -> persona -> fuzzer -> oracle -> reporter pipeline with no hardcoded paths. |
+| atlas-athena skill | Comprehensive quality, security, and OWASP audit swarm: discovery-first scan of the full codebase, severity-graded findings, coverage report, and an actionable remediation plan. |
 | Command library | Seventeen verification-gated `/atlas-*` launchers, each injecting the operating contract and driving a specific task through the squad. Includes `/atlas-launch`, which opens a remediation session from an audit hub, and `/atlas-doctor`, which diagnoses and repairs the plugin installation itself. |
 | Subagent squad | Eighteen `atlas:<role>` subagents, including a five-agent browser-driven UI/UX test swarm. |
 | Capability discovery | A read-only scanner plus a maintained catalog that recommend the skills/plugins/MCP a project needs, with exact install commands. |
@@ -43,7 +43,7 @@ atlas/
 |   `-- nudge.py                   #   Stop/SubagentStop: self-improvement nudge (throttled)
 |-- scripts/
 |   |-- discover_capabilities.py   #   read-only stack scan -> ranked recommendations
-|   |-- atlas_doctor.py            #   installation health check + auto-repair (/atlas-doctor, SessionStart guard)
+|   |-- atlas_doctor.py            #   installation health check + auto-repair (`atlas-doctor`, SessionStart guard)
 |   `-- install_hooks.py           #   fallback wiring for non-plugin installs
 |-- output-styles/
 |   `-- atlas-orchestrator.md      #   force-for-plugin: true - auto-applies whenever atlas is enabled
@@ -60,7 +60,7 @@ atlas/
 |   |-- docs-curator.md            #   maintains the docs/ single source of truth
 |   |-- docs-auditor.md            #   audits docs/ for drift against code
 |   `-- completeness-critic.md     #   "what did we miss" gap pass before done
-|-- commands/                      # 18 commands (/atlas + 17 launchers)
+|-- commands/                      # 28 skills (/atlas + 17 launchers)
 |   |-- atlas.md                   #   the architect: boot + configure the workspace
 |   |-- atlas-prompt.md            #   prompt optimizer
 |   |-- atlas-feature.md           #   full-stack feature build
@@ -79,14 +79,14 @@ atlas/
 |   |-- atlas-doctor.md            #   diagnose/repair the atlas installation itself
 |   `-- atlas-validate.md          #   validation-gated plugin/skill review (reports, no auto-fix)
 `-- skills/
-    |-- atlas-engine/              # SKILL.md + references/ (incl. operating-contract.md, capability-catalog.md)
-    |-- atlas-architect/           # SKILL.md - the boot/discovery methodology
-    |-- atlas-cartographer/        # SKILL.md - architecture map + structural dedup -> docs/architecture/boundaries.md
-    |-- atlas-sextant/             # SKILL.md - SQLite observability DB: measurable self-improvement
-    |-- atlas-orbit/               # SKILL.md - recurring/iterative task loop library (12+ loops)
-    |-- atlas-harbor/              # SKILL.md - guided cross-plugin vendor connector setup (10 connectors, owned by domain plugins)
-    |-- atlas-expedition/          # SKILL.md - app-discovering UX swarm (no hardcoded paths)
-    `-- atlas-survey/              # SKILL.md - comprehensive quality/security/OWASP audit swarm
+    |-- atlas-metis/              # SKILL.md + references/ (incl. operating-contract.md, capability-catalog.md)
+    |-- atlas-hephaestus/           # SKILL.md - the boot/discovery methodology
+    |-- atlas-ariadne/        # SKILL.md - architecture map + structural dedup -> docs/architecture/boundaries.md
+    |-- atlas-argus/             # SKILL.md - SQLite observability DB: measurable self-improvement
+    |-- atlas-chronos/               # SKILL.md - recurring/iterative task loop library (12+ loops)
+    |-- atlas-hermes/              # SKILL.md - guided cross-plugin vendor connector setup (10 connectors, owned by domain plugins)
+    |-- atlas-odysseus/          # SKILL.md - app-discovering UX swarm (no hardcoded paths)
+    `-- atlas-athena/              # SKILL.md - comprehensive quality/security/OWASP audit swarm
 ```
 
 ## Getting started
@@ -99,7 +99,7 @@ context-mode if you approve, recommends the capabilities your stack needs, and w
 
 ```
 /atlas                 # boot + configure this project (recommend then confirm)
-/atlas-feature ...     # build a full-stack feature with evidence
+`atlas-feature` ...     # build a full-stack feature with evidence
 ```
 
 ## Commands
@@ -165,7 +165,7 @@ exclusion.
 For installs outside a plugin (a copied skill or bare agent), `scripts/install_hooks.py`
 wires the hooks into settings manually. The optional ollama-backed optimizer is
 configured with `ATLAS_OPTIMIZE_CMD`, `ATLAS_OPTIMIZER_MODEL`, and `ATLAS_OLLAMA_URL`
-(see `skills/atlas-engine/references/hooks-automation.md`); it is not required.
+(see `skills/atlas-metis/references/hooks-automation.md`); it is not required.
 
 ## Dependencies
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Atlas SessionStart boot. Fast, idempotent, crash-proof.
 
-Emits additionalContext pointing at the operating contract and atlas-engine
+Emits additionalContext pointing at the operating contract and atlas-metis
 methodology, reports whether claude-mem and context-mode are present, and
 surfaces a one-line ready status. Never blocks session start: any error exits 0
 silently.
@@ -255,39 +255,39 @@ def main():
             pony = False
 
     lines = [
-        "Atlas runtime active. The atlas-engine methodology and operating contract apply:",
+        "Atlas runtime active. The atlas-metis methodology and operating contract apply:",
         "research -> theory -> test -> validate -> implement -> test -> verify; evidence before any done claim.",
         "This session is the atlas orchestrator. Substantive implementation is routed to atlas:<role> subagents "
         "(atlas:explorer, atlas:implementer, atlas:verifier, etc.); the orchestrator plans, delegates, "
         "and synthesizes -- it does not directly write production code or run broad tool sweeps.",
-        "Invoke the atlas-engine skill for multi-step or whole-codebase work; route subagents via atlas:<role>.",
+        "Invoke the atlas-metis skill for multi-step or whole-codebase work; route subagents via atlas:<role>.",
         "Memory (claude-mem): "
         + (
             "available"
             if mem
-            else "absent - run /atlas to install for self-improvement"
+            else "absent - run the `atlas` skill to install for self-improvement"
         )
         + ".",
         "Context protection (context-mode): "
         + (
             "available"
             if ctx
-            else "absent - run /atlas to install for large-output work"
+            else "absent - run the `atlas` skill to install for large-output work"
         )
         + ".",
         "Less-code mode (ponytail): "
-        + ("available" if pony else "absent - run /atlas to install for less-code mode")
+        + ("available" if pony else "absent - run the `atlas` skill to install for less-code mode")
         + ".",
-        "No-prompt scan: run /atlas, or any atlas skill with no task, to scan this project "
+        "No-prompt scan: run `atlas` or any atlas skill with no task to scan this project "
         "and report what is missing to reach atlas standard (claude-mem + context-mode + ponytail, "
-        "loop-library, connectors, hooks, docs/ SSOT).",
+        "loop-library, connectors, hooks, .atlas/.atlas/docs/ SSOT).",
     ]
     if resume:
         lines.append(resume)
     out = {
         "additionalContext": "\n".join(lines)[:9000],
         "systemMessage": "Atlas ready"
-        + ("" if (mem and ctx) else " (run /atlas to complete setup)"),
+        + ("" if (mem and ctx) else " (run the `atlas` skill to complete setup)"),
     }
     sys.stdout.write(json.dumps(out))
     sys.exit(0)

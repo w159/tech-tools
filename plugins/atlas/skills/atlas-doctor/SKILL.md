@@ -1,9 +1,14 @@
 ---
-description: "Repair the atlas plugin install: marketplace, rollbacks, hooks/agents/skills, auto-fix. Run when atlas stops launching subagents or acts like an older version."
-argument-hint: "[--fix to auto-repair] [plugin name, default atlas]"
+name: atlas-doctor
+description: 'Repair the atlas plugin install: marketplace, rollbacks, hooks/agents/skills, auto-fix. Run when atlas stops launching subagents or acts like an older version.'
+when_to_use: the task involves doctor
+disable-model-invocation: true
+argument-hint: '[--fix to auto-repair] [plugin name, default atlas]'
 ---
 
-# /atlas-doctor
+
+
+# `atlas-doctor`
 
 Atlas can be silently broken from the outside: a marketplace entry that points
 at a stale fork with autoUpdate on will roll the installed plugin back to an
@@ -30,7 +35,7 @@ The script prints one PASS/FAIL line per check and exits 0 (healthy) or 1
 | rollback | installed version is not below the highest version ever seen (state in ~/.atlas/doctor-state.json) |
 | install-path | the cache copy exists, matches the registered version, and is not marked .orphaned_at for garbage collection |
 | hooks-wired | every hook file referenced by hooks.json exists in the installed copy |
-| assets | commands/, agents/, skills/ are populated in the installed copy |
+| assets | `agents/` and `skills/` are populated in the installed copy |
 
 ## If problems are found
 

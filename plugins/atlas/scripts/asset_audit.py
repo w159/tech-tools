@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Atlas asset/context auditor — the context-cost lens of atlas-sextant.
+"""Atlas asset/context auditor — the context-cost lens of atlas-argus.
 
 Run telemetry answers "is atlas behaving?"; this answers "is the session
 carrying weight it does not need here?". It inventories every context-loaded
@@ -328,7 +328,7 @@ def main(argv):
     if as_json:
         print(json.dumps({"summary": summary, "plan": plan}, indent=2))
         return 0
-    print("# atlas-sextant asset audit")
+    print("# atlas-argus asset audit")
     print(f"project: {root}")
     print(f"detected stack: {', '.join(summary['project_tags']) or '(none detected)'}")
     print(

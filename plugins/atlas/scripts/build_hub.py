@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build the atlas knowledge-graph hub for an audit run dir (WS4).
 
-Given a run dir (e.g. docs/audits/atlas-survey-<date>/) that holds `handoffs/<id>.md`
+Given a run dir (e.g. docs/audits/atlas-athena-<date>/) that holds `handoffs/<id>.md`
 remediation prompts and optional `report.md`/`findings/*.md`, plus one or more graphify
 `graph.json` graphs, produce:
 

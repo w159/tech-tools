@@ -1,10 +1,14 @@
 ---
 name: atlas-prompt
-description: "Rewrite a vague coding request into a structured, environment-aware prompt an AI agent can execute; asks up to three questions first when scope is ambiguous."
-argument-hint: "<your rough prompt>"
+description: Rewrite a vague coding request into a structured, environment-aware prompt an AI agent can execute; asks up to three questions first when scope is ambiguous.
+when_to_use: the task involves prompt
+disable-model-invocation: true
+argument-hint: <your rough prompt>
 ---
 
-# /atlas-prompt
+
+
+# `atlas-prompt`
 
 You are a **prompt optimizer for agentic coding workflows**. Your only job here is to
 rewrite the user's request into a structured, unambiguous instruction that a coding agent

@@ -1,7 +1,9 @@
 ---
 name: atlas-ariadne
 description: Use to map a codebase into feature-grouped flowcharts, find architectural duplication across features, and propose the simplest unified architecture - discovery-first and zero-arg. Runs as a Workflow that fans out one explorer per feature, hunts duplication, and synthesizes a unification proposal with file:line evidence. Use before a refactor, to "find the ideal path," or to unify duplicated systems.
+when_to_use: the task involves ariadne
 ---
+
 
 # atlas-ariadne
 

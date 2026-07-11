@@ -1,7 +1,7 @@
 {
     "name": "atlas",
     "version": "4.0.0",
-    "description": "Self-configuring multi-agent coding architect with 11 Greek mythology named skills (atlas-metis, atlas-hephaestus, atlas-ariadne, atlas-athena, atlas-argus, atlas-chronos, atlas-hermes, atlas-odysseus, atlas-nestor, atlas-armada, atlas-olympus), 23 agents (12 core + 11 department), 19 commands, 15 hooks, and the atlas-metis method (evidence before any done claim). The atlas-armada skill provides organizational deployment with 11 departments, each with their own skills, agents, and vendor connectors. The atlas-olympus skill scaffolds the .atlas/ workspace, migrates the SSOT to .atlas/docs/, and recommends what to run next.",
+    "description": "Self-configuring multi-agent coding architect with 28 skills (11 Greek-mythology core skills: atlas-metis, atlas-hephaestus, atlas-ariadne, atlas-athena, atlas-argus, atlas-chronos, atlas-hermes, atlas-odysseus, atlas-nestor, atlas-armada, atlas-olympus; plus 17 task skills such as atlas-feature, atlas-debug, atlas-doctor, atlas-validate, atlas-refactor, atlas-harden, atlas-launch), 23 agents (12 core + 11 armada department), 15 hooks, and the atlas-metis method (evidence before any done claim). The atlas-armada skill provides organizational deployment with 11 departments, each with their own skills, agents, and vendor connectors. The atlas-olympus skill scaffolds the .atlas/ workspace, migrates the SSOT to .atlas/docs/, and recommends what to run next. All capabilities are now implemented as Claude Code skills following Anthropic's skill best practices.",
     "author": {
         "name": "w159",
         "url": "https://github.com/w159"

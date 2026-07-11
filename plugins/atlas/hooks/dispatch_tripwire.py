@@ -25,15 +25,27 @@ ORCH_MARKERS = ("docs/",)
 # 8 prior ops means this call is the 9th -> deny.
 DENY_THRESHOLD = 8
 # Skills whose invocation means the session IS an atlas orchestration run.
-# Deliberately excludes advisory/config skills (atlas-architect, atlas-harbor)
-# so casual sessions never trip the completion gate.
+# Deliberately excludes advisory/config skills (atlas-hephaestus, atlas-hermes,
+# atlas-doctor, atlas-validate) and narrow single-purpose skills
+# (atlas-prompt, atlas-readme, atlas-gitignore, atlas-handoff, atlas-m365,
+# atlas-db-audit, atlas-vendor-assessment, atlas-argus) so casual sessions
+# never trip the completion gate.
 ORCH_SKILLS = {
-    "atlas-engine",
-    "atlas-survey",
-    "atlas-cartographer",
-    "atlas-expedition",
-    "atlas-orbit",
-    "atlas-stacks",
+    "atlas-metis",
+    "atlas-athena",
+    "atlas-ariadne",
+    "atlas-odysseus",
+    "atlas-chronos",
+    "atlas-nestor",
+    "atlas-feature",
+    "atlas-debug",
+    "atlas-refactor",
+    "atlas-harden",
+    "atlas-launch",
+    "atlas-component",
+    "atlas-frontend",
+    "atlas-armada",
+    "atlas-olympus",
 }
 
 
@@ -48,7 +60,7 @@ def _is_orchestration_path(path):
     if not path:
         return True  # unknown path -> do not punish
     norm = path.replace("\\", "/")
-    return norm.startswith("docs/") or "/docs/" in norm
+    return norm.startswith(".atlas/docs/") or "/.atlas/docs/" in norm
 
 
 def _deny(reason):

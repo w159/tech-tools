@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
-"""Assert every atlas skill dir is `atlas-<one themed word>`: exactly one dash."""
+"""Assert every atlas skill dir starts with `atlas-` and uses valid slug characters.
 
-import os, sys
+Anthropic's skill spec allows lowercase letters, numbers, and hyphens, with a 64-char max.
+We keep the `atlas-` prefix as our project convention but no longer enforce exactly one dash,
+because command-like skills (atlas-db-audit, atlas-vendor-assessment) need descriptive names.
+"""
+
+import os, sys, re
 
 skills = os.path.join(os.path.dirname(__file__), "..", "skills")
 bad = []
 for name in sorted(os.listdir(skills)):
     if not os.path.isdir(os.path.join(skills, name)):
         continue
-    if not name.startswith("atlas-") or name.count("-") != 1:
+    if not name.startswith("atlas-") or not re.fullmatch(r"atlas-[a-z0-9-]{1,59}", name):
         bad.append(name)
 if bad:
     print("NON-CONFORMANT:", bad)
     sys.exit(1)
-print("all skill names conform (single dash, atlas- prefix)")
+print("all skill names conform (atlas- prefix, valid slug, ≤64 chars)")

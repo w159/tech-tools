@@ -1,17 +1,22 @@
 ---
-description: "Build a full-stack feature with verified evidence. Use when a request spans UI, API, and data and must ship working, not 'should work'."
-argument-hint: "[feature] [acceptance criteria] [stack] [constraints]"
+name: atlas-feature
+description: Build a full-stack feature with verified evidence. Use when a request spans UI, API, and data and must ship working, not 'should work'.
+when_to_use: a request spans UI, API, and data and must ship working, not 'should work'
+disable-model-invocation: true
+argument-hint: '[feature] [acceptance criteria] [stack] [constraints]'
 ---
+
+
 
 Apply the Operating Contract to this entire task. It is injected below.
 
 ```!
-cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-engine/references/operating-contract.md"
+cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-metis/references/operating-contract.md"
 ```
 
-If the contract did not load above, read `skills/atlas-engine/references/operating-contract.md` and apply it before proceeding.
+If the contract did not load above, read `skills/atlas-metis/references/operating-contract.md` and apply it before proceeding.
 
-# /atlas-feature
+# `atlas-feature`
 
 Build the feature described in `$ARGUMENTS` end to end: backend and frontend, with proof.
 
@@ -22,7 +27,7 @@ Inputs to read from `$ARGUMENTS`: the feature (what it does, for whom), acceptan
 - Look up any unfamiliar API, framework, or SDK via Context7 (or Microsoft Learn for Microsoft services) before using it. No memory-based API calls.
 
 ## Pick the shape: loop or single pass
-- If this work is recurring or iterative (a sweep across many endpoints or screens, a build-fix cycle, an until-dry discovery pass, a migration, or a review round), invoke the `atlas-orbit` skill to select and instantiate the best-fit loop from the loop-library, then run that loop. Otherwise dispatch the squad directly for a single pass.
+- If this work is recurring or iterative (a sweep across many endpoints or screens, a build-fix cycle, an until-dry discovery pass, a migration, or a review round), invoke the `atlas-chronos` skill to select and instantiate the best-fit loop from the loop-library, then run that loop. Otherwise dispatch the squad directly for a single pass.
 
 ## Execute through the squad (parallel where independent)
 Dispatch all independent jobs in ONE message (multiple Agent calls in a single message) so they run concurrently; keep roughly 4-6 in flight. ALWAYS close the wave with an independent atlas:verifier in a fresh context before integrating results.

@@ -1,7 +1,9 @@
 ---
 name: atlas-armada
-description: "Organizational configuration layer for the atlas plugin. When an organization deploys atlas, this skill ensures every role and department is provisioned with the right skills, agents, connectors, branding, and compliance policies. Use when setting up an org's atlas deployment, onboarding a new department, enforcing org branding on coding-agent outputs, or routing a user to their department's toolset. Triggers on org setup, department onboarding, brand enforcement, policy compliance, and connector provisioning."
+description: Organizational configuration layer for the atlas plugin. When an organization deploys atlas, this skill ensures every role and department is provisioned with the right skills, agents, connectors, branding, and compliance policies. Use when setting up an org's atlas deployment, onboarding a new department, enforcing org branding on coding-agent outputs, or routing a user to their department's toolset. Triggers on org setup, department onboarding, brand enforcement, policy compliance, and connector provisioning.
+when_to_use: setting up an org's atlas deployment, onboarding a new department, enforcing org branding on coding-agent outputs, or routing a user to their department's toolset. Triggers on org setup, department onboarding, brand enforcement, policy compliance, and connector provisioning
 ---
+
 
 # atlas-armada - the organizational fleet
 

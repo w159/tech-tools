@@ -1,7 +1,9 @@
 ---
 name: atlas-athena
 description: Use for a comprehensive, discovery-first code-quality and security audit of a whole codebase - correctness, OWASP/security, SOLID/DRY/KISS, risk hotspots, dead code, coverage gaps, and code-vs-docs drift. Runs as a Workflow that builds a knowledge graph (graphify), targets the hottest nodes, fans out one reviewer per dimension, and adversarially verifies every finding before it counts.
+when_to_use: a comprehensive, discovery-first code-quality and security audit of a whole codebase - correctness, OWASP/security, SOLID/DRY/KISS, risk hotspots, dead code, coverage gaps, and code-vs-docs drift. Runs as a Workflow that builds a knowledge graph (graphify), targets the hottest nodes, fans out one reviewer per dimension, and adversarially verifies every finding before it counts
 ---
+
 
 # atlas-athena
 

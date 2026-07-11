@@ -1,7 +1,11 @@
 ---
-description: "Atlas architect: boot the workspace. Verify claude-mem and context-mode, scan the project, recommend tooling (confirm first), wire hooks, seed the docs/ SSOT."
-argument-hint: "[menu [described need] | deps | discover | hooks | config | all]"
+name: atlas
+description: 'Atlas architect: boot the workspace. Verify claude-mem and context-mode,
+  scan the project, recommend tooling (confirm first), wire hooks, seed the docs/
+  SSOT.'
+argument-hint: '[menu [described need] | deps | discover | hooks | config | all]'
 ---
+
 
 # /atlas - architect and configure this workspace
 
@@ -33,7 +37,7 @@ hooks, config), run only that one. Default is all.
   strictly read-only.
 - Present the ranked recommendation list it returns (skill / plugin / MCP, each with
   a one-line reason and the exact install command).
-- Cross-check against `${CLAUDE_PLUGIN_ROOT}/skills/atlas-engine/references/capability-catalog.md`
+- Cross-check against `${CLAUDE_PLUGIN_ROOT}/skills/atlas-metis/references/capability-catalog.md`
   for any signal the script does not yet cover.
 - Ask which items to install. Install only the confirmed ones. Never auto-install.
 
@@ -62,7 +66,7 @@ hooks, config), run only that one. Default is all.
 
 - Print a compact status: dependency state, capabilities installed vs declined,
   hooks active, config path, docs/ state. End with the next recommended command
-  (usually the atlas-engine skill or a specific `/atlas-*` launcher), and remind the
+  (usually the atlas-metis skill or a specific `/atlas-*` launcher), and remind the
   user they can run `/atlas menu` anytime to see the full atlas surface grouped by intent.
 
 ## Menu mode
@@ -78,43 +82,43 @@ Orient & configure
   /atlas menu            this guide  ( /atlas menu <need>  recommends the best-fit tool )
 
 Understand a codebase
-  atlas-cartographer     map features into flowcharts + find duplication, propose unification
-  atlas-survey           comprehensive quality/security/OWASP audit; writes findings + a hub
-  atlas-engine (skill)   orchestrate ANY multi-step / whole-repo / cross-layer task via subagents
+  atlas-ariadne     map features into flowcharts + find duplication, propose unification
+  atlas-athena           comprehensive quality/security/OWASP audit; writes findings + a hub
+  atlas-metis (skill)   orchestrate ANY multi-step / whole-repo / cross-layer task via subagents
 
 Build something new
-  /atlas-feature         full-stack feature (UI + API + data) with read-back evidence
-  /atlas-frontend        UI on one design system, all four states
-  /atlas-component       a reusable component resilient to latency/cancellation/failure
+  `atlas-feature`         full-stack feature (UI + API + data) with read-back evidence
+  `atlas-frontend`        UI on one design system, all four states
+  `atlas-component`       a reusable component resilient to latency/cancellation/failure
 
 Fix & improve existing code
-  /atlas-debug           reproduce a failure, root-cause it, fix in place with proof
-  /atlas-refactor        restructure with behavior frozen and proven unchanged
-  /atlas-validate        validate a change against acceptance criteria
-  /atlas-harden          idempotent CHECK/SET/VERIFY hardening script (RMM/MDM)
+  `atlas-debug`           reproduce a failure, root-cause it, fix in place with proof
+  `atlas-refactor`        restructure with behavior frozen and proven unchanged
+  `atlas-validate`        validate a change against acceptance criteria
+  `atlas-harden`          idempotent CHECK/SET/VERIFY hardening script (RMM/MDM)
 
 Act on an audit
-  /atlas-launch <id>     open a remediation session pre-loaded with a finding's handoff
-                         ( /atlas-launch with no id lists the actionable findings )
+  `atlas-launch` <id>     open a remediation session pre-loaded with a finding's handoff
+                         ( `atlas-launch` with no id lists the actionable findings )
 
 Docs, prompts & handoff
-  /atlas-readme          onboarding README grounded in the real repo
-  /atlas-prompt          turn a vague request into a structured, tool-aware prompt
-  /atlas-gitignore       zero-trust deny-by-default .gitignore for a named stack
-  /atlas-handoff         high-density session-resume checkpoint (NOT remediation - that's atlas-launch)
+  `atlas-readme`          onboarding README grounded in the real repo
+  `atlas-prompt`          turn a vague request into a structured, tool-aware prompt
+  `atlas-gitignore`       zero-trust deny-by-default .gitignore for a named stack
+  `atlas-handoff`         high-density session-resume checkpoint (NOT remediation - that's atlas-launch)
 
 Data, cloud & vendors
-  /atlas-db-audit        strictly read-only parallel DB audit -> remediation plan
-  /atlas-grafana         build/fix a Grafana SQL panel
-  /atlas-m365            Microsoft 365 / Entra / Graph / Intune config with read-back
-  /atlas-vendor-assessment   assess a vendor against a control framework you name
+  `atlas-db-audit`        strictly read-only parallel DB audit -> remediation plan
+  `atlas-grafana`         build/fix a Grafana SQL panel
+  `atlas-m365`            Microsoft 365 / Entra / Graph / Intune config with read-back
+  `atlas-vendor-assessment`   assess a vendor against a control framework you name
 
 Recurring work, connectors & self-improvement
-  atlas-orbit            select/run a recurring loop from the loop-library
-  atlas-harbor           guide vendor connector setup across domain plugins (MSP/vendor signals)
-  atlas-expedition       app-discovering UX runtime test swarm
-  atlas-sextant          measure atlas's own run health + audit context/asset waste
+  atlas-chronos            select/run a recurring loop from the loop-library
+  atlas-hermes           guide vendor connector setup across domain plugins (MSP/vendor signals)
+  atlas-odysseus       app-discovering UX runtime test swarm
+  atlas-argus          measure atlas's own run health + audit context/asset waste
 ```
 
-Keep this list in sync with `commands/atlas-*.md` and the eight skills; if you notice a launcher
+Keep this list in sync with `skills/atlas-*.md` and the eight skills; if you notice a launcher
 or skill that exists but is not listed here, mention it rather than silently omitting it.

@@ -207,7 +207,7 @@ class AtlasDoctorTest(unittest.TestCase):
             },
         )
         with open(os.path.join(ip, "hooks", "dispatch_tripwire.py"), "w") as f:
-            f.write("ORCH_SKILLS = {'atlas-engine'}\nmark_orchestrating = None\n")
+            f.write("ORCH_SKILLS = {'atlas-metis'}\nmark_orchestrating = None\n")
         self.assertEqual(atlas_doctor.check_orchestration_wiring(ip), [])
 
     def test_norm_repo_treats_url_variants_as_equal(self):

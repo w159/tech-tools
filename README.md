@@ -55,7 +55,7 @@ seeds `docs/` as the single source of truth. From there, work runs through the
 `/atlas-*` command launchers and the `atlas:<role>` subagent squad under an
 evidence-before-done operating contract. Atlas ships no vendor MCP connectors itself;
 the ten vendor connectors live in the four domain plugins listed below, and the
-`atlas-harbor` skill guides setup across them. See `plugins/atlas/README.md` for the
+`atlas-hermes` skill guides setup across them. See `plugins/atlas/README.md` for the
 full skill, agent, and hook inventory.
 
 ## Vendor MCP connectors

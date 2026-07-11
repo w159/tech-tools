@@ -228,7 +228,7 @@ def _write_orchestration_sentinel(cwd):
     try:
         run_dir = os.path.join(cwd, "docs", ".run")
         os.makedirs(run_dir, exist_ok=True)
-        with open(os.path.join(run_dir, "atlas-engine.active"), "w") as f:
+        with open(os.path.join(run_dir, "atlas-metis.active"), "w") as f:
             f.write(str(time.time()))
     except Exception:
         pass  # sentinel is best-effort

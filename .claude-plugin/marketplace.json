@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "atlas",
-  "description": "The atlas plugin: a self-configuring multi-agent coding architect with Greek mythology named skills, an organizational deployment layer (atlas-armada), and the atlas-olympus entry point that scaffolds the .atlas/ workspace and recommends what to run next. Includes 11 skills, 23 agents (12 core + 11 department), 19 commands, 15 hooks, vendor MCP connectors for IT ops, security, M365, HR, and finance, and the atlas-metis orchestration methodology (evidence before any done claim).",
+  "description": "The atlas plugin: a self-configuring multi-agent coding architect with Greek mythology named skills, an organizational deployment layer (atlas-armada), and the atlas-olympus entry point that scaffolds the .atlas/ workspace and recommends what to run next. Includes 11 skills, 23 agents (12 core + 11 department), 28 skills, 15 hooks, vendor MCP connectors for IT ops, security, M365, HR, and finance, and the atlas-metis orchestration methodology (evidence before any done claim).",
   "version": "2.0.0",
   "owner": {
     "name": "w159",
@@ -11,7 +11,7 @@
     {
       "name": "atlas",
       "source": "./plugins/atlas",
-      "description": "Self-configuring multi-agent coding architect with 11 Greek mythology named skills (atlas-metis, atlas-hephaestus, atlas-ariadne, atlas-athena, atlas-argus, atlas-chronos, atlas-hermes, atlas-odysseus, atlas-nestor, atlas-armada, atlas-olympus), 23 agents (12 core + 11 department), 19 commands, 15 hooks, and the atlas-metis method (evidence before any done claim). The atlas-armada skill provides org branding enforcement, policy compliance, and per-department connector provisioning across 11 departments. The atlas-olympus skill scaffolds the .atlas/ workspace, migrates the SSOT to .atlas/docs/, and recommends what to run next.",
+      "description": "Self-configuring multi-agent coding architect with 11 Greek mythology named skills (atlas-metis, atlas-hephaestus, atlas-ariadne, atlas-athena, atlas-argus, atlas-chronos, atlas-hermes, atlas-odysseus, atlas-nestor, atlas-armada, atlas-olympus), 23 agents (12 core + 11 department), 28 skills, 15 hooks, and the atlas-metis method (evidence before any done claim). The atlas-armada skill provides org branding enforcement, policy compliance, and per-department connector provisioning across 11 departments. The atlas-olympus skill scaffolds the .atlas/ workspace, migrates the SSOT to .atlas/docs/, and recommends what to run next.",
       "category": "developer-tools",
       "keywords": [
         "atlas",

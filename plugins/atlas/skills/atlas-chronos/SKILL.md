@@ -1,7 +1,9 @@
 ---
 name: atlas-chronos
-description: 'Match a recurring or iterative task to the best-fit reusable loop from a curated loop-library and instantiate it, handing interval/self-paced loops to the built-in /loop skill and running fan-out loops as a parallel adversarial-verify Workflow. Use when the user wants to run something repeatedly, poll for status, iterate until a condition is met, sweep a backlog, or stand up a recurring/scheduled workflow.'
+description: Match a recurring or iterative task to the best-fit reusable loop from a curated loop-library and instantiate it, handing interval/self-paced loops to the built-in /loop skill and running fan-out loops as a parallel adversarial-verify Workflow. Use when the user wants to run something repeatedly, poll for status, iterate until a condition is met, sweep a backlog, or stand up a recurring/scheduled workflow.
+when_to_use: the user wants to run something repeatedly, poll for status, iterate until a condition is met, sweep a backlog, or stand up a recurring/scheduled workflow
 ---
+
 
 # atlas-chronos - the loop matcher
 

@@ -189,7 +189,7 @@ class TripwireTest(unittest.TestCase):
             {
                 "session_id": "sess-skill",
                 "tool_name": "Skill",
-                "tool_input": {"skill": "atlas:atlas-engine"},
+                "tool_input": {"skill": "atlas:atlas-metis"},
             },
             self.env,
         )
@@ -202,7 +202,7 @@ class TripwireTest(unittest.TestCase):
             {
                 "session_id": "sess-arch",
                 "tool_name": "Skill",
-                "tool_input": {"skill": "atlas:atlas-architect"},
+                "tool_input": {"skill": "atlas:atlas-hephaestus"},
             },
             self.env,
         )
