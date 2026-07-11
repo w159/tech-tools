@@ -1,0 +1,52 @@
+{
+  "name": "microsoft-365",
+  "version": "1.0.3",
+  "description": "Microsoft 365 administration and identity. Bundles native M365 management (users, mailboxes, Teams, OneDrive, licensing, security posture), Microsoft Graph and Entra reporting, and CIPP multi-tenant management (tenant health, standards drift, secure score, offboarding).",
+  "mcpServers": "./.mcp.json",
+  "author": {
+    "name": "MSP Claude Plugins Community"
+  },
+  "homepage": "https://github.com/w159/atlas",
+  "repository": "https://github.com/w159/atlas",
+  "license": "Apache-2.0",
+  "keywords": [
+    "m365",
+    "microsoft-graph",
+    "entra",
+    "cipp",
+    "identity",
+    "licensing",
+    "tenants",
+    "mailboxes",
+    "teams"
+  ],
+  "userConfig": {
+    "cipp_base_url": {
+      "type": "string",
+      "title": "CIPP base URL",
+      "description": "URL of your deployed CIPP Azure Function (required for the CIPP connector). Leave blank to disable CIPP."
+    },
+    "cipp_api_key": {
+      "type": "string",
+      "title": "CIPP API key",
+      "description": "Legacy static bearer token. Use this OR the OAuth trio below.",
+      "sensitive": true
+    },
+    "cipp_tenant_id": {
+      "type": "string",
+      "title": "CIPP tenant ID",
+      "description": "Entra tenant ID for modern CIPP OAuth2 auth."
+    },
+    "cipp_client_id": {
+      "type": "string",
+      "title": "CIPP client ID",
+      "description": "App registration client ID for modern CIPP OAuth2 auth."
+    },
+    "cipp_client_secret": {
+      "type": "string",
+      "title": "CIPP client secret",
+      "description": "App registration client secret for modern CIPP OAuth2 auth.",
+      "sensitive": true
+    }
+  }
+}

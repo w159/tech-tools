@@ -1,0 +1,17 @@
+{
+  "name": "design",
+  "version": "1.0.1",
+  "description": "Review accessibility, critique designs, manage design systems, write UX copy, and synthesize user research for product and design teams.",
+  "keywords": [
+    "design",
+    "ux",
+    "accessibility",
+    "wcag",
+    "design-system",
+    "ui"
+  ],
+  "author": {
+    "name": "w159",
+    "url": "https://github.com/w159"
+  }
+}

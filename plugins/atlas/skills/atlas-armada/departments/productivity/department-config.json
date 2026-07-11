@@ -1,0 +1,22 @@
+{
+  "name": "productivity",
+  "version": "1.1.2",
+  "description": "Workplace productivity utilities: two-tier memory management and task tracking, plus enterprise search and knowledge synthesis, PDF viewing/form-filling/signing, brand-voice enforcement, and nudge reminders.",
+  "mcpServers": "./.mcp.json",
+  "keywords": [
+    "productivity",
+    "memory",
+    "tasks",
+    "workflow",
+    "collaboration",
+    "pdf",
+    "enterprise-search",
+    "knowledge",
+    "brand-voice",
+    "nudge"
+  ],
+  "author": {
+    "name": "w159",
+    "url": "https://github.com/w159"
+  }
+}

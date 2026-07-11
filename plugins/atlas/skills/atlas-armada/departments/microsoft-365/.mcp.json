@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "cipp": {
+      "command": "bash",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/launch.sh", "cipp", "dist/entry.js"],
+      "env": {
+        "CIPP_BASE_URL": "${user_config.cipp_base_url}",
+        "CIPP_API_KEY": "${user_config.cipp_api_key}",
+        "CIPP_TENANT_ID": "${user_config.cipp_tenant_id}",
+        "CIPP_CLIENT_ID": "${user_config.cipp_client_id}",
+        "CIPP_CLIENT_SECRET": "${user_config.cipp_client_secret}",
+        "MCP_TRANSPORT": "stdio"
+      }
+    }
+  }
+}

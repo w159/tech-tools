@@ -1,0 +1,104 @@
+{
+  "name": "security-compliance",
+  "version": "1.2.3",
+  "description": "Security and compliance operations. Bundles Vanta (SOC 2/ISO/HIPAA GRC), KnowBe4 (security awareness), ThreatLocker (zero-trust endpoint), and Blumira (SIEM and detection), alongside core audit-readiness, evidence-gap, risk-heatmap, and approval-triage skills.",
+  "mcpServers": "./.mcp.json",
+  "author": {
+    "name": "w159",
+    "url": "https://github.com/w159"
+  },
+  "repository": "https://github.com/w159/atlas",
+  "homepage": "https://github.com/w159/atlas/tree/main/plugins/security-compliance",
+  "license": "Apache-2.0",
+  "keywords": [
+    "vanta",
+    "knowbe4",
+    "threatlocker",
+    "compliance",
+    "soc2",
+    "iso27001",
+    "hipaa",
+    "grc",
+    "security-awareness",
+    "zero-trust",
+    "audit",
+    "phishing",
+    "evidence",
+    "blumira",
+    "siem",
+    "email-security"
+  ],
+  "userConfig": {
+    "vanta_client_id": {
+      "type": "string",
+      "title": "Vanta client ID",
+      "description": "Vanta OAuth2 client ID. Leave blank to disable Vanta."
+    },
+    "vanta_client_secret": {
+      "type": "string",
+      "title": "Vanta client secret",
+      "description": "Vanta OAuth2 client secret.",
+      "sensitive": true
+    },
+    "vanta_base_url": {
+      "type": "string",
+      "title": "Vanta base URL",
+      "description": "Optional. Leave blank to use the default (https://api.vanta.com/v1)."
+    },
+    "knowbe4_api_key": {
+      "type": "string",
+      "title": "KnowBe4 API key",
+      "description": "KnowBe4 reporting API key. Leave blank to disable KnowBe4.",
+      "sensitive": true
+    },
+    "knowbe4_region": {
+      "type": "string",
+      "title": "KnowBe4 region",
+      "description": "KnowBe4 shard: us (default), eu, ca, uk, de. Leave blank for us.",
+      "default": "us"
+    },
+    "knowbe4_base_url": {
+      "type": "string",
+      "title": "KnowBe4 base URL",
+      "description": "Optional. Leave blank to use the region default."
+    },
+    "threatlocker_api_key": {
+      "type": "string",
+      "title": "ThreatLocker API key",
+      "description": "ThreatLocker API user key. Leave blank to disable ThreatLocker.",
+      "sensitive": true
+    },
+    "threatlocker_organization_id": {
+      "type": "string",
+      "title": "ThreatLocker organization ID",
+      "description": "Optional. Only set when acting on a managed child organization."
+    },
+    "threatlocker_base_url": {
+      "type": "string",
+      "title": "ThreatLocker base URL",
+      "description": "Optional. Leave blank to use the default shard."
+    },
+    "blumira_client_id": {
+      "type": "string",
+      "title": "Blumira client ID",
+      "description": "Blumira OAuth2 client ID. Use this plus the secret, or supply a JWT token instead."
+    },
+    "blumira_client_secret": {
+      "type": "string",
+      "title": "Blumira client secret",
+      "description": "Blumira OAuth2 client secret.",
+      "sensitive": true
+    },
+    "blumira_jwt_token": {
+      "type": "string",
+      "title": "Blumira JWT token",
+      "description": "Pre-issued Blumira JWT bearer token (alternative to client ID/secret).",
+      "sensitive": true
+    },
+    "blumira_base_url": {
+      "type": "string",
+      "title": "Blumira base URL",
+      "description": "Optional. Leave blank to use the default (https://api.blumira.com/public-api/v1)."
+    }
+  }
+}

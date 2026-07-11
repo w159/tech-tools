@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "paylocity": {
+      "command": "bash",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/launch.sh", "paylocity", "dist/index.js"],
+      "env": {
+        "PAYLOCITY_CLIENT_ID": "${user_config.paylocity_client_id}",
+        "PAYLOCITY_CLIENT_SECRET": "${user_config.paylocity_client_secret}",
+        "PAYLOCITY_COMPANY_ID": "${user_config.paylocity_company_id}",
+        "PAYLOCITY_BASE_URL": "${user_config.paylocity_base_url}",
+        "PAYLOCITY_SANDBOX": "${user_config.paylocity_sandbox}",
+        "MCP_TRANSPORT": "stdio"
+      }
+    }
+  }
+}
