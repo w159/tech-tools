@@ -238,10 +238,15 @@ def run_checks(plugin_name="atlas"):
 
     # C1: marketplace source must be the canonical repo, not a fork
     # known_marketplaces.json stores the source as {"source": "github", "repo": "owner/name"}
+    # or {"source": "directory", "path": "/local/path"} for local marketplaces
     src = mkt.get("source", {})
     src_url = src.get("url", "") or src.get("repo", "")
-    ok = norm_repo(src_url) == expected_repo
-    add("marketplace-source", ok, f"{src_url or 'MISSING'} (expected {expected_repo})")
+    # Directory-sourced marketplaces have no repo URL; check the clone remote instead
+    if not src_url and src.get("source") == "directory":
+        add("marketplace-source", True, f"directory: {src.get('path', '?')}")
+    else:
+        ok = norm_repo(src_url) == expected_repo
+        add("marketplace-source", ok, f"{src_url or 'MISSING'} (expected {expected_repo})")
 
     # C2: the marketplace git clone's origin must match too
     clone = mkt.get("installLocation", "")

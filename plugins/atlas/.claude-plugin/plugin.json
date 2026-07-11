@@ -1,13 +1,13 @@
 {
     "name": "atlas",
-    "version": "3.2.0",
-    "description": "Self-configuring multi-agent coding architect. Boots on /atlas and SessionStart: an agent squad, hooks, and verification-gated /atlas-* launchers driven by the atlas-engine method (evidence before any done claim). Integrates claude-mem and context-mode; recommends project tooling.",
+    "version": "4.0.0",
+    "description": "Self-configuring multi-agent coding architect with 11 Greek mythology named skills (atlas-metis, atlas-hephaestus, atlas-ariadne, atlas-athena, atlas-argus, atlas-chronos, atlas-hermes, atlas-odysseus, atlas-nestor, atlas-armada, atlas-olympus), 23 agents (12 core + 11 department), 19 commands, 15 hooks, and the atlas-metis method (evidence before any done claim). The atlas-armada skill provides organizational deployment with 11 departments, each with their own skills, agents, and vendor connectors. The atlas-olympus skill scaffolds the .atlas/ workspace, migrates the SSOT to .atlas/docs/, and recommends what to run next.",
     "author": {
         "name": "w159",
         "url": "https://github.com/w159"
     },
-    "repository": "https://github.com/w159/tech-tools",
-    "homepage": "https://github.com/w159/tech-tools/tree/main/plugins/atlas",
+    "repository": "https://github.com/w159/atlas",
+    "homepage": "https://github.com/w159/atlas/tree/main/plugins/atlas",
     "license": "Apache-2.0",
     "keywords": [
         "atlas",
@@ -37,6 +37,12 @@
         "asset-audit",
         "context-optimization",
         "session-forensics",
-        "self-improvement"
+        "self-improvement",
+        "atlas-armada",
+        "atlas-olympus",
+        "organization",
+        "branding",
+        "compliance",
+        "departments"
     ]
 }
