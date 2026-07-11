@@ -45,6 +45,41 @@ Stage N completes -> independent verifier runs Stage N's failable check in a fre
 
 This is the Verify step (`SKILL.md` step 3) applied per stage, not only at end-of-session. A `rejected` stage is a hard stop for everything downstream of it: do not run a dependent against an unverified or rejected predecessor, even to "save a round trip." Three failed verify cycles on the same stage -> mark `needs-human`, defer it, and proceed only with stages that do not depend on it.
 
+### findings.json format (write this file, every run)
+
+```json
+{
+  "stages": [
+    {
+      "id": "S1",
+      "name": "map the auth flow",
+      "implementer": "atlas:explorer",
+      "verifier": "atlas:verifier",
+      "status": "verified",
+      "evidence": "docs/evidence/2026-07-11-auth-flow-map.md",
+      "verifier_verdict": "confirmed",
+      "failable_check": "a named entry point exists and is reachable"
+    },
+    {
+      "id": "S2",
+      "name": "fix token validation",
+      "implementer": "atlas:implementer",
+      "verifier": null,
+      "status": "pending",
+      "evidence": null,
+      "verifier_verdict": null,
+      "failable_check": "the same curl now returns 200"
+    }
+  ]
+}
+```
+
+**Rules:**
+- Every stage that shipped code (implementer dispatch) MUST have a paired `verifier` dispatch and a `status` of `verified` or `rejected` before its dependents start.
+- A stage with `"verifier": null` and `"status": "pending"` blocks its dependents — no exceptions.
+- The completion gate's condition (g) reads `unpaired_implementer_dispatches` from the DB; `findings.json` is the human-readable mirror that lets you track coverage during the run, not just at the end.
+- Update `findings.json` after every verify step, not at the end of the session.
+
 ## Delegation decision
 
 Independent stages are the default fan-out unit: when two or more stages are genuinely independent - no shared state, no ordering dependency, neither needs the other's output - they MUST be dispatched in a *single message* so they run concurrently (~4-6 in flight). Single-message concurrent dispatch is the default; sequential, one-stage-per-message dispatch is reserved for a *real* data/ordering dependency where a stage needs an earlier stage's output. Do not invent a dependency to serialize work that could run in parallel.

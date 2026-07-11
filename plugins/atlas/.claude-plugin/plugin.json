@@ -1,6 +1,6 @@
 {
     "name": "atlas",
-    "version": "3.1.3",
+    "version": "3.2.0",
     "description": "Self-configuring multi-agent coding architect. Boots on /atlas and SessionStart: an agent squad, hooks, and verification-gated /atlas-* launchers driven by the atlas-engine method (evidence before any done claim). Integrates claude-mem and context-mode; recommends project tooling.",
     "author": {
         "name": "w159",

@@ -38,7 +38,7 @@ Pass the chosen capabilities into each subagent's spec as directives, **and** te
 | Infra / deploy / CI | `devops-automator`* | - | `gcloud`, `gcp-devkit`/`firebase-development` plugins if present | sonnet |
 | Large output / logs / data crunching | (any) | - | `context-mode` (`ctx_batch_execute`/`ctx_execute`) - never raw Bash | haiku |
 | "Did we solve this before?" | (you) | `mem-search` | `claude-mem`, `ctx_search` | - |
-| Claude Code setup feels limiting | (you) | `agentic-tools`, `orc-audit` | read `~/.claude` settings/agents/plugins | -> `claude-code-tuning.md` |
+| Claude Code setup feels limiting | (you) | `atlas:explorer` | read `~/.claude` settings/agents/plugins | -> `claude-code-tuning.md` |
 
 \* Built-in/global agent type, not shipped under `plugins/atlas/agents/` - resolved from `~/.claude/agents/`, `.claude/agents/`, or Claude Code's built-in agent types.
 

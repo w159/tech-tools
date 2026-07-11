@@ -1,5 +1,50 @@
 # Changelog
 
+## 3.2.0 (2026-07-11)
+
+Close the two stalled self-improvement items from run 215 and fix the
+marketplace-source doctor check that was failing on the real
+known_marketplaces.json format.
+
+- **Marketplace-source doctor fix.** `atlas_doctor.py` read
+  `mkt["source"]["url"]` but Claude Code's `known_marketplaces.json`
+  stores the repo as `{"source": "github", "repo": "owner/name"}` —
+  no `"url"` key. The check now reads `src.get("url") or src.get("repo")`
+  so both formats pass. The fix function was updated to handle both
+  formats too. Doctor now reports HEALTHY on the real install.
+- **Verifier coverage made concrete.** The engine SKILL.md step 3 now
+  requires a `docs/.run/findings.json` entry for every
+  implementer→verifier pair, with a concrete JSON schema. The
+  mechanical rule is stated explicitly: every implementer dispatch
+  MUST be followed by a verifier dispatch; pending stages block
+  dependents. This closes the stalled improvement where
+  `verifier_coverage` was NULL on every recent run because the prompt
+  described verification but never gave a writable artifact to track
+  it. `multi-stage-planning.md` gains the matching `findings.json`
+  format section with rules.
+- **Parallel dispatch made mechanical.** Engine SKILL.md step 2 now
+  has an explicit batch-dispatch paragraph: independent stages MUST
+  go in a single assistant message with multiple Agent tool calls.
+  The `parallel_waves` metric is named directly so the orchestrator
+  knows it is being measured. This closes the stalled improvement
+  where `parallel_waves` stayed at 0-1 despite 16-34 dispatches per
+  run because the prompt said "must" but never made batching
+  mechanical.
+- **Stale agent reference fixed.** `capability-routing.md:41`
+  referenced `orc-audit` (a pre-atlas agent name removed in the
+  v2.0.0 rename). Now correctly routes to `atlas:explorer`.
+- **DB audit agent Write permission constrained.** Three read-only
+  DB audit agents (`schema-inventory`, `naming-glossary-audit`,
+  `rls-privilege-audit`) had `Write` in their `tools:` frontmatter
+  without `disallowedTools` for Edit/MultiEdit. Added
+  `disallowedTools: [Edit, MultiEdit, NotebookEdit]` and an
+  explicit constraint: "Write is permitted ONLY for the `.audit/`
+  output file. Never write to source code, config, schema, or any
+  path outside `.audit/`."
+- **Observability DB VACUUM.** Reclaimed 755MB of space from the
+  July 9 observer purge that removed rows but never compacted the
+  file. DB went from 803MB to 48MB.
+
 ## 3.1.3 (2026-07-10)
 
 Close the rest of the Windows-invalid-path class. An independent atlas:verifier

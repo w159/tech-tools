@@ -237,7 +237,9 @@ def run_checks(plugin_name="atlas"):
     ctx.update(key=key, reg=reg, mkt_name=mkt_name, mkt=mkt)
 
     # C1: marketplace source must be the canonical repo, not a fork
-    src_url = mkt.get("source", {}).get("url", "")
+    # known_marketplaces.json stores the source as {"source": "github", "repo": "owner/name"}
+    src = mkt.get("source", {})
+    src_url = src.get("url", "") or src.get("repo", "")
     ok = norm_repo(src_url) == expected_repo
     add("marketplace-source", ok, f"{src_url or 'MISSING'} (expected {expected_repo})")
 
@@ -351,7 +353,9 @@ def apply_fixes(ctx, plugin_name="atlas"):
 
     markets_path = os.path.join(PLUGINS_DIR, "known_marketplaces.json")
     markets = _load_json(markets_path)
-    if norm_repo(markets[mkt_name]["source"].get("url", "")) != expected:
+    # Also handle the "repo" format used by Claude Code's known_marketplaces.json
+    if norm_repo(markets[mkt_name]["source"].get("url", "") or
+                  markets[mkt_name]["source"].get("repo", "")) != expected:
         markets[mkt_name]["source"]["url"] = url
         _save_json(markets_path, markets)
         actions.append(f"repointed marketplace source to {url}")
