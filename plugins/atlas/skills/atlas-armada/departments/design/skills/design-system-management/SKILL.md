@@ -1,6 +1,8 @@
 ---
 name: design-system-management
 description: Manage design tokens, component libraries, and pattern documentation. Trigger with "design system", "component library", "design tokens", "style guide", or when the user asks about maintaining consistency across designs.
+when_to_use: Managing design tokens, component libraries, or pattern documentation; maintaining consistency across a design system; versioning and migrating design system changes with documented paths
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Design System Management

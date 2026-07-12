@@ -2,6 +2,7 @@
 name: atlas-hephaestus
 description: 'Boot and configure a project so the full atlas runtime is active: verify and install claude-mem and context-mode, scan the stack, recommend then confirm tooling, confirm automation hooks are wired, write project config, and seed the .atlas/docs/ single source of truth. Triggers on project bootstrap, onboarding a repo to atlas, or configuring tooling for a codebase. Boots and configures only; run scoped build/fix/audit/refactor through atlas-metis.'
 when_to_use: project bootstrap, onboarding a repo to atlas, or configuring tooling for a codebase. Boots and configures only; run scoped build/fix/audit/refactor through atlas-metis
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 
@@ -28,6 +29,11 @@ Two entry points share this methodology:
 
 ## Stages
 
+The three capability kinds (skill, plugin, MCP), the decision rule for which kind
+fits a signal, and the config schema are documented in `references/tool-patterns.md`.
+A scaffold for proposing a new capability is in `templates/new-tool-scaffold.md`. Read
+the reference before building the recommend-then-confirm shortlist in Stage 2.
+
 1. Dependencies. Detect the session-augmentation trio: claude-mem, context-mode, and
    ponytail. If any is missing, show the exact install command and confirm before
    running it - never silently. claude-mem backs the self-improvement layer;
@@ -42,16 +48,29 @@ Two entry points share this methodology:
    quality and security audit (atlas-athena), UX runtime swarm (atlas-odysseus),
    and measurable self-improvement with observability (atlas-argus). Install only
    confirmed items.
-3. Hooks. A plugin install auto-loads `hooks/hooks.json`. Verify all eight hooks are
+3. Hooks. A plugin install auto-loads `hooks/hooks.json`. Verify all hooks are
    active (session boot, prompt optimizer, bash advisor, format-after-edit, dispatch
-   tripwire, completion gate, self-improvement nudge, session-transcript ingest).
+   tripwire, completion gate, memory capture, auto-skill, self-improvement nudge,
+   session-transcript ingest).
    A separate `hooks/validate-readonly-query.sh` SQL guard ships for the DB-audit
    subagents (schema-inventory, rls-privilege-audit, naming-glossary-audit) to use
    during read-only audits; it is not auto-loaded by hooks.json.
    Outside a plugin install, offer `scripts/install_hooks.py`.
 4. Config. Write or update `.claude/atlas.local.md` (schema below). Show the diff and
    confirm before writing.
-5. Docs seed and tracking. If `.atlas/docs/` lacks the SSOT scaffold, offer to seed it per
+5. Self-improvement. Verify the atlas self-improvement system is deployed:
+   - `scripts/atlas_memory.py` exists and `~/.atlas/memory/` is writable
+   - `scripts/skill_factory.py` exists and `~/.atlas/skills/` is writable
+   - `scripts/atlas_curator.py` exists
+   - `scripts/atlas_context_optimizer.py` exists
+   - `hooks/memory_capture.py` and `hooks/auto_skill.py` are wired in hooks.json
+   Run the context optimizer to disable unused skills/agents:
+   `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_context_optimizer.py optimize --dry-run`
+   Present the savings estimate to the user and confirm before applying.
+   This is the single most impactful action for reducing token cost — atlas loads
+   27 skills + 23 agents (~6000+ tokens) into every API call; disabling unused ones
+   can cut that by 70%+.
+6. Docs seed and tracking. If `.atlas/docs/` lacks the SSOT scaffold, offer to seed it per
    `..`atlas-metis`/references/docs-ssot.md`. Confirm first. Then ensure .atlas/docs/ is
    git-tracked: atlas maintains .atlas/docs/ as the project SSOT, so a deny-by-default
    `.gitignore` MUST allowlist the SSOT subtree (root `*.md` plus architecture/,
@@ -59,8 +78,9 @@ Two entry points share this methodology:
    keep `.atlas/docs/.run/` ignored, and never blanket-allow `.atlas/docs/**` (that would try to
    commit vendored doc clones that carry their own nested .git). Verify with
    `git check-ignore .atlas/docs/CHANGELOG.md` (should NOT be ignored).
-6. Report. Dependency state, capabilities installed vs declined, hooks active, config
-   path, .atlas/docs/ state, and the next recommended command.
+7. Report. Dependency state, capabilities installed vs declined, hooks active, config
+   path, .atlas/docs/ state, self-improvement status, context optimization results,
+   and the next recommended command.
 
 ## Recommend-then-confirm
 
@@ -82,10 +102,16 @@ recommend-then-confirm. Check, in order:
   atlas-hermes when MSP/vendor signals are present), atlas-ariadne (architecture
   map + structural dedup), atlas-athena (quality and security audit), atlas-odysseus
   (UX runtime swarm), and atlas-argus (measurable self-improvement + observability);
-- the eight automation hooks that auto-load via hooks.json (session boot, prompt
+- the automation hooks that auto-load via hooks.json (session boot, prompt
   optimizer, bash advisor, format-after-edit, dispatch tripwire, completion gate,
-  self-improvement nudge, session-transcript ingest);
-- the .atlas/docs/ SSOT scaffold, and whether CHANGELOG.md and ROADMAP.md are current.
+  memory capture, auto-skill, self-improvement nudge, session-transcript ingest);
+- the .atlas/docs/ SSOT scaffold, and whether CHANGELOG.md and ROADMAP.md are current;
+- the self-improvement system: atlas_memory, skill_factory, atlas_curator, and
+  atlas_context_optimizer scripts present and functional;
+- the context optimization state: run `atlas_context_optimizer.py status` and
+  report how many skills/agents are enabled vs disabled and the estimated
+  tokens per turn. If more than 15 skills are enabled, recommend running the
+  optimizer.
 
 Report each as present or missing with the exact remediation. Install nothing without
 the user's explicit OK.

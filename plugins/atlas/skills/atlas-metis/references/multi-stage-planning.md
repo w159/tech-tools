@@ -76,7 +76,7 @@ This is the Verify step (`SKILL.md` step 3) applied per stage, not only at end-o
 
 **Rules:**
 - Every stage that shipped code (implementer dispatch) MUST have a paired `verifier` dispatch and a `status` of `verified` or `rejected` before its dependents start.
-- A stage with `"verifier": null` and `"status": "pending"` blocks its dependents — no exceptions.
+- A stage with `"verifier": null` and `"status": "pending"` blocks its dependents, with no exceptions.
 - The completion gate's condition (g) reads `unpaired_implementer_dispatches` from the DB; `findings.json` is the human-readable mirror that lets you track coverage during the run, not just at the end.
 - Update `findings.json` after every verify step, not at the end of the session.
 

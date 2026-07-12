@@ -1,6 +1,8 @@
 ---
 name: risk-assessment
 description: Identify, assess, and mitigate operational risks. Trigger with "what are the risks", "risk assessment", "risk register", "what could go wrong", or when the user is evaluating risks associated with a project, vendor, process, or decision.
+when_to_use: "When identifying, assessing, and mitigating operational risks, or maintaining a risk register for a project, vendor, process, or decision"
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Risk Assessment

@@ -1,6 +1,11 @@
 ---
 name: pdf-view
 description: Interactive PDF viewer. Use when the user wants to open, show, or view a PDF and collaborate on it visually  -  annotate, highlight, stamp, fill form fields, place signature/initials, or review markup together. Not for summarization or text extraction (use native Read instead).
+when_to_use: >
+  Opening or viewing a PDF for collaborative markup; annotating, highlighting, or
+  stamping a document; filling form fields with live visual feedback; placing a
+  signature or initials image on a page.
+allowed-tools: Read, Glob, Grep, Bash, mcp__pdf__list_pdfs, mcp__pdf__display_pdf, mcp__pdf__interact
 ---
 
 # PDF Viewer  -  Interactive Document Workflows

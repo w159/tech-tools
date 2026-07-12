@@ -1,24 +1,11 @@
 ---
 name: pax8-products
-description: >
-  Use this skill when working with the Pax8 product catalog - searching
-  for cloud software, browsing vendors, checking pricing, reviewing
-  provisioning details, and finding the right SKU for a client need.
-  Covers Microsoft 365, Azure, security tools, backup products, and
-  the full Pax8 marketplace catalog.
-when_to_use: "When searching for cloud software, browsing vendors, checking pricing, reviewing provisioning details, and finding the right SKU for a client need"
-triggers:
-  - pax8 product
-  - pax8 catalog
-  - pax8 sku
-  - pax8 pricing
-  - pax8 vendor
-  - pax8 marketplace
-  - cloud product search
-  - microsoft 365 pax8
-  - azure pax8
-  - pax8 software
-  - license pricing
+description: Search the Pax8 product catalog for cloud software, browse vendors, check pricing and provisioning details, and find the right SKU for a client need across Microsoft 365, Azure, security, and backup products.
+when_to_use:
+  - Searching the Pax8 product catalog and browsing vendors
+  - Checking pricing and provisioning details for a SKU
+  - Finding the right cloud product (Microsoft 365, Azure, security, backup) for a client
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Pax8 Product Catalog

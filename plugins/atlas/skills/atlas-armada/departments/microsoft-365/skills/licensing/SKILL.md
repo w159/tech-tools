@@ -6,17 +6,7 @@ description: >
   or planning license optimization for a customer tenant. Covers SKUs, service
   plans, and license cost efficiency for MSP account management.
 when_to_use: "When managing Microsoft 365 licenses - checking available seats, assigning or removing licenses, auditing license usage, finding unused licenses"
-triggers:
-  - m365 license
-  - microsoft 365 license
-  - m365 seats
-  - m365 sku
-  - license audit
-  - license usage m365
-  - unused license m365
-  - license assignment m365
-  - m365 subscription
-  - license optimization
+allowed-tools: Read, Glob, Grep, Bash, mcp__microsoft-docs__microsoft_docs_search, mcp__microsoft-docs__microsoft_docs_fetch
 ---
 
 # Microsoft 365 Licensing
@@ -211,6 +201,10 @@ Filter results where `signInActivity.lastSignInDateTime < (today - 90 days)`.
 | View user licenses | `User.Read.All` |
 | Assign/remove licenses | `User.ReadWrite.All` or `Directory.ReadWrite.All` |
 | Sign-in activity | `AuditLog.Read.All` |
+
+## References
+
+For version-correct Microsoft Graph endpoints, license SKU and service plan resource types, and assignment syntax, consult `references/microsoft-graph-api.md` before issuing Graph calls.
 
 ## Related Skills
 

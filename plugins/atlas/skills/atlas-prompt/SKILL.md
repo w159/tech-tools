@@ -1,9 +1,9 @@
 ---
 name: atlas-prompt
 description: Rewrite a vague coding request into a structured, environment-aware prompt an AI agent can execute; asks up to three questions first when scope is ambiguous.
-when_to_use: the task involves prompt
-disable-model-invocation: true
-argument-hint: <your rough prompt>
+when_to_use: rewrite a vague coding request into a structured, environment-aware prompt an AI agent can execute
+allowed-tools: Read, Glob, Grep, Bash, Write
+argument-hint: '<the vague request to sharpen>'
 ---
 
 
@@ -123,6 +123,13 @@ one round becomes an explicit assumption listed in the optimized block.
    for the main agent alone.
 
 ## Output template (use these section headers verbatim)
+
+For the handoff-to-subagent variant (7-section TASK/EXPECTED OUTCOME/
+CONTEXT/CONSTRAINTS/MUST DO/MUST NOT DO/OUTPUT FORMAT), see
+`references/prompt-spec-template.md`. Use that form when the optimized
+prompt will be persisted as a handoff artifact or run in a fresh
+subagent context; use the inline block below when the main agent acts
+on it directly this session.
 
 # Optimized Prompt
 

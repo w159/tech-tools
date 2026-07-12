@@ -1,6 +1,8 @@
 ---
 name: sentry-error-investigation
 description: Deep-dive one Sentry issue across latest events, stack trace, breadcrumbs, tags, affected releases and users to isolate the failing frame. Read-only. Use when user asks "investigate this Sentry issue", "what is causing this error", or "show me the stack trace for issue X".
+when_to_use: "When deep-diving a single Sentry issue to isolate the failing frame, read its stack trace and breadcrumbs, or determine affected releases and users"
+allowed-tools: Read, Glob, Grep, Bash, mcp__io_github_getsentry_sentry-mcp__*
 ---
 
 # Sentry Error Investigation

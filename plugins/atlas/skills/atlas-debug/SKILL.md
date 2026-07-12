@@ -1,8 +1,8 @@
 ---
 name: atlas-debug
-description: Chase down and fix a reproducible bug, exception, or bad output; use when you want the root cause fixed with evidence, not patched over.
-when_to_use: the task involves debug
-disable-model-invocation: true
+description: Reproducible bug, exception, stack trace, or bad output: root-cause fix with evidence, not a patch over. Use when you want the actual cause fixed, not the symptom hidden.
+when_to_use: a reproducible bug, exception, stack trace, or bad output needs a root-cause fix with evidence, not a patch over
+allowed-tools: Read, Glob, Grep, Bash
 argument-hint: '[context] [stack] [symptom] [paste error/log]'
 ---
 
@@ -15,6 +15,8 @@ cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-metis/references/operating-contract.md"
 ```
 
 If the contract did not load above, read `skills/atlas-metis/references/operating-contract.md` and apply it before proceeding.
+
+Read `${CLAUDE_SKILL_DIR}/references/debug-workflow.md` and follow the reproduce-localize-fix-verify loop it defines for every debug run.
 
 Debug and fix this: $ARGUMENTS
 

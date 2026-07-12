@@ -5,19 +5,8 @@ description: >
   using public/private keys and clientId, pagination with page/pageSize, conditions
   query syntax, rate limiting (60/min), and error handling. Covers all common
   API patterns for ConnectWise PSA integration.
-when_to_use: "When working with authentication using public/private keys and clientId, pagination with page/pageSize, conditions query syntax, rate limiting (60/min)"
-triggers:
-  - connectwise api
-  - connectwise authentication
-  - connectwise auth
-  - api conditions
-  - query builder connectwise
-  - connectwise pagination
-  - api rate limit
-  - connectwise rest
-  - api error connectwise
-  - public key private key
-  - client id connectwise
+when_to_use: "When working with ConnectWise PSA REST API authentication, pagination, conditions query syntax, rate limiting, and error handling"
+allowed-tools: Read, Glob, Grep, Bash, mcp__connectwise__*
 ---
 
 # ConnectWise PSA API Patterns

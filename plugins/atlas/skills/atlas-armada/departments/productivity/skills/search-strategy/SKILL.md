@@ -1,6 +1,12 @@
 ---
 name: search-strategy
 description: Decompose a natural-language question into targeted per-source searches, translate it into each source's query syntax, run them in parallel, and rank the merged results. Use when answering an enterprise-search question that spans multiple connected sources, when a query must be classified (decision, status, document, person, factual) before searching, or when initial searches return too little and need broadening.
+when_to_use: >
+  An enterprise-search question spans multiple connected sources; a query needs
+  classification (decision, status, document, person, factual) before searching;
+  initial searches return too little and need broadening; generating per-source
+  query variants for parallel execution.
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Search Strategy

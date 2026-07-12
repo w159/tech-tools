@@ -1,8 +1,9 @@
 ---
 name: atlas-doctor
 description: 'Repair the atlas plugin install: marketplace, rollbacks, hooks/agents/skills, auto-fix. Run when atlas stops launching subagents or acts like an older version.'
-when_to_use: the task involves doctor
+when_to_use: atlas stops launching subagents, acts like an older version, or the plugin install needs repair
 disable-model-invocation: true
+user-invocable: true
 argument-hint: '[--fix to auto-repair] [plugin name, default atlas]'
 ---
 
@@ -55,3 +56,13 @@ The script prints one PASS/FAIL line per check and exits 0 (healthy) or 1
 The same checks also run automatically at SessionStart in warn-only mode, so a
 future rollback announces itself at the top of the session instead of
 silently degrading atlas.
+
+## Supporting files
+- `references/checks-matrix.md` - the eight checks, what each proves, what a
+  FAIL means, the additional surface checks (frontmatter validity, skill count
+  vs actual, `.atlas/docs/` tree presence), the SessionStart warn-only mode,
+  and why doctor is a manual skill.
+- `scripts/plugin-health.py` - a deterministic, read-only count of skills and
+  agents in the installed copy compared against the manifest's declared
+  counts. Exits 0 if counts match, 1 if they differ. A quick sanity check
+  between full doctor runs; does not repair.

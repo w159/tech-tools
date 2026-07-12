@@ -6,17 +6,7 @@ description: >
   troubleshooting Teams access issues. Covers MSP support tasks for Teams-heavy
   customer environments.
 when_to_use: "When listing teams and channels, managing team membership, finding meetings, checking Teams usage, or troubleshooting Teams access issues"
-triggers:
-  - microsoft teams
-  - m365 teams
-  - teams channel
-  - teams membership
-  - teams meeting
-  - teams access
-  - teams troubleshoot
-  - list teams m365
-  - teams usage
-  - teams admin
+allowed-tools: Read, Glob, Grep, Bash, mcp__microsoft-docs__microsoft_docs_search, mcp__microsoft-docs__microsoft_docs_fetch
 ---
 
 # Microsoft Teams Management
@@ -234,6 +224,10 @@ External accounts have `#EXT#` in their UPN pattern.
 | Create teams | `Team.Create` |
 | Archive teams | `TeamSettings.ReadWrite.All` |
 | Read messages | `ChannelMessage.Read.All` |
+
+## References
+
+For version-correct Microsoft Graph endpoints, Teams resource types, and meeting/online-call syntax, consult `references/microsoft-graph-api.md` before issuing Graph calls.
 
 ## Related Skills
 

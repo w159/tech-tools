@@ -1,6 +1,8 @@
 ---
 name: vendor-management
 description: Evaluate, compare, and manage vendor relationships. Trigger with "evaluate this vendor", "compare vendors", "vendor review", "should we renew", "RFP", or when the user is making procurement or vendor decisions.
+when_to_use: "When evaluating vendors, comparing vendor relationships, deciding on renewals, or running an RFP for procurement"
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Vendor Management

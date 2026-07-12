@@ -1,6 +1,8 @@
 ---
 name: compliance-tracking
 description: Track compliance requirements and audit readiness. Trigger with "compliance", "audit prep", "SOC 2", "ISO 27001", "GDPR", "regulatory requirement", or when the user needs help tracking, preparing for, or documenting compliance activities.
+when_to_use: "When tracking compliance requirements, preparing for audits, or documenting regulatory readiness for SOC 2, ISO 27001, GDPR, HIPAA, or PCI DSS"
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Compliance Tracking

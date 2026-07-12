@@ -1,23 +1,11 @@
 ---
 name: pandadoc-templates
-description: >
-  Use this skill when working with PandaDoc templates - browsing the
-  template library, finding the right template for a document type,
-  understanding template fields and tokens, and using templates to
-  create new documents. Covers MSP-specific templates for MSAs, SOWs,
-  proposals, quotes, and contracts.
-when_to_use: "When browsing the template library, finding the right template for a document type, understanding template fields and tokens, and using templates to create new documents"
-triggers:
-  - pandadoc template
-  - pandadoc blueprint
-  - pandadoc library
-  - document template
-  - template search
-  - template list
-  - msa template
-  - sow template
-  - proposal template
-  - quote template
+description: Browse the PandaDoc template library, find the right template for a document type, and use template fields and tokens to create new documents, including MSP templates for MSAs, SOWs, proposals, quotes, and contracts.
+when_to_use:
+  - Browsing the PandaDoc template library and finding a template by document type
+  - Understanding template fields, tokens, and blueprints
+  - Using templates to create new MSP documents (MSAs, SOWs, proposals, quotes)
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # PandaDoc Template Management

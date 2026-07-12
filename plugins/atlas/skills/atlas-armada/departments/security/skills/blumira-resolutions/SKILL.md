@@ -5,13 +5,7 @@ description: >
   resolution type, or understanding resolution workflows and their impact
   on security metrics.
 when_to_use: "When resolving Blumira findings, choosing the correct resolution type, or understanding resolution workflows and their impact on security metrics"
-triggers:
-  - resolution type
-  - resolve finding
-  - false positive
-  - valid finding
-  - not applicable
-  - close finding
+allowed-tools: Read, Glob, Grep, Bash, mcp__blumira__*
 ---
 
 # Blumira Resolutions

@@ -1,6 +1,8 @@
 ---
 name: resource-planning
 description: Plan and optimize resource allocation. Trigger with "resource planning", "capacity", "utilization", "staffing plan", "who should work on what", "we're stretched thin", or when the user needs help allocating people, budget, or time across projects and teams.
+when_to_use: "When allocating people, budget, or time across projects and teams, or planning capacity and staffing"
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Resource Planning

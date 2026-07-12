@@ -1,6 +1,8 @@
 ---
 name: org-planning
-description: Headcount planning, org design, and team structure optimization. Trigger with "org planning", "headcount plan", "team structure", "reorg", "who should we hire next", or when the user is thinking about team size, reporting structure, or organizational design.
+description: Headcount planning, org design, and team structure optimization. Use when user asks for "org planning", "headcount plan", "team structure", "reorg", "who should we hire next", or when thinking about team size, reporting structure, or organizational design.
+when_to_use: "When user asks about headcount, team structure, reorg, reporting lines, span of control, or who to hire next"
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Org Planning

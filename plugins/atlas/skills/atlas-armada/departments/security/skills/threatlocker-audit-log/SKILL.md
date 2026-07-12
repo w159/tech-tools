@@ -6,16 +6,7 @@ description: >
   history across endpoints, identifying repeated denials, and correlating
   policy bypasses or audit-only matches with user/computer context.
 when_to_use: "When investigating a security event timeline, tracing a file path or hash across endpoints, looking up repeated denials, or correlating policy bypasses to specific actions"
-triggers:
-  - threatlocker audit log
-  - threatlocker action log
-  - threatlocker investigate
-  - threatlocker file history
-  - threatlocker timeline
-  - threatlocker denied execution
-  - what happened on
-  - threatlocker policy bypass
-  - threatlocker forensics
+allowed-tools: Read, Glob, Grep, Bash, mcp__threatlocker__*
 ---
 
 # ThreatLocker Audit Log

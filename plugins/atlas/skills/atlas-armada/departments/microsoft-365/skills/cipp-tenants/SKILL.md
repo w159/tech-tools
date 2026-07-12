@@ -2,15 +2,7 @@
 name: "cipp-tenants"
 description: "Use this skill when working with CIPP tenants - listing managed M365 tenants, checking tenant details, identifying tenant ID/domain, and scoping operations to a specific tenant. The starting point for almost every CIPP workflow since most other tools require a tenant filter."
 when_to_use: "When listing managed M365 tenants, looking up tenant IDs/domains, or scoping operations across the MSP portfolio"
-triggers:
-  - cipp tenant
-  - list tenants
-  - m365 tenant
-  - tenant details
-  - which tenants
-  - all tenants
-  - cipp portfolio
-  - msp tenant list
+allowed-tools: Read, Glob, Grep, Bash, mcp__microsoft-docs__microsoft_docs_search, mcp__microsoft-docs__microsoft_docs_fetch, mcp__cipp__*
 ---
 
 # CIPP Tenants
@@ -70,3 +62,7 @@ tenant_filter = acme['defaultDomainName']
 
 - **`tenantFilter` not found** - the tenant exists in M365 but CIPP hasn't onboarded it. Trigger a tenant cache refresh in CIPP UI or check GDAP roles.
 - **Empty tenant list** - the API client has no tenant scope assigned. Check the role assigned to the API client in CIPP Settings -> API Client Management.
+
+## References
+
+See `references/microsoft-graph-api.md` for the underlying Microsoft Graph citations (tenant enumeration and GDAP relationship endpoints) this skill relies on.

@@ -1,6 +1,8 @@
 ---
 name: asana-my-tasks-triage
 description: Pull the user's assigned Asana tasks, group them by due-date urgency and project, flag overdue and blocked work, and output a prioritized day plan. Use when the user asks "what should I work on today", "triage my Asana tasks", or "what's overdue and blocking me".
+when_to_use: The user asks what to work on today or this week; triaging assigned Asana tasks into a ranked day plan; surfacing overdue or blocked work from the Asana My Tasks list; producing a prioritized focus list before standup.
+allowed-tools: Read, Glob, Grep, Bash, mcp__asana__*
 ---
 
 # Asana My Tasks Triage

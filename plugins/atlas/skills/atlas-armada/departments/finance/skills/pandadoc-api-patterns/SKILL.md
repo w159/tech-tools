@@ -1,23 +1,11 @@
 ---
 name: pandadoc-api-patterns
-description: >
-  Use this skill when working with PandaDoc MCP tools - available tools,
-  API key authentication, the hosted MCP server connection, documentation
-  search, code generation assistance, rate limiting, error handling,
-  and best practices for the PandaDoc API.
-when_to_use: "When working with available tools, API key authentication, the hosted MCP server connection, documentation search, code generation assistance, rate limiting, error handling"
-triggers:
-  - pandadoc api
-  - pandadoc query
-  - pandadoc authentication
-  - pandadoc mcp
-  - pandadoc rate limit
-  - pandadoc request
-  - pandadoc api key
-  - pandadoc tools
-  - pandadoc connection
-  - pandadoc endpoint
-  - pandadoc auth
+description: Work with PandaDoc MCP tools: available tools, API key authentication, the hosted MCP server connection, documentation search, rate limiting, and error handling for the PandaDoc API.
+when_to_use:
+  - Connecting to the PandaDoc hosted MCP server and authenticating with an API key
+  - Looking up available PandaDoc MCP tools and parameters
+  - Handling PandaDoc API rate limits, pagination, and errors
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # PandaDoc MCP Tools & API Patterns

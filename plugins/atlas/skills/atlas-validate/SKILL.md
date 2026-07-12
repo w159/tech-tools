@@ -1,8 +1,8 @@
 ---
 name: atlas-validate
-description: Audit a Claude Code plugin for structure, manifest validity, and content quality; reports file:line findings and pass/fail per check, without auto-fixing.
-when_to_use: the task involves validate
-disable-model-invocation: true
+description: Validate and verify a Claude Code plugin is done: a completion check that audits structure, manifest, and content quality with file:line findings and pass/fail per check, without auto-fixing.
+when_to_use: audit a Claude Code plugin for structure, manifest validity, and content quality with file:line findings
+allowed-tools: Read, Glob, Grep, Bash
 argument-hint: '[plugin name or path (default: plugin in current working directory)]'
 ---
 
@@ -15,6 +15,8 @@ cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-metis/references/operating-contract.md"
 ```
 
 If the contract did not load above, read `skills/atlas-metis/references/operating-contract.md` and apply it before proceeding.
+
+Read `${CLAUDE_SKILL_DIR}/references/validation-gate.md` and apply the completion-gate criteria (execution-evidence artifact, independent verifier, docs current) before declaring any check PASS.
 
 # `atlas-validate`
 

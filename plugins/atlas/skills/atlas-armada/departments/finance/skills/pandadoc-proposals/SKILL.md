@@ -1,25 +1,11 @@
 ---
 name: pandadoc-proposals
-description: >
-  Use this skill when working with MSP proposal workflows in PandaDoc -
-  creating managed service agreements (MSAs), statements of work (SOWs),
-  hardware quotes, project proposals, and tracking the MSP sales pipeline.
-  Covers content variables, pricing tables, proposal templates, and
-  end-to-end proposal lifecycle for managed service providers.
-when_to_use: "When creating managed service agreements (MSAs), statements of work (SOWs), hardware quotes, project proposals, and tracking the MSP sales pipeline"
-triggers:
-  - pandadoc proposal
-  - msp proposal
-  - managed services agreement
-  - msa
-  - statement of work
-  - sow
-  - hardware quote
-  - project proposal
-  - proposal pipeline
-  - sales pipeline
-  - proposal tracking
-  - client proposal
+description: Build MSP proposal workflows in PandaDoc: managed service agreements (MSAs), statements of work (SOWs), hardware quotes, and project proposals with content variables, pricing tables, and pipeline tracking.
+when_to_use:
+  - Creating MSAs, SOWs, hardware quotes, or project proposals in PandaDoc
+  - Configuring content variables and pricing tables for MSP proposals
+  - Tracking the MSP sales pipeline end to end
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # PandaDoc MSP Proposal Workflows

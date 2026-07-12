@@ -1,6 +1,8 @@
 ---
 name: sql-queries
 description: Write correct, performant SQL across all major data warehouse dialects (Snowflake, BigQuery, Databricks, PostgreSQL, etc.). Use when writing queries, optimizing slow SQL, translating between dialects, or building complex analytical queries with CTEs, window functions, or aggregations.
+when_to_use: writing queries across warehouse dialects; optimizing slow SQL; translating between dialects; building complex analytical queries with CTEs and window functions
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # SQL Queries Skill

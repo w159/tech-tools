@@ -58,7 +58,13 @@ compliance frameworks apply. This is a recommend-then-confirm flow.
 
 Armada organizes the org's roles into departments. Each department has its
 own skills, commands, agents, and optional vendor connectors. See
-`references/role-routing.md` for the full routing table.
+`references/role-routing.md` for the full routing table and
+`references/department-schema.md` for the canonical list of 11 departments,
+their owning agents, and the fields every department config carries.
+
+When onboarding a department, seed its config from
+`templates/department-onboarding.seed.yaml` and activate it at
+`.atlas/departments/<department>.yaml`.
 
 | Department | Covers | Vendor connectors |
 |---|---|---|

@@ -1,8 +1,8 @@
 ---
 name: atlas-feature
-description: Build a full-stack feature with verified evidence. Use when a request spans UI, API, and data and must ship working, not 'should work'.
-when_to_use: a request spans UI, API, and data and must ship working, not 'should work'
-disable-model-invocation: true
+description: Implement a feature end to end when the user says "implement a feature", "add a feature that", or "build new functionality" that spans UI, API, and data. Ships working with verified evidence, not 'should work'. Dispatches the atlas squad in parallel and closes with an independent verifier.
+when_to_use: the user asks to implement a feature, add a feature, or build new functionality that spans UI, API, and data and must ship working with evidence
+allowed-tools: Read, Glob, Grep, Bash, Edit, MultiEdit
 argument-hint: '[feature] [acceptance criteria] [stack] [constraints]'
 ---
 
@@ -21,6 +21,12 @@ If the contract did not load above, read `skills/atlas-metis/references/operatin
 Build the feature described in `$ARGUMENTS` end to end: backend and frontend, with proof.
 
 Inputs to read from `$ARGUMENTS`: the feature (what it does, for whom), acceptance criteria (specific and testable), stack (frontend framework, backend framework, datastore, auth), and constraints (auth model, data sensitivity, performance targets, anything regulated). If a required input is missing or ambiguous, ask once for it, then proceed.
+
+## Workflow
+
+The full end-to-end workflow (spec -> tests -> impl -> verify, one
+failable check per phase) lives in `references/feature-workflow.md`.
+Follow it in order; each phase's check must pass before the next.
 
 ## Pre-flight
 - Read the existing backend layout (routes, services, models, config) and frontend layout (components, pages, hooks, utils) and match it. Do not invent a new structure.

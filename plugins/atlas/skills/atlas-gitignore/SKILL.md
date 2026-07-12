@@ -1,8 +1,9 @@
 ---
 name: atlas-gitignore
 description: 'Generate a zero-trust, deny-by-default .gitignore for a named stack: allowlist intended paths, re-exclude secrets last. Use when starting or hardening a repo.'
-when_to_use: starting or hardening a repo
-disable-model-invocation: true
+when_to_use: starting or hardening a repo with a zero-trust, deny-by-default .gitignore
+allowed-tools: Read, Glob, Grep, Bash, Edit, Write
+paths: [".gitignore"]
 argument-hint:
 - languages/frameworks/package managers/build tools/OS/editors
 ---
@@ -18,6 +19,12 @@ cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-metis/references/operating-contract.md"
 If the contract did not load above, read `skills/atlas-metis/references/operating-contract.md` and apply it before proceeding.
 
 Generate a zero-trust .gitignore for this stack: $ARGUMENTS
+
+Seed the file from `templates/gitignore.seed` (the deny-all-then-allowlist
+skeleton) and add the project-specific allowlist entries in section 3.
+After writing, validate the structure:
+`bash "${CLAUDE_SKILL_DIR}/scripts/validate_gitignore.sh" .gitignore`
+exits 0 if valid, 1 with a reason if not.
 
 Read the arguments as the stack to cover: languages, frameworks, package managers, build tools, OS, and editors. If the stack list is missing something you need to decide a rule, ask once, then proceed.
 

@@ -1,7 +1,10 @@
 ---
 name: atlas-ariadne
 description: Use to map a codebase into feature-grouped flowcharts, find architectural duplication across features, and propose the simplest unified architecture - discovery-first and zero-arg. Runs as a Workflow that fans out one explorer per feature, hunts duplication, and synthesizes a unification proposal with file:line evidence. Use before a refactor, to "find the ideal path," or to unify duplicated systems.
-when_to_use: the task involves ariadne
+when_to_use: map a codebase into feature flowcharts, find architectural duplication across features, or propose a unified architecture before a refactor
+allowed-tools: Read, Glob, Grep, Bash
+context: fork
+agent: general-purpose
 ---
 
 
@@ -72,6 +75,11 @@ Then build the knowledge-graph hub so the findings are navigable and launchable:
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/build_hub.py" ".atlas/docs/audits/atlas-ariadne-<date>" <each per-root graphify-out/graph.json>
 ```
+
+The pipeline, the `manifest.json` schema, and the file-granular matching rule
+are documented in `references/graph-to-hub-pipeline.md`. Read it before the
+first hub run and when a hub comes out with `node_match: "none"` on every
+entry.
 
 This writes `hub/manifest.json` (each handoff mapped to its graphify node, file-granular) and a branded `hub/index.html`. Each charted system is then remediated in one step with `atlas-launch <system>`, which loads its handoff into the `atlas-metis` skill. Do not write /make-plan handoffs - these are atlas-native Workflows launched via `atlas-launch`. (`atlas-launch` is the remediation launcher; `atlas-handoff` is the separate session-resume checkpoint.)
 

@@ -6,14 +6,7 @@ description: >
   apply to which endpoints. Covers listing groups, mapping computer to
   group, and the difference between the dropdown and full list endpoints.
 when_to_use: "When scoping policies, mapping computers to groups, choosing a target group for new endpoints, or auditing global vs org-specific group usage"
-triggers:
-  - threatlocker computer group
-  - threatlocker policy scope
-  - threatlocker group dropdown
-  - threatlocker groups list
-  - threatlocker ostype
-  - assign computer group
-  - threatlocker policy targeting
+allowed-tools: Read, Glob, Grep, Bash, mcp__threatlocker__*
 ---
 
 # ThreatLocker Computer Groups

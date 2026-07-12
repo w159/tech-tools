@@ -1,6 +1,8 @@
 ---
 name: risk-heatmap
 description: Build a current user risk heatmap across groups with 90-day trend deltas from KnowBe4. Use when user asks for "risk overview", "who's risky", "risk trending", or before QBRs.
+when_to_use: "risk overview, who's risky, risk trending, QBR preparation"
+allowed-tools: Read, Glob, Grep, Bash, mcp__knowbe4__*, mcp__plugin_context-mode_context-mode__ctx_execute
 ---
 
 # Risk Heatmap (KnowBe4)

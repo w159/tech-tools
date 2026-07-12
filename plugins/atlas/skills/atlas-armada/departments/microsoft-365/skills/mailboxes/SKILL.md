@@ -6,17 +6,7 @@ description: >
   checking mailbox size, or diagnosing mail flow issues. Covers Exchange Online
   via Microsoft Graph for MSP technicians supporting customer email environments.
 when_to_use: "When reading email, searching messages, managing shared mailboxes, setting out-of-office replies, checking mailbox size, or diagnosing mail flow issues"
-triggers:
-  - m365 email
-  - m365 mailbox
-  - exchange online
-  - search email m365
-  - shared mailbox
-  - out of office m365
-  - mail flow issue
-  - email quota
-  - forward email m365
-  - inbox rules m365
+allowed-tools: Read, Glob, Grep, Bash, mcp__microsoft-docs__microsoft_docs_search, mcp__microsoft-docs__microsoft_docs_fetch
 ---
 
 # Microsoft 365 Mailbox Management
@@ -230,6 +220,10 @@ GET /v1.0/users/{userId}/messages?$filter=senderEmailAddress/address eq 'postmas
 | Send email | `Mail.Send` |
 | Mailbox settings | `MailboxSettings.ReadWrite` |
 | All users' mail (admin) | `Mail.Read` (delegated + admin consent) |
+
+## References
+
+For version-correct Microsoft Graph endpoints, mailbox resource types, and mail-flow diagnostic syntax, consult `references/microsoft-graph-api.md` before issuing Graph calls.
 
 ## Related Skills
 

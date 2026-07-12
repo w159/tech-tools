@@ -4,6 +4,8 @@ description: >
   Customize a Claude Code plugin for a specific organization's tools and workflows.
   Use when: customize plugin, set up plugin, configure plugin, tailor plugin, adjust plugin settings,
   customize plugin connectors, customize plugin skill, customize plugin command, tweak plugin, modify plugin configuration.
+when_to_use: "When setting up a generic plugin template by replacing ~~ placeholders, or scoping a customization to a plugin's connectors, skills, commands, or MCP config for an organization"
+allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 compatibility: Requires Cowork desktop app environment with access to mounted plugin directories (mnt/.local-plugins, mnt/.plugins).
 ---
 

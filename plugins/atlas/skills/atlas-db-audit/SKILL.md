@@ -1,8 +1,9 @@
 ---
 name: atlas-db-audit
 description: 'Read-only database audit via parallel subagents: inventory a live schema, reconcile it against the code, and check privileges and naming before any change.'
-when_to_use: the task involves db audit
-disable-model-invocation: true
+when_to_use: inventory a live database schema, reconcile it against the code, and check privileges and naming before any change
+allowed-tools: Read, Glob, Grep, Bash
+paths: ["**/*.sql", "migrations/**", "supabase/**"]
 argument-hint: '[repo path] [db connection] [glossary path] [naming-convention notes]'
 ---
 
@@ -57,3 +58,14 @@ REPORT:
 - The remediation plan, marked NOT EXECUTED, awaiting approval.
 - The atlas:verifier verdict and any claims it could not reproduce.
 - The `.audit/` file paths holding the full detail.
+
+## Supporting files
+- `references/audit-workflow.md` - the four parallel investigations, the three
+  agent roles (atlas:schema-inventory, atlas:rls-privilege-audit,
+  atlas:naming-glossary-audit) and the explorer, grounding rules, and
+  synthesis ranking order.
+- `scripts/read-only-catalog-queries.sql` - SELECT-only catalog query
+  templates the prober agents use (tables, columns, constraints, indexes, RLS
+  policies, grants, roles, sequences, functions). The
+  `hooks/validate-readonly-query.sh` guard blocks any non-SELECT statement
+  before it runs.

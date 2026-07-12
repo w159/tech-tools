@@ -6,19 +6,7 @@ description: >
   and user status management. Covers user provisioning, group-based targeting for
   campaigns, individual and organizational risk assessment.
 when_to_use: "When working with user lifecycle management, group creation and membership, risk scores, risk score history, user event tracking"
-triggers:
-  - knowbe4 user
-  - knowbe4 users
-  - knowbe4 group
-  - user risk score
-  - risk score history
-  - user management knowbe4
-  - group management
-  - user provisioning
-  - user status
-  - employee risk
-  - security risk score
-  - user event
+allowed-tools: Read, Glob, Grep, Bash, mcp__knowbe4__*
 ---
 
 # KnowBe4 User and Group Management

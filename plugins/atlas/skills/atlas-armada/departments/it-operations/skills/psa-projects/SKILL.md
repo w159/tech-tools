@@ -5,18 +5,8 @@ description: >
   managing project phases, templates, and resource allocation. Covers project
   lifecycle, budgeting, billing methods, and project tickets. Essential for MSPs
   delivering project-based services through ConnectWise PSA.
-when_to_use: "When creating, updating, managing project phases, templates, and resource allocation"
-triggers:
-  - connectwise project
-  - project management
-  - create project connectwise
-  - project phase
-  - project template
-  - project resource
-  - project budget
-  - project billing
-  - project ticket
-  - project schedule
+when_to_use: "When creating, updating, and managing ConnectWise PSA projects, including phases, templates, resource allocation, budgeting, billing, and project tickets"
+allowed-tools: Read, Glob, Grep, Bash, mcp__connectwise__*
 ---
 
 # ConnectWise PSA Project Management

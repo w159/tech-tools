@@ -1,6 +1,8 @@
 ---
 name: data-visualization
 description: Create effective data visualizations with Python (matplotlib, seaborn, plotly). Use when building charts, choosing the right chart type for a dataset, creating publication-quality figures, or applying design principles like accessibility and color theory.
+when_to_use: building charts with matplotlib, seaborn, or plotly; choosing the right chart type for a dataset; applying accessibility and color principles to figures
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Data Visualization Skill

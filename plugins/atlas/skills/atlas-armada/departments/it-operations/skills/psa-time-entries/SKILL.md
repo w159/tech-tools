@@ -5,18 +5,8 @@ description: >
   updating, searching, or managing time tracking. Covers billable vs non-billable
   time, work types, work roles, time approval, and time sheet operations.
   Essential for MSPs tracking technician time and billing in ConnectWise PSA.
-when_to_use: "When creating, updating, searching, or managing time tracking"
-triggers:
-  - connectwise time entry
-  - time tracking connectwise
-  - log time connectwise
-  - billable time
-  - non-billable time
-  - work type
-  - work role
-  - time sheet
-  - time approval
-  - hours logged
+when_to_use: "When creating, updating, searching, or managing ConnectWise PSA time entries, including billable vs non-billable time, work types, work roles, time sheets, and time approval"
+allowed-tools: Read, Glob, Grep, Bash, mcp__connectwise__*
 ---
 
 # ConnectWise PSA Time Entry Management

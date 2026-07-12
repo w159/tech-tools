@@ -2,16 +2,7 @@
 name: "cipp-ops"
 description: "Use this skill when working with CIPP operational tooling - GDAP role and invite management, scheduled tasks, server health checks, version reporting, and CIPP application logs. Covers the meta-layer: keeping CIPP itself healthy and properly delegated to managed tenants."
 when_to_use: "When checking GDAP delegation status, managing scheduled CIPP tasks, verifying CIPP server health, or reading CIPP application logs"
-triggers:
-  - gdap
-  - granular delegated admin
-  - delegated admin
-  - cipp scheduled
-  - schedule task cipp
-  - cipp ping
-  - cipp version
-  - cipp logs
-  - cipp health
+allowed-tools: Read, Glob, Grep, Bash, mcp__microsoft-docs__microsoft_docs_search, mcp__microsoft-docs__microsoft_docs_fetch, mcp__cipp__*
 ---
 
 # CIPP Operations
@@ -121,3 +112,7 @@ When any other CIPP tool returns an error:
 
 - `cipp_add_scheduled_item` doesn't validate the `command` parameter against CIPP's known job types - typos create scheduled items that fail silently. Verify with `cipp_list_scheduled_items` after creation.
 - `cipp_list_logs` is bounded by what CIPP itself retains - for long-term log retention, ship CIPP logs to an external SIEM via the CIPP integrations panel.
+
+## References
+
+See `references/microsoft-graph-api.md` for the underlying Microsoft Graph citations (scheduler, health, and GDAP endpoints) this skill relies on.

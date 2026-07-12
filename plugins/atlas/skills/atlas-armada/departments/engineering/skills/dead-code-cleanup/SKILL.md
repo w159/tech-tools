@@ -1,6 +1,8 @@
 ---
 name: dead-code-cleanup
 description: "Use fallow's cleanup layer to find unused files, exports, types, and dependencies plus cold-path deletion confidence from runtime coverage, then produce a safe, confirmation-gated deletion plan for a JavaScript or TypeScript repo. Use when the user asks \"find dead code\", \"clean up unused exports and dependencies\", or \"what is safe to delete\". DESTRUCTIVE: deletions are gated behind explicit confirmation; advisory by default."
+when_to_use: "When finding unused files, exports, types, or dependencies, grading deletion confidence with runtime cold-path data, or building a confirmation-gated deletion plan"
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Dead Code Cleanup

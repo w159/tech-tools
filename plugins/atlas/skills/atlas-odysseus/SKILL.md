@@ -2,6 +2,7 @@
 name: atlas-odysseus
 description: Use when asked to run a UX test swarm, full UI/UX test pass, persona testing review, or pre-release frontend sweep on any web app, or to re-test after fixes from a previous run. Discovers the target app from the repo automatically and adapts to any frontend stack. Drives persona generation, scripted data entry, real-browser walkthroughs, fuzzing, and an independent calc oracle, then gates on whether the CLIENT surface is actually correct.
 when_to_use: asked to run a UX test swarm, full UI/UX test pass, persona testing review, or pre-release frontend sweep on any web app, or to re-test after fixes from a previous run. Discovers the target app from the repo automatically and adapts to any frontend stack. Drives persona generation, scripted data entry, real-browser walkthroughs, fuzzing, and an independent calc oracle, then gates on whether the CLIENT surface is actually correct
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 
@@ -189,6 +190,23 @@ MUST reconcile with files on disk; `aggregate_results.py` asserts this.
 No agent deletes data it did not create. The user purges test accounts; you never delete.
 List the test accounts created (`notes/test-accounts-created.txt`) when you report back.
 
+## Driver script
+
+`scripts/ux-swarm-driver.sh` sets up the run directory, maps the user-supplied
+env knobs to the resolved values, applies tier caps, and emits the phase plan
+for the chosen tier. The skill invokes it at the start of a run; the script
+does not dispatch agents (the skill does that in one parallel message). The
+script is read-only with respect to the app: it writes only under `RUN_DIR`.
+
+## webapp-testing integration
+
+The browser-walk (phase 3) and fuzz (phase 4) phases delegate the actual
+browser work to `atlas:ui-runtime-tester` agents, which lean on the repo-root
+`webapp-testing` skill (`skills/webapp-testing/SKILL.md`) for Playwright
+primitives. See `references/webapp-testing-integration.md` for the boundary
+and what odysseus passes down to each delegated agent. webapp-testing is only
+invoked for `standard` and `full` tiers; `smoke` runs no browser walk.
+
 ## References (loaded on demand)
 
 - `references/discovery.md` - phase 0: cartographer + live-contract probe; the
@@ -203,7 +221,12 @@ List the test accounts created (`notes/test-accounts-created.txt`) when you repo
   compare-to-displayed-number rule.
 - `references/reporting.md` - deliverable shapes, completion-rate headline metric,
   count-reconciliation gate, timing rollup format.
+- `references/webapp-testing-integration.md` - how odysseus relates to the
+  repo-root `webapp-testing` skill, the delegation boundary, and what odysseus
+  passes down to each ui-runtime-tester agent.
 - `references/roles/<role>.md` - the six folded agent prompts (see roster above).
+- `scripts/ux-swarm-driver.sh` - run-directory setup and phase-plan emission
+  for the chosen tier.
 
 ## Reporting back
 

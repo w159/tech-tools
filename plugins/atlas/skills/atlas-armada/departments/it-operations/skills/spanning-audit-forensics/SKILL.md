@@ -1,6 +1,8 @@
 ---
 name: spanning-audit-forensics
 description: Investigate Kaseya Spanning Backup activity  -  who restored what, when, and why; surface anomalous restore patterns and tie events to specific users/services. Use when user asks "who restored this", "audit Spanning activity", "investigate suspicious restore", or for compliance review.
+when_to_use: "When auditing Spanning Backup activity, investigating suspicious restores, or collecting SOC 2 / HIPAA compliance evidence"
+allowed-tools: Read, Glob, Grep, Bash, mcp__spanning__*
 ---
 
 # Audit Forensics (Kaseya Spanning Backup)

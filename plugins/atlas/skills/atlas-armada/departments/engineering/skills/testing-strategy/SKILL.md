@@ -1,6 +1,8 @@
 ---
 name: testing-strategy
-description: Design test strategies and test plans. Trigger with "how should we test", "test strategy for", "write tests for", "test plan", "what tests do we need", or when the user needs help with testing approaches, coverage, or test architecture.
+description: Design test strategies and test plans balancing coverage, speed, and maintenance. Use when the user says "how should we test", "test strategy for", "write tests for", "test plan", or "what tests do we need", or needs help with testing approaches, coverage, or test architecture.
+when_to_use: "When designing a test strategy, choosing test types per component, setting coverage targets, or identifying gaps in existing coverage"
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Testing Strategy

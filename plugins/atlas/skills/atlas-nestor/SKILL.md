@@ -2,6 +2,9 @@
 name: atlas-nestor
 description: Interactive skill-stacking concierge. Use when the user knows roughly what they want but not which skills to use, asks 'what should I use for X', names several goals at once, or invokes `atlas-nestor`. Elicits the goal with AskUserQuestion (one focused round), inventories the skills available this session, composes them into an ordered stack with atlas verification riding along, confirms it, then executes stage by stage.
 when_to_use: the user knows roughly what they want but not which skills to use, asks 'what should I use for X', names several goals at once, or invokes `atlas-nestor`. Elicits the goal with AskUserQuestion (one focused round), inventories the skills available this session, composes them into an ordered stack with atlas verification riding along, confirms it, then executes stage by stage
+allowed-tools: Read, Glob, Grep, Bash
+context: fork
+agent: general-purpose
 ---
 
 
@@ -70,6 +73,11 @@ Invoke each stage via the **Skill tool** in order, letting each stage's skill dr
 own methodology. Carry forward a one-paragraph baton (what was produced, where evidence
 lives) between stages. Close every stack that changed anything with the atlas
 definition-of-done: evidence captured, independent verification, .atlas/docs/ current.
+
+The inter-stage baton format and the stack-plan recording rule are documented in
+`references/handoff-format.md`. A seed for the baton is in
+`templates/handoff-doc.md`. Read the reference before the first stack execution and
+when a stage loses the thread of the prior stage.
 
 ## Boundaries
 

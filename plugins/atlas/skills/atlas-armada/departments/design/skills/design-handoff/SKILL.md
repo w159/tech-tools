@@ -1,6 +1,8 @@
 ---
 name: design-handoff
 description: Create comprehensive developer handoff documentation from designs. Trigger with "handoff to engineering", "developer specs", "implementation notes", "design specs for developers", or when a design needs to be translated into detailed implementation guidance.
+when_to_use: Translating a design into developer implementation specs; creating handoff docs with visual, interaction, and accessibility specifications; specifying component states, edge cases, and design tokens for engineering
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Design Handoff

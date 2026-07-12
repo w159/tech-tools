@@ -2,15 +2,7 @@
 name: "cipp-security"
 description: "Use this skill when reviewing M365 conditional access policies and named locations through CIPP - auditing CA coverage, finding policies that exclude critical apps, listing trusted IP ranges, identifying tenants without baseline conditional access. Read-only surface focused on security posture review."
 when_to_use: "When auditing conditional access policies or named locations across managed tenants for security posture review"
-triggers:
-  - conditional access
-  - ca policy
-  - named locations
-  - trusted ips
-  - cipp security
-  - mfa enforcement
-  - security posture
-  - location based access
+allowed-tools: Read, Glob, Grep, Bash, mcp__microsoft-docs__microsoft_docs_search, mcp__microsoft-docs__microsoft_docs_fetch, mcp__cipp__*
 ---
 
 # CIPP Security - Conditional Access & Named Locations
@@ -71,3 +63,7 @@ Run `cipp_list_conditional_access_policies` per tenant and compare the policy fi
 - CA write operations (create/edit/delete) are not exposed via MCP. Use CIPP standards (`cipp_run_standards_check` and the standards UI) to deploy policy templates across tenants, or do it manually via the CIPP web UI.
 - Named locations are a **trust amplifier** - review them as carefully as policies. A misconfigured trusted IP range can quietly exempt entire networks from MFA.
 - `enabledForReportingButNotEnforced` looks like coverage in dashboards but enforces nothing. Always check `state == 'enabled'` for actual enforcement.
+
+## References
+
+See `references/microsoft-graph-api.md` for the underlying Microsoft Graph citations (conditional access policy and named location resource types) this skill relies on.

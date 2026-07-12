@@ -1,8 +1,8 @@
 ---
 name: atlas-launch
 description: Launch a remediation session preloaded with a finding from the latest audit hub; use after atlas-athena or atlas-ariadne. No args lists findings.
-when_to_use: the task involves launch
-disable-model-invocation: true
+when_to_use: launch a remediation session preloaded with a finding from the latest audit hub, or list actionable findings with no args
+allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '[finding-id]  (no args: list actionable findings from the latest hub)'
 ---
 
@@ -23,6 +23,12 @@ an actionable finding with its `id`, `severity`, `file`, `node_id`, `handoff_pat
 `prompt_summary`.
 
 Requested finding: $ARGUMENTS
+
+## Runbook
+
+The full ordered checklist (one failable check per step) lives in
+`references/launch-checklist.md`. The resumption artifact written at
+launch time is seeded from `templates/launch-artifact.seed.md`.
 
 ## Step 1 - Find the most recent hub
 

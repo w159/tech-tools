@@ -5,14 +5,7 @@ description: >
   multi-tenant operations, including managing multiple client accounts,
   cross-account finding queries, and per-account device/user management.
 when_to_use: "When working with tenant operations, including managing multiple client accounts, cross-account finding queries"
-triggers:
-  - blumira msp
-  - multi-tenant
-  - managed accounts
-  - client accounts
-  - cross-account
-  - msp findings
-  - msp overview
+allowed-tools: Read, Glob, Grep, Bash, mcp__blumira__*
 ---
 
 # Blumira MSP Operations

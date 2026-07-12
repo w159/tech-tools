@@ -1,6 +1,8 @@
 ---
 name: sentry-release-health
 description: Report Sentry release health (adoption, crash-free sessions and users, new vs resolved issues, regressions) for a release and flag bad releases. Read-only. Use when user asks "how healthy is this release", "is the latest deploy crashing", or "check release health".
+when_to_use: "When assessing a release for adoption, crash-free session and user rates, new-vs-resolved issue balance, regressions, or a healthy versus degraded rollback verdict"
+allowed-tools: Read, Glob, Grep, Bash, mcp__io_github_getsentry_sentry-mcp__*
 ---
 
 # Sentry Release Health

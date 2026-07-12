@@ -1,7 +1,8 @@
 ---
 name: atlas-hermes
 description: Guided cross-plugin setup for the ten vendor MCP connectors (Auvik, Blumira, CIPP, ConnectWise Manage, Spanning, KnowBe4, NinjaOne, Paylocity, ThreatLocker, Vanta), which live in their owning domain plugins (it-operations, security-compliance, microsoft-365, hr-payroll), not atlas. Detects installed domain plugins, shows enabled connectors, and points you to the owning plugin's /plugin config for credentials. Atlas ships no connectors itself.
-when_to_use: the task involves hermes
+when_to_use: set up vendor MCP connectors across domain plugins, detect installed connectors, or find the owning plugin's config for credentials
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 
@@ -88,3 +89,15 @@ Work one connector at a time.
 - Never direct credentials at atlas's own plugin config - atlas has no
   connector-related `userConfig` keys. Credentials always go on the owning domain
   plugin.
+
+## Supporting files
+
+- `vendors.md` (next to this file) - the per-vendor table: owning plugin,
+  required/optional keys, where-to-get-credentials, docs path. Read it before
+  guiding any setup.
+- `references/connector-authoring.md` - the connector ownership pattern: how a
+  vendor MCP connector is structured inside its owning domain plugin, the
+  inert-by-default mechanism, and the four fields hermes reads per connector.
+- `templates/connector-manifest.seed.json` - seed for a connector manifest
+  (one per vendor type). Replace every placeholder with the vendor's real
+  values.

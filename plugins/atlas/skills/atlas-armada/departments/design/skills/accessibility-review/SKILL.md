@@ -1,6 +1,8 @@
 ---
 name: accessibility-review
 description: Audit designs and code for WCAG 2.1 AA compliance. Trigger with "is this accessible", "accessibility check", "WCAG audit", "can screen readers use this", "color contrast", or when the user asks about making designs or code accessible to all users.
+when_to_use: Auditing a design or code for WCAG 2.1 AA compliance; checking color contrast, keyboard access, or screen reader support; reviewing ARIA landmarks, focus order, or touch targets
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Accessibility Review

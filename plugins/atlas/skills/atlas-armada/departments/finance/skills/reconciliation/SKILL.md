@@ -1,6 +1,11 @@
 ---
 name: reconciliation
 description: Reconcile accounts by comparing GL balances to subledgers, bank statements, or third-party data. Use when performing bank reconciliations, GL-to-subledger recs, intercompany reconciliations, or identifying and categorizing reconciling items.
+when_to_use:
+  - Performing bank, GL-to-subledger, or intercompany reconciliations
+  - Identifying and categorizing reconciling items
+  - Aging outstanding items and applying escalation thresholds
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Reconciliation

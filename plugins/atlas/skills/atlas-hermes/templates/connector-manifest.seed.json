@@ -1,0 +1,22 @@
+{
+  "manifest_version": 1,
+  "vendor": "<vendor-dir>",
+  "owning_plugin": "<domain-plugin>",
+  "connector_dir": "<vendor-dir>",
+  "display_name": "<Vendor Display Name>",
+  "status": "inert",
+  "required_to_enable": [
+    "<first required userConfig key>",
+    "<second required userConfig key>"
+  ],
+  "optional": [
+    "<optional key, e.g. vendor_base_url>"
+  ],
+  "base_url_default": "<default base url or empty>",
+  "docs_path": "docs/vendors/<vendor-dir>/",
+  "notes": [
+    "Seed file. Replace every <placeholder> with the vendor's real values.",
+    "status starts as inert; flips to enabled once all required_to_enable keys are non-empty on the owning plugin.",
+    "Credentials are collected via /plugin config on the owning domain plugin, never on atlas, never via free-text chat."
+  ]
+}

@@ -5,18 +5,8 @@ description: >
   device types, interpreting manageStatus, reading lifecycle and warranty
   fields, and choosing between the v1 list endpoint and the detailed
   device endpoints.
-when_to_use: "When listing, inspecting, or auditing Auvik devices, including lifecycle and warranty checks and managed vs unmanaged classification"
-triggers:
-  - auvik device
-  - auvik inventory
-  - auvik endpoint
-  - auvik switch
-  - auvik router
-  - auvik firewall
-  - auvik unmanaged
-  - auvik lifecycle
-  - auvik warranty
-  - auvik end of life
+when_to_use: "When listing, inspecting, or auditing Auvik devices, including inventory of switches, routers, firewalls, lifecycle and warranty checks, and managed vs unmanaged classification"
+allowed-tools: Read, Glob, Grep, Bash, mcp__auvik__*
 ---
 
 # Auvik Devices

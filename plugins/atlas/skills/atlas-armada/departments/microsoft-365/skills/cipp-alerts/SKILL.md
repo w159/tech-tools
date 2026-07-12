@@ -2,14 +2,7 @@
 name: "cipp-alerts"
 description: "Use this skill when working with CIPP alerts and audit logs - reviewing the queued alert backlog across tenants, investigating sign-in or admin activity in audit logs, correlating alerts with tenants. Read-only triage surface for the CIPP alerting subsystem."
 when_to_use: "When triaging the CIPP alert queue or pulling tenant audit logs for investigation"
-triggers:
-  - cipp alert
-  - alert queue
-  - audit log
-  - sign in log
-  - admin activity
-  - cipp investigation
-  - audit trail
+allowed-tools: Read, Glob, Grep, Bash, mcp__microsoft-docs__microsoft_docs_search, mcp__microsoft-docs__microsoft_docs_fetch, mcp__cipp__*
 ---
 
 # CIPP Alerts & Audit Logs
@@ -85,3 +78,7 @@ When `cipp_bec_check` flags a user, supplement it with audit log queries:
 - The unified audit log has a lag (typically minutes, sometimes hours) - recent events may not appear immediately.
 - Audit retention varies by license: 90 days for E3, 1 year for E5, longer with audit log retention add-ons. Plan investigations around what the tenant's licensing actually allows.
 - `cipp_list_alert_queue` returns active queue items - historic resolved alerts require the CIPP UI.
+
+## References
+
+See `references/microsoft-graph-api.md` for the underlying Microsoft Graph citations (audit log endpoints, sign-in activity resources) this skill relies on.

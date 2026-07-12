@@ -2,6 +2,7 @@
 name: atlas-chronos
 description: Match a recurring or iterative task to the best-fit reusable loop from a curated loop-library and instantiate it, handing interval/self-paced loops to the built-in /loop skill and running fan-out loops as a parallel adversarial-verify Workflow. Use when the user wants to run something repeatedly, poll for status, iterate until a condition is met, sweep a backlog, or stand up a recurring/scheduled workflow.
 when_to_use: the user wants to run something repeatedly, poll for status, iterate until a condition is met, sweep a backlog, or stand up a recurring/scheduled workflow
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 
@@ -16,6 +17,11 @@ Your job is selection and instantiation, not improvisation. Push the per-loop de
 ## The three cadences
 
 Every loop runs on exactly one cadence. The cadence decides who drives the repetition.
+
+The full loop library, the cadence selection rule, the current catalog by category, and
+the rules for adding a new loop are documented in `references/loop-library.md`. A
+scaffold for a new loop spec is in `templates/loop-spec.md`. Read the reference before
+adding a loop to `loops/` or when a task's cadence is not obvious.
 
 | Cadence | Who repeats it | How you instantiate it |
 |---|---|---|

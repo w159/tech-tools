@@ -6,16 +6,7 @@ description: >
   checking a user's schedule. Covers Exchange calendar via Microsoft Graph
   for MSP support of customer scheduling needs.
 when_to_use: "When viewing events, finding free/busy times, creating meetings, managing room bookings, or checking a user's schedule"
-triggers:
-  - m365 calendar
-  - outlook calendar
-  - calendar events m365
-  - meeting schedule m365
-  - find availability m365
-  - room booking m365
-  - m365 free busy
-  - teams meeting create
-  - calendar permissions
+allowed-tools: Read, Glob, Grep, Bash, mcp__microsoft-docs__microsoft_docs_search, mcp__microsoft-docs__microsoft_docs_fetch
 ---
 
 # Microsoft 365 Calendar Management
@@ -177,6 +168,10 @@ To update only one instance: `PATCH` the specific occurrence.
 | Create/update/delete events | `Calendars.ReadWrite` |
 | Check free/busy | `Calendars.Read` |
 | Room directory | `Place.Read.All` |
+
+## References
+
+For version-correct Microsoft Graph calendar endpoints, event resource types, and getSchedule request shapes, consult `references/microsoft-graph-api.md` before issuing Graph calls.
 
 ## Related Skills
 

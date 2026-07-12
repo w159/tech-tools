@@ -1,6 +1,8 @@
 ---
 name: asana-portfolio-rollup
 description: Roll up status across multiple Asana projects into an executive summary with per-project completion percentage, at-risk items, and recent activity. Use when the user asks for a "portfolio rollup", "status across all my projects", or "an exec summary of where everything stands".
+when_to_use: The user requests a portfolio rollup or status across multiple Asana projects; preparing an executive summary of cross-project health; aggregating completion, at-risk work, and recent activity for a leadership readout.
+allowed-tools: Read, Glob, Grep, Bash, mcp__asana__*
 ---
 
 # Asana Portfolio Rollup

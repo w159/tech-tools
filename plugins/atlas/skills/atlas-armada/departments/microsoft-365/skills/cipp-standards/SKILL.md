@@ -2,19 +2,7 @@
 name: "cipp-standards"
 description: "Use this skill when working with CIPP Standards, Best Practice Analyser (BPA), and domain health checks - listing configured standards per tenant, triggering on-demand compliance checks, retrieving BPA results, checking SPF/DKIM/DMARC. The core surface for CIPP's tenant-baseline enforcement model."
 when_to_use: "When auditing standards compliance, running BPA reports, checking domain authentication health, or detecting tenants drifting from configured baselines"
-triggers:
-  - cipp standards
-  - bpa
-  - best practice analyser
-  - best practice analyzer
-  - run standards check
-  - domain health
-  - dmarc
-  - dkim
-  - spf
-  - tenant baseline
-  - compliance drift
-  - secure score
+allowed-tools: Read, Glob, Grep, Bash, mcp__microsoft-docs__microsoft_docs_search, mcp__microsoft-docs__microsoft_docs_fetch, mcp__cipp__*
 ---
 
 # CIPP Standards & BPA
@@ -112,3 +100,7 @@ Before you change a tenant's identity or mail config:
 - BPA results reflect the last scheduled run; run `cipp_run_standards_check` for fresh data.
 - Standards `Remediate` mode can change tenant configuration without an additional confirmation - scope carefully and stage `Alert` first.
 - Domain health doesn't catch every email-auth issue (it doesn't validate ARC, BIMI, MTA-STS) - for full mail forensics, supplement with external tools.
+
+## References
+
+See `references/microsoft-graph-api.md` for the underlying Microsoft Graph citations (domain health and standards evaluation endpoints) this skill relies on.

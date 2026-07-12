@@ -5,12 +5,7 @@ description: >
   Use this skill when integrating with Spanning Cloud Backup. Covers admin email + API
   token auth, the per-platform endpoint surface (M365, Google Workspace, Salesforce),
   user/license model, backup status queries, restore operations, and audit logs.
-triggers:
-  - spanning
-  - spanning backup
-  - spanning api
-  - saas backup spanning
-  - cloud backup
+allowed-tools: Read, Glob, Grep, Bash, mcp__spanning__*
 ---
 
 # Spanning API Patterns

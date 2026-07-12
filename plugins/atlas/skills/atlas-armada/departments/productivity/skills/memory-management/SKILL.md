@@ -1,6 +1,11 @@
 ---
 name: memory-management
 description: Decode workplace shorthand (acronyms, nicknames, project codenames, internal terms) using a two-tier store, CLAUDE.md as the hot cache and the memory/ directory as the full glossary. Use when a request contains an unfamiliar name or abbreviation, when the user says "remember this" or "X means Y", or when initializing or maintaining the memory store.
+when_to_use: >
+  A request contains an unfamiliar name, acronym, or codename; the user says
+  "remember this" or "X means Y"; initializing or refreshing the memory store;
+  decoding shorthand before acting on a workplace request.
+allowed-tools: Read, Glob, Grep, Bash, Write
 ---
 
 # Memory Management

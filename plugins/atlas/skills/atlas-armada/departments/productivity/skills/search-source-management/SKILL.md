@@ -1,6 +1,11 @@
 ---
 name: search-source-management
 description: Detect which MCP search sources are connected, guide the user to add missing ones, order sources by query type, and handle rate limits gracefully. Use when a search returns few or no sources, when the user asks what is connected or how to add a source, or when a source is rate limited mid-search.
+when_to_use: >
+  A search returns few or no sources; the user asks what is connected or how to add
+  a source; a source is rate limited mid-search; ordering sources by query type
+  before dispatching searches.
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Source Management

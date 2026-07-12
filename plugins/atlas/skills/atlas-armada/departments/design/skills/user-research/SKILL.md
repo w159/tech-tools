@@ -1,6 +1,8 @@
 ---
 name: user-research
 description: Plan, conduct, and synthesize user research. Trigger with "user research plan", "interview guide", "usability test", "survey design", "research questions", or when the user needs help with any aspect of understanding their users through research.
+when_to_use: Planning user interviews, usability tests, or surveys; writing interview guides and research plans; synthesizing research findings into themes, journey maps, and recommendations
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # User Research

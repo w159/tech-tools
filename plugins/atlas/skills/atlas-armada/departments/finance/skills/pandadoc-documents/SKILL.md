@@ -1,25 +1,11 @@
 ---
 name: pandadoc-documents
-description: >
-  Use this skill when working with PandaDoc documents - creating proposals,
-  quotes, contracts, SOWs, and MSAs from templates, sending documents
-  for signature, checking document status, downloading signed copies,
-  and managing the full document lifecycle. Covers all document statuses,
-  content tokens, pricing tables, and e-signature workflows.
-when_to_use: "When creating proposals, quotes, contracts, SOWs, and MSAs from templates, sending documents for signature, checking document status, downloading signed copies"
-triggers:
-  - pandadoc document
-  - pandadoc proposal
-  - pandadoc contract
-  - pandadoc quote
-  - pandadoc sign
-  - pandadoc signature
-  - pandadoc send
-  - pandadoc status
-  - pandadoc download
-  - pandadoc create document
-  - document lifecycle
-  - e-signature
+description: Create, send, and track PandaDoc documents (proposals, quotes, contracts, SOWs, MSAs) from templates, manage e-signature workflows, check document status, and download signed copies.
+when_to_use:
+  - Creating proposals, quotes, contracts, SOWs, or MSAs from PandaDoc templates
+  - Sending documents for e-signature and checking document status
+  - Downloading signed copies and managing the document lifecycle
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # PandaDoc Document Management

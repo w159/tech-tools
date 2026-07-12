@@ -1,6 +1,8 @@
 ---
 name: asana-sprint-planning
 description: Read an Asana project's sections, tasks, and task counts, assess open work against capacity, and propose a sprint or iteration plan, creating tasks only after explicit confirmation. Use when the user asks to "plan a sprint in Asana", "fill the next iteration", or "what can the team commit to this sprint".
+when_to_use: Planning a sprint or iteration directly inside an Asana project; filling the next iteration from Asana backlog and sections; assessing what the team can commit to against stated capacity; proposing new Asana tasks for explicit confirmation.
+allowed-tools: Read, Glob, Grep, Bash, mcp__asana__*
 ---
 
 # Asana Sprint Planning

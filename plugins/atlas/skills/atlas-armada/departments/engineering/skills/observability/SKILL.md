@@ -1,6 +1,8 @@
 ---
 name: observability
-description: Instrument services and triage errors. Trigger with "why is this slow", "what's erroring", "set up alerting", "add tracing", "define an SLO", "triage this Sentry issue", "we're getting paged for nothing", or when the user needs logs, metrics, traces, or error monitoring.
+description: Instrument services and triage errors across the four telemetry pillars (logs, metrics, traces, errors). Use when the user says "why is this slow", "what's erroring", "set up alerting", "add tracing", "define an SLO", "triage this Sentry issue", or "we're getting paged for nothing", or needs logs, metrics, traces, or error monitoring.
+when_to_use: "When instrumenting a service for logs, metrics, or traces, triaging an error stream, defining SLOs and alert thresholds, or running the Sentry triage checklist"
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Observability

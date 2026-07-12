@@ -4,14 +4,8 @@ description: >
   Use this skill when working with NinjaOne tickets - creating, updating,
   searching, and managing ticketing operations. NinjaOne's built-in ticketing
   integrates with device monitoring for streamlined MSP workflows.
-when_to_use: "When creating, updating, searching, and managing ticketing operations. NinjaOne's built-in ticketing integrates with device monitoring for streamlined MSP workflows"
-triggers:
-  - ninjaone ticket
-  - ninjarmm ticket
-  - ninja ticket create
-  - ninja ticket search
-  - ticket status ninja
-  - ninja service ticket
+when_to_use: "When creating, updating, searching, and managing NinjaOne/NinjaRMM service tickets and ticketing operations"
+allowed-tools: Read, Glob, Grep, Bash, mcp__ninjaone__*
 ---
 
 # NinjaOne Ticket Management

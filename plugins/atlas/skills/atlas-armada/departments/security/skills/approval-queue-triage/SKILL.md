@@ -1,6 +1,8 @@
 ---
 name: approval-queue-triage
 description: Triage pending ThreatLocker approval requests with file-history, computer, and org context -- includes a recommended approve/deny verdict. Use when user asks "any pending approvals", "triage the approval queue", or for daily zero-trust review.
+when_to_use: "pending approvals, triage approval queue, daily zero-trust review, ThreatLocker approval requests"
+allowed-tools: Read, Glob, Grep, Bash, mcp__threatlocker__*, mcp__plugin_context-mode_context-mode__ctx_execute
 ---
 
 # Approval Queue Triage (ThreatLocker)

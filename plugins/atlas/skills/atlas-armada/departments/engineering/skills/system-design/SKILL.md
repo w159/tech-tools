@@ -1,6 +1,8 @@
 ---
 name: system-design
-description: Design systems, services, and architectures. Trigger with "design a system for", "how should we architect", "system design for", "what's the right architecture for", or when the user needs help with API design, data modeling, or service boundaries.
+description: Design systems, services, and architectures with explicit trade-off analysis. Use when the user says "design a system for", "how should we architect", "system design for", or "what's the right architecture for", or needs help with API design, data modeling, or service boundaries.
+when_to_use: "When designing a new system or service, evaluating an architecture, modeling data and API contracts, or making scaling and reliability trade-offs explicit"
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # System Design

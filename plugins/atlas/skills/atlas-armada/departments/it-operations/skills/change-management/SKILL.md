@@ -1,6 +1,8 @@
 ---
 name: change-management
 description: Plan and execute organizational or technical changes. Trigger with "we're changing", "rolling out", "migration plan", "how do we communicate this change", "change management plan", or when the user is planning a change that affects people, processes, or systems.
+when_to_use: "When planning a change, rolling out a migration, or communicating a change that affects people, processes, or systems"
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Change Management

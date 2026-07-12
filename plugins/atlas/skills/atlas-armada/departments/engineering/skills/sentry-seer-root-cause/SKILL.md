@@ -1,6 +1,8 @@
 ---
 name: sentry-seer-root-cause
 description: Run Sentry Seer AI analysis on a specific issue to get an AI root-cause and suggested fix, then summarize cause, blast radius, and recommended fix. Read-only. Use when user asks "run Seer on this issue", "what is the root cause", or "what fix does Sentry suggest".
+when_to_use: "When running Seer AI analysis on one confirmed Sentry issue, corroborating its root-cause hypothesis against event data, or summarizing cause, blast radius, and a recommended fix"
+allowed-tools: Read, Glob, Grep, Bash, mcp__io_github_getsentry_sentry-mcp__*
 ---
 
 # Sentry Seer Root Cause

@@ -5,19 +5,8 @@ description: >
   searching, or managing company/account records. Covers company types, statuses,
   sites/locations, custom fields, and company relationships. Essential for MSP
   account management and CRM operations in ConnectWise PSA.
-when_to_use: "When creating, updating, searching, or managing company/account records"
-triggers:
-  - connectwise company
-  - connectwise account
-  - company management
-  - create company connectwise
-  - company site
-  - company location
-  - company type
-  - company status
-  - customer record
-  - client record
-  - company custom field
+when_to_use: "When creating, updating, searching, or managing ConnectWise PSA company and client records, including sites, locations, types, statuses, and custom fields"
+allowed-tools: Read, Glob, Grep, Bash, mcp__connectwise__*
 ---
 
 # ConnectWise PSA Company Management

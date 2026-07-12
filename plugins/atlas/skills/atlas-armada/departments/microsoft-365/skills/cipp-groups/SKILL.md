@@ -2,13 +2,7 @@
 name: "cipp-groups"
 description: "Use this skill when listing or creating M365 groups in CIPP - security groups, distribution lists, M365 groups, mail-enabled security groups. Covers tenant-scoped group enumeration and creation as part of user onboarding or access-management workflows."
 when_to_use: "When enumerating or creating Entra ID / M365 groups across managed tenants"
-triggers:
-  - cipp group
-  - create group
-  - m365 group
-  - distribution list
-  - security group
-  - group membership
+allowed-tools: Read, Glob, Grep, Bash, mcp__microsoft-docs__microsoft_docs_search, mcp__microsoft-docs__microsoft_docs_fetch, mcp__cipp__*
 ---
 
 # CIPP Groups
@@ -63,3 +57,7 @@ After `cipp_list_groups`, sort by member count and flag any with > 50 members an
 ## Caveats
 
 CIPP's group toolset is intentionally narrow - for membership changes (add/remove user), conditional access scoping, or license assignment via groups, use the M365 plugin or work directly against the Graph API. CIPP focuses on the multi-tenant CRUD surface.
+
+## References
+
+See `references/microsoft-graph-api.md` for the underlying Microsoft Graph citations (group resource types, membership endpoints) this skill relies on.

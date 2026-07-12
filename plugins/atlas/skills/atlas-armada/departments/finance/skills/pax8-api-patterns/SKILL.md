@@ -1,23 +1,11 @@
 ---
 name: pax8-api-patterns
-description: >
-  Use this skill when working with the Pax8 MCP tools - available tools,
-  parameters, pagination, sorting, filtering, rate limiting, error
-  handling, and best practices. Covers the official hosted MCP server
-  connection and all 15 Pax8 MCP tools.
-when_to_use: "When working with available tools, parameters, pagination, sorting, filtering, rate limiting, error handling, and best practices in the Pax8 MCP tools"
-triggers:
-  - pax8 api
-  - pax8 query
-  - pax8 filter
-  - pax8 pagination
-  - pax8 rate limit
-  - pax8 authentication
-  - pax8 mcp
-  - pax8 endpoint
-  - pax8 request
-  - pax8 token
-  - pax8 tools
+description: Work with the Pax8 MCP tools: available tools, parameters, pagination, sorting, filtering, rate limiting, error handling, and the hosted MCP server connection covering all 15 Pax8 MCP tools.
+when_to_use:
+  - Connecting to the Pax8 hosted MCP server and authenticating
+  - Looking up available Pax8 MCP tools, parameters, and best practices
+  - Handling Pax8 pagination, filtering, sorting, rate limits, and errors
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Pax8 MCP Tools & API Patterns

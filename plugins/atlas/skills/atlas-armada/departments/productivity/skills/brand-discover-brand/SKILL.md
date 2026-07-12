@@ -1,13 +1,17 @@
 ---
 name: brand-discover-brand
 description: >
-  This skill orchestrates autonomous discovery of brand materials across enterprise
-  platforms (Notion, Confluence, Google Drive, Box, SharePoint, Figma, Gong, Granola, Slack).
-  It should be used when the user asks to "discover brand materials",
-  "find brand documents", "search for brand guidelines", "audit brand content",
-  "what brand materials do we have", "find our style guide", "where are our brand docs",
-  "do we have a style guide", "discover brand voice", "brand content audit",
-  or "find brand assets".
+  Discover brand materials across enterprise platforms (Notion, Confluence, Google
+  Drive, Box, SharePoint, Figma, Gong, Granola, Slack). Use when the user asks to
+  "discover brand materials", "find brand documents", "search for brand guidelines",
+  "audit brand content", "what brand materials do we have", "find our style guide",
+  "where are our brand docs", "do we have a style guide", "discover brand voice",
+  "brand content audit", or "find brand assets".
+when_to_use: >
+  Discovering brand materials across connected platforms; auditing brand content
+  coverage; locating style guides, pitch decks, or brand assets; producing a
+  structured discovery report from multi-platform searches.
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Brand Discovery

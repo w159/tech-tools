@@ -1,6 +1,8 @@
 ---
 name: code-quality-sweep
 description: Run a fallow static analysis pass on a JavaScript or TypeScript repo and synthesize a prioritized, ranked code-quality report covering changed-code risk, complexity hotspots, and architecture boundary violations. Use when the user asks "run a code quality sweep", "analyze code quality with fallow", or "what is risky in this changed code". Read-only and advisory.
+when_to_use: "When sweeping changed or full-tree code for complexity hotspots, boundary violations, duplication, and circular dependencies, or ranking findings for the code-review and tech-debt skills"
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Code Quality Sweep

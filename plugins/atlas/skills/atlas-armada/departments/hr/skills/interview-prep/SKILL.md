@@ -1,6 +1,8 @@
 ---
 name: interview-prep
-description: Create structured interview plans with competency-based questions and scorecards. Trigger with "interview plan for", "interview questions for", "how should we interview", "scorecard for", or when the user is preparing to interview candidates.
+description: Create structured interview plans with competency-based questions and scorecards. Use when user asks for "interview plan for", "interview questions for", "how should we interview", "scorecard for", or when preparing to interview candidates.
+when_to_use: "When user asks for an interview plan, interview questions, a scorecard, or is preparing to interview candidates"
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Interview Prep

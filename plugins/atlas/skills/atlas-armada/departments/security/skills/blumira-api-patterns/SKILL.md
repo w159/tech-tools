@@ -5,13 +5,7 @@ description: >
   the dual path structure (org vs MSP), constructing filtered queries, handling
   pagination, or troubleshooting API errors.
 when_to_use: "When working with Blumira API authentication, understanding the dual path structure (org vs MSP), constructing filtered queries, handling pagination, or troubleshooting API errors"
-triggers:
-  - blumira api
-  - blumira auth
-  - jwt token
-  - blumira filtering
-  - blumira pagination
-  - api error
+allowed-tools: Read, Glob, Grep, Bash, mcp__blumira__*
 ---
 
 # Blumira API Patterns

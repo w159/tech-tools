@@ -1,6 +1,8 @@
 ---
 name: asana-standup-generator
 description: Generate a yesterday/today/blockers standup from recent Asana task activity, stories, and updates. Use when the user asks to "write my standup", "what did I do yesterday in Asana", or "draft a daily update from my tasks".
+when_to_use: The user asks for their standup from Asana activity; drafting a yesterday/today/blockers update from recent task work and stories; preparing a daily standup before the sync; surfacing blockers from incomplete Asana dependencies.
+allowed-tools: Read, Glob, Grep, Bash, mcp__asana__*
 ---
 
 # Asana Standup Generator

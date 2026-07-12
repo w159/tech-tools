@@ -1,6 +1,8 @@
 ---
 name: compensation-benchmarking
 description: Benchmark compensation against market data. Use when user asks "what should we pay", "comp benchmark", "market rate for", "salary range for", or "is this offer competitive".
+when_to_use: "When user asks what to pay a role, market rate, salary range, is an offer competitive, or for comp benchmarking and equity planning"
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Compensation Benchmarking

@@ -1,14 +1,20 @@
 ---
 name: brand-guideline-generation
 description: >
-  This skill generates, creates, or builds brand voice guidelines from source
-  materials. It should be used when the user asks to "generate brand guidelines",
-  "create a style guide", "extract brand voice", "create guidelines from calls",
-  "consolidate brand materials", "analyze my sales calls for brand voice",
-  "build a brand playbook from documents", "synthesize a voice and tone guide",
-  or uploads brand documents, transcripts, or meeting recordings for brand
-  analysis. Also triggers when the user has a discovery report and wants to
-  convert it into actionable guidelines.
+  Generate brand voice guidelines from source materials - brand documents, sales
+  call transcripts, discovery reports, or direct input. Use when the user asks to
+  "generate brand guidelines", "create a style guide", "extract brand voice",
+  "create guidelines from calls", "consolidate brand materials", "analyze my sales
+  calls for brand voice", "build a brand playbook from documents", or "synthesize a
+  voice and tone guide", or uploads brand documents, transcripts, or meeting
+  recordings for brand analysis, or has a discovery report to convert into
+  actionable guidelines.
+when_to_use: >
+  Generating brand voice guidelines from documents or transcripts; converting a
+  discovery report into an enforceable guideline document; building a brand
+  playbook or style guide from source materials; synthesizing voice and tone from
+  sales call recordings.
+allowed-tools: Read, Glob, Grep, Bash, Write
 ---
 
 # Guideline Generation

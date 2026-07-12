@@ -2,17 +2,7 @@
 name: graph-connection
 description: "Use this skill when connecting a self-hosted Microsoft Graph MCP server to a customer tenant - registering the multi-tenant Entra app, supplying tenantId/clientId/clientSecret, and (the part everyone misses) granting per-tenant admin consent for the required delegated permissions out of band. Also covers the read-only design and the 100 calls/min/user rate limit."
 when_to_use: "When setting up, troubleshooting, or explaining the Microsoft Graph MCP connection - Entra app registration, redirect URI, client secret, admin consent failures, or 'why is the tenant returning no data'"
-triggers:
-  - connect microsoft graph
-  - microsoft graph mcp
-  - graph enterprise mcp
-  - entra app registration
-  - admin consent
-  - byoc entra
-  - microsoft graph setup
-  - graph mcp no data
-  - tenant consent
-  - microsoft graph rate limit
+allowed-tools: Read, Glob, Grep, Bash, mcp__microsoft-docs__microsoft_docs_search, mcp__microsoft-docs__microsoft_docs_fetch, mcp__microsoft-graph__*
 ---
 
 # Connecting a Microsoft Graph MCP server
@@ -81,3 +71,7 @@ Repeat Step 3 for every customer tenant you want to query. Steps 1 and 2 are one
 | Redirect URI mismatch error during sign-in | The Web platform redirect URI in the app registration doesn't match the MCP server's callback URL |
 | Works for one tenant, not another | Admin consent granted for the first tenant only - run Step 3 again per tenant |
 | PIM / privileged-role data missing | Tenant or caller lacks Microsoft Entra ID P2 |
+
+## References
+
+See `references/microsoft-graph-api.md` for the underlying Microsoft Graph citations (auth endpoints, token scopes, consent flows) this skill relies on.

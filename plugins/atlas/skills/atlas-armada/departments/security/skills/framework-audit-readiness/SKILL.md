@@ -1,6 +1,8 @@
 ---
 name: framework-audit-readiness
 description: Assess audit readiness for a specific Vanta framework (SOC 2, ISO 27001, HIPAA, etc.). Pulls the framework, its controls, and current test statuses, then surfaces every NEEDS_ATTENTION test and the controls they map back to. Use when user asks "are we audit ready for SOC 2", "what's failing in ISO 27001", or for pre-audit gap reviews.
+when_to_use: "are we audit ready for SOC 2, what's failing in ISO 27001, pre-audit gap review, framework readiness assessment"
+allowed-tools: Read, Glob, Grep, Bash, mcp__vanta__*, mcp__plugin_context-mode_context-mode__ctx_execute
 ---
 
 # Framework Audit Readiness (Vanta)
@@ -15,6 +17,7 @@ description: Assess audit readiness for a specific Vanta framework (SOC 2, ISO 2
    - Join failing tests to their parent controls.
    - Bucket by control category (access management, change management, vendor management, etc.).
    - Compute a coverage score: `passing_tests / total_tests` per control.
+   - Score readiness and classify controls per `references/audit-rubric.md` (Readiness Score Calculation, Control Criticality Tiers, Readiness Bands).
 
 ## Output
 

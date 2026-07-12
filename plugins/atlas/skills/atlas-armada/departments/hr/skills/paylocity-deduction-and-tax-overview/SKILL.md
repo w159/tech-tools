@@ -1,6 +1,8 @@
 ---
 name: paylocity-deduction-and-tax-overview
 description: For a single employee, pull deductions, local taxes, and direct deposit setup into one consolidated payroll snapshot. Use when user asks for "show me deductions for [name]", "what's set up for employee X", "payroll setup for one person", or pre-payroll checks for an individual.
+when_to_use: "When user asks to show deductions for one employee, what's set up for a person, payroll setup check, or pre-payroll individual review"
+allowed-tools: Read, Glob, Grep, Bash, mcp__paylocity__*, mcp__plugin_context-mode_context-mode__*
 ---
 
 # Deduction & Tax Overview (Paylocity)
@@ -35,3 +37,10 @@ Per-employee deep dive. Caller must supply `employeeId` (or a name to look up fi
 - ALWAYS mask account numbers - only show the last 4 digits.
 - Read-only. Surface findings, never propose writes.
 - If employee status is terminated, banner that at the top.
+
+## Reference
+
+Field shapes, masking rules, and issue-detection logic live in
+[references/field-reference.md](references/field-reference.md). Read it
+before building the snapshot so you know which fields each endpoint returns
+and how to normalize them.

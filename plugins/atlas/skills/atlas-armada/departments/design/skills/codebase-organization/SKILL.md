@@ -1,6 +1,8 @@
 ---
 name: codebase-organization
 description: Refactor and reorganize codebases using SOLID principles, clean architecture, strict naming conventions, and defensive programming. Trigger with "refactor this codebase", "reorganize the code", "clean up the project structure", "fix the naming", "audit the codebase", "code organization", or when someone needs help restructuring, renaming, deduplicating, or improving code quality across a project.
+when_to_use: Refactoring or reorganizing a codebase with SOLID and clean architecture; auditing naming conventions and cleaning up project structure; consolidating duplicated logic and establishing shared modules; improving async error handling and modularity
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Codebase Refactoring & Organization

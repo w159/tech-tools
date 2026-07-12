@@ -2,6 +2,9 @@
 name: atlas-athena
 description: Use for a comprehensive, discovery-first code-quality and security audit of a whole codebase - correctness, OWASP/security, SOLID/DRY/KISS, risk hotspots, dead code, coverage gaps, and code-vs-docs drift. Runs as a Workflow that builds a knowledge graph (graphify), targets the hottest nodes, fans out one reviewer per dimension, and adversarially verifies every finding before it counts.
 when_to_use: a comprehensive, discovery-first code-quality and security audit of a whole codebase - correctness, OWASP/security, SOLID/DRY/KISS, risk hotspots, dead code, coverage gaps, and code-vs-docs drift. Runs as a Workflow that builds a knowledge graph (graphify), targets the hottest nodes, fans out one reviewer per dimension, and adversarially verifies every finding before it counts
+allowed-tools: Read, Glob, Grep, Bash
+context: fork
+agent: general-purpose
 ---
 
 
@@ -97,6 +100,8 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/build_hub.py" ".atlas/docs/audits/atlas-a
 ## Workflow shape
 
 This skill runs as a Workflow following the skeleton in atlas-metis/references/workflow-template.md. The shape is a pipeline from graph through per-dimension review through per-finding verify, with verification starting as each dimension completes - no barrier between dimensions.
+
+The synthesis step (Phase 4), the seven dimensions, severity assignment, and the docs gate are documented in `references/synthesis-framework.md`. Read it when running Phase 4 or when a report comes out unbalanced across dimensions.
 
 ### Phase 1 - Graph and docs baseline (sequential, orchestrator-gated)
 

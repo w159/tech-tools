@@ -1,6 +1,11 @@
 ---
 name: financial-statements
 description: Generate income statements, balance sheets, and cash flow statements with GAAP presentation and period-over-period comparison. Use when preparing financial statements, running flux analysis, or creating P&L reports with variance commentary.
+when_to_use:
+  - Preparing GAAP financial statements (income statement, balance sheet, cash flow)
+  - Running flux analysis across periods
+  - Creating P&L reports with variance commentary
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Financial Statements

@@ -1,9 +1,9 @@
 ---
 name: atlas-refactor
-description: Reorganize structure, naming, and layout without changing observable behavior. Use when code works but is messy, hard to navigate, or carries dead weight.
+description: Refactor, rename, or restructure code without changing observable behavior. Use when code works but is messy, hard to navigate, or carries dead weight, and you need behavior preserved with before/after evidence.
 when_to_use: code works but is messy, hard to navigate, or carries dead weight
-disable-model-invocation: true
-argument-hint: '[project] [description] [pain points]'
+allowed-tools: Read, Glob, Grep, Bash, Edit, MultiEdit
+argument-hint: '<target symbol or file to refactor>'
 ---
 
 
@@ -15,6 +15,8 @@ cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-metis/references/operating-contract.md"
 ```
 
 If the contract did not load above, read `skills/atlas-metis/references/operating-contract.md` and apply it before proceeding.
+
+Read `${CLAUDE_SKILL_DIR}/references/refactor-checklist.md` and apply the behavior-preservation, test-coverage, and naming rules it defines to every step.
 
 Act as a software architect and refactoring specialist. Refactor this: $ARGUMENTS
 

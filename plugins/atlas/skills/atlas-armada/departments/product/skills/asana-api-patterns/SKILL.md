@@ -1,6 +1,8 @@
 ---
 name: asana-api-patterns
 description: Reference the Asana connector's gid model, name-to-gid resolution, search opt-fields and filters, pagination, and the read-versus-write tool split. Use when the user asks "how do Asana gids work", "which Asana tool resolves a project name", or "what opt-fields can asana_search_tasks return".
+when_to_use: Composing a multi-call Asana workflow and need to resolve names to gids first; deciding which opt-fields or filters to pass asana_search_tasks; confirming whether an Asana tool is a safe read or a visible-to-others write; the user asks how the Asana connector model works.
+allowed-tools: Read, Glob, Grep, Bash, mcp__asana__*
 ---
 
 # Asana API Patterns

@@ -244,6 +244,30 @@ def main():
 
     resume = resume_block(payload.get("cwd") or os.getcwd())
 
+    # Run the curator to manage auto-created skill lifecycle (fail-open)
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_curator
+        atlas_curator.apply_transitions()
+    except Exception:
+        pass  # curator is best-effort; never block boot
+
+    # Load and inject memory snapshot
+    memory_block = None
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_memory
+        snapshot = atlas_memory.load_snapshot()
+        parts = []
+        if snapshot.get("memory"):
+            parts.append(snapshot["memory"])
+        if snapshot.get("project"):
+            parts.append(snapshot["project"])
+        if parts:
+            memory_block = "\n\n".join(parts)
+    except Exception:
+        pass  # memory is best-effort
+
     mem = detect_dep("claude_mem") or has_cmd("claude-mem")
     ctx = detect_dep("context_mode") or has_cmd("context-mode")
 
@@ -282,6 +306,8 @@ def main():
         "and report what is missing to reach atlas standard (claude-mem + context-mode + ponytail, "
         "loop-library, connectors, hooks, .atlas/.atlas/docs/ SSOT).",
     ]
+    if memory_block:
+        lines.append(memory_block)
     if resume:
         lines.append(resume)
     out = {

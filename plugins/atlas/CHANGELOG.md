@@ -1,5 +1,110 @@
 # Changelog
 
+## 4.0.0 (2026-07-11)
+
+Skills mastery rebuild: rebuild the full 184-skill fleet (28 top-level
+plus 156 armada across 11 departments) to the Claude Code Skills Mastery
+Framework standard. The run is complete and verified: S1 through S8 are
+green (S7 armada all 11 departments verified, S8 scaffold verified), and
+S10 content fixes are verified. The only remaining items are advisory:
+9 reserved placeholder directories with no SKILL.md yet (listed below).
+
+- **Mastery framework standard applied.** Every skill now follows the
+  three-layer progressive disclosure standard (L1 metadata, L2 SKILL.md
+  body under 500 lines, L3 references/scripts/templates loaded on
+  demand). The authoritative spec lives at
+  plugins/atlas/skills/atlas-olympus/references/mastery-framework.md
+  (frontmatter fields, the L1/L2/L3 budget rules, and the explicit note
+  that `triggers:` is NOT a real Claude Code field and auto-trigger comes
+  only from `description` plus `when_to_use`).
+- **Olympus rebuilt as the manual onboarding layer.** atlas-olympus is
+  one of only two manual skills in the fleet. Its frontmatter carries
+  `disable-model-invocation: true`
+  (plugins/atlas/skills/atlas-olympus/SKILL.md:5). It gained
+  references/mastery-framework.md, references/manual-vs-auto-map.md,
+  references/graphify-wiring.md, references/skill-routing.md, and
+  references/recommendation-engine.md. The
+  scripts/scaffold_docs.py deterministic scaffolder builds the 12-folder
+  .atlas/docs/ tree from templates/ (verified idempotent, exit 0).
+- **Gate flips: 2 manual, 26 auto.** Only atlas-olympus and atlas-doctor
+  keep `disable-model-invocation: true`; the other 26 top-level skills
+  are auto-trigger. Verified by grep for `disable-model-invocation`
+  across plugins/atlas/skills/*/SKILL.md, which returns exactly
+  atlas-doctor/SKILL.md and atlas-olympus/SKILL.md.
+- **Inert `triggers:` field removed.** The atlas-invented `triggers:`
+  frontmatter field is not a real Claude Code field and was removed from
+  the armada skills; its keywords were folded into `description` and
+  `when_to_use`.
+- **allowed-tools pre-approval.** Skills gained `allowed-tools`
+  frontmatter pre-approving safe read-only tools, and the armada
+  department skills gained per-department MCP allowed-tools scoping
+  (for example, it-ops gets auvik, ninjaone, connectwise, spanning
+  wildcards that match the real .mcp.json server names; m365 gets cipp,
+  microsoft-graph, microsoft-docs).
+- **context:fork on isolation skills.** The research and isolation
+  skills (ariadne, athena, argus, nestor) gained `context:fork` so their
+  tool output does not pollute the parent context. Syntax confirmed
+  against the Anthropic claude-code-setup skills reference.
+- **Data interactive-dashboard-builder split.** The 786-line
+  data/interactive-dashboard-builder SKILL.md was split into a 235-line
+  SKILL.md plus references/interactive-dashboard-reference.md, keeping
+  the SKILL.md under the 500-line L2 budget
+  (plugins/atlas/skills/atlas-armada/departments/data/skills/interactive-dashboard-builder/SKILL.md).
+- **Finance audit-support 5-way split.** The finance audit-support skill
+  was split into an 80-line SKILL.md plus five references, all under 400
+  lines: control-types.md, deficiency-classification.md,
+  sample-selection.md, sox-testing-methodology.md, workpaper-standards.md
+  (plugins/atlas/skills/atlas-armada/departments/finance/skills/audit-support/references/).
+- **atlas-wiki producer skill added.** A new auto-trigger top-level
+  skill atlas-wiki (198-line SKILL.md) invokes the repo-root graphify
+  skill to render .atlas/docs/wiki/ diagrams from .atlas/docs/architecture/.
+  It ships scripts/check_wiki_freshness.sh, which compares the newest
+  mtime under .atlas/docs/wiki/diagrams/ against .atlas/docs/architecture/
+  and emits FRESH, MISSING, or STALE (exits 0, 0, 1). This brings the
+  top-level skill count to 28 (was 27).
+- **m365 Microsoft Learn citations.** The m365 department skills gained
+  references/microsoft-graph-api.md across 19 skills with 53-plus
+  learn.microsoft.com citations.
+- **.atlas/docs/ SSOT scaffolded.** The 12-folder durable docs tree
+  (AGENTS.md, architecture/, audits/, CHANGELOG.md, evidence/, features/,
+  lessons/, plans/, reference_files/, ROADMAP.md, specs/, wiki/) is
+  scaffolded and non-empty. This tree is gitignored so it produces no
+  git-diff entry; the tracked docs that move with the code are this
+  CHANGELOG and plugins/atlas/README.md.
+- **Subagent squad count corrected.** The README "Subagent squad" count
+  was stale (said 18 and 12). Verified count is 23
+  (plugins/atlas/agents/ holds 23 agent files; confirmed by
+  plugin-health.py reporting 23 agents).
+
+Additional verified fixes (S10 content pass):
+- **Security audit-rubric directive.** Three security SKILL.md files
+  (audit-forensics, evidence-gap-hunter, framework-audit-readiness)
+  gained a one-line L2 read-directive to references/audit-rubric.md,
+  fixing an orphaned reference (orphaned-ref fix).
+- **Engineering Sentry allowed-tools corrected.** Five engineering
+  Sentry skills (sentry-api-patterns, sentry-issue-triage,
+  sentry-error-investigation, sentry-release-health,
+  sentry-seer-root-cause) had allowed-tools corrected to
+  mcp__io_github_getsentry_sentry-mcp__* (the real server key
+  io.github.getsentry/sentry-mcp).
+- **Olympus cleanup.** atlas-olympus had `import os` removed and
+  allowed-tools corrected to Bash(python3:*); the scaffold runs 12/12
+  idempotent.
+- **manual-vs-auto-map.md updated.** atlas-wiki added; the map now
+  lists all 28 top-level skills (2 manual, 26 auto). Resolved.
+- **metis em-dash fixed.** The pre-existing em-dash at
+  metis/references/multi-stage-planning.md:79 was replaced with plain
+  ASCII. Resolved.
+
+Reserved placeholder directories (advisory, not blocking):
+Nine empty placeholder directories have 0-line SKILL.md files, are
+reserved/planned, and will not auto-trigger. They are not deleted (Law 6
+gate-write not authorized):
+- hr: new-hire-flow, pay-rate-audit, roster-snapshot (3).
+- finance: ramp-api-patterns, ramp-bill-vendor-reconciliation,
+  ramp-card-controls, ramp-reimbursement-review, ramp-spend-triage (5).
+- engineering: sonarqube-quality-gate (1).
+
 ## 3.2.0 (2026-07-11)
 
 Close the two stalled self-improvement items from run 215 and fix the
@@ -8,8 +113,8 @@ known_marketplaces.json format.
 
 - **Marketplace-source doctor fix.** `atlas_doctor.py` read
   `mkt["source"]["url"]` but Claude Code's `known_marketplaces.json`
-  stores the repo as `{"source": "github", "repo": "owner/name"}` —
-  no `"url"` key. The check now reads `src.get("url") or src.get("repo")`
+  stores the repo as `{"source": "github", "repo": "owner/name"}`,
+  with no `"url"` key. The check now reads `src.get("url") or src.get("repo")`
   so both formats pass. The fix function was updated to handle both
   formats too. Doctor now reports HEALTHY on the real install.
 - **Verifier coverage made concrete.** The engine SKILL.md step 3 now

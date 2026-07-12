@@ -6,18 +6,7 @@ description: >
   compromised account indicators, and security audit tasks. Critical for MSPs
   performing security reviews or investigating suspected account compromises.
 when_to_use: "When working with Microsoft 365 security posture checks - MFA enrollment status, conditional access policies, risky sign-ins, suspicious inbox rules"
-triggers:
-  - m365 security
-  - m365 mfa
-  - mfa enrollment
-  - conditional access
-  - risky sign-in
-  - account compromise m365
-  - m365 security audit
-  - suspicious activity m365
-  - m365 security score
-  - entra security
-  - m365 sign-in logs
+allowed-tools: Read, Glob, Grep, Bash, mcp__microsoft-docs__microsoft_docs_search, mcp__microsoft-docs__microsoft_docs_fetch
 ---
 
 # Microsoft 365 Security Posture
@@ -246,6 +235,10 @@ When a user reports suspicious activity, check these in order:
 | Conditional access | `Policy.Read.All` |
 | Security score | `SecurityEvents.Read.All` |
 | Revoke sessions | `Directory.ReadWrite.All` |
+
+## References
+
+For version-correct Microsoft Graph endpoints, audit log query syntax, and security resource types, consult `references/microsoft-graph-api.md` before issuing Graph calls.
 
 ## Related Skills
 

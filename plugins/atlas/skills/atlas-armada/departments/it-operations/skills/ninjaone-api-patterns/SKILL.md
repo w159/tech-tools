@@ -3,14 +3,8 @@ name: ninjaone-api-patterns
 description: >
   Use this skill for NinjaOne API authentication, pagination, rate limiting,
   and error handling patterns. Essential foundation for all NinjaOne API operations.
-when_to_use: "When working with NinjaOne API authentication, pagination, rate limiting, and error handling patterns"
-triggers:
-  - ninjaone api
-  - ninjarmm api
-  - ninja authentication
-  - ninja oauth
-  - ninja rate limit
-  - ninja pagination
+when_to_use: "When working with NinjaOne/NinjaRMM API authentication, OAuth, pagination, rate limiting, and error handling patterns"
+allowed-tools: Read, Glob, Grep, Bash, mcp__ninjaone__*
 ---
 
 # NinjaOne API Patterns

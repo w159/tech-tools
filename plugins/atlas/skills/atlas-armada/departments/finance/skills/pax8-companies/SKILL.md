@@ -1,20 +1,11 @@
 ---
 name: pax8-companies
-description: >
-  Use this skill when working with Pax8 companies (MSP clients) -
-  searching, retrieving, and managing client records in the
-  Pax8 marketplace. Covers company fields, contact management, billing
-  settings, and cross-referencing with subscriptions and orders.
-when_to_use: "When searching, retrieving, and managing client records in the Pax8 marketplace"
-triggers:
-  - pax8 company
-  - pax8 client
-  - pax8 organization
-  - pax8 customer
-  - company lookup pax8
-  - company management pax8
-  - pax8 contact
-  - client management pax8
+description: Search, retrieve, and manage Pax8 companies (MSP clients) in the marketplace, covering company fields, contact management, billing settings, and cross-referencing with subscriptions and orders.
+when_to_use:
+  - Searching for or retrieving Pax8 company (client) records
+  - Managing contacts and billing settings for a Pax8 company
+  - Cross-referencing companies with subscriptions and orders
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Pax8 Companies Management

@@ -2,16 +2,7 @@
 name: "cipp-mailboxes"
 description: "Use this skill when working with Exchange Online mailboxes through CIPP - listing mailboxes, auditing mailbox permissions, configuring out-of-office auto-replies, and setting email forwarding. Covers the mailbox surface most relevant to MSP operations: offboarding, leave coverage, BEC remediation."
 when_to_use: "When listing mailboxes, checking mailbox delegate/full-access permissions, configuring out-of-office, or setting email forwarding for a tenant"
-triggers:
-  - cipp mailbox
-  - mailbox permissions
-  - out of office
-  - auto reply
-  - email forwarding
-  - mail forwarding
-  - shared mailbox
-  - mailbox delegate
-  - full access mailbox
+allowed-tools: Read, Glob, Grep, Bash, mcp__microsoft-docs__microsoft_docs_search, mcp__microsoft-docs__microsoft_docs_fetch, mcp__cipp__*
 ---
 
 # CIPP Mailboxes
@@ -91,3 +82,7 @@ Scheduled OOO with start/end times is preferred over `enabled=true` without date
 
 - These tools are scoped to the mailbox-level operations CIPP exposes. Transport rules, mail flow, quarantine, and per-tenant Exchange settings require either CIPP UI workflows or direct Exchange Online PowerShell.
 - `cipp_set_email_forwarding(disable=true)` removes all forwarding - including legitimate ones. Capture state first.
+
+## References
+
+See `references/microsoft-graph-api.md` for the underlying Microsoft Graph citations (mailbox resource types, forwarding and permission endpoints) this skill relies on.

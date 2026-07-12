@@ -1,6 +1,8 @@
 ---
 name: data-validation
 description: QA an analysis before sharing with stakeholders - methodology checks, accuracy verification, and bias detection. Use when reviewing an analysis for errors, checking for survivorship bias, validating aggregation logic, or preparing documentation for reproducibility.
+when_to_use: reviewing an analysis before sharing with stakeholders; checking for survivorship bias or join explosion; validating aggregation logic; preparing reproducibility documentation
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Data Validation Skill

@@ -6,15 +6,7 @@ description: >
   keys, and identifying valid move targets when relocating computers
   between tenants.
 when_to_use: "When fanning out reports across child orgs, retrieving an org's auth key, or moving computers between organizations"
-triggers:
-  - threatlocker organization
-  - threatlocker tenant
-  - threatlocker child orgs
-  - threatlocker partner
-  - threatlocker auth key
-  - move computer threatlocker
-  - threatlocker multi-tenant
-  - threatlocker mssp
+allowed-tools: Read, Glob, Grep, Bash, mcp__threatlocker__*
 ---
 
 # ThreatLocker Organizations

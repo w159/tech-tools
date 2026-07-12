@@ -1,6 +1,8 @@
 ---
 name: customer-research
 description: Research customer questions by searching across documentation, knowledge bases, and connected sources, then synthesize a confidence-scored answer. Use when a customer asks a question you need to investigate, when building background on a customer situation, or when you need account context.
+when_to_use: A customer asks a question requiring multi-source investigation; you need account or historical context before responding; a ticket needs background research before drafting a reply.
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Customer Research Skill

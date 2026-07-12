@@ -6,18 +6,7 @@ description: >
   MFA enrollment, license assignment, group membership, and manager hierarchy.
   Essential for MSP technicians handling M365 user administration.
 when_to_use: "When listing, searching, creating, disabling, or checking user properties"
-triggers:
-  - m365 user
-  - microsoft 365 user
-  - entra user
-  - azure ad user
-  - create user m365
-  - disable user m365
-  - user license m365
-  - mfa status
-  - m365 account
-  - user provisioning
-  - user deprovisioning
+allowed-tools: Read, Glob, Grep, Bash, mcp__microsoft-docs__microsoft_docs_search, mcp__microsoft-docs__microsoft_docs_fetch
 ---
 
 # Microsoft 365 User Management
@@ -212,6 +201,10 @@ Filter results where `signInActivity.lastSignInDateTime` is older than 90 days, 
 | Assign licenses | `Directory.ReadWrite.All` |
 | Check auth methods | `UserAuthenticationMethod.Read.All` |
 | Revoke sessions | `Directory.ReadWrite.All` |
+
+## References
+
+For version-correct Microsoft Graph endpoints, user resource types, and license/assignment syntax, consult `references/microsoft-graph-api.md` before issuing Graph calls.
 
 ## Related Skills
 

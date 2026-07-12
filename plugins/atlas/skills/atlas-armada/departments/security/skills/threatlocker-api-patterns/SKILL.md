@@ -6,16 +6,7 @@ description: >
   organizationId header, POST-heavy "GetByParameters" endpoints,
   pagination shape, and child-organization fan-out patterns.
 when_to_use: "When working with ThreatLocker auth headers, multi-tenant requests, POST-based list endpoints, pagination, or fanning queries across child organizations"
-triggers:
-  - threatlocker api
-  - threatlocker authentication
-  - threatlocker pagination
-  - threatlocker organizationid
-  - threatlocker mcp
-  - threatlocker tools
-  - threatlocker child organizations
-  - threatlocker getbyparameters
-  - threatlocker portalapi
+allowed-tools: Read, Glob, Grep, Bash, mcp__threatlocker__*
 ---
 
 # ThreatLocker MCP Tools & API Patterns

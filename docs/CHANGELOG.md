@@ -4,6 +4,54 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
+## Atlas v4.0.0 -- skills mastery rebuild: 184-skill fleet rebuilt and verified (2026-07-11)
+
+Full atlas skills mastery rebuild. The 184-skill fleet (28 top-level plus
+156 armada across 11 departments) was rebuilt to the Claude Code Skills
+Mastery Framework standard. 23 agents. 2 manual skills
+(atlas-olympus, atlas-doctor, `disable-model-invocation: true`); the other
+26 top-level are auto-trigger; all 156 armada are auto-trigger behind
+atlas-armada. All 11 armada departments were rebuilt and independently
+verified by fresh atlas:verifier passes (CONFIRMED each). S10 content
+fixes (em-dash removal, manual-vs-auto-map 184/28, plugin.json 184
+count) verified. Version 3.3.0 -> 4.0.0
+(`plugins/atlas/.claude-plugin/plugin.json:3` version 4.0.0).
+
+- Mastery framework standard applied to every skill: three-layer
+  progressive disclosure (L1 metadata, L2 SKILL.md under 500 lines, L3
+  references/scripts/templates loaded on demand). Authoritative spec at
+  `plugins/atlas/skills/atlas-olympus/references/mastery-framework.md`.
+- Gate flips: 2 manual, 26 auto. Verified by grep for
+  `disable-model-invocation` across `plugins/atlas/skills/*/SKILL.md`
+  (returns only atlas-doctor and atlas-olympus). The manual-vs-auto map
+  at `plugins/atlas/skills/atlas-olympus/references/manual-vs-auto-map.md`
+  lists 28 top-level (2 manual, 26 auto) and all 156 armada.
+- atlas-wiki producer skill added (top-level now 28, total 184):
+  `plugins/atlas/skills/atlas-wiki/SKILL.md` (198 lines, auto-trigger),
+  ships `scripts/check_wiki_freshness.sh` (emits FRESH, MISSING, STALE).
+- Inert `triggers:` field removed from all armada skills; keywords
+  folded into `description` and `when_to_use`.
+- S7 armada all 11 departments CONFIRMED: design, productivity, data,
+  it-ops, support, finance, hr, security, engineering, m365, product.
+- S10 content fixes verified: 3 security SKILL.md
+  (audit-forensics, evidence-gap-hunter, framework-audit-readiness)
+  gained L2 read-directive to `references/audit-rubric.md`; 5 engineering
+  Sentry skills (sentry-api-patterns, sentry-issue-triage,
+  sentry-error-investigation, sentry-release-health,
+  sentry-seer-root-cause) had allowed-tools corrected to
+  `mcp__io_github_getsentry_sentry-mcp__*` (real server key
+  `io.github.getsentry/sentry-mcp`); manual-vs-auto-map updated to 28
+  top-level; pre-existing em-dash at
+  `metis/references/multi-stage-planning.md:79` replaced with ASCII.
+- 9 reserved placeholder directories (advisory, not deleted): 3 hr
+  (new-hire-flow, pay-rate-audit, roster-snapshot), 5 finance
+  (ramp-api-patterns, ramp-bill-vendor-reconciliation,
+  ramp-card-controls, ramp-reimbursement-review, ramp-spend-triage),
+  1 engineering (sonarqube-quality-gate).
+- Evidence: `.atlas/docs/.run/findings.json` (S1-S8 and S10 all status
+  "verified"). See `plugins/atlas/CHANGELOG.md` 4.0.0 entry for the full
+  per-wave breakdown.
+
 ## Atlas v3.1.3 -- close the rest of the Windows invalid-path class (2026-07-10)
 
 An independent atlas:verifier (agentId a10e294b3d3b68c55) confirmed the 3.1.2 fix

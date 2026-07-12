@@ -21,15 +21,19 @@ a codebase the more it is used.
 | atlas-hermes skill | Guided cross-plugin setup for the 10 vendor MCP connectors (NinjaOne, Auvik, CIPP, ConnectWise, Spanning, KnowBe4, Vanta, ThreatLocker, Paylocity, Blumira), which live in their owning domain plugins (it-operations, security-compliance, microsoft-365, hr-payroll) - atlas ships none of them itself. Detects installed domain plugins, shows enabled/disabled state, and directs credential setup to the owning plugin's `/plugin config`. |
 | atlas-odysseus skill | App-discovering UX swarm: auto-finds routes and form fields in any running web app, then runs the full cartographer -> persona -> fuzzer -> oracle -> reporter pipeline with no hardcoded paths. |
 | atlas-athena skill | Comprehensive quality, security, and OWASP audit swarm: discovery-first scan of the full codebase, severity-graded findings, coverage report, and an actionable remediation plan. |
+| atlas-olympus skill | The manual onboarding layer (one of only two manual skills, `disable-model-invocation: true`). Carries the mastery-framework reference, the manual-vs-auto map, the graphify-wiring guide, the scaffold_docs.py script, and the recommendation engine. |
+| atlas-armada skill | The department-fleet dispatcher. Routes a task to one of 11 department agents (atlas:armada-*), each carrying org branding, policies, and compliance context. |
+| atlas-wiki skill | Auto-trigger producer skill that invokes the repo-root graphify skill to render .atlas/docs/wiki/ diagrams from .atlas/docs/architecture/. Ships scripts/check_wiki_freshness.sh (emits FRESH, MISSING, or STALE). |
+| Skill fleet | 184 skills total: 28 top-level plus 156 armada across 11 departments. 2 manual (atlas-olympus, atlas-doctor, `disable-model-invocation: true`); the other 26 top-level are auto-trigger; all 156 armada are auto-trigger behind atlas-armada. |
 | Command library | Seventeen verification-gated `/atlas-*` launchers, each injecting the operating contract and driving a specific task through the squad. Includes `/atlas-launch`, which opens a remediation session from an audit hub, and `/atlas-doctor`, which diagnoses and repairs the plugin installation itself. |
-| Subagent squad | Eighteen `atlas:<role>` subagents, including a five-agent browser-driven UI/UX test swarm. |
+| Subagent squad | Twenty-three `atlas:<role>` subagents, including a five-agent browser-driven UI/UX test swarm. |
 | Capability discovery | A read-only scanner plus a maintained catalog that recommend the skills/plugins/MCP a project needs, with exact install commands. |
 
 ## Layout
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json     # manifest (name: atlas, v2.4.0)
+|-- .claude-plugin/plugin.json     # manifest (name: atlas, v4.0.0)
 |-- hooks/                         # 8 auto-loaded hooks + validate-readonly-query.sh guard + doctor rollback guard
 |   |-- hooks.json                 #   wires every hook below
 |   |-- session_boot.py            #   SessionStart: activate runtime, surface lessons
@@ -47,7 +51,7 @@ atlas/
 |   `-- install_hooks.py           #   fallback wiring for non-plugin installs
 |-- output-styles/
 |   `-- atlas-orchestrator.md      #   force-for-plugin: true - auto-applies whenever atlas is enabled
-|-- agents/                        # 12 subagents (atlas:<role>), auto-registered
+|-- agents/                        # 23 subagents (atlas:<role>), auto-registered
 |   |-- explorer.md                #   read-only codebase mapping
 |   |-- implementer.md             #   bounded, verified code edits
 |   |-- verifier.md                #   adversarial confirm/refute
@@ -60,7 +64,7 @@ atlas/
 |   |-- docs-curator.md            #   maintains the docs/ single source of truth
 |   |-- docs-auditor.md            #   audits docs/ for drift against code
 |   `-- completeness-critic.md     #   "what did we miss" gap pass before done
-|-- commands/                      # 28 skills (/atlas + 17 launchers)
+|-- commands/                      # 18 command files (/atlas boot + 17 /atlas-* launchers); the 28 top-level skills live in skills/atlas-*/
 |   |-- atlas.md                   #   the architect: boot + configure the workspace
 |   |-- atlas-prompt.md            #   prompt optimizer
 |   |-- atlas-feature.md           #   full-stack feature build

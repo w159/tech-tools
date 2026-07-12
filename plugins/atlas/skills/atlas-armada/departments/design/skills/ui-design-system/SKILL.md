@@ -1,6 +1,8 @@
 ---
 name: ui-design-system
 description: Modernize frontend codebases into production-grade interfaces using shadcn/ui, Tailwind CSS, and Radix UI. Covers design tokens, component architecture, loading/progress feedback patterns, accessibility, dark mode, and responsive design. Trigger with "modernize the UI", "ui refactor", "migrate to shadcn", "fix the design system", "add loading states", "progress feedback", "make it look modern", or when someone needs help with frontend component architecture, design tokens, or async feedback patterns.
+when_to_use: Modernizing a frontend with shadcn/ui, Tailwind CSS, and Radix UI; establishing design tokens, component architecture, and progress feedback patterns; refactoring UI for accessibility, dark mode, and responsive design; building loading, empty, and error states with consistent interaction states
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Frontend UI/UX Design System

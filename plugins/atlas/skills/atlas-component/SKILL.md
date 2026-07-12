@@ -1,8 +1,9 @@
 ---
 name: atlas-component
-description: Build one reusable component that survives latency, cancellation, and partial failure (progress modal, upload widget, job panel), handling every backend state.
-when_to_use: the task involves component
-disable-model-invocation: true
+description: Create or modify a reusable component that survives latency, cancellation, and partial failure (progress modal, upload widget, job panel), handling every backend state with all six interaction states rendered.
+when_to_use: build a reusable component that handles latency, cancellation, and partial failure - progress modal, upload widget, or job panel
+allowed-tools: Read, Glob, Grep, Bash, Edit, MultiEdit
+paths: ["components/**", "**/*.tsx"]
 argument-hint: '[component name+purpose] [props contract] [backend contract]'
 ---
 
@@ -15,6 +16,8 @@ cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-metis/references/operating-contract.md"
 ```
 
 If the contract did not load above, read `skills/atlas-metis/references/operating-contract.md` and apply it before proceeding.
+
+Read `${CLAUDE_SKILL_DIR}/references/component-pattern.md` and follow the props, className, six-state, and file-pattern contract it defines. Seed a new file from `${CLAUDE_SKILL_DIR}/templates/component.seed.tsx` when starting from scratch.
 
 # `atlas-component`
 

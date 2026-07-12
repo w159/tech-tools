@@ -1,15 +1,21 @@
 ---
 name: brand-voice-enforcement
 description: >
-  This skill applies brand guidelines to content creation. It should be used when
-  the user asks to "write an email", "draft a proposal", "create a pitch deck",
-  "write a LinkedIn post", "draft a presentation", "write a Slack message",
-  "draft sales content", or any content creation request where brand voice should
-  be applied. Also triggers on "on-brand", "brand voice", "enforce voice",
-  "apply brand guidelines", "brand-aligned content", "write in our voice",
-  "use our brand tone", "make this sound like us", "rewrite this in our tone",
-  or "this doesn't sound on-brand". Not for generating guidelines from scratch
-  (use guideline-generation) or discovering brand materials (use discover-brand).
+  Apply brand guidelines to content creation - emails, proposals, pitch decks,
+  LinkedIn posts, Slack messages, sales content. Use when the user asks to "write
+  an email", "draft a proposal", "create a pitch deck", "write a LinkedIn post",
+  "draft a presentation", "write a Slack message", "draft sales content", or any
+  content request where brand voice applies. Also triggers on "on-brand", "brand
+  voice", "enforce voice", "apply brand guidelines", "brand-aligned content",
+  "write in our voice", "use our brand tone", "make this sound like us", "rewrite
+  this in our tone", or "this doesn't sound on-brand". Not for generating
+  guidelines from scratch (use guideline-generation) or discovering brand materials
+  (use discover-brand).
+when_to_use: >
+  Writing or drafting on-brand content (email, proposal, deck, post, message);
+  rewriting existing content to match brand voice; applying tone flexes to a new
+  content type; validating that draft content aligns with brand guidelines.
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Brand Voice Enforcement

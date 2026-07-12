@@ -2,20 +2,7 @@
 name: "cipp-users"
 description: "Use this skill when working with CIPP-managed M365 users - creating accounts, editing properties, disabling, resetting passwords, resetting MFA, revoking sessions, full offboarding, BEC investigation, MFA status reporting, and listing user devices/groups. Covers the complete user lifecycle across multi-tenant M365 environments."
 when_to_use: "When creating, editing, disabling, offboarding, or auditing M365 users via CIPP - including password resets, MFA resets, session revocation, BEC checks, and MFA enrollment reports"
-triggers:
-  - cipp user
-  - create m365 user
-  - disable user
-  - offboard user
-  - reset password
-  - reset mfa
-  - revoke sessions
-  - bec check
-  - mfa status
-  - user devices
-  - user groups
-  - m365 offboarding
-  - business email compromise
+allowed-tools: Read, Glob, Grep, Bash, mcp__microsoft-docs__microsoft_docs_search, mcp__microsoft-docs__microsoft_docs_fetch, mcp__cipp__*
 ---
 
 # CIPP User Management
@@ -101,3 +88,7 @@ Use this monthly across the portfolio to drive MFA enforcement campaigns.
 ## Identifying a user
 
 `userId` accepts either the Azure AD object GUID or the userPrincipalName. UPN is more readable; GUID is more stable across UPN changes. CIPP returns both - pick one and stay consistent within a workflow.
+
+## References
+
+See `references/microsoft-graph-api.md` for the underlying Microsoft Graph citations (user resource types and enumeration endpoints) this skill relies on.

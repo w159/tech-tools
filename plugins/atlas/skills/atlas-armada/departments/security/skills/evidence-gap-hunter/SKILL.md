@@ -1,6 +1,8 @@
 ---
 name: evidence-gap-hunter
 description: Find missing, expiring, or stale evidence documents in Vanta across one or more frameworks. Use when user asks "what evidence is missing", "what policies are expiring", "evidence gaps before audit", or for monthly evidence health checks.
+when_to_use: "missing evidence, expiring policies, evidence gaps before audit, monthly evidence health checks"
+allowed-tools: Read, Glob, Grep, Bash, mcp__vanta__*, mcp__plugin_context-mode_context-mode__ctx_execute
 ---
 
 # Evidence Gap Hunter (Vanta)
@@ -17,6 +19,7 @@ description: Find missing, expiring, or stale evidence documents in Vanta across
 
 ## Output
 
+- Prioritize and classify gaps using `references/audit-rubric.md` (Evidence Status Classification, Gap Prioritization Matrix, Output Standards).
 - **Summary table**: status -> count per framework.
 - **Top 20 expiring soonest** with days-left and owner.
 - **All missing evidence** grouped by category, with the parent control name so the user can see why it matters.

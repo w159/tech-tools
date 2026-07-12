@@ -1,0 +1,40 @@
+# Department onboarding seed - one copy per department you onboard.
+# Lives at .atlas/departments/<department>.yaml once activated.
+# Replace every <placeholder> before use.
+
+department: "<department-dir>"          # one of the 11 dirs under departments/
+display_name: "<Department Display Name>"
+owning_agent: "armada:<agent-slug>"     # e.g. armada:it-ops, armada:security
+active: true
+
+# Skills this department exposes. Mirror the skills/ dir under departments/<dept>/.
+skills:
+  - <skill-dir-1>
+  - <skill-dir-2>
+
+# Commands this department exposes. Mirror commands/ under departments/<dept>/.
+commands:
+  - <command-name-1>
+
+# Vendor connectors this department may use. Credentials live on the owning
+# domain plugin's userConfig, never here. This block only records which
+# connectors are provisioned for this department.
+connectors:
+  - vendor: <vendor-dir>           # e.g. ninjaone, vanta, cipp, paylocity
+    status: disabled               # disabled | enabled
+    required_keys:                # mirror vendors.md "required to enable"
+      - <userConfig-key-1>
+
+# Branding overrides for this department (optional; fall back to org branding).
+branding:
+  voice: ""                        # empty = inherit org branding.voice
+  tone_guidelines: ""
+
+# Policy overrides for this department (optional; fall back to org policies).
+policies:
+  compliance_frameworks: []        # empty = inherit org policies.compliance_frameworks
+  approval_workflows: {}
+
+# Routing notes for this department (optional).
+routing:
+  notes: "Route by user role; ask if ambiguous."

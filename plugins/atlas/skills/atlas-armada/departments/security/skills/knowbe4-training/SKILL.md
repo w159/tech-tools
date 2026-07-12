@@ -7,20 +7,7 @@ description: >
   Covers training campaign lifecycle, enrollment workflows, completion tracking, and
   content management for security awareness programs.
 when_to_use: "When creating and managing training assignments, tracking enrollment and completion, browsing training modules and content library, managing store purchases"
-triggers:
-  - knowbe4 training
-  - training campaign
-  - security awareness training
-  - training enrollment
-  - training completion
-  - training module
-  - knowbe4 course
-  - training assignment
-  - training status
-  - compliance training
-  - training content
-  - store purchase
-  - training deadline
+allowed-tools: Read, Glob, Grep, Bash, mcp__knowbe4__*
 ---
 
 # KnowBe4 Training Campaign Management

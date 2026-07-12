@@ -1,6 +1,8 @@
 ---
 name: recruiting-pipeline
-description: Track and manage recruiting pipeline stages. Trigger with "recruiting update", "candidate pipeline", "how many candidates", "hiring status", or when the user discusses sourcing, screening, interviewing, or extending offers.
+description: Track and manage recruiting pipeline stages. Use when user asks for "recruiting update", "candidate pipeline", "how many candidates", "hiring status", or when discussing sourcing, screening, interviewing, or extending offers.
+when_to_use: "When user asks about recruiting status, candidate pipeline, hiring funnel, time to fill, or offer acceptance"
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Recruiting Pipeline

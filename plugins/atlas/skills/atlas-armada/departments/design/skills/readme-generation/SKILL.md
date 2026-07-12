@@ -1,6 +1,8 @@
 ---
 name: readme-generation
 description: Generate comprehensive, production-ready README.md documentation from a full codebase analysis. Trigger with "generate readme", "create readme", "update readme", "document this project", "write documentation for this repo", or when someone needs a complete project README created or refreshed from the actual implementation.
+when_to_use: Generating or refreshing a project README from codebase analysis; documenting architecture, setup, and contribution guides; updating stale README content to match the current implementation
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # README Generation

@@ -6,17 +6,7 @@ description: >
   searching across a user's files. Covers OneDrive and SharePoint via Microsoft
   Graph for MSP technicians handling file access issues.
 when_to_use: "When working with oneDrive personal storage, SharePoint document libraries, file sharing permissions, storage quotas, or searching across a user's files in Microsoft 365 files"
-triggers:
-  - onedrive
-  - m365 files
-  - sharepoint files
-  - onedrive quota
-  - file sharing m365
-  - onedrive permissions
-  - m365 storage
-  - find file m365
-  - onedrive access
-  - sharepoint document library
+allowed-tools: Read, Glob, Grep, Bash, mcp__microsoft-docs__microsoft_docs_search, mcp__microsoft-docs__microsoft_docs_fetch
 ---
 
 # Microsoft 365 Files (OneDrive & SharePoint)
@@ -231,6 +221,10 @@ If `quota.state` is `nearing` (>80%) or `critical` (>90%), alert for cleanup or 
 | Read SharePoint sites | `Sites.Read.All` |
 | Manage sharing | `Files.ReadWrite.All` |
 | SharePoint admin | `Sites.ReadWrite.All` |
+
+## References
+
+For version-correct Microsoft Graph endpoints, drive and list item resource types, and sharing/permission syntax, consult `references/microsoft-graph-api.md` before issuing Graph calls.
 
 ## Related Skills
 

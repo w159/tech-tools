@@ -1,25 +1,11 @@
 ---
 name: pax8-subscriptions
-description: >
-  Use this skill when working with Pax8 subscriptions - checking license
-  status, reviewing seat counts, filtering by company or product,
-  tracking subscription states, reviewing change history, and optimizing
-  license usage across MSP clients. Covers the full subscription
-  lifecycle including all subscription states and quantity management.
-when_to_use: "When checking license status, reviewing seat counts, filtering by company or product, tracking subscription states, reviewing change history"
-triggers:
-  - pax8 subscription
-  - pax8 license
-  - pax8 seat
-  - pax8 provision
-  - pax8 cancel
-  - subscription management
-  - license management
-  - seat count
-  - pax8 activate
-  - license optimization
-  - subscription lifecycle
-  - subscription status
+description: Check Pax8 subscription and license status, review seat counts, filter by company or product, track subscription states, review change history, and optimize license usage across MSP clients.
+when_to_use:
+  - Checking license status, seat counts, and subscription states
+  - Filtering subscriptions by company or product and reviewing change history
+  - Optimizing license usage across MSP clients
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Pax8 Subscription Lifecycle Management

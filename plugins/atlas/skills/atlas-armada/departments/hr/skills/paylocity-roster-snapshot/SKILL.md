@@ -1,6 +1,8 @@
 ---
 name: paylocity-roster-snapshot
 description: Pull a snapshot of the active employee roster from Paylocity, expanded with position, pay rate, and status. Use when user asks for "headcount", "current roster", "who works here", "active employees", or wants a list of employees with their titles and pay.
+when_to_use: "When user asks for headcount, current roster, who works here, active employees, or a list with titles and pay"
+allowed-tools: Read, Glob, Grep, Bash, mcp__paylocity__*, mcp__plugin_context-mode_context-mode__*
 ---
 
 # Roster Snapshot (Paylocity)

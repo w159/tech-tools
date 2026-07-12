@@ -5,13 +5,7 @@ description: >
   including listing devices, checking agent health, and managing agent
   deployment keys.
 when_to_use: "When working with Blumira agents, devices, and agent keys, including listing devices, checking agent health, and managing agent deployment keys"
-triggers:
-  - blumira agent
-  - blumira device
-  - agent key
-  - device inventory
-  - agent health
-  - sensor status
+allowed-tools: Read, Glob, Grep, Bash, mcp__blumira__*
 ---
 
 # Blumira Agents & Devices

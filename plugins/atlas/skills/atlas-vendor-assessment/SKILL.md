@@ -1,8 +1,8 @@
 ---
 name: atlas-vendor-assessment
 description: Evidence-based vendor security assessment against a framework you name, citing provided docs per finding. Use when the output may reach an auditor or reviewer.
-when_to_use: the output may reach an auditor or reviewer
-disable-model-invocation: true
+when_to_use: the output may reach an auditor or reviewer, and each finding must cite provided evidence
+allowed-tools: Read, Glob, Grep, Bash, Write
 argument-hint: '[vendor + services/data access] [framework(s)] [attach evidence: SOC 2, whitepaper, DPA, terms]'
 ---
 
@@ -40,3 +40,12 @@ Inputs to read from `$ARGUMENTS`: the vendor name and what they do or what data 
 - A findings table with columns: Control Area, Evidence Cited, Status, Framework Clause Implicated.
 - A list of material gaps.
 - A final recommendation on whether the vendor meets the named requirements, with the basis stated.
+
+## Supporting files
+- `references/assessment-rubric.md` - the status values (met / partial /
+  not_met / not_addressed), severity per gap (blocker / major / minor /
+  unknown), SOC 2 report-type handling, and evidence handling rules.
+- `templates/assessment-report.seed.md` - the report skeleton with the
+  standard sections (scope, findings table, material gaps, recommendation,
+  verifications, open questions). Fill from the evidence; delete the blockquote
+  before delivery.

@@ -5,15 +5,8 @@ description: >
   envelope shape, basic-auth credential model, region routing,
   cursor-based pagination, rate-limit handling, and the v1 vs v2
   device API distinction.
-when_to_use: "When working with Auvik authentication, region selection, pagination, rate limits, or interpreting the JSON:API response shape"
-triggers:
-  - auvik api
-  - auvik authentication
-  - auvik pagination
-  - auvik region
-  - auvik rate limit
-  - auvik v1 v2
-  - auvik jsonapi
+when_to_use: "When working with Auvik authentication, region selection, pagination, rate limits, or interpreting the JSON:API response shape, including v1 vs v2 endpoints"
+allowed-tools: Read, Glob, Grep, Bash, mcp__auvik__*
 ---
 
 # Auvik MCP Tools and API Patterns

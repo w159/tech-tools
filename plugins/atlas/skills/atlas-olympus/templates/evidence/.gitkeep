@@ -1,0 +1,8 @@
+# Evidence captures
+#
+# Permanent execution-evidence files. Each capture is a single
+# self-contained artifact: the exact command, its actual output, and the
+# verdict it proves. atlas-argus and the task skills write here; nothing
+# deletes from here (append-only, like CHANGELOG.md).
+#
+# Naming: <YYYY-MM-DD>-<skill>-<short-slug>.md

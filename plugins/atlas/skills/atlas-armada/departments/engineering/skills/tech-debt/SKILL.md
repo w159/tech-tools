@@ -1,6 +1,8 @@
 ---
 name: tech-debt
-description: Identify, categorize, and prioritize technical debt. Trigger with "tech debt", "technical debt audit", "what should we refactor", "code health", or when the user asks about code quality, refactoring priorities, or maintenance backlog.
+description: Identify, categorize, and prioritize technical debt into a phased remediation plan. Use when the user says "tech debt", "technical debt audit", "what should we refactor", or "code health", or asks about code quality, refactoring priorities, or the maintenance backlog.
+when_to_use: "When auditing technical debt, scoring refactoring priorities by impact and risk, or building a remediation plan that fits alongside feature work"
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Tech Debt Management

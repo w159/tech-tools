@@ -1,6 +1,8 @@
 ---
 name: paylocity-pay-rate-audit
 description: Audit pay rates across the active roster - pulls current and future pay rates, flags missing/zero rates, future-dated rate changes, and outliers vs. pay grade. Use when user asks for "pay rate audit", "comp review", "salary check", "are pay rates correct", or before a merit-cycle / payroll run.
+when_to_use: "When user asks for a pay rate audit, comp review, salary check, are pay rates correct, or before a merit cycle or payroll run"
+allowed-tools: Read, Glob, Grep, Bash, mcp__paylocity__*, mcp__plugin_context-mode_context-mode__*
 ---
 
 # Pay Rate Audit (Paylocity)
@@ -31,3 +33,10 @@ description: Audit pay rates across the active roster - pulls current and future
 
 - Read-only. Never propose rate changes inline - flag for HR.
 - If pay grade has no min/max defined, exclude from out-of-grade check (do not false-positive).
+
+## Reference
+
+Anomaly category definitions, pay-grade min/max math, stale-rate detection,
+and the out-of-grade exclusion rules live in
+[references/anomaly-rules.md](references/anomaly-rules.md). Read it before
+running the audit so anomalies are classified the same way every time.

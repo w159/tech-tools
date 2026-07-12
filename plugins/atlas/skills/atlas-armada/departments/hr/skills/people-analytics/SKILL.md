@@ -1,6 +1,8 @@
 ---
 name: people-analytics
-description: Analyze workforce data -- attrition, engagement, diversity, and productivity. Use when user asks for "attrition rate", "turnover analysis", "diversity metrics", "engagement data", "retention risk", or wants to understand workforce trends.
+description: Analyze workforce data - attrition, engagement, diversity, and productivity. Use when user asks for "attrition rate", "turnover analysis", "diversity metrics", "engagement data", "retention risk", or wants to understand workforce trends.
+when_to_use: "When user asks for attrition rate, turnover analysis, diversity metrics, engagement data, retention risk, or workforce trends"
+allowed-tools: Read, Glob, Grep, Bash, mcp__paylocity__*, mcp__plugin_context-mode_context-mode__*
 ---
 
 # People Analytics

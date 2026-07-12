@@ -1,6 +1,8 @@
 ---
 name: employee-handbook
-description: Answer questions about company policies, benefits, and procedures. Trigger with "what's our policy on", "how does PTO work", "benefits question", "expense policy", "remote work policy", or any question about company rules, perks, or procedures.
+description: Answer questions about company policies, benefits, and procedures. Use when user asks "what's our policy on", "how does PTO work", "benefits question", "expense policy", "remote work policy", or any question about company rules, perks, or procedures.
+when_to_use: "When user asks about PTO, benefits, expenses, remote work, travel, conduct, or any company policy or procedure"
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Employee Handbook
@@ -19,7 +21,7 @@ Answer employee questions about policies, benefits, and procedures by searching 
 
 ## How to Answer
 
-1. Search ~~knowledge base for the relevant policy document
+1. Search the knowledge base for the relevant policy document
 2. Provide a clear, plain-language answer
 3. Quote the specific policy language
 4. Note any exceptions or special cases

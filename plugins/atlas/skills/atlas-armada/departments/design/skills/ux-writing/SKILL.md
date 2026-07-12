@@ -1,6 +1,8 @@
 ---
 name: ux-writing
 description: Write effective microcopy for user interfaces. Trigger with "write copy for", "help with UX copy", "what should this button say", "error message for", "empty state copy", or when the user needs help with any interface text.
+when_to_use: Writing microcopy for buttons, error messages, or empty states; crafting confirmation dialogs and call-to-action labels; adapting voice and tone to success, error, and warning contexts
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # UX Writing

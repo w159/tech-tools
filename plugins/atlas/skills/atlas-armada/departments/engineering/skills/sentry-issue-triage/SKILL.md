@@ -1,6 +1,8 @@
 ---
 name: sentry-issue-triage
 description: Rank open and unresolved Sentry issues by severity, event volume, users affected, and regression or first-seen status, then produce a prioritized action list. Read-only. Use when user asks "triage Sentry", "what should I fix first", or "rank our open errors".
+when_to_use: "When ranking unresolved Sentry issues by impact, scoring severity versus event volume and users affected, or producing a prioritized fix-first action list"
+allowed-tools: Read, Glob, Grep, Bash, mcp__io_github_getsentry_sentry-mcp__*
 ---
 
 # Sentry Issue Triage

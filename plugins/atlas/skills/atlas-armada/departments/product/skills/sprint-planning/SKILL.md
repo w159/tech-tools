@@ -1,7 +1,9 @@
 ---
 name: sprint-planning
 description: Plan a sprint - scope work, estimate capacity, set goals, and draft a sprint plan. Use when kicking off a new sprint, sizing a backlog against team availability (accounting for PTO and meetings), deciding what's P0 vs. stretch, or handling carryover from the last sprint.
+when_to_use: Kicking off a new sprint and scoping work against capacity; sizing a backlog against team availability with PTO and meetings; deciding what is P0 versus stretch for the sprint; handling carryover from the last sprint.
 argument-hint: "[sprint name or date range]"
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # /sprint-planning

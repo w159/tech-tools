@@ -1,6 +1,8 @@
 ---
 name: vanta-vendor-risk-rollup
 description: Roll up third-party vendor risk in Vanta - status breakdown, stale reviews, highest-risk vendors. Use when user asks "vendor risk summary", "what vendors need review", "third-party risk rollup", or for quarterly vendor-management reports.
+when_to_use: "vendor risk summary, what vendors need review, third-party risk rollup, quarterly vendor-management reports"
+allowed-tools: Read, Glob, Grep, Bash, mcp__vanta__*, mcp__plugin_context-mode_context-mode__ctx_execute
 ---
 
 # Vendor Risk Rollup (Vanta)

@@ -2,17 +2,7 @@
 name: api-patterns
 description: "Reference for Microsoft Graph API fundamentals: authentication and token scopes, OData operators ($select/$filter/$search), pagination via @odata.nextLink, delta queries, throttling and Retry-After, and $batch requests. Use when constructing any M365/Graph API call, choosing filter syntax, handling 429 throttling, or debugging a Graph error code."
 when_to_use: "When working with Microsoft Graph API fundamentals - authentication patterns, OData query operators, pagination, throttling/retry, batch requests"
-triggers:
-  - microsoft graph api
-  - graph api patterns
-  - m365 api
-  - graph odata
-  - graph pagination
-  - graph throttling
-  - graph batch
-  - graph filter syntax
-  - m365 api error
-  - graph delta query
+allowed-tools: Read, Glob, Grep, Bash, mcp__microsoft-docs__microsoft_docs_search, mcp__microsoft-docs__microsoft_docs_fetch
 ---
 
 # Microsoft Graph API Patterns
@@ -217,6 +207,10 @@ Use for fetching details on multiple known user IDs simultaneously.
 For testing queries interactively: `https://developer.microsoft.com/graph/graph-explorer`
 
 Log in with a test M365 account to explore API responses before writing code.
+
+## References
+
+For version-correct Microsoft Graph endpoints, query syntax, pagination, and throttling rules, consult `references/microsoft-graph-api.md` before issuing Graph calls.
 
 ## Related Skills
 

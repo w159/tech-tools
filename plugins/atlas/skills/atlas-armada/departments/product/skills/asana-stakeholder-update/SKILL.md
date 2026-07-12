@@ -1,6 +1,8 @@
 ---
 name: asana-stakeholder-update
 description: Compose a stakeholder-ready status narrative from live Asana project data, drafting an update for review and posting it only after explicit confirmation. Use when the user asks to "write a stakeholder update", "draft a status update for leadership", or "post a project status in Asana".
+when_to_use: Drafting a stakeholder status narrative from live Asana project data; preparing a leadership status update grounded in Asana counts and stories; posting a project status update back to Asana after explicit user confirmation.
+allowed-tools: Read, Glob, Grep, Bash, mcp__asana__*
 ---
 
 # Asana Stakeholder Update

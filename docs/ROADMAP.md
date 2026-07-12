@@ -6,6 +6,21 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 
 ## Done
 
+### Atlas v4.0.0 -- skills mastery rebuild: 184-skill fleet (resolved 2026-07-11)
+
+Full atlas skills mastery rebuild. 184 skills (28 top-level plus 156 armada
+across 11 departments) rebuilt to the Claude Code Skills Mastery Framework
+standard. All 11 armada departments independently verified by fresh
+atlas:verifier passes. S10 content fixes verified (security audit-rubric
+directive, engineering Sentry allowed-tools, manual-vs-auto-map 184/28,
+em-dash removal). Plugin version 3.3.0 -> 4.0.0
+(`plugins/atlas/.claude-plugin/plugin.json:3`).
+
+9 reserved placeholder directories (0-line SKILL.md, will not auto-trigger)
+remain as advisory items, not deleted (Law 6): 3 hr, 5 finance, 1
+engineering. See `docs/CHANGELOG.md` v4.0.0 entry and
+`plugins/atlas/CHANGELOG.md` 4.0.0 for full detail.
+
 ### Atlas v3.1.2 + v3.1.3 -- Windows invalid-path filenames (2026-07-10)
 
 Fixed the Windows `git error: invalid path` that blocked syncing any repo

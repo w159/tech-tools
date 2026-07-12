@@ -1,8 +1,8 @@
 ---
 name: atlas-harden
 description: Write an idempotent endpoint remediation script using a CHECK/SET/VERIFY pattern for RMM/MDM, proving whether it changed state or was already compliant.
-when_to_use: the task involves harden
-disable-model-invocation: true
+when_to_use: write an idempotent endpoint remediation script with CHECK/SET/VERIFY for RMM/MDM that proves compliant or changed
+allowed-tools: Read, Glob, Grep, Bash, Edit, MultiEdit
 argument-hint: '[objective] [target OS/devices] [deployment context: RMM run-as, one-shot/scheduled, known GPO/MDM interactions]'
 ---
 
@@ -27,6 +27,13 @@ Inputs to read from `$ARGUMENTS`: the specific objective (for example, enforce a
 
 ## Documentation first
 - Verify every cmdlet, parameter, registry path, and key name against Microsoft Learn (or the OS vendor's docs for non-Windows targets). Do not rely on memory for key names or cmdlet signatures.
+
+## Checklist and structural validation
+- Every script must pass `references/hardening-checklist.md`
+  (OWASP-aligned) before it is reported done.
+- Confirm the CHECK/SET/VERIFY structure is present and ordered:
+  `bash "${CLAUDE_SKILL_DIR}/scripts/validate_harden_script.sh" <script>`
+  exits 0 if valid, 1 with a reason if not.
 
 ## Requirements
 - Idempotency: detect current state before changing anything, and report explicitly whether it modified a setting or found the system already compliant.

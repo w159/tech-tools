@@ -1,24 +1,11 @@
 ---
 name: pandadoc-recipients
-description: >
-  Use this skill when working with PandaDoc recipients and signatures -
-  adding recipients to documents, setting signing order, tracking who
-  has signed, managing multi-party agreements, and understanding
-  recipient roles. Covers e-signature workflows, completion tracking,
-  and multi-signer scenarios common in MSP contracts.
-when_to_use: "When adding recipients to documents, setting signing order, tracking who has signed, managing multi-party agreements, and understanding recipient roles"
-triggers:
-  - pandadoc recipient
-  - pandadoc signer
-  - pandadoc signing
-  - pandadoc signature
-  - signing order
-  - who signed
-  - signature status
-  - recipient role
-  - multi-signer
-  - e-sign
-  - esignature
+description: Manage PandaDoc recipients and signatures: add recipients to documents, set signing order, track who has signed, and handle multi-party and multi-signer agreements.
+when_to_use:
+  - Adding recipients to a PandaDoc document and setting signing order
+  - Tracking signature status and who has signed
+  - Managing multi-signer and multi-party agreements
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # PandaDoc Recipient & Signature Management

@@ -1,5 +1,5 @@
 {
-  "description": "Atlas automation: boot, doctor rollback guard, guards, formatting, prompt optimization, completion gate, self-improvement nudge, session-transcript ingest.",
+  "description": "Atlas automation: boot, doctor rollback guard, guards, formatting, prompt optimization, completion gate, self-improvement (memory capture + auto-skill + nudge), session-transcript ingest.",
   "hooks": {
     "SessionStart": [
       {
@@ -81,6 +81,14 @@
           },
           {
             "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/memory_capture.py\""
+          },
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/auto_skill.py\""
+          },
+          {
+            "type": "command",
             "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/nudge.py\""
           }
         ]
@@ -93,6 +101,10 @@
           {
             "type": "command",
             "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/ingest_session.py\""
+          },
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/memory_capture.py\""
           },
           {
             "type": "command",

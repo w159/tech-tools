@@ -7,16 +7,7 @@ description: >
   applying signed-publisher heuristics, and recommending approve/deny
   decisions with audit-friendly reasoning.
 when_to_use: "When triaging pending application approvals, evaluating signer/path heuristics, classifying high-confidence vs needs-review requests, or producing an approval queue summary"
-triggers:
-  - threatlocker approval
-  - threatlocker pending approval
-  - threatlocker approve application
-  - threatlocker deny application
-  - threatlocker request triage
-  - threatlocker application request
-  - approve threatlocker
-  - permit application threatlocker
-  - threatlocker queue
+allowed-tools: Read, Glob, Grep, Bash, mcp__threatlocker__*
 ---
 
 # ThreatLocker Approval Requests

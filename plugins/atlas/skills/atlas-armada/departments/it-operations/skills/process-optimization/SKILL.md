@@ -1,6 +1,8 @@
 ---
 name: process-optimization
 description: Analyze and improve business processes. Trigger with "this process is slow", "how can we improve", "streamline this workflow", "too many steps", "bottleneck", or when the user describes an inefficient process they want to fix.
+when_to_use: "When analyzing an inefficient process, finding bottlenecks, or streamlining a workflow with too many steps"
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Process Optimization

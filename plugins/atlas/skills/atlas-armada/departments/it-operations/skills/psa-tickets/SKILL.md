@@ -1,22 +1,8 @@
 ---
 name: psa-tickets
 description: "Use this skill when working with ConnectWise PSA tickets - creating, updating, searching, or managing service desk operations. Covers ticket fields, service boards, statuses, priorities, SLAs, ticket notes, and workflow automation. Essential for MSP technicians handling service delivery through ConnectWise PSA."
-when_to_use: "When creating, updating, searching, or managing service desk operations"
-triggers:
-  - connectwise ticket
-  - connectwise psa ticket
-  - service ticket connectwise
-  - create ticket connectwise
-  - ticket board
-  - ticket status connectwise
-  - ticket priority
-  - connectwise service desk
-  - ticket triage
-  - escalate ticket
-  - resolve ticket
-  - ticket notes
-  - sla calculation
-  - ticket workflow
+when_to_use: "When creating, updating, searching, triaging, escalating, or resolving ConnectWise PSA service desk tickets, including boards, statuses, priorities, SLAs, notes, and workflow"
+allowed-tools: Read, Glob, Grep, Bash, mcp__connectwise__*
 ---
 
 # ConnectWise PSA Ticket Management

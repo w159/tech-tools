@@ -4,11 +4,7 @@ description: >
   Use this skill when listing or looking up Blumira users, finding user IDs
   for finding assignment, or auditing user access.
 when_to_use: "When listing or looking up Blumira users, finding user IDs for finding assignment, or auditing user access"
-triggers:
-  - blumira user
-  - user list
-  - assign user
-  - user management
+allowed-tools: Read, Glob, Grep, Bash, mcp__blumira__*
 ---
 
 # Blumira Users

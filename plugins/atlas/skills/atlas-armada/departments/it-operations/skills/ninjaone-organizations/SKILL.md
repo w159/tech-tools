@@ -4,15 +4,8 @@ description: >
   Use this skill when working with NinjaOne organizations - creating, listing,
   managing locations, and configuring policies. Organizations are the top-level
   container for all devices and represent MSP clients.
-when_to_use: "When creating, listing, managing locations, and configuring policies. Organizations are the top-level container for all devices and represent MSP clients"
-triggers:
-  - ninjaone organization
-  - ninjarmm org
-  - ninja client
-  - ninja organization list
-  - create organization ninja
-  - ninja location
-  - ninja policy mapping
+when_to_use: "When creating, listing, and managing NinjaOne/NinjaRMM organizations, locations, and policy mappings for MSP clients"
+allowed-tools: Read, Glob, Grep, Bash, mcp__ninjaone__*
 ---
 
 # NinjaOne Organization Management

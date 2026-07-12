@@ -1,7 +1,10 @@
 ---
 name: atlas-argus
 description: 'Measure atlas''s own run health, audit context/asset waste, and mine session transcripts. Three lenses: RUN HEALTH reads the observability DB for metrics (wall-clock, dispatches, verifier coverage) and baseline->target goals; ASSET AUDIT scores each context-loaded skill/agent/plugin by token cost and relevance to flag disable/relocate; SESSION FORENSICS mines transcripts for unused tools and unverified claims into rules. No args reports trends.'
-when_to_use: the task involves argus
+when_to_use: measure atlas run health, audit context/asset waste, or mine session transcripts for unused tools and unverified claims
+allowed-tools: Read, Glob, Grep, Bash
+context: fork
+agent: general-purpose
 ---
 
 
@@ -25,6 +28,12 @@ silently; the learn-from-restores rule depends on explicit user choices.
 The global SQLite DB at `~/.atlas/atlas.db` (env `ATLAS_DB`), populated by the
 hooks and read via `scripts/atlas_db.py`. Access it through the public functions
 below -- never parse raw files or rely on memory alone.
+
+The three lenses (run health, asset/context audit, session forensics) each own
+distinct sources, drivers, and outputs. The per-lens `atlas_db.py` functions,
+the transcript-mirror tables, the four forensic questions, and the nudge
+capture format are documented in `references/lens-set.md`. Read it before
+choosing a lens and when wiring a new read against the mirror.
 
 Files are NOT the SSOT for run metrics. claude-mem is the narrative layer only:
 use it to store a lesson that survived three or more runs, not as the primary

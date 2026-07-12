@@ -7,20 +7,7 @@ description: >
   KnowBe4 metrics, build meaningful reports, and communicate security awareness
   posture to stakeholders.
 when_to_use: "When generating KnowBe4 security awareness reports - phishing summary statistics, training completion rates, risk score overviews, trend analysis, organizational benchmarks"
-triggers:
-  - knowbe4 report
-  - knowbe4 reporting
-  - security awareness report
-  - phishing summary
-  - training completion rate
-  - risk overview
-  - trend analysis
-  - knowbe4 metrics
-  - knowbe4 dashboard
-  - security posture report
-  - awareness metrics
-  - executive report knowbe4
-  - compliance report
+allowed-tools: Read, Glob, Grep, Bash, mcp__knowbe4__*
 ---
 
 # KnowBe4 Security Awareness Reporting

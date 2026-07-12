@@ -1,8 +1,9 @@
 ---
 name: atlas-readme
 description: Generate an onboarding-grade README.md by inspecting the actual repo, every claim traced to a real file. Use when a repo has no README or its README is stale.
-when_to_use: a repo has no README or its README is stale
-disable-model-invocation: true
+when_to_use: a repo has no README or its README is stale, and every claim must trace to a real file
+allowed-tools: Read, Glob, Grep, Bash, Edit, Write
+paths: ["README.md", "**/README.md"]
 argument-hint: '[repo path] [audience: contributors/internal/both]'
 ---
 
@@ -47,5 +48,15 @@ REPORT:
 - The path to the README.md written.
 - The list of files you read to generate it.
 - Any claim or command left marked [verify] and why.
+
+## Supporting files
+- `references/readme-section-standard.md` - the canonical section order
+  (What and Why, Quickstart, Prerequisites and Setup, Project Structure,
+  Architecture and Data Flow, Configuration, Operations, External
+  Dependencies), the sourcing rules for commands/env vars/runtime versions,
+  and the `[verify]` convention.
+- `templates/README.seed.md` - the README skeleton with every standard
+  section. Fill it from the repo's actual files; delete any section the repo
+  does not warrant; delete the blockquote before delivery.
 
 If a required input is missing or ambiguous, ask once for it, then proceed.

@@ -1,6 +1,11 @@
 ---
 name: task-management
 description: Simple task management using a shared TASKS.md file. Reference this when the user asks about their tasks, wants to add/complete tasks, or needs help tracking commitments.
+when_to_use: >
+  The user asks what is on their plate or what their tasks are; adding, completing,
+  or updating a task; tracking commitments and waiting-on items; extracting tasks
+  from a meeting or conversation summary.
+allowed-tools: Read, Glob, Grep, Bash, Write
 ---
 
 # Task Management

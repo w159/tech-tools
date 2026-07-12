@@ -1,6 +1,8 @@
 ---
 name: incident-response
-description: Triage and manage production incidents. Trigger with "we have an incident", "production is down", "something is broken", "there's an outage", "SEV1", or when the user describes a production issue needing immediate response.
+description: Triage and manage production incidents from detection through resolution and postmortem. Use when the user says "we have an incident", "production is down", "something is broken", "there's an outage", or "SEV1", or describes a production issue needing immediate response.
+when_to_use: "When a production issue needs immediate response, severity classification, status communication, mitigation, or a blameless postmortem"
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Incident Response

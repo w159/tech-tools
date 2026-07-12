@@ -1,8 +1,8 @@
 ---
 name: atlas-handoff
 description: Produce a dense session handoff so a fresh session resumes with zero re-discovery. Use at a checkpoint before context fills, a break, or handing off work.
-when_to_use: the task involves handoff
-disable-model-invocation: true
+when_to_use: produce a dense session handoff at a checkpoint before context fills, a break, or when handing off work to a fresh session
+allowed-tools: Read, Glob, Grep, Bash, Write
 argument-hint: (no args; run at a checkpoint)
 ---
 
@@ -17,6 +17,10 @@ cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-metis/references/operating-contract.md"
 If the contract did not load above, read `skills/atlas-metis/references/operating-contract.md` and apply it before proceeding.
 
 Produce a session handoff for the current work.
+
+Use `templates/handoff.md` as the document seed and follow the field
+schema in `references/handoff-memory-schema.md` for the structured shape
+(both the prose file and the memory record use the same fields).
 
 Where to write it:
 - If Serena is available, use its prepare_for_new_conversation tool and write the output to project memory.

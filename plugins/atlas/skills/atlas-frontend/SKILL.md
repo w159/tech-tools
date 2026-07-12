@@ -1,8 +1,9 @@
 ---
 name: atlas-frontend
-description: Build or refactor UI on a single design system (shadcn/ui + Tailwind + Radix) with every state handled and verified live. Use for screens, flows, or components.
-when_to_use: screens, flows, or components
-disable-model-invocation: true
+description: Build or refactor screens, flows, or components on a single design system (shadcn/ui + Tailwind + Radix) with every state handled and verified live in the browser.
+when_to_use: building or refactoring screens, flows, or components on a single design system with every state handled
+allowed-tools: Read, Glob, Grep, Bash, Edit, MultiEdit
+paths: ["**/*.tsx", "**/*.css", "**/*.scss", "components/**"]
 argument-hint: '[project] [screens/flows] [design intent]'
 ---
 
@@ -15,6 +16,8 @@ cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-metis/references/operating-contract.md"
 ```
 
 If the contract did not load above, read `skills/atlas-metis/references/operating-contract.md` and apply it before proceeding.
+
+Read `${CLAUDE_SKILL_DIR}/references/frontend-states.md` and apply the loading/empty/error/success, accessibility, and responsive rules it defines to every screen you touch.
 
 # `atlas-frontend`
 

@@ -2,15 +2,7 @@
 name: "cipp-licenses"
 description: "Use this skill when working with M365 license assignments and CSP license inventory through CIPP - listing license usage per tenant, identifying unused licenses, surfacing license SKUs available for assignment, and reviewing CSP-level license commitments. Drives license-rightsizing reports for MSP billing reviews."
 when_to_use: "When auditing M365 license usage, finding unused/overprovisioned licenses, or reviewing CSP license inventory across the MSP portfolio"
-triggers:
-  - cipp license
-  - license usage
-  - license audit
-  - unused licenses
-  - csp licenses
-  - m365 sku
-  - license report
-  - rightsize licenses
+allowed-tools: Read, Glob, Grep, Bash, mcp__microsoft-docs__microsoft_docs_search, mcp__microsoft-docs__microsoft_docs_fetch, mcp__cipp__*
 ---
 
 # CIPP Licenses
@@ -90,3 +82,7 @@ For each tenant in `cipp_list_tenants`, call `cipp_list_licenses` and tally SKUs
 
 - License *write* operations (assign/remove SKU) aren't in the MCP surface - use `cipp_create_user` (assigns at create time), `cipp_offboard_user` with `removeLicenses=true`, or fall back to the M365 plugin / Graph for runtime changes.
 - `consumedUnits` can lag the live tenant by minutes; trust the tenant UI for time-sensitive decisions.
+
+## References
+
+See `references/microsoft-graph-api.md` for the underlying Microsoft Graph citations (license SKU and service plan resource types) this skill relies on.

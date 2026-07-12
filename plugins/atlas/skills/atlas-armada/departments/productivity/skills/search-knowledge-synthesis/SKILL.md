@@ -1,6 +1,12 @@
 ---
 name: search-knowledge-synthesis
 description: Synthesize multi-source search results into one coherent, deduplicated, source-attributed answer, with confidence scored by freshness and authority. Use when results from several connected sources need merging into a single answer, when the same fact appears across chat/email/docs and must be reconciled, or when a large result set needs summarizing without losing nuance.
+when_to_use: >
+  Merging results from several connected sources into one answer; reconciling the
+  same fact across chat, email, and docs; summarizing a large result set without
+  losing nuance; surfacing conflicts and confidence levels in synthesized search
+  output.
+allowed-tools: Read, Glob, Grep, Bash
 ---
 
 # Knowledge Synthesis
