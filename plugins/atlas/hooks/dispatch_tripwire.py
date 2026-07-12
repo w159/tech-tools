@@ -25,18 +25,15 @@ ORCH_MARKERS = ("docs/",)
 # 8 prior ops means this call is the 9th -> deny.
 DENY_THRESHOLD = 8
 # Skills whose invocation means the session IS an atlas orchestration run.
-# Deliberately excludes advisory/config skills (atlas-hephaestus, atlas-hermes,
-# atlas-doctor, atlas-validate) and narrow single-purpose skills
-# (atlas-prompt, atlas-readme, atlas-gitignore, atlas-handoff, atlas-m365,
-# atlas-db-audit, atlas-vendor-assessment, atlas-argus) so casual sessions
-# never trip the completion gate.
+# Deliberately excludes advisory/config skills (atlas-setup, atlas-validate)
+# and narrow single-purpose skills (atlas-prompt, atlas-readme,
+# atlas-gitignore, atlas-handoff, atlas-m365, atlas-db-audit,
+# atlas-vendor-assessment) so casual sessions never trip the completion gate.
 ORCH_SKILLS = {
-    "atlas-metis",
-    "atlas-athena",
-    "atlas-ariadne",
-    "atlas-odysseus",
-    "atlas-chronos",
-    "atlas-nestor",
+    "atlas-orchestrate",
+    "atlas-audit",
+    "atlas-ux-test",
+    "atlas-loop",
     "atlas-feature",
     "atlas-debug",
     "atlas-refactor",
@@ -44,8 +41,6 @@ ORCH_SKILLS = {
     "atlas-launch",
     "atlas-component",
     "atlas-frontend",
-    "atlas-armada",
-    "atlas-olympus",
 }
 
 

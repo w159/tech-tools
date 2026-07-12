@@ -4,6 +4,28 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
+## Atlas v5.0.0 -- skill consolidation: mythology retired, 21 plain names, armada split out, runtime-evidence gate (2026-07-12)
+
+Driven by forensics on a 4.7-hour production session export (38 subagent
+dispatches, exactly 1 skill auto-invocation, zero self-improvement actions):
+the mythological names never routed, the fleet was 3x its working set, and
+verifiers CONFIRMED changes the running app contradicted (backend gates ran
+against in-memory SQLite while the dev DB sat at migration rev 129).
+
+- Renames: atlas-metis -> atlas-orchestrate, atlas-chronos -> atlas-loop,
+  atlas-odysseus -> atlas-ux-test.
+- Merges: athena + ariadne + argus -> atlas-audit (code/architecture/self
+  modes); olympus + hephaestus + hermes + doctor -> atlas-setup
+  (onboard/install/connectors/repair modes). atlas-nestor deleted.
+- armada moved to its own plugin (`plugins/armada`, v1.0.0) with the 11
+  department agents; new marketplace entry; atlas keeps 12 core agents.
+- Verifier doctrine: `verified` now requires runtime parity (live UI pass or
+  migration-parity check), not just green suites; atlas-orchestrate's
+  definition-of-done gained the same fourth condition, and Law 2 now forces
+  worktree isolation or serialization for concurrent writers.
+- Manifests, README, and setup references rewritten for the honest 21-skill
+  inventory (`plugins/atlas/.claude-plugin/plugin.json:3` version 5.0.0).
+
 ## Atlas v4.0.0 -- skills mastery rebuild: 184-skill fleet rebuilt and verified (2026-07-11)
 
 Full atlas skills mastery rebuild. The 184-skill fleet (28 top-level plus

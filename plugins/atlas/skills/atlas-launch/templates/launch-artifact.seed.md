@@ -11,7 +11,7 @@ fill the brackets. One finding per file.
 - **Manifest entry:** <id>, severity <HIGH|MEDIUM|LOW>, file <path:line>
 - **Launched at:** <ISO 8601 timestamp>
 - **Session:** <CLAUDE_CODE_SESSION_ID>
-- **Lead squad agent:** <atlas:implementer | atlas:hephaestus | ...>
+- **Lead squad agent:** <atlas:implementer | atlas:db-prober | ...>
 
 ## Handoff prompt (verbatim)
 

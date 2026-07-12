@@ -1,6 +1,6 @@
 ---
 name: atlas-launch
-description: Launch a remediation session preloaded with a finding from the latest audit hub; use after atlas-athena or atlas-ariadne. No args lists findings.
+description: Launch a remediation session preloaded with a finding from the latest audit hub; use after atlas-audit or atlas-audit. No args lists findings.
 when_to_use: launch a remediation session preloaded with a finding from the latest audit hub, or list actionable findings with no args
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '[finding-id]  (no args: list actionable findings from the latest hub)'
@@ -11,13 +11,13 @@ argument-hint: '[finding-id]  (no args: list actionable findings from the latest
 Apply the Operating Contract to this entire task. It is injected below.
 
 ```!
-cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-metis/references/operating-contract.md"
+cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/operating-contract.md"
 ```
 
-If the contract did not load above, read `skills/atlas-metis/references/operating-contract.md` and apply it before proceeding.
+If the contract did not load above, read `skills/atlas-orchestrate/references/operating-contract.md` and apply it before proceeding.
 
-You are the launcher that closes the audit -> remediation loop. A prior `atlas-athena` or
-`atlas-ariadne` run wrote a hub under `docs/audits/atlas-<skill>-<date>/hub/`
+You are the launcher that closes the audit -> remediation loop. A prior `atlas-audit` or
+`atlas-audit` run wrote a hub under `docs/audits/atlas-<skill>-<date>/hub/`
 (`manifest.json` + branded `index.html`, built by `scripts/build_hub.py`). Each manifest entry is
 an actionable finding with its `id`, `severity`, `file`, `node_id`, `handoff_path`, and
 `prompt_summary`.
@@ -33,7 +33,7 @@ launch time is seeded from `templates/launch-artifact.seed.md`.
 ## Step 1 - Find the most recent hub
 
 Locate the newest `docs/audits/atlas-*-*/hub/manifest.json` (most recent run dir by name/date). If
-none exists, stop and say so: "No audit hub found. Run `atlas-athena` or `atlas-ariadne` first."
+none exists, stop and say so: "No audit hub found. Run `atlas-audit` or `atlas-audit` first."
 
 ## Step 2a - No finding id given: list the actionable findings
 
@@ -57,12 +57,12 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_db.py" mark-orchestrating "${CLAUDE
 ```
 
    (Fail-open: if the command is unavailable, continue - the hooks just stay advisory-off.)
-4. Invoke the **`atlas-metis`** skill with the handoff prompt as its opening task. The handoff IS
-   the task: run atlas-metis's methodology (Orient -> plan -> dispatch -> verify) against it, with
+4. Invoke the **`atlas-orchestrate`** skill with the handoff prompt as its opening task. The handoff IS
+   the task: run atlas-orchestrate's methodology (Orient -> plan -> dispatch -> verify) against it, with
    the handoff's acceptance criterion as the definition of done. Do not re-derive the finding;
    start from the handoff and route to the squad agent it names.
 
-This command never invokes a non-existent `/atlas-metis` command - `atlas-metis` is the
+This command never invokes a non-existent `/atlas-orchestrate` command - `atlas-orchestrate` is the
 orchestration skill, and this launcher is the single entry point that loads a handoff into it.
 (Distinct from `/atlas-handoff`, which writes a session-RESUME checkpoint, not a remediation
 launch.)

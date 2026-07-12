@@ -48,7 +48,7 @@ graphify from the repo root and moves `graphify-out/` into
 `.atlas/docs/wiki/diagrams/` afterward. This matches the wiring
 contract's fallback ("then move graphify-out/ into
 .atlas/docs/wiki/diagrams/") in
-`plugins/atlas/skills/atlas-olympus/references/graphify-wiring.md`.
+`plugins/atlas/skills/atlas-setup/references/graphify-wiring.md`.
 
 ## Flags used and why
 
@@ -70,7 +70,7 @@ graphify/SKILL.md line 14:
     /graphify <path>                                      # full pipeline on specific path
 
 The path is `.atlas/docs/architecture/` (the folder
-atlas-ariadne populates). graphify Step 2 (line 86-93) runs its
+atlas-audit populates). graphify Step 2 (line 86-93) runs its
 `detect()` on this path and reports the corpus summary.
 
 ## Flags NOT used and why
@@ -83,7 +83,7 @@ graphify/SKILL.md line 18:
 
 Not used. The wiki's primary artifact is the interactive HTML graph;
 `--no-viz` would skip it (Step 6, line 518-541). The HTML is the
-navigable surface atlas-ariadne's hub links into.
+navigable surface atlas-audit's hub links into.
 
 ### `--mode deep`
 
@@ -125,21 +125,21 @@ graphify/SKILL.md lines 22-26. None of these serve the wiki contract.
 They export to Gephi, Neo4j, an MCP server, or a file watcher. The wiki
 wants HTML, JSON, and SVG only.
 
-## How ariadne's graph.json fits in
+## How atlas-audit graph.json fits in
 
-atlas-ariadne Phase 4 consumes `graphify-out/graph.json` files via
-`scripts/build_hub.py` (atlas-ariadne/SKILL.md, Phase 4):
+atlas-audit Phase 4 consumes `graphify-out/graph.json` files via
+`scripts/build_hub.py` (atlas-audit/SKILL.md, Phase 4):
 
     python3 "${CLAUDE_PLUGIN_ROOT}/scripts/build_hub.py" \
-      ".atlas/docs/audits/atlas-ariadne-<date>" \
+      ".atlas/docs/audits/atlas-audit-<date>" \
       <each per-root graphify-out/graph.json>
 
 This skill produces the long-lived `graph.json` at
 `.atlas/docs/wiki/diagrams/graph.json` - the same JSON shape graphify's
-`to_json` emits (graphify/SKILL.md line 421). ariadne's own per-root
-`graphify-out/graph.json` files are produced during ariadne's discovery
+`to_json` emits (graphify/SKILL.md line 421). atlas-audit own per-root
+`graphify-out/graph.json` files are produced during atlas-audit discovery
 pass and are ephemeral; this skill's wiki `graph.json` is the stable
-copy that survives across ariadne runs. ariadne can point
+copy that survives across atlas-audit runs. atlas-audit can point
 `build_hub.py` at the wiki `graph.json` when it wants the stable graph
 rather than its own ephemeral per-root copies.
 

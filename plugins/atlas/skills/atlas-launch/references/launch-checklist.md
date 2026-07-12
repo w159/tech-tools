@@ -9,7 +9,7 @@ has one failable check.
 - Find the newest `docs/audits/atlas-*-*/hub/manifest.json` by run-dir
   name (date-sortable).
 - **Check:** a manifest exists. If not, stop with "No audit hub found.
-  Run atlas-athena or atlas-ariadne first."
+  Run atlas-audit or atlas-audit first."
 
 ## Step 2 - Parse the manifest
 
@@ -52,9 +52,9 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_db.py" mark-orchestrating \
   `<run_dir>/launch/<finding-id>.md` and fill it. This is the resumption
   record for a fresh session.
 
-## Step 7 - Invoke atlas-metis with the handoff
+## Step 7 - Invoke atlas-orchestrate with the handoff
 
-- The handoff IS the task. Run atlas-metis's methodology
+- The handoff IS the task. Run atlas-orchestrate's methodology
   (Orient -> plan -> dispatch -> verify) against it, with the handoff's
   acceptance criterion as the definition of done.
 - Do not re-derive the finding; start from the handoff and route to the
@@ -62,7 +62,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_db.py" mark-orchestrating \
 
 ## Anti-patterns
 
-- Do not invoke a non-existent `/atlas-metis` command. `atlas-metis` is
+- Do not invoke a non-existent `/atlas-orchestrate` command. `atlas-orchestrate` is
   the orchestration skill; this launcher loads a handoff into it.
 - Do not confuse this with `/atlas-handoff`, which writes a
   session-resume checkpoint, not a remediation launch.

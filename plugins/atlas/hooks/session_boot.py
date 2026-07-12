@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Atlas SessionStart boot. Fast, idempotent, crash-proof.
 
-Emits additionalContext pointing at the operating contract and atlas-metis
+Emits additionalContext pointing at the operating contract and atlas-orchestrate
 methodology, reports whether claude-mem and context-mode are present, and
 surfaces a one-line ready status. Never blocks session start: any error exits 0
 silently.
@@ -279,12 +279,12 @@ def main():
             pony = False
 
     lines = [
-        "Atlas runtime active. The atlas-metis methodology and operating contract apply:",
+        "Atlas runtime active. The atlas-orchestrate methodology and operating contract apply:",
         "research -> theory -> test -> validate -> implement -> test -> verify; evidence before any done claim.",
         "This session is the atlas orchestrator. Substantive implementation is routed to atlas:<role> subagents "
         "(atlas:explorer, atlas:implementer, atlas:verifier, etc.); the orchestrator plans, delegates, "
         "and synthesizes -- it does not directly write production code or run broad tool sweeps.",
-        "Invoke the atlas-metis skill for multi-step or whole-codebase work; route subagents via atlas:<role>.",
+        "Invoke the atlas-orchestrate skill for multi-step or whole-codebase work; route subagents via atlas:<role>.",
         "Memory (claude-mem): "
         + (
             "available"

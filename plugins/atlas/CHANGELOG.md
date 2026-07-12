@@ -1,5 +1,45 @@
 # Changelog
 
+## 5.0.0 (2026-07-12)
+
+Skill consolidation driven by session forensics: a mined 4.7-hour production
+session (38 dispatches, 1 skill auto-invocation) showed the mythological names
+never routed, the fleet was 3x its working set, and verifiers confirmed changes
+the running app contradicted. Breaking release.
+
+- **Mythological names retired; fleet collapsed 27 -> 21 skills.**
+  atlas-metis -> atlas-orchestrate; atlas-chronos -> atlas-loop;
+  atlas-odysseus -> atlas-ux-test. atlas-athena, atlas-ariadne, and
+  atlas-argus merged into atlas-audit (code / architecture / self modes,
+  the demoted bodies live on as references/architecture-map.md and
+  references/self-telemetry.md). atlas-olympus, atlas-hephaestus,
+  atlas-hermes, and atlas-doctor merged into atlas-setup (onboard /
+  install / connectors / repair modes; scripts/atlas_doctor.py is
+  unchanged and still wired at SessionStart). atlas-nestor (skill-stacking
+  concierge) deleted: a concierge over a smaller fleet is routing overhead.
+- **armada split into its own plugin** (`plugins/armada`): the 3.0 MB
+  org-deployment tree and the 11 armada-* department agents moved out of
+  atlas; atlas alone now carries 12 core agents. New marketplace entry.
+- **Runtime-evidence gate.** agents/verifier.md and the atlas-orchestrate
+  definition-of-done now require runtime parity for a `verified` verdict:
+  user-facing changes need an atlas:ui-runtime-tester pass or observed
+  live behavior in the same wave; schema-touching backend changes need
+  migration parity with the environment the user runs (suites that
+  `create_all` their own schema do not count). Motivated by the mined
+  session where every backend gate ran against in-memory SQLite while dev
+  sat at migration rev 129.
+- **Writers never share a tree.** Law 2 hardened: any wave with more than
+  one writing agent uses `isolation: "worktree"` per writer or serializes;
+  "they touch different files" is explicitly not an exemption.
+- **Manifests made honest.** plugin.json, .kimi-plugin/plugin.json,
+  marketplace.json, README.md, and the setup references
+  (skill-routing.md, manual-vs-auto-map.md, recommendation-engine.md)
+  rewritten for the 21-skill fleet; the stale 18-file commands/ tree
+  claim removed from README (the directory does not exist).
+- dispatch_tripwire.py ORCH_SKILLS and atlas_context_optimizer.py
+  CORE/NICHE lists deduplicated for the merged names; optimizer tests
+  updated (atlas-wiki replaces atlas-nestor as the niche fixture).
+
 ## 4.0.0 (2026-07-11)
 
 Skills mastery rebuild: rebuild the full 184-skill fleet (28 top-level

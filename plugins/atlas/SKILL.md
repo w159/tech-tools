@@ -37,7 +37,7 @@ hooks, config), run only that one. Default is all.
   strictly read-only.
 - Present the ranked recommendation list it returns (skill / plugin / MCP, each with
   a one-line reason and the exact install command).
-- Cross-check against `${CLAUDE_PLUGIN_ROOT}/skills/atlas-metis/references/capability-catalog.md`
+- Cross-check against `${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/capability-catalog.md`
   for any signal the script does not yet cover.
 - Ask which items to install. Install only the confirmed ones. Never auto-install.
 
@@ -66,7 +66,7 @@ hooks, config), run only that one. Default is all.
 
 - Print a compact status: dependency state, capabilities installed vs declined,
   hooks active, config path, docs/ state. End with the next recommended command
-  (usually the atlas-metis skill or a specific `/atlas-*` launcher), and remind the
+  (usually the atlas-orchestrate skill or a specific `/atlas-*` launcher), and remind the
   user they can run `/atlas menu` anytime to see the full atlas surface grouped by intent.
 
 ## Menu mode
@@ -82,9 +82,9 @@ Orient & configure
   /atlas menu            this guide  ( /atlas menu <need>  recommends the best-fit tool )
 
 Understand a codebase
-  atlas-ariadne     map features into flowcharts + find duplication, propose unification
-  atlas-athena           comprehensive quality/security/OWASP audit; writes findings + a hub
-  atlas-metis (skill)   orchestrate ANY multi-step / whole-repo / cross-layer task via subagents
+  atlas-audit     map features into flowcharts + find duplication, propose unification
+  atlas-audit           comprehensive quality/security/OWASP audit; writes findings + a hub
+  atlas-orchestrate (skill)   orchestrate ANY multi-step / whole-repo / cross-layer task via subagents
 
 Build something new
   `atlas-feature`         full-stack feature (UI + API + data) with read-back evidence
@@ -114,10 +114,10 @@ Data, cloud & vendors
   `atlas-vendor-assessment`   assess a vendor against a control framework you name
 
 Recurring work, connectors & self-improvement
-  atlas-chronos            select/run a recurring loop from the loop-library
-  atlas-hermes           guide vendor connector setup across domain plugins (MSP/vendor signals)
-  atlas-odysseus       app-discovering UX runtime test swarm
-  atlas-argus          measure atlas's own run health + audit context/asset waste
+  atlas-loop            select/run a recurring loop from the loop-library
+  atlas-setup           guide vendor connector setup across domain plugins (MSP/vendor signals)
+  atlas-ux-test       app-discovering UX runtime test swarm
+  atlas-audit          measure atlas's own run health + audit context/asset waste
 ```
 
 Keep this list in sync with `skills/atlas-*.md` and the eight skills; if you notice a launcher

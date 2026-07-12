@@ -14,11 +14,9 @@ This script:
   5. Reports the estimated token savings
 
 The core working set (always enabled):
-  - atlas-metis (the engine — always needed)
-  - atlas-hephaestus (setup)
-  - atlas-doctor (recovery)
-  - atlas-olympus (onboarding)
-  - atlas-argus (self-improvement analysis)
+  - atlas-orchestrate (the engine — always needed)
+  - atlas-setup (onboarding, install, connectors, repair)
+  - atlas-audit (code/architecture audit + atlas self-telemetry)
   - Core agents: explorer, implementer, verifier, docs-curator, completeness-critic
 
 Skills/agents that were invoked in recent sessions are kept enabled.
@@ -40,11 +38,9 @@ from typing import Any, Dict, List, Set, Tuple
 
 # The always-on core set — these are never disabled
 CORE_SKILLS = {
-    "atlas-metis",
-    "atlas-hephaestus",
-    "atlas-doctor",
-    "atlas-olympus",
-    "atlas-argus",
+    "atlas-orchestrate",
+    "atlas-setup",
+    "atlas-audit",
 }
 
 CORE_AGENTS = {
@@ -60,9 +56,7 @@ CORE_AGENTS = {
 # Skills that are too niche to auto-enable but should remain available
 # (user-invocable but not auto-triggered)
 NICHE_SKILLS = {
-    "atlas-armada",       # org deployment — 3MB, only for org use
-    "atlas-nestor",       # skill-stacking concierge — overlaps with olympus
-    "atlas-wiki",         # graphify wiring — only when wiki is needed
+    "atlas-wiki",  # graphify wiring — only when wiki is needed
     "atlas-vendor-assessment",
     "atlas-m365",
     "atlas-gitignore",
@@ -153,12 +147,16 @@ def _all_agents() -> List[Dict[str, Any]]:
         if not item.is_file() or not item.name.endswith(".md"):
             continue
         name = item.stem
-        disabled = name.startswith(".disabled-") or (ad / ".disabled" / item.name).is_file()
-        agents.append({
-            "name": name,
-            "path": str(item),
-            "disabled": disabled,
-        })
+        disabled = (
+            name.startswith(".disabled-") or (ad / ".disabled" / item.name).is_file()
+        )
+        agents.append(
+            {
+                "name": name,
+                "path": str(item),
+                "disabled": disabled,
+            }
+        )
     return agents
 
 
@@ -233,7 +231,9 @@ def _estimate_tokens(skills: List[Dict], agents: List[Dict]) -> Dict[str, int]:
 
     # Each skill contributes name + description in the routing context
     # Average skill description is ~150 chars = ~40 tokens
-    skill_tokens = sum(len(s.get("description", "")) + len(s["name"]) for s in enabled_skills) // 4
+    skill_tokens = (
+        sum(len(s.get("description", "")) + len(s["name"]) for s in enabled_skills) // 4
+    )
     # Each agent contributes name + tools line = ~30 tokens
     agent_tokens = len(enabled_agents) * 30
 
@@ -283,9 +283,7 @@ def enable_skill(skill_md: Path) -> bool:
     try:
         content = skill_md.read_text(encoding="utf-8")
         # Remove the line
-        new_content = re.sub(
-            r'\ndisable-model-invocation:\s*true\b', '', content
-        )
+        new_content = re.sub(r"\ndisable-model-invocation:\s*true\b", "", content)
         if new_content != content:
             skill_md.write_text(new_content, encoding="utf-8")
             return True
@@ -324,7 +322,9 @@ def enable_agent(agent_name: str) -> bool:
         return False
 
 
-def optimize(db_path: str = "", dry_run: bool = False, aggressive: bool = False) -> Dict[str, Any]:
+def optimize(
+    db_path: str = "", dry_run: bool = False, aggressive: bool = False
+) -> Dict[str, Any]:
     """Main optimization: analyze usage, disable unused assets.
 
     Args:
@@ -427,7 +427,8 @@ def optimize(db_path: str = "", dry_run: bool = False, aggressive: bool = False)
         "agents_used_in_db": list(agents_used),
         "changes_applied": changes if not dry_run else None,
         "dry_run": dry_run,
-        "token_savings": before["estimated_total_tokens"] - after["estimated_total_tokens"],
+        "token_savings": before["estimated_total_tokens"]
+        - after["estimated_total_tokens"],
     }
 
 
@@ -450,8 +451,10 @@ def status() -> Dict[str, Any]:
 
 # --- CLI ---
 
+
 def _cli():
     import sys
+
     if len(sys.argv) < 2:
         print("Usage: atlas_context_optimizer.py [status|optimize|enable|disable]")
         print("  status    — show current state")

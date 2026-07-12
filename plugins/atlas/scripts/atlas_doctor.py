@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""atlas-doctor: detect and repair the plugin-rollback failure mode.
+"""atlas-setup: detect and repair the plugin-rollback failure mode.
 
 Root cause this guards against (2026-07-01 incident): the tech-tools
 marketplace entry in known_marketplaces.json pointed at a stale fork with
@@ -93,7 +93,6 @@ def marketplace_plugin_version(clone_dir, plugin_name):
 # ghost slash-commands/agents when a stale copy survives an upgrade.
 DEPRECATED_SKILLS = {
     "atlas-connectors",
-    "atlas-loop",
     "atlas-operating-contract",
     "atlas-self-improving",
     "atlas-uxt-swarm",
@@ -246,7 +245,11 @@ def run_checks(plugin_name="atlas"):
         add("marketplace-source", True, f"directory: {src.get('path', '?')}")
     else:
         ok = norm_repo(src_url) == expected_repo
-        add("marketplace-source", ok, f"{src_url or 'MISSING'} (expected {expected_repo})")
+        add(
+            "marketplace-source",
+            ok,
+            f"{src_url or 'MISSING'} (expected {expected_repo})",
+        )
 
     # C2: the marketplace git clone's origin must match too
     clone = mkt.get("installLocation", "")
@@ -320,9 +323,15 @@ def run_checks(plugin_name="atlas"):
     else:
         add("hooks-wired", False, "hooks/hooks.json absent from installed copy")
 
-    # C7: the engine's moving parts are actually there
+    # C7: the engine's moving parts are actually there. The plugin ships no
+    # commands/ since 5.0.0 (skills replaced the launchers), so only agents
+    # and skills are required.
     counts = count_assets(ip)
-    add("assets", all(counts.values()), json.dumps(counts))
+    add(
+        "assets",
+        counts["agents"] > 0 and counts["skills"] > 0,
+        json.dumps(counts),
+    )
 
     # C8: no deprecated/renamed asset may shadow the live set anywhere
     stale = find_stale_assets(ip, clone, plugin_name)
@@ -359,8 +368,13 @@ def apply_fixes(ctx, plugin_name="atlas"):
     markets_path = os.path.join(PLUGINS_DIR, "known_marketplaces.json")
     markets = _load_json(markets_path)
     # Also handle the "repo" format used by Claude Code's known_marketplaces.json
-    if norm_repo(markets[mkt_name]["source"].get("url", "") or
-                  markets[mkt_name]["source"].get("repo", "")) != expected:
+    if (
+        norm_repo(
+            markets[mkt_name]["source"].get("url", "")
+            or markets[mkt_name]["source"].get("repo", "")
+        )
+        != expected
+    ):
         markets[mkt_name]["source"]["url"] = url
         _save_json(markets_path, markets)
         actions.append(f"repointed marketplace source to {url}")
@@ -401,7 +415,7 @@ def apply_fixes(ctx, plugin_name="atlas"):
 
     stale = ctx.get("stale_assets") or []
     if stale:
-        trash = os.path.join(PLUGINS_DIR, f".trash-atlas-doctor-{int(time.time())}")
+        trash = os.path.join(PLUGINS_DIR, f".trash-atlas-setup-{int(time.time())}")
         os.makedirs(trash, exist_ok=True)
         for p in stale:
             dest = os.path.join(trash, os.path.basename(p.rstrip("/")))

@@ -30,7 +30,7 @@ Every session is one of two kinds:
   may open dozens of worker sessions.
 
 The observability DB (`~/.atlas/atlas.db`) records every session's transcript in the `session_logs`,
-`messages`, and `tool_calls` mirror tables (added in v2.2.1). Run-health aggregates in atlas-argus
+`messages`, and `tool_calls` mirror tables (added in v2.2.1). Run-health aggregates in atlas-audit
 Trends currently include all sessions; v2.2.3 will add a `run_kind` tag so orchestrator and worker
 sessions can be reported separately, preventing short worker sessions from skewing wall-clock or
 context averages.
@@ -88,8 +88,8 @@ Source: `plugins/atlas/agents/db-prober.md`, `schema-inventory.md`,
 
 One agent remains in this roster. The dedicated UX test swarm agents (`ux-cartographer`,
 `ux-persona`, `ux-fuzzer`, `ux-accuracy-oracle`, `ux-reporter`) were removed on 2026-07-07.
-UX/UI test-swarm runs now live solely in the `atlas-odysseus` skill (invoke with
-`/atlas-odysseus`); see `plugins/atlas/skills/atlas-metis/references/ux-test-swarm.md` for
+UX/UI test-swarm runs now live solely in the `atlas-ux-test` skill (invoke with
+`/atlas-ux-test`); see `plugins/atlas/skills/atlas-orchestrate/references/ux-test-swarm.md` for
 the pointer. The `ui-runtime-tester` agent below was not part of the removed swarm and is
 retained as a general-purpose browser validation agent used outside the swarm.
 

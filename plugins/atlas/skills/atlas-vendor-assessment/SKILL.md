@@ -11,10 +11,10 @@ argument-hint: '[vendor + services/data access] [framework(s)] [attach evidence:
 Apply the Operating Contract to this entire task. It is injected below.
 
 ```!
-cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-metis/references/operating-contract.md"
+cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/operating-contract.md"
 ```
 
-If the contract did not load above, read `skills/atlas-metis/references/operating-contract.md` and apply it before proceeding.
+If the contract did not load above, read `skills/atlas-orchestrate/references/operating-contract.md` and apply it before proceeding.
 
 # `atlas-vendor-assessment`
 

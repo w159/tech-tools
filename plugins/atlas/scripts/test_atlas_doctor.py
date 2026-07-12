@@ -144,7 +144,7 @@ class AtlasDoctorTest(unittest.TestCase):
 
     def test_fix_quarantines_stale_assets(self):
         ip = self.install_101
-        ghost = os.path.join(ip, "skills", "atlas-loop")
+        ghost = os.path.join(ip, "skills", "atlas-uxt-swarm")
         os.makedirs(ghost, exist_ok=True)
         results, ctx = atlas_doctor.run_checks("atlas")
         self.assertFalse(self.by_check(results)["stale-assets"]["ok"])
@@ -153,11 +153,11 @@ class AtlasDoctorTest(unittest.TestCase):
         self.assertFalse(os.path.exists(ghost))
         # quarantine is a move, not a delete: the ghost lives in the trash dir
         trash = [
-            d for d in os.listdir(self.plugins) if d.startswith(".trash-atlas-doctor-")
+            d for d in os.listdir(self.plugins) if d.startswith(".trash-atlas-setup-")
         ]
         self.assertTrue(trash)
         self.assertTrue(
-            os.path.isdir(os.path.join(self.plugins, trash[0], "atlas-loop"))
+            os.path.isdir(os.path.join(self.plugins, trash[0], "atlas-uxt-swarm"))
         )
 
     def test_orchestration_wiring_flags_missing_skill_matcher(self):
@@ -207,7 +207,7 @@ class AtlasDoctorTest(unittest.TestCase):
             },
         )
         with open(os.path.join(ip, "hooks", "dispatch_tripwire.py"), "w") as f:
-            f.write("ORCH_SKILLS = {'atlas-metis'}\nmark_orchestrating = None\n")
+            f.write("ORCH_SKILLS = {'atlas-orchestrate'}\nmark_orchestrating = None\n")
         self.assertEqual(atlas_doctor.check_orchestration_wiring(ip), [])
 
     def test_norm_repo_treats_url_variants_as_equal(self):

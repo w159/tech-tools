@@ -1,8 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "atlas",
-  "description": "The atlas plugin: a self-configuring multi-agent coding architect with Greek mythology named skills, an organizational deployment layer (atlas-armada), and the atlas-olympus entry point that scaffolds the .atlas/ workspace and recommends what to run next. Includes 11 skills, 23 agents (12 core + 11 department), 28 skills, 15 hooks, vendor MCP connectors for IT ops, security, M365, HR, and finance, and the atlas-metis orchestration methodology (evidence before any done claim).",
-  "version": "2.0.0",
+  "description": "The atlas marketplace: a multi-agent coding architect (atlas) with 21 plainly named skills, 12 core agents, self-improvement hooks, and the atlas-orchestrate methodology (evidence before any done claim), plus an optional organizational deployment plugin (armada) with 11 department agents and 156 department skills.",
+  "version": "3.0.0",
   "owner": {
     "name": "w159",
     "url": "https://github.com/w159"
@@ -11,7 +11,7 @@
     {
       "name": "atlas",
       "source": "./plugins/atlas",
-      "description": "Self-configuring multi-agent coding architect with 11 Greek mythology named skills (atlas-metis, atlas-hephaestus, atlas-ariadne, atlas-athena, atlas-argus, atlas-chronos, atlas-hermes, atlas-odysseus, atlas-nestor, atlas-armada, atlas-olympus), 23 agents (12 core + 11 department), 28 skills, 15 hooks, and the atlas-metis method (evidence before any done claim). The atlas-armada skill provides org branding enforcement, policy compliance, and per-department connector provisioning across 11 departments. The atlas-olympus skill scaffolds the .atlas/ workspace, migrates the SSOT to .atlas/docs/, and recommends what to run next.",
+      "description": "Multi-agent coding architect: 21 plainly named skills (atlas-orchestrate engine, atlas-audit code/architecture/self audits, atlas-setup onboarding/install/connectors/repair, atlas-loop recurring work, atlas-ux-test UX swarm, and 16 task skills), 12 core agents, 10 hooks including self-improvement (memory capture, auto-skill, nudge, session ingest), and the atlas-orchestrate method: independent verification with runtime evidence before any done claim.",
       "category": "developer-tools",
       "keywords": [
         "atlas",
@@ -29,20 +29,27 @@
         "docs-as-code",
         "multi-stage-planning",
         "ux-testing",
-        "slash-commands",
         "operating-contract",
         "verify-loop",
         "observability-db",
         "architecture-audit",
         "owasp",
         "security-audit",
-        "ux-swarm",
-        "atlas-armada",
-        "atlas-olympus",
+        "ux-swarm"
+      ]
+    },
+    {
+      "name": "armada",
+      "source": "./plugins/armada",
+      "description": "Organizational deployment layer split out of atlas: 11 department agents (data, design, engineering, finance, HR, IT ops, M365, product, productivity, security, support) and 156 department skills carrying org branding, policies, and compliance context. Install alongside atlas only for org use.",
+      "category": "developer-tools",
+      "keywords": [
+        "armada",
         "organization",
+        "departments",
         "branding",
         "compliance",
-        "departments"
+        "atlas"
       ]
     }
   ]

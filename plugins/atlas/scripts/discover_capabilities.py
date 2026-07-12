@@ -76,18 +76,18 @@ RULES = [
         "match": lambda c: True,
     },
     {
-        "id": "loop-library (atlas-chronos)",
+        "id": "loop-library (atlas-loop)",
         "type": "note",
-        "reason": "Built-in curated loops; use the atlas-chronos skill.",
+        "reason": "Built-in curated loops; use the atlas-loop skill.",
         "cmd": "(already shipped with atlas)",
         "match": lambda c: True,
     },
     {
-        "id": "connectors (atlas-hermes)",
+        "id": "connectors (atlas-setup)",
         "type": "note",
         "reason": "Vendor MCP connectors live in the domain plugins (it-operations, "
         "security-compliance, microsoft-365, hr-payroll), disabled by default; use "
-        "atlas-hermes as the cross-plugin setup guide.",
+        "atlas-setup as the cross-plugin setup guide.",
         "cmd": "(already shipped with atlas)",
         "match": lambda c: c["has_mcp_servers"],
     },

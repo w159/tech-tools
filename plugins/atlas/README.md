@@ -1,185 +1,132 @@
 # atlas
 
 A self-configuring Claude Code plugin that turns any coding agent into a disciplined
-multi-agent architect. One token, `atlas`, runs the whole thing: type `/atlas` to
-boot and configure a project, then drive work through the `/atlas-*` launchers and
-the `atlas:<role>` subagent squad. A SessionStart hook loads the runtime
-automatically every session, and a self-improvement nudge makes the agent better in
-a codebase the more it is used.
+multi-agent architect. Run `atlas-setup` once to onboard a project, then drive work
+through the auto-triggering skills and the `atlas:<role>` subagent squad. A
+SessionStart hook loads the runtime automatically every session, and the
+self-improvement hooks (memory capture, auto-skill, nudge, session ingest) make the
+agent better in a codebase the more it is used.
 
-## What ships
+Org deployment (11 departments, 156 department skills) lives in the separate
+`armada` plugin in this repo; install it alongside atlas only for org use.
 
-| Piece | What it is |
-| --- | --- |
-| `/atlas` architect | Boots and configures the workspace: verifies/installs claude-mem and context-mode (recommend then confirm), scans the stack and recommends skills/plugins/MCP to install, confirms hooks are wired, writes project config, and seeds the docs/ single source of truth. |
-| SessionStart boot | A fast, crash-proof hook that activates the runtime every session: injects the operating contract and atlas-metis methodology, reports dependency state, and surfaces relevant past lessons. Never blocks a session. |
-| atlas-metis skill | The orchestrator playbook: decompose a task, route every code edit to a subagent, demand execution evidence, verify with a second agent, keep docs/ as the single source of truth, and protect the context window. Triggers on whole-codebase build/fix/audit/refactor/investigate work. |
-| atlas-hephaestus skill | The methodology behind `/atlas` and the boot hook: dependencies, capability discovery, hooks, config, docs seed. |
-| atlas-ariadne skill | Produce an evidence-grounded architecture map of any codebase, identify structural duplicates, and write a `docs/architecture/boundaries.md` that a fresh agent can load instead of re-discovering the layout. |
-| atlas-argus skill | Measure run health from the SQLite observability DB and propose metric-backed improvements (baseline -> target). Three lenses: run metrics (wall-clock, inline-ops, dispatches, parallel waves, context, recall, verifier coverage), asset/context-cost audit, and session forensics over the indexed transcripts (used-vs-idle tools/skills/MCP/agents, context-tool health, repeated requests, behavioral issues). The Stop/SubagentStop nudge hook points here. |
-| atlas-chronos skill | Pick and instantiate the best-fit reusable loop for any recurring or iterative task (loop-until-dry, fan-out-adversarial-verify, red-green-tdd, doc-reconcile, incident-triage, and more). |
-| atlas-hermes skill | Guided cross-plugin setup for the 10 vendor MCP connectors (NinjaOne, Auvik, CIPP, ConnectWise, Spanning, KnowBe4, Vanta, ThreatLocker, Paylocity, Blumira), which live in their owning domain plugins (it-operations, security-compliance, microsoft-365, hr-payroll) - atlas ships none of them itself. Detects installed domain plugins, shows enabled/disabled state, and directs credential setup to the owning plugin's `/plugin config`. |
-| atlas-odysseus skill | App-discovering UX swarm: auto-finds routes and form fields in any running web app, then runs the full cartographer -> persona -> fuzzer -> oracle -> reporter pipeline with no hardcoded paths. |
-| atlas-athena skill | Comprehensive quality, security, and OWASP audit swarm: discovery-first scan of the full codebase, severity-graded findings, coverage report, and an actionable remediation plan. |
-| atlas-olympus skill | The manual onboarding layer (one of only two manual skills, `disable-model-invocation: true`). Carries the mastery-framework reference, the manual-vs-auto map, the graphify-wiring guide, the scaffold_docs.py script, and the recommendation engine. |
-| atlas-armada skill | The department-fleet dispatcher. Routes a task to one of 11 department agents (atlas:armada-*), each carrying org branding, policies, and compliance context. |
-| atlas-wiki skill | Auto-trigger producer skill that invokes the repo-root graphify skill to render .atlas/docs/wiki/ diagrams from .atlas/docs/architecture/. Ships scripts/check_wiki_freshness.sh (emits FRESH, MISSING, or STALE). |
-| Skill fleet | 184 skills total: 28 top-level plus 156 armada across 11 departments. 2 manual (atlas-olympus, atlas-doctor, `disable-model-invocation: true`); the other 26 top-level are auto-trigger; all 156 armada are auto-trigger behind atlas-armada. |
-| Command library | Seventeen verification-gated `/atlas-*` launchers, each injecting the operating contract and driving a specific task through the squad. Includes `/atlas-launch`, which opens a remediation session from an audit hub, and `/atlas-doctor`, which diagnoses and repairs the plugin installation itself. |
-| Subagent squad | Twenty-three `atlas:<role>` subagents, including a five-agent browser-driven UI/UX test swarm. |
-| Capability discovery | A read-only scanner plus a maintained catalog that recommend the skills/plugins/MCP a project needs, with exact install commands. |
+## The skill fleet (21 skills, plainly named)
+
+One manual skill, twenty auto-trigger skills. Auto-trigger comes from each
+skill's `description` + `when_to_use`; the manual skill has
+`disable-model-invocation: true`.
+
+| Skill | Mode | What it does |
+| --- | --- | --- |
+| atlas-setup | MANUAL | The lifecycle skill: onboard (scaffold `.atlas/docs/`, inventory, recommend what to run next), install (claude-mem, context-mode, hooks, config), connectors (vendor MCP setup), repair (`--fix` runs `scripts/atlas_doctor.py`) |
+| atlas-orchestrate | auto | The engine: decompose a task, route every code edit to a subagent, demand execution evidence, verify with an independent agent (runtime evidence included), keep `.atlas/docs/` the single source of truth |
+| atlas-audit | auto | Three audit modes: code (quality/security/OWASP swarm), architecture (feature map + duplication + unify proposal), self (atlas run health, context/asset waste, session forensics from the observability DB) |
+| atlas-loop | auto | Match a recurring or iterative task to a curated loop-library entry (loop-until-dry, fan-out-adversarial-verify, red-green-tdd, and more) and instantiate it |
+| atlas-ux-test | auto | App-discovering UX swarm: auto-finds routes and forms in a running web app, then runs cartographer -> persona -> fuzzer -> oracle -> reporter |
+| 16 task skills | auto | atlas-component, atlas-db-audit, atlas-debug, atlas-feature, atlas-frontend, atlas-gitignore, atlas-handoff, atlas-harden, atlas-launch, atlas-m365, atlas-prompt, atlas-readme, atlas-refactor, atlas-validate, atlas-vendor-assessment, atlas-wiki |
 
 ## Layout
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json     # manifest (name: atlas, v4.0.0)
-|-- hooks/                         # 8 auto-loaded hooks + validate-readonly-query.sh guard + doctor rollback guard
-|   |-- hooks.json                 #   wires every hook below
+|-- .claude-plugin/plugin.json     # manifest (name: atlas, v5.0.0)
+|-- hooks/                         # 10 auto-loaded hooks (hooks.json wires them all)
 |   |-- session_boot.py            #   SessionStart: activate runtime, surface lessons
-|   |-- prompt_optimizer.py        #   UserPromptSubmit: optional local-model rewrite
-|   |-- bash_advisor.py            #   PreToolUse(Bash): advisory only, warns on catastrophic commands (never denies)
-|   |-- validate-readonly-query.sh #   per DB-audit subagent: block writes in read-only audits
+|   |-- prompt_optimizer.py        #   UserPromptSubmit: optional rewrite + orchestration arm-early classifier
+|   |-- bash_advisor.py            #   PreToolUse(Bash): advisory warning on catastrophic commands only
 |   |-- format_after_edit.py       #   PostToolUse(Edit/Write): format after edits
-|   |-- dispatch_tripwire.py       #   PostToolUse: count inline ops, flag orchestrator drift
-|   |-- completion_gate.py         #   Stop: block premature "done" (opt-in via ATLAS_GATE)
-|   |-- ingest_session.py          #   Stop/SubagentStop/SessionEnd/PreCompact: mirror transcript to DB
-|   `-- nudge.py                   #   Stop/SubagentStop: self-improvement nudge (throttled)
-|-- scripts/
-|   |-- discover_capabilities.py   #   read-only stack scan -> ranked recommendations
-|   |-- atlas_doctor.py            #   installation health check + auto-repair (`atlas-doctor`, SessionStart guard)
-|   `-- install_hooks.py           #   fallback wiring for non-plugin installs
+|   |-- dispatch_tripwire.py       #   PostToolUse advisory + PreToolUse deny: curb inline drift in orchestration runs
+|   |-- completion_gate.py         #   Stop: block premature "done" until the definition-of-done holds
+|   |-- memory_capture.py          #   Stop/SubagentStop: persist lessons to ~/.atlas/memory/
+|   |-- auto_skill.py              #   Stop: create new skills from session transcripts at ~/.atlas/skills/
+|   |-- nudge.py                   #   Stop/SubagentStop: self-improvement nudge (throttled)
+|   |-- ingest_session.py          #   Stop/SubagentStop/SessionEnd/PreCompact: mirror transcript to the observability DB
+|   `-- validate-readonly-query.sh #   not auto-loaded; DB-audit subagents wire it during read-only audits
+|-- scripts/                       # atlas_doctor.py (repair), atlas_db.py (observability), atlas_context_optimizer.py
+|                                  # (disable unused skills/agents), atlas_curator.py, atlas_memory.py, skill_factory.py,
+|                                  # asset_audit.py, discover_capabilities.py, build_hub.py, install_hooks.py + tests
 |-- output-styles/
-|   `-- atlas-orchestrator.md      #   force-for-plugin: true - auto-applies whenever atlas is enabled
-|-- agents/                        # 23 subagents (atlas:<role>), auto-registered
-|   |-- explorer.md                #   read-only codebase mapping
+|   `-- atlas-orchestrator.md      # force-for-plugin: true - auto-applies whenever atlas is enabled
+|-- agents/                        # 12 subagents (atlas:<role>), auto-registered
+|   |-- explorer.md                #   read-only codebase mapping (never fork)
 |   |-- implementer.md             #   bounded, verified code edits
-|   |-- verifier.md                #   adversarial confirm/refute
+|   |-- verifier.md                #   adversarial confirm/refute with runtime-parity requirement (never fork)
 |   |-- db-prober.md               #   read-only schema/RLS/index inspection
-|   |-- schema-inventory.md        #   PostgreSQL catalog inventory (tables, columns, indexes)
+|   |-- schema-inventory.md        #   PostgreSQL catalog inventory
 |   |-- rls-privilege-audit.md     #   read-only RLS/grants/privilege audit
 |   |-- naming-glossary-audit.md   #   table/column name audit against project glossary
 |   |-- ui-runtime-tester.md       #   live browser/runtime behavior
-|   |-- planner.md                 #   multi-stage decomposition + stage maps
-|   |-- docs-curator.md            #   maintains the docs/ single source of truth
-|   |-- docs-auditor.md            #   audits docs/ for drift against code
-|   `-- completeness-critic.md     #   "what did we miss" gap pass before done
-|-- commands/                      # 18 command files (/atlas boot + 17 /atlas-* launchers); the 28 top-level skills live in skills/atlas-*/
-|   |-- atlas.md                   #   the architect: boot + configure the workspace
-|   |-- atlas-prompt.md            #   prompt optimizer
-|   |-- atlas-feature.md           #   full-stack feature build
-|   |-- atlas-frontend.md          #   design-system UI build/refactor
-|   |-- atlas-component.md         #   latency/cancellation-resilient component
-|   |-- atlas-debug.md             #   reproduce, root-cause, fix, verify
-|   |-- atlas-refactor.md          #   behavior-frozen restructuring
-|   |-- atlas-readme.md            #   evidence-grounded README generator
-|   |-- atlas-gitignore.md         #   zero-trust allowlist .gitignore
-|   |-- atlas-handoff.md           #   session handoff / state preservation
-|   |-- atlas-db-audit.md          #   read-only parallel DB audit + remediation plan
-|   |-- atlas-grafana.md           #   Grafana SQL panel / dashboard builder
-|   |-- atlas-m365.md              #   M365/Entra/Graph/Intune identity task
-|   |-- atlas-vendor-assessment.md #   evidence-based vendor security assessment
-|   |-- atlas-harden.md            #   idempotent CHECK/SET/VERIFY hardening script
-|   |-- atlas-doctor.md            #   diagnose/repair the atlas installation itself
-|   `-- atlas-validate.md          #   validation-gated plugin/skill review (reports, no auto-fix)
-`-- skills/
-    |-- atlas-metis/              # SKILL.md + references/ (incl. operating-contract.md, capability-catalog.md)
-    |-- atlas-hephaestus/           # SKILL.md - the boot/discovery methodology
-    |-- atlas-ariadne/        # SKILL.md - architecture map + structural dedup -> docs/architecture/boundaries.md
-    |-- atlas-argus/             # SKILL.md - SQLite observability DB: measurable self-improvement
-    |-- atlas-chronos/               # SKILL.md - recurring/iterative task loop library (12+ loops)
-    |-- atlas-hermes/              # SKILL.md - guided cross-plugin vendor connector setup (10 connectors, owned by domain plugins)
-    |-- atlas-odysseus/          # SKILL.md - app-discovering UX swarm (no hardcoded paths)
-    `-- atlas-athena/              # SKILL.md - comprehensive quality/security/OWASP audit swarm
+|   |-- planner.md                 #   multi-stage decomposition + stage maps (fork)
+|   |-- docs-curator.md            #   maintains the .atlas/docs/ single source of truth (fork)
+|   |-- docs-auditor.md            #   audits .atlas/docs/ for drift against code
+|   `-- completeness-critic.md     #   "what did we miss" gap pass before done (fork)
+`-- skills/                        # the 21 skills, one directory each (SKILL.md + references/)
 ```
 
 ## Getting started
 
-Install the plugin (place this directory under your plugins root, or install from the
-marketplace). On the next session the boot hook activates the runtime automatically.
-Then run `/atlas` once per project to complete setup: it installs claude-mem and
-context-mode if you approve, recommends the capabilities your stack needs, and writes
-`.claude/atlas.local.md`.
-
-```
-/atlas                 # boot + configure this project (recommend then confirm)
-`atlas-feature` ...     # build a full-stack feature with evidence
-```
-
-## Commands
-
-Every launcher injects the shared operating contract, then runs its task through the
-squad with explicit verification gates. Invoke with `/<name>`; pass the inputs or let
-the command ask once for anything missing.
-
-| Command | Use it to |
-| --- | --- |
-| `/atlas` | Boot and configure the workspace: dependencies, capability discovery, hooks, config, docs seed. `/atlas menu` lists every atlas skill/launcher grouped by intent (and `/atlas menu <need>` recommends the best-fit one). |
-| `/atlas-feature` | Build a full-stack feature across UI, API, and data with curl + read-back evidence |
-| `/atlas-frontend` | Build or refactor UI on one design system (shadcn/ui + Tailwind + Radix), all four states |
-| `/atlas-component` | Build a reusable component resilient to latency, cancellation, and partial failure |
-| `/atlas-debug` | Reproduce a failing behavior, name the root cause, fix in place, prove the symptom is gone |
-| `/atlas-refactor` | Restructure code with behavior frozen and proven unchanged, step by step |
-| `/atlas-readme` | Generate an onboarding README grounded in the actual repo, every claim traceable |
-| `/atlas-gitignore` | Generate a zero-trust deny-by-default `.gitignore` for a named stack |
-| `/atlas-handoff` | Produce a high-density session handoff so a fresh session resumes with zero re-discovery |
-| `/atlas-launch` | Open a remediation session pre-loaded with a finding's handoff from the latest audit hub (no args lists the actionable findings) |
-| `/atlas-db-audit` | Run a strictly read-only parallel DB audit and hand back a remediation plan to approve |
-| `/atlas-grafana` | Build or fix a Grafana SQL panel for any datasource and dialect |
-| `/atlas-m365` | Deliver a Microsoft 365 / Entra / Graph / Intune config with least-privilege scopes and read-back |
-| `/atlas-vendor-assessment` | Assess a vendor against a control framework you name, strictly from provided evidence |
-| `/atlas-harden` | Write an idempotent CHECK/SET/VERIFY endpoint hardening script for RMM/MDM deployment |
-| `/atlas-prompt` | Rewrite a vague request into a structured, environment-aware, verification-gated prompt |
-| `/atlas-validate` | Run plugin-dev:plugin-validator and plugin-dev:skill-reviewer over a target plugin; reports findings without auto-fixing |
-| `/atlas-doctor` | Diagnose the atlas installation itself (marketplace source, version rollback, orphaned cache, hooks, assets) and auto-repair with `--fix` |
+Install the plugin (place this directory under your plugins root, or install from
+the marketplace). On the next session the boot hook activates the runtime
+automatically. Then run `atlas-setup` once per project: it scaffolds
+`.atlas/docs/`, installs claude-mem and context-mode if you approve, recommends
+the capabilities your stack needs, and tells you what to run next.
 
 ## Hooks
 
 The hooks auto-load from `hooks/hooks.json` when the plugin is installed - no
-manual step. Each is stdlib-only and fails safe: any internal error exits 0, so a hook
-can never block a session.
+manual step. Each is stdlib-only and fails safe: any internal error exits 0, so a
+hook can never block a session.
 
 | Hook | Event | Purpose |
 | --- | --- | --- |
 | `session_boot.py` | `SessionStart` | Activate the runtime, report dependency state, surface relevant lessons |
 | `atlas_doctor.py --hook` | `SessionStart` | Rollback guard: warn loudly if the installed plugin was downgraded, the marketplace points at a fork, or hooks/assets are missing (warn-only, always exits 0) |
-| `prompt_optimizer.py` | `UserPromptSubmit` | Optional local-model prompt rewrite (trigger-gated; augments, never replaces). Also runs an arm-early classifier that flags substantive engineering prompts and marks the session orchestrating before any dispatch happens (`ATLAS_ENGINE_ARM=off`) |
-| `bash_advisor.py` | `PreToolUse` (Bash) | Advisory only: warns on catastrophic, near-irreversible patterns (`rm -rf /`, `mkfs`, `dd` to a disk, fork bomb). Never denies or forces an ask; the normal permission flow is preserved |
-| `validate-readonly-query.sh` | `PreToolUse` (Bash), per DB-audit subagent | Block writes/DDL/grants during read-only audits (wired by the audit agents, not the global session) |
-| `format_after_edit.py` | `PostToolUse` (Edit/Write) | Run the formatter after edits |
-| `dispatch_tripwire.py` | `PostToolUse` + `PreToolUse` | Auto-flag the session orchestrating on orchestration-skill invocation or `atlas:*` dispatch; count inline ops since the last dispatch and advise at the threshold (advisory; `ATLAS_TRIPWIRE=off`). A `PreToolUse` deny tier DENIES the call at 8 inline ops or on any Edit/Write/MultiEdit to a non-docs path, orchestration sessions only (`ATLAS_TRIPWIRE_HARD=off` disables just this tier) |
-| `completion_gate.py` | `Stop` | Block a premature "done" until all seven definition-of-done conditions hold: evidence/, verified finding, CHANGELOG, ROADMAP, root README, no code-changed-but-docs-didn't drift, and condition (g) Law 5 verifier coverage (blocks when implementer dispatches outnumber verifier dispatches for the run) (orchestrating sessions only; `ATLAS_GATE=off`) |
-| `ingest_session.py` | `Stop`, `SubagentStop`, `SessionEnd`, `PreCompact` | Mirror the session transcript into the observability DB for the sextant session-forensics lens (`ATLAS_INGEST=off`) |
+| `prompt_optimizer.py` | `UserPromptSubmit` | Optional trigger-gated prompt rewrite; also arm-early classifier that flags substantive engineering prompts as orchestration runs (`ATLAS_ENGINE_ARM=off`) |
+| `bash_advisor.py` | `PreToolUse` (Bash) | Advisory only: warns on catastrophic patterns (`rm -rf /`, `mkfs`, `dd` to a disk, fork bomb). Never denies |
+| `dispatch_tripwire.py` | `PostToolUse` + `PreToolUse` | Flag orchestration sessions, count inline ops, advise at the threshold; deny tier blocks at 8 inline ops or non-docs edits in orchestration runs (`ATLAS_TRIPWIRE=off`, `ATLAS_TRIPWIRE_HARD=off`) |
+| `format_after_edit.py` | `PostToolUse` (Edit/Write) | Run the repo's formatter after edits |
+| `completion_gate.py` | `Stop` | Block a premature "done" until the definition-of-done holds: evidence artifact, independent verifier, current docs, verifier coverage (orchestrating sessions only; `ATLAS_GATE=off`) |
+| `memory_capture.py` | `Stop`, `SubagentStop` | Persist session lessons to `~/.atlas/memory/` |
+| `auto_skill.py` | `Stop` | Create new skills from session transcripts at `~/.atlas/skills/` |
 | `nudge.py` | `Stop`, `SubagentStop` | Self-improvement: prompt to capture a lesson and check docs drift (throttled) |
+| `ingest_session.py` | `Stop`, `SubagentStop`, `SessionEnd`, `PreCompact` | Mirror the session transcript into the observability DB for atlas-audit self mode (`ATLAS_INGEST=off`) |
 
 An `atlas-orchestrator` output style ships under `output-styles/` with
-`force-for-plugin: true` - it auto-applies whenever the atlas plugin is enabled (status-header
-+ named-dispatch reporting; keeps Claude Code's own coding behavior intact). Fork routing is
-doctrine, not a style choice: `atlas:planner`, `atlas:completeness-critic`, and
-`atlas:docs-curator` dispatch as `subagent_type: "fork"` (requires `CLAUDE_CODE_FORK_SUBAGENT=1`
-set globally) to inherit history cheaply; `atlas:verifier` and `atlas:explorer` never fork, so
-their judgment stays uncontaminated. The observability DB's `session_logs` table carries an
-`agent` column (default `claude`) so the mirror can distinguish coding agents; a pluggable
-adapter layer backfills non-Claude sessions via `python3 scripts/session_ingest.py
---backfill-agent codex [root]`. claude-mem's own per-session observer transcripts
-(`.claude-mem/observer-sessions`) are excluded from the mirror at ingest and a one-shot
-`python3 scripts/atlas_db.py purge-observer-sessions` cleans up any rows landed before the
-exclusion.
+`force-for-plugin: true` - it auto-applies whenever the atlas plugin is enabled
+(status-header + named-dispatch reporting; keeps Claude Code's own coding behavior
+intact). Fork routing is doctrine, not a style choice: `atlas:planner`,
+`atlas:completeness-critic`, and `atlas:docs-curator` dispatch as
+`subagent_type: "fork"` (requires `CLAUDE_CODE_FORK_SUBAGENT=1` set globally) to
+inherit history cheaply; `atlas:verifier` and `atlas:explorer` never fork, so
+their judgment stays uncontaminated.
 
-For installs outside a plugin (a copied skill or bare agent), `scripts/install_hooks.py`
-wires the hooks into settings manually. The optional ollama-backed optimizer is
-configured with `ATLAS_OPTIMIZE_CMD`, `ATLAS_OPTIMIZER_MODEL`, and `ATLAS_OLLAMA_URL`
-(see `skills/atlas-metis/references/hooks-automation.md`); it is not required.
+For installs outside a plugin, `scripts/install_hooks.py` wires the hooks into
+settings manually. The optional ollama-backed optimizer is configured with
+`ATLAS_OPTIMIZE_CMD`, `ATLAS_OPTIMIZER_MODEL`, and `ATLAS_OLLAMA_URL`
+(see `skills/atlas-orchestrate/references/hooks-automation.md`); it is not required.
+
+## Self-improvement
+
+Four hooks close the loop the fleet used to leave to manual runs:
+
+- `memory_capture.py` persists durable lessons per project to `~/.atlas/memory/`.
+- `auto_skill.py` mines finished sessions and drafts new skills at `~/.atlas/skills/`.
+- `scripts/atlas_context_optimizer.py` disables unused skills/agents
+  (`disable-model-invocation: true`) based on real usage in the observability DB.
+- `scripts/atlas_curator.py` handles skill lifecycle (stale/archive/pin).
+
+atlas-audit's self mode reads the same observability DB to report run health
+(verifier coverage, inline ops, parallel waves) and recommend fixes.
 
 ## Dependencies
 
-Atlas integrates two companions and recommends installing them on first `/atlas`:
+Atlas integrates two companions and recommends installing them during setup:
 - claude-mem - cross-session memory that backs the self-improvement layer.
 - context-mode - large-output sandbox that keeps raw bytes out of the context window.
 
-It also recommends a docs resolver (context7) and a symbol/LSP server (serena) when the
-stack calls for them. Atlas degrades gracefully and uses only the tools present in the
-session.
+It also recommends a docs resolver (context7) and a symbol/LSP server (serena) when
+the stack calls for them. Atlas degrades gracefully and uses only the tools present
+in the session.
 
 ## License
 

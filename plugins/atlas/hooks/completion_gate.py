@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Stop hook -- the atlas "Definition of done" gate (opt-in).
 
-The atlas-metis skill's hardest rule is that a change is not *done* until observed
+The atlas-orchestrate skill's hardest rule is that a change is not *done* until observed
 behavior is captured AND an independent agent has verified it. Prose alone does not
 enforce this (the orchestrator rationalizes "I'll mark it unverified and move on").
 This hook is the machine backstop.

@@ -10,8 +10,8 @@ allowed-tools: Read, Glob, Grep, Bash
 Wiki diagram producer for the Atlas single source of truth. This skill is
 the missing producer half of the graphify pipeline: it invokes the repo-root
 graphify skill on `.atlas/docs/architecture/` and lands the rendered
-diagrams in `.atlas/docs/wiki/diagrams/`. atlas-ariadne consumes the
-resulting `graph.json` to build its navigable hub; atlas-olympus checks the
+diagrams in `.atlas/docs/wiki/diagrams/`. atlas-audit consumes the
+resulting `graph.json` to build its navigable hub; atlas-setup checks the
 wiki freshness this skill produces as part of its completion gate.
 
 ## Pipeline
@@ -23,9 +23,9 @@ come out.
 
 ### Inputs
 
-1. `.atlas/docs/architecture/` - the architecture folder atlas-olympus
-   scaffolds and atlas-ariadne populates. Holds boundaries, component
-   maps, ADRs, and `ariadne-graph.json`.
+1. `.atlas/docs/architecture/` - the architecture folder atlas-setup
+   scaffolds and atlas-audit populates. Holds boundaries, component
+   maps, ADRs, and `architecture-graph.json`.
 2. The repo-root graphify skill at
    `/Users/jerry/MEGA/Projects/Agentic/atlas/skills/graphify/SKILL.md`.
 
@@ -34,18 +34,18 @@ come out.
 1. `.atlas/docs/wiki/diagrams/index.html` - interactive HTML graph
    (graphify writes `graph.html`; rename on move).
 2. `.atlas/docs/wiki/diagrams/graph.json` - GraphRAG-ready JSON consumed
-   by atlas-ariadne's `build_hub.py`.
+   by atlas-audit's `build_hub.py`.
 3. `.atlas/docs/wiki/diagrams/GRAPH_REPORT.md` - plain-language audit
    report.
 4. `.atlas/docs/wiki/diagrams/graph.svg` - embeddable SVG diagram.
 
 ### What this skill does NOT own
 
-- Populating `.atlas/docs/architecture/` - that is atlas-ariadne's job.
-- Consuming `graph.json` into a hub - that is atlas-ariadne's Phase 4 job.
+- Populating `.atlas/docs/architecture/` - that is atlas-audit's job.
+- Consuming `graph.json` into a hub - that is atlas-audit's Phase 4 job.
 - Editing the repo-root graphify skill - never. graphify is general
   purpose and lives at the repo root for a reason.
-- Scaffolding the wiki/ folder - that is atlas-olympus's scaffold step.
+- Scaffolding the wiki/ folder - that is atlas-setup's scaffold step.
 
 ## Invocation
 
@@ -70,7 +70,7 @@ arch_dir=".atlas/docs/architecture"
 wiki_dir=".atlas/docs/wiki/diagrams"
 
 if [ ! -d "$arch_dir" ] || [ -z "$(ls -A "$arch_dir" 2>/dev/null)" ]; then
-  echo "MISSING: $arch_dir does not exist or is empty. Run atlas-ariadne first."
+  echo "MISSING: $arch_dir does not exist or is empty. Run atlas-audit first."
   exit 0
 fi
 ```
@@ -143,18 +143,18 @@ This skill auto-triggers. Run it when any of the following are true:
 
 - The freshness check reports STALE or MISSING and architecture/ is
   non-empty.
-- atlas-ariadne has just finished populating architecture/ and the wiki
+- atlas-audit has just finished populating architecture/ and the wiki
   has never been rendered.
-- atlas-olympus is running its completion gate and the wiki is stale.
+- atlas-setup is running its completion gate and the wiki is stale.
 - The user explicitly asks to refresh or regenerate the wiki diagrams.
 
 Do not run it when:
 
 - architecture/ is empty or missing (nothing to render; report MISSING
-  and defer to atlas-ariadne).
+  and defer to atlas-audit).
 - The freshness check reports FRESH (the wiki is current).
 - graphify itself is broken or uninstalled; report that and defer to
-  atlas-doctor.
+  atlas-setup.
 
 ## Freshness check
 
@@ -174,26 +174,26 @@ Runnable from anywhere:
 
 Defaults to the current working directory when no repo-root is given.
 
-## Relationship to atlas-ariadne
+## Relationship to atlas-audit
 
-atlas-ariadne Phase 4 consumes `graphify-out/graph.json` to build its
+atlas-audit Phase 4 consumes `graphify-out/graph.json` to build its
 navigable hub via `scripts/build_hub.py`. This skill produces the
-`graph.json` that ariadne consumes. The two skills do not edit each
+`graph.json` that atlas-audit consumes. The two skills do not edit each
 other; the contract is the file path and the JSON shape, both owned by
 graphify's `to_json` export (graphify/SKILL.md Step 4).
 
-When ariadne runs its own per-root graphify passes during discovery,
+When atlas-audit runs its own per-root graphify passes during discovery,
 those `graphify-out/graph.json` files feed the hub directly. This skill
-fills the gap ariadne does not: rendering the architecture/ folder into
-the long-lived wiki/diagrams/ home that survives across ariadne runs.
+fills the gap atlas-audit does not: rendering the architecture/ folder into
+the long-lived wiki/diagrams/ home that survives across atlas-audit runs.
 
-## Relationship to atlas-olympus
+## Relationship to atlas-setup
 
-atlas-olympus owns the completion gate and the freshness verdict this
-skill's script produces. olympus calls the freshness check; when the
-verdict is STALE or MISSING, olympus recommends invoking this skill (or
-atlas-ariadne first, if architecture/ is empty). This skill does not
+atlas-setup owns the completion gate and the freshness verdict this
+skill's script produces. atlas-setup calls the freshness check; when the
+verdict is STALE or MISSING, atlas-setup recommends invoking this skill (or
+atlas-audit first, if architecture/ is empty). This skill does not
 decide the gate; it only does the rendering work the gate demands.
 
-See `plugins/atlas/skills/atlas-olympus/references/graphify-wiring.md`
+See `plugins/atlas/skills/atlas-setup/references/graphify-wiring.md`
 for the full wiring contract.

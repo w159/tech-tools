@@ -1,7 +1,7 @@
 {
   "name": "atlas",
-  "version": "4.0.0",
-  "description": "Atlas is a self-configuring multi-agent coding architect implemented entirely as Claude Code skills. 28 skills total: 11 Greek-mythology core skills (atlas-metis orchestration, atlas-hephaestus boot/discovery, atlas-ariadne architecture mapping, atlas-athena security/quality audit, atlas-argus observability/forensics, atlas-chronos recurring loops, atlas-hermes vendor connector setup, atlas-odysseus UX test swarm, atlas-nestor skill stacking, atlas-armada org deployment, atlas-olympus workspace scaffolding/recommendations) plus 17 task skills (atlas-feature, atlas-debug, atlas-doctor, atlas-validate, atlas-refactor, atlas-launch, atlas-harden, etc.). 23 agents (12 core + 11 armada department agents), 15 hooks including dispatch tripwire and completion gate. The atlas-metis method demands evidence before any done claim. atlas-olympus analyzes sessions and recommends which skills to run next. atlas-armada provides organizational deployment with branding, policies, compliance, and department-specific connectors. Integrates claude-mem and context-mode.",
+  "version": "5.0.0",
+  "description": "Atlas is a multi-agent coding architect implemented entirely as Claude Code skills. 21 plainly named skills: atlas-orchestrate (the orchestration engine), atlas-audit (code/security audit, architecture mapping, atlas self-telemetry), atlas-setup (onboarding, install, connectors, repair - the one manual skill), atlas-loop (recurring loops), atlas-ux-test (UX test swarm), plus 16 task skills (atlas-feature, atlas-debug, atlas-refactor, atlas-validate, atlas-launch, atlas-harden, etc.). 12 core agents and 10 hooks including dispatch tripwire, completion gate, memory capture, and auto-skill creation. The atlas-orchestrate method demands independent verification with runtime evidence before any done claim. Org deployment (11 departments) lives in the separate armada plugin. Integrates claude-mem and context-mode.",
   "keywords": [
     "atlas",
     "architect",
@@ -30,13 +30,7 @@
     "asset-audit",
     "context-optimization",
     "session-forensics",
-    "self-improvement",
-    "atlas-armada",
-    "atlas-olympus",
-    "organization",
-    "branding",
-    "compliance",
-    "departments"
+    "self-improvement"
   ],
   "author": {
     "name": "w159",
@@ -46,7 +40,7 @@
   "license": "Apache-2.0",
   "interface": {
     "displayName": "Atlas",
-    "shortDescription": "Self-configuring multi-agent coding architect with 28 Claude Code skills, 23 agents, and observability-driven self-improvement."
+    "shortDescription": "Multi-agent coding architect with 21 plainly named skills, 12 agents, and observability-driven self-improvement."
   },
   "skills": "./skills/"
 }

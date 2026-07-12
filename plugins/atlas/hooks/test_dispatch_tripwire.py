@@ -189,7 +189,7 @@ class TripwireTest(unittest.TestCase):
             {
                 "session_id": "sess-skill",
                 "tool_name": "Skill",
-                "tool_input": {"skill": "atlas:atlas-metis"},
+                "tool_input": {"skill": "atlas:atlas-orchestrate"},
             },
             self.env,
         )
@@ -202,7 +202,7 @@ class TripwireTest(unittest.TestCase):
             {
                 "session_id": "sess-arch",
                 "tool_name": "Skill",
-                "tool_input": {"skill": "atlas:atlas-hephaestus"},
+                "tool_input": {"skill": "atlas:atlas-setup"},
             },
             self.env,
         )
@@ -273,9 +273,16 @@ class TripwireTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0)
         self.assertIn('"permissionDecision": "deny"', r.stdout)
         self.assertIn("atlas:implementer", r.stdout)
+        # Since the 4.0.0 SSOT migration only .atlas/docs/ is the
+        # orchestration-artifact tree; a plain docs/ path is target code.
         r2 = run_hook(self._pre_payload("Edit", {"file_path": "docs/x.md"}), self.env)
         self.assertEqual(r2.returncode, 0)
-        self.assertEqual(r2.stdout.strip(), "")
+        self.assertIn('"permissionDecision": "deny"', r2.stdout)
+        r3 = run_hook(
+            self._pre_payload("Edit", {"file_path": ".atlas/docs/x.md"}), self.env
+        )
+        self.assertEqual(r3.returncode, 0)
+        self.assertEqual(r3.stdout.strip(), "")
 
     def test_pre_fail_open_on_garbage_stdin(self):
         p = subprocess.run(

@@ -10,7 +10,7 @@ Mirrors Hermes Agent's curator (agent/curator.py) but is simpler and file-based:
 
 Design choices:
   - No LLM consolidation pass (Hermes's opt-in `consolidate` feature) — too expensive
-    for a hook-driven system. Consolidation is left to manual atlas-argus runs.
+    for a hook-driven system. Consolidation is left to manual atlas-audit runs.
   - File mtime is the activity signal (skills are files; if nobody touched them,
     they're stale). This avoids needing a usage telemetry sidecar.
   - Deterministic: no model calls, pure file I/O.

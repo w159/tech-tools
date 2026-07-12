@@ -119,31 +119,31 @@ Body.
 
     def test_optimize_dry_run(self):
         # Create a niche skill that should be disabled
-        self._create_skill("atlas-metis", "The engine")
-        self._create_skill("atlas-nestor", "Concierge")
-        self._create_skill("atlas-armada", "Org deployment")
+        self._create_skill("atlas-orchestrate", "The engine")
+        self._create_skill("atlas-wiki", "Wiki")
+        self._create_skill("armada", "Org deployment")
         self._create_agent("explorer")
         self._create_agent("armada-security")
 
         result = opt.optimize(db_path="/nonexistent.db", dry_run=True)
         self.assertTrue(result["dry_run"])
         self.assertIsNone(result["changes_applied"])
-        # atlas-nestor and atlas-armada should be flagged for disabling
-        self.assertIn("atlas-nestor", result["skills_to_disable"])
+        # atlas-wiki and armada should be flagged for disabling
+        self.assertIn("atlas-wiki", result["skills_to_disable"])
         # Core skills should be kept
-        self.assertIn("atlas-metis", result["skills_kept"])
+        self.assertIn("atlas-orchestrate", result["skills_kept"])
         # armada agent should be flagged for disabling
         self.assertIn("armada-security", result["agents_to_disable"])
 
     def test_optimize_applies_changes(self):
-        self._create_skill("atlas-metis", "The engine")
-        self._create_skill("atlas-nestor", "Concierge")
+        self._create_skill("atlas-orchestrate", "The engine")
+        self._create_skill("atlas-wiki", "Wiki")
         self._create_agent("explorer")
         self._create_agent("armada-security")
 
         result = opt.optimize(db_path="/nonexistent.db", dry_run=False)
         self.assertIsNotNone(result["changes_applied"])
-        self.assertIn("atlas-nestor", result["changes_applied"]["skills_disabled"])
+        self.assertIn("atlas-wiki", result["changes_applied"]["skills_disabled"])
         self.assertIn("armada-security", result["changes_applied"]["agents_disabled"])
 
     def test_status(self):
@@ -156,10 +156,10 @@ Body.
         self.assertEqual(s["disabled_skills"], 1)
 
     def test_core_skills_never_disabled(self):
-        self._create_skill("atlas-metis", "The engine")
+        self._create_skill("atlas-orchestrate", "The engine")
         result = opt.optimize(db_path="/nonexistent.db", aggressive=True, dry_run=True)
-        self.assertIn("atlas-metis", result["skills_kept"])
-        self.assertNotIn("atlas-metis", result["skills_to_disable"])
+        self.assertIn("atlas-orchestrate", result["skills_kept"])
+        self.assertNotIn("atlas-orchestrate", result["skills_to_disable"])
 
 
 if __name__ == "__main__":
