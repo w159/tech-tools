@@ -1,5 +1,6 @@
 ---
 name: atlas-prompt
+disable-model-invocation: true
 description: Rewrite a vague coding request into a structured, environment-aware prompt an AI agent can execute; asks up to three questions first when scope is ambiguous.
 when_to_use: rewrite a vague coding request into a structured, environment-aware prompt an AI agent can execute
 allowed-tools: Read, Glob, Grep, Bash, Write

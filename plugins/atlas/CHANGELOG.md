@@ -39,6 +39,10 @@ the running app contradicted. Breaking release.
 - dispatch_tripwire.py ORCH_SKILLS and atlas_context_optimizer.py
   CORE/NICHE lists deduplicated for the merged names; optimizer tests
   updated (atlas-wiki replaces atlas-nestor as the niche fixture).
+- README.md follow-up: 2 high-severity defects caught by atlas:completeness-critic
+  (Kimi manifest armada false-positive, mcp_servers _shared omission) corrected;
+  new README 343 lines, US-ASCII, 0 banned chars. See docs/CHANGELOG.md 2026-07-12
+  follow-up entry.
 
 ## 4.0.0 (2026-07-11)
 

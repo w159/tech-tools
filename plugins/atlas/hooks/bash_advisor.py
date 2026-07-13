@@ -28,6 +28,10 @@ import re
 import sys
 
 # (compiled pattern, human reason). Order only affects which reason is reported first.
+
+# A flag token: a long option (--recursive, --force, --foo) or a short cluster (-rf, -r).
+_RM_FLAG = r"(?:--[a-z-]+|-[a-zA-Z]+)"
+
 _CATASTROPHIC = [
     (
         re.compile(
@@ -38,6 +42,21 @@ _CATASTROPHIC = [
     (
         re.compile(
             r"\brm\s+(-[a-zA-Z]*\s+)*-[a-zA-Z]*f[a-zA-Z]*r[a-zA-Z]*\s+(/|/\*|~|\$HOME)(\s|$)"
+        ),
+        "recursive force-delete of a root/home path",
+    ),
+    # Long-flag and mixed forms (e.g. "rm --recursive --force /", "rm -r --force /").
+    # Two bounded lookaheads confirm a recursive flag and a force flag appear among the
+    # leading flag tokens; the lookaheads only consume flag tokens (each - prefixed), so
+    # they cannot scan past the target into a later command. Then flag tokens are consumed
+    # and the catastrophic root/home target is matched.
+    (
+        re.compile(
+            r"\brm\s+"
+            r"(?=(?:" + _RM_FLAG + r"\s+)*(?:--recursive|-[a-zA-Z]*r[a-zA-Z]*))"
+            r"(?=(?:" + _RM_FLAG + r"\s+)*(?:--force|-[a-zA-Z]*f[a-zA-Z]*))"
+            r"(?:" + _RM_FLAG + r"\s+)+"
+            r"(/|/\*|~|\$HOME|\"?\$\{HOME\}\"?)(\s|$)"
         ),
         "recursive force-delete of a root/home path",
     ),

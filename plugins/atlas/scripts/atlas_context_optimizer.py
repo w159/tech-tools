@@ -31,16 +31,17 @@ import json
 import os
 import re
 import sqlite3
-import sys
-import time
 from pathlib import Path
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List, Set
 
 # The always-on core set — these are never disabled
 CORE_SKILLS = {
     "atlas-orchestrate",
     "atlas-setup",
     "atlas-audit",
+    "atlas-debug",
+    "atlas-feature",
+    "atlas-validate",
 }
 
 CORE_AGENTS = {
@@ -66,6 +67,9 @@ NICHE_SKILLS = {
     "atlas-readme",
     "atlas-handoff",
     "atlas-launch",
+    "atlas-harden",
+    "atlas-refactor",
+    "atlas-frontend",
 }
 
 
@@ -182,7 +186,10 @@ def _skills_used_in_db(db_path: str, limit_sessions: int = 50) -> Set[str]:
                 used.add("atlas-" + clean)
         conn.close()
     except sqlite3.Error:
-        pass
+        # Fail loud: a transient DB read error must NOT fail-open to an empty
+        # used-set, which would disable the entire non-core fleet. Propagate so
+        # the caller aborts optimize instead of silently disabling everything.
+        raise
     return used
 
 
@@ -217,7 +224,10 @@ def _agents_used_in_db(db_path: str, limit_sessions: int = 50) -> Set[str]:
                 used.add(target)
         conn.close()
     except sqlite3.Error:
-        pass
+        # Fail loud: a transient DB read error must NOT fail-open to an empty
+        # used-set, which would disable the entire non-core fleet. Propagate so
+        # the caller aborts optimize instead of silently disabling everything.
+        raise
     return used
 
 
@@ -274,7 +284,14 @@ def disable_skill(skill_md: Path) -> bool:
         new_content = "---" + new_fm + "---" + content[end:]
         skill_md.write_text(new_content, encoding="utf-8")
         return True
-    except (OSError, UnicodeDecodeError):
+    except UnicodeDecodeError:
+        return False
+    except OSError as exc:
+        # Surface write failures (read-only SKILL.md, disk-full) so the caller
+        # cannot believe a disable succeeded that left the skill enabled.
+        import sys
+
+        print(f"disable_skill: OSError writing {skill_md}: {exc}", file=sys.stderr)
         return False
 
 
@@ -288,7 +305,14 @@ def enable_skill(skill_md: Path) -> bool:
             skill_md.write_text(new_content, encoding="utf-8")
             return True
         return False
-    except (OSError, UnicodeDecodeError):
+    except UnicodeDecodeError:
+        return False
+    except OSError as exc:
+        # Surface write failures (read-only SKILL.md, disk-full) so the caller
+        # cannot believe an enable succeeded that left the skill disabled.
+        import sys
+
+        print(f"enable_skill: OSError writing {skill_md}: {exc}", file=sys.stderr)
         return False
 
 

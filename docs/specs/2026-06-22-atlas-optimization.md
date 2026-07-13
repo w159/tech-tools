@@ -1,5 +1,10 @@
 # Atlas optimization + marketplace hygiene (design spec)
 
+> Note (2026-07-12): this spec is historical and pre-dates the v5.0.0 split.
+> The Claude Code marketplace now lists 2 plugins (`atlas`, `armada`); the
+> 12-plugin catalog is gone. See `docs/CHANGELOG.md` 2026-07-12 README rewrite
+> follow-up entry for the current state.
+
 Date: 2026-06-22
 Owner: orchestrator session
 Status: approved, in implementation

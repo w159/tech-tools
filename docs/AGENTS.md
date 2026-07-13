@@ -4,6 +4,17 @@ Authoritative list of subagents shipped in `plugins/atlas/agents/`. 12 agents to
 2026-07-07 UX-swarm and api-usage-map removal (formerly 18 as of v2.2.1).
 Source: `plugins/atlas/agents/*.md` (each file's `name:` and `description:` frontmatter fields).
 
+The atlas plugin ships 12 core agents (listed below). The v5.0.0 split moved 11 additional
+`atlas:armada-*` department agents out of atlas and into a separate `armada` plugin
+(`plugins/armada/agents/`), which is part of the Claude Code marketplace but is installed
+alongside `atlas` only for org deployment. The 11 armada department agents are:
+`atlas:armada-data`, `atlas:armada-design`, `atlas:armada-engineering`,
+`atlas:armada-finance`, `atlas:armada-hr`, `atlas:armada-it-ops`, `atlas:armada-m365`,
+`atlas:armada-product`, `atlas:armada-productivity`, `atlas:armada-security`, and
+`atlas:armada-support`. They are NOT in `plugins/atlas/agents/` and are not part of the
+12-agent count above. The 11 legacy domain clusters also ship their own setup via the Kimi
+manifest at `.kimi-plugin/marketplace.json`, separately from the Claude Code marketplace.
+
 ---
 
 ## How to Run Agents
@@ -30,10 +41,10 @@ Every session is one of two kinds:
   may open dozens of worker sessions.
 
 The observability DB (`~/.atlas/atlas.db`) records every session's transcript in the `session_logs`,
-`messages`, and `tool_calls` mirror tables (added in v2.2.1). Run-health aggregates in atlas-audit
-Trends currently include all sessions; v2.2.3 will add a `run_kind` tag so orchestrator and worker
-sessions can be reported separately, preventing short worker sessions from skewing wall-clock or
-context averages.
+`messages`, and `tool_calls` mirror tables (added in v2.2.1). v2.2.3 added a `run_kind` (orchestrator/worker) tag to the `runs` table, so atlas-audit Trends
+run-health aggregates now exclude leaf worker sessions, preventing short worker sessions from
+skewing wall-clock or context averages (`plugins/atlas/scripts/atlas_db.py:128,131`;
+`docs/ROADMAP.md:143`).
 
 ---
 

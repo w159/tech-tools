@@ -1,5 +1,6 @@
 ---
 name: atlas-db-audit
+disable-model-invocation: true
 description: 'Read-only database audit via parallel subagents: inventory a live schema, reconcile it against the code, and check privileges and naming before any change.'
 when_to_use: inventory a live database schema, reconcile it against the code, and check privileges and naming before any change
 allowed-tools: Read, Glob, Grep, Bash
@@ -12,10 +13,10 @@ argument-hint: '[repo path] [db connection] [glossary path] [naming-convention n
 Apply the Operating Contract to this entire task. It is injected below.
 
 ```!
-cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/operating-contract.md"
+cat "${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md"
 ```
 
-If the contract did not load above, read `skills/atlas-orchestrate/references/operating-contract.md` and apply it before proceeding.
+If the contract did not load above, read `references/operating-contract.md` and apply it before proceeding.
 
 Audit this database: $ARGUMENTS
 
@@ -30,7 +31,7 @@ If the DB connection or repo path is missing or ambiguous, ask once for it, then
 This is READ-ONLY. Nothing here may change the database or the code. The only outputs are a findings report and a remediation plan you review before anything changes.
 
 ENFORCE READ-ONLY:
-- Install the bundled guard at `hooks/validate-readonly-query.sh` as a PreToolUse(Bash) hook on every audit subagent so any SQL write, DDL, GRANT/REVOKE, or other privilege statement is blocked before it runs.
+- Install the bundled guard at `hooks/validate-readonly-query.sh` as a PreToolUse(Bash) hook on every audit subagent. The guard is a coarse denylist, NOT a "blocks any non-SELECT" guarantee. It matches a fixed set of SQL write/DDL/privilege structures: `DELETE FROM`, `INSERT INTO`, `REPLACE INTO`, `MERGE INTO`, `UPDATE <table> SET`, `TRUNCATE[ TABLE]`, `DROP|CREATE|ALTER` against `TABLE|DATABASE|SCHEMA|INDEX|VIEW|MATERIALIZED|SEQUENCE|TRIGGER|FUNCTION|ROLE|USER|EXTENSION|POLICY|PUBLICATION`, `GRANT|REVOKE ... ON`, and `COPY ... FROM|TO`. It does NOT catch every mutating statement: `CREATE OR REPLACE FUNCTION`, `CREATE TEMPORARY|UNLOGGED TABLE`, `CREATE AGGREGATE`, and `UPDATE|DELETE|INSERT` whose verb and target are split by SQL comments all pass the guard and can install persistent executable DB code or write rows. Enforce read-only at the database level (a read-only role or a replica) and treat the guard as defense-in-depth, not the boundary.
 - Subagents query the catalog and read code. They never mutate.
 
 Dispatch four investigations IN PARALLEL, each in a fresh context, each given only the inputs it needs. Each writes detailed findings to its own file under a `.audit/` directory and returns only a short structured summary plus that file path, so the main context stays lean:
@@ -67,5 +68,9 @@ REPORT:
 - `scripts/read-only-catalog-queries.sql` - SELECT-only catalog query
   templates the prober agents use (tables, columns, constraints, indexes, RLS
   policies, grants, roles, sequences, functions). The
-  `hooks/validate-readonly-query.sh` guard blocks any non-SELECT statement
-  before it runs.
+  `hooks/validate-readonly-query.sh` guard is a coarse denylist that blocks
+  the SQL write/DDL/privilege structures listed under ENFORCE READ-ONLY before
+  they run. It is NOT a "blocks any non-SELECT" guarantee: `CREATE OR REPLACE
+  FUNCTION`, `CREATE TEMPORARY|UNLOGGED TABLE`, `CREATE AGGREGATE`, and
+  comment-split `UPDATE|DELETE|INSERT` pass it, so pair it with a read-only
+  DB role or replica.

@@ -1,5 +1,6 @@
 ---
 name: atlas-frontend
+disable-model-invocation: true
 description: Build or refactor screens, flows, or components on a single design system (shadcn/ui + Tailwind + Radix) with every state handled and verified live in the browser.
 when_to_use: building or refactoring screens, flows, or components on a single design system with every state handled
 allowed-tools: Read, Glob, Grep, Bash, Edit, MultiEdit
@@ -12,10 +13,10 @@ argument-hint: '[project] [screens/flows] [design intent]'
 Apply the Operating Contract to this entire task. It is injected below.
 
 ```!
-cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/operating-contract.md"
+cat "${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md"
 ```
 
-If the contract did not load above, read `skills/atlas-orchestrate/references/operating-contract.md` and apply it before proceeding.
+If the contract did not load above, read `references/operating-contract.md` and apply it before proceeding.
 
 Read `${CLAUDE_SKILL_DIR}/references/frontend-states.md` and apply the loading/empty/error/success, accessibility, and responsive rules it defines to every screen you touch.
 

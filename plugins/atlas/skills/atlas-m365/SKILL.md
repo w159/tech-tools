@@ -1,5 +1,6 @@
 ---
 name: atlas-m365
+disable-model-invocation: true
 description: Microsoft 365, Entra, or M365 admin change: mailboxes, Teams, OneDrive, licensing, Intune, or Graph config, delivered with a verified read-back that proves the new tenant state applied.
 when_to_use: you must change Microsoft 365, Entra, Graph, Intune, or Exchange tenant state and prove it applied
 allowed-tools: Read, Glob, Grep, Bash
@@ -11,10 +12,10 @@ argument-hint: '[outcome wanted] [surface: Graph/portal/Intune/EXO PowerShell] [
 Apply the Operating Contract to this entire task. It is injected below.
 
 ```!
-cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/operating-contract.md"
+cat "${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md"
 ```
 
-If the contract did not load above, read `skills/atlas-orchestrate/references/operating-contract.md` and apply it before proceeding.
+If the contract did not load above, read `references/operating-contract.md` and apply it before proceeding.
 
 Read `${CLAUDE_SKILL_DIR}/references/m365-domains.md` and use the domain map (users, mailboxes, Teams, OneDrive, licensing, security posture, multi-tenant) it defines to locate the right surface and permission scope before issuing any call.
 

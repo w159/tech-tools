@@ -11,10 +11,10 @@ argument-hint: '[context] [stack] [symptom] [paste error/log]'
 Apply the Operating Contract to this entire task. It is injected below.
 
 ```!
-cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/operating-contract.md"
+cat "${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md"
 ```
 
-If the contract did not load above, read `skills/atlas-orchestrate/references/operating-contract.md` and apply it before proceeding.
+If the contract did not load above, read `references/operating-contract.md` and apply it before proceeding.
 
 Read `${CLAUDE_SKILL_DIR}/references/debug-workflow.md` and follow the reproduce-localize-fix-verify loop it defines for every debug run.
 

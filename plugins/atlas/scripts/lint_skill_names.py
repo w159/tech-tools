@@ -6,14 +6,22 @@ We keep the `atlas-` prefix as our project convention but no longer enforce exac
 because command-like skills (atlas-db-audit, atlas-vendor-assessment) need descriptive names.
 """
 
-import os, sys, re
+import os
+import re
+import sys
 
 skills = os.path.join(os.path.dirname(__file__), "..", "skills")
 bad = []
 for name in sorted(os.listdir(skills)):
     if not os.path.isdir(os.path.join(skills, name)):
         continue
-    if not name.startswith("atlas-") or not re.fullmatch(r"atlas-[a-z0-9-]{1,59}", name):
+    # Skip hidden/cache dirs (e.g. .ruff_cache) and the shared docs subdir;
+    # only actual skill dirs are subject to the naming convention.
+    if name.startswith(".") or name == "docs":
+        continue
+    if not name.startswith("atlas-") or not re.fullmatch(
+        r"atlas-[a-z0-9-]{1,59}", name
+    ):
         bad.append(name)
 if bad:
     print("NON-CONFORMANT:", bad)

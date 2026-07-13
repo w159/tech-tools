@@ -126,6 +126,33 @@ def main(argv: list) -> int:
     root_str = argv[1] if len(argv) > 1 else str(Path.cwd() / ".atlas" / "docs")
     root = Path(root_str).resolve()
 
+    # Abort gate: a non-empty .atlas/docs/ is already scaffolded. Re-running
+    # would only waste time (the original 828-file "took FOREVER" escalation)
+    # and risk clobbering curated content. True idempotent no-op: exit 0
+    # without creating or overwriting anything.
+    if root.is_dir() and is_non_empty(root):
+        print(f"already scaffolded, skipping: {root}")
+        return 0
+
+    # Dual-SSOT guard: if a root-level docs/ tree already declares the SSOT
+    # markers (CHANGELOG.md / ROADMAP.md / AGENTS.md), scaffolding .atlas/docs/
+    # creates a competing source of truth. Warn to stderr so the operator can
+    # reconcile, but still proceed to fill only missing entries (idempotent).
+    repo_root = root.parent.parent
+    root_docs = repo_root / "docs"
+    ssot_markers = ("CHANGELOG.md", "ROADMAP.md", "AGENTS.md")
+    present_markers = [m for m in ssot_markers if (root_docs / m).is_file()]
+    if present_markers:
+        print(
+            "WARNING: dual-SSOT conflict detected.\n"
+            f"  Existing root docs/ tree: {root_docs}\n"
+            f"  Scaffolding .atlas/docs/ tree: {root}\n"
+            "  Both declare SSOT markers "
+            f"({', '.join(present_markers)}). "
+            "Reconcile into one source of truth to avoid drift.",
+            file=sys.stderr,
+        )
+
     print(f"Scaffolding .atlas/docs/ at: {root}")
     count = scaffold(root)
     expected = len(DURABLE_ENTRIES)

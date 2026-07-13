@@ -1,5 +1,10 @@
 # Master Plan: Atlas 4.0.0 -- Marketplace Consolidation & Skill Renaming
 
+> Note (2026-07-12): this plan is historical and pre-dates the v5.0.0 split.
+> The Claude Code marketplace now lists 2 plugins (`atlas`, `armada`); the
+> 12-plugin catalog is gone. See `docs/CHANGELOG.md` 2026-07-12 README rewrite
+> follow-up entry for the current state.
+
 Source: User directive 2026-07-11. Rename marketplace from tech-tools to atlas,
 consolidate all 11 non-atlas plugins into atlas-armada, rename all atlas skills
 with Greek mythology etymology, and eliminate the cartographer/survey/sextant

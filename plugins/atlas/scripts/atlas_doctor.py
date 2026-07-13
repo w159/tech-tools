@@ -30,6 +30,23 @@ STATE_PATH = os.environ.get("ATLAS_DOCTOR_STATE") or os.path.expanduser(
     "~/.atlas/doctor-state.json"
 )
 
+# --- maintenance caps (keep the plugin's own footprint bounded across runs) ---
+# Per-run trash dirs (apply_fixes quarantines stale assets into one) grow
+# forever without a cap; keep the N newest and prune the rest.
+TRASH_PREFIX = ".trash-atlas-setup-"
+TRASH_KEEP = 5
+# atlas.db telemetry tables trimmed oldest-first when a row grows past the cap.
+# metrics PK is run_id; every other listed table has an id PK used for ordering.
+TELEMETRY_TABLES = (
+    "runs",
+    "events",
+    "dispatches",
+    "metrics",
+    "improvements",
+    "signals",
+)
+TELEMETRY_ROW_CAP = 5000
+
 
 def _load_json(path):
     with open(path) as f:
@@ -357,7 +374,93 @@ def run_checks(plugin_name="atlas"):
 # --- fixes (SET) ---
 
 
-def apply_fixes(ctx, plugin_name="atlas"):
+def cap_trash_dirs(plugins_dir, keep=TRASH_KEEP):
+    """Remove the oldest per-run trash dirs beyond `keep`, newest kept.
+
+    Trash dirs are named f"{TRASH_PREFIX}{stamp}"; stamps are compared
+    numerically when possible (so 200 sorts after 99), falling back to
+    lexicographic for any non-numeric suffix. Returns the count removed."""
+    if not os.path.isdir(plugins_dir):
+        return 0
+
+    def stamp_key(name):
+        s = name[len(TRASH_PREFIX) :]
+        try:
+            return (0, int(s), "")
+        except ValueError:
+            return (1, 0, s)
+
+    dirs = sorted(
+        (d for d in os.listdir(plugins_dir) if d.startswith(TRASH_PREFIX)),
+        key=stamp_key,
+    )
+    removed = 0
+    while len(dirs) > keep:
+        shutil.rmtree(os.path.join(plugins_dir, dirs.pop(0)), ignore_errors=True)
+        removed += 1
+    return removed
+
+
+def purge_telemetry(db_path=None, row_cap=TELEMETRY_ROW_CAP):
+    """Trim atlas_db telemetry tables to `row_cap` rows, oldest first.
+
+    Returns {table: {before, after, dropped}} for every table that exists.
+    Tables absent from the DB are skipped silently so this is safe to run
+    against a fresh or partially-migrated schema."""
+    import sqlite3
+
+    path = (
+        db_path or os.environ.get("ATLAS_DB") or os.path.expanduser("~/.atlas/atlas.db")
+    )
+    if not os.path.exists(path):
+        return {}
+    # metrics has no id column; its PK run_id is the ordering key.
+    order_col = {"metrics": "run_id"}
+    conn = sqlite3.connect(path, timeout=5.0)
+    try:
+        summary = {}
+        for table in TELEMETRY_TABLES:
+            try:
+                before = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+            except sqlite3.OperationalError:
+                continue  # table absent
+            col = order_col.get(table, "id")
+            try:
+                conn.execute(
+                    f"DELETE FROM {table} WHERE {col} NOT IN ("
+                    f"SELECT {col} FROM {table} ORDER BY {col} DESC LIMIT ?)",
+                    (row_cap,),
+                )
+            except sqlite3.OperationalError:
+                continue  # column absent / schema mismatch
+            after = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+            summary[table] = {
+                "before": before,
+                "after": after,
+                "dropped": before - after,
+            }
+        conn.commit()
+        return summary
+    finally:
+        conn.close()
+
+
+def record_maintenance(action, details=None):
+    """Append a maintenance log entry to doctor-state.json.
+
+    The entry always carries a UTC timestamp and `action`; callers pass any
+    before/after sizes or row counts in `details`."""
+    state = _load_json(STATE_PATH) if os.path.exists(STATE_PATH) else {}
+    log = state.setdefault("maintenance_log", [])
+    entry = {"timestamp": datetime.now(timezone.utc).isoformat(), "action": action}
+    if details:
+        entry.update(details)
+    log.append(entry)
+    _save_json(STATE_PATH, state)
+    return entry
+
+
+def apply_fixes(ctx, plugin_name="atlas", trash_stamp=None):
     actions = []
     expected = ctx.get("expected_repo")
     mkt_name, key, reg = ctx.get("mkt_name"), ctx.get("key"), ctx.get("reg")
@@ -415,7 +518,8 @@ def apply_fixes(ctx, plugin_name="atlas"):
 
     stale = ctx.get("stale_assets") or []
     if stale:
-        trash = os.path.join(PLUGINS_DIR, f".trash-atlas-setup-{int(time.time())}")
+        stamp = trash_stamp if trash_stamp is not None else int(time.time())
+        trash = os.path.join(PLUGINS_DIR, f"{TRASH_PREFIX}{stamp}")
         os.makedirs(trash, exist_ok=True)
         for p in stale:
             dest = os.path.join(trash, os.path.basename(p.rstrip("/")))
@@ -424,6 +528,10 @@ def apply_fixes(ctx, plugin_name="atlas"):
                 actions.append(f"quarantined stale asset {p} -> {dest}")
             except Exception as e:
                 actions.append(f"could not quarantine {p}: {e}")
+        # M20: cap per-run trash dirs so they do not accumulate unbounded.
+        pruned = cap_trash_dirs(PLUGINS_DIR)
+        if pruned:
+            actions.append(f"capped trash dirs: removed {pruned} old")
 
     if reg:
         orphan = os.path.join(reg.get("installPath", ""), ".orphaned_at")
@@ -441,6 +549,8 @@ def apply_fixes(ctx, plugin_name="atlas"):
             if path and os.path.exists(path):
                 os.remove(path)
                 actions.append(f"cleared {path}")
+    # M22: record what this fix run did so there is an audit trail.
+    record_maintenance("fix", {"actions": actions})
     return actions
 
 
@@ -452,8 +562,29 @@ def main(argv=None):
         action="store_true",
         help="SessionStart mode: warn only, always exit 0",
     )
+    ap.add_argument(
+        "--purge",
+        action="store_true",
+        help="purge atlas.db telemetry tables to the row cap and exit",
+    )
+    ap.add_argument(
+        "--purge-cap",
+        type=int,
+        default=None,
+        help=f"row cap for --purge (default: {TELEMETRY_ROW_CAP})",
+    )
     ap.add_argument("--plugin", default="atlas")
     args = ap.parse_args(argv)
+
+    if args.purge:
+        # M21/M22: trim telemetry oldest-first to the cap and record the run.
+        summary = purge_telemetry(row_cap=args.purge_cap or TELEMETRY_ROW_CAP)
+        record_maintenance("purge", {"tables": summary})
+        for table, s in summary.items():
+            print(
+                f"PURGE {table}: {s['before']} -> {s['after']} (dropped {s['dropped']})"
+            )
+        return 0
 
     results, ctx = run_checks(args.plugin)
     failed = [r for r in results if not r["ok"]]

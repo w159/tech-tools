@@ -87,14 +87,23 @@ def main():
         payload = {}
 
     session = payload.get("session_id", "")
+    conn = None
     try:
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         import atlas_db
 
-        if not atlas_db.is_orchestrating(atlas_db.connect(), session):
+        conn = atlas_db.connect()
+        if not atlas_db.is_orchestrating(conn, session):
             sys.exit(0)  # only nudge after real orchestration turns
-    except Exception:
-        pass  # fail-open: if we cannot tell, fall through to the throttle
+    except Exception as exc:
+        # Fail-closed on the orchestration check: a transient DB error must not
+        # fall through to a spurious self-improvement nudge. Skip rather than
+        # nudge, since we cannot confirm this was an orchestration turn.
+        sys.stderr.write("[atlas] nudge: skipping, DB error: %s\n" % exc)
+        sys.exit(0)
+    finally:
+        if conn is not None:
+            conn.close()
 
     if throttled(marker_path()):
         sys.exit(0)

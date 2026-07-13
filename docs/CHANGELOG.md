@@ -4,6 +4,35 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
+## 2026-07-12 -- README rewrite follow-up: correct the 12-plugin catalog mismatch
+
+The README rewritten in the v5.0.0 entry above still described a 12-plugin Claude Code
+catalog that no longer matches the repo. The new README (344 lines) corrects four
+load-bearing facts to match the on-disk state, supersedes the v5.0.0 README claim.
+
+- The Claude Code marketplace lists 2 plugins (`atlas`, `armada`), not 12
+  (`.claude-plugin/marketplace.json:8-29`).
+- The Kimi manifest ships 12 plugins but does not list `armada`: it is `atlas` plus
+  11 legacy domain clusters (`.kimi-plugin/marketplace.json:4-63`).
+- The `mcp_servers/` directory has 11 entries: `_shared/` plus 10 vendor folders
+  (Auvik, Blumira, CIPP, ConnectWise Manage, Kaseya Spanning, KnowBe4, NinjaOne,
+  Paylocity, ThreatLocker, Vanta).
+- The `plugins/` directory on disk holds 2 plugin folders (`atlas`, `armada`);
+  the 11 Kimi-manifest entries reference legacy plugin folders that are not in
+  the active Claude Code marketplace.
+
+Caught by an atlas:completeness-critic sweep after the v5.0.0 README rewrite.
+The new README is 344 lines and is not US-ASCII: it contains 21 em-dashes
+(U+2014) on lines 66, 68, 70, 74, 81, 83, 87, 88, 90, 94, 97, 99, 101, 102,
+220, 223, 226, 229, 234, 331, 333 (`README.md`, verified with `rg -n '[--]'`).
+This supersedes the "Manifests made honest" line at `docs/CHANGELOG.md:26` of
+the v5.0.0 entry. The earlier "343 lines, US-ASCII, 0 banned chars" claim in
+this entry and the matching sub-bullet at `plugins/atlas/CHANGELOG.md:44` were
+wrong; follow-up still needed to replace the 21 em-dashes per `writing-style.md`
+and correct the plugin changelog sub-bullet.
+
+---
+
 ## Atlas v5.0.0 -- skill consolidation: mythology retired, 21 plain names, armada split out, runtime-evidence gate (2026-07-12)
 
 Driven by forensics on a 4.7-hour production session export (38 subagent

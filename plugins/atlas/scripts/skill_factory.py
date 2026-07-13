@@ -23,18 +23,21 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import sqlite3
 import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+
 # Where auto-created skills live
 def _skills_dir() -> Path:
     base = os.environ.get("ATLAS_HOME", os.path.expanduser("~/.atlas"))
     return Path(base) / "skills"
 
-VALID_NAME_RE = re.compile(r'^[a-z0-9][a-z0-9._-]*$')
+
+VALID_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 MAX_NAME_LENGTH = 64
 
 
@@ -51,7 +54,7 @@ def _validate_name(name: str) -> Optional[str]:
 def _skill_name_from_topic(topic: str) -> str:
     """Derive a filesystem-safe skill name from a topic string."""
     # Take first few words, lowercase, hyphenate
-    words = re.sub(r'[^a-z0-9\s-]', '', topic.lower()).split()[:5]
+    words = re.sub(r"[^a-z0-9\s-]", "", topic.lower()).split()[:5]
     name = "-".join(w for w in words if w)
     if not name:
         name = "learned-lesson"
@@ -70,7 +73,7 @@ def _build_skill_md(name: str, description: str, body: str) -> str:
 name: {name}
 description: "{description}"
 created_by: "atlas-auto"
-created_at: "{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}"
+created_at: "{time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}"
 version: "1.0.0"
 ---
 
@@ -80,7 +83,9 @@ version: "1.0.0"
 """
 
 
-def _extract_lessons_from_session(conn: sqlite3.Connection, session_id: str) -> List[Dict[str, Any]]:
+def _extract_lessons_from_session(
+    conn: sqlite3.Connection, session_id: str
+) -> List[Dict[str, Any]]:
     """Extract learnable lessons from the observability DB for a session.
 
     Sources:
@@ -103,14 +108,21 @@ def _extract_lessons_from_session(conn: sqlite3.Connection, session_id: str) -> 
             ).fetchall():
                 dim, baseline, target, note = row
                 if note and note.strip():
-                    lessons.append({
-                        "topic": dim or "improvement",
-                        "description": f"Lesson: {dim or 'improvement'} — {note[:100]}",
-                        "body": f"## {dim or 'Improvement'}\n\n**Baseline:** {baseline or 'unknown'}\n**Target:** {target or 'improved'}\n**Lesson:** {note}\n",
-                        "source": "improvements",
-                    })
-    except sqlite3.Error:
-        pass
+                    lessons.append(
+                        {
+                            "topic": dim or "improvement",
+                            "description": f"Lesson: {dim or 'improvement'} — {note[:100]}",
+                            "body": f"## {dim or 'Improvement'}\n\n**Baseline:** {baseline or 'unknown'}\n**Target:** {target or 'improved'}\n**Lesson:** {note}\n",
+                            "source": "improvements",
+                        }
+                    )
+    except sqlite3.Error as e:
+        # Surface the failure rather than swallow it; continue to the next
+        # source so one bad query does not silently zero the whole extraction.
+        print(
+            f"skill_factory: lessons extraction error (improvements): {e}",
+            file=sys.stderr,
+        )
 
     # 2. Behavioral signals — user corrections and assumption admissions
     try:
@@ -122,15 +134,24 @@ def _extract_lessons_from_session(conn: sqlite3.Connection, session_id: str) -> 
         ).fetchall():
             sig_type, snippet = row
             if snippet and snippet.strip():
-                label = "User correction" if sig_type == "user_correction" else "Assumption admitted"
-                lessons.append({
-                    "topic": sig_type,
-                    "description": f"{label}: {snippet[:100]}",
-                    "body": f"## {label}\n\n{snippet}\n\n**Lesson:** This {sig_type.replace('_', ' ')} should be avoided in future sessions.\n",
-                    "source": "signals",
-                })
-    except sqlite3.Error:
-        pass
+                label = (
+                    "User correction"
+                    if sig_type == "user_correction"
+                    else "Assumption admitted"
+                )
+                lessons.append(
+                    {
+                        "topic": sig_type,
+                        "description": f"{label}: {snippet[:100]}",
+                        "body": f"## {label}\n\n{snippet}\n\n**Lesson:** This {sig_type.replace('_', ' ')} should be avoided in future sessions.\n",
+                        "source": "signals",
+                    }
+                )
+    except sqlite3.Error as e:
+        print(
+            f"skill_factory: lessons extraction error (signals): {e}",
+            file=sys.stderr,
+        )
 
     # 3. Tool errors — patterns of failure
     try:
@@ -143,14 +164,19 @@ def _extract_lessons_from_session(conn: sqlite3.Connection, session_id: str) -> 
         ).fetchall()
         for tool_name, cnt, samples in error_tools:
             if tool_name and cnt > 0:
-                lessons.append({
-                    "topic": f"tool-error-{tool_name.lower()}",
-                    "description": f"Tool '{tool_name}' failed {cnt} time(s) — error pattern to avoid",
-                    "body": f"## Tool Error Pattern: {tool_name}\n\nFailed {cnt} time(s) this session.\n\n**Samples:**\n{(samples or '')[:500]}\n\n**Lesson:** Check for this error pattern when using {tool_name}.\n",
-                    "source": "tool_errors",
-                })
-    except sqlite3.Error:
-        pass
+                lessons.append(
+                    {
+                        "topic": f"tool-error-{tool_name.lower()}",
+                        "description": f"Tool '{tool_name}' failed {cnt} time(s) — error pattern to avoid",
+                        "body": f"## Tool Error Pattern: {tool_name}\n\nFailed {cnt} time(s) this session.\n\n**Samples:**\n{(samples or '')[:500]}\n\n**Lesson:** Check for this error pattern when using {tool_name}.\n",
+                        "source": "tool_errors",
+                    }
+                )
+    except sqlite3.Error as e:
+        print(
+            f"skill_factory: lessons extraction error (tool_errors): {e}",
+            file=sys.stderr,
+        )
 
     return lessons
 
@@ -206,9 +232,15 @@ def _session_worthy(conn: sqlite3.Connection, session_id: str) -> Tuple[bool, st
         ).fetchone()[0]
 
         if improvements == 0 and signals == 0 and errors == 0:
-            return False, "no learnable signals (no improvements, corrections, or errors)"
+            return (
+                False,
+                "no learnable signals (no improvements, corrections, or errors)",
+            )
 
-        return True, f"orchestrating run with {tool_count} tools, {improvements} improvements, {signals} signals, {errors} errors"
+        return (
+            True,
+            f"orchestrating run with {tool_count} tools, {improvements} improvements, {signals} signals, {errors} errors",
+        )
     except sqlite3.Error as e:
         return False, f"DB error: {e}"
 
@@ -249,7 +281,16 @@ def create_skill(name: str, description: str, body: str) -> Dict[str, Any]:
 
     skill_dir.mkdir(parents=True)
     skill_md = _build_skill_md(name, description, body)
-    (skill_dir / "SKILL.md").write_text(skill_md, encoding="utf-8")
+    try:
+        (skill_dir / "SKILL.md").write_text(skill_md, encoding="utf-8")
+    except OSError as e:
+        # Clean up the partially-created skill dir so a retry starts fresh
+        # instead of failing with "already exists" on the next attempt.
+        shutil.rmtree(skill_dir, ignore_errors=True)
+        return {
+            "success": False,
+            "error": f"Failed to write skill '{name}': {e}",
+        }
 
     return {
         "success": True,
@@ -298,11 +339,15 @@ def auto_create_from_session(db_path: Optional[str] = None) -> Dict[str, Any]:
 
         lessons = _extract_lessons_from_session(conn, session_id)
         if not lessons:
-            return {"created": False, "reason": "no lessons extracted", "session_id": session_id}
+            return {
+                "created": False,
+                "reason": "no lessons extracted",
+                "session_id": session_id,
+            }
 
         # Build a combined skill from all lessons
         # Use the most common topic as the skill name
-        topics = [l["topic"] for l in lessons]
+        topics = [lesson["topic"] for lesson in lessons]
         primary_topic = max(set(topics), key=topics.count) if topics else "lesson"
 
         name = _skill_name_from_topic(primary_topic)
@@ -310,8 +355,12 @@ def auto_create_from_session(db_path: Optional[str] = None) -> Dict[str, Any]:
         name = _dedup_skill_name(name, existing)
 
         # Combine lesson bodies
-        description = f"Auto-learned from session {session_id[:8]}: {len(lessons)} lesson(s)"
-        body_parts = [f"> Auto-created by atlas skill factory from session `{session_id}`.\n"]
+        description = (
+            f"Auto-learned from session {session_id[:8]}: {len(lessons)} lesson(s)"
+        )
+        body_parts = [
+            f"> Auto-created by atlas skill factory from session `{session_id}`.\n"
+        ]
         for lesson in lessons:
             body_parts.append(lesson["body"])
         body = "\n".join(body_parts)
@@ -325,6 +374,7 @@ def auto_create_from_session(db_path: Optional[str] = None) -> Dict[str, Any]:
 
 
 # --- CLI ---
+
 
 def _cli():
     if len(sys.argv) < 2:

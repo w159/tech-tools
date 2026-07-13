@@ -1,5 +1,6 @@
 ---
 name: atlas-wiki
+disable-model-invocation: true
 description: 'Generates and refreshes the .atlas/docs/wiki/ diagrams from .atlas/docs/architecture/ by invoking the graphify skill. Keeps the wiki fresh as the codebase changes. Use when architecture docs are updated, before completion, or when wiki diagrams are stale or missing.'
 when_to_use: 'wiki is stale or missing, architecture changed and diagrams need refresh, before completion gate, generate diagrams from architecture docs'
 allowed-tools: Read, Glob, Grep, Bash
@@ -177,7 +178,7 @@ Defaults to the current working directory when no repo-root is given.
 ## Relationship to atlas-audit
 
 atlas-audit Phase 4 consumes `graphify-out/graph.json` to build its
-navigable hub via `scripts/build_hub.py`. This skill produces the
+navigable hub via `${CLAUDE_PLUGIN_ROOT}/scripts/build_hub.py`. This skill produces the
 `graph.json` that atlas-audit consumes. The two skills do not edit each
 other; the contract is the file path and the JSON shape, both owned by
 graphify's `to_json` export (graphify/SKILL.md Step 4).
@@ -195,5 +196,5 @@ verdict is STALE or MISSING, atlas-setup recommends invoking this skill (or
 atlas-audit first, if architecture/ is empty). This skill does not
 decide the gate; it only does the rendering work the gate demands.
 
-See `plugins/atlas/skills/atlas-setup/references/graphify-wiring.md`
+See `${CLAUDE_SKILL_DIR}/references/graphify-wiring.md`
 for the full wiring contract.

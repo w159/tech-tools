@@ -60,9 +60,9 @@ def main():
     # Read payload (but we don't need most of it — skill_factory finds the
     # most recent orchestrating session itself)
     try:
-        raw = sys.stdin.read()
+        sys.stdin.read()
     except Exception:
-        raw = ""
+        pass
 
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
@@ -81,8 +81,17 @@ def main():
                 f"The skill is available next session under ~/.atlas/skills/{name}/."
             )
             sys.stdout.write(json.dumps({"additionalContext": msg}))
-    except Exception:
-        pass  # fail-open
+        else:
+            # Fail-open but observable: surface why no skill was created so
+            # silent zero-output curator runs can be diagnosed.
+            reason = result.get("reason", "unknown")
+            sys.stderr.write(
+                f"[atlas] auto-skill: no skill created (reason: {reason})\n"
+            )
+    except Exception as e:
+        # Fail-open but observable: surface the error so the hook is diagnosable
+        # rather than silently swallowing skill_factory failures.
+        sys.stderr.write(f"[atlas] auto-skill error: {e}\n")
 
     sys.exit(0)
 

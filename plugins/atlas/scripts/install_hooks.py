@@ -65,7 +65,12 @@ def command_for(script: str) -> str:
 
 def load_settings(path: Path) -> dict:
     if not path.is_file():
-        return {}
+        # Surface the missing source explicitly: returning {} here would let a
+        # caller mistake an absent file for a successful empty read (M19).
+        raise SystemExit(
+            f"ERROR: settings file not found: {path}. "
+            "Create it first, or omit --settings to use the default."
+        )
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
@@ -187,7 +192,10 @@ def main() -> int:
         raise SystemExit(f"ERROR: hooks dir not found at {HOOKS_DIR}")
 
     path = Path(args.settings).expanduser()
-    settings = load_settings(path)
+    # A missing settings file is a valid fresh-install starting point; the
+    # loader itself errors on missing files (M19) so stray paths do not look
+    # like a silent empty read.
+    settings = {} if not path.is_file() else load_settings(path)
     selected = args.select or default_selection()
 
     if args.list:

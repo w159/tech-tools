@@ -1,5 +1,11 @@
 # Atlas Harden Audit - Orientation (Step 0)
 
+> Note (2026-07-12): this audit ran against the pre-v5.0.0 marketplace shape
+> (12-plugin Claude Code catalog, `tech-tools` repo name, no `armada` split).
+> See `docs/CHANGELOG.md` 2026-07-12 README rewrite follow-up entry for the
+> current state (Claude Code marketplace: 2 plugins; Kimi manifest: 12 plugins
+> without `armada`; mcp_servers/: 11 entries; plugins/: 2 plugin folders).
+
 Date: 2026-07-07. Run: wf_26eaa706-0ca (read-only, 10 agents, 0 errors).
 Raw tier reports: orient-result.json (same folder). No plugin file was written or modified.
 

@@ -138,6 +138,7 @@ def resume_block(root):
     try:
         project_name = os.path.basename(root)
         atlas_ctx = None
+        conn = None
         try:
             import atlas_db
 
@@ -150,6 +151,9 @@ def resume_block(root):
             atlas_ctx = _atlas_session_context(conn, root)
         except Exception:
             atlas_ctx = None
+        finally:
+            if conn is not None:
+                conn.close()
 
         mem = None
         try:
@@ -229,6 +233,7 @@ def main():
         pass
 
     # Observability DB lifecycle -- fail-open; must not block boot.
+    _conn = None
     try:
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         import atlas_db
@@ -237,10 +242,16 @@ def main():
         atlas_db.init(_conn)
         _root = payload.get("cwd") or os.getcwd()
         _pid = atlas_db.register_project(_conn, _root, os.path.basename(_root))
-        if atlas_db.current_run_id(_conn, payload.get("session_id", "")) is None:
-            atlas_db.start_run(_conn, _pid, payload.get("session_id", ""))
+        _sid = payload.get("session_id", "")
+        # Empty/missing session_id would create a phantom run keyed by "" and
+        # corrupt is_orchestrating/current_run_id lookups -- skip run creation.
+        if _sid and atlas_db.current_run_id(_conn, _sid) is None:
+            atlas_db.start_run(_conn, _pid, _sid)
     except Exception:
         pass  # observability is best-effort; never block boot
+    finally:
+        if _conn is not None:
+            _conn.close()
 
     resume = resume_block(payload.get("cwd") or os.getcwd())
 
@@ -248,6 +259,7 @@ def main():
     try:
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         import atlas_curator
+
         atlas_curator.apply_transitions()
     except Exception:
         pass  # curator is best-effort; never block boot
@@ -257,6 +269,7 @@ def main():
     try:
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         import atlas_memory
+
         snapshot = atlas_memory.load_snapshot()
         parts = []
         if snapshot.get("memory"):
@@ -300,11 +313,15 @@ def main():
         )
         + ".",
         "Less-code mode (ponytail): "
-        + ("available" if pony else "absent - run the `atlas` skill to install for less-code mode")
+        + (
+            "available"
+            if pony
+            else "absent - run the `atlas` skill to install for less-code mode"
+        )
         + ".",
         "No-prompt scan: run `atlas` or any atlas skill with no task to scan this project "
         "and report what is missing to reach atlas standard (claude-mem + context-mode + ponytail, "
-        "loop-library, connectors, hooks, .atlas/.atlas/docs/ SSOT).",
+        "loop-library, connectors, hooks, .atlas/docs/ SSOT).",
     ]
     if memory_block:
         lines.append(memory_block)

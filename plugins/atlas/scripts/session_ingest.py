@@ -241,7 +241,18 @@ def _read_session_cwd(path):
 def ingest_transcript(path, conn=None, session_id=None, force=False):
     """Ingest new lines of one transcript. Returns a small stats dict.
     Incremental via byte cursor; resets cleanly if the file was truncated."""
-    stats = {"messages": 0, "tools": 0, "prompts": 0, "signals": 0, "results": 0}
+    # `skipped` counts per-line failures that were swallowed rather than fatal
+    # (corrupt JSON, unparseable records); `skip_reasons` keeps a few samples so a
+    # silent partial ingest is observable. See M15.
+    stats = {
+        "messages": 0,
+        "tools": 0,
+        "prompts": 0,
+        "signals": 0,
+        "results": 0,
+        "skipped": 0,
+        "skip_reasons": [],
+    }
     # Never mirror a synthetic session (e.g. claude-mem observer transcripts):
     # no session_logs row, no child rows. Bail before opening the DB.
     if is_synthetic_session(path=path, cwd=_read_session_cwd(path)):
@@ -282,7 +293,15 @@ def ingest_transcript(path, conn=None, session_id=None, force=False):
                 continue
             try:
                 obj = json.loads(raw)
-            except Exception:
+            except Exception as e:
+                # Skip, do not abort: a single corrupt line must not sink the
+                # whole ingest. Record it so the silent partial result is
+                # observable (M15).
+                stats["skipped"] += 1
+                if len(stats["skip_reasons"]) < 5:
+                    stats["skip_reasons"].append(
+                        f"json parse failed: {type(e).__name__}: {e}"
+                    )
                 continue
             _ingest_line(conn, session_id, obj, meta, stats)
         # link project from the cwd seen in the transcript

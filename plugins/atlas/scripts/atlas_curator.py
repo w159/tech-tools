@@ -24,9 +24,10 @@ import json
 import os
 import re
 import shutil
+import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional
 
 DEFAULT_STALE_AFTER_DAYS = 30
 DEFAULT_ARCHIVE_AFTER_DAYS = 90
@@ -52,7 +53,14 @@ def _load_state() -> Dict[str, Any]:
         return {"last_run_at": None, "run_count": 0, "archived": [], "marked_stale": []}
     try:
         return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    except (OSError, json.JSONDecodeError) as exc:
+        # Best-effort: keep running on corrupt state, but make the corruption
+        # observable so the silent reset does not erase run history unnoticed.
+        print(
+            f"atlas_curator: corrupt state file {path}: {exc!r}; "
+            "falling back to empty state",
+            file=sys.stderr,
+        )
         return {"last_run_at": None, "run_count": 0, "archived": [], "marked_stale": []}
 
 
@@ -74,7 +82,7 @@ def _read_skill_provenance(skill_dir: Path) -> Optional[str]:
         if match:
             return match.group(1)
         # Also try unquoted
-        match = re.search(r'^created_by:\s*(\S+)', content, re.MULTILINE)
+        match = re.search(r"^created_by:\s*(\S+)", content, re.MULTILINE)
         if match:
             return match.group(1)
     except (OSError, UnicodeDecodeError):
@@ -120,13 +128,15 @@ def _all_auto_skills() -> List[Dict[str, Any]]:
         if provenance != PROVENANCE_MARKER:
             continue  # only manage auto-created skills
 
-        skills.append({
-            "name": item.name,
-            "path": str(item),
-            "pinned": _is_pinned(item),
-            "last_activity": _skill_activity_time(item),
-            "has_stale_marker": (item / ".stale").is_file(),
-        })
+        skills.append(
+            {
+                "name": item.name,
+                "path": str(item),
+                "pinned": _is_pinned(item),
+                "last_activity": _skill_activity_time(item),
+                "has_stale_marker": (item / ".stale").is_file(),
+            }
+        )
     return skills
 
 
@@ -176,8 +186,15 @@ def apply_transitions(now: Optional[float] = None) -> Dict[str, Any]:
                 shutil.move(str(path), str(dest))
                 counts["archived"] += 1
                 archived_names.append(name)
-            except (OSError, shutil.Error):
-                pass  # fail open
+            except (OSError, shutil.Error) as exc:
+                # Best-effort: do not crash the curator, but surface the
+                # archive failure so the docs tree and state do not silently
+                # diverge.
+                print(
+                    f"atlas_curator: failed to archive skill {name} "
+                    f"({path} -> {dest}): {exc!r}",
+                    file=sys.stderr,
+                )
         elif activity <= stale_cutoff:
             # Mark stale
             stale_marker = path / ".stale"
@@ -185,8 +202,12 @@ def apply_transitions(now: Optional[float] = None) -> Dict[str, Any]:
                 try:
                     stale_marker.write_text(str(now), encoding="utf-8")
                     counts["marked_stale"] += 1
-                except OSError:
-                    pass
+                except OSError as exc:
+                    print(
+                        f"atlas_curator: failed to mark skill {name} stale "
+                        f"({stale_marker}): {exc!r}",
+                        file=sys.stderr,
+                    )
         else:
             # Active — clear stale marker if present
             if skill["has_stale_marker"]:
@@ -194,12 +215,16 @@ def apply_transitions(now: Optional[float] = None) -> Dict[str, Any]:
                 try:
                     stale_marker.unlink()
                     counts["reactivated"] += 1
-                except OSError:
-                    pass
+                except OSError as exc:
+                    print(
+                        f"atlas_curator: failed to reactivate skill {name} "
+                        f"({stale_marker}): {exc!r}",
+                        file=sys.stderr,
+                    )
 
     # Update state
     state = _load_state()
-    state["last_run_at"] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(now))
+    state["last_run_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))
     state["run_count"] = state.get("run_count", 0) + 1
     if archived_names:
         state.setdefault("archived", []).extend(archived_names)
@@ -233,7 +258,10 @@ def restore_skill(name: str) -> Dict[str, Any]:
     if not archive.is_dir():
         return {"success": False, "error": f"Archived skill '{name}' not found."}
     if dest.exists():
-        return {"success": False, "error": f"Skill '{name}' already exists in active dir."}
+        return {
+            "success": False,
+            "error": f"Skill '{name}' already exists in active dir.",
+        }
     try:
         shutil.move(str(archive), str(dest))
         return {"success": True, "message": f"Skill '{name}' restored."}
@@ -245,24 +273,32 @@ def status() -> Dict[str, Any]:
     """Return current curator status and skill inventory."""
     state = _load_state()
     skills = _all_auto_skills()
-    now = time.time()
     return {
         "last_run": state.get("last_run_at"),
         "run_count": state.get("run_count", 0),
         "total_auto_skills": len(skills),
         "pinned": sum(1 for s in skills if s["pinned"]),
         "stale": sum(1 for s in skills if s["has_stale_marker"]),
-        "skills": [{"name": s["name"], "pinned": s["pinned"],
-                     "stale": s["has_stale_marker"],
-                     "last_active": time.strftime('%Y-%m-%d', time.localtime(s["last_activity"]))
-                    } for s in skills],
+        "skills": [
+            {
+                "name": s["name"],
+                "pinned": s["pinned"],
+                "stale": s["has_stale_marker"],
+                "last_active": time.strftime(
+                    "%Y-%m-%d", time.localtime(s["last_activity"])
+                ),
+            }
+            for s in skills
+        ],
     }
 
 
 # --- CLI ---
 
+
 def _cli():
     import sys
+
     if len(sys.argv) < 2:
         print("Usage: atlas_curator.py [run|status|pin|unpin|restore]")
         return

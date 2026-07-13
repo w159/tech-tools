@@ -1,5 +1,6 @@
 ---
 name: atlas-refactor
+disable-model-invocation: true
 description: Refactor, rename, or restructure code without changing observable behavior. Use when code works but is messy, hard to navigate, or carries dead weight, and you need behavior preserved with before/after evidence.
 when_to_use: code works but is messy, hard to navigate, or carries dead weight
 allowed-tools: Read, Glob, Grep, Bash, Edit, MultiEdit
@@ -11,10 +12,10 @@ argument-hint: '<target symbol or file to refactor>'
 Apply the Operating Contract to this entire task. It is injected below.
 
 ```!
-cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/operating-contract.md"
+cat "${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md"
 ```
 
-If the contract did not load above, read `skills/atlas-orchestrate/references/operating-contract.md` and apply it before proceeding.
+If the contract did not load above, read `references/operating-contract.md` and apply it before proceeding.
 
 Read `${CLAUDE_SKILL_DIR}/references/refactor-checklist.md` and apply the behavior-preservation, test-coverage, and naming rules it defines to every step.
 

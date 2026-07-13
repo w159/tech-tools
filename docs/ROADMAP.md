@@ -6,6 +6,37 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 
 ## Done
 
+### Atlas v5.0.0 -- skill consolidation: mythology retired, 21 plain names, armada split out, runtime-evidence gate (resolved 2026-07-12)
+
+Skill consolidation driven by session forensics: a mined 4.7-hour production
+session (38 dispatches, 1 skill auto-invocation) showed the mythological names
+never routed, the fleet was 3x its working set, and verifiers confirmed changes
+the running app contradicted. Breaking release.
+
+- Mythological names retired; fleet collapsed 27 -> 21 skills. atlas-metis ->
+  atlas-orchestrate; atlas-chronos -> atlas-loop; atlas-odysseus -> atlas-ux-test.
+  atlas-athena, atlas-ariadne, and atlas-argus merged into atlas-audit. atlas-olympus,
+  atlas-hephaestus, atlas-hermes, and atlas-doctor merged into atlas-setup.
+  atlas-nestor deleted.
+- armada split into its own plugin (`plugins/armada`): the 3.0 MB org-deployment
+  tree and the 11 armada-* department agents moved out of atlas; atlas alone now
+  carries 12 core agents. New marketplace entry.
+- Runtime-evidence gate. `verified` now requires runtime parity: user-facing
+  changes need an atlas:ui-runtime-tester pass or observed live behavior in
+  the same wave; schema-touching backend changes need migration parity with
+  the environment the user runs.
+- Manifests made honest. plugin.json, .kimi-plugin/plugin.json, marketplace.json,
+  README.md, and the setup references rewritten for the 21-skill fleet.
+- Follow-up (same day): README rewrite to correct the 12-plugin catalog mismatch.
+  New README mirrors on-disk state (Claude Code marketplace: 2 plugins; Kimi
+  manifest: 12 plugins without `armada`; mcp_servers/: 11 entries; plugins/:
+  2 plugin folders). See `docs/CHANGELOG.md` 2026-07-12 README rewrite entry
+  and `plugins/atlas/CHANGELOG.md` 5.0.0 sub-bullet.
+
+Plugin version 4.0.0 -> 5.0.0 (`plugins/atlas/.claude-plugin/plugin.json:3`).
+See `plugins/atlas/CHANGELOG.md` 5.0.0 entry for the full per-skill breakdown
+and `docs/CHANGELOG.md` v5.0.0 entry for the rollup.
+
 ### Atlas v4.0.0 -- skills mastery rebuild: 184-skill fleet (resolved 2026-07-11)
 
 Full atlas skills mastery rebuild. 184 skills (28 top-level plus 156 armada
@@ -61,7 +92,10 @@ generator fix does not touch files that already exist in that repo.
   dispatches) to measure real-world false-arm rate of the accepted dual-use-verb
   residual (audit/investigate/debug/profile/harden).
 - atlas_doctor marketplace-source repair: pre-existing FAILs (installed cache
-  tracks henssler-financial remote, expected w159/tech-tools) - run
+  tracks henssler-financial remote, expected w159/atlas per
+  `plugins/atlas/.claude-plugin/plugin.json:8`; the marketplace name itself
+  is `atlas` per `.claude-plugin/marketplace.json:3`, and the marketplace
+  now lists 2 plugins, not 12) - run
   `python3 plugins/atlas/scripts/atlas_doctor.py --fix` then reload plugins.
 - Improvement #28 (user-gated): one-line global CLAUDE.md rule that the Skill tool
   is only for listed skills (34 historical Skill(bash/read/write) misfires, 100%
@@ -229,6 +263,10 @@ Keyword lists in `.claude-plugin/marketplace.json` brought into parity with each
 security-compliance (+email-security). All 12 plugins now match; marketplace.json valid.
 (`.claude-plugin/marketplace.json`)
 
+> Note (2026-07-12, v5.0.0): the Claude Code marketplace was reduced to 2 plugins
+> (`atlas`, `armada`); the 11 legacy domain plugins still ship via the Kimi manifest
+> at `.kimi-plugin/marketplace.json` and are no longer Claude Code marketplace entries.
+
 ### Phase 3 -- finance connectors wired, nudge standalone, ASCII normalization (shipped 2026-06-22)
 
 All three open decisions from Phase 2 resolved (finance wiring, nudge plist, ASCII sweep).
@@ -243,6 +281,10 @@ See `docs/CHANGELOG.md` Phase 3 entry dated 2026-06-22.
 - ASCII normalization: 0 non-ASCII codepoints confirmed across all 12 plugins, `_templates/`,
   and `CLAUDE.md`. Em/en dashes, arrows, box-drawing, emoji, math symbols all replaced.
   (`plugins/_templates/`, `plugins/CLAUDE.md`, all 12 plugin clusters)
+
+> Note (2026-07-12, v5.0.0): the "all 12 plugins" referenced here are the pre-v5.0.0
+> Claude Code marketplace shape. The Claude Code marketplace now lists 2 plugins
+> (`atlas`, `armada`); the 11 legacy domain clusters still ship via the Kimi manifest.
 - Re-verification: 362 frontmatter files, 0 PyYAML failures; marketplace.json 12/12 matches disk.
 
 ### Phase 2 -- marketplace-wide hygiene (shipped 2026-06-22)
@@ -259,6 +301,11 @@ See `docs/CHANGELOG.md` entry dated 2026-06-22 (Phase 2 section).
 - README stale-name fixes: root README.md and plugins/it-operations/README.md corrected;
   leaked personal path removed from plugins/productivity/commands/nudge.md.
   (`README.md`, `plugins/it-operations/README.md`, `plugins/productivity/commands/nudge.md`)
+
+> Note (2026-07-12, v5.0.0): this README stale-name fix is superseded by the v5.0.0
+> README rewrite (343 lines, US-ASCII, 0 banned chars) and its 2026-07-12 follow-up
+> correcting the 12-plugin catalog mismatch. See `docs/CHANGELOG.md` 2026-07-12
+> follow-up entry for the rollup.
 
 ### Phase 1 -- atlas plugin optimization (shipped 2026-06-22)
 

@@ -226,7 +226,7 @@ def is_orchestrating(conn, session_id):
 def _write_orchestration_sentinel(cwd):
     """Advisory only. Never read for gating; a stale file must not enable a gate."""
     try:
-        run_dir = os.path.join(cwd, "docs", ".run")
+        run_dir = os.path.join(cwd, ".atlas", "docs", ".run")
         os.makedirs(run_dir, exist_ok=True)
         with open(os.path.join(run_dir, "atlas-orchestrate.active"), "w") as f:
             f.write(str(time.time()))
@@ -339,29 +339,48 @@ def run_metrics(conn, run_id):
     return dict(zip(cols, row))
 
 
+def is_shipping_agent(agent_type):
+    """True for dispatch agent_types that ship code changes (Law 5 implementers).
+
+    Covers the canonical atlas:implementer plus the generalist/bare types an
+    orchestrator can dispatch to ship code: general-purpose, fork, and a bare
+    'Agent'. Read-only/analysis types (explorer, planner, docs-curator,
+    completeness-critic, Code Reviewer, etc.) are NOT shipping agents -- only
+    true implementers count, so an orchestrator cannot escape the verifier gate
+    by dispatching a generalist instead of atlas:implementer.
+    """
+    if not agent_type:
+        return False
+    t = agent_type.lower()
+    if "implementer" in t:
+        return True
+    return t in {"general-purpose", "fork", "agent"}
+
+
 def _dispatch_coverage_counts(conn, run_id):
     """Count implementer-type vs verifier-type dispatches for a run from the
     `dispatches` table, whose agent_type is recorded at dispatch time (the reliable
     source; tool_calls targets suffer a ~99% key-mismatch against real agent names).
 
-    Matching rule (case-insensitive substring on agent_type):
-      implementer-type: contains 'implementer' - covers atlas:implementer and any
-                        domain-prefixed specialist that ships changes
-                        (e.g. frontend-implementer, atlas:implementer).
+    Matching rule (case-insensitive on agent_type):
+      implementer-type: is_shipping_agent - contains 'implementer' (covers
+                        atlas:implementer and domain-prefixed specialists that
+                        ship changes) OR is exactly general-purpose/fork/Agent
+                        (generalist/bare types that also ship code).
       verifier-type:    contains 'verifier' or 'validator' - covers atlas:verifier
                         and secondary-expert-validator equivalents.
+    Read-only/analysis agent types (explorer, planner, docs-curator, Code
+    Reviewer, etc.) count as neither -- they ship nothing.
     Returns (implementers, verifiers)."""
-    impl = conn.execute(
-        "SELECT COUNT(*) FROM dispatches WHERE run_id=? "
-        "AND LOWER(agent_type) LIKE '%implementer%'",
-        (run_id,),
-    ).fetchone()[0]
-    ver = conn.execute(
-        "SELECT COUNT(*) FROM dispatches WHERE run_id=? "
-        "AND (LOWER(agent_type) LIKE '%verifier%' "
-        "OR LOWER(agent_type) LIKE '%validator%')",
-        (run_id,),
-    ).fetchone()[0]
+    rows = conn.execute(
+        "SELECT agent_type FROM dispatches WHERE run_id=?", (run_id,)
+    ).fetchall()
+    impl = sum(1 for (a,) in rows if is_shipping_agent(a))
+    ver = sum(
+        1
+        for (a,) in rows
+        if a and ("verifier" in a.lower() or "validator" in a.lower())
+    )
     return impl, ver
 
 
@@ -630,9 +649,9 @@ def upsert_session_log(conn, session_id, agent=None, **fields):
         "file_mtime",
         "last_ingest_at",
     )
-    insert_cols = list(cols)
+    insert_cols: list[str] = list(cols)
     insert_vals = [fields.get(c) for c in cols]
-    update_cols = list(cols)
+    update_cols: list[str] = list(cols)
     if agent is not None:
         insert_cols.append("agent")
         insert_vals.append(agent)

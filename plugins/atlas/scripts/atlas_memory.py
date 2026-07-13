@@ -23,12 +23,10 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import tempfile
-import time
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 # fcntl is Unix-only; on Windows use msvcrt for file locking
 fcntl = None
@@ -38,7 +36,7 @@ except ImportError:
     try:
         import msvcrt
     except ImportError:
-        msvcrt = None
+        msvcrt: Any = None
 
 ENTRY_DELIMITER = "\n§\n"
 DEFAULT_MEMORY_LIMIT = 4000  # chars — generous for project-specific lessons
@@ -176,7 +174,10 @@ def add(target: str, content: str) -> Dict[str, Any]:
         entries = list(dict.fromkeys(entries))  # dedupe
 
         if content in entries:
-            return {"success": True, "message": "Entry already exists (no duplicate added)."}
+            return {
+                "success": True,
+                "message": "Entry already exists (no duplicate added).",
+            }
 
         limit = _char_limit(target)
         new_entries = entries + [content]
@@ -204,7 +205,10 @@ def replace(target: str, old_text: str, new_content: str) -> Dict[str, Any]:
     if not old_text:
         return {"success": False, "error": "old_text cannot be empty."}
     if not new_content:
-        return {"success": False, "error": "new_content cannot be empty. Use 'remove' to delete entries."}
+        return {
+            "success": False,
+            "error": "new_content cannot be empty. Use 'remove' to delete entries.",
+        }
 
     path = _path_for(target)
     with _file_lock(path):
@@ -213,12 +217,19 @@ def replace(target: str, old_text: str, new_content: str) -> Dict[str, Any]:
 
         matches = [(i, e) for i, e in enumerate(entries) if old_text in e]
         if not matches:
-            return {"success": False, "error": f"No entry matched '{old_text}'.", "current_entries": entries}
+            return {
+                "success": False,
+                "error": f"No entry matched '{old_text}'.",
+                "current_entries": entries,
+            }
 
         if len(matches) > 1:
             unique_texts = {e for _, e in matches}
             if len(unique_texts) > 1:
-                return {"success": False, "error": f"Multiple entries matched '{old_text}'. Be more specific."}
+                return {
+                    "success": False,
+                    "error": f"Multiple entries matched '{old_text}'. Be more specific.",
+                }
 
         idx = matches[0][0]
         limit = _char_limit(target)
@@ -252,12 +263,19 @@ def remove(target: str, old_text: str) -> Dict[str, Any]:
 
         matches = [(i, e) for i, e in enumerate(entries) if old_text in e]
         if not matches:
-            return {"success": False, "error": f"No entry matched '{old_text}'.", "current_entries": entries}
+            return {
+                "success": False,
+                "error": f"No entry matched '{old_text}'.",
+                "current_entries": entries,
+            }
 
         if len(matches) > 1:
             unique_texts = {e for _, e in matches}
             if len(unique_texts) > 1:
-                return {"success": False, "error": f"Multiple entries matched '{old_text}'. Be more specific."}
+                return {
+                    "success": False,
+                    "error": f"Multiple entries matched '{old_text}'. Be more specific.",
+                }
 
         idx = matches[0][0]
         entries.pop(idx)
@@ -329,8 +347,10 @@ def usage(target: str) -> Dict[str, Any]:
 
 # --- CLI for manual inspection/management ---
 
+
 def _cli():
     import sys
+
     if len(sys.argv) < 2:
         print("Usage: atlas_memory.py [snapshot|list|add|remove|usage]")
         return

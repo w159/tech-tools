@@ -11,14 +11,14 @@ argument-hint: '[finding-id]  (no args: list actionable findings from the latest
 Apply the Operating Contract to this entire task. It is injected below.
 
 ```!
-cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/operating-contract.md"
+cat "${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md"
 ```
 
-If the contract did not load above, read `skills/atlas-orchestrate/references/operating-contract.md` and apply it before proceeding.
+If the contract did not load above, read `references/operating-contract.md` and apply it before proceeding.
 
 You are the launcher that closes the audit -> remediation loop. A prior `atlas-audit` or
 `atlas-audit` run wrote a hub under `docs/audits/atlas-<skill>-<date>/hub/`
-(`manifest.json` + branded `index.html`, built by `scripts/build_hub.py`). Each manifest entry is
+(`manifest.json` + branded `index.html`, built by `${CLAUDE_PLUGIN_ROOT}/scripts/build_hub.py`). Each manifest entry is
 an actionable finding with its `id`, `severity`, `file`, `node_id`, `handoff_path`, and
 `prompt_summary`.
 

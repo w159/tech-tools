@@ -1,5 +1,6 @@
 ---
 name: atlas-vendor-assessment
+disable-model-invocation: true
 description: Evidence-based vendor security assessment against a framework you name, citing provided docs per finding. Use when the output may reach an auditor or reviewer.
 when_to_use: the output may reach an auditor or reviewer, and each finding must cite provided evidence
 allowed-tools: Read, Glob, Grep, Bash, Write
@@ -11,10 +12,10 @@ argument-hint: '[vendor + services/data access] [framework(s)] [attach evidence:
 Apply the Operating Contract to this entire task. It is injected below.
 
 ```!
-cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/operating-contract.md"
+cat "${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md"
 ```
 
-If the contract did not load above, read `skills/atlas-orchestrate/references/operating-contract.md` and apply it before proceeding.
+If the contract did not load above, read `references/operating-contract.md` and apply it before proceeding.
 
 # `atlas-vendor-assessment`
 

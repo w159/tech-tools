@@ -1,5 +1,6 @@
 ---
 name: atlas-harden
+disable-model-invocation: true
 description: Write an idempotent endpoint remediation script using a CHECK/SET/VERIFY pattern for RMM/MDM, proving whether it changed state or was already compliant.
 when_to_use: write an idempotent endpoint remediation script with CHECK/SET/VERIFY for RMM/MDM that proves compliant or changed
 allowed-tools: Read, Glob, Grep, Bash, Edit, MultiEdit
@@ -11,10 +12,10 @@ argument-hint: '[objective] [target OS/devices] [deployment context: RMM run-as,
 Apply the Operating Contract to this entire task. It is injected below.
 
 ```!
-cat "${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/operating-contract.md"
+cat "${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md"
 ```
 
-If the contract did not load above, read `skills/atlas-orchestrate/references/operating-contract.md` and apply it before proceeding.
+If the contract did not load above, read `references/operating-contract.md` and apply it before proceeding.
 
 # `atlas-harden`
 

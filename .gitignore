@@ -226,6 +226,17 @@ firebase-adminsdk*.json
 !docs/superpowers/
 !docs/superpowers/**
 
+# ---- .atlas/docs - atlas per-project SSOT (ledger + evidence must ship) ----
+# The atlas skills and completion_gate.py treat .atlas/docs/ as the single source
+# of truth: .run/findings.json is the verification ledger and evidence/ holds the
+# batch verification records. The deny-by-default /.*/ rule at the top blocks
+# every root-level dotdir, so re-include the durable tree here. Ephemeral run
+# state under .atlas/docs/.run/ (active-session markers, STATE.md) is re-excluded
+# in Section 5 except findings.json, which is the durable verification record.
+!.atlas/
+!.atlas/docs/
+!.atlas/docs/**
+
 
 # ============================================================================
 # SECTION 5 — Re-exclude generated, local, and machine-specific artifacts
@@ -242,6 +253,13 @@ firebase-adminsdk*.json
 # ---- Atlas ephemeral run state (orchestration scratch; never durable) ----
 docs/.run/
 docs/.run/**
+# Same ephemeral scratch under the .atlas/docs SSOT, EXCEPT the findings.json
+# ledger, which is the durable verification record the Law 5 gate reads and
+# must ship with the repo. Exclude only the .run/ contents (not the directory
+# itself) so the per-file negation below can re-include findings.json; git will
+# not re-include a file whose parent directory is excluded. Later rules win.
+.atlas/docs/.run/**
+!.atlas/docs/.run/findings.json
 
 # ---- Safety: keep any nested git repo / vendored doc-site clone under docs/ out ----
 # The docs allowlist above never includes these; this is belt-and-suspenders so a

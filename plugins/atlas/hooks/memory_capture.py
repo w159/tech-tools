@@ -19,30 +19,97 @@ import json
 import os
 import sqlite3
 import sys
-import time
+
+
+def _resolve_scope(conn, session_id):
+    """Resolve the session_ids and run_ids worth querying for this Stop hook.
+
+    The Stop hook fires with one session_id, but the learnable signals often
+    live under a DIFFERENT session_id: the orchestrating run's own session
+    (when the Stop session is a subagent with no run of its own) or subagent
+    sessions in the orchestrating run's project. The schema has no
+    parent_run_id, so the orbit is approximated by project + recency: the
+    orchestrating run in the same project, plus session_logs rows started
+    during that run. Fail-open: any DB error collapses to just the literal
+    session_id.
+    """
+    # ponytail: project+recency heuristic, not a parent_run_id link; upgrade to
+    # an explicit run->subagent mapping if cross-run noise in one project shows.
+    session_ids = {session_id}
+    run_ids = set()
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db
+
+        rid = atlas_db.current_run_id(conn, session_id) or atlas_db.latest_run_id(
+            conn, session_id
+        )
+        project_id, run_started = None, None
+        if rid:
+            run_ids.add(rid)
+            row = conn.execute(
+                "SELECT session_id, project_id, started_at FROM runs WHERE id=?",
+                (rid,),
+            ).fetchone()
+            if row:
+                session_ids.add(row[0])
+                project_id, run_started = row[1], row[2]
+        if project_id is None:
+            # Stop session has no run; link it to a project via session_logs.
+            row = conn.execute(
+                "SELECT project_id FROM session_logs WHERE session_id=?",
+                (session_id,),
+            ).fetchone()
+            if row:
+                project_id = row[0]
+        if project_id:
+            orch = conn.execute(
+                "SELECT id, session_id, started_at FROM runs "
+                "WHERE project_id=? AND orchestrating=1 ORDER BY id DESC LIMIT 1",
+                (project_id,),
+            ).fetchone()
+            if orch:
+                run_ids.add(orch[0])
+                session_ids.add(orch[1])
+                if run_started is None:
+                    run_started = orch[2]
+            if run_started is not None:
+                for sid in conn.execute(
+                    "SELECT session_id FROM session_logs "
+                    "WHERE project_id=? AND started_at>=? AND session_id!=?",
+                    (project_id, run_started, session_id),
+                ).fetchall():
+                    session_ids.add(sid[0])
+    except sqlite3.Error:
+        pass
+    return session_ids, run_ids
+
+
+def _in_clause(values):
+    """Placeholders + params for an IN (...) clause built from one tuple."""
+    params = tuple(values)
+    return ",".join("?" * len(params)), params
 
 
 def _should_capture(conn, session_id):
-    """True when this session has learnable signals worth capturing."""
+    """True when this session (or its orchestrating run's orbit) has learnable
+    signals worth capturing."""
     try:
-        # Check for behavioral signals (corrections, assumption admissions)
+        session_ids, run_ids = _resolve_scope(conn, session_id)
+        ph, params = _in_clause(session_ids)
         signals = conn.execute(
-            "SELECT COUNT(*) FROM signals WHERE session_id=? "
+            "SELECT COUNT(*) FROM signals WHERE session_id IN (" + ph + ") "
             "AND signal_type IN ('user_correction', 'assumption_admission')",
-            (session_id,),
+            params,
         ).fetchone()[0]
         if signals > 0:
             return True, "behavioral signals"
 
-        # Check for improvements
-        run_row = conn.execute(
-            "SELECT id FROM runs WHERE session_id=? ORDER BY id DESC LIMIT 1",
-            (session_id,),
-        ).fetchone()
-        if run_row:
+        if run_ids:
+            rph, rparams = _in_clause(run_ids)
             improvements = conn.execute(
-                "SELECT COUNT(*) FROM improvements WHERE run_id=?",
-                (run_row[0],),
+                "SELECT COUNT(*) FROM improvements WHERE run_id IN (" + rph + ")",
+                rparams,
             ).fetchone()[0]
             if improvements > 0:
                 return True, "improvements recorded"
@@ -59,12 +126,18 @@ def _extract_facts(conn, session_id, cwd):
 
     project_name = os.path.basename(cwd) if cwd else "unknown"
 
+    try:
+        session_ids, run_ids = _resolve_scope(conn, session_id)
+    except sqlite3.Error:
+        session_ids, run_ids = {session_id}, set()
+
     # 1. User corrections → memory (agent-level lessons)
     try:
+        ph, params = _in_clause(session_ids)
         for row in conn.execute(
-            "SELECT snippet FROM signals WHERE session_id=? "
+            "SELECT snippet FROM signals WHERE session_id IN (" + ph + ") "
             "AND signal_type='user_correction' ORDER BY ts DESC LIMIT 5",
-            (session_id,),
+            params,
         ).fetchall():
             snippet = row[0]
             if snippet and snippet.strip():
@@ -76,10 +149,11 @@ def _extract_facts(conn, session_id, cwd):
 
     # 2. Assumption admissions → memory (agent-level lessons)
     try:
+        ph, params = _in_clause(session_ids)
         for row in conn.execute(
-            "SELECT snippet FROM signals WHERE session_id=? "
+            "SELECT snippet FROM signals WHERE session_id IN (" + ph + ") "
             "AND signal_type='assumption_admission' ORDER BY ts DESC LIMIT 3",
-            (session_id,),
+            params,
         ).fetchall():
             snippet = row[0]
             if snippet and snippet.strip():
@@ -90,30 +164,30 @@ def _extract_facts(conn, session_id, cwd):
 
     # 3. Improvements → project memory (project-specific decisions)
     try:
-        run_row = conn.execute(
-            "SELECT id FROM runs WHERE session_id=? ORDER BY id DESC LIMIT 1",
-            (session_id,),
-        ).fetchone()
-        if run_row:
+        if run_ids:
+            rph, rparams = _in_clause(run_ids)
             for row in conn.execute(
                 "SELECT dimension, baseline, target, note FROM improvements "
-                "WHERE run_id=? ORDER BY id DESC LIMIT 5",
-                (run_row[0],),
+                "WHERE run_id IN (" + rph + ") ORDER BY id DESC LIMIT 5",
+                rparams,
             ).fetchall():
                 dim, baseline, target, note = row
                 if note and note.strip():
-                    fact = f"[{project_name}] {dim or 'Improvement'}: {note.strip()[:200]}"
+                    fact = (
+                        f"[{project_name}] {dim or 'Improvement'}: {note.strip()[:200]}"
+                    )
                     project_facts.append(fact)
     except sqlite3.Error:
         pass
 
     # 4. Tool error patterns → memory (agent-level tool quirks)
     try:
+        ph, params = _in_clause(session_ids)
         error_tools = conn.execute(
             "SELECT tool_name, COUNT(*) as cnt FROM tool_calls "
-            "WHERE session_id=? AND is_error=1 "
+            "WHERE session_id IN (" + ph + ") AND is_error=1 "
             "GROUP BY tool_name HAVING cnt >= 1 ORDER BY cnt DESC LIMIT 3",
-            (session_id,),
+            params,
         ).fetchall()
         for tool_name, cnt in error_tools:
             if tool_name:
@@ -184,7 +258,13 @@ def main():
                 captured["project"] += 1
                 captured["facts"].append(fact[:80])
 
-    except Exception:
+    except Exception as exc:
+        # fail-open: never block the hook. But surface the failure on stderr so
+        # a silent capture miss is observable instead of invisible.
+        try:
+            sys.stderr.write(f"[atlas] memory_capture fail-open: {exc}\n")
+        except Exception:
+            pass
         sys.exit(0)  # fail-open
     finally:
         try:
