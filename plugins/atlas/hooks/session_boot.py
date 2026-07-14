@@ -321,7 +321,7 @@ def main():
         + ".",
         "No-prompt scan: run `atlas` or any atlas skill with no task to scan this project "
         "and report what is missing to reach atlas standard (claude-mem + context-mode + ponytail, "
-        "loop-library, connectors, hooks, .atlas/docs/ SSOT).",
+        "loop-library, connectors, hooks, docs/ SSOT).",
     ]
     if memory_block:
         lines.append(memory_block)

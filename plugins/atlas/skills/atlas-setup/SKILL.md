@@ -1,11 +1,11 @@
 ---
 name: atlas-setup
-description: 'MANUAL skill covering the full atlas lifecycle outside of task work: onboard (scaffold the .atlas/docs/ SSOT, inventory skills, recommend what to run next), install (verify and wire claude-mem, context-mode, hooks, project config), connectors (guided vendor MCP connector setup across domain plugins), and repair (fix a broken atlas install: marketplace, rollbacks, hooks, assets). Run with no args for onboarding plus recommendations; run with --fix to auto-repair.'
+description: 'MANUAL skill covering the full atlas lifecycle outside of task work: onboard (scaffold the docs/ SSOT plus .atlas/ internal state, inventory skills, recommend what to run next), install (verify and wire claude-mem, context-mode, hooks, project config), connectors (guided vendor MCP connector setup across domain plugins), and repair (fix a broken atlas install: marketplace, rollbacks, hooks, assets). Run with no args for onboarding plus recommendations; run with --fix to auto-repair.'
 when_to_use: first run to bring atlas online, workspace setup, SSOT scaffolding, tooling install, vendor connector setup, what to run next, or a broken atlas install (subagents not launching, plugin acting like an older version)
 disable-model-invocation: true
 user-invocable: true
 argument-hint: "[onboard | install | connectors | repair [--fix] | task description | 'menu']"
-allowed-tools: Read, Glob, Grep, Bash(python3:*), Write(.atlas/docs/**)
+allowed-tools: Read, Glob, Grep, Bash(python3:*), Write(docs/**), Write(.atlas/evidence/**), Write(.atlas/audits/**)
 ---
 
 # atlas-setup - onboarding, install, connectors, repair
@@ -17,15 +17,15 @@ It has four modes. Pick by argument, or infer from the ask:
 
 | Mode | When | Reference |
 |---|---|---|
-| onboard (default) | First run, `.atlas/docs/` missing, or "what should I run next" | this file |
+| onboard (default) | First run, `docs/` missing, or "what should I run next" | this file |
 | install | Tooling not wired: claude-mem, context-mode, hooks, project config | `references/install.md` |
 | connectors | Vendor MCP connector setup (Auvik, CIPP, NinjaOne, ...) | `references/connectors.md` |
 | repair | Atlas itself is broken: subagents not launching, stale version, missing hooks | `references/repair.md` |
 
 Mode routing rules:
 
-- No args and no `.atlas/docs/` -> onboard.
-- No args and `.atlas/docs/` exists -> recommendations (below).
+- No args and no `docs/` -> onboard.
+- No args and `docs/` exists -> recommendations (below).
 - Anything that smells like a broken install (subagents do not launch, the
   plugin acts like an older version, marketplace points at a stale fork)
   -> repair. Auto-repair with `--fix` runs
@@ -49,43 +49,53 @@ standard is in `references/mastery-framework.md`. The summary:
 Key rule: `triggers:` is NOT a real Claude Code field. Auto-trigger comes
 ONLY from `description` + `when_to_use`. Never use `triggers:`.
 
-## The .atlas/docs/ SSOT
+## The docs/ SSOT (plus .atlas/ internal state)
 
-Onboarding scaffolds this structure at the project root:
+Onboarding scaffolds two trees at the project root. Project documentation
+lives under `docs/`; atlas's own self-improvement state lives under
+`.atlas/` directly. `.atlas/` never contains a `docs/` subdirectory.
 
 ```
-.atlas/docs/
+docs/
   CHANGELOG.md            append-only, newest-first
   ROADMAP.md              backlog with status
   AGENTS.md               architecture, conventions, commands
-  evidence/               permanent execution-evidence captures
   architecture/           system design, maps, ADRs (atlas-audit)
   reference_files/        external/vendor doc snippets
-  audits/                 audit reports (atlas-audit)
   features/               per-feature specs-as-built
   lessons/                durable lessons, gotchas, postmortems
   wiki/                   onboarding, how-to, runbooks, diagrams (graphify)
   specs/                  requirements and specifications
   plans/                  implementation plans, stage maps
+
+.atlas/
+  evidence/               permanent execution-evidence captures
+  audits/                 audit reports (atlas-audit)
   .run/                   EPHEMERAL, GITIGNORED run state
 ```
 
-Everything under `.atlas/docs/` is committed except `.run/`. The scaffold
-is created by a deterministic, idempotent script, never inline prose:
+Everything under `docs/` and `.atlas/evidence/`, `.atlas/audits/` is
+committed; `.atlas/.run/` is the only ephemeral, gitignored subtree. The
+scaffold is created by a deterministic, idempotent script, never inline
+prose:
 
-    python3 "${CLAUDE_SKILL_DIR}/scripts/scaffold_docs.py" <repo-root>/.atlas/docs
+    python3 "${CLAUDE_SKILL_DIR}/scripts/scaffold_docs.py" <repo-root>
+
+A leftover `.atlas/docs/` from before this split is not migrated
+automatically; the script refuses (exit 1) until its unique content is
+moved into `docs/` and the legacy directory deleted.
 
 ## First run: onboarding
 
-When `.atlas/docs/` does not exist:
+When `docs/` does not exist:
 
 1. **Detect roots** - find the project root (nearest `.git` ancestor) and
    any codebase roots (subdirectories with their own manifest).
 2. **Scaffold the SSOT** - run `scripts/scaffold_docs.py`.
 3. **Wire graphify** - record the wiki producer pipeline (architecture/
    in, wiki/diagrams/ out) per `references/graphify-wiring.md`.
-4. **Update .gitignore** - ensure `.atlas/docs/.run/` is ignored but the
-   durable tree is tracked.
+4. **Update .gitignore** - ensure `.atlas/.run/` is ignored but `docs/`
+   and `.atlas/evidence/`, `.atlas/audits/` are tracked.
 5. **Inventory skills** - read `references/manual-vs-auto-map.md` and
    report which skills just came online.
 6. **Run the freshness gate** - wiki fresh, stale, missing, or N/A per
@@ -106,7 +116,7 @@ When `.atlas/docs/` does not exist:
 8. **Recommend** - run the recommendation analysis and present the top
    3-5 next steps.
 
-If `.atlas/docs/` already exists, skip scaffolding and go straight to
+If `docs/` already exists, skip scaffolding and go straight to
 recommendations.
 
 ## Subsequent runs: recommendations
@@ -162,7 +172,7 @@ separate `armada` plugin; install it only for org use.
 
 ## The wiki pipeline (graphify wiring)
 
-    .atlas/docs/architecture/  -->  .atlas/docs/wiki/diagrams/
+    docs/architecture/  -->  docs/wiki/diagrams/
 
 graphify lives at the repo root (`skills/graphify/SKILL.md`), not inside
 the atlas plugin. atlas-audit populates `architecture/`; graphify renders
@@ -180,6 +190,6 @@ skill, asking one question if ambiguous.
 
 ## First move
 
-Check for `.atlas/docs/`. Missing: scaffold, wire graphify, inventory,
+Check for `docs/`. Missing: scaffold, wire graphify, inventory,
 recommend. Present: analyze and recommend. If anything about the install
 itself looks broken, switch to repair mode (`references/repair.md`).

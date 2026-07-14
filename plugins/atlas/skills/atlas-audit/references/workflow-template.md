@@ -124,7 +124,7 @@ const rejected = verifications.filter(v => v && v.includes("rejected"));
 if (rejected.length > 0) {
   log(`GATE FAILED: ${rejected.length} stage(s) rejected. Do not proceed.`);
 } else {
-  log("All stages verified. Dispatch atlas:docs-curator to reconcile .atlas/docs/.");
+  log("All stages verified. Dispatch atlas:docs-curator to reconcile docs/.");
 }
 ```
 

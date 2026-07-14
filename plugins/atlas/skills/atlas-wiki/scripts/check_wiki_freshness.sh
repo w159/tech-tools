@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
 # check_wiki_freshness.sh - compare newest mtime under
-# .atlas/docs/architecture/ against newest mtime under
-# .atlas/docs/wiki/diagrams/. Emits FRESH, MISSING, or STALE.
+# docs/architecture/ against newest mtime under
+# docs/wiki/diagrams/. Emits FRESH, MISSING, or STALE.
 #
 # Verdicts:
 #   FRESH   exit 0  wiki/diagrams/ is newer than architecture/, or
@@ -25,8 +25,8 @@ repo_root="${1:-$(pwd)}"
 repo_root="${repo_root%/}"
 
 # Paths this script compares.
-arch_dir="${repo_root}/.atlas/docs/architecture"
-wiki_dir="${repo_root}/.atlas/docs/wiki/diagrams"
+arch_dir="${repo_root}/docs/architecture"
+wiki_dir="${repo_root}/docs/wiki/diagrams"
 
 # Helper: print a verdict and exit with the right code.
 emit() {

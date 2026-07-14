@@ -4,7 +4,39 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 
 ---
 
+## In Progress
+
+- [active] L1: marketplace plugin (5.0.0) is stale vs the working tree. Run `/reload-plugins`
+  (or reinstall) so the live Stop hook executes the fixed `docs`-resolving completion_gate.
+  Coverage and test fixes are inert in the live agent until this reload lands.
+
 ## Done
+
+### Docs consolidation: `.atlas/docs/` retired, `docs/` is the sole project-documentation SSOT (resolved 2026-07-14)
+
+`.atlas/docs/` and `docs/` were two independent, drifting copies of the same SSOT files.
+`.atlas/docs/` deleted entirely; `docs/` is now the only home for CHANGELOG.md, ROADMAP.md,
+AGENTS.md, wiki/, architecture/, features/, specs/, plans/, reference_files/, and lessons/.
+`.atlas/` (no `docs/` subdirectory, ever) keeps only atlas-internal state: `.atlas/evidence/`,
+`.atlas/audits/`, `.atlas/.run/`. See CHANGELOG.md 2026-07-14 entry for the full file list.
+
+### Zero-defect hardening loop: batches Z1-Z9 verified, coverage 17%->98% hooks / 63%->99% scripts (resolved 2026-07-13)
+
+| ID | Status | Batch | Task |
+|----|--------|-------|------|
+| Z1 | done | Batch 1 | 5 HIGH defects (atlas_db, atlas_context_optimizer, auto_skill, memory_capture, operating-contract promotion) |
+| Z2 | done | Batch 2a | 6 MEDIUM hook defects (completion_gate, dispatch_tripwire, session_boot, memory_capture, nudge, bash_advisor) |
+| Z3 | done | Batch 2b | 7 MEDIUM script defects (scaffold_docs, skill_factory, atlas_curator, atlas_context_optimizer, session_ingest, install_hooks, atlas_doctor) |
+| Z4 | done | Batch 2c | Skill-reference conformance (4 dangling refs resolved, 7 bare script refs prefixed) |
+| Z5 | done | lint-zero | ruff 23 -> 0 across hooks + scripts |
+| Z6 | done | Batch 3a | Fixed broken YAML frontmatter on 10 skills + added `test_valid_frontmatter` |
+| Z7 | done | Batch 3b | Pyright type cleanup (0 errors/0 warnings/0 informations) |
+| Z8 | done | Batch 4 | Coverage to 85/85/75/85 on hooks/ and scripts/ (final: 98% hooks / 99% scripts) |
+| Z9 | done | dry rounds | atlas:completeness-critic rounds until K=3 consecutive clean |
+
+All 9 batches verifier CONFIRMED (findings.json 14/14 "verified"). Evidence:
+`.atlas/evidence/batch-{1-2,3a,3b,4a-1,4a-2,4b-1,4b-2,pyright-cleanup}-verification.md`.
+See CHANGELOG.md 2026-07-13 entry.
 
 ### Atlas v5.0.0 -- skill consolidation: mythology retired, 21 plain names, armada split out, runtime-evidence gate (resolved 2026-07-12)
 

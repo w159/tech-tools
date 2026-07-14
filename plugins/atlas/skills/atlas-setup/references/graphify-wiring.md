@@ -1,7 +1,7 @@
 # Graphify Wiring
 
 How atlas plugin skills invoke the repo-root graphify skill to render
-diagrams into `.atlas/docs/wiki/` from `.atlas/docs/architecture/` and the
+diagrams into `docs/wiki/` from `docs/architecture/` and the
 atlas-audit graph.json. atlas-setup wires this pipeline so the wiki stays
 current without manual diagramming.
 
@@ -20,12 +20,12 @@ HTML, GraphRAG-ready JSON, and a plain-language GRAPH_REPORT.md.
 atlas-setup wires graphify as the wiki producer for the SSOT. The
 pipeline is one-directional:
 
-    .atlas/docs/architecture/  --graphify-->  .atlas/docs/wiki/diagrams/
-    .atlas/docs/architecture/architecture-graph.json  --graphify-->  wiki/diagrams/
+    docs/architecture/  --graphify-->  docs/wiki/diagrams/
+    docs/architecture/architecture-graph.json  --graphify-->  wiki/diagrams/
 
 ### Inputs
 
-1. `.atlas/docs/architecture/` - the architecture folder atlas-setup
+1. `docs/architecture/` - the architecture folder atlas-setup
    scaffolds and atlas-audit populates. Holds boundaries, component
    maps, and ADRs.
 2. `architecture-graph.json` - the graph atlas-audit produces when it maps
@@ -34,9 +34,9 @@ pipeline is one-directional:
 
 ### Outputs
 
-1. `.atlas/docs/wiki/diagrams/index.html` - interactive HTML graph
-2. `.atlas/docs/wiki/diagrams/graph.json` - GraphRAG-ready JSON
-3. `.atlas/docs/wiki/diagrams/GRAPH_REPORT.md` - plain-language report
+1. `docs/wiki/diagrams/index.html` - interactive HTML graph
+2. `docs/wiki/diagrams/graph.json` - GraphRAG-ready JSON
+3. `docs/wiki/diagrams/GRAPH_REPORT.md` - plain-language report
 
 ### Invocation
 
@@ -44,11 +44,11 @@ A plugin skill invokes graphify by calling the slash command with the
 architecture folder as the path and the wiki diagrams folder as the
 output:
 
-    /graphify .atlas/docs/architecture --no-viz
-    # then move graphify-out/ into .atlas/docs/wiki/diagrams/
+    /graphify docs/architecture --no-viz
+    # then move graphify-out/ into docs/wiki/diagrams/
 
 Or, when graphify supports an explicit output path, point it directly at
-`.atlas/docs/wiki/diagrams/`. The skill body decides; the wiring contract
+`docs/wiki/diagrams/`. The skill body decides; the wiring contract
 is only that the inputs and outputs are the two paths above.
 
 ## Wiki freshness check (completion gate)
@@ -59,8 +59,8 @@ architecture input.
 
 ### Check logic
 
-1. Find the newest mtime of any file under `.atlas/docs/architecture/`.
-2. Find the newest mtime of any file under `.atlas/docs/wiki/diagrams/`.
+1. Find the newest mtime of any file under `docs/architecture/`.
+2. Find the newest mtime of any file under `docs/wiki/diagrams/`.
 3. If `architecture` is newer than `wiki/diagrams/`, the wiki is STALE.
 4. If `wiki/diagrams/` does not exist, the wiki is MISSING.
 5. If `architecture/` does not exist, the check is N/A (nothing to render
@@ -68,7 +68,7 @@ architecture input.
 
 ### Check command
 
-    arch_newest=$(find .atlas/docs/architecture -type f -newer .atlas/docs/wiki/diagrams 2>/dev/null | head -1)
+    arch_newest=$(find docs/architecture -type f -newer docs/wiki/diagrams 2>/dev/null | head -1)
     if [ -n "$arch_newest" ]; then echo "WIKI STALE"; else echo "WIKI FRESH"; fi
 
 ### Gate behavior

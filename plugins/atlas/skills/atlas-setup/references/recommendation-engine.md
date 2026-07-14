@@ -11,7 +11,7 @@ found. The order is priority-ranked: earlier items are more urgent.
 
 ### 1. Setup gaps (confidence: high)
 
-Check: does `.atlas/` exist? Does `.atlas/docs/CHANGELOG.md` exist? Are hooks
+Check: does `.atlas/` exist? Does `docs/CHANGELOG.md` exist? Are hooks
 wired? Is claude-mem installed? Is context-mode installed?
 
 If any are missing: recommend atlas-setup (boot and configure).
@@ -19,7 +19,7 @@ Command: `/atlas` (which runs atlas-setup).
 
 ### 2. Security audit overdue (confidence: high)
 
-Check: does `.atlas/docs/audits/` contain a security audit newer than the last
+Check: does `.atlas/audits/` contain a security audit newer than the last
 known code change? Has atlas-audit ever run on this project?
 
 If no audit or stale audit: recommend atlas-audit (security/quality audit).
@@ -29,7 +29,7 @@ changes."
 
 ### 3. Architecture map missing or stale (confidence: high)
 
-Check: does `.atlas/docs/architecture/boundaries.md` exist? If it exists, has
+Check: does `docs/architecture/boundaries.md` exist? If it exists, has
 the codebase changed since it was written (compare git log dates)?
 
 If missing or stale: recommend atlas-audit (architecture map).
@@ -66,7 +66,7 @@ Reason: "The frontend has not been tested by the UX swarm."
 
 ### 7. Docs drift (confidence: high)
 
-Check: does `.atlas/docs/AGENTS.md` match the actual stack? Does CHANGELOG have
+Check: does `docs/AGENTS.md` match the actual stack? Does CHANGELOG have
 entries for recent git commits? Are there features without specs?
 
 If drift detected: recommend atlas-orchestrate (orchestrator) to drive a docs

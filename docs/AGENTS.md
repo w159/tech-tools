@@ -112,6 +112,48 @@ Source: `plugins/atlas/agents/ui-runtime-tester.md`.
 
 ---
 
+## Stack
+
+Verified 2026-07-13 against the shipped tree.
+
+- Language(s): Python 3 (`plugins/atlas/hooks`, `plugins/atlas/scripts`)
+- Framework(s): none; code is standard library only, runtime is the Claude Code plugin and
+  skill markdown system
+- Package manager: none (standard library only); npx used only to run pyright
+- Test runner: unittest, via `python3 -m unittest discover`
+
+## Architecture
+
+- Entry points: `plugins/atlas/{hooks,scripts,skills,agents,mcp}` (hook handlers, CLI scripts,
+  21 skills, 12 agents, 4 MCP servers)
+- Boundaries: `atlas` plugin (codebase-facing, 12 agents in `plugins/atlas/agents/`) versus
+  `armada` plugin (11 department agents in `plugins/armada/agents/`); the split landed in v5.0.0
+- Key modules: 21 skills under `plugins/atlas/skills/`, 12 agents under `plugins/atlas/agents/`,
+  hook handlers under `plugins/atlas/hooks/`, CLI scripts under `plugins/atlas/scripts/`, MCP
+  servers under `plugins/atlas/mcp/`
+
+## Conventions
+
+- The single source of truth for project documentation lives under `docs/`. `.atlas/` never
+  contains a `docs/` subdirectory: it is reserved for atlas's own self-improvement, evidence,
+  findings, `.run/` state, and audits (`.atlas/evidence/`, `.atlas/audits/`, `.atlas/.run/`).
+- Every claim cites file:line.
+- Every completion carries its evidence in the same message.
+- The `.atlas/.run/` directory is ephemeral and gitignored.
+
+## Commands
+
+Verified 2026-07-13. Run from repo root.
+
+- Build: none (no compile step; Python is interpreted)
+- Test: `python3 -m unittest discover -s plugins/atlas/hooks` (423 tests, OK as of 2026-07-13)
+  and `python3 -m unittest discover -s plugins/atlas/scripts` (510 tests, OK)
+- Lint: `ruff check plugins/atlas/hooks plugins/atlas/scripts` (All checks passed)
+- Typecheck: `npx pyright plugins/atlas/hooks plugins/atlas/scripts` (0 errors, 0 warnings,
+  0 informations)
+- Run: load the `atlas` plugin in Claude Code; invoke skills with `/atlas:<skill-name>` or the
+  Skill tool
+
 ## Agent Constraints
 
 All 12 agents share three standing constraints regardless of the task:

@@ -18,8 +18,8 @@ skill's `description` + `when_to_use`; the manual skill has
 
 | Skill | Mode | What it does |
 | --- | --- | --- |
-| atlas-setup | MANUAL | The lifecycle skill: onboard (scaffold `.atlas/docs/`, inventory, recommend what to run next), install (claude-mem, context-mode, hooks, config), connectors (vendor MCP setup), repair (`--fix` runs `scripts/atlas_doctor.py`) |
-| atlas-orchestrate | auto | The engine: decompose a task, route every code edit to a subagent, demand execution evidence, verify with an independent agent (runtime evidence included), keep `.atlas/docs/` the single source of truth |
+| atlas-setup | MANUAL | The lifecycle skill: onboard (scaffold `docs/`, inventory, recommend what to run next), install (claude-mem, context-mode, hooks, config), connectors (vendor MCP setup), repair (`--fix` runs `scripts/atlas_doctor.py`) |
+| atlas-orchestrate | auto | The engine: decompose a task, route every code edit to a subagent, demand execution evidence, verify with an independent agent (runtime evidence included), keep `docs/` the single source of truth |
 | atlas-audit | auto | Three audit modes: code (quality/security/OWASP swarm), architecture (feature map + duplication + unify proposal), self (atlas run health, context/asset waste, session forensics from the observability DB) |
 | atlas-loop | auto | Match a recurring or iterative task to a curated loop-library entry (loop-until-dry, fan-out-adversarial-verify, red-green-tdd, and more) and instantiate it |
 | atlas-ux-test | auto | App-discovering UX swarm: auto-finds routes and forms in a running web app, then runs cartographer -> persona -> fuzzer -> oracle -> reporter |
@@ -57,8 +57,8 @@ atlas/
 |   |-- naming-glossary-audit.md   #   table/column name audit against project glossary
 |   |-- ui-runtime-tester.md       #   live browser/runtime behavior
 |   |-- planner.md                 #   multi-stage decomposition + stage maps (fork)
-|   |-- docs-curator.md            #   maintains the .atlas/docs/ single source of truth (fork)
-|   |-- docs-auditor.md            #   audits .atlas/docs/ for drift against code
+|   |-- docs-curator.md            #   maintains the docs/ single source of truth (fork)
+|   |-- docs-auditor.md            #   audits docs/ for drift against code
 |   `-- completeness-critic.md     #   "what did we miss" gap pass before done (fork)
 `-- skills/                        # the 21 skills, one directory each (SKILL.md + references/)
 ```
@@ -68,7 +68,7 @@ atlas/
 Install the plugin (place this directory under your plugins root, or install from
 the marketplace). On the next session the boot hook activates the runtime
 automatically. Then run `atlas-setup` once per project: it scaffolds
-`.atlas/docs/`, installs claude-mem and context-mode if you approve, recommends
+`docs/`, installs claude-mem and context-mode if you approve, recommends
 the capabilities your stack needs, and tells you what to run next.
 
 ## Hooks

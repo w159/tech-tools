@@ -1,5 +1,49 @@
 # Changelog
 
+## 5.0.1 (2026-07-14)
+
+Docs-consolidation patch: `.atlas/docs/` retired, `docs/` is now the sole
+project-documentation single source of truth. `.atlas/` never contains a
+`docs/` subdirectory; it holds only atlas's own internal state (evidence,
+audits, ephemeral `.run/`).
+
+- **`.atlas/docs/` deleted.** Project documentation (CHANGELOG.md,
+  ROADMAP.md, AGENTS.md, architecture/, features/, specs/, plans/,
+  reference_files/, wiki/, lessons/) lives only under `docs/`.
+  Atlas-internal state moved directly under `.atlas/`: `.atlas/evidence/`,
+  `.atlas/audits/`, `.atlas/.run/`.
+- **`scripts/scaffold_docs.py` rewritten.** Now scaffolds `docs/` and
+  `.atlas/` (evidence/, audits/) from a single `<repo-root>` argument
+  (previously took a `.atlas/docs` path directly). Refuses (exit 1) to
+  scaffold over a non-empty legacy `.atlas/docs/` rather than silently
+  warning and proceeding. `test_scaffold_docs.py` rewritten to match
+  (idempotent no-op, never-creates-legacy-dir, and legacy-guard tests).
+- **`hooks/completion_gate.py` rewritten.** `_find_ssot` (returned the
+  `.atlas/docs/` dir) replaced by `_find_root` (returns the project root
+  holding `docs/`); evidence/findings checks now read `.atlas/evidence/`
+  and `.atlas/.run/findings.json` directly, CHANGELOG/ROADMAP checks read
+  `docs/`. `test_completion_gate.py` rewritten to match (53 tests, all
+  passing).
+- **`hooks/dispatch_tripwire.py` fixed.** `_is_orchestration_path` now
+  recognizes both `docs/` and `.atlas/` as orchestration-owned (previously
+  only `.atlas/docs/`), so inline edits to either tree are correctly
+  exempted from the inline-edit deny tier. `test_dispatch_tripwire.py`
+  updated.
+- **`hooks/session_boot.py`** advisory message updated to say `docs/ SSOT`.
+- **`skills/atlas-wiki/scripts/check_wiki_freshness.sh`** now compares
+  `docs/architecture/` against `docs/wiki/diagrams/`.
+- Every `.atlas/docs/*` path reference across `plugins/atlas/skills/**`
+  (SKILL.md files, `references/*.md`, `templates/*`) and
+  `plugins/armada/skills/armada/references/org-config-schema.md`
+  rewritten: durable/project paths now read `docs/*`; atlas-internal paths
+  now read `.atlas/evidence/`, `.atlas/audits/`, `.atlas/.run/`. The two
+  `docs-ssot.md` copies (atlas-orchestrate, atlas-loop) rewritten in full
+  to document both trees, their ownership, and the legacy-guard behavior.
+- Root `README.md` and `.gitignore` updated: `docs/` is stated as the sole
+  SSOT (the prior "dual source of truth" clarification is retracted), and
+  `.atlas/evidence/`, `.atlas/audits/` are allowlisted for tracking while
+  `.atlas/.run/` stays gitignored.
+
 ## 5.0.0 (2026-07-12)
 
 Skill consolidation driven by session forensics: a mined 4.7-hour production

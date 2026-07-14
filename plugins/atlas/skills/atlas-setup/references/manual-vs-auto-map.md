@@ -14,7 +14,7 @@ auto-triggers from its `description` + `when_to_use`.
 
 | # | Skill | Mode | One-line trigger |
 |---|---|---|---|
-| 1 | atlas-setup | MANUAL | Onboard (scaffold .atlas/docs/, recommend), install tooling, set up connectors, repair a broken install |
+| 1 | atlas-setup | MANUAL | Onboard (scaffold docs/, recommend), install tooling, set up connectors, repair a broken install |
 | 2 | atlas-orchestrate | auto | Orchestrate any multi-step build/fix/audit/refactor through subagents with verification |
 | 3 | atlas-audit | auto | Code/security audit (OWASP, SOLID, dead code, drift), architecture map and dedup, or atlas self-telemetry |
 | 4 | atlas-loop | auto | Match a recurring or iterative task to a reusable loop and instantiate it |
@@ -34,7 +34,7 @@ auto-triggers from its `description` + `when_to_use`.
 | 18 | atlas-refactor | auto | Reorganize structure, naming, and layout without changing observable behavior |
 | 19 | atlas-validate | auto | Audit a Claude Code plugin for structure, manifest validity, content quality |
 | 20 | atlas-vendor-assessment | auto | Evidence-based vendor security assessment against a named framework |
-| 21 | atlas-wiki | auto | Generate and refresh .atlas/docs/wiki/ diagrams from architecture docs via the graphify skill |
+| 21 | atlas-wiki | auto | Generate and refresh docs/wiki/ diagrams from architecture docs via the graphify skill |
 
 ## Count check
 

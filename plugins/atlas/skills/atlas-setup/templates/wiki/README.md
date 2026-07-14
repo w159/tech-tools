@@ -1,7 +1,7 @@
 # Wiki
 
 Onboarding, how-to, and operational runbooks. graphify renders the
-diagrams that live here from `.atlas/docs/architecture/` and the atlas-audit
+diagrams that live here from `docs/architecture/` and the atlas-audit
 graph.json. See references/graphify-wiring.md for the producer pipeline.
 
 ## What lives here

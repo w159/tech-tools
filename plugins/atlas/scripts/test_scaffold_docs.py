@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Tests for scaffold_docs.py — abort gate and dual-SSOT warning."""
+"""Tests for scaffold_docs.py -- idempotent no-op and legacy .atlas/docs/ guard."""
 
 import contextlib
 import io
 import os
+import shutil
 import sys
 import tempfile
 import unittest
@@ -27,28 +28,26 @@ class TestScaffoldDocsAbortGate(unittest.TestCase):
         self.tmpdir = tempfile.mkdtemp()
 
     def tearDown(self):
-        import shutil
-
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
-    def _run_main(self, docs_root):
-        """Invoke scaffold_docs.main targeting docs_root, capturing streams."""
+    def _run_main(self, repo_root):
+        """Invoke scaffold_docs.main targeting repo_root, capturing streams."""
         out = io.StringIO()
         err = io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            code = scaffold_docs.main(["scaffold_docs.py", str(docs_root)])
+            code = scaffold_docs.main(["scaffold_docs.py", str(repo_root)])
         return code, out.getvalue(), err.getvalue()
 
-    def test_existing_ssot_is_noop_without_overwrite(self):
-        """A non-empty .atlas/docs/ must be a true no-op: exit 0, no re-scaffold."""
-        docs_root = os.path.join(self.tmpdir, ".atlas", "docs")
+    def test_existing_docs_is_noop_without_overwrite(self):
+        """A non-empty docs/ must be a true no-op: exit 0, no re-scaffold."""
+        docs_root = os.path.join(self.tmpdir, "docs")
         os.makedirs(docs_root, exist_ok=True)
         marker = "DISTINCTIVE ORIGINAL CHANGELOG CONTENT\n"
         changelog = os.path.join(docs_root, "CHANGELOG.md")
         with open(changelog, "w") as fh:
             fh.write(marker)
 
-        code, out, err = self._run_main(docs_root)
+        code, out, err = self._run_main(self.tmpdir)
 
         self.assertEqual(code, 0, f"expected exit 0, got {code}; stderr={err}")
         with open(changelog) as fh:
@@ -56,25 +55,31 @@ class TestScaffoldDocsAbortGate(unittest.TestCase):
         self.assertEqual(after, marker, "existing CHANGELOG.md was modified")
         self.assertIn("already scaffolded", out.lower())
 
-    def test_dual_ssot_warning_to_stderr(self):
-        """A root docs/ with SSOT markers must emit a dual-SSOT warning to stderr."""
-        root_docs = os.path.join(self.tmpdir, "docs")
-        os.makedirs(root_docs, exist_ok=True)
-        for name in ("CHANGELOG.md", "ROADMAP.md", "AGENTS.md"):
-            with open(os.path.join(root_docs, name), "w") as fh:
-                fh.write(f"# root {name}\n")
+    def test_never_creates_atlas_docs(self):
+        """Scaffolding must never create a .atlas/docs/ directory."""
+        code, _, err = self._run_main(self.tmpdir)
 
-        # .atlas/docs/ does not exist yet -> scaffold proceeds, with warning.
-        docs_root = os.path.join(self.tmpdir, ".atlas", "docs")
+        self.assertEqual(code, 0, f"expected exit 0, got {code}; stderr={err}")
+        legacy = os.path.join(self.tmpdir, ".atlas", "docs")
+        self.assertFalse(os.path.isdir(legacy), ".atlas/docs/ must never be created")
+        self.assertTrue(os.path.isdir(os.path.join(self.tmpdir, "docs")))
+        self.assertTrue(os.path.isdir(os.path.join(self.tmpdir, ".atlas", "evidence")))
+        self.assertTrue(os.path.isdir(os.path.join(self.tmpdir, ".atlas", "audits")))
 
-        code, out, err = self._run_main(docs_root)
+    def test_legacy_atlas_docs_blocks_with_error(self):
+        """A pre-existing non-empty .atlas/docs/ must refuse to scaffold, not silently proceed."""
+        legacy = os.path.join(self.tmpdir, ".atlas", "docs")
+        os.makedirs(legacy, exist_ok=True)
+        with open(os.path.join(legacy, "CHANGELOG.md"), "w") as fh:
+            fh.write("# stale legacy changelog\n")
 
-        self.assertEqual(code, 0, f"expected exit 0, got {code}; stdout={out}")
-        self.assertIn(
-            "dual", err.lower(), f"expected dual-SSOT warning on stderr; got: {err}"
-        )
-        # Warning must name the root docs/ tree so the operator can reconcile.
-        self.assertIn("docs", err.lower())
+        code, out, err = self._run_main(self.tmpdir)
+
+        self.assertEqual(code, 1, f"expected exit 1, got {code}; stdout={out}")
+        self.assertIn("legacy", err.lower())
+        self.assertIn(".atlas/docs", err.replace(os.sep, "/"))
+        # Must not have scaffolded docs/ while blocked.
+        self.assertFalse(os.path.isdir(os.path.join(self.tmpdir, "docs")))
 
 
 if __name__ == "__main__":

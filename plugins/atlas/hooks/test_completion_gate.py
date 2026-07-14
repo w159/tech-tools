@@ -17,7 +17,7 @@ import completion_gate  # noqa: E402
 from completion_gate import (
     _check_findings,
     _docs_drift,
-    _find_ssot,
+    _find_root,
     _git_changed_paths,
     _nondocs_changed,
     _reason,
@@ -63,7 +63,7 @@ class GateOrchestrationTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
         os.makedirs(
-            os.path.join(self.tmp, ".atlas", "docs"), exist_ok=True
+            os.path.join(self.tmp, "docs"), exist_ok=True
         )  # docs/ exists, no artifacts
         self.env = dict(os.environ, ATLAS_DB=os.path.join(self.tmp, "atlas.db"))
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
@@ -86,23 +86,24 @@ class GateOrchestrationTest(unittest.TestCase):
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertIn('"decision": "block"', r.stdout)
 
-    def test_legacy_docs_only_does_not_engage_gate(self):
-        """A repo with a legacy root docs/ but no .atlas/docs/ -> gate is a no-op,
-        even for an orchestrating session. The SSOT is .atlas/docs/ only; a bare
-        docs/ must NOT trigger the gate."""
-        shutil.rmtree(os.path.join(self.tmp, ".atlas"))
-        os.makedirs(os.path.join(self.tmp, "docs"), exist_ok=True)
+    def test_legacy_atlas_docs_only_does_not_engage_gate(self):
+        """A repo with only a legacy .atlas/docs/ but no root docs/ -> gate is
+        a no-op, even for an orchestrating session. The SSOT is docs/ only;
+        a bare legacy .atlas/docs/ must NOT trigger the gate."""
+        shutil.rmtree(os.path.join(self.tmp, "docs"))
+        os.makedirs(os.path.join(self.tmp, ".atlas", "docs"), exist_ok=True)
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertEqual(r.returncode, 0)
         self.assertNotIn('"decision": "block"', r.stdout)
 
     def _satisfy_all_conditions(self):
-        docs = os.path.join(self.tmp, ".atlas", "docs")
-        os.makedirs(os.path.join(docs, "evidence"), exist_ok=True)
-        os.makedirs(os.path.join(docs, ".run"), exist_ok=True)
-        with open(os.path.join(docs, "evidence", "run.txt"), "w") as f:
+        docs = os.path.join(self.tmp, "docs")
+        atlas_dir = os.path.join(self.tmp, ".atlas")
+        os.makedirs(os.path.join(atlas_dir, "evidence"), exist_ok=True)
+        os.makedirs(os.path.join(atlas_dir, ".run"), exist_ok=True)
+        with open(os.path.join(atlas_dir, "evidence", "run.txt"), "w") as f:
             f.write("observed output")
-        with open(os.path.join(docs, ".run", "findings.json"), "w") as f:
+        with open(os.path.join(atlas_dir, ".run", "findings.json"), "w") as f:
             json.dump([{"claim": "x works", "status": "verified"}], f)
         for name in ("CHANGELOG.md", "ROADMAP.md"):
             with open(os.path.join(docs, name), "w") as f:
@@ -118,7 +119,7 @@ class GateOrchestrationTest(unittest.TestCase):
 
     def test_missing_roadmap_blocks_with_condition_d(self):
         self._satisfy_all_conditions()
-        os.remove(os.path.join(self.tmp, ".atlas", "docs", "ROADMAP.md"))
+        os.remove(os.path.join(self.tmp, "docs", "ROADMAP.md"))
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertIn('"decision": "block"', r.stdout)
         self.assertIn("ROADMAP.md is missing", r.stdout)
@@ -159,7 +160,7 @@ class GateOrchestrationTest(unittest.TestCase):
         self.assertIn('"decision": "block"', r.stdout)
         self.assertIn("Docs drift", r.stdout)
         # touching a docs file clears the drift block
-        with open(os.path.join(self.tmp, ".atlas", "docs", "CHANGELOG.md"), "a") as f:
+        with open(os.path.join(self.tmp, "docs", "CHANGELOG.md"), "a") as f:
             f.write("- change\n")
         r2 = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertNotIn('"decision": "block"', r2.stdout)
@@ -230,7 +231,7 @@ class GateOrchestrationTest(unittest.TestCase):
             ["git", "-C", self.tmp, "add", "app.py"], check=True, capture_output=True
         )
         # docs change -> drift cleared, so (f) passes and only (g) can block
-        with open(os.path.join(self.tmp, ".atlas", "docs", "CHANGELOG.md"), "a") as f:
+        with open(os.path.join(self.tmp, "docs", "CHANGELOG.md"), "a") as f:
             f.write("- change\n")
 
     def _log_dispatches(self, implementers, verifiers):
@@ -332,12 +333,12 @@ class ConditionGHelperTest(unittest.TestCase):
 
     def test_unpaired_returns_zero_when_no_run_exists(self):
         """A session with no observability run in the DB -> helper returns 0
-        at the `if rid is None` guard (lines 406-407), NOT the DB-error except
-        branch. This documents that condition (g) (Law 5 verifier coverage) is
-        NOT enforced when a session never started a run: the gate cannot detect
-        unpaired dispatches for a run that does not exist, so it silently passes
-        and a session that never opened an observability run ships code with
-        zero verifier coverage undetected."""
+        at the `if rid is None` guard, NOT the DB-error except branch. This
+        documents that condition (g) (Law 5 verifier coverage) is NOT enforced
+        when a session never started a run: the gate cannot detect unpaired
+        dispatches for a run that does not exist, so it silently passes and a
+        session that never opened an observability run ships code with zero
+        verifier coverage undetected."""
         tmp = tempfile.mkdtemp()
         db_path = os.path.join(tmp, "atlas.db")
         old = os.environ.get("ATLAS_DB")
@@ -368,13 +369,14 @@ class CheckFindingsMalformedTest(unittest.TestCase):
         _check_findings must return False so condition (b) fails rather than
         silently passing as if a verified entry existed."""
         tmp = tempfile.mkdtemp()
-        docs = Path(tmp) / ".atlas" / "docs"
-        (docs / ".run").mkdir(parents=True, exist_ok=True)
+        root = Path(tmp)
+        run_dir = root / ".atlas" / ".run"
+        run_dir.mkdir(parents=True, exist_ok=True)
         # Top-level JSON string: not a list, and has no "findings" key. Calling
         # .get() on a str raises AttributeError, which the buggy code swallowed
         # to return True (silently passing condition b). It must return False.
-        (docs / ".run" / "findings.json").write_text('"not-a-findings-file"')
-        self.assertFalse(_check_findings(docs))
+        (run_dir / "findings.json").write_text('"not-a-findings-file"')
+        self.assertFalse(_check_findings(root))
 
 
 # ---------------------------------------------------------------------------
@@ -402,7 +404,7 @@ class InProcessMainTest(unittest.TestCase):
 
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
-        os.makedirs(os.path.join(self.tmp, ".atlas", "docs"), exist_ok=True)
+        os.makedirs(os.path.join(self.tmp, "docs"), exist_ok=True)
         self.db_path = os.path.join(self.tmp, "atlas.db")
         self.env = dict(os.environ, ATLAS_DB=self.db_path)
         c = atlas_db.connect(self.db_path)
@@ -435,12 +437,13 @@ class InProcessMainTest(unittest.TestCase):
         return rc, stdout_buf.getvalue()
 
     def _satisfy_all(self):
-        docs = os.path.join(self.tmp, ".atlas", "docs")
-        os.makedirs(os.path.join(docs, "evidence"), exist_ok=True)
-        os.makedirs(os.path.join(docs, ".run"), exist_ok=True)
-        with open(os.path.join(docs, "evidence", "run.txt"), "w") as f:
+        docs = os.path.join(self.tmp, "docs")
+        atlas_dir = os.path.join(self.tmp, ".atlas")
+        os.makedirs(os.path.join(atlas_dir, "evidence"), exist_ok=True)
+        os.makedirs(os.path.join(atlas_dir, ".run"), exist_ok=True)
+        with open(os.path.join(atlas_dir, "evidence", "run.txt"), "w") as f:
             f.write("observed output")
-        with open(os.path.join(docs, ".run", "findings.json"), "w") as f:
+        with open(os.path.join(atlas_dir, ".run", "findings.json"), "w") as f:
             json.dump([{"claim": "x works", "status": "verified"}], f)
         for name in ("CHANGELOG.md", "ROADMAP.md"):
             with open(os.path.join(docs, name), "w") as f:
@@ -473,7 +476,7 @@ class InProcessMainTest(unittest.TestCase):
 
     def _stage_mixed_diff(self):
         self._stage_code_change()
-        with open(os.path.join(self.tmp, ".atlas", "docs", "CHANGELOG.md"), "a") as f:
+        with open(os.path.join(self.tmp, "docs", "CHANGELOG.md"), "a") as f:
             f.write("- change\n")
 
     def _log_dispatches(self, implementers, verifiers):
@@ -511,7 +514,7 @@ class InProcessMainTest(unittest.TestCase):
 
     def test_non_dict_stdin_treated_as_empty(self):
         # Top-level JSON list -> not a dict -> treated as {} -> no SSOT (cwd tmp
-        # has .atlas/docs but session_id empty -> non-orchestrating -> no-op).
+        # has docs/ but session_id empty -> non-orchestrating -> no-op).
         rc, _ = self._invoke(["not", "a", "dict"])
         self.assertEqual(rc, 0)
 
@@ -543,7 +546,7 @@ class InProcessMainTest(unittest.TestCase):
         self.assertNotIn('"decision": "block"', out)
 
     def test_no_ssot_is_noop(self):
-        shutil.rmtree(os.path.join(self.tmp, ".atlas"))
+        shutil.rmtree(os.path.join(self.tmp, "docs"))
         rc, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertEqual(rc, 0)
         self.assertNotIn('"decision": "block"', out)
@@ -567,7 +570,7 @@ class InProcessMainTest(unittest.TestCase):
 
     def test_missing_evidence_condition_a(self):
         self._satisfy_all()
-        shutil.rmtree(os.path.join(self.tmp, ".atlas", "docs", "evidence"))
+        shutil.rmtree(os.path.join(self.tmp, ".atlas", "evidence"))
         rc, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertEqual(rc, 0)  # block returns 0
         self.assertIn('"decision": "block"', out)
@@ -575,40 +578,38 @@ class InProcessMainTest(unittest.TestCase):
 
     def test_missing_findings_condition_b(self):
         self._satisfy_all()
-        os.remove(os.path.join(self.tmp, ".atlas", "docs", ".run", "findings.json"))
-        rc, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
+        os.remove(os.path.join(self.tmp, ".atlas", ".run", "findings.json"))
+        _, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertIn('"decision": "block"', out)
         self.assertIn("findings.json", out)
 
     def test_malformed_findings_blocks_condition_b(self):
         """M1: structurally malformed findings.json must NOT count as verified."""
         self._satisfy_all()
-        with open(
-            os.path.join(self.tmp, ".atlas", "docs", ".run", "findings.json"), "w"
-        ) as f:
+        with open(os.path.join(self.tmp, ".atlas", ".run", "findings.json"), "w") as f:
             f.write('"not-a-findings-file"')
-        rc, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
+        _, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertIn('"decision": "block"', out)
         self.assertIn("findings.json", out)
 
     def test_missing_changelog_condition_c(self):
         self._satisfy_all()
-        os.remove(os.path.join(self.tmp, ".atlas", "docs", "CHANGELOG.md"))
-        rc, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
+        os.remove(os.path.join(self.tmp, "docs", "CHANGELOG.md"))
+        _, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertIn('"decision": "block"', out)
         self.assertIn("CHANGELOG.md is missing", out)
 
     def test_missing_roadmap_condition_d(self):
         self._satisfy_all()
-        os.remove(os.path.join(self.tmp, ".atlas", "docs", "ROADMAP.md"))
-        rc, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
+        os.remove(os.path.join(self.tmp, "docs", "ROADMAP.md"))
+        _, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertIn('"decision": "block"', out)
         self.assertIn("ROADMAP.md is missing", out)
 
     def test_missing_readme_condition_e(self):
         self._satisfy_all()
         os.remove(os.path.join(self.tmp, "README.md"))
-        rc, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
+        _, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertIn('"decision": "block"', out)
         self.assertIn("README.md at the project root is missing", out)
 
@@ -618,7 +619,7 @@ class InProcessMainTest(unittest.TestCase):
         self._satisfy_all()
         self._init_git_repo()
         self._stage_code_change()  # code only, no docs change -> drift
-        rc, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
+        _, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertIn('"decision": "block"', out)
         self.assertIn("Docs drift", out)
 
@@ -627,7 +628,7 @@ class InProcessMainTest(unittest.TestCase):
         self._init_git_repo()
         self._stage_mixed_diff()  # code + docs -> drift cleared, code changed
         self._log_dispatches(implementers=2, verifiers=0)
-        rc, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
+        _, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertIn('"decision": "block"', out)
         self.assertIn("verifier coverage", out)
         self.assertIn("2 implementer", out)
@@ -648,11 +649,12 @@ class InProcessMainTest(unittest.TestCase):
         self._satisfy_all()
         self._init_git_repo()
         self._stage_code_change()
-        rc, out = self._invoke(
+        _, out = self._invoke(
             {"session_id": "sess-orch", "cwd": self.tmp}, scrub_path=True
         )
         self.assertIn('"decision": "block"', out)
         self.assertIn("git", out.lower())
+
     def test_outer_catch_all_failopens_on_unexpected_crash(self):
         """GAP-3: an unexpected crash in the gate logic (e.g. _reason raising)
         must fail-open to rc=0 without emitting a block decision, and the
@@ -661,7 +663,7 @@ class InProcessMainTest(unittest.TestCase):
         self._satisfy_all()
         # Fail condition (a) so the gate reaches the block-decision path that
         # calls _reason; then make _reason raise to hit the outer catch-all.
-        shutil.rmtree(os.path.join(self.tmp, ".atlas", "docs", "evidence"))
+        shutil.rmtree(os.path.join(self.tmp, ".atlas", "evidence"))
         env = dict(self.env)
         stdin_data = io.StringIO(
             json.dumps({"session_id": "sess-orch", "cwd": self.tmp})
@@ -707,34 +709,36 @@ class InProcessMainTest(unittest.TestCase):
 class HelperUnitTest(unittest.TestCase):
     """Direct unit coverage of the pure/IO helpers in completion_gate."""
 
-    def test_find_ssot_finds_atlas_docs(self):
+    def test_find_root_finds_docs_dir(self):
         tmp = tempfile.mkdtemp()
         try:
-            os.makedirs(os.path.join(tmp, ".atlas", "docs"))
+            os.makedirs(os.path.join(tmp, "docs"))
             nested = Path(tmp) / "a" / "b" / "c"
             nested.mkdir(parents=True)
-            found = _find_ssot(nested)
-            self.assertEqual(found, Path(tmp) / ".atlas" / "docs")
+            found = _find_root(nested)
+            self.assertEqual(found, Path(tmp))
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
-    def test_find_ssot_returns_none_when_absent(self):
+    def test_find_root_returns_none_when_absent(self):
         tmp = tempfile.mkdtemp()
         try:
-            self.assertIsNone(_find_ssot(Path(tmp)))
+            self.assertIsNone(_find_root(Path(tmp)))
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
     def test_check_evidence_oserror_failopen(self):
         tmp = tempfile.mkdtemp()
         try:
-            docs = Path(tmp) / ".atlas" / "docs"
-            (docs / "evidence").mkdir(parents=True)  # evidence/ exists so is_dir() True
+            root = Path(tmp)
+            (root / ".atlas" / "evidence").mkdir(
+                parents=True
+            )  # evidence/ exists so is_dir() True
             with mock.patch.object(Path, "iterdir", side_effect=OSError):
                 # (a) fails open on OSError
                 from completion_gate import _check_evidence
 
-                self.assertTrue(_check_evidence(docs))
+                self.assertTrue(_check_evidence(root))
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
@@ -751,46 +755,46 @@ class HelperUnitTest(unittest.TestCase):
     def test_check_findings_oserror_failopen(self):
         tmp = tempfile.mkdtemp()
         try:
-            docs = Path(tmp) / ".atlas" / "docs"
-            (docs / ".run").mkdir(parents=True)
-            (docs / ".run" / "findings.json").write_text("[]")
+            root = Path(tmp)
+            (root / ".atlas" / ".run").mkdir(parents=True)
+            (root / ".atlas" / ".run" / "findings.json").write_text("[]")
             with mock.patch.object(Path, "read_text", side_effect=OSError):
                 # OSError -> fail open -> True
-                self.assertTrue(_check_findings(docs))
+                self.assertTrue(_check_findings(root))
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
     def test_check_findings_dict_with_findings_key(self):
         tmp = tempfile.mkdtemp()
         try:
-            docs = Path(tmp) / ".atlas" / "docs"
-            (docs / ".run").mkdir(parents=True)
-            (docs / ".run" / "findings.json").write_text(
+            root = Path(tmp)
+            (root / ".atlas" / ".run").mkdir(parents=True)
+            (root / ".atlas" / ".run" / "findings.json").write_text(
                 json.dumps({"findings": [{"status": "verified"}]})
             )
-            self.assertTrue(_check_findings(docs))
+            self.assertTrue(_check_findings(root))
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
     def test_check_findings_no_verified_entry(self):
         tmp = tempfile.mkdtemp()
         try:
-            docs = Path(tmp) / ".atlas" / "docs"
-            (docs / ".run").mkdir(parents=True)
-            (docs / ".run" / "findings.json").write_text(
+            root = Path(tmp)
+            (root / ".atlas" / ".run").mkdir(parents=True)
+            (root / ".atlas" / ".run" / "findings.json").write_text(
                 json.dumps([{"status": "unverified"}])
             )
-            self.assertFalse(_check_findings(docs))
+            self.assertFalse(_check_findings(root))
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
     def test_git_changed_paths_non_repo_returns_empty(self):
         tmp = tempfile.mkdtemp()
         try:
-            docs = Path(tmp) / ".atlas" / "docs"
-            docs.mkdir(parents=True)
+            root = Path(tmp) / "sub"
+            root.mkdir(parents=True)
             # Not a git repo -> rev-parse fails (non-FileNotFoundError) -> []
-            self.assertEqual(_git_changed_paths(docs), [])
+            self.assertEqual(_git_changed_paths(root), [])
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
@@ -798,7 +802,7 @@ class HelperUnitTest(unittest.TestCase):
         tmp = tempfile.mkdtemp()
         try:
             subprocess.run(["git", "init", "-q", tmp], check=True, capture_output=True)
-            docs = Path(tmp) / ".atlas" / "docs"
+            docs = Path(tmp) / "docs"
             docs.mkdir(parents=True)
             (docs / "CHANGELOG.md").write_text("# c\n")
             subprocess.run(
@@ -815,7 +819,7 @@ class HelperUnitTest(unittest.TestCase):
             subprocess.run(
                 ["git", "-C", tmp, "add", "app.py"], check=True, capture_output=True
             )
-            changed = _git_changed_paths(docs)
+            changed = _git_changed_paths(Path(tmp))
             self.assertIn("app.py", changed)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)

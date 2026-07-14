@@ -24,14 +24,14 @@ branding:
     primary: "#0066CC"               # optional: brand primary color
     secondary: "#FF6600"             # optional: brand secondary color
   commit_style: "conventional"       # optional: conventional | custom | none
-  doc_template: ".atlas/docs/templates/acme-doc.md"  # optional: path to doc template
+  doc_template: "docs/templates/acme-doc.md"  # optional: path to doc template
 
 policies:
   compliance_frameworks:              # optional: list of applicable frameworks
     - soc2
     - hipaa
-  coding_standards: ".atlas/docs/standards/coding.md"      # optional: path
-  documentation_standards: ".atlas/docs/standards/docs.md" # optional: path
+  coding_standards: "docs/standards/coding.md"      # optional: path
+  documentation_standards: "docs/standards/docs.md" # optional: path
   approval_workflows:                                 # optional
     production_deploy: "requires-change-ticket"
     data_access: "requires-manager-approval"

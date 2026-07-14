@@ -96,5 +96,12 @@
     "status": "verified",
     "verifier": "atlas:verifier (fresh)",
     "evidence": "Coverage bars MET: hooks 98%, scripts 99% (lines/functions/branches/statements all >=85). Tests: hooks 365 OK, scripts 502 OK (867 total). ruff All checks passed!; pyright 0 errors, 0 warnings, 0 informations. K=3 consecutive clean rounds achieved."
+  },
+  {
+    "batch": "nudge-test-isolation-fix",
+    "claim": "test_orchestration_with_no_capture_nudges_to_capture in plugins/atlas/hooks/test_nudge.py was flaky because it read real global state under ~/.atlas/skills/ and ~/.atlas/memory/ via nudge._check_skill_created and nudge._check_memory_captured; fixed by mocking both to return False, matching the pattern already used in the three sibling tests below it.",
+    "status": "verified",
+    "verifier": "atlas:verifier (fresh)",
+    "evidence": "plugins/atlas/hooks/test_nudge.py:115-124 shows the mock.patch.object wrapping; git diff --stat confirms only test_nudge.py changed (nudge.py untouched); pytest plugins/atlas/hooks/test_nudge.py -v: 29 passed. Counterfactual: created ~/.atlas/skills/__verify_tmp_skill__/SKILL.md with fresh mtime, fixed test still PASSED; git stash to pre-fix code with same fake state present reproduced the exact original failure (AssertionError: self-improvement check not found); git stash pop restored the fix; temp skill dir removed. Full suite pytest plugins/atlas/hooks/ -q: 428 passed, 8 subtests passed."
   }
 ]

@@ -24,7 +24,7 @@ does not start until every dimension's verify wave is done.
 The orchestrator is the sole author of `report.md` and the handoff
 prompts. Synthesis is never delegated. The orchestrator may dispatch
 `atlas:planner` to draft a remediation sequencing plan, and
-`atlas:docs-curator` to record the audit run in `.atlas/docs/`, but the
+`atlas:docs-curator` to record the audit run in `docs/`, but the
 final report and handoffs are written by the orchestrator alone.
 
 The synthesis step does four things, in order:
@@ -61,7 +61,7 @@ order of completion does not matter).
 6. Test-coverage gaps - untested behavior, critical paths covered only
    by integration tests, missing post-change verification in
    idempotent scripts.
-7. Code-vs-docs drift - `.atlas/docs/` (the SSOT read in Phase 1)
+7. Code-vs-docs drift - `docs/` (the SSOT read in Phase 1)
    against live behavior: missing docs for live features, documented
    features that no longer exist, stale examples.
 
@@ -102,8 +102,8 @@ navigable and one-command launchable.
 ## The docs gate
 
 After synthesis, the orchestrator dispatches `atlas:docs-curator` to
-record the audit run in `.atlas/docs/CHANGELOG.md` and under
-`.atlas/docs/audits/`. If the curator is unavailable, the orchestrator
+record the audit run in `docs/CHANGELOG.md` and under
+`.atlas/audits/`. If the curator is unavailable, the orchestrator
 writes those entries itself. The audit is not done until the docs gate
 is satisfied, the same completion gate atlas-orchestrate enforces.
 

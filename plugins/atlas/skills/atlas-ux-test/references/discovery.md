@@ -14,7 +14,7 @@ call so the harness mirrors it instead of guessing.
 
 1. Coverage cartography. Scan the frontend router file and pages directory for routes and all
    of the frontend source for user-editable fields. Rebuild the canonical route-matrix.csv and
-   field-matrix.csv in .atlas/docs/claude_testers/coverage/, diff against the previous run, and copy
+   field-matrix.csv in .atlas/evidence/claude_testers/coverage/, diff against the previous run, and copy
    both into RUN_DIR/coverage/ with two extra columns: status (init untested) and evidence_ref.
 
    Start by locating the router (look for router.tsx, App.tsx, routes.ts, or equivalent) and
@@ -50,7 +50,7 @@ call so the harness mirrors it instead of guessing.
     "source_refs": ["file:line", ...]
   }
 
-The canonical matrices in .atlas/docs/claude_testers/coverage/ are also overwritten with the fresh
+The canonical matrices in .atlas/evidence/claude_testers/coverage/ are also overwritten with the fresh
 scan, and COVERAGE-NOTES.md gets the scan date + per-app_area counts.
 
 ## Downstream dependency

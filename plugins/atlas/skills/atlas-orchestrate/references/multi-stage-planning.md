@@ -35,7 +35,7 @@ The cost of catching an error one stage back is trivial. The cost of catching it
 
 ## The per-stage gate
 
-A stage's dependents do not start until that stage is `verified`. The mark is written by an *independent* `atlas:verifier` (or specialist) running its own failable check in a *fresh* context, per law 5 in `SKILL.md`, and recorded in `.atlas/docs/.run/findings.json`:
+A stage's dependents do not start until that stage is `verified`. The mark is written by an *independent* `atlas:verifier` (or specialist) running its own failable check in a *fresh* context, per law 5 in `SKILL.md`, and recorded in `.atlas/.run/findings.json`:
 
 ```
 Stage N completes -> independent verifier runs Stage N's failable check in a fresh context
@@ -56,7 +56,7 @@ This is the Verify step (`SKILL.md` step 3) applied per stage, not only at end-o
       "implementer": "atlas:explorer",
       "verifier": "atlas:verifier",
       "status": "verified",
-      "evidence": ".atlas/docs/evidence/2026-07-11-auth-flow-map.md",
+      "evidence": ".atlas/evidence/2026-07-11-auth-flow-map.md",
       "verifier_verdict": "confirmed",
       "failable_check": "a named entry point exists and is reachable"
     },
@@ -97,7 +97,7 @@ When you do delegate, every subagent gets a 4-part brief:
 
 1. **Its specific task** - one job, scoped to a distinct concern.
 2. **What it must produce** - the exact artifact (a findings entry, a diff, a captured repro).
-3. **Where to save outputs** - the path it writes to (e.g. `.atlas/docs/evidence/`, `.atlas/docs/.run/`).
+3. **Where to save outputs** - the path it writes to (e.g. `.atlas/evidence/`, `.atlas/.run/`).
 4. **Relevant context from prior stages** - only what it cannot derive itself: paths, the failing case, finding ids from earlier waves.
 
 (See `subagent-kit.md` for the full dispatch spec these four parts plug into.)
@@ -123,7 +123,7 @@ If two "subtasks" would always succeed or fail together, they are one subtask.
 
 ## Resumability
 
-Maintain `.atlas/docs/.run/work-log.md` as the session's memory:
+Maintain `.atlas/.run/work-log.md` as the session's memory:
 
 - Decisions made and the rationale behind each.
 - What was tried and failed (so it is not retried).

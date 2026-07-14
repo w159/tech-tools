@@ -283,7 +283,7 @@ its totals blend regimes once codex rows exist.
 A backlog of pre-exclusion observer-session rows was purged from the live DB
 on 2026-07-09 after an audit found 96.6% of `session_logs` rows were this
 pollution; see `purge_observer_sessions(conn)` above and evidence at
-`.atlas/docs/evidence/2026-07-09-observer-purge.md`.
+`.atlas/evidence/2026-07-09-observer-purge.md`.
 
 ## Trends (no-arg)
 

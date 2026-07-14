@@ -1,24 +1,44 @@
 # Connector Authoring Pattern
 
-How a vendor MCP connector is structured inside its owning domain plugin, and
-how atlas-setup reasons about it without owning it. Read this alongside
-`vendors.md` (the per-vendor table) when guiding setup.
+How a vendor MCP connector is structured inside the atlas plugin, and how
+atlas-setup reasons about it. Read this alongside `vendors.md` (the per-vendor
+table) when guiding setup.
 
 ## Ownership rule
 
-Atlas ships zero connectors. Every connector lives in its owning domain
-plugin's `.claude-plugin/` tree:
+Every connector lives inside the atlas plugin's `mcp/` tree:
 
 ```
-<domain-plugin>/
+plugins/atlas/
   .claude-plugin/
-    plugin.json          # declares userConfig keys (defaults to "")
-    .mcp.json            # launches the connector server
-  skills/<vendor>-*/
-    SKILL.md             # vendor-specific skill
-  agents/<vendor>-*.md   # optional vendor-specific agent
-  docs/vendors/<vendor-dir>/
-    *.md                 # where-to-get-credentials docs
+    plugin.json          # declares all connector userConfig keys (defaults to "")
+    .mcp.json            # launches every connector server
+  mcp/
+    hr/
+      paylocity.mcpb
+      launch.sh
+      extract.sh
+    it-operations/
+      auvik.mcpb
+      connectwise.mcpb
+      ninjaone.mcpb
+      spanning.mcpb
+      launch.sh
+      extract.sh
+    microsoft-365/
+      cipp.mcpb
+      launch.sh
+      extract.sh
+    security/
+      blumira.mcpb
+      knowbe4.mcpb
+      threatlocker.mcpb
+      vanta.mcpb
+      launch.sh
+      extract.sh
+  skills/atlas-setup/
+    references/vendors.md    # per-vendor table
+    references/connectors.md # setup workflow
 ```
 
 ## Inert-by-default mechanism
@@ -27,43 +47,40 @@ Every `userConfig` key in `plugin.json` defaults to the empty string. The
 connector's server entry in `.mcp.json` runs a credential check on startup;
 with any required key empty, that check fails and the server never loads. So
 "installed but not configured" is indistinguishable from "absent" to the
-runtime - no MCP server, no tools. Filling the required keys on the owning
-plugin is the single act that enables the connector.
+runtime - no MCP server, no tools. Filling the required keys on the atlas
+plugin via `/plugin config` is the single act that enables the connector.
 
 ## The four fields the connectors mode reads per connector
 
-For each connector, `vendors.md` carries these columns. the connectors mode reads them
-directly, never from memory:
+For each connector, `vendors.md` carries these columns. The connectors mode reads
+them directly, never from memory:
 
-1. **owning plugin** - which domain plugin to install/configure.
+1. **owning plugin** - always `atlas` for the bundled connectors.
 2. **required_to_enable** - the `userConfig` keys that must be non-empty.
 3. **optional** - keys that may stay blank (typically `*_base_url`).
-4. **docs path** - where to find the where-to-get-credentials doc.
+4. **bundle path** - where the `.mcpb` bundle and launch scripts live.
 
 ## Status detection (no-args scan)
 
 To report a connector's status, the connectors mode:
 
-1. Resolve the owning domain plugin from `vendors.md`.
-2. Check `~/.claude/plugins/installed_plugins.json` for that plugin.
-3. If installed, read the plugin's effective merged `userConfig` values.
-4. Mark ENABLED if every `required_to_enable` key is non-empty, else DISABLED.
-5. If the owning plugin is not installed, mark NOT INSTALLED and skip the
-   enabled check.
+1. Resolve the atlas plugin as the owning plugin from `vendors.md`.
+2. Read the atlas plugin's effective merged `userConfig` values.
+3. Mark ENABLED if every `required_to_enable` key is non-empty, else DISABLED.
 
 ## Guided enable flow
 
 1. Open `vendors.md`, find the connector row.
-2. Tell the user the owning plugin, the required keys, the optional keys, and
-   the docs path - nothing else.
-3. Point the user at `/plugin config` on the owning domain plugin.
+2. Tell the user the required keys, the optional keys, the base-url/region
+   defaults, and the bundle path - nothing else.
+3. Point the user at `/plugin config` on the **atlas plugin**.
 4. Re-read the effective config to confirm; never ask the user to paste the
    values back into chat.
 
 ## What the connectors mode never does
 
 - Never invent credential values.
-- Never direct credentials at atlas's own plugin config.
+- Never direct credentials at a domain plugin's config.
 - Never echo credential values back.
 - Never collect more keys than the chosen connector needs.
 - Never push the user to fill an optional base-url key.

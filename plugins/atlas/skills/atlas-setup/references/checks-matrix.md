@@ -29,7 +29,7 @@ Beyond the eight scripted checks, doctor inspects:
 - **Skill count vs actual** - the plugin manifest's declared skill count
   matches the number of `SKILL.md` files found under `skills/`. A mismatch
   means a skill was added to the manifest but not shipped, or vice versa.
-- **`.atlas/docs/` tree** - if the org config references `.atlas/docs/` for
+- **`docs/` tree** - if the org config references `docs/` for
   standards or templates, those paths must exist. Missing docs break the
   branding and policy loading flows.
 

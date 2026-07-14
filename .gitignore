@@ -226,16 +226,19 @@ firebase-adminsdk*.json
 !docs/superpowers/
 !docs/superpowers/**
 
-# ---- .atlas/docs - atlas per-project SSOT (ledger + evidence must ship) ----
-# The atlas skills and completion_gate.py treat .atlas/docs/ as the single source
-# of truth: .run/findings.json is the verification ledger and evidence/ holds the
-# batch verification records. The deny-by-default /.*/ rule at the top blocks
-# every root-level dotdir, so re-include the durable tree here. Ephemeral run
-# state under .atlas/docs/.run/ (active-session markers, STATE.md) is re-excluded
-# in Section 5 except findings.json, which is the durable verification record.
+# ---- .atlas/ - atlas-internal state only, never a docs/ subdirectory ----
+# .atlas/ holds atlas's own self-improvement state: evidence/ (batch verification
+# records) and audits/ (audit reports) are durable and must ship; .run/ is
+# ephemeral except findings.json (the verification ledger completion_gate.py
+# reads). The deny-by-default /.*/ rule at the top blocks every root-level
+# dotdir, so re-include only these specific subtrees here. Ephemeral run state
+# under .atlas/.run/ (active-session markers, STATE.md) is re-excluded in
+# Section 5 except findings.json.
 !.atlas/
-!.atlas/docs/
-!.atlas/docs/**
+!.atlas/evidence/
+!.atlas/evidence/**
+!.atlas/audits/
+!.atlas/audits/**
 
 
 # ============================================================================
@@ -251,15 +254,18 @@ firebase-adminsdk*.json
 **/node_modules.nosync.noindex
 
 # ---- Atlas ephemeral run state (orchestration scratch; never durable) ----
+# docs/ never carries a .run/ subtree (that lives under .atlas/.run/ only), but
+# this stays as belt-and-suspenders in case a legacy layout re-creates one.
 docs/.run/
 docs/.run/**
-# Same ephemeral scratch under the .atlas/docs SSOT, EXCEPT the findings.json
-# ledger, which is the durable verification record the Law 5 gate reads and
-# must ship with the repo. Exclude only the .run/ contents (not the directory
-# itself) so the per-file negation below can re-include findings.json; git will
-# not re-include a file whose parent directory is excluded. Later rules win.
-.atlas/docs/.run/**
-!.atlas/docs/.run/findings.json
+# .atlas/.run/ is ephemeral scratch EXCEPT the findings.json ledger, which is
+# the durable verification record the Law 5 gate reads and must ship with the
+# repo. The directory itself must be explicitly re-included (!.atlas/.run/)
+# before a per-file negation inside it can take effect -- git will not
+# re-include a file whose parent directory is excluded, even by a later rule.
+!.atlas/.run/
+.atlas/.run/*
+!.atlas/.run/findings.json
 
 # ---- Safety: keep any nested git repo / vendored doc-site clone under docs/ out ----
 # The docs allowlist above never includes these; this is belt-and-suspenders so a

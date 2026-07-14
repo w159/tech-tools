@@ -201,7 +201,7 @@ def latest_run_id(conn, session_id):
 def mark_orchestrating(conn, session_id, cwd=None):
     """Flag this session's run as a real atlas orchestration run. Idempotent.
     Creates a run if none exists yet (e.g. the boot hook has not fired).
-    Optionally writes an advisory sentinel under <cwd>/docs/.run/."""
+    Optionally writes an advisory sentinel under <cwd>/.atlas/.run/."""
     rid = current_run_id(conn, session_id) or latest_run_id(conn, session_id)
     if rid is None:
         base = cwd or "."
@@ -226,7 +226,7 @@ def is_orchestrating(conn, session_id):
 def _write_orchestration_sentinel(cwd):
     """Advisory only. Never read for gating; a stale file must not enable a gate."""
     try:
-        run_dir = os.path.join(cwd, ".atlas", "docs", ".run")
+        run_dir = os.path.join(cwd, ".atlas", ".run")
         os.makedirs(run_dir, exist_ok=True)
         with open(os.path.join(run_dir, "atlas-orchestrate.active"), "w") as f:
             f.write(str(time.time()))

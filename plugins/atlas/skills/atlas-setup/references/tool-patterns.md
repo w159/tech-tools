@@ -70,17 +70,17 @@ The body is free-form: project conventions, gotchas, and anything
 learned during setup that the team should see. Show the diff and
 confirm before writing.
 
-## The .atlas/docs/ scaffold
+## The docs/ scaffold
 
-If `.atlas/docs/` lacks the SSOT scaffold, offer to seed it per
+If `docs/` lacks the SSOT scaffold, offer to seed it per
 `..`atlas-orchestrate`/references/docs-ssot.md`. Confirm first. Then ensure
-`.atlas/docs/` is git-tracked: a deny-by-default `.gitignore` MUST
+`docs/` is git-tracked: a deny-by-default `.gitignore` MUST
 allowlist the SSOT subtree (root `*.md` plus `architecture/`,
 `features/`, `specs/`, `audits/`, `lessons/`, `wiki/`, `plans/`,
-`evidence/`, `reference_files/`), keep `.atlas/docs/.run/` ignored,
-and never blanket-allow `.atlas/docs/**` (that would try to commit
+`evidence/`, `reference_files/`), keep `.atlas/.run/` ignored,
+and never blanket-allow `docs/**` (that would try to commit
 vendored doc clones that carry their own nested `.git`). Verify with
-`git check-ignore .atlas/docs/CHANGELOG.md` (should NOT be ignored).
+`git check-ignore docs/CHANGELOG.md` (should NOT be ignored).
 
 ## Hooks
 
@@ -95,6 +95,6 @@ documented in `..`atlas-orchestrate`/references/hooks-automation.md`.
 
 the install mode boots and configures only. It never runs scoped
 build/fix/audit/refactor work; that routes to atlas-orchestrate. It never
-installs or writes outside `.atlas/docs/` and `.claude/` without
+installs or writes outside `docs/` and `.claude/` without
 explicit confirmation. Every install and every write outside those two
 trees is gated on the user's explicit OK.

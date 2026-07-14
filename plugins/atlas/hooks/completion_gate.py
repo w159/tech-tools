@@ -7,19 +7,17 @@ enforce this (the orchestrator rationalizes "I'll mark it unverified and move on
 This hook is the machine backstop.
 
 It is **scoped**: it only engages when the working directory (or a detected project
-root above it) holds a `.atlas/docs/` directory -- the single source of truth that
-atlas-setup scaffolds. The SSOT always lives at `.atlas/docs/`, never at a root
-`docs/`. Before this was reconciled the gate looked for `docs/` while the skill
-wrote `.atlas/docs/`, so it gated the wrong tree (when a legacy `docs/` happened to
-exist) or never engaged at all (for a pure 5.0.0 project). In any session with no
-`.atlas/docs/` it is a silent no-op, so it is safe to leave installed.
+root above it) holds a `docs/` directory -- the project-documentation single source
+of truth that atlas-setup scaffolds. Atlas-internal state (evidence, audits, run
+findings) lives under `.atlas/` directly, never under a `.atlas/docs/` layer. In any
+session with no `docs/` it is a silent no-op, so it is safe to leave installed.
 
 Seven conditions must ALL hold before the gate passes (else block ONCE):
-  (a) At least one file exists under `.atlas/docs/evidence/`.
-  (b) `.atlas/docs/.run/findings.json` exists and contains at least one entry with
+  (a) At least one file exists under `.atlas/evidence/`.
+  (b) `.atlas/.run/findings.json` exists and contains at least one entry with
       status "verified".
-  (c) `.atlas/docs/CHANGELOG.md` exists and is non-empty (docs-current backstop).
-  (d) `.atlas/docs/ROADMAP.md` exists and is non-empty.
+  (c) `docs/CHANGELOG.md` exists and is non-empty (docs-current backstop).
+  (d) `docs/ROADMAP.md` exists and is non-empty.
   (e) `README.md` at the project root exists and is non-empty.
   (f) No docs drift: if non-docs files changed this run (git diff HEAD +
       staged), at least one docs/ file changed too -- this is the deterministic
@@ -49,19 +47,16 @@ import sys
 from pathlib import Path
 
 
-def _find_ssot(start: Path) -> Path | None:
-    """Walk from start toward the filesystem root; return the .atlas/docs/ SSOT dir.
-
-    The atlas SSOT always lives at .atlas/docs/ (never a root docs/). Before this
-    was reconciled the gate looked for docs/ while the skill wrote .atlas/docs/,
-    gating the wrong tree or never engaging. Stops at the filesystem root or after
-    6 levels to stay cheap and fail-open.
+def _find_root(start: Path) -> Path | None:
+    """Walk from start toward the filesystem root; return the project root
+    holding a `docs/` directory -- the project-documentation SSOT that
+    atlas-setup scaffolds. Stops at the filesystem root or after 6 levels to
+    stay cheap and fail-open.
     """
     candidate = start
     for _ in range(7):
-        atlas_docs = candidate / ".atlas" / "docs"
-        if atlas_docs.is_dir():
-            return atlas_docs
+        if (candidate / "docs").is_dir():
+            return candidate
         parent = candidate.parent
         if parent == candidate:
             break
@@ -69,18 +64,18 @@ def _find_ssot(start: Path) -> Path | None:
     return None
 
 
-def _check_evidence(docs: Path) -> bool:
-    """(a) At least one file under docs/evidence/."""
-    evidence = docs / "evidence"
+def _check_evidence(root: Path) -> bool:
+    """(a) At least one file under .atlas/evidence/."""
+    evidence = root / ".atlas" / "evidence"
     try:
         return evidence.is_dir() and any(p.is_file() for p in evidence.iterdir())
     except OSError:
         return True  # can't read -> fail open
 
 
-def _check_findings(docs: Path) -> bool:
-    """(b) .atlas/docs/.run/findings.json has at least one entry with status 'verified'."""
-    findings = docs / ".run" / "findings.json"
+def _check_findings(root: Path) -> bool:
+    """(b) .atlas/.run/findings.json has at least one entry with status 'verified'."""
+    findings = root / ".atlas" / ".run" / "findings.json"
     try:
         if not findings.is_file():
             return False
@@ -107,23 +102,19 @@ def _check_nonempty(path: Path) -> bool:
         return True  # can't stat -> fail open
 
 
-def _check_changelog(docs: Path) -> bool:
-    """(c) .atlas/docs/CHANGELOG.md exists and is non-empty."""
-    return _check_nonempty(docs / "CHANGELOG.md")
+def _check_changelog(root: Path) -> bool:
+    """(c) docs/CHANGELOG.md exists and is non-empty."""
+    return _check_nonempty(root / "docs" / "CHANGELOG.md")
 
 
-def _check_roadmap(docs: Path) -> bool:
-    """(d) .atlas/docs/ROADMAP.md exists and is non-empty."""
-    return _check_nonempty(docs / "ROADMAP.md")
+def _check_roadmap(root: Path) -> bool:
+    """(d) docs/ROADMAP.md exists and is non-empty."""
+    return _check_nonempty(root / "docs" / "ROADMAP.md")
 
 
-def _check_readme(docs: Path) -> bool:
-    """(e) README.md at the project root is non-empty.
-
-    docs is .atlas/docs/, so the project root is two levels up
-    (.atlas/docs -> .atlas -> repo root). Fail-open on OSError.
-    """
-    return _check_nonempty(docs.parent.parent / "README.md")
+def _check_readme(root: Path) -> bool:
+    """(e) README.md at the project root is non-empty. Fail-open on OSError."""
+    return _check_nonempty(root / "README.md")
 
 
 def _docs_drift(changed_paths: list) -> bool:
@@ -153,10 +144,10 @@ def _nondocs_changed(changed_paths: list) -> bool:
     return False
 
 
-def _git_changed_paths(docs: Path) -> list:
+def _git_changed_paths(root: Path) -> list:
     """Return changed file paths from git diff HEAD and the staged index.
 
-    Uses the repo root detected from the docs/ directory. Fails open on a
+    Uses the repo root detected from the project root. Fails open on a
     non-repo path or git command error (returns [] so the caller treats it as
     no drift). A missing git binary (FileNotFoundError) is propagated so the
     caller can fail-closed -- silently passing docs-drift / Law 5 when git is
@@ -164,7 +155,7 @@ def _git_changed_paths(docs: Path) -> list:
     """
     try:
         root_bytes = subprocess.check_output(
-            ["git", "-C", str(docs), "rev-parse", "--show-toplevel"],
+            ["git", "-C", str(root), "rev-parse", "--show-toplevel"],
             stderr=subprocess.DEVNULL,
             timeout=5,
         )
@@ -203,31 +194,31 @@ def _reason(
     parts = []
     if missing_a:
         parts.append(
-            "  (a) No files found under .atlas/docs/evidence/. Capture observed-behavior proof "
+            "  (a) No files found under .atlas/evidence/. Capture observed-behavior proof "
             "(test output, DB read-back, endpoint response, or UI screenshot) there first. "
             "-> Dispatch the relevant atlas specialist (atlas:implementer to re-run and "
             "capture, atlas:ui-runtime-tester for a live UI screenshot, or atlas:db-prober "
-            "for a DB read-back) to produce and save that artifact under .atlas/docs/evidence/."
+            "for a DB read-back) to produce and save that artifact under .atlas/evidence/."
         )
     if missing_b:
         parts.append(
-            "  (b) .atlas/docs/.run/findings.json is missing or has no entry with status "
+            "  (b) .atlas/.run/findings.json is missing or has no entry with status "
             '"verified". Record an independent atlas:verifier result before stopping. '
             "-> Dispatch atlas:verifier for the shipping stage to independently confirm "
             'or refute the claim, then write its verdict (status="verified") into '
-            ".atlas/docs/.run/findings.json."
+            ".atlas/.run/findings.json."
         )
     if missing_c:
         parts.append(
-            "  (c) .atlas/docs/CHANGELOG.md is missing or empty. .atlas/docs/ must be current -- "
+            "  (c) docs/CHANGELOG.md is missing or empty. docs/ must be current -- "
             "update CHANGELOG.md (and ROADMAP/affected subfolders) to reflect this run. "
             "-> Dispatch atlas:docs-curator to bring docs/ current (CHANGELOG, ROADMAP, "
             "affected subfolders) citing file:line evidence."
         )
     if missing_d:
         parts.append(
-            "  (d) .atlas/docs/ROADMAP.md is missing or empty. The roadmap is part of the "
-            ".atlas/docs/ single source of truth. -> Dispatch atlas:docs-curator to write or "
+            "  (d) docs/ROADMAP.md is missing or empty. The roadmap is part of the "
+            "docs/ single source of truth. -> Dispatch atlas:docs-curator to write or "
             "update ROADMAP.md reflecting shipped, in-flight, and planned work."
         )
     if missing_e:
@@ -238,8 +229,8 @@ def _reason(
         )
     if drift:
         parts.append(
-            "  (f) Docs drift: non-docs files changed this run but no .atlas/docs/ file is "
-            "in the diff. The .atlas/docs/ tree is the single source of truth and must move "
+            "  (f) Docs drift: non-docs files changed this run but no docs/ file is "
+            "in the diff. The docs/ tree is the single source of truth and must move "
             "with the code. -> Dispatch atlas:docs-curator to reconcile docs/ "
             "(CHANGELOG, ROADMAP, affected subfolders) citing file:line evidence, "
             "then retry Stop."
@@ -292,16 +283,16 @@ def main() -> int:
         if data.get("stop_hook_active"):
             return 0
         cwd = Path(data.get("cwd") or os.getcwd())
-        docs = _find_ssot(cwd)
-        if docs is None:
-            return 0  # no .atlas/docs/ SSOT -> not an atlas run -> silent no-op
+        root = _find_root(cwd)
+        if root is None:
+            return 0  # no docs/ SSOT -> not an atlas run -> silent no-op
         if not _session_is_orchestrating(data.get("session_id", "")):
             return 0  # WS1: only real orchestration runs are gated; never block a chat/audit turn
-        ok_a = _check_evidence(docs)
-        ok_b = _check_findings(docs)
-        ok_c = _check_changelog(docs)
-        ok_d = _check_roadmap(docs)
-        ok_e = _check_readme(docs)
+        ok_a = _check_evidence(root)
+        ok_b = _check_findings(root)
+        ok_c = _check_changelog(root)
+        ok_d = _check_roadmap(root)
+        ok_e = _check_readme(root)
         # (f) Docs drift BLOCKS: code moved but docs/ did not. This is the
         # deterministic trigger that forces an atlas:docs-curator dispatch.
         # Fail-open: any git error yields an empty path list -> no drift.
@@ -309,7 +300,7 @@ def main() -> int:
         code_changed = False
         git_error = ""
         try:
-            changed = _git_changed_paths(docs)
+            changed = _git_changed_paths(root)
             drift = _docs_drift(changed)
             code_changed = _nondocs_changed(changed)
         except Exception as exc:

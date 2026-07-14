@@ -4,6 +4,113 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
+## 2026-07-14 -- fix: flaky `test_orchestration_with_no_capture_nudges_to_capture` (test isolation)
+
+- What changed: `plugins/atlas/hooks/test_nudge.py:115-124` now mocks
+  `nudge._check_memory_captured` and `nudge._check_skill_created` to `False`
+  around its `_run_main` call, matching the pattern already used in the three
+  sibling tests below it in the same file.
+- Why: the two `nudge.py` functions (`nudge.py:46-57`, `:60-75`) read real
+  global state under `~/.atlas/memory/MEMORY.md` and `~/.atlas/skills/*/SKILL.md`.
+  Any process touching either within 60 seconds (e.g. `auto_skill.py`'s
+  skill-factory) flipped this test's "nudge to capture" assertions to fail.
+  `nudge.py` itself was not modified -- test-only fix.
+- Evidence: `.atlas/evidence/nudge-test-isolation-fix.md`. `pytest
+  plugins/atlas/hooks/test_nudge.py -v` -> 29 passed; `pytest
+  plugins/atlas/hooks/ -q` -> 428 passed, 8 subtests passed. Independent
+  `atlas:verifier` reproduced the original failure via `git stash` against a
+  faked `~/.atlas/skills/__verify_tmp_skill__/SKILL.md`, then confirmed the
+  fix eliminates it. Verdict: verified (`.atlas/.run/findings.json`, batch
+  `nudge-test-isolation-fix`).
+
+## 2026-07-14 -- docs consolidation: `.atlas/docs/` retired, `docs/` is the sole project-documentation SSOT
+
+`.atlas/docs/` and `docs/` had drifted into two independent, partially-overlapping copies
+of CHANGELOG.md, ROADMAP.md, AGENTS.md, and the durable subfolders (architecture/, plans/,
+specs/, features/, wiki/, reference_files/, lessons/) -- exactly the duplication this entry
+closes. Per explicit instruction: `.atlas/` never contains a `docs/` subdirectory again;
+project documentation, wiki, ROADMAP.md, and CHANGELOG.md live solely under `docs/` and its
+subdirectories; `.atlas/` is reserved for atlas's own self-improvement, evidence, findings,
+`.run/` state, audits, and coding-agent-relevant details.
+
+- Moved: `.atlas/docs/architecture/skills-mastery.md` -> `docs/architecture/skills-mastery.md`;
+  `.atlas/docs/plans/skills-mastery-rebuild.md` -> `docs/plans/skills-mastery-rebuild.md`.
+- Relocated (atlas-internal, not project docs): `.atlas/docs/evidence/` -> `.atlas/evidence/`;
+  `.atlas/docs/.run/` -> `.atlas/.run/`; `.atlas/docs/audits/` -> `.atlas/audits/`.
+- Unique entries from `.atlas/docs/CHANGELOG.md` (2026-07-13, 2026-07-14) and
+  `.atlas/docs/ROADMAP.md` (zero-defect-loop Z1-Z9, live item L1) merged below/into
+  `docs/ROADMAP.md`; unique orientation sections (Stack, Architecture, Conventions, Commands)
+  from `.atlas/docs/AGENTS.md` merged into `docs/AGENTS.md`.
+- `.atlas/docs/` deleted entirely (was: AGENTS.md, CHANGELOG.md, ROADMAP.md, and 7
+  boilerplate-only `README.md` placeholders under architecture/, audits/, features/, lessons/,
+  plans/, reference_files/, specs/, wiki/ -- content-free, not migrated).
+- Every `.atlas/docs/*` path reference across `plugins/atlas/skills/**` (SKILL.md files,
+  `references/*.md`, `templates/*`) and `plugins/armada/skills/armada/references/org-config-schema.md`
+  rewritten: durable/project paths now read `docs/*`; atlas-internal paths now read
+  `.atlas/evidence/`, `.atlas/audits/`, `.atlas/.run/`.
+- Evidence: `find .atlas -type d -name docs` -> empty (no `.atlas/**/docs/` directory exists);
+  `grep -rl '\.atlas/docs' plugins .atlas docs README.md .gitignore` -> no matches outside
+  historical CHANGELOG prose (append-only logs are not rewritten).
+- Verdict: done -- directory structure and every live skill/reference path updated; independent
+  verification pending a fresh `atlas:verifier` pass (see ROADMAP.md).
+
+## 2026-07-14 -- atlas-orchestrate -- README.md self-contradiction fix: version-counter split and duplicate-SSOT claim clarified
+
+- What changed: root README.md:26-32 added a clarifying paragraph after the marketplace/plugin
+  version mentions, stating the marketplace wrapper version (`3.0.0`,
+  `.claude-plugin/marketplace.json:3`) and the plugin version (`5.0.0`,
+  `plugins/atlas/.claude-plugin/plugin.json:3`) are two independent counters bumped together
+  in commit `ad7313c`, not a stale reference. This entry's own claim of a `.atlas/docs/` vs
+  `docs/` split is superseded by the 2026-07-14 consolidation entry above: the two directories
+  are no longer independent SSOTs, `docs/` is now the only one.
+- Evidence: `cat .claude-plugin/marketplace.json` -> `"version": "3.0.0"`; `cat
+  plugins/atlas/.claude-plugin/plugin.json` -> `"version": "5.0.0"`; `git log --oneline -1
+  -S'"version": "3.0.0"' -- .claude-plugin/marketplace.json` -> `ad7313c` (same commit as the
+  plugin's 5.0.0 bump, confirming two counters moved together, not drift).
+- Verdict: done -- docs-only prose change, no source code touched.
+
+## 2026-07-14 -- atlas:docs-curator -- README.md fleet section rewritten with detailed skills/agents/hooks/architecture tables
+
+- What changed: root README.md:238-380 replaced the old thin skills-table/agent-list/hooks-prose
+  under "## The atlas fleet" with four detailed tables sourced from an atlas:explorer inventory
+  pass: 21 skills (Skill/Path/Description/When-to-Use), 12 agents
+  (Agent/Role/Model/Color/Tool-Restrictions), hooks (Event/Handlers/Purpose/Evidence). Added a
+  new "## Architecture & design principles" section: single-source-of-truth list, 5 key design
+  laws, testing/quality-gate table, stack/commands table.
+- Evidence: `grep -c "&amp;" README.md` -> `0` (no stray HTML-entity artifacts from the source
+  inventory); `wc -l README.md` -> 428 lines (was 345 before the edit).
+- Verdict: done -- docs-only/prose change, no source code touched.
+
+## 2026-07-13 -- atlas:docs-curator -- zero-defect hardening complete: all batches verified, coverage 17%->98% hooks / 63%->99% scripts
+
+- Final state (fresh gates this session): hooks `Ran 365 tests in 4.012s, OK`; scripts `Ran 502
+  tests in 0.659s, OK` (867 total, up from 495). Coverage: hooks TOTAL 3962 63 98%; scripts
+  TOTAL 6708 40 99%. `ruff check plugins/atlas/hooks plugins/atlas/scripts` -> `All checks
+  passed!`. `npx pyright plugins/atlas/hooks plugins/atlas/scripts` -> `0 errors, 0 warnings,
+  0 informations`. Coverage bars MET (lines/functions/branches/statements all >=85).
+- Batches verified (findings.json: 14/14 "verified"): 1, 2a, 2b, 2c, lint-zero, 3a, 3b, 4
+  (folded into 4a-1/4a-2/4b-1/4b-2), 4a-1 (6 zero-coverage hooks -> 96%), 4a-2 (4 partial hooks
+  -> 97-100%), 4b-1 (5 lowest scripts -> 99-100%), 4b-2 (7 mid scripts -> 99-100%),
+  pyright-cleanup (pyrightconfig.json extraPaths + 18 test errors cleared), dry-rounds (K=3
+  consecutive clean + bars met).
+- Batch 3a (frontmatter): 10 SKILL.md files fixed (missing closing `---`) and
+  `test_valid_frontmatter` added. Evidence: `.atlas/evidence/batch-3a-verification.md`.
+- Batch 3b (pyright types): `plugins/atlas/scripts/test_session_ingest.py:614` int-iterable,
+  `plugins/atlas/scripts/verify_install_hooks.py:41-42` ModuleSpec|None,
+  `plugins/atlas/scripts/atlas_db.py:656-658` Literal['agent'] resolved; pyrightconfig
+  import-resolution added. Evidence: `.atlas/evidence/batch-3b-verification.md`.
+- Batch 4a/4b (coverage): 4 false-green test files fixed (test_dispatch_tripwire, test_nudge,
+  test_session_boot_db, test_prompt_classifier); tests added for previously untested
+  hooks/scripts. Per-batch evidence: `.atlas/evidence/batch-4a-1/4a-2/4b-1/4b-2-verification.md`.
+- pyright-cleanup: pyrightconfig.json extraPaths (atlas_db/scaffold_docs/atlas_memory
+  import-resolution), 18 test errors cleared. Evidence:
+  `.atlas/evidence/pyright-cleanup-verification.md`.
+- Law 5 (verifier on every shipping change) enforced throughout: every batch closed by a fresh
+  atlas:verifier pass captured in findings.json and the evidence files above.
+- LIVE ACTION ITEM (not closed): the installed marketplace plugin (5.0.0) is stale vs this
+  working tree. See ROADMAP.md.
+- Verdict: done -- see ROADMAP.md for the still-open live action item.
+
 ## 2026-07-12 -- README rewrite follow-up: correct the 12-plugin catalog mismatch
 
 The README rewritten in the v5.0.0 entry above still described a 12-plugin Claude Code

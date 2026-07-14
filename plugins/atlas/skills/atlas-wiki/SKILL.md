@@ -1,7 +1,7 @@
 ---
 name: atlas-wiki
 disable-model-invocation: true
-description: 'Generates and refreshes the .atlas/docs/wiki/ diagrams from .atlas/docs/architecture/ by invoking the graphify skill. Keeps the wiki fresh as the codebase changes. Use when architecture docs are updated, before completion, or when wiki diagrams are stale or missing.'
+description: 'Generates and refreshes the docs/wiki/ diagrams from docs/architecture/ by invoking the graphify skill. Keeps the wiki fresh as the codebase changes. Use when architecture docs are updated, before completion, or when wiki diagrams are stale or missing.'
 when_to_use: 'wiki is stale or missing, architecture changed and diagrams need refresh, before completion gate, generate diagrams from architecture docs'
 allowed-tools: Read, Glob, Grep, Bash
 ---
@@ -10,8 +10,8 @@ allowed-tools: Read, Glob, Grep, Bash
 
 Wiki diagram producer for the Atlas single source of truth. This skill is
 the missing producer half of the graphify pipeline: it invokes the repo-root
-graphify skill on `.atlas/docs/architecture/` and lands the rendered
-diagrams in `.atlas/docs/wiki/diagrams/`. atlas-audit consumes the
+graphify skill on `docs/architecture/` and lands the rendered
+diagrams in `docs/wiki/diagrams/`. atlas-audit consumes the
 resulting `graph.json` to build its navigable hub; atlas-setup checks the
 wiki freshness this skill produces as part of its completion gate.
 
@@ -20,11 +20,11 @@ wiki freshness this skill produces as part of its completion gate.
 The flow is one-directional. Architecture docs go in; rendered diagrams
 come out.
 
-    .atlas/docs/architecture/  --/graphify-->  graphify-out/  --move-->  .atlas/docs/wiki/diagrams/
+    docs/architecture/  --/graphify-->  graphify-out/  --move-->  docs/wiki/diagrams/
 
 ### Inputs
 
-1. `.atlas/docs/architecture/` - the architecture folder atlas-setup
+1. `docs/architecture/` - the architecture folder atlas-setup
    scaffolds and atlas-audit populates. Holds boundaries, component
    maps, ADRs, and `architecture-graph.json`.
 2. The repo-root graphify skill at
@@ -32,17 +32,17 @@ come out.
 
 ### Outputs
 
-1. `.atlas/docs/wiki/diagrams/index.html` - interactive HTML graph
+1. `docs/wiki/diagrams/index.html` - interactive HTML graph
    (graphify writes `graph.html`; rename on move).
-2. `.atlas/docs/wiki/diagrams/graph.json` - GraphRAG-ready JSON consumed
+2. `docs/wiki/diagrams/graph.json` - GraphRAG-ready JSON consumed
    by atlas-audit's `build_hub.py`.
-3. `.atlas/docs/wiki/diagrams/GRAPH_REPORT.md` - plain-language audit
+3. `docs/wiki/diagrams/GRAPH_REPORT.md` - plain-language audit
    report.
-4. `.atlas/docs/wiki/diagrams/graph.svg` - embeddable SVG diagram.
+4. `docs/wiki/diagrams/graph.svg` - embeddable SVG diagram.
 
 ### What this skill does NOT own
 
-- Populating `.atlas/docs/architecture/` - that is atlas-audit's job.
+- Populating `docs/architecture/` - that is atlas-audit's job.
 - Consuming `graph.json` into a hub - that is atlas-audit's Phase 4 job.
 - Editing the repo-root graphify skill - never. graphify is general
   purpose and lives at the repo root for a reason.
@@ -53,7 +53,7 @@ come out.
 This skill invokes the repo-root graphify skill as a slash command.
 graphify has no `--output` flag; it always writes to `graphify-out/` in
 the current working directory. So the producer runs graphify from the
-repo root, then moves `graphify-out/` into `.atlas/docs/wiki/diagrams/`.
+repo root, then moves `graphify-out/` into `docs/wiki/diagrams/`.
 
 See `references/graphify-invocation.md` for the exact, confirmed command
 string and the graphify SKILL.md lines it is based on.
@@ -67,8 +67,8 @@ it will exit with "No supported files found" and that is noise.
 
 ```bash
 # Run from the repo root.
-arch_dir=".atlas/docs/architecture"
-wiki_dir=".atlas/docs/wiki/diagrams"
+arch_dir="docs/architecture"
+wiki_dir="docs/wiki/diagrams"
 
 if [ ! -d "$arch_dir" ] || [ -z "$(ls -A "$arch_dir" 2>/dev/null)" ]; then
   echo "MISSING: $arch_dir does not exist or is empty. Run atlas-audit first."
@@ -99,7 +99,7 @@ HTML is the primary navigable artifact and should be kept.
 The exact invocation and the flags' grounding in graphify/SKILL.md are
 documented in `references/graphify-invocation.md`. The short form:
 
-    /graphify .atlas/docs/architecture --svg
+    /graphify docs/architecture --svg
 
 graphify writes its outputs to `graphify-out/` in the current working
 directory (the repo root). It does not accept an output path flag.
@@ -160,8 +160,8 @@ Do not run it when:
 ## Freshness check
 
 `scripts/check_wiki_freshness.sh` compares the newest mtime under
-`.atlas/docs/architecture/` against the newest mtime under
-`.atlas/docs/wiki/diagrams/`. It emits one of three verdicts:
+`docs/architecture/` against the newest mtime under
+`docs/wiki/diagrams/`. It emits one of three verdicts:
 
 | Verdict | Exit | Meaning |
 |---|---|---|

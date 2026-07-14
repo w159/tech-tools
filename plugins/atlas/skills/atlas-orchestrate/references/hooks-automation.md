@@ -13,7 +13,7 @@ prompt, a tool call, or wedge a session).
 | `advisor` | `PreToolUse` (Bash) | `hooks/bash_advisor.py` | advisory-only; emits a warning on catastrophic, near-irreversible commands only |
 | `format` | `PostToolUse` (Edit\|Write\|MultiEdit) | `hooks/format_after_edit.py` | auto-format the edited file (ruff/prettier/gofmt/rustfmt), async |
 | `dispatch-tripwire` | `PostToolUse` + `PreToolUse` | `hooks/dispatch_tripwire.py` | advisory STOP at the threshold (default 4); a second `PreToolUse` tier DENIES at 8 inline ops or on Edit/Write/MultiEdit to non-docs paths; marker-gated, orchestration sessions only |
-| `completion-gate` | `Stop` | `hooks/completion_gate.py` | **opt-out.** block stopping an orchestration run until evidence is captured; marker-gated, on by default when .atlas/docs/ exists (disable with ATLAS_GATE=off) |
+| `completion-gate` | `Stop` | `hooks/completion_gate.py` | **opt-out.** block stopping an orchestration run until evidence is captured; marker-gated, on by default when docs/ exists (disable with ATLAS_GATE=off) |
 | `nudge` | `Stop`, `SubagentStop` | `hooks/nudge.py` | self-improvement: surface a past lesson and prompt to capture new ones; marker-gated, throttled |
 | `ingest-session` | `Stop`, `SubagentStop`, `SessionEnd`, `PreCompact` | `hooks/ingest_session.py` | index the session transcript into the observability store for atlas-audit |
 
@@ -103,19 +103,19 @@ Encodes the skill's hardest rule -- *a change is not done until observed behavio
 an independent agent verified it* -- as a `Stop` hook. Prose alone doesn't enforce it (the
 orchestrator rationalizes "I'll mark it unverified and move on"); this is the machine backstop.
 
-- **Scoped.** Engages only when a `.atlas/docs/` directory is found at or above the working dir (walked
+- **Scoped.** Engages only when a `docs/` directory is found at or above the working dir (walked
   up to 6 levels) AND the session's run is flagged orchestrating in the atlas DB (the
   dispatch-tripwire hook sets that flag automatically when an orchestration skill is invoked or
   an `atlas:*` subagent is dispatched). In any other session it is a silent no-op.
 - **What satisfies it.** All seven conditions must hold:
-  - (a) At least one file under `.atlas/docs/evidence/` (observed-behavior proof captured).
-  - (b) `.atlas/docs/.run/findings.json` exists and records at least one entry with status `verified`
+  - (a) At least one file under `.atlas/evidence/` (observed-behavior proof captured).
+  - (b) `.atlas/.run/findings.json` exists and records at least one entry with status `verified`
     (independent atlas:verifier result present).
-  - (c) `.atlas/docs/CHANGELOG.md` exists and is non-empty.
-  - (d) `.atlas/docs/ROADMAP.md` exists and is non-empty.
+  - (c) `docs/CHANGELOG.md` exists and is non-empty.
+  - (d) `docs/ROADMAP.md` exists and is non-empty.
   - (e) `README.md` at the project root exists and is non-empty.
   - (f) No docs drift: if non-docs files changed this run (git diff HEAD + staged), at least
-    one `.atlas/docs/` file changed too -- the deterministic trigger forcing an `atlas:docs-curator`
+    one `docs/` file changed too -- the deterministic trigger forcing an `atlas:docs-curator`
     dispatch before "done".
   - (g) Law 5 - verifier coverage: if non-docs code changed this run, block when implementer
     dispatches outnumber verifier dispatches (`atlas_db.unpaired_implementer_dispatches > 0`) -
@@ -124,7 +124,7 @@ orchestrator rationalizes "I'll mark it unverified and move on"); this is the ma
 - **Single nudge, never a wedge.** It blocks the stop at most **once** (the `stop_hook_active`
   loop-guard), then lets the continuation through. Fail-open on any error. Disable entirely with
   `ATLAS_GATE=off`.
-- **On by default when .atlas/docs/ exists.** A plain `--apply` installs the full set including the
+- **On by default when docs/ exists.** A plain `--apply` installs the full set including the
   completion-gate. Disable with `ATLAS_GATE=off`. (Note: it coexists with codebase-brain's
   `validate_gate.py` Stop hook -- that one is message-text based, this one is artifact based;
   complementary.)

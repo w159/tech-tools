@@ -113,7 +113,11 @@ class InProcessMainTest(unittest.TestCase):
         self.assertEqual(err, "")
 
     def test_orchestration_with_no_capture_nudges_to_capture(self):
-        code, out, err = self._run_main({"session_id": "sess-orch"})
+        with (
+            mock.patch.object(nudge, "_check_memory_captured", return_value=False),
+            mock.patch.object(nudge, "_check_skill_created", return_value=False),
+        ):
+            code, out, err = self._run_main({"session_id": "sess-orch"})
         self.assertEqual(code, 0)
         self.assertIn("additionalContext", out)
         self.assertIn("self-improvement check", out)
@@ -347,7 +351,6 @@ class CheckSkillCreatedTest(unittest.TestCase):
             mock.patch.object(os.path, "getmtime", side_effect=OSError("boom")),
         ):
             self.assertFalse(nudge._check_skill_created())
-
 
 
 class OuterMainGuardTest(unittest.TestCase):

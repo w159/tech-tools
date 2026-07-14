@@ -289,13 +289,13 @@ class TripwireTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0)
         self.assertIn('"permissionDecision": "deny"', r.stdout)
         self.assertIn("atlas:implementer", r.stdout)
-        # Since the 4.0.0 SSOT migration only .atlas/docs/ is the
-        # orchestration-artifact tree; a plain docs/ path is target code.
+        # docs/ is the project-documentation orchestration-artifact tree.
         r2 = run_hook(self._pre_payload("Edit", {"file_path": "docs/x.md"}), self.env)
         self.assertEqual(r2.returncode, 0)
-        self.assertIn('"permissionDecision": "deny"', r2.stdout)
+        self.assertEqual(r2.stdout.strip(), "")
+        # .atlas/ (evidence, audits, .run) is also orchestration-owned.
         r3 = run_hook(
-            self._pre_payload("Edit", {"file_path": ".atlas/docs/x.md"}), self.env
+            self._pre_payload("Edit", {"file_path": ".atlas/evidence/x.md"}), self.env
         )
         self.assertEqual(r3.returncode, 0)
         self.assertEqual(r3.stdout.strip(), "")
@@ -626,13 +626,18 @@ class InProcessTest(unittest.TestCase):
         self.assertIn("atlas:implementer", out)
 
     def test_ip_pre_docs_edit_allowed(self):
-        # An edit inside the .atlas/docs/ orchestration tree is permitted.
-        out = self._run_main(self._pre("Edit", {"file_path": ".atlas/docs/x.md"}))
+        # An edit inside the docs/ orchestration tree is permitted.
+        out = self._run_main(self._pre("Edit", {"file_path": "docs/x.md"}))
         self.assertEqual(out, "")
 
     def test_ip_pre_docs_edit_allowed_via_contains(self):
-        # The path-orchestration check also matches "/.atlas/docs/" mid-path.
-        out = self._run_main(self._pre("Edit", {"file_path": "/repo/.atlas/docs/x.md"}))
+        # The path-orchestration check also matches "/docs/" mid-path.
+        out = self._run_main(self._pre("Edit", {"file_path": "/repo/docs/x.md"}))
+        self.assertEqual(out, "")
+
+    def test_ip_pre_atlas_evidence_edit_allowed(self):
+        # .atlas/ (evidence, audits, .run) is also orchestration-owned.
+        out = self._run_main(self._pre("Edit", {"file_path": ".atlas/evidence/x.md"}))
         self.assertEqual(out, "")
 
     def test_ip_pre_no_active_run_is_silent(self):
@@ -683,9 +688,11 @@ class InProcessTest(unittest.TestCase):
         f = self.dt._is_orchestration_path
         self.assertTrue(f(None))  # unknown path -> do not punish
         self.assertTrue(f(""))  # empty -> do not punish
-        self.assertTrue(f(".atlas/docs/x.md"))  # startswith
-        self.assertTrue(f("/repo/.atlas/docs/x.md"))  # contains
-        self.assertTrue(f(".atlas\\docs\\x.md"))  # backslash normalization
+        self.assertTrue(f("docs/x.md"))  # startswith docs/
+        self.assertTrue(f("/repo/docs/x.md"))  # contains /docs/
+        self.assertTrue(f(".atlas/evidence/x.md"))  # startswith .atlas/
+        self.assertTrue(f("/repo/.atlas/audits/x.md"))  # contains /.atlas/
+        self.assertTrue(f("docs\\x.md"))  # backslash normalization
         self.assertFalse(f("src/foo.py"))  # production target
 
     def test_ip_threshold_value_error_branch(self):

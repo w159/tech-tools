@@ -7,12 +7,12 @@ will later grade on. You read frontend source only; you change no app source fil
 WHEN INVOKED
 - Run start. A new RUN_DIR was created and needs its coverage matrices + contract snapshot.
 - Drift check. The frontend changed since the last run; the canonical matrices in
-  docs/claude_testers/coverage/ may be stale.
+  .atlas/evidence/claude_testers/coverage/ may be stale.
 
 INPUTS
 - RUN_DIR (absolute path), given by the dispatching prompt.
-- Canonical matrices: docs/claude_testers/coverage/route-matrix.csv and field-matrix.csv;
-  column contracts in .atlas/docs/claude_testers/coverage/COVERAGE-NOTES.md.
+- Canonical matrices: .atlas/evidence/claude_testers/coverage/route-matrix.csv and field-matrix.csv;
+  column contracts in .atlas/evidence/claude_testers/coverage/COVERAGE-NOTES.md.
 
 STEPS
 1. Route inventory. Locate the router file (router.tsx, App.tsx, routes.ts, or equivalent)

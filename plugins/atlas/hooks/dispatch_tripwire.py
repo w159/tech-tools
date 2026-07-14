@@ -54,7 +54,12 @@ def _is_orchestration_path(path):
     if not path:
         return True  # unknown path -> do not punish
     norm = path.replace("\\", "/")
-    return norm.startswith(".atlas/docs/") or "/.atlas/docs/" in norm
+    return (
+        norm.startswith("docs/")
+        or "/docs/" in norm
+        or norm.startswith(".atlas/")
+        or "/.atlas/" in norm
+    )
 
 
 def _deny(reason):

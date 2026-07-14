@@ -20,13 +20,13 @@ Three modes; pick by the ask, never by question:
 
 The rest of this file is the code mode.
 
-Discovery-first, comprehensive audit swarm. You supply no arguments. The survey builds a knowledge graph of the codebase, aims every dimension reviewer at the hottest nodes that graph surfaces, verifies every finding adversarially, and delivers a prioritized, file:line-anchored report under .atlas/docs/audits/atlas-audit-<date>/.
+Discovery-first, comprehensive audit swarm. You supply no arguments. The survey builds a knowledge graph of the codebase, aims every dimension reviewer at the hottest nodes that graph surfaces, verifies every finding adversarially, and delivers a prioritized, file:line-anchored report under .atlas/audits/atlas-audit-<date>/.
 
 **Elicitation:** before building the graph, if the user's ask did not fix the tier, ask ONE AskUserQuestion: audit depth - comprehensive sweep (recommended for "audit this"), hotspot-only quick pass, or a named-dimension focus (security/OWASP only, correctness only). Depth changes swarm size and wall-clock materially, so it is the user's call; which files are hot is discovery's call, never a question.
 
 ## Zero-arg discovery
 
-The user invokes this skill with no arguments. Phase 1 first discovers the codebase roots (a single-package repo yields one root; a monorepo yields one per package - MCP server, node lib, plugin), then runs the `graphify` skill **scoped per root** to build the codebase knowledge graph: community structure, god nodes (high in-degree, high coupling), and high-centrality hot spots (bridges between modules). Scoping per root keeps each graphify run under its size gate so the build never stalls on a whole-monorepo scope. In parallel, the orchestrator reads .atlas/docs/ as the SSOT for intended behavior - these docs become the baseline against which code-vs-docs drift is measured.
+The user invokes this skill with no arguments. Phase 1 first discovers the codebase roots (a single-package repo yields one root; a monorepo yields one per package - MCP server, node lib, plugin), then runs the `graphify` skill **scoped per root** to build the codebase knowledge graph: community structure, god nodes (high in-degree, high coupling), and high-centrality hot spots (bridges between modules). Scoping per root keeps each graphify run under its size gate so the build never stalls on a whole-monorepo scope. In parallel, the orchestrator reads docs/ as the SSOT for intended behavior - these docs become the baseline against which code-vs-docs drift is measured.
 
 The graph output determines WHERE each dimension reviewer focuses. Reviewers are not pointed at the whole codebase; they are aimed at the nodes and communities the graph flagged as highest risk. This is what makes the survey comprehensive without being shallow.
 
@@ -75,10 +75,10 @@ The boundary is symmetric by design. If a survey dimension reviewer surfaces a s
 
 ## Output
 
-All artifacts land under .atlas/docs/audits/atlas-audit-<date>/ as the single source of truth. No loose files in the repo root. Every findings file and report.md use the same severity scale: HIGH / MED / LOW.
+All artifacts land under .atlas/audits/atlas-audit-<date>/ as the single source of truth. No loose files in the repo root. Every findings file and report.md use the same severity scale: HIGH / MED / LOW.
 
 ```
-.atlas/docs/audits/atlas-audit-<date>/
+.atlas/audits/atlas-audit-<date>/
   graph-summary.md          - merged hot spots and communities surfaced by graphify across all roots (file:line)
                               (per-root graphs live in each root's own graphify-out/, not under this audit dir)
   findings/
@@ -102,7 +102,7 @@ Each finding in report.md carries: dimension, severity (HIGH / MED / LOW), file:
 The orchestrator writes handoff prompts only for findings the user accepts for remediation. Each `<finding-id>` used as a filename must be a filesystem-safe slug: lowercase, with every character outside `a-z 0-9 . _ -` (notably the Windows-reserved set `< > : " / \ | ? *`, plus spaces) replaced by `-`. A colon in any audit filename makes the repo un-checkout-able on Windows and blocks everyone syncing it. Each handoff is self-contained: it names the file:line, states the flaw and acceptance criterion, specifies which atlas squad agent should lead the fix, and ends with `Remediate with: atlas-launch <finding-id>`. After writing handoffs/, the orchestrator builds the hub so findings are navigable and one-command launchable:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/build_hub.py" ".atlas/docs/audits/atlas-audit-<date>" <each per-root graphify-out/graph.json>
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/build_hub.py" ".atlas/audits/atlas-audit-<date>" <each per-root graphify-out/graph.json>
 ```
 
 `atlas-launch <finding-id>` then loads that handoff into the `atlas-orchestrate` skill to remediate it. (`atlas-launch` is the remediation launcher; `atlas-handoff` is the separate session-resume checkpoint.)
@@ -121,7 +121,7 @@ the real packages are), not a static or config-supplied list. A single-package r
 one root; this monorepo resolves to one root per MCP server / node lib / plugin. The orchestrator
 then runs the `graphify` skill **scoped per discovered root** (with `GRAPHIFY_NONINTERACTIVE=1` set
 so a root that still trips the size gate auto-scopes instead of blocking), writing a `graphify-out/`
-under each root. It merges each root's hot-spot nodes into a single top-N list and reads .atlas/docs/ for
+under each root. It merges each root's hot-spot nodes into a single top-N list and reads docs/ for
 the intended-behavior baseline. This phase completes before any dimension fans out. The orchestrator
 records the merged top-N hot spot nodes (file:line) and the docs baseline to disk before dispatching
 Phase 2.
@@ -138,4 +138,4 @@ As each dimension reviewer completes, its findings flow into a per-finding verif
 
 ### Phase 4 - Synthesize and output (orchestrator only)
 
-The orchestrator collects all verified findings, assigns final severity ordering (HIGH first), writes report.md, and generates handoff prompts for accepted findings. Synthesis is never delegated. If atlas:docs-curator is available, the orchestrator dispatches it to record the audit run in .atlas/docs/CHANGELOG.md and under .atlas/docs/audits/; if it is not available, the orchestrator writes those entries itself. (atlas:docs-curator is the only writer of durable docs/ content when present.)
+The orchestrator collects all verified findings, assigns final severity ordering (HIGH first), writes report.md, and generates handoff prompts for accepted findings. Synthesis is never delegated. If atlas:docs-curator is available, the orchestrator dispatches it to record the audit run in docs/CHANGELOG.md and under .atlas/audits/; if it is not available, the orchestrator writes those entries itself. (atlas:docs-curator is the only writer of durable docs/ content when present.)

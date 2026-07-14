@@ -22,10 +22,10 @@ discover the real stack.
 
 ## Conventions
 
-- The single source of truth lives under `.atlas/docs/`.
+- The single source of truth lives under `docs/`.
 - Every claim cites file:line.
 - Every completion carries its evidence in the same message.
-- The `.atlas/docs/.run/` directory is ephemeral and gitignored.
+- The `.atlas/.run/` directory is ephemeral and gitignored.
 
 ## Commands
 

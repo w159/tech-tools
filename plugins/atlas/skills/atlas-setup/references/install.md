@@ -2,7 +2,7 @@
 
 The architect makes a project ready for atlas: memory on, context protection on,
 the right capabilities recommended, hooks wired, config written, docs/ seeded. It
-never installs or writes outside `.atlas/docs/` and `.claude/` without explicit
+never installs or writes outside `docs/` and `.claude/` without explicit
 confirmation.
 
 **Elicitation:** consent decisions go through the **AskUserQuestion tool**, not prose
@@ -62,21 +62,21 @@ the reference before building the recommend-then-confirm shortlist in Stage 2.
    This is the single most impactful action for reducing token cost — atlas loads
    27 skills + 23 agents (~6000+ tokens) into every API call; disabling unused ones
    can cut that by 70%+.
-6. Docs seed and tracking. If `.atlas/docs/` lacks the SSOT scaffold, offer to seed it per
-   `..`atlas-orchestrate`/references/docs-ssot.md`. Confirm first. Then ensure .atlas/docs/ is
-   git-tracked: atlas maintains .atlas/docs/ as the project SSOT, so a deny-by-default
+6. Docs seed and tracking. If `docs/` lacks the SSOT scaffold, offer to seed it per
+   `..`atlas-orchestrate`/references/docs-ssot.md`. Confirm first. Then ensure docs/ is
+   git-tracked: atlas maintains docs/ as the project SSOT, so a deny-by-default
    `.gitignore` MUST allowlist the SSOT subtree (root `*.md` plus architecture/,
    features/, specs/, audits/, lessons/, wiki/, plans/, evidence/, reference_files/),
-   keep `.atlas/docs/.run/` ignored, and never blanket-allow `.atlas/docs/**` (that would try to
+   keep `.atlas/.run/` ignored, and never blanket-allow `docs/**` (that would try to
    commit vendored doc clones that carry their own nested .git). Verify with
-   `git check-ignore .atlas/docs/CHANGELOG.md` (should NOT be ignored).
+   `git check-ignore docs/CHANGELOG.md` (should NOT be ignored).
 7. Report. Dependency state, capabilities installed vs declined, hooks active, config
-   path, .atlas/docs/ state, self-improvement status, context optimization results,
+   path, docs/ state, self-improvement status, context optimization results,
    and the next recommended command.
 
 ## Recommend-then-confirm
 
-Every install and every write outside `.atlas/docs/` and `.claude/` is gated on the user's
+Every install and every write outside `docs/` and `.claude/` is gated on the user's
 explicit OK. The discovery script is read-only and side-effect free. Present the
 shopping list; let the user choose; install only what they pick.
 
@@ -97,7 +97,7 @@ recommend-then-confirm. Check, in order:
 - the automation hooks that auto-load via hooks.json (session boot, prompt
   optimizer, bash advisor, format-after-edit, dispatch tripwire, completion gate,
   memory capture, auto-skill, self-improvement nudge, session-transcript ingest);
-- the .atlas/docs/ SSOT scaffold, and whether CHANGELOG.md and ROADMAP.md are current;
+- the docs/ SSOT scaffold, and whether CHANGELOG.md and ROADMAP.md are current;
 - the self-improvement system: atlas_memory, skill_factory, atlas_curator, and
   atlas_context_optimizer scripts present and functional;
 - the context optimization state: run `atlas_context_optimizer.py status` and

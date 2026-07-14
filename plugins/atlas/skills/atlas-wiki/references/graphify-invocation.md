@@ -1,27 +1,27 @@
 # Graphify Invocation
 
 The exact, confirmed invocation of the repo-root graphify skill used by
-atlas-wiki to render `.atlas/docs/architecture/` into
-`.atlas/docs/wiki/diagrams/`. Every flag and path here is grounded in
+atlas-wiki to render `docs/architecture/` into
+`docs/wiki/diagrams/`. Every flag and path here is grounded in
 the graphify skill file at
 `/Users/jerry/MEGA/Projects/Agentic/atlas/skills/graphify/SKILL.md`.
 Nothing is invented.
 
 ## The invocation
 
-From the repo root, after confirming `.atlas/docs/architecture/` is
+From the repo root, after confirming `docs/architecture/` is
 non-empty:
 
-    /graphify .atlas/docs/architecture --svg
+    /graphify docs/architecture --svg
 
 Then move the resulting `graphify-out/` into the wiki:
 
-    mkdir -p .atlas/docs/wiki/diagrams
-    rm -rf .atlas/docs/wiki/diagrams/*
-    mv graphify-out/graph.html .atlas/docs/wiki/diagrams/index.html
-    mv graphify-out/graph.json .atlas/docs/wiki/diagrams/graph.json
-    mv graphify-out/GRAPH_REPORT.md .atlas/docs/wiki/diagrams/GRAPH_REPORT.md
-    mv graphify-out/graph.svg .atlas/docs/wiki/diagrams/graph.svg
+    mkdir -p docs/wiki/diagrams
+    rm -rf docs/wiki/diagrams/*
+    mv graphify-out/graph.html docs/wiki/diagrams/index.html
+    mv graphify-out/graph.json docs/wiki/diagrams/graph.json
+    mv graphify-out/GRAPH_REPORT.md docs/wiki/diagrams/GRAPH_REPORT.md
+    mv graphify-out/graph.svg docs/wiki/diagrams/graph.svg
     rm -rf graphify-out
 
 ## Why there is no output-path flag
@@ -45,9 +45,9 @@ output write targets `graphify-out/`:
 
 Because the output directory is fixed relative to CWD, the producer runs
 graphify from the repo root and moves `graphify-out/` into
-`.atlas/docs/wiki/diagrams/` afterward. This matches the wiring
+`docs/wiki/diagrams/` afterward. This matches the wiring
 contract's fallback ("then move graphify-out/ into
-.atlas/docs/wiki/diagrams/") in
+docs/wiki/diagrams/") in
 `plugins/atlas/skills/atlas-setup/references/graphify-wiring.md`.
 
 ## Flags used and why
@@ -69,7 +69,7 @@ graphify/SKILL.md line 14:
 
     /graphify <path>                                      # full pipeline on specific path
 
-The path is `.atlas/docs/architecture/` (the folder
+The path is `docs/architecture/` (the folder
 atlas-audit populates). graphify Step 2 (line 86-93) runs its
 `detect()` on this path and reports the corpus summary.
 
@@ -131,11 +131,11 @@ atlas-audit Phase 4 consumes `graphify-out/graph.json` files via
 `scripts/build_hub.py` (atlas-audit/SKILL.md, Phase 4):
 
     python3 "${CLAUDE_PLUGIN_ROOT}/scripts/build_hub.py" \
-      ".atlas/docs/audits/atlas-audit-<date>" \
+      ".atlas/audits/atlas-audit-<date>" \
       <each per-root graphify-out/graph.json>
 
 This skill produces the long-lived `graph.json` at
-`.atlas/docs/wiki/diagrams/graph.json` - the same JSON shape graphify's
+`docs/wiki/diagrams/graph.json` - the same JSON shape graphify's
 `to_json` emits (graphify/SKILL.md line 421). atlas-audit own per-root
 `graphify-out/graph.json` files are produced during atlas-audit discovery
 pass and are ephemeral; this skill's wiki `graph.json` is the stable
