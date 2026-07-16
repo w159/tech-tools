@@ -1,6 +1,6 @@
 {
     "name": "atlas",
-    "version": "5.0.1",
+    "version": "5.1.0",
     "description": "Multi-agent coding architect with automatic self-improvement. 21 plainly named skills: the atlas-orchestrate engine, atlas-audit (code/security audit, architecture map, atlas self-telemetry), atlas-setup (onboarding, install, connectors, repair - the one manual skill), atlas-loop (recurring/iterative work), atlas-ux-test (UX runtime swarm), and 16 task skills (atlas-feature, atlas-debug, atlas-refactor, atlas-frontend, atlas-component, atlas-db-audit, atlas-gitignore, atlas-handoff, atlas-harden, atlas-launch, atlas-m365, atlas-prompt, atlas-readme, atlas-validate, atlas-vendor-assessment, atlas-wiki). 12 core agents, 10 hooks (session boot, prompt optimizer, bash advisor, format-after-edit, dispatch tripwire, completion gate, memory capture, auto-skill, self-improvement nudge, session-transcript ingest), and the atlas-orchestrate method: independent verification with runtime evidence before any done claim. Self-improvement: persistent memory at ~/.atlas/memory/, automatic skill creation from session transcripts at ~/.atlas/skills/, skill lifecycle curation, and context optimization that disables unused skills/agents. Org deployment (11 departments) lives in the separate armada plugin.",
     "author": {
         "name": "w159",

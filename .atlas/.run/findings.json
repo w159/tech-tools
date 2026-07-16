@@ -103,5 +103,12 @@
     "status": "verified",
     "verifier": "atlas:verifier (fresh)",
     "evidence": "plugins/atlas/hooks/test_nudge.py:115-124 shows the mock.patch.object wrapping; git diff --stat confirms only test_nudge.py changed (nudge.py untouched); pytest plugins/atlas/hooks/test_nudge.py -v: 29 passed. Counterfactual: created ~/.atlas/skills/__verify_tmp_skill__/SKILL.md with fresh mtime, fixed test still PASSED; git stash to pre-fix code with same fake state present reproduced the exact original failure (AssertionError: self-improvement check not found); git stash pop restored the fix; temp skill dir removed. Full suite pytest plugins/atlas/hooks/ -q: 428 passed, 8 subtests passed."
+  },
+  {
+    "batch": "2026-07-16-wiring-repair",
+    "claim": "atlas 5.1.0 wiring repair: .mcp.json relocated to plugin root (10 connector servers now resolvable), agent evidence paths unified on .atlas/evidence/, operating-contract fallback anchored in 14 skills, legacy tracked docs/.run markers removed, em dash sweep, rename-residue fixes in atlas-launch/atlas-audit, docs/audits convention unified, CHANGELOG 5.1.0 entry added.",
+    "status": "verified",
+    "verifier": "atlas:verifier (fresh)",
+    "evidence": "verifier verdict: 11/12 CONFIRMED, 1 REFUTED (line-wrapped 'atlas-audit or atlas-audit' at atlas-launch/SKILL.md:19-20) subsequently fixed and re-checked wrap-tolerantly -> 0 matches. pytest hooks scripts -> 960 passed, 8 subtests. Full artifact: .atlas/evidence/2026-07-16-atlas-5.1.0-wiring-repair.md"
   }
 ]

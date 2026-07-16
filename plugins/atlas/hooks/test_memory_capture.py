@@ -515,22 +515,46 @@ class MemoryCaptureHelpersCoverageTest(unittest.TestCase):
         self.assertTrue(any("parallelism" in f for f in proj_facts), proj_facts)
 
     def test_extract_tool_error_patterns(self):
+        """Tool error patterns are captured only for non-trivial tools with ≥3 failures."""
         self._seed_run("tool-sess")
-        atlas_db.insert_tool_call(
-            self.conn,
-            "tool-sess",
-            {
-                "message_uuid": "m",
-                "ts": 1,
-                "tool_name": "Bash",
-                "is_error": 1,
-            },
-        )
+        # Insert 3 Write errors (non-trivial tool, ≥3 threshold)
+        for i in range(3):
+            atlas_db.insert_tool_call(
+                self.conn,
+                "tool-sess",
+                {
+                    "message_uuid": f"m{i}",
+                    "ts": i + 1,
+                    "tool_name": "Write",
+                    "is_error": 1,
+                },
+            )
         self.conn.commit()
         mem_facts, _proj = memory_capture._extract_facts(
             self.conn, "tool-sess", "/repo/atlas"
         )
-        self.assertTrue(any("Tool 'Bash'" in f for f in mem_facts), mem_facts)
+        self.assertTrue(any("Tool 'Write'" in f for f in mem_facts), mem_facts)
+
+    def test_extract_tool_error_trivial_tool_skipped(self):
+        """Bash errors are NOT captured — Bash is a trivial tool where single
+        failures are normal during development."""
+        self._seed_run("tool-sess")
+        for i in range(5):
+            atlas_db.insert_tool_call(
+                self.conn,
+                "tool-sess",
+                {
+                    "message_uuid": f"m{i}",
+                    "ts": i + 1,
+                    "tool_name": "Bash",
+                    "is_error": 1,
+                },
+            )
+        self.conn.commit()
+        mem_facts, _proj = memory_capture._extract_facts(
+            self.conn, "tool-sess", "/repo/atlas"
+        )
+        self.assertFalse(any("Tool 'Bash'" in f for f in mem_facts), mem_facts)
 
     def test_extract_facts_closed_conn_swallows_block_errors(self):
         # Closed conn: _resolve_scope collapses, then each query block raises

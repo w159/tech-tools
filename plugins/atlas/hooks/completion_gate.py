@@ -8,7 +8,7 @@ This hook is the machine backstop.
 
 It is **scoped**: it only engages when the working directory (or a detected project
 root above it) holds a `docs/` directory -- the project-documentation single source
-of truth that atlas-setup scaffolds. Atlas-internal state (evidence, audits, run
+of truth that atlas-setup scaffolds. Atlas-internal state (evidence, run
 findings) lives under `.atlas/` directly, never under a `.atlas/docs/` layer. In any
 session with no `docs/` it is a silent no-op, so it is safe to leave installed.
 
@@ -26,6 +26,10 @@ Seven conditions must ALL hold before the gate passes (else block ONCE):
       are more implementer dispatches than verifier dispatches for the run
       (atlas_db.unpaired_implementer_dispatches > 0), block -- shipping work
       that never got an independent atlas:verifier pass.
+  (h) ROADMAP reconciliation: if docs/ROADMAP.md contains items with status
+      "done" that should have been moved to CHANGELOG, block. A "done" item
+      in ROADMAP is a defect -- it belongs in CHANGELOG with a date and
+      evidence citation.
 
 If any condition is missing the hook blocks and names exactly which condition
 failed and which specialist closes it.
@@ -117,6 +121,29 @@ def _check_readme(root: Path) -> bool:
     return _check_nonempty(root / "README.md")
 
 
+def _check_roadmap_reconciled(root: Path) -> bool:
+    """(h) ROADMAP.md must not contain items with status 'done'.
+
+    A 'done' item in ROADMAP is a defect — it should have been moved to
+    CHANGELOG with a date and evidence citation. This check scans for
+    the `- [done]` pattern or `status: done` in ROADMAP.md.
+
+    Returns True if ROADMAP is reconciled (no 'done' items found).
+    Fail-open on OSError (can't read → don't block).
+    """
+    roadmap = root / "docs" / "ROADMAP.md"
+    try:
+        if not roadmap.is_file():
+            return True  # condition (d) handles missing ROADMAP
+        content = roadmap.read_text(encoding="utf-8").lower()
+        # Check for common patterns: "- [done]", "status: done", "| done |"
+        if "- [done]" in content or "status: done" in content or "| done |" in content:
+            return False
+        return True
+    except (OSError, UnicodeDecodeError):
+        return True  # can't read → fail open
+
+
 def _docs_drift(changed_paths: list) -> bool:
     """Return True when >=1 non-docs file was changed and 0 docs files were changed.
 
@@ -190,6 +217,7 @@ def _reason(
     drift: bool = False,
     unverified: int = 0,
     git_error: str = "",
+    roadmap_not_reconciled: bool = False,
 ) -> str:
     parts = []
     if missing_a:
@@ -251,6 +279,14 @@ def _reason(
             "nothing changed. -> Ensure git is reachable from this environment "
             "and retry Stop." % git_error
         )
+    if roadmap_not_reconciled:
+        parts.append(
+            "  (h) ROADMAP reconciliation: docs/ROADMAP.md contains items with "
+            'status "done" that should have been moved to CHANGELOG.md with a '
+            "date and evidence citation. A 'done' item in ROADMAP is a defect. "
+            "-> Dispatch atlas:docs-curator to move completed and verified "
+            "items from ROADMAP to CHANGELOG, then retry Stop."
+        )
     failed = "\n".join(parts)
     return (
         "[atlas] Definition-of-done gate: the following condition(s) are not met:\n"
@@ -293,6 +329,7 @@ def main() -> int:
         ok_c = _check_changelog(root)
         ok_d = _check_roadmap(root)
         ok_e = _check_readme(root)
+        ok_h = _check_roadmap_reconciled(root)
         # (f) Docs drift BLOCKS: code moved but docs/ did not. This is the
         # deterministic trigger that forces an atlas:docs-curator dispatch.
         # Fail-open: any git error yields an empty path list -> no drift.
@@ -324,6 +361,7 @@ def main() -> int:
             and ok_c
             and ok_d
             and ok_e
+            and ok_h
             and not drift
             and unverified == 0
             and not git_error
@@ -338,6 +376,7 @@ def main() -> int:
             drift,
             unverified,
             git_error,
+            not ok_h,
         )
         print(json.dumps({"decision": "block", "reason": block_reason}))
     except Exception as exc:  # noqa: BLE001 -- a Stop hook must never wedge the session

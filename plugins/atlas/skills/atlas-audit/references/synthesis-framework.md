@@ -103,7 +103,7 @@ navigable and one-command launchable.
 
 After synthesis, the orchestrator dispatches `atlas:docs-curator` to
 record the audit run in `docs/CHANGELOG.md` and under
-`.atlas/audits/`. If the curator is unavailable, the orchestrator
+`docs/audits/`. If the curator is unavailable, the orchestrator
 writes those entries itself. The audit is not done until the docs gate
 is satisfied, the same completion gate atlas-orchestrate enforces.
 

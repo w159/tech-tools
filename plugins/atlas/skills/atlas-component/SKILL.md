@@ -16,7 +16,7 @@ Apply the Operating Contract to this entire task. It is injected below.
 cat "${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md"
 ```
 
-If the contract did not load above, read `references/operating-contract.md` and apply it before proceeding.
+If the contract did not load above, read `${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md` and apply it before proceeding.
 
 Read `${CLAUDE_SKILL_DIR}/references/component-pattern.md` and follow the props, className, six-state, and file-pattern contract it defines. Seed a new file from `${CLAUDE_SKILL_DIR}/templates/component.seed.tsx` when starting from scratch.
 

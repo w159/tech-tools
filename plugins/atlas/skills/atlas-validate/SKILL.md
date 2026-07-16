@@ -14,7 +14,7 @@ Apply the Operating Contract to this entire task. It is injected below.
 cat "${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md"
 ```
 
-If the contract did not load above, read `references/operating-contract.md` and apply it before proceeding.
+If the contract did not load above, read `${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md` and apply it before proceeding.
 
 Read `${CLAUDE_SKILL_DIR}/references/validation-gate.md` and apply the completion-gate criteria (execution-evidence artifact, independent verifier, docs current) before declaring any check PASS.
 

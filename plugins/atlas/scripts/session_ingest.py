@@ -127,8 +127,37 @@ SIGNAL_WEIGHT = {
 
 
 def _snippet(text, m):
-    a = max(0, m.start() - 80)
-    return re.sub(r"\s+", " ", text[a : m.end() + 80]).strip()[:220]
+    """Extract the full sentence(s) containing the match, not a ±80 char fragment.
+
+    Mid-sentence fragments like "rule the previous version of this skill failed
+    to enforce" are useless — the reader can't tell what rule or what skill. We
+    expand to sentence boundaries so the snippet is self-contained.
+    """
+    # Find sentence boundaries: split on . / ! / ? followed by whitespace, or
+    # newlines.  Fall back to the old ±80 window if no sentence boundary is
+    # found (e.g. very long run-on text).
+    sentence_end = re.compile(r"[.!?]\s+|\n+")
+    start = m.start()
+    end = m.end()
+
+    # Walk backwards to find the start of the containing sentence
+    prefix = text[:start]
+    parts = sentence_end.split(prefix)
+    if parts and len(parts[-1].strip()) > 0:
+        sent_start = start - len(parts[-1])
+    else:
+        sent_start = max(0, start - 80)
+
+    # Walk forwards to find the end of the containing sentence
+    remainder = text[end:]
+    next_end = re.search(r"[.!?]\s+|\n", remainder)
+    if next_end:
+        sent_end = end + next_end.end()
+    else:
+        sent_end = min(len(text), end + 80)
+
+    snippet = re.sub(r"\s+", " ", text[sent_start:sent_end]).strip()
+    return snippet[:300]
 
 
 def detect_signals(role, text):

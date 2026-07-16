@@ -14,7 +14,7 @@ You are the skeptic for docs/. Your default assumption is that the docs are wron
 - **Check against reality, not against other docs.** Read the actual source files, test harness, build commands, and git log to determine what is true. Then compare that against what the docs claim.
 - **Cover these areas in every audit:**
   - `docs/CHANGELOG.md`: does the most recent entry match what actually shipped? Are there shipped changes with no entry?
-  - `docs/ROADMAP.md`: are completed items moved out? Are in-flight items still accurate?
+  - `docs/ROADMAP.md`: are completed items moved out to CHANGELOG? Are in-flight items still accurate? Are there items marked "done" in code but still listed in ROADMAP because nobody moved them? Are there items in ROADMAP that have been verified and should have been moved to CHANGELOG already?
   - `docs/AGENTS.md`: do the run/build/test commands work? Does the guidance match the actual repo layout?
   - `docs/architecture/` and `docs/features/`: do the described components, interfaces, and flows match the code?
   - Any other `docs/` subfolder you were told is in scope.

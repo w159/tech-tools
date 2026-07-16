@@ -16,7 +16,7 @@ Apply the Operating Contract to this entire task. It is injected below.
 cat "${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md"
 ```
 
-If the contract did not load above, read `references/operating-contract.md` and apply it before proceeding.
+If the contract did not load above, read `${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md` and apply it before proceeding.
 
 Generate a zero-trust .gitignore for this stack: $ARGUMENTS
 
@@ -37,7 +37,7 @@ The file must:
 - Cover the named stack's build output, dependency directories, caches, OS cruft, and editor files.
 - Re-exclude secrets and env files AFTER the allowlist so a later broad include cannot leak them. Re-include only the safe templates (for example `!.env.example`).
 - Account for cloud or synced-drive artifacts generically (for example `*.nosync*` patterns) only if the stack mentions a synced or cloud-backed drive.
-- If the project keeps a `docs/` tree, atlas maintains it as the documentation SSOT, so allowlist the SSOT subtree explicitly: `!docs/` plus `!docs/*.md` and the durable subfolders (architecture/, features/, specs/, lessons/, wiki/, plans/, reference_files/), each a paired `!dir/` + `!dir/**`. NEVER use a blanket `!docs/**`: vendored doc-site clones under docs/ carry their own nested .git and must stay ignored, so also re-exclude `docs/**/.git/` as belt-and-suspenders. `.atlas/` (never `.atlas/docs/`) holds atlas's own internal state: allowlist `!.atlas/evidence/` + `!.atlas/evidence/**` and `!.atlas/audits/` + `!.atlas/audits/**`, then re-exclude the ephemeral `.atlas/.run/` after the allowlist (except `!.atlas/.run/findings.json`, the durable verification ledger).
+- If the project keeps a `docs/` tree, atlas maintains it as the documentation SSOT, so allowlist the SSOT subtree explicitly: `!docs/` plus `!docs/*.md` and the durable subfolders (architecture/, features/, specs/, lessons/, wiki/, plans/, reference_files/), each a paired `!dir/` + `!dir/**`. NEVER use a blanket `!docs/**`: vendored doc-site clones under docs/ carry their own nested .git and must stay ignored, so also re-exclude `docs/**/.git/` as belt-and-suspenders. `.atlas/` (never `.atlas/docs/`) holds atlas's own internal state: allowlist `!.atlas/evidence/` + `!.atlas/evidence/**` and `!docs/audits/` + `!docs/audits/**`, then re-exclude the ephemeral `.atlas/.run/` after the allowlist (except `!.atlas/.run/findings.json`, the durable verification ledger).
 
 Do not invent ignore rules for tools that are not in the named stack.
 

@@ -59,7 +59,7 @@ the reference before building the recommend-then-confirm shortlist in Stage 2.
    Run the context optimizer to disable unused skills/agents:
    `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_context_optimizer.py optimize --dry-run`
    Present the savings estimate to the user and confirm before applying.
-   This is the single most impactful action for reducing token cost — atlas loads
+   This is the single most impactful action for reducing token cost - atlas loads
    27 skills + 23 agents (~6000+ tokens) into every API call; disabling unused ones
    can cut that by 70%+.
 6. Docs seed and tracking. If `docs/` lacks the SSOT scaffold, offer to seed it per

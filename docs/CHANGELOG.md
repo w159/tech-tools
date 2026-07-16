@@ -4,6 +4,64 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
+## 2026-07-16 -- atlas plugin 5.1.0: connector wiring repaired, path conventions unified
+
+Full details and per-fix evidence: `plugins/atlas/CHANGELOG.md` (5.1.0 entry)
+and `.atlas/evidence/2026-07-16-atlas-5.1.0-wiring-repair.md`.
+
+- `plugins/atlas/.mcp.json` moved from `.claude-plugin/` to the plugin root so
+  the manifest's `mcpServers: "./.mcp.json"` actually resolves; all 10
+  connector servers were silently unregistered before this.
+- Agent evidence writes (`ui-runtime-tester`, `db-prober`) redirected from
+  `docs/evidence/` to `.atlas/evidence/` to match the completion gate.
+- Operating-contract fallback in 14 skills anchored at
+  `${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md`.
+- Deleted git-tracked legacy run markers `plugins/atlas/docs/.run/*.active`
+  (pre-5.0 layout; made the completion gate grade the wrong root).
+- Em dash sweep (18 lines), rename residue in atlas-launch/atlas-audit,
+  absolute-path and unanchored-path fixes in atlas-wiki/atlas-db-audit,
+  plugin CHANGELOG 5.1.0 entry added to match the manifest version.
+- Verified: `python3 -m pytest hooks scripts -q` -> 960 passed; independent
+  atlas:verifier pass recorded in `.atlas/.run/findings.json`.
+
+## 2026-07-15 -- SSOT correction: atlas-internal content moved from docs/ to .atlas/
+
+The previous `.atlas/docs/` → `docs/` refactor (2026-07-14) moved paths but left
+atlas-internal content in `docs/` — the exact dual-SSOT problem it was supposed
+to solve. This correction moves all atlas-internal content to `.atlas/` and
+restores the correct split: `docs/` is the project wiki (CHANGELOG, ROADMAP,
+dynamic subfolders including graphify results); `.atlas/` is atlas's auditable
+self-improvement surface (evidence, audits, plans, specs, architecture, lessons,
+wiki, nudge, self-improvement, memory, .run state).
+
+- Moved `docs/audits/` → `.atlas/audits/` (2 audit trees, 29 files).
+- Moved `docs/evidence/` → `.atlas/evidence/` (6 files, merged with existing 9).
+- Moved `docs/lessons/` → `.atlas/lessons/` (1 file).
+- Moved `docs/plans/` → `.atlas/plans/` (11 files).
+- Moved `docs/specs/` → `.atlas/specs/` (1 file).
+- Moved `docs/architecture/` → `.atlas/architecture/` (1 file).
+- Moved `docs/superpowers/` → `.atlas/plans/` + `.atlas/specs/` (4 files).
+- Deleted `docs/.run/` (stale, untracked; `.atlas/.run/` is the live location).
+- Deleted `docs/self-improvement/` (empty).
+- `docs/` now holds only: CHANGELOG.md, ROADMAP.md, AGENTS.md, README.md,
+  standards/ (18 files). Vendored upstream clones (aider/, claude-code/, cline/,
+  etc.) remain in docs/ pending a separate cleanup decision.
+- Updated `scaffold_docs.py`: `ATLAS_ENTRIES` expanded from 3 to 11 subdirs
+  (evidence, audits, plans, specs, architecture, lessons, wiki, nudge,
+  self-improvement, memory, .run). `DURABLE_ENTRIES` remains minimal
+  (CHANGELOG.md, ROADMAP.md) — the wiki grows dynamically.
+- Rewrote `docs-ssot.md` (atlas-orchestrate + atlas-loop): new contract with
+  correct split. docs/ = project wiki (dynamic); .atlas/ = self-improvement
+  surface (auditable tracking, skill generation/disabling, subagent management).
+- Updated `atlas-launch` SKILL.md + references: `docs/audits/` → `.atlas/audits/`.
+- Updated `atlas-orchestrate` SKILL.md: `docs/plans/` → `.atlas/plans/`.
+- Fixed 14 stale `.atlas/docs/` references in `.atlas/architecture/skills-mastery.md`
+  and `.atlas/plans/skills-mastery-rebuild.md`.
+- Added 4 new tests in `test_scaffold_docs.py`:
+  `test_legacy_atlas_docs_with_only_run_marker_proceeds` (Bug 1 regression),
+  `test_legacy_atlas_docs_empty_dir_proceeds`, `test_scaffold_creates_minimal_docs_and_full_atlas`,
+  `test_no_atlas_internal_dirs_in_docs`.
+
 ## 2026-07-14 -- fix: flaky `test_orchestration_with_no_capture_nudges_to_capture` (test isolation)
 
 - What changed: `plugins/atlas/hooks/test_nudge.py:115-124` now mocks

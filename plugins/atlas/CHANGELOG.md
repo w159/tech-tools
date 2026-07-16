@@ -1,5 +1,40 @@
 # Changelog
 
+## 5.1.0 (2026-07-16)
+
+Wiring-repair patch: connector MCP registration fixed, evidence paths
+unified on the 5.0.1 convention, and portability holdouts removed.
+
+- **`.mcp.json` moved from `.claude-plugin/` to the plugin root.** The
+  manifest's `mcpServers: "./.mcp.json"` resolves relative to the plugin
+  root per the Claude Code plugin spec, so all 10 connector servers
+  (auvik, blumira, cipp, connectwise, spanning, knowbe4, ninjaone,
+  paylocity, threatlocker, vanta) were silently never registered.
+  `scripts/test_connectors_wiring.py` and
+  `skills/atlas-setup/references/connectors.md` updated to the new path.
+- **Evidence path unified.** `agents/ui-runtime-tester.md` and
+  `agents/db-prober.md` directed evidence writes to `docs/evidence/`,
+  which `hooks/completion_gate.py` never reads; both now write to
+  `.atlas/evidence/`.
+- **Audits location unified on `docs/audits/`.** The atlas-setup scaffold
+  tree showed `audits/` under `.atlas/`, contradicting
+  `scaffold_docs.py` (creates `docs/audits/` and refuses to scaffold over
+  `.atlas/audits/`), atlas-audit (writes), and atlas-launch (reads). The
+  tree and the completion-gate docstring now match the code.
+- **Operating-contract fallback anchored.** 14 task skills told the model
+  to fall back to a skill-relative `references/operating-contract.md`
+  that exists only at the plugin root; all now use
+  `${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md`.
+- **Rename residue and portability fixes.** atlas-launch no longer says
+  "use after atlas-audit or atlas-audit"; atlas-audit's boundary section
+  no longer defers to itself (names CODE vs ARCHITECTURE mode);
+  atlas-wiki drops a hardcoded `/Users/...` path; atlas-db-audit anchors
+  the read-only SQL guard at
+  `${CLAUDE_PLUGIN_ROOT}/hooks/validate-readonly-query.sh`.
+- **ASCII sweep.** 18 lines of em dashes removed across
+  `agents/docs-curator.md`, both `docs-ssot.md` references,
+  `atlas-setup/SKILL.md`, and `atlas-setup/references/install.md`.
+
 ## 5.0.1 (2026-07-14)
 
 Docs-consolidation patch: `.atlas/docs/` retired, `docs/` is now the sole

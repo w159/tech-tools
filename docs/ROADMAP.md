@@ -9,16 +9,21 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 - [active] L1: marketplace plugin (5.0.0) is stale vs the working tree. Run `/reload-plugins`
   (or reinstall) so the live Stop hook executes the fixed `docs`-resolving completion_gate.
   Coverage and test fixes are inert in the live agent until this reload lands.
+- [in-progress] Vendored upstream clones (aider/, claude-code/, cline/, codex/, cursor/,
+  gemini-cli/, github-copilot/, pi/, windsurf/, frameworks/, vendors/) still live in docs/.
+  Decision needed: move to `reference/` at repo root, or keep in docs/ as reference material.
+  These carry their own nested .git dirs and are not project documentation.
 
 ## Done
 
-### Docs consolidation: `.atlas/docs/` retired, `docs/` is the sole project-documentation SSOT (resolved 2026-07-14)
+### SSOT correction: atlas-internal content moved from docs/ to .atlas/ (resolved 2026-07-15)
 
-`.atlas/docs/` and `docs/` were two independent, drifting copies of the same SSOT files.
-`.atlas/docs/` deleted entirely; `docs/` is now the only home for CHANGELOG.md, ROADMAP.md,
-AGENTS.md, wiki/, architecture/, features/, specs/, plans/, reference_files/, and lessons/.
-`.atlas/` (no `docs/` subdirectory, ever) keeps only atlas-internal state: `.atlas/evidence/`,
-`.atlas/audits/`, `.atlas/.run/`. See CHANGELOG.md 2026-07-14 entry for the full file list.
+The 2026-07-14 refactor moved paths but left atlas-internal content in `docs/`. This
+correction moves all atlas-internal content to `.atlas/` subfolders (evidence, audits,
+plans, specs, architecture, lessons, wiki, nudge, self-improvement, memory, .run). `docs/`
+now holds only project wiki content: CHANGELOG.md, ROADMAP.md, AGENTS.md, README.md,
+standards/, and vendored clones (pending separate cleanup). Scaffold updated: docs/ minimum
+is CHANGELOG + ROADMAP (dynamic thereafter); .atlas/ gets the full self-improvement surface.
 
 ### Zero-defect hardening loop: batches Z1-Z9 verified, coverage 17%->98% hooks / 63%->99% scripts (resolved 2026-07-13)
 

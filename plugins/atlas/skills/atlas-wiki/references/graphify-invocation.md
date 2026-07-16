@@ -131,7 +131,7 @@ atlas-audit Phase 4 consumes `graphify-out/graph.json` files via
 `scripts/build_hub.py` (atlas-audit/SKILL.md, Phase 4):
 
     python3 "${CLAUDE_PLUGIN_ROOT}/scripts/build_hub.py" \
-      ".atlas/audits/atlas-audit-<date>" \
+      "docs/audits/atlas-audit-<date>" \
       <each per-root graphify-out/graph.json>
 
 This skill produces the long-lived `graph.json` at

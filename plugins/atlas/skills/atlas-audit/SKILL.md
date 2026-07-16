@@ -20,7 +20,7 @@ Three modes; pick by the ask, never by question:
 
 The rest of this file is the code mode.
 
-Discovery-first, comprehensive audit swarm. You supply no arguments. The survey builds a knowledge graph of the codebase, aims every dimension reviewer at the hottest nodes that graph surfaces, verifies every finding adversarially, and delivers a prioritized, file:line-anchored report under .atlas/audits/atlas-audit-<date>/.
+Discovery-first, comprehensive audit swarm. You supply no arguments. The survey builds a knowledge graph of the codebase, aims every dimension reviewer at the hottest nodes that graph surfaces, verifies every finding adversarially, and delivers a prioritized, file:line-anchored report under docs/audits/atlas-audit-<date>/.
 
 **Elicitation:** before building the graph, if the user's ask did not fix the tier, ask ONE AskUserQuestion: audit depth - comprehensive sweep (recommended for "audit this"), hotspot-only quick pass, or a named-dimension focus (security/OWASP only, correctness only). Depth changes swarm size and wall-clock materially, so it is the user's call; which files are hot is discovery's call, never a question.
 
@@ -46,7 +46,7 @@ The seven dimensions:
 6. **Test-coverage gaps** - behaviors with no test, critical paths exercised only by integration tests, edge cases not covered, remediation or idempotent scripts missing a post-change verification step.
 7. **Code-vs-docs drift** - discrepancies between docs/ (the SSOT read in Phase 1) and actual implemented behavior: missing docs for live features, documented features that no longer exist, stale examples.
 
-Structural and architectural duplication - parallel subsystems across features doing the same structural job - is out of scope for this dimension list. That work belongs to `atlas-audit`. See the Boundary section.
+Structural and architectural duplication - parallel subsystems across features doing the same structural job - is out of scope for this dimension list. That work belongs to the ARCHITECTURE mode of this skill. See the Boundary section.
 
 ## Adversarial verify
 
@@ -69,16 +69,16 @@ atlas-audit owns:
 - Code-vs-docs drift (docs/ vs. live behavior).
 - Local code-smell duplication: repeated logic within a single module or tightly coupled files that share a change rate.
 
-atlas-audit does NOT own structural or architectural duplication. That means: parallel subsystems across features doing the same structural job (two auth middlewares, two independent retry loops, two identical pipeline stages in separate features). That belongs to `atlas-audit`.
+CODE mode does NOT own structural or architectural duplication. That means: parallel subsystems across features doing the same structural job (two auth middlewares, two independent retry loops, two identical pipeline stages in separate features). That belongs to ARCHITECTURE mode.
 
 The boundary is symmetric by design. If a survey dimension reviewer surfaces a structural duplication finding (same pattern appearing in two separate features), the reviewer notes it as out-of-scope and excludes it from its structured return. The orchestrator writes a single line to the output referencing atlas-audit for that class of finding. The two skills never re-audit the same concern.
 
 ## Output
 
-All artifacts land under .atlas/audits/atlas-audit-<date>/ as the single source of truth. No loose files in the repo root. Every findings file and report.md use the same severity scale: HIGH / MED / LOW.
+All artifacts land under docs/audits/atlas-audit-<date>/ as the single source of truth. No loose files in the repo root. Every findings file and report.md use the same severity scale: HIGH / MED / LOW.
 
 ```
-.atlas/audits/atlas-audit-<date>/
+docs/audits/atlas-audit-<date>/
   graph-summary.md          - merged hot spots and communities surfaced by graphify across all roots (file:line)
                               (per-root graphs live in each root's own graphify-out/, not under this audit dir)
   findings/
@@ -102,7 +102,7 @@ Each finding in report.md carries: dimension, severity (HIGH / MED / LOW), file:
 The orchestrator writes handoff prompts only for findings the user accepts for remediation. Each `<finding-id>` used as a filename must be a filesystem-safe slug: lowercase, with every character outside `a-z 0-9 . _ -` (notably the Windows-reserved set `< > : " / \ | ? *`, plus spaces) replaced by `-`. A colon in any audit filename makes the repo un-checkout-able on Windows and blocks everyone syncing it. Each handoff is self-contained: it names the file:line, states the flaw and acceptance criterion, specifies which atlas squad agent should lead the fix, and ends with `Remediate with: atlas-launch <finding-id>`. After writing handoffs/, the orchestrator builds the hub so findings are navigable and one-command launchable:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/build_hub.py" ".atlas/audits/atlas-audit-<date>" <each per-root graphify-out/graph.json>
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/build_hub.py" "docs/audits/atlas-audit-<date>" <each per-root graphify-out/graph.json>
 ```
 
 `atlas-launch <finding-id>` then loads that handoff into the `atlas-orchestrate` skill to remediate it. (`atlas-launch` is the remediation launcher; `atlas-handoff` is the separate session-resume checkpoint.)
@@ -138,4 +138,4 @@ As each dimension reviewer completes, its findings flow into a per-finding verif
 
 ### Phase 4 - Synthesize and output (orchestrator only)
 
-The orchestrator collects all verified findings, assigns final severity ordering (HIGH first), writes report.md, and generates handoff prompts for accepted findings. Synthesis is never delegated. If atlas:docs-curator is available, the orchestrator dispatches it to record the audit run in docs/CHANGELOG.md and under .atlas/audits/; if it is not available, the orchestrator writes those entries itself. (atlas:docs-curator is the only writer of durable docs/ content when present.)
+The orchestrator collects all verified findings, assigns final severity ordering (HIGH first), writes report.md, and generates handoff prompts for accepted findings. Synthesis is never delegated. If atlas:docs-curator is available, the orchestrator dispatches it to record the audit run in docs/CHANGELOG.md and under docs/audits/; if it is not available, the orchestrator writes those entries itself. (atlas:docs-curator is the only writer of durable docs/ content when present.)

@@ -5,7 +5,7 @@ when_to_use: first run to bring atlas online, workspace setup, SSOT scaffolding,
 disable-model-invocation: true
 user-invocable: true
 argument-hint: "[onboard | install | connectors | repair [--fix] | task description | 'menu']"
-allowed-tools: Read, Glob, Grep, Bash(python3:*), Write(docs/**), Write(.atlas/evidence/**), Write(.atlas/audits/**)
+allowed-tools: Read, Glob, Grep, Bash(python3:*), Write(docs/**), Write(.atlas/evidence/**), Write(docs/audits/**)
 ---
 
 # atlas-setup - onboarding, install, connectors, repair
@@ -67,14 +67,14 @@ docs/
   wiki/                   onboarding, how-to, runbooks, diagrams (graphify)
   specs/                  requirements and specifications
   plans/                  implementation plans, stage maps
+  audits/                 audit run artifacts and hubs (atlas-audit)
 
 .atlas/
   evidence/               permanent execution-evidence captures
-  audits/                 audit reports (atlas-audit)
   .run/                   EPHEMERAL, GITIGNORED run state
 ```
 
-Everything under `docs/` and `.atlas/evidence/`, `.atlas/audits/` is
+Everything under `docs/` and `.atlas/evidence/`, `docs/audits/` is
 committed; `.atlas/.run/` is the only ephemeral, gitignored subtree. The
 scaffold is created by a deterministic, idempotent script, never inline
 prose:
@@ -95,7 +95,7 @@ When `docs/` does not exist:
 3. **Wire graphify** - record the wiki producer pipeline (architecture/
    in, wiki/diagrams/ out) per `references/graphify-wiring.md`.
 4. **Update .gitignore** - ensure `.atlas/.run/` is ignored but `docs/`
-   and `.atlas/evidence/`, `.atlas/audits/` are tracked.
+   and `.atlas/evidence/`, `docs/audits/` are tracked.
 5. **Inventory skills** - read `references/manual-vs-auto-map.md` and
    report which skills just came online.
 6. **Run the freshness gate** - wiki fresh, stale, missing, or N/A per
@@ -110,7 +110,7 @@ When `docs/` does not exist:
    Run the context optimizer to disable unused skills/agents:
    `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_context_optimizer.py" optimize --dry-run`
    Present the savings estimate to the user and confirm before applying.
-   This is the single most impactful action for reducing token cost — atlas
+   This is the single most impactful action for reducing token cost - atlas
    loads 21 skills + 12 agents into every API call; disabling unused ones
    can cut that by 40%+.
 8. **Recommend** - run the recommendation analysis and present the top

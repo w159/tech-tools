@@ -1,6 +1,6 @@
 ---
 name: atlas-launch
-description: Launch a remediation session preloaded with a finding from the latest audit hub; use after atlas-audit or atlas-audit. No args lists findings.
+description: Launch a remediation session preloaded with a finding from the latest audit hub; use after an atlas-audit run. No args lists findings.
 when_to_use: launch a remediation session preloaded with a finding from the latest audit hub, or list actionable findings with no args
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '[finding-id]  (no args: list actionable findings from the latest hub)'
@@ -14,10 +14,10 @@ Apply the Operating Contract to this entire task. It is injected below.
 cat "${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md"
 ```
 
-If the contract did not load above, read `references/operating-contract.md` and apply it before proceeding.
+If the contract did not load above, read `${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md` and apply it before proceeding.
 
-You are the launcher that closes the audit -> remediation loop. A prior `atlas-audit` or
-`atlas-audit` run wrote a hub under `docs/audits/atlas-<skill>-<date>/hub/`
+You are the launcher that closes the audit -> remediation loop. A prior `atlas-audit`
+run wrote a hub under `docs/audits/atlas-<skill>-<date>/hub/`
 (`manifest.json` + branded `index.html`, built by `${CLAUDE_PLUGIN_ROOT}/scripts/build_hub.py`). Each manifest entry is
 an actionable finding with its `id`, `severity`, `file`, `node_id`, `handoff_path`, and
 `prompt_summary`.
@@ -33,7 +33,7 @@ launch time is seeded from `templates/launch-artifact.seed.md`.
 ## Step 1 - Find the most recent hub
 
 Locate the newest `docs/audits/atlas-*-*/hub/manifest.json` (most recent run dir by name/date). If
-none exists, stop and say so: "No audit hub found. Run `atlas-audit` or `atlas-audit` first."
+none exists, stop and say so: "No audit hub found. Run `atlas-audit` first."
 
 ## Step 2a - No finding id given: list the actionable findings
 

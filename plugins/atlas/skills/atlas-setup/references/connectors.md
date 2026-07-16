@@ -11,7 +11,7 @@ Atlas bundles ten vendor MCP connectors inside the atlas plugin itself:
 
 The atlas plugin declares all connector `userConfig` credential keys in its own
 `.claude-plugin/plugin.json` and launches each connector from its own
-`.claude-plugin/.mcp.json`. They ship INERT: every `userConfig` key defaults to
+`.mcp.json` at the plugin root. They ship INERT: every `userConfig` key defaults to
 `""`, so with no credentials each server fails its own credential check and
 never loads. Filling a vendor's required keys on the **atlas plugin** is what
 enables it.

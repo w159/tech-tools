@@ -50,7 +50,7 @@ Match to detected stack; check the plugin's per-turn **context cost** before sug
 1. Present the gap report grouped by leverage (token economy -> automation -> coverage -> plugins), each with the concrete change and its benefit.
 2. On approval, apply low-risk changes in one batch: settings `permissions.deny`/`claudeMdExcludes`/`subagentDefaults`, format/guard hooks, LSP-plugin installs, agent/skill files. Respect the user's source-of-truth layout (e.g. write to their managed source and let their sync/symlinks pick it up; don't bypass it).
 3. **Verify the change took effect**: re-read settings, `/plugin` shows it enabled/installed, `/reload-plugins` or `/reload-skills` if needed, a probe confirms the new capability works.
-4. Record applied changes in `docs/` (the consolidated SSOT, e.g. `docs/CHANGELOG.md` / `.atlas/audits/`) and offer to note durable conventions in the user-level `~/.claude/CLAUDE.md`.
+4. Record applied changes in `docs/` (the consolidated SSOT, e.g. `docs/CHANGELOG.md` / `docs/audits/`) and offer to note durable conventions in the user-level `~/.claude/CLAUDE.md`.
 
 ## Authoritative sources (re-verify against these, don't trust memory)
 `code.claude.com/docs/en/`: `settings`, `hooks`, `mcp`, `memory`, `sub-agents`, `large-codebases`, `discover-plugins`, `skills`, `goal`, `workflows`. The user's own setup conventions take precedence over any default.

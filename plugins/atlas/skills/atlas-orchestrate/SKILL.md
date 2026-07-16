@@ -234,7 +234,7 @@ this session rather than blocking it.
 Run **Orient** (step 0) - a handful of cheap calls. Present the orientation + proposed plan and **wait for go-ahead before any write**. Do not edit, migrate, or install on your own initiative - discover, propose, gate, then route to subagents.
 
 **Opening task from a handoff.** When invoked by `atlas-launch <id>`, your opening task is a
-prepared handoff prompt from an audit hub (`.atlas/audits/atlas-<skill>-<date>/handoffs/<id>.md`). It
+prepared handoff prompt from an audit hub (`docs/audits/atlas-<skill>-<date>/handoffs/<id>.md`). It
 already names the `file:line`, the flaw, the acceptance criterion, and the lead squad agent. Do not
 re-derive the finding: treat the handoff's acceptance criterion as the definition of done, still run
 Orient (recall + roots) for context, then plan -> dispatch -> verify against it. The orchestration

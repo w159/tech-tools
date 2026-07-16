@@ -19,7 +19,7 @@ Command: `/atlas` (which runs atlas-setup).
 
 ### 2. Security audit overdue (confidence: high)
 
-Check: does `.atlas/audits/` contain a security audit newer than the last
+Check: does `docs/audits/` contain a security audit newer than the last
 known code change? Has atlas-audit ever run on this project?
 
 If no audit or stale audit: recommend atlas-audit (security/quality audit).

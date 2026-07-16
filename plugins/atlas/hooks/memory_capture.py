@@ -181,16 +181,20 @@ def _extract_facts(conn, session_id, cwd):
         pass
 
     # 4. Tool error patterns → memory (agent-level tool quirks)
+    # Only capture persistent errors (≥3 failures of the same tool in a session).
+    # Single Bash/Read failures are normal during development and create noise.
+    # Also skip "trivial" tools where single failures are expected (Bash, Read, Glob, Grep).
+    TRIVIAL_TOOLS = {"Bash", "Read", "Glob", "Grep"}
     try:
         ph, params = _in_clause(session_ids)
         error_tools = conn.execute(
             "SELECT tool_name, COUNT(*) as cnt FROM tool_calls "
             "WHERE session_id IN (" + ph + ") AND is_error=1 "
-            "GROUP BY tool_name HAVING cnt >= 1 ORDER BY cnt DESC LIMIT 3",
+            "GROUP BY tool_name HAVING cnt >= 3 ORDER BY cnt DESC LIMIT 3",
             params,
         ).fetchall()
         for tool_name, cnt in error_tools:
-            if tool_name:
+            if tool_name and tool_name not in TRIVIAL_TOOLS:
                 fact = f"Tool '{tool_name}' errored {cnt}x in {project_name} — check usage pattern"
                 memory_facts.append(fact)
     except sqlite3.Error:

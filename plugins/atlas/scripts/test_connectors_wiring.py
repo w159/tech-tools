@@ -13,7 +13,7 @@ from pathlib import Path
 PLUGINS_ATLAS = Path(__file__).parent.parent
 MCP_DIR = PLUGINS_ATLAS / "mcp"
 PLUGIN_JSON = PLUGINS_ATLAS / ".claude-plugin" / "plugin.json"
-MCP_JSON = PLUGINS_ATLAS / ".claude-plugin" / ".mcp.json"
+MCP_JSON = PLUGINS_ATLAS / ".mcp.json"
 
 # userConfig interpolation pattern used in this repo's .mcp.json files.
 _INTERPOLATION_RE = re.compile(r"\$\{user_config\.([a-z_][a-z0-9_]*)\}")

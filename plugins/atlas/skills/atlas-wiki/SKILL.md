@@ -28,7 +28,7 @@ come out.
    scaffolds and atlas-audit populates. Holds boundaries, component
    maps, ADRs, and `architecture-graph.json`.
 2. The repo-root graphify skill at
-   `/Users/jerry/MEGA/Projects/Agentic/atlas/skills/graphify/SKILL.md`.
+   `skills/graphify/SKILL.md` (relative to the project root).
 
 ### Outputs
 

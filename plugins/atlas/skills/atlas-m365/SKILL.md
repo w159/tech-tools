@@ -15,7 +15,7 @@ Apply the Operating Contract to this entire task. It is injected below.
 cat "${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md"
 ```
 
-If the contract did not load above, read `references/operating-contract.md` and apply it before proceeding.
+If the contract did not load above, read `${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md` and apply it before proceeding.
 
 Read `${CLAUDE_SKILL_DIR}/references/m365-domains.md` and use the domain map (users, mailboxes, Teams, OneDrive, licensing, security posture, multi-tenant) it defines to locate the right surface and permission scope before issuing any call.
 

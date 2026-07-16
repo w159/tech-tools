@@ -308,7 +308,7 @@ class TestSkillFactory(unittest.TestCase):
         worthy, reason = skill_factory._session_worthy(conn, "s1")
         conn.close()
         self.assertFalse(worthy)
-        self.assertEqual(reason, "no learnable signals (no improvements, corrections, or errors)")
+        self.assertEqual(reason, "no learnable signals (no improvements, corrections, or persistent errors)")
 
     def test_session_worthy_yes(self):
         db = os.path.join(self.tmpdir, "a.db")
@@ -385,6 +385,7 @@ class TestSkillFactory(unittest.TestCase):
             tool_calls=[
                 (1, "s1", "Bash", 1, "rm -rf"),
                 (2, "s1", "Bash", 1, "rm -rf again"),
+                (3, "s1", "Bash", 1, "rm -rf third"),
             ],
         )
         conn = sqlite3.connect(db)
@@ -574,6 +575,58 @@ class TestSkillFactory(unittest.TestCase):
     def test_cli_unknown_command(self):
         out = self._run_cli(["skill_factory", "bogus"])
         self.assertIn("Unknown command: bogus", out)
+
+    # --- Content-based dedup tests ---
+
+    def test_content_similarity_identical(self):
+        sim = skill_factory._content_similarity("hello world", "hello world")
+        self.assertEqual(sim, 1.0)
+
+    def test_content_similarity_unrelated(self):
+        sim = skill_factory._content_similarity("alpha beta", "gamma delta")
+        self.assertEqual(sim, 0.0)
+
+    def test_content_similarity_partial(self):
+        sim = skill_factory._content_similarity(
+            "alpha beta gamma delta", "alpha beta epsilon zeta"
+        )
+        self.assertGreater(sim, 0.0)
+        self.assertLess(sim, 1.0)
+
+    def test_content_similarity_empty(self):
+        self.assertEqual(skill_factory._content_similarity("", "text"), 0.0)
+        self.assertEqual(skill_factory._content_similarity("text", ""), 0.0)
+
+    def test_is_duplicate_skill_finds_match(self):
+        # Create a skill, then check that similar content is detected as dup
+        skill_factory.create_skill("learned-test-1", "test", "## Lesson\n\nAlways verify before claiming.")
+        contents = skill_factory._existing_skill_contents()
+        self.assertIn("learned-test-1", contents)
+        dup = skill_factory._is_duplicate_skill(
+            "## Lesson\n\nAlways verify before claiming.", contents
+        )
+        self.assertIsNotNone(dup)
+        self.assertEqual(dup, "learned-test-1")
+
+    def test_is_duplicate_skill_no_match(self):
+        skill_factory.create_skill("learned-test-2", "test", "## Lesson\n\nAlways verify before claiming.")
+        contents = skill_factory._existing_skill_contents()
+        dup = skill_factory._is_duplicate_skill(
+            "## Different Lesson\n\nNever use undefined variables in production code.", contents
+        )
+        self.assertIsNone(dup)
+
+    def test_existing_skill_contents_only_auto(self):
+        # Hand-written skills (no created_by: atlas-auto) should be excluded
+        skills_dir = skill_factory._skills_dir()
+        hand_dir = skills_dir / "hand-written-skill"
+        hand_dir.mkdir(parents=True)
+        (hand_dir / "SKILL.md").write_text(
+            "---\nname: hand-written-skill\ndescription: \"manual\"\n---\n# hand-written-skill\n\nManual content.",
+            encoding="utf-8",
+        )
+        contents = skill_factory._existing_skill_contents()
+        self.assertNotIn("hand-written-skill", contents)
 
 
 if __name__ == "__main__":

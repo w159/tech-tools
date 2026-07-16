@@ -1,6 +1,6 @@
 # Architecture mapping (atlas-audit mode)
 
-Discovery-first codebase mapper. You supply no arguments. The cartographer reads the repo, proposes its own feature boundaries, maps each feature as a Mermaid flowchart with every node labeled file:line, finds structural duplication across features, and proposes the simplest unified architecture. Everything lands in .atlas/audits/atlas-audit-<date>/.
+Discovery-first codebase mapper. You supply no arguments. The cartographer reads the repo, proposes its own feature boundaries, maps each feature as a Mermaid flowchart with every node labeled file:line, finds structural duplication across features, and proposes the simplest unified architecture. Everything lands in docs/audits/atlas-audit-<date>/.
 
 **Elicitation:** zero-arg means zero *required* input, not zero dialogue. If discovery finds more than one plausible codebase root (monorepo with several apps, nested projects), ask ONE AskUserQuestion - which root(s) to map (multiSelect, "all of them" as an option) - before fanning out. Everything else (features, boundaries, hotspots) is discovered, never asked.
 
@@ -22,7 +22,7 @@ This skill runs as a Workflow following the skeleton in atlas-orchestrate/refere
 
 One atlas:explorer surveys the source tree and proposes feature boundaries. atlas:planner then decomposes the explorer's raw boundary proposal into the approved feature list, merging, splitting, or renaming entries as needed to produce a clean, non-overlapping set. The orchestrator reviews and finalizes that list before any fan-out begins. This is the only sequential gate; all subsequent phases fan out.
 
-The orchestrator writes the approved boundary list to .atlas/audits/atlas-audit-<date>/boundaries.md before dispatching Phase 1.
+The orchestrator writes the approved boundary list to docs/audits/atlas-audit-<date>/boundaries.md before dispatching Phase 1.
 
 ### Phase 1 - Per-feature flowchart (parallel)
 
@@ -32,7 +32,7 @@ Explorer prompt template:
 
 > You are atlas:explorer. Map the "{feature}" feature. Return a Mermaid flowchart (graph TD) covering every significant entry point, branch, and data flow. Label EVERY node with its file:line. Do not describe code; chart it. Return: { "feature": "...", "chart": "graph TD\n..." }
 
-The orchestrator collects all charts and writes them to .atlas/audits/atlas-audit-<date>/charts/<feature>.md. The `<feature>` filename must be a filesystem-safe slug (see "Filename safety" below) - never write a raw feature name containing a colon, slash, or space into a path.
+The orchestrator collects all charts and writes them to docs/audits/atlas-audit-<date>/charts/<feature>.md. The `<feature>` filename must be a filesystem-safe slug (see "Filename safety" below) - never write a raw feature name containing a colon, slash, or space into a path.
 
 ### Phase 2 - Duplication hunting (parallel)
 
@@ -43,7 +43,7 @@ Two atlas:verifier agents dispatched concurrently. Duplication hunting is advers
 
 Each atlas:verifier hunter returns JSON: { "duplications": [ { "label": "...", "locations": ["file:line", "file:line", ...], "similarity": "..." } ] }. atlas:verifier enforces the evidence rule: any duplication claim that does not cite at least two file:line locations is invalid. The hunter discards it and does not return it.
 
-The orchestrator writes the merged duplication list to .atlas/audits/atlas-audit-<date>/duplications.md.
+The orchestrator writes the merged duplication list to docs/audits/atlas-audit-<date>/duplications.md.
 
 ### Phase 3 - Unified proposal (orchestrator only)
 
@@ -54,16 +54,16 @@ The orchestrator synthesizes the feature charts and duplication list into a sing
 3. Describes the minimal change each feature needs to adopt the shared path.
 4. Lists any duplication that is intentional (different domains, different change rates) and should NOT be merged.
 
-The proposal is written to .atlas/audits/atlas-audit-<date>/proposal.md.
+The proposal is written to docs/audits/atlas-audit-<date>/proposal.md.
 
 ### Phase 4 - Handoff prompts + hub (orchestrator only)
 
-For each system the proposal targets for unification, the orchestrator writes a handoff prompt to .atlas/audits/atlas-audit-<date>/handoffs/<system>.md. The `<system>` filename must be a filesystem-safe slug (see "Filename safety" below); the human-readable system name still appears inside the file. Each prompt is self-contained: it names the target, cites file:line evidence from the duplication report, states the acceptance criterion, specifies which atlas squad agent should lead the work, and ends with the launch line `Remediate with: atlas-launch <system>`.
+For each system the proposal targets for unification, the orchestrator writes a handoff prompt to docs/audits/atlas-audit-<date>/handoffs/<system>.md. The `<system>` filename must be a filesystem-safe slug (see "Filename safety" below); the human-readable system name still appears inside the file. Each prompt is self-contained: it names the target, cites file:line evidence from the duplication report, states the acceptance criterion, specifies which atlas squad agent should lead the work, and ends with the launch line `Remediate with: atlas-launch <system>`.
 
 Then build the knowledge-graph hub so the findings are navigable and launchable:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/build_hub.py" ".atlas/audits/atlas-audit-<date>" <each per-root graphify-out/graph.json>
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/build_hub.py" "docs/audits/atlas-audit-<date>" <each per-root graphify-out/graph.json>
 ```
 
 The pipeline, the `manifest.json` schema, and the file-granular matching rule
@@ -113,10 +113,10 @@ Those belong to atlas-audit. If the cartographer's explorer surfaces a quality o
 
 ## Output
 
-All artifacts land under .atlas/audits/atlas-audit-<date>/ as the single source of truth. No loose files in the repo root.
+All artifacts land under docs/audits/atlas-audit-<date>/ as the single source of truth. No loose files in the repo root.
 
 ```
-.atlas/audits/atlas-audit-<date>/
+docs/audits/atlas-audit-<date>/
   boundaries.md          - approved feature boundary list with file:line roots
   charts/
     <feature-slug>.md    - Mermaid flowchart, one per feature, all nodes labeled file:line (name slugged; no colons/spaces)
@@ -129,7 +129,7 @@ All artifacts land under .atlas/audits/atlas-audit-<date>/ as the single source 
     index.html           - branded Atlas expedition map; click a node -> finding + atlas-launch cmd
 ```
 
-The orchestrator writes a short index entry to .atlas/audits/atlas-audit-<date>/index.md listing the run date, feature count, duplication count, and proposal summary (one sentence per merged subsystem).
+The orchestrator writes a short index entry to docs/audits/atlas-audit-<date>/index.md listing the run date, feature count, duplication count, and proposal summary (one sentence per merged subsystem).
 
 ## Anti-patterns to reject in the proposal
 

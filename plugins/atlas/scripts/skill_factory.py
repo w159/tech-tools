@@ -153,17 +153,20 @@ def _extract_lessons_from_session(
             file=sys.stderr,
         )
 
-    # 3. Tool errors — patterns of failure
+    # 3. Tool errors — patterns of failure (only persistent failures, ≥3)
+    # Single Bash/Read failures are normal during development and not worth
+    # capturing as lessons.  We only want tools that fail repeatedly, signalling
+    # a systematic misuse pattern.
     try:
         error_tools = conn.execute(
             "SELECT tool_name, COUNT(*) as cnt, "
             "GROUP_CONCAT(input_summary, ' | ') as samples "
             "FROM tool_calls WHERE session_id=? AND is_error=1 "
-            "GROUP BY tool_name ORDER BY cnt DESC LIMIT 5",
+            "GROUP BY tool_name HAVING cnt >= 3 ORDER BY cnt DESC LIMIT 5",
             (session_id,),
         ).fetchall()
         for tool_name, cnt, samples in error_tools:
-            if tool_name and cnt > 0:
+            if tool_name and cnt >= 3:
                 lessons.append(
                     {
                         "topic": f"tool-error-{tool_name.lower()}",
@@ -231,15 +234,23 @@ def _session_worthy(conn: sqlite3.Connection, session_id: str) -> Tuple[bool, st
             (session_id,),
         ).fetchone()[0]
 
-        if improvements == 0 and signals == 0 and errors == 0:
+        # Tool errors only count as learnable if they're persistent (≥3).
+        # A single Bash failure is normal development, not a lesson.
+        persistent_errors = conn.execute(
+            "SELECT COUNT(*) FROM (SELECT tool_name FROM tool_calls "
+            "WHERE session_id=? AND is_error=1 GROUP BY tool_name HAVING COUNT(*) >= 3)",
+            (session_id,),
+        ).fetchone()[0]
+
+        if improvements == 0 and signals == 0 and persistent_errors == 0:
             return (
                 False,
-                "no learnable signals (no improvements, corrections, or errors)",
+                "no learnable signals (no improvements, corrections, or persistent errors)",
             )
 
         return (
             True,
-            f"orchestrating run with {tool_count} tools, {improvements} improvements, {signals} signals, {errors} errors",
+            f"orchestrating run with {tool_count} tools, {improvements} improvements, {signals} signals, {persistent_errors} persistent error patterns",
         )
     except sqlite3.Error as e:
         return False, f"DB error: {e}"
@@ -255,6 +266,63 @@ def _existing_skill_names() -> set:
         if item.is_dir() and (item / "SKILL.md").is_file():
             skills.add(item.name)
     return skills
+
+
+def _existing_skill_contents() -> Dict[str, str]:
+    """Return {skill_name: body_text} for all auto-created skills."""
+    contents = {}
+    d = _skills_dir()
+    if not d.is_dir():
+        return contents
+    for item in d.iterdir():
+        if not item.is_dir():
+            continue
+        skill_md = item / "SKILL.md"
+        if not skill_md.is_file():
+            continue
+        try:
+            text = skill_md.read_text(encoding="utf-8")
+            # Only match auto-created skills
+            if 'created_by: "atlas-auto"' not in text:
+                continue
+            # Extract the body (everything after frontmatter)
+            if "---" in text:
+                parts = text.split("---", 2)
+                if len(parts) >= 3:
+                    contents[item.name] = parts[2][:2000]
+            else:
+                contents[item.name] = text[:2000]
+        except (OSError, UnicodeDecodeError):
+            continue
+    return contents
+
+
+def _content_similarity(text_a: str, text_b: str) -> float:
+    """Compute Jaccard similarity of word sets between two texts.
+
+    Used for content-based dedup: if a new skill's lessons are ≥80% similar to
+    an existing skill, skip creation instead of producing a -2, -3, -N variant.
+    """
+    if not text_a or not text_b:
+        return 0.0
+    words_a = set(re.sub(r"\s+", " ", text_a.lower()).split())
+    words_b = set(re.sub(r"\s+", " ", text_b.lower()).split())
+    if not words_a or not words_b:
+        return 0.0
+    intersection = words_a & words_b
+    union = words_a | words_b
+    return len(intersection) / len(union) if union else 0.0
+
+
+def _is_duplicate_skill(new_body: str, existing_contents: Dict[str, str], threshold: float = 0.7) -> Optional[str]:
+    """Check if new_body is ≥threshold similar to any existing skill.
+
+    Returns the name of the similar existing skill, or None if no duplicate.
+    """
+    for name, existing_body in existing_contents.items():
+        if _content_similarity(new_body, existing_body) >= threshold:
+            return name
+    return None
 
 
 def _dedup_skill_name(name: str, existing: set) -> str:
@@ -364,6 +432,19 @@ def auto_create_from_session(db_path: Optional[str] = None) -> Dict[str, Any]:
         for lesson in lessons:
             body_parts.append(lesson["body"])
         body = "\n".join(body_parts)
+
+        # Content-based dedup: if the new skill is ≥80% similar to an existing
+        # one, skip creation instead of producing a -2, -3, -N variant that
+        # says the same thing in slightly different words.
+        existing_contents = _existing_skill_contents()
+        dup = _is_duplicate_skill(body, existing_contents)
+        if dup:
+            return {
+                "created": False,
+                "reason": f"content duplicate of existing skill '{dup}'",
+                "session_id": session_id,
+                "lessons": lessons,
+            }
 
         result = create_skill(name, description, body)
         result["lessons"] = lessons

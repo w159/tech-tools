@@ -32,7 +32,7 @@ missing fields. Safe to run repeatedly.
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/build_hub.py" \
-  ".atlas/audits/atlas-audit-<date>" \
+  "docs/audits/atlas-audit-<date>" \
   <each per-root graphify-out/graph.json>
 ```
 
