@@ -47,6 +47,10 @@
   "engines": {
     "node": ">=18.0.0"
   },
+  "overrides": {
+    "esbuild": "^0.28.1",
+    "tmp": "^0.2.4"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/w159/tech-tools.git",

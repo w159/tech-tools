@@ -63,5 +63,8 @@
     "README.md",
     "LICENSE",
     "CHANGELOG.md"
-  ]
+  ],
+  "overrides": {
+    "esbuild": "^0.28.1"
+  }
 }

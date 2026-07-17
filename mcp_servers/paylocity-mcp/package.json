@@ -44,5 +44,8 @@
   "homepage": "https://github.com/w159/tech-tools/tree/main/mcp_servers/paylocity-mcp",
   "bugs": {
     "url": "https://github.com/w159/tech-tools/issues"
+  },
+  "overrides": {
+    "esbuild": "^0.28.1"
   }
 }

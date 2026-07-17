@@ -48,5 +48,8 @@
   "homepage": "https://github.com/w159/tech-tools/tree/main/mcp_servers/kaseya-spanning-backup-mcp",
   "bugs": {
     "url": "https://github.com/w159/tech-tools/issues"
+  },
+  "overrides": {
+    "esbuild": "^0.28.1"
   }
 }
