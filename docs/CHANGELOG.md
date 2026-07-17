@@ -4,6 +4,53 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
+## 2026-07-17 -- Dependency remediation: 17 Node MCP projects (Dependabot), commit 711fb10
+
+Remediated GitHub Dependabot alerts across 10 `mcp_servers/*` and 7 `mcp_node/*`
+Node projects. Baseline before this commit: 344 open alerts (16 critical, 82 high,
+199 medium, 47 low). Two changes only, `package.json` + `package-lock.json` per
+project; no source files touched (`git show --stat 711fb10`, 32 files changed,
+27872 insertions(+), 86960 deletions(-)):
+
+- Removed unused `semantic-release` + `@semantic-release/*` dev tooling from every
+  project that carried it. No `.github/workflows` in this repo invokes it; its
+  bundled npm dragged in vulnerable `sigstore`, `tar`, `handlebars`, and
+  `minimatch` transitively.
+- Bumped `vitest` from 1.x/2.x to `4.1.10` in projects with real tests (clears the
+  critical vitest advisory plus the vulnerable `vite`/`esbuild` chain it pulled
+  in); dropped `vitest` entirely from projects with no tests.
+- Runtime dependencies re-resolved in-range via clean lockfile regeneration.
+
+Result: per-project `npm audit` after the change drops to 1 low (residual
+dev-only `esbuild` advisory `GHSA-g7r4-m6w7-qqqr`) for most projects. Verified
+residual exceptions, confirmed by `npm audit` on 2026-07-17:
+- `connectwise-manage-mcp`, `knowbe4-mcp`, `ninjaone-mcp`: 6 high each, a
+  `minimatch` ReDoS chain via `@typescript-eslint/eslint-plugin` `^6`
+  (`@typescript-eslint/utils` 6.16.0-7.5.0) - needs an eslint 9 /
+  `@typescript-eslint` 8 major migration to clear (tracked in ROADMAP).
+- `cipp-mcp`: 11 vulnerabilities (4 low, 7 high) via `@inquirer/prompts` <=6.0.1
+  pulled in by `@anthropic-ai/mcpb`.
+- `blumira-mcp`: 6 vulnerabilities (5 low, 1 high), same `@anthropic-ai/mcpb`
+  chain.
+
+Two pre-existing defects were found during verification and are explicitly out
+of scope for this remediation (not fixed here, tracked in ROADMAP):
+1. `mcp_servers/_shared/` was deleted in commit `56d1a9f` and never restored.
+   `blumira-mcp`, `threatlocker-mcp`, and `vanta-mcp` still import `@shared/*`
+   (e.g. `mcp_servers/threatlocker-mcp/src/domains/_helpers.ts:15,21,26`) with no
+   local fallback, so `npm run build` fails for all three (reproduced:
+   `cd mcp_servers/threatlocker-mcp && npm run build` -> esbuild "Could not
+   resolve ... mcp_servers/_shared/response-shaper.js" and 2 more, 3 errors).
+2. `vitest` 4's default file glob follows the `node_modules ->
+   node_modules.nosync.noindex` symlink convention used in this repo and picks
+   up test files belonging to vendored packages inside it. Reproduced:
+   `cd mcp_servers/threatlocker-mcp && npm test -- --run` -> 15 of 184 test files
+   fail, all under `node_modules.nosync.noindex/zod/...` and
+   `node_modules.nosync.noindex/node-threatlocker/...`
+   (`mcp_servers/threatlocker-mcp/vitest.config.ts` has no `exclude` override).
+
+---
+
 ## 2026-07-17 -- Full audit remediation and marketplace truth pass (v5.1.1)
 
 Follow-up to the entry below: the remaining defects in

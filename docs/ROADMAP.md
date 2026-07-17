@@ -60,6 +60,49 @@ repoint all three servers' imports at it, or accept per-server copies as the pat
 drop the consolidation goal. Left in Backlog, unplanned - no code change toward
 consolidation exists in this diff.
 
+### Bug: blumira-mcp, threatlocker-mcp, vanta-mcp fail to build (missing @shared alias target, found 2026-07-17)
+
+Same root cause as the DRY-divergence item above (`mcp_servers/_shared/` deleted in
+`56d1a9f`), but unlike `auvik-mcp`/`connectwise-manage-mcp`/`cipp-mcp` these three never
+got a local `src/_shared/` fallback. They still import `@shared/response-shaper.js`,
+`@shared/error-envelope.js`, and `@shared/base-url.js`
+(e.g. `mcp_servers/threatlocker-mcp/src/domains/_helpers.ts:15,21,26`, same pattern in
+`mcp_servers/blumira-mcp/src/domains/_helpers.ts` and
+`mcp_servers/vanta-mcp/src/domains/_helpers.ts`), aliased by `tsup.config.ts` to a
+`mcp_servers/_shared/` path that no longer exists. Reproduced 2026-07-17: `cd
+mcp_servers/threatlocker-mcp && npm run build` fails with 3 esbuild "Could not resolve"
+errors against `mcp_servers/_shared/{response-shaper,error-envelope,base-url}.js`. Fix
+needs either a restored top-level `mcp_servers/_shared/` or a local `src/_shared/` copy
+per server, matching whichever direction the DRY-divergence item above resolves to.
+Out of scope for the 2026-07-17 dependency remediation (package.json/lockfile only).
+
+### Bug: vitest 4 globs into node_modules.nosync.noindex symlink target during npm test (found 2026-07-17)
+
+The repo's `node_modules -> node_modules.nosync.noindex` symlink convention (iCloud
+hygiene) is not excluded by vitest 4's default test glob, so `npm test` picks up test
+files belonging to vendored packages. Reproduced 2026-07-17: `cd
+mcp_servers/threatlocker-mcp && npm test -- --run` -> 15 of 184 test files fail, all
+under `node_modules.nosync.noindex/zod/src/v4/classic/tests/*.test.ts` (missing
+optional peer deps `recheck`, `@web-std/file`, `@seriousme/openapi-schema-validator`)
+and `node_modules.nosync.noindex/node-threatlocker/tests/unit/computers.test.ts` (a
+different project's tests reached through the symlink). Real test count for the
+project itself: 1882 passed, 3 failed on an unrelated live-HTTP-440 issue.
+`mcp_servers/threatlocker-mcp/vitest.config.ts` has no `exclude` override. Fix needs
+an explicit `test.exclude` (or `test.dir` scoping to `tests/` and `src/`) added to
+each project's `vitest.config.ts` bumped to vitest 4 in the 2026-07-17 dependency
+remediation. Out of scope for that remediation (package.json/lockfile only).
+
+### Tech debt: eslint 9 / @typescript-eslint 8 migration to clear minimatch ReDoS residual (found 2026-07-17)
+
+`connectwise-manage-mcp`, `knowbe4-mcp`, and `ninjaone-mcp` each carry 6 high-severity
+`npm audit` findings after the 2026-07-17 dependency remediation: a `minimatch` ReDoS
+chain via `@typescript-eslint/eslint-plugin` `^6` / `@typescript-eslint/utils`
+6.16.0-7.5.0. Clearing it needs an eslint 9 / `@typescript-eslint` 8 major-version
+migration (breaking change to lint config, deferred from the 2026-07-17 remediation
+which only bumped in-range). `cipp-mcp` and `blumira-mcp` carry a separate residual
+(`@inquirer/prompts` <=6.0.1 / `tmp` / `esbuild` via `@anthropic-ai/mcpb`) not covered
+by this eslint migration.
+
 ### Tech debt: tool-description polish pass on cipp / connectwise / ninjaone / paylocity
 
 cipp-mcp, connectwise-manage-mcp, ninjaone-mcp, and paylocity-mcp still have tool
