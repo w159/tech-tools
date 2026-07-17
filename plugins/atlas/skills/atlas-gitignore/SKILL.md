@@ -37,7 +37,8 @@ The file must:
 - Cover the named stack's build output, dependency directories, caches, OS cruft, and editor files.
 - Re-exclude secrets and env files AFTER the allowlist so a later broad include cannot leak them. Re-include only the safe templates (for example `!.env.example`).
 - Account for cloud or synced-drive artifacts generically (for example `*.nosync*` patterns) only if the stack mentions a synced or cloud-backed drive.
-- If the project keeps a `docs/` tree, atlas maintains it as the documentation SSOT, so allowlist the SSOT subtree explicitly: `!docs/` plus `!docs/*.md` and the durable subfolders (architecture/, features/, specs/, lessons/, wiki/, plans/, reference_files/), each a paired `!dir/` + `!dir/**`. NEVER use a blanket `!docs/**`: vendored doc-site clones under docs/ carry their own nested .git and must stay ignored, so also re-exclude `docs/**/.git/` as belt-and-suspenders. `.atlas/` (never `.atlas/docs/`) holds atlas's own internal state: allowlist `!.atlas/evidence/` + `!.atlas/evidence/**` and `!docs/audits/` + `!docs/audits/**`, then re-exclude the ephemeral `.atlas/.run/` after the allowlist (except `!.atlas/.run/findings.json`, the durable verification ledger).
+- `templates/gitignore.seed` already bakes in the full `docs/` + `.atlas/` allowlist mandated by `docs-ssot.md` (the SSOT for atlas project structure - if any other reference disagrees with it, it wins): `!docs/` + `!docs/**` for the project wiki, a paired `!dir/` + `!dir/**` for every committed `.atlas/` subfolder (`evidence/`, `findings/`, `audits/`, `decisions/`, `archive/`, `understand-anything/`, `graphify/`, `self-improvement/`, `memory/`, `nudge/`) plus `!.atlas/CLAUDE.md` and `!.atlas/AGENTS.md`, and the traversal-enabling `!.atlas` entry the parent-exclusion rule requires. `.atlas/` never contains a `docs/` subdirectory. These are fixed, not project-specific - do not remove or reinvent them; only add the named stack's entries into the "project-specific allowlist entries go here" placeholder.
+- `.atlas/.run/` is the one ephemeral subtree: the seed re-excludes it after the allowlist (`.atlas/.run/*`, preceded by the traversal-enabling `!.atlas/.run`) and re-includes only the durable ledger, `!.atlas/.run/findings.json`. Git cannot re-include a file whose parent directory stays excluded, so both traversal-enabling entries above are load-bearing, not decorative.
 
 Do not invent ignore rules for tools that are not in the named stack.
 
@@ -46,7 +47,7 @@ VERIFY before reporting:
 - Confirm every `!path/` has a paired `!path/**`.
 - Confirm secret and env rules sit AFTER the allowlist, so `git check-ignore -v .env` would report the file as ignored.
 - Confirm no existing tracked file the user intends to keep would now be ignored: spot-check the allowlist against the named stack's source layout.
-- If `docs/` is tracked, confirm `git check-ignore docs/CHANGELOG.md` reports it NOT ignored while a vendored clone like `docs/<tool>/` stays ignored.
+- Confirm the `docs-ssot.md` allowlist outcomes hold: `git check-ignore -q docs/CHANGELOG.md` and `git check-ignore -q .atlas/evidence/.gitkeep` both exit 1 (NOT ignored); `git check-ignore -q .atlas/.run/STATE.md` exits 0 (ignored); `git check-ignore -q .atlas/.run/findings.json` exits 1 (NOT ignored). Note `git check-ignore -v` alone is not reliable for this: it can print a matched negation pattern while still exiting 0, so check the plain/`-q` exit code, not just the printed pattern.
 
 REPORT:
 - The path to the .gitignore written.

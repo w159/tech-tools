@@ -227,18 +227,33 @@ firebase-adminsdk*.json
 !docs/superpowers/**
 
 # ---- .atlas/ - atlas-internal state only, never a docs/ subdirectory ----
-# .atlas/ holds atlas's own self-improvement state: evidence/ (batch verification
-# records) and audits/ (audit reports) are durable and must ship; .run/ is
-# ephemeral except findings.json (the verification ledger completion_gate.py
-# reads). The deny-by-default /.*/ rule at the top blocks every root-level
-# dotdir, so re-include only these specific subtrees here. Ephemeral run state
-# under .atlas/.run/ (active-session markers, STATE.md) is re-excluded in
-# Section 5 except findings.json.
+# .atlas/ holds atlas's own self-improvement state, all durable and must ship
+# except .run/ (ephemeral, re-excluded in Section 5 below except findings.json).
+# The deny-by-default /.*/ rule at the top blocks every root-level dotdir, so
+# re-include only these specific subtrees here.
 !.atlas/
 !.atlas/evidence/
 !.atlas/evidence/**
 !.atlas/audits/
 !.atlas/audits/**
+!.atlas/findings/
+!.atlas/findings/**
+!.atlas/decisions/
+!.atlas/decisions/**
+!.atlas/archive/
+!.atlas/archive/**
+!.atlas/understand-anything/
+!.atlas/understand-anything/**
+!.atlas/graphify/
+!.atlas/graphify/**
+!.atlas/self-improvement/
+!.atlas/self-improvement/**
+!.atlas/memory/
+!.atlas/memory/**
+!.atlas/nudge/
+!.atlas/nudge/**
+!.atlas/CLAUDE.md
+!.atlas/AGENTS.md
 
 
 # ============================================================================

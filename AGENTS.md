@@ -2,6 +2,38 @@
 
 This file is the canonical AGENTS.md directive set for any AI agent (Claude Code, Codex, Cursor, Copilot, Kimi Code CLI, custom orchestrators) operating in this repository. It is loaded every session.
 
+## 0. Repository identity: atlas and armada are products built here, not tools to run here (READ FIRST)
+
+This repository is the **atlas marketplace** (`.claude-plugin/marketplace.json`). It publishes two Claude Code plugins whose source code lives in this tree:
+
+- **atlas** - source at `plugins/atlas/` (a multi-agent coding architect: skills, agents, hooks, output styles, MCP config, scripts).
+- **armada** - source at `plugins/armada/` (an organizational deployment layer for atlas: department agents and skills).
+
+When the user says "atlas" or "armada" in a prompt in this repository, they mean **the plugin as a software product you are developing** - its code, functionality, skills, agents, hooks, docs, and dependencies. Every request to "add", "fix", "change", "improve", "rename", or "remove" something in atlas or armada is a request to **edit the plugin source under `plugins/atlas/` or `plugins/armada/`** (and the shared dependencies that back them), then verify the change.
+
+The user is **never** asking you to:
+
+- install these plugins, add the marketplace, or run `/plugin` / `/plugins install`;
+- set up, onboard, or configure an atlas or armada *deployment* inside this workspace;
+- invoke `atlas-setup`, `/armada:armada`, or any atlas/armada skill *as the way to do the work* (e.g. do not run `/armada:armada` to "provision a department" as if this repo were a customer environment);
+- treat this workspace as a live atlas installation to be operated.
+
+Do the opposite: open the relevant files under `plugins/atlas/` or `plugins/armada/` and change the code.
+
+### Runtime artifacts are not the product
+
+atlas and armada happen to be *active in the harness* while you work here (this session's output style, the loaded skills, the subagent registry). That is incidental. The following are runtime state written by a running atlas, **not** the product source, and are not your edit target unless the user explicitly asks about atlas's own runtime files:
+
+- `.atlas/` (departments, evidence, nudge, self-improvement), `.fallow/`, `.supermemory/`, `.taskmaster/`
+
+If a request seems to ask you to operate atlas here rather than change its code, stop and confirm scope before acting. The default interpretation is always: change the plugin source.
+
+### What "dependencies" covers
+
+"atlas/armada or their dependencies" includes: the shared skill and standard libraries under `plugins/` (`plugins/_standards/`, `plugins/_templates/`, top-level `skills/`), and the vendor tooling the armada department agents call - the MCP servers (`mcp_servers/<svc>-mcp/`), their `.mcpb` archives, and the Node client libs (`mcp_node/node-<svc>/`). Changes to those propagate under the same rules as Section 1 and 2 below.
+
+Full explanation, source maps, and worked correct-vs-incorrect examples: `docs/plugin-development-scope.md`.
+
 ## 1. Definition of "tools" in this repo
 
 "Tools" is a load-bearing word here. It refers to **all of the following, together, as one product surface**:

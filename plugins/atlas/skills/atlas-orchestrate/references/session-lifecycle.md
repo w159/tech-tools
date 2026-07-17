@@ -65,22 +65,23 @@ scratch. This is a specialization of the START reconcile above, not a second flo
      re-attempted, not skipped.
 
 3. **Archive on completion so history persists.** When the run finishes, copy the final
-   `STATE.md` and `findings.json` into a committed, per-run archive - `docs/runs/<id>/`
-   (use the run id or a `<YYYY-MM-DD>-<slug>`, filesystem-safe per the slug rule in
-   `docs-ssot.md` "Naming conventions" - no colon/slash/space, or Windows cannot check
-   out the repo) - so the decisions and verdicts of the run
-   survive after `.atlas/.run/` is cleared for the next task. The durable narrative still
-   lands in CHANGELOG and the affected subfolders via the END curate flow below; the
-   archive preserves the raw run record those entries were drawn from.
+   `STATE.md` and `findings.json` into a committed, per-run archive under
+   `.atlas/archive/<YYYY-MM-DD>-<slug>/` (use the run id or a `<YYYY-MM-DD>-<slug>`,
+   filesystem-safe per the slug rule in `docs-ssot.md` "Naming conventions" -
+   no colon/slash/space, or Windows cannot check out the repo) - so the decisions and
+   verdicts of the run survive after `.atlas/.run/` is cleared for the next task. The
+   durable narrative still lands in CHANGELOG and the affected subfolders via the END
+   curate flow below; the archive preserves the raw run record those entries were drawn from.
 
 **Durable vs ephemeral - the intended reading.** `docs-ssot.md` classifies `.atlas/.run/` as
-the one ephemeral, gitignored subtree, and that holds: nothing in `.atlas/.run/` is committed.
-The run-state is durable in a different sense - it is intentionally kept on disk, intact,
-across sessions for the lifetime of one in-flight multi-session run, which is exactly what
-makes resume possible. Completion resolves the two: `.atlas/.run/` is cleared (ephemeral as
-promised), the committed `docs/runs/<id>/` archive carries the history forward, and the SSOT
-durable subfolders carry the outcome. There is no contradiction - the gitignored scratch
-lives long enough to finish the job, then its record is archived and the scratch is reset.
+the one ephemeral, gitignored subtree (except the durable `findings.json` ledger, re-included
+per `docs-ssot.md`). The run-state is durable in a different sense - it is intentionally kept
+on disk, intact, across sessions for the lifetime of one in-flight multi-session run, which is
+exactly what makes resume possible. Completion resolves the two: `.atlas/.run/` is cleared
+(ephemeral as promised), the committed `.atlas/archive/<YYYY-MM-DD>-<slug>/` archive carries the
+history forward, and the SSOT durable subfolders carry the outcome. There is no contradiction -
+the gitignored scratch lives long enough to finish the job, then its record is archived and the
+scratch is reset.
 
 ## DURING - work is tracked in ROADMAP
 

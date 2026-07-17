@@ -1,5 +1,10 @@
 # tech-tools plugins
 
+> **Scope rule (read first):** `atlas` and `armada` are products developed in this
+> repo. A request about them means edit their source under `plugins/atlas/` or
+> `plugins/armada/` - never install, set up, or run them in this workspace. Full
+> rule: `AGENTS.md` Section 0 and `docs/plugin-development-scope.md`.
+
 This directory holds the plugin collection for the `tech-tools` monorepo. Each plugin is a domain cluster that bundles the vendor connectors and skills for one business area, from MSP IT operations and security/compliance to Microsoft 365, HR/payroll, finance, and the engineering and productivity surfaces. The `atlas` plugin is the multi-agent coding meta-agent that drives verification-gated work across the repo. Every plugin listed below exists as a directory under `plugins/`.
 
 ## Available plugins

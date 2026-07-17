@@ -13,6 +13,17 @@ allowed-tools: Read, Glob, Grep, Bash(python3:*), Write(docs/**), Write(.atlas/e
 The one manual skill in the fleet. The user invokes it explicitly; it never
 auto-triggers. Every other atlas skill auto-triggers from its description.
 
+atlas-setup configures, fixes, and organizes any project it runs in. First run
+scaffolds the SSOT from nothing; every later run checks the same structure and
+repairs whatever is partial, missing, or drifted. The scaffold step is
+idempotent, so running it again on an already-onboarded project is safe and is
+the correct way to fix a broken or partial structure - not just a first-run
+action. Structural writes (root entry files, the `docs/` base tree, and the
+durable `.atlas/**` subfolders) go through this script under
+`Bash(python3:*)`, not through the frontmatter's narrower direct `Write`
+grants, which cover `docs/**` content edits and `.atlas/evidence/**`
+captures made outside the scaffolder.
+
 It has four modes. Pick by argument, or infer from the ask:
 
 | Mode | When | Reference |
@@ -24,8 +35,15 @@ It has four modes. Pick by argument, or infer from the ask:
 
 Mode routing rules:
 
-- No args and no `docs/` -> onboard.
-- No args and `docs/` exists -> recommendations (below).
+- No args -> always run `python3 scripts/scaffold_docs.py <repo-root>` first.
+  It is idempotent: create-if-missing on a fresh project, gap-repair on a
+  partial or drifted one, no-op on an already-correct one. This is the
+  mechanism that fixes a partial, missing, or drifted `.atlas/` or `docs/`
+  tree on every run, not just the first.
+- No `docs/` before that call -> continue with the rest of onboard (below).
+- `docs/` already existed -> the scaffold call above already repaired it;
+  go straight to recommendations (below) instead of repeating onboard steps
+  3-8.
 - Anything that smells like a broken install (subagents do not launch, the
   plugin acts like an older version, marketplace points at a stale fork)
   -> repair. Auto-repair with `--fix` runs
@@ -51,51 +69,95 @@ ONLY from `description` + `when_to_use`. Never use `triggers:`.
 
 ## The docs/ SSOT (plus .atlas/ internal state)
 
-Onboarding scaffolds two trees at the project root. Project documentation
-lives under `docs/`; atlas's own self-improvement state lives under
-`.atlas/` directly. `.atlas/` never contains a `docs/` subdirectory.
+The full canonical structure is defined once, authoritatively, in the
+docs-ssot.md single source of truth (maintained in the atlas-orchestrate and
+atlas-loop skills). Onboarding scaffolds root entry files
+plus two trees at the project root: project documentation lives under
+`docs/`; atlas's own self-improvement state lives under `.atlas/` directly.
+`.atlas/` never contains a `docs/` subdirectory or project-wiki content
+(architecture, plans, specs, features).
 
 ```
+README.md, AGENTS.md, CLAUDE.md   root entry points: human onboarding, agent
+                                   orientation, Claude-Code operating rules
+
 docs/
-  CHANGELOG.md            append-only, newest-first
-  ROADMAP.md              backlog with status
-  AGENTS.md               architecture, conventions, commands
-  architecture/           system design, maps, ADRs (atlas-audit)
-  reference_files/        external/vendor doc snippets
+  CHANGELOG.md            append-only, newest-first, completed + verified work
+  ROADMAP.md              backlog with status (planned/in-progress/blocked/deferred)
+  AGENTS.md               deep orienting doc; optional, root AGENTS.md is the minimum
+  architecture/           system design, maps, ADRs source material (atlas-audit)
+  decisions/              project ADRs (architecture decision records)
+  plans/                  implementation plans, one per task
+  specs/                  requirements and specifications
   features/               per-feature specs-as-built
   lessons/                durable lessons, gotchas, postmortems
-  wiki/                   onboarding, how-to, runbooks, diagrams (graphify)
-  specs/                  requirements and specifications
-  plans/                  implementation plans, stage maps
-  audits/                 audit run artifacts and hubs (atlas-audit)
+  wiki/                   rendered graphify diagrams + understand-anything wiki
+  api/                    PROJECT-ADAPTIVE: only when an API is detected
+                           (OpenAPI file, routes/controllers dir, web framework)
 
 .atlas/
   evidence/               permanent execution-evidence captures
-  .run/                   EPHEMERAL, GITIGNORED run state
+  findings/               dated learning ledger (<date>-<slug>.md + INDEX.md)
+  audits/                 atlas-internal audit records
+  decisions/              atlas's own dated operating decisions (tooling
+                           activation, structure repairs) - see install.md
+  archive/                retired/superseded state
+  understand-anything/    knowledge-graph working data (published to docs/wiki/)
+  graphify/               diagram working data (published to docs/wiki/)
+  self-improvement/       skill-gen/disable decisions, context-optimizer output
+  memory/                 persistent cross-session memory
+  nudge/                  inline-op thresholds, dispatch coaching signals
+  CLAUDE.md               orientation: what .atlas/ is, ephemeral vs durable
+  AGENTS.md               same orientation for non-Claude agents
+  .run/                   EPHEMERAL, GITIGNORED run state (except
+                           .run/findings.json, which is durable)
 ```
 
-Everything under `docs/` and `.atlas/evidence/`, `docs/audits/` is
-committed; `.atlas/.run/` is the only ephemeral, gitignored subtree. The
-scaffold is created by a deterministic, idempotent script, never inline
-prose:
+Subfolders under `docs/` are project-adaptive: a project with no HTTP API
+has no `docs/api/`; a project with one does. `docs/standards/`,
+`docs/glossary.md`, and `docs/reference/` are created on demand by the
+curator, not by the scaffold. `.atlas/findings/` is the dated, durable
+learning ledger agents consult before non-trivial work; `.atlas/decisions/`
+is where atlas's own dated operating decisions land, including the
+tooling-activation record install mode writes (`references/install.md`).
+
+Everything shown above except `.atlas/.run/`
+(minus its durable `findings.json`) is committed, behind a zero-trust,
+deny-by-default `.gitignore` that allowlists the durable trees and
+re-excludes secrets last (see `atlas-gitignore`). The scaffold is created by
+a deterministic, idempotent script, never inline prose:
 
     python3 "${CLAUDE_SKILL_DIR}/scripts/scaffold_docs.py" <repo-root>
 
-A leftover `.atlas/docs/` from before this split is not migrated
-automatically; the script refuses (exit 1) until its unique content is
-moved into `docs/` and the legacy directory deleted.
+Idempotent means safe to re-run on every invocation: it creates only what
+is missing and never overwrites a non-empty file, so running it against a
+project that already has a partial or drifted structure repairs the gaps
+without disturbing what is already correct. A leftover `.atlas/docs/` from
+before this split is not migrated automatically; the script refuses (exit
+1) until its unique content is moved into `docs/` and the legacy directory
+deleted.
 
 ## First run: onboarding
 
 When `docs/` does not exist:
 
-1. **Detect roots** - find the project root (nearest `.git` ancestor) and
-   any codebase roots (subdirectories with their own manifest).
-2. **Scaffold the SSOT** - run `scripts/scaffold_docs.py`.
+1. **Detect roots** - find the project root (nearest `.git` ancestor), any
+   codebase roots (subdirectories with their own manifest), and whether the
+   project exposes an API (OpenAPI file, routes/controllers dir, web
+   framework) so the project-adaptive `docs/api/` scaffolds only when it fits.
+2. **Scaffold the SSOT** - run `scripts/scaffold_docs.py`. It creates the
+   root entry files, the full `docs/` base tree, and the full `.atlas/` tree
+   shown above (project-adaptive `docs/api/` only when Step 1 detected an
+   API). It is idempotent: re-running it against a partial or drifted
+   structure fills in exactly what is missing and leaves everything else
+   untouched, which is how atlas-setup fixes and organizes a project on
+   every later run, not only the first.
 3. **Wire graphify** - record the wiki producer pipeline (architecture/
    in, wiki/diagrams/ out) per `references/graphify-wiring.md`.
-4. **Update .gitignore** - ensure `.atlas/.run/` is ignored but `docs/`
-   and `.atlas/evidence/`, `docs/audits/` are tracked.
+4. **Update .gitignore** - write or repair a zero-trust, deny-by-default
+   `.gitignore` (see `atlas-gitignore`): allowlist the full `docs/` and
+   `.atlas/` durable trees, ensure `.atlas/.run/` stays ignored except its
+   durable `findings.json`, and re-exclude secrets last.
 5. **Inventory skills** - read `references/manual-vs-auto-map.md` and
    report which skills just came online.
 6. **Run the freshness gate** - wiki fresh, stale, missing, or N/A per
@@ -116,8 +178,12 @@ When `docs/` does not exist:
 8. **Recommend** - run the recommendation analysis and present the top
    3-5 next steps.
 
-If `docs/` already exists, skip scaffolding and go straight to
-recommendations.
+Every no-args run executes step 2 (`scripts/scaffold_docs.py`) first,
+whether or not `docs/` already exists - that call is what repairs a
+partial, missing, or drifted structure before anything else happens. If
+`docs/` did not exist, continue through the rest of onboarding (steps 3-8)
+below. If `docs/` already existed, the scaffold call already repaired it;
+skip straight to recommendations (below) instead of repeating steps 3-8.
 
 ## Subsequent runs: recommendations
 
@@ -190,6 +256,9 @@ skill, asking one question if ambiguous.
 
 ## First move
 
-Check for `docs/`. Missing: scaffold, wire graphify, inventory,
-recommend. Present: analyze and recommend. If anything about the install
-itself looks broken, switch to repair mode (`references/repair.md`).
+Always run `scripts/scaffold_docs.py` first - it creates the tree from
+nothing or repairs a partial/drifted one, and is a no-op when everything is
+already correct. If `docs/` did not exist before that call: continue with
+wire graphify, inventory, recommend. If it already existed: analyze and
+recommend. If anything about the install itself looks broken, switch to
+repair mode (`references/repair.md`).

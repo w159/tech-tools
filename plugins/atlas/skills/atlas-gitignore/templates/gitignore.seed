@@ -16,7 +16,7 @@
 
 # ---------------------------------------------------------------
 # 2. Global sensitive-file protection (before allowlist; belt-only,
-#    the re-exclusions in section 4 are the real guard)
+#    the re-exclusions in section 5 are the real guard)
 # ---------------------------------------------------------------
 # Env files
 .env
@@ -84,6 +84,8 @@ firebase-adminsdk*.json
 !.gitignore
 !.gitattributes
 !README.md
+!AGENTS.md
+!CLAUDE.md
 !LICENSE
 !CHANGELOG.md
 
@@ -91,10 +93,59 @@ firebase-adminsdk*.json
 !.github/
 !.github/**
 
+# docs/ - project wiki SSOT (see docs-ssot.md)
+!docs/
+!docs/**
+
+# .atlas/ - atlas's own auditable operational state (see docs-ssot.md).
+# .atlas/.run/ is ephemeral and re-excluded in section 4 below.
+# The directory entry itself must be un-ignored first (no trailing slash,
+# so it is a traversal-only rule, not a !.atlas/** blanket) so git can
+# recurse into it at all - a parent directory left excluded blocks every
+# nested allow rule below it, no matter how specific.
+!.atlas
+!.atlas/evidence/
+!.atlas/evidence/**
+!.atlas/findings/
+!.atlas/findings/**
+!.atlas/audits/
+!.atlas/audits/**
+!.atlas/decisions/
+!.atlas/decisions/**
+!.atlas/archive/
+!.atlas/archive/**
+!.atlas/understand-anything/
+!.atlas/understand-anything/**
+!.atlas/graphify/
+!.atlas/graphify/**
+!.atlas/self-improvement/
+!.atlas/self-improvement/**
+!.atlas/memory/
+!.atlas/memory/**
+!.atlas/nudge/
+!.atlas/nudge/**
+!.atlas/CLAUDE.md
+!.atlas/AGENTS.md
+
 # --- project-specific allowlist entries go here ---
 
 # ---------------------------------------------------------------
-# 4. Re-exclude generated artifacts (MUST come after allowlist)
+# 4. Re-exclude ephemeral atlas run state (MUST come after allowlist,
+#    so it wins over the .atlas/ allowlist above; only the durable
+#    findings ledger is re-included)
+# ---------------------------------------------------------------
+# Un-ignore the .run directory entry itself first (no trailing slash,
+# traversal-only - the bare top-level "*" in section 1 would otherwise
+# keep it excluded), then glob its contents rather than the directory,
+# then re-include the one durable file. Git cannot re-include a file
+# whose parent directory is excluded, so skipping either step above
+# would make the findings.json negation below a silent no-op.
+!.atlas/.run
+.atlas/.run/*
+!.atlas/.run/findings.json
+
+# ---------------------------------------------------------------
+# 5. Re-exclude generated artifacts (MUST come after allowlist)
 # ---------------------------------------------------------------
 # Node / TypeScript
 **/node_modules/
@@ -133,7 +184,7 @@ Thumbs.db
 # **/*.nosync*
 
 # ---------------------------------------------------------------
-# 5. Pre-commit verification footer
+# 6. Pre-commit verification footer
 # ---------------------------------------------------------------
 # Pre-commit verification:
 #   1. git status                                 # nothing unexpected staged?

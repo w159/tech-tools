@@ -370,6 +370,34 @@ class HelperTest(unittest.TestCase):
         """Empty project_name short-circuits to None."""
         self.assertIsNone(session_boot._claude_mem_summary(""))
 
+    def test_missing_structure_reports_full_canonical_set(self):
+        """A bare dir (no .git, no docs/) is missing every canonical path,
+        including the docs/ base subfolders and durable .atlas/ subfolders
+        this check was broadened to cover."""
+        tmp = tempfile.mkdtemp()
+        missing = session_boot.missing_structure(tmp)
+        for label in (
+            "docs/architecture/",
+            "docs/wiki/",
+            ".atlas/findings/",
+            ".atlas/self-improvement/",
+            "CLAUDE.md",
+            ".gitignore",
+        ):
+            self.assertIn(label, missing)
+
+    def test_missing_structure_empty_when_fully_scaffolded(self):
+        """A dir with every canonical path present reports nothing missing."""
+        tmp = tempfile.mkdtemp()
+        for label in session_boot._STRUCTURE_PATHS:
+            path = os.path.join(tmp, label.rstrip("/"))
+            if label.endswith("/"):
+                os.makedirs(path, exist_ok=True)
+            else:
+                os.makedirs(os.path.dirname(path) or tmp, exist_ok=True)
+                open(path, "w").close()
+        self.assertEqual(session_boot.missing_structure(tmp), [])
+
 
 class ResumeBlockTest(unittest.TestCase):
     """Cover resume_block's None and populated return paths."""

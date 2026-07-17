@@ -110,5 +110,12 @@
     "status": "verified",
     "verifier": "atlas:verifier (fresh)",
     "evidence": "verifier verdict: 11/12 CONFIRMED, 1 REFUTED (line-wrapped 'atlas-audit or atlas-audit' at atlas-launch/SKILL.md:19-20) subsequently fixed and re-checked wrap-tolerantly -> 0 matches. pytest hooks scripts -> 960 passed, 8 subtests. Full artifact: .atlas/evidence/2026-07-16-atlas-5.1.0-wiring-repair.md"
+  },
+  {
+    "batch": "2026-07-17-atlas-canonical-structure",
+    "claim": "atlas-setup now scaffolds and idempotently repairs the full canonical structure (root README/AGENTS/CLAUDE.md; project-adaptive docs/ tree; full .atlas/ tree incl. dated findings/audits/decisions/archive/understand-anything/graphify + orientation files; zero-trust .gitignore), and every atlas skill/agent/hook/reference agrees via the expanded docs-ssot.md single source of truth.",
+    "status": "verified",
+    "verifier": "atlas:verifier (fresh)",
+    "evidence": "99 tests pass (test_session_boot + test_completion_gate + test_skill_agent_conformance); test_scaffold_docs.py 13 assertions pass; end-to-end temp-dir scaffold produces the full tree and is idempotent (0 false re-seed on 2nd run); all 5 git check-ignore outcomes match spec; scaffolding.md/session-lifecycle.md free of legacy docs/ paths; docs-ssot.md mirrors byte-identical (diff empty). Regression (dead references/docs-ssot.md link) found and fixed; conformance now 13/13. Full artifact: .atlas/evidence/2026-07-17-atlas-canonical-structure/verification.md"
   }
 ]

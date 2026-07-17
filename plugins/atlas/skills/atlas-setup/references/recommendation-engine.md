@@ -17,7 +17,23 @@ wired? Is claude-mem installed? Is context-mode installed?
 If any are missing: recommend atlas-setup (boot and configure).
 Command: `/atlas` (which runs atlas-setup).
 
-### 2. Security audit overdue (confidence: high)
+### 2. Structural completeness (confidence: high)
+
+Check: does the canonical structure from `atlas-loop/references/docs-ssot.md`
+actually exist? Any absent root file (`README.md`, `AGENTS.md`, `CLAUDE.md`)?
+Any missing `docs/` base subfolder (architecture/, decisions/, plans/,
+specs/, features/, lessons/, wiki/)? Any missing `.atlas/` subfolder
+(findings/, audits/, decisions/, archive/, understand-anything/, graphify/
+plus the `.atlas/CLAUDE.md` and `.atlas/AGENTS.md` orientation files)?
+
+If any of the above is missing or partial: recommend running the scaffolder
+to repair it - not a full re-onboard, since the scaffolder is idempotent and
+only fills the gaps.
+Command: `python3 "${CLAUDE_SKILL_DIR}/scripts/scaffold_docs.py" <repo-root>`.
+Reason: cite the specific missing root file, `docs/` subfolder, or `.atlas/`
+subfolder found.
+
+### 3. Security audit overdue (confidence: high)
 
 Check: does `docs/audits/` contain a security audit newer than the last
 known code change? Has atlas-audit ever run on this project?
@@ -27,7 +43,7 @@ Command: invoke the atlas-audit skill.
 Reason: "No security audit has been run, or the last audit predates recent code
 changes."
 
-### 3. Architecture map missing or stale (confidence: high)
+### 4. Architecture map missing or stale (confidence: high)
 
 Check: does `docs/architecture/boundaries.md` exist? If it exists, has
 the codebase changed since it was written (compare git log dates)?
@@ -37,7 +53,7 @@ Command: invoke the atlas-audit skill.
 Reason: "The architecture has not been mapped, or the map is stale relative to
 recent changes."
 
-### 4. Run health regressing (confidence: medium)
+### 5. Run health regressing (confidence: medium)
 
 Check: read the atlas-audit observability DB. Are inline_ops trending up? Is
 verifier_coverage below 1.0? Are there unpaired implementer dispatches?
@@ -46,7 +62,7 @@ If any metric is regressing: recommend atlas-audit (observability audit).
 Command: invoke the atlas-audit skill.
 Reason: cite the specific metric and its direction.
 
-### 5. Org deployment not configured (confidence: medium)
+### 6. Org deployment not configured (confidence: medium)
 
 Check: does `.atlas/org-config.yaml` exist? If it exists, are departments
 active? Are connectors provisioned for departments that need them?
@@ -55,7 +71,7 @@ If org config is missing or incomplete: recommend armada (org setup).
 Command: invoke the armada skill.
 Reason: "Organizational configuration is not set up" or cite the specific gap.
 
-### 6. UX coverage gap (confidence: medium)
+### 7. UX coverage gap (confidence: medium)
 
 Check: is there a frontend? Has atlas-ux-test ever tested it? If it has, are
 there open findings from the last run?
@@ -64,7 +80,7 @@ If frontend exists and no UX test has run: recommend atlas-ux-test.
 Command: invoke the atlas-ux-test skill.
 Reason: "The frontend has not been tested by the UX swarm."
 
-### 7. Docs drift (confidence: high)
+### 8. Docs drift (confidence: high)
 
 Check: does `docs/AGENTS.md` match the actual stack? Does CHANGELOG have
 entries for recent git commits? Are there features without specs?
@@ -74,7 +90,7 @@ reconciliation pass.
 Command: invoke atlas-orchestrate with a docs-reconcile task.
 Reason: "Documentation has drifted from the codebase."
 
-### 8. Recurring task identified (confidence: low)
+### 9. Recurring task identified (confidence: low)
 
 Check: read the observability DB for repeated prompts. Are there tasks the
 user asks for repeatedly that could be automated as a loop?
@@ -83,7 +99,7 @@ If repeated patterns found: recommend atlas-loop (loop library).
 Command: invoke the atlas-loop skill.
 Reason: "You have repeated this task N times; a loop could automate it."
 
-### 9. Tech debt accumulation (confidence: low)
+### 10. Tech debt accumulation (confidence: low)
 
 Check: are there TODO/FIXME/HACK comments? Are there stale branches? Is the
 test coverage below a threshold?
@@ -92,7 +108,7 @@ If debt signals found: recommend atlas-orchestrate with a tech-debt sweep task.
 Command: invoke atlas-orchestrate.
 Reason: "N TODO/FIXME markers found; tech debt is accumulating."
 
-### 10. Connector not provisioned (confidence: low)
+### 11. Connector not provisioned (confidence: low)
 
 Check: does the stack suggest vendor connectors (e.g. an MSP shop with RMM
 signals but no NinjaOne connector)? Does atlas-setup show disabled connectors?

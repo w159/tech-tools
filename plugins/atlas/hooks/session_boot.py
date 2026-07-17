@@ -129,6 +129,82 @@ def _atlas_session_context(conn, root):
     }
 
 
+# Canonical structure per docs-ssot.md: root entry files, docs/ minimum plus
+# base wiki subfolders, and the durable .atlas/ subfolders.
+_STRUCTURE_PATHS = (
+    "docs/",
+    "docs/CHANGELOG.md",
+    "docs/ROADMAP.md",
+    "docs/architecture/",
+    "docs/decisions/",
+    "docs/plans/",
+    "docs/specs/",
+    "docs/features/",
+    "docs/lessons/",
+    "docs/wiki/",
+    ".atlas/",
+    ".atlas/evidence/",
+    ".atlas/findings/",
+    ".atlas/audits/",
+    ".atlas/decisions/",
+    ".atlas/archive/",
+    ".atlas/understand-anything/",
+    ".atlas/graphify/",
+    ".atlas/self-improvement/",
+    ".atlas/memory/",
+    ".atlas/nudge/",
+    "README.md",
+    "AGENTS.md",
+    "CLAUDE.md",
+    ".gitignore",
+)
+
+
+def _find_structure_root(start_dir):
+    """Walk up to 6 parent levels from start_dir looking for a directory
+    that already has a .git entry or a docs/ folder, and treat that as the
+    project root for the structure check. Falls back to start_dir itself
+    if nothing is found. Fail-open: any error returns start_dir."""
+    try:
+        d = os.path.abspath(start_dir)
+        for _ in range(7):  # start_dir plus up to 6 parents
+            if os.path.exists(os.path.join(d, ".git")) or os.path.isdir(
+                os.path.join(d, "docs")
+            ):
+                return d
+            parent = os.path.dirname(d)
+            if parent == d:
+                break
+            d = parent
+        return os.path.abspath(start_dir)
+    except Exception:
+        return start_dir
+
+
+def missing_structure(start_dir):
+    """Shallow, cheap check for the canonical atlas project structure
+    (docs-ssot.md): root entry files (README.md, AGENTS.md, CLAUDE.md,
+    .gitignore), the docs/ minimum plus base wiki subfolders (architecture,
+    decisions, plans, specs, features, lessons, wiki), and the durable
+    .atlas/ subfolders (evidence, findings, audits, decisions, archive,
+    understand-anything, graphify, self-improvement, memory, nudge). Returns
+    the list of missing path labels, or [] when everything is present or on
+    any error -- advisory only, never blocks boot."""
+    try:
+        root = _find_structure_root(start_dir)
+        missing = []
+        for label in _STRUCTURE_PATHS:
+            path = os.path.join(root, label.rstrip("/"))
+            exists = (
+                os.path.isdir(path) if label.endswith("/") else os.path.isfile(path)
+            )
+            if not exists:
+                missing.append(label)
+        return missing
+    except Exception:
+        return []
+
+
 def resume_block(root):
     """Derive a compact 'Resuming <project>' markdown block from claude-mem's
     session memory and atlas_db's transcript mirror, so the next session gets
@@ -323,6 +399,16 @@ def main():
         "and report what is missing to reach atlas standard (claude-mem + context-mode + ponytail, "
         "loop-library, connectors, hooks, docs/ SSOT).",
     ]
+    try:
+        missing = missing_structure(payload.get("cwd") or os.getcwd())
+        if missing:
+            lines.append(
+                "atlas: project structure incomplete (missing: %s) - run /atlas-setup to scaffold/repair"
+                % ", ".join(missing)
+            )
+    except Exception:
+        pass  # structure advisory is best-effort; never block boot
+
     if memory_block:
         lines.append(memory_block)
     if resume:

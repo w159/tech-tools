@@ -4,6 +4,100 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
+## 2026-07-17 -- atlas canonical project structure: full scaffold/repair + enforcement across all surfaces
+
+`atlas-setup` previously only seeded a handful of `docs/` and `.atlas/` subfolders and left
+new/refreshed root files, `docs/api`, and several `.atlas/` subfolders (`decisions/`,
+`understand-anything/`, `graphify/`, orientation `.atlas/CLAUDE.md`/`.atlas/AGENTS.md`) out of
+scope, so repos scaffolded by an older run silently missed structure the rest of the fleet
+(docs-curator, docs-auditor, session_boot advisory, atlas-gitignore) already assumed existed.
+This change makes the canonical structure one definition, scaffolded/repaired idempotently, and
+enforced consistently everywhere it is read.
+
+- Canonical structure definition expanded and mirrored byte-identical in both docs-ssot
+  references: root README/AGENTS/CLAUDE.md; project-adaptive `docs/` tree (base subfolders
+  plus `docs/api` only when an API signal is detected); full `.atlas/` tree including dated
+  `.atlas/findings/`, `.atlas/audits/`, `.atlas/decisions/`, `.atlas/archive/`,
+  `.atlas/understand-anything/`, `.atlas/graphify/`, and orientation `.atlas/CLAUDE.md` +
+  `.atlas/AGENTS.md`; the zero-trust `.gitignore` contract; learning-loop and
+  tooling-activation sections.
+  (`plugins/atlas/skills/atlas-loop/references/docs-ssot.md` (275 lines),
+  `plugins/atlas/skills/atlas-orchestrate/references/docs-ssot.md` (275 lines, byte-identical
+  mirror))
+- `scaffold_docs.py` scaffolds and repairs the full tree idempotently: `DURABLE_ENTRIES`
+  (`plugins/atlas/skills/atlas-setup/scripts/scaffold_docs.py:45`), `ATLAS_ENTRIES`
+  (`scaffold_docs.py:90`), project-adaptive API detection via `detect_api()`
+  (`scaffold_docs.py:331`, signals at `scaffold_docs.py:154-167`), and `.gitignore` seeding via
+  `ensure_gitignore()` (`scaffold_docs.py:367`). New `templates/` dir at
+  `plugins/atlas/skills/atlas-setup/templates/` (root README/AGENTS/CLAUDE.md, `docs/`,
+  `.atlas/decisions/`, `.atlas/findings/`, `.atlas/graphify/`,
+  `.atlas/understand-anything/`, `docs/api/`, `endpoints.md`). New
+  `plugins/atlas/skills/atlas-setup/scripts/test_scaffold_docs.py` (207 lines, 13 tests, all
+  passing); superseded the stale duplicate at `plugins/atlas/scripts/test_scaffold_docs.py`
+  (deleted).
+- `atlas-setup` `SKILL.md` (264 lines), `references/install.md` (154 lines), and
+  `references/recommendation-engine.md` (154 lines) rewritten for full-structure onboarding,
+  always-repair routing, structural-completeness recommendation, and tech-stack tooling
+  activation (claude-mem, context-mode, ponytail, gate hooks) recorded to `.atlas/decisions/`.
+- `docs-curator` agent now owns and enforces the structure: `.gitignore` hygiene
+  (`plugins/atlas/agents/docs-curator.md:35`), structure-completeness check that recommends
+  `atlas-setup` rather than silently inventing missing paths (`docs-curator.md:36`), archive
+  discipline into `.atlas/archive/` (`docs-curator.md:37`), knowledge-graph refresh
+  (`docs-curator.md:38`). `docs-auditor` agent (34 lines) is read-only and audits the full
+  `.atlas/` structure completeness (`plugins/atlas/agents/docs-auditor.md:22`) and
+  `.gitignore` zero-trust drift via `git check-ignore` outcomes (`docs-auditor.md:23`).
+- `session_boot.py` SessionStart advisory now checks the full 25-path canonical set, advisory
+  and non-blocking (`plugins/atlas/hooks/session_boot.py:185`).
+- `atlas-gitignore` zero-trust seed allowlists the full `.atlas/` tree, including the
+  un-ignore-parent-then-reignore-contents pattern for `.atlas/.run/` so only
+  `.atlas/.run/findings.json` survives
+  (`plugins/atlas/skills/atlas-gitignore/templates/gitignore.seed:107-145`); the validator
+  checks structural pairing plus live `git check-ignore` outcomes against the docs-ssot path
+  set (`plugins/atlas/skills/atlas-gitignore/scripts/validate_gitignore.sh:1-44`);
+  `plugins/atlas/skills/atlas-gitignore/SKILL.md` (58 lines) updated to match.
+- `atlas-orchestrate` references corrected to the `.atlas/` split layout: archive moves to
+  `.atlas/archive/`, not `docs/archive/`
+  (`plugins/atlas/skills/atlas-orchestrate/references/scaffolding.md:31-57`,
+  `plugins/atlas/skills/atlas-orchestrate/references/session-lifecycle.md:22,68-90`).
+- Root `AGENTS.md` Section 0 (`AGENTS.md:5-36`) states atlas/armada are products developed in
+  this repo, not tools to run here; `plugins/README.md:3-6` points to it; new
+  `docs/plugin-development-scope.md` (148 lines) records the scope rule in `docs/`.
+- Regression fixed same-day: `plugins/atlas/skills/atlas-setup/SKILL.md:73` carried a dead
+  `references/docs-ssot.md` link that failed `test_no_dangling_skill_references`; reworded to
+  a descriptive pointer, restoring `test_skill_agent_conformance.py` to 13/13.
+
+- This repo's own root `.gitignore` had drifted from the expanded contract above: it
+  allowlisted only `.atlas/evidence/` and `.atlas/audits/` (`.gitignore:237-241` before this
+  fix), so `.atlas/findings/`, `.atlas/decisions/`, `.atlas/archive/`,
+  `.atlas/understand-anything/`, `.atlas/graphify/`, `.atlas/self-improvement/`,
+  `.atlas/memory/`, `.atlas/nudge/`, `.atlas/CLAUDE.md`, and `.atlas/AGENTS.md` were all
+  silently gitignored - `git check-ignore -q .atlas/findings/INDEX.md` returned rc=0
+  (ignored) before the fix. Added the missing `!.atlas/<subfolder>/` + `!.atlas/<subfolder>/**`
+  allowlist pairs (`.gitignore:237-259`, docs-curator `.gitignore` hygiene duty at
+  `plugins/atlas/agents/docs-curator.md:35`). After the fix, `git check-ignore -q` on
+  `.atlas/findings/INDEX.md` returns rc=1 (not ignored, tracked).
+
+Verified: `python3 -m pytest plugins/atlas/skills/atlas-setup/scripts/test_scaffold_docs.py -q`
+-> 13 passed; `python3 -m pytest plugins/atlas/hooks/test_session_boot.py -q` -> 33 passed;
+`python3 -m pytest plugins/atlas/hooks/test_completion_gate.py -q` -> 53 passed;
+`python3 -m pytest plugins/atlas/scripts/test_skill_agent_conformance.py -q` -> 13 passed.
+Live proof in a scratch temp dir: `scaffold_docs.py <tmpdir>` produced "OK: full docs/ +
+.atlas/ + root canonical structure is in place" (9/9 `docs/` entries, 11/11 `.atlas/` entries,
+root files, seeded `.gitignore`); `git check-ignore -q` on the resulting repo confirmed
+`docs/CHANGELOG.md` and `.atlas/findings/INDEX.md` are NOT ignored (rc=1),
+`.atlas/.run/STATE.md` IS ignored (rc=0), and `.atlas/.run/findings.json` is NOT ignored
+(rc=1, i.e. tracked) - the zero-trust contract behaves exactly as documented. The root
+`.gitignore` fix above was confirmed the same way against the real repo (not the scratch
+dir). Note: `bash plugins/atlas/skills/atlas-gitignore/scripts/validate_gitignore.sh
+.gitignore` still FAILs on pre-existing, session-unrelated em dashes in `.gitignore` comment
+prose - tracked as a new ROADMAP backlog item, not fixed here (out of scope for this
+change). Independent verifier evidence for this change, including the same scratch-dir
+proof and an idempotency re-run (second pass: zero `seeded:` lines, all `keep existing:`),
+is recorded at `.atlas/evidence/2026-07-17-atlas-canonical-structure/verification.md`. One
+pre-existing, unrelated test failure noted there
+(`test_skill_factory.py::test_cli_auto`, KeyError on `created` with no DB) is out of scope:
+`skill_factory.py` was not touched this session.
+
 ## 2026-07-16 -- atlas plugin 5.1.0: connector wiring repaired, path conventions unified
 
 Full details and per-fix evidence: `plugins/atlas/CHANGELOG.md` (5.1.0 entry)

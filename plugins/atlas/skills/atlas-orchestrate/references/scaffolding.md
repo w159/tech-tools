@@ -2,7 +2,7 @@
 
 Where artifacts live. The rule that prevents clutter: **scope everything to where it belongs, never to a parent that holds multiple projects.**
 
-All orchestrator artifacts live under one tree: the codebase root's `docs/`. There is no separate `.orchestrator/` directory. `docs/` is the single source of truth. See `docs-ssot.md` for the full contract of who writes what and when.
+Artifacts live in two separate trees at the codebase root: `docs/` (the project wiki) and `.atlas/` (atlas's own internal state - evidence, run state, findings, audits, decisions). Neither is nested inside the other. See `docs-ssot.md` for the full contract of who writes what and when; this file is the layout, root-detection, and findings.json-schema detail it delegates to.
 
 ## Detect three levels first
 
@@ -10,27 +10,38 @@ All orchestrator artifacts live under one tree: the codebase root's `docs/`. The
 2. **Project root**: the unit of work, the git repository root, or the single app dir. Detection: nearest ancestor with `.git`.
 3. **Codebase roots**: subdirectories with their *own* manifest (`package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `pom.xml`, `build.gradle`, `composer.json`, ...). A monorepo has several (e.g. `frontend/`, `backend/`, `admin-webapp/`, `functions/`). Detection: descendants (depth <= 3, excluding `node_modules`/`.venv*`/`dist`/`build`) containing a manifest.
 
-The `docs/` tree lives at the **codebase root** the task targets, not at a multi-project parent. A single-app repo has one codebase root (= project root) and one `docs/`. A monorepo gets a `docs/` under whichever codebase root the work touches; respect any existing layout the repo already has. Confirm the chosen root in the orientation summary before creating anything.
+`docs/` and `.atlas/` live at the **codebase root** the task targets, not at a multi-project parent. A single-app repo has one codebase root (= project root) and one `docs/` + one `.atlas/`. A monorepo gets its own pair under whichever codebase root the work touches; respect any existing layout the repo already has. Confirm the chosen root in the orientation summary before creating anything.
 
 ## Artifact layout
 
 ```
-<codebase-root>/docs/                 # single source of truth (create if absent)
+<codebase-root>/docs/                 # project wiki: committed, project-adaptive (create if absent)
 |-- CHANGELOG.md          # append-only, newest-first; everything done/changed
 |-- ROADMAP.md            # everything still to be done; backlog with status
-|-- AGENTS.md             # how the project works: architecture, conventions, real run/test/build/lint commands, glossary
-|-- evidence/             # COMMITTED permanent execution-evidence; one dir per item: <YYYY-MM-DD>-<slug>/
-|-- architecture/         # system design, component maps, data flows; ADRs under architecture/decisions/
-|-- reference_files/      # external/vendor doc snippets, API references, sample configs the project depends on
-|-- audits/               # audit reports (security/quality/performance) with date + scope
+|-- AGENTS.md             # deep orienting guidance beyond the root AGENTS.md (optional)
+|-- architecture/         # system design, component maps, data flows
+|-- decisions/            # project ADRs
+|-- plans/                # implementation plans, one per task
+|-- specs/                # requirements and specifications (pre-build intent)
 |-- features/             # per-feature specs-as-built: what it does, where it lives, how it is tested
 |-- lessons/              # durable lessons learned, gotchas, postmortems, why-we-did-X
-|-- wiki/                 # onboarding, how-to, operational runbooks
-|-- specs/                # requirements and specifications (pre-build intent)
-|-- plans/                # implementation plans = numbered stage maps, one per task, living documents
-`-- .run/                 # EPHEMERAL, GITIGNORED run state
+|-- wiki/                 # rendered, human-facing graphify diagrams and understand-anything output
+`-- api/                  # OpenAPI/Swagger specs + endpoints.md - only if the project has an API
+
+<codebase-root>/.atlas/                # atlas internal state: mostly committed (create if absent)
+|-- evidence/             # COMMITTED permanent execution-evidence; one dir per item: <YYYY-MM-DD>-<slug>/
+|-- findings/             # COMMITTED dated learning ledger: <YYYY-MM-DD>-<slug>.md + INDEX.md
+|-- audits/               # COMMITTED atlas-internal audit records, <YYYY-MM-DD>-<scope>/
+|-- decisions/            # COMMITTED atlas's own operating decisions, <YYYY-MM-DD>-<slug>.md
+|-- archive/              # COMMITTED retired/superseded state: old run logs, deprecated findings, prior structure snapshots
+|-- understand-anything/  # COMMITTED working data for the understand-anything skill
+|-- graphify/             # COMMITTED working data for the graphify skill
+|-- self-improvement/     # COMMITTED skill generation/disabling decisions, context-optimizer output
+|-- memory/                # COMMITTED persistent memory for cross-session self-improvement
+|-- nudge/                 # COMMITTED nudge data: inline-op thresholds, dispatch coaching signals
+`-- .run/                 # EPHEMERAL, GITIGNORED run state (except findings.json, see below)
     |-- STATE.md          #   live: current wave, open subagents, decisions, next wave
-    |-- findings.json     #   machine-readable, one object per finding (schema below)
+    |-- findings.json     #   COMMITTED durable ledger, machine-readable, one object per finding (schema below)
     `-- work-log.md       #   resumability log; re-read before any continuation
 ```
 
@@ -41,8 +52,9 @@ Per-codebase knowledge graphs stay scoped per root:
 ```
 
 Rules:
-- Everything under `docs/` is **committed** except `.atlas/.run/`. Add `.atlas/.run/` to the repo's `.gitignore`: it is ephemeral run state and must never be committed.
-- One `docs/` per codebase root. Respect an existing layout if the repo already has one; merge into it rather than duplicating.
+- `docs/` is fully **committed**. `.atlas/` is committed except `.atlas/.run/`, which is ephemeral and gitignored - with one exception: `.atlas/.run/findings.json` is re-included and committed because it is the durable verification ledger. Add `.atlas/.run/` to the repo's `.gitignore`, then re-allowlist `!.atlas/.run/findings.json`.
+- One `docs/` and one `.atlas/` per codebase root. Respect an existing layout if the repo already has one; merge into it rather than duplicating.
+- `.atlas/` never holds project wiki content (`architecture/`, `plans/`, `specs/`, `features/`) or a `docs/` subdirectory. A leftover `.atlas/docs/` is a defect - move its content into `docs/` or the right `.atlas/` subfolder and delete it.
 - `graphify-out/` is **per codebase root** (run `graphify` scoped to each root, not the whole tree).
 - Never write artifacts above the codebase root.
 - For a trivial single-shot task you may skip `.atlas/.run/` scaffolding (use judgment); scaffold when the work spans multiple waves or you need to persist findings. The durable subfolders are still updated for any shipping change (see "Living-docs discipline").
@@ -67,8 +79,8 @@ Lives at `.atlas/.run/findings.json`. One object per finding:
 }
 ```
 
-The `status` enum is `verified | rejected | needs-evidence | open`. A finding starts `open`, becomes `needs-evidence` when it lacks a reproduction or capture, and resolves to `verified` or `rejected` only through a separate verifier context. Bulky evidence referenced from a finding is committed under `.atlas/evidence/`, not inlined.
+The `status` enum is `verified | rejected | needs-evidence | open`. A finding starts `open`, becomes `needs-evidence` when it lacks a reproduction or capture, and resolves to `verified` or `rejected` only through a separate verifier context. Bulky evidence referenced from a finding is committed under `.atlas/evidence/`, not inlined. The curator later distills `verified` entries into the dated `.atlas/findings/<YYYY-MM-DD>-<slug>.md` history.
 
 ## Living-docs discipline
 
-Any change to user-visible behavior, a public API, or an operator workflow updates `docs/CHANGELOG.md` (what shipped, newest-first) and reconciles `docs/ROADMAP.md` (move done items out, add follow-ups) as part of the same wave. A code change without its doc update is incomplete. Every affected durable subfolder (`architecture/`, `features/`, `lessons/`, `audits/`, `wiki/`, `specs/`) is updated too. Keep `docs/AGENTS.md` current with discovered stacks, the real gate commands, and gotchas, so the next session orients in seconds. This is the "docs-current" state the completion gate enforces, see `docs-ssot.md`.
+Any change to user-visible behavior, a public API, or an operator workflow updates `docs/CHANGELOG.md` (what shipped, newest-first) and reconciles `docs/ROADMAP.md` (move done items out, add follow-ups) as part of the same wave. A code change without its doc update is incomplete. Every affected durable subfolder (`docs/architecture/`, `docs/features/`, `docs/lessons/`, `docs/wiki/`, and `.atlas/findings/`, `.atlas/audits/`, `.atlas/decisions/`) is updated too. Keep `docs/AGENTS.md` current with discovered stacks, the real gate commands, and gotchas, so the next session orients in seconds. This is the "docs-current" state the completion gate enforces, see `docs-ssot.md`.

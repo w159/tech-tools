@@ -1,9 +1,15 @@
 # Project bootstrap and install (atlas-setup mode)
 
-The architect makes a project ready for atlas: memory on, context protection on,
-the right capabilities recommended, hooks wired, config written, docs/ seeded. It
+The architect makes a project ready for atlas: the project's stack detected, the
+tooling that fits that stack recommended and activated, memory on, context
+protection on, hooks wired and confirmed active, config written, docs/ seeded. It
 never installs or writes outside `docs/` and `.claude/` without explicit
-confirmation.
+confirmation. "Activated" means installed, wired into `hooks.json` or the
+project's config, and verified live - not merely present on disk.
+
+The full canonical project structure this mode configures against is defined once
+in `atlas-loop/references/docs-ssot.md` ("## Tooling activation"); that file is the
+structure authority for anything install.md scaffolds or verifies.
 
 **Elicitation:** consent decisions go through the **AskUserQuestion tool**, not prose
 offers the user must parse. Recommend-then-confirm means: present the install shortlist
@@ -26,11 +32,17 @@ fits a signal, and the config schema are documented in `references/tool-patterns
 A scaffold for proposing a new capability is in `templates/new-tool-scaffold.md`. Read
 the reference before building the recommend-then-confirm shortlist in Stage 2.
 
-1. Dependencies. Detect the session-augmentation trio: claude-mem, context-mode, and
-   ponytail. If any is missing, show the exact install command and confirm before
-   running it - never silently. claude-mem backs the self-improvement layer;
-   context-mode keeps large output out of context; ponytail (lite/full/ultra/off)
-   writes far less code while keeping safety.
+1. Dependencies. Detect the project's stack - languages, frameworks, package
+   managers - from its manifests (this doubles as input to Stage 2's discovery
+   run). Against that stack, check the minimum tooling bar every project gets:
+   the session-augmentation trio (claude-mem for cross-session memory,
+   context-mode for context-window protection, ponytail for simplicity
+   discipline), the atlas completion/dispatch gate hooks (Stage 3), and any
+   ecc gate hooks available for the detected stack (Stage 3). If any minimum-
+   bar item is missing or inactive, show the exact install/activation command
+   and confirm before running it - never silently. Stack-specific items beyond
+   this minimum bar are recommended, not assumed: they join the Stage 2
+   shortlist instead of being installed here.
 2. Discover. Run `${CLAUDE_PLUGIN_ROOT}/scripts/discover_capabilities.py <root>` (read-only). Match its
    signals against `..`atlas-orchestrate`/references/capability-catalog.md`. Present a
    ranked list (skill / plugin / mcp) with a reason and the exact install command
@@ -43,10 +55,17 @@ the reference before building the recommend-then-confirm shortlist in Stage 2.
 3. Hooks. A plugin install auto-loads `hooks/hooks.json`. Verify all hooks are
    active (session boot, prompt optimizer, bash advisor, format-after-edit, dispatch
    tripwire, completion gate, memory capture, auto-skill, self-improvement nudge,
-   session-transcript ingest).
+   session-transcript ingest) - these are the atlas completion/dispatch gate hooks
+   referenced in Stage 1's minimum bar.
    A separate `hooks/validate-readonly-query.sh` SQL guard ships for the DB-audit
    subagents (schema-inventory, rls-privilege-audit, naming-glossary-audit) to use
    during read-only audits; it is not auto-loaded by hooks.json.
+   If the ecc plugin (or another marketplace plugin bundling gate hooks) is
+   already installed, verify its gate hooks are wired and active too. If it is
+   not installed but its gate hooks fit the detected stack, add it to the
+   Stage 2 shortlist rather than installing it here - Stage 1's minimum bar is
+   about verifying what should already be active, not a second silent install
+   path.
    Outside a plugin install, offer `scripts/install_hooks.py`.
 4. Config. Write or update `.claude/atlas.local.md` (schema below). Show the diff and
    confirm before writing.
@@ -72,7 +91,11 @@ the reference before building the recommend-then-confirm shortlist in Stage 2.
    `git check-ignore docs/CHANGELOG.md` (should NOT be ignored).
 7. Report. Dependency state, capabilities installed vs declined, hooks active, config
    path, docs/ state, self-improvement status, context optimization results,
-   and the next recommended command.
+   and the next recommended command. Persist the same activation record - what
+   tooling was detected as fitting the stack, what was activated, what was
+   declined, and why - to `.atlas/decisions/<YYYY-MM-DD>-tooling-activation.md`
+   so a later session (or `atlas:docs-auditor`) can see the reasoning without
+   re-deriving it.
 
 ## Recommend-then-confirm
 
@@ -88,6 +111,8 @@ Invoked with no task or prompt, any atlas skill runs the standard scan: inspect 
 project and report exactly what is missing to bring it to atlas standard, then
 recommend-then-confirm. Check, in order:
 
+- the project's stack (languages, frameworks, package managers), so the rest of
+  the scan and Stage 2's shortlist are matched to what this project actually is;
 - the session-augmentation trio - claude-mem (memory), context-mode (context
   protection), ponytail (less-code mode);
 - the built-ins - loop-library (surfaced by atlas-loop), connectors (enabled via
@@ -96,7 +121,10 @@ recommend-then-confirm. Check, in order:
   (UX runtime swarm), and atlas-audit (measurable self-improvement + observability);
 - the automation hooks that auto-load via hooks.json (session boot, prompt
   optimizer, bash advisor, format-after-edit, dispatch tripwire, completion gate,
-  memory capture, auto-skill, self-improvement nudge, session-transcript ingest);
+  memory capture, auto-skill, self-improvement nudge, session-transcript ingest),
+  plus any ecc gate hooks available for the detected stack;
+- whether `.atlas/decisions/` has a `tooling-activation` record from a prior run,
+  so this scan can report drift against it instead of starting cold;
 - the docs/ SSOT scaffold, and whether CHANGELOG.md and ROADMAP.md are current;
 - the self-improvement system: atlas_memory, skill_factory, atlas_curator, and
   atlas_context_optimizer scripts present and functional;

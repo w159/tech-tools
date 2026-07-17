@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# validate_gitignore.sh - structural validator for a zero-trust .gitignore.
+# validate_gitignore.sh - structural + behavioral validator for a
+# zero-trust .gitignore.
 #
 # Checks the load-bearing invariants of the deny-all-then-allowlist
 # methodology:
@@ -7,6 +8,13 @@
 #   2. Every '!path/' has a paired '!path/**'.
 #   3. No '!*.env' or '!**/.env' rule exists anywhere (secret leak).
 #   4. Banned Unicode absent (plain ASCII only).
+#   5. Runtime allowlist outcomes match docs-ssot.md (docs/ + .atlas/
+#      trees), exercised in a throwaway git repo. Structural checks alone
+#      cannot catch this: git refuses to re-include a file whose parent
+#      directory is itself excluded, so a negated child rule (e.g.
+#      '!.atlas/.run/findings.json') can be structurally present and
+#      still be a silent no-op if the parent directory was never
+#      explicitly un-ignored first.
 #
 # Exits 0 if valid, 1 with a reason if not.
 #
@@ -90,5 +98,34 @@ if grep -nE '^\s*!\*\.env' "$target" || grep -nE '^\s*!\*\*/\.env' "$target"; th
   exit 1
 fi
 
-echo "OK: zero-trust .gitignore structure is valid."
+# 5. Runtime allowlist verification (docs-ssot.md docs/ + .atlas/ tree).
+# Copy the target file into a throwaway git repo and confirm the actual
+# ignore/track outcome git produces, not just the pattern text.
+workdir=$(mktemp -d)
+trap 'rm -rf "$workdir"' EXIT
+git init -q "$workdir"
+cp "$target" "$workdir/.gitignore"
+(
+  cd "$workdir"
+  mkdir -p docs .atlas/evidence .atlas/.run
+  touch docs/CHANGELOG.md .atlas/evidence/.gitkeep .atlas/.run/STATE.md \
+    .atlas/.run/findings.json .env
+
+  check() {
+    local path="$1" want="$2" # want: ignored | tracked
+    local got="tracked"
+    git check-ignore -q "$path" && got="ignored"
+    if [[ "$got" != "$want" ]]; then
+      echo "FAIL: $path expected $want but git reports $got" >&2
+      exit 1
+    fi
+  }
+  check docs/CHANGELOG.md tracked
+  check .atlas/evidence/.gitkeep tracked
+  check .atlas/.run/STATE.md ignored
+  check .atlas/.run/findings.json tracked
+  check .env ignored
+)
+
+echo "OK: zero-trust .gitignore structure and allowlist behavior are valid."
 exit 0
