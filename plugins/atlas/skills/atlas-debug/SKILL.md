@@ -1,6 +1,6 @@
 ---
 name: atlas-debug
-description: Reproducible bug, exception, stack trace, or bad output: root-cause fix with evidence, not a patch over. Use when you want the actual cause fixed, not the symptom hidden.
+description: 'Reproducible bug, exception, stack trace, or bad output: root-cause fix with evidence, not a patch over. Use when you want the actual cause fixed, not the symptom hidden.'
 when_to_use: a reproducible bug, exception, stack trace, or bad output needs a root-cause fix with evidence, not a patch over
 allowed-tools: Read, Glob, Grep, Bash
 argument-hint: '[context] [stack] [symptom] [paste error/log]'

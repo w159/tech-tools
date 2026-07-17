@@ -5,7 +5,7 @@ Fires on Stop. Uses skill_factory.auto_create_from_session() to:
   1. Find the most recent orchestrating session
   2. Check if it's skill-worthy (>= 5 tool calls, learnable signals)
   3. Extract lessons (improvements, corrections, error patterns)
-  4. Create a SKILL.md under ~/.atlas/skills/ with `created_by: "atlas-auto"` provenance
+  4. Create a SKILL.md under ~/.claude/skills/ with `created_by: "atlas-auto"` provenance
 
 The created skill shows up with a "learned" label — it was auto-learned from
 session experience. The atlas curator will manage its lifecycle (stale/archive).
@@ -78,9 +78,19 @@ def main():
                 f"[atlas] Self-improvement: auto-created skill '{name}' "
                 f"from session {result.get('session_id', '?')[:8]}. "
                 f"{len(lessons)} lesson(s) captured. "
-                f"The skill is available next session under ~/.atlas/skills/{name}/."
+                f"The skill is available next session under ~/.claude/skills/{name}/ "
+                f"(or $ATLAS_SKILLS_DIR if set)."
             )
-            sys.stdout.write(json.dumps({"additionalContext": msg}))
+            sys.stdout.write(
+                json.dumps(
+                    {
+                        "hookSpecificOutput": {
+                            "hookEventName": "Stop",
+                            "additionalContext": msg,
+                        }
+                    }
+                )
+            )
         else:
             # Fail-open but observable: surface why no skill was created so
             # silent zero-output curator runs can be diagnosed.

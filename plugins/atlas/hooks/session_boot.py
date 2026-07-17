@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Atlas SessionStart boot. Fast, idempotent, crash-proof.
 
-Emits additionalContext pointing at the operating contract and atlas-orchestrate
+Emits hookSpecificOutput.additionalContext pointing at the operating contract and atlas-orchestrate
 methodology, reports whether claude-mem and context-mode are present, and
 surfaces a one-line ready status. Never blocks session start: any error exits 0
 silently.
@@ -219,6 +219,7 @@ def resume_block(root):
             import atlas_db
 
             conn = atlas_db.connect()
+            atlas_db.init(conn)
             row = conn.execute(
                 "SELECT name FROM projects WHERE root_path=?", (root,)
             ).fetchone()
@@ -414,9 +415,12 @@ def main():
     if resume:
         lines.append(resume)
     out = {
-        "additionalContext": "\n".join(lines)[:9000],
         "systemMessage": "Atlas ready"
         + ("" if (mem and ctx) else " (run the `atlas` skill to complete setup)"),
+        "hookSpecificOutput": {
+            "hookEventName": "SessionStart",
+            "additionalContext": "\n".join(lines)[:9000],
+        },
     }
     sys.stdout.write(json.dumps(out))
     sys.exit(0)

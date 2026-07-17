@@ -65,7 +65,7 @@ import urllib.request
 # erase sequences (e.g. "data c\x1b[1D\x1b[K\nconsistency"). Stripping those codes naively
 # leaves the dangling "c"; we must INTERPRET them like a terminal to get clean text. The HTTP
 # API path emits no codes, so this is a no-op there.
-_CSI = re.compile(r"\x1b\[([0-9]*)([A-Za-z])")
+_CSI = re.compile(r"\x1b\[([0-9;]*)([A-Za-z])")
 _OSC = re.compile(r"\x1b\][^\x07]*\x07")  # OSC (e.g. window-title) sequences
 
 DEFAULT_TRIGGERS = ("opt:", "optimize:", "++")
@@ -75,6 +75,14 @@ DEFAULT_MODEL = "prompt-optimizer:latest"
 def _env(name: str, default: str) -> str:
     val = os.environ.get(name, "").strip()
     return val if val else default
+
+
+def _env_num(name: str, default, cast):
+    """Read a numeric env var, falling back to default on a bad value - never blocks."""
+    try:
+        return cast(_env(name, str(default)))
+    except (ValueError, TypeError):
+        return default
 
 
 def clean(text: str) -> str:
@@ -92,7 +100,12 @@ def clean(text: str) -> str:
                 i += 1
                 continue
             num_s, cmd = m.group(1), m.group(2)
-            num = int(num_s) if num_s else 0
+            # Multi-param CSI sequences (e.g. SGR "38;5;108m") aren't single ints -
+            # they're not D/C/K anyway, so treat them as the ignored default.
+            try:
+                num = int(num_s) if num_s else 0
+            except ValueError:
+                num = 0
             if cmd == "D":  # cursor back
                 pos = max(0, pos - (num or 1))
             elif cmd == "C":  # cursor forward
@@ -149,7 +162,7 @@ def should_optimize(prompt: str) -> tuple[bool, str]:
         _env("ATLAS_OPTIMIZE_TRIGGER", ",".join(DEFAULT_TRIGGERS)).split(",")
     )
     matched, body = match_trigger(prompt, triggers)
-    minlen = int(_env("ATLAS_OPTIMIZE_MINLEN", "12") or "12")
+    minlen = _env_num("ATLAS_OPTIMIZE_MINLEN", 12, int)
     if mode == "always":
         # Fire on everything that isn't a slash command, but still skip prompts too short
         # to be worth the latency - a bare "ok"/"thanks" should pass through instantly.
@@ -227,7 +240,7 @@ def run_via_api(prompt: str, model: str, timeout: float) -> str | None:
 
 def run_optimizer(prompt: str) -> str | None:
     """Optimize via override cmd -> HTTP API -> CLI fallback. Returns cleaned text or None."""
-    timeout = float(_env("ATLAS_OPTIMIZE_TIMEOUT", "110") or "110")
+    timeout = _env_num("ATLAS_OPTIMIZE_TIMEOUT", 110.0, float)
     override = override_command(prompt)
     if override is not None:
         return _run_argv(override, timeout)

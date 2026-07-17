@@ -566,10 +566,21 @@ Body.
         buf = io.StringIO()
         with (
             mock.patch.object(sys, "argv", ["prog", "bogus"]),
+            contextlib.redirect_stderr(buf),
+        ):
+            with self.assertRaises(SystemExit) as cm:
+                opt._cli()
+        self.assertEqual(cm.exception.code, 2)
+        self.assertIn("Unknown command", buf.getvalue())
+
+    def test_cli_help(self):
+        buf = io.StringIO()
+        with (
+            mock.patch.object(sys, "argv", ["prog", "--help"]),
             contextlib.redirect_stdout(buf),
         ):
             opt._cli()
-        self.assertIn("Unknown command", buf.getvalue())
+        self.assertIn("Usage", buf.getvalue())
 
 
 if __name__ == "__main__":

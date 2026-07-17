@@ -4,6 +4,75 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
+## 2026-07-17 -- Full audit remediation and marketplace truth pass (v5.1.1)
+
+Follow-up to the entry below: the remaining defects in
+`atlas-audit-2026-07-17.md` were reproduced, fixed, and verified
+(972 passed, 0 failed). Root `SKILL.md` moved to `skills/atlas/`
+(the root file never loaded; /atlas now works), skill factory output
+redirected to `~/.claude/skills/`, trigger flags reconciled
+(22 skills: 2 manual, 20 auto), CLI exit codes hardened, prompt-optimizer
+timeout wired, and every stale count/version/path in README.md,
+plugins/README.md, plugin manifests, and atlas-setup references corrected.
+Audit-review verdicts recorded in `atlas-audit-2026-07-17-review.md`.
+Detail: `plugins/atlas/CHANGELOG.md` 5.1.1.
+
+---
+
+## 2026-07-17 -- Security/correctness remediation from atlas-audit CODE 2026-07-17
+
+Findings from `docs/audits/atlas-audit-2026-07-17/report.md` (baseline: 967 tests passing).
+Verified: `python3 -m pytest plugins/atlas/ -q` -> 973 passed, 8 subtests passed.
+
+**Hook contract fix (H1-H4):** `additionalContext` was emitted as a bare top-level JSON key,
+which Claude Code drops silently; report H1 traced this to
+`test_session_boot.py` asserting on `data["additionalContext"]` at top level instead of the
+real contract shape (report.md:40). Now nested under `hookSpecificOutput` with the firing
+`hookEventName`, restoring the SessionStart injection path:
+- `plugins/atlas/hooks/session_boot.py:419-421` (`hookEventName: "SessionStart"`)
+- `plugins/atlas/hooks/auto_skill.py:86`
+- `plugins/atlas/hooks/memory_capture.py:291`
+- `plugins/atlas/hooks/nudge.py:137`
+- `plugins/atlas/hooks/test_session_boot.py` (19 assertions across the file rewritten to read
+  `data["hookSpecificOutput"]["additionalContext"]` / `["hookEventName"]`, e.g. line 92, 115)
+
+**atlas_memory.py data-loss and injection fixes (H5-H6):**
+- `_read_file` (`plugins/atlas/scripts/atlas_memory.py:99`) no longer swallows a read error
+  and then overwrites the file on the next write.
+- `add()` (`atlas_memory.py:189`) now runs entries through `_sanitize_entry`
+  (`atlas_memory.py:121`, called at `atlas_memory.py:191` and in `apply_batch` at
+  `atlas_memory.py:325,330`) to collapse newlines and strip control chars, closing a
+  stored-prompt-injection path into `~/.atlas/memory/MEMORY.md` that SessionStart re-injects.
+- Regression tests added in `plugins/atlas/scripts/test_atlas_memory.py` (67 insertions).
+
+**Other CODE-audit fixes, each with a regression test in the suite above:**
+- `atlas_context_optimizer.py` `disable_skill` (`plugins/atlas/scripts/atlas_context_optimizer.py:260`):
+  fixed frontmatter corruption where the closing `---` was glued onto the last field,
+  producing invalid YAML.
+- `skill_factory.py` `_build_skill_md` (`plugins/atlas/scripts/skill_factory.py:76`): the
+  `description` field is now escaped via `json.dumps` (comment at line 72) so an embedded
+  quote cannot break the generated `SKILL.md` frontmatter.
+- `atlas_curator.py` `_skill_activity_time` (`plugins/atlas/scripts/atlas_curator.py:103`):
+  now skips the curator's own `.stale`/`.pinned` marker files
+  (`CURATOR_MARKER_FILES` at `atlas_curator.py:39`), fixing an infinite
+  mark-stale/reactivate oscillation that had prevented the 90-day archive path from ever
+  firing.
+- `prompt_optimizer.py`: env ints/floats now parsed defensively via `_env_num`
+  (`plugins/atlas/hooks/prompt_optimizer.py:80-84`) so a non-numeric env value falls back to
+  the default instead of crashing the never-block hook; the CSI regex
+  (`prompt_optimizer.py:68`) was broadened from `[0-9]*` to `[0-9;]*` so multi-param ANSI
+  color codes (e.g. `38;5;108m`) are matched and stripped instead of leaking into cleaned
+  text, with a matching `try`/`except` guard at `prompt_optimizer.py:103-106`.
+
+**Build break fix:** commit `56d1a9f` deleted the top-level `mcp_servers/_shared/`
+(`error-envelope.ts`, `response-shaper.ts`, `base-url.ts`, etc.), leaving `auvik-mcp`'s
+imports at `mcp_servers/auvik-mcp/src/tools/shared.ts:12,17` and
+`mcp_servers/auvik-mcp/src/tools/status.ts:5` dangling. Restored a per-server
+`mcp_servers/auvik-mcp/src/_shared/` (`base-url.ts`, `response-shaper.ts`,
+`error-envelope.ts`) and repointed the imports from `../../../_shared/...` to
+`../_shared/...`, matching the per-server pattern already in use by
+`connectwise-manage-mcp/src/_shared/` and `cipp-mcp/src/_shared/`.
+
 ## 2026-07-17 -- atlas canonical project structure: full scaffold/repair + enforcement across all surfaces
 
 `atlas-setup` previously only seeded a handful of `docs/` and `.atlas/` subfolders and left

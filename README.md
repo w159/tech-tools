@@ -2,11 +2,11 @@
 
 Atlas is a self-configuring Claude Code plugin that turns any coding agent into a
 disciplined multi-agent architect. Run `/atlas` once to onboard a project, then
-drive work through the 21 auto-trigger skills and the `atlas:<role>` subagent
+drive work through the 20 auto-trigger skills and the `atlas:<role>` subagent
 squad. A `SessionStart` hook loads the runtime every session, and four
 self-improvement hooks (memory capture, auto-skill, nudge, session ingest) make
 the agent better the more it is used in a codebase
-(`plugins/atlas/SKILL.md:10`,
+(`plugins/atlas/skills/atlas/SKILL.md:10`,
 `plugins/atlas/README.md:3-9`,
 `plugins/atlas/hooks/hooks.json:1-7`).
 
@@ -16,19 +16,15 @@ The marketplace is published from this repo at
 `.kimi-plugin/marketplace.json` (Kimi Code CLI, version 2,
 `.kimi-plugin/marketplace.json:1-2`). The Claude Code manifest currently ships
 two plugins: `atlas` and the optional `armada` org-deployment plugin
-(`.claude-plugin/marketplace.json:18,28`). The Kimi manifest ships a
-different catalog: 12 plugins total, `atlas` plus 11 legacy domain clusters
-(it-operations, security-compliance, microsoft-365, hr-payroll, finance,
-engineering, data, design, customer-support, product-management, productivity)
-and no `armada` entry
-(`.kimi-plugin/marketplace.json:4-63`).
+(`.claude-plugin/marketplace.json:18,28`). The Kimi manifest ships the
+same two plugins (`atlas`, `armada`) from `.kimi-plugin/marketplace.json`.
 
 **Two separate version counters, not a typo:** the marketplace wrapper
 above (`3.0.0`) versions the catalog file itself; the `atlas` plugin it
-lists versions independently at `5.0.0`
+lists versions independently at `5.1.1`
 (`plugins/atlas/.claude-plugin/plugin.json:3`). Both numbers moved in the
 same commit (`ad7313c`: marketplace `2.0.0` -> `3.0.0`, plugin -> `5.0.0`)
-but on unrelated scales, so every `v5.0.0` reference later in this README
+but on unrelated scales, so every `v5.x` reference later in this README
 is the plugin version, never the marketplace version.
 
 A separate `armada` plugin in this repo carries 11 department agents and 156
@@ -45,7 +41,7 @@ use (`plugins/atlas/README.md:8-10`,
 3. In a project, type `/atlas` once. The `atlas-setup` skill scaffolds
    `docs/` (plus `.atlas/` internal state), verifies or installs `claude-mem`
    and `context-mode`, wires hooks, and recommends the next step
-   (`plugins/atlas/SKILL.md:24-64`,
+   (`plugins/atlas/skills/atlas/SKILL.md:24-64`,
    `plugins/atlas/skills/atlas-setup/SKILL.md:78-111`).
 4. For a coding task, type the name of the skill you want (for example
    `atlas-feature` to build a feature, `atlas-debug` to root-cause a bug,
@@ -57,11 +53,11 @@ use (`plugins/atlas/README.md:8-10`,
 
 - Claude Code (Kimi Code CLI is also supported via the alternate marketplace
   manifest at `.kimi-plugin/marketplace.json`).
-- Python 3, used by all 10 hooks and the `scripts/` tooling
-  (`plugins/atlas/hooks/hooks.json:11,23,30,46,67,90,100,113,127`).
+- Python 3, used by all 11 hooks and the `scripts/` tooling
+  (`plugins/atlas/hooks/hooks.json`).
 - `claude-mem` and `context-mode` are required companions. `atlas-setup`
   detects them and offers to install if missing; do not install silently
-  (`plugins/atlas/SKILL.md:24-32`).
+  (`plugins/atlas/skills/atlas/SKILL.md:24-32`).
 - No system-level package manager install is needed for `atlas` itself. The
   vendor MCP servers under `mcp_servers/` are not part of the active
   marketplace and require their own setup; see
@@ -73,21 +69,19 @@ Top-level layout, one line each, every entry verified on disk:
 
 - `.claude-plugin/marketplace.json` — Claude Code marketplace manifest, two
   plugins (`atlas`, `armada`).
-- `.kimi-plugin/marketplace.json` — Kimi Code CLI marketplace manifest, 12
-  plugins total (`atlas` plus 11 legacy domain clusters; no `armada` entry).
-- `plugins/` — one directory per plugin. The Claude Code marketplace lists
-  `plugins/atlas/` and `plugins/armada/`; the Kimi marketplace lists the
-  11 legacy domain cluster folders plus `plugins/atlas/` under the same
-  root (no `plugins/armada/` reference in the Kimi manifest).
-- `plugins/atlas/` — the atlas plugin. 21 skills
-  (`plugins/atlas/skills/`), 12 agents (`plugins/atlas/agents/`), 10
+- `.kimi-plugin/marketplace.json` — Kimi Code CLI marketplace manifest, the
+  same two plugins (`atlas`, `armada`).
+- `plugins/` — one directory per plugin (`atlas`, `armada`), plus the shared
+  `_standards/` and `_templates/` authoring libraries.
+- `plugins/atlas/` — the atlas plugin. 22 skills
+  (`plugins/atlas/skills/`), 12 agents (`plugins/atlas/agents/`), 11
   hooks (`plugins/atlas/hooks/hooks.json`), one output style
   (`plugins/atlas/output-styles/atlas-orchestrator.md`), and
   `scripts/` for runtime tools (`atlas_doctor.py`, `atlas_db.py`,
   `atlas_context_optimizer.py`, and the rest, per
   `plugins/atlas/README.md:44-62`).
-- `plugins/armada/` — 11 department agents, no skills directory of its own
-  in the current manifest.
+- `plugins/armada/` — 11 department agents plus the `armada` skill tree
+  (156 department skills under `plugins/armada/skills/`).
 - `mcp_servers/` — 10 vendor MCP server implementations (Auvik, Blumira,
   CIPP, ConnectWise Manage, Kaseya Spanning, KnowBe4, NinjaOne, Paylocity,
   ThreatLocker, Vanta) plus a `_shared/` cross-cutting helpers folder. Not
@@ -119,7 +113,7 @@ Top-level layout, one line each, every entry verified on disk:
 Atlas itself needs no environment configuration. The four required pieces
 are wired by the `SessionStart` hook: the plugin path, Python 3, and the
 `claude-mem` and `context-mode` binaries on `PATH` (verified by
-`atlas-setup` at first run, `plugins/atlas/SKILL.md:24-32`).
+`atlas-setup` at first run, `plugins/atlas/skills/atlas/SKILL.md:24-32`).
 
 The vendor MCP servers under `mcp_servers/` are not in the active
 marketplace but are kept in the repo. If you use one, copy the matching
@@ -167,7 +161,7 @@ manual step is needed for the common case
 (bare skill files), run
 `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/install_hooks.py"` to wire the
 hooks into Claude Code settings
-(`plugins/atlas/SKILL.md:50-52`).
+(`plugins/atlas/skills/atlas/SKILL.md:50-52`).
 
 ### Test
 
@@ -242,7 +236,7 @@ every `SessionStart` as a rollback guard
 - **Self-improvement not running** — verify the four required scripts
   exist (`atlas_memory.py`, `skill_factory.py`, `atlas_curator.py`,
   `atlas_context_optimizer.py`) and that `~/.atlas/memory/` and
-  `~/.atlas/skills/` are writable
+  `~/.claude/skills/` are writable
   (`plugins/atlas/skills/atlas-setup/SKILL.md:97-115`).
 - **Stale wiki diagrams** — `architecture/` is newer than
   `wiki/diagrams/`; run `atlas-wiki` or invoke `graphify` directly
@@ -253,10 +247,11 @@ every `SessionStart` as a rollback guard
 The numbers below are verified by listing the directories on disk
 (v5.0.0, `ad7313c`, consolidated from 27 skills in v4.x).
 
-### 21 skills (`plugins/atlas/skills/`)
+### 22 skills (`plugins/atlas/skills/`)
 
 | Skill | Path | Description | When to Use |
 |-------|------|-------------|------------|
+| **atlas** | `skills/atlas/SKILL.md:1-10` | Architect menu: boot and configure the workspace (deps, discover, hooks, config); manual entry point | Type `/atlas` to configure a project or reach the routing menu |
 | **atlas-audit** | `skills/atlas-audit/SKILL.md:1-10` | Audits: CODE (quality/security discovery), ARCHITECTURE (duplication), SELF (run health/transcript forensics) | Comprehensive code/security audit, architecture mapping, atlas health measurement |
 | **atlas-component** | `skills/atlas-component/SKILL.md:1-8` | Build reusable component (progress modal, upload, job panel) handling latency/cancellation/partial failure | Create/modify latency-resistant, multi-state component |
 | **atlas-db-audit** | `skills/atlas-db-audit/SKILL.md:1-9` | Read-only: inventory schema, reconcile vs code, check privileges & naming via parallel subagents | Pre-change DB audit: schema, privileges, glossary alignment |
@@ -282,7 +277,7 @@ The numbers below are verified by listing the directories on disk
 **Skill tooling notes:**
 
 - All skills use **context: fork** or standard tool sets (Read, Glob, Grep, Bash, Edit, MultiEdit).
-- Disable-model-invocation skills (require explicit user invocation, not auto-triggered): `atlas-component`, `atlas-db-audit`, `atlas-frontend`, `atlas-m365`, `atlas-prompt`, `atlas-readme`, `atlas-refactor`, `atlas-setup`, `atlas-vendor-assessment`, `atlas-wiki`.
+- Only `atlas` and `atlas-setup` set `disable-model-invocation: true` (require explicit user invocation, not auto-triggered); the other 20 skills auto-trigger.
 
 ### 12 agents (`plugins/atlas/agents/`)
 
@@ -411,7 +406,7 @@ Four hooks close the loop the fleet used to leave to manual runs
 - `hooks/memory_capture.py` persists session lessons to
   `~/.atlas/memory/`.
 - `hooks/auto_skill.py` mines finished sessions and drafts new skills
-  at `~/.atlas/skills/`.
+  at `~/.claude/skills/`.
 - `scripts/atlas_context_optimizer.py` disables unused skills and
   agents based on real usage in the observability DB. The optimizer
   alone can cut the 21-skill + 12-agent cost that every API call
@@ -432,7 +427,7 @@ hook never blocks a session, `plugins/atlas/README.md:77-78`). The
 two required runtime companions are external Claude Code plugins:
 
 - `claude-mem` — backs the self-improvement layer
-  (`plugins/atlas/SKILL.md:28-32`).
+  (`plugins/atlas/skills/atlas/SKILL.md:28-32`).
 - `context-mode` — protects the context window on large-output work
   (same).
 

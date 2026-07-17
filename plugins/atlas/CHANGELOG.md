@@ -1,5 +1,56 @@
 # Changelog
 
+## 5.1.1 (2026-07-17)
+
+Audit remediation: every reproduced defect from atlas-audit-2026-07-17.md
+fixed and verified (972+ tests, 0 failures).
+
+- **SessionStart context restored.** `hooks/session_boot.py` emitted
+  `additionalContext` at the top level of its JSON output, which Claude
+  Code silently ignores; it is now nested under
+  `hookSpecificOutput.hookEventName: "SessionStart"`. Same fix applied in
+  `memory_capture.py`, `nudge.py`, and `auto_skill.py`. The boot, memory,
+  and resume context now actually reaches the model.
+- **`/atlas` skill loads.** The plugin-root `SKILL.md` was inert (a
+  root SKILL.md only loads when the plugin has no `skills/` directory);
+  moved to `skills/atlas/SKILL.md`. The plugin now ships 22 skills. The
+  phantom `atlas-grafana` menu entry was removed.
+- **Self-improvement loop closed.** `scripts/skill_factory.py` wrote
+  generated skills to `~/.atlas/skills/`, which Claude Code never loads;
+  it now writes to `~/.claude/skills/` (override: `ATLAS_SKILLS_DIR`,
+  honors `CLAUDE_CONFIG_DIR`). `atlas_curator.py` follows the same
+  resolution. The auto path no longer crashes on a schema-less DB
+  (`no such table: runs` is now a soft no-op).
+- **Trigger flags reconciled.** Ten task skills shipped with
+  `disable-model-invocation: true` (unreconciled context-optimizer
+  output); restored to auto. Manual skills are exactly `atlas` and
+  `atlas-setup` (22 skills: 2 manual, 20 auto).
+- **resume_block fixed.** `session_boot.resume_block()` returned None
+  for atlas-ctx-only resumes because the DB was opened without `init()`;
+  fixed, own test now passes.
+- **CLI hardening.** `build_hub.py` gained argparse (previously
+  `--help` created a literal `--help/hub/` directory); `atlas_memory`,
+  `atlas_curator`, `atlas_context_optimizer`, `skill_factory`, and
+  `atlas_db` now exit 2 with usage on unknown commands (previously
+  exit 0).
+- **Prompt-optimizer timeout.** `hooks.json` now sets `"timeout": 120`
+  on the UserPromptSubmit entry (Claude Code's 30 s default killed the
+  optimizer path).
+- **Docs and manifests reconciled to reality.** Hook count corrected to
+  11 (was variously 8 and 10), skills to 22, `27 skills + 23 agents`
+  stale claim removed, versions unified on 5.1.1,
+  `manual-vs-auto-map.md` rewritten, malformed
+  `..`atlas-orchestrate`/...` reference paths repaired,
+  `plugin-health.py` path citations corrected, doctor's documented
+  checks matched to `atlas_doctor.py` reality. `plugins/README.md`
+  rewritten (previously described 11 plugins that do not exist in this
+  repo); stale Task Master `plugins/CLAUDE.md` removed;
+  `.kimi-plugin/marketplace.json` now lists `atlas` and `armada`.
+- **Hygiene.** Tracked `.coverage` artifacts untracked and removed;
+  caches cleaned and gitignored; `lint_skill_names.py` wired into the
+  test suite (was referenced by nothing); strict-YAML frontmatter fixed
+  in three skills; `atlas-gitignore` argument-hint normalized.
+
 ## 5.1.0 (2026-07-16)
 
 Wiring-repair patch: connector MCP registration fixed, evidence paths

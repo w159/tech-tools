@@ -2,7 +2,7 @@
 """Atlas skill factory — auto-create skills from session transcripts.
 
 Extracts reusable lessons from the observability DB's session mirror and
-writes SKILL.md files under ~/.atlas/skills/. Mirrors Hermes Agent's
+writes SKILL.md files under ~/.claude/skills/. Mirrors Hermes Agent's
 skill_manage(action='create') but is hook-driven, not agent-driven.
 
 Provenance: every auto-created skill carries `created_by: "atlas-auto"` in
@@ -33,7 +33,10 @@ from typing import Any, Dict, List, Optional, Tuple
 
 # Where auto-created skills live
 def _skills_dir() -> Path:
-    base = os.environ.get("ATLAS_HOME", os.path.expanduser("~/.atlas"))
+    override = os.environ.get("ATLAS_SKILLS_DIR")
+    if override:
+        return Path(override)
+    base = os.environ.get("CLAUDE_CONFIG_DIR", os.path.expanduser("~/.claude"))
     return Path(base) / "skills"
 
 
@@ -69,9 +72,11 @@ def _skill_name_from_topic(topic: str) -> str:
 
 def _build_skill_md(name: str, description: str, body: str) -> str:
     """Build a SKILL.md with frontmatter."""
+    # json.dumps yields a valid YAML double-quoted scalar (YAML is a JSON superset),
+    # so an embedded " in a lesson-derived description cannot break the frontmatter.
     return f"""---
 name: {name}
-description: "{description}"
+description: {json.dumps(description)}
 created_by: "atlas-auto"
 created_at: "{time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}"
 version: "1.0.0"
@@ -257,7 +262,7 @@ def _session_worthy(conn: sqlite3.Connection, session_id: str) -> Tuple[bool, st
 
 
 def _existing_skill_names() -> set:
-    """Return set of existing skill names under ~/.atlas/skills/."""
+    """Return set of existing skill names under ~/.claude/skills/."""
     skills = set()
     d = _skills_dir()
     if not d.is_dir():
@@ -314,7 +319,9 @@ def _content_similarity(text_a: str, text_b: str) -> float:
     return len(intersection) / len(union) if union else 0.0
 
 
-def _is_duplicate_skill(new_body: str, existing_contents: Dict[str, str], threshold: float = 0.7) -> Optional[str]:
+def _is_duplicate_skill(
+    new_body: str, existing_contents: Dict[str, str], threshold: float = 0.7
+) -> Optional[str]:
     """Check if new_body is ≥threshold similar to any existing skill.
 
     Returns the name of the similar existing skill, or None if no duplicate.
@@ -450,6 +457,8 @@ def auto_create_from_session(db_path: Optional[str] = None) -> Dict[str, Any]:
         result["lessons"] = lessons
         result["session_id"] = session_id
         return result
+    except (sqlite3.OperationalError, sqlite3.DatabaseError) as e:
+        return {"created": False, "reason": f"DB schema error: {e}"}
     finally:
         conn.close()
 
@@ -459,16 +468,16 @@ def auto_create_from_session(db_path: Optional[str] = None) -> Dict[str, Any]:
 
 def _cli():
     if len(sys.argv) < 2:
-        print("Usage: skill_factory.py [auto|create|list]")
-        return
+        print("Usage: skill_factory.py [auto|create|list]", file=sys.stderr)
+        sys.exit(2)
     cmd = sys.argv[1]
     if cmd == "auto":
         result = auto_create_from_session()
         print(json.dumps(result, indent=2, default=str))
     elif cmd == "create":
         if len(sys.argv) < 4:
-            print("Usage: skill_factory.py create <name> <description> [body_file]")
-            return
+            print("Usage: skill_factory.py create <name> <description> [body_file]", file=sys.stderr)
+            sys.exit(2)
         name = sys.argv[2]
         desc = sys.argv[3]
         body = ""
@@ -479,7 +488,9 @@ def _cli():
         for name in sorted(_existing_skill_names()):
             print(name)
     else:
-        print(f"Unknown command: {cmd}")
+        print(f"Unknown command: {cmd}", file=sys.stderr)
+        print("Usage: skill_factory.py [auto|create|list]", file=sys.stderr)
+        sys.exit(2)
 
 
 if __name__ == "__main__":

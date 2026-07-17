@@ -2,7 +2,7 @@ import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { getCredentials } from '../credentials.js';
 import { createAuvikClient } from '../client-factory.js';
 import { shapeRaw } from './shared.js';
-import { describeBaseUrl } from '../../../_shared/base-url.js';
+import { describeBaseUrl } from '../_shared/base-url.js';
 
 export const statusTool: Tool = {
   name: 'auvik_status',

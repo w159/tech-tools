@@ -1,6 +1,5 @@
 ---
 name: atlas-component
-disable-model-invocation: true
 description: Create or modify a reusable component that survives latency, cancellation, and partial failure (progress modal, upload widget, job panel), handling every backend state with all six interaction states rendered.
 when_to_use: build a reusable component that handles latency, cancellation, and partial failure - progress modal, upload widget, or job panel
 allowed-tools: Read, Glob, Grep, Bash, Edit, MultiEdit

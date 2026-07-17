@@ -14,13 +14,13 @@ import atlas_curator
 class TestAtlasCurator(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
-        os.environ["ATLAS_HOME"] = self.tmpdir
+        os.environ["ATLAS_SKILLS_DIR"] = os.path.join(self.tmpdir, "skills")
 
     def tearDown(self):
         import shutil
 
         shutil.rmtree(self.tmpdir, ignore_errors=True)
-        del os.environ["ATLAS_HOME"]
+        del os.environ["ATLAS_SKILLS_DIR"]
 
     def _create_auto_skill(self, name, days_old=0):
         """Create a skill with atlas-auto provenance."""
@@ -358,7 +358,16 @@ description: "Manual skill"
         return out.getvalue()
 
     def test_cli_no_args(self):
-        self.assertIn("Usage", self._run_cli(["atlas_curator.py"]))
+        import io
+        import contextlib
+        from unittest import mock
+
+        err = io.StringIO()
+        with self.assertRaises(SystemExit) as cm:
+            with mock.patch.object(sys, "argv", ["atlas_curator.py"]), contextlib.redirect_stderr(err):
+                atlas_curator._cli()
+        self.assertEqual(cm.exception.code, 2)
+        self.assertIn("Usage", err.getvalue())
 
     def test_cli_run(self):
         import json
@@ -375,7 +384,16 @@ description: "Manual skill"
         )
 
     def test_cli_pin_no_name(self):
-        self.assertIn("Usage", self._run_cli(["atlas_curator.py", "pin"]))
+        import io
+        import contextlib
+        from unittest import mock
+
+        err = io.StringIO()
+        with self.assertRaises(SystemExit) as cm:
+            with mock.patch.object(sys, "argv", ["atlas_curator.py", "pin"]), contextlib.redirect_stderr(err):
+                atlas_curator._cli()
+        self.assertEqual(cm.exception.code, 2)
+        self.assertIn("Usage", err.getvalue())
 
     def test_cli_pin_with_name(self):
         import json
@@ -386,7 +404,16 @@ description: "Manual skill"
         )
 
     def test_cli_unpin_no_name(self):
-        self.assertIn("Usage", self._run_cli(["atlas_curator.py", "unpin"]))
+        import io
+        import contextlib
+        from unittest import mock
+
+        err = io.StringIO()
+        with self.assertRaises(SystemExit) as cm:
+            with mock.patch.object(sys, "argv", ["atlas_curator.py", "unpin"]), contextlib.redirect_stderr(err):
+                atlas_curator._cli()
+        self.assertEqual(cm.exception.code, 2)
+        self.assertIn("Usage", err.getvalue())
 
     def test_cli_unpin_with_name(self):
         import json
@@ -398,7 +425,16 @@ description: "Manual skill"
         )
 
     def test_cli_restore_no_name(self):
-        self.assertIn("Usage", self._run_cli(["atlas_curator.py", "restore"]))
+        import io
+        import contextlib
+        from unittest import mock
+
+        err = io.StringIO()
+        with self.assertRaises(SystemExit) as cm:
+            with mock.patch.object(sys, "argv", ["atlas_curator.py", "restore"]), contextlib.redirect_stderr(err):
+                atlas_curator._cli()
+        self.assertEqual(cm.exception.code, 2)
+        self.assertIn("Usage", err.getvalue())
 
     def test_cli_restore_with_name(self):
         import json
@@ -412,7 +448,16 @@ description: "Manual skill"
         )
 
     def test_cli_unknown_command(self):
-        self.assertIn("Unknown command", self._run_cli(["atlas_curator.py", "bogus"]))
+        import io
+        import contextlib
+        from unittest import mock
+
+        err = io.StringIO()
+        with self.assertRaises(SystemExit) as cm:
+            with mock.patch.object(sys, "argv", ["atlas_curator.py", "bogus"]), contextlib.redirect_stderr(err):
+                atlas_curator._cli()
+        self.assertEqual(cm.exception.code, 2)
+        self.assertIn("Unknown command", err.getvalue())
 
     def test_main_entry_point(self):
         import io
@@ -420,11 +465,13 @@ description: "Manual skill"
         import runpy
         from unittest import mock
 
-        out = io.StringIO()
+        err = io.StringIO()
         with mock.patch.object(sys, "argv", ["atlas_curator.py"]):
-            with contextlib.redirect_stdout(out):
-                runpy.run_path(atlas_curator.__file__, run_name="__main__")
-        self.assertIn("Usage", out.getvalue())
+            with contextlib.redirect_stderr(err):
+                with self.assertRaises(SystemExit) as cm:
+                    runpy.run_path(atlas_curator.__file__, run_name="__main__")
+        self.assertEqual(cm.exception.code, 2)
+        self.assertIn("Usage", err.getvalue())
 
 
 if __name__ == "__main__":

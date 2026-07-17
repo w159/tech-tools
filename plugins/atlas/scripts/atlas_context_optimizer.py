@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Atlas context optimizer — disable unused skills/agents to slash token cost.
 
-The #1 cost problem: atlas loads 27 skills + 23 agents into every API call.
+The #1 cost problem: atlas loads 22 skills + 12 agents into every API call.
 Each skill description is ~100-200 tokens, each agent ~50-100 tokens.
 That's ~6000+ tokens per turn for assets that are never used.
 
@@ -516,8 +516,18 @@ def _cli():
         elif kind == "agent":
             agent_md = _agents_dir() / f"{name}.md"
             print(json.dumps({"success": disable_agent(agent_md)}, indent=2))
+    elif cmd in ("--help", "-h", "help"):
+        print("Usage: atlas_context_optimizer.py [status|optimize|enable|disable]")
+        print("  status    — show current state")
+        print("  optimize  — disable unused assets (use --dry-run to preview)")
+        print("  aggressive — disable everything not in core set")
     else:
-        print(f"Unknown command: {cmd}")
+        print(
+            "Usage: atlas_context_optimizer.py [status|optimize|enable|disable]",
+            file=sys.stderr,
+        )
+        print(f"Unknown command: {cmd}", file=sys.stderr)
+        sys.exit(2)
 
 
 if __name__ == "__main__":

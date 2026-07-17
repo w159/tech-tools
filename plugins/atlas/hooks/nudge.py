@@ -118,7 +118,7 @@ def main():
         if memory_captured:
             parts.append("memory facts captured to ~/.atlas/memory/")
         if skill_created:
-            parts.append("new skill auto-created under ~/.atlas/skills/")
+            parts.append("new skill auto-created under ~/.claude/skills/")
         msg = (
             "[atlas] Self-improvement complete: " + ", ".join(parts) + ". "
             "These will be available next session."
@@ -131,7 +131,16 @@ def main():
             ".agents/) so the next session starts ahead. If you changed behavior or "
             "structure, confirm docs/ still matches (CHANGELOG/ROADMAP/architecture)."
         )
-    sys.stdout.write(json.dumps({"additionalContext": msg}))
+    sys.stdout.write(
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": payload.get("hook_event_name", "Stop"),
+                    "additionalContext": msg,
+                }
+            }
+        )
+    )
     sys.exit(0)
 
 

@@ -12,12 +12,18 @@ import sys
 
 skills = os.path.join(os.path.dirname(__file__), "..", "skills")
 bad = []
+# The plugin's entry skill (invoked as /atlas) is named exactly "atlas", not
+# "atlas-<slug>" - it's the top-level dispatcher, not a sub-capability, so the
+# atlas-<slug> convention doesn't apply to it. Explicit allowlist of one.
+ALLOWED_EXACT_NAMES = {"atlas"}
 for name in sorted(os.listdir(skills)):
     if not os.path.isdir(os.path.join(skills, name)):
         continue
     # Skip hidden/cache dirs (e.g. .ruff_cache) and the shared docs subdir;
     # only actual skill dirs are subject to the naming convention.
     if name.startswith(".") or name == "docs":
+        continue
+    if name in ALLOWED_EXACT_NAMES:
         continue
     if not name.startswith("atlas-") or not re.fullmatch(
         r"atlas-[a-z0-9-]{1,59}", name

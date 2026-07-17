@@ -951,7 +951,16 @@ def idle_assets(conn, kind, known_keys):
 if __name__ == "__main__":
     import sys as _sys
 
-    if len(_sys.argv) >= 3 and _sys.argv[1] == "mark-orchestrating":
+    _USAGE = (
+        "Usage: atlas_db.py "
+        "[mark-orchestrating <session> [cwd]|purge-observer-sessions|"
+        "record-recall <session> hit|miss]"
+    )
+
+    if len(_sys.argv) >= 2 and _sys.argv[1] in ("--help", "-h", "help"):
+        print(_USAGE)
+
+    elif len(_sys.argv) >= 3 and _sys.argv[1] == "mark-orchestrating":
         _session = _sys.argv[2]
         _cwd = _sys.argv[3] if len(_sys.argv) >= 4 else os.getcwd()
         _c = connect()
@@ -986,3 +995,7 @@ if __name__ == "__main__":
             else:
                 record_recall(_c, _rid, _outcome == "hit")
                 print("recorded recall %s for run %s" % (_outcome, _rid))
+
+    else:
+        print(_USAGE, file=_sys.stderr)
+        _sys.exit(2)

@@ -20,6 +20,7 @@ Usage:
   # with no graph paths, auto-discovers graphify-out/graph.json under the repo root.
 """
 
+import argparse
 import html
 import json
 import os
@@ -281,12 +282,38 @@ def _discover_graphs(start):
     return found
 
 
+def _build_argparser():
+    parser = argparse.ArgumentParser(
+        prog="build_hub.py",
+        description="Build the atlas knowledge-graph hub for an audit run dir.",
+    )
+    parser.add_argument(
+        "run_dir", help="audit run dir (e.g. docs/audits/atlas-audit-<date>/)"
+    )
+    parser.add_argument(
+        "graphs",
+        nargs="*",
+        help="graphify graph.json path(s); auto-discovered under the repo root if omitted",
+    )
+    return parser
+
+
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("usage: build_hub.py <run_dir> [graph.json ...]")
+    _parser = _build_argparser()
+    _args = _parser.parse_args()
+    if _args.run_dir.startswith("-"):
+        print(
+            "Error: run_dir '%s' looks like an option, not a path" % _args.run_dir,
+            file=sys.stderr,
+        )
         sys.exit(2)
-    _run = sys.argv[1]
-    _graphs = sys.argv[2:] or _discover_graphs(os.path.abspath(_run))
+    if not os.path.isdir(_args.run_dir):
+        print(
+            "Error: run_dir '%s' does not exist" % _args.run_dir, file=sys.stderr
+        )
+        sys.exit(2)
+    _run = _args.run_dir
+    _graphs = _args.graphs or _discover_graphs(os.path.abspath(_run))
     _m = build_hub(_run, _graphs)
     print(
         "hub built: %d actionable nodes (%d graph-mapped) -> %s/hub/"

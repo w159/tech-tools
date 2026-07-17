@@ -7,7 +7,7 @@ import runpy
 import sys
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
 # Add scripts dir to path
@@ -131,13 +131,12 @@ class TestAtlasMemory(unittest.TestCase):
         self.assertEqual(u["entries"], 1)
         self.assertGreater(u["used"], 0)
 
-
-
     # --- import fallback paths (lines 35-39) ---
 
     def test_import_fallback_no_fcntl_no_msvcrt(self):
         """Both fcntl and msvcrt unavailable -> both fall back to None."""
         import builtins
+
         real_import = builtins.__import__
         source = open(atlas_memory.__file__).read()
 
@@ -158,8 +157,10 @@ class TestAtlasMemory(unittest.TestCase):
 
     def test_file_lock_no_locking_module(self):
         """Both fcntl and msvcrt None -> lock is a no-op (yield + return)."""
-        with mock.patch.object(atlas_memory, "fcntl", None), \
-                mock.patch.object(atlas_memory, "msvcrt", None, create=True):
+        with (
+            mock.patch.object(atlas_memory, "fcntl", None),
+            mock.patch.object(atlas_memory, "msvcrt", None, create=True),
+        ):
             result = atlas_memory.add("memory", "no lock path")
         self.assertTrue(result["success"])
         self.assertEqual(atlas_memory.get_entries("memory"), ["no lock path"])
@@ -175,8 +176,10 @@ class TestAtlasMemory(unittest.TestCase):
                 raise OSError("unlock failed")
 
         fake_msvcrt.locking.side_effect = locking
-        with mock.patch.object(atlas_memory, "fcntl", None), \
-                mock.patch.object(atlas_memory, "msvcrt", fake_msvcrt, create=True):
+        with (
+            mock.patch.object(atlas_memory, "fcntl", None),
+            mock.patch.object(atlas_memory, "msvcrt", fake_msvcrt, create=True),
+        ):
             result = atlas_memory.add("memory", "via msvcrt lock")
         self.assertTrue(result["success"])
         self.assertGreaterEqual(fake_msvcrt.locking.call_count, 2)
@@ -209,8 +212,14 @@ class TestAtlasMemory(unittest.TestCase):
     def test_write_file_exception_cleanup(self):
         path = atlas_memory._path_for("memory")
         path.parent.mkdir(parents=True, exist_ok=True)
-        with mock.patch.object(atlas_memory.os, "replace", side_effect=OSError("replace failed")), \
-                mock.patch.object(atlas_memory.os, "unlink", side_effect=OSError("unlink failed")):
+        with (
+            mock.patch.object(
+                atlas_memory.os, "replace", side_effect=OSError("replace failed")
+            ),
+            mock.patch.object(
+                atlas_memory.os, "unlink", side_effect=OSError("unlink failed")
+            ),
+        ):
             with self.assertRaises(OSError):
                 atlas_memory._write_file(path, ["entry"])
         self.assertFalse(path.is_file())
@@ -313,15 +322,26 @@ class TestAtlasMemory(unittest.TestCase):
         self.assertIn("used", out)
 
     def test_cli_unknown_command(self):
-        out = self._run_cli(["atlas_memory.py", "bogus"])
-        self.assertIn("Unknown command", out)
+        errbuf = io.StringIO()
+        with mock.patch.object(sys, "argv", ["atlas_memory.py", "bogus"]), \
+                redirect_stderr(errbuf):
+            with self.assertRaises(SystemExit) as cm:
+                atlas_memory._cli()
+        self.assertEqual(cm.exception.code, 2)
+        self.assertIn("Unknown command", errbuf.getvalue())
+
+    def test_cli_help(self):
+        out = self._run_cli(["atlas_memory.py", "--help"])
+        self.assertIn("Usage", out)
 
     # --- __main__ entry (line 384) ---
 
     def test_main_entry_runs_cli(self):
         buf = io.StringIO()
-        with mock.patch.object(sys, "argv", ["atlas_memory.py", "usage", "memory"]), \
-                redirect_stdout(buf):
+        with (
+            mock.patch.object(sys, "argv", ["atlas_memory.py", "usage", "memory"]),
+            redirect_stdout(buf),
+        ):
             runpy.run_path(atlas_memory.__file__, run_name="__main__")
         self.assertIn("used", buf.getvalue())
 

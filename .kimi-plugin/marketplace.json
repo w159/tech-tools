@@ -7,59 +7,9 @@
       "source": "./plugins/atlas"
     },
     {
-      "id": "it-operations",
-      "displayName": "IT Operations",
-      "source": "./plugins/it-operations"
-    },
-    {
-      "id": "security-compliance",
-      "displayName": "Security & Compliance",
-      "source": "./plugins/security-compliance"
-    },
-    {
-      "id": "microsoft-365",
-      "displayName": "Microsoft 365",
-      "source": "./plugins/microsoft-365"
-    },
-    {
-      "id": "hr-payroll",
-      "displayName": "HR & Payroll",
-      "source": "./plugins/hr-payroll"
-    },
-    {
-      "id": "finance",
-      "displayName": "Finance",
-      "source": "./plugins/finance"
-    },
-    {
-      "id": "engineering",
-      "displayName": "Engineering",
-      "source": "./plugins/engineering"
-    },
-    {
-      "id": "data",
-      "displayName": "Data",
-      "source": "./plugins/data"
-    },
-    {
-      "id": "design",
-      "displayName": "Design",
-      "source": "./plugins/design"
-    },
-    {
-      "id": "customer-support",
-      "displayName": "Customer Support",
-      "source": "./plugins/customer-support"
-    },
-    {
-      "id": "product-management",
-      "displayName": "Product Management",
-      "source": "./plugins/product-management"
-    },
-    {
-      "id": "productivity",
-      "displayName": "Productivity",
-      "source": "./plugins/productivity"
+      "id": "armada",
+      "displayName": "Armada",
+      "source": "./plugins/armada"
     }
   ]
 }

@@ -9,14 +9,14 @@ import {
   type SummaryFn,
   type ToolResult,
   type ShapeArgs,
-} from '../../../_shared/response-shaper.js';
+} from '../_shared/response-shaper.js';
 import {
   toolErrorFromCatch,
   missingCredsError,
   toolError,
   type ErrorCode,
   type ErrorContext,
-} from '../../../_shared/error-envelope.js';
+} from '../_shared/error-envelope.js';
 
 // Re-export for convenience so tool files only import from './shared.js'.
 export type { ToolResult, SummaryFn, ShapeArgs };

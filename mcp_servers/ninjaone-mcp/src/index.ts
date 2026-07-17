@@ -139,7 +139,7 @@ const signInTool: Tool = {
 const signOutTool: Tool = {
   name: "ninjaone_sign_out",
   description:
-    "Forget the stored NinjaOne refresh token (deletes ~/.tech-tools/ninjaone-tokens.json). After sign-out you must call ninjaone_sign_in again before any read/write tools will work.",
+    "Forget the stored NinjaOne refresh token (deletes ~/.atlas/ninjaone-tokens.json). After sign-out you must call ninjaone_sign_in again before any read/write tools will work.",
   inputSchema: { type: "object", properties: {} },
 };
 

@@ -1104,6 +1104,24 @@ class MainCliTest(unittest.TestCase):
         self.assertIn("no run for session", out)
         self.assertIn("ghost-session", out)
 
+    def test_main_help(self):
+        out = self._run_cli(["atlas_db.py", "--help"])
+        self.assertIn("Usage", out)
+
+    def test_main_unknown_command_exits_2(self):
+        env = dict(os.environ)
+        env["ATLAS_DB"] = self.db
+        err = io.StringIO()
+        with (
+            patch.object(sys, "argv", ["atlas_db.py", "bogus-cmd"]),
+            patch.dict(os.environ, env, clear=False),
+            contextlib.redirect_stderr(err),
+        ):
+            with self.assertRaises(SystemExit) as cm:
+                runpy.run_path(self.script, run_name="__main__")
+        self.assertEqual(cm.exception.code, 2)
+        self.assertIn("Usage", err.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()

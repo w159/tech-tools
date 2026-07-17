@@ -45,14 +45,20 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 Surface autocompact and thinking-token budgets plus model routing as recommend-then-confirm options
 (modeled on ECC), opt-in only. Not yet implemented.
 
-### Tech debt: consolidate error-envelope DRY divergence
+### Tech debt: error-envelope DRY divergence (re-scoped 2026-07-17)
 
-The bug that caused CIPP and auvik to misclassify HTTP errors existed because three
-servers carry private copies of the classifier instead of importing the shared module.
-Consolidate `connectwise-manage-mcp/src/_shared/error-envelope.ts`,
-`cipp-mcp/src/_shared/error-envelope.ts`, and `auvik-mcp/src/errors.ts` into the single
-`mcp_servers/_shared/error-envelope.ts` so future classifier changes propagate everywhere
-without manual synchronization. (Surfaced by 2026-06-22 error-envelope fix.)
+The single top-level `mcp_servers/_shared/error-envelope.ts` this item originally proposed
+consolidating into was deleted in commit `56d1a9f` (along with `response-shaper.ts`,
+`base-url.ts`, etc.), which broke `auvik-mcp`'s imports. The 2026-07-17 build-break fix
+(see CHANGELOG) restored `auvik-mcp`'s copy as a per-server
+`mcp_servers/auvik-mcp/src/_shared/error-envelope.ts`, matching the pattern already used by
+`connectwise-manage-mcp/src/_shared/error-envelope.ts` and
+`cipp-mcp/src/_shared/error-envelope.ts` (both pre-existing, confirmed on disk). All three
+servers now carry a private per-server copy - there is no live top-level `_shared/` to
+consolidate into. Re-scope this item: either restore a top-level `mcp_servers/_shared/` and
+repoint all three servers' imports at it, or accept per-server copies as the pattern and
+drop the consolidation goal. Left in Backlog, unplanned - no code change toward
+consolidation exists in this diff.
 
 ### Tech debt: tool-description polish pass on cipp / connectwise / ninjaone / paylocity
 

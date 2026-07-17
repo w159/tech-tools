@@ -1,7 +1,6 @@
 ---
 name: atlas-m365
-disable-model-invocation: true
-description: Microsoft 365, Entra, or M365 admin change: mailboxes, Teams, OneDrive, licensing, Intune, or Graph config, delivered with a verified read-back that proves the new tenant state applied.
+description: 'Microsoft 365, Entra, or M365 admin change: mailboxes, Teams, OneDrive, licensing, Intune, or Graph config, delivered with a verified read-back that proves the new tenant state applied.'
 when_to_use: you must change Microsoft 365, Entra, Graph, Intune, or Exchange tenant state and prove it applied
 allowed-tools: Read, Glob, Grep, Bash
 argument-hint: '[outcome wanted] [surface: Graph/portal/Intune/EXO PowerShell] [tenant constraints]'

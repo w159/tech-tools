@@ -1,6 +1,6 @@
 ---
 name: atlas-validate
-description: Validate and verify a Claude Code plugin is done: a completion check that audits structure, manifest, and content quality with file:line findings and pass/fail per check, without auto-fixing.
+description: 'Validate and verify a Claude Code plugin is done: a completion check that audits structure, manifest, and content quality with file:line findings and pass/fail per check, without auto-fixing.'
 when_to_use: audit a Claude Code plugin for structure, manifest validity, and content quality with file:line findings
 allowed-tools: Read, Glob, Grep, Bash
 argument-hint: '[plugin name or path (default: plugin in current working directory)]'

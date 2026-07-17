@@ -4,8 +4,7 @@ description: 'Generate a zero-trust, deny-by-default .gitignore for a named stac
 when_to_use: starting or hardening a repo with a zero-trust, deny-by-default .gitignore
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 paths: [".gitignore"]
-argument-hint:
-- languages/frameworks/package managers/build tools/OS/editors
+argument-hint: '[languages/frameworks/package managers/build tools/OS/editors]'
 ---
 
 

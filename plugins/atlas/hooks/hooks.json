@@ -22,7 +22,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/prompt_optimizer.py\""
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/prompt_optimizer.py\"",
+            "timeout": 120
           }
         ]
       }

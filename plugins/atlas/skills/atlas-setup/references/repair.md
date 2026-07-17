@@ -48,10 +48,10 @@ silently degrading atlas.
 
 ## Supporting files
 - `references/checks-matrix.md` - the eight checks, what each proves, what a
-  FAIL means, the additional surface checks (frontmatter validity, skill count
-  vs actual, `docs/` tree presence), the SessionStart warn-only mode,
-  and why doctor is a manual skill.
-- `scripts/plugin-health.py` - a deterministic, read-only count of skills and
+  FAIL means, the additional surface checks (frontmatter validity, skill/agent
+  count vs manifest, `docs/` tree presence), the SessionStart warn-only mode,
+  and why doctor is not itself a skill.
+- `skills/atlas-setup/scripts/plugin-health.py` - a deterministic, read-only count of skills and
   agents in the installed copy compared against the manifest's declared
   counts. Exits 0 if counts match, 1 if they differ. A quick sanity check
   between full doctor runs; does not repair.

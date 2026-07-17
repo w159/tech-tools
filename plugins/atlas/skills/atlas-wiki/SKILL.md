@@ -1,6 +1,5 @@
 ---
 name: atlas-wiki
-disable-model-invocation: true
 description: 'Generates and refreshes the docs/wiki/ diagrams from docs/architecture/ by invoking the graphify skill. Keeps the wiki fresh as the codebase changes. Use when architecture docs are updated, before completion, or when wiki diagrams are stale or missing.'
 when_to_use: 'wiki is stale or missing, architecture changed and diagrams need refresh, before completion gate, generate diagrams from architecture docs'
 allowed-tools: Read, Glob, Grep, Bash

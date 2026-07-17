@@ -376,8 +376,12 @@ def _cli():
     elif cmd == "usage":
         target = sys.argv[2] if len(sys.argv) > 2 else "memory"
         print(json.dumps(usage(target), indent=2))
+    elif cmd in ("--help", "-h", "help"):
+        print("Usage: atlas_memory.py [snapshot|list|add|remove|usage]")
     else:
-        print(f"Unknown command: {cmd}")
+        print("Usage: atlas_memory.py [snapshot|list|add|remove|usage]", file=sys.stderr)
+        print(f"Unknown command: {cmd}", file=sys.stderr)
+        sys.exit(2)
 
 
 if __name__ == "__main__":

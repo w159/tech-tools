@@ -285,7 +285,16 @@ def main():
         )
         if captured["facts"]:
             msg += " Captured: " + "; ".join(captured["facts"][:3])
-        sys.stdout.write(json.dumps({"additionalContext": msg}))
+        sys.stdout.write(
+            json.dumps(
+                {
+                    "hookSpecificOutput": {
+                        "hookEventName": payload.get("hook_event_name", "Stop"),
+                        "additionalContext": msg,
+                    }
+                }
+            )
+        )
     sys.exit(0)
 
 

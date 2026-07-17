@@ -4,6 +4,7 @@ description: 'Atlas architect: boot the workspace. Verify claude-mem and context
   scan the project, recommend tooling (confirm first), wire hooks, seed the docs/
   SSOT.'
 argument-hint: '[menu [described need] | deps | discover | hooks | config | all]'
+disable-model-invocation: true
 ---
 
 
@@ -44,9 +45,9 @@ hooks, config), run only that one. Default is all.
 ## 3. Hooks
 
 - A plugin install auto-loads `hooks/hooks.json`, so the hooks are normally already
-  active. Verify all eight are wired (SessionStart boot, prompt optimizer, bash advisor,
-  format-after-edit, dispatch tripwire, completion gate, self-improvement nudge, and
-  session-transcript ingest) and report.
+  active. Verify all eleven are wired (SessionStart boot, doctor rollback guard, prompt
+  optimizer, bash advisor, dispatch tripwire, format-after-edit, completion gate,
+  session-transcript ingest, memory capture, auto-skill, and nudge) and report.
 - If atlas is running outside a plugin install (copied skill, bare agent), offer to
   run `${CLAUDE_PLUGIN_ROOT}/scripts/install_hooks.py` to wire them into settings.
 
@@ -59,7 +60,7 @@ hooks, config), run only that one. Default is all.
 ## 5. Seed docs/ SSOT
 
 - If `docs/` is missing the single-source-of-truth scaffold (CHANGELOG, ROADMAP,
-  architecture), offer to seed it per `references/docs-ssot.md`. Confirm before
+  architecture), offer to seed it per `${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/docs-ssot.md`. Confirm before
   creating any files.
 
 ## 6. Report
@@ -109,7 +110,6 @@ Docs, prompts & handoff
 
 Data, cloud & vendors
   `atlas-db-audit`        strictly read-only parallel DB audit -> remediation plan
-  `atlas-grafana`         build/fix a Grafana SQL panel
   `atlas-m365`            Microsoft 365 / Entra / Graph / Intune config with read-back
   `atlas-vendor-assessment`   assess a vendor against a control framework you name
 

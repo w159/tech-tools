@@ -44,7 +44,7 @@ the reference before building the recommend-then-confirm shortlist in Stage 2.
    this minimum bar are recommended, not assumed: they join the Stage 2
    shortlist instead of being installed here.
 2. Discover. Run `${CLAUDE_PLUGIN_ROOT}/scripts/discover_capabilities.py <root>` (read-only). Match its
-   signals against `..`atlas-orchestrate`/references/capability-catalog.md`. Present a
+   signals against `../atlas-orchestrate/references/capability-catalog.md`. Present a
    ranked list (skill / plugin / mcp) with a reason and the exact install command
    per item. Also surface the built-ins this project can use now: the loop-library
    (via atlas-loop), vendor connectors (via atlas-setup, disabled until setup),
@@ -71,7 +71,7 @@ the reference before building the recommend-then-confirm shortlist in Stage 2.
    confirm before writing.
 5. Self-improvement. Verify the atlas self-improvement system is deployed:
    - `scripts/atlas_memory.py` exists and `~/.atlas/memory/` is writable
-   - `scripts/skill_factory.py` exists and `~/.atlas/skills/` is writable
+   - `scripts/skill_factory.py` exists and `~/.claude/skills/` is writable
    - `scripts/atlas_curator.py` exists
    - `scripts/atlas_context_optimizer.py` exists
    - `hooks/memory_capture.py` and `hooks/auto_skill.py` are wired in hooks.json
@@ -79,10 +79,10 @@ the reference before building the recommend-then-confirm shortlist in Stage 2.
    `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_context_optimizer.py optimize --dry-run`
    Present the savings estimate to the user and confirm before applying.
    This is the single most impactful action for reducing token cost - atlas loads
-   27 skills + 23 agents (~6000+ tokens) into every API call; disabling unused ones
+   22 skills + 12 agents (~6000+ tokens) into every API call; disabling unused ones
    can cut that by 70%+.
 6. Docs seed and tracking. If `docs/` lacks the SSOT scaffold, offer to seed it per
-   `..`atlas-orchestrate`/references/docs-ssot.md`. Confirm first. Then ensure docs/ is
+   `../atlas-orchestrate/references/docs-ssot.md`. Confirm first. Then ensure docs/ is
    git-tracked: atlas maintains docs/ as the project SSOT, so a deny-by-default
    `.gitignore` MUST allowlist the SSOT subtree (root `*.md` plus architecture/,
    features/, specs/, audits/, lessons/, wiki/, plans/, evidence/, reference_files/),

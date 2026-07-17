@@ -10,7 +10,7 @@ allowed-tools: Read, Glob, Grep, Bash(python3:*), Write(docs/**), Write(.atlas/e
 
 # atlas-setup - onboarding, install, connectors, repair
 
-The one manual skill in the fleet. The user invokes it explicitly; it never
+One of two manual skills in the fleet (the other is `atlas`). The user invokes it explicitly; it never
 auto-triggers. Every other atlas skill auto-triggers from its description.
 
 atlas-setup configures, fixes, and organizes any project it runs in. First run
@@ -165,7 +165,7 @@ When `docs/` does not exist:
 7. **Deploy self-improvement** - verify the atlas self-improvement system
    is deployed and functional:
    - `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_memory.py` exists and `~/.atlas/memory/` is writable
-   - `${CLAUDE_PLUGIN_ROOT}/scripts/skill_factory.py` exists and `~/.atlas/skills/` is writable
+   - `${CLAUDE_PLUGIN_ROOT}/scripts/skill_factory.py` exists and `~/.claude/skills/` is writable
    - `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_curator.py` exists
    - `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_context_optimizer.py` exists
    - `hooks/memory_capture.py` and `hooks/auto_skill.py` are wired in hooks.json
@@ -173,7 +173,7 @@ When `docs/` does not exist:
    `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_context_optimizer.py" optimize --dry-run`
    Present the savings estimate to the user and confirm before applying.
    This is the single most impactful action for reducing token cost - atlas
-   loads 21 skills + 12 agents into every API call; disabling unused ones
+   loads 22 skills + 12 agents into every API call; disabling unused ones
    can cut that by 40%+.
 8. **Recommend** - run the recommendation analysis and present the top
    3-5 next steps.
@@ -193,7 +193,7 @@ The "what should I run next" mode. The analysis checks, in priority order:
    installed? If missing, run install mode.
 2. **Self-improvement deployed?** - atlas_memory, skill_factory,
    atlas_curator, atlas_context_optimizer scripts present? Memory at
-   `~/.atlas/memory/` writable? Auto-skills at `~/.atlas/skills/`?
+   `~/.atlas/memory/` writable? Auto-skills at `~/.claude/skills/`?
    Run `atlas_context_optimizer.py status` and if >15 skills are enabled,
    recommend running the optimizer.
 3. **Security audit overdue** - has atlas-audit ever run? Is it stale?
@@ -223,9 +223,9 @@ task. When routing is ambiguous, present the candidates as one
 AskUserQuestion, recommendation first. See `references/skill-routing.md`
 for the full task-to-skill mapping.
 
-## The skill inventory (21 skills)
+## The skill inventory (22 skills)
 
-- **1 manual skill** - atlas-setup (this skill).
+- **2 manual skills** - atlas-setup (this skill) and atlas.
 - **20 auto-trigger skills** - atlas-orchestrate, atlas-audit,
   atlas-loop, atlas-ux-test, and the 16 task skills (atlas-component,
   atlas-db-audit, atlas-debug, atlas-feature, atlas-frontend,

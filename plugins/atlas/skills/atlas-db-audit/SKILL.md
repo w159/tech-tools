@@ -1,6 +1,5 @@
 ---
 name: atlas-db-audit
-disable-model-invocation: true
 description: 'Read-only database audit via parallel subagents: inventory a live schema, reconcile it against the code, and check privileges and naming before any change.'
 when_to_use: inventory a live database schema, reconcile it against the code, and check privileges and naming before any change
 allowed-tools: Read, Glob, Grep, Bash

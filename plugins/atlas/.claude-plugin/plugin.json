@@ -1,298 +1,298 @@
 {
-    "name": "atlas",
-    "version": "5.1.0",
-    "description": "Multi-agent coding architect with automatic self-improvement. 21 plainly named skills: the atlas-orchestrate engine, atlas-audit (code/security audit, architecture map, atlas self-telemetry), atlas-setup (onboarding, install, connectors, repair - the one manual skill), atlas-loop (recurring/iterative work), atlas-ux-test (UX runtime swarm), and 16 task skills (atlas-feature, atlas-debug, atlas-refactor, atlas-frontend, atlas-component, atlas-db-audit, atlas-gitignore, atlas-handoff, atlas-harden, atlas-launch, atlas-m365, atlas-prompt, atlas-readme, atlas-validate, atlas-vendor-assessment, atlas-wiki). 12 core agents, 10 hooks (session boot, prompt optimizer, bash advisor, format-after-edit, dispatch tripwire, completion gate, memory capture, auto-skill, self-improvement nudge, session-transcript ingest), and the atlas-orchestrate method: independent verification with runtime evidence before any done claim. Self-improvement: persistent memory at ~/.atlas/memory/, automatic skill creation from session transcripts at ~/.atlas/skills/, skill lifecycle curation, and context optimization that disables unused skills/agents. Org deployment (11 departments) lives in the separate armada plugin.",
-    "author": {
-        "name": "w159",
-        "url": "https://github.com/w159"
+  "name": "atlas",
+  "version": "5.1.1",
+  "description": "Multi-agent coding architect with automatic self-improvement. 22 plainly named skills: the atlas architect skill (bootstrap: verify claude-mem/context-mode, scan the project, recommend tooling, wire hooks, seed docs/ SSOT), the atlas-orchestrate engine, atlas-audit (code/security audit, architecture map, atlas self-telemetry), atlas-setup (onboarding, install, connectors, repair - one of two manual skills, alongside the atlas architect skill), atlas-loop (recurring/iterative work), atlas-ux-test (UX runtime swarm), and 16 task skills (atlas-feature, atlas-debug, atlas-refactor, atlas-frontend, atlas-component, atlas-db-audit, atlas-gitignore, atlas-handoff, atlas-harden, atlas-launch, atlas-m365, atlas-prompt, atlas-readme, atlas-validate, atlas-vendor-assessment, atlas-wiki). 12 core agents, 11 hooks (session boot, prompt optimizer, bash advisor, format-after-edit, dispatch tripwire, completion gate, memory capture, auto-skill, self-improvement nudge, session-transcript ingest, atlas_doctor session-health check), and the atlas-orchestrate method: independent verification with runtime evidence before any done claim. Self-improvement: persistent memory at ~/.atlas/memory/, automatic skill creation from session transcripts at ~/.claude/skills/, skill lifecycle curation, and context optimization that disables unused skills/agents. Org deployment (11 departments) lives in the separate armada plugin.",
+  "author": {
+    "name": "w159",
+    "url": "https://github.com/w159"
+  },
+  "repository": "https://github.com/w159/atlas",
+  "homepage": "https://github.com/w159/atlas/tree/main/plugins/atlas",
+  "license": "Apache-2.0",
+  "mcpServers": "./.mcp.json",
+  "userConfig": {
+    "auvik_username": {
+      "type": "string",
+      "title": "Auvik username",
+      "description": "Auvik portal username (email) for the Auvik connector. Leave blank to disable Auvik.",
+      "default": ""
     },
-    "repository": "https://github.com/w159/atlas",
-    "homepage": "https://github.com/w159/atlas/tree/main/plugins/atlas",
-    "license": "Apache-2.0",
-    "mcpServers": "./.mcp.json",
-    "userConfig": {
-        "auvik_username": {
-            "type": "string",
-            "title": "Auvik username",
-            "description": "Auvik portal username (email) for the Auvik connector. Leave blank to disable Auvik.",
-            "default": ""
-        },
-        "auvik_api_key": {
-            "type": "string",
-            "title": "Auvik API key",
-            "description": "Auvik portal API key.",
-            "sensitive": true,
-            "default": ""
-        },
-        "auvik_region": {
-            "type": "string",
-            "title": "Auvik region",
-            "description": "Auvik shard: us1 (default), us2, us3, us4, eu1, eu2, au1, ca1. Leave blank for us1.",
-            "default": ""
-        },
-        "blumira_jwt_token": {
-            "type": "string",
-            "title": "Blumira JWT token",
-            "description": "Pre-issued Blumira JWT. Leave blank if using OAuth client credentials.",
-            "sensitive": true,
-            "default": ""
-        },
-        "blumira_client_id": {
-            "type": "string",
-            "title": "Blumira client ID",
-            "description": "Blumira OAuth2 client ID. Leave blank if using a JWT token.",
-            "default": ""
-        },
-        "blumira_client_secret": {
-            "type": "string",
-            "title": "Blumira client secret",
-            "description": "Blumira OAuth2 client secret.",
-            "sensitive": true,
-            "default": ""
-        },
-        "blumira_base_url": {
-            "type": "string",
-            "title": "Blumira base URL",
-            "description": "Optional. Leave blank to use the default (https://api.blumira.com/public-api/v1).",
-            "default": ""
-        },
-        "cipp_base_url": {
-            "type": "string",
-            "title": "CIPP base URL",
-            "description": "URL of your deployed CIPP Azure Function (required for the CIPP connector). Leave blank to disable CIPP.",
-            "default": ""
-        },
-        "cipp_api_key": {
-            "type": "string",
-            "title": "CIPP API key",
-            "description": "Legacy static bearer token. Use this OR the OAuth trio below.",
-            "sensitive": true,
-            "default": ""
-        },
-        "cipp_tenant_id": {
-            "type": "string",
-            "title": "CIPP tenant ID",
-            "description": "Entra tenant ID for modern CIPP OAuth2 auth.",
-            "default": ""
-        },
-        "cipp_client_id": {
-            "type": "string",
-            "title": "CIPP client ID",
-            "description": "App registration client ID for modern CIPP OAuth2 auth.",
-            "default": ""
-        },
-        "cipp_client_secret": {
-            "type": "string",
-            "title": "CIPP client secret",
-            "description": "App registration client secret for modern CIPP OAuth2 auth.",
-            "sensitive": true,
-            "default": ""
-        },
-        "cw_manage_company_id": {
-            "type": "string",
-            "title": "ConnectWise company ID",
-            "description": "ConnectWise Manage company ID. Leave blank to disable ConnectWise.",
-            "default": ""
-        },
-        "cw_manage_public_key": {
-            "type": "string",
-            "title": "ConnectWise public key",
-            "description": "ConnectWise Manage API member public key.",
-            "sensitive": true,
-            "default": ""
-        },
-        "cw_manage_private_key": {
-            "type": "string",
-            "title": "ConnectWise private key",
-            "description": "ConnectWise Manage API member private key.",
-            "sensitive": true,
-            "default": ""
-        },
-        "cw_manage_client_id": {
-            "type": "string",
-            "title": "ConnectWise client ID",
-            "description": "ConnectWise Manage integrator client ID from developer.connectwise.com.",
-            "default": ""
-        },
-        "cw_manage_base_url": {
-            "type": "string",
-            "title": "ConnectWise base URL",
-            "description": "Optional. Leave blank to use the default (https://api-na.myconnectwise.net).",
-            "default": ""
-        },
-        "spanning_admin_email": {
-            "type": "string",
-            "title": "Spanning admin email",
-            "description": "Spanning admin email. Leave blank to disable Spanning.",
-            "default": ""
-        },
-        "spanning_api_token": {
-            "type": "string",
-            "title": "Spanning API token",
-            "description": "Spanning API token from the Spanning admin console.",
-            "sensitive": true,
-            "default": ""
-        },
-        "spanning_platform": {
-            "type": "string",
-            "title": "Spanning platform",
-            "description": "Spanning platform: m365 (default) or google. Leave blank for m365.",
-            "default": ""
-        },
-        "spanning_api_url": {
-            "type": "string",
-            "title": "Spanning API URL",
-            "description": "Optional. Leave blank to use the platform default.",
-            "default": ""
-        },
-        "knowbe4_api_key": {
-            "type": "string",
-            "title": "KnowBe4 API key",
-            "description": "KnowBe4 reporting API key. Leave blank to disable KnowBe4.",
-            "sensitive": true,
-            "default": ""
-        },
-        "knowbe4_region": {
-            "type": "string",
-            "title": "KnowBe4 region",
-            "description": "KnowBe4 shard: us (default), eu, ca, uk, de. Leave blank for us.",
-            "default": ""
-        },
-        "knowbe4_base_url": {
-            "type": "string",
-            "title": "KnowBe4 base URL",
-            "description": "Optional. Leave blank to use the region default.",
-            "default": ""
-        },
-        "ninjaone_client_id": {
-            "type": "string",
-            "title": "NinjaOne client ID",
-            "description": "NinjaOne OAuth2 client ID. Leave blank to disable NinjaOne.",
-            "default": ""
-        },
-        "ninjaone_client_secret": {
-            "type": "string",
-            "title": "NinjaOne client secret",
-            "description": "NinjaOne OAuth2 client secret.",
-            "sensitive": true,
-            "default": ""
-        },
-        "ninjaone_region": {
-            "type": "string",
-            "title": "NinjaOne region",
-            "description": "NinjaOne shard: us (default), eu, ca, oc. Leave blank for us.",
-            "default": ""
-        },
-        "ninjaone_auth_mode": {
-            "type": "string",
-            "title": "NinjaOne auth mode",
-            "description": "Optional. Overrides the default OAuth flow only if your NinjaOne integration requires it.",
-            "default": ""
-        },
-        "ninjaone_base_url": {
-            "type": "string",
-            "title": "NinjaOne base URL",
-            "description": "Optional. Leave blank to use the region default; only set for a non-standard shard.",
-            "default": ""
-        },
-        "paylocity_client_id": {
-            "type": "string",
-            "title": "Paylocity client ID",
-            "description": "Paylocity OAuth2 client ID. Leave blank to disable Paylocity.",
-            "default": ""
-        },
-        "paylocity_client_secret": {
-            "type": "string",
-            "title": "Paylocity client secret",
-            "description": "Paylocity OAuth2 client secret.",
-            "sensitive": true,
-            "default": ""
-        },
-        "paylocity_company_id": {
-            "type": "string",
-            "title": "Paylocity company ID",
-            "description": "Paylocity company ID that scopes all calls.",
-            "default": ""
-        },
-        "paylocity_base_url": {
-            "type": "string",
-            "title": "Paylocity base URL",
-            "description": "Optional. Leave blank to use the default (https://api.paylocity.com).",
-            "default": ""
-        },
-        "paylocity_sandbox": {
-            "type": "string",
-            "title": "Paylocity sandbox",
-            "description": "Optional. Set to 'true' to target the Paylocity sandbox (ignored if a base URL is set).",
-            "default": ""
-        },
-        "threatlocker_api_key": {
-            "type": "string",
-            "title": "ThreatLocker API key",
-            "description": "ThreatLocker API user key. Leave blank to disable ThreatLocker.",
-            "sensitive": true,
-            "default": ""
-        },
-        "threatlocker_organization_id": {
-            "type": "string",
-            "title": "ThreatLocker organization ID",
-            "description": "Optional. Only set when acting on a managed child organization.",
-            "default": ""
-        },
-        "threatlocker_base_url": {
-            "type": "string",
-            "title": "ThreatLocker base URL",
-            "description": "Optional. Leave blank to use the default shard.",
-            "default": ""
-        },
-        "vanta_client_id": {
-            "type": "string",
-            "title": "Vanta client ID",
-            "description": "Vanta OAuth2 client ID. Leave blank to disable Vanta.",
-            "default": ""
-        },
-        "vanta_client_secret": {
-            "type": "string",
-            "title": "Vanta client secret",
-            "description": "Vanta OAuth2 client secret.",
-            "sensitive": true,
-            "default": ""
-        },
-        "vanta_base_url": {
-            "type": "string",
-            "title": "Vanta base URL",
-            "description": "Optional. Leave blank to use the default (https://api.vanta.com/v1).",
-            "default": ""
-        }
+    "auvik_api_key": {
+      "type": "string",
+      "title": "Auvik API key",
+      "description": "Auvik portal API key.",
+      "sensitive": true,
+      "default": ""
     },
-    "keywords": [
-        "atlas",
-        "architect",
-        "observability",
-        "claude-mem",
-        "context-mode",
-        "capability-discovery",
-        "subagents",
-        "prompt-optimization",
-        "verification",
-        "hooks",
-        "agentic",
-        "coding-agent",
-        "docs-as-code",
-        "multi-stage-planning",
-        "ux-testing",
-        "slash-commands",
-        "operating-contract",
-        "verify-loop",
-        "observability-db",
-        "architecture-audit",
-        "owasp",
-        "security-audit",
-        "ux-swarm",
-        "context-audit",
-        "asset-audit",
-        "context-optimization",
-        "session-forensics",
-        "self-improvement"
-    ]
+    "auvik_region": {
+      "type": "string",
+      "title": "Auvik region",
+      "description": "Auvik shard: us1 (default), us2, us3, us4, eu1, eu2, au1, ca1. Leave blank for us1.",
+      "default": ""
+    },
+    "blumira_jwt_token": {
+      "type": "string",
+      "title": "Blumira JWT token",
+      "description": "Pre-issued Blumira JWT. Leave blank if using OAuth client credentials.",
+      "sensitive": true,
+      "default": ""
+    },
+    "blumira_client_id": {
+      "type": "string",
+      "title": "Blumira client ID",
+      "description": "Blumira OAuth2 client ID. Leave blank if using a JWT token.",
+      "default": ""
+    },
+    "blumira_client_secret": {
+      "type": "string",
+      "title": "Blumira client secret",
+      "description": "Blumira OAuth2 client secret.",
+      "sensitive": true,
+      "default": ""
+    },
+    "blumira_base_url": {
+      "type": "string",
+      "title": "Blumira base URL",
+      "description": "Optional. Leave blank to use the default (https://api.blumira.com/public-api/v1).",
+      "default": ""
+    },
+    "cipp_base_url": {
+      "type": "string",
+      "title": "CIPP base URL",
+      "description": "URL of your deployed CIPP Azure Function (required for the CIPP connector). Leave blank to disable CIPP.",
+      "default": ""
+    },
+    "cipp_api_key": {
+      "type": "string",
+      "title": "CIPP API key",
+      "description": "Legacy static bearer token. Use this OR the OAuth trio below.",
+      "sensitive": true,
+      "default": ""
+    },
+    "cipp_tenant_id": {
+      "type": "string",
+      "title": "CIPP tenant ID",
+      "description": "Entra tenant ID for modern CIPP OAuth2 auth.",
+      "default": ""
+    },
+    "cipp_client_id": {
+      "type": "string",
+      "title": "CIPP client ID",
+      "description": "App registration client ID for modern CIPP OAuth2 auth.",
+      "default": ""
+    },
+    "cipp_client_secret": {
+      "type": "string",
+      "title": "CIPP client secret",
+      "description": "App registration client secret for modern CIPP OAuth2 auth.",
+      "sensitive": true,
+      "default": ""
+    },
+    "cw_manage_company_id": {
+      "type": "string",
+      "title": "ConnectWise company ID",
+      "description": "ConnectWise Manage company ID. Leave blank to disable ConnectWise.",
+      "default": ""
+    },
+    "cw_manage_public_key": {
+      "type": "string",
+      "title": "ConnectWise public key",
+      "description": "ConnectWise Manage API member public key.",
+      "sensitive": true,
+      "default": ""
+    },
+    "cw_manage_private_key": {
+      "type": "string",
+      "title": "ConnectWise private key",
+      "description": "ConnectWise Manage API member private key.",
+      "sensitive": true,
+      "default": ""
+    },
+    "cw_manage_client_id": {
+      "type": "string",
+      "title": "ConnectWise client ID",
+      "description": "ConnectWise Manage integrator client ID from developer.connectwise.com.",
+      "default": ""
+    },
+    "cw_manage_base_url": {
+      "type": "string",
+      "title": "ConnectWise base URL",
+      "description": "Optional. Leave blank to use the default (https://api-na.myconnectwise.net).",
+      "default": ""
+    },
+    "spanning_admin_email": {
+      "type": "string",
+      "title": "Spanning admin email",
+      "description": "Spanning admin email. Leave blank to disable Spanning.",
+      "default": ""
+    },
+    "spanning_api_token": {
+      "type": "string",
+      "title": "Spanning API token",
+      "description": "Spanning API token from the Spanning admin console.",
+      "sensitive": true,
+      "default": ""
+    },
+    "spanning_platform": {
+      "type": "string",
+      "title": "Spanning platform",
+      "description": "Spanning platform: m365 (default) or google. Leave blank for m365.",
+      "default": ""
+    },
+    "spanning_api_url": {
+      "type": "string",
+      "title": "Spanning API URL",
+      "description": "Optional. Leave blank to use the platform default.",
+      "default": ""
+    },
+    "knowbe4_api_key": {
+      "type": "string",
+      "title": "KnowBe4 API key",
+      "description": "KnowBe4 reporting API key. Leave blank to disable KnowBe4.",
+      "sensitive": true,
+      "default": ""
+    },
+    "knowbe4_region": {
+      "type": "string",
+      "title": "KnowBe4 region",
+      "description": "KnowBe4 shard: us (default), eu, ca, uk, de. Leave blank for us.",
+      "default": ""
+    },
+    "knowbe4_base_url": {
+      "type": "string",
+      "title": "KnowBe4 base URL",
+      "description": "Optional. Leave blank to use the region default.",
+      "default": ""
+    },
+    "ninjaone_client_id": {
+      "type": "string",
+      "title": "NinjaOne client ID",
+      "description": "NinjaOne OAuth2 client ID. Leave blank to disable NinjaOne.",
+      "default": ""
+    },
+    "ninjaone_client_secret": {
+      "type": "string",
+      "title": "NinjaOne client secret",
+      "description": "NinjaOne OAuth2 client secret.",
+      "sensitive": true,
+      "default": ""
+    },
+    "ninjaone_region": {
+      "type": "string",
+      "title": "NinjaOne region",
+      "description": "NinjaOne shard: us (default), eu, ca, oc. Leave blank for us.",
+      "default": ""
+    },
+    "ninjaone_auth_mode": {
+      "type": "string",
+      "title": "NinjaOne auth mode",
+      "description": "Optional. Overrides the default OAuth flow only if your NinjaOne integration requires it.",
+      "default": ""
+    },
+    "ninjaone_base_url": {
+      "type": "string",
+      "title": "NinjaOne base URL",
+      "description": "Optional. Leave blank to use the region default; only set for a non-standard shard.",
+      "default": ""
+    },
+    "paylocity_client_id": {
+      "type": "string",
+      "title": "Paylocity client ID",
+      "description": "Paylocity OAuth2 client ID. Leave blank to disable Paylocity.",
+      "default": ""
+    },
+    "paylocity_client_secret": {
+      "type": "string",
+      "title": "Paylocity client secret",
+      "description": "Paylocity OAuth2 client secret.",
+      "sensitive": true,
+      "default": ""
+    },
+    "paylocity_company_id": {
+      "type": "string",
+      "title": "Paylocity company ID",
+      "description": "Paylocity company ID that scopes all calls.",
+      "default": ""
+    },
+    "paylocity_base_url": {
+      "type": "string",
+      "title": "Paylocity base URL",
+      "description": "Optional. Leave blank to use the default (https://api.paylocity.com).",
+      "default": ""
+    },
+    "paylocity_sandbox": {
+      "type": "string",
+      "title": "Paylocity sandbox",
+      "description": "Optional. Set to 'true' to target the Paylocity sandbox (ignored if a base URL is set).",
+      "default": ""
+    },
+    "threatlocker_api_key": {
+      "type": "string",
+      "title": "ThreatLocker API key",
+      "description": "ThreatLocker API user key. Leave blank to disable ThreatLocker.",
+      "sensitive": true,
+      "default": ""
+    },
+    "threatlocker_organization_id": {
+      "type": "string",
+      "title": "ThreatLocker organization ID",
+      "description": "Optional. Only set when acting on a managed child organization.",
+      "default": ""
+    },
+    "threatlocker_base_url": {
+      "type": "string",
+      "title": "ThreatLocker base URL",
+      "description": "Optional. Leave blank to use the default shard.",
+      "default": ""
+    },
+    "vanta_client_id": {
+      "type": "string",
+      "title": "Vanta client ID",
+      "description": "Vanta OAuth2 client ID. Leave blank to disable Vanta.",
+      "default": ""
+    },
+    "vanta_client_secret": {
+      "type": "string",
+      "title": "Vanta client secret",
+      "description": "Vanta OAuth2 client secret.",
+      "sensitive": true,
+      "default": ""
+    },
+    "vanta_base_url": {
+      "type": "string",
+      "title": "Vanta base URL",
+      "description": "Optional. Leave blank to use the default (https://api.vanta.com/v1).",
+      "default": ""
+    }
+  },
+  "keywords": [
+    "atlas",
+    "architect",
+    "observability",
+    "claude-mem",
+    "context-mode",
+    "capability-discovery",
+    "subagents",
+    "prompt-optimization",
+    "verification",
+    "hooks",
+    "agentic",
+    "coding-agent",
+    "docs-as-code",
+    "multi-stage-planning",
+    "ux-testing",
+    "slash-commands",
+    "operating-contract",
+    "verify-loop",
+    "observability-db",
+    "architecture-audit",
+    "owasp",
+    "security-audit",
+    "ux-swarm",
+    "context-audit",
+    "asset-audit",
+    "context-optimization",
+    "session-forensics",
+    "self-improvement"
+  ]
 }

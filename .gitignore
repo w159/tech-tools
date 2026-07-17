@@ -358,6 +358,8 @@ desktop.ini
 **/.pytest_cache/**
 **/.mypy_cache/
 **/.ruff_cache/
+**/.coverage
+.coverage
 
 # ---- Atlas runtime state must never be tracked (written by hooks at runtime) ----
 **/.atlas_nudge

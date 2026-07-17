@@ -38,7 +38,7 @@ Prefer the lightest kind that carries the work:
 `scripts/discover_capabilities.py <root>` is read-only and side-effect
 free. It reads the project's manifests and deps and emits signals:
 languages, frameworks, cloud providers, package managers. Match those
-signals against `..`atlas-orchestrate`/references/capability-catalog.md` to
+signals against `../atlas-orchestrate/references/capability-catalog.md` to
 build the ranked shortlist. Each shortlist entry states:
 
 - the asset id (skill, plugin, or `server.tool` for MCP)
@@ -73,7 +73,7 @@ confirm before writing.
 ## The docs/ scaffold
 
 If `docs/` lacks the SSOT scaffold, offer to seed it per
-`..`atlas-orchestrate`/references/docs-ssot.md`. Confirm first. Then ensure
+`../atlas-orchestrate/references/docs-ssot.md`. Confirm first. Then ensure
 `docs/` is git-tracked: a deny-by-default `.gitignore` MUST
 allowlist the SSOT subtree (root `*.md` plus `architecture/`,
 `features/`, `specs/`, `audits/`, `lessons/`, `wiki/`, `plans/`,
@@ -84,12 +84,12 @@ vendored doc clones that carry their own nested `.git`). Verify with
 
 ## Hooks
 
-A plugin install auto-loads `hooks/hooks.json`. Verify all eight hooks
+A plugin install auto-loads `hooks/hooks.json`. Verify all 11 hooks
 are active (session boot, prompt optimizer, bash advisor,
 format-after-edit, dispatch tripwire, completion gate,
 self-improvement nudge, session-transcript ingest). Outside a plugin
 install, offer `scripts/install_hooks.py`. The hooks themselves are
-documented in `..`atlas-orchestrate`/references/hooks-automation.md`.
+documented in `../atlas-orchestrate/references/hooks-automation.md`.
 
 ## Boundaries
 

@@ -1,33 +1,30 @@
-# tech-tools plugins
+# atlas plugins
 
 > **Scope rule (read first):** `atlas` and `armada` are products developed in this
 > repo. A request about them means edit their source under `plugins/atlas/` or
 > `plugins/armada/` - never install, set up, or run them in this workspace. Full
 > rule: `AGENTS.md` Section 0 and `docs/plugin-development-scope.md`.
 
-This directory holds the plugin collection for the `tech-tools` monorepo. Each plugin is a domain cluster that bundles the vendor connectors and skills for one business area, from MSP IT operations and security/compliance to Microsoft 365, HR/payroll, finance, and the engineering and productivity surfaces. The `atlas` plugin is the multi-agent coding meta-agent that drives verification-gated work across the repo. Every plugin listed below exists as a directory under `plugins/`.
+This directory holds the two plugins published from this repo, plus the shared authoring assets they draw on.
 
-## Available plugins
+## Plugins
 
-| Plugin | What it does | Key vendors |
-|--------|--------------|-------------|
-| `atlas` | Self-configuring multi-agent coding architect: research to verify methodology, a subagent squad, automation hooks, and verification-gated `/atlas-*` launcher commands. | (no external vendor connectors) |
-| `it-operations` | MSP IT operations across RMM, PSA, networking, and backup, plus change management, risk, and vendor-management skills. | NinjaOne, ConnectWise Manage (PSA), Auvik, Kaseya Spanning |
-| `security-compliance` | Security and compliance operations: audit readiness, evidence-gap tracking, risk heatmaps, and approval triage. | Vanta, KnowBe4, ThreatLocker, Blumira |
-| `microsoft-365` | Microsoft 365 administration and identity: users, mailboxes, Teams, OneDrive, licensing, security posture, and multi-tenant management. | CIPP, Microsoft Graph / Entra |
-| `hr-payroll` | HR and payroll operations: roster snapshots, new-hire flow, pay-rate and deduction/tax audits, plus compensation, recruiting, and people-analytics skills. | Paylocity |
-| `finance` | Finance and revenue operations: proposals and contracts, licensing and invoicing, plus financial-close, reconciliation, variance, and SOX audit skills. | PandaDoc, Pax8 |
-| `engineering` | Software engineering skills: code review, system design, incident response, testing strategy, and tech-debt management. | (no external vendor connectors) |
-| `data` | Data work: explore datasets, write SQL, validate data quality, build visualizations, and generate interactive dashboards. | (no external vendor connectors) |
-| `design` | Design and UX work: accessibility review, design critique, design-system management, UX copy, and user-research synthesis. | (no external vendor connectors) |
-| `product-management` | Product management: feature specs, roadmap planning, user-research synthesis, stakeholder updates, and competitive landscape. | (no external vendor connectors) |
-| `customer-support` | Support operations: triage tickets, draft responses, research questions, manage escalations, and build knowledge-base articles. | (no external vendor connectors) |
-| `productivity` | Workplace productivity utilities: memory and task tracking, enterprise search and knowledge synthesis, PDF viewing/form-filling/signing, brand-voice enforcement, and nudge reminders. | (no external vendor connectors) |
+| Plugin | What it is |
+|--------|------------|
+| `atlas` | The multi-agent coding architect plugin: self-configuring, drives verification-gated work via subagents and hooks. |
+| `armada` | The org deployment layer split out of atlas: 11 department agents plus their department skills, for organizations that want atlas's capabilities wired with department-specific branding/policy/compliance context. Install alongside atlas only for org use. |
+
+## Shared assets
+
+- `_standards/` - shared authoring standards used across atlas/armada content.
+- `_templates/` - shared templates for generating new skills/agents/docs.
 
 ## Install and usage
 
-These plugins are published from the `w159/tech-tools` repository through the marketplace defined in `.claude-plugin/marketplace.json` at the repo root. Add the marketplace in Claude Code with the `/plugin` command, then install the plugins you need (for example `it-operations`, `security-compliance`, or `microsoft-365`).
+Both plugins are published from the `w159/atlas` repository through the marketplace defined in `.claude-plugin/marketplace.json` at the repo root (version 3.0.0). That marketplace lists exactly `atlas` and `armada`. Add the marketplace in Claude Code with the `/plugin` command, then install the plugin(s) you need.
 
-Kimi Code CLI users can browse the custom marketplace from the repo root with `/plugins marketplace .kimi-plugin/marketplace.json`, then install the plugins you need. You can also install a single plugin directly with `/plugins install ./plugins/<name>` (from the repo root). Remote GitHub subpath installs are not supported by Kimi Code CLI's current installer, so distribution from the monorepo requires loading the marketplace from a local clone or publishing per-plugin zip artifacts.
+Kimi Code CLI users can browse the same catalog from the repo root with `/plugins marketplace .kimi-plugin/marketplace.json`, which lists the same two plugins. You can also install a single plugin directly with `/plugins install ./plugins/<name>` (from the repo root). Remote GitHub subpath installs are not supported by Kimi Code CLI's current installer, so distribution requires a local clone or per-plugin zip artifacts.
 
-Vendor-backed plugins (`it-operations`, `security-compliance`, `microsoft-365`, `hr-payroll`, `finance`) need API credentials for their connectors. The credential keys live in `.env.template` at the repo root; copy it to `.env` and fill in the values for the vendors you use. Base URL keys are optional for vendors that ship a documented default. Skill-only plugins (`engineering`, `data`, `design`, `product-management`, `customer-support`, `productivity`, `atlas`) run without external credentials.
+## Credentials
+
+All connector credentials live on `atlas`, not `armada`: `atlas`'s manifest (`plugins/atlas/.claude-plugin/plugin.json`) declares the `mcpServers` entry (`plugins/atlas/.mcp.json`) and the full `userConfig` block of per-vendor credential keys (Auvik, Blumira, CIPP, ConnectWise Manage, Kaseya Spanning, KnowBe4, NinjaOne, Paylocity, ThreatLocker, Vanta). `armada`'s own manifest (`plugins/armada/.claude-plugin/plugin.json`) declares neither `userConfig` nor `mcpServers` - see `plugins/armada/skills/armada/references/connector-provisioning.md` for which `userConfig` keys each department connector needs and how they're set via `/plugin config` on `atlas`.

@@ -1,7 +1,7 @@
 {
   "name": "atlas",
-  "version": "5.0.0",
-  "description": "Atlas is a multi-agent coding architect implemented entirely as Claude Code skills. 21 plainly named skills: atlas-orchestrate (the orchestration engine), atlas-audit (code/security audit, architecture mapping, atlas self-telemetry), atlas-setup (onboarding, install, connectors, repair - the one manual skill), atlas-loop (recurring loops), atlas-ux-test (UX test swarm), plus 16 task skills (atlas-feature, atlas-debug, atlas-refactor, atlas-validate, atlas-launch, atlas-harden, etc.). 12 core agents and 10 hooks including dispatch tripwire, completion gate, memory capture, and auto-skill creation. The atlas-orchestrate method demands independent verification with runtime evidence before any done claim. Org deployment (11 departments) lives in the separate armada plugin. Integrates claude-mem and context-mode.",
+  "version": "5.1.1",
+  "description": "Atlas is a multi-agent coding architect implemented entirely as Claude Code skills. 22 plainly named skills: the atlas architect skill (bootstrap and workspace setup), atlas-orchestrate (the orchestration engine), atlas-audit (code/security audit, architecture mapping, atlas self-telemetry), atlas-setup (onboarding, install, connectors, repair - one of two manual skills, alongside the atlas architect skill), atlas-loop (recurring loops), atlas-ux-test (UX test swarm), plus 16 task skills (atlas-feature, atlas-debug, atlas-refactor, atlas-validate, atlas-launch, atlas-harden, etc.). 12 core agents and 11 hooks including dispatch tripwire, completion gate, memory capture, auto-skill creation, and atlas_doctor session-health checks. The atlas-orchestrate method demands independent verification with runtime evidence before any done claim. Org deployment (11 departments) lives in the separate armada plugin. Integrates claude-mem and context-mode.",
   "keywords": [
     "atlas",
     "architect",
@@ -40,7 +40,7 @@
   "license": "Apache-2.0",
   "interface": {
     "displayName": "Atlas",
-    "shortDescription": "Multi-agent coding architect with 21 plainly named skills, 12 agents, and observability-driven self-improvement."
+    "shortDescription": "Multi-agent coding architect with 22 plainly named skills, 12 agents, and observability-driven self-improvement."
   },
   "skills": "./skills/"
 }

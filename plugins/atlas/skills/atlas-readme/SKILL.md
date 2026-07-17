@@ -1,6 +1,5 @@
 ---
 name: atlas-readme
-disable-model-invocation: true
 description: Generate an onboarding-grade README.md by inspecting the actual repo, every claim traced to a real file. Use when a repo has no README or its README is stale.
 when_to_use: a repo has no README or its README is stale, and every claim must trace to a real file
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write

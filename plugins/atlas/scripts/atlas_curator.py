@@ -2,7 +2,7 @@
 """Atlas curator — background skill lifecycle management for auto-created skills.
 
 Mirrors Hermes Agent's curator (agent/curator.py) but is simpler and file-based:
-  - Walks ~/.atlas/skills/ for skills with `created_by: "atlas-auto"` in frontmatter
+  - Walks ~/.claude/skills/ for skills with `created_by: "atlas-auto"` in frontmatter
   - Marks skills stale after 30 days of inactivity (no file mtime change)
   - Archives stale skills after 90 days
   - Pinned skills (`.pinned` marker file) are exempt from all transitions
@@ -33,9 +33,17 @@ DEFAULT_STALE_AFTER_DAYS = 30
 DEFAULT_ARCHIVE_AFTER_DAYS = 90
 PROVENANCE_MARKER = "atlas-auto"
 
+# Marker files the curator itself writes into a skill directory. Their mtimes
+# must not count as skill activity, or writing ".stale" resets the activity
+# clock and the skill oscillates mark-stale/reactivate forever.
+CURATOR_MARKER_FILES = {".stale", ".pinned"}
+
 
 def _skills_dir() -> Path:
-    base = os.environ.get("ATLAS_HOME", os.path.expanduser("~/.atlas"))
+    override = os.environ.get("ATLAS_SKILLS_DIR")
+    if override:
+        return Path(override)
+    base = os.environ.get("CLAUDE_CONFIG_DIR", os.path.expanduser("~/.claude"))
     return Path(base) / "skills"
 
 
@@ -100,6 +108,8 @@ def _skill_activity_time(skill_dir: Path) -> float:
     latest = 0.0
     try:
         for item in skill_dir.rglob("*"):
+            if item.name in CURATOR_MARKER_FILES:
+                continue
             if item.is_file():
                 mtime = item.stat().st_mtime
                 if mtime > latest:
@@ -300,8 +310,8 @@ def _cli():
     import sys
 
     if len(sys.argv) < 2:
-        print("Usage: atlas_curator.py [run|status|pin|unpin|restore]")
-        return
+        print("Usage: atlas_curator.py [run|status|pin|unpin|restore]", file=sys.stderr)
+        sys.exit(2)
     cmd = sys.argv[1]
     if cmd == "run":
         result = apply_transitions()
@@ -310,21 +320,23 @@ def _cli():
         print(json.dumps(status(), indent=2))
     elif cmd == "pin":
         if len(sys.argv) < 3:
-            print("Usage: atlas_curator.py pin <name>")
-            return
+            print("Usage: atlas_curator.py pin <name>", file=sys.stderr)
+            sys.exit(2)
         print(json.dumps(pin_skill(sys.argv[2]), indent=2))
     elif cmd == "unpin":
         if len(sys.argv) < 3:
-            print("Usage: atlas_curator.py unpin <name>")
-            return
+            print("Usage: atlas_curator.py unpin <name>", file=sys.stderr)
+            sys.exit(2)
         print(json.dumps(unpin_skill(sys.argv[2]), indent=2))
     elif cmd == "restore":
         if len(sys.argv) < 3:
-            print("Usage: atlas_curator.py restore <name>")
-            return
+            print("Usage: atlas_curator.py restore <name>", file=sys.stderr)
+            sys.exit(2)
         print(json.dumps(restore_skill(sys.argv[2]), indent=2))
     else:
-        print(f"Unknown command: {cmd}")
+        print(f"Unknown command: {cmd}", file=sys.stderr)
+        print("Usage: atlas_curator.py [run|status|pin|unpin|restore]", file=sys.stderr)
+        sys.exit(2)
 
 
 if __name__ == "__main__":

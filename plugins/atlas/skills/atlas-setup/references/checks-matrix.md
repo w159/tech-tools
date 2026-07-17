@@ -21,14 +21,18 @@ without running the script.
 
 ## Additional surface checks
 
-Beyond the eight scripted checks, doctor inspects:
+Beyond the eight scripted checks, two things are worth tracking:
 
-- **Frontmatter validity** - every installed skill's `SKILL.md` has the
-  required frontmatter fields (`name`, `description`) and no unknown fields.
-  Malformed frontmatter can silently disable a skill.
-- **Skill count vs actual** - the plugin manifest's declared skill count
-  matches the number of `SKILL.md` files found under `skills/`. A mismatch
-  means a skill was added to the manifest but not shipped, or vice versa.
+- **Frontmatter validity** - no script currently checks that every
+  installed skill's `SKILL.md` has the required frontmatter fields
+  (`name`, `description`) and no unknown fields. Malformed frontmatter
+  can silently disable a skill; treat this as a manual review item.
+- **Skill/agent count vs manifest** - handled separately by
+  `plugin-health.py` (see below), not by atlas_doctor.py itself. It
+  compares the plugin manifest's declared skill/agent counts against
+  the number of `SKILL.md` files and agent files actually found. A
+  mismatch means an asset was added to the manifest but not shipped,
+  or vice versa.
 - **`docs/` tree** - if the org config references `docs/` for
   standards or templates, those paths must exist. Missing docs break the
   branding and policy loading flows.
@@ -43,16 +47,18 @@ degrade atlas.
 
 ## Manual skill
 
-doctor is one of two manual skills in the atlas plugin
-(`disable-model-invocation: true`, `user-invocable: true`). It does not
-auto-trigger from a description match; the user must invoke it explicitly.
-This is intentional: a broken install that auto-triggered doctor on every
-session would amplify the problem. The user runs doctor when something is
-wrong.
+The atlas plugin has exactly two manual skills, `atlas` and `atlas-setup`
+(both `disable-model-invocation: true`, `user-invocable: true`). Neither
+auto-triggers from a description match; the user must invoke them
+explicitly. Doctor (`atlas_doctor.py`) is not a skill itself - it is the
+script that atlas-setup's repair mode invokes (`--fix`), plus a separate
+SessionStart hook invocation (warn-only). This is intentional: a broken
+install that auto-triggered repair on every session would amplify the
+problem. The user runs atlas-setup's repair mode when something is wrong.
 
 ## plugin-health.py
 
-`scripts/plugin-health.py` is a deterministic, read-only check that counts
+`skills/atlas-setup/scripts/plugin-health.py` is a deterministic, read-only check that counts
 the skills and agents in the installed copy and compares against the
 manifest's declared counts. It exits 0 if the counts match and 1 if they
 differ. It does not repair anything; it only reports. Use it as a quick

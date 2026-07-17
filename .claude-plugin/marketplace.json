@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "atlas",
-  "description": "The atlas marketplace: a multi-agent coding architect (atlas) with 21 plainly named skills, 12 core agents, self-improvement hooks, and the atlas-orchestrate methodology (evidence before any done claim), plus an optional organizational deployment plugin (armada) with 11 department agents and 156 department skills.",
+  "description": "The atlas marketplace: a multi-agent coding architect (atlas) with 22 plainly named skills, 12 core agents, self-improvement hooks, and the atlas-orchestrate methodology (evidence before any done claim), plus an optional organizational deployment plugin (armada) with 11 department agents and 156 department skills.",
   "version": "3.0.0",
   "owner": {
     "name": "w159",
@@ -11,7 +11,7 @@
     {
       "name": "atlas",
       "source": "./plugins/atlas",
-      "description": "Multi-agent coding architect: 21 plainly named skills (atlas-orchestrate engine, atlas-audit code/architecture/self audits, atlas-setup onboarding/install/connectors/repair, atlas-loop recurring work, atlas-ux-test UX swarm, and 16 task skills), 12 core agents, 10 hooks including self-improvement (memory capture, auto-skill, nudge, session ingest), and the atlas-orchestrate method: independent verification with runtime evidence before any done claim.",
+      "description": "Multi-agent coding architect: 22 plainly named skills (the atlas architect skill, atlas-orchestrate engine, atlas-audit code/architecture/self audits, atlas-setup onboarding/install/connectors/repair, atlas-loop recurring work, atlas-ux-test UX swarm, and 16 task skills), 12 core agents, 11 hooks including self-improvement (memory capture, auto-skill, nudge, session ingest) and atlas_doctor (session-health check), and the atlas-orchestrate method: independent verification with runtime evidence before any done claim.",
       "category": "developer-tools",
       "keywords": [
         "atlas",

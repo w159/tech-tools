@@ -10,14 +10,15 @@ agent better in a codebase the more it is used.
 Org deployment (11 departments, 156 department skills) lives in the separate
 `armada` plugin in this repo; install it alongside atlas only for org use.
 
-## The skill fleet (21 skills, plainly named)
+## The skill fleet (22 skills, plainly named)
 
-One manual skill, twenty auto-trigger skills. Auto-trigger comes from each
-skill's `description` + `when_to_use`; the manual skill has
+Two manual skills, twenty auto-trigger skills. Auto-trigger comes from each
+skill's `description` + `when_to_use`; the manual skills have
 `disable-model-invocation: true`.
 
 | Skill | Mode | What it does |
 | --- | --- | --- |
+| atlas | MANUAL | Boot the workspace: verify claude-mem and context-mode, scan the project, recommend tooling (confirm first), wire hooks, seed the docs/ SSOT |
 | atlas-setup | MANUAL | The lifecycle skill: onboard (scaffold `docs/`, inventory, recommend what to run next), install (claude-mem, context-mode, hooks, config), connectors (vendor MCP setup), repair (`--fix` runs `scripts/atlas_doctor.py`) |
 | atlas-orchestrate | auto | The engine: decompose a task, route every code edit to a subagent, demand execution evidence, verify with an independent agent (runtime evidence included), keep `docs/` the single source of truth |
 | atlas-audit | auto | Three audit modes: code (quality/security/OWASP swarm), architecture (feature map + duplication + unify proposal), self (atlas run health, context/asset waste, session forensics from the observability DB) |
@@ -29,8 +30,8 @@ skill's `description` + `when_to_use`; the manual skill has
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json     # manifest (name: atlas, v5.0.0)
-|-- hooks/                         # 10 auto-loaded hooks (hooks.json wires them all)
+|-- .claude-plugin/plugin.json     # manifest (name: atlas, v5.1.1)
+|-- hooks/                         # 11 auto-loaded hooks (hooks.json wires them all; atlas_doctor.py lives in scripts/, wired as the 11th)
 |   |-- session_boot.py            #   SessionStart: activate runtime, surface lessons
 |   |-- prompt_optimizer.py        #   UserPromptSubmit: optional rewrite + orchestration arm-early classifier
 |   |-- bash_advisor.py            #   PreToolUse(Bash): advisory warning on catastrophic commands only
@@ -38,11 +39,11 @@ atlas/
 |   |-- dispatch_tripwire.py       #   PostToolUse advisory + PreToolUse deny: curb inline drift in orchestration runs
 |   |-- completion_gate.py         #   Stop: block premature "done" until the definition-of-done holds
 |   |-- memory_capture.py          #   Stop/SubagentStop: persist lessons to ~/.atlas/memory/
-|   |-- auto_skill.py              #   Stop: create new skills from session transcripts at ~/.atlas/skills/
+|   |-- auto_skill.py              #   Stop: create new skills from session transcripts at ~/.claude/skills/
 |   |-- nudge.py                   #   Stop/SubagentStop: self-improvement nudge (throttled)
 |   |-- ingest_session.py          #   Stop/SubagentStop/SessionEnd/PreCompact: mirror transcript to the observability DB
 |   `-- validate-readonly-query.sh #   not auto-loaded; DB-audit subagents wire it during read-only audits
-|-- scripts/                       # atlas_doctor.py (repair), atlas_db.py (observability), atlas_context_optimizer.py
+|-- scripts/                       # atlas_doctor.py (repair; also wired via hooks.json --hook as the 11th auto-loaded hook, SessionStart), atlas_db.py (observability), atlas_context_optimizer.py
 |                                  # (disable unused skills/agents), atlas_curator.py, atlas_memory.py, skill_factory.py,
 |                                  # asset_audit.py, discover_capabilities.py, build_hub.py, install_hooks.py + tests
 |-- output-styles/
@@ -60,7 +61,7 @@ atlas/
 |   |-- docs-curator.md            #   maintains the docs/ single source of truth (fork)
 |   |-- docs-auditor.md            #   audits docs/ for drift against code
 |   `-- completeness-critic.md     #   "what did we miss" gap pass before done (fork)
-`-- skills/                        # the 21 skills, one directory each (SKILL.md + references/)
+`-- skills/                        # the 22 skills, one directory each (SKILL.md + references/)
 ```
 
 ## Getting started
@@ -87,7 +88,7 @@ hook can never block a session.
 | `format_after_edit.py` | `PostToolUse` (Edit/Write) | Run the repo's formatter after edits |
 | `completion_gate.py` | `Stop` | Block a premature "done" until the definition-of-done holds: evidence artifact, independent verifier, current docs, verifier coverage (orchestrating sessions only; `ATLAS_GATE=off`) |
 | `memory_capture.py` | `Stop`, `SubagentStop` | Persist session lessons to `~/.atlas/memory/` |
-| `auto_skill.py` | `Stop` | Create new skills from session transcripts at `~/.atlas/skills/` |
+| `auto_skill.py` | `Stop` | Create new skills from session transcripts at `~/.claude/skills/` |
 | `nudge.py` | `Stop`, `SubagentStop` | Self-improvement: prompt to capture a lesson and check docs drift (throttled) |
 | `ingest_session.py` | `Stop`, `SubagentStop`, `SessionEnd`, `PreCompact` | Mirror the session transcript into the observability DB for atlas-audit self mode (`ATLAS_INGEST=off`) |
 
@@ -110,7 +111,7 @@ settings manually. The optional ollama-backed optimizer is configured with
 Four hooks close the loop the fleet used to leave to manual runs:
 
 - `memory_capture.py` persists durable lessons per project to `~/.atlas/memory/`.
-- `auto_skill.py` mines finished sessions and drafts new skills at `~/.atlas/skills/`.
+- `auto_skill.py` mines finished sessions and drafts new skills at `~/.claude/skills/`.
 - `scripts/atlas_context_optimizer.py` disables unused skills/agents
   (`disable-model-invocation: true`) based on real usage in the observability DB.
 - `scripts/atlas_curator.py` handles skill lifecycle (stale/archive/pin).

@@ -88,19 +88,31 @@ class MainInProcessTest(unittest.TestCase):
             )
         self.assertEqual(code, 0)
         data = json.loads(out)
-        self.assertIn("Atlas runtime active", data["additionalContext"])
-        self.assertIn("research -> theory", data["additionalContext"])
-        self.assertIn("atlas:<role>", data["additionalContext"])
-        # All three deps absent -> all three "absent" lines present.
-        self.assertIn("Memory (claude-mem): absent", data["additionalContext"])
         self.assertIn(
-            "Context protection (context-mode): absent", data["additionalContext"]
+            "Atlas runtime active", data["hookSpecificOutput"]["additionalContext"]
         )
-        self.assertIn("Less-code mode (ponytail): absent", data["additionalContext"])
+        self.assertIn(
+            "research -> theory", data["hookSpecificOutput"]["additionalContext"]
+        )
+        self.assertIn("atlas:<role>", data["hookSpecificOutput"]["additionalContext"])
+        # All three deps absent -> all three "absent" lines present.
+        self.assertIn(
+            "Memory (claude-mem): absent",
+            data["hookSpecificOutput"]["additionalContext"],
+        )
+        self.assertIn(
+            "Context protection (context-mode): absent",
+            data["hookSpecificOutput"]["additionalContext"],
+        )
+        self.assertIn(
+            "Less-code mode (ponytail): absent",
+            data["hookSpecificOutput"]["additionalContext"],
+        )
         self.assertEqual(
             data["systemMessage"],
             "Atlas ready (run the `atlas` skill to complete setup)",
         )
+        self.assertEqual(data["hookSpecificOutput"]["hookEventName"], "SessionStart")
 
     def test_main_system_message_ready_when_all_deps_available(self):
         """All deps present -> systemMessage is the bare 'Atlas ready'."""
@@ -113,11 +125,18 @@ class MainInProcessTest(unittest.TestCase):
             )
         self.assertEqual(code, 0)
         data = json.loads(out)
-        self.assertIn("Memory (claude-mem): available", data["additionalContext"])
         self.assertIn(
-            "Context protection (context-mode): available", data["additionalContext"]
+            "Memory (claude-mem): available",
+            data["hookSpecificOutput"]["additionalContext"],
         )
-        self.assertIn("Less-code mode (ponytail): available", data["additionalContext"])
+        self.assertIn(
+            "Context protection (context-mode): available",
+            data["hookSpecificOutput"]["additionalContext"],
+        )
+        self.assertIn(
+            "Less-code mode (ponytail): available",
+            data["hookSpecificOutput"]["additionalContext"],
+        )
         self.assertEqual(data["systemMessage"], "Atlas ready")
 
     def test_main_ponytail_via_config_file_branch(self):
@@ -136,7 +155,10 @@ class MainInProcessTest(unittest.TestCase):
             )
         self.assertEqual(code, 0)
         data = json.loads(out)
-        self.assertIn("Less-code mode (ponytail): available", data["additionalContext"])
+        self.assertIn(
+            "Less-code mode (ponytail): available",
+            data["hookSpecificOutput"]["additionalContext"],
+        )
 
     # --- DB start_run path ------------------------------------------------
 
@@ -202,7 +224,9 @@ class MainInProcessTest(unittest.TestCase):
                 {"session_id": "s5", "cwd": self.tmp}, self.env
             )
         self.assertEqual(code, 0)
-        self.assertTrue(json.loads(out).get("additionalContext"))
+        self.assertTrue(
+            json.loads(out).get("hookSpecificOutput", {}).get("additionalContext")
+        )
 
     # --- memory snapshot injection ---------------------------------------
 
@@ -220,7 +244,7 @@ class MainInProcessTest(unittest.TestCase):
                 {"session_id": "s6", "cwd": self.tmp}, self.env
             )
         self.assertEqual(code, 0)
-        ctx = json.loads(out)["additionalContext"]
+        ctx = json.loads(out)["hookSpecificOutput"]["additionalContext"]
         self.assertIn("MEM-LINE", ctx)
         self.assertIn("PROJ-LINE", ctx)
 
@@ -235,7 +259,10 @@ class MainInProcessTest(unittest.TestCase):
                 {"session_id": "s7", "cwd": self.tmp}, self.env
             )
         self.assertEqual(code, 0)
-        self.assertIn("Atlas runtime active", json.loads(out)["additionalContext"])
+        self.assertIn(
+            "Atlas runtime active",
+            json.loads(out)["hookSpecificOutput"]["additionalContext"],
+        )
 
     # --- resume block appended to context --------------------------------
 
@@ -252,7 +279,10 @@ class MainInProcessTest(unittest.TestCase):
                 {"session_id": "s8", "cwd": self.tmp}, self.env
             )
         self.assertEqual(code, 0)
-        self.assertIn("## Resuming demo", json.loads(out)["additionalContext"])
+        self.assertIn(
+            "## Resuming demo",
+            json.loads(out)["hookSpecificOutput"]["additionalContext"],
+        )
 
     def test_main_resume_block_none_is_skipped(self):
         """resume_block None -> no crash, context still emitted."""
@@ -265,7 +295,10 @@ class MainInProcessTest(unittest.TestCase):
                 {"session_id": "s9", "cwd": self.tmp}, self.env
             )
         self.assertEqual(code, 0)
-        self.assertIn("Atlas runtime active", json.loads(out)["additionalContext"])
+        self.assertIn(
+            "Atlas runtime active",
+            json.loads(out)["hookSpecificOutput"]["additionalContext"],
+        )
 
     # --- malformed stdin does not block boot ------------------------------
 
@@ -277,7 +310,10 @@ class MainInProcessTest(unittest.TestCase):
         ):
             code, out = run_main_inprocess("{not valid json", self.env)
         self.assertEqual(code, 0)
-        self.assertIn("Atlas runtime active", json.loads(out)["additionalContext"])
+        self.assertIn(
+            "Atlas runtime active",
+            json.loads(out)["hookSpecificOutput"]["additionalContext"],
+        )
 
     def test_main_db_failure_does_not_block_boot(self):
         """If atlas_db.connect raises, boot still emits context and exits 0."""
@@ -290,7 +326,10 @@ class MainInProcessTest(unittest.TestCase):
                 {"session_id": "s10", "cwd": self.tmp}, self.env
             )
         self.assertEqual(code, 0)
-        self.assertIn("Atlas runtime active", json.loads(out)["additionalContext"])
+        self.assertIn(
+            "Atlas runtime active",
+            json.loads(out)["hookSpecificOutput"]["additionalContext"],
+        )
 
     # --- context truncation guard ----------------------------------------
 
@@ -305,7 +344,9 @@ class MainInProcessTest(unittest.TestCase):
                 {"session_id": "s11", "cwd": self.tmp}, self.env
             )
         self.assertEqual(code, 0)
-        self.assertLessEqual(len(json.loads(out)["additionalContext"]), 9000)
+        self.assertLessEqual(
+            len(json.loads(out)["hookSpecificOutput"]["additionalContext"]), 9000
+        )
 
     def test_main_block_catches_exception_exits_zero(self):
         """The outer __main__ guard catches any exception escaping main() and

@@ -91,11 +91,11 @@ def _make_db(path, runs=None, tool_calls=None, improvements=None, signals=None):
 class TestSkillFactory(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
-        os.environ["ATLAS_HOME"] = self.tmpdir
+        os.environ["ATLAS_SKILLS_DIR"] = os.path.join(self.tmpdir, "skills")
 
     def tearDown(self):
         shutil.rmtree(self.tmpdir, ignore_errors=True)
-        del os.environ["ATLAS_HOME"]
+        del os.environ["ATLAS_SKILLS_DIR"]
 
     def test_validate_name_valid(self):
         self.assertIsNone(skill_factory._validate_name("my-skill"))
@@ -239,7 +239,7 @@ class TestSkillFactory(unittest.TestCase):
 
     def test_existing_skill_names_no_dir(self):
         """When the skills directory does not exist, returns an empty set."""
-        os.environ["ATLAS_HOME"] = os.path.join(self.tmpdir, "does-not-exist")
+        os.environ["ATLAS_SKILLS_DIR"] = os.path.join(self.tmpdir, "does-not-exist", "skills")
         self.assertEqual(skill_factory._existing_skill_names(), set())
 
     # --- dedup fallback (all -2..-99 taken) ---
@@ -531,8 +531,12 @@ class TestSkillFactory(unittest.TestCase):
         return out.getvalue()
 
     def test_cli_no_args(self):
-        out = self._run_cli(["skill_factory"])
-        self.assertIn("Usage", out)
+        err = io.StringIO()
+        with self.assertRaises(SystemExit) as cm:
+            with mock.patch.object(sys, "argv", ["skill_factory"]), redirect_stderr(err):
+                skill_factory._cli()
+        self.assertEqual(cm.exception.code, 2)
+        self.assertIn("Usage", err.getvalue())
 
     def test_cli_auto(self):
         out = self._run_cli(["skill_factory", "auto"])
@@ -541,8 +545,12 @@ class TestSkillFactory(unittest.TestCase):
         self.assertFalse(data["created"])
 
     def test_cli_create_too_few_args(self):
-        out = self._run_cli(["skill_factory", "create", "only-name"])
-        self.assertIn("Usage", out)
+        err = io.StringIO()
+        with self.assertRaises(SystemExit) as cm:
+            with mock.patch.object(sys, "argv", ["skill_factory", "create", "only-name"]), redirect_stderr(err):
+                skill_factory._cli()
+        self.assertEqual(cm.exception.code, 2)
+        self.assertIn("Usage", err.getvalue())
 
     def test_cli_create_no_body_file(self):
         out = self._run_cli(["skill_factory", "create", "cli-skill", "a desc"])
@@ -573,8 +581,12 @@ class TestSkillFactory(unittest.TestCase):
         self.assertEqual(names, sorted(names))
 
     def test_cli_unknown_command(self):
-        out = self._run_cli(["skill_factory", "bogus"])
-        self.assertIn("Unknown command: bogus", out)
+        err = io.StringIO()
+        with self.assertRaises(SystemExit) as cm:
+            with mock.patch.object(sys, "argv", ["skill_factory", "bogus"]), redirect_stderr(err):
+                skill_factory._cli()
+        self.assertEqual(cm.exception.code, 2)
+        self.assertIn("Unknown command: bogus", err.getvalue())
 
     # --- Content-based dedup tests ---
 

@@ -21,23 +21,52 @@ _THIS_DIR = pathlib.Path(__file__).resolve().parent
 PLUGIN_ROOT = _THIS_DIR.parent
 
 # Match a load directive that expands to a references/<name>.md path.
-# Captures the trailing references/<name>.md portion. The leading expansion
-# var (${CLAUDE_PLUGIN_ROOT} or ${CLAUDE_SKILL_DIR}) anchors this to actual
-# load directives, ignoring prose mentions of other skills' references.
+# Group 1 captures whatever sits between the expansion var and "references/"
+# (e.g. "/skills/atlas-orchestrate/" for a cross-skill directive, or just "/"
+# for a same-skill one); group 2 captures the trailing references/<name>.md
+# portion. The leading expansion var (${CLAUDE_PLUGIN_ROOT} or
+# ${CLAUDE_SKILL_DIR}) anchors this to actual load directives, ignoring prose
+# mentions of other skills' references.
 _REF_RE = re.compile(
-    r"\$\{(?:CLAUDE_PLUGIN_ROOT|CLAUDE_SKILL_DIR)\}[^\s`\"\')\]]*?"
+    r"\$\{(?:CLAUDE_PLUGIN_ROOT|CLAUDE_SKILL_DIR)\}([^\s`\"\')\]]*?)"
     r"(references/[A-Za-z0-9_.-]+\.md)"
 )
 
+# Detects an explicit cross-skill path segment ("skills/<skill>/") immediately
+# preceding the references/<file>.md tail, e.g.
+# ${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/foo.md. Such a
+# directive is fully qualified from the plugin root and should resolve there,
+# unlike a bare cross-skill mention (no expansion var at all).
+_CROSS_SKILL_PREFIX_RE = re.compile(r"(?:^|/)skills/([A-Za-z0-9_.-]+)/$")
+
 
 def _dangling_references(plugin_root: pathlib.Path):
-    """Return list of (skill_md_rel, reference) for unresolved load directives."""
+    """Return list of (skill_md_rel, reference) for unresolved load directives.
+
+    A directive of the form ${CLAUDE_PLUGIN_ROOT}/skills/<skill>/references/<f>
+    is a fully-qualified cross-skill reference and resolves against
+    plugin_root/skills/<skill>/references/<f>; anything else resolves under the
+    referencing skill's own references/ dir or the plugin-level references/ dir.
+    """
     dangling = []
     for skill_md in sorted((plugin_root / "skills").glob("*/SKILL.md")):
         text = skill_md.read_text(encoding="utf-8")
+        skill_dir = skill_md.parent
         for match in _REF_RE.finditer(text):
-            ref = pathlib.Path(match.group(1))
-            skill_dir = skill_md.parent
+            prefix, ref_str = match.group(1), match.group(2)
+            cross = _CROSS_SKILL_PREFIX_RE.search(prefix)
+            if cross:
+                other_skill = cross.group(1)
+                if (plugin_root / "skills" / other_skill / ref_str).is_file():
+                    continue
+                dangling.append(
+                    (
+                        str(skill_md.relative_to(plugin_root)),
+                        f"skills/{other_skill}/{ref_str}",
+                    )
+                )
+                continue
+            ref = pathlib.Path(ref_str)
             if (skill_dir / ref).is_file():
                 continue
             if (plugin_root / ref).is_file():
@@ -51,8 +80,17 @@ def _dangling_references(plugin_root: pathlib.Path):
 # resolution rule is "the file exists in the referencing skill's references/ or
 # the plugin-level references/", so a file that lives only in a different skill
 # is dangling (a cross-skill link is dead at runtime - ${CLAUDE_SKILL_DIR}
-# expands to the *referencing* skill, not the one named in prose).
-_REF_NAME_RE = re.compile(r"references/([A-Za-z0-9_.-]+\.md)")
+# expands to the *referencing* skill, not the one named in prose) - UNLESS the
+# mention is explicitly qualified as a cross-skill path via
+# ${CLAUDE_PLUGIN_ROOT}/skills/<skill>/references/<file> or ../<skill>/references/<file>,
+# both of which unambiguously name the target skill and resolve against
+# plugin_root/skills/<skill>/references/<file>.
+_REF_NAME_RE = re.compile(
+    r"(?:\$\{CLAUDE_PLUGIN_ROOT\}/skills/(?P<xskill1>[A-Za-z0-9_.-]+)/"
+    r"|\.\./(?P<xskill2>[A-Za-z0-9_.-]+)/"
+    r")?"
+    r"references/(?P<file>[A-Za-z0-9_.-]+\.md)"
+)
 
 # A scripts/<file> token with an optional ${CLAUDE_*} expansion prefix. Captures
 # (prefix_or_None, filename). The negative lookbehind avoids matching the tail
@@ -82,7 +120,18 @@ def _dangling_skill_references(plugin_root: pathlib.Path):
         text = skill_md.read_text(encoding="utf-8")
         skill_dir = skill_md.parent
         for m in _REF_NAME_RE.finditer(text):
-            base = m.group(1)
+            base = m.group("file")
+            xskill = m.group("xskill1") or m.group("xskill2")
+            if xskill:
+                if (plugin_root / "skills" / xskill / "references" / base).is_file():
+                    continue
+                dangling.append(
+                    (
+                        str(skill_md.relative_to(plugin_root)),
+                        f"skills/{xskill}/references/{base}",
+                    )
+                )
+                continue
             if (skill_dir / "references" / base).is_file():
                 continue
             if (plugin_root / "references" / base).is_file():

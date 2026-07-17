@@ -1,6 +1,5 @@
 ---
 name: atlas-vendor-assessment
-disable-model-invocation: true
 description: Evidence-based vendor security assessment against a framework you name, citing provided docs per finding. Use when the output may reach an auditor or reviewer.
 when_to_use: the output may reach an auditor or reviewer, and each finding must cite provided evidence
 allowed-tools: Read, Glob, Grep, Bash, Write
