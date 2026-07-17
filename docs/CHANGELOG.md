@@ -4,6 +4,38 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
+## 2026-07-17 -- Residual Dependabot alerts cleared, mcp_servers/_shared restored, commit adace06
+
+Follow-up to the 711fb10 remediation below. Closes both defects that entry tracked as out
+of scope, plus the minimatch ReDoS residual, via a simpler path than originally planned.
+
+- Restored `mcp_servers/_shared/` (deleted by `56d1a9f`, 9 files: `error-envelope.ts`,
+  `response-shaper.ts`, `base-url.ts`, `annotate-tool.ts`, `pack-mcpb.js`, `package.json`,
+  `tsconfig.json`, `ADOPTION.md`, `__tests__/response-quality.test.ts`). The `@shared/*`
+  imports in `mcp_servers/threatlocker-mcp/src/domains/_helpers.ts:15,21,26` (same pattern
+  in `blumira-mcp` and `vanta-mcp`) now resolve; `npm run build` verified passing in each of
+  the three previously-broken servers. Resolves ROADMAP item "Bug: blumira-mcp,
+  threatlocker-mcp, vanta-mcp fail to build."
+- Added npm `overrides` across all 17 `mcp_servers/*` and `mcp_node/*` projects:
+  - `esbuild ^0.28.1` - clears the dev-only esbuild low left over from 711fb10, repo-wide
+    (e.g. `mcp_servers/blumira-mcp/package.json`, `mcp_node/node-blumira/package.json`).
+  - `minimatch ^3.1.2` (resolves to 3.1.5) - clears the ReDoS high in
+    `connectwise-manage-mcp`, `knowbe4-mcp`, `ninjaone-mcp`, and `cipp-mcp` without the
+    eslint-9 / `@typescript-eslint` 8 migration the 711fb10 entry and ROADMAP originally
+    called for (`mcp_servers/connectwise-manage-mcp/package.json`,
+    `mcp_servers/cipp-mcp/package.json`). Resolves ROADMAP item "Tech debt: eslint 9 /
+    @typescript-eslint 8 migration to clear minimatch ReDoS residual" by pinning the
+    transitive instead of the major-version migration.
+  - `tmp ^0.2.4` - clears the `cipp-mcp` / `blumira-mcp` `tmp` advisory pulled in via
+    `@anthropic-ai/mcpb` (`mcp_servers/cipp-mcp/package.json`,
+    `mcp_servers/blumira-mcp/package.json`).
+- Result: every one of the 17 projects now reports `npm audit` = 0 vulnerabilities. No
+  source edits beyond the `_shared` restore; `node_modules` symlink convention preserved.
+- Not fixed here, remains open in ROADMAP: the vitest 4 / `node_modules.nosync.noindex`
+  symlink test-glob issue (unrelated to dependency pins or the `_shared` restore).
+
+---
+
 ## 2026-07-17 -- Dependency remediation: 17 Node MCP projects (Dependabot), commit 711fb10
 
 Remediated GitHub Dependabot alerts across 10 `mcp_servers/*` and 7 `mcp_node/*`

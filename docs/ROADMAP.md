@@ -45,36 +45,19 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 Surface autocompact and thinking-token budgets plus model routing as recommend-then-confirm options
 (modeled on ECC), opt-in only. Not yet implemented.
 
-### Tech debt: error-envelope DRY divergence (re-scoped 2026-07-17)
+### Tech debt: error-envelope DRY divergence (re-scoped again 2026-07-17, commit adace06)
 
-The single top-level `mcp_servers/_shared/error-envelope.ts` this item originally proposed
-consolidating into was deleted in commit `56d1a9f` (along with `response-shaper.ts`,
-`base-url.ts`, etc.), which broke `auvik-mcp`'s imports. The 2026-07-17 build-break fix
-(see CHANGELOG) restored `auvik-mcp`'s copy as a per-server
-`mcp_servers/auvik-mcp/src/_shared/error-envelope.ts`, matching the pattern already used by
-`connectwise-manage-mcp/src/_shared/error-envelope.ts` and
-`cipp-mcp/src/_shared/error-envelope.ts` (both pre-existing, confirmed on disk). All three
-servers now carry a private per-server copy - there is no live top-level `_shared/` to
-consolidate into. Re-scope this item: either restore a top-level `mcp_servers/_shared/` and
-repoint all three servers' imports at it, or accept per-server copies as the pattern and
-drop the consolidation goal. Left in Backlog, unplanned - no code change toward
-consolidation exists in this diff.
-
-### Bug: blumira-mcp, threatlocker-mcp, vanta-mcp fail to build (missing @shared alias target, found 2026-07-17)
-
-Same root cause as the DRY-divergence item above (`mcp_servers/_shared/` deleted in
-`56d1a9f`), but unlike `auvik-mcp`/`connectwise-manage-mcp`/`cipp-mcp` these three never
-got a local `src/_shared/` fallback. They still import `@shared/response-shaper.js`,
-`@shared/error-envelope.js`, and `@shared/base-url.js`
-(e.g. `mcp_servers/threatlocker-mcp/src/domains/_helpers.ts:15,21,26`, same pattern in
-`mcp_servers/blumira-mcp/src/domains/_helpers.ts` and
-`mcp_servers/vanta-mcp/src/domains/_helpers.ts`), aliased by `tsup.config.ts` to a
-`mcp_servers/_shared/` path that no longer exists. Reproduced 2026-07-17: `cd
-mcp_servers/threatlocker-mcp && npm run build` fails with 3 esbuild "Could not resolve"
-errors against `mcp_servers/_shared/{response-shaper,error-envelope,base-url}.js`. Fix
-needs either a restored top-level `mcp_servers/_shared/` or a local `src/_shared/` copy
-per server, matching whichever direction the DRY-divergence item above resolves to.
-Out of scope for the 2026-07-17 dependency remediation (package.json/lockfile only).
+Commit `adace06` restored a top-level `mcp_servers/_shared/` (see CHANGELOG), but this is a
+restore, not the per-server consolidation this item originally asked for: `blumira-mcp`,
+`threatlocker-mcp`, and `vanta-mcp` now import the top-level copy via their `@shared/*`
+alias, while `auvik-mcp/src/_shared/error-envelope.ts`,
+`connectwise-manage-mcp/src/_shared/error-envelope.ts`, and
+`cipp-mcp/src/_shared/error-envelope.ts` still carry their own private per-server copies
+(confirmed on disk 2026-07-17 - none of the three re-point at `mcp_servers/_shared/`). The
+repo now has four independent copies of `error-envelope.ts`/`response-shaper.ts` (one
+top-level, three per-server), not one. Still left in Backlog, unplanned: either repoint
+`auvik-mcp`/`connectwise-manage-mcp`/`cipp-mcp` at the now-restored top-level `_shared/`, or
+accept four copies as the pattern and drop the consolidation goal.
 
 ### Bug: vitest 4 globs into node_modules.nosync.noindex symlink target during npm test (found 2026-07-17)
 
@@ -91,17 +74,6 @@ project itself: 1882 passed, 3 failed on an unrelated live-HTTP-440 issue.
 an explicit `test.exclude` (or `test.dir` scoping to `tests/` and `src/`) added to
 each project's `vitest.config.ts` bumped to vitest 4 in the 2026-07-17 dependency
 remediation. Out of scope for that remediation (package.json/lockfile only).
-
-### Tech debt: eslint 9 / @typescript-eslint 8 migration to clear minimatch ReDoS residual (found 2026-07-17)
-
-`connectwise-manage-mcp`, `knowbe4-mcp`, and `ninjaone-mcp` each carry 6 high-severity
-`npm audit` findings after the 2026-07-17 dependency remediation: a `minimatch` ReDoS
-chain via `@typescript-eslint/eslint-plugin` `^6` / `@typescript-eslint/utils`
-6.16.0-7.5.0. Clearing it needs an eslint 9 / `@typescript-eslint` 8 major-version
-migration (breaking change to lint config, deferred from the 2026-07-17 remediation
-which only bumped in-range). `cipp-mcp` and `blumira-mcp` carry a separate residual
-(`@inquirer/prompts` <=6.0.1 / `tmp` / `esbuild` via `@anthropic-ai/mcpb`) not covered
-by this eslint migration.
 
 ### Tech debt: tool-description polish pass on cipp / connectwise / ninjaone / paylocity
 
