@@ -11,7 +11,6 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "start": "node dist/index.js",
-    "test": "vitest run",
     "clean": "rm -rf dist",
     "pack:mcpb": "node scripts/pack-mcpb.js"
   },
@@ -32,8 +31,7 @@
   "devDependencies": {
     "@types/node": "^20.0.0",
     "tsup": "^8.0.0",
-    "typescript": "^5.5.0",
-    "vitest": "^2.0.0"
+    "typescript": "^5.5.0"
   },
   "engines": {
     "node": ">=18.0.0"
