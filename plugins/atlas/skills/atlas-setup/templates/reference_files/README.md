@@ -16,5 +16,5 @@ so the project stays self-contained and offline-capable.
 - Excerpts are copies, not links, so they survive source churn.
 - Keep excerpts short; link to the source for the full doc.
 
-atlas-setup, atlas-vendor-assessment, and atlas-audit write here.
+atlas-setup and atlas-audit write here.
 atlas-setup only creates it.

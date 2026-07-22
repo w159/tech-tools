@@ -223,15 +223,15 @@ task. When routing is ambiguous, present the candidates as one
 AskUserQuestion, recommendation first. See `references/skill-routing.md`
 for the full task-to-skill mapping.
 
-## The skill inventory (22 skills)
+## The skill inventory (20 skills)
 
 - **2 manual skills** - atlas-setup (this skill) and atlas.
-- **20 auto-trigger skills** - atlas-orchestrate, atlas-audit,
-  atlas-loop, atlas-ux-test, and the 16 task skills (atlas-component,
+- **18 auto-trigger skills** - atlas-orchestrate, atlas-audit,
+  atlas-loop, atlas-ux-test, and the 14 task skills (atlas-component,
   atlas-db-audit, atlas-debug, atlas-feature, atlas-frontend,
   atlas-gitignore, atlas-handoff, atlas-harden, atlas-launch,
-  atlas-m365, atlas-prompt, atlas-readme, atlas-refactor,
-  atlas-validate, atlas-vendor-assessment, atlas-wiki).
+  atlas-prompt, atlas-readme, atlas-refactor,
+  atlas-validate, atlas-wiki).
 
 Org deployment (11 departments, 156 department skills) now lives in the
 separate `armada` plugin; install it only for org use.

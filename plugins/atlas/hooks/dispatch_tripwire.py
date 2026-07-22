@@ -26,8 +26,8 @@ DENY_THRESHOLD = 8
 # Skills whose invocation means the session IS an atlas orchestration run.
 # Deliberately excludes advisory/config skills (atlas-setup, atlas-validate)
 # and narrow single-purpose skills (atlas-prompt, atlas-readme,
-# atlas-gitignore, atlas-handoff, atlas-m365, atlas-db-audit,
-# atlas-vendor-assessment) so casual sessions never trip the completion gate.
+# atlas-gitignore, atlas-handoff, atlas-db-audit)
+# so casual sessions never trip the completion gate.
 ORCH_SKILLS = {
     "atlas-orchestrate",
     "atlas-audit",

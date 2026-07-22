@@ -55,9 +55,9 @@ The atlas fleet:
  6. Task skills        -- atlas-feature, atlas-debug, atlas-refactor,
                           atlas-frontend, atlas-component, atlas-db-audit,
                           atlas-gitignore, atlas-handoff, atlas-harden,
-                          atlas-launch, atlas-m365, atlas-prompt,
+                          atlas-launch, atlas-prompt,
                           atlas-readme, atlas-validate,
-                          atlas-vendor-assessment, atlas-wiki
+                          atlas-wiki
 
 Org deployment lives in the separate armada plugin.
 

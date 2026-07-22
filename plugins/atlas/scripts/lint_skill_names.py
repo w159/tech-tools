@@ -3,7 +3,7 @@
 
 Anthropic's skill spec allows lowercase letters, numbers, and hyphens, with a 64-char max.
 We keep the `atlas-` prefix as our project convention but no longer enforce exactly one dash,
-because command-like skills (atlas-db-audit, atlas-vendor-assessment) need descriptive names.
+because command-like skills (atlas-db-audit) need descriptive names.
 """
 
 import os

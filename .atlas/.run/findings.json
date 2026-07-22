@@ -117,5 +117,12 @@
     "status": "verified",
     "verifier": "atlas:verifier (fresh)",
     "evidence": "99 tests pass (test_session_boot + test_completion_gate + test_skill_agent_conformance); test_scaffold_docs.py 13 assertions pass; end-to-end temp-dir scaffold produces the full tree and is idempotent (0 false re-seed on 2nd run); all 5 git check-ignore outcomes match spec; scaffolding.md/session-lifecycle.md free of legacy docs/ paths; docs-ssot.md mirrors byte-identical (diff empty). Regression (dead references/docs-ssot.md link) found and fixed; conformance now 13/13. Full artifact: .atlas/evidence/2026-07-17-atlas-canonical-structure/verification.md"
+  },
+  {
+    "batch": "2026-07-21-programmer-plugin-move",
+    "claim": "Moved the standalone pragmatic-programmer plugin into the atlas marketplace as a new plugin named programmer, with skills namespaced tpp-* (tpp-audit, tpp-principles) and agent tpp-auditor; renamed all internal cross-refs, the report filename, the hook pointer line, README, and LICENSE; registered programmer in .claude-plugin/marketplace.json (source ./plugins/programmer, version bumped 3.0.0 -> 3.1.0). 89 concept reference files preserved.",
+    "status": "verified",
+    "verifier": "atlas:verifier (fresh)",
+    "evidence": "Full-tree grep (no exclusions) for pragmatic-audit|pragmatic-principles|pragmatic-auditor -> 0 hits; plugin.json/hooks.json/marketplace.json all parse via python3 json.load; marketplace plugins=['atlas','armada','programmer'], version 3.1.0, programmer source ./plugins/programmer; frontmatter names tpp-audit/tpp-principles/tpp-auditor; 89 concept files; LICENSE:3 now skills/tpp-principles/references/concepts/. Pass 1 verifier REFUTED on LICENSE:3 stale ref (caught a gap my own grep's /references/concepts/ exclusion had hidden); fixed; pass 2 verifier CONFIRMED all 9 points. Full artifact: .atlas/evidence/2026-07-21-programmer-plugin-move.md"
   }
 ]

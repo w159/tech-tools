@@ -107,11 +107,7 @@ Docs, prompts & handoff
   `atlas-prompt`          turn a vague request into a structured, tool-aware prompt
   `atlas-gitignore`       zero-trust deny-by-default .gitignore for a named stack
   `atlas-handoff`         high-density session-resume checkpoint (NOT remediation - that's atlas-launch)
-
-Data, cloud & vendors
   `atlas-db-audit`        strictly read-only parallel DB audit -> remediation plan
-  `atlas-m365`            Microsoft 365 / Entra / Graph / Intune config with read-back
-  `atlas-vendor-assessment`   assess a vendor against a control framework you name
 
 Recurring work, connectors & self-improvement
   atlas-loop            select/run a recurring loop from the loop-library

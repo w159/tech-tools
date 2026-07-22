@@ -30,17 +30,15 @@ atlas-setup). Every other skill auto-triggers from its `description` +
 | 13 | atlas-handoff | auto | Produce a dense session handoff so a fresh session resumes with zero re-discovery |
 | 14 | atlas-harden | auto | Write an idempotent CHECK/SET/VERIFY remediation script for RMM/MDM |
 | 15 | atlas-launch | auto | Launch a remediation session preloaded with a finding from the latest audit hub |
-| 16 | atlas-m365 | auto | Deliver a production-ready M365/Entra/Graph/Intune/Exchange config with read-back |
-| 17 | atlas-prompt | auto | Rewrite a vague coding request into a structured, environment-aware prompt |
-| 18 | atlas-readme | auto | Generate an onboarding-grade README.md by inspecting the actual repo |
-| 19 | atlas-refactor | auto | Reorganize structure, naming, and layout without changing observable behavior |
-| 20 | atlas-validate | auto | Audit a Claude Code plugin for structure, manifest validity, content quality |
-| 21 | atlas-vendor-assessment | auto | Evidence-based vendor security assessment against a named framework |
-| 22 | atlas-wiki | auto | Generate and refresh docs/wiki/ diagrams from architecture docs via the graphify skill |
+| 16 | atlas-prompt | auto | Rewrite a vague coding request into a structured, environment-aware prompt |
+| 17 | atlas-readme | auto | Generate an onboarding-grade README.md by inspecting the actual repo |
+| 18 | atlas-refactor | auto | Reorganize structure, naming, and layout without changing observable behavior |
+| 19 | atlas-validate | auto | Audit a Claude Code plugin for structure, manifest validity, content quality |
+| 20 | atlas-wiki | auto | Generate and refresh docs/wiki/ diagrams from architecture docs via the graphify skill |
 
 ## Count check
 
-- Atlas skills: 22 (2 manual, 20 auto)
+- Atlas skills: 20 (2 manual, 18 auto)
 - Manual skills: atlas, atlas-setup
 
 ## Armada (separate plugin)
@@ -57,7 +55,7 @@ its skills are all auto and route through the department agents in
 After scaffolding, atlas-setup tells the user:
 
 1. That atlas and atlas-setup are the two manual skills and how to invoke them.
-2. That the other 20 skills are auto-trigger and will start when the task
+2. That the other 18 skills are auto-trigger and will start when the task
    matches their descriptions.
 3. Whether the armada plugin is installed, and that org deployment lives
    there if the user needs it.

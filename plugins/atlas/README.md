@@ -24,7 +24,7 @@ skill's `description` + `when_to_use`; the manual skills have
 | atlas-audit | auto | Three audit modes: code (quality/security/OWASP swarm), architecture (feature map + duplication + unify proposal), self (atlas run health, context/asset waste, session forensics from the observability DB) |
 | atlas-loop | auto | Match a recurring or iterative task to a curated loop-library entry (loop-until-dry, fan-out-adversarial-verify, red-green-tdd, and more) and instantiate it |
 | atlas-ux-test | auto | App-discovering UX swarm: auto-finds routes and forms in a running web app, then runs cartographer -> persona -> fuzzer -> oracle -> reporter |
-| 16 task skills | auto | atlas-component, atlas-db-audit, atlas-debug, atlas-feature, atlas-frontend, atlas-gitignore, atlas-handoff, atlas-harden, atlas-launch, atlas-m365, atlas-prompt, atlas-readme, atlas-refactor, atlas-validate, atlas-vendor-assessment, atlas-wiki |
+| 14 task skills | auto | atlas-component, atlas-db-audit, atlas-debug, atlas-feature, atlas-frontend, atlas-gitignore, atlas-handoff, atlas-harden, atlas-launch, atlas-prompt, atlas-readme, atlas-refactor, atlas-validate, atlas-wiki |
 
 ## Layout
 

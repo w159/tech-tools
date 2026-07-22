@@ -1,0 +1,10 @@
+{
+  "name": "programmer",
+  "version": "0.1.0",
+  "description": "Turns The Pragmatic Programmer (20th Anniversary Edition) into an active codebase auditor and coding-time advisor. Audits a codebase against the book's principles, tips, and practices, and surfaces relevant lessons while you work.",
+  "author": { "name": "Jerry", "url": "https://github.com/w159" },
+  "repository": "https://github.com/w159/atlas",
+  "homepage": "https://github.com/w159/atlas/tree/main/plugins/programmer",
+  "license": "MIT",
+  "keywords": ["tpp", "pragmatic-programmer", "audit", "code-review", "principles", "best-practices"]
+}

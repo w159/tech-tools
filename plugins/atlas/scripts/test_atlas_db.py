@@ -988,9 +988,9 @@ class UncoveredPathsTest(unittest.TestCase):
         idle = atlas_db.idle_assets(
             self.conn,
             "skill",
-            ["atlas-harden", "atlas-refactor", "atlas-wiki", "atlas-m365"],
+            ["atlas-harden", "atlas-refactor", "atlas-wiki"],
         )
-        self.assertEqual(idle, ["atlas-m365", "atlas-wiki"])
+        self.assertEqual(idle, ["atlas-wiki"])
 
 
 class MainCliTest(unittest.TestCase):

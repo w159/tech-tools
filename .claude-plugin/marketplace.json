@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "atlas",
   "description": "The atlas marketplace: a multi-agent coding architect (atlas) with 22 plainly named skills, 12 core agents, self-improvement hooks, and the atlas-orchestrate methodology (evidence before any done claim), plus an optional organizational deployment plugin (armada) with 11 department agents and 156 department skills.",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "owner": {
     "name": "w159",
     "url": "https://github.com/w159"
@@ -50,6 +50,21 @@
         "branding",
         "compliance",
         "atlas"
+      ]
+    },
+    {
+      "name": "programmer",
+      "source": "./plugins/programmer",
+      "description": "The Pragmatic Programmer (20th Anniversary Edition) as an active codebase auditor and coding-time advisor: 2 skills (tpp-audit runs a 10-dimension codebase review with file:line evidence; tpp-principles surfaces 1-4 relevant book principles while you work), 1 per-dimension auditor agent (tpp-auditor), a UserPromptSubmit nudge hook, and an 89-concept glossary repackaged as reference files for citation.",
+      "category": "developer-tools",
+      "keywords": [
+        "tpp",
+        "pragmatic-programmer",
+        "audit",
+        "code-review",
+        "principles",
+        "best-practices",
+        "book"
       ]
     }
   ]

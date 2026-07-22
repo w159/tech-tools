@@ -58,8 +58,6 @@ CORE_AGENTS = {
 # (user-invocable but not auto-triggered)
 NICHE_SKILLS = {
     "atlas-wiki",  # graphify wiring — only when wiki is needed
-    "atlas-vendor-assessment",
-    "atlas-m365",
     "atlas-gitignore",
     "atlas-component",
     "atlas-db-audit",
