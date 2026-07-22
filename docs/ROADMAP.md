@@ -14,12 +14,6 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
   Decision needed: move to `reference/` at repo root, or keep in docs/ as reference material.
   These carry their own nested .git dirs and are not project documentation.
 
-## Done
-
-- [done] Kimi marketplace installation fixed: added missing `.kimi-plugin/plugin.json` manifests for armada and programmer plugins, added root `kimi.plugin.json` and `.kimi-plugin/marketplace.json` with GitHub URLs. All 3 plugins (atlas, armada, programmer) now installable via Kimi marketplace.
-  - Evidence: `kimi.plugin.json:1-8`, `.kimi-plugin/marketplace.json:1-8`, `marketplace.json:1-8`, `plugins/armada/.kimi-plugin/plugin.json:1-11`, `plugins/programmer/.kimi-plugin/plugin.json:1-11`
-  - CHANGELOG: 2026-07-22 entry
-
 ## Backlog
 
 ### Atlas v3.1.0 follow-ups (added 2026-07-09)
