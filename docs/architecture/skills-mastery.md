@@ -1,21 +1,27 @@
 # Skills Mastery Framework Application
 
 How the post-5.0.0 atlas fleet is structured to the Claude Code Skills Mastery
-Framework. The fleet is now split across two plugins: a 21-skill
+Framework. The fleet is now split across two plugins: a 20-skill
 plugins/atlas (12 core agents in plugins/atlas/agents) and a separate
 plugins/armada (11 department agents in plugins/armada/agents, with the
 armada department skills under plugins/armada/skills/armada/departments/).
+(The marketplace catalog also ships a third, unrelated plugin, programmer -
+a standalone Pragmatic Programmer auditor with its own skills and agent -
+that does not apply the atlas Skills Mastery Framework described here and
+is out of scope for this document.)
 The authoritative spec is
 plugins/atlas/skills/atlas-setup/references/mastery-framework.md (moved here
 when atlas-olympus was merged into atlas-setup in 5.0.0).
 
 Counts are verified by plugins/atlas/skills/atlas-setup/scripts/plugin-health.py,
-which reports `skills: actual=21` and `agents: actual=12`, both PASS against
-the atlas manifest. The 21 atlas skills are: atlas-audit, atlas-component,
-atlas-db-audit, atlas-debug, atlas-feature, atlas-frontend, atlas-gitignore,
-atlas-handoff, atlas-harden, atlas-launch, atlas-loop, atlas-m365,
+which reports `skills: actual=20` and `agents: actual=12`, both PASS against
+the atlas manifest. The 20 atlas skills are: atlas, atlas-audit,
+atlas-component, atlas-db-audit, atlas-debug, atlas-feature, atlas-frontend,
+atlas-gitignore, atlas-handoff, atlas-harden, atlas-launch, atlas-loop,
 atlas-orchestrate, atlas-prompt, atlas-readme, atlas-refactor, atlas-setup,
-atlas-ux-test, atlas-validate, atlas-vendor-assessment, atlas-wiki. The 12
+atlas-ux-test, atlas-validate, atlas-wiki (atlas-m365 and
+atlas-vendor-assessment removed 2026-07-21; see docs/CHANGELOG.md and
+.atlas/findings/2026-07-21-remove-m365-vendor-assessment.md). The 12
 core agents live in plugins/atlas/agents/: completeness-critic, db-prober,
 docs-auditor, docs-curator, explorer, implementer, naming-glossary-audit,
 planner, rls-privilege-audit, schema-inventory, ui-runtime-tester, verifier.
@@ -92,7 +98,7 @@ locate themselves. Examples in this run:
   (Moved from atlas-olympus/scripts/ when olympus merged into atlas-setup.)
 - plugins/atlas/skills/atlas-setup/scripts/plugin-health.py: the health
   gate that verifies skill and agent counts against the manifest; source
-  of the `skills: actual=21` / `agents: actual=12` evidence cited above.
+  of the `skills: actual=20` / `agents: actual=12` evidence cited above.
 - plugins/atlas/skills/atlas-wiki/scripts/check_wiki_freshness.sh: compares
   the newest mtime under .atlas/docs/wiki/diagrams/ against
   .atlas/docs/architecture/ and emits FRESH, MISSING, or STALE (exits 0,
@@ -140,5 +146,5 @@ The run is complete and verified. S1 through S8 are green (S7 armada all
 11 departments verified, S8 scaffold verified), and S10 content fixes are
 verified. See .atlas/docs/.run/findings.json for per-stage verifier
 verdicts and .atlas/docs/CHANGELOG.md for the completion entry. The
-post-5.0.0 fleet counts (21 atlas skills, 12 atlas agents, 11 armada
+post-5.0.0 fleet counts (20 atlas skills, 12 atlas agents, 11 armada
 department agents) are re-verified by plugin-health.py as of this writing.

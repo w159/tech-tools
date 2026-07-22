@@ -40,8 +40,9 @@ Key facts:
 ## Repo feature boundaries
 
 - **Root `/skills/` (12 standalone tools):** az-cost-optimize, azure-deployment-preflight, cloud-design-patterns, codebase-brain, database-optimization, entra-agent-user, graphify, msgraph-sdk, msoffice-docs, scrapling-official, security-audit, webapp-testing. All target external domains (Azure, MS APIs, security, web).
-- **`/plugins/atlas/` (the plugin):** 21 atlas-* skills + 12 agents + 10 hooks + scripts. Atlas-specific operations (audit, debug, orchestrate).
+- **`/plugins/atlas/` (the plugin):** 20 atlas-* skills + 12 agents + 10 hooks + scripts. Atlas-specific operations (audit, debug, orchestrate).
 - **`/plugins/armada/` (org config layer):** 11 department agents carrying org branding/compliance context + the armada routing skill.
+- **`/plugins/programmer/` (independent developer-tools plugin, added 2026-07-21):** 2 skills (tpp-audit, tpp-principles) + 1 agent (tpp-auditor) + 1 UserPromptSubmit hook. Pragmatic Programmer codebase auditor with an 89-concept glossary; not part of the atlas orchestration engine.
 - **`/plugins/_standards/`, `/plugins/_templates/`:** scaffolding docs and skill/command/agent/plugin templates.
 - **`/mcp_servers/`:** per-vendor MCP servers (auvik, cipp, connectwise-manage, vanta, knowbe4, ...).
 
@@ -53,7 +54,8 @@ Key facts:
 | Root-finding (walk up to `docs/`) | `completion_gate.py:54-70`, `session_boot.py:164-180` | Same upward-walk, two names (`_find_root` vs inside `find_structure`). |
 | atlas_db bootstrap (sys.path + connect + init) | `dispatch_tripwire.py:122-134`, `completion_gate.py:390-408`, `memory_capture.py:216` | No shared bootstrap; each hook re-injects `scripts/` on sys.path and re-inits. One `atlas_db.bootstrap()` would centralize it. |
 | MCP-server shell / `DomainHandler` interface | copied per server, `vanta` vs `knowbe4` have DRIFTED | The whole MCP-server shell is duplicated and the copies diverge. Highest-risk duplication: drift means per-server behavior differences. Candidate for a shared `mcp_servers/_shared` (note: that dir was just deleted in `56d1a9f`, breaking auvik - see CODE audit H7; the unification target must be rebuilt, not assumed present). |
-| M365 coverage | `armada/agents/armada-m365.md` vs `atlas/skills/atlas-m365/SKILL.md` | Overlapping domain; armada version adds org routing. Intentional layering, but keep shared M365 knowledge in one place to avoid drift. |
+
+M365 coverage duplication (previously `armada/agents/armada-m365.md` vs `atlas/skills/atlas-m365/SKILL.md`) is resolved: `atlas-m365` was deleted 2026-07-21 (see docs/CHANGELOG.md), leaving `armada-m365.md` as the sole M365 coverage.
 
 ## Simplest unification proposal
 

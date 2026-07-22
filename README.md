@@ -13,14 +13,16 @@
 Atlas installs a full operating contract on top of Claude Code: a research to
 verify loop, a squad of role subagents, eleven event hooks, persistent memory,
 and automatic skill creation. You run `/atlas` once to onboard a project, then
-drive work through 22 plainly named skills. The agent stops guessing, starts
+drive work through 20 plainly named skills. The agent stops guessing, starts
 verifying, and gets measurably better the more you use it in a codebase.
 
-- Plugin version `5.1.1` (`plugins/atlas/.claude-plugin/plugin.json:3`)
-- Marketplace catalog version `3.0.0` (`.claude-plugin/marketplace.json`)
-- 22 skills, 12 agents, 11 hooks, 10 optional connectors, 1 output style
+- Plugin version `5.1.1` (`plugins/atlas/.claude-plugin/plugin.json:2`)
+- Marketplace catalog version `3.1.0` (`.claude-plugin/marketplace.json:5`)
+- 20 skills, 12 agents, 11 hooks, 10 optional connectors, 1 output style
+- Two more plugins ship in the same marketplace: `armada` (org deployment)
+  and `programmer` (a Pragmatic Programmer codebase auditor)
 
-> Two version counters, not a typo. The marketplace wrapper (`3.0.0`) versions
+> Two version counters, not a typo. The marketplace wrapper (`3.1.0`) versions
 > the catalog file. The `atlas` plugin it lists versions independently at
 > `5.1.1`. Every `v5.x` reference below is the plugin version.
 
@@ -32,17 +34,18 @@ verifying, and gets measurably better the more you use it in a codebase.
 2. [Install and quickstart](#install-and-quickstart)
 3. [The operating contract](#the-operating-contract-research-to-verify)
 4. [Architecture: how a task flows](#architecture-how-a-task-flows)
-5. [Skills (22)](#skills-22)
+5. [Skills (20)](#skills-20)
 6. [Agents (12)](#agents-12)
 7. [Hooks (11)](#hooks-11)
 8. [Scripts](#scripts)
 9. [Connectors (10 MCP servers)](#connectors-10-mcp-servers)
-10. [Output style](#output-style)
-11. [Docs as the single source of truth](#docs-as-the-single-source-of-truth)
-12. [Self-improvement](#self-improvement)
-13. [Repository layout](#repository-layout)
-14. [Prerequisites and configuration](#prerequisites-and-configuration)
-15. [Repair, testing, troubleshooting](#repair-testing-troubleshooting)
+10. [Other plugins in this marketplace](#other-plugins-in-this-marketplace)
+11. [Output style](#output-style)
+12. [Docs as the single source of truth](#docs-as-the-single-source-of-truth)
+13. [Self-improvement](#self-improvement)
+14. [Repository layout](#repository-layout)
+15. [Prerequisites and configuration](#prerequisites-and-configuration)
+16. [Repair, testing, troubleshooting](#repair-testing-troubleshooting)
 
 ---
 
@@ -71,11 +74,14 @@ the practical before and after once the plugin is installed.
 ![Atlas plugin marketplace tile](img/plugin-marketplace-tile.png)
 
 1. **Add the marketplace.** In Claude Code, run `/plugin` and add this repo's
-   marketplace file, `.claude-plugin/marketplace.json` (catalog name `atlas`).
+   marketplace file, `.claude-plugin/marketplace.json` (catalog name `atlas`,
+   version `3.1.0`, listing three plugins: `atlas`, `armada`, `programmer`).
    Kimi Code CLI is also supported through `.kimi-plugin/marketplace.json`.
-2. **Install the plugin.** Install `atlas` from the marketplace. Install the
-   optional `armada` org-deployment plugin too only if you need the 11-department
-   toolset (`plugins/armada/`).
+2. **Install the plugin.** Install `atlas` from the marketplace. Two optional
+   plugins live in the same catalog: `armada` for the 11-department org
+   toolset (`plugins/armada/`), and `programmer` for a Pragmatic Programmer
+   codebase auditor (`plugins/programmer/`, see below). Neither is required
+   for `atlas` to work.
 3. **Onboard a project.** In your repo, type `/atlas` once. The `atlas-setup`
    skill scaffolds `docs/` (plus internal `.atlas/` state), verifies or offers
    to install `claude-mem` and `context-mode`, wires the hooks, and recommends
@@ -155,7 +161,7 @@ different files" is not accepted as a reason to skip isolation
 
 ---
 
-## Skills (22)
+## Skills (20)
 
 Skills are the entry points. Type the name or describe the work. Manual skills
 are marked; everything else auto-triggers from its `description`. Sources:
@@ -291,6 +297,31 @@ an idempotent remediation script. Server source lives under `mcp_servers/`
 
 ---
 
+## Other plugins in this marketplace
+
+The marketplace catalog (`.claude-plugin/marketplace.json`) lists three
+plugins. Only `atlas` is required; the other two are independent installs.
+
+**`armada`** (`plugins/armada/`, v1.0.0) is the organizational deployment
+layer split out of atlas: 11 department agents (data, design, engineering,
+finance, HR, IT ops, M365, product, productivity, security, support) plus
+156 department skills carrying org branding, policy, and compliance context.
+Its own dispatch entry point is the `armada` skill
+(`plugins/armada/skills/armada/SKILL.md`).
+
+**`programmer`** (`plugins/programmer/`, v0.1.0) turns *The Pragmatic
+Programmer* (20th Anniversary Edition) into an active codebase auditor and
+coding-time advisor. It ships 2 skills, `tpp-audit` (a 10-dimension codebase
+review with file:line evidence, `plugins/programmer/skills/tpp-audit/`) and
+`tpp-principles` (surfaces 1-4 relevant book principles while you work,
+`plugins/programmer/skills/tpp-principles/`), 1 per-dimension auditor agent
+(`tpp-auditor`, `plugins/programmer/agents/tpp-auditor.md`), a
+`UserPromptSubmit` nudge hook that points at the relevant concept file for
+your prompt (`plugins/programmer/hooks/hooks.json`), and an 89-concept
+glossary under `skills/tpp-principles/references/concepts/` for citation.
+
+---
+
 ## Output style
 
 `output-styles/atlas-orchestrator.md` ships with `force-for-plugin: true`, so it
@@ -348,12 +379,12 @@ are required; `atlas-setup` detects them and offers to install if missing.
 atlas/
 |- README.md                 # this file
 |- img/                      # repo imagery (hero, headers, tiles)
-|- .claude-plugin/           # marketplace.json catalog (name: atlas, 3.0.0)
+|- .claude-plugin/           # marketplace.json catalog (name: atlas, 3.1.0)
 |- plugins/
 |  |- atlas/                 # the plugin (v5.1.1)
 |  |  |- .claude-plugin/     # plugin.json manifest + userConfig
 |  |  |- .mcp.json           # 10 connector server definitions
-|  |  |- skills/             # 22 skills
+|  |  |- skills/             # 20 skills
 |  |  |- agents/             # 12 role agents
 |  |  |- hooks/              # 11 hooks + hooks.json + tests
 |  |  |- scripts/            # tooling (db, memory, factory, curator, ...)
@@ -362,6 +393,7 @@ atlas/
 |  |  |- references/         # supporting reference docs
 |  |  \- CHANGELOG.md
 |  |- armada/                # optional org-deployment plugin (11 departments)
+|  |- programmer/            # optional Pragmatic Programmer auditor plugin
 |  |- _standards/            # shared authoring standards
 |  \- _templates/            # skill/agent templates
 |- mcp_servers/              # connector source (10 *-mcp projects + _shared)
@@ -389,7 +421,9 @@ atlas/
   config.
 
 The `armada` plugin adds 11 department agents for org deployment and is separate;
-install it only for organizational use.
+install it only for organizational use. The `programmer` plugin is a standalone
+codebase auditor with no dependency on `atlas` or `armada`; install it if you
+want Pragmatic Programmer principle audits.
 
 ---
 
@@ -434,8 +468,5 @@ Lint with `ruff check plugins/atlas/hooks plugins/atlas/scripts`; typecheck with
 
 Apache-2.0 licensed. Author: [w159](https://github.com/w159). Repository:
 [github.com/w159/atlas](https://github.com/w159/atlas).
-
-</div>
-atlas).
 
 </div>

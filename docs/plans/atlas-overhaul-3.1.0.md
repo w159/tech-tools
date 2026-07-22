@@ -1,9 +1,8 @@
 # Atlas 3.0.2 -> 3.1.0 overhaul - stage map (living)
 
 > Note (2026-07-12): this plan is historical and pre-dates the v5.0.0 split.
-> The Claude Code marketplace now lists 2 plugins (`atlas`, `armada`); the
-> 12-plugin catalog is gone. See `docs/CHANGELOG.md` 2026-07-12 README rewrite
-> follow-up entry for the current state.
+> The 12-plugin catalog is gone; see `docs/CHANGELOG.md` (newest entry first)
+> for the current marketplace plugin count and catalog state.
 
 Source: atlas:planner (opus), 2026-07-09, session 1b3bbf4e. Full map in planner
 report; this file tracks decisions + status. Baselines under attack: improvements

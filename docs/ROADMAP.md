@@ -34,7 +34,7 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
   tracks henssler-financial remote, expected w159/atlas per
   `plugins/atlas/.claude-plugin/plugin.json:8`; the marketplace name itself
   is `atlas` per `.claude-plugin/marketplace.json:3`, and the marketplace
-  now lists 2 plugins, not 12) - run
+  now lists 3 plugins: `atlas`, `armada`, `programmer`) - run
   `python3 plugins/atlas/scripts/atlas_doctor.py --fix` then reload plugins.
 - Improvement #28 (user-gated): one-line global CLAUDE.md rule that the Skill tool
   is only for listed skills (34 historical Skill(bash/read/write) misfires, 100%

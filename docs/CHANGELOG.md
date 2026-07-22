@@ -4,6 +4,46 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
+## 2026-07-21 -- README updated with accurate inventory and marketplace 3.1.0
+
+Documentation sync: README.md updated to reflect real skill and plugin counts, marketplace version bump, and structural additions.
+
+- Corrected skill count: 22 → 20 (README.md:16, 37, 164). Two skills were consolidated or removed in the v5.1.1 plugin release but README had not been synced.
+- Bumped marketplace catalog version: 3.0.0 → 3.1.0 (README.md:19-20, 27, 382).
+- Corrected plugin manifest file path reference: `plugins/atlas/.claude-plugin/plugin.json:3` → `:2` (README.md:19).
+- Added marketplace catalog path reference: `.claude-plugin/marketplace.json:5` (README.md:20).
+- Added "Other plugins in this marketplace" section (README.md:300-321) documenting the three plugins now shipped in the unified catalog:
+  - `atlas` (v5.1.1) - core agent and skill framework
+  - `armada` (v1.0.0) - organizational deployment (11 departments, 156 skills)
+  - `programmer` (v0.1.0) - Pragmatic Programmer auditor with 2 skills and 89-concept glossary
+- Updated quickstart instructions to name all three plugins in the marketplace listing (README.md:76-84).
+- Added "Prerequisites and configuration" clarification that `programmer` is optional and independent (README.md:424-426).
+- Fixed repository layout tree: added `programmer/` to plugin section (README.md:396).
+- Fixed malformed closing `</div>` tag (README.md:473).
+
+---
+
+## 2026-07-21 -- Added `programmer` plugin (Pragmatic Programmer auditor) to the marketplace
+
+Moved the standalone `pragmatic-programmer` plugin into the `atlas` marketplace as a new plugin named `programmer`, with skills namespaced `tpp-*`.
+
+- New plugin at `plugins/programmer/`: 2 skills (`tpp-audit`, `tpp-principles`, renamed from `pragmatic-audit`/`pragmatic-principles`), 1 agent (`tpp-auditor`, renamed from `pragmatic-auditor`), 1 UserPromptSubmit hook, and an 89-concept glossary under `skills/tpp-principles/references/concepts/`.
+- Renamed internal cross-references throughout `agents/tpp-auditor.md`, `skills/tpp-audit/SKILL.md`, `skills/tpp-audit/references/dimensions.md`, `README.md`, and `LICENSE` to match the new `tpp-*` naming.
+- Registered `programmer` in `.claude-plugin/marketplace.json`: version `3.0.0` → `3.1.0`, plugin added with `source: ./plugins/programmer`, `category: developer-tools`.
+- Verified by two independent `atlas:verifier` passes: first pass REFUTED on a stale `LICENSE:3` path reference (`skills/pragmatic-principles/references/concepts/` → `skills/tpp-principles/references/concepts/`); fixed and re-verified CONFIRMED on all 9 checks. Full evidence: `.atlas/evidence/2026-07-21-programmer-plugin-move.md`.
+
+---
+
+## 2026-07-21 -- Removed atlas-m365 and atlas-vendor-assessment skills
+
+Deleted two unused auto-trigger skills from the atlas plugin: `plugins/atlas/skills/atlas-m365/` and `plugins/atlas/skills/atlas-vendor-assessment/`, including their SKILL.md and references. Neither had callers; `atlas-m365` overlapped with armada's own M365 coverage, `atlas-vendor-assessment` was a niche security-evaluation skill.
+
+- Atlas plugin skill count: 22 → 20 (16 → 14 task skills). Verified via `plugins/atlas/skills/atlas-setup/scripts/plugin-health.py plugins/atlas` → `skills: actual=20, PASS`.
+- Updated: `plugins/atlas/README.md`, `plugins/atlas/.claude-plugin/plugin.json` (description), `plugins/atlas/skills/atlas/SKILL.md`, `plugins/atlas/skills/atlas-setup/SKILL.md`, `plugins/atlas/skills/atlas-setup/references/manual-vs-auto-map.md`, `plugins/atlas/skills/atlas-setup/references/skill-routing.md`, `plugins/atlas/skills/atlas-setup/templates/reference_files/README.md`, root `README.md`.
+- Full record: `.atlas/findings/2026-07-21-remove-m365-vendor-assessment.md`.
+
+---
+
 ## 2026-07-17 -- Residual Dependabot alerts cleared, mcp_servers/_shared restored, commit adace06
 
 Follow-up to the 711fb10 remediation below. Closes both defects that entry tracked as out
