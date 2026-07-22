@@ -147,6 +147,8 @@ firebase-adminsdk*.json
 !CONTRIBUTING.md
 !SECURITY.md
 !CLA.md
+!kimi.plugin.json
+!marketplace.json
 
 # ---- Root scripts ----
 !test-mcp-tools.mjs
