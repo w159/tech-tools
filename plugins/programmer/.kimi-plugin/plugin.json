@@ -1,0 +1,11 @@
+{
+  "name": "programmer",
+  "version": "0.1.0",
+  "displayName": "Programmer",
+  "description": "Pragmatic Programmer principles as enforceable skills: 2 skills (tpp-audit, tpp-principles) with domain-aware nudging hook. Claude-only plugin (no Kimi marketplace distribution).",
+  "author": { "name": "w159", "url": "https://github.com/w159" },
+  "repository": "https://github.com/w159/atlas",
+  "homepage": "https://github.com/w159/atlas/tree/main/plugins/programmer",
+  "license": "Apache-2.0",
+  "keywords": ["programmer", "pragmatic", "tpp", "audit", "principles", "nudging"]
+}

@@ -1,15 +1,8 @@
 {
   "version": "2",
   "plugins": [
-    {
-      "id": "atlas",
-      "displayName": "Atlas",
-      "source": "./plugins/atlas"
-    },
-    {
-      "id": "armada",
-      "displayName": "Armada",
-      "source": "./plugins/armada"
-    }
+    { "id": "atlas", "displayName": "Atlas", "source": "https://github.com/w159/atlas/tree/main/plugins/atlas" },
+    { "id": "armada", "displayName": "Armada", "source": "https://github.com/w159/atlas/tree/main/plugins/armada" },
+    { "id": "programmer", "displayName": "Programmer", "source": "https://github.com/w159/atlas/tree/main/plugins/programmer" }
   ]
 }

@@ -4,10 +4,11 @@ This file is the canonical AGENTS.md directive set for any AI agent (Claude Code
 
 ## 0. Repository identity: atlas and armada are products built here, not tools to run here (READ FIRST)
 
-This repository is the **atlas marketplace** (`.claude-plugin/marketplace.json`). It publishes two Claude Code plugins whose source code lives in this tree:
+This repository is the **atlas marketplace** (`.claude-plugin/marketplace.json`). It publishes three Claude Code plugins whose source code lives in this tree:
 
 - **atlas** - source at `plugins/atlas/` (a multi-agent coding architect: skills, agents, hooks, output styles, MCP config, scripts).
 - **armada** - source at `plugins/armada/` (an organizational deployment layer for atlas: department agents and skills).
+- **programmer** - source at `plugins/programmer/` (a Pragmatic Programmer codebase auditor with 2 skills and an 89-concept glossary).
 
 When the user says "atlas" or "armada" in a prompt in this repository, they mean **the plugin as a software product you are developing** - its code, functionality, skills, agents, hooks, docs, and dependencies. Every request to "add", "fix", "change", "improve", "rename", or "remove" something in atlas or armada is a request to **edit the plugin source under `plugins/atlas/` or `plugins/armada/`** (and the shared dependencies that back them), then verify the change.
 

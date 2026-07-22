@@ -4,6 +4,21 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
+## 2026-07-22 -- Kimi marketplace installation fixed: all 3 plugins now installable
+
+Fixed Kimi marketplace installation by adding missing `.kimi-plugin/plugin.json` manifests for armada and programmer plugins, and adding repo root `kimi.plugin.json` and `.kimi-plugin/marketplace.json` with GitHub source URLs.
+
+- Added `plugins/armada/.kimi-plugin/plugin.json` (v1.0.0) - Armada org deployment plugin manifest
+- Added `plugins/programmer/.kimi-plugin/plugin.json` (v0.1.0) - Programmer plugin manifest  
+- Added root `kimi.plugin.json` (v2) listing all 3 plugins with local paths: `./plugins/atlas`, `./plugins/armada`, `./plugins/programmer`
+- Added `.kimi-plugin/marketplace.json` with GitHub URLs for all 3 plugins: `https://github.com/w159/atlas/tree/main/plugins/atlas`, `https://github.com/w159/atlas/tree/main/plugins/armada`, `https://github.com/w159/atlas/tree/main/plugins/programmer`
+- Root `marketplace.json` also updated with GitHub URLs (was using local paths)
+- All 3 plugins (atlas v5.1.1, armada v1.0.0, programmer v0.1.0) now installable via Kimi marketplace
+
+Evidence: `kimi.plugin.json:1-8`, `.kimi-plugin/marketplace.json:1-8`, `marketplace.json:1-8`, `plugins/armada/.kimi-plugin/plugin.json:1-11`, `plugins/programmer/.kimi-plugin/plugin.json:1-11`
+
+---
+
 ## 2026-07-21 -- README updated with accurate inventory and marketplace 3.1.0
 
 Documentation sync: README.md updated to reflect real skill and plugin counts, marketplace version bump, and structural additions.

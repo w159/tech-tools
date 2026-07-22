@@ -1,0 +1,11 @@
+{
+  "name": "armada",
+  "version": "1.0.0",
+  "displayName": "Armada",
+  "description": "Organizational deployment layer: 11 department agents (data, design, engineering, finance, HR, IT ops, M365, product, productivity, security, support) and 156 department skills with org branding, policies, and compliance context. Install alongside atlas for org use.",
+  "author": { "name": "w159", "url": "https://github.com/w159" },
+  "repository": "https://github.com/w159/atlas",
+  "homepage": "https://github.com/w159/atlas/tree/main/plugins/armada",
+  "license": "Apache-2.0",
+  "keywords": ["armada", "organization", "departments", "branding", "compliance", "atlas"]
+}
