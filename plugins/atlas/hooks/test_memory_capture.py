@@ -12,6 +12,7 @@ sys.path.insert(0, SCRIPTS)
 sys.path.insert(0, HERE)
 
 import atlas_db  # noqa: E402
+import atlas_hook_guard  # noqa: E402
 import memory_capture  # noqa: E402
 
 
@@ -143,13 +144,11 @@ class MemoryCaptureAddFailureTest(unittest.TestCase):
         self._atlas_memory = atlas_memory
         self._orig_add = atlas_memory.add
 
-        # Isolate the throttle marker and seen-hash file in tmp so this test
-        # never touches (or is throttled by) real ~/.atlas state.
-        self.marker = os.path.join(self.tmp, ".atlas_memory_capture")
+        # Isolate the guard's hookstate dir and the seen-hash file in tmp so
+        # this test never touches (or is throttled/deduped by) real ~/.atlas
+        # state.
         self.seen_path = os.path.join(self.tmp, ".memory_capture_seen")
-        patcher1 = mock.patch.object(
-            memory_capture, "_capture_marker_path", lambda: self.marker
-        )
+        patcher1 = mock.patch.object(atlas_hook_guard, "_state_dir", lambda: self.tmp)
         patcher2 = mock.patch.object(
             memory_capture, "_seen_hashes_path", lambda: self.seen_path
         )
@@ -221,13 +220,11 @@ class MemoryCaptureMainPathTest(unittest.TestCase):
         self._atlas_memory = atlas_memory
         self._orig_add = atlas_memory.add
 
-        # Isolate the throttle marker and seen-hash file in tmp so this test
-        # never touches (or is throttled by) real ~/.atlas state.
-        self.marker = os.path.join(self.tmp, ".atlas_memory_capture")
+        # Isolate the guard's hookstate dir and the seen-hash file in tmp so
+        # this test never touches (or is throttled/deduped by) real ~/.atlas
+        # state.
         self.seen_path = os.path.join(self.tmp, ".memory_capture_seen")
-        patcher1 = mock.patch.object(
-            memory_capture, "_capture_marker_path", lambda: self.marker
-        )
+        patcher1 = mock.patch.object(atlas_hook_guard, "_state_dir", lambda: self.tmp)
         patcher2 = mock.patch.object(
             memory_capture, "_seen_hashes_path", lambda: self.seen_path
         )
@@ -631,13 +628,11 @@ class MemoryCaptureLoopGuardTest(unittest.TestCase):
         self._orig_add = atlas_memory.add
         self._atlas_memory.add = self._add_ok
 
-        # Isolate the throttle marker and seen-hash file in tmp so this test
-        # never touches (or is throttled by) real ~/.atlas state.
-        self.marker = os.path.join(self.tmp, ".atlas_memory_capture")
+        # Isolate the guard's hookstate dir and the seen-hash file in tmp so
+        # this test never touches (or is throttled/deduped by) real ~/.atlas
+        # state.
         self.seen_path = os.path.join(self.tmp, ".memory_capture_seen")
-        patcher1 = mock.patch.object(
-            memory_capture, "_capture_marker_path", lambda: self.marker
-        )
+        patcher1 = mock.patch.object(atlas_hook_guard, "_state_dir", lambda: self.tmp)
         patcher2 = mock.patch.object(
             memory_capture, "_seen_hashes_path", lambda: self.seen_path
         )
@@ -711,7 +706,7 @@ class MemoryCaptureLoopGuardTest(unittest.TestCase):
         payload = {"session_id": "repeat-sess", "cwd": "/repo/atlas"}
         # Bypass the time throttle so this exercises the hash dedupe
         # specifically, not the blast-radius cap (covered separately below).
-        with mock.patch.object(memory_capture, "_throttled", return_value=False):
+        with mock.patch.object(atlas_hook_guard, "should_run", return_value=True):
             _err1, out1 = self._run_main(payload)
             _err2, out2 = self._run_main(payload)
         self.assertIn("additionalContext", out1)
@@ -724,7 +719,7 @@ class MemoryCaptureLoopGuardTest(unittest.TestCase):
         snippet = "Never edit files outside the assigned scope"
         self._seed_correction("agent-aaa-sess", snippet, message_uuid="m-a")
         self._seed_correction("agent-bbb-sess", snippet, message_uuid="m-b")
-        with mock.patch.object(memory_capture, "_throttled", return_value=False):
+        with mock.patch.object(atlas_hook_guard, "should_run", return_value=True):
             _err1, out1 = self._run_main(
                 {"session_id": "agent-aaa-sess", "cwd": "/x/agent-aaa"}
             )

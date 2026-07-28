@@ -30,12 +30,19 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 - Classifier arm-precision monitoring: use sextant (runs.orchestrating vs actual
   dispatches) to measure real-world false-arm rate of the accepted dual-use-verb
   residual (audit/investigate/debug/profile/harden).
-- atlas_doctor marketplace-source repair: pre-existing FAILs (installed cache
-  tracks henssler-financial remote, expected w159/atlas per
-  `plugins/atlas/.claude-plugin/plugin.json:8`; the marketplace name itself
-  is `atlas` per `.claude-plugin/marketplace.json:3`, and the marketplace
-  now lists 3 plugins: `atlas`, `armada`, `programmer`) - run
-  `python3 plugins/atlas/scripts/atlas_doctor.py --fix` then reload plugins.
+- atlas_doctor marketplace-source repair: pre-existing FAILs, unrelated to and
+  not introduced by the 2026-07-28 Stop-hook loop fix. As of 2026-07-28,
+  `python3 plugins/atlas/scripts/atlas_doctor.py` reports:
+  `FAIL marketplace-source https://github.com/w159/tech-tools.git (expected
+  w159/atlas)` and `FAIL clone-remote https://github.com/w159/tech-tools.git`.
+  (Supersedes an earlier observation of this same FAIL category that recorded
+  a `henssler-financial` remote; the underlying installed-cache-vs-plugin-
+  manifest mismatch is the same class of issue, the observed remote value has
+  since changed.) The marketplace name itself is `atlas` per
+  `.claude-plugin/marketplace.json:3`, and the marketplace lists 3 plugins:
+  `atlas`, `armada`, `programmer`. `atlas_doctor.py` offers `--fix`; it has
+  not been run. Run `python3 plugins/atlas/scripts/atlas_doctor.py --fix`
+  then reload plugins.
 - Improvement #28 (user-gated): one-line global CLAUDE.md rule that the Skill tool
   is only for listed skills (34 historical Skill(bash/read/write) misfires, 100%
   error rate).

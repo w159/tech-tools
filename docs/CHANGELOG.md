@@ -4,6 +4,23 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
+## 2026-07-28 -- atlas 5.2.0: shared Stop-hook guard module with a session circuit breaker
+
+The point fix earlier this date (`ab67df4`) patched `memory_capture.py` directly. The user pushed back that this was insufficient: the invariant "a Stop hook must not re-emit identical feedback forever" was still hand-implemented inconsistently across five hooks, and any new hook would inherit nothing. This release is the structural answer: one shared module plus a session-wide circuit breaker that can see the Stop chain thrashing as a whole, which no per-hook throttle can do.
+
+- New module `plugins/atlas/scripts/atlas_hook_guard.py` (about 218 lines). API: `read_payload()`, `should_run(payload, hook_name, window_seconds=None)`, `emit(payload, hook_name, message)`. Per-session JSON state at `~/.atlas/hookstate/<session_id>.json`, overridable via `ATLAS_HOOKSTATE_DIR` for tests. Tracks `last_run` per hook, `stop_events` for the breaker, and emitted message hashes (sha256, first 16 hex chars).
+- Circuit breaker: `STOP_BURST_LIMIT = 5`, `STOP_BURST_WINDOW = 120` seconds. More than 5 Stop events inside 120 seconds trips it for the rest of the session, silencing every atlas Stop hook. Writes one line to stderr, never stdout (stdout output would itself become hook feedback and could re-enter the loop it is meant to stop).
+- All five Stop hooks rewired to the guard, each keeping its previous throttle window now expressed through it: `nudge.py` 900s, `auto_skill.py` 600s, `memory_capture.py` 900s; `ingest_session.py` and `completion_gate.py` carry no throttle of their own (breaker only).
+- Design decision: `completion_gate.py` uses `should_run()` only, not `emit()`. Its definition-of-done block message is meant to repeat identically every Stop until the conditions are actually met; content-hash dedupe would silently defeat the gate. Only the breaker can silence it. Verified: three consecutive subprocess calls returned the identical block; a 7-call burst silenced it at call 6 via the breaker.
+- `memory_capture.py` keeps its separate fact-level seen-marker (`~/.atlas/.memory_capture_seen`) unchanged. That marker is about facts; the guard's dedupe is about messages. Two different mechanisms, both retained deliberately.
+- Version bumped 5.1.1 -> 5.2.0 in `plugins/atlas/.claude-plugin/plugin.json:3` and `plugins/atlas/.kimi-plugin/plugin.json:3` (minor bump: new capability plus a bug fix, no breaking change). No marketplace manifest carries a per-plugin atlas version (`.claude-plugin/marketplace.json` entries hold only name, source, description, category, keywords; the Kimi registries hold only id, displayName, source), so those two plugin manifests are the entire version surface. The registry's own `3.1.0` in `.claude-plugin/marketplace.json` is unrelated and was correctly left alone.
+
+Evidence: 23 passed in `test_atlas_hook_guard.py`; 129 passed across the five wired hook suites; 562 passed in `plugins/atlas/scripts`; 427 passed in `plugins/atlas/hooks`; ruff clean on all touched files. Incident replay end to end against the real `memory_capture.py` hook, same session, 4 calls about 1 second apart: call 1 emitted `additionalContext`, calls 2, 3, and 4 emitted nothing, exit 0 throughout. Breaker probe on a 13-second cadence: allowed, allowed, allowed, allowed, allowed, then blocked at Stop 6 (t=65s); after tripping, `should_run` returned False for all five hook names. Breaker probe on a legitimate slow cadence, 5 Stops over 10 minutes: never trips. Breaker is per-session: tripping session A does not silence session B. Fail-open held under ten adversarial probes, including corrupt JSON state, the state path being a directory, a chmod 000 state dir, malformed stdin, a missing `session_id`, and a poisoned schema; no exception escaped any of them.
+
+Known pre-existing operational issue, not introduced by this work: `atlas_doctor.py` reports the plugin's marketplace source pointing at `w159/tech-tools` where it expects `w159/atlas`. See ROADMAP.
+
+---
+
 ## 2026-07-28 -- Fixed endless Stop-hook self-improvement loop that burned a usage limit
 
 A Claude Code session entered an endless Stop-hook loop: every turn re-emitted "[atlas] Self-improvement: captured 1 memory fact(s) and 0 project fact(s) from this session..." roughly every 13 seconds until the usage limit was exhausted. Root cause was two-fold: `memory_capture.py` had no loop guard and its per-cwd fact string defeated its own dedupe, and `session_ingest.py`'s signal detector could promote the hooks' own announcement text into a durable `user_correction` signal, which then kept `_should_capture()` returning true forever.

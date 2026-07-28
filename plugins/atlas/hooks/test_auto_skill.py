@@ -7,6 +7,7 @@ contribute nothing to coverage, so the heavy lifting is all in-process.
 """
 
 import io
+import json
 import os
 import subprocess
 import sys
@@ -16,7 +17,9 @@ from unittest import mock
 
 HOOK_DIR = os.path.dirname(__file__)
 sys.path.insert(0, HOOK_DIR)
+sys.path.insert(0, os.path.join(HOOK_DIR, "..", "scripts"))
 
+import atlas_hook_guard  # noqa: E402
 import auto_skill  # noqa: E402
 
 
@@ -36,7 +39,7 @@ class _StubFactory:
 class AutoSkillTest(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
-        self.marker = os.path.join(self.tmpdir, ".atlas_auto_skill")
+        self.hookstate_dir = os.path.join(self.tmpdir, "hookstate")
         os.environ.pop("ATLAS_AUTO_SKILL", None)
 
     def _run_main(
@@ -46,15 +49,15 @@ class AutoSkillTest(unittest.TestCase):
         stdin_data="",
         stdin_read_exc=None,
         env_off=False,
-        marker_path=None,
-        open_exc=None,
+        hookstate_dir=None,
     ):
         """Run auto_skill.main() with a stubbed skill_factory, capture output.
 
-        marker_path overrides _marker_path; if None, uses self.marker.
+        hookstate_dir overrides atlas_hook_guard's state dir; if None, uses
+        self.hookstate_dir (isolated from real ~/.atlas, and shared across
+        calls within one test so the throttle/breaker can be exercised).
         stdin_read_exc (if set) makes sys.stdin.read raise instead of returning
-        stdin_data. open_exc (if set) patches builtins.open to raise, exercising
-        the marker-write failure branch in _throttled.
+        stdin_data.
         """
         sys.modules["skill_factory"] = stub
         self.addCleanup(sys.modules.pop, "skill_factory", None)
@@ -74,8 +77,10 @@ class AutoSkillTest(unittest.TestCase):
         out = io.StringIO()
         err = io.StringIO()
         patches = [
-            mock.patch(
-                "auto_skill._marker_path", return_value=marker_path or self.marker
+            mock.patch.object(
+                atlas_hook_guard,
+                "_state_dir",
+                lambda: hookstate_dir or self.hookstate_dir,
             ),
             mock.patch("sys.stdin", stdin_obj),
             mock.patch("sys.stdout", out),
@@ -85,8 +90,6 @@ class AutoSkillTest(unittest.TestCase):
                 side_effect=lambda code=0: (_ for _ in ()).throw(SystemExit(code)),
             ),
         ]
-        if open_exc is not None:
-            patches.append(mock.patch("builtins.open", side_effect=open_exc))
 
         for p in patches:
             p.start()
@@ -153,32 +156,18 @@ class AutoSkillTest(unittest.TestCase):
         self.assertEqual(err, "")
 
     def test_throttled_recent_marker_exits_zero(self):
-        """A marker file newer than WINDOW_SECONDS makes _throttled return True."""
-        # Create a fresh marker so getmtime is recent.
-        with open(self.marker, "w") as f:
-            f.write("0")
-        os.utime(self.marker, (0, 0))  # age 0 -> actually recent? no, we want recent
-        import time as _time
+        """A second call within WINDOW_SECONDS for the same session is throttled
+        by atlas_hook_guard.should_run and never reaches skill_factory again."""
+        session_payload = json.dumps({"session_id": "auto-skill-throttle-sess"})
+        stub_first = _StubFactory(return_value={"created": False, "reason": "first"})
+        self._run_main(stub_first, stdin_data=session_payload)
 
-        now = _time.time()
-        os.utime(self.marker, (now, now))
-        stub = _StubFactory(
+        stub_second = _StubFactory(
             raise_exc=AssertionError("must not be called when throttled")
         )
-        out, err = self._run_main(stub, marker_path=self.marker)
+        out, err = self._run_main(stub_second, stdin_data=session_payload)
         self.assertEqual(out, "")
         self.assertEqual(err, "")
-
-    def test_marker_write_failure_is_swallowed(self):
-        """If the marker file cannot be written, _throttled still returns False and main continues."""
-        stub = _StubFactory(
-            return_value={"created": False, "reason": "write-failed-then-skipped"}
-        )
-        # Marker does not exist (getmtime raises) AND open raises -> exercises
-        # the except branch around the marker write.
-        out, err = self._run_main(stub, open_exc=OSError("denied"))
-        # main continued past _throttled and logged the not-created reason.
-        self.assertIn("write-failed-then-skipped", out + err)
 
     def test_stdin_read_exception_is_swallowed(self):
         """A failing stdin.read must not crash the hook."""
@@ -186,12 +175,6 @@ class AutoSkillTest(unittest.TestCase):
         out, err = self._run_main(stub, stdin_read_exc=IOError("stdin gone"))
         # stdin failure swallowed; main proceeded and logged the reason.
         self.assertIn("stdin-broke-ok", out + err)
-
-    def test_marker_path_makedirs_fallback(self):
-        """_marker_path falls back to /tmp when ~/.atlas cannot be created."""
-        with mock.patch("os.makedirs", side_effect=OSError("no home for you")):
-            path = auto_skill._marker_path()
-        self.assertEqual(path, os.path.join("/tmp", ".atlas_auto_skill"))
 
     def test_main_block_catches_non_systemexit_exception(self):
         """The if __name__ == '__main__' guard catches a real exception and exits 0.
