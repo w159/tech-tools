@@ -50,6 +50,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+import atlas_hook_guard  # noqa: E402
+
 
 def _find_root(start: Path) -> Path | None:
     """Walk from start toward the filesystem root; return the project root
@@ -315,8 +318,12 @@ def main() -> int:
     try:
         if os.environ.get("ATLAS_GATE", "").lower() == "off":
             return 0
-        # Loop guard: never re-block a continuation we already triggered.
-        if data.get("stop_hook_active"):
+        # stop_hook_active and the session circuit breaker (a thrashing Stop
+        # chain silences the gate too, same as the other four hooks). No
+        # throttle window: the gate is meant to re-block every Stop until the
+        # conditions are actually met, so window_seconds is left at its
+        # default of None.
+        if not atlas_hook_guard.should_run(data, "completion_gate"):
             return 0
         cwd = Path(data.get("cwd") or os.getcwd())
         root = _find_root(cwd)

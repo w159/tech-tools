@@ -7,40 +7,19 @@ what was actually captured by the hooks above, and only nudges if nothing
 was captured but the session was orchestrating.
 
 Rate-limited and non-blocking: returns additionalContext only, never exit 2.
-Self-throttles via a timestamp marker so it fires at most once per window.
+Throttling, the stop_hook_active loop guard, and the circuit breaker all
+live in atlas_hook_guard now (see that module for the shared invariant).
 Any error exits 0 silently.
 """
 
-import json
 import os
 import sys
 import time
 
 WINDOW_SECONDS = 900  # at most once per 15 minutes
 
-
-def marker_path():
-    base = os.path.join(os.path.expanduser("~"), ".atlas")
-    try:
-        os.makedirs(base, exist_ok=True)
-    except Exception:
-        base = "/tmp"
-    return os.path.join(base, ".atlas_nudge")
-
-
-def throttled(path):
-    try:
-        last = os.path.getmtime(path)
-        if (time.time() - last) < WINDOW_SECONDS:
-            return True
-    except Exception:
-        pass
-    try:
-        with open(path, "w") as f:
-            f.write(str(time.time()))
-    except Exception:
-        pass
-    return False
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+import atlas_hook_guard  # noqa: E402
 
 
 def _check_memory_captured():
@@ -76,24 +55,16 @@ def _check_skill_created():
 
 
 def main():
-    raw = ""
-    try:
-        raw = sys.stdin.read()
-    except Exception:
-        pass
-    try:
-        payload = json.loads(raw) if raw.strip() else {}
-    except Exception:
-        payload = {}
+    payload = atlas_hook_guard.read_payload()
 
-    # Loop guard: never re-nudge on a continuation this Stop hook forced.
-    if payload.get("stop_hook_active"):
+    # stop_hook_active, the throttle window, and the circuit breaker are all
+    # checked here before we even touch the DB.
+    if not atlas_hook_guard.should_run(payload, "nudge", window_seconds=WINDOW_SECONDS):
         sys.exit(0)
 
     session = payload.get("session_id", "")
     conn = None
     try:
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         import atlas_db
 
         conn = atlas_db.connect()
@@ -108,9 +79,6 @@ def main():
     finally:
         if conn is not None:
             conn.close()
-
-    if throttled(marker_path()):
-        sys.exit(0)
 
     # Check what was already captured by the hooks above
     memory_captured = _check_memory_captured()
@@ -135,16 +103,7 @@ def main():
             ".agents/) so the next session starts ahead. If you changed behavior or "
             "structure, confirm docs/ still matches (CHANGELOG/ROADMAP/architecture)."
         )
-    sys.stdout.write(
-        json.dumps(
-            {
-                "hookSpecificOutput": {
-                    "hookEventName": payload.get("hook_event_name", "Stop"),
-                    "additionalContext": msg,
-                }
-            }
-        )
-    )
+    atlas_hook_guard.emit(payload, "nudge", msg)
     sys.exit(0)
 
 

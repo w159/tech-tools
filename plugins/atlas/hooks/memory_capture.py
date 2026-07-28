@@ -12,45 +12,24 @@ Unlike the old nudge.py which said "please capture a lesson," this hook
 DOES the capture — no agent action required. It writes to
 ~/.atlas/memory/MEMORY.md and ~/.atlas/memory/PROJECT.md via atlas_memory.
 
+The Stop-hook loop guard (stop_hook_active, the throttle window, and the
+session circuit breaker) lives in atlas_hook_guard now. The seen-hash dedupe
+below is a SEPARATE, older mechanism about facts (durable content already
+captured to memory across sessions) and is kept independent of it.
+
 Fail-open: any error exits 0 silently. Disable with ATLAS_MEMORY_CAPTURE=off.
 """
 
 import hashlib
-import json
 import os
 import sqlite3
 import sys
-import time
 
 CAPTURE_WINDOW_SECONDS = 900  # blast-radius cap: at most once per 15 minutes
 SEEN_MAX_LINES = 500  # cap the seen-hash file so it cannot grow unbounded
 
-
-def _capture_marker_path():
-    base = os.path.join(os.path.expanduser("~"), ".atlas")
-    try:
-        os.makedirs(base, exist_ok=True)
-    except Exception:
-        base = "/tmp"
-    return os.path.join(base, ".atlas_memory_capture")
-
-
-def _throttled(path):
-    """At-most-once-per-window guard, mirrors nudge.py's marker-file pattern.
-    This is the blast-radius cap: even if the seen-hash dedupe below somehow
-    misses a duplicate, this hook still cannot fire more than once per window."""
-    try:
-        last = os.path.getmtime(path)
-        if (time.time() - last) < CAPTURE_WINDOW_SECONDS:
-            return True
-    except Exception:
-        pass
-    try:
-        with open(path, "w") as f:
-            f.write(str(time.time()))
-    except Exception:
-        pass
-    return False
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+import atlas_hook_guard  # noqa: E402
 
 
 def _seen_hashes_path():
@@ -302,19 +281,7 @@ def main():
     if os.environ.get("ATLAS_MEMORY_CAPTURE", "on").lower() == "off":
         sys.exit(0)
 
-    raw = ""
-    try:
-        raw = sys.stdin.read()
-    except Exception:
-        pass
-    try:
-        payload = json.loads(raw) if raw.strip() else {}
-    except (json.JSONDecodeError, ValueError):
-        payload = {}
-
-    # Loop guard: never re-capture on a continuation this Stop hook forced.
-    if payload.get("stop_hook_active"):
-        sys.exit(0)
+    payload = atlas_hook_guard.read_payload()
 
     session_id = payload.get("session_id", "")
     cwd = payload.get("cwd", "")
@@ -322,11 +289,11 @@ def main():
     if not session_id:
         sys.exit(0)
 
-    if _throttled(_capture_marker_path()):
+    # stop_hook_active, the throttle window, and the circuit breaker.
+    if not atlas_hook_guard.should_run(
+        payload, "memory_capture", window_seconds=CAPTURE_WINDOW_SECONDS
+    ):
         sys.exit(0)
-
-    # Connect to the atlas DB
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
     db_path = os.environ.get("ATLAS_DB", os.path.expanduser("~/.atlas/atlas.db"))
     if not os.path.exists(db_path):
@@ -413,16 +380,7 @@ def main():
         )
         if captured["facts"]:
             msg += " Captured: " + "; ".join(captured["facts"][:3])
-        sys.stdout.write(
-            json.dumps(
-                {
-                    "hookSpecificOutput": {
-                        "hookEventName": payload.get("hook_event_name", "Stop"),
-                        "additionalContext": msg,
-                    }
-                }
-            )
-        )
+        atlas_hook_guard.emit(payload, "memory_capture", msg)
     sys.exit(0)
 
 

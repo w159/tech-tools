@@ -6,7 +6,8 @@
 ## Area
 plugins/atlas/hooks/memory_capture.py, plugins/atlas/hooks/ingest_session.py,
 plugins/atlas/hooks/auto_skill.py, plugins/atlas/hooks/nudge.py,
-plugins/atlas/scripts/session_ingest.py
+plugins/atlas/hooks/completion_gate.py, plugins/atlas/scripts/session_ingest.py,
+plugins/atlas/scripts/atlas_hook_guard.py
 
 ## Summary
 A Claude Code session entered an endless Stop-hook loop and burned its usage limit. Every
@@ -73,6 +74,63 @@ Two independent defects compounded each other.
    `NOISE_PREFIXES` and `_is_real_prompt` confirmed byte-identical to HEAD. Diff: 66
    insertions, 0 deletions.
 
+## Structural Fix (atlas 5.2.0, same date)
+The per-hook fixes above (steps 1-6) were judged insufficient on their own. Each was a
+point patch: the guard in step 1 was hand-copied into four hooks, and the invariant it
+enforces (a Stop hook must not re-emit identical feedback forever) had no single owner. A
+new hook added later would inherit none of it, and no per-hook throttle can see the Stop
+chain thrashing as a whole, only whether that one hook has spoken recently.
+
+The structural answer: a new shared module, `plugins/atlas/scripts/atlas_hook_guard.py`
+(about 218 lines), exposing `read_payload()`, `should_run(payload, hook_name,
+window_seconds=None)`, and `emit(payload, hook_name, message)`. State is per-session JSON
+at `~/.atlas/hookstate/<session_id>.json` (override: `ATLAS_HOOKSTATE_DIR`), tracking
+`last_run` per hook, `stop_events` for the circuit breaker, and emitted message hashes
+(sha256, first 16 hex chars).
+
+Circuit breaker: `STOP_BURST_LIMIT = 5` Stop events within `STOP_BURST_WINDOW = 120`
+seconds trips it for the rest of the session, silencing every atlas Stop hook regardless of
+which hook is thrashing. This is the part a per-hook throttle cannot do: it answers "is the
+whole chain looping" rather than "have I personally spoken recently." Breaker notice goes
+to stderr only, never stdout, since stdout output would itself become hook feedback and
+could re-enter the loop it exists to stop.
+
+All five Stop hooks were rewired onto the guard, each keeping its previous throttle window
+now expressed through it: `nudge.py` 900s, `auto_skill.py` 600s, `memory_capture.py` 900s;
+`ingest_session.py` and `completion_gate.py` carry no throttle of their own (breaker only).
+
+Design decision: `completion_gate.py` uses `should_run()` only, not `emit()`. Its
+definition-of-done block message is meant to repeat identically every Stop until the
+conditions are actually met; content-hash dedupe (as used by the other four hooks) would
+silently defeat the gate by suppressing a message that is supposed to keep firing. Only the
+breaker can silence it, and only after a genuine burst. Verified: three consecutive
+subprocess calls returned the identical block unsuppressed; a 7-call burst silenced it at
+call 6 via the breaker.
+
+`memory_capture.py` retains its separate fact-level seen-marker
+(`~/.atlas/.memory_capture_seen`, from fix step 2) unchanged alongside the new guard. The
+marker is about facts (has this specific memory fact been captured before); the guard's
+dedupe is about messages (has this specific hook output been emitted before in this
+session). Two different mechanisms, both retained deliberately.
+
+Version bumped 5.1.1 -> 5.2.0 in `plugins/atlas/.claude-plugin/plugin.json:3` and
+`plugins/atlas/.kimi-plugin/plugin.json:3` (minor: new capability plus a bug fix, no
+breaking change). No marketplace manifest carries a per-plugin atlas version; those two
+plugin manifests are the entire version surface. The registry's own `3.1.0` in
+`.claude-plugin/marketplace.json` is unrelated and unchanged.
+
+Evidence: 23 passed in `test_atlas_hook_guard.py`; 129 passed across the five wired hook
+suites; 562 passed in `plugins/atlas/scripts`; 427 passed in `plugins/atlas/hooks`; ruff
+clean on all touched files. Incident replay end to end against the real `memory_capture.py`
+hook, same session, 4 calls about 1 second apart: call 1 emitted `additionalContext`, calls
+2, 3, and 4 emitted nothing, exit 0 throughout. Breaker probe on a 13-second cadence:
+allowed x5, then blocked at Stop 6 (t=65s); after tripping, `should_run` returned False for
+all five hook names. Breaker probe on a legitimate slow cadence, 5 Stops over 10 minutes:
+never trips. Breaker is per-session: tripping session A does not silence session B.
+Fail-open held under ten adversarial probes: corrupt JSON state, the state path being a
+directory, a chmod 000 state dir, malformed stdin, a missing `session_id`, and a poisoned
+schema; no exception escaped any of them.
+
 ## Accepted Trade-off
 `_is_machine_authored()` suppression is wholesale, by design, and pre-dates the blockquote
 fix. Any message containing a machine marker anywhere is suppressed entirely, so a genuine
@@ -114,9 +172,14 @@ judged cheaper than a signal that never expires. This is an accepted cost, not a
   closing verdict: the blockquote gap is closed without opening a false-positive hole.
 
 ## Resolution
-Fixed and verified: the loop guard and dedupe on `memory_capture.py` (fix steps 1-3), the
-machine-authored signal filter on `session_ingest.py` (fix step 4), the line-start
-narrowing of the `[atlas]` marker match (fix step 5), and the blockquote-prefix fix (fix
-step 6) have all shipped and been independently verified. No open gap remains from this
-work. The wholesale-suppression trade-off (see Accepted Trade-off) is deliberate and
-unchanged.
+Fixed and verified in two stages. Stage one (fix steps 1-6, committed as `ab67df4`): the
+loop guard and dedupe on `memory_capture.py`, the machine-authored signal filter on
+`session_ingest.py`, the line-start narrowing of the `[atlas]` marker match, and the
+blockquote-prefix fix. Stage two, released as atlas 5.2.0 (see Structural Fix): the same
+invariant was centralized into `plugins/atlas/scripts/atlas_hook_guard.py` and given a
+session-wide circuit breaker, because the stage-one fix was per-hook and any new hook would
+have inherited none of it. Both stages have shipped and been independently verified. No
+open gap remains from this work. The wholesale-suppression trade-off (see Accepted
+Trade-off) is deliberate and unchanged. A pre-existing, unrelated `atlas_doctor.py`
+marketplace-source/clone-remote mismatch is tracked separately in `docs/ROADMAP.md`, not
+here, since it did not originate from this incident.

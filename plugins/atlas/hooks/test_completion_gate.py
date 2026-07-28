@@ -65,7 +65,14 @@ class GateOrchestrationTest(unittest.TestCase):
         os.makedirs(
             os.path.join(self.tmp, "docs"), exist_ok=True
         )  # docs/ exists, no artifacts
-        self.env = dict(os.environ, ATLAS_DB=os.path.join(self.tmp, "atlas.db"))
+        self.env = dict(
+            os.environ,
+            ATLAS_DB=os.path.join(self.tmp, "atlas.db"),
+            # Isolate the guard's breaker/throttle state: several tests reuse
+            # "sess-orch" across many _run_gate calls, and must never touch
+            # real ~/.atlas or trip the breaker across unrelated tests.
+            ATLAS_HOOKSTATE_DIR=os.path.join(self.tmp, "hookstate"),
+        )
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         import atlas_db
 
@@ -406,7 +413,11 @@ class InProcessMainTest(unittest.TestCase):
         self.tmp = tempfile.mkdtemp()
         os.makedirs(os.path.join(self.tmp, "docs"), exist_ok=True)
         self.db_path = os.path.join(self.tmp, "atlas.db")
-        self.env = dict(os.environ, ATLAS_DB=self.db_path)
+        self.env = dict(
+            os.environ,
+            ATLAS_DB=self.db_path,
+            ATLAS_HOOKSTATE_DIR=os.path.join(self.tmp, "hookstate"),
+        )
         c = atlas_db.connect(self.db_path)
         atlas_db.init(c)
         pid = atlas_db.register_project(c, self.tmp)
