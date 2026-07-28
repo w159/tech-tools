@@ -86,6 +86,10 @@ def main():
     except Exception:
         payload = {}
 
+    # Loop guard: never re-nudge on a continuation this Stop hook forced.
+    if payload.get("stop_hook_active"):
+        sys.exit(0)
+
     session = payload.get("session_id", "")
     conn = None
     try:

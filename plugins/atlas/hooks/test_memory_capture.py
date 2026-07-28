@@ -143,6 +143,21 @@ class MemoryCaptureAddFailureTest(unittest.TestCase):
         self._atlas_memory = atlas_memory
         self._orig_add = atlas_memory.add
 
+        # Isolate the throttle marker and seen-hash file in tmp so this test
+        # never touches (or is throttled by) real ~/.atlas state.
+        self.marker = os.path.join(self.tmp, ".atlas_memory_capture")
+        self.seen_path = os.path.join(self.tmp, ".memory_capture_seen")
+        patcher1 = mock.patch.object(
+            memory_capture, "_capture_marker_path", lambda: self.marker
+        )
+        patcher2 = mock.patch.object(
+            memory_capture, "_seen_hashes_path", lambda: self.seen_path
+        )
+        patcher1.start()
+        patcher2.start()
+        self.addCleanup(patcher1.stop)
+        self.addCleanup(patcher2.stop)
+
     def tearDown(self):
         self._atlas_memory.add = self._orig_add
         if self._orig_env is None:
@@ -205,6 +220,21 @@ class MemoryCaptureMainPathTest(unittest.TestCase):
 
         self._atlas_memory = atlas_memory
         self._orig_add = atlas_memory.add
+
+        # Isolate the throttle marker and seen-hash file in tmp so this test
+        # never touches (or is throttled by) real ~/.atlas state.
+        self.marker = os.path.join(self.tmp, ".atlas_memory_capture")
+        self.seen_path = os.path.join(self.tmp, ".memory_capture_seen")
+        patcher1 = mock.patch.object(
+            memory_capture, "_capture_marker_path", lambda: self.marker
+        )
+        patcher2 = mock.patch.object(
+            memory_capture, "_seen_hashes_path", lambda: self.seen_path
+        )
+        patcher1.start()
+        patcher2.start()
+        self.addCleanup(patcher1.stop)
+        self.addCleanup(patcher2.stop)
 
     def tearDown(self):
         self._atlas_memory.add = self._orig_add
@@ -578,6 +608,148 @@ class MemoryCaptureHelpersCoverageTest(unittest.TestCase):
         self.assertEqual(proj_facts, [])
 
 
+class MemoryCaptureLoopGuardTest(unittest.TestCase):
+    """Regression coverage for the Stop-hook loop that burned the usage limit:
+    the stop_hook_active loop guard, and the seen-hash dedupe that must
+    survive both a repeat call and a different cwd (the project_name in the
+    formatted fact string must not defeat the dedupe)."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.db = os.path.join(self.tmp, "atlas.db")
+        self.conn = atlas_db.connect(self.db)
+        atlas_db.init(self.conn)
+        self.pid = atlas_db.register_project(self.conn, "/repo/atlas")
+        self.conn.close()
+
+        self._orig_env_db = os.environ.get("ATLAS_DB")
+        os.environ["ATLAS_DB"] = self.db
+
+        import atlas_memory
+
+        self._atlas_memory = atlas_memory
+        self._orig_add = atlas_memory.add
+        self._atlas_memory.add = self._add_ok
+
+        # Isolate the throttle marker and seen-hash file in tmp so this test
+        # never touches (or is throttled by) real ~/.atlas state.
+        self.marker = os.path.join(self.tmp, ".atlas_memory_capture")
+        self.seen_path = os.path.join(self.tmp, ".memory_capture_seen")
+        patcher1 = mock.patch.object(
+            memory_capture, "_capture_marker_path", lambda: self.marker
+        )
+        patcher2 = mock.patch.object(
+            memory_capture, "_seen_hashes_path", lambda: self.seen_path
+        )
+        patcher1.start()
+        patcher2.start()
+        self.addCleanup(patcher1.stop)
+        self.addCleanup(patcher2.stop)
+
+    def tearDown(self):
+        self._atlas_memory.add = self._orig_add
+        if self._orig_env_db is None:
+            os.environ.pop("ATLAS_DB", None)
+        else:
+            os.environ["ATLAS_DB"] = self._orig_env_db
+
+    @staticmethod
+    def _add_ok(target, content):
+        return {"success": True}
+
+    def _seed_correction(self, session_id, snippet, message_uuid="m"):
+        conn = atlas_db.connect(self.db)
+        rid = atlas_db.start_run(conn, self.pid, session_id)
+        conn.execute(
+            "UPDATE runs SET orchestrating=1, started_at=100 WHERE id=?", (rid,)
+        )
+        atlas_db.insert_signal(
+            conn,
+            session_id,
+            {
+                "message_uuid": message_uuid,
+                "signal_type": "user_correction",
+                "weight": 1.0,
+                "snippet": snippet,
+            },
+        )
+        conn.commit()
+        conn.close()
+
+    def _run_main(self, payload):
+        sys.stdin = io.StringIO(json.dumps(payload))
+        sys.stderr = io.StringIO()
+        sys.stdout = io.StringIO()
+        try:
+            try:
+                memory_capture.main()
+            except SystemExit:
+                pass
+            return sys.stderr.getvalue(), sys.stdout.getvalue()
+        finally:
+            sys.stdin = sys.__stdin__
+            sys.stderr = sys.__stderr__
+            sys.stdout = sys.__stdout__
+
+    def test_stop_hook_active_produces_no_output(self):
+        # A Stop hook must never react to a continuation IT forced.
+        err, out = self._run_main(
+            {
+                "session_id": "guard-sess",
+                "cwd": "/repo/atlas",
+                "stop_hook_active": True,
+            }
+        )
+        self.assertEqual(out, "")
+
+    def test_same_snippet_announced_once_then_silent(self):
+        """Without the seen-hash dedupe, _should_capture keeps returning True
+        forever once one user_correction row exists, so the second call also
+        produces output -- this is the regression test for the loop and must
+        fail against the pre-fix code."""
+        self._seed_correction("repeat-sess", "Always run tests before commit")
+        payload = {"session_id": "repeat-sess", "cwd": "/repo/atlas"}
+        # Bypass the time throttle so this exercises the hash dedupe
+        # specifically, not the blast-radius cap (covered separately below).
+        with mock.patch.object(memory_capture, "_throttled", return_value=False):
+            _err1, out1 = self._run_main(payload)
+            _err2, out2 = self._run_main(payload)
+        self.assertIn("additionalContext", out1)
+        self.assertEqual(out2, "", f"expected silence on repeat, got: {out2!r}")
+
+    def test_same_snippet_different_cwd_announced_once(self):
+        """The fact string embeds os.path.basename(cwd), so a naive dedupe on
+        the formatted string never matches across two subagent working
+        directories. Hashing the raw snippet must still catch the duplicate."""
+        snippet = "Never edit files outside the assigned scope"
+        self._seed_correction("agent-aaa-sess", snippet, message_uuid="m-a")
+        self._seed_correction("agent-bbb-sess", snippet, message_uuid="m-b")
+        with mock.patch.object(memory_capture, "_throttled", return_value=False):
+            _err1, out1 = self._run_main(
+                {"session_id": "agent-aaa-sess", "cwd": "/x/agent-aaa"}
+            )
+            _err2, out2 = self._run_main(
+                {"session_id": "agent-bbb-sess", "cwd": "/x/agent-bbb"}
+            )
+        self.assertIn("additionalContext", out1)
+        self.assertEqual(
+            out2, "", f"expected the second subagent dir to stay silent, got: {out2!r}"
+        )
+
+    def test_throttle_blocks_second_call_within_window(self):
+        """Belt-and-braces: even with a fresh (never-seen) fact, a second call
+        within the throttle window must stay silent -- the blast-radius cap."""
+        self._seed_correction("throttle-sess", "Prefer composition over inheritance")
+        payload = {"session_id": "throttle-sess", "cwd": "/repo/atlas"}
+        _err1, out1 = self._run_main(payload)
+        self.assertIn("additionalContext", out1)
+        # Second call, same window, no throttle bypass this time.
+        self._seed_correction(
+            "throttle-sess", "A different fact entirely", message_uuid="m2"
+        )
+        _err2, out2 = self._run_main(payload)
+        self.assertEqual(out2, "", f"expected throttle to block, got: {out2!r}")
+
 
 class OuterMainGuardTest(unittest.TestCase):
     """Cover the fail-open `if __name__ == '__main__'` guard: an exception
@@ -600,9 +772,7 @@ class OuterMainGuardTest(unittest.TestCase):
             mock.patch("sys.exit", side_effect=_fake_exit),
             mock.patch("sys.stdin", io.StringIO("")),
             mock.patch("sys.stdout", io.StringIO()),
-            mock.patch.dict(
-                os.environ, {"ATLAS_MEMORY_CAPTURE": "off"}, clear=False
-            ),
+            mock.patch.dict(os.environ, {"ATLAS_MEMORY_CAPTURE": "off"}, clear=False),
         ):
             # ATLAS_MEMORY_CAPTURE=off makes main() hit its first sys.exit(0);
             # the patched sys.exit raises RuntimeError, which escapes main(),
