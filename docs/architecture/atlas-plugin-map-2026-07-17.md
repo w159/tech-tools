@@ -18,7 +18,7 @@ graph TD
     M --> N["Parse"] --> O["Find root"] --> P["Evidence"] --> Q["Findings"]
     Q --> R["Docs check"] --> S["Verifier coverage"] --> T["Finalize DB"]
 
-    A --> U["SessionEnd<br/>memory_capture.py"]
+    A --> U["Stop + SubagentStop<br/>memory_capture.py"]
     U --> V["Parse"] --> W["DB connect"] --> X["Extract facts"]
 
     T --> Y["SQLite SSOT<br/>~/.atlas/atlas.db"]
@@ -36,6 +36,7 @@ Key facts:
 - SQLite SSOT schema at `atlas_db.py:11-86`; DB at `~/.atlas/atlas.db` (or `$ATLAS_DB`). Tables: `runs`, `events`, `dispatches`.
 - Skills wire to agents by agent-type name in SKILL.md (e.g. atlas-db-audit -> schema-inventory / rls-privilege-audit / explorer).
 - `session_boot` is fail-open throughout (any error exits 0). `completion_gate` is fail-closed on verifier/git checks but fail-open on structure checks. (The CODE audit flags several fail-open branches as contradicting their own comments.)
+- Updated 2026-07-28: all five Stop hooks (`completion_gate`, `ingest_session`, `memory_capture`, `auto_skill`, `nudge`) now early-exit on `payload["stop_hook_active"]`; previously only `completion_gate` checked it, which let a forced continuation Stop re-run the full self-improvement pipeline. `memory_capture.py` also gained a content-hash seen-marker (`~/.atlas/.memory_capture_seen`) and a 900s throttle, replacing a per-cwd formatted-string dedupe that never matched across subagent working directories. See `.atlas/findings/2026-07-28-stop-hook-memory-capture-loop.md`.
 
 ## Repo feature boundaries
 

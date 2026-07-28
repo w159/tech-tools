@@ -21,6 +21,9 @@ def main():
         return
     raw = sys.stdin.read()
     payload = json.loads(raw) if raw.strip() else {}
+    # Loop guard: never re-ingest on a continuation this Stop hook forced.
+    if payload.get("stop_hook_active"):
+        return
     path = payload.get("transcript_path")
     if not path or not os.path.exists(path):
         return  # nothing to ingest yet

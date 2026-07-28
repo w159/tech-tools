@@ -15,10 +15,95 @@ DOES the capture — no agent action required. It writes to
 Fail-open: any error exits 0 silently. Disable with ATLAS_MEMORY_CAPTURE=off.
 """
 
+import hashlib
 import json
 import os
 import sqlite3
 import sys
+import time
+
+CAPTURE_WINDOW_SECONDS = 900  # blast-radius cap: at most once per 15 minutes
+SEEN_MAX_LINES = 500  # cap the seen-hash file so it cannot grow unbounded
+
+
+def _capture_marker_path():
+    base = os.path.join(os.path.expanduser("~"), ".atlas")
+    try:
+        os.makedirs(base, exist_ok=True)
+    except Exception:
+        base = "/tmp"
+    return os.path.join(base, ".atlas_memory_capture")
+
+
+def _throttled(path):
+    """At-most-once-per-window guard, mirrors nudge.py's marker-file pattern.
+    This is the blast-radius cap: even if the seen-hash dedupe below somehow
+    misses a duplicate, this hook still cannot fire more than once per window."""
+    try:
+        last = os.path.getmtime(path)
+        if (time.time() - last) < CAPTURE_WINDOW_SECONDS:
+            return True
+    except Exception:
+        pass
+    try:
+        with open(path, "w") as f:
+            f.write(str(time.time()))
+    except Exception:
+        pass
+    return False
+
+
+def _seen_hashes_path():
+    return os.path.join(os.path.expanduser("~"), ".atlas", ".memory_capture_seen")
+
+
+def _hash_key(raw_text):
+    """sha256 of the durable raw content (never the formatted, per-cwd fact
+    string) so a fact is recognized as the same fact across subagent dirs."""
+    return hashlib.sha256(raw_text.strip().encode("utf-8", "replace")).hexdigest()[:16]
+
+
+def _load_seen_hashes(path):
+    try:
+        with open(path) as f:
+            return {line.strip() for line in f if line.strip()}
+    except Exception:
+        return set()
+
+
+def _append_seen_hashes(path, new_hashes):
+    """Persist newly-announced fact hashes. Fail-open: any IO error here must
+    not affect the hook result, since the fact was already written to memory
+    by the time this is called."""
+    if not new_hashes:
+        return
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        existing = []
+        if os.path.exists(path):
+            with open(path) as f:
+                existing = [line.strip() for line in f if line.strip()]
+        for h in new_hashes:
+            if h not in existing:
+                existing.append(h)
+        existing = existing[-SEEN_MAX_LINES:]  # cap unbounded growth
+        with open(path, "w") as f:
+            f.write("\n".join(existing) + "\n")
+    except Exception:
+        pass
+
+
+class _Fact(str):
+    """A captured fact string that also carries the durable dedupe key (the
+    raw signal content) separately from its formatted display text. Needed
+    because the display text embeds a per-cwd project label, which would
+    defeat a naive string-hash dedupe across subagents running in different
+    working directories."""
+
+    def __new__(cls, text, dedupe_key):
+        obj = str.__new__(cls, text)
+        obj.dedupe_key = dedupe_key
+        return obj
 
 
 def _resolve_scope(conn, session_id):
@@ -142,7 +227,8 @@ def _extract_facts(conn, session_id, cwd):
             snippet = row[0]
             if snippet and snippet.strip():
                 # Keep it concise — truncate to 200 chars
-                fact = f"User correction ({project_name}): {snippet.strip()[:200]}"
+                clean = snippet.strip()
+                fact = _Fact(f"User correction ({project_name}): {clean[:200]}", clean)
                 memory_facts.append(fact)
     except sqlite3.Error:
         pass
@@ -157,7 +243,10 @@ def _extract_facts(conn, session_id, cwd):
         ).fetchall():
             snippet = row[0]
             if snippet and snippet.strip():
-                fact = f"Assumption to avoid ({project_name}): {snippet.strip()[:200]}"
+                clean = snippet.strip()
+                fact = _Fact(
+                    f"Assumption to avoid ({project_name}): {clean[:200]}", clean
+                )
                 memory_facts.append(fact)
     except sqlite3.Error:
         pass
@@ -173,8 +262,11 @@ def _extract_facts(conn, session_id, cwd):
             ).fetchall():
                 dim, baseline, target, note = row
                 if note and note.strip():
-                    fact = (
-                        f"[{project_name}] {dim or 'Improvement'}: {note.strip()[:200]}"
+                    clean = note.strip()
+                    dim_label = dim or "Improvement"
+                    fact = _Fact(
+                        f"[{project_name}] {dim_label}: {clean[:200]}",
+                        f"{dim_label}:{clean}",
                     )
                     project_facts.append(fact)
     except sqlite3.Error:
@@ -195,7 +287,10 @@ def _extract_facts(conn, session_id, cwd):
         ).fetchall()
         for tool_name, cnt in error_tools:
             if tool_name and tool_name not in TRIVIAL_TOOLS:
-                fact = f"Tool '{tool_name}' errored {cnt}x in {project_name} — check usage pattern"
+                fact = _Fact(
+                    f"Tool '{tool_name}' errored {cnt}x in {project_name} — check usage pattern",
+                    f"tool_error:{tool_name}",
+                )
                 memory_facts.append(fact)
     except sqlite3.Error:
         pass
@@ -217,10 +312,17 @@ def main():
     except (json.JSONDecodeError, ValueError):
         payload = {}
 
+    # Loop guard: never re-capture on a continuation this Stop hook forced.
+    if payload.get("stop_hook_active"):
+        sys.exit(0)
+
     session_id = payload.get("session_id", "")
     cwd = payload.get("cwd", "")
 
     if not session_id:
+        sys.exit(0)
+
+    if _throttled(_capture_marker_path()):
         sys.exit(0)
 
     # Connect to the atlas DB
@@ -247,20 +349,46 @@ def main():
         if not memory_facts and not project_facts:
             sys.exit(0)
 
+        # Content-hash dedupe: a fact already announced in a prior turn (even
+        # under a different cwd/project label) must never be re-announced --
+        # that is what let the fact-string dedupe in atlas_memory.add miss and
+        # sustained the Stop-hook loop.
+        seen_path = _seen_hashes_path()
+        seen = _load_seen_hashes(seen_path)
+
+        def _fresh(facts):
+            fresh = []
+            for fact in facts:
+                key = getattr(fact, "dedupe_key", fact)
+                h = _hash_key(key)
+                if h in seen:
+                    continue
+                seen.add(h)  # also dedupes within this same batch
+                fresh.append((fact, h))
+            return fresh
+
+        fresh_memory = _fresh(memory_facts)
+        fresh_project = _fresh(project_facts)
+
+        if not fresh_memory and not fresh_project:
+            sys.exit(0)  # nothing NEW -> emit nothing, so the loop cannot sustain
+
         # Write to memory
         import atlas_memory
 
-        for fact in memory_facts:
+        for fact, h in fresh_memory:
             result = atlas_memory.add("memory", fact)
             if result.get("success"):
                 captured["memory"] += 1
                 captured["facts"].append(fact[:80])
+                _append_seen_hashes(seen_path, [h])
 
-        for fact in project_facts:
+        for fact, h in fresh_project:
             result = atlas_memory.add("project", fact)
             if result.get("success"):
                 captured["project"] += 1
                 captured["facts"].append(fact[:80])
+                _append_seen_hashes(seen_path, [h])
 
     except Exception as exc:
         # fail-open: never block the hook. But surface the failure on stderr so

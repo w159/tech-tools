@@ -53,16 +53,25 @@ def main():
     if os.environ.get("ATLAS_AUTO_SKILL", "on").lower() == "off":
         sys.exit(0)
 
+    # Read payload (we don't need most of it - skill_factory finds the most
+    # recent orchestrating session itself - but we do need stop_hook_active).
+    raw = ""
+    try:
+        raw = sys.stdin.read()
+    except Exception:
+        pass
+    try:
+        payload = json.loads(raw) if raw.strip() else {}
+    except (json.JSONDecodeError, ValueError):
+        payload = {}
+
+    # Loop guard: never re-react to a continuation this Stop hook forced.
+    if payload.get("stop_hook_active"):
+        sys.exit(0)
+
     # Throttle: don't run more than once per window
     if _throttled(_marker_path()):
         sys.exit(0)
-
-    # Read payload (but we don't need most of it — skill_factory finds the
-    # most recent orchestrating session itself)
-    try:
-        sys.stdin.read()
-    except Exception:
-        pass
 
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
