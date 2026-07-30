@@ -30,7 +30,7 @@ skill's `description` + `when_to_use`; the manual skills have
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json     # manifest (name: atlas, v5.1.1)
+|-- .claude-plugin/plugin.json     # manifest (name: atlas, v5.2.0)
 |-- hooks/                         # 11 auto-loaded hooks (hooks.json wires them all; atlas_doctor.py lives in scripts/, wired as the 11th)
 |   |-- session_boot.py            #   SessionStart: activate runtime, surface lessons
 |   |-- prompt_optimizer.py        #   UserPromptSubmit: optional rewrite + orchestration arm-early classifier

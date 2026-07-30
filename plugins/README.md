@@ -21,7 +21,7 @@ This directory holds the two plugins published from this repo, plus the shared a
 
 ## Install and usage
 
-Both plugins are published from the `w159/atlas` repository through the marketplace defined in `.claude-plugin/marketplace.json` at the repo root (version 3.0.0). That marketplace lists exactly `atlas` and `armada`. Add the marketplace in Claude Code with the `/plugin` command, then install the plugin(s) you need.
+Both plugins are published from the `w159/tech-tools` repository through the marketplace defined in `.claude-plugin/marketplace.json` at the repo root (version 3.0.0). That marketplace lists exactly `atlas` and `armada`. Add the marketplace in Claude Code with the `/plugin` command, then install the plugin(s) you need.
 
 Kimi Code CLI users can browse the same catalog from the repo root with `/plugins marketplace .kimi-plugin/marketplace.json`, which lists the same two plugins. You can also install a single plugin directly with `/plugins install ./plugins/<name>` (from the repo root). Remote GitHub subpath installs are not supported by Kimi Code CLI's current installer, so distribution requires a local clone or per-plugin zip artifacts.
 

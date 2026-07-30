@@ -671,7 +671,9 @@ class ClassifyEdgeTest(unittest.TestCase):
     def test_non_plugin_mcp_server(self):
         # mcp__<server>__<tool> where server is not a plugin_* segment
         kind, target, server = session_ingest.classify("mcp__serena__find_symbol", {})
-        self.assertEqual((kind, target, server), ("mcp", "serena.find_symbol", "serena"))
+        self.assertEqual(
+            (kind, target, server), ("mcp", "serena.find_symbol", "serena")
+        )
 
     def test_mcp_no_toolpart(self):
         kind, target, server = session_ingest.classify("mcp__serena", {})
@@ -696,7 +698,9 @@ class DetectSignalsTest(unittest.TestCase):
         self.assertTrue(any(s[0] == "unverified_claim" for s in sigs))
 
     def test_assumption_admission(self):
-        sigs = list(session_ingest.detect_signals("assistant", "I just assumed it worked"))
+        sigs = list(
+            session_ingest.detect_signals("assistant", "I just assumed it worked")
+        )
         self.assertTrue(any(s[0] == "assumption_admission" for s in sigs))
 
     def test_user_correction(self):
@@ -708,8 +712,146 @@ class DetectSignalsTest(unittest.TestCase):
         self.assertEqual(list(session_ingest.detect_signals("user", None)), [])
 
     def test_no_signal(self):
-        self.assertEqual(list(session_ingest.detect_signals("assistant", "plain text")), [])
+        self.assertEqual(
+            list(session_ingest.detect_signals("assistant", "plain text")), []
+        )
         self.assertEqual(list(session_ingest.detect_signals("user", "plain text")), [])
+
+    # --- machine-authored / quoted hook output suppression --------------------
+
+    def test_pasted_hook_output_is_not_a_correction(self):
+        # The exact string from the real incident (signal row id=676): a human
+        # pasted memory_capture's own output while reporting a bug, and it was
+        # scored as a user_correction because "You NEVER edit the target
+        # codebase yourself" matches the CORRECTION regex's "you never" arm.
+        text = (
+            "[atlas] Self-improvement: captured 1 memory fact(s) and 0 project "
+            "fact(s) from this session. They will be available next session. "
+            "Captured: User correction (.hermes): - **You NEVER edit the "
+            "target codebase yourself** - n"
+        )
+        sigs = list(session_ingest.detect_signals("user", text))
+        self.assertEqual(sigs, [])
+
+    def test_genuine_human_correction_still_detected(self):
+        # Guard against over-matching: a realistic human correction with no
+        # machine markers must still mint a user_correction.
+        sigs = list(
+            session_ingest.detect_signals(
+                "user", "no, you never ran the tests, stop claiming it works"
+            )
+        )
+        self.assertTrue(any(s[0] == "user_correction" for s in sigs))
+
+    def test_correction_wholesale_suppressed_when_sharing_a_message_with_hook_output(
+        self,
+    ):
+        # Wholesale-vs-region decision, pinned: a message that has BOTH a
+        # pasted hook transcript AND its own genuine human correction text is
+        # suppressed entirely, not just over the pasted region. This is the
+        # accepted cost of the simpler wholesale approach.
+        text = (
+            "no, that's wrong, you never fixed it. Here is what the hook said: "
+            "[atlas] Self-improvement: captured 1 memory fact(s) and 0 project "
+            "fact(s) from this session."
+        )
+        sigs = list(session_ingest.detect_signals("user", text))
+        self.assertEqual(sigs, [])
+
+    def test_is_machine_authored_marker_variants(self):
+        self.assertTrue(session_ingest._is_machine_authored("[atlas] did a thing"))
+        self.assertTrue(
+            session_ingest._is_machine_authored("Stop hook feedback: retry needed")
+        )
+        self.assertTrue(
+            session_ingest._is_machine_authored("Self-improvement: captured 2 facts")
+        )
+        self.assertTrue(
+            session_ingest._is_machine_authored("<system-reminder>context here")
+        )
+        self.assertFalse(session_ingest._is_machine_authored("plain human text"))
+
+    def test_prose_naming_the_plugin_mints_a_correction(self):
+        # Regression for the over-broad substring match: a purely human
+        # message that names the plugin in ordinary prose (no pasted hook
+        # output anywhere) must still mint a user_correction. Before the
+        # "[atlas]" marker was anchored to line start, this was wrongly
+        # swallowed because "[atlas]" appeared mid-sentence.
+        sigs = list(
+            session_ingest.detect_signals(
+                "user",
+                "the [atlas] plugin is broken, you never verified the fix",
+            )
+        )
+        self.assertTrue(any(s[0] == "user_correction" for s in sigs))
+
+    def test_machine_marker_on_third_line_of_multiline_message_is_suppressed(self):
+        # Every line must be checked, not just the first: a multiline paste
+        # where the hook line is the third line is still machine-authored.
+        text = (
+            "human text above\n"
+            "more human text\n"
+            "[atlas] Self-improvement: captured 1 memory fact(s)\n"
+            "trailing human text"
+        )
+        self.assertTrue(session_ingest._is_machine_authored(text))
+
+    def test_is_machine_authored_false_for_midline_atlas_mention(self):
+        # A human message with "[atlas]" mid-sentence and no other marker is
+        # not suppressed - only a line whose stripped start is "[atlas]"
+        # counts as machine output.
+        self.assertFalse(
+            session_ingest._is_machine_authored(
+                "I think the [atlas] plugin has a bug in it somewhere"
+            )
+        )
+
+    def test_blockquoted_hook_output_is_suppressed(self):
+        # Regression for the confirmed gap: a human quoting hook output with a
+        # markdown "> " blockquote marker defeated the line-start anchor
+        # because lstrip() does not strip ">". This is the exact
+        # definition-of-done gate message from the bug report.
+        text = (
+            "> [atlas] Definition-of-done gate: the following condition(s) "
+            "are not met: you never ran the tests"
+        )
+        self.assertTrue(session_ingest._is_machine_authored(text))
+        self.assertEqual(list(session_ingest.detect_signals("user", text)), [])
+
+    def test_blockquote_marker_variants_suppressed(self):
+        # Nested and spaced blockquote forms must all be caught: ">>", "> >",
+        # and extra leading whitespace before the marker.
+        for text in (
+            ">> [atlas] nested quote of hook output",
+            "> > [atlas] spaced nested quote of hook output",
+            "  > [atlas] leading whitespace before the quote marker",
+        ):
+            self.assertTrue(
+                session_ingest._is_machine_authored(text), f"not suppressed: {text!r}"
+            )
+
+    def test_quoted_prose_naming_the_plugin_mid_sentence_still_fires(self):
+        # Judgment call: a line that merely STARTS with a quote marker but
+        # whose "[atlas]" mention is mid-sentence is a human quoting a human
+        # (or just writing prose after a ">"), not a paste of hook output.
+        # Stripping the quote marker leaves "I think the [atlas] plugin...",
+        # which does not start with "[atlas]", so the anchor correctly misses
+        # it and the genuine correction is still minted.
+        sigs = list(
+            session_ingest.detect_signals(
+                "user",
+                "> I think the [atlas] plugin has a bug, you never actually "
+                "read the file",
+            )
+        )
+        self.assertTrue(any(s[0] == "user_correction" for s in sigs))
+
+    def test_unquoted_line_start_atlas_still_suppressed(self):
+        # Regression guard: a line-start "[atlas]" with no quote marker at all
+        # must still be suppressed exactly as before this fix.
+        text = "[atlas] Definition-of-done gate: you never ran the tests"
+        self.assertTrue(session_ingest._is_machine_authored(text))
+        self.assertEqual(list(session_ingest.detect_signals("user", text)), [])
 
 
 class HelpersTest(unittest.TestCase):
@@ -825,15 +967,20 @@ class IngestTranscriptEdgeTest(unittest.TestCase):
         self.assertEqual(stats["messages"], 0)
 
     def test_register_project_failure_swallowed(self):
-        with mock.patch.object(atlas_db, "register_project", side_effect=RuntimeError("boom")):
+        with mock.patch.object(
+            atlas_db, "register_project", side_effect=RuntimeError("boom")
+        ):
             stats = session_ingest.ingest_transcript(
                 self.tpath, conn=self.conn, session_id=SID
             )
         self.assertGreater(stats["messages"], 0)
 
     def test_derive_run_metrics_failure_swallowed(self):
-        with mock.patch.object(atlas_db, "latest_run_id", return_value=42), mock.patch.object(
-            atlas_db, "derive_run_metrics", side_effect=RuntimeError("boom")
+        with (
+            mock.patch.object(atlas_db, "latest_run_id", return_value=42),
+            mock.patch.object(
+                atlas_db, "derive_run_metrics", side_effect=RuntimeError("boom")
+            ),
         ):
             stats = session_ingest.ingest_transcript(
                 self.tpath, conn=self.conn, session_id=SID
@@ -842,10 +989,14 @@ class IngestTranscriptEdgeTest(unittest.TestCase):
 
     def test_non_message_type_skipped(self):
         extra = [
-            json.dumps({"type": "summary", "uuid": "s1", "timestamp": "2026-06-26T12:00:00Z"})
+            json.dumps(
+                {"type": "summary", "uuid": "s1", "timestamp": "2026-06-26T12:00:00Z"}
+            )
         ]
         self._write(FIXTURE + extra)
-        stats = session_ingest.ingest_transcript(self.tpath, conn=self.conn, session_id=SID)
+        stats = session_ingest.ingest_transcript(
+            self.tpath, conn=self.conn, session_id=SID
+        )
         self.assertGreater(stats["messages"], 0)
 
     def test_non_dict_block_skipped(self):
@@ -853,13 +1004,17 @@ class IngestTranscriptEdgeTest(unittest.TestCase):
             "nb1", "assistant", ["not a dict", {"type": "text", "text": "real text"}]
         )
         self._write(FIXTURE + [line])
-        stats = session_ingest.ingest_transcript(self.tpath, conn=self.conn, session_id=SID)
+        stats = session_ingest.ingest_transcript(
+            self.tpath, conn=self.conn, session_id=SID
+        )
         self.assertGreater(stats["messages"], 0)
 
     def test_tool_result_without_id_skipped(self):
         line = _msg("nr1", "user", [{"type": "tool_result", "content": "x"}])
         self._write(FIXTURE + [line])
-        stats = session_ingest.ingest_transcript(self.tpath, conn=self.conn, session_id=SID)
+        stats = session_ingest.ingest_transcript(
+            self.tpath, conn=self.conn, session_id=SID
+        )
         self.assertGreater(stats["messages"], 0)
 
 
@@ -876,7 +1031,10 @@ class CodexHelpersTest(unittest.TestCase):
     def test_codex_text_list(self):
         self.assertEqual(
             session_ingest._codex_text(
-                [{"type": "input_text", "text": "a"}, {"type": "output_text", "text": "b"}]
+                [
+                    {"type": "input_text", "text": "a"},
+                    {"type": "output_text", "text": "b"},
+                ]
             ),
             "a\nb",
         )
@@ -890,9 +1048,7 @@ class CodexHelpersTest(unittest.TestCase):
         )
 
     def test_codex_args_non_dict_json(self):
-        self.assertEqual(
-            session_ingest._codex_args("[1, 2]"), {"arguments": "[1, 2]"}
-        )
+        self.assertEqual(session_ingest._codex_args("[1, 2]"), {"arguments": "[1, 2]"})
 
     def test_codex_args_non_str_non_dict(self):
         self.assertEqual(session_ingest._codex_args(None), {})
@@ -927,7 +1083,12 @@ class CodexAdapterEdgeTest(unittest.TestCase):
             _cx("session_meta", {"id": "cx2", "cwd": "/repo/c", "timestamp": CX_TS}),
             _cx(
                 "response_item",
-                {"type": "function_call", "name": "f", "call_id": "c1", "arguments": "{}"},
+                {
+                    "type": "function_call",
+                    "name": "f",
+                    "call_id": "c1",
+                    "arguments": "{}",
+                },
             ),
             _cx(
                 "response_item",
@@ -939,7 +1100,9 @@ class CodexAdapterEdgeTest(unittest.TestCase):
             ),
         ]
         p = self._write("rollout-y.jsonl", lines)
-        results = [r for r in session_ingest.codex_adapter(p) if r["kind"] == "tool_result"]
+        results = [
+            r for r in session_ingest.codex_adapter(p) if r["kind"] == "tool_result"
+        ]
         self.assertEqual(results[0]["result_bytes"], None)
         self.assertEqual(results[1]["result_bytes"], len(json.dumps({"k": "v"})))
 
@@ -961,7 +1124,9 @@ class AgentSessionEdgeTest(unittest.TestCase):
         return p
 
     def test_synthetic_path_returns_empty(self):
-        p = os.path.join(self.tmp, ".claude-mem", "observer-sessions", "rollout-synth.jsonl")
+        p = os.path.join(
+            self.tmp, ".claude-mem", "observer-sessions", "rollout-synth.jsonl"
+        )
         os.makedirs(os.path.dirname(p), exist_ok=True)
         with open(p, "w") as f:
             f.write("\n".join(_codex_session("synth", "hi", "bye")) + "\n")
@@ -988,7 +1153,13 @@ class AgentSessionEdgeTest(unittest.TestCase):
                 "started_at": 100.0,
                 "ended_at": 200.0,
             }
-            yield {"kind": "message", "uuid": "m1", "ts": 150.0, "role": "user", "text": "hi"}
+            yield {
+                "kind": "message",
+                "uuid": "m1",
+                "ts": 150.0,
+                "role": "user",
+                "text": "hi",
+            }
 
         p = self._empty_file("custom-ended.jsonl")
         stats = session_ingest.ingest_agent_session(p, adapter, conn=self.conn)
@@ -1046,7 +1217,9 @@ class BackfillAgentTest(unittest.TestCase):
         p = os.path.join(dirpath, name)
         with open(p, "w") as f:
             if lines is None:
-                lines = _codex_session(name.replace("rollout-", "").split(".")[0], "hi", "bye")
+                lines = _codex_session(
+                    name.replace("rollout-", "").split(".")[0], "hi", "bye"
+                )
             f.write("\n".join(lines) + "\n")
         return p
 
@@ -1083,8 +1256,12 @@ class BackfillAgentTest(unittest.TestCase):
                 raise RuntimeError("boom")
             return orig(p, adapter, conn=conn, session_id=session_id)
 
-        with mock.patch.object(session_ingest, "ingest_agent_session", side_effect=_flaky):
-            totals = session_ingest.backfill_agent("codex", root=self.root, conn=self.conn)
+        with mock.patch.object(
+            session_ingest, "ingest_agent_session", side_effect=_flaky
+        ):
+            totals = session_ingest.backfill_agent(
+                "codex", root=self.root, conn=self.conn
+            )
         self.assertEqual(totals["files"], 1)
 
     def test_progress_print_at_200(self):
@@ -1092,7 +1269,9 @@ class BackfillAgentTest(unittest.TestCase):
             self._rollout(self.root, f"rollout-{i:04d}.jsonl", lines=[])
         buf = io.StringIO()
         with contextlib.redirect_stderr(buf):
-            totals = session_ingest.backfill_agent("codex", root=self.root, conn=self.conn)
+            totals = session_ingest.backfill_agent(
+                "codex", root=self.root, conn=self.conn
+            )
         self.assertEqual(totals["files"], 200)
         self.assertIn("200 codex sessions", buf.getvalue())
 
@@ -1221,7 +1400,11 @@ class MainModuleTest(unittest.TestCase):
         )
 
     def _exec_as_main(self, argv):
-        ns = {"__name__": "__main__", "__file__": self.src, "__builtins__": __builtins__}
+        ns = {
+            "__name__": "__main__",
+            "__file__": self.src,
+            "__builtins__": __builtins__,
+        }
         with open(self.src) as f:
             code = compile(f.read(), self.src, "exec")
         with mock.patch.object(sys, "argv", ["session_ingest.py", *argv]):
@@ -1233,9 +1416,14 @@ class MainModuleTest(unittest.TestCase):
         self.assertEqual(cm.exception.code, 0)
 
     def test_main_block_exception_swallowed_exits_zero(self):
-        with mock.patch.object(
-            atlas_db, "connect", side_effect=lambda *a, **k: _orig_connect(self.dbpath)
-        ), mock.patch.object(atlas_db, "init", side_effect=RuntimeError("init boom")):
+        with (
+            mock.patch.object(
+                atlas_db,
+                "connect",
+                side_effect=lambda *a, **k: _orig_connect(self.dbpath),
+            ),
+            mock.patch.object(atlas_db, "init", side_effect=RuntimeError("init boom")),
+        ):
             with self.assertRaises(SystemExit) as cm:
                 self._exec_as_main([self.tpath])
         self.assertEqual(cm.exception.code, 0)

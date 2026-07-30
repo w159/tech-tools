@@ -258,6 +258,25 @@ class AtlasDoctorTest(unittest.TestCase):
         self.assertFalse(checks["rollback"]["ok"])
         self.assertIn("BELOW", checks["rollback"]["detail"])
 
+    def test_legacy_pre_rename_repo_url_accepted_as_marketplace_source(self):
+        # w159/atlas was renamed to w159/tech-tools; GitHub redirects the old
+        # URL, so an unmigrated install must not get a false-alarm FAIL.
+        write_json(
+            os.path.join(self.plugins, "known_marketplaces.json"),
+            {
+                "tech-tools": {
+                    "source": {
+                        "source": "git",
+                        "url": "https://github.com/w159/atlas.git",
+                    },
+                    "installLocation": self.clone,
+                    "autoUpdate": True,
+                }
+            },
+        )
+        checks = self.by_check(atlas_doctor.run_checks("atlas")[0])
+        self.assertTrue(checks["marketplace-source"]["ok"])
+
     def test_orphan_marker_fails_install_path(self):
         open(os.path.join(self.install_101, ".orphaned_at"), "w").close()
         checks = self.by_check(atlas_doctor.run_checks("atlas")[0])

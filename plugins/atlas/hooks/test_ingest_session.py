@@ -55,7 +55,15 @@ class _HookTestCase(unittest.TestCase):
         self.dbpath = os.path.join(self.tmp, "atlas.db")
         self.tpath = os.path.join(self.tmp, "sess-ingest-test.jsonl")
         self._write_transcript(FIXTURE_LINES)
-        self._base_env = dict(os.environ, ATLAS_DB=self.dbpath, ATLAS_INGEST="on")
+        self._base_env = dict(
+            os.environ,
+            ATLAS_DB=self.dbpath,
+            ATLAS_INGEST="on",
+            # Fresh hookstate per test: the same session_id repeats across many
+            # calls in this file, and must never touch real ~/.atlas or trip
+            # the circuit breaker across unrelated test methods.
+            ATLAS_HOOKSTATE_DIR=os.path.join(self.tmp, "hookstate"),
+        )
 
     def tearDown(self):
         # Drop the cached session_ingest import so a later test re-inserts the

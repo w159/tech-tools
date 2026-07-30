@@ -125,6 +125,63 @@ SIGNAL_WEIGHT = {
     "unverified_claim": 0.5,
 }
 
+# Substrings that mark a message as atlas's own hook output, or a quoted
+# transcript of it, rather than something a human wrote. The CORRECTION regex
+# above matches ordinary correction vocabulary ("you never...", "that's
+# wrong") - vocabulary atlas's own hooks also use in their own output (e.g.
+# memory_capture's "Captured: User correction ... You NEVER edit the target
+# codebase yourself"). A human pasting a hook transcript while reporting a bug
+# must not have that pasted text laundered into a durable signal.
+#
+# "[atlas]" is checked per line, anchored to the start of the (stripped)
+# line, rather than as a substring anywhere in the text: every atlas hook
+# prefixes its own output with "[atlas]" at the start of the line, but users
+# also name the plugin in ordinary prose ("the [atlas] plugin is broken"),
+# and a substring-anywhere match wrongly swallowed those genuine complaints.
+# Before the anchor is applied, a leading markdown blockquote marker is also
+# stripped (">", ">>", "> >", ">[atlas]" with no space, any amount of leading
+# whitespace) - a human pasting hook output verbatim commonly quotes it with
+# "> ", and that quoting must not defeat the anchor. Only ">" and whitespace
+# are stripped, and only from the very start of the line, so "[atlas]"
+# appearing after any other character (mid-sentence prose, e.g. "I think the
+# [atlas] plugin ...") is left alone and still mints a signal normally.
+# "hook feedback:" and "Self-improvement: captured" stay substring matches
+# anywhere in the text - they are distinctive enough not to appear in
+# ordinary prose, and this is what catches the mid-line quoted form "Stop
+# hook feedback: [atlas] Self-improvement: captured ...".
+MACHINE_MARKERS = (
+    "hook feedback:",
+    "Self-improvement: captured",
+)
+
+_QUOTE_PREFIX = re.compile(r"^[\s>]*")
+
+
+def _strip_quote_prefix(line):
+    """Strip leading whitespace and markdown blockquote markers from one line,
+    so a quoted "> [atlas] ..." line is recognized the same as an unquoted
+    "[atlas] ..." line. See the MACHINE_MARKERS comment above for why only
+    ">" and whitespace are stripped, and only from the start of the line."""
+    return _QUOTE_PREFIX.sub("", line, count=1)
+
+
+def _is_machine_authored(text):
+    """True when text was authored by atlas's own hooks, or quotes them
+    verbatim (e.g. a bug report pasting a hook transcript, including one
+    blockquoted with a leading "> "). NOISE_PREFIXES is reused rather than
+    duplicated - it already lists atlas/claude-mem's own machine-generated
+    message openings. "[atlas]" is checked per line, after stripping any
+    leading blockquote marker (see _strip_quote_prefix), anchored to the
+    start of what remains - so prose that merely names the plugin mid-line
+    (quoted or not) is not flagged."""
+    if text.lstrip().startswith(NOISE_PREFIXES):
+        return True
+    if any(
+        _strip_quote_prefix(line).startswith("[atlas]") for line in text.splitlines()
+    ):
+        return True
+    return any(marker in text for marker in MACHINE_MARKERS)
+
 
 def _snippet(text, m):
     """Extract the full sentence(s) containing the match, not a ±80 char fragment.
@@ -163,6 +220,15 @@ def _snippet(text, m):
 def detect_signals(role, text):
     """Yield (signal_type, weight, snippet) for one message's text."""
     if not text:
+        return
+    # Wholesale suppression: once _is_machine_authored finds a machine marker
+    # anywhere in the message (a hook-output line, or one of the substring
+    # markers), no signal is minted from the message at all, even if the
+    # same message also contains genuine human correction text elsewhere.
+    # Simpler than locating and excluding just the matching span, at the cost
+    # of losing that rare mixed case; a missed signal is cheaper than one
+    # that never expires.
+    if _is_machine_authored(text):
         return
     if role == "assistant":
         m = ADMISSION.search(text)

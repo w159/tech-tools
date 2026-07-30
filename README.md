@@ -74,7 +74,7 @@ the practical before and after once the plugin is installed.
 ![Atlas plugin marketplace tile](img/plugin-marketplace-tile.png)
 
 1. **Add the marketplace.** In Claude Code, run `/plugin` and add this repo's
-   marketplace file, `.claude-plugin/marketplace.json` (catalog name `atlas`,
+   marketplace file, `.claude-plugin/marketplace.json` (catalog name `tech-tools`,
    version `3.1.0`, listing three plugins: `atlas`, `armada`, `programmer`).
    Kimi Code CLI is also supported through `.kimi-plugin/marketplace.json`.
 2. **Install the plugin.** Install `atlas` from the marketplace. Two optional
@@ -379,7 +379,7 @@ are required; `atlas-setup` detects them and offers to install if missing.
 atlas/
 |- README.md                 # this file
 |- img/                      # repo imagery (hero, headers, tiles)
-|- .claude-plugin/           # marketplace.json catalog (name: atlas, 3.1.0)
+|- .claude-plugin/           # marketplace.json catalog (name: tech-tools, 3.1.0)
 |- plugins/
 |  |- atlas/                 # the plugin (v5.1.1)
 |  |  |- .claude-plugin/     # plugin.json manifest + userConfig
@@ -467,6 +467,6 @@ Lint with `ruff check plugins/atlas/hooks plugins/atlas/scripts`; typecheck with
 <div align="center">
 
 Apache-2.0 licensed. Author: [w159](https://github.com/w159). Repository:
-[github.com/w159/atlas](https://github.com/w159/atlas).
+[github.com/w159/tech-tools](https://github.com/w159/tech-tools).
 
 </div>

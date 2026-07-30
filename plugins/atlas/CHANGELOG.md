@@ -1,5 +1,49 @@
 # Changelog
 
+## 5.2.0 (2026-07-28)
+
+Stop-hook loop guard, generalized. An earlier point fix patched
+`memory_capture.py` directly for a Stop-hook loop that burned a usage
+limit; the invariant it enforced (a Stop hook must not re-emit identical
+feedback forever) was still hand-implemented per hook, so a new hook would
+inherit nothing. This release centralizes it.
+
+- **New shared module `scripts/atlas_hook_guard.py`** (about 218 lines):
+  `read_payload()`, `should_run(payload, hook_name, window_seconds=None)`,
+  `emit(payload, hook_name, message)`. Per-session JSON state at
+  `~/.atlas/hookstate/<session_id>.json` (override: `ATLAS_HOOKSTATE_DIR`).
+  Tracks `last_run` per hook, `stop_events` for the circuit breaker, and
+  emitted message hashes (sha256, first 16 hex chars).
+- **Session circuit breaker.** `STOP_BURST_LIMIT = 5` Stop events within
+  `STOP_BURST_WINDOW = 120` seconds trips it for the rest of the session,
+  silencing every atlas Stop hook. A per-hook throttle can only ask "have I
+  spoken recently"; only the breaker sees the whole Stop chain thrashing.
+  Notice goes to stderr only, never stdout.
+- **All five Stop hooks rewired to the guard**, each keeping its previous
+  throttle window: `nudge.py` 900s, `auto_skill.py` 600s,
+  `memory_capture.py` 900s; `ingest_session.py` and `completion_gate.py`
+  carry no throttle of their own (breaker only).
+- **`completion_gate.py` uses `should_run()` only, not `emit()`.** Its
+  definition-of-done block message must repeat identically every Stop
+  until the conditions are actually met; content-hash dedupe would
+  silently defeat the gate. Only the breaker can silence it.
+- `memory_capture.py` keeps its own fact-level seen-marker
+  (`~/.atlas/.memory_capture_seen`) separately from the guard's
+  message-level dedupe; the two track different things and both stay.
+- Version 5.1.1 -> 5.2.0. Minor bump: new capability (the guard module and
+  breaker) plus a bug fix, no breaking change.
+
+Evidence: 23 passed in `test_atlas_hook_guard.py`; 129 passed across the
+five wired hook suites; 562 passed in `scripts`; 427 passed in `hooks`;
+ruff clean. Incident replay against the real `memory_capture.py` hook (4
+calls about 1s apart): call 1 emitted `additionalContext`, calls 2-4 emitted
+nothing, exit 0 throughout. Breaker probe at a 13s cadence blocked at Stop 6
+(t=65s); a legitimate 5-Stops-over-10-minutes cadence never trips; the
+breaker is per-session (tripping session A does not silence session B).
+Fail-open held under ten adversarial probes (corrupt JSON state, state path
+as a directory, chmod 000 state dir, malformed stdin, missing `session_id`,
+poisoned schema).
+
 ## 5.1.1 (2026-07-17)
 
 Audit remediation: every reproduced defect from atlas-audit-2026-07-17.md
