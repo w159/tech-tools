@@ -6,8 +6,8 @@
     "name": "w159",
     "url": "https://github.com/w159"
   },
-  "repository": "https://github.com/w159/atlas",
-  "homepage": "https://github.com/w159/atlas/tree/main/plugins/atlas",
+  "repository": "https://github.com/w159/tech-tools",
+  "homepage": "https://github.com/w159/tech-tools/tree/main/plugins/atlas",
   "license": "Apache-2.0",
   "mcpServers": "./.mcp.json",
   "userConfig": {

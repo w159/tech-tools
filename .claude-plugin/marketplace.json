@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
-  "name": "atlas",
+  "name": "tech-tools",
   "description": "The atlas marketplace: a multi-agent coding architect (atlas) with 22 plainly named skills, 12 core agents, self-improvement hooks, and the atlas-orchestrate methodology (evidence before any done claim), plus an optional organizational deployment plugin (armada) with 11 department agents and 156 department skills.",
   "version": "3.1.0",
   "owner": {

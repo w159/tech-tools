@@ -36,7 +36,7 @@
     "name": "w159",
     "url": "https://github.com/w159"
   },
-  "homepage": "https://github.com/w159/atlas/tree/main/plugins/atlas",
+  "homepage": "https://github.com/w159/tech-tools/tree/main/plugins/atlas",
   "license": "Apache-2.0",
   "interface": {
     "displayName": "Atlas",
