@@ -1,8 +1,8 @@
-# programmer (Claude Code plugin in the atlas marketplace)
+# programmer (Claude Code plugin in the tech-tools marketplace)
 
 Turns The Pragmatic Programmer (20th Anniversary Edition) into an active codebase auditor and coding-time advisor. The book's principles, tips, practices, and lessons become things you can run against a real codebase, not just quotes on a page.
 
-This plugin ships as part of the [atlas marketplace](https://github.com/w159/atlas) (owner w159), alongside the `atlas` and `armada` plugins. Skills are namespaced `tpp-*` (The Pragmatic Programmer).
+This plugin ships as part of the [tech-tools marketplace](https://github.com/w159/tech-tools) (owner w159), alongside the `atlas` and `armada` plugins. Skills are namespaced `tpp-*` (The Pragmatic Programmer).
 
 ## What's included
 

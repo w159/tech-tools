@@ -14,57 +14,29 @@ This mirrors Hermes Agent's skill_manage(action='create') but is hook-driven:
 the agent doesn't need to decide to save — it happens automatically.
 
 Fail-open: any error exits 0 silently. Disable with ATLAS_AUTO_SKILL=off.
-Rate-limited: at most once per 10 minutes via a marker file.
+Rate-limited: at most once per 10 minutes. stop_hook_active, the throttle
+window, and the circuit breaker are all enforced by atlas_hook_guard now.
 """
 
-import json
 import os
 import sys
-import time
 
 WINDOW_SECONDS = 600  # at most once per 10 minutes
 
-
-def _marker_path():
-    base = os.path.join(os.path.expanduser("~"), ".atlas")
-    try:
-        os.makedirs(base, exist_ok=True)
-    except Exception:
-        base = "/tmp"
-    return os.path.join(base, ".atlas_auto_skill")
-
-
-def _throttled(path):
-    try:
-        last = os.path.getmtime(path)
-        if (time.time() - last) < WINDOW_SECONDS:
-            return True
-    except Exception:
-        pass
-    try:
-        with open(path, "w") as f:
-            f.write(str(time.time()))
-    except Exception:
-        pass
-    return False
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+import atlas_hook_guard  # noqa: E402
 
 
 def main():
     if os.environ.get("ATLAS_AUTO_SKILL", "on").lower() == "off":
         sys.exit(0)
 
-    # Throttle: don't run more than once per window
-    if _throttled(_marker_path()):
+    payload = atlas_hook_guard.read_payload()
+
+    if not atlas_hook_guard.should_run(
+        payload, "auto_skill", window_seconds=WINDOW_SECONDS
+    ):
         sys.exit(0)
-
-    # Read payload (but we don't need most of it — skill_factory finds the
-    # most recent orchestrating session itself)
-    try:
-        sys.stdin.read()
-    except Exception:
-        pass
-
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
     try:
         import skill_factory
@@ -81,16 +53,7 @@ def main():
                 f"The skill is available next session under ~/.claude/skills/{name}/ "
                 f"(or $ATLAS_SKILLS_DIR if set)."
             )
-            sys.stdout.write(
-                json.dumps(
-                    {
-                        "hookSpecificOutput": {
-                            "hookEventName": "Stop",
-                            "additionalContext": msg,
-                        }
-                    }
-                )
-            )
+            atlas_hook_guard.emit(payload, "auto_skill", msg)
         else:
             # Fail-open but observable: surface why no skill was created so
             # silent zero-output curator runs can be diagnosed.

@@ -9,22 +9,28 @@ with ATLAS_INGEST=off.
 The on-disk transcript - not this hook's stdin payload - is the source of truth;
 the payload only tells us which file to read (transcript_path) and the
 session/cwd to attribute it to.
+
+stop_hook_active and the session circuit breaker are checked via
+atlas_hook_guard (window_seconds=None -- this hook has no throttle of its
+own, only the breaker that silences a thrashing Stop chain).
 """
 
-import json
 import os
 import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+import atlas_hook_guard  # noqa: E402
 
 
 def main():
     if os.environ.get("ATLAS_INGEST", "on").lower() == "off":
         return
-    raw = sys.stdin.read()
-    payload = json.loads(raw) if raw.strip() else {}
+    payload = atlas_hook_guard.read_payload()
+    if not atlas_hook_guard.should_run(payload, "ingest_session"):
+        return
     path = payload.get("transcript_path")
     if not path or not os.path.exists(path):
         return  # nothing to ingest yet
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
     import session_ingest
 
     session_ingest.ingest_transcript(path, session_id=payload.get("session_id"))

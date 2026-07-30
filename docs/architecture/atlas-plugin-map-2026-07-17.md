@@ -18,7 +18,7 @@ graph TD
     M --> N["Parse"] --> O["Find root"] --> P["Evidence"] --> Q["Findings"]
     Q --> R["Docs check"] --> S["Verifier coverage"] --> T["Finalize DB"]
 
-    A --> U["SessionEnd<br/>memory_capture.py"]
+    A --> U["Stop + SubagentStop<br/>memory_capture.py"]
     U --> V["Parse"] --> W["DB connect"] --> X["Extract facts"]
 
     T --> Y["SQLite SSOT<br/>~/.atlas/atlas.db"]
@@ -36,6 +36,7 @@ Key facts:
 - SQLite SSOT schema at `atlas_db.py:11-86`; DB at `~/.atlas/atlas.db` (or `$ATLAS_DB`). Tables: `runs`, `events`, `dispatches`.
 - Skills wire to agents by agent-type name in SKILL.md (e.g. atlas-db-audit -> schema-inventory / rls-privilege-audit / explorer).
 - `session_boot` is fail-open throughout (any error exits 0). `completion_gate` is fail-closed on verifier/git checks but fail-open on structure checks. (The CODE audit flags several fail-open branches as contradicting their own comments.)
+- Updated 2026-07-28 (atlas 5.2.0): the per-hook Stop-loop guard described in an earlier revision of this note was superseded the same day by a shared module, `plugins/atlas/scripts/atlas_hook_guard.py` (`read_payload()`, `should_run()`, `emit()`, per-session state at `~/.atlas/hookstate/<session_id>.json`). All five Stop hooks (`completion_gate`, `ingest_session`, `memory_capture`, `auto_skill`, `nudge`) now route through it instead of each hand-implementing its own `stop_hook_active` check and dedupe. The module adds a session-wide circuit breaker (`STOP_BURST_LIMIT = 5` Stop events per `STOP_BURST_WINDOW = 120` seconds trips it for the rest of the session, silencing every atlas Stop hook) that no per-hook throttle could provide on its own. `completion_gate.py` deliberately calls `should_run()` only, not `emit()`, so its repeat-until-fixed definition-of-done message is not deduped away; only the breaker can silence it. `memory_capture.py` separately keeps its own fact-level seen-marker (`~/.atlas/.memory_capture_seen`), which tracks facts rather than messages and is unrelated to the guard module. See `.atlas/findings/2026-07-28-stop-hook-memory-capture-loop.md`.
 
 ## Repo feature boundaries
 

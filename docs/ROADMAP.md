@@ -30,12 +30,12 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 - Classifier arm-precision monitoring: use sextant (runs.orchestrating vs actual
   dispatches) to measure real-world false-arm rate of the accepted dual-use-verb
   residual (audit/investigate/debug/profile/harden).
-- atlas_doctor marketplace-source repair: pre-existing FAILs (installed cache
-  tracks henssler-financial remote, expected w159/atlas per
-  `plugins/atlas/.claude-plugin/plugin.json:8`; the marketplace name itself
-  is `atlas` per `.claude-plugin/marketplace.json:3`, and the marketplace
-  now lists 3 plugins: `atlas`, `armada`, `programmer`) - run
-  `python3 plugins/atlas/scripts/atlas_doctor.py --fix` then reload plugins.
+- [resolved 2026-07-29] atlas_doctor `marketplace-source`/`clone-remote` FAILs: this
+  was never a marketplace-source mismatch or a fork - the GitHub repo was renamed
+  `w159/atlas` -> `w159/tech-tools`, and the `atlas` plugin's own `repository` field
+  (which `atlas_doctor.py` reads to derive its expected repo) still carried the
+  pre-rename URL. Fixed by repointing that field, and the marketplace catalog name
+  itself, to `tech-tools`; see CHANGELOG 2026-07-29.
 - Improvement #28 (user-gated): one-line global CLAUDE.md rule that the Skill tool
   is only for listed skills (34 historical Skill(bash/read/write) misfires, 100%
   error rate).

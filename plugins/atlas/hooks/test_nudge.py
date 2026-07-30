@@ -33,7 +33,13 @@ def run_hook(payload, env):
 class NudgeTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
-        self.env = dict(os.environ, ATLAS_DB=os.path.join(self.tmp, "atlas.db"))
+        self.env = dict(
+            os.environ,
+            ATLAS_DB=os.path.join(self.tmp, "atlas.db"),
+            # Fresh hookstate per test: never touch real ~/.atlas, and never let
+            # a shared session_id across test methods trip the breaker/throttle.
+            ATLAS_HOOKSTATE_DIR=os.path.join(self.tmp, "hookstate"),
+        )
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         import atlas_db
 
@@ -44,10 +50,6 @@ class NudgeTest(unittest.TestCase):
         atlas_db.start_run(c, pid, "sess-orch")
         atlas_db.mark_orchestrating(c, "sess-orch")
         c.close()
-        # Remove the throttle marker so test_fires_for_orchestration is deterministic
-        m = os.path.join(os.path.expanduser("~"), ".atlas", ".atlas_nudge")
-        if os.path.exists(m):
-            os.remove(m)
 
     def test_silent_for_non_orchestration(self):
         r = run_hook({"session_id": "sess-chat", "cwd": self.tmp}, self.env)
@@ -73,7 +75,6 @@ class InProcessMainTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
         self.db_path = os.path.join(self.tmp, "atlas.db")
-        self.marker = os.path.join(self.tmp, ".atlas_nudge")
         c = atlas_db.connect(self.db_path)
         atlas_db.init(c)
         pid = atlas_db.register_project(c, "/repo/x")
@@ -81,10 +82,14 @@ class InProcessMainTest(unittest.TestCase):
         atlas_db.start_run(c, pid, "sess-orch")
         atlas_db.mark_orchestrating(c, "sess-orch")
         c.close()
-        self.env = dict(os.environ, ATLAS_DB=self.db_path)
+        self.env = dict(
+            os.environ,
+            ATLAS_DB=self.db_path,
+            ATLAS_HOOKSTATE_DIR=os.path.join(self.tmp, "hookstate"),
+        )
 
     def _run_main(self, payload, env=None, stdin_text=None):
-        """Invoke nudge.main() with controlled stdin/env and a temp marker path.
+        """Invoke nudge.main() with controlled stdin/env and isolated hookstate.
         Returns (exit_code, stdout, stderr)."""
         env = env if env is not None else self.env
         if stdin_text is None:
@@ -96,7 +101,6 @@ class InProcessMainTest(unittest.TestCase):
         with (
             mock.patch("sys.stdin", stdin),
             mock.patch.dict(os.environ, env, clear=False),
-            mock.patch.object(nudge, "marker_path", lambda: self.marker),
             contextlib.redirect_stdout(out),
             contextlib.redirect_stderr(err),
         ):
@@ -124,11 +128,15 @@ class InProcessMainTest(unittest.TestCase):
         self.assertIn("capture it", out)
 
     def test_throttle_skips_recent_marker(self):
-        # Recent marker -> throttled() returns True -> exit 0, no output.
-        with open(self.marker, "w") as f:
-            f.write(str(time.time()))
-        os.utime(self.marker, (time.time(), time.time()))
-        code, out, err = self._run_main({"session_id": "sess-orch"})
+        # First call fires and records the throttle window in hookstate; a
+        # second call for the same session, inside the window, stays silent.
+        with (
+            mock.patch.object(nudge, "_check_memory_captured", return_value=False),
+            mock.patch.object(nudge, "_check_skill_created", return_value=False),
+        ):
+            first_code, first_out, _ = self._run_main({"session_id": "sess-orch"})
+            code, out, err = self._run_main({"session_id": "sess-orch"})
+        self.assertIn("additionalContext", first_out)
         self.assertEqual(code, 0)
         self.assertEqual(out, "")
 
@@ -194,7 +202,6 @@ class InProcessMainTest(unittest.TestCase):
         with (
             mock.patch("sys.stdin", stdin),
             mock.patch.dict(os.environ, self.env, clear=False),
-            mock.patch.object(nudge, "marker_path", lambda: self.marker),
             contextlib.redirect_stdout(out),
             contextlib.redirect_stderr(err),
         ):
@@ -206,52 +213,9 @@ class InProcessMainTest(unittest.TestCase):
         self.assertEqual(out.getvalue(), "")
 
 
-class MarkerPathTest(unittest.TestCase):
-    def test_marker_path_under_atlas_dir(self):
-        tmp = tempfile.mkdtemp()
-        with mock.patch.dict(os.environ, {"HOME": tmp}, clear=False):
-            path = nudge.marker_path()
-        self.assertTrue(path.endswith(".atlas_nudge"))
-        self.assertIn(".atlas", path)
-
-    def test_marker_path_falls_back_to_tmp_when_makedirs_fails(self):
-        # os.makedirs raising (e.g. read-only home) -> base falls back to /tmp.
-        with mock.patch("os.makedirs", side_effect=OSError("denied")):
-            path = nudge.marker_path()
-        self.assertTrue(path.startswith("/tmp"))
-        self.assertTrue(path.endswith(".atlas_nudge"))
-
-
-class ThrottledTest(unittest.TestCase):
-    def setUp(self):
-        self.tmp = tempfile.mkdtemp()
-        self.path = os.path.join(self.tmp, "marker")
-
-    def test_recent_marker_returns_true(self):
-        with open(self.path, "w") as f:
-            f.write(str(time.time()))
-        os.utime(self.path, (time.time(), time.time()))
-        self.assertTrue(nudge.throttled(self.path))
-
-    def test_missing_marker_writes_and_returns_false(self):
-        self.assertFalse(os.path.exists(self.path))
-        self.assertFalse(nudge.throttled(self.path))
-        self.assertTrue(os.path.exists(self.path))  # marker created
-
-    def test_stale_marker_returns_false_and_refreshes(self):
-        with open(self.path, "w") as f:
-            f.write("old")
-        old = time.time() - nudge.WINDOW_SECONDS - 1
-        os.utime(self.path, (old, old))
-        self.assertFalse(nudge.throttled(self.path))
-
-    def test_write_failure_returns_false(self):
-        # Path in a non-existent parent dir: getmtime raises (no file), then
-        # open(path, "w") raises (no parent) -> write except branch -> False,
-        # and no marker is created.
-        missing = os.path.join(self.tmp, "no_such_dir", "marker")
-        self.assertFalse(nudge.throttled(missing))
-        self.assertFalse(os.path.exists(missing))
+# Throttle-window and marker-path coverage moved to
+# atlas_hook_guard/test_atlas_hook_guard.py, which now owns that invariant
+# for all five Stop hooks.
 
 
 class CheckMemoryCapturedTest(unittest.TestCase):
