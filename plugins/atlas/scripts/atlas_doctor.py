@@ -65,6 +65,12 @@ def _git(args, cwd):
     )
 
 
+# The repo was renamed w159/atlas -> w159/tech-tools (2026-07-29). GitHub
+# redirects the old URL, so a marketplace/clone still pointing at it is not
+# broken - accept it too rather than raising a false alarm on unmigrated installs.
+LEGACY_REPO_ALIAS = "w159/atlas"
+
+
 def norm_repo(url):
     """Compare repo URLs by owner/name only (scheme and .git suffix vary)."""
     if not url:
@@ -261,7 +267,7 @@ def run_checks(plugin_name="atlas"):
     if not src_url and src.get("source") == "directory":
         add("marketplace-source", True, f"directory: {src.get('path', '?')}")
     else:
-        ok = norm_repo(src_url) == expected_repo
+        ok = norm_repo(src_url) in (expected_repo, LEGACY_REPO_ALIAS)
         add(
             "marketplace-source",
             ok,

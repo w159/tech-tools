@@ -4,6 +4,19 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
+## 2026-07-29 -- Marketplace renamed atlas -> tech-tools (repo rename follow-up)
+
+The GitHub repo was renamed from `w159/atlas` to `w159/tech-tools` (confirmed via `gh api repos/w159/atlas -q .full_name` returning `w159/tech-tools`, the old URL now a live redirect). This is a naming-inconsistency fix, not the "marketplace source mismatch" the 2026-07-28 entry and ROADMAP had guessed at: `atlas_doctor.py` derives its expected repo straight from the `atlas` plugin's own `repository` field in `plugin.json`, and that field still read the pre-rename URL.
+
+- Marketplace catalog name changed `atlas` -> `tech-tools` in `.claude-plugin/marketplace.json:3`. Plugin references now read `atlas@tech-tools`, `programmer@tech-tools`, `armada@tech-tools`. The two Kimi-schema catalogs (`marketplace.json`, `.kimi-plugin/marketplace.json`) have no top-level marketplace name field to change (schema `"version": "2"`, `id`/`displayName`/`source` per plugin); their per-plugin `source` URLs were repointed from `w159/atlas` to `w159/tech-tools`.
+- Plugin identities are unchanged: `atlas`, `programmer`, and `armada` still each carry `"name": "<plugin>"` in their own `plugin.json` / Kimi manifest. Only the `repository` and `homepage` URLs in all six plugin manifests (`.claude-plugin/plugin.json` and `.kimi-plugin/plugin.json` for each of the three plugins), the two armada `department-config.json` files (security-compliance, microsoft-365), and doc links in `README.md` / `plugins/README.md` were repointed to `github.com/w159/tech-tools`.
+- `plugins/atlas/scripts/atlas_doctor.py`: added `LEGACY_REPO_ALIAS = "w159/atlas"`; the `marketplace-source` check now accepts either the current `expected_repo` (derived from the plugin's own `repository` field, now `w159/tech-tools`) or the legacy pre-rename URL, since GitHub's redirect means an unmigrated install is not actually broken. Still a warning-only check in `--hook` mode, never a hard failure. New test: `test_legacy_pre_rename_repo_url_accepted_as_marketplace_source` in `test_atlas_doctor.py`.
+- Corrects `docs/ROADMAP.md`: the open item describing this as an `atlas_doctor` "marketplace-source repair" / mismatch has been resolved and removed from Backlog; it was this same naming inconsistency, not a fork or a real source-of-truth problem.
+
+Evidence: `python3 -m pytest plugins/atlas/scripts/test_atlas_doctor.py -q` -> 36 passed. Every `*.json` file in the repo still parses (`python3 -c "import json,glob; [json.load(open(f)) for f in glob.glob('**/*.json', recursive=True) if '.git' not in f and 'node_modules' not in f]"`).
+
+---
+
 ## 2026-07-28 -- atlas 5.2.0: shared Stop-hook guard module with a session circuit breaker
 
 The point fix earlier this date (`ab67df4`) patched `memory_capture.py` directly. The user pushed back that this was insufficient: the invariant "a Stop hook must not re-emit identical feedback forever" was still hand-implemented inconsistently across five hooks, and any new hook would inherit nothing. This release is the structural answer: one shared module plus a session-wide circuit breaker that can see the Stop chain thrashing as a whole, which no per-hook throttle can do.
