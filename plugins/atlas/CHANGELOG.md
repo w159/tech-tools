@@ -1,5 +1,74 @@
 # Changelog
 
+## 5.3.0 (2026-07-31)
+
+All 10 vendored MCP connectors fixed: `.gitignore` had `*.mcpb`, so the 10
+bundles were never committed, and an installed plugin's `mcp/<name>/` folder
+held only `extract.sh` + `launch.sh` with nothing for `launch.sh` to launch.
+Zero `mcp__plugin_atlas_*` tools existed in any session. `.mcpb` is also a
+Claude Desktop installation format Claude Code plugins cannot execute
+natively (`code.claude.com/docs/en/plugins-reference.md`), so the
+extract-and-exec wrapper was never a viable plugin mechanism.
+
+- **Replaced `.mcpb` + `launch.sh` + `extract.sh` with one self-contained
+  ESM bundle per server**: `mcp/<key>/server.mjs`, tsup `noExternal:[/.*/]`,
+  no `dist/`, no `node_modules/`. Removed the 4 domain subfolders (`hr`,
+  `it-operations`, `microsoft-365`, `security`), the 8 shell scripts, and
+  the 10 `.mcpb` bundles. One folder per connector key: auvik, blumira,
+  cipp, connectwise, knowbe4, ninjaone, paylocity, spanning, threatlocker,
+  vanta. `mcp/` went from 31 MB to 4.3 MB.
+- `.mcp.json`: all 10 entries rewired to `command: "node"`, `args:
+  ["--import", "${CLAUDE_PLUGIN_ROOT}/mcp/_env/load.mjs",
+  "${CLAUDE_PLUGIN_ROOT}/mcp/<key>/server.mjs"]` (`.mcp.json:99-105` for
+  ninjaone).
+- **New preloader `mcp/_env/load.mjs`**, dependency-free ESM: loads
+  `ATLAS_ENV_FILE` (default `${CLAUDE_PLUGIN_ROOT}/.env`) with override
+  semantics, then promotes `CFG_<NAME>` to `<NAME>` only when `<NAME>` is
+  unset, non-empty, and not an unexpanded `${...}` literal (`load.mjs:5-34`).
+  Never writes to stdout, since stdout is reserved for JSON-RPC.
+- **Credential precedence changed**: `.env` now beats the plugin's
+  `userConfig` Keychain values (which remain as fallback). Node's
+  `--env-file` does not override variables already in the environment, so
+  `userConfig` would otherwise always win. Added `.env.example` covering
+  all 40 credential variables, commented, no values.
+- `.gitignore:307-314` allowlists `plugins/atlas/mcp/` (re-included after
+  the generic `dist/`/`node_modules/` excludes) so the bundles actually
+  ship; `plugins/atlas/.env` stays re-excluded (`.gitignore:339-340`).
+  `*.mcpb` rule retained.
+- Marketplace cleanup: removed the stray root `marketplace.json` (duplicated
+  all 3 plugins, produced 6 cards for 3 plugins in the plugin browser);
+  `plugins/programmer/.claude-plugin/plugin.json:5` author corrected
+  `"Jerry"` -> `"w159"`; corrected stale skill counts in
+  `.claude-plugin/marketplace.json:4,13` ("22 plainly named skills" -> 20,
+  "16 task skills" -> 14).
+- Version 5.2.0 -> 5.3.0. Minor bump: new capability (bundled ESM connector
+  mechanism, `.env` credential precedence) plus a bug fix (all 10
+  connectors restored from completely dead to working), no breaking change
+  to the plugin's own interface.
+
+Known limitation, recorded honestly: Claude Code has no per-MCP-server
+enable/disable, only plugin-level `defaultEnabled`
+(`plugins-reference.md:509-518`). All 10 servers load together; those
+without credentials sit in a reduced diagnostic mode.
+
+Evidence (independently verified by a fresh-context verifier): all 10
+servers complete an MCP initialize handshake and return `tools/list`
+(auvik-mcp 0.4.2 39 tools, blumira-mcp 1.1.5 2 credential-gated, cipp-mcp
+0.2.2 43, connectwise-manage-mcp 1.5.2 2 without credentials/52 with,
+kaseya-spanning-backup-mcp 1.1.3 14, mcp-server-knowbe4 1.1.2 30,
+ninjaone-mcp 1.6.2 26, paylocity-mcp 0.1.4 16, threatlocker-mcp 1.3.0 18,
+vanta-mcp 0.2.3 28), all exit cleanly. `ninjaone/server.mjs` copied alone
+into an empty temp dir ran and returned its full 26-tool list with no
+`node_modules` present. All 10 bundles confirmed git-addable; `.env`
+confirmed ignored. 40 `userConfig` keys reconcile exactly across
+`plugin.json`, `.mcp.json`, and `.env.example` with none renamed, dropped,
+or orphaned. Credential precedence verified in all four cases. Preloader
+stdout-safety verified against malformed input, a missing file, and a
+directory passed instead of a file: zero stdout bytes, never throws.
+
+Not yet verified: working from an installed plugin cache, since that
+requires this commit to be pushed first.
+
 ## 5.2.0 (2026-07-28)
 
 Stop-hook loop guard, generalized. An earlier point fix patched
