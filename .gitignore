@@ -304,6 +304,15 @@ docs/**/.git/**
 **/coverage/**
 **/.eslintcache
 
+# ---- atlas MCP servers: bundled, must ship trackable ----
+# Each vendor ships as a single self-contained plugins/atlas/mcp/<key>/server.mjs
+# (tsup noExternal bundle, no dist/, no node_modules/). These MUST be tracked:
+# the previous .mcpb bundles were ignored, so marketplace installs shipped
+# launchers with nothing to launch and every server was dead on arrival.
+# Re-included after the generic dist/ and node_modules/ excludes above.
+!plugins/atlas/mcp/
+!plugins/atlas/mcp/**
+
 # ---- Generated knowledge-graph output (graphify skill) ----
 # These cache files embed absolute /Users/<name>/... paths — never commit them.
 **/graphify-out/
@@ -326,6 +335,10 @@ mcp_servers/.archive/**
 !**/.env.template
 !**/.env.example
 !**/.env.sample
+
+# ---- plugins/atlas real env file: never tracked, template stays tracked ----
+plugins/atlas/.env
+!plugins/atlas/.env.example
 
 # ---- Claude Desktop config (may contain API keys / session tokens) ----
 **/.claude/
