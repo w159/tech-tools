@@ -16,6 +16,41 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 
 ## Backlog
 
+### Extract MCP connector servers into standalone repos (approved 2026-07-31)
+
+Goal: deliver each of the 10 MCP connector servers via
+`npx -y git+https://github.com/w159/<vendor>-mcp.git` instead of as folders inside this
+monorepo. Approved as a follow-on target; not started. Four independent blockers confirmed
+this session:
+
+1. All 10 are folders in this monorepo, not standalone repos. `git -C mcp_servers/<name>
+   rev-parse --show-toplevel` returns the tech-tools root for every one; single remote
+   `https://github.com/w159/tech-tools.git`; no `.gitmodules`, no nested `.git`. npm git URLs
+   have no subdirectory form, so a git+ URL today would install the whole monorepo, not one
+   server.
+2. 6 of 10 depend on local `file:../../mcp_node/node-*` paths and cannot install standalone:
+   blumira-mcp, kaseya-spanning-backup-mcp, ninjaone-mcp, paylocity-mcp, threatlocker-mcp,
+   vanta-mcp.
+3. `dist/` is gitignored for all 10, and only 3 of 10 (blumira, cipp, threatlocker) have a
+   `prepare` script. npm runs `prepare` (not `build`) on git installs, so the other 7 would
+   install as empty packages.
+4. None of the 10 are published to npm. All names are unscoped (auvik-mcp, blumira-mcp,
+   cipp-mcp, connectwise-manage-mcp, kaseya-spanning-backup-mcp, knowbe4-mcp, ninjaone-mcp,
+   paylocity-mcp, threatlocker-mcp, vanta-mcp).
+
+What would unblock it, in order:
+- Publish the `mcp_node/node-*` client libraries to npm.
+- Replace the 6 `file:` dependencies with published npm versions.
+- Add `prepare` scripts to the 7 servers lacking them, or commit `dist/`.
+- Extract each server to its own repo (`w159/<vendor>-mcp`). Only `w159/atlas-connectwise`
+  exists today and it is unrelated.
+
+Interim decision (approved 2026-07-31): vendor the built servers directly into
+`plugins/atlas/mcp/<server-key>/` and launch them with `node` against
+`${CLAUDE_PLUGIN_ROOT}`, which works today with no registry or repo work. The npx-from-git
+delivery above remains the eventual target, not the current mechanism. Vendoring work itself
+is in progress and unverified as of this entry - not recorded here as done.
+
 ### Atlas v3.1.0 follow-ups (added 2026-07-09)
 
 - Post-release smoke test: reload plugins (installed cache is still 3.0.2), open a
