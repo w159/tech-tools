@@ -1,5 +1,95 @@
 # Changelog
 
+## 5.4.0 (2026-08-05)
+
+Self-improvement was not missing, it was stalled. Atlas had been recording
+telemetry faithfully for a month and consuming none of it: `improvements` had
+not been written in 24 days, `asset_verdicts` in 27, and `~/.atlas/memory/`
+had not changed since 2026-07-16. Three compounding causes, each proven before
+anything was changed.
+
+**Root causes fixed**
+
+- **A 4,000-byte cap on accumulated memory, failing silently.** `MEMORY.md`
+  sat at 4,058 bytes, so `atlas_memory.add()` returned `success=False` and
+  `memory_capture.py` skipped the lesson with no error anywhere. Every lesson
+  since 2026-07-16 was discarded. `WORKING_CAP_CHARS` raised to 20,000 with
+  rotation to a dated archive instead of rejection (`atlas_memory.py:53`,
+  `:156-194`). Verified: forced rotation of 50 over-cap entries preserved all
+  50 across live plus archive, and the real 4,058-byte file gained an entry
+  with the original unchanged.
+- **`atlas_doctor --hook` never persisted its verdict.** The SessionStart path
+  returned before writing, so 27 days of health checks recorded nothing.
+  `record_hook_verdict()` is now wired into that branch.
+- **A blocked Stop silenced every learning hook.** When `completion_gate`
+  blocks, Claude Code re-fires Stop with `stop_hook_active=true`, and
+  `atlas_hook_guard.should_run()` returned False for all hooks
+  (`atlas_hook_guard.py:146`). The gate's false positives were switching off
+  atlas's own learning. `should_run()` gained a `kind` parameter: capture
+  hooks (`ingest_session`, `memory_capture`, `chronicle_facet`) survive a
+  blocked Stop; emit hooks (`nudge`, `auto_skill`) stay suppressed, which is
+  what the flag exists for. Default stays `"emit"` for back-compat.
+
+**New**
+
+- **`facets`, `friction_events`, `findings` tables**, plus `improvements`
+  extended additively with `finding_id`, `metric`, `baseline_value`,
+  `target_value`, `measure_after_runs`, `remeasured_at`, `remeasured_value`,
+  `verdict` (`atlas_db.py:43-67`, `:165-172`). Migration verified
+  non-destructive against a copy of a live 119 MB database: all 12
+  pre-existing tables unchanged, `improvements` kept its 38 rows.
+- **`hooks/chronicle_facet.py`**, a Stop hook writing one deterministic facet
+  row per session from data `ingest_session` already stored. No LLM call, no
+  network. Runs after `ingest_session`, before `memory_capture`. Writes NULL,
+  not a fabricated 0, for counts on sessions that were never ingested.
+- **`skills/atlas-doctor/`**, promoted out of `atlas-setup` into its own
+  skill. Five phases: enrich pending facets, mine findings, ask the user per
+  finding (apply / skip / modify) via `AskUserQuestion`, apply what is
+  accepted as real edits, then record a baseline and re-measure later into
+  `improved` / `no_change` / `regressed`. Not a report generator and not a
+  prompt vending machine.
+- **`MINERS` registry in `atlas_doctor.py`** with 8 miners and a CLI
+  (`--mine`, `--list-findings`, `--set-status`, `--baseline`, `--remeasure`,
+  `--pending-facets`, `--json`). Findings dedupe on a UNIQUE fingerprint, so
+  re-running updates rather than duplicating.
+- **`memory_capture` now records refusals.** Both `atlas_memory.add()` call
+  sites gained an `else` branch writing a `memory_drop` row to
+  `friction_events` and surfacing it on stderr. Atlas's own
+  `mine_memory_capture_silent_drop` miner reported this defect before the fix
+  and reports nothing after.
+
+**Fixed**
+
+- **`completion_gate` conditions (f) and (g) rescoped.** Both now consider
+  only files the current run wrote, via the atlas_db run signal, instead of
+  the whole git working tree. A dirty tree inherited from an earlier session
+  no longer blocks a run that touched nothing, and (f) warns rather than
+  blocks when a run wrote no non-docs files.
+- **SECURITY: secrets were trackable inside every allowlisted folder.**
+  `.gitignore` declares its secret patterns above the allowlist, and last rule
+  wins, so every `!docs/<subdir>/**` and `!.atlas/<subdir>/**` entry re-admitted
+  them. Before the fix `git check-ignore` proved `docs/decisions/id_rsa`,
+  `docs/audits/secret.key`, `docs/specs/id_rsa` and `customers_dump.sql` were
+  all committable. Only `.env` was safe, via its own post-allowlist rule. A
+  terminal re-exclusion block now mirrors the full secret vocabulary and must
+  remain the last rules in the file. Pre-existing defect, not introduced by
+  this release.
+
+**Not shipped**
+
+- The anonymized feedback exporter was built and then removed. An adversarial
+  verifier proved it leaked MCP connector UUIDs, vendor tool names and
+  internal skill codenames into a payload intended to be shared publicly. See
+  `docs/decisions/no-anonymized-feedback-exporter-without-designed-in-redaction.md`.
+  The underlying facet and finding data still accumulates, so it can be rebuilt
+  with redaction designed in rather than retrofitted.
+- Gate-block persistence is not implemented, so `facets.gate_block_count`
+  stays NULL.
+
+Evidence: `python3 -m pytest scripts hooks -q` from `plugins/atlas` gives
+1045 passed with one pre-existing failure (`test_connectors_wiring`, confirmed
+unrelated by reproducing it on a clean stashed tree).
+
 ## 5.3.0 (2026-07-31)
 
 All 10 vendored MCP connectors fixed: `.gitignore` had `*.mcpb`, so the 10
