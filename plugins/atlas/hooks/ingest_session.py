@@ -26,7 +26,7 @@ def main():
     if os.environ.get("ATLAS_INGEST", "on").lower() == "off":
         return
     payload = atlas_hook_guard.read_payload()
-    if not atlas_hook_guard.should_run(payload, "ingest_session"):
+    if not atlas_hook_guard.should_run(payload, "ingest_session", kind="capture"):
         return
     path = payload.get("transcript_path")
     if not path or not os.path.exists(path):

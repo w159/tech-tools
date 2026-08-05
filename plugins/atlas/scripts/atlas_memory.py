@@ -25,6 +25,7 @@ import json
 import os
 import tempfile
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -39,8 +40,17 @@ except ImportError:
         msvcrt: Any = None
 
 ENTRY_DELIMITER = "\n§\n"
-DEFAULT_MEMORY_LIMIT = 4000  # chars — generous for project-specific lessons
-DEFAULT_PROJECT_LIMIT = 4000
+
+# Working cap for the LIVE memory file (chars, not tokens -- model-independent).
+# MEMORY.md is long-lived: it accumulates a handful of short lessons per
+# session across months of use, and 4000 chars (sized for a "quick note") was
+# hit within about three weeks of normal use, at which point add() rejected
+# every new lesson and the failure was silent (see PROBLEM 1). 20,000 chars is
+# roughly a week or two of injected boot-context budget's worth of headroom --
+# generous enough that rotation, not rejection, is the normal outcome of
+# reaching it. When this cap is hit, oldest entries are rotated into a dated
+# archive file rather than dropped (see _rotate_to_fit).
+WORKING_CAP_CHARS = 20_000
 
 
 def _memory_dir() -> Path:
@@ -57,9 +67,20 @@ def _path_for(target: str) -> Path:
 
 
 def _char_limit(target: str) -> int:
-    if target == "project":
-        return DEFAULT_PROJECT_LIMIT
-    return DEFAULT_MEMORY_LIMIT
+    return WORKING_CAP_CHARS
+
+
+def _archive_dir() -> Path:
+    d = _memory_dir() / "archive"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _archive_path(target: str) -> Path:
+    """Dated archive file for entries rotated out of the live file this month."""
+    name = "PROJECT" if target == "project" else "MEMORY"
+    stamp = datetime.now().strftime("%Y-%m")
+    return _archive_dir() / f"{name}-{stamp}.md"
 
 
 @contextmanager
@@ -132,6 +153,47 @@ def _write_file(path: Path, entries: List[str]) -> None:
         raise
 
 
+def _archive_entries(target: str, entries_to_archive: List[str]) -> None:
+    """Append rotated-out entries to this month's dated archive file.
+
+    Read-then-append (never overwrite) so multiple rotations within the same
+    month accumulate rather than clobber each other. Reuses the same
+    §-delimited reader/writer as the live file, so the archive stays in the
+    same format and is just as readable.
+    """
+    if not entries_to_archive:
+        return
+    archive = _archive_path(target)
+    with _file_lock(archive):
+        existing = _read_file(archive)
+        _write_file(archive, existing + entries_to_archive)
+
+
+def _rotate_to_fit(target: str, entries: List[str]) -> Dict[str, Any]:
+    """Trim `entries` from the oldest end until they fit the working cap,
+    archiving anything rotated out (PROBLEM 2: rotate, never silently reject).
+
+    Returns {"entries": fitted_list, "rotated": [popped_oldest_first], "dropped": bool}.
+    dropped=True means even the newest entry alone still exceeds the cap --
+    `entries` is returned unchanged so the caller can refuse the write (this
+    is the one remaining genuine-drop case, and it must be reported, not
+    silent -- see PROBLEM 1).
+    """
+    limit = _char_limit(target)
+    working = list(entries)
+    rotated: List[str] = []
+    while len(working) > 1 and len(ENTRY_DELIMITER.join(working)) > limit:
+        rotated.append(working.pop(0))  # oldest first
+
+    if len(ENTRY_DELIMITER.join(working)) > limit:
+        return {"entries": entries, "rotated": [], "dropped": True}
+
+    if rotated:
+        _archive_entries(target, rotated)
+
+    return {"entries": working, "rotated": rotated, "dropped": False}
+
+
 def load_snapshot() -> Dict[str, str]:
     """Load memory entries and return a rendered snapshot for injection.
 
@@ -163,7 +225,9 @@ def _render_block(title: str, entries: List[str]) -> str:
 
 
 def add(target: str, content: str) -> Dict[str, Any]:
-    """Append a new entry. Returns error if it would exceed the char limit."""
+    """Append a new entry. Rotates oldest entries to the archive rather than
+    rejecting when the working cap would be exceeded (see _rotate_to_fit).
+    Only fails if this single entry alone cannot fit even in an empty file."""
     content = content.strip()
     if not content:
         return {"success": False, "error": "Content cannot be empty."}
@@ -179,23 +243,22 @@ def add(target: str, content: str) -> Dict[str, Any]:
                 "message": "Entry already exists (no duplicate added).",
             }
 
-        limit = _char_limit(target)
-        new_entries = entries + [content]
-        new_total = len(ENTRY_DELIMITER.join(new_entries))
-
-        if new_total > limit:
-            current = len(ENTRY_DELIMITER.join(entries)) if entries else 0
+        fit = _rotate_to_fit(target, entries + [content])
+        if fit["dropped"]:
+            limit = _char_limit(target)
             return {
                 "success": False,
-                "error": f"Memory at {current:,}/{limit:,} chars. Adding this entry ({len(content)} chars) would exceed the limit. Use 'replace' or 'remove' to make room.",
+                "error": f"Entry alone is {len(content):,} chars, exceeding the {limit:,}-char working cap even after rotating out all prior entries. Shorten it.",
                 "current_entries": entries,
-                "usage": f"{current:,}/{limit:,}",
             }
 
-        entries.append(content)
-        _write_file(path, entries)
+        _write_file(path, fit["entries"])
 
-    return {"success": True, "message": "Entry added."}
+    message = "Entry added."
+    if fit["rotated"]:
+        n = len(fit["rotated"])
+        message += f" Rotated {n} older entr{'y' if n == 1 else 'ies'} to archive to stay within cap."
+    return {"success": True, "message": message}
 
 
 def replace(target: str, old_text: str, new_content: str) -> Dict[str, Any]:
@@ -379,7 +442,9 @@ def _cli():
     elif cmd in ("--help", "-h", "help"):
         print("Usage: atlas_memory.py [snapshot|list|add|remove|usage]")
     else:
-        print("Usage: atlas_memory.py [snapshot|list|add|remove|usage]", file=sys.stderr)
+        print(
+            "Usage: atlas_memory.py [snapshot|list|add|remove|usage]", file=sys.stderr
+        )
         print(f"Unknown command: {cmd}", file=sys.stderr)
         sys.exit(2)
 

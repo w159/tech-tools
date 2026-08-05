@@ -993,6 +993,187 @@ class UncoveredPathsTest(unittest.TestCase):
         self.assertEqual(idle, ["atlas-wiki"])
 
 
+class ChronicleInsightsTest(unittest.TestCase):
+    """Chronicle/insights schema: facets, friction_events, findings, and the
+    additive improvements columns."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.path = os.path.join(self.tmp, "atlas.db")
+        self.conn = atlas_db.connect(self.path)
+        atlas_db.init(self.conn)
+
+    def tearDown(self):
+        self.conn.close()
+
+    def test_fresh_db_gets_chronicle_tables(self):
+        names = {
+            r[0]
+            for r in self.conn.execute(
+                "select name from sqlite_master where type='table'"
+            )
+        }
+        self.assertTrue({"facets", "friction_events", "findings"} <= names)
+
+    def test_chronicle_migration_is_idempotent(self):
+        atlas_db.init(self.conn)  # second call
+        atlas_db.init(self.conn)  # third call
+        names = {
+            r[0]
+            for r in self.conn.execute(
+                "select name from sqlite_master where type='table'"
+            )
+        }
+        self.assertTrue({"facets", "friction_events", "findings"} <= names)
+        cols = {r[1] for r in self.conn.execute("PRAGMA table_info(improvements)")}
+        self.assertIn("verdict", cols)
+
+    def test_improvements_migration_from_old_schema_preserves_rows(self):
+        # A DB whose `improvements` table predates the finding/remeasure
+        # columns: init() must ALTER it additively, keeping existing rows.
+        path = os.path.join(self.tmp, "old_improvements.db")
+        raw = atlas_db.connect(path)
+        raw.executescript(
+            "CREATE TABLE improvements ("
+            "  id INTEGER PRIMARY KEY, run_id INTEGER NOT NULL, ts REAL,"
+            "  dimension TEXT, baseline TEXT, target TEXT, note TEXT);"
+        )
+        raw.execute(
+            "INSERT INTO improvements(run_id,ts,dimension,baseline,target,note) "
+            "VALUES(1,100.0,'parallelism','0 waves','>=3 waves','fan out')"
+        )
+        raw.commit()
+        cols_before = {r[1] for r in raw.execute("PRAGMA table_info(improvements)")}
+        self.assertNotIn("verdict", cols_before)
+        atlas_db.init(raw)  # must not raise; adds the columns
+        cols_after = {r[1] for r in raw.execute("PRAGMA table_info(improvements)")}
+        for col in atlas_db.IMPROVEMENT_REMEASURE_COLUMNS:
+            self.assertIn(col, cols_after)
+        row = raw.execute(
+            "SELECT run_id, dimension, baseline, target, note FROM improvements"
+        ).fetchone()
+        self.assertEqual(row, (1, "parallelism", "0 waves", ">=3 waves", "fan out"))
+        self.assertEqual(
+            raw.execute("SELECT COUNT(*) FROM improvements").fetchone()[0], 1
+        )
+        atlas_db.init(raw)  # idempotent second call on the migrated DB
+        raw.close()
+
+    def test_upsert_facet_roundtrip_and_pending(self):
+        pid = atlas_db.register_project(self.conn, "/repo/x")
+        atlas_db.upsert_facet(
+            self.conn,
+            "sess-f1",
+            project_id=pid,
+            message_count=10,
+            tool_call_count=5,
+            verifier_coverage=0.5,
+        )
+        row = self.conn.execute(
+            "SELECT project_id, message_count, tool_call_count, verifier_coverage, "
+            "enriched_at FROM facets WHERE session_id='sess-f1'"
+        ).fetchone()
+        self.assertEqual(row, (pid, 10, 5, 0.5, None))
+        # still pending (enriched_at IS NULL)
+        pending = atlas_db.pending_facets(self.conn)
+        self.assertEqual([p["session_id"] for p in pending], ["sess-f1"])
+        # a second upsert enriches it; absent keys keep their stored value.
+        atlas_db.upsert_facet(
+            self.conn,
+            "sess-f1",
+            enriched_at=200.0,
+            underlying_goal="ship the chronicle schema",
+        )
+        row2 = self.conn.execute(
+            "SELECT message_count, enriched_at, underlying_goal FROM facets "
+            "WHERE session_id='sess-f1'"
+        ).fetchone()
+        self.assertEqual(row2, (10, 200.0, "ship the chronicle schema"))
+        self.assertEqual(atlas_db.pending_facets(self.conn), [])
+
+    def test_record_friction_roundtrip(self):
+        fid = atlas_db.record_friction(
+            self.conn, "sess-fr", "gate_block", weight=2.0, snippet="blocked at gate"
+        )
+        row = self.conn.execute(
+            "SELECT session_id, category, weight, snippet FROM friction_events "
+            "WHERE id=?",
+            (fid,),
+        ).fetchone()
+        self.assertEqual(row, ("sess-fr", "gate_block", 2.0, "blocked at gate"))
+
+    def test_upsert_finding_fingerprint_dedupes(self):
+        fid1 = atlas_db.upsert_finding(
+            self.conn,
+            "fp-1",
+            dimension="security",
+            severity="high",
+            title="hardcoded secret",
+            proposed_action="move to env",
+        )
+        self.assertEqual(
+            self.conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0], 1
+        )
+        # Re-upserting the same fingerprint updates the row, not a duplicate.
+        fid2 = atlas_db.upsert_finding(
+            self.conn,
+            "fp-1",
+            severity="critical",
+        )
+        self.assertEqual(fid1, fid2)
+        self.assertEqual(
+            self.conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0], 1
+        )
+        row = self.conn.execute(
+            "SELECT severity, title, status FROM findings WHERE id=?", (fid1,)
+        ).fetchone()
+        self.assertEqual(row, ("critical", "hardcoded secret", "open"))
+
+    def test_set_finding_status(self):
+        fid = atlas_db.upsert_finding(self.conn, "fp-2", dimension="perf", title="t")
+        atlas_db.set_finding_status(self.conn, fid, "accepted", decided_at=50.0)
+        row = self.conn.execute(
+            "SELECT status, decided_at, applied_at FROM findings WHERE id=?", (fid,)
+        ).fetchone()
+        self.assertEqual(row, ("accepted", 50.0, None))
+        atlas_db.set_finding_status(self.conn, fid, "applied", applied_at=75.0)
+        row2 = self.conn.execute(
+            "SELECT status, decided_at, applied_at FROM findings WHERE id=?", (fid,)
+        ).fetchone()
+        self.assertEqual(row2, ("applied", 50.0, 75.0))  # decided_at untouched
+
+    def test_record_improvement_with_remeasure_fields_and_pending(self):
+        pid = atlas_db.register_project(self.conn, "/repo/x")
+        rid = atlas_db.start_run(self.conn, pid, "sess-imp")
+        fid = atlas_db.upsert_finding(self.conn, "fp-3", dimension="parallelism")
+        iid = atlas_db.record_improvement(
+            self.conn,
+            rid,
+            "parallelism",
+            "0 waves",
+            ">=3 waves",
+            "fan out",
+            finding_id=fid,
+            metric="parallel_waves",
+            baseline_value=0.0,
+            target_value=3.0,
+            measure_after_runs=5,
+        )
+        row = self.conn.execute(
+            "SELECT finding_id, metric, baseline_value, target_value, "
+            "measure_after_runs, remeasured_at FROM improvements WHERE id=?",
+            (iid,),
+        ).fetchone()
+        self.assertEqual(row, (fid, "parallel_waves", 0.0, 3.0, 5, None))
+        pending = atlas_db.pending_remeasures(self.conn)
+        self.assertEqual([p["id"] for p in pending], [iid])
+        # a call with no remeasure kwargs still works (existing call sites).
+        atlas_db.record_improvement(self.conn, rid, "dim", "b", "t", "n")
+        self.assertEqual(
+            self.conn.execute("SELECT COUNT(*) FROM improvements").fetchone()[0], 2
+        )
+
+
 class MainCliTest(unittest.TestCase):
     """Cover the `if __name__ == '__main__'` CLI entry points in-process.
 

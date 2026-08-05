@@ -277,6 +277,41 @@ def _extract_facts(conn, session_id, cwd):
     return memory_facts, project_facts
 
 
+def _record_drop(session_id, kind, result):
+    """A lesson could not be stored: record it instead of discarding it.
+
+    The hook's own `conn` is opened read-only, so this takes its own
+    short-lived write connection. Fail-open in every direction: a logging
+    failure must never cost us the capture path or block Stop.
+    """
+    try:
+        import atlas_db
+
+        reason = (result or {}).get("error") or "unknown"
+        conn = atlas_db.connect()
+        try:
+            atlas_db.record_friction(
+                conn,
+                session_id,
+                "memory_drop",
+                weight=1.0,
+                snippet=f"{kind}: {reason}"[:200],
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception:
+        pass
+    # Surface it too -- a drop that is only in the DB is still invisible today.
+    try:
+        sys.stderr.write(
+            f"[atlas] memory_capture dropped a {kind} lesson: "
+            f"{(result or {}).get('error', 'unknown')}\n"
+        )
+    except Exception:
+        pass
+
+
 def main():
     if os.environ.get("ATLAS_MEMORY_CAPTURE", "on").lower() == "off":
         sys.exit(0)
@@ -291,7 +326,7 @@ def main():
 
     # stop_hook_active, the throttle window, and the circuit breaker.
     if not atlas_hook_guard.should_run(
-        payload, "memory_capture", window_seconds=CAPTURE_WINDOW_SECONDS
+        payload, "memory_capture", window_seconds=CAPTURE_WINDOW_SECONDS, kind="capture"
     ):
         sys.exit(0)
 
@@ -349,6 +384,8 @@ def main():
                 captured["memory"] += 1
                 captured["facts"].append(fact[:80])
                 _append_seen_hashes(seen_path, [h])
+            else:
+                _record_drop(session_id, "memory", result)
 
         for fact, h in fresh_project:
             result = atlas_memory.add("project", fact)
@@ -356,6 +393,8 @@ def main():
                 captured["project"] += 1
                 captured["facts"].append(fact[:80])
                 _append_seen_hashes(seen_path, [h])
+            else:
+                _record_drop(session_id, "project", result)
 
     except Exception as exc:
         # fail-open: never block the hook. But surface the failure on stderr so

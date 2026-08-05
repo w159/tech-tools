@@ -5,7 +5,7 @@
 > `plugins/armada/` - never install, set up, or run them in this workspace. Full
 > rule: `AGENTS.md` Section 0 and `docs/plugin-development-scope.md`.
 
-This directory holds the two plugins published from this repo, plus the shared authoring assets they draw on.
+This directory holds the three plugins published from this repo, plus the shared authoring assets they draw on.
 
 ## Plugins
 
@@ -13,6 +13,7 @@ This directory holds the two plugins published from this repo, plus the shared a
 |--------|------------|
 | `atlas` | The multi-agent coding architect plugin: self-configuring, drives verification-gated work via subagents and hooks. |
 | `armada` | The org deployment layer split out of atlas: 11 department agents plus their department skills, for organizations that want atlas's capabilities wired with department-specific branding/policy/compliance context. Install alongside atlas only for org use. |
+| `programmer` | The Pragmatic Programmer (20th Anniversary Edition) turned into an active codebase auditor and coding-time advisor: a 10-dimension audit skill with file:line evidence, a principle-surfacing nudge hook while you work, and an 89-concept glossary repackaged for citation. |
 
 ## Shared assets
 
@@ -21,9 +22,9 @@ This directory holds the two plugins published from this repo, plus the shared a
 
 ## Install and usage
 
-Both plugins are published from the `w159/tech-tools` repository through the marketplace defined in `.claude-plugin/marketplace.json` at the repo root (version 3.0.0). That marketplace lists exactly `atlas` and `armada`. Add the marketplace in Claude Code with the `/plugin` command, then install the plugin(s) you need.
+All three plugins are published from the `w159/tech-tools` repository through the `tech-tools` marketplace defined in `.claude-plugin/marketplace.json` at the repo root (version 3.1.0). That marketplace lists `atlas`, `armada`, and `programmer`. Add the marketplace in Claude Code with the `/plugin` command, then install the plugin(s) you need.
 
-Kimi Code CLI users can browse the same catalog from the repo root with `/plugins marketplace .kimi-plugin/marketplace.json`, which lists the same two plugins. You can also install a single plugin directly with `/plugins install ./plugins/<name>` (from the repo root). Remote GitHub subpath installs are not supported by Kimi Code CLI's current installer, so distribution requires a local clone or per-plugin zip artifacts.
+Kimi Code CLI users can browse the same catalog from the repo root with `/plugins marketplace .kimi-plugin/marketplace.json`, which lists the same three plugins. You can also install a single plugin directly with `/plugins install ./plugins/<name>` (from the repo root). Remote GitHub subpath installs are not supported by Kimi Code CLI's current installer, so distribution requires a local clone or per-plugin zip artifacts.
 
 ## Credentials
 

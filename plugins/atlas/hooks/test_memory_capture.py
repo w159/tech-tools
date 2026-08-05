@@ -179,6 +179,65 @@ class MemoryCaptureAddFailureTest(unittest.TestCase):
             sys.stderr = sys.__stderr__
             sys.stdout = sys.__stdout__
 
+    def _memory_drop_rows(self):
+        conn = atlas_db.connect(self.db)
+        try:
+            return conn.execute(
+                "SELECT session_id, category, snippet FROM friction_events "
+                "WHERE category='memory_drop' ORDER BY id"
+            ).fetchall()
+        finally:
+            conn.close()
+
+    def test_unstorable_lesson_is_recorded_not_dropped(self):
+        """The bug this guards: MEMORY.md sat over its cap for three weeks and
+        every lesson add() refused was discarded with no record anywhere. A
+        refusal must now land in friction_events so it is mineable."""
+
+        def refuse(target, content):
+            return {"success": False, "error": "entry exceeds cap"}
+
+        self._atlas_memory.add = refuse
+
+        self._run_main({"session_id": "fail-sess", "cwd": "/repo/atlas"})
+
+        rows = self._memory_drop_rows()
+        self.assertTrue(rows, "a refused lesson must be recorded, not discarded")
+        for session_id, category, snippet in rows:
+            self.assertEqual(session_id, "fail-sess")
+            self.assertEqual(category, "memory_drop")
+            self.assertIn("entry exceeds cap", snippet)
+
+    def test_success_path_records_no_drop(self):
+        """A stored lesson must not manufacture a spurious drop event."""
+
+        def accept(target, content):
+            return {"success": True}
+
+        self._atlas_memory.add = accept
+
+        self._run_main({"session_id": "fail-sess", "cwd": "/repo/atlas"})
+
+        self.assertEqual(self._memory_drop_rows(), [])
+
+    def test_drop_recording_failure_stays_fail_open(self):
+        """Recording the drop is observability, never a reason to break capture:
+        if the write connection itself fails, the hook still exits 0 and the
+        drop is still surfaced on stderr."""
+
+        def refuse(target, content):
+            return {"success": False, "error": "entry exceeds cap"}
+
+        self._atlas_memory.add = refuse
+
+        def broken_connect(*a, **kw):
+            raise RuntimeError("db unavailable")
+
+        with mock.patch.object(atlas_db, "connect", broken_connect):
+            err, out = self._run_main({"session_id": "fail-sess", "cwd": "/repo/atlas"})
+
+        self.assertIn("dropped a", err + out)
+
     def test_atlas_memory_add_failure_surfaced(self):
         # Simulate a broken atlas_memory.add (disk full / module write error).
         def boom(target, content):

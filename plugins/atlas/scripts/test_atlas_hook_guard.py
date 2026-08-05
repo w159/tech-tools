@@ -52,6 +52,22 @@ class ShouldRunStopHookActiveTest(_GuardTestCase):
         payload = {"session_id": "s1", "stop_hook_active": True}
         self.assertFalse(guard.should_run(payload, "nudge"))
 
+    def test_stop_hook_active_default_kind_is_emit(self):
+        """An un-updated caller passes no kind at all -- must keep today's
+        safe behavior of silencing on stop_hook_active."""
+        payload = {"session_id": "s1-default", "stop_hook_active": True}
+        self.assertFalse(guard.should_run(payload, "nudge"))
+
+    def test_stop_hook_active_emit_kind_blocks(self):
+        payload = {"session_id": "s1-emit", "stop_hook_active": True}
+        self.assertFalse(guard.should_run(payload, "nudge", kind="emit"))
+
+    def test_stop_hook_active_capture_kind_still_runs(self):
+        """Capture hooks (ingest_session/memory_capture/chronicle_facet) are
+        idempotent on a retry -- silencing them starves telemetry forever."""
+        payload = {"session_id": "s1-capture", "stop_hook_active": True}
+        self.assertTrue(guard.should_run(payload, "ingest_session", kind="capture"))
+
 
 class ShouldRunThrottleTest(_GuardTestCase):
     def test_throttle_window_respected(self):
@@ -102,6 +118,22 @@ class BreakerTest(_GuardTestCase):
         with mock.patch.object(guard, "_now", side_effect=[200.0, 300.0]):
             self.assertFalse(guard.should_run(payload, "memory_capture"))
             self.assertFalse(guard.should_run(payload, "auto_skill"))
+
+    def test_trips_for_both_kinds(self):
+        """The breaker is a session-wide fuse, not a per-kind one -- once
+        tripped, both emit and capture hooks go silent, or a blocked-Stop
+        chain that only fires capture hooks would loop forever too."""
+        payload = {"session_id": "burst-both-kinds"}
+        times = [0.0, 13.0, 26.0, 39.0, 52.0, 65.0]
+        with mock.patch.object(guard, "_now", side_effect=times):
+            for _ in times:
+                guard.should_run(payload, "nudge", kind="emit")
+
+        with mock.patch.object(guard, "_now", side_effect=[200.0, 300.0]):
+            self.assertFalse(guard.should_run(payload, "nudge", kind="emit"))
+            self.assertFalse(
+                guard.should_run(payload, "ingest_session", kind="capture")
+            )
 
     def test_does_not_trip_on_slow_legitimate_cadence(self):
         """5 Stops spread over 10 minutes must never trip the breaker."""

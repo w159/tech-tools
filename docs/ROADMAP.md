@@ -16,6 +16,24 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 
 ## Backlog
 
+### Atlas self-improvement follow-ups (added 2026-08-05)
+
+Chronicle/insights schema and `atlas-doctor` skill shipped this date (see CHANGELOG). Three
+gaps remain, none of which block the shipped skill:
+
+- Gate-block persistence: `completion_gate.py` does not yet record which condition fired to
+  `atlas.db`, so `facets.gate_block_count` stays NULL. The agent that would have wired this
+  stalled before writing it.
+- Anonymized feedback exporter: `atlas_feedback.py` was built, then deleted at the user's
+  direction after an adversarial verifier proved it leaked the user's vendor stack (MCP
+  connector UUIDs, vendor tool names, internal skill codenames) into what was meant to be a
+  shareable export. See `docs/decisions/no-anonymized-feedback-exporter-without-designed-in-redaction.md`.
+  Facets/findings data keeps accumulating, so this can be rebuilt later with anonymization
+  designed in from the start rather than retrofitted.
+- No unit test yet asserts that a memory drop (`atlas_memory.add()` returning
+  `success=False`) is recorded to `friction_events` via `memory_capture.py`'s new
+  `_record_drop()` (`memory_capture.py:280-296`).
+
 ### Extract MCP connector servers into standalone repos (approved 2026-07-31)
 
 Goal: deliver each of the 10 MCP connector servers via

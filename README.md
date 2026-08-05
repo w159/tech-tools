@@ -18,7 +18,7 @@ verifying, and gets measurably better the more you use it in a codebase.
 
 - Plugin version `5.1.1` (`plugins/atlas/.claude-plugin/plugin.json:2`)
 - Marketplace catalog version `3.1.0` (`.claude-plugin/marketplace.json:5`)
-- 20 skills, 12 agents, 11 hooks, 10 optional connectors, 1 output style
+- 21 skills, 12 agents, 11 hooks, 10 optional connectors, 1 output style
 - Two more plugins ship in the same marketplace: `armada` (org deployment)
   and `programmer` (a Pragmatic Programmer codebase auditor)
 
@@ -176,6 +176,7 @@ are marked; everything else auto-triggers from its `description`. Sources:
 | `atlas-debug` | "login returns 500, find the real cause" | Root-cause a reproducible bug with evidence, not a symptom patch. |
 | `atlas-refactor` | "clean up this module without changing behavior" | Restructure with before/after evidence that behavior is preserved. |
 | `atlas-audit` | `atlas-audit` | Whole-codebase code + security audit (or architecture map, or atlas self-telemetry) as a verified workflow. |
+| `atlas-doctor` | "have atlas self-improve" | Interactive self-improvement loop: mine cross-session findings, ask the user apply/skip/modify per finding, apply what's accepted, and measure the result. |
 | `atlas-frontend` | "build this dashboard page" | Screens/flows on one design system with every state (loading/empty/error/success) rendered. |
 | `atlas-component` | "add a reusable upload component" | Build one latency-resistant component that handles cancellation and partial failure. |
 | `atlas-ux-test` | "test this flow in a browser" | UX runtime swarm: personas, scripted entry, real-browser walks, an independent oracle. |
@@ -384,7 +385,7 @@ atlas/
 |  |- atlas/                 # the plugin (v5.1.1)
 |  |  |- .claude-plugin/     # plugin.json manifest + userConfig
 |  |  |- .mcp.json           # 10 connector server definitions
-|  |  |- skills/             # 20 skills
+|  |  |- skills/             # 21 skills
 |  |  |- agents/             # 12 role agents
 |  |  |- hooks/              # 11 hooks + hooks.json + tests
 |  |  |- scripts/            # tooling (db, memory, factory, curator, ...)

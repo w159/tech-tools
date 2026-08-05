@@ -137,13 +137,29 @@ def read_payload():
         return {}
 
 
-def should_run(payload, hook_name, window_seconds=None):
+def should_run(payload, hook_name, window_seconds=None, kind="emit"):
     """False if this Stop hook must not act right now: a continuation it (or
     a sibling hook) forced, its own throttle window, or the session circuit
     breaker. True otherwise -- and on any internal error, since fail-open is
-    absolute here: a hook must never be blocked by a guard bug."""
+    absolute here: a hook must never be blocked by a guard bug.
+
+    `kind` distinguishes two hook shapes that stop_hook_active must treat
+    differently:
+      "emit"    -- nudge/auto_skill/completion_gate re-emit a message or a
+                   block decision on every Stop. stop_hook_active exists
+                   precisely to stop these from looping forever on Claude
+                   Code's forced-continuation retry, so it silences them.
+      "capture" -- ingest_session/memory_capture/chronicle_facet only write
+                   observability data; replaying that on a retry is
+                   idempotent, not a loop risk. Silencing them on every
+                   blocked Stop is what starved atlas's own telemetry, so
+                   stop_hook_active does NOT gate capture hooks.
+    The circuit breaker and per-hook throttle window still apply to both
+    kinds -- only the stop_hook_active short-circuit is kind-specific.
+    Defaults to "emit" so any caller not yet updated keeps today's behavior.
+    """
     try:
-        if payload.get("stop_hook_active"):
+        if payload.get("stop_hook_active") and kind != "capture":
             return False
 
         session_id = payload.get("session_id")

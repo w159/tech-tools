@@ -4,6 +4,50 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
+## 2026-08-05 -- Chronicle/insights schema, atlas-doctor self-improvement skill, and two root-cause fixes for a learning stall
+
+Root-cause investigation (`.agents/notes/atlas-self-improvement-rootcause.md`) found that atlas's own capture pipeline worked but consumption of what it captured was dead: `improvements` was 24 days stale, `asset_verdicts` 27 days stale, and lessons written to `MEMORY.md` after 2026-07-16 were silently discarded. This entry ships the schema and skill that let atlas mine, review, and apply its own findings, plus fixes for both silent-drop causes.
+
+- Added three tables to `plugins/atlas/scripts/atlas_db.py`: `facets` (`atlas_db.py:43-52`, one deterministic+LLM-enriched insight row per session, primary key `session_id`), `friction_events` (`atlas_db.py:57-60`, categorized friction events), and `findings` (`atlas_db.py:62-67`, doctor-produced findings with a `UNIQUE fingerprint` and a `status` lifecycle of `open|accepted|rejected|applied|verified|regressed`). `improvements` extended additively with `finding_id`, `metric`, `baseline_value`, `target_value`, `measure_after_runs`, `remeasured_at`, `remeasured_value`, `verdict` (`atlas_db.py:165-172,613-620`). `facets` and `findings` are deliberately left out of `TELEMETRY_TABLES` (`atlas_doctor.py:40-53`) so they are never row-capped like per-event telemetry. Verified: migrating a copy of the live 119MB `~/.atlas/atlas.db` left all 12 pre-existing tables' row counts identical and `improvements` kept its 38 rows.
+- New Stop hook `plugins/atlas/hooks/chronicle_facet.py` (191 lines) writes one deterministic `facets` row per session from data `ingest_session.py` already stored, and mirrors this session's `signals` into `friction_events` via `FRICTION_CATEGORY_BY_SIGNAL` (`chronicle_facet.py:24-29`). Writes NULL, not a fabricated 0, for counts on a session that was never ingested. Wired into the Stop chain in `plugins/atlas/hooks/hooks.json` (line 85), after `ingest_session.py`, before `memory_capture.py`.
+- New skill `plugins/atlas/skills/atlas-doctor/SKILL.md`: an interactive self-improvement loop, promoted out of `atlas-setup` into its own skill. Five phases: enrich pending facets, mine findings, ask the user per finding (apply/skip/modify), apply accepted changes as real edits, record a baseline and re-measure later.
+- `plugins/atlas/scripts/atlas_doctor.py`: added a `MINERS` registry of 8 miners (`atlas_doctor.py:925-933`: `memory_capture_silent_drop`, `doctor_hook_stale_verdicts`, `gate_block_silences_capture`, `facet_uningested_hardcoded_zero`, `inline_dispatch_ratio_high`, `verifier_coverage_low`, `tool_error_rate_high`, `recurring_friction`); a new CLI (`--mine`, `--list-findings`, `--set-status`, `--baseline`, `--remeasure`, `--pending-facets`, `--json`); and `record_hook_verdict()` (`atlas_doctor.py:460`) wired into the `--hook` path (`atlas_doctor.py:1233`), which fixes cause 2 below. Verified end to end: `mine` -> `set-status` -> `baseline` -> `remeasure` produced a real `improved` verdict; re-running `--mine` did not duplicate findings (fingerprint-keyed upsert).
+- `completion_gate.py` conditions (f) docs-drift and (g) verifier-coverage rescoped from the whole git working tree to only the files this run wrote, via the `atlas_db` run signal (`completion_gate.py:346-370`, helpers `_run_written_paths`/`_docs_drift`/`_unpaired_implementer_dispatches` at `completion_gate.py:450-488`). A dirty tree inherited from a previous session no longer blocks a run that touched nothing; (f) now WARNs instead of blocking when a run wrote zero non-docs files (`completion_gate.py:376-393`).
+
+### Root cause 1: `stop_hook_active` was silencing atlas's own telemetry, not just its retry loops
+
+`atlas_hook_guard.should_run()` gained a `kind` parameter, `"capture"` or `"emit"` (default `"emit"`), documented at `atlas_hook_guard.py:140-159`. The `stop_hook_active` short-circuit (`atlas_hook_guard.py:162`) now suppresses only `kind="emit"` hooks (nudge/auto_skill/completion_gate re-emitting a message or block decision, which is what the guard was built to stop). `ingest_session.py:29`, `memory_capture.py:329`, and `chronicle_facet.py:155` all now pass `kind="capture"`. Root cause: whenever `completion_gate` blocked, Claude Code re-fired Stop with `stop_hook_active=true`, and the old unconditional guard silenced every atlas Stop hook on that retry -- so the gate's false-positive blocks (the whole-tree drift check fixed above) had been switching off atlas's own capture hooks since late July. See `.atlas/findings/2026-08-05-stop-hook-active-silenced-capture-hooks.md`.
+
+### Root cause 2: `MEMORY.md`'s 4000-byte cap silently discarded every lesson since 2026-07-16
+
+`plugins/atlas/scripts/atlas_memory.py`: `WORKING_CAP_CHARS` raised from `4_000` to `20_000` (`atlas_memory.py:53`), with rotation to a dated `archive/<NAME>-<YYYY-MM>.md` file (`atlas_memory.py:76-79`) instead of outright rejection when the cap is still hit. Root cause: the user's real `MEMORY.md` sat at 4058 bytes against the old 4000-byte cap, so `atlas_memory.add()` returned `success=False` with no error surfaced, and `memory_capture.py` silently swallowed it. Verified: a forced rotation of 50 entries produced 41 live + 10 archived + 1 new with zero entries lost; the user's actual 4058-byte file gains a new entry cleanly with the original content untouched. Companion fix: `plugins/atlas/hooks/memory_capture.py` added `_record_drop()` (`memory_capture.py:280-296`) and else-branches at both `atlas_memory.add()` call sites (`memory_capture.py:387,397`) so an unstorable lesson is now recorded to `friction_events` (category `memory_drop`) and surfaced on stderr instead of vanishing. Verified: the `mine_memory_capture_silent_drop` miner reported this defect before the fix and reports no finding after. See `.atlas/findings/2026-08-05-memory-cap-silently-dropped-lessons.md`.
+
+### Decision: anonymized feedback exporter built, then removed
+
+An exporter meant to share anonymized session facets/findings was built (`atlas_feedback.py`, `test_atlas_feedback.py`), then deleted this session at the user's direction after an adversarial verifier proved it leaked the user's vendor stack (MCP connector UUIDs, vendor tool names, internal skill codenames) into what was meant to be a shareable export. See `docs/decisions/no-anonymized-feedback-exporter-without-designed-in-redaction.md`. The underlying facets/findings data keeps accumulating, so the exporter can be rebuilt later with anonymization designed in rather than retrofitted.
+
+Evidence: `python3 -m pytest scripts hooks -q` from `plugins/atlas` -> 1045 passed, 1 pre-existing failure (`test_connectors_wiring::test_every_mcp_server_has_a_bundle`, confirmed unrelated by reproducing it on a clean stashed tree).
+
+Known gaps, not shipped this run -- see ROADMAP:
+- Gate-block persistence (which condition fired, to `atlas.db`) is not implemented; `facets.gate_block_count` stays NULL.
+- Phase 1 facet enrichment has no deterministic CLI flag; it is an LLM judgment driven by the `atlas-doctor` skill reading `--pending-facets`.
+- No unit test yet asserts a memory drop is recorded to `friction_events`.
+
+### SECURITY: secret-pattern re-exclusions sat above the allowlist, so every `!docs/**`/`!.atlas/**` rule re-admitted them -- pre-existing, not introduced this session
+
+`.gitignore`'s Section 3 secret patterns (`*.key`, `*.pem`, `id_rsa`, `credentials.json`, etc., `.gitignore:66-91` before the fix) sat above Section 4's allowlist (`!docs/`, `!.atlas/`, and their per-subdir `!docs/<subdir>/**` / `!.atlas/<subdir>/**` entries). Because later `.gitignore` rules win, every one of those allowlist entries silently re-admitted the secret patterns underneath it. This was **pre-existing** and dated back to whenever the per-subdir allowlist entries were added (see the 2026-07-17 canonical-structure-scaffolding and 2026-07-31 `.mcpb` entries above); it was not caused by this session's `docs/decisions/` addition, which merely inherited the same flaw. It affected every allowlisted secret-adjacent folder identically, confirmed for `docs/audits/` and `docs/specs/` as well as `docs/decisions/`, not just the folder this session happened to be writing to.
+
+Verified with `git check-ignore` **before** the fix -- all trackable (i.e. the bug was live):
+`docs/decisions/secret.key`, `docs/decisions/foo.pem`, `docs/decisions/id_rsa`, `docs/decisions/credentials.json`, `docs/audits/secret.key`, `docs/specs/id_rsa`. Only `.env` variants were safe, because they alone had a dedicated post-allowlist re-exclusion block (`**/.env` family).
+
+Fix (`.gitignore:341-371`): added a "Global secret re-exclusion (MUST stay after the allowlist)" block immediately before the `plugins/atlas/.env` re-exclusion, mirroring the existing `**/.env` pattern for the rest of the secret set (`**/*.key`, `**/*.pem`, `**/*.p12`, `**/*.pfx`, `**/*.crt`, `**/*.cer`, `**/*.der`, `**/*.asc`, `**/*.gpg`, `**/id_rsa`, `**/id_ed25519`, `**/*_rsa`, `**/*_ed25519`, `**/credentials.json`, `**/secrets.json`, `**/secrets.yaml`, `**/service-account*.json`, `**/firebase-adminsdk*.json`, `**/.netrc`, `**/.npmrc`, `**/.pypirc`, `**/*.tfstate`, `**/*.tfstate.*`).
+
+Verified after the fix: all 8 probe paths (`docs/decisions/{secret.key,foo.pem,id_rsa,credentials.json}`, `docs/audits/secret.key`, `docs/specs/id_rsa`, `plugins/atlas/private.pem`, `.atlas/findings/id_rsa`) -> IGNORED. Real docs still trackable (`docs/CHANGELOG.md`, the new ADR, `.atlas/findings/INDEX.md`). `git ls-files | wc -l` -> 1650, with no already-tracked file matching the new patterns.
+
+Not comprehensively verified: an atlas verifier is separately auditing pattern coverage for secret shapes this list may still miss (e.g. `*.jks`, `*.keystore`, `*.p8`, `id_ecdsa`, `.git-credentials`, `secrets.yml` vs `secrets.yaml`). This entry covers only what was checked above; it does not claim all secret shapes are now blocked. See `.atlas/findings/2026-08-05-gitignore-secret-patterns-above-allowlist.md`.
+
+---
+
 ## 2026-07-31 -- All 10 atlas MCP connectors were dead on arrival; replaced .mcpb launchers with vendored ESM bundles
 
 `.gitignore` had `*.mcpb`, so the 10 vendored MCP connector bundles were never committed. An installed plugin's `mcp/<name>/` folder held only `extract.sh` and `launch.sh`; `launch.sh` called `extract.sh <name>`, which had no `<name>.mcpb` to find, so no server ever started and zero `mcp__plugin_atlas_*` tools existed in any session. Separately, `.mcpb` is a Claude Desktop installation format that Claude Code plugins cannot execute natively (`code.claude.com/docs/en/plugins-reference.md`), so the extract-and-exec wrapper was never going to work as a plugin mechanism.
@@ -390,7 +434,7 @@ and `.atlas/evidence/2026-07-16-atlas-5.1.0-wiring-repair.md`.
 ## 2026-07-15 -- SSOT correction: atlas-internal content moved from docs/ to .atlas/
 
 The previous `.atlas/docs/` → `docs/` refactor (2026-07-14) moved paths but left
-atlas-internal content in `docs/` — the exact dual-SSOT problem it was supposed
+atlas-internal content in `docs/` - the exact dual-SSOT problem it was supposed
 to solve. This correction moves all atlas-internal content to `.atlas/` and
 restores the correct split: `docs/` is the project wiki (CHANGELOG, ROADMAP,
 dynamic subfolders including graphify results); `.atlas/` is atlas's auditable
@@ -412,7 +456,7 @@ wiki, nudge, self-improvement, memory, .run state).
 - Updated `scaffold_docs.py`: `ATLAS_ENTRIES` expanded from 3 to 11 subdirs
   (evidence, audits, plans, specs, architecture, lessons, wiki, nudge,
   self-improvement, memory, .run). `DURABLE_ENTRIES` remains minimal
-  (CHANGELOG.md, ROADMAP.md) — the wiki grows dynamically.
+  (CHANGELOG.md, ROADMAP.md) - the wiki grows dynamically.
 - Rewrote `docs-ssot.md` (atlas-orchestrate + atlas-loop): new contract with
   correct split. docs/ = project wiki (dynamic); .atlas/ = self-improvement
   surface (auditable tracking, skill generation/disabling, subagent management).

@@ -690,5 +690,334 @@ class AtlasDoctorTest(unittest.TestCase):
             self.assertIn("internal error", buf.getvalue())
 
 
+class AtlasDoctorMiningTest(unittest.TestCase):
+    """Self-improvement loop: miners -> findings -> baseline -> remeasure."""
+
+    NO_DROP_HANDLING = (
+        'result = atlas_memory.add("memory", fact)\n'
+        '            if result.get("success"):\n'
+        '                captured["memory"] += 1\n'
+    )
+    WITH_DROP_HANDLING = (
+        'result = atlas_memory.add("memory", fact)\n'
+        '            if result.get("success"):\n'
+        '                captured["memory"] += 1\n'
+        "            else:\n"
+        '                atlas_db.record_friction(conn, session_id, "memory_capture_dropped")\n'
+    )
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.db = os.path.join(self.tmp, "atlas.db")
+        self._orig_db = os.environ.get("ATLAS_DB")
+        os.environ["ATLAS_DB"] = self.db
+        self.conn = atlas_db.connect(self.db)
+        atlas_db.init(self.conn)
+        self.pid = atlas_db.register_project(self.conn, "/repo/proj")
+        # fake plugin root with just enough of hooks/ for the static miner
+        self.root = os.path.join(self.tmp, "fakeplugin")
+        os.makedirs(os.path.join(self.root, "hooks"), exist_ok=True)
+
+    def tearDown(self):
+        self.conn.close()
+        if self._orig_db is None:
+            os.environ.pop("ATLAS_DB", None)
+        else:
+            os.environ["ATLAS_DB"] = self._orig_db
+        shutil.rmtree(self.tmp)
+
+    def _write_memory_capture(self, body):
+        with open(os.path.join(self.root, "hooks", "memory_capture.py"), "w") as f:
+            f.write(body)
+
+    # --- individual miners -----------------------------------------------
+
+    def test_memory_capture_miner_flags_missing_else(self):
+        self._write_memory_capture(self.NO_DROP_HANDLING)
+        found = atlas_doctor.mine_memory_capture_silent_drop(self.conn, self.root)
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0]["key"], "silent_drop")
+        self.assertEqual(found[0]["metric_value"], 1)
+
+    def test_memory_capture_miner_silent_when_else_present(self):
+        self._write_memory_capture(self.WITH_DROP_HANDLING)
+        found = atlas_doctor.mine_memory_capture_silent_drop(self.conn, self.root)
+        self.assertEqual(found, [])
+
+    def test_memory_capture_miner_missing_file_is_silent(self):
+        found = atlas_doctor.mine_memory_capture_silent_drop(self.conn, self.root)
+        self.assertEqual(found, [])
+
+    def test_doctor_hook_stale_verdicts_miner(self):
+        # no asset_verdicts rows at all -> stale
+        found = atlas_doctor.mine_doctor_hook_stale_verdicts(self.conn, self.root)
+        self.assertEqual(len(found), 1)
+        atlas_db.record_asset_verdicts(
+            self.conn,
+            self.pid,
+            [{"kind": "plugin_health", "key": "atlas", "verdict": "healthy"}],
+        )
+        found = atlas_doctor.mine_doctor_hook_stale_verdicts(self.conn, self.root)
+        self.assertEqual(found, [])
+
+    def test_gate_block_silences_capture_miner(self):
+        atlas_db.upsert_session_log(self.conn, "s1", project_id=self.pid)
+        found = atlas_doctor.mine_gate_block_silences_capture(self.conn, self.root)
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0]["metric_value"], 1)
+        atlas_db.upsert_facet(self.conn, "s1", project_id=self.pid)
+        found = atlas_doctor.mine_gate_block_silences_capture(self.conn, self.root)
+        self.assertEqual(found, [])
+
+    def test_facet_uningested_hardcoded_zero_miner(self):
+        # legacy row: never ingested (message_count NULL) but a fabricated 0
+        atlas_db.upsert_facet(self.conn, "legacy", edit_count=0, read_count=0)
+        found = atlas_doctor.mine_facet_uningested_hardcoded_zero(self.conn, self.root)
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0]["metric_value"], 1)
+        # a properly-NULL'd row must not be flagged
+        atlas_db.upsert_facet(self.conn, "clean")
+        found = atlas_doctor.mine_facet_uningested_hardcoded_zero(self.conn, self.root)
+        self.assertEqual(len(found), 1)  # only the legacy row, still
+
+    def test_inline_dispatch_ratio_miner(self):
+        rid = atlas_db.start_run(self.conn, self.pid, "s1")
+        atlas_db.finalize_run(self.conn, rid)
+        self.conn.execute(
+            "UPDATE metrics SET inline_ops=?, dispatches=? WHERE run_id=?",
+            (30, 1, rid),
+        )
+        self.conn.commit()
+        found = atlas_doctor.mine_inline_dispatch_ratio(self.conn, self.root)
+        self.assertEqual(len(found), 1)
+        self.assertAlmostEqual(found[0]["metric_value"], 30.0)
+
+    def test_verifier_coverage_miner(self):
+        rid = atlas_db.start_run(self.conn, self.pid, "s1")
+        atlas_db.finalize_run(self.conn, rid)
+        self.conn.execute(
+            "UPDATE metrics SET verifier_coverage=? WHERE run_id=?", (0.1, rid)
+        )
+        self.conn.commit()
+        found = atlas_doctor.mine_low_verifier_coverage(self.conn, self.root)
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0]["severity"], "HIGH")
+
+    def test_tool_error_rate_miner(self):
+        for i in range(10):
+            atlas_db.insert_tool_call(
+                self.conn,
+                "s1",
+                {
+                    "message_uuid": f"m{i}",
+                    "ts": float(i),
+                    "tool_name": "Bash",
+                    "kind": "builtin",
+                    "target": "Bash",
+                    "is_error": 1 if i < 5 else 0,
+                },
+            )
+        found = atlas_doctor.mine_tool_error_rate(self.conn, self.root, min_calls=5)
+        self.assertEqual(len(found), 1)
+        self.assertAlmostEqual(found[0]["metric_value"], 0.5)
+
+    def test_recurring_friction_miner(self):
+        for _ in range(4):
+            atlas_db.record_friction(self.conn, "s1", "user_correction")
+        found = atlas_doctor.mine_recurring_friction(self.conn, self.root, min_count=3)
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0]["key"], "user_correction")
+        self.assertEqual(found[0]["metric_value"], 4)
+
+    # --- mine() dedupe / registry ------------------------------------------
+
+    def test_mine_registers_every_miner(self):
+        for name, fn in atlas_doctor.MINERS.items():
+            self.assertTrue(callable(fn), name)
+
+    def test_mine_dedupes_on_rerun(self):
+        for _ in range(4):
+            atlas_db.record_friction(self.conn, "s1", "user_correction")
+        atlas_doctor.mine(self.conn, self.root)
+        atlas_doctor.mine(self.conn, self.root)  # re-run: must update, not duplicate
+        rows = self.conn.execute(
+            "SELECT COUNT(*) FROM findings WHERE fingerprint=?",
+            ("recurring_friction:user_correction",),
+        ).fetchone()[0]
+        self.assertEqual(rows, 1)
+
+    # --- status transitions -------------------------------------------------
+
+    def test_finding_status_transitions(self):
+        fid = atlas_db.upsert_finding(
+            self.conn,
+            "test:fp",
+            dimension="d",
+            severity="LOW",
+            title="t",
+            detail="d",
+            proposed_action="p",
+            target_path="x",
+        )
+        atlas_db.set_finding_status(self.conn, fid, "accepted", decided_at=1.0)
+        row = atlas_db.get_finding(self.conn, fid)
+        self.assertEqual(row["status"], "accepted")
+        self.assertEqual(row["decided_at"], 1.0)
+        atlas_db.set_finding_status(self.conn, fid, "applied", applied_at=2.0)
+        row = atlas_db.get_finding(self.conn, fid)
+        self.assertEqual(row["status"], "applied")
+        self.assertEqual(row["applied_at"], 2.0)
+        # decided_at is untouched by a later transition that doesn't pass it
+        self.assertEqual(row["decided_at"], 1.0)
+
+    # --- baseline + remeasure ------------------------------------------------
+
+    def _seed_friction_finding(self, count):
+        for _ in range(count):
+            atlas_db.record_friction(self.conn, "s1", "user_correction")
+        atlas_doctor.mine(self.conn, self.root)
+        return atlas_db.get_finding(
+            self.conn,
+            self.conn.execute(
+                "SELECT id FROM findings WHERE fingerprint='recurring_friction:user_correction'"
+            ).fetchone()[0],
+        )
+
+    def test_baseline_records_current_metric_value(self):
+        finding = self._seed_friction_finding(5)
+        value = atlas_doctor.measure_finding_metric(self.conn, finding, self.root)
+        self.assertEqual(value, 5)
+        imp_id = atlas_db.record_improvement(
+            self.conn,
+            0,
+            finding["dimension"],
+            str(value),
+            "0",
+            None,
+            finding_id=finding["id"],
+            metric="friction_count",
+            baseline_value=value,
+            target_value=0.0,
+            measure_after_runs=1,
+        )
+        imp = atlas_db.pending_remeasures(self.conn)[0]
+        self.assertEqual(imp["id"], imp_id)
+        self.assertEqual(imp["baseline_value"], 5.0)
+
+    def _due_improvement(self, finding, baseline_value):
+        imp_id = atlas_db.record_improvement(
+            self.conn,
+            0,
+            finding["dimension"],
+            str(baseline_value),
+            "0",
+            None,
+            finding_id=finding["id"],
+            metric="friction_count",
+            baseline_value=baseline_value,
+            target_value=0.0,
+            measure_after_runs=1,
+        )
+        # one run elapsed since baseline -> due
+        rid = atlas_db.start_run(self.conn, self.pid, "later-run")
+        atlas_db.finalize_run(self.conn, rid)
+        return imp_id
+
+    def test_remeasure_improved_verdict(self):
+        finding = self._seed_friction_finding(5)
+        self._due_improvement(finding, baseline_value=5.0)
+        # clear the friction so the miner reproduces a lower count
+        self.conn.execute("DELETE FROM friction_events")
+        self.conn.commit()
+        atlas_db.record_friction(self.conn, "s1", "user_correction")  # count now 1
+        updated = atlas_doctor.remeasure(self.conn, self.root)
+        self.assertEqual(len(updated), 1)
+        self.assertEqual(updated[0]["verdict"], "improved")
+        # min_count=3 in the miner: a count of 1 no longer reproduces this
+        # finding at all, so measure_finding_metric reports it resolved (0.0).
+        self.assertEqual(updated[0]["remeasured_value"], 0.0)
+
+    def test_remeasure_no_change_verdict(self):
+        finding = self._seed_friction_finding(5)
+        self._due_improvement(finding, baseline_value=5.0)
+        updated = atlas_doctor.remeasure(self.conn, self.root)
+        self.assertEqual(len(updated), 1)
+        self.assertEqual(updated[0]["verdict"], "no_change")
+
+    def test_remeasure_regressed_verdict(self):
+        finding = self._seed_friction_finding(5)
+        self._due_improvement(finding, baseline_value=5.0)
+        for _ in range(3):
+            atlas_db.record_friction(self.conn, "s1", "user_correction")  # now 8
+        updated = atlas_doctor.remeasure(self.conn, self.root)
+        self.assertEqual(len(updated), 1)
+        self.assertEqual(updated[0]["verdict"], "regressed")
+        self.assertEqual(updated[0]["remeasured_value"], 8)
+
+    def test_remeasure_not_due_yet_is_skipped(self):
+        finding = self._seed_friction_finding(5)
+        atlas_db.record_improvement(
+            self.conn,
+            0,
+            finding["dimension"],
+            "5",
+            "0",
+            None,
+            finding_id=finding["id"],
+            metric="friction_count",
+            baseline_value=5.0,
+            target_value=0.0,
+            measure_after_runs=5,  # needs 5 runs; none have elapsed
+        )
+        updated = atlas_doctor.remeasure(self.conn, self.root)
+        self.assertEqual(updated, [])
+
+    # --- --hook now persists an asset_verdicts row --------------------------
+
+    def test_hook_records_asset_verdict(self):
+        before = self.conn.execute("SELECT COUNT(*) FROM asset_verdicts").fetchone()[0]
+        self.assertEqual(before, 0)
+        atlas_doctor.record_hook_verdict("atlas", failed=[], root_path="/repo/proj")
+        after = self.conn.execute(
+            "SELECT kind, key, verdict FROM asset_verdicts"
+        ).fetchall()
+        self.assertEqual(len(after), 1)
+        self.assertEqual(after[0], ("plugin_health", "atlas", "healthy"))
+
+    def test_hook_records_unhealthy_verdict(self):
+        atlas_doctor.record_hook_verdict(
+            "atlas", failed=[{"check": "x", "detail": "y"}], root_path="/repo/proj"
+        )
+        row = self.conn.execute("SELECT verdict FROM asset_verdicts").fetchone()
+        self.assertEqual(row[0], "unhealthy")
+
+    # --- TELEMETRY_TABLES leaves facets/findings uncapped -------------------
+
+    def test_telemetry_tables_excludes_facets_and_findings(self):
+        self.assertNotIn("facets", atlas_doctor.TELEMETRY_TABLES)
+        self.assertNotIn("findings", atlas_doctor.TELEMETRY_TABLES)
+        self.assertIn("friction_events", atlas_doctor.TELEMETRY_TABLES)
+
+    def test_purge_telemetry_does_not_touch_facets_or_findings(self):
+        atlas_db.upsert_facet(self.conn, "keep-me")
+        atlas_db.upsert_finding(
+            self.conn,
+            "keep:me",
+            dimension="d",
+            severity="LOW",
+            title="t",
+            detail="d",
+            proposed_action="p",
+            target_path="x",
+        )
+        atlas_doctor.purge_telemetry(self.db, row_cap=0)
+        self.assertEqual(
+            self.conn.execute("SELECT COUNT(*) FROM facets").fetchone()[0], 1
+        )
+        self.assertEqual(
+            self.conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0], 1
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
