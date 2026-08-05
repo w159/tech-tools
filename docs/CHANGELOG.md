@@ -6,6 +6,12 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ## 2026-08-05 -- Chronicle/insights schema, atlas-doctor self-improvement skill, and two root-cause fixes for a learning stall
 
+**Released as atlas 5.4.0** (`plugins/atlas/.claude-plugin/plugin.json:3`), marketplace 3.2.0
+(`.claude-plugin/marketplace.json:5`), commit `da0f90e`. Manifest descriptions in both files
+were corrected to the verified counts: 21 skills (`atlas-doctor` was missing) and 12 hooks
+(`chronicle_facet` was missing); they had read 20 and 11. Per-plugin release notes live in
+`plugins/atlas/CHANGELOG.md`.
+
 Root-cause investigation (`.agents/notes/atlas-self-improvement-rootcause.md`) found that atlas's own capture pipeline worked but consumption of what it captured was dead: `improvements` was 24 days stale, `asset_verdicts` 27 days stale, and lessons written to `MEMORY.md` after 2026-07-16 were silently discarded. This entry ships the schema and skill that let atlas mine, review, and apply its own findings, plus fixes for both silent-drop causes.
 
 - Added three tables to `plugins/atlas/scripts/atlas_db.py`: `facets` (`atlas_db.py:43-52`, one deterministic+LLM-enriched insight row per session, primary key `session_id`), `friction_events` (`atlas_db.py:57-60`, categorized friction events), and `findings` (`atlas_db.py:62-67`, doctor-produced findings with a `UNIQUE fingerprint` and a `status` lifecycle of `open|accepted|rejected|applied|verified|regressed`). `improvements` extended additively with `finding_id`, `metric`, `baseline_value`, `target_value`, `measure_after_runs`, `remeasured_at`, `remeasured_value`, `verdict` (`atlas_db.py:165-172,613-620`). `facets` and `findings` are deliberately left out of `TELEMETRY_TABLES` (`atlas_doctor.py:40-53`) so they are never row-capped like per-event telemetry. Verified: migrating a copy of the live 119MB `~/.atlas/atlas.db` left all 12 pre-existing tables' row counts identical and `improvements` kept its 38 rows.
