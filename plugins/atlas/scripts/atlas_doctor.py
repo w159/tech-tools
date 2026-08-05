@@ -22,6 +22,8 @@ import sys
 import time
 from datetime import datetime, timezone
 
+import atlas_db
+
 # --- environment (overridable so tests never touch the real install) ---
 PLUGINS_DIR = os.environ.get("ATLAS_PLUGINS_DIR") or os.path.expanduser(
     "~/.claude/plugins"
@@ -37,6 +39,9 @@ TRASH_PREFIX = ".trash-atlas-setup-"
 TRASH_KEEP = 5
 # atlas.db telemetry tables trimmed oldest-first when a row grows past the cap.
 # metrics PK is run_id; every other listed table has an id PK used for ordering.
+# `facets` and `findings` are deliberately NOT listed here -- they are atlas's
+# long memory (per-session chronicle, cross-session findings ledger), not
+# per-event telemetry, so they stay uncapped.
 TELEMETRY_TABLES = (
     "runs",
     "events",
@@ -44,6 +49,7 @@ TELEMETRY_TABLES = (
     "metrics",
     "improvements",
     "signals",
+    "friction_events",
 )
 TELEMETRY_ROW_CAP = 5000
 
@@ -451,6 +457,39 @@ def purge_telemetry(db_path=None, row_cap=TELEMETRY_ROW_CAP):
         conn.close()
 
 
+def record_hook_verdict(plugin_name, failed, root_path=None):
+    """Persist the --hook path's health verdict to asset_verdicts.
+
+    Before this, --hook only ever printed a warning; it never wrote to the
+    DB, which is why asset_verdicts went stale (no row in 27 days) even
+    though this hook runs every SessionStart. record_asset_verdicts()
+    replaces (not accumulates) the prior non-applied/non-restored row for
+    this (project, kind, key), so this stays one row per project rather
+    than growing unbounded across sessions.
+
+    Fast + fail-open: any error here must never block a SessionStart hook."""
+    try:
+        conn = atlas_db.connect()
+        atlas_db.init(conn)
+        project_id = atlas_db.register_project(conn, root_path or os.getcwd())
+        atlas_db.record_asset_verdicts(
+            conn,
+            project_id,
+            [
+                {
+                    "kind": "plugin_health",
+                    "key": plugin_name,
+                    "tags": [],
+                    "verdict": "unhealthy" if failed else "healthy",
+                    "est_tokens": 0,
+                }
+            ],
+        )
+        conn.close()
+    except Exception:
+        pass  # fail-open
+
+
 def record_maintenance(action, details=None):
     """Append a maintenance log entry to doctor-state.json.
 
@@ -560,6 +599,442 @@ def apply_fixes(ctx, plugin_name="atlas", trash_stamp=None):
     return actions
 
 
+# --- self-improvement: finding miners (PHASE 2 of the /atlas-doctor skill) ----
+# One function per miner, registered in MINERS. Each miner(conn, root) returns
+# a list of _finding() dicts. To add a new class of defect detection: write a
+# miner function, register it in MINERS -- nothing else needs to change; mine()
+# fingerprints/upserts/dedupes generically for every entry in the registry.
+
+
+def _finding(
+    dimension,
+    severity,
+    title,
+    detail,
+    proposed_action,
+    target_path,
+    key,
+    metric_value,
+    **evidence,
+):
+    """One miner-produced finding, pre-fingerprint. `key` is the part of the
+    fingerprint unique within this miner (e.g. a tool name, a category, or a
+    fixed literal for a miner that only ever emits one instance). `metric_value`
+    is the headline number remeasure() recomputes later to judge improved/
+    no_change/regressed -- always a plain float/int, never a formatted string."""
+    return {
+        "dimension": dimension,
+        "severity": severity,
+        "title": title,
+        "detail": detail,
+        "proposed_action": proposed_action,
+        "target_path": target_path,
+        "key": key,
+        "metric_value": metric_value,
+        "evidence": evidence,
+    }
+
+
+def mine_memory_capture_silent_drop(conn, root):
+    """Static check: memory_capture.py's write path checks atlas_memory.add()'s
+    {"success": False} case (raised when MEMORY.md/PROJECT.md is at its char
+    cap) but has no `else` branch -- a fact that cannot fit is silently
+    dropped instead of surfacing anywhere (not even a friction_event)."""
+    path = os.path.join(root, "hooks", "memory_capture.py")
+    try:
+        with open(path, encoding="utf-8") as f:
+            src = f.read()
+    except OSError:
+        return []
+    checks = len(re.findall(r'if result\.get\("success"\):', src))
+    handled = len(
+        re.findall(r'if result\.get\("success"\):(?:\n[ \t]+.*)*\n[ \t]*else:', src)
+    )
+    missing = checks - handled
+    if missing <= 0:
+        return []
+    return [
+        _finding(
+            dimension="reliability",
+            severity="MED",
+            title="memory_capture drops facts silently when MEMORY.md/PROJECT.md is at cap",
+            detail=(
+                f"{missing} call site(s) in hooks/memory_capture.py check "
+                'atlas_memory.add()\'s result.get("success") but have no else '
+                "branch -- when the char cap (atlas_memory.DEFAULT_MEMORY_LIMIT) "
+                "is hit, the fact is discarded with no record anywhere."
+            ),
+            proposed_action=(
+                "Add an else branch at each call site that records the drop via "
+                'atlas_db.record_friction(conn, session_id, "memory_capture_dropped", '
+                "snippet=fact[:80]) so a capped memory is an observable signal, not "
+                "a silent loss."
+            ),
+            target_path="plugins/atlas/hooks/memory_capture.py",
+            key="silent_drop",
+            metric_value=missing,
+        )
+    ]
+
+
+def mine_doctor_hook_stale_verdicts(conn, root, stale_days=7.0):
+    """DB check: asset_verdicts should get a fresh row every SessionStart now
+    that record_hook_verdict() runs there. Flags a stale table (no verdict in
+    `stale_days`) the same way the pre-fix table went 27 days quiet."""
+    row = conn.execute("SELECT MAX(ts) FROM asset_verdicts").fetchone()
+    max_ts = row[0] if row else None
+    age_days = (time.time() - max_ts) / 86400.0 if max_ts else None
+    if age_days is not None and age_days <= stale_days:
+        return []
+    return [
+        _finding(
+            dimension="observability",
+            severity="LOW",
+            title="asset_verdicts table is stale",
+            detail=(
+                "No asset_verdicts row in over "
+                f"{stale_days:.0f} days (age: {age_days!r})."
+                " The --hook SessionStart path is the only writer that runs "
+                "every session; if it stops writing, this table goes quiet again."
+            ),
+            proposed_action=(
+                "Confirm atlas_doctor.py's --hook branch still calls "
+                "record_hook_verdict() every SessionStart (fixed in this run; "
+                "verify it stays wired after future edits to main())."
+            ),
+            target_path="plugins/atlas/scripts/atlas_doctor.py",
+            key="stale_verdicts",
+            metric_value=age_days if age_days is not None else 999999.0,
+        )
+    ]
+
+
+def mine_gate_block_silences_capture(conn, root):
+    """DB check: sessions with an ingested transcript (session_logs) but no
+    facets row at all -- the observable signature of a Stop-hook block
+    (stop_hook_active) starving the chronicle_facet capture hook before the
+    kind="capture" carve-out existed in atlas_hook_guard.should_run."""
+    n = conn.execute(
+        "SELECT COUNT(*) FROM session_logs "
+        "WHERE session_id NOT IN (SELECT session_id FROM facets)"
+    ).fetchone()[0]
+    if n <= 0:
+        return []
+    return [
+        _finding(
+            dimension="observability",
+            severity="MED",
+            title="sessions with no facet row despite an ingested transcript",
+            detail=(
+                f"{n} session(s) in session_logs have no matching facets row. "
+                "This is the signature completion_gate's Stop-hook block leaves "
+                "behind: stop_hook_active silences capture hooks on a blocked Stop."
+            ),
+            proposed_action=(
+                "Confirm atlas_hook_guard.should_run(kind='capture') is used by "
+                "chronicle_facet.py/memory_capture.py (already the case as of this "
+                "run) so a gate block no longer silences the facet/memory write "
+                "for that Stop."
+            ),
+            target_path="plugins/atlas/hooks/completion_gate.py",
+            key="gate_silences_capture",
+            metric_value=n,
+        )
+    ]
+
+
+def mine_facet_uningested_hardcoded_zero(conn, root):
+    """DB check: legacy facets rows written before chronicle_facet.py NULL'd
+    its deterministic columns for un-ingested sessions -- message_count NULL
+    (never ingested) but one of the dependent counts still reads a fabricated
+    0 rather than NULL."""
+    n = conn.execute(
+        "SELECT COUNT(*) FROM facets WHERE message_count IS NULL AND ("
+        "edit_count=0 OR read_count=0 OR correction_count=0 OR "
+        "dispatch_count=0 OR gate_block_count=0)"
+    ).fetchone()[0]
+    if n <= 0:
+        return []
+    return [
+        _finding(
+            dimension="data quality",
+            severity="LOW",
+            title="facets rows carry fabricated 0s instead of NULL for un-ingested sessions",
+            detail=(
+                f"{n} facets row(s) have message_count IS NULL (never ingested) "
+                "but a dependent column still reads 0 rather than NULL -- data "
+                "written before chronicle_facet.py's NULL-for-un-ingested fix."
+            ),
+            proposed_action=(
+                "One-time backfill: UPDATE facets SET edit_count=NULL, "
+                "read_count=NULL, correction_count=NULL, dispatch_count=NULL, "
+                "gate_block_count=NULL WHERE message_count IS NULL. New rows are "
+                "already correct as of chronicle_facet.py's ingested-flag fix."
+            ),
+            target_path="plugins/atlas/hooks/chronicle_facet.py",
+            key="uningested_hardcoded_zero",
+            metric_value=n,
+        )
+    ]
+
+
+def mine_inline_dispatch_ratio(conn, root, threshold=5.0, limit=50):
+    """Behavioral check: average inline_ops/dispatches ratio across recent
+    orchestrator runs. High = the dispatch discipline is being bypassed
+    ("too small to delegate") rather than fanning out to subagents."""
+    rows = conn.execute(
+        "SELECT m.inline_ops, m.dispatches FROM metrics m "
+        "JOIN runs r ON r.id = m.run_id "
+        "WHERE COALESCE(r.kind,'orchestrator')='orchestrator' AND m.dispatches>0 "
+        "ORDER BY r.id DESC LIMIT ?",
+        (limit,),
+    ).fetchall()
+    ratios = [io / d for io, d in rows if d]
+    if not ratios:
+        return []
+    avg_ratio = sum(ratios) / len(ratios)
+    if avg_ratio <= threshold:
+        return []
+    return [
+        _finding(
+            dimension="orchestration discipline",
+            severity="MED",
+            title="high inline-op-to-dispatch ratio across recent runs",
+            detail=(
+                f"Average inline_ops/dispatches over the last {len(ratios)} "
+                f"orchestrator run(s) is {avg_ratio:.1f} (threshold {threshold})."
+            ),
+            proposed_action=(
+                "Tighten the dispatch-tripwire threshold or the operating "
+                "contract's dispatch rule so more work routes to subagents "
+                "instead of running inline in the orchestrator's own context."
+            ),
+            target_path="plugins/atlas/hooks/dispatch_tripwire.py",
+            key="inline_dispatch_ratio",
+            metric_value=avg_ratio,
+        )
+    ]
+
+
+def mine_low_verifier_coverage(conn, root, threshold=0.7, limit=50):
+    """Behavioral check: average verifier_coverage across recent orchestrator
+    runs. Below threshold means changes are shipping without an independent
+    verifier checking them (engine law 5)."""
+    rows = conn.execute(
+        "SELECT m.verifier_coverage FROM metrics m JOIN runs r ON r.id = m.run_id "
+        "WHERE COALESCE(r.kind,'orchestrator')='orchestrator' "
+        "AND m.verifier_coverage IS NOT NULL ORDER BY r.id DESC LIMIT ?",
+        (limit,),
+    ).fetchall()
+    vals = [v[0] for v in rows]
+    if not vals:
+        return []
+    avg = sum(vals) / len(vals)
+    if avg >= threshold:
+        return []
+    return [
+        _finding(
+            dimension="verification discipline",
+            severity="HIGH",
+            title="low average verifier coverage across recent runs",
+            detail=(
+                f"Average verifier_coverage over the last {len(vals)} "
+                f"orchestrator run(s) is {avg:.2f} (threshold {threshold})."
+            ),
+            proposed_action=(
+                "Audit recent shipping-agent dispatches lacking a paired "
+                "atlas:verifier dispatch; tighten the completion gate's "
+                "unpaired_implementer_dispatches check if it is not already "
+                "blocking on this."
+            ),
+            target_path="plugins/atlas/hooks/completion_gate.py",
+            key="verifier_coverage_low",
+            metric_value=avg,
+        )
+    ]
+
+
+def mine_tool_error_rate(conn, root, threshold=0.2, min_calls=5):
+    """Behavioral check: per-tool error rate from the tool_calls mirror. One
+    finding per tool crossing the threshold, so each can be triaged (and
+    remeasured) independently."""
+    out = []
+    for r in atlas_db.tool_usage(conn):
+        calls = r.get("calls") or 0
+        if calls < min_calls:
+            continue
+        rate = (r.get("errors") or 0) / calls
+        if rate <= threshold:
+            continue
+        target = r.get("target") or "?"
+        out.append(
+            _finding(
+                dimension="tool reliability",
+                severity="MED",
+                title=f"high error rate on {r.get('kind')}:{target}",
+                detail=(
+                    f"{r.get('errors')}/{calls} calls to {target} errored "
+                    f"({rate:.0%}, threshold {threshold:.0%})."
+                ),
+                proposed_action=(
+                    f"Investigate recurring failures calling {target}; check "
+                    "for a wrong argument shape, a missing precondition check, "
+                    "or a wrapper that should retry/back off."
+                ),
+                target_path=target,
+                key=f"{r.get('kind')}:{target}",
+                metric_value=rate,
+                calls=calls,
+                errors=r.get("errors"),
+            )
+        )
+    return out
+
+
+def mine_recurring_friction(conn, root, min_count=3):
+    """Behavioral check: friction_events categories (user_correction,
+    assumption_admission, error_report, ...) recurring often enough to be a
+    pattern rather than a one-off."""
+    rows = conn.execute(
+        "SELECT category, COUNT(*) AS n FROM friction_events "
+        "GROUP BY category HAVING n >= ? ORDER BY n DESC",
+        (min_count,),
+    ).fetchall()
+    out = []
+    for category, n in rows:
+        out.append(
+            _finding(
+                dimension="behavioral friction",
+                severity="MED" if n >= min_count * 2 else "LOW",
+                title=f"recurring {category} friction ({n}x)",
+                detail=f"{n} friction_events row(s) categorized '{category}'.",
+                proposed_action=(
+                    f"Read the recent snippets for category='{category}' "
+                    "(atlas_db.signal_rollup or friction_events directly) and "
+                    "turn the recurring pattern into a CLAUDE.md rule, a hook "
+                    "guard, or a skill fix -- whichever closes the gap."
+                ),
+                target_path="CLAUDE.md",
+                key=category,
+                metric_value=n,
+            )
+        )
+    return out
+
+
+MINERS = {
+    "memory_capture_silent_drop": mine_memory_capture_silent_drop,
+    "doctor_hook_stale_verdicts": mine_doctor_hook_stale_verdicts,
+    "gate_block_silences_capture": mine_gate_block_silences_capture,
+    "facet_uningested_hardcoded_zero": mine_facet_uningested_hardcoded_zero,
+    "inline_dispatch_ratio_high": mine_inline_dispatch_ratio,
+    "verifier_coverage_low": mine_low_verifier_coverage,
+    "tool_error_rate_high": mine_tool_error_rate,
+    "recurring_friction": mine_recurring_friction,
+}
+
+
+def mine(conn, root=None):
+    """Run every registered miner, upsert each finding (fingerprint =
+    '<miner>:<key>', so re-running updates rather than duplicates), and
+    return {miner_name: finding_count}."""
+    root = root or self_manifest()[0]
+    counts = {}
+    for name, fn in MINERS.items():
+        try:
+            found = fn(conn, root)
+        except Exception as e:
+            found = []
+            counts[name] = f"error: {e}"
+            continue
+        for f in found:
+            evidence = dict(f["evidence"])
+            evidence["miner"] = name
+            evidence["metric_value"] = f["metric_value"]
+            atlas_db.upsert_finding(
+                conn,
+                f"{name}:{f['key']}",
+                dimension=f["dimension"],
+                severity=f["severity"],
+                title=f["title"],
+                detail=f["detail"],
+                evidence_json=json.dumps(evidence),
+                proposed_action=f["proposed_action"],
+                target_path=f["target_path"],
+            )
+        counts[name] = len(found)
+    return counts
+
+
+def measure_finding_metric(conn, finding, root=None):
+    """Recompute a finding's headline metric_value by re-running the miner
+    that produced it (recorded in evidence_json) and matching on its key.
+    Returns: the fresh value if the miner still reproduces this instance;
+    0.0 if the miner ran clean but no longer reproduces it (resolved); None
+    if the miner is unknown or errors (caller should skip, not guess)."""
+    try:
+        evidence = json.loads(finding.get("evidence_json") or "{}")
+    except (TypeError, ValueError):
+        return None
+    miner_name = evidence.get("miner")
+    fn = MINERS.get(miner_name)
+    fingerprint = finding.get("fingerprint") or ""
+    if not fn or ":" not in fingerprint:
+        return None
+    key = fingerprint.split(":", 1)[1]
+    root = root or self_manifest()[0]
+    try:
+        found = fn(conn, root)
+    except Exception:
+        return None
+    for f in found:
+        if f["key"] == key:
+            return f["metric_value"]
+    return 0.0
+
+
+def remeasure(conn, root=None):
+    """For every improvement due for remeasurement (measure_after_runs runs
+    have elapsed since baseline), recompute its metric and record
+    improved|no_change|regressed. Returns a list of the improvement dicts
+    updated. Assumes lower-is-better metrics (every current miner is a
+    problem count/rate) -- a future miner whose metric improves by
+    increasing needs its own verdict direction, not this shared rule."""
+    updated = []
+    for imp in atlas_db.pending_remeasures(conn):
+        runs_since = conn.execute(
+            "SELECT COUNT(*) FROM runs WHERE started_at > ?", (imp["ts"],)
+        ).fetchone()[0]
+        if runs_since < (imp["measure_after_runs"] or 0):
+            continue  # not due yet
+        finding = (
+            atlas_db.get_finding(conn, imp["finding_id"]) if imp["finding_id"] else None
+        )
+        if finding is None:
+            continue  # nothing to remeasure against
+        value = measure_finding_metric(conn, finding, root=root)
+        if value is None:
+            continue  # unknown/errored miner -- leave pending rather than guess
+        baseline = imp.get("baseline_value")
+        if baseline is None:
+            verdict = "no_change"
+        elif value < baseline:
+            verdict = "improved"
+        elif value > baseline:
+            verdict = "regressed"
+        else:
+            verdict = "no_change"
+        remeasured_at = time.time()
+        atlas_db.set_improvement_remeasure(
+            conn, imp["id"], value, verdict, remeasured_at
+        )
+        imp = dict(
+            imp, remeasured_value=value, verdict=verdict, remeasured_at=remeasured_at
+        )
+        updated.append(imp)
+    return updated
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="atlas plugin health check")
     ap.add_argument("--fix", action="store_true", help="repair what CHECK finds")
@@ -580,7 +1055,160 @@ def main(argv=None):
         help=f"row cap for --purge (default: {TELEMETRY_ROW_CAP})",
     )
     ap.add_argument("--plugin", default="atlas")
+
+    # --- self-improvement loop (the /atlas-doctor skill drives these) ---
+    ap.add_argument(
+        "--mine", action="store_true", help="run all finding miners and upsert results"
+    )
+    ap.add_argument(
+        "--list-findings",
+        action="store_true",
+        help="print findings (optionally filtered by --status)",
+    )
+    ap.add_argument("--status", default=None, help="filter for --list-findings")
+    ap.add_argument(
+        "--set-status",
+        nargs=2,
+        metavar=("FINDING_ID", "STATUS"),
+        help="transition a finding: open|accepted|rejected|applied|verified|regressed",
+    )
+    ap.add_argument(
+        "--baseline",
+        metavar="FINDING_ID",
+        type=int,
+        help="record an improvement baseline for an applied finding",
+    )
+    ap.add_argument("--metric", default=None, help="metric label for --baseline")
+    ap.add_argument(
+        "--target", type=float, default=None, help="target value for --baseline"
+    )
+    ap.add_argument(
+        "--after",
+        type=int,
+        default=5,
+        help="runs to wait before --remeasure is due (default: 5)",
+    )
+    ap.add_argument("--note", default=None, help="free-text note for --baseline")
+    ap.add_argument(
+        "--run-id", type=int, default=0, help="run id to attach --baseline to"
+    )
+    ap.add_argument(
+        "--remeasure",
+        action="store_true",
+        help="remeasure every improvement due (measure_after_runs elapsed)",
+    )
+    ap.add_argument(
+        "--pending-facets",
+        type=int,
+        nargs="?",
+        const=50,
+        default=None,
+        metavar="LIMIT",
+        help="print facets rows pending LLM enrichment (default limit 50)",
+    )
+    ap.add_argument(
+        "--json", action="store_true", help="machine-readable output for the above"
+    )
     args = ap.parse_args(argv)
+
+    if args.mine:
+        conn = atlas_db.connect()
+        atlas_db.init(conn)
+        counts = mine(conn, self_manifest()[0])
+        conn.close()
+        print(json.dumps(counts, indent=2) if args.json else counts)
+        return 0
+
+    if args.list_findings:
+        conn = atlas_db.connect()
+        atlas_db.init(conn)
+        rows = atlas_db.list_findings(conn, status=args.status)
+        conn.close()
+        if args.json:
+            print(json.dumps(rows, indent=2))
+        else:
+            for r in rows:
+                print(
+                    f"[{r['id']}] {r['status']:10} {r['severity']:4} "
+                    f"{r['dimension']:24} {r['title']}"
+                )
+        return 0
+
+    if args.set_status:
+        finding_id, status = int(args.set_status[0]), args.set_status[1]
+        conn = atlas_db.connect()
+        atlas_db.init(conn)
+        now = time.time()
+        atlas_db.set_finding_status(
+            conn,
+            finding_id,
+            status,
+            decided_at=now if status in ("accepted", "rejected") else None,
+            applied_at=now if status == "applied" else None,
+        )
+        conn.close()
+        print(f"finding {finding_id} -> {status}")
+        return 0
+
+    if args.baseline is not None:
+        if not args.metric or args.target is None:
+            print("--baseline requires --metric and --target")
+            return 2
+        conn = atlas_db.connect()
+        atlas_db.init(conn)
+        finding = atlas_db.get_finding(conn, args.baseline)
+        if finding is None:
+            print(f"no finding with id {args.baseline}")
+            conn.close()
+            return 2
+        baseline_value = measure_finding_metric(conn, finding, self_manifest()[0])
+        if baseline_value is None:
+            baseline_value = 0.0
+        imp_id = atlas_db.record_improvement(
+            conn,
+            args.run_id,
+            finding["dimension"],
+            str(baseline_value),
+            str(args.target),
+            args.note,
+            finding_id=args.baseline,
+            metric=args.metric,
+            baseline_value=baseline_value,
+            target_value=args.target,
+            measure_after_runs=args.after,
+        )
+        conn.close()
+        print(
+            f"improvement {imp_id}: finding {args.baseline} baseline={baseline_value} "
+            f"target={args.target} (remeasure after {args.after} runs)"
+        )
+        return 0
+
+    if args.remeasure:
+        conn = atlas_db.connect()
+        atlas_db.init(conn)
+        updated = remeasure(conn, self_manifest()[0])
+        conn.close()
+        if args.json:
+            print(json.dumps(updated, indent=2))
+        else:
+            for u in updated:
+                print(
+                    f"improvement {u['id']} (finding {u['finding_id']}): "
+                    f"{u['baseline_value']} -> {u['remeasured_value']} "
+                    f"({u['verdict']})"
+                )
+            if not updated:
+                print("no improvements due for remeasurement")
+        return 0
+
+    if args.pending_facets is not None:
+        conn = atlas_db.connect()
+        atlas_db.init(conn)
+        rows = atlas_db.pending_facets(conn, limit=args.pending_facets)
+        conn.close()
+        print(json.dumps(rows, indent=2))
+        return 0
 
     if args.purge:
         # M21/M22: trim telemetry oldest-first to the cap and record the run.
@@ -602,6 +1230,7 @@ def main(argv=None):
         failed = [r for r in results if not r["ok"]]
 
     if args.hook:
+        record_hook_verdict(args.plugin, failed)
         if failed:
             print(
                 f"ATLAS-DOCTOR WARNING: {args.plugin} plugin is unhealthy - "

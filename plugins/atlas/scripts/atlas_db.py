@@ -4,6 +4,7 @@ Stdlib-only. Stores paths, tool names, counts, timestamps - never code or secret
 Callers in hooks MUST wrap usage in try/except and fail open; this module may raise.
 """
 
+import json
 import os
 import sqlite3
 import time
@@ -35,6 +36,36 @@ CREATE TABLE IF NOT EXISTS asset_verdicts (
   kind TEXT, key TEXT, tags TEXT, verdict TEXT, est_tokens INTEGER,
   applied INTEGER DEFAULT 0, restored INTEGER DEFAULT 0);
 CREATE INDEX IF NOT EXISTS ix_asset_verdicts_key ON asset_verdicts(kind, key);
+
+-- Chronicle/insights layer: one qualitative record per session (facets),
+-- categorized friction finer-grained than `signals`, and doctor-produced
+-- findings that the user accepts, rejects, or applies.
+CREATE TABLE IF NOT EXISTS facets (
+  session_id TEXT PRIMARY KEY, project_id INTEGER, created_at REAL,
+  -- deterministic, filled by the Stop hook from existing tables:
+  message_count INTEGER, user_prompt_count INTEGER, tool_call_count INTEGER,
+  error_count INTEGER, dispatch_count INTEGER, verifier_coverage REAL,
+  wall_clock_s REAL, edit_count INTEGER, read_count INTEGER,
+  gate_block_count INTEGER, correction_count INTEGER,
+  -- LLM-enriched later by the doctor; NULL means pending:
+  enriched_at REAL, underlying_goal TEXT, outcome TEXT, session_type TEXT,
+  primary_success TEXT, friction_detail TEXT, brief_summary TEXT,
+  goal_categories_json TEXT, friction_counts_json TEXT,
+  user_satisfaction TEXT, claude_helpfulness TEXT);
+CREATE INDEX IF NOT EXISTS ix_facets_enriched_at ON facets(enriched_at);
+CREATE INDEX IF NOT EXISTS ix_facets_created_at ON facets(created_at);
+CREATE TABLE IF NOT EXISTS friction_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT, category TEXT,
+  weight REAL, snippet TEXT, ts REAL);
+CREATE INDEX IF NOT EXISTS ix_friction_events_category_ts ON friction_events(category, ts);
+CREATE INDEX IF NOT EXISTS ix_friction_events_session ON friction_events(session_id);
+CREATE TABLE IF NOT EXISTS findings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, created_at REAL, dimension TEXT,
+  severity TEXT, title TEXT, detail TEXT, evidence_json TEXT,
+  proposed_action TEXT, target_path TEXT,
+  status TEXT DEFAULT 'open',
+  decided_at REAL, applied_at REAL, fingerprint TEXT UNIQUE);
+CREATE INDEX IF NOT EXISTS ix_findings_status_created ON findings(status, created_at);
 
 -- Session-log mirror: the rich transcript forensics layer. Populated by the
 -- ingest hook (Stop/SubagentStop/SessionEnd/PreCompact) and the backfill CLI,
@@ -125,6 +156,26 @@ def init(conn):
         conn.commit()
     except sqlite3.OperationalError:
         pass  # column already present
+    # Idempotent migration: extend the pre-existing `improvements` table with
+    # finding-linkage and remeasure-tracking columns, additively. Existing rows
+    # (run_id, dimension, baseline, target, note) are untouched; ALTER TABLE
+    # ADD COLUMN only appends. The OperationalError is the success path once a
+    # column already exists.
+    for _col, _decl in (
+        ("finding_id", "INTEGER"),
+        ("metric", "TEXT"),
+        ("baseline_value", "REAL"),
+        ("target_value", "REAL"),
+        ("measure_after_runs", "INTEGER"),
+        ("remeasured_at", "REAL"),
+        ("remeasured_value", "REAL"),
+        ("verdict", "TEXT"),
+    ):
+        try:
+            conn.execute(f"ALTER TABLE improvements ADD COLUMN {_col} {_decl}")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # column already present
     backfill_run_kinds(conn)
 
 
@@ -393,6 +444,66 @@ def unpaired_implementer_dispatches(conn, run_id):
     return max(0, impl - ver)
 
 
+_WRITE_TOOLS = ("Edit", "Write", "MultiEdit")
+
+
+def run_changed_paths(conn, run_id):
+    """File paths this run's OWN activity actually wrote -- the completion gate's
+    run-scoped replacement for diffing the whole working tree, which cannot tell
+    a file this run touched from one left dirty by an earlier session.
+
+    Combines two existing signals rather than inventing a new one:
+      - `events`: Edit/Write/MultiEdit ops on the main thread, logged by
+        dispatch_tripwire's PostToolUse hook with a clean `path` column.
+      - `tool_calls`: the same tool names from ANY thread (including dispatched
+        subagents' sidechain work, which dispatch_tripwire never sees since it
+        only fires on the main session's own tool calls), scoped to this run's
+        session and its [started_at, ended_at] window, with the path recovered
+        from the scrubbed `input_summary` JSON written at transcript-ingest time.
+
+    Returns a de-duplicated list of path strings. Fails open to [] on any DB
+    error -- callers must treat "unknown" the same as "nothing changed" so a
+    read failure here can never turn into a false block.
+    """
+    try:
+        row = conn.execute(
+            "SELECT session_id, started_at, ended_at FROM runs WHERE id=?",
+            (run_id,),
+        ).fetchone()
+        if not row:
+            return []
+        session_id, started_at, ended_at = row
+        paths = set()
+        placeholders = ",".join("?" for _ in _WRITE_TOOLS)
+        for (path,) in conn.execute(
+            "SELECT DISTINCT path FROM events WHERE run_id=? AND tool IN "
+            f"({placeholders}) AND path IS NOT NULL",
+            (run_id, *_WRITE_TOOLS),
+        ):
+            if path:
+                paths.add(path)
+        if session_id:
+            end = ended_at if ended_at is not None else time.time()
+            start = started_at or 0
+            rows = conn.execute(
+                "SELECT input_summary FROM tool_calls WHERE session_id=? "
+                f"AND tool_name IN ({placeholders}) AND ts>=? AND ts<=?",
+                (session_id, *_WRITE_TOOLS, start, end),
+            ).fetchall()
+            for (summary,) in rows:
+                if not summary:
+                    continue
+                try:
+                    file_path = json.loads(summary).get("file_path")
+                except Exception:
+                    continue
+                if file_path:
+                    paths.add(file_path)
+        return list(paths)
+    except Exception:
+        return []
+
+
 def derive_run_metrics(conn, run_id, session_id, window_s=10.0):
     """Compute the run-health columns that no live hook can fill, from the
     transcript mirror, and write them onto the metrics row. Fills the columns
@@ -498,14 +609,208 @@ def _dispatch_waves(sorted_ts, window_s):
     return peak, waves
 
 
-def record_improvement(conn, run_id, dimension, baseline, target, note):
+IMPROVEMENT_REMEASURE_COLUMNS = (
+    "finding_id",
+    "metric",
+    "baseline_value",
+    "target_value",
+    "measure_after_runs",
+    "remeasured_at",
+    "remeasured_value",
+    "verdict",
+)
+
+
+def record_improvement(conn, run_id, dimension, baseline, target, note, **fields):
+    """Log one improvement note for a run. Optional keyword fields
+    (IMPROVEMENT_REMEASURE_COLUMNS) link it to a finding and track a later
+    remeasure; every one defaults to NULL when omitted, so pre-existing call
+    sites are unaffected."""
+    extra_vals = [fields.get(c) for c in IMPROVEMENT_REMEASURE_COLUMNS]
     cur = conn.execute(
-        "INSERT INTO improvements(run_id,ts,dimension,baseline,target,note) "
-        "VALUES(?,?,?,?,?,?)",
-        (run_id, time.time(), dimension, baseline, target, note),
+        "INSERT INTO improvements(run_id,ts,dimension,baseline,target,note,"
+        + ",".join(IMPROVEMENT_REMEASURE_COLUMNS)
+        + ") VALUES(?,?,?,?,?,?,"
+        + ",".join("?" for _ in IMPROVEMENT_REMEASURE_COLUMNS)
+        + ")",
+        (run_id, time.time(), dimension, baseline, target, note, *extra_vals),
     )
     conn.commit()
     return cur.lastrowid
+
+
+def pending_remeasures(conn, limit=50):
+    """Improvements flagged for remeasurement (measure_after_runs set) that
+    have not yet been remeasured, oldest first. Thin selection only --
+    deciding whether enough runs have elapsed since is the doctor's job."""
+    return _rows(
+        conn.execute(
+            "SELECT * FROM improvements WHERE measure_after_runs IS NOT NULL "
+            "AND remeasured_at IS NULL ORDER BY ts ASC LIMIT ?",
+            (limit,),
+        )
+    )
+
+
+def set_improvement_remeasure(
+    conn, improvement_id, remeasured_value, verdict, remeasured_at=None
+):
+    """Record a remeasurement's result: the fresh metric value, the
+    improved|no_change|regressed verdict, and when it was taken (defaults to
+    now). This is what turns a baseline into an actually-measured outcome."""
+    conn.execute(
+        "UPDATE improvements SET remeasured_value=?, verdict=?, remeasured_at=? "
+        "WHERE id=?",
+        (
+            remeasured_value,
+            verdict,
+            remeasured_at if remeasured_at is not None else time.time(),
+            improvement_id,
+        ),
+    )
+    conn.commit()
+
+
+# --- chronicle/insights: facets, friction, findings ---------------------------
+
+FACET_COLUMNS = (
+    "project_id",
+    "created_at",
+    "message_count",
+    "user_prompt_count",
+    "tool_call_count",
+    "error_count",
+    "dispatch_count",
+    "verifier_coverage",
+    "wall_clock_s",
+    "edit_count",
+    "read_count",
+    "gate_block_count",
+    "correction_count",
+    "enriched_at",
+    "underlying_goal",
+    "outcome",
+    "session_type",
+    "primary_success",
+    "friction_detail",
+    "brief_summary",
+    "goal_categories_json",
+    "friction_counts_json",
+    "user_satisfaction",
+    "claude_helpfulness",
+)
+
+
+def upsert_facet(conn, session_id, **fields):
+    """Insert or update the per-session qualitative facet row. Only keys
+    passed in `fields` are written; absent keys keep their stored value
+    (COALESCE), matching upsert_session_log's semantics. `created_at`
+    defaults to now so a fresh insert is never left NULL."""
+    fields.setdefault("created_at", time.time())
+    vals = [fields.get(c) for c in FACET_COLUMNS]
+    conn.execute(
+        "INSERT INTO facets(session_id," + ",".join(FACET_COLUMNS) + ") "
+        "VALUES(?," + ",".join("?" for _ in FACET_COLUMNS) + ") "
+        "ON CONFLICT(session_id) DO UPDATE SET "
+        + ",".join(f"{c}=COALESCE(excluded.{c},{c})" for c in FACET_COLUMNS),
+        (session_id, *vals),
+    )
+    conn.commit()
+
+
+def pending_facets(conn, limit=50):
+    """Facets rows not yet LLM-enriched (enriched_at IS NULL), oldest first --
+    the doctor's work queue."""
+    return _rows(
+        conn.execute(
+            "SELECT * FROM facets WHERE enriched_at IS NULL "
+            "ORDER BY created_at ASC LIMIT ?",
+            (limit,),
+        )
+    )
+
+
+def record_friction(conn, session_id, category, weight=1.0, snippet=None, ts=None):
+    """Log one categorized friction event for a session."""
+    cur = conn.execute(
+        "INSERT INTO friction_events(session_id,category,weight,snippet,ts) "
+        "VALUES(?,?,?,?,?)",
+        (session_id, category, weight, snippet, ts if ts is not None else time.time()),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+FINDING_COLUMNS = (
+    "created_at",
+    "dimension",
+    "severity",
+    "title",
+    "detail",
+    "evidence_json",
+    "proposed_action",
+    "target_path",
+    "status",
+    "decided_at",
+    "applied_at",
+)
+
+
+def upsert_finding(conn, fingerprint, **fields):
+    """Insert a new finding, or update the existing one sharing `fingerprint`
+    so re-running the doctor refreshes a finding instead of duplicating it.
+    `created_at` defaults to now and `status` defaults to 'open' on first
+    insert. Returns the finding id."""
+    fields.setdefault("created_at", time.time())
+    fields.setdefault("status", "open")
+    vals = [fields.get(c) for c in FINDING_COLUMNS]
+    conn.execute(
+        "INSERT INTO findings(fingerprint," + ",".join(FINDING_COLUMNS) + ") "
+        "VALUES(?," + ",".join("?" for _ in FINDING_COLUMNS) + ") "
+        "ON CONFLICT(fingerprint) DO UPDATE SET "
+        + ",".join(f"{c}=COALESCE(excluded.{c},{c})" for c in FINDING_COLUMNS),
+        (fingerprint, *vals),
+    )
+    conn.commit()
+    return conn.execute(
+        "SELECT id FROM findings WHERE fingerprint=?", (fingerprint,)
+    ).fetchone()[0]
+
+
+def set_finding_status(conn, finding_id, status, decided_at=None, applied_at=None):
+    """Transition a finding's status (open|accepted|rejected|applied|
+    verified|regressed). decided_at/applied_at are only overwritten when a
+    caller passes them explicitly."""
+    conn.execute(
+        "UPDATE findings SET status=?, "
+        "decided_at=COALESCE(?,decided_at), applied_at=COALESCE(?,applied_at) "
+        "WHERE id=?",
+        (status, decided_at, applied_at, finding_id),
+    )
+    conn.commit()
+
+
+def get_finding(conn, finding_id):
+    """One findings row by id, or None. Dict keyed by column name."""
+    rows = _rows(conn.execute("SELECT * FROM findings WHERE id=?", (finding_id,)))
+    return rows[0] if rows else None
+
+
+def list_findings(conn, status=None, limit=100):
+    """Findings, most recent first, optionally filtered by status."""
+    if status:
+        return _rows(
+            conn.execute(
+                "SELECT * FROM findings WHERE status=? "
+                "ORDER BY created_at DESC LIMIT ?",
+                (status, limit),
+            )
+        )
+    return _rows(
+        conn.execute(
+            "SELECT * FROM findings ORDER BY created_at DESC LIMIT ?", (limit,)
+        )
+    )
 
 
 TREND_COLUMNS = (

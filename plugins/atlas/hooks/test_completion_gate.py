@@ -93,6 +93,22 @@ class GateOrchestrationTest(unittest.TestCase):
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertIn('"decision": "block"', r.stdout)
 
+    def _log_run_write(self, path):
+        """Simulate this run's own activity writing `path` -- what
+        dispatch_tripwire (main-thread) or session_ingest (dispatched
+        subagents) would have recorded in atlas_db for a real run. (f)/(g)
+        are now scoped to this signal instead of the whole working tree."""
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db
+
+        c = atlas_db.connect(self.env["ATLAS_DB"])
+        rid = atlas_db.current_run_id(c, "sess-orch") or atlas_db.latest_run_id(
+            c, "sess-orch"
+        )
+        atlas_db.log_event(c, rid, "Write", "main", 1, path)
+        c.commit()
+        c.close()
+
     def test_legacy_atlas_docs_only_does_not_engage_gate(self):
         """A repo with only a legacy .atlas/docs/ but no root docs/ -> gate is
         a no-op, even for an orchestrating session. The SSOT is docs/ only;
@@ -139,52 +155,30 @@ class GateOrchestrationTest(unittest.TestCase):
         self.assertIn("README.md at the project root is missing", r.stdout)
 
     def test_docs_drift_blocks_with_condition_f(self):
+        """(b) (f) DOES fire when the run itself wrote non-docs files (via the
+        atlas_db run-write signal, not a git diff) and no docs/ file changed."""
         self._satisfy_all_conditions()
-        subprocess.run(["git", "init", "-q", self.tmp], check=True, capture_output=True)
-        genv = dict(
-            os.environ,
-            GIT_AUTHOR_NAME="t",
-            GIT_AUTHOR_EMAIL="t@t",
-            GIT_COMMITTER_NAME="t",
-            GIT_COMMITTER_EMAIL="t@t",
-        )
-        subprocess.run(
-            ["git", "-C", self.tmp, "add", "-A"], check=True, capture_output=True
-        )
-        subprocess.run(
-            ["git", "-C", self.tmp, "commit", "-qm", "base"],
-            check=True,
-            capture_output=True,
-            env=genv,
-        )
-        # change code only -> drift
-        with open(os.path.join(self.tmp, "app.py"), "w") as f:
+        app_py = os.path.join(self.tmp, "app.py")
+        with open(app_py, "w") as f:
             f.write("print('x')\n")
-        subprocess.run(
-            ["git", "-C", self.tmp, "add", "app.py"], check=True, capture_output=True
-        )
+        self._log_run_write(app_py)  # this run wrote non-docs code, no docs touched
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertIn('"decision": "block"', r.stdout)
         self.assertIn("Docs drift", r.stdout)
-        # touching a docs file clears the drift block
-        with open(os.path.join(self.tmp, "docs", "CHANGELOG.md"), "a") as f:
+        # this run ALSO touching a docs file clears the drift block
+        docs_md = os.path.join(self.tmp, "docs", "CHANGELOG.md")
+        with open(docs_md, "a") as f:
             f.write("- change\n")
+        self._log_run_write(docs_md)
         r2 = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertNotIn('"decision": "block"', r2.stdout)
 
-    def test_git_error_does_not_silently_pass_drift_and_g(self):
-        """Git unavailable at gate time (PATH scrubbed so the git binary cannot
-        be found) must NOT silently pass conditions (f) and (g). With a git repo
-        that has code changed, the gate must BLOCK with a reason naming the git
-        failure rather than letting unverified code ship."""
+    def test_dirty_tree_from_other_run_does_not_block_condition_f(self):
+        """(a) (f) does NOT fire when the tree is dirty from files THIS run did
+        not write -- the exact false-positive this fix targets: a prior
+        session's leftover uncommitted files must never block a run that
+        touched nothing itself."""
         self._satisfy_all_conditions()
-        genv = dict(
-            os.environ,
-            GIT_AUTHOR_NAME="t",
-            GIT_AUTHOR_EMAIL="t@t",
-            GIT_COMMITTER_NAME="t",
-            GIT_COMMITTER_EMAIL="t@t",
-        )
         subprocess.run(["git", "init", "-q", self.tmp], check=True, capture_output=True)
         subprocess.run(
             ["git", "-C", self.tmp, "add", "-A"], check=True, capture_output=True
@@ -193,53 +187,46 @@ class GateOrchestrationTest(unittest.TestCase):
             ["git", "-C", self.tmp, "commit", "-qm", "base"],
             check=True,
             capture_output=True,
-            env=genv,
+            env=dict(
+                os.environ,
+                GIT_AUTHOR_NAME="t",
+                GIT_AUTHOR_EMAIL="t@t",
+                GIT_COMMITTER_NAME="t",
+                GIT_COMMITTER_EMAIL="t@t",
+            ),
         )
-        # Stage a non-docs code change in the repo.
-        with open(os.path.join(self.tmp, "app.py"), "w") as f:
-            f.write("print('x')\n")
-        subprocess.run(
-            ["git", "-C", self.tmp, "add", "app.py"], check=True, capture_output=True
-        )
-        # Run the gate with git unreachable: PATH holds no git binary, so
-        # subprocess.check_output(["git", ...]) raises FileNotFoundError. The
-        # gate must fail-closed and block, naming the git failure.
-        scrubbed_env = dict(self.env)
-        scrubbed_env["PATH"] = ""
-        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, scrubbed_env)
-        self.assertIn('"decision": "block"', r.stdout)
-        self.assertIn("git", r.stdout.lower())
+        # A stale, non-docs, uncommitted change left dirty by some other run --
+        # NOT logged via _log_run_write, so atlas_db has no record that THIS
+        # run touched it.
+        with open(os.path.join(self.tmp, "stale_from_prior_session.py"), "w") as f:
+            f.write("print('leftover')\n")
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertNotIn('"decision": "block"', r.stdout)
+
+    def test_zero_writes_warns_not_blocks_condition_f(self):
+        """(c) (f) warns rather than blocks when the run wrote zero non-docs
+        files -- there is nothing for (f)/(g) to check, so the gate says so
+        instead of either blocking or passing silently."""
+        self._satisfy_all_conditions()
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertNotIn('"decision": "block"', r.stdout)
+        self.assertIn("wrote zero non-docs files", r.stdout)
 
     def _commit_and_make_mixed_diff(self):
-        """Satisfy (a)-(f): commit a baseline, then stage a non-docs code change
-        AND touch a docs file so drift is cleared but code did change this run."""
+        """Satisfy (a)-(f): a non-docs code change AND a docs touch, both
+        recorded as THIS run's own writes via the atlas_db signal, so drift
+        is cleared (f passes) but code did change this run (g is live)."""
         self._satisfy_all_conditions()
-        genv = dict(
-            os.environ,
-            GIT_AUTHOR_NAME="t",
-            GIT_AUTHOR_EMAIL="t@t",
-            GIT_COMMITTER_NAME="t",
-            GIT_COMMITTER_EMAIL="t@t",
-        )
-        subprocess.run(["git", "init", "-q", self.tmp], check=True, capture_output=True)
-        subprocess.run(
-            ["git", "-C", self.tmp, "add", "-A"], check=True, capture_output=True
-        )
-        subprocess.run(
-            ["git", "-C", self.tmp, "commit", "-qm", "base"],
-            check=True,
-            capture_output=True,
-            env=genv,
-        )
-        # non-docs code change (staged) -> code_changed True
-        with open(os.path.join(self.tmp, "app.py"), "w") as f:
+        # non-docs code change -> code_changed True
+        app_py = os.path.join(self.tmp, "app.py")
+        with open(app_py, "w") as f:
             f.write("print('x')\n")
-        subprocess.run(
-            ["git", "-C", self.tmp, "add", "app.py"], check=True, capture_output=True
-        )
+        self._log_run_write(app_py)
         # docs change -> drift cleared, so (f) passes and only (g) can block
-        with open(os.path.join(self.tmp, "docs", "CHANGELOG.md"), "a") as f:
+        docs_md = os.path.join(self.tmp, "docs", "CHANGELOG.md")
+        with open(docs_md, "a") as f:
             f.write("- change\n")
+        self._log_run_write(docs_md)
 
     def _log_dispatches(self, implementers, verifiers):
         """Record implementer/verifier dispatches on the orch session's run."""
@@ -306,6 +293,17 @@ class GateOrchestrationTest(unittest.TestCase):
         """0 implementers -> unpaired count 0 -> no (g) block."""
         self._commit_and_make_mixed_diff()
         self._log_dispatches(implementers=0, verifiers=0)
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertEqual(r.returncode, 0)
+        self.assertNotIn('"decision": "block"', r.stdout)
+
+    def test_implementer_dispatch_with_no_diff_does_not_block_condition_g(self):
+        """(d) (g) does NOT fire for an implementer dispatch that produced no
+        diff: dispatched but still running (or shipped nothing) means
+        run_written_paths is empty, so code_changed is False and (g) is
+        never evaluated -- it must not be conflated with 'unverified'."""
+        self._satisfy_all_conditions()  # (a)-(e)/(h) satisfied, no writes logged
+        self._log_dispatches(implementers=1, verifiers=0)
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertEqual(r.returncode, 0)
         self.assertNotIn('"decision": "block"', r.stdout)
@@ -478,17 +476,34 @@ class InProcessMainTest(unittest.TestCase):
             env=_git_env(),
         )
 
+    def _log_run_write(self, path):
+        """Simulate this run's own activity writing `path` (what
+        dispatch_tripwire/session_ingest would have recorded for a real run).
+        (f)/(g) are scoped to this signal, not the whole working tree."""
+        c = atlas_db.connect(self.db_path)
+        rid = atlas_db.current_run_id(c, "sess-orch") or atlas_db.latest_run_id(
+            c, "sess-orch"
+        )
+        atlas_db.log_event(c, rid, "Write", "main", 1, path)
+        c.commit()
+        c.close()
+
     def _stage_code_change(self):
-        with open(os.path.join(self.tmp, "app.py"), "w") as f:
+        """Write app.py to disk AND record it as this run's own write."""
+        app_py = os.path.join(self.tmp, "app.py")
+        with open(app_py, "w") as f:
             f.write("print('x')\n")
         subprocess.run(
             ["git", "-C", self.tmp, "add", "app.py"], check=True, capture_output=True
         )
+        self._log_run_write(app_py)
 
     def _stage_mixed_diff(self):
         self._stage_code_change()
-        with open(os.path.join(self.tmp, "docs", "CHANGELOG.md"), "a") as f:
+        docs_md = os.path.join(self.tmp, "docs", "CHANGELOG.md")
+        with open(docs_md, "a") as f:
             f.write("- change\n")
+        self._log_run_write(docs_md)
 
     def _log_dispatches(self, implementers, verifiers):
         c = atlas_db.connect(self.db_path)
@@ -566,8 +581,8 @@ class InProcessMainTest(unittest.TestCase):
 
     def test_all_conditions_pass_without_git_repo(self):
         self._satisfy_all()
-        # No git repo -> _git_changed_paths returns [] -> drift=False,
-        # code_changed=False -> unpaired skipped -> all pass.
+        # No git repo and no run-write logged -> run_written_paths returns [],
+        # code_changed=False -> drift/unpaired skipped -> all pass (warns).
         rc, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertEqual(rc, 0)
         self.assertNotIn('"decision": "block"', out)
@@ -653,18 +668,33 @@ class InProcessMainTest(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertNotIn('"decision": "block"', out)
 
-    def test_git_error_fail_closed(self):
-        """M2: PATH scrubbed so git raises FileNotFoundError -> gate fails
-        closed and blocks naming the git failure rather than silently passing
-        drift / Law 5."""
+    def test_db_read_error_fails_open_to_warn_not_block(self):
+        """(f)/(g) are scoped to the atlas_db run-write signal, not git -- git
+        being unreachable is irrelevant to them now. What DOES matter is
+        atlas_db's run-write query itself failing: that must fail open
+        (run_written_paths -> [], same as 'wrote nothing') and warn rather
+        than block, matching every other fail-open condition in this gate.
+        `is_orchestrating`/`connect` must keep working (a real run exists and
+        the gate must still evaluate it) -- only `run_changed_paths` errors,
+        simulating a read failure isolated to that one query."""
         self._satisfy_all()
         self._init_git_repo()
-        self._stage_code_change()
-        _, out = self._invoke(
-            {"session_id": "sess-orch", "cwd": self.tmp}, scrub_path=True
-        )
-        self.assertIn('"decision": "block"', out)
-        self.assertIn("git", out.lower())
+        with mock.patch.object(
+            atlas_db, "run_changed_paths", side_effect=Exception("db read error")
+        ):
+            _, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
+        self.assertNotIn('"decision": "block"', out)
+        self.assertIn("wrote zero non-docs files", out)
+
+    def test_implementer_dispatch_with_no_diff_does_not_block_condition_g(self):
+        """(d) (g) does NOT fire for an implementer dispatch that produced no
+        diff: dispatched but nothing written this run -> code_changed False
+        -> (g) is never evaluated."""
+        self._satisfy_all()
+        self._log_dispatches(implementers=1, verifiers=0)
+        rc, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
+        self.assertEqual(rc, 0)
+        self.assertNotIn('"decision": "block"', out)
 
     def test_outer_catch_all_failopens_on_unexpected_crash(self):
         """GAP-3: an unexpected crash in the gate logic (e.g. _reason raising)

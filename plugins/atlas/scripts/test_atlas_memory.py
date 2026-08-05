@@ -79,17 +79,89 @@ class TestAtlasMemory(unittest.TestCase):
         mem_entries = atlas_memory.get_entries("memory")
         self.assertEqual(len(mem_entries), 0)
 
-    def test_char_limit(self):
-        # Add entries until we hit the limit
-        result = None
-        for i in range(100):
+    def test_char_limit_under_cap_unchanged(self):
+        """(a) writing under cap works unchanged -- no regression."""
+        result = atlas_memory.add("memory", "A short, ordinary fact")
+        self.assertTrue(result["success"])
+        self.assertNotIn("Rotated", result["message"])
+        entries = atlas_memory.get_entries("memory")
+        self.assertEqual(len(entries), 1)
+
+    def test_at_cap_rotates_instead_of_failing(self):
+        """(b) writing AT/OVER cap rotates instead of failing -- the lesson is
+        stored, not dropped."""
+        # Fill past the cap with distinct entries (dedupe would collapse
+        # identical ones), each large enough that a handful crosses 20,000 chars.
+        for i in range(60):
             result = atlas_memory.add("memory", f"Fact number {i} " * 20)
-            if not result["success"]:
-                break
-        # The last one should have failed
-        assert result is not None  # range(100) always runs at least once
+            self.assertTrue(result["success"], result)
+
+        # The most recent add must have succeeded (never rejected)...
+        self.assertTrue(result["success"])
+        # ...and by now the cap must have been exceeded at least once, so at
+        # least one add() reported a rotation rather than a plain append.
+        rotated_any = False
+        for i in range(60, 120):
+            result = atlas_memory.add("memory", f"Fact number {i} " * 20)
+            self.assertTrue(result["success"], result)
+            if "Rotated" in result["message"]:
+                rotated_any = True
+        self.assertTrue(rotated_any, "expected at least one add() to rotate")
+
+        # The live file must stay within the working cap.
+        entries = atlas_memory.get_entries("memory")
+        total = len(atlas_memory.ENTRY_DELIMITER.join(entries))
+        self.assertLessEqual(total, atlas_memory.WORKING_CAP_CHARS)
+        # And the newest fact is still present, i.e. NOT dropped.
+        self.assertTrue(any("Fact number 119" in e for e in entries))
+
+    def test_rotation_preserves_prior_content_in_archive(self):
+        """(c) rotation preserves 100% of prior content in the archive --
+        assert content, not just file existence."""
+        added = []
+        for i in range(80):
+            content = f"Distinct rotation fact {i} " * 15
+            result = atlas_memory.add("memory", content)
+            self.assertTrue(result["success"], result)
+            added.append(content.strip())
+
+        live_entries = set(atlas_memory.get_entries("memory"))
+        archive_path = atlas_memory._archive_path("memory")
+        self.assertTrue(archive_path.is_file())
+        archived_entries = set(atlas_memory._read_file(archive_path))
+
+        # Every fact ever added is accounted for -- either still live or
+        # rotated into the archive. None may be missing from both.
+        for content in added:
+            self.assertTrue(
+                content in live_entries or content in archived_entries,
+                f"fact lost entirely, in neither live file nor archive: {content[:60]!r}",
+            )
+        # The archive is non-trivial (something was actually rotated out).
+        self.assertGreater(len(archived_entries), 0)
+
+    def test_genuine_drop_when_single_entry_exceeds_cap(self):
+        """(d) a genuine drop is still possible: a single entry larger than the
+        whole working cap cannot be stored even after rotating everything else
+        out, and that failure must be reported, not silent."""
+        huge = "x" * (atlas_memory.WORKING_CAP_CHARS + 1000)
+        result = atlas_memory.add("memory", huge)
         self.assertFalse(result["success"])
-        self.assertIn("exceed", result["error"])
+        self.assertIn("exceeding", result["error"])
+        # Nothing was rotated away over this -- current entries preserved.
+        self.assertEqual(atlas_memory.get_entries("memory"), [])
+
+    def test_dedupe_prevents_repeat_entries_consuming_budget(self):
+        """(e) dedupe prevents identical repeated lessons from consuming the
+        rotation/archive budget."""
+        for _ in range(10):
+            result = atlas_memory.add("memory", "The exact same lesson every time")
+        self.assertTrue(result["success"])
+        self.assertIn("already exists", result["message"])
+        entries = atlas_memory.get_entries("memory")
+        self.assertEqual(len(entries), 1)
+        # Nothing was ever rotated -- one entry can never exceed the cap.
+        self.assertFalse(atlas_memory._archive_path("memory").exists())
 
     def test_load_snapshot(self):
         atlas_memory.add("memory", "Memory fact")
@@ -245,7 +317,9 @@ class TestAtlasMemory(unittest.TestCase):
 
     def test_replace_exceeds_limit(self):
         atlas_memory.add("memory", "short")
-        result = atlas_memory.replace("memory", "short", "x" * 5000)
+        # Sized against WORKING_CAP_CHARS (20_000): a single entry too large to
+        # rotate away must still be rejected, not silently dropped.
+        result = atlas_memory.replace("memory", "short", "x" * 25000)
         self.assertFalse(result["success"])
         self.assertIn("Shorten or remove", result["error"])
 
@@ -279,7 +353,9 @@ class TestAtlasMemory(unittest.TestCase):
         self.assertNotIn("doomed entry", entries)
 
     def test_batch_exceeds_budget(self):
-        ops = [{"action": "add", "content": "x" * 5000}]
+        # Sized against WORKING_CAP_CHARS (20_000), same reasoning as
+        # test_replace_exceeds_limit.
+        ops = [{"action": "add", "content": "x" * 25000}]
         result = atlas_memory.apply_batch("memory", ops)
         self.assertFalse(result["success"])
         self.assertIn("Remove entries to make room", result["error"])
@@ -323,8 +399,10 @@ class TestAtlasMemory(unittest.TestCase):
 
     def test_cli_unknown_command(self):
         errbuf = io.StringIO()
-        with mock.patch.object(sys, "argv", ["atlas_memory.py", "bogus"]), \
-                redirect_stderr(errbuf):
+        with (
+            mock.patch.object(sys, "argv", ["atlas_memory.py", "bogus"]),
+            redirect_stderr(errbuf),
+        ):
             with self.assertRaises(SystemExit) as cm:
                 atlas_memory._cli()
         self.assertEqual(cm.exception.code, 2)

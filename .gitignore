@@ -212,6 +212,8 @@ firebase-adminsdk*.json
 !docs/specs/**
 !docs/audits/
 !docs/audits/**
+!docs/decisions/
+!docs/decisions/**
 !docs/lessons/
 !docs/lessons/**
 !docs/wiki/
@@ -389,9 +391,12 @@ plugins/atlas/**/.claude/.atlas_nudge
 # Pre-commit verification checklist:
 #   1. git status                                 # nothing unexpected staged?
 #   2. git check-ignore -v .env                   # confirm secrets are ignored
-#   3. git ls-files | grep -E '\.(env|key|pem)$'  # confirm no secrets tracked
+#   3. confirm no secret-shaped file is tracked (matches the terminal
+#      re-exclusion block at the end of this file, not just env/key/pem):
+#      git ls-files | grep -iE '\.(env|key|pem|p12|pfx|pkcs12|crt|cer|der|asc|gpg|jks|keystore|ppk|p8|kdbx|ovpn|jwt|token|tfstate|sql|dump|bak)$|(^|/)(id_[a-z]+|authorized_keys|known_hosts|secrets\.(json|ya?ml)|credentials\.(json|ya?ml)|\.netrc|\.npmrc|\.pypirc|\.pgpass|\.boto|\.s3cfg|\.htpasswd|\.git-credentials)$'
+#      Expected: nothing, except the one documented .sql carve-out.
 #   4. git diff --cached                          # review staged content
-# If ANY secret-like file appears in steps 1, 3, or 4 — STOP and investigate.
+# If ANY secret-like file appears in steps 1, 3, or 4, STOP and investigate.
 # ============================================================================
 
 # Built MCPB bundles in mcp_servers/ are NOT tracked (rebuilt locally / shipped via Releases).
@@ -409,3 +414,100 @@ plugins/atlas/**/.claude/.atlas_nudge
 !plugins/*/mcp/*.mcpb
 .orchestrator/
 .fallow/
+
+# =====================================================================
+# GLOBAL SECRET RE-EXCLUSION -- MUST BE THE LAST RULES IN THIS FILE
+# =====================================================================
+# Why this exists: the secret patterns in Section 3 (lines ~66-120) are
+# negated by every later `!docs/<subdir>/**`, `!.atlas/<subdir>/**` and
+# `!plugins/**` allowlist rule, because last matching rule wins. Before this
+# block, `git check-ignore` proved these were all TRACKABLE:
+#   docs/decisions/id_rsa   docs/audits/secret.key   docs/specs/id_rsa
+#   docs/decisions/foo.pem  docs/decisions/credentials.json
+# Only .env was safe, via its own post-allowlist **/.env rule.
+#
+# This mirrors Section 3's full vocabulary, plus shapes an adversarial audit
+# found still open. NOTHING may be added below this block: any `!` rule placed
+# after it wins and silently reopens the hole for that subtree.
+#
+# Deliberately NOT included, and why:
+#   **/config.json -- too broad; it would block legitimate application config
+#     throughout the tree. Review config.json files by hand for credentials.
+#   **/*.sql -- .sql is a SOURCE type in this repo, not just a dump format
+#     (plugins/atlas/skills/atlas-db-audit/scripts/read-only-catalog-queries.sql
+#     is tracked). Blocking it here would silently ignore new query scripts.
+#     Section 3's root-level *.sql still catches dumps outside allowlisted dirs.
+
+# Keys and certs (mirrors Section 3)
+**/*.key
+**/*.pem
+**/*.p12
+**/*.pfx
+**/*.pkcs12
+**/*.crt
+**/*.cer
+**/*.der
+**/*.asc
+**/*.gpg
+**/*.jks
+**/*.keystore
+**/*.ppk
+**/*.p8
+
+# SSH material
+**/id_rsa
+**/id_dsa
+**/id_ecdsa
+**/id_ed25519
+**/*_rsa
+**/*_dsa
+**/*_ecdsa
+**/*_ed25519
+**/authorized_keys
+**/known_hosts
+
+# Generic secret markers (mirrors Section 3)
+**/*.secret
+**/*.secrets
+**/secrets.json
+**/secrets.yaml
+**/secrets.yml
+**/credentials.json
+**/credentials.yaml
+**/credentials.yml
+**/secrets/
+
+# Cloud / provider credentials (mirrors Section 3)
+**/gcloud-key.json
+**/service-account*.json
+**/*serviceaccount*.json
+**/firebase-adminsdk*.json
+
+# Tokens, sessions, password stores
+**/.netrc
+**/.npmrc
+**/.pypirc
+**/.terraformrc
+**/.pgpass
+**/.boto
+**/.s3cfg
+**/.htpasswd
+**/.git-credentials
+**/*.kdbx
+**/*.ovpn
+**/*.jwt
+**/*.token
+**/*.tfstate
+**/*.tfstate.*
+
+# Dump / backup leaks (mirrors Section 3)
+# *.sql is blanket-blocked: a DB dump in an allowlisted folder is the exact leak
+# this block exists to stop (db_dump.sql, prod_backup.sql, customers_dump.sql
+# were all trackable while this pattern was omitted). The repo does track one
+# legitimate .sql source file, so it gets a single named negation right here --
+# inside the terminal block, never below it. Add further carve-outs the same way:
+# named path, immediately after the pattern it excepts.
+**/*.sql
+!plugins/atlas/skills/atlas-db-audit/scripts/read-only-catalog-queries.sql
+**/*.dump
+**/*.bak

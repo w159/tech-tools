@@ -19,9 +19,12 @@ Seven conditions must ALL hold before the gate passes (else block ONCE):
   (c) `docs/CHANGELOG.md` exists and is non-empty (docs-current backstop).
   (d) `docs/ROADMAP.md` exists and is non-empty.
   (e) `README.md` at the project root exists and is non-empty.
-  (f) No docs drift: if non-docs files changed this run (git diff HEAD +
-      staged), at least one docs/ file changed too -- this is the deterministic
-      trigger that forces an atlas:docs-curator dispatch before "done".
+  (f) No docs drift: if THIS RUN's own activity (atlas_db events + tool_calls,
+      not the whole working tree) wrote non-docs files, at least one docs/
+      file changed too -- this is the deterministic trigger that forces an
+      atlas:docs-curator dispatch before "done". If this run wrote zero
+      non-docs files, (f) WARNS instead of blocking -- a dirty tree left by an
+      earlier session is not this run's problem to fix.
   (g) Law 5 -- verifier coverage: if non-docs code changed this run and there
       are more implementer dispatches than verifier dispatches for the run
       (atlas_db.unpaired_implementer_dispatches > 0), block -- shipping work
@@ -337,26 +340,21 @@ def main() -> int:
         ok_d = _check_roadmap(root)
         ok_e = _check_readme(root)
         ok_h = _check_roadmap_reconciled(root)
-        # (f) Docs drift BLOCKS: code moved but docs/ did not. This is the
-        # deterministic trigger that forces an atlas:docs-curator dispatch.
-        # Fail-open: any git error yields an empty path list -> no drift.
-        drift = False
-        code_changed = False
-        git_error = ""
-        try:
-            changed = _git_changed_paths(root)
-            drift = _docs_drift(changed)
-            code_changed = _nondocs_changed(changed)
-        except Exception as exc:
-            # Fail-closed for the drift/verifier conditions: if git is
-            # genuinely unavailable we cannot verify docs moved with the code
-            # or that non-docs code changed -- block rather than silently pass
-            # and let unverified code ship.
-            git_error = str(exc) or "git subprocess failed"
-        # (g) Law 5 -- verifier coverage. Only when non-docs code changed this
-        # run: block if implementer dispatches outnumber verifier dispatches.
-        # Fail-open: the helper returns 0 on any atlas_db import/DB error, so
-        # condition (g) silently passes and never crashes the session.
+        # (f) Docs drift BLOCKS: THIS RUN's own writes moved code but docs/ did
+        # not. Scoped to run_written_paths (atlas_db events + tool_calls), not
+        # the whole working tree -- a dirty tree left by an earlier session
+        # must never block a run that touched nothing. Fail-open: any DB
+        # error yields an empty path list -> treated the same as "wrote
+        # nothing", never a false block.
+        run_paths = _run_written_paths(data.get("session_id", ""))
+        code_changed = _nondocs_changed(run_paths)
+        drift = _docs_drift(run_paths) if code_changed else False
+        # (g) Law 5 -- verifier coverage. Only when THIS RUN's own writes
+        # touched non-docs code: block if implementer dispatches outnumber
+        # verifier dispatches. An implementer still in flight, or one that
+        # shipped no diff, contributes nothing to run_paths, so it cannot
+        # trip this. Fail-open: the helper returns 0 on any atlas_db
+        # import/DB error, so condition (g) silently passes.
         unverified = (
             _unpaired_implementer_dispatches(data.get("session_id", ""))
             if code_changed
@@ -371,8 +369,26 @@ def main() -> int:
             and ok_h
             and not drift
             and unverified == 0
-            and not git_error
         ):
+            if not code_changed:
+                # This run wrote zero non-docs files -- (f)/(g) had nothing to
+                # check. WARN so that's observable instead of silently
+                # indistinguishable from "checked and clean", but never block
+                # a run over a dirty tree it did not create.
+                print(
+                    json.dumps(
+                        {
+                            "hookSpecificOutput": {
+                                "hookEventName": "Stop",
+                                "additionalContext": (
+                                    "[atlas] completion_gate: this run wrote zero "
+                                    "non-docs files, so conditions (f) docs-drift and "
+                                    "(g) verifier coverage were not evaluated this Stop."
+                                ),
+                            }
+                        }
+                    )
+                )
             return 0
         block_reason = _reason(
             not ok_a,
@@ -382,7 +398,7 @@ def main() -> int:
             not ok_e,
             drift,
             unverified,
-            git_error,
+            "",
             not ok_h,
         )
         print(json.dumps({"decision": "block", "reason": block_reason}))
@@ -424,6 +440,30 @@ def _session_is_orchestrating(session_id: str) -> bool:
         return atlas_db.is_orchestrating(conn, session_id)
     except Exception:
         return False
+    finally:
+        if conn is not None:
+            conn.close()
+
+
+def _run_written_paths(session_id: str) -> list:
+    """(f)/(g) shared signal: file paths THIS RUN's own activity wrote, via
+    atlas_db.run_changed_paths for the current-or-latest run. Fail-open to []:
+    any atlas_db import or DB error means "nothing changed" rather than a
+    false block -- same fail-open contract as _unpaired_implementer_dispatches."""
+    conn = None
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db
+
+        conn = atlas_db.connect()
+        rid = atlas_db.current_run_id(conn, session_id) or atlas_db.latest_run_id(
+            conn, session_id
+        )
+        if rid is None:
+            return []
+        return atlas_db.run_changed_paths(conn, rid)
+    except Exception:
+        return []
     finally:
         if conn is not None:
             conn.close()
