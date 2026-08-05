@@ -42,7 +42,10 @@ Key facts:
 ## Repo feature boundaries
 
 - **Root `/skills/` (12 standalone tools):** az-cost-optimize, azure-deployment-preflight, cloud-design-patterns, codebase-brain, database-optimization, entra-agent-user, graphify, msgraph-sdk, msoffice-docs, scrapling-official, security-audit, webapp-testing. All target external domains (Azure, MS APIs, security, web).
-- **`/plugins/atlas/` (the plugin):** 21 atlas-* skills + 12 agents + 11 hooks + scripts. Atlas-specific operations (audit, debug, orchestrate).
+- **`/plugins/atlas/` (the plugin):** 21 atlas-* skills + 12 agents + 12 hooks + scripts. Atlas-specific operations (audit, debug, orchestrate).
+  <!-- 2026-08-05: hooks 11 -> 12 with the addition of chronicle_facet.py
+       (Stop-chain facet capture). Count is the 11 scripts wired in
+       hooks/hooks.json plus atlas_doctor.py --hook on SessionStart. -->
 - **`/plugins/armada/` (org config layer):** 11 department agents carrying org branding/compliance context + the armada routing skill.
 - **`/plugins/programmer/` (independent developer-tools plugin, added 2026-07-21):** 2 skills (tpp-audit, tpp-principles) + 1 agent (tpp-auditor) + 1 UserPromptSubmit hook. Pragmatic Programmer codebase auditor with an 89-concept glossary; not part of the atlas orchestration engine.
 - **`/plugins/_standards/`, `/plugins/_templates/`:** scaffolding docs and skill/command/agent/plugin templates.
