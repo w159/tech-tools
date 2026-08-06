@@ -291,5 +291,59 @@ class DocsMatchCodeContract(unittest.TestCase):
         self.assertNotIn("auto_skill.py", readme, "README documents a deleted hook")
 
 
+class InstalledParityContract(unittest.TestCase):
+    """The repo is not what runs. The installed plugin cache is.
+
+    A whole session was spent verifying hook fixes against the working tree
+    while the live system executed an older cached copy: auto_skill.py still
+    wired, nudge.py still bound to SubagentStop, docs_drift_watch.py absent.
+    Every test above passed the entire time. This asserts the two trees agree
+    so that gap is visible instead of silent.
+
+    Skips when no install is present (CI, fresh clone) rather than failing.
+    """
+
+    def _installed_root(self):
+        version = json.loads(
+            (PLUGIN_ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8")
+        )["version"]
+        cache = Path.home() / ".claude/plugins/cache/tech-tools/atlas" / version
+        return cache if (cache / "hooks" / "hooks.json").is_file() else None
+
+    def test_installed_version_matches_manifest(self):
+        root = self._installed_root()
+        if root is None:
+            self.skipTest("atlas not installed at the manifest version")
+        self.assertTrue(root.is_dir())
+
+    def test_installed_hook_bindings_match_repo(self):
+        root = self._installed_root()
+        if root is None:
+            self.skipTest("atlas not installed at the manifest version")
+        installed = json.loads(
+            (root / "hooks" / "hooks.json").read_text(encoding="utf-8")
+        )["hooks"]
+        self.assertEqual(
+            installed,
+            _hooks_config(),
+            "installed hook wiring differs from the repo: reinstall the plugin",
+        )
+
+    def test_installed_hook_files_match_repo(self):
+        root = self._installed_root()
+        if root is None:
+            self.skipTest("atlas not installed at the manifest version")
+        drift = []
+        for path in sorted(HOOKS_DIR.glob("*.py")):
+            if path.name.startswith("test_"):
+                continue
+            mirror = root / "hooks" / path.name
+            if not mirror.is_file():
+                drift.append("%s missing from install" % path.name)
+            elif mirror.read_bytes() != path.read_bytes():
+                drift.append("%s differs from install" % path.name)
+        self.assertEqual(drift, [], "reinstall the plugin: %s" % drift)
+
+
 if __name__ == "__main__":
     unittest.main()
