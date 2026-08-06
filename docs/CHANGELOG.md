@@ -4,6 +4,26 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
+## 2026-08-06 -- armada 1.1.0: setup you can actually run, branding first
+
+Released as armada 1.1.0 (`plugins/armada/.claude-plugin/plugin.json:3`, `.kimi-plugin/plugin.json:3`), marketplace 3.5.0.
+
+**The defect.** Claude Code discovers only `plugins/<p>/skills/<name>/SKILL.md`, `plugins/<p>/commands/*.md` and `plugins/<p>/agents/`. armada had no `commands/` directory at all and exactly one skill directory, so its 123 department commands and 156 department skills -- all nested under `skills/armada/departments/` -- were invisible. The single visible skill opened with an `## Elicitation` section instructing it to ask an `AskUserQuestion` (org setup / department onboarding / brand enforcement / connector provisioning) before doing anything, and there was no skill to route any of those answers to. `/armada` therefore asked a question, had nowhere to send the answer, and burned the turn.
+
+**The fix: three setup skills promoted to the discoverable level, in run order.** `armada-brand` (step 1) detects org name, logo, colors, voice and commit style from `package.json`, `README.md`, theme files and `git log`, asks at most one question covering only what it could not detect, and writes the `org:` and `branding:` blocks of `.atlas/org-config.yaml`, merging rather than truncating. `armada-department` (step 2) refuses to run before branding exists, resolves a department name (with aliases), reads the real `skills/` and `commands/` listings out of the plugin tree, and writes `.atlas/departments/<dept>.yaml` from the existing seed template; with no argument it prints the 11-department table with live state and stops. `armada-connect` (step 3) reports which vendor connectors are live in-session versus missing credentials, and names the exact `userConfig` keys -- credentials stay on the atlas plugin and are never accepted in chat.
+
+**Departments activate by config, not by copying.** Department skills and commands stay in the plugin tree as the department agent's reference library; the yaml is the activation record. One copy of the content, so it cannot drift from the plugin, and nothing is written into the user's `.claude/`. The department files are not slash commands in a project, and the root skill and new README now say so instead of implying otherwise.
+
+**The root `armada` skill no longer elicits.** Its `## Elicitation` section is gone, `allowed-tools` is read-only (`Read, Glob, Grep, Bash`), and its job is a state scan that ends in exactly one recommended next command.
+
+**Contract test.** `plugins/armada/tests/test_armada_contract.py` (14 tests) locks the invariants that broke: the four setup skills resolve as `skills/<name>/SKILL.md`, dir names match frontmatter names, names are unique, the root skill contains no `AskUserQuestion` and declares no write tools, every `${CLAUDE_PLUGIN_ROOT}/...` path cited in any skill resolves to a real file (this caught a bad seed path during authoring), all 11 department dirs have their agent, and the two manifests agree on version while declaring no credentials.
+
+Evidence: `python3 plugins/armada/tests/test_armada_contract.py` -> **14 tests, OK**. Against the pre-change tree the same assertions fail: `git show HEAD:plugins/armada/skills/armada/SKILL.md | grep -c AskUserQuestion` -> `1`, `git ls-tree --name-only HEAD plugins/armada/skills/` -> `plugins/armada/skills/armada` (one skill), `git ls-tree HEAD plugins/armada/commands/` -> empty.
+
+Not addressed: the per-department `.mcp.json` files under `skills/armada/departments/*/` are equally undiscovered (only a plugin-root `.mcp.json` loads). Connectors work today because atlas declares them; armada's copies are dead files.
+
+---
+
 ## 2026-08-06 -- atlas 5.6.0: the carried gaps closed, and the gate's own blind spot with them
 
 Released as atlas 5.6.0 (`plugins/atlas/.claude-plugin/plugin.json:3`, `.kimi-plugin/plugin.json:3`). Every item below was a gap this repo had recorded and left open, either in ROADMAP or as an honest caveat inside an earlier CHANGELOG entry. Evidence: `.atlas/evidence/2026-08-06-atlas-5.6.0-gap-closure.md`.

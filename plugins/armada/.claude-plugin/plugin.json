@@ -1,7 +1,7 @@
 {
     "name": "armada",
-    "version": "1.0.0",
-    "description": "Organizational deployment layer split out of the atlas plugin: 11 department agents (data, design, engineering, finance, HR, IT ops, M365, product, productivity, security, support) and 156 department skills carrying org branding, policies, and compliance context. Install alongside atlas only for org use; single-project engineering work does not need it.",
+    "version": "1.1.0",
+    "description": "Organizational deployment layer split out of the atlas plugin. Four invocable setup skills run in order: armada (deployment status and router), armada-brand (org name, voice, colors, commit style - run first), armada-department (activate one of 11 departments and its agent), armada-connect (vendor MCP connectors). Behind them sit 11 department agents (data, design, engineering, finance, HR, IT ops, M365, product, productivity, security, support) and 156 department skills carrying org branding, policies, and compliance context. Install alongside atlas only for org use; single-project engineering work does not need it.",
     "author": {
         "name": "w159",
         "url": "https://github.com/w159"
