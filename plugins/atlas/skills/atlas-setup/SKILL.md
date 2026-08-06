@@ -165,10 +165,9 @@ When `docs/` does not exist:
 7. **Deploy self-improvement** - verify the atlas self-improvement system
    is deployed and functional:
    - `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_memory.py` exists and `~/.atlas/memory/` is writable
-   - `${CLAUDE_PLUGIN_ROOT}/scripts/skill_factory.py` exists and `~/.claude/skills/` is writable
    - `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_curator.py` exists
    - `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_context_optimizer.py` exists
-   - `hooks/memory_capture.py` and `hooks/auto_skill.py` are wired in hooks.json
+   - `hooks/memory_capture.py` and `hooks/chronicle_facet.py` are wired in hooks.json
    Run the context optimizer to disable unused skills/agents:
    `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_context_optimizer.py" optimize --dry-run`
    Present the savings estimate to the user and confirm before applying.
@@ -191,9 +190,10 @@ The "what should I run next" mode. The analysis checks, in priority order:
 
 1. **Setup gaps** - hooks wired? claude-mem installed? context-mode
    installed? If missing, run install mode.
-2. **Self-improvement deployed?** - atlas_memory, skill_factory,
-   atlas_curator, atlas_context_optimizer scripts present? Memory at
-   `~/.atlas/memory/` writable? Auto-skills at `~/.claude/skills/`?
+2. **Self-improvement deployed?** - atlas_memory, atlas_curator,
+   atlas_context_optimizer scripts present? Memory at `~/.atlas/memory/`
+   writable? (Atlas never creates skills: lessons go to memory, findings,
+   and docs.)
    Run `atlas_context_optimizer.py status` and if >15 skills are enabled,
    recommend running the optimizer.
 3. **Security audit overdue** - has atlas-audit ever run? Is it stale?

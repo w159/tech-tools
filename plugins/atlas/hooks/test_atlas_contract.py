@@ -64,14 +64,22 @@ def _script_paths() -> list:
     return paths
 
 
-def _run_hook(script: str, payload, cwd=None):
-    """Invoke a hook exactly as Claude Code does: JSON on stdin, read stdout."""
+def _run_hook(script: str, payload, cwd=None, db=None):
+    """Invoke a hook exactly as Claude Code does: JSON on stdin, read stdout.
+
+    `db` points ATLAS_DB at a throwaway sqlite file so a test never reads or
+    writes the developer's real ~/.atlas/atlas.db.
+    """
+    env = dict(os.environ)
+    if db is not None:
+        env["ATLAS_DB"] = str(db)
     return subprocess.run(
         [sys.executable, str(HOOKS_DIR / script)],
         input=payload if isinstance(payload, str) else json.dumps(payload),
         capture_output=True,
         text=True,
         cwd=cwd,
+        env=env,
     )
 
 
@@ -93,6 +101,28 @@ def _mkrepo(with_docs=True):
         env=GIT_ENV,
     )
     return tmp
+
+
+def _mkorchestrating_repo(session_id, with_telemetry):
+    """A throwaway repo plus its own atlas.db, with this session flagged
+    orchestrating -- the only state in which the gate evaluates anything.
+
+    with_telemetry=True logs one non-write tool call, so the run's "wrote no
+    files" is real data. False leaves the run with nothing logged at all, which
+    is the telemetry-never-landed case the git fallback exists for.
+    """
+    repo = _mkrepo()
+    db = os.path.join(repo, "atlas.db")
+    sys.path.insert(0, str(PLUGIN_ROOT / "scripts"))
+    import atlas_db
+
+    conn = atlas_db.connect(db)
+    atlas_db.init(conn)
+    rid = atlas_db.mark_orchestrating(conn, session_id, cwd=repo)
+    if with_telemetry:
+        atlas_db.log_event(conn, rid, "Read", "main", 0, path="app.py")
+    conn.close()
+    return repo, db
 
 
 class WiringContract(unittest.TestCase):
@@ -119,6 +149,33 @@ class WiringContract(unittest.TestCase):
                 "skill_factory", body, "%s calls the skill factory" % path.name
             )
         self.assertNotIn("auto_skill", json.dumps(_hooks_config()))
+
+    def test_no_script_writes_a_skill_either(self):
+        """The rule covers scripts, not just hooks.
+
+        auto_skill.py was unwired in 5.5.0 but scripts/skill_factory.py -- the
+        thing that actually wrote the SKILL.md files -- survived, callable by
+        anything. Deleted in 5.6.0; this keeps it deleted.
+        """
+        self.assertFalse(
+            (PLUGIN_ROOT / "scripts" / "skill_factory.py").exists(),
+            "the skill factory is back",
+        )
+        # Reading SKILL.md is fine (the asset auditor inventories them). Writing
+        # one is the banned act, so look for a write on a SKILL.md line.
+        for path in (PLUGIN_ROOT / "scripts").glob("*.py"):
+            if path.name.startswith("test_"):
+                continue
+            for lineno, line in enumerate(
+                path.read_text(encoding="utf-8").splitlines(), 1
+            ):
+                if "SKILL.md" not in line:
+                    continue
+                self.assertNotRegex(
+                    line,
+                    r"write_text|writelines|\.write\(|open\([^)]*['\"][wa]",
+                    "%s:%d writes a skill file" % (path.name, lineno),
+                )
 
     def test_subagent_stop_injects_no_instructions(self):
         """A hook that speaks on SubagentStop hijacks the agent's final reply.
@@ -152,29 +209,66 @@ class CompletionGateContract(unittest.TestCase):
         self.assertEqual(res.returncode, 0)
         self.assertEqual(res.stdout.strip(), "", "gate narrated on a passing run")
 
-    def test_gate_is_inert_when_the_db_has_no_run_row(self):
-        """KNOWN GAP, asserted so it cannot rot silently.
+    def test_gate_falls_back_to_git_when_the_db_has_no_run_row(self):
+        """Closed gap: a session whose telemetry never landed is still gated.
 
-        Conditions (a) evidence, (b) verified finding, (f) docs drift and
-        (g) verifier coverage all key off _run_written_paths(), which reads
-        atlas_db run rows by session_id and fails open to [] on any miss.
-        No run row means code_changed is False, which means those four
-        conditions are skipped and the gate passes on uncommitted code.
-
-        A session whose telemetry never landed therefore gets a gate that
-        enforces only "the docs files exist". That is the skipped-reads-as-
-        passed failure mode. This test documents the real behavior; flip it
-        to assert "block" if the gate gains a git-derived fallback.
+        Conditions (a), (b), (f) and (g) key off _run_written_paths(). With no
+        run row there is no data to trust, so the gate reads the git working
+        tree instead. Without this fallback such a session got a gate that
+        enforced only "the docs files exist" -- the skipped-reads-as-passed
+        failure mode -- and unverified code shipped through the hole.
         """
-        repo = _mkrepo()
+        repo, db = _mkorchestrating_repo(session_id="no-such-run", with_telemetry=False)
         Path(repo, "app.py").write_text("1\n", encoding="utf-8")
         res = _run_hook(
-            "completion_gate.py", {"cwd": repo, "session_id": "no-such-run"}, cwd=repo
+            "completion_gate.py",
+            {"cwd": repo, "session_id": "no-such-run"},
+            cwd=repo,
+            db=db,
         )
         self.assertEqual(res.returncode, 0)
-        self.assertEqual(
-            res.stdout.strip(), "", "gate behavior changed: update this test"
+        self.assertIn("Definition-of-done gate", res.stdout)
+
+    def test_gate_trusts_a_run_row_that_reports_no_writes(self):
+        """The fallback must not resurrect the dirty-tree false block.
+
+        A run row saying "this run wrote nothing" is real data. An unrelated
+        dirty tree from an earlier session is not this run's problem.
+        """
+        repo, db = _mkorchestrating_repo(session_id="s-quiet", with_telemetry=True)
+        Path(repo, "app.py").write_text("1\n", encoding="utf-8")
+        res = _run_hook(
+            "completion_gate.py",
+            {"cwd": repo, "session_id": "s-quiet"},
+            cwd=repo,
+            db=db,
         )
+        self.assertEqual(res.stdout.strip(), "", "dirty tree blocked a quiet run")
+
+    def test_a_block_is_recorded_as_a_friction_event(self):
+        """A gate block must be measurable, not just printed and forgotten.
+
+        facets.gate_block_count is derived from these rows; before this it was
+        permanently NULL because nothing ever wrote one.
+        """
+        import sqlite3
+
+        repo, db = _mkorchestrating_repo(session_id="s-block", with_telemetry=False)
+        Path(repo, "app.py").write_text("1\n", encoding="utf-8")
+        _run_hook(
+            "completion_gate.py",
+            {"cwd": repo, "session_id": "s-block"},
+            cwd=repo,
+            db=db,
+        )
+        conn = sqlite3.connect(db)
+        rows = conn.execute(
+            "SELECT category, snippet FROM friction_events WHERE session_id=?",
+            ("s-block",),
+        ).fetchall()
+        conn.close()
+        self.assertEqual([r[0] for r in rows], ["gate_block"])
+        self.assertIn("conditions:", rows[0][1])
 
     def test_no_docs_tree_is_a_noop(self):
         repo = _mkrepo(with_docs=False)
@@ -289,6 +383,65 @@ class DocsMatchCodeContract(unittest.TestCase):
     def test_readme_lists_no_removed_hook(self):
         readme = (PLUGIN_ROOT / "README.md").read_text(encoding="utf-8")
         self.assertNotIn("auto_skill.py", readme, "README documents a deleted hook")
+
+
+class GitignoreSecretContract(unittest.TestCase):
+    """Secret shapes stay ignored inside allowlisted folders.
+
+    The allowlist (`!docs/**`, `!.atlas/**`, `!plugins/**`) re-admits anything
+    matched only by an earlier rule, so every secret pattern has to sit in the
+    terminal block at the bottom of .gitignore. Probing with git check-ignore is
+    the only honest check: reading the file cannot tell which rule wins.
+    """
+
+    PROBES = (
+        "docs/decisions/secret.key",
+        "docs/decisions/foo.pem",
+        "docs/decisions/id_rsa",
+        "docs/decisions/id_ecdsa",
+        "docs/decisions/credentials.json",
+        "docs/decisions/.git-credentials",
+        "docs/audits/secret.key",
+        "docs/audits/secrets.yml",
+        "docs/specs/id_rsa",
+        "docs/specs/app.jks",
+        "docs/specs/key.p8",
+        "docs/decisions/vault.jceks",
+        "docs/decisions/auth.keytab",
+        "docs/decisions/x.p7b",
+        "docs/decisions/db.pgdump",
+        "docs/decisions/db.dmp",
+        "docs/decisions/dump.rdb",
+        "docs/audits/db.bacpac",
+        "docs/specs/db.sqlite",
+        ".atlas/findings/db.sqlite3",
+        ".atlas/findings/id_rsa",
+        "plugins/atlas/private.pem",
+        "plugins/atlas/x.db",
+        "plugins/atlas/.env",
+    )
+
+    def test_secret_shapes_are_ignored_under_every_allowlisted_tree(self):
+        leaked = [
+            p
+            for p in self.PROBES
+            if subprocess.run(
+                ["git", "-C", str(REPO_ROOT), "check-ignore", "-q", p]
+            ).returncode
+            != 0
+        ]
+        self.assertEqual(leaked, [], "these secret shapes are trackable: %s" % leaked)
+
+    def test_real_docs_are_still_trackable(self):
+        """The blanket patterns must not swallow the docs they sit next to."""
+        for path in ("docs/CHANGELOG.md", "README.md", ".atlas/findings/INDEX.md"):
+            self.assertNotEqual(
+                subprocess.run(
+                    ["git", "-C", str(REPO_ROOT), "check-ignore", "-q", path]
+                ).returncode,
+                0,
+                "%s is ignored: an over-broad secret pattern" % path,
+            )
 
 
 class InstalledParityContract(unittest.TestCase):

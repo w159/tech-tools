@@ -257,8 +257,7 @@ focused job and a test file beside it. Sources: `plugins/atlas/scripts/`.
 | `session_ingest.py` | Mirror Claude Code session transcripts into the observability DB. |
 | `atlas_doctor.py` | Detect and repair the plugin-rollback failure mode. |
 | `atlas_memory.py` | Persistent, file-backed, char-bounded memory store. |
-| `skill_factory.py` | Auto-create skills from session transcripts. |
-| `atlas_curator.py` | Background lifecycle management for auto-created skills (stale, archive, pin). |
+| `atlas_curator.py` | Background lifecycle management for skill assets (stale, archive, pin). |
 | `atlas_context_optimizer.py` | Disable unused skills/agents to cut token cost. |
 | `asset_audit.py` | The context-cost lens of `atlas-audit`. |
 | `build_hub.py` | Build the knowledge-graph hub for an audit run. |
@@ -360,8 +359,8 @@ The plugin gets better the more it is used in a codebase:
 
 - **Persistent memory** at `~/.atlas/memory/`, reloaded at every session boot
   (`hooks/memory_capture.py`).
-- **Automatic skill creation** from session transcripts into `~/.claude/skills/`
-  (`hooks/auto_skill.py`, `scripts/skill_factory.py`).
+- **No automatic skill creation.** Removed in 5.5.0: nothing atlas runs may write
+  a SKILL.md or a slash command. Lessons land in memory, findings, and docs.
 - **Skill lifecycle curation** that promotes, keeps, or retires auto-created
   skills (`scripts/atlas_curator.py`).
 - **Context optimization** that disables unused skills and agents to cut cost
@@ -458,9 +457,8 @@ Lint with `ruff check plugins/atlas/hooks plugins/atlas/scripts`; typecheck with
   plugin install auto-loads it. Outside a plugin, run `scripts/install_hooks.py`.
 - *Plugin acts like an older version*: run `atlas-setup` repair; the doctor
   compares installed vs marketplace version and warns on a downgrade or fork.
-- *Self-improvement not running*: confirm `atlas_memory.py`, `skill_factory.py`,
-  `atlas_curator.py`, `atlas_context_optimizer.py` exist and that
-  `~/.atlas/memory/` and `~/.claude/skills/` are writable.
+- *Self-improvement not running*: confirm `atlas_memory.py`, `atlas_curator.py`,
+  and `atlas_context_optimizer.py` exist and that `~/.atlas/memory/` is writable.
 - *Stale wiki diagrams*: run `atlas-wiki` or invoke `graphify` directly.
 
 ---

@@ -1,5 +1,52 @@
 # Changelog
 
+## 5.6.0 (2026-08-06)
+
+Gap closure. Everything here was already known and written down somewhere as
+open, which is exactly why it needed shipping rather than re-recording.
+
+**Hooks**
+
+- `completion_gate.py` records every block as a `friction_events` row
+  (category `gate_block`, snippet naming the failed conditions), so
+  `facets.gate_block_count` is a real measurement instead of a permanent NULL.
+- `completion_gate.py` falls back to the git working tree when a run logged no
+  telemetry at all (zero events, zero tool_calls). A run that logged activity
+  and reports no writes is still trusted, so a dirty tree from an earlier
+  session still cannot block it. Closes the KNOWN GAP the contract suite had
+  been asserting: a session whose telemetry never landed used to get a gate
+  that enforced only "the docs files exist".
+- `chronicle_facet.py` no longer wipes friction rows it does not own. Its
+  `signals` re-mirror deleted every row for the session, silently erasing the
+  new `gate_block` rows and `memory_capture`'s `memory_drop` rows.
+
+**Scripts**
+
+- `scripts/skill_factory.py` and its test deleted. 5.5.0 unwired the hook but
+  left the code that wrote the SKILL.md files in place; `atlas-setup` was still
+  verifying its presence as a deployment step.
+- `atlas_doctor.py --enrich-facet <session_id> '<json>'`: writes the LLM-judged
+  facet columns through a validated command. Unknown columns and bad JSON exit 2.
+- `test_connectors_wiring.py` rewritten for the vendored ESM bundle layout it
+  should have moved to on 2026-07-31. It was globbing `*.mcpb`, so three tests
+  were vacuous and one failed: the repo's one standing test failure.
+
+**Security**
+
+- Ten more secret shapes (`*.pgdump`, `*.dmp`, `*.rdb`, `*.bacpac`, `*.sqlite`,
+  `*.sqlite3`, `*.db`, `*.jceks`, `*.keytab`, `*.p7b`) were trackable inside
+  allowlisted folders. Added to `.gitignore`'s terminal block, with a
+  `GitignoreSecretContract` probing 24 paths on every test run.
+
+**Contract tests**
+
+- No script may write a SKILL.md (the hook-only rule missed the factory).
+- Gate blocks are persisted; the git fallback fires only without telemetry.
+- Secret shapes stay ignored, real docs stay trackable.
+
+Evidence: `python3 -m pytest hooks scripts -q` -> 1028 passed, 3 skipped
+(installed-parity, un-skips after reinstall), 56 subtests passed.
+
 ## 5.5.0 (2026-08-06)
 
 Reporting discipline and deterministic verification. Atlas was producing

@@ -30,6 +30,11 @@ FRICTION_CATEGORY_BY_SIGNAL = {
     "unverified_claim": "friction",
 }
 
+# friction_events rows written by other hooks (completion_gate's gate blocks,
+# memory_capture's drops). _sync_friction_events must not delete these when it
+# re-mirrors `signals`, or it would erase the only record of them.
+GATE_BLOCK_CATEGORY = "gate_block"
+
 
 def _edit_read_counts(conn, session_id):
     edit_count = conn.execute(
@@ -43,6 +48,14 @@ def _edit_read_counts(conn, session_id):
         (session_id,),
     ).fetchone()[0]
     return edit_count, read_count
+
+
+def _gate_block_count(conn, session_id):
+    """How many times completion_gate blocked this session (friction_events)."""
+    return conn.execute(
+        "SELECT COUNT(*) FROM friction_events WHERE session_id=? AND category=?",
+        (session_id, GATE_BLOCK_CATEGORY),
+    ).fetchone()[0]
 
 
 def _compute_facet_fields(conn, session_id):
@@ -111,27 +124,37 @@ def _compute_facet_fields(conn, session_id):
         "wall_clock_s": wall_clock_s,
         "edit_count": edit_count,
         "read_count": read_count,
-        # No table currently records Stop-gate block decisions -- completion_gate.py
-        # only prints a {"decision": "block", ...} JSON line, it never persists one.
-        # Always NULL (never a real measurement) rather than a fabricated 0;
-        # wire this up once that gap is closed.
-        "gate_block_count": None,
+        # completion_gate.py records one friction_events row per block decision
+        # (category `gate_block`), so this is a real count. It stays NULL only
+        # when the transcript has not been ingested, matching edit/read/
+        # correction_count: before ingest, "0 blocks" is a claim we cannot make.
+        "gate_block_count": _gate_block_count(conn, session_id) if ingested else None,
         "correction_count": correction_count,
     }
 
 
 def _sync_friction_events(conn, session_id):
-    """Replace this session's friction_events with a fresh mirror of its
-    `signals` rows. Delete-then-reinsert (rather than tracking which signals
-    were already mirrored) keeps this idempotent across repeat Stop firings
-    without needing a new unique constraint on friction_events."""
+    """Replace this session's signal-derived friction_events with a fresh mirror
+    of its `signals` rows. Delete-then-reinsert (rather than tracking which
+    signals were already mirrored) keeps this idempotent across repeat Stop
+    firings without needing a new unique constraint on friction_events.
+
+    The delete is scoped to the categories THIS hook mirrors. Rows other hooks
+    own -- completion_gate's `gate_block`, memory_capture's `memory_drop` -- are
+    never sourced from `signals`, so an unscoped delete would erase them on the
+    next Stop and leave no record they ever happened."""
     import atlas_db
 
     signals = conn.execute(
         "SELECT signal_type, weight, snippet, ts FROM signals WHERE session_id=?",
         (session_id,),
     ).fetchall()
-    conn.execute("DELETE FROM friction_events WHERE session_id=?", (session_id,))
+    mirrored = sorted(set(FRICTION_CATEGORY_BY_SIGNAL.values()))
+    conn.execute(
+        "DELETE FROM friction_events WHERE session_id=? AND category IN (%s)"
+        % ",".join("?" * len(mirrored)),
+        (session_id, *mirrored),
+    )
     for signal_type, weight, snippet, ts in signals:
         category = FRICTION_CATEGORY_BY_SIGNAL.get(signal_type)
         if category is None:

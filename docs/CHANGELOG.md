@@ -4,6 +4,28 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
+## 2026-08-06 -- atlas 5.6.0: the carried gaps closed, and the gate's own blind spot with them
+
+Released as atlas 5.6.0 (`plugins/atlas/.claude-plugin/plugin.json:3`, `.kimi-plugin/plugin.json:3`). Every item below was a gap this repo had recorded and left open, either in ROADMAP or as an honest caveat inside an earlier CHANGELOG entry. Evidence: `.atlas/evidence/2026-08-06-atlas-5.6.0-gap-closure.md`.
+
+**The one pre-existing test failure, explained and fixed.** `scripts/test_connectors_wiring.py` still discovered connectors by globbing `*.mcpb`, a layout the 2026-07-31 release replaced with vendored ESM bundles. Discovery returned an empty dict, so three of its four bundle tests passed vacuously and `test_every_mcp_server_has_a_bundle` failed. Discovery now keys on `mcp/<name>/server.mjs`; a new `test_connectors_are_discoverable_at_all` fails loudly if discovery ever goes empty again, and `test_mcp_server_runs_vendored_bundle_through_env_preloader` asserts the real `node --import ${CLAUDE_PLUGIN_ROOT}/mcp/_env/load.mjs .../server.mjs` shape instead of the retired `launch.sh` contract. 9 passed.
+
+**Gate-block persistence (`facets.gate_block_count` was permanently NULL).** `completion_gate.py` now writes one `friction_events` row per block (category `gate_block`, weight = number of failed conditions, snippet naming them: `conditions: a,b,f`), and `chronicle_facet.py` counts them into the facet. Wiring it surfaced a second defect: `_sync_friction_events` deleted *every* friction_events row for the session before re-mirroring `signals`, which silently erased both the new `gate_block` rows and `memory_capture`'s `memory_drop` rows -- neither of which any signal can reinsert. The delete is now scoped to the categories that hook actually owns (`chronicle_facet.py:_sync_friction_events`).
+
+**The gate's no-telemetry blind spot.** Conditions (a), (b), (f) and (g) key off the atlas_db run-write signal, which could not distinguish "this run wrote no files" from "nothing was ever recorded". A session whose telemetry never landed therefore got a gate that enforced only "the docs files exist" -- the skipped-reads-as-passed failure mode, previously asserted as a KNOWN GAP in `test_atlas_contract.py`. `_run_written_paths` now falls back to the git working tree when the run has zero `events` AND zero `tool_calls`; a run that logged activity and reports no writes is still trusted, so the dirty-tree false block the 2026-08-06 entry below fixed stays fixed. Both halves are asserted (`test_no_telemetry_falls_back_to_git_condition_f`, `test_gate_trusts_a_run_row_that_reports_no_writes`).
+
+**SECURITY: ten more secret shapes were trackable inside allowlisted folders.** The 2026-08-05 entry closed the ordering bug but explicitly did not claim full coverage. Probing with `git check-ignore` found `*.pgdump`, `*.dmp`, `*.rdb`, `*.bacpac`, `*.sqlite`, `*.sqlite3`, `*.db`, `*.jceks`, `*.keytab` and `*.p7b` still trackable under `docs/`, `.atlas/` and `plugins/`; the shapes that entry named as unverified (`*.jks`, `*.keystore`, `*.p8`, `id_ecdsa`, `.git-credentials`, `secrets.yml`) were in fact already covered. All ten are now in the terminal block. No tracked file matches any new pattern (`git ls-files` verified), and `docs/CHANGELOG.md`, `README.md` and `.atlas/findings/INDEX.md` remain trackable. A new `GitignoreSecretContract` probes 24 paths on every test run so this cannot regress silently.
+
+**`skill_factory.py` deleted.** 5.5.0 unwired `auto_skill.py` but left the script that actually wrote the SKILL.md files sitting in `scripts/`, callable by anything, and `atlas-setup` still verified its presence as a deployment step. Both the script and `test_skill_factory.py` are gone, `atlas-setup` no longer checks for it, and `test_no_script_writes_a_skill_either` asserts no script under `scripts/` writes a SKILL.md (reading one is still fine -- the asset auditor inventories them).
+
+**Facet enrichment is a command, not a prose step.** `atlas_doctor.py --enrich-facet <session_id> '<json>'` validates keys against `atlas_db.FACET_COLUMNS` and writes the LLM-judged columns; unknown columns, non-object payloads and unparseable JSON all exit 2. The judgment stays the model's; the write is now deterministic and testable.
+
+**Manifest and README drift corrected.** Both plugin manifests still advertised `auto-skill` and "automatic skill creation from session transcripts"; the Kimi manifest claimed 22 skills and 16 task skills (real: 21 and 14) and 11 hooks (real: 12, and `docs_drift_watch.py` was never listed). The plugin README repeated the same auto-skill claim and a 22-skill count.
+
+Evidence: `cd plugins/atlas && python3 -m pytest hooks scripts -q` -> **1028 passed, 3 skipped, 56 subtests passed**. The 3 skips are `InstalledParityContract` (installed cache at 5.5.0 vs manifest 5.6.0); they un-skip and pass after reinstall.
+
+---
+
 ## 2026-08-06 -- Stop-hook noise: stop gating research-only runs and stop narrating passes, stop injecting nudge into subagent replies
 
 A user-reported transcript showed a chain of Stop-hook messages each forcing another assistant turn, burying the actual decision point. Three defects fixed:

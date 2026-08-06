@@ -119,6 +119,20 @@ class GateOrchestrationTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0)
         self.assertNotIn('"decision": "block"', r.stdout)
 
+    def _log_run_read(self, path):
+        """Telemetry that is NOT a write: proves the recorder was working this
+        run, so 'this run wrote no files' is a measurement and not a silence."""
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db
+
+        c = atlas_db.connect(self.env["ATLAS_DB"])
+        rid = atlas_db.current_run_id(c, "sess-orch") or atlas_db.latest_run_id(
+            c, "sess-orch"
+        )
+        atlas_db.log_event(c, rid, "Read", "main", 1, path)
+        c.commit()
+        c.close()
+
     def _satisfy_all_conditions(self):
         docs = os.path.join(self.tmp, "docs")
         atlas_dir = os.path.join(self.tmp, ".atlas")
@@ -177,8 +191,15 @@ class GateOrchestrationTest(unittest.TestCase):
         """(a) (f) does NOT fire when the tree is dirty from files THIS run did
         not write -- the exact false-positive this fix targets: a prior
         session's leftover uncommitted files must never block a run that
-        touched nothing itself."""
+        touched nothing itself.
+
+        The run must have logged SOMETHING for its "wrote no files" to be data
+        rather than an absence of data: a run with no telemetry at all falls
+        back to the git tree (see test_no_telemetry_falls_back_to_git below).
+        One read event is enough to say the recorder was working.
+        """
         self._satisfy_all_conditions()
+        self._log_run_read(os.path.join(self.tmp, "README.md"))
         subprocess.run(["git", "init", "-q", self.tmp], check=True, capture_output=True)
         subprocess.run(
             ["git", "-C", self.tmp, "add", "-A"], check=True, capture_output=True
@@ -202,6 +223,41 @@ class GateOrchestrationTest(unittest.TestCase):
             f.write("print('leftover')\n")
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertNotIn('"decision": "block"', r.stdout)
+
+    def test_no_telemetry_falls_back_to_git_condition_f(self):
+        """(a2) A run that logged NOTHING is not evidence that nothing shipped.
+
+        Before this fallback, a session whose telemetry never landed got a gate
+        that checked only "the docs files exist", and unverified code shipped
+        straight through. With no events and no tool_calls the gate reads the
+        git working tree instead.
+        """
+        self._satisfy_all_conditions()
+        subprocess.run(["git", "init", "-q", self.tmp], check=True, capture_output=True)
+        subprocess.run(
+            ["git", "-C", self.tmp, "add", "-A"], check=True, capture_output=True
+        )
+        subprocess.run(
+            ["git", "-C", self.tmp, "commit", "-qm", "base"],
+            check=True,
+            capture_output=True,
+            env=dict(
+                os.environ,
+                GIT_AUTHOR_NAME="t",
+                GIT_AUTHOR_EMAIL="t@t",
+                GIT_COMMITTER_NAME="t",
+                GIT_COMMITTER_EMAIL="t@t",
+            ),
+        )
+        # Tracked file modified, nothing logged in atlas_db for this run.
+        with open(os.path.join(self.tmp, "app.py"), "w") as f:
+            f.write("print('shipped with no telemetry')\n")
+        subprocess.run(
+            ["git", "-C", self.tmp, "add", "app.py"], check=True, capture_output=True
+        )
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertIn('"decision": "block"', r.stdout)
+        self.assertIn("Docs drift", r.stdout)
 
     def test_zero_writes_passes_silently_condition_f(self):
         """(c) The gate passes silently -- EMPTY stdout -- when the run wrote

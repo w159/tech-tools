@@ -511,3 +511,22 @@ plugins/atlas/**/.claude/.atlas_nudge
 !plugins/atlas/skills/atlas-db-audit/scripts/read-only-catalog-queries.sql
 **/*.dump
 **/*.bak
+# Binary dump and embedded-DB shapes an adversarial probe found still trackable
+# inside allowlisted folders on 2026-08-06 (git check-ignore said TRACKABLE for
+# every one of these under docs/decisions/): a Postgres custom-format dump, an
+# Oracle/Windows .dmp, a Redis snapshot, an Azure SQL .bacpac, and a raw SQLite
+# file. No tracked file in this repo matches any of them (verified with
+# `git ls-files`), so nothing legitimate is lost by blanket-blocking them.
+**/*.pgdump
+**/*.dmp
+**/*.rdb
+**/*.bacpac
+**/*.sqlite
+**/*.sqlite3
+**/*.db
+
+# Key material the probe also found trackable: a Java keystore variant, a
+# Kerberos keytab, and a PKCS#7 certificate bundle.
+**/*.jceks
+**/*.keytab
+**/*.p7b

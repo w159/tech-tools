@@ -288,7 +288,7 @@ def main() -> int:
         # earlier session must never block a run that touched nothing.
         # Fail-open: any DB error yields an empty path list -> treated the
         # same as "wrote nothing", never a false block.
-        run_paths = _run_written_paths(data.get("session_id", ""))
+        run_paths = _run_written_paths(data.get("session_id", ""), root)
         code_changed = _nondocs_changed(run_paths)
         # (a)/(b) only apply once this run has shipped non-docs code. A
         # research-only or docs-only run has no evidence/verification to
@@ -328,6 +328,21 @@ def main() -> int:
             # blocks. No advisory, no "not evaluated" narration -- any output
             # here reads as a prompt for another turn.
             return 0
+        failed = [
+            letter
+            for letter, failing in (
+                ("a", not ok_a),
+                ("b", not ok_b),
+                ("c", not ok_c),
+                ("d", not ok_d),
+                ("e", not ok_e),
+                ("f", drift),
+                ("g", unverified > 0),
+                ("h", not ok_h),
+            )
+            if failing
+        ]
+        _record_gate_block(data.get("session_id", ""), failed)
         block_reason = _reason(
             not ok_a,
             not ok_b,
@@ -366,6 +381,51 @@ def _finalize_db(session_id: str) -> None:
             _conn.close()
 
 
+def _run_has_telemetry(conn, run_id, session_id: str) -> bool:
+    """Did anything at all get logged for this run? Distinguishes "the run wrote
+    no files" (real data) from "nothing was ever recorded" (no data). Any error
+    counts as telemetry present, so a read failure cannot trigger the git
+    fallback and manufacture a block."""
+    try:
+        events = conn.execute(
+            "SELECT COUNT(*) FROM events WHERE run_id=?", (run_id,)
+        ).fetchone()[0]
+        if events:
+            return True
+        calls = conn.execute(
+            "SELECT COUNT(*) FROM tool_calls WHERE session_id=?", (session_id,)
+        ).fetchone()[0]
+        return bool(calls)
+    except Exception:
+        return True
+
+
+def _record_gate_block(session_id: str, failed: list) -> None:
+    """Persist one friction_events row per block decision, so a gate block is a
+    measurable event (facets.gate_block_count) and not just a line of stdout the
+    session throws away. Fail-open: observability never blocks the Stop path."""
+    if not session_id or not failed:
+        return
+    conn = None
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db
+
+        conn = atlas_db.connect()
+        atlas_db.record_friction(
+            conn,
+            session_id,
+            "gate_block",
+            weight=float(len(failed)),
+            snippet="conditions: " + ",".join(failed),
+        )
+    except Exception:
+        pass
+    finally:
+        if conn is not None:
+            conn.close()
+
+
 def _session_is_orchestrating(session_id: str) -> bool:
     """True only when this session has a run flagged orchestrating. Fail-open to
     False: if the DB is unreadable we do NOT gate (never block on uncertainty)."""
@@ -383,11 +443,22 @@ def _session_is_orchestrating(session_id: str) -> bool:
             conn.close()
 
 
-def _run_written_paths(session_id: str) -> list:
-    """(f)/(g) shared signal: file paths THIS RUN's own activity wrote, via
-    atlas_db.run_changed_paths for the current-or-latest run. Fail-open to []:
-    any atlas_db import or DB error means "nothing changed" rather than a
-    false block -- same fail-open contract as _unpaired_implementer_dispatches."""
+def _run_written_paths(session_id: str, root: Path | None = None) -> list:
+    """(a)/(b)/(f)/(g) shared signal: file paths THIS RUN's own activity wrote,
+    via atlas_db.run_changed_paths for the current-or-latest run.
+
+    Two distinct misses, handled differently on purpose:
+      * The run logged tool activity and none of it wrote a file -> trust it.
+        "This run touched nothing" is real data, and a dirty tree left by an
+        earlier session must never block a run that shipped nothing.
+      * The run logged NO tool activity at all (no run row, or a run row with
+        zero events and zero tool_calls) -> the telemetry never landed, so
+        there is nothing to trust. Fall back to the git working tree.
+        Otherwise a session whose telemetry failed gets a gate enforcing only
+        "the docs files exist", and unverified code ships through the hole.
+
+    Fail-open to [] on any atlas_db import/DB error, same contract as
+    _unpaired_implementer_dispatches."""
     conn = None
     try:
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
@@ -398,8 +469,11 @@ def _run_written_paths(session_id: str) -> list:
             conn, session_id
         )
         if rid is None:
-            return []
-        return atlas_db.run_changed_paths(conn, rid)
+            return _git_changed_paths(root) if root is not None else []
+        paths = atlas_db.run_changed_paths(conn, rid)
+        if not paths and not _run_has_telemetry(conn, rid, session_id):
+            return _git_changed_paths(root) if root is not None else []
+        return paths
     except Exception:
         return []
     finally:

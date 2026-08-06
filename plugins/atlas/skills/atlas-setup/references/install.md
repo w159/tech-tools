@@ -71,7 +71,6 @@ the reference before building the recommend-then-confirm shortlist in Stage 2.
    confirm before writing.
 5. Self-improvement. Verify the atlas self-improvement system is deployed:
    - `scripts/atlas_memory.py` exists and `~/.atlas/memory/` is writable
-   - `scripts/skill_factory.py` exists and `~/.claude/skills/` is writable
    - `scripts/atlas_curator.py` exists
    - `scripts/atlas_context_optimizer.py` exists
    - `hooks/memory_capture.py` and `hooks/auto_skill.py` are wired in hooks.json
@@ -126,7 +125,7 @@ recommend-then-confirm. Check, in order:
 - whether `.atlas/decisions/` has a `tooling-activation` record from a prior run,
   so this scan can report drift against it instead of starting cold;
 - the docs/ SSOT scaffold, and whether CHANGELOG.md and ROADMAP.md are current;
-- the self-improvement system: atlas_memory, skill_factory, atlas_curator, and
+- the self-improvement system: atlas_memory, atlas_curator, and
   atlas_context_optimizer scripts present and functional;
 - the context optimization state: run `atlas_context_optimizer.py status` and
   report how many skills/agents are enabled vs disabled and the estimated
