@@ -10,9 +10,16 @@ Pass paths and goals, not file contents. The subagent's prompt is its entire sys
 ROLE: <one line, which specialist this is>
 GOAL: <one sentence, measurable>
 CONTEXT: <only what it cannot derive itself: key paths, the inventory line, prior finding ids>
+TOOLS (required - name them, do not say "use the right tools"):
+  ToolSearch first: <exact deferred/MCP tool names this job needs>
+  Orient:  ctx_compose (lean-ctx)
+  Symbols: get_symbols_overview / find_symbol / find_referencing_symbols (serena)
+  Search:  ctx_search (lean-ctx); noisy output: ctx_batch_execute / ctx_execute (context-mode)
+  Docs:    context7 (resolve-library-id -> query-docs); microsoft-docs for Azure/.NET/M365/Entra
+  Recall:  claude-mem search -> timeline -> get_observations
+  (drop the lines this job does not need; keep the ones it does)
 DISCOVER FIRST: confirm the best-fit capability for this exact job,
-  check live skills/MCP/LSP; use serena/LSP over grep+read; pull context7 docs
-  for any library you touch and cite the version.
+  check live skills/MCP/LSP; augment the TOOLS list for nuances the spec missed.
 TOOLS ALLOWED: <explicit>
 TOOLS FORBIDDEN: package installs - migrations - .env edits - git push  (+ Write/Edit for read-only roles)
 DELIVERABLE: <exact artifact: a report, a diff, a findings entry path>
@@ -33,9 +40,13 @@ The spec above is the full form. Its load-bearing core is the **4-part brief**, 
 
 For how to slice work into stages and when to fan out at all, see `multi-stage-planning.md`. For how the verify/critic agents confirm a result, see `verification-and-grounding.md`.
 
-## Choosing the agent + model
+## Choosing the agent + model + effort
 
-- Pick the agent type from `capability-routing.md`. Set `model` per the tier table in `SKILL.md`.
+- Pick the agent type from `capability-routing.md`. Model and effort already live in each agent's
+  frontmatter per the tier tables in `SKILL.md` - **sonnet is the ceiling for every `atlas:*`
+  companion**, and effort is `low` except for the three that render an independent verdict. Only
+  override at dispatch time with a stated reason; "this feels hard" is not one. An underspecified
+  prompt is the usual cause, and the fix is the prompt.
 - Read-only roles (explore, verify, db-probe, ui-test) -> `disallowedTools: [Write, Edit, MultiEdit, NotebookEdit]`.
 - Parallel editors of the same tree -> `isolation: "worktree"` so they don't collide.
 - Cap long/background jobs with a turn budget. Spawn all independent jobs in ONE message.
@@ -49,17 +60,17 @@ For how to slice work into stages and when to fan out at all, see `multi-stage-p
 
 Use these by name as `subagent_type`. They already carry the orchestrator's discipline; your spec just supplies GOAL + CONTEXT + paths.
 
-| Agent | Use for | Model | Writes? |
-|---|---|---|---|
-| `atlas:explorer` | map a feature/module, find owners, trace a call path | haiku | no |
-| `atlas:implementer` | make one bounded change correctly, run the local gate | sonnet | yes |
-| `atlas:verifier` | adversarially confirm a finding/fix in a fresh context | sonnet (->opus if critical) | no |
-| `atlas:db-prober` | read-only schema / RLS / grants / indexes / EXPLAIN | sonnet | no |
-| `atlas:ui-runtime-tester` | actually run the FE and validate observed behavior | sonnet | no |
-| `atlas:planner` | decompose a task into a numbered, failable-check stage map | sonnet | no |
-| `atlas:docs-curator` | keep `docs/` as the single source of truth, current with the work | sonnet | only under `docs/` |
-| `atlas:docs-auditor` | audit `docs/` for drift against the code/behavior | sonnet | no |
-| `atlas:completeness-critic` | final "what did we miss" gap pass; findings seed the next wave | sonnet | no |
+| Agent | Use for | Model | Effort | Writes? |
+|---|---|---|---|---|
+| `atlas:explorer` | map a feature/module, find owners, trace a call path | haiku | low | no |
+| `atlas:implementer` | make one bounded change correctly, run the local gate | sonnet | low | yes |
+| `atlas:verifier` | adversarially confirm a finding/fix in a fresh context | sonnet | medium | no |
+| `atlas:db-prober` | read-only schema / RLS / grants / indexes / EXPLAIN | sonnet | low | no |
+| `atlas:ui-runtime-tester` | actually run the FE and validate observed behavior | sonnet | low | no |
+| `atlas:planner` | decompose a task into a numbered, failable-check stage map | sonnet | low | no |
+| `atlas:docs-curator` | keep `docs/` as the single source of truth, current with the work | sonnet | low | only under `docs/` |
+| `atlas:docs-auditor` | audit `docs/` for drift against the code/behavior | sonnet | low | no |
+| `atlas:completeness-critic` | final "what did we miss" gap pass; findings seed the next wave | sonnet | medium | no |
 
 For domain depth, route instead to the installed specialists (`backend-architect`, `frontend-developer`, `security-engineer`, `debugger`, `devops-automator`, `code-reviewer`, `test-engineer`, `test-executor`, `secondary-expert-validator`, `codebase-explorer`), same spec shape.
 
@@ -79,6 +90,10 @@ Route by whether the dispatch's value comes from everything already said this se
 | `atlas:explorer` | never | cheap haiku lookup with no history dependency - forking defeats the point of a light dispatch |
 
 **Fallback:** if fork is unavailable (env var unset, older CLI), dispatch the same role as a normal fresh subagent with a fuller brief - restate the relevant history in `CONTEXT` - and keep going. A missing fork never fails the wave.
+
+**Cost caution:** a fork inherits the parent's model and effort, so the agent file's `model: sonnet` /
+`effort: low` do NOT apply - a fork off an opus orchestrator runs on opus. Fork only when inheriting
+this session's history is the point; otherwise dispatch fresh and let the agent's own tier hold.
 
 **Caution:** a fork inherits the orchestrator's assumptions verbatim, unexamined. Anything that needs independent judgment - a verifier, a second opinion, any check that must not be contaminated by what the orchestrator already believes - must not fork.
 

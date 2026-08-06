@@ -41,6 +41,37 @@ Pass the chosen capabilities into each subagent's spec as directives, **and** te
 
 \* Built-in/global agent type, not shipped under `plugins/atlas/agents/` - resolved from `~/.claude/agents/`, `.claude/agents/`, or Claude Code's built-in agent types.
 
+## Step 2b - The tool names to actually put in the prompt
+
+A subagent that reads "use serena" will not use serena. These are **deferred MCP tools**: their
+schemas are not loaded, so the name has to be concrete and the agent has to `ToolSearch` for it
+first. Server prefixes vary per install (`mcp__serena__*`, `mcp__lean-ctx__*`,
+`mcp__plugin_context-mode_context-mode__*`, `mcp__plugin_claude-mem_mcp-search__*`), so tell the
+agent to search by keyword rather than hardcoding a prefix.
+
+| Job | Name these tools in the prompt | Instead of |
+|---|---|---|
+| Orient in unfamiliar code | `ctx_compose` (lean-ctx) | a spray of `Read` calls |
+| Outline a file | `get_symbols_overview` (serena), `ctx_read` `mode=signatures` | reading the whole file |
+| Locate a symbol / its callers | `find_symbol`, `find_declaration`, `find_referencing_symbols` (serena) | `Grep` + `Read` |
+| Edit a named function or class | `replace_symbol_body`, `insert_after_symbol` (serena) | rewriting the file |
+| Confirm an edit type-checks | `get_diagnostics_for_file` (serena) | eyeballing the diff |
+| Impact / callers-of-callers | `ctx_callgraph` (lean-ctx) | manual grep sweeps |
+| Pattern or semantic search | `ctx_search` (lean-ctx, `action=semantic`) | `Grep` over the tree |
+| Command output past ~20 lines | `ctx_batch_execute` / `ctx_execute` (context-mode) | raw `Bash` |
+| Analyze a large file | `ctx_execute_file` (context-mode) | `Read` on the whole file |
+| Fetch a web page | `ctx_fetch_and_index` (context-mode) | `WebFetch` |
+| Library / SDK behavior | `context7` `resolve-library-id` -> `query-docs` | memory |
+| Azure / .NET / M365 / Entra | `microsoft-docs` `microsoft_docs_search` -> `_fetch` | memory |
+| "Did we hit this before?" | claude-mem `search` -> `timeline` -> `get_observations` | re-deriving it |
+
+claude-mem worker-runtime arg shapes (the historical error source, see `memory-access.md`):
+`timeline` takes `anchor` (int) or `query` and has **no** `limit`; `get_observations` takes `ids` as
+an array of **numbers**. `observation_search` is server-beta only - use `search`.
+
+Serena is for **code symbols**. For prose, markdown, JSON, and config, `ctx_read` / `ctx_search` are
+correct and serena is not.
+
 ## Step 3 - Hard rules that override convenience
 
 - **Never grep-then-read when an LSP/`serena` symbol call answers it.** For an LSP-enabled language (TS, Python via `typescript-lsp`/`pyright-lsp`, etc.), instruct subagents: "use find-references / go-to-definition, not grep + read."

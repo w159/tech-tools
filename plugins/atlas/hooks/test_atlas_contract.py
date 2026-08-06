@@ -498,5 +498,110 @@ class InstalledParityContract(unittest.TestCase):
         self.assertEqual(drift, [], "reinstall the plugin: %s" % drift)
 
 
+AGENTS_DIR = PLUGIN_ROOT / "agents"
+
+# The reasoning-depth lever for a plugin agent. Confirmed against the CLI's own
+# validator strings ("has invalid effort '...'. Valid options: ... or an integer");
+# there is no `thinking` frontmatter key, so effort is the only knob.
+VALID_EFFORT = {"low", "medium", "high", "xhigh"}
+
+# Subagents execute a spec the orchestrator already wrote. Opus is the orchestrator's
+# tier; a subagent that needs it is a symptom of an underspecified prompt.
+MAX_MODEL = {"haiku", "sonnet"}
+
+# Only the roles that render an independent verdict against evidence they were not
+# handed get medium. Everything else executes a clear spec at low.
+MEDIUM_EFFORT_ROLES = {"verifier", "completeness-critic", "rls-privilege-audit"}
+
+
+def _agent_files() -> list:
+    return sorted(AGENTS_DIR.glob("*.md"))
+
+
+def _frontmatter(path: Path) -> dict:
+    text = path.read_text(encoding="utf-8")
+    if not text.startswith("---\n"):
+        return {}
+    head = text.split("\n---\n", 1)[0][4:]
+    out = {}
+    for line in head.split("\n"):
+        if ":" in line and not line.startswith((" ", "\t", "#")):
+            k, _, v = line.partition(":")
+            out[k.strip()] = v.strip().strip("\"'")
+    return out
+
+
+class AgentTierContract(unittest.TestCase):
+    """Model, effort, and tool-routing guarantees for every shipped atlas agent."""
+
+    def test_agents_exist(self):
+        self.assertGreaterEqual(len(_agent_files()), 12)
+
+    def test_every_agent_declares_a_valid_effort(self):
+        bad = [
+            "%s: %r" % (p.name, _frontmatter(p).get("effort"))
+            for p in _agent_files()
+            if _frontmatter(p).get("effort") not in VALID_EFFORT
+        ]
+        self.assertEqual(bad, [], "agents missing/invalid effort: %s" % bad)
+
+    def test_no_agent_exceeds_sonnet(self):
+        bad = [
+            "%s: %s" % (p.name, _frontmatter(p).get("model"))
+            for p in _agent_files()
+            if _frontmatter(p).get("model") not in MAX_MODEL
+        ]
+        self.assertEqual(
+            bad, [], "opus is the orchestrator's tier, not a subagent's: %s" % bad
+        )
+
+    def test_only_verdict_roles_get_medium_effort(self):
+        bad = []
+        for path in _agent_files():
+            fm = _frontmatter(path)
+            expected = "medium" if fm.get("name") in MEDIUM_EFFORT_ROLES else "low"
+            if fm.get("effort") != expected:
+                bad.append("%s: %s (want %s)" % (path.name, fm.get("effort"), expected))
+        self.assertEqual(bad, [], "effort tier drift: %s" % bad)
+
+    def test_no_agent_restricts_tools_and_locks_out_mcp(self):
+        """A `tools:` allowlist silently excludes every mcp__* tool. Use disallowedTools."""
+        bad = [p.name for p in _agent_files() if "tools" in _frontmatter(p)]
+        self.assertEqual(
+            bad, [], "`tools:` allowlist locks these agents out of MCP: %s" % bad
+        )
+
+    def test_every_agent_routes_to_concrete_mcp_tools(self):
+        """Prose like "use serena" is why no agent ever called it. Names must be callable."""
+        bad = []
+        for path in _agent_files():
+            body = path.read_text(encoding="utf-8")
+            if "ToolSearch" not in body:
+                bad.append("%s: no ToolSearch instruction" % path.name)
+            if not any(
+                t in body for t in ("ctx_batch_execute", "ctx_execute", "ctx_compose")
+            ):
+                bad.append("%s: names no context-mode/lean-ctx tool" % path.name)
+        self.assertEqual(bad, [], "agents with no concrete tool routing: %s" % bad)
+
+    def test_code_agents_name_serena_symbol_tools(self):
+        needs_symbols = {
+            "explorer",
+            "implementer",
+            "verifier",
+            "planner",
+            "docs-auditor",
+        }
+        bad = []
+        for path in _agent_files():
+            fm = _frontmatter(path)
+            if fm.get("name") not in needs_symbols:
+                continue
+            body = path.read_text(encoding="utf-8")
+            if not any(t in body for t in ("find_symbol", "get_symbols_overview")):
+                bad.append(path.name)
+        self.assertEqual(bad, [], "code agents with no serena symbol routing: %s" % bad)
+
+
 if __name__ == "__main__":
     unittest.main()

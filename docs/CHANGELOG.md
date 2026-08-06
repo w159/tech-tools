@@ -4,6 +4,26 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
+## 2026-08-06 -- atlas 5.7.0: subagents call the MCP tools, at the right tier
+
+Released as atlas 5.7.0 (`plugins/atlas/.claude-plugin/plugin.json:3`, `.kimi-plugin/plugin.json:3`), marketplace 3.6.0.
+
+**The defect.** Atlas subagents were told to "use `serena`" and to "route noisy output through `context-mode`" in prose. Those are deferred MCP tools: the schema is not in a subagent's tool list until it calls `ToolSearch`, so an agent looking for a tool literally named `serena` finds nothing and falls back to `Grep` + `Read` without saying so. `lean-ctx` and `claude-mem` appeared in no agent body at all. Three agents (`schema-inventory.md:4`, `rls-privilege-audit.md:4`, `naming-glossary-audit.md:4`) additionally carried a `tools:` frontmatter allowlist, which excludes every `mcp__*` tool by construction, so the routing could not have worked there even if the names had been right.
+
+**The fix, agent side.** All 12 agents in `plugins/atlas/agents/` now carry a tool-routing table ahead of their Method section: need, exact callable tool name, and what it replaces. The names are real (`ctx_compose`, `get_symbols_overview`, `find_symbol`, `find_referencing_symbols`, `replace_symbol_body`, `get_diagnostics_for_file`, `ctx_callgraph`, `ctx_search`, `ctx_batch_execute`, `ctx_execute_file`, `ctx_fetch_and_index`, `query-docs`, claude-mem `search`/`timeline`/`get_observations`), each agent gets only the rows its job needs, and every agent is told to `ToolSearch` for schemas first and to search by keyword because server prefixes differ per install. The three `tools:` allowlists are removed; `disallowedTools` already carried the read-only guarantee.
+
+**The fix, tier side.** `effort` is a real plugin-agent frontmatter key (`low`/`medium`/`high`/`xhigh` or an integer, confirmed against the CLI's own validator strings) and is the only reasoning-depth lever available to a subagent - there is no `thinking` key. Every agent now declares one. Sonnet is the ceiling for `atlas:*`: `rls-privilege-audit` drops from opus, and the `SKILL.md` tier table no longer routes `planner`, `completeness-critic`, or critical `verifier` work to opus. Effort is `low` for the nine roles that execute a spec the orchestrator already wrote and `medium` for the three that render an independent verdict against evidence they were not handed. The rationale is stated where it can act: a subagent that appears to need a bigger model is an underspecified prompt, and the fix is the prompt.
+
+**The fix, orchestrator side.** The routing table in `capability-routing.md` already existed and did not change behavior, because nothing required the orchestrator to put those names into a dispatch. The enforcement point moved into the prompt feed: `subagent-kit.md`'s dispatch spec now has a required `TOOLS` block, `prompt-optimization.md` makes naming exact tools a per-dispatch rule with the failure mode spelled out, and `capability-routing.md` gains a Step 2b table of the names to paste, plus the claude-mem worker-runtime argument shapes that caused its historical error rate. `subagent-kit.md` also now warns that a fork inherits the parent's model and effort, so an agent file's `model: sonnet` / `effort: low` do not apply to a forked dispatch.
+
+**Contract test.** `plugins/atlas/hooks/test_atlas_contract.py` gains `AgentTierContract` (7 tests) rather than a verifier subagent: every agent declares a valid `effort`; no agent exceeds sonnet; only `verifier`, `completeness-critic`, and `rls-privilege-audit` get `medium`; no agent carries a `tools:` allowlist; every agent names a `ToolSearch` instruction and at least one context-mode/lean-ctx tool; the five code-facing agents name a serena symbol tool.
+
+Evidence: `python3 -m pytest plugins/atlas/hooks/test_atlas_contract.py -q` -> **31 passed, 48 subtests passed in 2.03s**. Negative control: setting `planner` to `model: opus` and stripping its `effort` line fails 3 of the 7 new tests (`effort tier drift: ['planner.md: None (want low)']`), restored after.
+
+Not addressed: nothing enforces at runtime that a dispatched subagent actually called an MCP tool. The contract test proves the instruction is present and callable, not that the model obeyed it. Per-dispatch tool-use telemetry already lands in `~/.atlas/atlas.db`; measuring MCP-tool share per agent from it is the follow-up.
+
+---
+
 ## 2026-08-06 -- armada 1.1.0: setup you can actually run, branding first
 
 Released as armada 1.1.0 (`plugins/armada/.claude-plugin/plugin.json:3`, `.kimi-plugin/plugin.json:3`), marketplace 3.5.0.
