@@ -31,19 +31,21 @@ skill's `description` + `when_to_use`; the manual skills have
 ```
 atlas/
 |-- .claude-plugin/plugin.json     # manifest (name: atlas, v5.2.0)
-|-- hooks/                         # 11 auto-loaded hooks (hooks.json wires them all; atlas_doctor.py lives in scripts/, wired as the 11th)
+|-- hooks/                         # 13 auto-loaded hooks (hooks.json wires them all; atlas_doctor.py lives in scripts/, wired as the 13th)
 |   |-- session_boot.py            #   SessionStart: activate runtime, surface lessons
 |   |-- prompt_optimizer.py        #   UserPromptSubmit: optional rewrite + orchestration arm-early classifier
 |   |-- bash_advisor.py            #   PreToolUse(Bash): advisory warning on catastrophic commands only
 |   |-- format_after_edit.py       #   PostToolUse(Edit/Write): format after edits
+|   |-- docs_drift_watch.py        #   PostToolUse(Edit/Write/MultiEdit): inline docs-drift warning, debounced
 |   |-- dispatch_tripwire.py       #   PostToolUse advisory + PreToolUse deny: curb inline drift in orchestration runs
 |   |-- completion_gate.py         #   Stop: block premature "done" until the definition-of-done holds
-|   |-- memory_capture.py          #   Stop/SubagentStop: persist lessons to ~/.atlas/memory/
-|   |-- auto_skill.py              #   Stop: create new skills from session transcripts at ~/.claude/skills/
-|   |-- nudge.py                   #   Stop/SubagentStop: self-improvement nudge (throttled)
 |   |-- ingest_session.py          #   Stop/SubagentStop/SessionEnd/PreCompact: mirror transcript to the observability DB
+|   |-- chronicle_facet.py         #   Stop: write one facets row + mirror signals into friction_events
+|   |-- memory_capture.py          #   Stop/SubagentStop: persist lessons to ~/.atlas/memory/
+|   |-- nudge.py                   #   Stop only: self-improvement nudge (throttled)
+|   |-- docs_drift.py              #   not a hook; shared find_root/docs_drift/git_changed_paths used by completion_gate.py and docs_drift_watch.py
 |   `-- validate-readonly-query.sh #   not auto-loaded; DB-audit subagents wire it during read-only audits
-|-- scripts/                       # atlas_doctor.py (repair; also wired via hooks.json --hook as the 11th auto-loaded hook, SessionStart), atlas_db.py (observability), atlas_context_optimizer.py
+|-- scripts/                       # atlas_doctor.py (repair; also wired via hooks.json --hook as the 13th auto-loaded hook, SessionStart), atlas_db.py (observability), atlas_context_optimizer.py
 |                                  # (disable unused skills/agents), atlas_curator.py, atlas_memory.py, skill_factory.py,
 |                                  # asset_audit.py, discover_capabilities.py, build_hub.py, install_hooks.py + tests
 |-- output-styles/
@@ -86,11 +88,12 @@ hook can never block a session.
 | `bash_advisor.py` | `PreToolUse` (Bash) | Advisory only: warns on catastrophic patterns (`rm -rf /`, `mkfs`, `dd` to a disk, fork bomb). Never denies |
 | `dispatch_tripwire.py` | `PostToolUse` + `PreToolUse` | Flag orchestration sessions, count inline ops, advise at the threshold; deny tier blocks at 8 inline ops or non-docs edits in orchestration runs (`ATLAS_TRIPWIRE=off`, `ATLAS_TRIPWIRE_HARD=off`) |
 | `format_after_edit.py` | `PostToolUse` (Edit/Write) | Run the repo's formatter after edits |
-| `completion_gate.py` | `Stop` | Block a premature "done" until the definition-of-done holds: evidence artifact, independent verifier, current docs, verifier coverage (orchestrating sessions only; `ATLAS_GATE=off`) |
-| `memory_capture.py` | `Stop`, `SubagentStop` | Persist session lessons to `~/.atlas/memory/` |
-| `auto_skill.py` | `Stop` | Create new skills from session transcripts at `~/.claude/skills/` |
-| `nudge.py` | `Stop`, `SubagentStop` | Self-improvement: prompt to capture a lesson and check docs drift (throttled) |
+| `docs_drift_watch.py` | `PostToolUse` (Edit/Write/MultiEdit) | Inline backstop for `completion_gate.py` condition (f): warns the moment a non-docs edit drifts from `docs/`, instead of waiting for Stop. Debounced per session_id (first drifting edit, then every 5th; resets when `docs/` reappears in the diff or a new/missing session_id arrives); silent with no `docs/`, `ATLAS_GATE=off`, or on a `docs/`/`.atlas/` path. The backing `git diff` is cached for 2s (`time.monotonic`) to keep the common-path cost low |
+| `completion_gate.py` | `Stop` | Block a premature "done" until the definition-of-done holds: evidence artifact and independent verifier (only once this run shipped non-docs code), current docs, verifier coverage (orchestrating sessions only; `ATLAS_GATE=off`). Silent on pass -- speaks only when it blocks |
+| `memory_capture.py` | `Stop`, `SubagentStop` | Persist session lessons to `~/.atlas/memory/`. Note: also emits an additionalContext summary of what it captured on both events -- unlike `ingest_session.py`, this is not silent capture |
+| `nudge.py` | `Stop` only | Self-improvement: prompt to capture a lesson and check docs drift (throttled). Not bound to `SubagentStop` -- landing there injected its prompt into a dispatched subagent's context right before it composed its final response, so the subagent answered the nudge instead of returning its deliverable |
 | `ingest_session.py` | `Stop`, `SubagentStop`, `SessionEnd`, `PreCompact` | Mirror the session transcript into the observability DB for atlas-audit self mode (`ATLAS_INGEST=off`) |
+| `chronicle_facet.py` | `Stop` | Write one deterministic `facets` row per session and mirror `signals` into `friction_events` |
 
 An `atlas-orchestrator` output style ships under `output-styles/` with
 `force-for-plugin: true` - it auto-applies whenever the atlas plugin is enabled
@@ -111,7 +114,6 @@ settings manually. The optional ollama-backed optimizer is configured with
 Four hooks close the loop the fleet used to leave to manual runs:
 
 - `memory_capture.py` persists durable lessons per project to `~/.atlas/memory/`.
-- `auto_skill.py` mines finished sessions and drafts new skills at `~/.claude/skills/`.
 - `scripts/atlas_context_optimizer.py` disables unused skills/agents
   (`disable-model-invocation: true`) based on real usage in the observability DB.
 - `scripts/atlas_curator.py` handles skill lifecycle (stale/archive/pin).

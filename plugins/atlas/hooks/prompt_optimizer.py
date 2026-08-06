@@ -503,6 +503,8 @@ def main() -> int:
     try:
         raw = sys.stdin.read()
         data = json.loads(raw) if raw.strip() else {}
+        if not isinstance(data, dict):
+            data = {}  # non-dict JSON (null, list) is not a payload
     except (json.JSONDecodeError, ValueError):
         return 0  # malformed input -> passthrough
     prompt = (data.get("prompt") or "").strip()

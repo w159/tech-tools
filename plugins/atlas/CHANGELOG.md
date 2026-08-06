@@ -1,5 +1,63 @@
 # Changelog
 
+## 5.5.0 (2026-08-06)
+
+Reporting discipline and deterministic verification. Atlas was producing
+unusable output: `done` was emitted repeatedly inside one exchange, each time
+followed by more work, and the user's decision points were buried under
+restated state. Separately, verification leaned on dispatched subagents that
+ran longer than the changes they checked and returned prose instead of
+verdicts.
+
+**Output style (`output-styles/atlas-orchestrator.md`)**
+
+- `done` is now terminal and conditional: forbidden while any subagent or
+  background task is pending, while any question to the user is unanswered,
+  or while anything remains to do. Emitting it otherwise is a defect.
+- Length budget: 12 lines of prose for any non-report reply. Evidence blocks
+  are exempt; the budget never excuses skipping evidence.
+- New information only: a re-invocation with nothing new gets one line, not a
+  restatement of outstanding state.
+- Decisions go first: any question sits at the top under `DECISION NEEDED:`
+  and repeats until resolved.
+- Verification doctrine replaced: verify with a deterministic test, dispatch a
+  verifier subagent only when no test can express the check, and say why.
+
+**Hooks**
+
+- Removed `auto_skill.py` and its tests. It wrote `SKILL.md` files into
+  `~/.claude/skills/` unprompted, producing 19 `learned-*` slash commands the
+  user never asked for. The hook, its binding, and the generated skills are
+  gone; `nudge.py` lost its dead skill-probe with them.
+- `completion_gate.py` no longer narrates on a pass. Silence is the contract:
+  it speaks only when it blocks. Conditions (a) and (b) apply only once a run
+  has shipped non-docs code, so research-only runs stop being gated.
+- `nudge.py` unbound from `SubagentStop`. Landing there injected its prompt
+  into a dispatched agent's context immediately before its final response, and
+  agents answered the nudge instead of returning their deliverable.
+- New `docs_drift_watch.py` (PostToolUse): warns inline the moment a non-docs
+  edit drifts from `docs/`, instead of waiting for the Stop gate. Debounced per
+  `session_id`, backing `git diff` cached 2s, atomic state writes.
+- Extracted `docs_drift.py` (`find_root`, `docs_drift`, `git_changed_paths`),
+  shared by the gate and the watcher.
+- `bash_advisor.py`, `format_after_edit.py` and `prompt_optimizer.py` now
+  coerce non-dict JSON payloads to `{}`. All three crashed with
+  `AttributeError` on `null` or a list, which fail-open was assumed to cover
+  and never tested.
+
+**Verification**
+
+- New `hooks/test_atlas_contract.py`: the deterministic replacement for a
+  verifier subagent. Asserts wiring integrity, that no hook can write a
+  `SKILL.md`, that nothing instruction-injecting binds to `SubagentStop`, gate
+  silence on pass, drift-warning behavior, session-scoped debounce, fail-open
+  under garbage stdin for every hook, the output-style rules, and
+  docs-match-code. Runs in under two seconds and found four real defects on
+  its first run.
+- Documented a known gap as a passing test: the gate's conditions (a), (b),
+  (f) and (g) all key off `atlas_db` run rows, so a session with no run row
+  gets a gate that enforces only "the docs files exist".
+
 ## 5.4.0 (2026-08-05)
 
 Self-improvement was not missing, it was stalled. Atlas had been recording

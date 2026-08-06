@@ -13,9 +13,13 @@ findings) lives under `.atlas/` directly, never under a `.atlas/docs/` layer. In
 session with no `docs/` it is a silent no-op, so it is safe to leave installed.
 
 Seven conditions must ALL hold before the gate passes (else block ONCE):
-  (a) At least one file exists under `.atlas/evidence/`.
+  (a) At least one file exists under `.atlas/evidence/`. Scoped like (f)/(g):
+      only checked when THIS RUN shipped non-docs code (_nondocs_changed on
+      the run-write signal). A run that shipped no code has no evidence to
+      capture, so (a) is skipped rather than manufacturing busywork.
   (b) `.atlas/.run/findings.json` exists and contains at least one entry with
-      status "verified".
+      status "verified". Same scoping as (a): only checked when this run
+      shipped non-docs code.
   (c) `docs/CHANGELOG.md` exists and is non-empty (docs-current backstop).
   (d) `docs/ROADMAP.md` exists and is non-empty.
   (e) `README.md` at the project root exists and is non-empty.
@@ -23,8 +27,8 @@ Seven conditions must ALL hold before the gate passes (else block ONCE):
       not the whole working tree) wrote non-docs files, at least one docs/
       file changed too -- this is the deterministic trigger that forces an
       atlas:docs-curator dispatch before "done". If this run wrote zero
-      non-docs files, (f) WARNS instead of blocking -- a dirty tree left by an
-      earlier session is not this run's problem to fix.
+      non-docs files, (f) is skipped -- a dirty tree left by an earlier
+      session is not this run's problem to fix.
   (g) Law 5 -- verifier coverage: if non-docs code changed this run and there
       are more implementer dispatches than verifier dispatches for the run
       (atlas_db.unpaired_implementer_dispatches > 0), block -- shipping work
@@ -34,8 +38,16 @@ Seven conditions must ALL hold before the gate passes (else block ONCE):
       in ROADMAP is a defect -- it belongs in CHANGELOG with a date and
       evidence citation.
 
+(a), (b), (f), and (g) all share one signal: whether THIS RUN shipped
+non-docs code (_nondocs_changed on the run-write signal from atlas_db). A
+run that shipped no code -- a question answered, a read-only audit --
+has nothing for those four conditions to check, so they are skipped
+rather than blocking on manufactured busywork or narrating a pass.
+
 If any condition is missing the hook blocks and names exactly which condition
-failed and which specialist closes it.
+failed and which specialist closes it. On a pass, the gate is silent: it
+never emits additionalContext or any other output that could prompt another
+turn -- only a block speaks.
 
 Fail-open by construction: any error, missing dir, or unparseable input lets the
 stop proceed. Disable entirely with ATLAS_GATE=off. Opt-out (on by default when
@@ -49,29 +61,16 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 import atlas_hook_guard  # noqa: E402
 
-
-def _find_root(start: Path) -> Path | None:
-    """Walk from start toward the filesystem root; return the project root
-    holding a `docs/` directory -- the project-documentation SSOT that
-    atlas-setup scaffolds. Stops at the filesystem root or after 6 levels to
-    stay cheap and fail-open.
-    """
-    candidate = start
-    for _ in range(7):
-        if (candidate / "docs").is_dir():
-            return candidate
-        parent = candidate.parent
-        if parent == candidate:
-            break
-        candidate = parent
-    return None
+sys.path.insert(0, os.path.dirname(__file__))
+from docs_drift import docs_drift as _docs_drift  # noqa: E402
+from docs_drift import find_root as _find_root  # noqa: E402
+from docs_drift import git_changed_paths as _git_changed_paths  # noqa: E402
 
 
 def _check_evidence(root: Path) -> bool:
@@ -150,20 +149,6 @@ def _check_roadmap_reconciled(root: Path) -> bool:
         return True  # can't read → fail open
 
 
-def _docs_drift(changed_paths: list) -> bool:
-    """Return True when >=1 non-docs file was changed and 0 docs files were changed.
-
-    A path is 'docs' if it starts with 'docs/' or contains '/docs/'.
-    Pure helper: takes a list of relative path strings, does no I/O.
-    """
-    if not changed_paths:
-        return False
-    for p in changed_paths:
-        if p.startswith("docs/") or "/docs/" in p:
-            return False  # at least one docs path -> no drift
-    return True  # paths present, none are docs
-
-
 def _nondocs_changed(changed_paths: list) -> bool:
     """Return True when at least one changed path is NOT a docs/ path.
 
@@ -175,43 +160,6 @@ def _nondocs_changed(changed_paths: list) -> bool:
         if not (p.startswith("docs/") or "/docs/" in p):
             return True
     return False
-
-
-def _git_changed_paths(root: Path) -> list:
-    """Return changed file paths from git diff HEAD and the staged index.
-
-    Uses the repo root detected from the project root. Fails open on a
-    non-repo path or git command error (returns [] so the caller treats it as
-    no drift). A missing git binary (FileNotFoundError) is propagated so the
-    caller can fail-closed -- silently passing docs-drift / Law 5 when git is
-    genuinely unavailable would let unverified code ship.
-    """
-    try:
-        root_bytes = subprocess.check_output(
-            ["git", "-C", str(root), "rev-parse", "--show-toplevel"],
-            stderr=subprocess.DEVNULL,
-            timeout=5,
-        )
-        repo_root = root_bytes.decode(errors="replace").strip()
-    except FileNotFoundError as exc:
-        raise RuntimeError("git unavailable: could not run git (%s)" % exc) from exc
-    except Exception:
-        return []
-
-    paths: set = set()
-    for args in (
-        ["git", "-C", repo_root, "diff", "--name-only", "HEAD"],
-        ["git", "-C", repo_root, "diff", "--name-only", "--cached"],
-    ):
-        try:
-            out = subprocess.check_output(args, stderr=subprocess.DEVNULL, timeout=5)
-            for line in out.decode(errors="replace").splitlines():
-                line = line.strip()
-                if line:
-                    paths.add(line)
-        except Exception:
-            pass  # fail-open: any git error -> treat as no new paths
-    return list(paths)
 
 
 def _reason(
@@ -334,20 +282,26 @@ def main() -> int:
             return 0  # no docs/ SSOT -> not an atlas run -> silent no-op
         if not _session_is_orchestrating(data.get("session_id", "")):
             return 0  # WS1: only real orchestration runs are gated; never block a chat/audit turn
-        ok_a = _check_evidence(root)
-        ok_b = _check_findings(root)
+        # (a)/(b)/(f)/(g) share one signal: did THIS RUN's own activity ship
+        # non-docs code? Scoped to run_written_paths (atlas_db events +
+        # tool_calls), not the whole working tree -- a dirty tree left by an
+        # earlier session must never block a run that touched nothing.
+        # Fail-open: any DB error yields an empty path list -> treated the
+        # same as "wrote nothing", never a false block.
+        run_paths = _run_written_paths(data.get("session_id", ""))
+        code_changed = _nondocs_changed(run_paths)
+        # (a)/(b) only apply once this run has shipped non-docs code. A
+        # research-only or docs-only run has no evidence/verification to
+        # produce, so manufacturing a findings.json entry to satisfy an
+        # inapplicable gate is the defect, not the fix.
+        ok_a = _check_evidence(root) if code_changed else True
+        ok_b = _check_findings(root) if code_changed else True
         ok_c = _check_changelog(root)
         ok_d = _check_roadmap(root)
         ok_e = _check_readme(root)
         ok_h = _check_roadmap_reconciled(root)
-        # (f) Docs drift BLOCKS: THIS RUN's own writes moved code but docs/ did
-        # not. Scoped to run_written_paths (atlas_db events + tool_calls), not
-        # the whole working tree -- a dirty tree left by an earlier session
-        # must never block a run that touched nothing. Fail-open: any DB
-        # error yields an empty path list -> treated the same as "wrote
-        # nothing", never a false block.
-        run_paths = _run_written_paths(data.get("session_id", ""))
-        code_changed = _nondocs_changed(run_paths)
+        # (f) Docs drift BLOCKS: THIS RUN's own writes moved code but docs/
+        # did not.
         drift = _docs_drift(run_paths) if code_changed else False
         # (g) Law 5 -- verifier coverage. Only when THIS RUN's own writes
         # touched non-docs code: block if implementer dispatches outnumber
@@ -370,25 +324,9 @@ def main() -> int:
             and not drift
             and unverified == 0
         ):
-            if not code_changed:
-                # This run wrote zero non-docs files -- (f)/(g) had nothing to
-                # check. WARN so that's observable instead of silently
-                # indistinguishable from "checked and clean", but never block
-                # a run over a dirty tree it did not create.
-                print(
-                    json.dumps(
-                        {
-                            "hookSpecificOutput": {
-                                "hookEventName": "Stop",
-                                "additionalContext": (
-                                    "[atlas] completion_gate: this run wrote zero "
-                                    "non-docs files, so conditions (f) docs-drift and "
-                                    "(g) verifier coverage were not evaluated this Stop."
-                                ),
-                            }
-                        }
-                    )
-                )
+            # Silence on pass is the contract: the gate speaks only when it
+            # blocks. No advisory, no "not evaluated" narration -- any output
+            # here reads as a prompt for another turn.
             return 0
         block_reason = _reason(
             not ok_a,

@@ -119,7 +119,6 @@ class InProcessMainTest(unittest.TestCase):
     def test_orchestration_with_no_capture_nudges_to_capture(self):
         with (
             mock.patch.object(nudge, "_check_memory_captured", return_value=False),
-            mock.patch.object(nudge, "_check_skill_created", return_value=False),
         ):
             code, out, err = self._run_main({"session_id": "sess-orch"})
         self.assertEqual(code, 0)
@@ -132,7 +131,6 @@ class InProcessMainTest(unittest.TestCase):
         # second call for the same session, inside the window, stays silent.
         with (
             mock.patch.object(nudge, "_check_memory_captured", return_value=False),
-            mock.patch.object(nudge, "_check_skill_created", return_value=False),
         ):
             first_code, first_out, _ = self._run_main({"session_id": "sess-orch"})
             code, out, err = self._run_main({"session_id": "sess-orch"})
@@ -152,34 +150,13 @@ class InProcessMainTest(unittest.TestCase):
     def test_memory_captured_reports_completion(self):
         with (
             mock.patch.object(nudge, "_check_memory_captured", return_value=True),
-            mock.patch.object(nudge, "_check_skill_created", return_value=False),
         ):
             code, out, err = self._run_main({"session_id": "sess-orch"})
         self.assertEqual(code, 0)
         self.assertIn("Self-improvement complete", out)
         self.assertIn("memory facts captured", out)
-        self.assertNotIn("new skill auto-created", out)
 
-    def test_skill_created_reports_completion(self):
-        with (
-            mock.patch.object(nudge, "_check_memory_captured", return_value=False),
-            mock.patch.object(nudge, "_check_skill_created", return_value=True),
-        ):
-            code, out, err = self._run_main({"session_id": "sess-orch"})
-        self.assertEqual(code, 0)
-        self.assertIn("Self-improvement complete", out)
-        self.assertIn("new skill auto-created", out)
-        self.assertNotIn("memory facts captured", out)
 
-    def test_both_captured_reports_both_parts(self):
-        with (
-            mock.patch.object(nudge, "_check_memory_captured", return_value=True),
-            mock.patch.object(nudge, "_check_skill_created", return_value=True),
-        ):
-            code, out, err = self._run_main({"session_id": "sess-orch"})
-        self.assertEqual(code, 0)
-        self.assertIn("memory facts captured", out)
-        self.assertIn("new skill auto-created", out)
 
     def test_empty_stdin_falls_back_to_empty_payload(self):
         # No session_id -> is_orchestrating("") is False -> no-op exit 0.
@@ -263,60 +240,6 @@ class CheckMemoryCapturedTest(unittest.TestCase):
             self.assertFalse(nudge._check_memory_captured())
 
 
-class CheckSkillCreatedTest(unittest.TestCase):
-    def _skills_dir(self, home):
-        return os.path.join(home, ".atlas", "skills")
-
-    def test_recent_skill_md_returns_true(self):
-        home = tempfile.mkdtemp()
-        skill_dir = os.path.join(self._skills_dir(home), "my-skill")
-        os.makedirs(skill_dir)
-        skill_md = os.path.join(skill_dir, "SKILL.md")
-        with open(skill_md, "w") as f:
-            f.write("# skill")
-        os.utime(skill_md, (time.time(), time.time()))
-        with mock.patch.dict(os.environ, {"HOME": home}, clear=False):
-            self.assertTrue(nudge._check_skill_created())
-
-    def test_missing_skills_dir_returns_false(self):
-        home = tempfile.mkdtemp()
-        with mock.patch.dict(os.environ, {"HOME": home}, clear=False):
-            self.assertFalse(nudge._check_skill_created())
-
-    def test_no_skill_md_returns_false(self):
-        home = tempfile.mkdtemp()
-        skill_dir = os.path.join(self._skills_dir(home), "empty")
-        os.makedirs(skill_dir)  # dir exists but no SKILL.md
-        with mock.patch.dict(os.environ, {"HOME": home}, clear=False):
-            self.assertFalse(nudge._check_skill_created())
-
-    def test_stale_skill_md_returns_false(self):
-        home = tempfile.mkdtemp()
-        skill_dir = os.path.join(self._skills_dir(home), "old-skill")
-        os.makedirs(skill_dir)
-        skill_md = os.path.join(skill_dir, "SKILL.md")
-        with open(skill_md, "w") as f:
-            f.write("# old")
-        old = time.time() - 120
-        os.utime(skill_md, (old, old))
-        with mock.patch.dict(os.environ, {"HOME": home}, clear=False):
-            self.assertFalse(nudge._check_skill_created())
-
-    def test_getmtime_error_returns_false(self):
-        # Skill SKILL.md exists but getmtime raises -> except branch -> False.
-        home = tempfile.mkdtemp()
-        skill_dir = os.path.join(self._skills_dir(home), "my-skill")
-        os.makedirs(skill_dir)
-        skill_md = os.path.join(skill_dir, "SKILL.md")
-        with open(skill_md, "w") as f:
-            f.write("# skill")
-        with (
-            mock.patch.dict(os.environ, {"HOME": home}, clear=False),
-            mock.patch.object(os.path, "getmtime", side_effect=OSError("boom")),
-        ):
-            self.assertFalse(nudge._check_skill_created())
-
-
 class OuterMainGuardTest(unittest.TestCase):
     """Cover the fail-open `if __name__ == '__main__'` guard: an exception
     escaping main() must be swallowed and the process exit 0 (mirrors the
@@ -351,6 +274,28 @@ class OuterMainGuardTest(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 exec(compile(source, src_path, "exec"), g)
         self.assertGreaterEqual(guard_calls.call_count, 2)
+
+
+class NudgeHooksJsonBindingTest(unittest.TestCase):
+    """DEFECT 3: the self-improvement nudge must fire only on Stop, never on
+    SubagentStop. Landing on SubagentStop injects additionalContext into a
+    dispatched subagent's context right before it composes its final
+    response, which the subagent answers instead of returning its
+    deliverable -- costing a full resume round trip per occurrence."""
+
+    def test_nudge_not_bound_to_subagent_stop(self):
+        hj = os.path.join(os.path.dirname(__file__), "hooks.json")
+        with open(hj) as f:
+            data = json.load(f)
+        subagent_stop_blob = json.dumps(data.get("hooks", {}).get("SubagentStop", []))
+        self.assertNotIn("nudge.py", subagent_stop_blob)
+
+    def test_nudge_still_bound_to_stop(self):
+        hj = os.path.join(os.path.dirname(__file__), "hooks.json")
+        with open(hj) as f:
+            data = json.load(f)
+        stop_blob = json.dumps(data.get("hooks", {}).get("Stop", []))
+        self.assertIn("nudge.py", stop_blob)
 
 
 if __name__ == "__main__":
