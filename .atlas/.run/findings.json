@@ -168,5 +168,12 @@
     "status": "needs-verification",
     "verifier": "pending (atlas:verifier to promote)",
     "evidence": "python3 -m pytest plugins/atlas/hooks -q -> 467 passed (baseline 460), 8 subtests passed, 0 failures. Files changed: plugins/atlas/hooks/completion_gate.py, plugins/atlas/hooks/hooks.json, plugins/atlas/hooks/test_completion_gate.py, plugins/atlas/hooks/test_nudge.py, docs/CHANGELOG.md, plugins/atlas/README.md, docs/architecture/atlas-plugin-map-2026-07-17.md."
+  },
+  {
+    "batch": "2026-08-06-5.6.0-gap-closure",
+    "claim": "Six carried gaps closed: stale .mcpb connector test rewritten for vendored ESM bundles (the repo's one pre-existing failure); gate-block persistence wired so facets.gate_block_count is a real count; chronicle_facet's unscoped friction_events delete no longer erases gate_block/memory_drop rows; completion_gate falls back to the git tree when a run logged no telemetry at all; .gitignore extended for 10 dump/keystore shapes proven trackable by git check-ignore; skill_factory.py deleted and guarded by a contract test; atlas_doctor gained --enrich-facet.",
+    "status": "verified",
+    "verifier": "deterministic contract + unit suite (no subagent: every claim is expressible as a test)",
+    "evidence": "cd plugins/atlas && python3 -m pytest hooks scripts -q -> 1028 passed, 3 skipped, 56 subtests passed (3 skips are InstalledParityContract, installed cache 5.5.0 vs manifest 5.6.0, un-skip after reinstall). git check-ignore probes before/after in .atlas/evidence/2026-08-06-atlas-5.6.0-gap-closure.md."
   }
 ]

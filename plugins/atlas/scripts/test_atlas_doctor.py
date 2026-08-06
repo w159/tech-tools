@@ -732,6 +732,38 @@ class AtlasDoctorMiningTest(unittest.TestCase):
 
     # --- individual miners -----------------------------------------------
 
+    def test_enrich_facet_writes_llm_columns(self):
+        """Phase 1 enrichment is a deterministic command, not a prose step.
+
+        The judgment stays the model's; the write is a validated CLI call that
+        can be tested and replayed instead of being described in a skill.
+        """
+        atlas_db.upsert_facet(self.conn, "sess-enrich")
+        rc = atlas_doctor.main(
+            [
+                "--enrich-facet",
+                "sess-enrich",
+                json.dumps(
+                    {"primary_success": "closed the gate gap", "brief_summary": "gaps"}
+                ),
+            ]
+        )
+        self.assertEqual(rc, 0)
+        row = self.conn.execute(
+            "SELECT primary_success, brief_summary FROM facets WHERE session_id=?",
+            ("sess-enrich",),
+        ).fetchone()
+        self.assertEqual(row, ("closed the gate gap", "gaps"))
+
+    def test_enrich_facet_rejects_unknown_columns_and_bad_json(self):
+        """A typo must fail loudly, not write a column nobody reads."""
+        self.assertEqual(
+            atlas_doctor.main(["--enrich-facet", "s", '{"nope": 1}']),
+            2,
+        )
+        self.assertEqual(atlas_doctor.main(["--enrich-facet", "s", "{"]), 2)
+        self.assertEqual(atlas_doctor.main(["--enrich-facet", "s", "[]"]), 2)
+
     def test_memory_capture_miner_flags_missing_else(self):
         self._write_memory_capture(self.NO_DROP_HANDLING)
         found = atlas_doctor.mine_memory_capture_silent_drop(self.conn, self.root)

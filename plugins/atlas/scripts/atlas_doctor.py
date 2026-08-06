@@ -1107,9 +1107,40 @@ def main(argv=None):
         help="print facets rows pending LLM enrichment (default limit 50)",
     )
     ap.add_argument(
+        "--enrich-facet",
+        nargs=2,
+        default=None,
+        metavar=("SESSION_ID", "JSON"),
+        help="write LLM-judged facet columns for one session, e.g. "
+        '--enrich-facet abc123 \'{"primary_success":"...","brief_summary":"..."}\'',
+    )
+    ap.add_argument(
         "--json", action="store_true", help="machine-readable output for the above"
     )
     args = ap.parse_args(argv)
+
+    if args.enrich_facet:
+        session_id, payload = args.enrich_facet
+        try:
+            fields = json.loads(payload)
+        except (json.JSONDecodeError, ValueError) as exc:
+            print("--enrich-facet: JSON is not parseable: %s" % exc, file=sys.stderr)
+            return 2
+        if not isinstance(fields, dict) or not fields:
+            print("--enrich-facet: expected a non-empty JSON object", file=sys.stderr)
+            return 2
+        unknown = sorted(set(fields) - set(atlas_db.FACET_COLUMNS))
+        if unknown:
+            print(
+                "--enrich-facet: unknown facet column(s): %s" % unknown, file=sys.stderr
+            )
+            return 2
+        conn = atlas_db.connect()
+        atlas_db.init(conn)
+        atlas_db.upsert_facet(conn, session_id, **fields)
+        conn.close()
+        print(json.dumps({"session_id": session_id, "written": sorted(fields)}))
+        return 0
 
     if args.mine:
         conn = atlas_db.connect()

@@ -20,11 +20,11 @@ _INTERPOLATION_RE = re.compile(r"\$\{user_config\.([a-z_][a-z0-9_]*)\}")
 
 
 def _discover_connectors() -> dict[str, Path]:
-    """Return a map of connector name -> bundle path for every .mcpb bundle."""
+    """Return a map of connector name -> vendored ESM bundle (mcp/<name>/server.mjs)."""
     connectors: dict[str, Path] = {}
     if MCP_DIR.exists():
-        for bundle in sorted(MCP_DIR.rglob("*.mcpb")):
-            connectors[bundle.stem] = bundle
+        for bundle in sorted(MCP_DIR.glob("*/server.mjs")):
+            connectors[bundle.parent.name] = bundle
     return connectors
 
 
@@ -53,7 +53,7 @@ class TestConnectorsWiring(unittest.TestCase):
         self.assertEqual(
             missing,
             [],
-            "every .mcpb bundle must have a matching mcpServers entry",
+            "every vendored server.mjs must have a matching mcpServers entry",
         )
 
     def test_every_mcp_server_has_a_bundle(self) -> None:
@@ -61,33 +61,37 @@ class TestConnectorsWiring(unittest.TestCase):
         self.assertEqual(
             extra,
             [],
-            "every mcpServers entry must have a matching .mcpb bundle",
+            "every mcpServers entry must have a matching mcp/<name>/server.mjs",
         )
 
-    def test_mcp_server_invokes_department_launch_script(self) -> None:
-        for name, bundle in self.connectors.items():
+    def test_connectors_are_discoverable_at_all(self) -> None:
+        """Guard against a discovery bug making every bundle test vacuous."""
+        self.assertTrue(
+            self.connectors,
+            f"no connector bundles discovered under {MCP_DIR}; discovery is broken",
+        )
+
+    def test_mcp_server_runs_vendored_bundle_through_env_preloader(self) -> None:
+        for name in self.connectors:
             server = self.mcp_servers[name]
-            args = server.get("args", [])
-            dept = bundle.parent.name
-            expected_script = f"${{CLAUDE_PLUGIN_ROOT}}/mcp/{dept}/launch.sh"
             self.assertEqual(
-                args[0],
-                expected_script,
-                f"{name}: launch script must be {expected_script}",
+                server.get("command"),
+                "node",
+                f"{name}: vendored ESM bundles are launched with node",
             )
             self.assertEqual(
-                args[1],
-                name,
-                f"{name}: launch script arg must be the connector bundle name",
-            )
-            self.assertTrue(
-                isinstance(args[2], str) and args[2],
-                f"{name}: launch script must include a non-empty entry path",
+                server.get("args"),
+                [
+                    "--import",
+                    "${CLAUDE_PLUGIN_ROOT}/mcp/_env/load.mjs",
+                    f"${{CLAUDE_PLUGIN_ROOT}}/mcp/{name}/server.mjs",
+                ],
+                f"{name}: must preload the env loader, then run its own server.mjs",
             )
 
     def test_every_interpolated_user_config_key_exists(self) -> None:
         referenced: set[str] = set()
-        for name, server in self.mcp_servers.items():
+        for server in self.mcp_servers.values():
             for value in server.get("env", {}).values():
                 for match in _INTERPOLATION_RE.finditer(value):
                     referenced.add(match.group(1))

@@ -4,13 +4,14 @@ A self-configuring Claude Code plugin that turns any coding agent into a discipl
 multi-agent architect. Run `atlas-setup` once to onboard a project, then drive work
 through the auto-triggering skills and the `atlas:<role>` subagent squad. A
 SessionStart hook loads the runtime automatically every session, and the
-self-improvement hooks (memory capture, auto-skill, nudge, session ingest) make the
-agent better in a codebase the more it is used.
+self-improvement hooks (memory capture, chronicle facet capture, nudge, session
+ingest) make the agent better in a codebase the more it is used. No hook creates a
+skill or a slash command: durable knowledge goes to findings, docs, and memory.
 
 Org deployment (11 departments, 156 department skills) lives in the separate
 `armada` plugin in this repo; install it alongside atlas only for org use.
 
-## The skill fleet (22 skills, plainly named)
+## The skill fleet (21 skills, plainly named)
 
 Two manual skills, twenty auto-trigger skills. Auto-trigger comes from each
 skill's `description` + `when_to_use`; the manual skills have
@@ -46,7 +47,7 @@ atlas/
 |   |-- docs_drift.py              #   not a hook; shared find_root/docs_drift/git_changed_paths used by completion_gate.py and docs_drift_watch.py
 |   `-- validate-readonly-query.sh #   not auto-loaded; DB-audit subagents wire it during read-only audits
 |-- scripts/                       # atlas_doctor.py (repair; also wired via hooks.json --hook as the 13th auto-loaded hook, SessionStart), atlas_db.py (observability), atlas_context_optimizer.py
-|                                  # (disable unused skills/agents), atlas_curator.py, atlas_memory.py, skill_factory.py,
+|                                  # (disable unused skills/agents), atlas_curator.py, atlas_memory.py,
 |                                  # asset_audit.py, discover_capabilities.py, build_hub.py, install_hooks.py + tests
 |-- output-styles/
 |   `-- atlas-orchestrator.md      # force-for-plugin: true - auto-applies whenever atlas is enabled
@@ -63,7 +64,7 @@ atlas/
 |   |-- docs-curator.md            #   maintains the docs/ single source of truth (fork)
 |   |-- docs-auditor.md            #   audits docs/ for drift against code
 |   `-- completeness-critic.md     #   "what did we miss" gap pass before done (fork)
-`-- skills/                        # the 22 skills, one directory each (SKILL.md + references/)
+`-- skills/                        # the 21 skills, one directory each (SKILL.md + references/)
 ```
 
 ## Getting started

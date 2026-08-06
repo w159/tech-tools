@@ -166,8 +166,41 @@ class ChronicleFacetTest(unittest.TestCase):
         self.assertEqual(dispatch_count, 1)
         self.assertEqual(verifier_coverage, 0.5)
         self.assertEqual(wall_clock_s, 42.0)
-        # gate_block_count has no data source yet -- NULL, never a fabricated 0.
-        self.assertIsNone(gate_block_count)
+        # gate_block_count now counts completion_gate's friction_events rows.
+        # This session was blocked zero times, and it was ingested, so 0 is a
+        # real measurement rather than a fabricated one.
+        self.assertEqual(gate_block_count, 0)
+
+    def test_gate_blocks_are_counted_and_survive_the_signal_mirror(self):
+        """completion_gate writes friction_events; this hook must count them.
+
+        _sync_friction_events re-mirrors `signals` on every Stop. Its delete
+        used to be unscoped, which erased gate_block (and memory_drop) rows
+        that no signal could ever reinsert.
+        """
+        rid = atlas_db.start_run(self.conn, self.pid, "sess-gate")
+        self._seed_session("sess-gate", run_id=rid)
+        atlas_db.record_friction(
+            self.conn, "sess-gate", "gate_block", snippet="conditions: a,b"
+        )
+        atlas_db.record_friction(
+            self.conn, "sess-gate", "memory_drop", snippet="memory: cap"
+        )
+        self._run_main({"session_id": "sess-gate", "cwd": "/repo/atlas"})
+
+        count = self.conn.execute(
+            "SELECT gate_block_count FROM facets WHERE session_id=?", ("sess-gate",)
+        ).fetchone()[0]
+        self.assertEqual(count, 1)
+        survivors = {
+            c
+            for (c,) in self.conn.execute(
+                "SELECT DISTINCT category FROM friction_events WHERE session_id=?",
+                ("sess-gate",),
+            )
+        }
+        self.assertIn("gate_block", survivors)
+        self.assertIn("memory_drop", survivors)
 
     # (a2) un-ingested session (no session_logs row yet) writes NULL, not 0,
     # for every count that depends on the transcript mirror having run.

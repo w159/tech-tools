@@ -6,9 +6,9 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 
 ## In Progress
 
-- [active] L1: marketplace plugin (5.0.0) is stale vs the working tree. Run `/reload-plugins`
-  (or reinstall) so the live Stop hook executes the fixed `docs`-resolving completion_gate.
-  Coverage and test fixes are inert in the live agent until this reload lands.
+- [active] Reinstall after the 5.6.0 bump. `InstalledParityContract` skips (rather than
+  passes) whenever the installed cache version differs from the manifest, so those three
+  assertions are dormant until `/plugin` reinstalls atlas at 5.6.0.
 - [in-progress] Vendored upstream clones (aider/, claude-code/, cline/, codex/, cursor/,
   gemini-cli/, github-copilot/, pi/, windsurf/, frameworks/, vendors/) still live in docs/.
   Decision needed: move to `reference/` at repo root, or keep in docs/ as reference material.
@@ -18,21 +18,27 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 
 ### Atlas self-improvement follow-ups (added 2026-08-05)
 
-Chronicle/insights schema and `atlas-doctor` skill shipped this date (see CHANGELOG). Three
-gaps remain, none of which block the shipped skill:
+Chronicle/insights schema and `atlas-doctor` skill shipped this date (see CHANGELOG). One
+gap remains; the other two closed in 5.6.0 (2026-08-06):
 
-- Gate-block persistence: `completion_gate.py` does not yet record which condition fired to
-  `atlas.db`, so `facets.gate_block_count` stays NULL. The agent that would have wired this
-  stalled before writing it.
+- [closed 2026-08-06] Gate-block persistence: `completion_gate.py` now writes a
+  `friction_events` row per block and `chronicle_facet.py` counts it into
+  `facets.gate_block_count`. Also fixed the unscoped friction delete that was erasing those
+  rows. See CHANGELOG 2026-08-06 (5.6.0).
+- [closed, was never open] The memory-drop test was already written:
+  `test_unstorable_lesson_is_recorded_not_dropped` in `hooks/test_memory_capture.py:192`
+  asserts a refused `atlas_memory.add()` lands in `friction_events`. This entry was stale,
+  not a real gap. 33 tests pass in that file.
 - Anonymized feedback exporter: `atlas_feedback.py` was built, then deleted at the user's
   direction after an adversarial verifier proved it leaked the user's vendor stack (MCP
   connector UUIDs, vendor tool names, internal skill codenames) into what was meant to be a
   shareable export. See `docs/decisions/no-anonymized-feedback-exporter-without-designed-in-redaction.md`.
   Facets/findings data keeps accumulating, so this can be rebuilt later with anonymization
   designed in from the start rather than retrofitted.
-- No unit test yet asserts that a memory drop (`atlas_memory.add()` returning
-  `success=False`) is recorded to `friction_events` via `memory_capture.py`'s new
-  `_record_drop()` (`memory_capture.py:280-296`).
+- [closed 2026-08-06] Phase 1 facet enrichment had no deterministic entry point.
+  `atlas_doctor.py --enrich-facet <session_id> '<json>'` now validates against
+  `atlas_db.FACET_COLUMNS` and writes the LLM-judged columns; the judgment stays the
+  model's, the write is testable.
 
 ### Extract MCP connector servers into standalone repos (approved 2026-07-31)
 
