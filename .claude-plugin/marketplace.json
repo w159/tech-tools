@@ -1,8 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "tech-tools",
-  "description": "The atlas marketplace: a multi-agent coding architect (atlas) with 21 plainly named skills, 12 core agents, self-improvement hooks, and the atlas-orchestrate methodology (evidence before any done claim), plus an optional organizational deployment plugin (armada) with 11 department agents and 156 department skills.",
-  "version": "3.4.0",
+  "description": "The atlas marketplace: a multi-agent coding architect (atlas) with 21 plainly named skills, 12 core agents, self-improvement hooks, and the atlas-orchestrate methodology (evidence before any done claim), plus an optional organizational deployment plugin (armada) with 4 invocable setup skills, 11 department agents, and 156 department skills.",
+  "version": "3.5.0",
   "owner": {
     "name": "w159",
     "url": "https://github.com/w159"
@@ -41,7 +41,7 @@
     {
       "name": "armada",
       "source": "./plugins/armada",
-      "description": "Organizational deployment layer split out of atlas: 11 department agents (data, design, engineering, finance, HR, IT ops, M365, product, productivity, security, support) and 156 department skills carrying org branding, policies, and compliance context. Install alongside atlas only for org use.",
+      "description": "Organizational deployment layer split out of atlas. Four invocable setup skills in run order: armada (deployment status and router), armada-brand (org name, voice, colors, commit style - run first), armada-department (activate one of 11 departments and its agent), armada-connect (vendor MCP connectors). Behind them: 11 department agents (data, design, engineering, finance, HR, IT ops, M365, product, productivity, security, support) and 156 department skills carrying org branding, policies, and compliance context. Install alongside atlas only for org use.",
       "category": "developer-tools",
       "keywords": [
         "armada",
