@@ -1,5 +1,58 @@
 # Changelog
 
+## 5.7.0 (2026-08-06)
+
+Subagents now name the tools they are supposed to use, and cost what a
+spec-executing agent should cost.
+
+**The defect.** Every agent body said "use `serena`" or "route noisy output
+through `context-mode`" as prose. Those are deferred MCP tools: their schemas are
+not in a subagent's tool list until it calls `ToolSearch`. An agent told to "use
+serena" finds no such tool, falls back to `Grep` + `Read`, and reports success.
+Three agents were worse off: `schema-inventory`, `rls-privilege-audit` and
+`naming-glossary-audit` carried a `tools:` frontmatter allowlist (`Bash, Write`),
+which excludes every `mcp__*` tool outright. No agent mentioned `lean-ctx` or
+`claude-mem` at all.
+
+**Agents (all 12).** Each now carries a concrete tool-routing table ahead of its
+Method section: the need, the exact tool name (`ctx_compose`,
+`get_symbols_overview`, `find_symbol`, `find_referencing_symbols`,
+`replace_symbol_body`, `get_diagnostics_for_file`, `ctx_callgraph`, `ctx_search`,
+`ctx_batch_execute`, `ctx_execute_file`, `ctx_fetch_and_index`, `query-docs`,
+claude-mem `search`/`timeline`/`get_observations`), and what it replaces. Each is
+told to `ToolSearch` for schemas first and to search by keyword rather than
+hardcode a server prefix, since prefixes differ per install. The three `tools:`
+allowlists are removed; `disallowedTools` already carried the read-only
+guarantee.
+
+**Model and effort.** `effort` is agent frontmatter (`low`/`medium`/`high`/
+`xhigh`, or an integer) and is the only reasoning-depth lever for a subagent -
+there is no `thinking` key. Every agent now declares one. Sonnet is the ceiling:
+`rls-privilege-audit` drops from opus, and `SKILL.md` no longer routes `planner`,
+`completeness-critic` or critical `verifier` work to opus. Effort is `low` for the
+nine roles that execute a spec the orchestrator already wrote, `medium` for the
+three that render an independent verdict against evidence they were not handed
+(`verifier`, `completeness-critic`, `rls-privilege-audit`). A subagent that seems
+to need a bigger model is an underspecified prompt.
+
+**Orchestrator side.** `subagent-kit.md`'s dispatch spec gains a required `TOOLS`
+block naming real tools, replacing the old "use serena/LSP over grep+read" aside,
+plus a cost caution that a fork inherits the parent's model and effort so the
+agent file's tiers do not apply. `capability-routing.md` gains a Step 2b table of
+the exact names to put in a prompt, with the claude-mem worker-runtime arg shapes
+that caused its historical error rate. `prompt-optimization.md` makes naming exact
+tools a per-dispatch requirement.
+
+**Contract test.** `hooks/test_atlas_contract.py` gains `AgentTierContract`
+(7 tests): every agent declares a valid `effort`, no agent exceeds sonnet, only
+the three verdict roles get `medium`, no agent carries a `tools:` allowlist, every
+agent names a `ToolSearch` instruction and a context-mode/lean-ctx tool, and the
+five code-facing agents name a serena symbol tool.
+
+Evidence: `python3 -m pytest plugins/atlas/hooks/test_atlas_contract.py -q` ->
+**31 passed, 48 subtests passed**. Negative control: setting `planner` to
+`model: opus` and stripping its `effort` fails 3 of the 7 new tests.
+
 ## 5.6.0 (2026-08-06)
 
 Gap closure. Everything here was already known and written down somewhere as

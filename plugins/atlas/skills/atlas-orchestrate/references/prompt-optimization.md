@@ -39,8 +39,16 @@ contract, not a paragraph of hope. The mechanics live in `references/subagent-ki
 - **Cut everything the agent can derive itself.** Its prompt is its entire system prompt; trim
   to GOAL - CONTEXT it can't derive - TOOLS - SUCCESS CRITERIA - OUT OF SCOPE - REPORT shape.
 - **One job per agent.** Unscoped "fix everything" prompts produce wandering, expensive runs.
-- **State the model and tool directives** (per the tier table and `capability-routing.md`) so
-  the agent doesn't waste a turn deciding how to work.
+- **Name the exact tools, every dispatch.** A `TOOLS` block is required in the spec (shape in
+  `subagent-kit.md`, name table in `capability-routing.md` Step 2b). Name real tools -
+  `find_symbol`, `ctx_compose`, `ctx_batch_execute`, `query-docs` - and tell the agent to
+  `ToolSearch` for their schemas first, because deferred MCP tools are not in its tool list until
+  it does. "Use the right tools" and "use serena" both produce an agent that quietly falls back to
+  `Read`/`Grep`; that is the failure this line exists to prevent.
+- **State the model and effort deliberately** (per the tier tables in `SKILL.md`). Sonnet is the
+  ceiling for `atlas:*` companions and effort is `low` for spec-executing roles - which is only
+  affordable because the prompt carries the decomposition. A subagent that seems to need a bigger
+  model is telling you the prompt is underspecified. Fix the prompt.
 - **Specify the exact output format or schema** the subagent must return (field names, types,
   required keys). Consistent output shape across parallel dispatches is what makes synthesis
   reliable: without it each agent invents its own structure and the orchestrator has to

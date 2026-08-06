@@ -150,15 +150,29 @@ You may **not** claim a change is done, fixed, working, or complete - and may no
 
 "I'll open this file" * "too small to orchestrate" * "I'll fix it directly" * "I already tested it" * "I'll verify it myself" * "my reasoning is sound" * "the diff is fine" * "docs later" * "mark unverified and continue". Each one means: **stop, dispatch, get observed-behavior evidence, get an independent verifier, and update docs/.**
 
-## Model tiers (cost-tiered routing)
+## Model and effort tiers (cost-tiered routing)
+
+**Opus is the orchestrator's tier, not a subagent's.** A subagent works from a spec you already
+wrote: the decomposition, the success criteria, and the evidence bar are decided here, before
+dispatch. Sonnet is the ceiling for every `atlas:*` companion. If a subagent needs opus to do its
+job, the real defect is an underspecified prompt - fix the prompt, not the model.
 
 | Tier | Use for | Set via |
 |---|---|---|
-| **haiku** | read-only discovery, grep/symbol sweeps, running lint/format, mechanical edits | `atlas:explorer`, `Agent(model:"haiku")` |
-| **sonnet** | implementation, most subagent work, running & writing tests, DB probing, docs curation | default; `atlas:implementer`, `atlas:db-prober`, `atlas:docs-curator` |
-| **opus** | hard architecture, security reasoning, multi-stage decomposition, cross-validation of critical findings, completeness critique, final synthesis | you; `atlas:planner`, `atlas:completeness-critic`, `Agent(model:"opus")` on `atlas:verifier` for critical items |
+| **haiku** | read-only discovery, symbol sweeps, catalog dumps, running lint/format, mechanical edits | `atlas:explorer`, `atlas:schema-inventory`, `Agent(model:"haiku")` |
+| **sonnet** | implementation, verification, planning, DB probing, docs curation - every other subagent | default and ceiling for `atlas:*` |
+| **opus** | you, the orchestrator: hard architecture, cross-cutting judgment, final synthesis | the main thread only |
 
-Match the model to the job. Opus on a grep, or Haiku on a security judgment, both cost more than they save.
+Effort follows the same logic. `effort` is agent frontmatter (`low` \| `medium` \| `high` \| `xhigh`,
+or an integer); it is the only reasoning-depth lever for a subagent (there is no `thinking`
+frontmatter key).
+
+| Effort | Use for | Agents |
+|---|---|---|
+| **low** | executing a clear spec: mapping, implementing, cataloguing, curating, running a gate | `explorer`, `planner`, `implementer`, `docs-auditor`, `docs-curator`, `db-prober`, `ui-runtime-tester`, `schema-inventory`, `naming-glossary-audit` |
+| **medium** | rendering an independent verdict against evidence you did not hand them | `verifier`, `completeness-critic`, `rls-privilege-audit` |
+
+Raising a subagent's effort is a last resort after the prompt has been tightened and still fails.
 
 ## Your squad
 
