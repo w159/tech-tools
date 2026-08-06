@@ -203,14 +203,65 @@ class GateOrchestrationTest(unittest.TestCase):
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertNotIn('"decision": "block"', r.stdout)
 
-    def test_zero_writes_warns_not_blocks_condition_f(self):
-        """(c) (f) warns rather than blocks when the run wrote zero non-docs
-        files -- there is nothing for (f)/(g) to check, so the gate says so
-        instead of either blocking or passing silently."""
+    def test_zero_writes_passes_silently_condition_f(self):
+        """(c) The gate passes silently -- EMPTY stdout -- when the run wrote
+        zero non-docs files: there is nothing for (a)/(b)/(f)/(g) to check,
+        and a pass never narrates. Silence on pass is the contract; only a
+        block speaks."""
         self._satisfy_all_conditions()
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertNotIn('"decision": "block"', r.stdout)
-        self.assertIn("wrote zero non-docs files", r.stdout)
+        self.assertEqual(r.stdout.strip(), "")
+
+    def test_zero_writes_skips_a_and_b_even_when_unsatisfied(self):
+        """DEFECT 1: a research-only run (zero non-docs writes) must pass even
+        with no .atlas/evidence/ and no verified findings.json entry -- (a)
+        and (b) only apply once this run has shipped non-docs code. Docs
+        (c)/(d)/(e)/(h) are still required and satisfied here."""
+        docs = os.path.join(self.tmp, "docs")
+        for name in ("CHANGELOG.md", "ROADMAP.md"):
+            with open(os.path.join(docs, name), "w") as f:
+                f.write("# %s\ncontent\n" % name)
+        with open(os.path.join(self.tmp, "README.md"), "w") as f:
+            f.write("# project\n")
+        # Deliberately no .atlas/evidence/ and no findings.json.
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertNotIn('"decision": "block"', r.stdout)
+        self.assertEqual(r.stdout.strip(), "")
+
+    def test_code_shipped_still_blocks_on_missing_evidence_condition_a(self):
+        """A run that DID ship non-docs code still blocks on missing (a)
+        evidence, exactly as before the defect-1 scoping fix."""
+        self._satisfy_all_conditions()
+        shutil.rmtree(os.path.join(self.tmp, ".atlas", "evidence"))
+        app_py = os.path.join(self.tmp, "app.py")
+        with open(app_py, "w") as f:
+            f.write("print('x')\n")
+        self._log_run_write(app_py)
+        docs_md = os.path.join(self.tmp, "docs", "CHANGELOG.md")
+        with open(docs_md, "a") as f:
+            f.write("- change\n")
+        self._log_run_write(docs_md)  # clear (f) drift so only (a) blocks
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertIn('"decision": "block"', r.stdout)
+        self.assertIn("evidence/", r.stdout)
+
+    def test_code_shipped_still_blocks_on_missing_findings_condition_b(self):
+        """A run that DID ship non-docs code still blocks on missing (b)
+        verified findings, exactly as before the defect-1 scoping fix."""
+        self._satisfy_all_conditions()
+        os.remove(os.path.join(self.tmp, ".atlas", ".run", "findings.json"))
+        app_py = os.path.join(self.tmp, "app.py")
+        with open(app_py, "w") as f:
+            f.write("print('x')\n")
+        self._log_run_write(app_py)
+        docs_md = os.path.join(self.tmp, "docs", "CHANGELOG.md")
+        with open(docs_md, "a") as f:
+            f.write("- change\n")
+        self._log_run_write(docs_md)  # clear (f) drift so only (b) blocks
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertIn('"decision": "block"', r.stdout)
+        self.assertIn("findings.json", r.stdout)
 
     def _commit_and_make_mixed_diff(self):
         """Satisfy (a)-(f): a non-docs code change AND a docs touch, both
@@ -582,10 +633,11 @@ class InProcessMainTest(unittest.TestCase):
     def test_all_conditions_pass_without_git_repo(self):
         self._satisfy_all()
         # No git repo and no run-write logged -> run_written_paths returns [],
-        # code_changed=False -> drift/unpaired skipped -> all pass (warns).
+        # code_changed=False -> (a)/(b)/(f)/(g) skipped -> all pass silently.
         rc, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertEqual(rc, 0)
         self.assertNotIn('"decision": "block"', out)
+        self.assertEqual(out.strip(), "")
 
     def test_all_conditions_pass_with_git_repo_clean(self):
         self._satisfy_all()
@@ -595,25 +647,54 @@ class InProcessMainTest(unittest.TestCase):
         self.assertNotIn('"decision": "block"', out)
 
     def test_missing_evidence_condition_a(self):
+        """(a) only applies once this run shipped non-docs code; stage a
+        mixed diff (code + docs) so (f)/(g) stay clear and only (a) blocks."""
         self._satisfy_all()
         shutil.rmtree(os.path.join(self.tmp, ".atlas", "evidence"))
+        self._init_git_repo()
+        self._stage_mixed_diff()
         rc, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertEqual(rc, 0)  # block returns 0
         self.assertIn('"decision": "block"', out)
         self.assertIn("evidence/", out)
 
+    def test_missing_evidence_skipped_when_no_code_shipped(self):
+        """DEFECT 1: with zero non-docs writes this run, missing (a) evidence
+        must NOT block -- there is nothing to have captured evidence of."""
+        self._satisfy_all()
+        shutil.rmtree(os.path.join(self.tmp, ".atlas", "evidence"))
+        rc, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
+        self.assertEqual(rc, 0)
+        self.assertNotIn('"decision": "block"', out)
+        self.assertEqual(out.strip(), "")
+
     def test_missing_findings_condition_b(self):
         self._satisfy_all()
         os.remove(os.path.join(self.tmp, ".atlas", ".run", "findings.json"))
+        self._init_git_repo()
+        self._stage_mixed_diff()
         _, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertIn('"decision": "block"', out)
         self.assertIn("findings.json", out)
 
+    def test_missing_findings_skipped_when_no_code_shipped(self):
+        """DEFECT 1: with zero non-docs writes this run, a missing/absent
+        verified finding must NOT block -- nothing was shipped to verify."""
+        self._satisfy_all()
+        os.remove(os.path.join(self.tmp, ".atlas", ".run", "findings.json"))
+        rc, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
+        self.assertEqual(rc, 0)
+        self.assertNotIn('"decision": "block"', out)
+        self.assertEqual(out.strip(), "")
+
     def test_malformed_findings_blocks_condition_b(self):
-        """M1: structurally malformed findings.json must NOT count as verified."""
+        """M1: structurally malformed findings.json must NOT count as verified,
+        once this run has shipped non-docs code."""
         self._satisfy_all()
         with open(os.path.join(self.tmp, ".atlas", ".run", "findings.json"), "w") as f:
             f.write('"not-a-findings-file"')
+        self._init_git_repo()
+        self._stage_mixed_diff()
         _, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertIn('"decision": "block"', out)
         self.assertIn("findings.json", out)
@@ -668,12 +749,13 @@ class InProcessMainTest(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertNotIn('"decision": "block"', out)
 
-    def test_db_read_error_fails_open_to_warn_not_block(self):
+    def test_db_read_error_fails_open_to_pass_silently(self):
         """(f)/(g) are scoped to the atlas_db run-write signal, not git -- git
         being unreachable is irrelevant to them now. What DOES matter is
         atlas_db's run-write query itself failing: that must fail open
-        (run_written_paths -> [], same as 'wrote nothing') and warn rather
-        than block, matching every other fail-open condition in this gate.
+        (run_written_paths -> [], same as 'wrote nothing') and pass silently,
+        matching every other fail-open condition in this gate -- a pass never
+        narrates, on the happy path or the fail-open path alike.
         `is_orchestrating`/`connect` must keep working (a real run exists and
         the gate must still evaluate it) -- only `run_changed_paths` errors,
         simulating a read failure isolated to that one query."""
@@ -684,7 +766,7 @@ class InProcessMainTest(unittest.TestCase):
         ):
             _, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertNotIn('"decision": "block"', out)
-        self.assertIn("wrote zero non-docs files", out)
+        self.assertEqual(out.strip(), "")
 
     def test_implementer_dispatch_with_no_diff_does_not_block_condition_g(self):
         """(d) (g) does NOT fire for an implementer dispatch that produced no
@@ -704,7 +786,11 @@ class InProcessMainTest(unittest.TestCase):
         self._satisfy_all()
         # Fail condition (a) so the gate reaches the block-decision path that
         # calls _reason; then make _reason raise to hit the outer catch-all.
+        # (a) only applies once this run shipped non-docs code, so stage a
+        # mixed diff (code + docs) to make it live.
         shutil.rmtree(os.path.join(self.tmp, ".atlas", "evidence"))
+        self._init_git_repo()
+        self._stage_mixed_diff()
         env = dict(self.env)
         stdin_data = io.StringIO(
             json.dumps({"session_id": "sess-orch", "cwd": self.tmp})

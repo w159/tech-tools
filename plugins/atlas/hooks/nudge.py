@@ -36,24 +36,6 @@ def _check_memory_captured():
     return False
 
 
-def _check_skill_created():
-    """Check if auto_skill.py created a skill recently."""
-    try:
-        skills_dir = os.path.join(os.path.expanduser("~/.atlas"), "skills")
-        if not os.path.isdir(skills_dir):
-            return False
-        for item in os.listdir(skills_dir):
-            skill_dir = os.path.join(skills_dir, item)
-            skill_md = os.path.join(skill_dir, "SKILL.md")
-            if os.path.isfile(skill_md):
-                mtime = os.path.getmtime(skill_md)
-                if (time.time() - mtime) < 60:
-                    return True
-    except Exception:
-        pass
-    return False
-
-
 def main():
     payload = atlas_hook_guard.read_payload()
 
@@ -82,18 +64,11 @@ def main():
 
     # Check what was already captured by the hooks above
     memory_captured = _check_memory_captured()
-    skill_created = _check_skill_created()
 
-    if memory_captured or skill_created:
-        # Report what was captured — self-improvement happened
-        parts = []
-        if memory_captured:
-            parts.append("memory facts captured to ~/.atlas/memory/")
-        if skill_created:
-            parts.append("new skill auto-created under ~/.claude/skills/")
+    if memory_captured:
         msg = (
-            "[atlas] Self-improvement complete: " + ", ".join(parts) + ". "
-            "These will be available next session."
+            "[atlas] Self-improvement complete: memory facts captured to "
+            "~/.atlas/memory/. These will be available next session."
         )
     else:
         # Nothing was captured — nudge to do it manually
