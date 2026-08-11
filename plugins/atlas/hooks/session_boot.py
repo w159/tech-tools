@@ -28,6 +28,101 @@ def detect_dep(module_marker):
         return False
 
 
+# --- serena project self-heal ------------------------------------------------
+# Subagents lose every symbol tool when serena cannot load a project: calls return
+# `No active project ... known projects: []` or `KeyError: 'languages'`, and the agent
+# falls back to Bash grep/cat/sed. Both failures share one cause -- a `.serena/project.yml`
+# written before serena 1.6 made `languages:` a required field. Heal it at boot so the
+# whole session, subagents included, starts with working symbol lookup.
+
+_LANG_BY_EXT = {
+    ".py": "python",
+    ".ts": "typescript",
+    ".tsx": "typescript",
+    ".js": "typescript",
+    ".jsx": "typescript",
+    ".go": "go",
+    ".rs": "rust",
+    ".java": "java",
+    ".cs": "csharp",
+    ".rb": "ruby",
+    ".php": "php",
+    ".kt": "kotlin",
+    ".swift": "swift",
+    ".cpp": "cpp",
+    ".c": "c",
+}
+_SKIP_DIRS = {
+    ".git",
+    "node_modules",
+    "__pycache__",
+    "dist",
+    "build",
+    ".next",
+    "vendor",
+    "target",
+}
+_WALK_BUDGET = 6000  # files; keeps boot fast on large trees
+
+
+def _detect_languages(root, cap=3):
+    counts = {}
+    seen = 0
+    for _dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [
+            d for d in dirnames if d not in _SKIP_DIRS and not d.startswith(".venv")
+        ]
+        for fn in filenames:
+            lang = _LANG_BY_EXT.get(os.path.splitext(fn)[1])
+            if lang:
+                counts[lang] = counts.get(lang, 0) + 1
+            seen += 1
+        if seen > _WALK_BUDGET:
+            break
+    ranked = sorted(counts.items(), key=lambda kv: -kv[1])[:cap]
+    return [lang for lang, _ in ranked]
+
+
+def heal_serena_project(root):
+    """Append the `languages:` key serena >= 1.6 requires. Returns a status line or None.
+
+    Idempotent: a config that already declares `languages:` at top level is left alone.
+    Absent configs are NOT created -- serena's own onboarding owns that.
+    """
+    cfg = os.path.join(root, ".serena", "project.yml")
+    if not os.path.isfile(cfg):
+        return None
+    try:
+        with open(cfg, encoding="utf-8") as fh:
+            text = fh.read()
+    except Exception:
+        return None
+    # Top-level key only: `language_servers:` and indented matches do not count.
+    for line in text.splitlines():
+        if line.startswith("languages:"):
+            return None
+    langs = _detect_languages(root) or ["python"]
+    block = (
+        "\n# required by serena >= 1.6 (ProjectConfig.FIELDS_WITHOUT_DEFAULTS); without it the\n"
+        "# project fails to load with KeyError: 'languages' and every symbol tool goes dark\n"
+        "# for this session and all its subagents. Added automatically by atlas session_boot.\n"
+        "languages: [%s]\n" % ", ".join('"%s"' % lang for lang in langs)
+    )
+    try:
+        with open(cfg, "a", encoding="utf-8") as fh:
+            fh.write(block)
+    except Exception:
+        return None
+    return (
+        "serena: repaired %s (added languages: %s) - symbol tools now load for "
+        "subagents; they had been failing with KeyError: 'languages'"
+        % (
+            cfg,
+            ", ".join(langs),
+        )
+    )
+
+
 def _relative_time(epoch_s):
     """Render an epoch-seconds timestamp as a short 'Xm/Xh/Xd ago' string."""
     delta = time.time() - epoch_s
@@ -409,6 +504,13 @@ def main():
             )
     except Exception:
         pass  # structure advisory is best-effort; never block boot
+
+    try:
+        healed = heal_serena_project(payload.get("cwd") or os.getcwd())
+        if healed:
+            lines.append(healed)
+    except Exception:
+        pass  # serena heal is best-effort; never block boot
 
     if memory_block:
         lines.append(memory_block)

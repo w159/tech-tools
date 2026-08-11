@@ -276,6 +276,53 @@ class TripwireTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0)
         self.assertEqual(r.stdout.strip(), "")
 
+    def test_pre_deny_atlas_dispatch_with_no_toolsearch(self):
+        """A dispatch that names no tools produces a subagent that greps.
+
+        Recorded: 3 of 12 subagent runs arrived with no TOOLS block and made zero
+        MCP calls, reading the repo through Bash grep/cat instead.
+        """
+        r = run_hook(
+            self._pre_payload(
+                "Agent",
+                {
+                    "subagent_type": "atlas:explorer",
+                    "prompt": "ROLE: explorer. GOAL: map the auth path.",
+                },
+            ),
+            self.env,
+        )
+        self.assertEqual(r.returncode, 0)
+        self.assertIn('"permissionDecision": "deny"', r.stdout)
+        self.assertIn("ToolSearch", r.stdout)
+
+    def test_pre_allows_atlas_dispatch_that_orders_the_toolset(self):
+        r = run_hook(
+            self._pre_payload(
+                "Agent",
+                {
+                    "subagent_type": "atlas:explorer",
+                    "prompt": 'TOOLS: ToolSearch("select:mcp__lean-ctx__ctx_compose,'
+                    'mcp__serena__find_symbol") then map the auth path.',
+                },
+            ),
+            self.env,
+        )
+        self.assertEqual(r.returncode, 0)
+        self.assertEqual(r.stdout.strip(), "")
+
+    def test_pre_toolkit_guard_ignores_forks_and_foreign_agents(self):
+        """A fork inherits the parent's already-loaded tools; non-atlas agents carry
+        their own contract. Denying either would block work this guard is not about."""
+        for agent in ("fork", "general-purpose", "Explore"):
+            r = run_hook(
+                self._pre_payload(
+                    "Agent", {"subagent_type": agent, "prompt": "do the thing"}
+                ),
+                self.env,
+            )
+            self.assertEqual(r.stdout.strip(), "", "denied a %s dispatch" % agent)
+
     def test_pre_hard_off_disables_deny_only(self):
         for _ in range(8):
             run_hook(self._post_payload("Read", {"file_path": "a.py"}), self.env)

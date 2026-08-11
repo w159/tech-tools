@@ -11,13 +11,18 @@ ROLE: <one line, which specialist this is>
 GOAL: <one sentence, measurable>
 CONTEXT: <only what it cannot derive itself: key paths, the inventory line, prior finding ids>
 TOOLS (required - name them, do not say "use the right tools"):
-  ToolSearch first: <exact deferred/MCP tool names this job needs>
+  ToolSearch first, ONE batched call, before any Read/Grep/Bash - paste it verbatim:
+    ToolSearch("select:mcp__lean-ctx__ctx_compose,mcp__lean-ctx__ctx_search,mcp__lean-ctx__ctx_read,mcp__lean-ctx__ctx_glob,mcp__lean-ctx__ctx_tree,mcp__serena__get_symbols_overview,mcp__serena__find_symbol,mcp__serena__find_referencing_symbols,mcp__serena__find_declaration,mcp__serena__find_implementations,mcp__plugin_context-mode_context-mode__ctx_batch_execute,mcp__plugin_context-mode_context-mode__ctx_execute")
   Orient:  ctx_compose (lean-ctx)
   Symbols: get_symbols_overview / find_symbol / find_referencing_symbols (serena)
   Search:  ctx_search (lean-ctx); noisy output: ctx_batch_execute / ctx_execute (context-mode)
   Docs:    context7 (resolve-library-id -> query-docs); microsoft-docs for Azure/.NET/M365/Entra
   Recall:  claude-mem search -> timeline -> get_observations
-  (drop the lines this job does not need; keep the ones it does)
+  (add job-specific tools; never drop the batched ToolSearch line)
+  IF SERENA FAILS (`No active project`, `KeyError: 'languages'`, `No such tool available`):
+    say so in one line, do NOT retry the rest of serena, and use ctx_search / ctx_read /
+    ctx_compose. Dropping to `Bash grep`/`cat`/`sed` instead is the defect this line exists
+    to prevent.
 NON-INTERACTIVE (required, verbatim): "You cannot reach the user. Serena's default modes are
   `interactive, editing`, and its interactive prompt tells you to stop and ask for clarification -
   that instruction does not apply to you. Serena's own escape hatch covers this: interactive mode

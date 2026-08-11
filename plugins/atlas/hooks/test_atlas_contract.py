@@ -605,23 +605,67 @@ class AgentTierContract(unittest.TestCase):
     def test_agents_load_symbol_toolset_up_front(self):
         """Per-tool ToolSearch mid-task loses to Grep: by then the agent has fallen back.
 
-        serena's claude-code context says to load the toolset "immediately, before
-        performing any read, grep or bash commands". Enforce the batched select: form.
+        One batched `select:` covering all three servers, loaded before the first
+        Read/Grep/Bash. Measured failure this guards: 12 subagent runs that loaded
+        serena alone, hit `KeyError: 'languages'`, and had nothing else in reach.
         """
         bad = []
         for path in _agent_files():
             body = path.read_text(encoding="utf-8")
-            if 'ToolSearch("select:mcp__serena__' not in body:
-                bad.append("%s: no up-front serena toolset load" % path.name)
-            elif (
-                body.count(
-                    "mcp__serena__", body.index('ToolSearch("select:mcp__serena__')
-                )
-                < 3
-            ):
+            starts = [
+                i
+                for i, _ in enumerate(body)
+                if body.startswith('ToolSearch("select:', i)
+            ]
+            if not starts:
+                bad.append("%s: no up-front batched toolset load" % path.name)
+                continue
+            select = body[starts[0] : body.index('")', starts[0])]
+            if select.count("mcp__serena__") < 3:
                 bad.append("%s: loads serena tools one at a time" % path.name)
+            if "mcp__lean-ctx__" not in select:
+                bad.append("%s: select loads no lean-ctx tool" % path.name)
+            if "context-mode" not in select:
+                bad.append("%s: select loads no context-mode tool" % path.name)
         self.assertEqual(
-            bad, [], "agents not loading the symbol toolset up front: %s" % bad
+            bad, [], "agents not loading the full toolset up front: %s" % bad
+        )
+
+    def test_agents_name_lean_ctx_not_bash_as_the_serena_fallback(self):
+        """The measured defect: serena dies, the agent drops to Bash grep/cat/sed.
+
+        Across the last 12 recorded subagent runs, every serena call failed
+        (`No active project`, `KeyError: 'languages'`) and the agents fell back to
+        378 Bash calls -- 61 grep, 25 cat, 15 sed -- against 8 MCP calls total, with
+        zero lean-ctx calls because lean-ctx was never loaded. The agent spec must
+        name lean-ctx as the fallback and Bash-as-reader as the defect.
+        """
+        bad = []
+        for path in _agent_files():
+            body = path.read_text(encoding="utf-8")
+            if "lean-ctx is the fallback" not in body:
+                bad.append("%s: no serena-down fallback to lean-ctx" % path.name)
+            if "`Bash grep`" not in body:
+                bad.append("%s: does not rule out Bash grep/cat/sed" % path.name)
+        self.assertEqual(bad, [], "agents with an unusable fallback ladder: %s" % bad)
+
+    def test_dispatch_template_names_lean_ctx_in_its_tools_block(self):
+        """The orchestrator copies this template into every dispatch. If the template
+        omits lean-ctx, so does the dispatch, and the subagent never loads it."""
+        kit = (
+            PLUGIN_ROOT
+            / "skills"
+            / "atlas-orchestrate"
+            / "references"
+            / "subagent-kit.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "mcp__lean-ctx__", kit, "dispatch template names no lean-ctx tool"
+        )
+        self.assertIn(
+            "ToolSearch first",
+            kit,
+            "dispatch template does not order the up-front ToolSearch",
         )
 
     def test_agents_do_not_name_context_excluded_serena_tools(self):
@@ -683,6 +727,10 @@ class AgentTierContract(unittest.TestCase):
         )
         bad = []
         for path in sorted(PLUGIN_ROOT.rglob("*.md")):
+            # A changelog's job is to record removals; naming a tool it dropped is
+            # the entry, not a route to it.
+            if path.name == "CHANGELOG.md":
+                continue
             for lineno, line in enumerate(
                 path.read_text(encoding="utf-8").splitlines(), 1
             ):
@@ -700,6 +748,91 @@ class AgentTierContract(unittest.TestCase):
                     )
         self.assertEqual(
             bad, [], "atlas names serena tools that do not exist: %s" % bad
+        )
+
+
+class SerenaHealContract(unittest.TestCase):
+    """A `.serena/project.yml` without `languages:` takes every symbol tool down.
+
+    Serena >= 1.6 lists `languages` in ProjectConfig.FIELDS_WITHOUT_DEFAULTS, so a
+    pre-1.6 config raises `KeyError: 'languages'` on activation and every later call
+    answers `No active project ... known projects: []`. That is the single cause behind
+    every failed serena call in the recorded subagent transcripts.
+    """
+
+    def _boot(self):
+        sys.path.insert(0, str(HOOKS_DIR))
+        import session_boot
+
+        return session_boot
+
+    def _project(self, tmp, body):
+        root = Path(tmp)
+        (root / ".serena").mkdir()
+        (root / ".serena" / "project.yml").write_text(body, encoding="utf-8")
+        (root / "app.py").write_text("x = 1\n", encoding="utf-8")
+        return root
+
+    def test_adds_languages_when_missing(self):
+        boot = self._boot()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._project(tmp, 'project_name: "demo"\nencoding: "utf-8"\n')
+            msg = boot.heal_serena_project(str(root))
+            text = (root / ".serena" / "project.yml").read_text(encoding="utf-8")
+            self.assertIsNotNone(msg, "heal reported nothing on a broken config")
+            self.assertIn("languages:", text)
+            self.assertIn("python", text)
+
+    def test_is_idempotent(self):
+        boot = self._boot()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._project(tmp, 'project_name: "demo"\nlanguages: ["python"]\n')
+            before = (root / ".serena" / "project.yml").read_text(encoding="utf-8")
+            self.assertIsNone(boot.heal_serena_project(str(root)))
+            self.assertEqual(
+                before, (root / ".serena" / "project.yml").read_text(encoding="utf-8")
+            )
+
+    def test_language_servers_key_does_not_count_as_languages(self):
+        """The pre-1.6 key is `language_servers:`. Substring-matching it would leave
+        the config broken while reporting it healthy."""
+        boot = self._boot()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._project(tmp, 'project_name: "demo"\nlanguage_servers: []\n')
+            self.assertIsNotNone(boot.heal_serena_project(str(root)))
+            self.assertIn(
+                "languages:",
+                (root / ".serena" / "project.yml").read_text(encoding="utf-8"),
+            )
+
+    def test_no_config_is_left_alone(self):
+        """serena's own onboarding owns config creation; inventing one invites drift."""
+        boot = self._boot()
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertIsNone(boot.heal_serena_project(tmp))
+            self.assertFalse((Path(tmp) / ".serena").exists())
+
+    def test_unreadable_config_fails_open(self):
+        boot = self._boot()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".serena").mkdir()
+            (root / ".serena" / "project.yml").write_text("x", encoding="utf-8")
+            os.chmod(root / ".serena" / "project.yml", 0o000)
+            try:
+                self.assertIsNone(boot.heal_serena_project(str(root)))
+            finally:
+                os.chmod(root / ".serena" / "project.yml", 0o644)
+
+    def test_shipped_repo_config_is_valid(self):
+        """This repo's own config must not be the one that breaks its subagents."""
+        cfg = REPO_ROOT / ".serena" / "project.yml"
+        if not cfg.exists():
+            self.skipTest("no serena project config in this checkout")
+        lines = cfg.read_text(encoding="utf-8").splitlines()
+        self.assertTrue(
+            any(ln.startswith("languages:") for ln in lines),
+            "%s has no top-level languages: key -- serena will refuse to load it" % cfg,
         )
 
 

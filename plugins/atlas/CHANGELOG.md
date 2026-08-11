@@ -1,5 +1,49 @@
 # Changelog
 
+## 5.8.0 (2026-08-11)
+
+Subagents were not ignoring their MCP tools. They were obeying a fallback that
+fired on every dispatch, because serena died first and nothing else was loaded.
+
+**The measurement.** Across the 12 most recent recorded subagent runs: 378 Bash
+calls (190 `cd`, 61 `grep`, 25 `cat`, 15 `sed`) against 8 successful MCP calls.
+Every one of the 9 serena calls failed - `No active project ... known projects:
+[]`, `KeyError: 'languages'` from `activate_project`, `No such tool available`
+for `search_for_pattern`. Zero lean-ctx calls in any run. Three of the twelve
+never called `ToolSearch` at all.
+
+**Three defects in series.**
+
+1. The batched `ToolSearch("select:...")` every agent spec mandates named only
+   serena. When serena failed - which was always, on a repo whose
+   `.serena/project.yml` predates serena 1.6 - the agent had loaded nothing else,
+   so `Bash grep` was the only reader left in reach. lean-ctx appeared in the
+   agents' tool *tables* but never in the line that actually loads a schema.
+2. Nothing repaired the broken serena config. 5.7.1 taught agents to *recognize*
+   `KeyError: 'languages'` and fall back; it never fixed the file, so the
+   fallback fired forever.
+3. A dispatch could omit the TOOLS block entirely and nothing objected.
+
+**The fixes.**
+
+- All 12 agent specs load one batched `ToolSearch` covering lean-ctx, serena, and
+  context-mode before the first `Read`/`Grep`/`Bash`. The serena-down path now
+  routes to `ctx_search`/`ctx_read`/`ctx_compose` explicitly, and names
+  `Bash grep`/`cat`/`sed` as the defect rather than the fallback.
+- `session_boot.py` gains `heal_serena_project()`: on SessionStart it appends the
+  `languages:` key serena >= 1.6 requires to a `.serena/project.yml` that lacks
+  it, inferring languages from the tree. Idempotent, never creates a config that
+  is not there, fails open. Symbol tools come up for the session and every
+  subagent under it.
+- `dispatch_tripwire.py` denies an `atlas:*` dispatch whose prompt never orders
+  the batched `ToolSearch`, and `hooks.json` binds it to `Agent|Task` on
+  PreToolUse. Forks and non-atlas agents are exempt.
+- `subagent-kit.md`'s TOOLS block carries the verbatim batched call and the
+  serena-down ladder.
+- 10 contract tests added across `test_atlas_contract.py` (toolset-load shape,
+  lean-ctx fallback clause, dispatch template, six `heal_serena_project` cases)
+  and `test_dispatch_tripwire.py` (deny/allow/exempt for the dispatch guard).
+
 ## 5.7.1 (2026-08-11)
 
 Serena was wired, named, and had never activated a project. Two config defects

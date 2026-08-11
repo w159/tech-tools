@@ -75,7 +75,23 @@ def _deny(reason):
     print(json.dumps(out))
 
 
-def _pre_tool_use(conn, atlas_db, tool, session, path):
+def _toolkit_gap(tinput):
+    """An atlas:* dispatch whose prompt never orders the batched ToolSearch.
+
+    Measured: 3 of 12 recorded subagent runs got no TOOLS block and made 0 MCP calls,
+    reading the repo through Bash grep/cat instead. The agent's own spec says to load
+    the toolset first; a dispatch that repeats the order is what makes it stick.
+    """
+    agent = str(tinput.get("subagent_type") or "")
+    if not agent.startswith("atlas:"):
+        return None  # forks inherit the parent's loaded tools; non-atlas agents opt out
+    prompt = str(tinput.get("prompt") or "")
+    if "ToolSearch" in prompt:
+        return None
+    return agent
+
+
+def _pre_tool_use(conn, atlas_db, tool, session, path, tinput=None):
     """Deny tier: fires before the op lands, orchestration-flagged sessions only."""
     # The deny tier is independently kill-switchable; the advisory tier persists.
     if os.environ.get("ATLAS_TRIPWIRE_HARD", "on").lower() == "off":
@@ -85,6 +101,20 @@ def _pre_tool_use(conn, atlas_db, tool, session, path):
         return  # no active run -> nothing to gate
     if not atlas_db.is_orchestrating(conn, session):
         return  # non-orchestration sessions are NEVER denied anything
+    # (c) A dispatch that never names the toolset gets a subagent that greps.
+    if tool in DISPATCH_TOOLS:
+        gap = _toolkit_gap(tinput or {})
+        if gap:
+            _deny(
+                "DENY - this %s dispatch names no tools. Add the TOOLS block from "
+                "subagent-kit.md, starting with the one batched "
+                'ToolSearch("select:mcp__lean-ctx__...,mcp__serena__...,'
+                'mcp__plugin_context-mode_context-mode__...") the subagent must run '
+                "before its first Read/Grep/Bash, plus the serena-down fallback to "
+                "ctx_search/ctx_read. Without it %s reads the repo through Bash grep."
+                % (tool, gap)
+            )
+        return
     # (b) Editing production target code inline is the sharpest violation.
     if tool in EDIT_TOOLS and not _is_orchestration_path(path):
         _deny(
@@ -134,7 +164,7 @@ def main():
         atlas_db.init(conn)
 
         if event == "PreToolUse":
-            _pre_tool_use(conn, atlas_db, tool, session, path)
+            _pre_tool_use(conn, atlas_db, tool, session, path, tinput)
             return
 
         if tool == "Skill":
