@@ -207,5 +207,22 @@
       ".atlas/findings/2026-08-11-serena-never-activated.md"
     ],
     "open_gap": "~40 other .serena/project.yml files on this machine still lack the `languages:` key and will keep failing until each is fixed; the user declined the machine-wide sweep. Repos with no project.yml are unaffected, since --project-from-cwd autogenerates a current one. Also: the ~/.mcp.json change takes effect on the next Claude Code restart."
+  },
+  {
+    "batch": "atlas-5.8.0",
+    "claim": "Subagents were not ignoring their MCP tools; they were taking a documented fallback that fired on every dispatch. Measured across the 12 most recent subagent transcripts under ~/.claude/projects/*/subagents/: 378 Bash calls (190 cd, 61 grep, 25 cat, 15 sed) against 8 successful MCP calls, all 9 serena calls failed (No active project / KeyError: 'languages' / No such tool available), zero lean-ctx calls, and 3 of 12 never called ToolSearch at all. Three defects in series: (D1) the mandated batched ToolSearch select named serena only, so when serena died nothing else had been loaded and Bash grep was the only reader in reach -- lean-ctx sat in the agents' tool tables but never in the schema-loading line; (D2) 5.7.1 taught agents to RECOGNIZE the broken .serena/project.yml and fall back but never repaired the file, so the fallback fired forever; (D3) a dispatch could omit its TOOLS block and nothing objected.",
+    "evidence": [
+      "plugins/atlas/agents/*.md - one batched ToolSearch over lean-ctx + serena + context-mode before the first Read/Grep/Bash, explicit serena-down ladder to ctx_search/ctx_read, Bash grep/cat/sed named as the defect (all 12 files)",
+      "plugins/atlas/hooks/session_boot.py:85-122 heal_serena_project() appends the languages: key serena >= 1.6 requires at SessionStart",
+      "plugins/atlas/hooks/dispatch_tripwire.py _toolkit_gap() + PreToolUse deny; hooks.json PreToolUse matcher now Edit|Write|MultiEdit|Read|Grep|Glob|Bash|Agent|Task",
+      "plugins/atlas/skills/atlas-orchestrate/references/subagent-kit.md TOOLS block carries the verbatim batched call and the fallback ladder",
+      "python3 -m pytest -q (plugins/atlas/hooks): 500 passed, 56 subtests passed, 0 skipped -- install parity asserted, not skipped",
+      "SessionStart hook run against the real broken repo: 'serena: repaired /Users/jerry/MEGA/Projects/Web/gwh-firstrespondersapp/.serena/project.yml (added languages: python, typescript)'; second run emits nothing (idempotent)",
+      "mcp__serena__find_symbol('heal_serena_project') resolved in tech-tools, whose project.yml already carries languages: -- confirms a valid key is what makes serena resolve",
+      "commit 7847ca2 pushed to origin/main; installed to ~/.claude/plugins/cache/tech-tools/atlas/5.8.0 with installed_plugins.json repointed"
+    ],
+    "open_gap": "Not proven end to end: that a subagent dispatched into gwh-firstrespondersapp now completes a serena symbol lookup. The repaired config and a working serena call in tech-tools are the evidence chain; the first real dispatch into that repo is the confirming run.",
+    "status": "verified",
+    "verifier": "deterministic contract suite (test_atlas_contract.py, test_dispatch_tripwire.py) + runtime hook execution against the real broken config"
   }
 ]
