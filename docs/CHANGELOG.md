@@ -4,6 +4,38 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
+## 2026-08-11 -- atlas 5.8.0: subagents fell back to Bash grep because serena died first
+
+Released as atlas 5.8.0 (`plugins/atlas/.claude-plugin/plugin.json:3`, `.kimi-plugin/plugin.json:3`).
+
+Measured across the 12 most recent recorded subagent transcripts under
+`~/.claude/projects/*/subagents/`: 378 Bash calls (190 `cd`, 61 `grep`, 25 `cat`, 15 `sed`)
+against 8 successful MCP calls. All 9 serena calls failed. Zero lean-ctx calls in any run.
+Three of the twelve never called `ToolSearch` at all. The agents were not ignoring their
+tools - they were taking a documented fallback that fired on every single dispatch.
+
+Three defects in series:
+
+- The mandated batched `ToolSearch("select:...")` named serena only. serena failed on the
+  target repo (`KeyError: 'languages'`), and since nothing else had been loaded, `Bash grep`
+  was the only reader left. lean-ctx sat in the agents' tool tables but never in the line
+  that loads a schema (`plugins/atlas/agents/*.md`).
+- 5.7.1 taught agents to recognize the broken `.serena/project.yml` and fall back; nothing
+  ever repaired the file, so the fallback fired forever.
+- A dispatch could omit its TOOLS block and nothing objected.
+
+Fixes: one batched `ToolSearch` per agent spanning lean-ctx + serena + context-mode with an
+explicit serena-down ladder to `ctx_search`/`ctx_read`
+(`plugins/atlas/agents/*.md`); `heal_serena_project()` in
+`plugins/atlas/hooks/session_boot.py` appends the required `languages:` key at SessionStart
+(idempotent, never creates an absent config, fails open); a PreToolUse deny in
+`plugins/atlas/hooks/dispatch_tripwire.py` for an `atlas:*` dispatch that orders no
+`ToolSearch`, bound via `hooks.json` on `Agent|Task`; and the same block in
+`skills/atlas-orchestrate/references/subagent-kit.md`. 10 contract tests added; full hook
+suite 500 passed.
+
+---
+
 ## 2026-08-11 -- atlas 5.7.1: serena was never activating a project
 
 Released as atlas 5.7.1 (`plugins/atlas/.claude-plugin/plugin.json:3`, `.kimi-plugin/plugin.json:3`).
