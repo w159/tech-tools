@@ -1,5 +1,59 @@
 # Changelog
 
+## 5.7.1 (2026-08-11)
+
+Serena was wired, named, and had never activated a project. Two config defects
+sat in series underneath 5.7.0's fix.
+
+**The defect.** serena 1.6 made `languages:` a `ProjectConfig` field with no
+default (`FIELDS_WITHOUT_DEFAULTS`). Every `.serena/project.yml` on the machine
+predates that rename and carries only `language_servers:`, so
+`serena_config.py:569` raises `KeyError: 'languages'`, the project is skipped at
+load, and every symbol tool answers `No active project`. Separately, the MCP
+entry the session actually reads (`~/.mcp.json:57`) launched the server with
+`--context claude-code` and no `--project`, so nothing activated even where the
+yml was valid. Net effect: an always-empty status bar, a `tools/list` handshake
+followed by silence, and a 29% tool error rate that read as a bad tool rather
+than a bad config.
+
+**The correction.** The first determination was to remove serena as redundant
+with the native `LSP` tool. That was wrong. `LSP` requires
+`(filePath, line, character)` and returns *locations*; `find_symbol` takes a
+*name* and returns the *body*. Reaching a position for `LSP` means Read or Grep
+first, which is the context cost serena exists to remove. Serena's symbol-edit
+tools - `replace_symbol_body`, `insert_before/after_symbol`, `rename_symbol`,
+`safe_delete_symbol`, `replace_content`, `replace_in_files` - have no native
+equivalent. And serena never competed with lean-ctx or context-mode: the
+`claude-code` context excludes `read_file`, `create_text_file`,
+`execute_shell_command`, `find_file`, `list_dir` and `search_for_pattern` by
+construction, so it only ever offered what the harness lacks.
+
+**Changed**
+
+- All 12 agent bodies load the symbol toolset in **one** up-front `ToolSearch`
+  before the first `Read`/`Grep`/`Bash`, per serena's own claude-code context
+  instruction. Per-tool schema fetching mid-task is how an agent still ends up
+  on `Grep`.
+- Every agent now recognizes `No active project` / `KeyError: 'languages'` as a
+  one-line config report instead of retrying every tool.
+- `subagent-kit.md` dispatch brief carries a required `NON-INTERACTIVE` clause.
+  serena's global `default_modes` include `interactive`, whose prompt tells the
+  model to stop and ask the user for clarification - which a subagent cannot do.
+  serena 1.6.1's claude-code context exposes no `switch_modes` tool, so the
+  brief invokes serena's own documented escape hatch instead.
+- `lsp-and-symbols.md` gains the serena-vs-native-`LSP` split (name->body vs
+  position->locations) and serena's active-project preconditions.
+- `capability-routing.md` Step 2b specifies the batched `ToolSearch` form and
+  names the six context-excluded tools that must never appear in a spec.
+- Three contract tests added: `test_agents_load_symbol_toolset_up_front`,
+  `test_agents_do_not_name_context_excluded_serena_tools`,
+  `test_dispatch_brief_overrides_serena_interactive_mode`.
+
+**Known gap.** Roughly 40 other `.serena/project.yml` files on the machine still
+lack `languages:` and will keep failing until each is fixed; the sweep was
+declined. A repo with *no* project.yml is unaffected - `--project-from-cwd`
+autogenerates a current one.
+
 ## 5.7.0 (2026-08-06)
 
 Subagents now name the tools they are supposed to use, and cost what a

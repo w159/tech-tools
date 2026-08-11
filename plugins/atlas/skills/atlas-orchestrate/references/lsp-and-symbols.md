@@ -21,8 +21,35 @@ reads - and the bytes never enter context. This is law 1 (protect your context) 
    `references/claude-code-tuning.md`.
 4. **`smart-explore` skill** - tree-sitter AST structure when you want shape without an LSP.
 
-Avoid stacking redundant navigation. If `serena` already covers a language well this session,
-don't also spin up a second symbol MCP for it - note what's live in Orient and route to one.
+### serena vs the native `LSP` tool - they are not substitutes
+
+They answer different questions, so "pick one" is the wrong instinct:
+
+| You have | You want | Tool |
+|---|---|---|
+| a symbol **name** | its **body** | `find_symbol(name_path, include_body=true)` (serena) |
+| a **position** (file, line, char) | locations that reference it | `LSP findReferences` |
+| a symbol name | to **replace/rename/delete** it safely | serena only - the native `LSP` tool is read-only |
+| a file | its outline | `get_symbols_overview` (serena) or `LSP documentSymbol` |
+
+The native `LSP` tool requires `(filePath, line, character)` and returns *locations*. To reach a
+position you must first Read or Grep - which is the context cost serena removes. Use serena to
+go from a name to a body; use `LSP` for position-anchored facts and call hierarchy once you are
+already anchored.
+
+### serena preconditions (check before routing work to it)
+
+serena's `claude-code` context deliberately **excludes** `read_file`, `create_text_file`,
+`execute_shell_command`, `find_file`, `list_dir` and `search_for_pattern` so it never duplicates
+Claude Code's own tools. Naming any of those in a dispatch spec guarantees a failed call.
+
+It also needs an **active project**. Two failure modes, both silent-looking:
+- server started without `--project` / `--project-from-cwd` -> every symbol call returns
+  `No active project`.
+- the repo's `.serena/project.yml` predates serena 1.6 and lacks the required `languages:` key
+  -> `KeyError: 'languages'`, the project is skipped at load, and nothing activates.
+
+Both are one-line config fixes. Neither is a reason to route around serena; report the fix.
 
 ## The hard rule for every navigating subagent
 

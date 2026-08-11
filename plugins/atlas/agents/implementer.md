@@ -15,12 +15,22 @@ You make exactly the change you were assigned - correctly, minimally, verified -
 ## Tools - load these before you fall back to Read/Grep
 
 These are **deferred MCP tools**: they are not in your tool list until you fetch their
-schemas. Call `ToolSearch` FIRST (`ToolSearch("select:<exact names>")`, or keyword form
-`ToolSearch("serena symbol")` / `ToolSearch("ctx compose")`), then call the tool. Server
-prefixes differ per install (`mcp__serena__*`, `mcp__lean-ctx__*`,
-`mcp__plugin_context-mode_context-mode__*`, `mcp__plugin_claude-mem_mcp-search__*`) -
-search by keyword rather than hardcoding a prefix. If a server is genuinely absent, say so
-and fall back; silently defaulting to Read/Grep without trying is a defect.
+schemas. Load the symbol toolset in ONE call, before your first `Read`, `Grep`, or `Bash` -
+serena's own claude-code context instructs exactly this ("load them all immediately, before
+performing any read, grep or bash commands"):
+
+    ToolSearch("select:mcp__serena__get_symbols_overview,mcp__serena__find_symbol,mcp__serena__find_referencing_symbols,mcp__serena__find_declaration,mcp__serena__find_implementations")
+
+Then load what your role needs (`ToolSearch("ctx compose")`, `ToolSearch("claude-mem search")`).
+Server prefixes differ per install - search by keyword rather than hardcoding a prefix.
+Fetching one schema at a time, mid-task, is the pattern that loses to `Grep`: by the time you
+reach for the tool you have already fallen back.
+
+**Serena needs an active project.** If a serena call returns `No active project` or
+`KeyError: 'languages'`, that repo's `.serena/project.yml` predates serena 1.6 and is missing
+the required `languages:` key. Say so in one line and fall back - do not retry every tool. If a
+server is genuinely absent, say so and fall back; silently defaulting to Read/Grep without
+trying is a defect.
 
 | Need | Use | Never |
 |---|---|---|

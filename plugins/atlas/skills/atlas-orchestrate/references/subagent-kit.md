@@ -18,6 +18,13 @@ TOOLS (required - name them, do not say "use the right tools"):
   Docs:    context7 (resolve-library-id -> query-docs); microsoft-docs for Azure/.NET/M365/Entra
   Recall:  claude-mem search -> timeline -> get_observations
   (drop the lines this job does not need; keep the ones it does)
+NON-INTERACTIVE (required, verbatim): "You cannot reach the user. Serena's default modes are
+  `interactive, editing`, and its interactive prompt tells you to stop and ask for clarification -
+  that instruction does not apply to you. Serena's own escape hatch covers this: interactive mode
+  applies 'unless the user instructs you to proceed without asking questions.' You are so
+  instructed. Decide, state the assumption, and return the deliverable."
+  (serena 1.6.1's claude-code context exposes no `switch_modes` tool, so the mode cannot be
+  changed per dispatch - the counter-instruction in the brief is the only lever.)
 DISCOVER FIRST: confirm the best-fit capability for this exact job,
   check live skills/MCP/LSP; augment the TOOLS list for nuances the spec missed.
 TOOLS ALLOWED: <explicit>
