@@ -650,7 +650,11 @@ class AgentTierContract(unittest.TestCase):
         ask the user questions they cannot ask. No switch_modes tool exists in the
         claude-code context, so the dispatch brief must carry the counter-instruction."""
         kit = (
-            PLUGIN_ROOT / "skills" / "atlas-orchestrate" / "references" / "subagent-kit.md"
+            PLUGIN_ROOT
+            / "skills"
+            / "atlas-orchestrate"
+            / "references"
+            / "subagent-kit.md"
         ).read_text(encoding="utf-8")
         self.assertIn(
             "NON-INTERACTIVE", kit, "dispatch brief has no non-interactive clause"
@@ -659,6 +663,43 @@ class AgentTierContract(unittest.TestCase):
             "proceed without asking questions",
             kit,
             "brief does not invoke serena's documented interactive-mode escape hatch",
+        )
+
+    def test_no_atlas_file_routes_to_a_nonexistent_serena_tool(self):
+        """Naming a tool serena does not have is a guaranteed failed call.
+
+        atlas-handoff told agents to call `prepare_for_new_conversation` for
+        months; no such tool exists in serena 1.6. Same defect shape as "tools
+        named in prose are not callable" -- caught here instead of at runtime.
+        A mention is allowed only on a line that says the tool is gone.
+        """
+        gone = (
+            "prepare_for_new_conversation",
+            "think_about_task_adherence",
+            "think_about_whether_you_are_done",
+            "think_about_collected_information",
+            "summarize_changes",
+            "switch_modes",
+        )
+        bad = []
+        for path in sorted(PLUGIN_ROOT.rglob("*.md")):
+            for lineno, line in enumerate(
+                path.read_text(encoding="utf-8").splitlines(), 1
+            ):
+                for tool in gone:
+                    if tool not in line:
+                        continue
+                    # A line disclaiming the tool is the documentation of its absence.
+                    if any(
+                        w in line for w in ("no ", "No ", "not exist", "gone", "fails")
+                    ):
+                        continue
+                    bad.append(
+                        "%s:%d routes to nonexistent %s"
+                        % (path.relative_to(PLUGIN_ROOT), lineno, tool)
+                    )
+        self.assertEqual(
+            bad, [], "atlas names serena tools that do not exist: %s" % bad
         )
 
 

@@ -23,7 +23,10 @@ schema in `references/handoff-memory-schema.md` for the structured shape
 (both the prose file and the memory record use the same fields).
 
 Where to write it:
-- If Serena is available, use its prepare_for_new_conversation tool and write the output to project memory.
+- If serena has an active project, write the record with `write_memory` (key
+  `handoff/<topic-slug>`); `list_memories` / `read_memory` retrieve it next session.
+  There is no `prepare_for_new_conversation` tool in serena 1.6 - compose the record
+  yourself from the field schema.
 - Otherwise, write the handoff to the project's docs directory or its memory store.
 - If you cannot tell where the project keeps memory or docs, ask once, then proceed.
 
