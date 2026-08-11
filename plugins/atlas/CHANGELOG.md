@@ -45,9 +45,15 @@ construction, so it only ever offered what the harness lacks.
   position->locations) and serena's active-project preconditions.
 - `capability-routing.md` Step 2b specifies the batched `ToolSearch` form and
   names the six context-excluded tools that must never appear in a spec.
-- Three contract tests added: `test_agents_load_symbol_toolset_up_front`,
+- `atlas-handoff` stopped routing to `prepare_for_new_conversation`, a tool
+  serena 1.6 does not have. It had been instructing agents to make a call that
+  always fails; the handoff record is now composed from the field schema and
+  stored with `write_memory`.
+- Four contract tests added: `test_agents_load_symbol_toolset_up_front`,
   `test_agents_do_not_name_context_excluded_serena_tools`,
-  `test_dispatch_brief_overrides_serena_interactive_mode`.
+  `test_dispatch_brief_overrides_serena_interactive_mode`, and
+  `test_no_atlas_file_routes_to_a_nonexistent_serena_tool` (scans every plugin
+  markdown file, not just the agents).
 
 **Known gap.** Roughly 40 other `.serena/project.yml` files on the machine still
 lack `languages:` and will keep failing until each is fixed; the sweep was

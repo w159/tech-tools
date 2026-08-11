@@ -25,9 +25,11 @@ relies on to resume without re-discovery.
 
 ## Storage locations (in priority order)
 
-1. **Serena project memory** - if Serena is available, use
-   `prepare_for_new_conversation` and write the output to project memory.
-   Key: `handoff/<topic-slug>`.
+1. **serena project memory** - if serena has an active project, compose the
+   record from the field schema above and store it with `write_memory`.
+   Key: `handoff/<topic-slug>`. Retrieve with `list_memories` / `read_memory`.
+   (serena 1.6 has no `prepare_for_new_conversation` tool; earlier versions of
+   this doc named one, which is a call that fails.)
 2. **Project docs directory** - write to `docs/handoffs/<topic-slug>.md`
    if the project keeps a docs tree.
 3. **Project memory store** - write to the project's declared memory

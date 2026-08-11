@@ -107,6 +107,17 @@ each yml gets the key. Note that a repo with **no** `.serena/project.yml` is fin
 Only stale existing files fail. The agents now recognize the error and report it in one line
 instead of retrying every tool.
 
+## Adjacent defect found while auditing the same routing
+
+`atlas-handoff` (SKILL.md:26 and `references/handoff-memory-schema.md:28`) instructed agents
+to call serena's `prepare_for_new_conversation`. No such tool exists in serena 1.6 - it is
+absent from the published tool list and from both the active and available-but-inactive sets
+reported by `get_current_config`. Every agent that followed that instruction made a call that
+could only fail. Fixed to compose the record from the field schema and store it with
+`write_memory`. Guarded by `test_no_atlas_file_routes_to_a_nonexistent_serena_tool`, which
+scans every markdown file in the plugin rather than only the agent bodies; confirmed
+non-vacuous by replaying it against `HEAD` (2 violations) versus the fixed tree (0).
+
 ## Reusable rule
 
 A tool that is wired, named, and still unused is a configuration failure until proven a
