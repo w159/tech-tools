@@ -4,6 +4,43 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
+## 2026-08-11 -- atlas 5.7.1: serena was never activating a project
+
+Released as atlas 5.7.1 (`plugins/atlas/.claude-plugin/plugin.json:3`, `.kimi-plugin/plugin.json:3`).
+
+5.7.0 made every agent name serena's tools correctly and serena still did nothing. Two
+configuration defects sat in series underneath it:
+
+- serena 1.6 made `languages:` a `ProjectConfig` field with no default. Every
+  `.serena/project.yml` on this machine predates the rename and carries only
+  `language_servers:`, so `serena_config.py:569` raises `KeyError: 'languages'`, the project
+  is skipped at load, and every symbol tool answers `No active project`.
+- `~/.mcp.json:57` - the entry the session actually reads - launched the server with
+  `--context claude-code` and no `--project`, so nothing activated even where the yml was
+  valid.
+
+Together they produced the always-empty status bar, the `tools/list`-then-silence logs, and a
+29% serena tool error rate (against 4.6% for context-mode and 6.8% for lean-ctx) that read as
+a bad tool rather than a bad config.
+
+The first determination, "the native `LSP` tool subsumes serena, remove it", was wrong and is
+recorded as such. `LSP` takes `(filePath, line, character)` and returns locations;
+`find_symbol` takes a name and returns a body. Serena's symbol-edit tools have no native
+equivalent, and its `claude-code` context excludes `read_file`, `search_for_pattern` and four
+others by construction, so it never overlapped lean-ctx or context-mode at all.
+
+Changed: all 12 agents load the symbol toolset in one up-front `ToolSearch`; the dispatch
+brief carries a `NON-INTERACTIVE` clause overriding serena's `interactive` default mode, which
+tells subagents to ask the user questions they cannot ask; `lsp-and-symbols.md` and
+`capability-routing.md` document the serena-vs-`LSP` split and the active-project
+preconditions; three contract tests enforce all of it. Full detail in
+`.atlas/findings/2026-08-11-serena-never-activated.md`.
+
+Known gap: ~40 other `.serena/project.yml` files on the machine still lack `languages:`; the
+sweep was declined. Repos with no project.yml are unaffected.
+
+---
+
 ## 2026-08-06 -- atlas 5.7.0: subagents call the MCP tools, at the right tier
 
 Released as atlas 5.7.0 (`plugins/atlas/.claude-plugin/plugin.json:3`, `.kimi-plugin/plugin.json:3`), marketplace 3.6.0.

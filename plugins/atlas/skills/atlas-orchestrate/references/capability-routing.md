@@ -49,6 +49,19 @@ first. Server prefixes vary per install (`mcp__serena__*`, `mcp__lean-ctx__*`,
 `mcp__plugin_context-mode_context-mode__*`, `mcp__plugin_claude-mem_mcp-search__*`), so tell the
 agent to search by keyword rather than hardcoding a prefix.
 
+**Load the set in one call, up front.** Per-tool `ToolSearch` at the moment of need is how an
+agent still ends up on `Grep`: by the time it reaches for the symbol tool it has already fallen
+back. serena's own claude-code context says to load them "immediately, before performing any
+read, grep or bash commands". Put the batched form in the prompt:
+
+    ToolSearch("select:mcp__serena__get_symbols_overview,mcp__serena__find_symbol,mcp__serena__find_referencing_symbols,mcp__serena__find_declaration,mcp__serena__find_implementations")
+
+Do **not** name `search_for_pattern`, `read_file`, `execute_shell_command`, `find_file`,
+`list_dir` or `create_text_file`: the claude-code context excludes all six so they never
+duplicate Claude Code's own tools, and every call to one fails. See
+`references/lsp-and-symbols.md` for the serena-vs-native-`LSP` split and the active-project
+preconditions.
+
 | Job | Name these tools in the prompt | Instead of |
 |---|---|---|
 | Orient in unfamiliar code | `ctx_compose` (lean-ctx) | a spray of `Read` calls |

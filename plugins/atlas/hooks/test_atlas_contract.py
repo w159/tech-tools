@@ -602,6 +602,65 @@ class AgentTierContract(unittest.TestCase):
                 bad.append(path.name)
         self.assertEqual(bad, [], "code agents with no serena symbol routing: %s" % bad)
 
+    def test_agents_load_symbol_toolset_up_front(self):
+        """Per-tool ToolSearch mid-task loses to Grep: by then the agent has fallen back.
+
+        serena's claude-code context says to load the toolset "immediately, before
+        performing any read, grep or bash commands". Enforce the batched select: form.
+        """
+        bad = []
+        for path in _agent_files():
+            body = path.read_text(encoding="utf-8")
+            if 'ToolSearch("select:mcp__serena__' not in body:
+                bad.append("%s: no up-front serena toolset load" % path.name)
+            elif (
+                body.count(
+                    "mcp__serena__", body.index('ToolSearch("select:mcp__serena__')
+                )
+                < 3
+            ):
+                bad.append("%s: loads serena tools one at a time" % path.name)
+        self.assertEqual(
+            bad, [], "agents not loading the symbol toolset up front: %s" % bad
+        )
+
+    def test_agents_do_not_name_context_excluded_serena_tools(self):
+        """The claude-code context excludes these; naming them guarantees a failed call.
+
+        Empirically: every recorded search_for_pattern call errored for this reason.
+        """
+        excluded = (
+            "search_for_pattern",
+            "read_file",
+            "create_text_file",
+            "execute_shell_command",
+            "find_file",
+            "list_dir",
+        )
+        bad = []
+        for path in _agent_files():
+            body = path.read_text(encoding="utf-8")
+            for tool in excluded:
+                if tool in body:
+                    bad.append("%s: names context-excluded %s" % (path.name, tool))
+        self.assertEqual(bad, [], "agents naming excluded serena tools: %s" % bad)
+
+    def test_dispatch_brief_overrides_serena_interactive_mode(self):
+        """serena's default modes include `interactive`, which tells subagents to stop and
+        ask the user questions they cannot ask. No switch_modes tool exists in the
+        claude-code context, so the dispatch brief must carry the counter-instruction."""
+        kit = (
+            PLUGIN_ROOT / "skills" / "atlas-orchestrate" / "references" / "subagent-kit.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "NON-INTERACTIVE", kit, "dispatch brief has no non-interactive clause"
+        )
+        self.assertIn(
+            "proceed without asking questions",
+            kit,
+            "brief does not invoke serena's documented interactive-mode escape hatch",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
