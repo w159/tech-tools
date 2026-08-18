@@ -4,6 +4,48 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
+## 2026-08-18 -- atlas 5.10.0: no nested subagents, and stop sending a squad after a one-file change
+
+Released as atlas 5.10.0 (`plugins/atlas/.claude-plugin/plugin.json:3`,
+`.kimi-plugin/plugin.json:3`). Both rules were asserted in prose and enforced nowhere.
+
+**Subagents launched subagents.** No agent definition listed `Agent` or `Task` in
+`disallowedTools`, and no hook denied a nested dispatch. A nested agent is invisible to
+the orchestrator that owns the task: its dispatch is never counted toward verifier
+coverage, its verdict never reaches `findings.json`, its context is unreachable. Fixed in
+two independent layers so a change to either alone cannot reopen the hole: all 12 specs in
+`plugins/atlas/agents/` now carry `Agent, Task` in `disallowedTools` plus a "You do not
+dispatch" section, and `hooks/dispatch_tripwire.py:123` denies any `Agent`/`Task` whose
+`transcript_path` is a `subagents/` transcript. That deny runs before the `ATLAS_TRIPWIRE`
+kill switch (a structural invariant is not a taste setting) and before any DB call, because
+a subagent's session_id has no run row and everything downstream of `current_run_id()`
+returns early.
+
+**Every task cost two subagents.** Law 5 (`skills/atlas-orchestrate/SKILL.md:111`) required
+an `atlas:verifier` dispatch to pair each implementer, "no exceptions, no it is trivial",
+and completion-gate condition (g) enforced exactly that. A one-file change with a passing
+test still needed a second agent, which contradicts atlas's own doctrine that verification
+is a test run, not a subagent. Condition (g) is now
+`max(0, unpaired_implementer_dispatches - verified_findings_stamped_this_run)`
+(`hooks/completion_gate.py`): a `verified` entry written during the run pairs an
+implementer exactly like a verifier dispatch, scoped to the run window so an inherited or
+undated entry earns nothing. `SKILL.md` gains a wave-sizing ladder.
+
+**The orchestrator still never does the work.** Right-sizing is about how many subagents,
+never about working inline. The deny tier got tighter, 8 inline ops to 6
+(`hooks/dispatch_tripwire.py:32`). Tightening is safe because the count now excludes the
+orchestrator's own `docs/` and `.atlas/` writes via
+`atlas_db.unsanctioned_inline_ops_since_last_dispatch` -- counting those was a latent
+deadlock, since the completion gate orders exactly those writes at closeout and the
+tripwire would have denied them.
+
+Verification: `python3 -m pytest plugins/atlas/hooks plugins/atlas/scripts -q` -- 1129
+passed. New coverage: `NestedSubagentDenyTest` (7), `TestRunPairsAnImplementerTest` (5),
+`UnsanctionedInlineOpsTest` (5), `NoNestedSubagentsContract` (4),
+`RightSizedDelegationContract` (4).
+
+---
+
 ## 2026-08-18 -- atlas 5.9.0: the four atlas-side defects the usage-insight report measured
 
 Released as atlas 5.9.0 (`plugins/atlas/.claude-plugin/plugin.json:3`,

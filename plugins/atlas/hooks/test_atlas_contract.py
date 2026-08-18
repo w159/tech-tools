@@ -931,3 +931,98 @@ class InsightRemediationContract(unittest.TestCase):
         only announces success must not emit."""
         text = (HOOKS_DIR / "nudge.py").read_text(encoding="utf-8")
         self.assertNotIn("Self-improvement complete", text)
+
+
+class NoNestedSubagentsContract(unittest.TestCase):
+    """Subagents launching subagents forks work out of the orchestrator's view.
+    Two independent layers must hold, so a change to either alone cannot
+    reopen the hole."""
+
+    def test_every_agent_disallows_agent_and_task(self):
+        missing = []
+        for path in sorted((PLUGIN_ROOT / "agents").glob("*.md")):
+            fm = _frontmatter(path)
+            declared = fm.get("disallowedTools", "")
+            for tool in ("Agent", "Task"):
+                if tool not in declared:
+                    missing.append("%s -> %s" % (path.name, tool))
+        self.assertEqual(missing, [], "agents that can still dispatch: %s" % missing)
+
+    def test_every_agent_spec_says_it_does_not_dispatch(self):
+        """Frontmatter is the belt; the prose stops the agent burning turns
+        fighting a deny it did not expect."""
+        missing = [
+            p.name
+            for p in sorted((PLUGIN_ROOT / "agents").glob("*.md"))
+            if "You do not dispatch" not in p.read_text(encoding="utf-8")
+        ]
+        self.assertEqual(missing, [])
+
+    def test_hook_denies_a_dispatch_from_a_subagent_transcript(self):
+        payload = {
+            "session_id": "agent-deadbeef",
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Agent",
+            "transcript_path": "/x/projects/p/sess/subagents/agent-deadbeef.jsonl",
+            "tool_input": {"subagent_type": "atlas:explorer", "prompt": "ToolSearch()"},
+        }
+        r = subprocess.run(
+            [sys.executable, str(HOOKS_DIR / "dispatch_tripwire.py")],
+            input=json.dumps(payload),
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(r.returncode, 0)
+        out = json.loads(r.stdout)["hookSpecificOutput"]
+        self.assertEqual(out["permissionDecision"], "deny")
+
+    def test_the_deny_precedes_the_drift_kill_switch_and_the_db(self):
+        """Placement is the whole trick: a subagent's session has no run row, so
+        anything after current_run_id() would return early and never deny."""
+        src = (HOOKS_DIR / "dispatch_tripwire.py").read_text(encoding="utf-8")
+        body = src[src.index("def main():") :]
+        deny_at = body.index("_deny_nested_dispatch")
+        self.assertLess(deny_at, body.index('ATLAS_TRIPWIRE", "on"'))
+        self.assertLess(deny_at, body.index("import atlas_db"))
+
+
+class RightSizedDelegationContract(unittest.TestCase):
+    """Always delegate, but do not send a squad after a one-file change."""
+
+    def test_a_test_run_can_pair_an_implementer(self):
+        """Condition (g) must accept a deterministic test, not only a verifier
+        dispatch -- otherwise every task costs two subagents by construction."""
+        src = (HOOKS_DIR / "completion_gate.py").read_text(encoding="utf-8")
+        self.assertIn("_test_verified_this_run", src)
+        self.assertIn("_unpaired_implementer_dispatches(session)", src)
+        self.assertIn("_test_verified_this_run(root, session)", src)
+
+    def test_orchestrate_skill_documents_the_wave_ladder(self):
+        text = (
+            PLUGIN_ROOT / "skills" / "atlas-orchestrate" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("Right-size the wave", text)
+        self.assertIn("Subagents never dispatch subagents", text)
+        # The old absolute rule forced a verifier dispatch onto every task.
+        self.assertNotIn(
+            "every `atlas:implementer` dispatch MUST be followed by an "
+            "`atlas:verifier` dispatch",
+            text,
+        )
+
+    def test_small_change_still_gets_a_subagent(self):
+        """Right-sizing must never be read as 'do it inline'."""
+        text = (
+            PLUGIN_ROOT / "skills" / "atlas-orchestrate" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("a one-line change is still an `atlas:implementer` dispatch", text)
+
+    def test_deny_tier_excludes_the_orchestrator_sanctioned_writes(self):
+        """The gate orders docs//.atlas/ writes at closeout. Counting them
+        against the inline budget would deny the remediation it just demanded."""
+        src = (HOOKS_DIR / "dispatch_tripwire.py").read_text(encoding="utf-8")
+        self.assertIn("unsanctioned_inline_ops_since_last_dispatch", src)
+        self.assertNotIn(
+            "atlas_db.inline_ops_since_last_dispatch(conn, run_id)\n    except",
+            src,
+        )

@@ -722,7 +722,7 @@ class InProcessTest(unittest.TestCase):
             self._run_main(self._post("Read", {"file_path": "a.py"}))
         with patch.object(
             self.atlas_db,
-            "inline_ops_since_last_dispatch",
+            "unsanctioned_inline_ops_since_last_dispatch",
             side_effect=Exception("boom"),
         ):
             out = self._run_main(self._pre("Read", {"file_path": "b.py"}))
@@ -856,3 +856,75 @@ class VerifierVerdictBracketTest(unittest.TestCase):
         ).fetchone()[0]
         conn.close()
         self.assertGreaterEqual(rows, 1)
+
+
+class NestedSubagentDenyTest(unittest.TestCase):
+    """A subagent must never dispatch another subagent. Nesting hides the work
+    from the orchestrator that owns the task: the nested dispatch is uncounted,
+    its verdict never reaches findings.json, its context is unreachable."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.env = dict(os.environ, ATLAS_DB=os.path.join(self.tmp, "atlas.db"))
+        self.sub_transcript = os.path.join(
+            self.tmp, "proj", "sess-1", "subagents", "agent-abc123.jsonl"
+        )
+        self.main_transcript = os.path.join(self.tmp, "proj", "sess-1.jsonl")
+
+    def _payload(self, transcript, tool="Agent", event="PreToolUse"):
+        return {
+            # A subagent's session_id is its own agent id and has no run row --
+            # which is exactly why the deny cannot depend on the DB.
+            "session_id": "agent-abc123",
+            "hook_event_name": event,
+            "tool_name": tool,
+            "transcript_path": transcript,
+            "tool_input": {
+                "subagent_type": "atlas:explorer",
+                "prompt": 'ToolSearch("select:mcp__lean-ctx__ctx_read")',
+            },
+        }
+
+    def _decision(self, stdout):
+        if not stdout.strip():
+            return None
+        return json.loads(stdout)["hookSpecificOutput"].get("permissionDecision")
+
+    def test_agent_dispatch_from_a_subagent_is_denied(self):
+        r = run_hook(self._payload(self.sub_transcript), self.env)
+        self.assertEqual(self._decision(r.stdout), "deny")
+        self.assertIn("never dispatch another subagent", r.stdout)
+
+    def test_task_dispatch_from_a_subagent_is_denied(self):
+        r = run_hook(self._payload(self.sub_transcript, tool="Task"), self.env)
+        self.assertEqual(self._decision(r.stdout), "deny")
+
+    def test_the_orchestrator_is_never_denied_for_nesting(self):
+        r = run_hook(self._payload(self.main_transcript), self.env)
+        self.assertNotIn("never dispatch another subagent", r.stdout)
+
+    def test_deny_survives_the_drift_kill_switch(self):
+        """ATLAS_TRIPWIRE=off silences inline-drift coaching, a matter of taste.
+        Nesting is a structural invariant and is not opt-out."""
+        env = dict(self.env, ATLAS_TRIPWIRE="off")
+        r = run_hook(self._payload(self.sub_transcript), env)
+        self.assertEqual(self._decision(r.stdout), "deny")
+
+    def test_non_dispatch_tools_in_a_subagent_are_untouched(self):
+        r = run_hook(
+            self._payload(self.sub_transcript, tool="Read"),
+            self.env,
+        )
+        self.assertNotIn("never dispatch another subagent", r.stdout)
+
+    def test_no_db_is_required_for_the_deny(self):
+        """The whole point of placing this before the DB import: a subagent has
+        no run row, so any DB-gated path would return early and never deny."""
+        env = dict(self.env, ATLAS_DB="/nonexistent/dir/atlas.db")
+        r = run_hook(self._payload(self.sub_transcript), env)
+        self.assertEqual(self._decision(r.stdout), "deny")
+
+    def test_windows_style_transcript_path_is_recognized(self):
+        win = r"C:\Users\x\.claude\projects\p\sess\subagents\agent-abc.jsonl"
+        r = run_hook(self._payload(win), self.env)
+        self.assertEqual(self._decision(r.stdout), "deny")

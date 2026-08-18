@@ -25,9 +25,11 @@ from docs_drift import find_root  # noqa: E402
 INLINE_TOOLS = {"Read", "Grep", "Glob", "Edit", "Write", "Bash"}
 DISPATCH_TOOLS = {"Agent", "Task"}
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit"}
-# PreToolUse deny tier: the Nth inline op with no intervening dispatch is denied.
-# 8 prior ops means this call is the 9th -> deny.
-DENY_THRESHOLD = 8
+# PreToolUse deny tier: the Nth UNSANCTIONED inline op with no intervening dispatch
+# is denied. 6 prior ops means this call is the 7th -> deny. Sanctioned writes (the
+# orchestrator's own docs/ and .atlas/ edits, which the completion gate requires at
+# closeout) are excluded from the count, which is what makes a tighter limit safe.
+DENY_THRESHOLD = 6
 # Skills whose invocation means the session IS an atlas orchestration run.
 # Deliberately excludes advisory/config skills (atlas-setup, atlas-validate)
 # and narrow single-purpose skills (atlas-prompt, atlas-readme,
@@ -105,6 +107,35 @@ def _verdict_missing(root, session):
     if not isinstance(before, int):
         return False
     return _findings_count(root) <= before
+
+
+def _in_subagent(payload):
+    """True when this hook is firing inside a dispatched subagent.
+
+    Subagent transcripts live at `<session-dir>/subagents/agent-<id>.jsonl`,
+    which is the only reliable marker in the payload: a subagent's session_id
+    (`agent-xxxxx`) has no run row, so nothing in the observability DB can
+    answer this.
+    """
+    return "/subagents/" in str(payload.get("transcript_path") or "").replace("\\", "/")
+
+
+def _deny_nested_dispatch(tool):
+    """A subagent that dispatches its own subagent forks the work out of the
+    orchestrator's view: the nested agent's dispatch is never counted, its
+    verdict never reaches findings.json, and its context is invisible to the
+    session that owns the task. Subagents execute; only the orchestrator
+    delegates. Unconditional -- not gated on the run being flagged
+    orchestrating, because a subagent session never is."""
+    _deny(
+        "DENY - a subagent must never dispatch another subagent. You are running "
+        "inside a dispatched agent; nesting hides the work from the orchestrator "
+        "that owns this task (its dispatch is uncounted, its verdict never reaches "
+        "findings.json, its context is unreachable). Do the work yourself with the "
+        "tools you have. If it genuinely needs another role, stop and say so in your "
+        "final report -- name the role and the exact task -- and let the orchestrator "
+        "dispatch it. (%s)" % tool
+    )
 
 
 def _threshold():
@@ -191,7 +222,7 @@ def _pre_tool_use(conn, atlas_db, tool, session, path, tinput=None):
     # op past the hard limit mid-orchestration. The broad __main__ fail-open
     # covers garbage stdin / connect failures, not this trust decision.
     try:
-        count = atlas_db.inline_ops_since_last_dispatch(conn, run_id)
+        count = atlas_db.unsanctioned_inline_ops_since_last_dispatch(conn, run_id)
     except Exception:
         _deny(
             "DENY - tripwire could not verify the inline-op count (DB error). "
@@ -201,17 +232,35 @@ def _pre_tool_use(conn, atlas_db, tool, session, path, tinput=None):
         return
     if count >= DENY_THRESHOLD:
         _deny(
-            "DENY - %d inline ops since your last dispatch. Orchestrators "
-            "delegate: dispatch the next step to atlas:explorer (investigation) "
-            "or atlas:implementer (edits) instead of acting inline." % count
+            "DENY - %d inline ops since your last dispatch. Orchestrators delegate: "
+            "the work happens in subagents so this session's context stays clean. "
+            "Dispatch the next step to atlas:explorer (investigation) or "
+            "atlas:implementer (edits). Right-size it - one bounded change is ONE "
+            "implementer dispatch, not a squad. (Your own docs/ and .atlas/ writes "
+            "are not counted here; only unsanctioned inline work is.)" % count
         )
 
 
 def main():
-    if os.environ.get("ATLAS_TRIPWIRE", "on").lower() == "off":
-        return
     raw = sys.stdin.read()
     payload = json.loads(raw)  # may raise -> caught below
+
+    # Nesting deny comes FIRST: before the drift kill-switch and before any DB
+    # work. ATLAS_TRIPWIRE=off silences inline-drift coaching, which is a matter
+    # of taste; subagent nesting is a structural invariant and is not opt-out.
+    # It must also precede any DB call, because a subagent's session_id has no
+    # run row and everything downstream of current_run_id() returns early.
+    if (
+        payload.get("hook_event_name") == "PreToolUse"
+        and payload.get("tool_name") in DISPATCH_TOOLS
+        and _in_subagent(payload)
+    ):
+        _deny_nested_dispatch(payload.get("tool_name"))
+        return
+
+    if os.environ.get("ATLAS_TRIPWIRE", "on").lower() == "off":
+        return
+
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
     import atlas_db
 

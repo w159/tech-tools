@@ -110,16 +110,22 @@ orchestrator rationalizes "I'll mark it unverified and move on"); this is the ma
 - **What satisfies it.** All seven conditions must hold:
   - (a) At least one file under `.atlas/evidence/` (observed-behavior proof captured).
   - (b) `.atlas/.run/findings.json` exists and records at least one entry with status `verified`
-    (independent atlas:verifier result present).
+    (an independent check happened - a deterministic test recorded via
+    `scripts/atlas_finding.py`, or an atlas:verifier result).
   - (c) `docs/CHANGELOG.md` exists and is non-empty.
   - (d) `docs/ROADMAP.md` exists and is non-empty.
   - (e) `README.md` at the project root exists and is non-empty.
   - (f) No docs drift: if non-docs files changed this run (git diff HEAD + staged), at least
     one `docs/` file changed too -- the deterministic trigger forcing an `atlas:docs-curator`
     dispatch before "done".
-  - (g) Law 5 - verifier coverage: if non-docs code changed this run, block when implementer
-    dispatches outnumber verifier dispatches (`atlas_db.unpaired_implementer_dispatches > 0`) -
-    shipping work that never got an independent `atlas:verifier` pass.
+  - (g) Law 5 - verification coverage: if non-docs code changed this run, block when
+    implementer dispatches outnumber the independent checks that covered them. Two things
+    count as a check, and they are interchangeable: an `atlas:verifier` dispatch, or a
+    `verified` entry written into `findings.json` DURING this run (a test run recorded via
+    `scripts/atlas_finding.py`). The formula is
+    `max(0, unpaired_implementer_dispatches - verified_findings_stamped_this_run)`. Entries
+    inherited from an earlier run, and undated entries, earn no credit - they prove nothing
+    about the code this run shipped.
   The block message names exactly which condition(s) are missing.
 - **Single nudge, never a wedge.** It blocks the stop at most **once** (the `stop_hook_active`
   loop-guard), then lets the continuation through. Fail-open on any error. Disable entirely with

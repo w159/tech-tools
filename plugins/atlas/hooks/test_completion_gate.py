@@ -371,7 +371,7 @@ class GateOrchestrationTest(unittest.TestCase):
         self._log_dispatches(implementers=2, verifiers=0)
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertIn('"decision": "block"', r.stdout)
-        self.assertIn("verifier coverage", r.stdout)
+        self.assertIn("verification coverage", r.stdout)
         self.assertIn("atlas:verifier", r.stdout)
         self.assertIn("2 implementer", r.stdout)
 
@@ -384,7 +384,7 @@ class GateOrchestrationTest(unittest.TestCase):
         self._log_general_purpose_dispatches(2)
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertIn('"decision": "block"', r.stdout)
-        self.assertIn("verifier coverage", r.stdout)
+        self.assertIn("verification coverage", r.stdout)
         self.assertIn("atlas:verifier", r.stdout)
         self.assertIn("2 implementer", r.stdout)
 
@@ -793,7 +793,7 @@ class InProcessMainTest(unittest.TestCase):
         self._log_dispatches(implementers=2, verifiers=0)
         _, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertIn('"decision": "block"', out)
-        self.assertIn("verifier coverage", out)
+        self.assertIn("verification coverage", out)
         self.assertIn("2 implementer", out)
 
     def test_paired_verifier_no_block_condition_g(self):
@@ -1032,3 +1032,98 @@ class HelperUnitTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestRunPairsAnImplementerTest(GateOrchestrationTest):
+    """Law 5 used to accept only an atlas:verifier DISPATCH as pairing, which
+    forced a second subagent onto every task no matter how small. Atlas's own
+    doctrine is that a deterministic test beats a verifier agent. A `verified`
+    findings.json entry stamped DURING this run now pairs an implementer exactly
+    like a dispatch -- and one stamped before the run still does not."""
+
+    def _write_findings(self, entries):
+        path = os.path.join(self.tmp, ".atlas", ".run", "findings.json")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            json.dump(entries, f)
+
+    def _stamp(self, offset_seconds):
+        """ISO-8601 UTC stamp offset from the run's start."""
+        import datetime as _dt
+
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db
+
+        c = atlas_db.connect(self.env["ATLAS_DB"])
+        rid = atlas_db.current_run_id(c, "sess-orch") or atlas_db.latest_run_id(
+            c, "sess-orch"
+        )
+        started = atlas_db.run_started_at(c, rid)
+        c.close()
+        return (
+            _dt.datetime.fromtimestamp(started + offset_seconds, _dt.timezone.utc)
+            .isoformat(timespec="seconds")
+        )
+
+    def test_one_implementer_plus_a_test_verified_finding_passes(self):
+        """The simple-task path: one subagent, verification by test, no verifier
+        dispatch, gate green."""
+        self._commit_and_make_mixed_diff()
+        self._log_dispatches(implementers=1, verifiers=0)
+        self._write_findings(
+            [
+                {
+                    "id": "S1",
+                    "status": "verified",
+                    "verified_at": self._stamp(1),
+                    "reproduction": "pytest -q",
+                }
+            ]
+        )
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertEqual(r.stdout.strip(), "", r.stdout)
+
+    def test_credit_is_scoped_to_the_run_window(self):
+        """A verified row inherited from an earlier session proves nothing about
+        the code THIS run shipped. It satisfies (b) but must not pair (g)."""
+        self._commit_and_make_mixed_diff()
+        self._log_dispatches(implementers=1, verifiers=0)
+        self._write_findings(
+            [{"id": "OLD", "status": "verified", "verified_at": self._stamp(-86400)}]
+        )
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertIn("verification coverage", r.stdout)
+
+    def test_undated_verified_entry_earns_no_credit(self):
+        """No verified_at means it cannot be proven to belong to this run."""
+        self._commit_and_make_mixed_diff()
+        self._log_dispatches(implementers=1, verifiers=0)
+        self._write_findings([{"id": "S1", "status": "verified"}])
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertIn("verification coverage", r.stdout)
+
+    def test_credit_does_not_cover_more_implementers_than_it_earned(self):
+        """Three implementers, one test-verified finding -> still 2 unpaired."""
+        self._commit_and_make_mixed_diff()
+        self._log_dispatches(implementers=3, verifiers=0)
+        self._write_findings(
+            [{"id": "S1", "status": "verified", "verified_at": self._stamp(1)}]
+        )
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertIn("2 implementer", r.stdout)
+
+    def test_non_verified_status_earns_no_credit(self):
+        self._commit_and_make_mixed_diff()
+        self._log_dispatches(implementers=1, verifiers=0)
+        self._write_findings(
+            [
+                {"id": "S0", "status": "verified", "verified_at": self._stamp(-86400)},
+                {
+                    "id": "S1",
+                    "status": "needs-evidence",
+                    "verified_at": self._stamp(1),
+                },
+            ]
+        )
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertIn("verification coverage", r.stdout)
