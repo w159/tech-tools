@@ -76,7 +76,11 @@ and the four `*_list` default-parameter cases. Isolated bundle handshake:
 `initialize` -> ninjaone-mcp 1.7.0, `tools/list` -> 39 tools, and every one
 of the 35 domain tools called and reached a handler (zero `Unknown tool`).
 
-Ships as ninjaone-mcp 1.7.0 and node-ninjaone 1.3.0.
+Ships as ninjaone-mcp 1.7.0 and node-ninjaone 1.4.0. The minor bump on the
+client library is a removal: `devices.getOsPatchInstalls` and
+`devices.listOsPatchInstalls` (added in 5.12.0) are gone, along with the
+`unwrapQueryResults` helper they orphaned. `QueriesResource` owns that
+endpoint now, so the device-vs-tenant branch exists in one place.
 
 **Not fixed, and worth knowing:** `node-ninjaone`'s own test suite still
 cannot run as committed -- `msw` and `vitest` are absent from its

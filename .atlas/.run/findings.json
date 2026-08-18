@@ -412,7 +412,7 @@
     "notes": "typecheck clean. vitest devices.test.ts: 18 passed, 2 failed, both reproduce on 81af28f with the change stashed. Full suite 100 passed / 11 failed against a 93/12 baseline: 6 new tests pass, tool-count assertion flipped to passing, zero new failures. Isolated handshake with no node_modules: initialize OK as ninjaone-mcp 1.6.3, tools/list 27 tools (was 26), ninjaone_devices_os_patch_installs present with all 10 schema properties. Contract NOT yet exercised against the live NinjaOne API: df grammar, status enum, and epoch-seconds params are verified against mocks only."
   },
   {
-    "id": "ATLAS-5.12.0-ninjaone-prefix-router",
+    "id": "ATLAS-5.13.0-ninjaone-prefix-router",
     "surface": "mcp-connector-ninjaone",
     "category": "correctness",
     "severity": "high",
@@ -433,7 +433,7 @@
     "verified_by": "isolated bundle handshake + flattened-navigation routability test"
   },
   {
-    "id": "ATLAS-5.12.0-ninjaone-df-scoping",
+    "id": "ATLAS-5.13.0-ninjaone-df-scoping",
     "surface": "mcp-connector-ninjaone",
     "category": "correctness",
     "severity": "high",
@@ -474,7 +474,7 @@
     "verified_by": "package.json inspection"
   },
   {
-    "id": "ATLAS-5.12.0-ninjaone-annotation-mislabel",
+    "id": "ATLAS-5.13.0-ninjaone-annotation-mislabel",
     "surface": "mcp-connector-ninjaone",
     "category": "security",
     "severity": "high",
