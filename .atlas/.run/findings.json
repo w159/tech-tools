@@ -563,5 +563,39 @@
     "status": "verified",
     "verified_at": "2026-08-18T19:31:15+00:00",
     "verified_by": "user supplied the authoritative list and it did not match"
+  },
+  {
+    "id": "ATLAS-5.13.0-ninjaone-fields-param-inert",
+    "surface": "mcp-connector-ninjaone",
+    "category": "correctness",
+    "severity": "high",
+    "title": "ninjaone_queries_run declares fields and full but the handler returns records via shapeRaw, so both are inert - the same declared-but-never-read defect as activity_type",
+    "evidence": [
+      "mcp_servers/ninjaone-mcp/src/domains/queries.ts"
+    ],
+    "doc_refs": [],
+    "reproduction": "ninjaone_queries_run(query='computer-systems', page_size=200, fields=['deviceId','name','serialNumber']) returns full unfiltered records and truncates at the 40000-char cap",
+    "proposed_fix": "honor fields/full in the queries handler, or drop both from the input schema",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-08-18T21:54:33+00:00",
+    "verified_by": "live API call against the shipped 5.13.0 bundle"
+  },
+  {
+    "id": "ATLAS-ninjaone-devices-list-org-filter-inert",
+    "surface": "mcp-connector-ninjaone",
+    "category": "correctness",
+    "severity": "high",
+    "title": "ninjaone_devices_list declares organization_id but does not scope on it: a call for org 2 returns devices from orgs 1, 2 and 3",
+    "evidence": [
+      "mcp_servers/ninjaone-mcp/src/domains/devices.ts"
+    ],
+    "doc_refs": [],
+    "reproduction": "ninjaone_devices_list(organization_id=2, limit=100) returns records with organizationId 1, 2 and 3",
+    "proposed_fix": "route through GET /v2/organization/{id}/devices, or send df 'org = <id>'",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-08-18T21:54:33+00:00",
+    "verified_by": "live API call; pre-existing, not introduced by 5.13.0"
   }
 ]
