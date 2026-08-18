@@ -546,5 +546,22 @@
     "status": "verified",
     "verified_at": "2026-08-18T15:38:13+00:00",
     "verified_by": "symlink restored; npm test and npm run build both pass through it"
+  },
+  {
+    "id": "ATLAS-process-do-not-table-transcribed-prose",
+    "surface": "orchestration",
+    "category": "process",
+    "severity": "high",
+    "title": "rendering facts transcribed from a chat message as a table makes narrative look like a query result; label the source or do not render it",
+    "evidence": [
+      ".atlas/.run/findings.json"
+    ],
+    "doc_refs": [],
+    "reproduction": "a device list read out of a pasted prior-session report was presented as a table; it carried serials instead of names, no usernames, and silently omitted an entire organization (HPM-) because the original was org-scoped",
+    "proposed_fix": "",
+    "blast_radius": "session",
+    "status": "verified",
+    "verified_at": "2026-08-18T19:31:15+00:00",
+    "verified_by": "user supplied the authoritative list and it did not match"
   }
 ]
