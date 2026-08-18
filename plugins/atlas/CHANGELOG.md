@@ -1,5 +1,91 @@
 # Changelog
 
+## 5.13.0 (2026-08-18)
+
+The NinjaOne connector could list tools it could not call, and covered a
+fifth of the API.
+
+**The routing defect.** `mcp_servers/ninjaone-mcp/src/index.ts` dispatched
+`tools/call` through a hand-written prefix chain: four `if
+(name.startsWith("ninjaone_<domain>_"))` branches, anything else answered
+`Unknown tool`. Two consequences. A tool whose name does not encode its
+domain (`ninjaone_scripts_list` lives in `automation`) is listed and
+uncallable. A tool whose name encodes the *wrong* domain
+(`ninjaone_devices_os_patch_installs` lives in `queries`) routes to a handler
+that has never heard of it. Replaced with `getDomainForTool()`, a name ->
+domain index built once from the handlers' own `getTools()`, so a listed
+tool cannot be unroutable. `flattened-navigation.test.ts` now pins that
+invariant (every listed tool resolves to exactly one declaring domain)
+instead of the old naming pin, which is what forced the prefix router in the
+first place.
+
+**The coverage gap.** `node-ninjaone` had resources for alerts, devices,
+organizations, tickets, and webhooks. Everything in
+`docs/vendors/ninjaone/api-reference.md:81-158` had no client code at all.
+Three new resources (`queries`, `automation`, `directory`) plus per-device
+inventory and write methods on `devices`, wired onto `NinjaOneClient`.
+
+13 new tools, 26 -> 39 (5.12.0 shipped one of them; this supersedes it). Near-identical endpoints collapse behind an enum
+rather than getting one tool each, because every tool is permanent context
+cost in every session that loads the server:
+
+- `ninjaone_queries_run` - all 13 `/v2/queries/*` endpoints
+- `ninjaone_devices_os_patch_installs` - ergonomic wrapper; with `device_id`
+  it hits `/v2/device/{id}/os-patch-installs`, without one it delegates to
+  the same handler as `queries_run`, so the routing exists once
+- `ninjaone_devices_inventory` - 9 per-device inventory paths
+- `ninjaone_devices_custom_fields_update`, `_script_run`, `_maintenance`
+- `ninjaone_scripts_list`, `ninjaone_jobs_list`
+- `ninjaone_policies_list`, `_get`, `ninjaone_groups_list`, `_device_ids`
+- `ninjaone_directory_list` - users, locations, roles, node-classes
+
+**Tenant scoping goes through `df`, not `organizationId`.** The query and
+job endpoints have no `organizationId` parameter, so passing one filters
+nothing and returns a whole-tenant result that reads like a scoped one.
+Every filtering tool builds `df: "org = <id>"`; an explicit `device_filter`
+overrides it. Pinned by test in `queries.test.ts` and `automation.test.ts`.
+
+**Dates drop rather than corrupt.** `installed_after` / `installed_before`
+take ISO 8601 or epoch seconds. An unparseable value drops the filter
+instead of sending `NaN`, so a typo cannot return an empty set that looks
+like a real answer.
+
+**Records pass through unshaped.** NinjaOne's apidocs pages are JS-rendered
+and return no content, so the response field names for every new endpoint
+are unverifiable. Rather than write summary functions against guessed names
+and silently drop fields, nothing narrows these records.
+
+**Fixed: `ninjaone_devices_activities` declared an `activity_type` property
+its handler never read**, so the filter was inert and silently returned
+unfiltered results. Now sent as `type` per `api-reference.md:79`, with a
+regression test.
+
+**Fixed: two annotation mislabels, one of them dangerous.** `annotate-tool.ts`
+classifies tools by name pattern, which lies in both directions.
+`ninjaone_devices_maintenance` matched nothing and fell through to the
+read-only default despite mutating state, so clients would group a write
+under "Read-only tools". `ninjaone_queries_run` matched `run` and was marked
+a write despite being a pure read. Both now carry explicit classifications,
+with a test that fails if any future tool whose name implies mutation lands
+in the read class.
+
+Gate: `tsc --noEmit` clean. Suite 142 passed / 11 failed, against a
+pre-change baseline of 94 passed / 11 failed -- 48 tests added, zero new
+failures. The 11 are pre-existing mock-shape mismatches in `client.test.ts`
+and the four `*_list` default-parameter cases. Isolated bundle handshake:
+`initialize` -> ninjaone-mcp 1.7.0, `tools/list` -> 39 tools, and every one
+of the 35 domain tools called and reached a handler (zero `Unknown tool`).
+
+Ships as ninjaone-mcp 1.7.0 and node-ninjaone 1.3.0.
+
+**Not fixed, and worth knowing:** `node-ninjaone`'s own test suite still
+cannot run as committed -- `msw` and `vitest` are absent from its
+devDependencies. All new coverage therefore lives at the ninjaone-mcp domain
+layer. Every green check above is against mocks and a handshake; the `df`
+grammar, the `status` enum values, and the epoch-seconds parameter names
+have never touched the real API.
+
+
 ## 5.12.0 (2026-08-18)
 
 NinjaOne can answer patch questions now.

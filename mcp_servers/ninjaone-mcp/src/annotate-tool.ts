@@ -124,7 +124,23 @@ function matchesAny(name: string, patterns: RegExp[]): boolean {
 
 export type ToolClass = "read" | "create" | "destructive";
 
+/**
+ * Tools whose names the patterns above classify wrongly. Name matching is a
+ * heuristic: "run" reads as a write (ninjaone_queries_run is a pure read) and
+ * a bare noun reads as a read (ninjaone_devices_maintenance mutates state).
+ * A mislabelled write is the dangerous direction, so these are explicit.
+ */
+const CLASS_OVERRIDES: Record<string, ToolClass> = {
+  ninjaone_queries_run: "read",
+  ninjaone_devices_os_patch_installs: "read",
+  ninjaone_devices_inventory: "read",
+  ninjaone_devices_maintenance: "destructive",
+  ninjaone_devices_script_run: "destructive",
+};
+
 export function classifyTool(name: string): ToolClass {
+  const override = CLASS_OVERRIDES[name];
+  if (override) return override;
   if (matchesAny(name, DESTRUCTIVE_PATTERNS)) return "destructive";
   if (matchesAny(name, CREATE_PATTERNS)) return "create";
   if (matchesAny(name, READ_PATTERNS)) return "read";

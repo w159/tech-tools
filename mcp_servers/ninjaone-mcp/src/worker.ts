@@ -31,7 +31,7 @@ function createMcpServer(): Server {
   const server = new Server(
     {
       name: "ninjaone-mcp",
-      version: "1.6.3",
+      version: "1.7.0",
     },
     {
       capabilities: {
@@ -45,13 +45,13 @@ function createMcpServer(): Server {
     const navigateTool: Tool = {
       name: "ninjaone_navigate",
       description:
-        "Navigate to a NinjaOne domain to access its tools. Available domains: devices, organizations, alerts, tickets.",
+        "Navigate to a NinjaOne domain to access its tools. Available domains: devices, organizations, alerts, tickets, queries, automation, directory.",
       inputSchema: {
         type: "object",
         properties: {
           domain: {
             type: "string",
-            enum: ["devices", "organizations", "alerts", "tickets"],
+            enum: ["devices", "organizations", "alerts", "tickets", "queries", "automation", "directory"],
             description: "The domain to navigate to",
           },
         },

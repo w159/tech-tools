@@ -72,9 +72,30 @@ async function getAllDomainTools(): Promise<Tool[]> {
 }
 
 /**
+ * Tool name -> declaring domain, built once from the handlers themselves so a
+ * tool can never be listed but unroutable. Lazily populated on first call.
+ */
+let toolDomainIndex: Map<string, DomainName> | null = null;
+
+export async function getDomainForTool(
+  toolName: string
+): Promise<DomainName | undefined> {
+  if (!toolDomainIndex) {
+    toolDomainIndex = new Map();
+    for (const domain of getAvailableDomains()) {
+      const handler = await getDomainHandler(domain);
+      for (const tool of handler.getTools()) {
+        toolDomainIndex.set(tool.name, domain as DomainName);
+      }
+    }
+  }
+  return toolDomainIndex.get(toolName);
+}
+
+/**
  * Available domains for navigation
  */
-type DomainName = "devices" | "organizations" | "alerts" | "tickets";
+type DomainName = "devices" | "organizations" | "alerts" | "tickets" | "queries" | "automation" | "directory";
 
 /**
  * Domain metadata for discovery
@@ -84,6 +105,9 @@ const domainDescriptions: Record<DomainName, string> = {
   organizations: "Organization management - manage customer accounts, locations, and view organization devices",
   alerts: "Alert management - view, reset, and summarize monitoring alerts across devices and organizations",
   tickets: "Ticket management - create, update, comment on, and track service tickets",
+  queries: "Cross-org reporting - fleet-wide patch, software, hardware, and antivirus queries without per-device fan-out",
+  automation: "Automation - script catalog and scheduled/running job visibility",
+  directory: "Org structure - policies, saved device groups, users, locations, roles, and node classes",
 };
 
 /**
@@ -106,7 +130,10 @@ const navigateTool: Tool = {
 - devices: ${domainDescriptions.devices}
 - organizations: ${domainDescriptions.organizations}
 - alerts: ${domainDescriptions.alerts}
-- tickets: ${domainDescriptions.tickets}`,
+- tickets: ${domainDescriptions.tickets}
+- queries: ${domainDescriptions.queries}
+- automation: ${domainDescriptions.automation}
+- directory: ${domainDescriptions.directory}`,
       },
     },
     required: ["domain"],
@@ -165,7 +192,7 @@ async function createMcpServer(credentialOverrides?: NinjaOneCredentials): Promi
   const server = new Server(
     {
       name: "ninjaone-mcp",
-      version: "1.6.3",
+      version: "1.7.0",
     },
     {
       capabilities: {
@@ -335,23 +362,15 @@ async function createMcpServer(credentialOverrides?: NinjaOneCredentials): Promi
         return { content: [{ type: "text", text: lines.join("\n") }] };
       }
 
-      // Route to appropriate domain handler based on tool name prefix
+      // Route by the tool's declaring domain, not by name prefix. A prefix
+      // chain silently drops any tool whose name does not match its domain
+      // (ninjaone_scripts_list in "automation", ninjaone_devices_os_patch_installs
+      // in "queries"), which surfaces to the caller as "Unknown tool".
       const toolArgs = (args ?? {}) as Record<string, unknown>;
 
-      if (name.startsWith("ninjaone_devices_")) {
-        const handler = await getDomainHandler("devices");
-        return await handler.handleCall(name, toolArgs);
-      }
-      if (name.startsWith("ninjaone_organizations_")) {
-        const handler = await getDomainHandler("organizations");
-        return await handler.handleCall(name, toolArgs);
-      }
-      if (name.startsWith("ninjaone_alerts_")) {
-        const handler = await getDomainHandler("alerts");
-        return await handler.handleCall(name, toolArgs);
-      }
-      if (name.startsWith("ninjaone_tickets_")) {
-        const handler = await getDomainHandler("tickets");
+      const domain = await getDomainForTool(name);
+      if (domain) {
+        const handler = await getDomainHandler(domain);
         return await handler.handleCall(name, toolArgs);
       }
 
