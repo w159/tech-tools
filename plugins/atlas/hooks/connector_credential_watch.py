@@ -41,6 +41,27 @@ _HARD_AUTH = re.compile(
 )
 
 
+# Servers whose tool_response is file content or command output, not an API
+# result. Their payloads routinely CONTAIN the words this hook hunts for -- a
+# ctx_read of connector source, or a grep for auth patterns, would otherwise
+# inject a false "restart the server" order mid-task. Same context-hijack class
+# as nudge.py landing in subagent context. The hooks.json matcher already
+# narrows to connector prefixes; this is the guard that survives a matcher edit.
+CONTENT_SERVERS = (
+    "lean-ctx",
+    "context-mode",
+    "mcp-search",
+    "claude-mem",
+    "serena",
+    "context7",
+    "microsoft-docs",
+)
+
+
+def _is_content_server(tool_name: str) -> bool:
+    return any(name in tool_name for name in CONTENT_SERVERS)
+
+
 def _server_of(tool_name: str) -> str:
     """`mcp__plugin_atlas_connectwise__cw_search_tickets` -> the server segment."""
     parts = tool_name.split("__")
@@ -118,7 +139,7 @@ def main() -> int:
         return 0
     try:
         tool = str(payload.get("tool_name", ""))
-        if not tool.startswith("mcp__"):
+        if not tool.startswith("mcp__") or _is_content_server(tool):
             return 0
         if not looks_like_auth_failure(_response_text(payload)):
             return 0

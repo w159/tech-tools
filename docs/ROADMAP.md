@@ -6,9 +6,6 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 
 ## In Progress
 
-- [active] Reinstall after the 5.6.0 bump. `InstalledParityContract` skips (rather than
-  passes) whenever the installed cache version differs from the manifest, so those three
-  assertions are dormant until `/plugin` reinstalls atlas at 5.6.0.
 - [in-progress] Vendored upstream clones (aider/, claude-code/, cline/, codex/, cursor/,
   gemini-cli/, github-copilot/, pi/, windsurf/, frameworks/, vendors/) still live in docs/.
   Decision needed: move to `reference/` at repo root, or keep in docs/ as reference material.

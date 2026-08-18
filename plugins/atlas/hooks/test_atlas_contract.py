@@ -911,7 +911,14 @@ class InsightRemediationContract(unittest.TestCase):
                 for h in m.get("hooks", [])
             )
         ]
-        self.assertEqual(matchers, ["mcp__.*"])
+        self.assertEqual(len(matchers), 1)
+        matcher = matchers[0]
+        # Must NOT be a blanket mcp__ sweep: lean-ctx/context-mode/serena return
+        # file content, and this repo's own sources contain "Invalid Token".
+        self.assertNotEqual(matcher, "mcp__.*")
+        self.assertIn("mcp__plugin_atlas_", matcher)
+        for content_server in ("lean-ctx", "context-mode", "serena", "context7"):
+            self.assertNotIn(content_server, matcher)
 
     def test_tripwire_brackets_verifier_dispatches(self):
         text = (HOOKS_DIR / "dispatch_tripwire.py").read_text(encoding="utf-8")

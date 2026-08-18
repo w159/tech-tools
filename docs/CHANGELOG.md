@@ -38,6 +38,10 @@ endpoints. Once per server per session, advisory only, `ATLAS_CONNECTOR_WATCH=of
 **4. nudge.py announced its own success on Stop.** additionalContext on Stop prompts
 another model turn. `hooks/nudge.py` is now silent on the success path.
 
+Also closed here (moved out of `docs/ROADMAP.md`): the "[active] Reinstall after the
+5.6.0 bump" item. `InstalledParityContract` no longer skips -- all three assertions run
+and pass against the installed 5.9.0 cache.
+
 Verification: `python3 -m pytest plugins/atlas/hooks plugins/atlas/scripts -q` -- 1082
 passed. New coverage: `scripts/test_atlas_finding.py` (9),
 `hooks/test_connector_credential_watch.py` (11), `VerifierVerdictBracketTest` in
