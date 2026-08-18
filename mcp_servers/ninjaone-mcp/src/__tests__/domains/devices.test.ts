@@ -12,8 +12,11 @@ const {
   mockDevicesGetServices,
   mockAlertsListByDevice,
   mockDevicesGetActivities,
-  mockDevicesGetOsPatchInstalls,
-  mockDevicesListOsPatchInstalls,
+  mockDevicesGetInventoryByKind,
+  mockDevicesUpdateCustomFields,
+  mockDevicesRunScript,
+  mockDevicesStartMaintenance,
+  mockDevicesCancelMaintenance,
   mockClient,
 } = vi.hoisted(() => {
   const mockDevicesList = vi.fn();
@@ -22,8 +25,11 @@ const {
   const mockDevicesGetServices = vi.fn();
   const mockAlertsListByDevice = vi.fn();
   const mockDevicesGetActivities = vi.fn();
-  const mockDevicesGetOsPatchInstalls = vi.fn();
-  const mockDevicesListOsPatchInstalls = vi.fn();
+  const mockDevicesGetInventoryByKind = vi.fn();
+  const mockDevicesUpdateCustomFields = vi.fn();
+  const mockDevicesRunScript = vi.fn();
+  const mockDevicesStartMaintenance = vi.fn();
+  const mockDevicesCancelMaintenance = vi.fn();
 
   const mockClient = {
     devices: {
@@ -32,8 +38,11 @@ const {
       reboot: mockDevicesReboot,
       getServices: mockDevicesGetServices,
       getActivities: mockDevicesGetActivities,
-      getOsPatchInstalls: mockDevicesGetOsPatchInstalls,
-      listOsPatchInstalls: mockDevicesListOsPatchInstalls,
+      getInventoryByKind: mockDevicesGetInventoryByKind,
+      updateCustomFields: mockDevicesUpdateCustomFields,
+      runScript: mockDevicesRunScript,
+      startMaintenance: mockDevicesStartMaintenance,
+      cancelMaintenance: mockDevicesCancelMaintenance,
     },
     alerts: {
       listByDevice: mockAlertsListByDevice,
@@ -47,8 +56,11 @@ const {
     mockDevicesGetServices,
     mockAlertsListByDevice,
     mockDevicesGetActivities,
-    mockDevicesGetOsPatchInstalls,
-    mockDevicesListOsPatchInstalls,
+    mockDevicesGetInventoryByKind,
+    mockDevicesUpdateCustomFields,
+    mockDevicesRunScript,
+    mockDevicesStartMaintenance,
+    mockDevicesCancelMaintenance,
     mockClient,
   };
 });
@@ -77,6 +89,11 @@ describe("Devices Domain Handler", () => {
     mockDevicesGetServices.mockClear();
     mockAlertsListByDevice.mockClear();
     mockDevicesGetActivities.mockClear();
+    mockDevicesGetInventoryByKind.mockClear();
+    mockDevicesUpdateCustomFields.mockClear();
+    mockDevicesRunScript.mockClear();
+    mockDevicesStartMaintenance.mockClear();
+    mockDevicesCancelMaintenance.mockClear();
 
     // Reset mock implementations - list returns Device[] directly
     mockDevicesList.mockResolvedValue([
@@ -104,23 +121,18 @@ describe("Devices Domain Handler", () => {
         { id: 1, type: "LOGIN", timestamp: "2024-01-01T00:00:00Z" },
       ],
     });
-    mockDevicesGetOsPatchInstalls.mockClear();
-    mockDevicesListOsPatchInstalls.mockClear();
-    // Both SDK methods normalize the API's two response shapes to an array
-    mockDevicesGetOsPatchInstalls.mockResolvedValue([
-      { deviceId: 1, kbNumber: "KB5094126", status: "INSTALLED", installedAt: 1780000000 },
-    ]);
-    mockDevicesListOsPatchInstalls.mockResolvedValue([
-      { deviceId: 1, kbNumber: "KB5094126", status: "INSTALLED", installedAt: 1780000000 },
-      { deviceId: 2, kbNumber: "KB5094126", status: "FAILED", installedAt: 1780000100 },
-    ]);
+    mockDevicesGetInventoryByKind.mockResolvedValue({ some: "raw-field" });
+    mockDevicesUpdateCustomFields.mockResolvedValue(undefined);
+    mockDevicesRunScript.mockResolvedValue(undefined);
+    mockDevicesStartMaintenance.mockResolvedValue(undefined);
+    mockDevicesCancelMaintenance.mockResolvedValue(undefined);
   });
 
   describe("getTools", () => {
     it("should return all device tools", () => {
       const tools = devicesHandler.getTools();
 
-      expect(tools.length).toBe(7);
+      expect(tools.length).toBe(10);
 
       const toolNames = tools.map((t) => t.name);
       expect(toolNames).toContain("ninjaone_devices_list");
@@ -129,7 +141,10 @@ describe("Devices Domain Handler", () => {
       expect(toolNames).toContain("ninjaone_devices_services");
       expect(toolNames).toContain("ninjaone_devices_alerts");
       expect(toolNames).toContain("ninjaone_devices_activities");
-      expect(toolNames).toContain("ninjaone_devices_os_patch_installs");
+      expect(toolNames).toContain("ninjaone_devices_inventory");
+      expect(toolNames).toContain("ninjaone_devices_custom_fields_update");
+      expect(toolNames).toContain("ninjaone_devices_script_run");
+      expect(toolNames).toContain("ninjaone_devices_maintenance");
     });
 
     it("ninjaone_devices_get should require device_id", () => {
@@ -274,72 +289,113 @@ describe("Devices Domain Handler", () => {
         const data = JSON.parse(result.content[0].text);
         expect(data.activities).toHaveLength(1);
       });
+
+      it("should pass activity_type through to the request as type (regression: filter was inert)", async () => {
+        await devicesHandler.handleCall("ninjaone_devices_activities", {
+          device_id: 1,
+          activity_type: "REBOOT",
+        });
+
+        expect(mockDevicesGetActivities).toHaveBeenCalledWith(
+          1,
+          expect.objectContaining({ type: "REBOOT" })
+        );
+      });
     });
 
-    describe("ninjaone_devices_os_patch_installs", () => {
-      it("should query one device when device_id is given", async () => {
-        const result = await devicesHandler.handleCall("ninjaone_devices_os_patch_installs", {
-          device_id: 261,
+    describe("ninjaone_devices_inventory", () => {
+      it.each([
+        "disks",
+        "processors",
+        "volumes",
+        "software",
+        "os-patches",
+        "network-interfaces",
+        "custom-fields",
+        "last-logged-on-user",
+        "scripting-options",
+      ])("should fetch the %s sub-resource by kind", async (kind) => {
+        const result = await devicesHandler.handleCall("ninjaone_devices_inventory", {
+          device_id: 1,
+          kind,
         });
 
         expect(result.isError).toBeUndefined();
-        expect(mockDevicesGetOsPatchInstalls).toHaveBeenCalledTimes(1);
-        expect(mockDevicesListOsPatchInstalls).not.toHaveBeenCalled();
-        expect(mockDevicesGetOsPatchInstalls.mock.calls[0][0]).toBe(261);
-        expect(result.content[0].text).toContain("KB5094126");
+        expect(mockDevicesGetInventoryByKind).toHaveBeenCalledWith(1, kind);
       });
 
-      it("should scope a tenant-wide query through df, not organizationId", async () => {
-        await devicesHandler.handleCall("ninjaone_devices_os_patch_installs", {
-          organization_id: 1,
+      it("should return unshaped raw data", async () => {
+        const result = await devicesHandler.handleCall("ninjaone_devices_inventory", {
+          device_id: 1,
+          kind: "disks",
         });
 
-        expect(mockDevicesListOsPatchInstalls).toHaveBeenCalledTimes(1);
-        expect(mockDevicesListOsPatchInstalls.mock.calls[0][0]).toMatchObject({ df: "org = 1" });
+        const data = JSON.parse(result.content[0].text);
+        expect(data.some).toBe("raw-field");
       });
 
-      it("should let an explicit device_filter win over organization_id", async () => {
-        await devicesHandler.handleCall("ninjaone_devices_os_patch_installs", {
-          organization_id: 1,
-          device_filter: "class = WINDOWS_WORKSTATION",
+      it("should return error when device_id or kind is missing", async () => {
+        const result = await devicesHandler.handleCall("ninjaone_devices_inventory", {
+          device_id: 1,
         });
 
-        expect(mockDevicesListOsPatchInstalls.mock.calls[0][0]).toMatchObject({
-          df: "class = WINDOWS_WORKSTATION",
+        expect(result.isError).toBe(true);
+      });
+    });
+
+    describe("ninjaone_devices_custom_fields_update", () => {
+      it("should update custom fields", async () => {
+        const result = await devicesHandler.handleCall("ninjaone_devices_custom_fields_update", {
+          device_id: 1,
+          fields: { warrantyExpiry: "2027-01-01" },
+        });
+
+        expect(result.isError).toBeUndefined();
+        expect(mockDevicesUpdateCustomFields).toHaveBeenCalledWith(1, {
+          warrantyExpiry: "2027-01-01",
         });
       });
+    });
 
-      it("should convert ISO dates to epoch seconds", async () => {
-        await devicesHandler.handleCall("ninjaone_devices_os_patch_installs", {
-          device_id: 261,
-          installed_after: "2026-08-08",
-          installed_before: "2026-08-15T00:00:00Z",
+    describe("ninjaone_devices_script_run", () => {
+      it("should send the documented body shape", async () => {
+        const result = await devicesHandler.handleCall("ninjaone_devices_script_run", {
+          device_id: 1,
+          script_id: 42,
+          parameters: "-Verbose",
+          run_as: "SYSTEM",
         });
 
-        expect(mockDevicesGetOsPatchInstalls.mock.calls[0][1]).toMatchObject({
-          installedAfter: Math.floor(Date.parse("2026-08-08T00:00:00Z") / 1000),
-          installedBefore: Math.floor(Date.parse("2026-08-15T00:00:00Z") / 1000),
-        });
-      });
-
-      it("should pass epoch seconds through unchanged", async () => {
-        await devicesHandler.handleCall("ninjaone_devices_os_patch_installs", {
-          device_id: 261,
-          installed_after: 1786000000,
-        });
-
-        expect(mockDevicesGetOsPatchInstalls.mock.calls[0][1]).toMatchObject({
-          installedAfter: 1786000000,
+        expect(result.isError).toBeUndefined();
+        expect(mockDevicesRunScript).toHaveBeenCalledWith(1, {
+          scriptId: 42,
+          parameters: "-Verbose",
+          runAs: "SYSTEM",
         });
       });
+    });
 
-      it("should drop an unparseable date rather than filter on NaN", async () => {
-        await devicesHandler.handleCall("ninjaone_devices_os_patch_installs", {
-          device_id: 261,
-          installed_after: "last tuesday",
+    describe("ninjaone_devices_maintenance", () => {
+      it("should call startMaintenance (POST) for action=start", async () => {
+        const result = await devicesHandler.handleCall("ninjaone_devices_maintenance", {
+          device_id: 1,
+          action: "start",
         });
 
-        expect(mockDevicesGetOsPatchInstalls.mock.calls[0][1].installedAfter).toBeUndefined();
+        expect(result.isError).toBeUndefined();
+        expect(mockDevicesStartMaintenance).toHaveBeenCalledWith(1);
+        expect(mockDevicesCancelMaintenance).not.toHaveBeenCalled();
+      });
+
+      it("should call cancelMaintenance (DELETE) for action=cancel", async () => {
+        const result = await devicesHandler.handleCall("ninjaone_devices_maintenance", {
+          device_id: 1,
+          action: "cancel",
+        });
+
+        expect(result.isError).toBeUndefined();
+        expect(mockDevicesCancelMaintenance).toHaveBeenCalledWith(1);
+        expect(mockDevicesStartMaintenance).not.toHaveBeenCalled();
       });
     });
 

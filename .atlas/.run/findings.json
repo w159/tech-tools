@@ -410,5 +410,87 @@
     "verified_at": "2026-08-18T14:35:00+00:00",
     "verified_by": "typecheck + vitest + isolated stdio handshake",
     "notes": "typecheck clean. vitest devices.test.ts: 18 passed, 2 failed, both reproduce on 81af28f with the change stashed. Full suite 100 passed / 11 failed against a 93/12 baseline: 6 new tests pass, tool-count assertion flipped to passing, zero new failures. Isolated handshake with no node_modules: initialize OK as ninjaone-mcp 1.6.3, tools/list 27 tools (was 26), ninjaone_devices_os_patch_installs present with all 10 schema properties. Contract NOT yet exercised against the live NinjaOne API: df grammar, status enum, and epoch-seconds params are verified against mocks only."
+  },
+  {
+    "id": "ATLAS-5.12.0-ninjaone-prefix-router",
+    "surface": "mcp-connector-ninjaone",
+    "category": "correctness",
+    "severity": "high",
+    "title": "tools/call routed by hardcoded name prefix, so any tool whose name did not encode its domain was listed but uncallable",
+    "evidence": [
+      "mcp_servers/ninjaone-mcp/src/index.ts:74-93",
+      "mcp_servers/ninjaone-mcp/src/__tests__/flattened-navigation.test.ts"
+    ],
+    "doc_refs": [
+      "docs/CHANGELOG.md",
+      "plugins/atlas/CHANGELOG.md"
+    ],
+    "reproduction": "spawn plugins/atlas/mcp/ninjaone/server.mjs, tools/list then tools/call each listed tool; assert no response contains 'Unknown tool' (35/35 reach a handler)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-08-18T15:07:09+00:00",
+    "verified_by": "isolated bundle handshake + flattened-navigation routability test"
+  },
+  {
+    "id": "ATLAS-5.12.0-ninjaone-df-scoping",
+    "surface": "mcp-connector-ninjaone",
+    "category": "correctness",
+    "severity": "high",
+    "title": "NinjaOne /queries/* and /jobs have no organizationId parameter; tenant scoping must build df 'org = <id>' or the result is whole-tenant while reading as scoped",
+    "evidence": [
+      "mcp_servers/ninjaone-mcp/src/domains/queries.ts",
+      "mcp_servers/ninjaone-mcp/src/domains/automation.ts",
+      "docs/vendors/ninjaone/api-reference.md:136"
+    ],
+    "doc_refs": [
+      "docs/CHANGELOG.md"
+    ],
+    "reproduction": "cd mcp_servers/ninjaone-mcp && npx vitest run src/__tests__/domains/queries.test.ts src/__tests__/domains/automation.test.ts",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-08-18T15:07:09+00:00",
+    "verified_by": "deterministic domain tests"
+  },
+  {
+    "id": "ATLAS-5.12.0-node-ninjaone-untestable",
+    "surface": "mcp-connector-ninjaone",
+    "category": "test-coverage",
+    "severity": "medium",
+    "title": "node-ninjaone's committed test suite cannot run: msw and vitest absent from devDependencies",
+    "evidence": [
+      "mcp_node/node-ninjaone/package.json",
+      "mcp_node/node-ninjaone/tests/"
+    ],
+    "doc_refs": [
+      "docs/CHANGELOG.md"
+    ],
+    "reproduction": "cd mcp_node/node-ninjaone && npx vitest run  # vitest not installed",
+    "proposed_fix": "add msw and vitest to devDependencies; deferred to avoid node_modules churn under iCloud",
+    "blast_radius": "module",
+    "status": "open",
+    "verified_at": "2026-08-18T15:07:09+00:00",
+    "verified_by": "package.json inspection"
+  },
+  {
+    "id": "ATLAS-5.12.0-ninjaone-annotation-mislabel",
+    "surface": "mcp-connector-ninjaone",
+    "category": "security",
+    "severity": "high",
+    "title": "name-pattern annotation marked ninjaone_devices_maintenance read-only (it mutates) and ninjaone_queries_run a write (it reads)",
+    "evidence": [
+      "mcp_servers/ninjaone-mcp/src/annotate-tool.ts",
+      "mcp_servers/ninjaone-mcp/src/__tests__/annotations.test.ts"
+    ],
+    "doc_refs": [
+      "docs/CHANGELOG.md"
+    ],
+    "reproduction": "cd mcp_servers/ninjaone-mcp && npx vitest run src/__tests__/annotations.test.ts",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-08-18T15:10:14+00:00",
+    "verified_by": "annotations test + live bundle tools/list annotation dump"
   }
 ]

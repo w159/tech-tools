@@ -4,6 +4,56 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
+## 2026-08-18 -- atlas 5.13.0: the NinjaOne connector listed tools it could not call
+
+Released as atlas 5.13.0 (`plugins/atlas/.claude-plugin/plugin.json:3`,
+`.kimi-plugin/plugin.json:3`), ninjaone-mcp 1.7.0, node-ninjaone 1.3.0.
+
+**Root cause of "tools that do not work."** `mcp_servers/ninjaone-mcp/src/index.ts`
+routed `tools/call` through four hardcoded `name.startsWith("ninjaone_<domain>_")`
+branches and answered `Unknown tool` to everything else. Any tool whose name does
+not encode its own domain was listed by `tools/list` and uncallable. Replaced with
+`getDomainForTool()` (`src/index.ts:74-93`), a name -> domain index built from the
+handlers' own `getTools()` at first call. `src/__tests__/flattened-navigation.test.ts`
+now pins routability rather than naming.
+
+**Coverage.** `mcp_node/node-ninjaone` covered five resources; everything in
+`docs/vendors/ninjaone/api-reference.md:81-158` had no client code. Added
+`resources/queries.ts`, `resources/automation.ts`, `resources/directory.ts`, and
+extended `resources/devices.ts` with per-device inventory, `runScript`,
+`startMaintenance`, `cancelMaintenance`. All wired onto `NinjaOneClient`
+(`src/client.ts`). Tool count 26 -> 39; near-identical endpoints collapse behind
+an enum (`ninjaone_queries_run` covers all 13 `/v2/queries/*`,
+`ninjaone_devices_inventory` covers 9 per-device paths) rather than one tool each.
+
+**Verified behaviors.** Tenant scoping builds `df: "org = <id>"`, never
+`organizationId` -- those endpoints have no such parameter, so passing one filters
+nothing while returning a whole-tenant result that reads scoped. Unparseable
+`installed_after` / `installed_before` drop the filter instead of sending `NaN`.
+`ninjaone_devices_activities` now actually sends its `activity_type` as `type`
+(`api-reference.md:79`); the property was declared and never read.
+
+**Annotations.** `src/annotate-tool.ts` classified by name pattern:
+`ninjaone_devices_maintenance` fell through to the read-only default while
+mutating state, and `ninjaone_queries_run` was marked a write because its name
+contains "run". Explicit overrides plus `src/__tests__/annotations.test.ts`,
+which fails if a mutation-implying name lands in the read class.
+
+**Deliberately unshaped.** NinjaOne apidocs are JS-rendered and return nothing, so
+response field names for the new endpoints are unverifiable. Records pass through
+without summary functions rather than being narrowed against guessed names.
+
+**Evidence.** `tsc --noEmit` clean. Suite 142 passed / 11 failed vs a pre-change
+baseline of 94 / 11 -- 48 tests added, zero new failures; the 11 are pre-existing
+mock-shape mismatches. Isolated bundle handshake against
+`plugins/atlas/mcp/ninjaone/server.mjs`: ninjaone-mcp 1.7.0, 39 tools, all 35
+domain tools reached a handler with zero `Unknown tool`.
+
+**Open.** `node-ninjaone`'s test suite still cannot run (`msw`, `vitest` absent
+from devDependencies); coverage lives at the ninjaone-mcp domain layer. No new
+endpoint has been exercised against the live API.
+
+
 ## 2026-08-18 -- atlas 5.12.0: NinjaOne OS patch history
 
 Released as atlas 5.12.0 (`plugins/atlas/.claude-plugin/plugin.json:3`,

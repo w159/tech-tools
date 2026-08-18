@@ -12,6 +12,9 @@ import { DevicesResource } from './resources/devices.js';
 import { AlertsResource } from './resources/alerts.js';
 import { TicketsResource } from './resources/tickets.js';
 import { WebhooksResource } from './resources/webhooks.js';
+import { QueriesResource } from './resources/queries.js';
+import { AutomationResource } from './resources/automation.js';
+import { DirectoryResource } from './resources/directory.js';
 
 /**
  * NinjaOne API Client
@@ -57,6 +60,12 @@ export class NinjaOneClient {
   readonly tickets: TicketsResource;
   /** Webhook operations */
   readonly webhooks: WebhooksResource;
+  /** Cross-org reporting queries (/v2/queries/*) */
+  readonly queries: QueriesResource;
+  /** Script catalog and job visibility */
+  readonly automation: AutomationResource;
+  /** Policies, groups, users, locations, roles, node classes */
+  readonly directory: DirectoryResource;
 
   constructor(config: NinjaOneConfig) {
     this.config = resolveConfig(config);
@@ -70,6 +79,9 @@ export class NinjaOneClient {
     this.alerts = new AlertsResource(this.httpClient);
     this.tickets = new TicketsResource(this.httpClient);
     this.webhooks = new WebhooksResource(this.httpClient);
+    this.queries = new QueriesResource(this.httpClient);
+    this.automation = new AutomationResource(this.httpClient);
+    this.directory = new DirectoryResource(this.httpClient);
   }
 
   /**

@@ -208,69 +208,99 @@ function getTools(): Tool[] {
       },
     },
     {
-      name: "ninjaone_devices_os_patch_installs",
+      name: "ninjaone_devices_inventory",
       description:
-        "Get Windows OS patch install history (KB number, title, install time, INSTALLED/FAILED status). Pass device_id for one device, or omit it to query the whole tenant and narrow with organization_id or device_filter. Use installed_after/installed_before to bracket a date range when investigating what a machine did or did not receive.",
+        "Get a per-device inventory sub-resource by device_id (required) and kind (required): disks, processors, volumes, software, os-patches, network-interfaces, custom-fields, last-logged-on-user, or scripting-options. Returned records are passed through unshaped since field names are undocumented.",
       inputSchema: {
         type: "object" as const,
         properties: {
-          ...SHAPE_PROPS,
           device_id: {
             type: "number",
-            description: "Integer NinjaOne device ID. Omit to query across devices instead of one.",
+            description: "Integer NinjaOne device ID.",
           },
-          organization_id: {
-            type: "number",
-            description: "Tenant-wide queries only: scope to one organization. Ignored when device_id is given.",
-          },
-          device_filter: {
+          kind: {
             type: "string",
-            description:
-              "Tenant-wide queries only: raw NinjaOne device filter, e.g. \"org = 1\" or \"class = WINDOWS_WORKSTATION\". Takes precedence over organization_id.",
-          },
-          status: {
-            type: "string",
-            enum: ["INSTALLED", "FAILED"],
-            description: "Filter to successful or failed installs; omit to return both.",
-          },
-          installed_after: {
-            type: "string",
-            description:
-              "Only patches installed at or after this time. ISO 8601 date or datetime (e.g. '2026-08-08' or '2026-08-08T00:00:00Z'), or Unix epoch seconds.",
-          },
-          installed_before: {
-            type: "string",
-            description: "Only patches installed at or before this time. Same formats as installed_after.",
-          },
-          limit: {
-            type: "number",
-            description: "Page size — maximum patch records to return (default: 50).",
-          },
-          cursor: {
-            type: "string",
-            description: "Opaque pagination cursor from the previous page response. Tenant-wide queries only.",
+            enum: [
+              "disks",
+              "processors",
+              "volumes",
+              "software",
+              "os-patches",
+              "network-interfaces",
+              "custom-fields",
+              "last-logged-on-user",
+              "scripting-options",
+            ],
+            description: "Which inventory sub-resource to fetch.",
           },
         },
+        required: ["device_id", "kind"],
+      },
+    },
+    {
+      name: "ninjaone_devices_custom_fields_update",
+      description: "DESTRUCTIVE: Update custom field values on a NinjaOne device by device_id (required). fields (required) is a map of custom field name to new value; this overwrites the existing values.",
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          device_id: {
+            type: "number",
+            description: "Integer NinjaOne device ID of the target device.",
+          },
+          fields: {
+            type: "object",
+            description: "Map of custom field name to new value.",
+          },
+        },
+        required: ["device_id", "fields"],
+      },
+    },
+    {
+      name: "ninjaone_devices_script_run",
+      description: "DESTRUCTIVE: Run a script on a NinjaOne-managed device. The script executes immediately on the target device with the specified parameters and run-as account.",
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          device_id: {
+            type: "number",
+            description: "Integer NinjaOne device ID of the target device.",
+          },
+          script_id: {
+            type: "number",
+            description: "Integer ID of the script to run, from ninjaone_devices_inventory with kind='scripting-options'.",
+          },
+          parameters: {
+            type: "string",
+            description: "Parameter string passed to the script.",
+          },
+          run_as: {
+            type: "string",
+            description: "Account context to run the script as.",
+          },
+        },
+        required: ["device_id", "script_id"],
+      },
+    },
+    {
+      name: "ninjaone_devices_maintenance",
+      description: "DESTRUCTIVE: Start or cancel a maintenance window on a NinjaOne device by device_id (required) and action (required: start/cancel). While in maintenance, alerts are suppressed for the device.",
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          device_id: {
+            type: "number",
+            description: "Integer NinjaOne device ID of the target device.",
+          },
+          action: {
+            type: "string",
+            enum: ["start", "cancel"],
+            description: "Whether to start or cancel the maintenance window.",
+          },
+        },
+        required: ["device_id", "action"],
       },
     },
   ];
-}
-
-/**
- * Accept either an ISO 8601 date/datetime or raw epoch seconds and return
- * epoch seconds, which is what the NinjaOne patch endpoints expect.
- * Returns undefined for absent or unparseable input so a bad date narrows
- * nothing rather than silently filtering everything out.
- */
-function toEpochSeconds(value: unknown): number | undefined {
-  if (value === undefined || value === null || value === "") return undefined;
-  if (typeof value === "number") return Math.floor(value);
-
-  const raw = String(value).trim();
-  if (/^\d+$/.test(raw)) return parseInt(raw, 10);
-
-  const parsed = Date.parse(raw.length === 10 ? `${raw}T00:00:00Z` : raw);
-  return Number.isNaN(parsed) ? undefined : Math.floor(parsed / 1000);
 }
 
 // ---------------------------------------------------------------------------
@@ -412,10 +442,12 @@ async function handleCall(
     case "ninjaone_devices_activities": {
       const deviceId = args.device_id as number;
       const limit = (args.limit as number) || 50;
-      logger.info("API call: devices.getActivities", { deviceId, limit });
+      const activityType = args.activity_type as string | undefined;
+      logger.info("API call: devices.getActivities", { deviceId, limit, activityType });
       try {
         const activitiesResponse = await client.devices.getActivities(deviceId, {
           pageSize: limit,
+          type: activityType,
         });
         const activities = activitiesResponse.activities ?? [];
         logger.debug("API response: devices.getActivities", { count: activities.length });
@@ -427,58 +459,83 @@ async function handleCall(
       }
     }
 
-    case "ninjaone_devices_os_patch_installs": {
-      const deviceId = args.device_id as number | undefined;
-      const limit = (args.limit as number) || 50;
-      const status = args.status as "INSTALLED" | "FAILED" | undefined;
-      const installedAfter = toEpochSeconds(args.installed_after);
-      const installedBefore = toEpochSeconds(args.installed_before);
-
+    case "ninjaone_devices_inventory": {
+      const deviceId = args.device_id as number;
+      const kind = args.kind as string;
+      if (!deviceId || !kind) {
+        return toolError("INVALID_ARGS", "device_id and kind are required.", {
+          hint: "Pass the integer device ID and one of the supported inventory kinds.",
+        });
+      }
+      logger.info("API call: devices.getInventoryByKind", { deviceId, kind });
       try {
-        if (deviceId) {
-          logger.info("API call: devices.getOsPatchInstalls", {
-            deviceId,
-            status,
-            installedAfter,
-            installedBefore,
-          });
-          const patches = await client.devices.getOsPatchInstalls(deviceId, {
-            status,
-            installedAfter,
-            installedBefore,
-            pageSize: limit,
-          });
-          logger.debug("API response: devices.getOsPatchInstalls", { count: patches.length });
-          // No summary fn: the patch record schema is not pinned, so shaping
-          // it here would silently drop fields. Callers narrow with `fields`.
-          return shapeList(patches as Record<string, unknown>[], undefined, shapeArgs);
-        }
-
-        // Tenant-wide. This endpoint scopes through `df`, not organizationId.
-        const organizationId = args.organization_id as number | undefined;
-        const df =
-          (args.device_filter as string | undefined) ??
-          (organizationId !== undefined ? `org = ${organizationId}` : undefined);
-
-        logger.info("API call: devices.listOsPatchInstalls", {
-          df,
-          status,
-          installedAfter,
-          installedBefore,
-        });
-        const patches = await client.devices.listOsPatchInstalls({
-          df,
-          status,
-          installedAfter,
-          installedBefore,
-          cursor: args.cursor as string | undefined,
-          pageSize: limit,
-        });
-        logger.debug("API response: devices.listOsPatchInstalls", { count: patches.length });
-        return shapeList(patches as Record<string, unknown>[], undefined, shapeArgs);
+        const data = await client.devices.getInventoryByKind(deviceId, kind);
+        logger.debug("API response: devices.getInventoryByKind", { deviceId, kind });
+        return shapeRaw(data as Record<string, unknown>);
       } catch (err) {
-        return toolErrorFromCatch("ninjaone_devices_os_patch_installs", err, {
-          hint: "Requires the 'monitoring' API scope. Verify device_id with ninjaone_devices_list; only Windows devices report OS patches.",
+        return toolErrorFromCatch("ninjaone_devices_inventory", err, {
+          hint: "Verify device_id with ninjaone_devices_list first.",
+        });
+      }
+    }
+
+    case "ninjaone_devices_custom_fields_update": {
+      const deviceId = args.device_id as number;
+      const fields = args.fields as Record<string, unknown>;
+      if (!deviceId || !fields) {
+        return toolError("INVALID_ARGS", "device_id and fields are required.");
+      }
+      logger.info("API call: devices.updateCustomFields", { deviceId });
+      try {
+        await client.devices.updateCustomFields(deviceId, fields);
+        return shapeRaw({ success: true, message: "Custom fields updated" });
+      } catch (err) {
+        return toolErrorFromCatch("ninjaone_devices_custom_fields_update", err, {
+          hint: "Verify device_id with ninjaone_devices_list and field names with ninjaone_devices_inventory kind='custom-fields'.",
+        });
+      }
+    }
+
+    case "ninjaone_devices_script_run": {
+      const deviceId = args.device_id as number;
+      const scriptId = args.script_id as number;
+      if (!deviceId || !scriptId) {
+        return toolError("INVALID_ARGS", "device_id and script_id are required.");
+      }
+      logger.info("API call: devices.runScript", { deviceId, scriptId });
+      try {
+        const result = await client.devices.runScript(deviceId, {
+          scriptId,
+          parameters: args.parameters as string | undefined,
+          runAs: args.run_as as string | undefined,
+        });
+        return shapeRaw({ success: true, message: "Script run scheduled", result });
+      } catch (err) {
+        return toolErrorFromCatch("ninjaone_devices_script_run", err, {
+          hint: "Verify device_id and script_id with ninjaone_devices_inventory kind='scripting-options'.",
+        });
+      }
+    }
+
+    case "ninjaone_devices_maintenance": {
+      const deviceId = args.device_id as number;
+      const action = args.action as string;
+      if (!deviceId || !action) {
+        return toolError("INVALID_ARGS", "device_id and action are required.");
+      }
+      logger.info("API call: devices.maintenance", { deviceId, action });
+      try {
+        if (action === "start") {
+          const result = await client.devices.startMaintenance(deviceId);
+          return shapeRaw({ success: true, message: "Maintenance window started", result });
+        } else if (action === "cancel") {
+          await client.devices.cancelMaintenance(deviceId);
+          return shapeRaw({ success: true, message: "Maintenance window cancelled" });
+        }
+        return toolError("INVALID_ARGS", `Unknown maintenance action: ${action}`);
+      } catch (err) {
+        return toolErrorFromCatch("ninjaone_devices_maintenance", err, {
+          hint: "Verify device_id with ninjaone_devices_list first.",
         });
       }
     }
