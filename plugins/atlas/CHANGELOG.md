@@ -1,5 +1,50 @@
 # Changelog
 
+## 5.11.0 (2026-08-18)
+
+Terminal noise, measured and cut; and decisions that no longer scroll past.
+
+**The boot banner was the noise.** `session_boot.py` emitted 9,820 bytes on every
+SessionStart, 10,874 chars of it the memory block, because `load_snapshot()`
+injected the whole of MEMORY.md (cap: 20,000 chars). Reading it back:
+roughly 40 lines of `Tool 'Write' errored 2x in agent-a870d7a4169e4bb8b`, six
+near-identical copies of one user correction filed once per subagent scope, and
+fragments cut mid-word ("It just never ran, because the"). Nothing readable at
+the speed it scrolls.
+
+- `atlas_memory.filter_for_recall()` filters INJECTION only, never the file:
+  drops tool-error telemetry, drops junk scopes (`agent-<hex>`, `.run`,
+  `.atlas`), collapses near-duplicates by normalizing away the `(project)`
+  qualifier (which is the only thing that differed across those six copies), and
+  hard-caps at 8 entries / 1,200 chars, newest first.
+- Measured after: SessionStart 9,820 -> 3,649 bytes; the memory block
+  10,874 -> 1,068 chars.
+
+**The junk was still being written.** `memory_capture.py` now refuses to file a
+lesson under a subagent scope, never captures tool-error tallies at all (the
+counts stay in atlas_db where atlas-audit can query them; recall was their only
+consumer), and truncates on a word boundary. It is also unbound from
+`SubagentStop` -- per-dispatch capture is what produced one copy of each lesson
+per agent, and the parent `Stop` already resolves subagent sessions.
+
+**Two Stop hooks were narrating their own bookkeeping.** `memory_capture` emitted
+"captured N memory fact(s)" on every Stop and SubagentStop. additionalContext on
+Stop costs a whole model turn to say nothing -- the same defect nudge.py carried
+until 5.9.0. Silent on success now.
+
+**Decisions stop the line.** The output style asked for a `DECISION NEEDED:`
+label and merely "preferred" AskUserQuestion. A label scrolls. Now: a decision
+that gates the next step MUST go through AskUserQuestion and wait -- blocking, up
+to three batched into one call. Prose is left for exactly one case, an FYI
+decision that does not gate the work and names the default already taken. The
+orchestrate skill routes the other lost path too: a subagent returning
+`DECISION NEEDED:` makes AskUserQuestion the orchestrator's very next action,
+before further dispatch or synthesis.
+
+**Verification.** `python3 -m pytest plugins/atlas/hooks plugins/atlas/scripts -q`
+-> 1136 passed. New: `RecallFilterTest` (8), `QuietTerminalContract` (5, including
+a hard byte ceiling on SessionStart), `DecisionsAreBlockingContract` (2).
+
 ## 5.10.0 (2026-08-18)
 
 Two structural rules that atlas asserted in prose but never enforced.

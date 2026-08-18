@@ -1026,3 +1026,91 @@ class RightSizedDelegationContract(unittest.TestCase):
             "atlas_db.inline_ops_since_last_dispatch(conn, run_id)\n    except",
             src,
         )
+
+
+class QuietTerminalContract(unittest.TestCase):
+    """Measured before the fix: SessionStart emitted 9,820 bytes, 10,874 of them
+    the memory block -- ~40 lines of tool-error telemetry and the same lesson
+    repeated once per subagent scope. It scrolls past unread and buries anything
+    that matters."""
+
+    MAX_BOOT_BYTES = 5000
+
+    def test_session_boot_emission_stays_small(self):
+        r = subprocess.run(
+            [sys.executable, str(HOOKS_DIR / "session_boot.py")],
+            input=json.dumps(
+                {
+                    "hook_event_name": "SessionStart",
+                    "session_id": "contract",
+                    "cwd": str(REPO_ROOT),
+                    "source": "startup",
+                }
+            ),
+            capture_output=True,
+            text=True,
+        )
+        self.assertLess(
+            len(r.stdout),
+            self.MAX_BOOT_BYTES,
+            "SessionStart emitted %d bytes; the boot banner is the single "
+            "largest source of terminal noise" % len(r.stdout),
+        )
+
+    def test_recall_is_capped_and_filtered(self):
+        sys.path.insert(0, str(PLUGIN_ROOT / "scripts"))
+        import atlas_memory
+
+        self.assertLessEqual(atlas_memory.RECALL_MAX_ENTRIES, 10)
+        self.assertLessEqual(atlas_memory.RECALL_MAX_CHARS, 2000)
+        noisy = [
+            "Tool 'Write' errored 4x in tech-tools - check usage pattern",
+            "User correction (agent-a870d7a4169e4bb8b): scoped to a subagent",
+            "User correction (tech-tools): the only real lesson here",
+        ]
+        self.assertEqual(
+            atlas_memory.filter_for_recall(noisy),
+            ["User correction (tech-tools): the only real lesson here"],
+        )
+
+    def test_stop_hooks_do_not_announce_their_own_success(self):
+        """additionalContext on Stop costs a whole model turn. A hook that only
+        reports bookkeeping must stay silent."""
+        for name in ("nudge.py", "memory_capture.py"):
+            src = (HOOKS_DIR / name).read_text(encoding="utf-8")
+            with self.subTest(hook=name):
+                self.assertNotIn("Self-improvement complete", src)
+                self.assertNotIn("captured {captured", src)
+
+    def test_memory_capture_is_not_bound_to_subagent_stop(self):
+        """Per-dispatch capture filed the same lesson once per subagent scope.
+        The parent Stop already resolves subagent sessions."""
+        cmds = _commands_for("SubagentStop")
+        self.assertFalse(any("memory_capture.py" in c for c in cmds))
+
+    def test_capture_refuses_subagent_scopes(self):
+        src = (HOOKS_DIR / "memory_capture.py").read_text(encoding="utf-8")
+        self.assertIn("_JUNK_SCOPE", src)
+        self.assertNotIn("clean[:200]", src)  # mid-word truncation
+
+
+class DecisionsAreBlockingContract(unittest.TestCase):
+    """A decision written as prose scrolls past and is lost. If it gates the
+    work, it has to be a blocking prompt."""
+
+    def test_output_style_requires_askuserquestion_for_gating_decisions(self):
+        text = OUTPUT_STYLE.read_text(encoding="utf-8")
+        self.assertIn("Decisions stop the line", text)
+        self.assertIn("AskUserQuestion", text)
+        self.assertIn("gates what", text)
+        # The old rule made prose the default and the tool a preference.
+        self.assertNotIn("Prefer the AskUserQuestion tool\nover prose", text)
+
+    def test_orchestrate_routes_a_blocked_subagent_to_a_blocking_ask(self):
+        text = (
+            PLUGIN_ROOT / "skills" / "atlas-orchestrate" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("DECISION NEEDED:", text)
+        self.assertIn("AskUserQuestion", text)
+        decision_at = text.index("A subagent's `DECISION NEEDED:` is a hard stop")
+        self.assertIn("AskUserQuestion", text[decision_at : decision_at + 800])

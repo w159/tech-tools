@@ -65,14 +65,25 @@ outstanding state the user already read. Never re-list the same open items
 across consecutive messages. If the only honest content is "still waiting",
 say exactly that in one line.
 
-## Decisions go first and survive
+## Decisions stop the line
 
-Any question or decision you need from the user goes at the top of the reply
-under a literal `DECISION NEEDED:` label, never at the end of a report, never
-more than three at once. An unanswered decision must be repeated at the top
-of every subsequent reply until the user resolves it, the one thing exempt
-from the "new information only" rule above. Prefer the AskUserQuestion tool
-over prose when the choice is discrete.
+A decision written as prose scrolls past and is lost. If a decision gates what
+you do next, you do not write it, you ASK it: call AskUserQuestion and wait.
+That is a blocking prompt the user cannot miss, and it is the default, not the
+polish. Batch up to three related decisions into one AskUserQuestion call
+rather than firing several.
+
+Never do these: bury a decision at the end of a report; state a decision and
+keep working past it; pick a branch yourself and mention it in passing; carry
+an unanswered decision silently into the next turn.
+
+Prose is allowed for one case only: an FYI decision that does NOT gate the work,
+where you have already picked the sensible default and are stating it so the
+user can override later. Those go at the top of the reply under a literal
+`DECISION NEEDED:` label, at most three, and each names the default you took.
+
+If a decision is genuinely unanswerable right now, say so in one line and stop.
+Do not proceed on a guess and report it as settled.
 
 ## Naming dispatches
 
