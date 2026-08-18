@@ -17,6 +17,11 @@ import json
 import os
 import sys
 
+sys.path.insert(0, os.path.dirname(__file__))
+from pathlib import Path  # noqa: E402
+
+from docs_drift import find_root  # noqa: E402
+
 INLINE_TOOLS = {"Read", "Grep", "Glob", "Edit", "Write", "Bash"}
 DISPATCH_TOOLS = {"Agent", "Task"}
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit"}
@@ -41,6 +46,65 @@ ORCH_SKILLS = {
     "atlas-component",
     "atlas-frontend",
 }
+
+
+FINDINGS_RELPATH = (".atlas", ".run", "findings.json")
+VERIFIER_WATCH_RELPATH = (".atlas", ".run", "verifier_watch.json")
+
+
+def _is_verifier(subagent_type):
+    return "verifier" in str(subagent_type or "").lower()
+
+
+def _findings_count(root):
+    """Number of entries in findings.json. -1 when the count is unknowable, which
+    suppresses the check rather than warning on a guess."""
+    if root is None:
+        return -1
+    try:
+        data = json.loads(root.joinpath(*FINDINGS_RELPATH).read_text(encoding="utf-8"))
+    except Exception:
+        return 0  # missing/corrupt reads as empty: a verdict written now still counts
+    items = data if isinstance(data, list) else data.get("findings", [])
+    return len(items) if isinstance(items, list) else 0
+
+
+def _watch_path(root):
+    return root.joinpath(*VERIFIER_WATCH_RELPATH)
+
+
+def _stash_findings_count(root, session):
+    """PreToolUse side of the verifier-verdict check: remember how many findings
+    existed before the verifier ran. ponytail: one slot per session, so N verifiers
+    dispatched in parallel share a baseline -- if any one of them writes, none are
+    flagged. Under-warning beats false-warning here."""
+    if root is None:
+        return
+    try:
+        path = _watch_path(root)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps({"session_id": session, "count": _findings_count(root)}),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass  # advisory only
+
+
+def _verdict_missing(root, session):
+    """PostToolUse side: True when a verifier returned and findings.json did not grow."""
+    if root is None:
+        return False
+    try:
+        state = json.loads(_watch_path(root).read_text(encoding="utf-8"))
+    except Exception:
+        return False  # no baseline -> cannot judge -> stay silent
+    if not isinstance(state, dict) or state.get("session_id") != session:
+        return False
+    before = state.get("count")
+    if not isinstance(before, int):
+        return False
+    return _findings_count(root) <= before
 
 
 def _threshold():
@@ -157,6 +221,39 @@ def main():
     tinput = payload.get("tool_input", {}) or {}
     session = payload.get("session_id", "")
     path = tinput.get("file_path") or tinput.get("path") or tinput.get("notebook_path")
+
+    # Verifier-verdict check. Runs outside the orchestration gate on purpose: the
+    # very first atlas: dispatch of a session is what FLAGS it as orchestrating,
+    # so gating the baseline on that flag would always miss dispatch #1.
+    if tool in DISPATCH_TOOLS and _is_verifier(tinput.get("subagent_type")):
+        root = find_root(Path(payload.get("cwd") or os.getcwd()))
+        if event == "PreToolUse":
+            _stash_findings_count(root, session)
+        elif _verdict_missing(root, session):
+            print(
+                json.dumps(
+                    {
+                        "hookSpecificOutput": {
+                            "hookEventName": "PostToolUse",
+                            "additionalContext": (
+                                "[atlas] The verifier returned but .atlas/.run/"
+                                "findings.json gained no entry, so its verdict is "
+                                "prose only and the completion gate cannot see it. "
+                                "Write it yourself now, from the verdict it just "
+                                "returned:\n"
+                                '  python3 "$CLAUDE_PLUGIN_ROOT/scripts/'
+                                'atlas_finding.py" --id <stage> --status '
+                                "verified|rejected|needs-evidence --title '<one "
+                                "line>' --evidence '<path or test id>' "
+                                "--reproduction '<exact command>'\n"
+                                "Do not re-dispatch the verifier to fix this, and do "
+                                "not treat the chat text as the record."
+                            ),
+                        }
+                    }
+                )
+            )
+            # No early return: the dispatch still needs to reach the DB below.
 
     conn = None
     try:

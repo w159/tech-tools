@@ -147,14 +147,16 @@ class InProcessMainTest(unittest.TestCase):
         self.assertEqual(out, "")
         self.assertIn("[atlas] nudge: skipping, DB error:", err)
 
-    def test_memory_captured_reports_completion(self):
+    def test_memory_captured_is_silent(self):
+        """memory_capture already wrote the facts. Announcing that on Stop is
+        additionalContext, which costs a whole extra model turn to say nothing.
+        A Stop hook speaks only when it needs something done."""
         with (
             mock.patch.object(nudge, "_check_memory_captured", return_value=True),
         ):
             code, out, err = self._run_main({"session_id": "sess-orch"})
         self.assertEqual(code, 0)
-        self.assertIn("Self-improvement complete", out)
-        self.assertIn("memory facts captured", out)
+        self.assertEqual(out, "")
 
 
 

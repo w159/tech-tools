@@ -185,10 +185,12 @@ def _reason(
     if missing_b:
         parts.append(
             "  (b) .atlas/.run/findings.json is missing or has no entry with status "
-            '"verified". Record an independent atlas:verifier result before stopping. '
-            "-> Dispatch atlas:verifier for the shipping stage to independently confirm "
-            'or refute the claim, then write its verdict (status="verified") into '
-            ".atlas/.run/findings.json."
+            '"verified". -> If a verifier already reached a verdict this run, the '
+            "record is simply unwritten: write it yourself, now, with one command -- "
+            'python3 "$CLAUDE_PLUGIN_ROOT/scripts/atlas_finding.py" --id <stage> '
+            "--status verified --title '<one line>' --evidence '<path or test id>' "
+            "--reproduction '<exact command>'. Only dispatch atlas:verifier if no "
+            "independent check has actually run yet."
         )
     if missing_c:
         parts.append(
@@ -245,10 +247,18 @@ def _reason(
     return (
         "[atlas] Definition-of-done gate: the following condition(s) are not met:\n"
         + failed
-        + "\n\nClose the gap proactively, do not just refuse: first dispatch "
-        "atlas:completeness-critic to pinpoint exactly which evidence and verification "
-        "are still missing, then dispatch the specialist named beside each failed "
-        "condition above to produce it, then retry Stop.\n\n"
+        + "\n\nClose the gap with the SMALLEST deterministic action, in this order:\n"
+        "  1. Anything that is only an unwritten record -- a docs/CHANGELOG line, a "
+        "ROADMAP move, a findings.json verdict a verifier already reached -- write it "
+        "inline, yourself, right now. docs/ and .atlas/ are the two trees an "
+        "orchestrator may edit directly, so no dispatch is needed and none should be "
+        "made.\n"
+        "  2. Dispatch a specialist ONLY when the evidence genuinely does not exist "
+        "yet and someone has to go produce it (atlas:verifier for a check that never "
+        "ran, atlas:ui-runtime-tester for a missing runtime capture).\n"
+        "  3. If a dispatch cannot realistically finish in this session, do not start "
+        "one. Say plainly what is unverified, name the exact command and its expected "
+        "output, and leave the gate honestly open rather than ending mid-wave.\n\n"
         "All conditions must hold before this run can be declared done. "
         "If the work is genuinely not done, say so explicitly -- what is unverified "
         "and the exact command + expected output to verify it. Do not declare success.\n"

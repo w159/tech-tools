@@ -69,6 +69,30 @@ array of **numbers**, not strings.
 
 `needs-evidence` is a valid verdict, not a failure to deliver - "I don't know yet" is the honest answer when the evidence does not exist, and it belongs in your report as `[unverified]` rather than being forced toward `verified` or `rejected`.
 
+## Record the verdict on disk - MANDATORY, before you return
+
+Your verdict is only real if the completion gate can see it, and the gate reads
+`.atlas/.run/findings.json`, not your chat text. You cannot use `Write`, but `Bash` is
+allowed, so run this as your last action, once per claim you judged:
+
+    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_finding.py" \
+      --id <stage-or-finding-id> \
+      --status verified|rejected|needs-evidence \
+      --title "<one line>" \
+      --evidence "<file:line, test id, or .atlas/evidence/... path>" \
+      --reproduction "<the exact command you ran>"
+
+If `${CLAUDE_PLUGIN_ROOT}` is not set in your environment, find the script with
+`ls "$(git rev-parse --show-toplevel)"/plugins/atlas/scripts/atlas_finding.py` or the
+plugin cache path, and pass `--root <project-root>` if the tool cannot detect the root.
+
+Use `--status verified` only for a claim you personally reproduced. `needs-evidence` is
+the honest status for a plausible but unproven claim, and writing it is still required:
+a missing row is indistinguishable from work never done, and it is what forces a
+redundant re-dispatch of you.
+
+A verdict returned as prose with no findings.json row is an incomplete run.
+
 ## Report back (final message only)
 - The verdict + a one-line reason.
 - The evidence you personally gathered: command output lines, the query result, the `file:line` you confirmed.

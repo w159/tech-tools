@@ -1,5 +1,64 @@
 # Changelog
 
+## 5.9.0 (2026-08-18)
+
+Four defects the usage-insight report for 2026-07-02..2026-08-17 measured across
+369 sessions, each traced to a specific line of atlas rather than to model
+behavior.
+
+**1. The verifier had no way to write its verdict.** `agents/verifier.md` ships
+`disallowedTools: [Write, Edit, MultiEdit, NotebookEdit]` and never mentioned
+`findings.json`. The completion gate's condition (b) reads
+`.atlas/.run/findings.json` for `status: "verified"`. So the contract demanded a
+file the agent was structurally prevented from writing and never told about:
+verdicts came back as prose, the gate tripped, and the orchestrator re-dispatched
+the same verifier. The report logged this as "sub-agent verifiers repeatedly
+omitted their verdicts from findings.json, tripping the definition-of-done gate
+multiple times in a single session."
+
+- New `scripts/atlas_finding.py`: append one schema-valid entry to
+  `.atlas/.run/findings.json` with an atomic write. Bash is allowed to the
+  verifier, so this is a write path it can actually use.
+- `agents/verifier.md` now ends with a MANDATORY step invoking it, including the
+  `needs-evidence` case - a missing row is indistinguishable from work never done.
+- `dispatch_tripwire.py` brackets every `*verifier*` dispatch: it snapshots the
+  entry count on `PreToolUse` and, if the verifier returns without adding a row,
+  names the one-command fix immediately. The gap surfaces mid-session, not at Stop.
+
+**2. Closeout gates converted a handoff request into a fresh dispatch wave.**
+"Claude spent nine consecutive sessions trying to write a handoff summary and got
+blocked by its own docs-drift Stop hook every single time." Two causes: the gate's
+block text led with "dispatch atlas:completeness-critic", and `atlas-handoff` had
+no preflight.
+
+- `completion_gate.py`'s remediation is now ordered smallest-first: write the
+  unwritten record inline (docs/ and .atlas/ are the two trees an orchestrator may
+  edit directly), dispatch only when the evidence genuinely does not exist yet, and
+  do not start a dispatch that cannot finish this session.
+- `skills/atlas-handoff/SKILL.md` gains Step 0, a gate preflight that runs before
+  a word of the summary: reconcile findings.json, reconcile docs drift, name what
+  cannot be closed. The gate is deterministic and its firing was predictable.
+
+**3. Stale MCP credentials ate whole sessions.** The ConnectWise connector
+returned HTTP 400 "Invalid Token" on every endpoint and the session kept sweeping
+endpoints; Ramp and CIPP failed the same way. A running MCP server caches its
+credentials at startup, so a rotated secret never reaches it.
+
+- New `hooks/connector_credential_watch.py`, `PostToolUse` on `mcp__.*`: on the
+  first 401/403 (or a 400 whose body names the token) from any MCP tool, inject one
+  instruction - restart the server, do not retry other endpoints. Once per server
+  per session, advisory only, `ATLAS_CONNECTOR_WATCH=off`.
+
+**4. nudge.py announced its own success on Stop.** additionalContext on Stop
+prompts another model turn. A turn spent saying "memory facts captured" is a turn.
+It is now silent on the success path and speaks only when it needs something done.
+
+**Verification.** 1082 tests pass, including 9 new in
+`scripts/test_atlas_finding.py`, 11 in `hooks/test_connector_credential_watch.py`,
+6 verifier-bracket cases in `hooks/test_dispatch_tripwire.py`, and 7 permanent
+invariants in `hooks/test_atlas_contract.py::InsightRemediationContract` that
+pin each of the four fixes so they cannot silently regress.
+
 ## 5.8.0 (2026-08-11)
 
 Subagents were not ignoring their MCP tools. They were obeying a fallback that

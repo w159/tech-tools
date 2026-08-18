@@ -16,6 +16,36 @@ cat "${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md"
 
 If the contract did not load above, read `${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md` and apply it before proceeding.
 
+## Step 0 - gate preflight, BEFORE you write a word of the summary
+
+Measured failure this step exists to kill: a run of sessions where the only ask was
+"summarize this for handoff", the Stop hook then flagged docs drift or a missing
+verified finding, agents were dispatched to close it, and the session ended with the
+agents still running. The summary about the unfinished work became the unfinished work.
+The gate is deterministic. You already know it will fire. Close it first, while the
+context is still loaded.
+
+Run these three checks now, inline. They are reads and small writes to `docs/` and
+`.atlas/`, which an orchestrator is allowed to do directly - do NOT dispatch for them.
+
+1. **Findings.** Read `.atlas/.run/findings.json`. List every stage this session shipped
+   that has no entry. For each one where a check actually ran, write the row now:
+   `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_finding.py" --id <stage> --status
+   verified|rejected|needs-evidence --title "<one line>" --evidence "<path or test id>"
+   --reproduction "<exact command>"`. Where no check ran, write `needs-evidence` with
+   the exact command that would settle it. Do not invent a `verified`.
+2. **Docs drift.** `git status --short` and `git diff --name-only`. If any non-docs file
+   changed with no `docs/` file beside it, update `docs/CHANGELOG.md` (and
+   `docs/ROADMAP.md` if items completed) yourself, right now, with file:line evidence.
+3. **Blockers you cannot close in this session.** Name them. Do not start a dispatch
+   that cannot finish. An honestly open gate documented in the handoff beats a
+   half-finished remediation wave.
+
+Report the preflight result in two short lines (findings written, docs reconciled) and
+only then continue.
+
+## The handoff
+
 Produce a session handoff for the current work.
 
 Use `templates/handoff.md` as the document seed and follow the field
