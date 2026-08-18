@@ -49,15 +49,21 @@ from the devices domain to queries and shares one routing path with
 response field names for the new endpoints are unverifiable. Records pass through
 without summary functions rather than being narrowed against guessed names.
 
+**Fixed: node-ninjaone's suite could not run.** Nine test files, a vitest
+config, an empty `scripts` block, and no `msw` or `vitest` in devDependencies.
+Added both plus `@vitest/coverage-v8` and the missing scripts; the 82 existing
+tests pass unchanged. New `tests/integration/resources.test.ts` asserts that
+`queries`, `automation`, and `directory` are reachable on `NinjaOneClient` and
+that each method hits its documented path, which is the failure mode this
+release hit. Suite: 94 passed.
+
 **Evidence.** `tsc --noEmit` clean. Suite 142 passed / 11 failed vs a pre-change
 baseline of 94 / 11 -- 48 tests added, zero new failures; the 11 are pre-existing
 mock-shape mismatches. Isolated bundle handshake against
 `plugins/atlas/mcp/ninjaone/server.mjs`: ninjaone-mcp 1.7.0, 39 tools, all 35
 domain tools reached a handler with zero `Unknown tool`.
 
-**Open.** `node-ninjaone`'s test suite still cannot run (`msw`, `vitest` absent
-from devDependencies); coverage lives at the ninjaone-mcp domain layer. No new
-endpoint has been exercised against the live API.
+**Open.** No new endpoint has been exercised against the live API.
 
 
 ## 2026-08-18 -- atlas 5.12.0: NinjaOne OS patch history
