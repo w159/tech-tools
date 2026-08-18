@@ -4,6 +4,49 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
+## 2026-08-18 -- atlas 5.9.0: the four atlas-side defects the usage-insight report measured
+
+Released as atlas 5.9.0 (`plugins/atlas/.claude-plugin/plugin.json:3`,
+`.kimi-plugin/plugin.json:3`). Source: `~/.claude/usage-data/report-2026-08-18-075202.html`,
+6,284 messages across 369 sessions, 2026-07-02 to 2026-08-17.
+
+**1. The verifier had no write path for its verdict.**
+`plugins/atlas/agents/verifier.md:7` declares `disallowedTools: [Write, Edit, MultiEdit,
+NotebookEdit]`, and the file never mentioned `findings.json`. The completion gate's
+condition (b) (`plugins/atlas/hooks/completion_gate.py:85`) reads
+`.atlas/.run/findings.json` for `status: "verified"`. The contract required a file the
+agent was structurally prevented from writing and never told about, so verdicts came back
+as prose and the gate re-tripped. Fixed with `plugins/atlas/scripts/atlas_finding.py` (a
+Bash-invocable atomic append the verifier can actually run), a MANDATORY final step in
+`agents/verifier.md:72`, and a `PreToolUse`/`PostToolUse` bracket around every `*verifier*`
+dispatch in `hooks/dispatch_tripwire.py:227` that flags a returned verifier which added no
+row.
+
+**2. Closeout gates turned a handoff request into a fresh dispatch wave.** The gate's block
+text led with "dispatch atlas:completeness-critic", and `atlas-handoff` had no preflight.
+`hooks/completion_gate.py:250` now orders remediation smallest-first (write the unwritten
+record inline; dispatch only for evidence that does not exist yet; never start a dispatch
+that cannot finish), and `skills/atlas-handoff/SKILL.md:19` gains a Step 0 gate preflight
+ahead of the summary body.
+
+**3. Stale MCP credentials ate whole sessions.** New
+`plugins/atlas/hooks/connector_credential_watch.py`, wired `PostToolUse` on `mcp__.*`
+(`hooks/hooks.json`): on the first 401/403, or a 400 whose body names the token, from any
+MCP tool, inject one instruction to restart the server rather than sweep the remaining
+endpoints. Once per server per session, advisory only, `ATLAS_CONNECTOR_WATCH=off`.
+
+**4. nudge.py announced its own success on Stop.** additionalContext on Stop prompts
+another model turn. `hooks/nudge.py` is now silent on the success path.
+
+Verification: `python3 -m pytest plugins/atlas/hooks plugins/atlas/scripts -q` -- 1082
+passed. New coverage: `scripts/test_atlas_finding.py` (9),
+`hooks/test_connector_credential_watch.py` (11), `VerifierVerdictBracketTest` in
+`hooks/test_dispatch_tripwire.py` (6), and
+`hooks/test_atlas_contract.py::InsightRemediationContract` (7 permanent invariants pinning
+each fix).
+
+---
+
 ## 2026-08-11 -- atlas 5.8.0: subagents fell back to Bash grep because serena died first
 
 Released as atlas 5.8.0 (`plugins/atlas/.claude-plugin/plugin.json:3`, `.kimi-plugin/plugin.json:3`).

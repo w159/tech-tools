@@ -224,5 +224,77 @@
     "open_gap": "Not proven end to end: that a subagent dispatched into gwh-firstrespondersapp now completes a serena symbol lookup. The repaired config and a working serena call in tech-tools are the evidence chain; the first real dispatch into that repo is the confirming run.",
     "status": "verified",
     "verifier": "deterministic contract suite (test_atlas_contract.py, test_dispatch_tripwire.py) + runtime hook execution against the real broken config"
+  },
+  {
+    "id": "ATLAS-5.9.0-verifier-write-path",
+    "surface": "claude-code-setup",
+    "category": "correctness",
+    "severity": "high",
+    "title": "atlas:verifier had no write path to findings.json; CLI + mandatory step + dispatch bracket added",
+    "evidence": [
+      "plugins/atlas/scripts/atlas_finding.py",
+      "plugins/atlas/agents/verifier.md:72",
+      "plugins/atlas/hooks/dispatch_tripwire.py:227"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m pytest plugins/atlas/scripts/test_atlas_finding.py plugins/atlas/hooks/test_dispatch_tripwire.py -q",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-08-18T12:09:24+00:00",
+    "verified_by": "deterministic contract suite"
+  },
+  {
+    "id": "ATLAS-5.9.0-closeout-inline-first",
+    "surface": "claude-code-setup",
+    "category": "reliability",
+    "severity": "high",
+    "title": "completion gate remediation ordered inline-first; atlas-handoff gained a Step 0 gate preflight",
+    "evidence": [
+      "plugins/atlas/hooks/completion_gate.py:250",
+      "plugins/atlas/skills/atlas-handoff/SKILL.md:19"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m pytest plugins/atlas/hooks/test_atlas_contract.py -k InsightRemediation -q",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-08-18T12:09:24+00:00",
+    "verified_by": "deterministic contract suite"
+  },
+  {
+    "id": "ATLAS-5.9.0-connector-credential-watch",
+    "surface": "claude-code-setup",
+    "category": "reliability",
+    "severity": "medium",
+    "title": "MCP auth failures now trigger one restart instruction instead of an endpoint sweep",
+    "evidence": [
+      "plugins/atlas/hooks/connector_credential_watch.py",
+      "plugins/atlas/hooks/hooks.json"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m pytest plugins/atlas/hooks/test_connector_credential_watch.py -q",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-08-18T12:09:24+00:00",
+    "verified_by": "deterministic contract suite"
+  },
+  {
+    "id": "ATLAS-5.9.0-nudge-silent-on-success",
+    "surface": "claude-code-setup",
+    "category": "maintainability",
+    "severity": "low",
+    "title": "nudge.py no longer emits a success announcement on Stop",
+    "evidence": [
+      "plugins/atlas/hooks/nudge.py"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m pytest plugins/atlas/hooks/test_nudge.py -q",
+    "proposed_fix": "",
+    "blast_radius": "single-file",
+    "status": "verified",
+    "verified_at": "2026-08-18T12:09:24+00:00",
+    "verified_by": "deterministic contract suite"
   }
 ]

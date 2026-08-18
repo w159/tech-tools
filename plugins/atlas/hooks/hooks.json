@@ -70,6 +70,15 @@
             "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/dispatch_tripwire.py\""
           }
         ]
+      },
+      {
+        "matcher": "mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/connector_credential_watch.py\""
+          }
+        ]
       }
     ],
     "Stop": [

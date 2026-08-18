@@ -838,3 +838,89 @@ class SerenaHealContract(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class InsightRemediationContract(unittest.TestCase):
+    """Invariants for the defects named in the 2026-08-18 usage-insight report.
+
+    Each assertion is a specific regression the report measured, encoded so it
+    cannot silently come back: verdicts that never reach findings.json, a
+    closeout gate that orders fresh dispatches at session end, a handoff skill
+    with no preflight, and a connector that gets swept endpoint by endpoint
+    while holding a stale credential.
+    """
+
+    def test_verifier_has_a_write_path_for_its_verdict(self):
+        """atlas:verifier has Write disallowed. Without an explicit Bash write
+        path its verdict can only be prose, which gate condition (b) cannot
+        see -- the measured cause of repeated re-dispatch."""
+        text = (PLUGIN_ROOT / "agents" / "verifier.md").read_text(encoding="utf-8")
+        self.assertIn("disallowedTools", text)
+        self.assertIn("atlas_finding.py", text)
+        self.assertIn("findings.json", text)
+        self.assertIn("MANDATORY", text)
+
+    def test_finding_cli_exists_and_is_executable_by_python(self):
+        cli = PLUGIN_ROOT / "scripts" / "atlas_finding.py"
+        self.assertTrue(cli.is_file())
+        r = subprocess.run(
+            [sys.executable, str(cli), "--help"], capture_output=True, text=True
+        )
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("--status", r.stdout)
+
+    def test_handoff_skill_runs_the_gate_preflight_before_the_summary(self):
+        """The report's single most repeated failure: a handoff request that
+        the Stop gate turns into a fresh remediation wave. The preflight has to
+        come before the summary body, not after it."""
+        text = (
+            PLUGIN_ROOT / "skills" / "atlas-handoff" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("preflight", text.lower())
+        preflight_at = text.lower().index("preflight")
+        summary_at = text.index("Produce a session handoff")
+        self.assertLess(
+            preflight_at,
+            summary_at,
+            "gate preflight must precede the handoff body, or it is not front-loaded",
+        )
+        self.assertIn("findings.json", text)
+        self.assertIn("atlas_finding.py", text)
+
+    def test_gate_block_orders_the_inline_fix_before_any_dispatch(self):
+        """A block reason that leads with 'dispatch' is what dies at session
+        end. Records that are merely unwritten get written inline."""
+        text = (HOOKS_DIR / "completion_gate.py").read_text(encoding="utf-8")
+        self.assertIn("SMALLEST deterministic action", text)
+        self.assertIn("atlas_finding.py", text)
+        smallest = text.index("SMALLEST deterministic action")
+        dispatch_only = text.index("Dispatch a specialist ONLY when")
+        self.assertLess(smallest, dispatch_only)
+
+    def test_connector_credential_watch_is_wired_on_mcp_responses(self):
+        cmds = _commands_for("PostToolUse")
+        self.assertTrue(
+            any("connector_credential_watch.py" in c for c in cmds),
+            "connector_credential_watch.py must be bound to PostToolUse",
+        )
+        matchers = [
+            m.get("matcher", "")
+            for m in _hooks_config()["PostToolUse"]
+            if any(
+                "connector_credential_watch.py" in h.get("command", "")
+                for h in m.get("hooks", [])
+            )
+        ]
+        self.assertEqual(matchers, ["mcp__.*"])
+
+    def test_tripwire_brackets_verifier_dispatches(self):
+        text = (HOOKS_DIR / "dispatch_tripwire.py").read_text(encoding="utf-8")
+        self.assertIn("_is_verifier", text)
+        self.assertIn("_stash_findings_count", text)
+        self.assertIn("_verdict_missing", text)
+
+    def test_nudge_is_silent_when_memory_was_already_captured(self):
+        """additionalContext on Stop costs a whole extra model turn. A hook that
+        only announces success must not emit."""
+        text = (HOOKS_DIR / "nudge.py").read_text(encoding="utf-8")
+        self.assertNotIn("Self-improvement complete", text)

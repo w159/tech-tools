@@ -762,3 +762,97 @@ class InProcessTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VerifierVerdictBracketTest(unittest.TestCase):
+    """A verifier that returns prose and writes no findings.json row is the
+    documented cause of the re-dispatch loop: the completion gate reads the
+    file, not the chat. The tripwire brackets each verifier dispatch (count
+    before on PreToolUse, count after on PostToolUse) and names the one-command
+    fix instead of letting Stop discover the gap."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.root = os.path.join(self.tmp, "repo")
+        os.makedirs(os.path.join(self.root, "docs"))
+        os.makedirs(os.path.join(self.root, ".atlas", ".run"))
+        self.env = dict(os.environ, ATLAS_DB=os.path.join(self.tmp, "atlas.db"))
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db
+
+        conn = atlas_db.connect(self.env["ATLAS_DB"])
+        atlas_db.init(conn)
+        pid = atlas_db.register_project(conn, self.root)
+        atlas_db.start_run(conn, pid, "sess-v")
+        atlas_db.mark_orchestrating(conn, "sess-v")
+        conn.close()
+
+    def _findings_path(self):
+        return os.path.join(self.root, ".atlas", ".run", "findings.json")
+
+    def _write_findings(self, entries):
+        with open(self._findings_path(), "w") as fh:
+            json.dump(entries, fh)
+
+    def _payload(self, event, session="sess-v", agent="atlas:verifier"):
+        return {
+            "session_id": session,
+            "hook_event_name": event,
+            "tool_name": "Agent",
+            "cwd": self.root,
+            "tool_input": {
+                "subagent_type": agent,
+                "prompt": 'ToolSearch("select:mcp__lean-ctx__ctx_read")',
+            },
+        }
+
+    def test_verifier_without_a_findings_write_is_flagged(self):
+        self._write_findings([{"id": "S1", "status": "open"}])
+        run_hook(self._payload("PreToolUse"), self.env)
+        post = run_hook(self._payload("PostToolUse"), self.env)
+        self.assertIn("findings.json gained no entry", post.stdout)
+        self.assertIn("atlas_finding.py", post.stdout)
+        self.assertIn("Do not re-dispatch", post.stdout)
+
+    def test_verifier_that_wrote_its_verdict_is_silent(self):
+        self._write_findings([{"id": "S1", "status": "open"}])
+        run_hook(self._payload("PreToolUse"), self.env)
+        self._write_findings(
+            [{"id": "S1", "status": "open"}, {"id": "S2", "status": "verified"}]
+        )
+        post = run_hook(self._payload("PostToolUse"), self.env)
+        self.assertNotIn("findings.json gained no entry", post.stdout)
+
+    def test_non_verifier_dispatch_is_not_bracketed(self):
+        self._write_findings([])
+        run_hook(self._payload("PreToolUse", agent="atlas:implementer"), self.env)
+        post = run_hook(self._payload("PostToolUse", agent="atlas:implementer"), self.env)
+        self.assertNotIn("findings.json gained no entry", post.stdout)
+
+    def test_no_baseline_stays_silent(self):
+        """A PostToolUse with no matching PreToolUse baseline cannot judge, so
+        it says nothing rather than warning on a guess."""
+        self._write_findings([])
+        post = run_hook(self._payload("PostToolUse"), self.env)
+        self.assertNotIn("findings.json gained no entry", post.stdout)
+
+    def test_baseline_from_another_session_is_ignored(self):
+        self._write_findings([])
+        run_hook(self._payload("PreToolUse", session="other"), self.env)
+        post = run_hook(self._payload("PostToolUse"), self.env)
+        self.assertNotIn("findings.json gained no entry", post.stdout)
+
+    def test_dispatch_still_reaches_the_observability_db(self):
+        """The flag must not swallow dispatch logging -- condition (g) depends on it."""
+        import atlas_db
+
+        self._write_findings([])
+        run_hook(self._payload("PreToolUse"), self.env)
+        run_hook(self._payload("PostToolUse"), self.env)
+        conn = atlas_db.connect(self.env["ATLAS_DB"])
+        rid = atlas_db.current_run_id(conn, "sess-v")
+        rows = conn.execute(
+            "SELECT COUNT(*) FROM dispatches WHERE run_id=?", (rid,)
+        ).fetchone()[0]
+        conn.close()
+        self.assertGreaterEqual(rows, 1)
