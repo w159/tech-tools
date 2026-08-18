@@ -1306,3 +1306,66 @@ class MainCliTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class UnsanctionedInlineOpsTest(unittest.TestCase):
+    """The deny tier counts inline work the orchestrator should have delegated.
+    It must NOT count the docs/ and .atlas/ writes the completion gate itself
+    orders at closeout -- denying the remediation the gate just demanded is a
+    deadlock, not a guardrail."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.conn = atlas_db.connect(os.path.join(self.tmp, "atlas.db"))
+        atlas_db.init(self.conn)
+        pid = atlas_db.register_project(self.conn, "/repo")
+        self.rid = atlas_db.start_run(self.conn, pid, "s1")
+
+    def tearDown(self):
+        self.conn.close()
+
+    def _log(self, tool, path):
+        atlas_db.log_event(self.conn, self.rid, tool, "main", 1, path)
+
+    def test_sanctioned_docs_and_atlas_writes_are_not_counted(self):
+        for path in (
+            "docs/CHANGELOG.md",
+            "/repo/docs/ROADMAP.md",
+            ".atlas/.run/findings.json",
+            "/repo/.atlas/evidence/run.log",
+        ):
+            self._log("Edit", path)
+        self.assertEqual(
+            atlas_db.unsanctioned_inline_ops_since_last_dispatch(self.conn, self.rid), 0
+        )
+
+    def test_target_code_edits_are_counted(self):
+        self._log("Edit", "backend/app.py")
+        self._log("Write", "src/x.ts")
+        self.assertEqual(
+            atlas_db.unsanctioned_inline_ops_since_last_dispatch(self.conn, self.rid), 2
+        )
+
+    def test_pathless_bash_is_still_counted(self):
+        """'Unknown path' is the largest inline surface there is -- 378 Bash
+        calls was the measured failure. Exempting it would empty the counter."""
+        for _ in range(3):
+            self._log("Bash", None)
+        self.assertEqual(
+            atlas_db.unsanctioned_inline_ops_since_last_dispatch(self.conn, self.rid), 3
+        )
+
+    def test_reads_of_docs_are_counted(self):
+        """Only WRITES to docs/ are sanctioned. Reading your way through the
+        task inline is exactly the drift the tier exists to stop."""
+        self._log("Read", "docs/architecture/overview.md")
+        self.assertEqual(
+            atlas_db.unsanctioned_inline_ops_since_last_dispatch(self.conn, self.rid), 1
+        )
+
+    def test_a_dispatch_resets_the_count(self):
+        self._log("Bash", None)
+        atlas_db.log_dispatch(self.conn, self.rid, "atlas:implementer")
+        self.assertEqual(
+            atlas_db.unsanctioned_inline_ops_since_last_dispatch(self.conn, self.rid), 0
+        )

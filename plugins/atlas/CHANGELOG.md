@@ -1,5 +1,52 @@
 # Changelog
 
+## 5.10.0 (2026-08-18)
+
+Two structural rules that atlas asserted in prose but never enforced.
+
+**1. Subagents launched subagents.** Nothing stopped them. No agent definition
+listed `Agent` or `Task` in `disallowedTools`, and no hook denied a nested
+dispatch. A nested agent is invisible to the orchestrator that owns the task: its
+dispatch is never counted toward verifier coverage, its verdict never reaches
+findings.json, and its context cannot be reached. Two independent layers now:
+
+- All 12 agent specs carry `Agent, Task` in `disallowedTools`, plus a "You do not
+  dispatch" section telling the agent to name the role it needs in its final
+  report instead of burning turns against a deny it did not expect.
+- `dispatch_tripwire.py` denies any `Agent`/`Task` whose `transcript_path` is a
+  `subagents/` transcript. Placement is the trick: it runs BEFORE the
+  `ATLAS_TRIPWIRE` kill switch (nesting is a structural invariant, not a taste
+  setting) and BEFORE any DB call, because a subagent's session_id has no run row
+  and everything downstream of `current_run_id()` would return early.
+
+**2. Every task cost two subagents.** Law 5 required an `atlas:verifier`
+*dispatch* to pair each implementer -- "no exceptions, no 'it's trivial'" -- and
+completion-gate condition (g) enforced exactly that. So a one-file change with a
+passing test still needed a second agent. That contradicts atlas's own doctrine
+that verification is a test run, not a subagent.
+
+- Condition (g) is now
+  `max(0, unpaired_implementer_dispatches - verified_findings_stamped_this_run)`.
+  A `verified` entry written into findings.json during the run pairs an
+  implementer exactly like a verifier dispatch. Scoped to the run window: entries
+  inherited from an earlier run, and undated entries, earn no credit.
+- `SKILL.md` law 5 gains a wave-sizing ladder: one bounded change with a provable
+  gate is ONE implementer and a recorded test result; a check no test can express
+  adds a verifier; multi-surface work gets waves.
+
+**What did not change: the orchestrator still never does the work.** Right-sizing
+is about how many subagents, never about doing it inline. The deny tier got
+*tighter*, from 8 inline ops to 6, and the block text says so. It is safe to
+tighten because the count now excludes the orchestrator's own `docs/` and
+`.atlas/` writes -- the ones the completion gate itself orders at closeout.
+Counting those was a latent deadlock: the gate demanded a write the tripwire
+would have denied.
+
+**Verification.** `python3 -m pytest plugins/atlas/hooks plugins/atlas/scripts -q`
+-> 1129 passed. New: `NestedSubagentDenyTest` (7), `TestRunPairsAnImplementerTest`
+(5), `UnsanctionedInlineOpsTest` (5), and permanent invariants in
+`NoNestedSubagentsContract` (4) + `RightSizedDelegationContract` (4).
+
 ## 5.9.0 (2026-08-18)
 
 Four defects the usage-insight report for 2026-07-02..2026-08-17 measured across

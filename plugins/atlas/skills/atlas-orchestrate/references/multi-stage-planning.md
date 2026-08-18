@@ -35,7 +35,7 @@ The cost of catching an error one stage back is trivial. The cost of catching it
 
 ## The per-stage gate
 
-A stage's dependents do not start until that stage is `verified`. The mark is written by an *independent* `atlas:verifier` (or specialist) running its own failable check in a *fresh* context, per law 5 in `SKILL.md`, and recorded in `.atlas/.run/findings.json`:
+A stage's dependents do not start until that stage is `verified`. The mark comes from an independent failable check, recorded in `.atlas/.run/findings.json`: either a deterministic test/gate run whose result you record with `scripts/atlas_finding.py`, or - when no test can express the check - an *independent* `atlas:verifier` (or specialist) in a *fresh* context, per law 5 in `SKILL.md`. The test is the default and the verifier is the exception; see the wave-sizing table in `SKILL.md`.
 
 ```
 Stage N completes -> independent verifier runs Stage N's failable check in a fresh context
@@ -130,3 +130,26 @@ Maintain `.atlas/.run/work-log.md` as the session's memory:
 - Open items and their current status.
 
 Re-read it before any continuation - after a pause, a handoff, or a context compaction - so no completed work is duplicated and no failed approach is repeated. The work-log is the difference between resuming and restarting.
+
+## Right-size the wave before you dispatch
+
+Every task is delegated - the orchestrator never does the work itself. That is not the
+same as every task getting a squad. Match the shape of the work:
+
+| Shape of the work | Dispatch |
+|---|---|
+| One bounded change in one place, with a gate that can prove it (a test, a lint, a typecheck) | ONE `atlas:implementer`. It runs the gate itself; you record the result as a `verified` finding. No verifier dispatch. |
+| A change whose correctness a test cannot express (runtime behavior, a data claim, a security property) | `atlas:implementer`, then an independent `atlas:verifier` in a fresh context. |
+| Multi-surface, multi-stage, or whole-codebase work | Waves: parallel implementers per stage, each closed by an independent verify step. |
+
+The verifier dispatch is the expensive tier and it is not the default. A deterministic
+test run cannot hallucinate, cannot be captured by a hook, and returns in seconds; a
+verifier subagent returns prose in minutes. Completion-gate condition (g) accepts either:
+a `verified` entry written into `.atlas/.run/findings.json` DURING this run pairs an
+implementer exactly like an `atlas:verifier` dispatch does. Reach for the verifier when
+no test can express the check, and say in one line why.
+
+What this does NOT license: doing the work yourself because it is "small." A one-line
+change is still an `atlas:implementer` dispatch. The point of delegation is keeping the
+orchestrator's context clean, and that argument is strongest, not weakest, on small
+changes where the reading-and-editing noise dwarfs the diff.

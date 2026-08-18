@@ -351,6 +351,31 @@ def inline_ops_since_last_dispatch(conn, run_id):
     ).fetchone()[0]
 
 
+def unsanctioned_inline_ops_since_last_dispatch(conn, run_id):
+    """inline_ops_since_last_dispatch, minus the orchestrator's sanctioned writes.
+
+    The tripwire's deny tier exists to stop an orchestrator from doing the WORK
+    inline. But the completion gate explicitly requires the orchestrator to write
+    docs/ and .atlas/ records itself at closeout -- counting those against the
+    inline budget would deny the very remediation the gate just ordered.
+
+    Excluded: Edit/Write/MultiEdit whose path is under docs/ or .atlas/. NOT
+    excluded: any op with no path (all Bash), because 'unknown path' is the
+    largest inline surface there is and exempting it would empty the counter.
+    """
+    last = conn.execute(
+        "SELECT COALESCE(MAX(id),0) FROM events WHERE run_id=? AND is_inline_op=0",
+        (run_id,),
+    ).fetchone()[0]
+    return conn.execute(
+        "SELECT COUNT(*) FROM events WHERE run_id=? AND is_inline_op=1 AND id>? "
+        "AND NOT (tool IN ('Edit','Write','MultiEdit') AND path IS NOT NULL AND ("
+        "  path LIKE 'docs/%' OR path LIKE '%/docs/%'"
+        "  OR path LIKE '.atlas/%' OR path LIKE '%/.atlas/%'))",
+        (run_id, last),
+    ).fetchone()[0]
+
+
 def finalize_run(conn, run_id, wall_clock_s=None):
     # Default the wall clock to the run's own elapsed time. Callers (the Stop
     # hook) rarely have a precomputed duration, and a NULL here is why
@@ -433,6 +458,19 @@ def _dispatch_coverage_counts(conn, run_id):
         if a and ("verifier" in a.lower() or "validator" in a.lower())
     )
     return impl, ver
+
+
+def run_started_at(conn, run_id):
+    """Epoch seconds the run began, or None. The completion gate uses this to ask
+    whether a findings.json verdict was written during THIS run rather than
+    inherited from an earlier one."""
+    try:
+        row = conn.execute(
+            "SELECT started_at FROM runs WHERE id=?", (run_id,)
+        ).fetchone()
+        return row[0] if row else None
+    except Exception:
+        return None
 
 
 def unpaired_implementer_dispatches(conn, run_id):

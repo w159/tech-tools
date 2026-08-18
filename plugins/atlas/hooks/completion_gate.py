@@ -29,10 +29,15 @@ Seven conditions must ALL hold before the gate passes (else block ONCE):
       atlas:docs-curator dispatch before "done". If this run wrote zero
       non-docs files, (f) is skipped -- a dirty tree left by an earlier
       session is not this run's problem to fix.
-  (g) Law 5 -- verifier coverage: if non-docs code changed this run and there
-      are more implementer dispatches than verifier dispatches for the run
-      (atlas_db.unpaired_implementer_dispatches > 0), block -- shipping work
-      that never got an independent atlas:verifier pass.
+  (g) Law 5 -- verification coverage: if non-docs code changed this run, block
+      when implementer dispatches outnumber the independent checks that covered
+      them. Two things count and they are interchangeable: an atlas:verifier
+      dispatch, or a `verified` findings.json entry stamped DURING this run (a
+      deterministic test result recorded via scripts/atlas_finding.py). The
+      formula is max(0, unpaired_implementer_dispatches - _test_verified_this_run).
+      Requiring a verifier *dispatch* specifically is what made every task,
+      however small, cost two subagents; a test run is the better evidence and
+      now satisfies the same gate.
   (h) ROADMAP reconciliation: if docs/ROADMAP.md contains items with status
       "done" that should have been moved to CHANGELOG, block. A "done" item
       in ROADMAP is a defect -- it belongs in CHANGELOG with a date and
@@ -62,6 +67,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
@@ -221,11 +227,16 @@ def _reason(
         )
     if unverified > 0:
         parts.append(
-            "  (g) Law 5 -- verifier coverage: %d implementer dispatch(es) shipped "
-            "code this run with no independent atlas:verifier to check them. Every "
-            "shipping change gets an independent verifier. -> Dispatch atlas:verifier "
-            "for the unverified change(s) to confirm or refute the work in a fresh "
-            "context, then retry Stop." % unverified
+            "  (g) Law 5 -- verification coverage: %d implementer dispatch(es) "
+            "shipped code this run with nothing independent checking them. Two ways "
+            "to close this, cheapest first: (1) run the failing check yourself -- the "
+            "project's test/lint/typecheck gate -- and record the result with "
+            'python3 "$CLAUDE_PLUGIN_ROOT/scripts/atlas_finding.py" --id <stage> '
+            "--status verified --evidence '<test id>' --reproduction '<command>'; a "
+            "`verified` entry stamped during this run pairs an implementer exactly "
+            "like a dispatch does, and a test cannot hallucinate. (2) Dispatch "
+            "atlas:verifier only when no test can express the check. Then retry Stop."
+            % unverified
         )
     if git_error:
         parts.append(
@@ -319,11 +330,19 @@ def main() -> int:
         # shipped no diff, contributes nothing to run_paths, so it cannot
         # trip this. Fail-open: the helper returns 0 on any atlas_db
         # import/DB error, so condition (g) silently passes.
-        unverified = (
-            _unpaired_implementer_dispatches(data.get("session_id", ""))
-            if code_changed
-            else 0
-        )
+        # (g) Verifier coverage, with test-run credit. An implementer is
+        # "paired" by an independent atlas:verifier dispatch OR by a `verified`
+        # findings.json entry written during this run -- a deterministic test is
+        # the stronger evidence of the two, and demanding a second subagent for a
+        # one-file change is what turned every simple task into a wave.
+        unverified = 0
+        if code_changed:
+            session = data.get("session_id", "")
+            unverified = max(
+                0,
+                _unpaired_implementer_dispatches(session)
+                - _test_verified_this_run(root, session),
+            )
         if (
             ok_a
             and ok_b
@@ -486,6 +505,63 @@ def _run_written_paths(session_id: str, root: Path | None = None) -> list:
         return paths
     except Exception:
         return []
+    finally:
+        if conn is not None:
+            conn.close()
+
+
+def _test_verified_this_run(root: Path, session_id: str) -> int:
+    """(g) pairing credit for verification that was a TEST RUN, not a subagent.
+
+    Law 5 used to accept only an atlas:verifier *dispatch* as proof a change was
+    checked, which forced a second subagent onto every task no matter how small.
+    Atlas's own doctrine is that a deterministic test beats a verifier agent: it
+    cannot hallucinate and returns in seconds. So a `verified` entry written into
+    findings.json DURING this run counts toward pairing exactly like a dispatch.
+
+    Scoped to the run window on purpose. A `verified` row inherited from an
+    earlier session proves nothing about the code this run shipped, and counting
+    it would hollow the gate out completely.
+
+    Fail-open to 0 (no credit, gate keeps its old strictness) on any error.
+    """
+    findings = root / ".atlas" / ".run" / "findings.json"
+    conn = None
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db
+
+        conn = atlas_db.connect()
+        rid = atlas_db.current_run_id(conn, session_id) or atlas_db.latest_run_id(
+            conn, session_id
+        )
+        if rid is None:
+            return 0
+        started = atlas_db.run_started_at(conn, rid)
+        if started is None:
+            return 0
+        data = json.loads(findings.read_text(encoding="utf-8"))
+        items = data if isinstance(data, list) else data.get("findings", [])
+        count = 0
+        for item in items if isinstance(items, list) else []:
+            if not isinstance(item, dict):
+                continue
+            if str(item.get("status", "")).lower() != "verified":
+                continue
+            stamp = item.get("verified_at")
+            if not isinstance(stamp, str):
+                continue  # an undated entry cannot be proven to belong to this run
+            try:
+                when = datetime.fromisoformat(stamp)
+            except ValueError:
+                continue
+            if when.tzinfo is None:
+                when = when.replace(tzinfo=timezone.utc)
+            if when.timestamp() >= started:
+                count += 1
+        return count
+    except Exception:
+        return 0
     finally:
         if conn is not None:
             conn.close()

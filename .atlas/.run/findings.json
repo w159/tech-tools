@@ -296,5 +296,58 @@
     "status": "verified",
     "verified_at": "2026-08-18T12:09:24+00:00",
     "verified_by": "deterministic contract suite"
+  },
+  {
+    "id": "ATLAS-5.10.0-no-nested-subagents",
+    "surface": "claude-code-setup",
+    "category": "correctness",
+    "severity": "high",
+    "title": "subagents could dispatch subagents: no disallowedTools entry, no hook deny",
+    "evidence": [
+      "plugins/atlas/agents/*.md disallowedTools",
+      "plugins/atlas/hooks/dispatch_tripwire.py:123"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m pytest plugins/atlas/hooks/test_dispatch_tripwire.py -k NestedSubagentDeny plugins/atlas/hooks/test_atlas_contract.py -k NoNestedSubagents -q",
+    "proposed_fix": "",
+    "blast_radius": "cross-service",
+    "status": "verified",
+    "verified_at": "2026-08-18T12:34:54+00:00",
+    "verified_by": "deterministic contract suite"
+  },
+  {
+    "id": "ATLAS-5.10.0-right-sized-delegation",
+    "surface": "claude-code-setup",
+    "category": "maintainability",
+    "severity": "medium",
+    "title": "condition (g) accepts a run-scoped test-verified finding, so a simple task costs one subagent not two",
+    "evidence": [
+      "plugins/atlas/hooks/completion_gate.py _test_verified_this_run",
+      "plugins/atlas/skills/atlas-orchestrate/SKILL.md:111"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m pytest plugins/atlas/hooks/test_completion_gate.py -k TestRunPairs -q",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-08-18T12:34:54+00:00",
+    "verified_by": "deterministic contract suite"
+  },
+  {
+    "id": "ATLAS-5.10.0-sanctioned-inline-writes",
+    "surface": "claude-code-setup",
+    "category": "reliability",
+    "severity": "medium",
+    "title": "deny tier no longer counts the docs/.atlas writes the completion gate itself orders; threshold 8 -> 6",
+    "evidence": [
+      "plugins/atlas/scripts/atlas_db.py unsanctioned_inline_ops_since_last_dispatch"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m pytest plugins/atlas/scripts/test_atlas_db.py -k UnsanctionedInlineOps -q",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-08-18T12:34:54+00:00",
+    "verified_by": "deterministic contract suite"
   }
 ]
