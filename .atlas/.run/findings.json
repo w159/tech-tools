@@ -493,5 +493,58 @@
     "status": "verified",
     "verified_at": "2026-08-18T15:10:14+00:00",
     "verified_by": "annotations test + live bundle tools/list annotation dump"
+  },
+  {
+    "id": "ATLAS-process-fetch-before-declaring-a-commit-missing",
+    "surface": "orchestration",
+    "category": "process",
+    "severity": "medium",
+    "title": "git cat-file failing proves the object is absent LOCALLY, not that the commit does not exist; fetch before telling the user work was lost",
+    "evidence": [
+      "docs/CHANGELOG.md"
+    ],
+    "doc_refs": [
+      "docs/CHANGELOG.md"
+    ],
+    "reproduction": "git cat-file -t f796445 fails on a clone that has not fetched; git fetch origin then git log --all shows it on origin/main",
+    "proposed_fix": "",
+    "blast_radius": "session",
+    "status": "verified",
+    "verified_at": "2026-08-18T15:38:13+00:00",
+    "verified_by": "this session claimed 5.12.0 was lost, then found it on origin/main at push time"
+  },
+  {
+    "id": "ATLAS-process-workspace-is-mega-not-icloud",
+    "surface": "orchestration",
+    "category": "process",
+    "severity": "medium",
+    "title": "this workspace lives under ~/MEGA, so the global iCloud node_modules caution does not apply and must not be used to justify skipping a dependency fix",
+    "evidence": [
+      "mcp_node/node-ninjaone/package.json"
+    ],
+    "doc_refs": [],
+    "reproduction": "pwd -> /Users/jerry/MEGA/Projects/Agentic/tech-tools",
+    "proposed_fix": "",
+    "blast_radius": "repo",
+    "status": "verified",
+    "verified_at": "2026-08-18T15:38:13+00:00",
+    "verified_by": "user correction; npm install completed in 6s and the suite went 0 -> 94 passing"
+  },
+  {
+    "id": "ATLAS-process-npm-install-clobbers-node-modules-symlink",
+    "surface": "orchestration",
+    "category": "process",
+    "severity": "medium",
+    "title": "npm install replaces the repo's tracked node_modules symlink with a real directory; move the fresh tree into node_modules.nosync.noindex and relink",
+    "evidence": [
+      "mcp_node/node-ninjaone/node_modules"
+    ],
+    "doc_refs": [],
+    "reproduction": "git ls-files -s mcp_node/node-ninjaone/node_modules -> mode 120000 (symlink); npm install turns it into a directory",
+    "proposed_fix": "",
+    "blast_radius": "repo",
+    "status": "verified",
+    "verified_at": "2026-08-18T15:38:13+00:00",
+    "verified_by": "symlink restored; npm test and npm run build both pass through it"
   }
 ]
