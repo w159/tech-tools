@@ -385,5 +385,30 @@
     "status": "verified",
     "verified_at": "2026-08-18T12:48:52+00:00",
     "verified_by": "deterministic contract suite"
+  },
+  {
+    "id": "ATLAS-5.12.0-ninjaone-os-patch-installs",
+    "surface": "mcp-connector",
+    "category": "capability-gap",
+    "severity": "medium",
+    "title": "NinjaOne connector could not answer OS patch history; /v2/queries/os-patch-installs now wired as ninjaone_devices_os_patch_installs",
+    "evidence": [
+      "mcp_servers/ninjaone-mcp/src/domains/devices.ts",
+      "mcp_node/node-ninjaone/src/resources/devices.ts",
+      "mcp_servers/ninjaone-mcp/src/__tests__/domains/devices.test.ts",
+      "plugins/atlas/mcp/ninjaone/server.mjs",
+      "commit f796445"
+    ],
+    "doc_refs": [
+      "plugins/atlas/CHANGELOG.md",
+      "docs/CHANGELOG.md"
+    ],
+    "reproduction": "cd mcp_servers/ninjaone-mcp && npm run typecheck && npx vitest run src/__tests__/domains/devices.test.ts; then copy plugins/atlas/mcp/ninjaone/server.mjs alone into an empty dir and drive it with MCP initialize + tools/list over stdio",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-08-18T14:35:00+00:00",
+    "verified_by": "typecheck + vitest + isolated stdio handshake",
+    "notes": "typecheck clean. vitest devices.test.ts: 18 passed, 2 failed, both reproduce on 81af28f with the change stashed. Full suite 100 passed / 11 failed against a 93/12 baseline: 6 new tests pass, tool-count assertion flipped to passing, zero new failures. Isolated handshake with no node_modules: initialize OK as ninjaone-mcp 1.6.3, tools/list 27 tools (was 26), ninjaone_devices_os_patch_installs present with all 10 schema properties. Contract NOT yet exercised against the live NinjaOne API: df grammar, status enum, and epoch-seconds params are verified against mocks only."
   }
 ]
