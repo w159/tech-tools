@@ -43,6 +43,8 @@ export type {
   DeviceMemory,
   DeviceDisk,
   DeviceInventory,
+  OsPatchInstall,
+  OsPatchInstallListParams,
 } from './devices.js';
 
 // Alert types
