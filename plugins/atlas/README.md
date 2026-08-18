@@ -47,7 +47,7 @@ atlas/
 |   |-- nudge.py                   #   Stop only: self-improvement nudge (throttled)
 |   |-- docs_drift.py              #   not a hook; shared find_root/docs_drift/git_changed_paths used by completion_gate.py and docs_drift_watch.py
 |   `-- validate-readonly-query.sh #   not auto-loaded; DB-audit subagents wire it during read-only audits
-|-- scripts/                       # atlas_doctor.py (repair; also wired via hooks.json --hook as the 13th auto-loaded hook, SessionStart), atlas_db.py (observability), atlas_context_optimizer.py
+|-- scripts/                       # atlas_doctor.py (repair; also wired via hooks.json --hook as the 14th auto-loaded hook, SessionStart), atlas_db.py (observability), atlas_context_optimizer.py
 |                                  # (disable unused skills/agents), atlas_curator.py, atlas_memory.py,
 |                                  # asset_audit.py, discover_capabilities.py, build_hub.py, install_hooks.py + tests
 |-- output-styles/

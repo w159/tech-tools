@@ -115,6 +115,29 @@ class ConnectorCredentialWatch(unittest.TestCase):
         later = _run(self._payload({"status": 401}, session="s2"), home=self.home)
         self.assertIn("STALE CREDENTIAL", later.stdout)
 
+    def test_content_returning_server_never_warns(self):
+        """lean-ctx/context-mode/serena return FILE CONTENT. Reading this very
+        hook, or grepping the connector sources, puts "Invalid Token" and
+        "Unauthorized" in the response body. Warning there would inject a false
+        restart order mid-task -- the nudge-in-subagent-context defect again."""
+        for tool in (
+            "mcp__lean-ctx__ctx_read",
+            "mcp__plugin_context-mode_context-mode__ctx_execute",
+            "mcp__serena__find_symbol",
+            "mcp__plugin_claude-mem_mcp-search__search",
+            "mcp__context7__query-docs",
+        ):
+            with self.subTest(tool=tool):
+                r = _run(
+                    self._payload(
+                        'HTTP 401 Unauthorized: {"error":"Invalid Token"}  '
+                        "-- matched in hooks/connector_credential_watch.py",
+                        tool=tool,
+                    ),
+                    home=self.home,
+                )
+                self.assertEqual(r.stdout.strip(), "")
+
     def test_kill_switch(self):
         r = _run(
             self._payload({"status": 401}),

@@ -11,7 +11,7 @@
     {
       "name": "atlas",
       "source": "./plugins/atlas",
-      "description": "Multi-agent coding architect: 21 plainly named skills (the atlas architect skill, atlas-orchestrate engine, atlas-audit code/architecture/self audits, atlas-doctor interactive self-improvement, atlas-setup onboarding/install/connectors/repair, atlas-loop recurring work, atlas-ux-test UX swarm, and 14 task skills), 12 core agents, 12 hooks including inline docs-drift warning, self-improvement (session ingest, chronicle facet capture, memory capture, nudge) and atlas_doctor (session-health check), and the atlas-orchestrate method: deterministic contract tests as the verification step, with runtime evidence before any done claim.",
+      "description": "Multi-agent coding architect: 21 plainly named skills (the atlas architect skill, atlas-orchestrate engine, atlas-audit code/architecture/self audits, atlas-doctor interactive self-improvement, atlas-setup onboarding/install/connectors/repair, atlas-loop recurring work, atlas-ux-test UX swarm, and 14 task skills), 12 core agents, 13 hooks including inline docs-drift warning, stale-connector-credential detection, self-improvement (session ingest, chronicle facet capture, memory capture, nudge) and atlas_doctor (session-health check), and the atlas-orchestrate method: deterministic contract tests as the verification step, with runtime evidence before any done claim.",
       "category": "developer-tools",
       "keywords": [
         "atlas",
