@@ -4,6 +4,49 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
+## 2026-08-18 -- atlas 5.12.0: NinjaOne OS patch history
+
+Released as atlas 5.12.0 (`plugins/atlas/.claude-plugin/plugin.json:3`,
+`.kimi-plugin/plugin.json:3`), ninjaone-mcp 1.6.3, node-ninjaone 1.3.0.
+
+The NinjaOne connector could not answer patch questions. Its four domains
+(devices, organizations, alerts, tickets) wrap no part of the `/v2/queries/*`
+API, and the only fallback, `ninjaone_devices_activities`, truncates at the
+40,000-char response cap while saturated with remote-session records, so it
+cannot reach back a week on a busy device.
+
+- New tool `ninjaone_devices_os_patch_installs`
+  (`mcp_servers/ninjaone-mcp/src/domains/devices.ts`). With `device_id` it hits
+  `/v2/device/{id}/os-patch-installs`; without one it hits
+  `/v2/queries/os-patch-installs`. Filters: `status` (INSTALLED/FAILED),
+  `installed_after`, `installed_before`, `organization_id` or `device_filter`,
+  `limit`, `cursor`. Requires the `monitoring` API scope.
+- Tenant-wide scoping goes through NinjaOne's `df` device filter, not
+  `organizationId`, which those endpoints do not accept. The tool builds
+  `df: "org = <id>"`; an explicit `device_filter` overrides it. Pinned by test.
+- `installed_after` / `installed_before` accept ISO 8601 or epoch seconds. An
+  unparseable value drops the filter instead of sending NaN, so a typo cannot
+  return an empty result that reads as a real answer.
+- Patch records are returned unshaped. NinjaOne's apidocs pages are JS-rendered
+  and the response schema could not be verified, so nothing narrows the record
+  to guessed field names.
+- SDK: `devices.getOsPatchInstalls()` and `devices.listOsPatchInstalls()`
+  (`mcp_node/node-ninjaone/src/resources/devices.ts`), both normalizing the bare
+  array and `{ cursor, results }` envelope shapes to an array.
+
+Evidence: `npm run typecheck` clean. `vitest src/__tests__/domains/devices.test.ts`
+18 passed, 2 failed; both failures reproduce on `81af28f` with the change stashed
+and are unrelated response-shaper assertions. `plugins/atlas/mcp/ninjaone/server.mjs`
+rebuilt (esbuild, bundled ESM, minified, no `node_modules`); copied alone into an
+empty directory it completes an MCP initialize handshake as ninjaone-mcp and
+returns 27 tools, up from 26, including the new tool with all ten schema
+properties.
+
+Not fixed here: `ninjaone_devices_activities` declares an `activity_type`
+property that its handler never reads, so the filter is inert.
+
+---
+
 ## 2026-08-18 -- atlas 5.11.0: cut the terminal noise, make decisions block
 
 Released as atlas 5.11.0 (`plugins/atlas/.claude-plugin/plugin.json:3`,

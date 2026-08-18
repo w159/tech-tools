@@ -207,7 +207,70 @@ function getTools(): Tool[] {
         required: ["device_id"],
       },
     },
+    {
+      name: "ninjaone_devices_os_patch_installs",
+      description:
+        "Get Windows OS patch install history (KB number, title, install time, INSTALLED/FAILED status). Pass device_id for one device, or omit it to query the whole tenant and narrow with organization_id or device_filter. Use installed_after/installed_before to bracket a date range when investigating what a machine did or did not receive.",
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          ...SHAPE_PROPS,
+          device_id: {
+            type: "number",
+            description: "Integer NinjaOne device ID. Omit to query across devices instead of one.",
+          },
+          organization_id: {
+            type: "number",
+            description: "Tenant-wide queries only: scope to one organization. Ignored when device_id is given.",
+          },
+          device_filter: {
+            type: "string",
+            description:
+              "Tenant-wide queries only: raw NinjaOne device filter, e.g. \"org = 1\" or \"class = WINDOWS_WORKSTATION\". Takes precedence over organization_id.",
+          },
+          status: {
+            type: "string",
+            enum: ["INSTALLED", "FAILED"],
+            description: "Filter to successful or failed installs; omit to return both.",
+          },
+          installed_after: {
+            type: "string",
+            description:
+              "Only patches installed at or after this time. ISO 8601 date or datetime (e.g. '2026-08-08' or '2026-08-08T00:00:00Z'), or Unix epoch seconds.",
+          },
+          installed_before: {
+            type: "string",
+            description: "Only patches installed at or before this time. Same formats as installed_after.",
+          },
+          limit: {
+            type: "number",
+            description: "Page size — maximum patch records to return (default: 50).",
+          },
+          cursor: {
+            type: "string",
+            description: "Opaque pagination cursor from the previous page response. Tenant-wide queries only.",
+          },
+        },
+      },
+    },
   ];
+}
+
+/**
+ * Accept either an ISO 8601 date/datetime or raw epoch seconds and return
+ * epoch seconds, which is what the NinjaOne patch endpoints expect.
+ * Returns undefined for absent or unparseable input so a bad date narrows
+ * nothing rather than silently filtering everything out.
+ */
+function toEpochSeconds(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  if (typeof value === "number") return Math.floor(value);
+
+  const raw = String(value).trim();
+  if (/^\d+$/.test(raw)) return parseInt(raw, 10);
+
+  const parsed = Date.parse(raw.length === 10 ? `${raw}T00:00:00Z` : raw);
+  return Number.isNaN(parsed) ? undefined : Math.floor(parsed / 1000);
 }
 
 // ---------------------------------------------------------------------------
@@ -360,6 +423,62 @@ async function handleCall(
       } catch (err) {
         return toolErrorFromCatch("ninjaone_devices_activities", err, {
           hint: "Verify device_id with ninjaone_devices_list first.",
+        });
+      }
+    }
+
+    case "ninjaone_devices_os_patch_installs": {
+      const deviceId = args.device_id as number | undefined;
+      const limit = (args.limit as number) || 50;
+      const status = args.status as "INSTALLED" | "FAILED" | undefined;
+      const installedAfter = toEpochSeconds(args.installed_after);
+      const installedBefore = toEpochSeconds(args.installed_before);
+
+      try {
+        if (deviceId) {
+          logger.info("API call: devices.getOsPatchInstalls", {
+            deviceId,
+            status,
+            installedAfter,
+            installedBefore,
+          });
+          const patches = await client.devices.getOsPatchInstalls(deviceId, {
+            status,
+            installedAfter,
+            installedBefore,
+            pageSize: limit,
+          });
+          logger.debug("API response: devices.getOsPatchInstalls", { count: patches.length });
+          // No summary fn: the patch record schema is not pinned, so shaping
+          // it here would silently drop fields. Callers narrow with `fields`.
+          return shapeList(patches as Record<string, unknown>[], undefined, shapeArgs);
+        }
+
+        // Tenant-wide. This endpoint scopes through `df`, not organizationId.
+        const organizationId = args.organization_id as number | undefined;
+        const df =
+          (args.device_filter as string | undefined) ??
+          (organizationId !== undefined ? `org = ${organizationId}` : undefined);
+
+        logger.info("API call: devices.listOsPatchInstalls", {
+          df,
+          status,
+          installedAfter,
+          installedBefore,
+        });
+        const patches = await client.devices.listOsPatchInstalls({
+          df,
+          status,
+          installedAfter,
+          installedBefore,
+          cursor: args.cursor as string | undefined,
+          pageSize: limit,
+        });
+        logger.debug("API response: devices.listOsPatchInstalls", { count: patches.length });
+        return shapeList(patches as Record<string, unknown>[], undefined, shapeArgs);
+      } catch (err) {
+        return toolErrorFromCatch("ninjaone_devices_os_patch_installs", err, {
+          hint: "Requires the 'monitoring' API scope. Verify device_id with ninjaone_devices_list; only Windows devices report OS patches.",
         });
       }
     }

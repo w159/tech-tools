@@ -12,6 +12,8 @@ const {
   mockDevicesGetServices,
   mockAlertsListByDevice,
   mockDevicesGetActivities,
+  mockDevicesGetOsPatchInstalls,
+  mockDevicesListOsPatchInstalls,
   mockClient,
 } = vi.hoisted(() => {
   const mockDevicesList = vi.fn();
@@ -20,6 +22,8 @@ const {
   const mockDevicesGetServices = vi.fn();
   const mockAlertsListByDevice = vi.fn();
   const mockDevicesGetActivities = vi.fn();
+  const mockDevicesGetOsPatchInstalls = vi.fn();
+  const mockDevicesListOsPatchInstalls = vi.fn();
 
   const mockClient = {
     devices: {
@@ -28,6 +32,8 @@ const {
       reboot: mockDevicesReboot,
       getServices: mockDevicesGetServices,
       getActivities: mockDevicesGetActivities,
+      getOsPatchInstalls: mockDevicesGetOsPatchInstalls,
+      listOsPatchInstalls: mockDevicesListOsPatchInstalls,
     },
     alerts: {
       listByDevice: mockAlertsListByDevice,
@@ -41,6 +47,8 @@ const {
     mockDevicesGetServices,
     mockAlertsListByDevice,
     mockDevicesGetActivities,
+    mockDevicesGetOsPatchInstalls,
+    mockDevicesListOsPatchInstalls,
     mockClient,
   };
 });
@@ -96,13 +104,23 @@ describe("Devices Domain Handler", () => {
         { id: 1, type: "LOGIN", timestamp: "2024-01-01T00:00:00Z" },
       ],
     });
+    mockDevicesGetOsPatchInstalls.mockClear();
+    mockDevicesListOsPatchInstalls.mockClear();
+    // Both SDK methods normalize the API's two response shapes to an array
+    mockDevicesGetOsPatchInstalls.mockResolvedValue([
+      { deviceId: 1, kbNumber: "KB5094126", status: "INSTALLED", installedAt: 1780000000 },
+    ]);
+    mockDevicesListOsPatchInstalls.mockResolvedValue([
+      { deviceId: 1, kbNumber: "KB5094126", status: "INSTALLED", installedAt: 1780000000 },
+      { deviceId: 2, kbNumber: "KB5094126", status: "FAILED", installedAt: 1780000100 },
+    ]);
   });
 
   describe("getTools", () => {
     it("should return all device tools", () => {
       const tools = devicesHandler.getTools();
 
-      expect(tools.length).toBe(6);
+      expect(tools.length).toBe(7);
 
       const toolNames = tools.map((t) => t.name);
       expect(toolNames).toContain("ninjaone_devices_list");
@@ -111,6 +129,7 @@ describe("Devices Domain Handler", () => {
       expect(toolNames).toContain("ninjaone_devices_services");
       expect(toolNames).toContain("ninjaone_devices_alerts");
       expect(toolNames).toContain("ninjaone_devices_activities");
+      expect(toolNames).toContain("ninjaone_devices_os_patch_installs");
     });
 
     it("ninjaone_devices_get should require device_id", () => {
@@ -254,6 +273,73 @@ describe("Devices Domain Handler", () => {
 
         const data = JSON.parse(result.content[0].text);
         expect(data.activities).toHaveLength(1);
+      });
+    });
+
+    describe("ninjaone_devices_os_patch_installs", () => {
+      it("should query one device when device_id is given", async () => {
+        const result = await devicesHandler.handleCall("ninjaone_devices_os_patch_installs", {
+          device_id: 261,
+        });
+
+        expect(result.isError).toBeUndefined();
+        expect(mockDevicesGetOsPatchInstalls).toHaveBeenCalledTimes(1);
+        expect(mockDevicesListOsPatchInstalls).not.toHaveBeenCalled();
+        expect(mockDevicesGetOsPatchInstalls.mock.calls[0][0]).toBe(261);
+        expect(result.content[0].text).toContain("KB5094126");
+      });
+
+      it("should scope a tenant-wide query through df, not organizationId", async () => {
+        await devicesHandler.handleCall("ninjaone_devices_os_patch_installs", {
+          organization_id: 1,
+        });
+
+        expect(mockDevicesListOsPatchInstalls).toHaveBeenCalledTimes(1);
+        expect(mockDevicesListOsPatchInstalls.mock.calls[0][0]).toMatchObject({ df: "org = 1" });
+      });
+
+      it("should let an explicit device_filter win over organization_id", async () => {
+        await devicesHandler.handleCall("ninjaone_devices_os_patch_installs", {
+          organization_id: 1,
+          device_filter: "class = WINDOWS_WORKSTATION",
+        });
+
+        expect(mockDevicesListOsPatchInstalls.mock.calls[0][0]).toMatchObject({
+          df: "class = WINDOWS_WORKSTATION",
+        });
+      });
+
+      it("should convert ISO dates to epoch seconds", async () => {
+        await devicesHandler.handleCall("ninjaone_devices_os_patch_installs", {
+          device_id: 261,
+          installed_after: "2026-08-08",
+          installed_before: "2026-08-15T00:00:00Z",
+        });
+
+        expect(mockDevicesGetOsPatchInstalls.mock.calls[0][1]).toMatchObject({
+          installedAfter: Math.floor(Date.parse("2026-08-08T00:00:00Z") / 1000),
+          installedBefore: Math.floor(Date.parse("2026-08-15T00:00:00Z") / 1000),
+        });
+      });
+
+      it("should pass epoch seconds through unchanged", async () => {
+        await devicesHandler.handleCall("ninjaone_devices_os_patch_installs", {
+          device_id: 261,
+          installed_after: 1786000000,
+        });
+
+        expect(mockDevicesGetOsPatchInstalls.mock.calls[0][1]).toMatchObject({
+          installedAfter: 1786000000,
+        });
+      });
+
+      it("should drop an unparseable date rather than filter on NaN", async () => {
+        await devicesHandler.handleCall("ninjaone_devices_os_patch_installs", {
+          device_id: 261,
+          installed_after: "last tuesday",
+        });
+
+        expect(mockDevicesGetOsPatchInstalls.mock.calls[0][1].installedAfter).toBeUndefined();
       });
     });
 

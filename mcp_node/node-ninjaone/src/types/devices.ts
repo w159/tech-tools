@@ -209,6 +209,31 @@ export interface DeviceActivityListResponse {
 }
 
 /**
+ * One OS patch install record.
+ *
+ * Deliberately unpinned: NinjaOne's apidocs pages are JS-rendered and the
+ * response schema could not be read from them, so records pass through
+ * unshaped rather than being narrowed to guessed field names.
+ */
+export type OsPatchInstall = Record<string, unknown>;
+
+/**
+ * Filters for OS patch install queries.
+ *
+ * installedAfter and installedBefore are Unix epoch seconds. Tenant-wide
+ * scoping goes through `df` (NinjaOne's device filter, e.g. 'org = 1'):
+ * the /v2/queries/* endpoints have no organizationId parameter.
+ */
+export interface OsPatchInstallListParams {
+  df?: string;
+  status?: 'FAILED' | 'INSTALLED';
+  installedAfter?: number;
+  installedBefore?: number;
+  cursor?: string;
+  pageSize?: number;
+}
+
+/**
  * Device service
  */
 export interface DeviceService {

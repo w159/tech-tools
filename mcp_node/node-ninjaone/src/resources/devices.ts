@@ -12,6 +12,8 @@ import type {
   DeviceService,
   DeviceSoftware,
   DeviceInventory,
+  OsPatchInstall,
+  OsPatchInstallListParams,
 } from '../types/devices.js';
 
 /**
@@ -108,6 +110,34 @@ export class DevicesResource {
   }
 
   /**
+   * Get OS patch install history for one device (Windows only)
+   */
+  async getOsPatchInstalls(
+    id: number,
+    params?: Omit<OsPatchInstallListParams, 'df' | 'cursor'>
+  ): Promise<OsPatchInstall[]> {
+    const response = await this.httpClient.request<OsPatchInstall[] | { results?: OsPatchInstall[] }>(
+      `/v2/device/${id}/os-patch-installs`,
+      { params: this.buildListParams(params) }
+    );
+    return this.unwrapQueryResults(response);
+  }
+
+  /**
+   * Get OS patch install history across the tenant.
+   *
+   * Scope with `df` (device filter, e.g. 'org = 1'). This endpoint has no
+   * organizationId parameter, so passing one filters nothing.
+   */
+  async listOsPatchInstalls(params?: OsPatchInstallListParams): Promise<OsPatchInstall[]> {
+    const response = await this.httpClient.request<OsPatchInstall[] | { results?: OsPatchInstall[] }>(
+      '/v2/queries/os-patch-installs',
+      { params: this.buildListParams(params) }
+    );
+    return this.unwrapQueryResults(response);
+  }
+
+  /**
    * Get device services (Windows only)
    */
   async getServices(id: number): Promise<DeviceService[]> {
@@ -179,6 +209,15 @@ export class DevicesResource {
     await this.httpClient.request<void>(`/v2/device/${id}`, {
       method: 'DELETE',
     });
+  }
+
+  /**
+   * The /v2/queries/* endpoints answer with a { cursor, results } envelope,
+   * while their per-device counterparts answer with a bare array. Normalize
+   * both to an array so callers do not branch on tenant behavior.
+   */
+  private unwrapQueryResults<T>(response: T[] | { results?: T[] }): T[] {
+    return Array.isArray(response) ? response : (response?.results ?? []);
   }
 
   /**

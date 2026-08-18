@@ -1,5 +1,50 @@
 # Changelog
 
+## 5.12.0 (2026-08-18)
+
+NinjaOne can answer patch questions now.
+
+A BitLocker boot-failure investigation needed the OS patch history for five
+laptops, to tell "an update that got installed" apart from "an update that did
+not." The connector could not answer: its four domains (devices, organizations,
+alerts, tickets) wrap no part of the `/v2/queries/*` API, and the fallback,
+reading `ninjaone_devices_activities`, truncates at the 40,000-char cap while
+saturated with remote-session records, so it never reaches back a week.
+
+- **New tool `ninjaone_devices_os_patch_installs`** (`mcp_servers/ninjaone-mcp/src/domains/devices.ts`).
+  Pass `device_id` for one machine (`/v2/device/{id}/os-patch-installs`), or omit
+  it to query the tenant (`/v2/queries/os-patch-installs`). Filters:
+  `status` (INSTALLED/FAILED), `installed_after`, `installed_before`,
+  `organization_id` or `device_filter`, `limit`, `cursor`.
+- **Tenant scoping goes through `df`, not `organizationId`.** The `/v2/queries/*`
+  endpoints have no organizationId parameter, so passing one filters nothing and
+  returns a whole-tenant result that reads like a scoped one. The tool builds
+  `df: "org = <id>"` from `organization_id`, and an explicit `device_filter`
+  wins over it. A test pins this.
+- **Dates accept ISO 8601 or epoch seconds.** `installed_after: "2026-08-08"`
+  and `installed_after: 1786000000` both work. An unparseable date resolves to
+  `undefined` (filter dropped) rather than NaN, so a typo cannot silently return
+  an empty set that looks like a real answer.
+- **Patch records pass through unshaped.** NinjaOne's apidocs pages are
+  JS-rendered and the response schema could not be read from them, so no summary
+  function narrows the record to guessed field names. Callers use `fields`.
+- SDK `node-ninjaone` 1.3.0: `devices.getOsPatchInstalls()` and
+  `devices.listOsPatchInstalls()`. Both normalize the API's two response shapes,
+  a bare array and a `{ cursor, results }` envelope, to an array.
+- ninjaone-mcp 1.6.2 -> 1.6.3. Bundle rebuilt: 26 tools -> 27.
+
+Evidence: `npm run typecheck` clean; `vitest src/__tests__/domains/devices.test.ts`
+18 passed, 2 failed, both failures pre-existing on `81af28f` and unrelated
+(`ninjaone_devices_list` and `ninjaone_devices_activities` assert on a response
+shape the shared response-shaper no longer returns). The rebuilt `server.mjs`,
+copied alone into an empty directory with no `node_modules`, completes an MCP
+initialize handshake and returns 27 tools including
+`ninjaone_devices_os_patch_installs` with all ten schema properties.
+
+Known and not fixed here: `ninjaone_devices_activities` declares an
+`activity_type` property its handler never reads, so that filter is silently
+inert.
+
 ## 5.11.0 (2026-08-18)
 
 Terminal noise, measured and cut; and decisions that no longer scroll past.
