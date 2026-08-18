@@ -4,6 +4,47 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
+## 2026-08-18 -- atlas 5.11.0: cut the terminal noise, make decisions block
+
+Released as atlas 5.11.0 (`plugins/atlas/.claude-plugin/plugin.json:3`,
+`.kimi-plugin/plugin.json:3`).
+
+**The boot banner was the noise, and it was measurable.** `hooks/session_boot.py`
+emitted 9,820 bytes on every SessionStart. 10,874 chars of that was the memory block,
+because `scripts/atlas_memory.py:load_snapshot()` injected the whole of MEMORY.md, whose
+cap is 20,000 chars. The content: ~40 lines of `Tool 'Write' errored 2x in
+agent-a870d7a4169e4bb8b`, six near-identical copies of one user correction filed once per
+subagent scope, and fragments cut mid-word. New `filter_for_recall()` filters injection
+only and never the file -- drops tool-error telemetry and junk scopes (`agent-<hex>`,
+`.run`, `.atlas`), collapses near-duplicates by normalizing away the `(project)` qualifier,
+and caps at 8 entries / 1,200 chars newest-first. Measured after: SessionStart 9,820 ->
+3,649 bytes, memory block 10,874 -> 1,068 chars.
+
+**The junk was still being written.** `hooks/memory_capture.py` refuses subagent scopes,
+never captures tool-error tallies (the counts stay in atlas_db for atlas-audit; recall was
+their only consumer), truncates on a word boundary, and is unbound from `SubagentStop` in
+`hooks/hooks.json` -- per-dispatch capture is what produced one copy per agent, and the
+parent `Stop` already resolves subagent sessions.
+
+**Two Stop hooks narrated their own bookkeeping.** `memory_capture` announced "captured N
+memory fact(s)" on every Stop. additionalContext on Stop costs a whole model turn to say
+nothing, the same defect `nudge.py` carried until 5.9.0. Silent on success now.
+
+**Decisions stop the line.** `output-styles/atlas-orchestrator.md` asked for a
+`DECISION NEEDED:` label and only "preferred" AskUserQuestion; a label scrolls past in a
+fast-moving terminal. A decision that gates the next step now MUST go through
+AskUserQuestion and wait, up to three batched into one call. Prose is reserved for an FYI
+decision that does not gate the work and names the default already taken.
+`skills/atlas-orchestrate/SKILL.md` closes the other lost path: a subagent returning
+`DECISION NEEDED:` makes AskUserQuestion the orchestrator's very next action, before
+further dispatch or synthesis.
+
+Verification: `python3 -m pytest plugins/atlas/hooks plugins/atlas/scripts -q` -- 1136
+passed. New coverage: `RecallFilterTest` (8), `QuietTerminalContract` (5, including a hard
+byte ceiling on SessionStart so this cannot creep back), `DecisionsAreBlockingContract` (2).
+
+---
+
 ## 2026-08-18 -- atlas 5.10.0: no nested subagents, and stop sending a squad after a one-file change
 
 Released as atlas 5.10.0 (`plugins/atlas/.claude-plugin/plugin.json:3`,

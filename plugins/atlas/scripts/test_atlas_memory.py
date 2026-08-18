@@ -426,3 +426,75 @@ class TestAtlasMemory(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RecallFilterTest(unittest.TestCase):
+    """SessionStart used to inject all of MEMORY.md -- a measured 10,874-char
+    wall of text, mostly tool-error telemetry and the same lesson repeated once
+    per subagent scope. Nobody can read that as it scrolls. The file stays whole;
+    only what gets injected is filtered."""
+
+    def test_tool_error_telemetry_is_dropped(self):
+        entries = [
+            "Tool 'Write' errored 2x in tech-tools - check usage pattern",
+            "User correction (tech-tools): always push before claiming done",
+        ]
+        kept = atlas_memory.filter_for_recall(entries)
+        self.assertEqual(len(kept), 1)
+        self.assertTrue(kept[0].startswith("User correction"))
+
+    def test_subagent_scopes_are_dropped(self):
+        entries = [
+            "User correction (agent-a870d7a4169e4bb8b): x",
+            "User correction (.run): x",
+            "User correction (tech-tools): keep me",
+        ]
+        kept = atlas_memory.filter_for_recall(entries)
+        self.assertEqual(kept, ["User correction (tech-tools): keep me"])
+
+    def test_the_same_lesson_under_six_scopes_collapses_to_one(self):
+        """Near-dup collapse is what actually shrank the block: the copies differ
+        only in the (project) qualifier."""
+        entries = [
+            "User correction (%s): the rule the previous version failed to enforce" % scope
+            for scope in ("alpha", "beta", "gamma", "delta", "epsilon", "zeta")
+        ]
+        self.assertEqual(len(atlas_memory.filter_for_recall(entries)), 1)
+
+    def test_entry_count_is_capped(self):
+        entries = ["Assumption to avoid (p): distinct lesson %d" % i for i in range(40)]
+        self.assertLessEqual(
+            len(atlas_memory.filter_for_recall(entries)),
+            atlas_memory.RECALL_MAX_ENTRIES,
+        )
+
+    def test_total_chars_are_capped(self):
+        entries = ["Assumption to avoid (p): %s %d" % ("x" * 400, i) for i in range(20)]
+        kept = atlas_memory.filter_for_recall(entries)
+        total = sum(len(e) for e in kept)
+        self.assertLessEqual(total, atlas_memory.RECALL_MAX_CHARS + 400)
+
+    def test_newest_entries_win(self):
+        entries = ["Assumption to avoid (p): lesson %d" % i for i in range(20)]
+        kept = atlas_memory.filter_for_recall(entries)
+        self.assertIn("lesson 19", kept[0])
+
+    def test_one_oversized_entry_is_still_returned(self):
+        """Never return nothing just because the single newest entry is long."""
+        kept = atlas_memory.filter_for_recall(["User correction (p): " + "y" * 5000])
+        self.assertEqual(len(kept), 1)
+
+    def test_snapshot_shrinks_a_noisy_memory_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.dict(os.environ, {"ATLAS_HOME": tmp}):
+                for i in range(30):
+                    atlas_memory.add(
+                        "memory",
+                        "Tool 'Write' errored %dx in agent-%012x - check usage pattern"
+                        % (i + 3, i),
+                    )
+                atlas_memory.add("memory", "User correction (tech-tools): the real one")
+                snap = atlas_memory.load_snapshot()
+        self.assertIn("the real one", snap["memory"])
+        self.assertNotIn("errored", snap["memory"])
+        self.assertLess(len(snap["memory"]), 1500)

@@ -349,5 +349,41 @@
     "status": "verified",
     "verified_at": "2026-08-18T12:34:54+00:00",
     "verified_by": "deterministic contract suite"
+  },
+  {
+    "id": "ATLAS-5.11.0-boot-noise",
+    "surface": "claude-code-setup",
+    "category": "maintainability",
+    "severity": "high",
+    "title": "SessionStart injected all of MEMORY.md: 9820 bytes of mostly telemetry and per-subagent duplicates; now 3649",
+    "evidence": [
+      "plugins/atlas/scripts/atlas_memory.py filter_for_recall",
+      "plugins/atlas/hooks/memory_capture.py"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m pytest plugins/atlas/scripts/test_atlas_memory.py -k RecallFilter plugins/atlas/hooks/test_atlas_contract.py -k QuietTerminal -q",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-08-18T12:48:52+00:00",
+    "verified_by": "deterministic contract suite"
+  },
+  {
+    "id": "ATLAS-5.11.0-decisions-block",
+    "surface": "claude-code-setup",
+    "category": "reliability",
+    "severity": "high",
+    "title": "gating decisions must go through AskUserQuestion, not a DECISION NEEDED label that scrolls past",
+    "evidence": [
+      "plugins/atlas/output-styles/atlas-orchestrator.md",
+      "plugins/atlas/skills/atlas-orchestrate/SKILL.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m pytest plugins/atlas/hooks/test_atlas_contract.py -k DecisionsAreBlocking -q",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-08-18T12:48:52+00:00",
+    "verified_by": "deterministic contract suite"
   }
 ]

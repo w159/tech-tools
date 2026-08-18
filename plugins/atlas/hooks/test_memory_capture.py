@@ -332,6 +332,19 @@ class MemoryCaptureMainPathTest(unittest.TestCase):
     def _add_ok(target, content):
         return {"success": True}
 
+    def _recording_add(self):
+        """Capture is silent on success since 5.11.0 (a Stop-hook announcement
+        costs a model turn to narrate bookkeeping). The observable is the write
+        itself, not stdout."""
+        calls = []
+
+        def add(target, content):
+            calls.append((target, content))
+            return {"success": True}
+
+        self._atlas_memory.add = add
+        return calls
+
     @staticmethod
     def _add_fail(target, content):
         return {"success": False}
@@ -422,12 +435,12 @@ class MemoryCaptureMainPathTest(unittest.TestCase):
         )
         conn.commit()
         conn.close()
-        self._atlas_memory.add = self._add_ok
+        calls = self._recording_add()
         err, out = self._run_main(
             json.dumps({"session_id": "ok-sess", "cwd": "/repo/atlas"})
         )
-        self.assertIn("additionalContext", out)
-        self.assertIn("captured 1 memory fact", out)
+        self.assertEqual(out, "", "capture must be silent on success")
+        self.assertEqual([t for t, _ in calls], ["memory"])
 
     def test_capture_success_project_fact(self):
         conn, rid = self._seed_run("proj-sess")
@@ -436,12 +449,12 @@ class MemoryCaptureMainPathTest(unittest.TestCase):
         )
         conn.commit()
         conn.close()
-        self._atlas_memory.add = self._add_ok
+        calls = self._recording_add()
         err, out = self._run_main(
             json.dumps({"session_id": "proj-sess", "cwd": "/repo/atlas"})
         )
-        self.assertIn("additionalContext", out)
-        self.assertIn("1 project fact", out)
+        self.assertEqual(out, "", "capture must be silent on success")
+        self.assertEqual([t for t, _ in calls], ["project"])
 
     def test_add_returns_failure_no_context(self):
         conn, _ = self._seed_run("failret-sess")
@@ -600,8 +613,11 @@ class MemoryCaptureHelpersCoverageTest(unittest.TestCase):
         )
         self.assertTrue(any("parallelism" in f for f in proj_facts), proj_facts)
 
-    def test_extract_tool_error_patterns(self):
-        """Tool error patterns are captured only for non-trivial tools with ≥3 failures."""
+    def test_tool_error_tallies_are_never_captured_as_memory(self):
+        """Reversed in 5.11.0. A tally names no lesson and no action; its only
+        consumer was SessionStart recall, where 40+ lines of "Tool 'Write'
+        errored 2x in agent-a870d7a4169e4bb8b" buried every real lesson. The
+        counts still live in atlas_db for atlas-audit to query."""
         self._seed_run("tool-sess")
         # Insert 3 Write errors (non-trivial tool, ≥3 threshold)
         for i in range(3):
@@ -619,7 +635,7 @@ class MemoryCaptureHelpersCoverageTest(unittest.TestCase):
         mem_facts, _proj = memory_capture._extract_facts(
             self.conn, "tool-sess", "/repo/atlas"
         )
-        self.assertTrue(any("Tool 'Write'" in f for f in mem_facts), mem_facts)
+        self.assertEqual([f for f in mem_facts if "Tool '" in f], [])
 
     def test_extract_tool_error_trivial_tool_skipped(self):
         """Bash errors are NOT captured — Bash is a trivial tool where single
@@ -669,6 +685,20 @@ class MemoryCaptureLoopGuardTest(unittest.TestCase):
     the stop_hook_active loop guard, and the seen-hash dedupe that must
     survive both a repeat call and a different cwd (the project_name in the
     formatted fact string must not defeat the dedupe)."""
+
+
+    def _recording_add(self):
+        """Capture is silent on success since 5.11.0 (a Stop-hook announcement
+        costs a model turn to narrate bookkeeping). The observable is the write
+        itself, not stdout."""
+        calls = []
+
+        def add(target, content):
+            calls.append((target, content))
+            return {"success": True}
+
+        self._atlas_memory.add = add
+        return calls
 
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
@@ -765,11 +795,13 @@ class MemoryCaptureLoopGuardTest(unittest.TestCase):
         payload = {"session_id": "repeat-sess", "cwd": "/repo/atlas"}
         # Bypass the time throttle so this exercises the hash dedupe
         # specifically, not the blast-radius cap (covered separately below).
+        calls = self._recording_add()
         with mock.patch.object(atlas_hook_guard, "should_run", return_value=True):
-            _err1, out1 = self._run_main(payload)
-            _err2, out2 = self._run_main(payload)
-        self.assertIn("additionalContext", out1)
-        self.assertEqual(out2, "", f"expected silence on repeat, got: {out2!r}")
+            self._run_main(payload)
+            first = len(calls)
+            self._run_main(payload)
+        self.assertEqual(first, 1, "first call must capture the correction")
+        self.assertEqual(len(calls), 1, "repeat must be deduped, not re-captured")
 
     def test_same_snippet_different_cwd_announced_once(self):
         """The fact string embeds os.path.basename(cwd), so a naive dedupe on
@@ -778,16 +810,14 @@ class MemoryCaptureLoopGuardTest(unittest.TestCase):
         snippet = "Never edit files outside the assigned scope"
         self._seed_correction("agent-aaa-sess", snippet, message_uuid="m-a")
         self._seed_correction("agent-bbb-sess", snippet, message_uuid="m-b")
+        calls = self._recording_add()
         with mock.patch.object(atlas_hook_guard, "should_run", return_value=True):
-            _err1, out1 = self._run_main(
-                {"session_id": "agent-aaa-sess", "cwd": "/x/agent-aaa"}
-            )
-            _err2, out2 = self._run_main(
-                {"session_id": "agent-bbb-sess", "cwd": "/x/agent-bbb"}
-            )
-        self.assertIn("additionalContext", out1)
+            self._run_main({"session_id": "agent-aaa-sess", "cwd": "/x/agent-aaa"})
+            first = len(calls)
+            self._run_main({"session_id": "agent-bbb-sess", "cwd": "/x/agent-bbb"})
+        self.assertEqual(first, 1)
         self.assertEqual(
-            out2, "", f"expected the second subagent dir to stay silent, got: {out2!r}"
+            len(calls), 1, "the same snippet under a second cwd must not re-capture"
         )
 
     def test_throttle_blocks_second_call_within_window(self):
@@ -795,14 +825,15 @@ class MemoryCaptureLoopGuardTest(unittest.TestCase):
         within the throttle window must stay silent -- the blast-radius cap."""
         self._seed_correction("throttle-sess", "Prefer composition over inheritance")
         payload = {"session_id": "throttle-sess", "cwd": "/repo/atlas"}
-        _err1, out1 = self._run_main(payload)
-        self.assertIn("additionalContext", out1)
+        calls = self._recording_add()
+        self._run_main(payload)
+        self.assertEqual(len(calls), 1)
         # Second call, same window, no throttle bypass this time.
         self._seed_correction(
             "throttle-sess", "A different fact entirely", message_uuid="m2"
         )
-        _err2, out2 = self._run_main(payload)
-        self.assertEqual(out2, "", f"expected throttle to block, got: {out2!r}")
+        self._run_main(payload)
+        self.assertEqual(len(calls), 1, "throttle must block the second capture")
 
 
 class OuterMainGuardTest(unittest.TestCase):

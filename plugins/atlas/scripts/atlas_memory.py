@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
 from contextlib import contextmanager
 from datetime import datetime
@@ -194,6 +195,68 @@ def _rotate_to_fit(target: str, entries: List[str]) -> Dict[str, Any]:
     return {"entries": working, "rotated": rotated, "dropped": False}
 
 
+# --- Recall filtering -------------------------------------------------------
+# MEMORY.md holds up to WORKING_CAP_CHARS. load_snapshot used to inject ALL of
+# it into every SessionStart: a measured 10,874-char wall of text, most of it
+# "Tool 'Write' errored 2x in agent-a870d7a4169e4bb8b" telemetry and six
+# near-identical copies of the same user correction, one per subagent scope.
+# Nobody can read that as it scrolls past, and it buries anything that matters.
+# The file stays whole; only what gets INJECTED is filtered and capped.
+
+RECALL_MAX_ENTRIES = 8
+RECALL_MAX_CHARS = 1200
+
+# Tool-error tallies are already in atlas_db, queryable by atlas-audit. As a
+# recall line they are pure noise: they name no lesson and no action.
+_NOISE_PREFIXES = ("Tool '",)
+
+# Scope names that are not projects. A subagent's cwd basename becomes its
+# "project", so lessons got filed under agent-<hex> and .run.
+_JUNK_SCOPE = re.compile(r"^(agent-[0-9a-f]{6,}|\.run|\.atlas)$")
+
+
+def _scope_of(entry: str) -> str:
+    """The `(project)` qualifier a captured entry carries, or ''."""
+    m = re.match(r"^[^(\n]{0,60}\(([^)\n]{1,80})\):", entry)
+    return m.group(1).strip() if m else ""
+
+
+def _dedupe_key(entry: str) -> str:
+    """Collapse near-duplicates: the same lesson captured under six different
+    subagent scopes differs ONLY in its `(project)` qualifier. Strip that, fold
+    whitespace, and the six become one."""
+    stripped = re.sub(r"\(([^)\n]{1,80})\):", ":", entry, count=1)
+    return " ".join(stripped.split()).lower()[:160]
+
+
+def filter_for_recall(entries: List[str]) -> List[str]:
+    """What actually gets injected at SessionStart: newest first, junk scopes and
+    tool-error telemetry dropped, near-duplicates collapsed, hard-capped by both
+    entry count and total chars."""
+    kept: List[str] = []
+    seen = set()
+    total = 0
+    for entry in reversed(entries):  # newest first
+        text = entry.strip()
+        if not text:
+            continue
+        if text.startswith(_NOISE_PREFIXES):
+            continue
+        if _JUNK_SCOPE.match(_scope_of(text)):
+            continue
+        key = _dedupe_key(text)
+        if key in seen:
+            continue
+        if total + len(text) > RECALL_MAX_CHARS and kept:
+            break
+        seen.add(key)
+        kept.append(text)
+        total += len(text)
+        if len(kept) >= RECALL_MAX_ENTRIES:
+            break
+    return kept
+
+
 def load_snapshot() -> Dict[str, str]:
     """Load memory entries and return a rendered snapshot for injection.
 
@@ -206,9 +269,10 @@ def load_snapshot() -> Dict[str, str]:
     memory_entries = _read_file(mem_dir / "MEMORY.md")
     project_entries = _read_file(mem_dir / "PROJECT.md")
 
-    # Deduplicate preserving order
-    memory_entries = list(dict.fromkeys(memory_entries))
-    project_entries = list(dict.fromkeys(project_entries))
+    # Exact dedupe first, then the recall filter (junk scopes, telemetry lines,
+    # near-duplicates, hard cap). The files on disk are untouched.
+    memory_entries = filter_for_recall(list(dict.fromkeys(memory_entries)))
+    project_entries = filter_for_recall(list(dict.fromkeys(project_entries)))
 
     return {
         "memory": _render_block("MEMORY", memory_entries),
