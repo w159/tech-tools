@@ -454,24 +454,25 @@
     "verified_by": "deterministic domain tests"
   },
   {
-    "id": "ATLAS-5.12.0-node-ninjaone-untestable",
+    "id": "ATLAS-5.13.0-node-ninjaone-untestable",
     "surface": "mcp-connector-ninjaone",
     "category": "test-coverage",
     "severity": "medium",
-    "title": "node-ninjaone's committed test suite cannot run: msw and vitest absent from devDependencies",
+    "title": "node-ninjaone shipped a test suite and a vitest config with no way to run either: msw and vitest absent from devDependencies, empty scripts block",
     "evidence": [
       "mcp_node/node-ninjaone/package.json",
-      "mcp_node/node-ninjaone/tests/"
+      "mcp_node/node-ninjaone/tests/",
+      "mcp_node/node-ninjaone/tests/integration/resources.test.ts"
     ],
     "doc_refs": [
       "docs/CHANGELOG.md"
     ],
-    "reproduction": "cd mcp_node/node-ninjaone && npx vitest run  # vitest not installed",
-    "proposed_fix": "add msw and vitest to devDependencies; deferred to avoid node_modules churn under iCloud",
+    "reproduction": "cd mcp_node/node-ninjaone && npm test  # 10 files, 94 passed",
+    "proposed_fix": "",
     "blast_radius": "module",
-    "status": "open",
-    "verified_at": "2026-08-18T15:07:09+00:00",
-    "verified_by": "package.json inspection"
+    "status": "verified",
+    "verified_at": "2026-08-18T15:37:18+00:00",
+    "verified_by": "npm test: 10 files, 94 passed"
   },
   {
     "id": "ATLAS-5.13.0-ninjaone-annotation-mislabel",

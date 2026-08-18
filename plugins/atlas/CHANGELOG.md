@@ -69,6 +69,18 @@ a write despite being a pure read. Both now carry explicit classifications,
 with a test that fails if any future tool whose name implies mutation lands
 in the read class.
 
+**Fixed: node-ninjaone's test suite could not run.** The package shipped nine
+test files, a `vitest.config.ts`, and an empty `scripts` block, with `msw` and
+`vitest` absent from devDependencies. Added both (plus
+`@vitest/coverage-v8`, which the config's coverage provider needs) and a
+`scripts` block with `build`, `typecheck`, `test`, `test:watch`. The existing
+82 tests pass unchanged; they were never broken, just unreachable. A tenth file,
+`tests/integration/resources.test.ts`, covers what the MCP-layer tests
+structurally cannot: that `queries`, `automation`, and `directory` are actually
+reachable on `NinjaOneClient` and that each method hits its documented path.
+That is the exact failure mode this release hit, where a resource compiled and
+tested green while being absent from the client at runtime. Suite: 94 passed.
+
 Gate: `tsc --noEmit` clean. Suite 142 passed / 11 failed, against a
 pre-change baseline of 94 passed / 11 failed -- 48 tests added, zero new
 failures. The 11 are pre-existing mock-shape mismatches in `client.test.ts`
@@ -82,12 +94,9 @@ client library is a removal: `devices.getOsPatchInstalls` and
 `unwrapQueryResults` helper they orphaned. `QueriesResource` owns that
 endpoint now, so the device-vs-tenant branch exists in one place.
 
-**Not fixed, and worth knowing:** `node-ninjaone`'s own test suite still
-cannot run as committed -- `msw` and `vitest` are absent from its
-devDependencies. All new coverage therefore lives at the ninjaone-mcp domain
-layer. Every green check above is against mocks and a handshake; the `df`
-grammar, the `status` enum values, and the epoch-seconds parameter names
-have never touched the real API.
+**Worth knowing:** every green check above is against mocks and a handshake.
+The `df` grammar, the `status` enum values, and the epoch-seconds parameter
+names have never touched the real API.
 
 
 ## 5.12.0 (2026-08-18)
