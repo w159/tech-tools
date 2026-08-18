@@ -7,7 +7,7 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 ## 2026-08-18 -- atlas 5.13.0: the NinjaOne connector listed tools it could not call
 
 Released as atlas 5.13.0 (`plugins/atlas/.claude-plugin/plugin.json:3`,
-`.kimi-plugin/plugin.json:3`), ninjaone-mcp 1.7.0, node-ninjaone 1.3.0.
+`.kimi-plugin/plugin.json:3`), ninjaone-mcp 1.7.0, node-ninjaone 1.4.0.
 
 **Root cause of "tools that do not work."** `mcp_servers/ninjaone-mcp/src/index.ts`
 routed `tools/call` through four hardcoded `name.startsWith("ninjaone_<domain>_")`
@@ -38,6 +38,12 @@ nothing while returning a whole-tenant result that reads scoped. Unparseable
 mutating state, and `ninjaone_queries_run` was marked a write because its name
 contains "run". Explicit overrides plus `src/__tests__/annotations.test.ts`,
 which fails if a mutation-implying name lands in the read class.
+
+**Supersedes 5.12.0's placement.** `ninjaone_devices_os_patch_installs` moved
+from the devices domain to queries and shares one routing path with
+`ninjaone_queries_run`. The duplicate client methods
+`devices.getOsPatchInstalls` / `listOsPatchInstalls` and their orphaned
+`unwrapQueryResults` helper are removed (node-ninjaone 1.4.0).
 
 **Deliberately unshaped.** NinjaOne apidocs are JS-rendered and return nothing, so
 response field names for the new endpoints are unverifiable. Records pass through
