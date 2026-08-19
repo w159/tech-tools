@@ -65,7 +65,7 @@ describe('DevicesResource', () => {
 
   describe('reboot', () => {
     it('should reboot a device', async () => {
-      await expect(client.devices.reboot(101, 'Maintenance')).resolves.toBeUndefined();
+      await expect(client.devices.reboot(101, 'NORMAL', 'Maintenance')).resolves.toBeUndefined();
     });
   });
 

@@ -21,5 +21,16 @@ export {
   NinjaOneServerError,
 } from './errors.js';
 
+// Request/response types owned by resource modules
+export type {
+  RebootMode,
+  ServiceAction,
+  PatchType,
+  PatchAction,
+  RunScriptBody,
+  MaintenanceWindow,
+} from './resources/devices.js';
+export type { JobListParams } from './resources/automation.js';
+
 // Types
 export * from './types/index.js';

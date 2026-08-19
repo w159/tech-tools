@@ -1,5 +1,137 @@
 # Changelog
 
+## 5.15.0 (2026-08-19)
+
+The NinjaOne connector reported a permissions problem that did not exist.
+Five endpoints were transcribed wrong, and the error envelope blamed
+credentials for every failure including a 404. See the full write-up in
+`docs/CHANGELOG.md` under the same date.
+
+- `plugins/atlas/mcp/ninjaone/server.mjs` rebuilt: ninjaone-mcp 1.7.0 -> 1.8.0,
+  39 tools -> 45. New: `ninjaone_devices_patch_run` (OS and third-party patch
+  scan/apply), `ninjaone_devices_service_control`, `ninjaone_devices_search`,
+  `ninjaone_activities_list`, `ninjaone_tasks_list`,
+  `ninjaone_vulnerability_scan_groups`.
+- Corrected: the script catalog path (`/v2/automation/scripts`, not
+  `/v2/scripts`), the script-run body (`{type, id, uid}`, not `{scriptId}`),
+  the reboot mode path segment, `scripting/options`, and the maintenance verb
+  (PUT with a required `end`).
+- `ninjaone_devices_inventory` covers 15 sub-resources (was 9);
+  `ninjaone_queries_run` covers all 24 fleet queries (was 13), each described
+  on the schema.
+- `ninjaone_devices_list`: `device_class` and `online` were declared but never
+  sent, so a filtered request returned the whole tenant. All filters now compile
+  into a `df` expression, and pagination uses `after` (the param the endpoint
+  actually takes) instead of an inert `cursor`.
+- `mcp_servers/_shared/error-envelope.ts`: a NOT_FOUND now carries an explicit
+  "this is not a credentials or permissions failure" hint. Applies to all ten
+  connectors at source; only the ninjaone bundle was rebuilt here.
+
+Evidence: node-ninjaone 111 tests passed; ninjaone-mcp 162 passed with the same
+11 pre-existing failures as `6df018c`; _shared 66 passed; connector-wiring and
+atlas-contract suites 82 passed, 3 skipped; the rebuilt bundle handshakes
+standalone as ninjaone-mcp 1.8.0 with 45 tools.
+
+## 5.14.0 (2026-08-19)
+
+Atlas talked too much and tracked too little.
+
+**The noise.** Every routine event had a voice. `format_after_edit.py`
+announced "auto-formatted X with ruff" on every successful edit;
+`prompt_optimizer.py` printed a two-line colored stderr banner on every
+optimized prompt; `session_boot.py` opened each session with eight lines of
+methodology recital plus a per-dependency status line for claude-mem,
+context-mode, and ponytail *whether present or absent*, capped at 9000
+characters. None of it was actionable. That volume is not neutral: a user who
+learns atlas output is skimmable stops reading the one line that is a real
+blocker.
+
+The rule is now uniform - an advisory hook says nothing on the happy path:
+
+- `format_after_edit.py` is silent on success. A formatter that ran is not news.
+- `prompt_optimizer.py`'s banner is opt-in via `ATLAS_OPTIMIZE_VERBOSE` (was
+  opt-out via `ATLAS_OPTIMIZE_QUIET`), and is one line when it does fire.
+- `session_boot.py` emits one posture line plus a single `Setup gap:` line
+  naming only what is actually missing. Nothing missing, nothing said. The boot
+  block is capped at 3000 chars and the memory snapshot at 700.
+- `dispatch_tripwire.py`'s advisories and `docs_drift_watch.py`'s drift warning
+  keep their content and lose their padding.
+
+`NoiseContract` in `hooks/test_atlas_contract.py` pins each of these, so the
+next hook that decides to narrate itself fails the suite.
+
+**The todo list.** The orchestrator had no user-visible progress surface and no
+mechanical guard against dropping a stage. `TodoWrite` is now mandatory: the
+stage map is mirrored into it at plan time (one todo per stage), an item flips
+to `completed` only when its `findings.json` entry reads `verified`, and
+re-reading the list is step 1 of the close-out. `TodoWrite` and
+`AskUserQuestion` join the skill's `allowed-tools`, since mandating a forbidden
+tool is a dead rule.
+
+**Mid-run steering.** A user message arriving during a wave is classified before
+it is acted on: a correction (stop the affected work now), new scope (insert
+into the todo list at its dependency position), or a process change (apply from
+the next wave on). Ambiguity between correction and new scope routes to
+`AskUserQuestion`.
+
+**Worktree close-out.** Waves with more than one writer get
+`isolation: "worktree"`, and a worktree containing changes does not clean itself
+up. The done gate now requires merging each one into the local branch, removing
+it, then *offering* the push. Pushing on atlas's own initiative was never
+allowed and is now stated where the gate can be read.
+
+**Enforcement, not prose.** The todo, worktree, and docs-drift rules above
+would otherwise have been markdown that only a compliant model obeys. Three
+mechanisms now carry them, all fail-open like every sibling condition:
+
+- **Condition (i), todo drain.** `completion_gate.py` reads `transcript_path`
+  for the run's most recent `TodoWrite` tool_use. TodoWrite rewrites the whole
+  list every call, so the last one is current state. A run that shipped code and
+  still holds non-`completed` items is blocked. A run with no todo list at all
+  passes: (i) enforces draining a list, not creating one, and demanding a todo
+  list for a two-line change is the busywork this plugin exists to avoid.
+- **Condition (j), worktree close-out.** `dispatch_tripwire.py` records
+  `isolation: "worktree"` on any dispatch via the new `runs.used_worktrees`
+  column, and the gate blocks when that flag is set *and* `git worktree list`
+  still shows trees beyond the main one. Scoped to this run's own dispatches on
+  purpose: a gate that fires on the user's long-lived worktrees is the false
+  positive that teaches people to ignore gates.
+- **Condition (f) cross-check.** (f)'s signal is `run_changed_paths`, fed by
+  tool calls carrying a `file_path`. A docs file written by a Bash-invoked
+  script produces none, so a run whose docs were genuinely current was blocked
+  for drift twice while shipping this very release. The gate now cross-checks
+  `git` before blocking. The suppression is one-directional (it can only prevent
+  a false block); the cost is that stale docs edits from an earlier session can
+  mask real drift, which is the cheaper failure.
+
+The (f) fix carries a red->green capture on live session state
+(`.atlas/evidence/2026-08-19-gate-f-cross-check.md`): the same payload, same
+session, same docs state, blocked by installed 5.13.0 on `(f)` and passing
+silently on the repo copy. Conditions (i) and (j) were inert during that capture
+and stay fixture-verified only.
+
+Mid-run steering classification stays instruction-layer: no hook can tell a
+correction from new scope, because that is a judgment about intent.
+
+Each mechanism is pinned by fixture-driven tests (`OpenTodosTest`,
+`LeftoverWorktreeTest`, `GateConditionIJTest`, `DocsMovedInGitTest`,
+`WorktreeFlagTest`) and each was mutation-checked: disabling the condition in
+the hook makes its test fail.
+
+**Subagent tiers and colors.** `docs-auditor` and `naming-glossary-audit`
+dropped to haiku - both read and report, neither renders a judgment. `verifier`
+and `completeness-critic` stay sonnet/medium on purpose: cheapening the
+adversarial pass works against the reason the noise was cut. Colors are assigned
+by role family (cyan discovery, blue planning, green code writes, purple docs
+writes, pink runtime testing, yellow/orange probe and audit, red verdict) and
+pinned to Claude Code's eight-color palette. That palette is a closed set, not a
+style preference: the frontmatter value is a key into the CLI's own map
+(`{red:"red",...,purple:"magenta",orange:"colour208",pink:"colour205",cyan:"cyan"}`),
+so a value outside it misses the map and the dispatch renders uncolored.
+`ui-runtime-tester` had been set to `magenta`, which appears in that map only as
+a value (what `purple` resolves to), never as a key - so it was rendering
+uncolored. Moved to `pink`.
+
 ## 5.13.0 (2026-08-18)
 
 The NinjaOne connector could list tools it could not call, and covered a

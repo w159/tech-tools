@@ -4,6 +4,240 @@ Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
 
 ---
 
+## 2026-08-19 -- ninjaone-mcp 1.8.0: five endpoints were wrong, and the 404s read as a permissions problem
+
+An agent reported that the NinjaOne connector "can only list scripts" and that
+the API app's permissions needed updating. Neither was true. Five endpoints
+were transcribed wrong, and the error envelope told the agent to blame
+credentials for every failure including a 404.
+
+**The five wrong endpoints**, each checked against `NinjaRMM-API-v2.json`:
+
+| Tool | 1.7.0 sent | The spec says |
+|---|---|---|
+| `ninjaone_scripts_list` | `GET /v2/scripts` | `GET /v2/automation/scripts` -- `/v2/scripts` does not exist |
+| `ninjaone_devices_script_run` | body `{scriptId, parameters, runAs}` | `{type: SCRIPT\|ACTION, id, uid, parameters, runAs}` |
+| `ninjaone_devices_reboot` | `POST /v2/device/{id}/reboot` | `POST /v2/device/{id}/reboot/{NORMAL\|FORCED}` -- mode is a path segment |
+| `ninjaone_devices_inventory` kind=`scripting-options` | `/v2/device/{id}/scripting-options` | `/v2/device/{id}/scripting/options` |
+| `ninjaone_devices_maintenance` | `POST /maintenance`, no body | `PUT /maintenance` with a required `end` |
+
+Windows service start/stop/restart were also wrong: the SDK called
+`/windows-service/{name}/start`, `/stop` and `/restart`, none of which exist.
+The spec has one `POST /windows-service/{serviceId}/control` with the verb in
+the body.
+
+Live red evidence, this session, against the installed 1.7.0 bundle:
+
+```
+ninjaone_scripts_list
+-> {"code":"NOT_FOUND","message":"ninjaone_scripts_list failed: HTTP 404",
+    "hint":"Verify NINJAONE_CLIENT_ID, NINJAONE_CLIENT_SECRET, and NINJAONE_REGION are set."}
+```
+
+That hint is the second defect. Every handler passed a fixed credentials hint
+regardless of status, so an agent reading a wrong-path 404 concluded the API
+app lacked permissions and told the user to change them. `toolErrorFromCatch`
+in `mcp_servers/_shared/error-envelope.ts` now overrides the hint on
+`NOT_FOUND` with an explicit "this is NOT a credentials or permissions failure,
+do not tell the user to change API permissions", keeping the caller's hint
+appended. This applies to all ten connectors at source. Only the ninjaone bundle was rebuilt this session, so the
+other nine pick the change up on their next rebuild.
+
+**New capability.** 39 tools to 45, and the existing tools reach far more of the
+API:
+
+- `ninjaone_devices_patch_run` -- OS and third-party patch scan and apply
+  (`POST /v2/device/{id}/patch/{os|software}/{scan|apply}`), the four endpoints
+  that make patching actionable rather than read-only.
+- `ninjaone_devices_service_control` -- START/STOP/PAUSE/RESTART a Windows service.
+- `ninjaone_devices_search` -- free-text lookup by hostname, user or IP, so an
+  agent can resolve a name to the numeric `device_id` every other tool needs.
+- `ninjaone_activities_list` -- the tenant-wide activity log, which is where a
+  script's actual result lands.
+- `ninjaone_tasks_list` -- scheduled tasks.
+- `ninjaone_vulnerability_scan_groups` -- scan groups. Scope note stated in the
+  tool description: the public v2 API exposes scan-group configuration only,
+  not per-device CVE findings. Real vulnerability posture comes from
+  `os-patches` (severity=CRITICAL), `software-patches` and `antivirus-threats`.
+- `ninjaone_devices_inventory` -- 9 kinds to 15, adding `software-patches`,
+  `os-patch-installs`, `software-patch-installs`, `jobs`, `policy/overrides`,
+  `windows-services`, and the corrected `scripting/options`. Patch kinds now
+  forward `status`, `type` and `severity`, which were previously undeclared.
+- `ninjaone_queries_run` -- 13 query names to all 24 in the spec, adding
+  `antivirus-threats`, `device-health`, `software-patches`,
+  `software-patch-installs`, `raid-controllers`, `raid-drives`, `backup/usage`,
+  the detailed and scoped custom-field variants, and `windows-services`. Each
+  is described in one line on the tool schema so an agent can pick one without
+  reading the REST docs, and `severity`/`type`/`productName`/`productState`
+  filters are forwarded.
+- `ninjaone_devices_script_run` -- gained `type` and `action_uid`, so built-in
+  actions (the "run a command" surface) are reachable, not just catalog scripts.
+- `ninjaone_devices_reboot` -- gained `mode`.
+- `ninjaone_devices_maintenance` -- gained `end`, `start`, `disabled_features`
+  and `reason`; `action=start` without `end` is now rejected locally instead of
+  being refused by the API.
+
+**A third inert-parameter defect, same class as the two recorded in `6df018c`.**
+`ninjaone_devices_list` declared `device_class` and `online`, logged them, and
+never sent them: `/v2/devices` accepts no such params, so a
+`device_class=WINDOWS_SERVER` request returned the whole tenant and read like a
+scoped answer. Its `cursor` param was inert for the same reason, since that
+endpoint pages by `after` (last device ID). All three filters now compile into
+one `df` expression, `cursor` is replaced by `after`, and `device_filter` lets a
+caller write the df directly. A regression test pins the compiled expression.
+
+Tool descriptions were rewritten to say what an agent should reach for and in
+what order: which tool yields the ID the next one needs, when a fleet query
+beats a per-device loop, and that a script run returns when queued rather than
+when finished.
+
+**SDK** (`mcp_node/node-ninjaone` 1.4.0 -> 1.5.0): the five path/body fixes,
+`controlService` replacing the three phantom per-verb methods, plus
+`getScriptingOptions`, `runPatchAction`, `getActiveJobs`, `getPolicyOverrides`,
+`resetPolicyOverrides`, `getDashboardUrl`, `search`, `listDetailed`,
+`automation.listTasks`, and a new `VulnerabilityResource`.
+`getInventoryByKind` now forwards query params and accepts multi-segment tails.
+
+**Docs.** `docs/vendors/ninjaone/api-reference.md` listed `/scripts`, the
+`{scriptId}` body and `POST /maintenance` -- the code was written from that
+table, so the table was corrected and the 16 missing endpoints added.
+
+Evidence:
+
+- Red: the live `ninjaone_scripts_list` 404 above, against installed 1.7.0.
+- `mcp_node/node-ninjaone`: `npm run typecheck` clean, `npm test` 111 passed
+  (was 94). 17 new msw tests assert one spec-verified path per endpoint;
+  `onUnhandledRequest: 'error'` means a drifted path fails the suite.
+- `mcp_servers/ninjaone-mcp`: `npm run typecheck` clean, `npm test` 162 passed /
+  11 failed. The same 11 fail on `6df018c` with this change stashed (response-
+  shaper and credential-resolution assertions, unrelated); baseline was 142
+  passed / 11 failed.
+- `mcp_servers/_shared`: 66 passed / 0 failed, including two new tests pinning
+  the 404 hint override.
+- `plugins/atlas/mcp/ninjaone/server.mjs` rebuilt with esbuild (bundled ESM,
+  minified, no `node_modules`). Copied alone into an empty directory it
+  completes an MCP initialize handshake as `ninjaone-mcp 1.8.0` and returns 45
+  tools, with `ninjaone_devices_inventory` offering 15 kinds and
+  `ninjaone_queries_run` 24 queries.
+- `python3 -m pytest plugins/atlas/scripts/test_connectors_wiring.py
+  plugins/atlas/hooks/test_atlas_contract.py -q`: 82 passed, 3 skipped.
+
+UNVERIFIED - needs user retest: no live API call was made against the corrected
+paths. The MCP server in this session still runs the old 1.7.0 bundle until
+Claude Code restarts, and the write paths (script run, reboot, patch apply,
+service control, maintenance) must not be smoke-tested against production
+endpoints. After a restart, `ninjaone_scripts_list` should return the script
+catalog instead of HTTP 404.
+
+---
+
+## 2026-08-19 -- atlas 5.14.0: the plugin talked too much and tracked too little
+
+Released as atlas 5.14.0 (`plugins/atlas/.claude-plugin/plugin.json:3`).
+
+**Noise.** Every routine event had a voice, and none of it was actionable.
+`format_after_edit.py` printed "auto-formatted X with ruff" on every successful
+edit; `prompt_optimizer.py` printed a two-line colored stderr banner on every
+optimized prompt; `session_boot.py` opened each session with eight lines of
+methodology recital plus a status line for claude-mem, context-mode, and
+ponytail *whether present or absent*, capped at 9000 characters. Volume is not
+neutral: a user who learns atlas output is skimmable stops reading the one line
+that is a real blocker.
+
+The rule is now uniform, and an advisory hook says nothing on the happy path.
+`format_after_edit.py:118-121` returns silently on success. The optimizer banner is
+opt-in via `ATLAS_OPTIMIZE_VERBOSE` (was opt-out via `ATLAS_OPTIMIZE_QUIET`) and
+is one line when it fires (`hooks/prompt_optimizer.py:458-489`).
+`session_boot.py:466-486` emits one posture line plus a single `Setup gap:` line
+naming only what is missing, capped at 3000 chars with the memory snapshot cut
+at 700 on a record boundary. `dispatch_tripwire.py` and `docs_drift_watch.py`
+keep their content and lose their padding. Measured: the boot block went from
+~5k chars to 1,744.
+
+**The todo list.** The orchestrator had no user-visible progress surface and no
+mechanical guard against dropping a stage. `TodoWrite` is now mandatory in
+`plugins/atlas/skills/atlas-orchestrate/SKILL.md:92-109`: the stage map mirrors
+into it at plan time, an item flips to `completed` only when its
+`findings.json` entry reads `verified`, and re-reading the list is close-out
+step 1. `TodoWrite` and `AskUserQuestion` were added to the skill's
+`allowed-tools`, since mandating a forbidden tool is a dead rule.
+
+**Mid-run steering.** A user message arriving during a wave is classified before
+it is acted on (`SKILL.md:111-123`): a correction stops the affected work now,
+new scope is inserted into the todo list at its dependency position, a process
+change applies from the next wave. Ambiguity routes to `AskUserQuestion`.
+
+**Worktree close-out.** Waves with more than one writer get
+`isolation: "worktree"`, and a worktree containing changes does not clean itself
+up. The done gate (`SKILL.md:174-192`) now requires committing inside a dirty
+worktree first, merging into the local branch, removing the tree, then
+*offering* the push. Pushing on atlas's own initiative was never allowed and is
+now stated where the gate can be read.
+
+**Enforcement, not prose.** The todo, worktree, and docs-drift rules above
+would otherwise have been markdown that only a compliant model obeys. Three
+mechanisms now carry them, all fail-open like every sibling condition:
+
+- **Condition (i), todo drain.** `completion_gate.py` reads `transcript_path`
+  for the run's most recent `TodoWrite` tool_use. TodoWrite rewrites the whole
+  list every call, so the last one is current state. A run that shipped code and
+  still holds non-`completed` items is blocked. A run with no todo list at all
+  passes: (i) enforces draining a list, not creating one, and demanding a todo
+  list for a two-line change is the busywork this plugin exists to avoid.
+- **Condition (j), worktree close-out.** `dispatch_tripwire.py` records
+  `isolation: "worktree"` on any dispatch via the new `runs.used_worktrees`
+  column, and the gate blocks when that flag is set *and* `git worktree list`
+  still shows trees beyond the main one. Scoped to this run's own dispatches on
+  purpose: a gate that fires on the user's long-lived worktrees is the false
+  positive that teaches people to ignore gates.
+- **Condition (f) cross-check.** (f)'s signal is `run_changed_paths`, fed by
+  tool calls carrying a `file_path`. A docs file written by a Bash-invoked
+  script produces none, so a run whose docs were genuinely current was blocked
+  for drift twice while shipping this very release. The gate now cross-checks
+  `git` before blocking. The suppression is one-directional (it can only prevent
+  a false block); the cost is that stale docs edits from an earlier session can
+  mask real drift, which is the cheaper failure.
+
+The (f) fix carries a red->green capture on live session state
+(`.atlas/evidence/2026-08-19-gate-f-cross-check.md`): the same payload, same
+session, same docs state, blocked by installed 5.13.0 on `(f)` and passing
+silently on the repo copy. Conditions (i) and (j) were inert during that capture
+and stay fixture-verified only.
+
+Mid-run steering classification stays instruction-layer: no hook can tell a
+correction from new scope, because that is a judgment about intent.
+
+Each mechanism is pinned by fixture-driven tests (`OpenTodosTest`,
+`LeftoverWorktreeTest`, `GateConditionIJTest`, `DocsMovedInGitTest`,
+`WorktreeFlagTest`) and each was mutation-checked: disabling the condition in
+the hook makes its test fail.
+
+**Subagent tiers and colors.** `docs-auditor` and `naming-glossary-audit`
+dropped to haiku; both read and report, neither renders a judgment. `verifier`
+and `completeness-critic` stay sonnet/medium on purpose, because cheapening the
+adversarial pass works against the reason the noise was cut. Colors are assigned
+by role family (cyan discovery, blue planning, green code writes, purple docs
+writes, pink runtime testing, yellow/orange probe and audit, red verdict) and
+pinned to Claude Code's eight-color palette. That palette is a closed set, not a
+style preference: the frontmatter value is a key into the CLI's own color map
+(`{red:"red",...,purple:"magenta",orange:"colour208",pink:"colour205",cyan:"cyan"}`,
+confirmed by grepping the shipped binary), so a value outside it misses the map
+and the dispatch renders uncolored. `ui-runtime-tester` had been set to
+`magenta`, which appears in that map only as a value (what `purple` resolves to)
+and never as a key, so it was rendering uncolored. Moved to `pink`.
+
+**Verification.** `hooks/test_atlas_contract.py` gained `NoiseContract` and
+`OrchestrationContract` (11 checks) so the next hook that narrates itself, or a
+dropped todo/worktree rule, fails the suite. Full run:
+`python3 -m pytest -q` in `plugins/atlas/hooks` -> 578 passed, 3 skipped, 67
+subtests. The 3 skips are `InstalledParityContract`, which is inert until the
+plugin is reinstalled at 5.14.0.
+
+**Known gap.** Nothing above is live until the plugin reinstalls; the running
+copy is 5.13.0.
+
+---
+
 ## 2026-08-18 -- atlas 5.13.0: the NinjaOne connector listed tools it could not call
 
 Released as atlas 5.13.0 (`plugins/atlas/.claude-plugin/plugin.json:3`,

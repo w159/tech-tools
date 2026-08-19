@@ -101,12 +101,12 @@ type DomainName = "devices" | "organizations" | "alerts" | "tickets" | "queries"
  * Domain metadata for discovery
  */
 const domainDescriptions: Record<DomainName, string> = {
-  devices: "Device management - manage endpoints, reboot systems, view services, and get device alerts/activities",
+  devices: "Device management - find and inspect endpoints, run scripts, scan and apply patches, control Windows services, reboot, schedule maintenance, and read per-device hardware, software, patch and job inventory",
   organizations: "Organization management - manage customer accounts, locations, and view organization devices",
   alerts: "Alert management - view, reset, and summarize monitoring alerts across devices and organizations",
   tickets: "Ticket management - create, update, comment on, and track service tickets",
-  queries: "Cross-org reporting - fleet-wide patch, software, hardware, and antivirus queries without per-device fan-out",
-  automation: "Automation - script catalog and scheduled/running job visibility",
+  queries: "Cross-org reporting - 24 fleet-wide queries covering patch compliance, software and hardware inventory, antivirus posture, device health and vulnerability scan groups, without per-device fan-out",
+  automation: "Automation - run scripts and built-in actions, browse the script catalog, watch active jobs and scheduled tasks, and read the tenant-wide activity log",
   directory: "Org structure - policies, saved device groups, users, locations, roles, and node classes",
 };
 
@@ -192,7 +192,7 @@ async function createMcpServer(credentialOverrides?: NinjaOneCredentials): Promi
   const server = new Server(
     {
       name: "ninjaone-mcp",
-      version: "1.7.0",
+      version: "1.8.0",
     },
     {
       capabilities: {

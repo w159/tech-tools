@@ -1,6 +1,6 @@
 {
   "name": "node-ninjaone",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "type": "commonjs",
   "description": "Typed Node.js client for the NinjaOne/NinjaRMM API; used by ninjaone-mcp.",
   "main": "./dist/index.js",

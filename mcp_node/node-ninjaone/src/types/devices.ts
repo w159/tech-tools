@@ -128,6 +128,14 @@ export interface Device extends BaseEntity, TimestampFields {
  * Device list parameters
  */
 export interface DeviceListParams extends BaseListParams {
+  /**
+   * NinjaOne device filter expression, e.g. "org = 12 AND class = WINDOWS_SERVER".
+   * This is the only filter /v2/devices honours: organizationId, status and
+   * nodeClass below apply to the organization-scoped and detailed endpoints.
+   */
+  df?: string;
+  /** Pagination: highest device ID from the previous page. /v2/devices pages by ID, not cursor. */
+  after?: number;
   /** Filter by organization ID */
   organizationId?: number;
   /** Filter by device status */

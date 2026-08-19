@@ -137,8 +137,30 @@ export function toolErrorFromCatch(
 
   return toolError(code, message, {
     detail: ctx.detail ?? detail,
-    hint: ctx.hint,
+    hint: hintFor(code, ctx.hint),
   });
+}
+
+/**
+ * Pick the hint an agent should act on.
+ *
+ * Callers pass a fixed hint per call site, which is right for a resource that
+ * genuinely might not exist but wrong for a 404 on the endpoint itself: an
+ * agent reading "verify your credentials" after a wrong-path 404 concludes the
+ * API app lacks permissions and reports a configuration problem that does not
+ * exist. That misdiagnosis is what this override prevents.
+ */
+function hintFor(code: ErrorCode, callerHint: string | undefined): string | undefined {
+  if (code === "NOT_FOUND") {
+    const suffix = callerHint ? ` ${callerHint}` : "";
+    return (
+      "HTTP 404 means the endpoint path or the resource ID is wrong. " +
+      "This is NOT a credentials or permissions failure - the request authenticated successfully. " +
+      "Do not tell the user to change API permissions." +
+      suffix
+    );
+  }
+  return callerHint;
 }
 
 // ---------------------------------------------------------------------------
