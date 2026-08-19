@@ -1030,6 +1030,253 @@ class HelperUnitTest(unittest.TestCase):
         self.assertIn("git exploded", msg)
 
 
+def _todo_transcript(path, todos, name="TodoWrite"):
+    """Write a minimal Claude Code transcript containing one TodoWrite tool_use."""
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(json.dumps({"type": "user", "message": {"content": "go"}}) + "\n")
+        fh.write(
+            json.dumps(
+                {
+                    "type": "assistant",
+                    "message": {
+                        "content": [
+                            {"type": "text", "text": "planning"},
+                            {
+                                "type": "tool_use",
+                                "name": name,
+                                "input": {"todos": todos},
+                            },
+                        ]
+                    },
+                }
+            )
+            + "\n"
+        )
+    return path
+
+
+class OpenTodosTest(unittest.TestCase):
+    """(i) reads the LAST TodoWrite call as current state, and fails open."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.t = os.path.join(self.tmp, "transcript.jsonl")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_no_transcript_path_is_zero(self):
+        self.assertEqual(completion_gate._open_todos(""), 0)
+
+    def test_missing_file_fails_open(self):
+        self.assertEqual(
+            completion_gate._open_todos(os.path.join(self.tmp, "nope.jsonl")), 0
+        )
+
+    def test_no_todowrite_call_is_zero(self):
+        """No todo list at all passes: (i) enforces draining, not creating."""
+        with open(self.t, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps({"type": "user", "message": {"content": "hi"}}) + "\n")
+        self.assertEqual(completion_gate._open_todos(self.t), 0)
+
+    def test_all_completed_is_zero(self):
+        _todo_transcript(
+            self.t,
+            [
+                {"content": "a", "status": "completed"},
+                {"content": "b", "status": "completed"},
+            ],
+        )
+        self.assertEqual(completion_gate._open_todos(self.t), 0)
+
+    def test_open_items_are_counted(self):
+        _todo_transcript(
+            self.t,
+            [
+                {"content": "a", "status": "completed"},
+                {"content": "b", "status": "in_progress"},
+                {"content": "c", "status": "pending"},
+            ],
+        )
+        self.assertEqual(completion_gate._open_todos(self.t), 2)
+
+    def test_last_call_wins(self):
+        """TodoWrite rewrites the whole list, so only the final call is state."""
+        with open(self.t, "w", encoding="utf-8") as fh:
+            for todos in (
+                [{"content": "a", "status": "pending"}],
+                [{"content": "a", "status": "completed"}],
+            ):
+                fh.write(
+                    json.dumps(
+                        {
+                            "type": "assistant",
+                            "message": {
+                                "content": [
+                                    {
+                                        "type": "tool_use",
+                                        "name": "TodoWrite",
+                                        "input": {"todos": todos},
+                                    }
+                                ]
+                            },
+                        }
+                    )
+                    + "\n"
+                )
+        self.assertEqual(completion_gate._open_todos(self.t), 0)
+
+    def test_other_tool_named_in_line_is_ignored(self):
+        """An allowedTools listing mentioning TodoWrite is not a TodoWrite call."""
+        with open(self.t, "w", encoding="utf-8") as fh:
+            fh.write(
+                json.dumps({"tools": ["Read", "TodoWrite"], "message": {}}) + "\n"
+            )
+        self.assertEqual(completion_gate._open_todos(self.t), 0)
+
+    def test_malformed_json_line_is_skipped(self):
+        with open(self.t, "w", encoding="utf-8") as fh:
+            fh.write('{"TodoWrite" broken json\n')
+        self.assertEqual(completion_gate._open_todos(self.t), 0)
+
+
+class LeftoverWorktreeTest(unittest.TestCase):
+    """(j) reports only the extra trees, and only for a real repo."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_non_repo_returns_empty(self):
+        self.assertEqual(completion_gate._leftover_worktrees(Path(self.tmp)), [])
+
+    def test_main_tree_alone_is_not_leftover(self):
+        out = b"worktree /repo\nHEAD abc\nbranch refs/heads/main\n\n"
+        with mock.patch("subprocess.check_output", return_value=out):
+            self.assertEqual(completion_gate._leftover_worktrees(Path(self.tmp)), [])
+
+    def test_extra_trees_are_reported(self):
+        out = (
+            b"worktree /repo\nHEAD abc\nbranch refs/heads/main\n\n"
+            b"worktree /tmp/wt-1\nHEAD def\nbranch refs/heads/feat\n\n"
+        )
+        with mock.patch("subprocess.check_output", return_value=out):
+            self.assertEqual(
+                completion_gate._leftover_worktrees(Path(self.tmp)), ["/tmp/wt-1"]
+            )
+
+
+class GateConditionIJTest(GateOrchestrationTest):
+    """End-to-end: (i) and (j) block Stop, and only when this run earned them."""
+
+    def _satisfy_everything_else(self):
+        """Make (a)-(h) pass so a block can only come from (i)/(j)."""
+        os.makedirs(os.path.join(self.tmp, ".atlas", "evidence"), exist_ok=True)
+        with open(
+            os.path.join(self.tmp, ".atlas", "evidence", "e.md"), "w"
+        ) as fh:
+            fh.write("red->green")
+        os.makedirs(os.path.join(self.tmp, ".atlas", ".run"), exist_ok=True)
+        with open(os.path.join(self.tmp, ".atlas", ".run", "findings.json"), "w") as fh:
+            json.dump([{"id": "S1", "status": "verified"}], fh)
+        for name in ("CHANGELOG.md", "ROADMAP.md"):
+            with open(os.path.join(self.tmp, "docs", name), "w") as fh:
+                fh.write("# %s\ncontent\n" % name)
+        with open(os.path.join(self.tmp, "README.md"), "w") as fh:
+            fh.write("# readme\n")
+        # A docs write in the same run clears (f).
+        self._log_run_write("docs/CHANGELOG.md")
+        self._log_run_write("src/app.py")
+
+    def test_open_todos_block_the_stop(self):
+        self._satisfy_everything_else()
+        t = _todo_transcript(
+            os.path.join(self.tmp, "t.jsonl"),
+            [{"content": "ship it", "status": "in_progress"}],
+        )
+        r = _run_gate(
+            {"session_id": "sess-orch", "cwd": self.tmp, "transcript_path": t}, self.env
+        )
+        self.assertIn('"decision": "block"', r.stdout)
+        self.assertIn("(i) Todo list not drained", r.stdout)
+
+    def test_drained_todos_do_not_block(self):
+        self._satisfy_everything_else()
+        t = _todo_transcript(
+            os.path.join(self.tmp, "t.jsonl"),
+            [{"content": "ship it", "status": "completed"}],
+        )
+        r = _run_gate(
+            {"session_id": "sess-orch", "cwd": self.tmp, "transcript_path": t}, self.env
+        )
+        self.assertNotIn('"decision": "block"', r.stdout)
+
+    def test_worktrees_only_block_when_this_run_used_one(self):
+        """A user's own worktree must never trip the gate."""
+        self._satisfy_everything_else()
+        with mock.patch.object(
+            completion_gate, "_leftover_worktrees", return_value=["/tmp/wt-1"]
+        ):
+            self.assertFalse(
+                completion_gate._run_used_worktrees("sess-orch"),
+                "no isolated dispatch was recorded, so the flag must be off",
+            )
+
+    def test_recorded_worktree_dispatch_blocks_on_leftovers(self):
+        self._satisfy_everything_else()
+        c = atlas_db.connect(self.env["ATLAS_DB"])
+        atlas_db.mark_used_worktrees(c, "sess-orch")
+        c.close()
+        out = (
+            b"worktree /repo\nHEAD abc\n\n"
+            b"worktree /tmp/wt-1\nHEAD def\nbranch refs/heads/feat\n\n"
+        )
+        with mock.patch("subprocess.check_output", return_value=out):
+            reason = _reason(
+                False, False, False, False, False, False, 0, "", False, 0, ["/tmp/wt-1"]
+            )
+        self.assertIn("(j) 1 git worktree(s) from this run are still on disk", reason)
+        self.assertIn("git worktree remove", reason)
+        self.assertIn("never run it unasked", reason)
+
+
+class DocsMovedInGitTest(unittest.TestCase):
+    """(f)'s cross-check: git-visible docs movement suppresses a false block.
+
+    The tool-call signal is blind to a docs file written by a Bash-invoked
+    script, which blocked two genuinely-docs-current runs while shipping 5.14.0.
+    """
+
+    def test_docs_path_in_git_diff_suppresses(self):
+        with mock.patch.object(
+            completion_gate, "_git_changed_paths", return_value=["docs/CHANGELOG.md"]
+        ):
+            self.assertTrue(completion_gate._docs_moved_in_git(Path("/x")))
+
+    def test_nested_docs_path_counts(self):
+        with mock.patch.object(
+            completion_gate,
+            "_git_changed_paths",
+            return_value=["plugins/atlas/docs/x.md"],
+        ):
+            self.assertTrue(completion_gate._docs_moved_in_git(Path("/x")))
+
+    def test_code_only_diff_does_not_suppress(self):
+        with mock.patch.object(
+            completion_gate, "_git_changed_paths", return_value=["src/app.py"]
+        ):
+            self.assertFalse(completion_gate._docs_moved_in_git(Path("/x")))
+
+    def test_git_failure_does_not_suppress(self):
+        """One-directional: the cross-check can only prevent a false block."""
+        with mock.patch.object(
+            completion_gate, "_git_changed_paths", side_effect=RuntimeError("no git")
+        ):
+            self.assertFalse(completion_gate._docs_moved_in_git(Path("/x")))
+
+
 if __name__ == "__main__":
     unittest.main()
 

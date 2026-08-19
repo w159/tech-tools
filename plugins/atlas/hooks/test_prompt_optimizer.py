@@ -472,29 +472,34 @@ class NotifyTest(unittest.TestCase):
     def setUp(self):
         self.env = mock.patch.dict(os.environ, {}, clear=False)
         self.env.start()
-        os.environ.pop("ATLAS_OPTIMIZE_QUIET", None)
+        os.environ.pop("ATLAS_OPTIMIZE_VERBOSE", None)
 
     def tearDown(self):
         self.env.stop()
 
-    def test_quiet_silent(self):
-        os.environ["ATLAS_OPTIMIZE_QUIET"] = "1"
+    def test_default_is_silent(self):
+        """Noise contract: the banner is opt-in, not opt-out."""
         with mock.patch("sys.stderr", new_callable=io.StringIO) as err:
-            po.notify("spec text")
+            po.notify("## Intent\nDo the thing")
             self.assertEqual(err.getvalue(), "")
 
-    def test_banner_without_intent(self):
+    def test_verbose_banner_without_intent(self):
+        os.environ["ATLAS_OPTIMIZE_VERBOSE"] = "1"
         with mock.patch("sys.stderr", new_callable=io.StringIO) as err:
             po.notify("just a plain spec with no intent header")
-            self.assertIn("prompt-optimizer", err.getvalue())
+            self.assertIn("[atlas] spec injected", err.getvalue())
 
-    def test_banner_with_intent(self):
+    def test_verbose_banner_with_intent(self):
+        os.environ["ATLAS_OPTIMIZE_VERBOSE"] = "1"
         spec = "## Intent\nDo the thing\n## Steps\n1. x"
         with mock.patch("sys.stderr", new_callable=io.StringIO) as err:
             po.notify(spec)
-            self.assertIn("Do the thing", err.getvalue())
+            out = err.getvalue()
+            self.assertIn("Do the thing", out)
+            self.assertEqual(len(out.strip().splitlines()), 1)  # one line, always
 
     def test_intent_truncated(self):
+        os.environ["ATLAS_OPTIMIZE_VERBOSE"] = "1"
         spec = "## Intent\n" + "a" * 200
         with mock.patch("sys.stderr", new_callable=io.StringIO) as err:
             po.notify(spec)

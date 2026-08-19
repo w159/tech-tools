@@ -2,7 +2,7 @@
 name: atlas-orchestrate
 description: Orchestrate any multi-step, multi-surface, or whole-codebase engineering task (build, fix, audit, refactor, investigate) through subagents with real execution and independent verification instead of inline work, keeping docs/ the single source of truth. Triggers on orchestrate, whole-repo work, cross-layer (frontend/backend/database) bugs, and audits. To first install and configure atlas itself, use atlas-setup.
 when_to_use: orchestrate, whole-repo work, cross-layer (frontend/backend/database) bugs, and audits. To first install and configure atlas itself, use atlas-setup
-allowed-tools: Read, Glob, Grep, Bash
+allowed-tools: Read, Glob, Grep, Bash, TodoWrite, AskUserQuestion
 ---
 
 
@@ -89,12 +89,45 @@ delegates all execution, demands independent verification on every shipping chan
 and synthesizes only after evidence is in hand. Subagents report distilled findings;
 the engine gates, routes, and narrates. No other skill drives this loop.
 
+## The visible plan (TodoWrite is not optional)
+
+The user cannot read your context. `TodoWrite` is the one surface that shows them
+what is done and what is left, and it is also *your* backstop against finishing
+with a stage silently dropped.
+
+- **Create it at plan time.** The moment the stage map exists (loop step 1), write
+  one todo per stage, in dependency order, phrased as the deliverable ("auth
+  callback returns 302 on expired token"), not the activity ("look at auth").
+- **One `in_progress` at a time**, flipped when you dispatch that stage - not when
+  you think about it.
+- **`completed` means verified**, never "the implementer returned." A stage whose
+  `findings.json` entry is `pending` or `rejected` stays `in_progress`.
+- **Re-read it before you finish.** The last action before any done claim is to
+  re-read the list. Any item not `completed` means you are not done: either finish
+  it or say plainly which item you are leaving and why.
+- Keep it short. One item per stage, not one per tool call. A 30-item list is as
+  unreadable as no list.
+
+## Steering mid-run: classify, then act
+
+A user message that arrives while a wave is in flight is one of three things, and
+guessing wrong is expensive. Classify it in one line before you do anything else.
+
+| The message is | What it looks like | What you do |
+|---|---|---|
+| **A correction** | "no, that's the wrong file", "stop, that breaks X" | Highest priority. Stop the affected line of work now, including abandoning in-flight dispatches whose premise just died. Re-plan, then continue. |
+| **New scope** | "also fix the export button" | Insert it into the todo list at the position its dependencies allow - not automatically the end. Say where you put it and why. Do not drop the current stage to chase it. |
+| **A process change** | "use more subagents", "run these in parallel", "be less verbose" | Change how you work for the rest of the run, not what you are building. Restate the new rule in one line so it is on the record, then apply it to the very next wave. |
+
+If the message is genuinely ambiguous between "correction" and "new scope", that is
+a decision, and decisions go to `AskUserQuestion` - not to a guess.
+
 ## The loop
 
 Flex the shape to the task; a quick fix may collapse to two waves, a full audit may iterate 1-4 many times. The loop runs **forward and backward** - if a later fix invalidates an earlier check, re-run that earlier check before proceeding. **No step is optional for a shipping change.**
 
 0. **Orient (you, cheap).** Detect project + codebase roots (dirs with their own manifest). Read the *actual* run/test/build/lint commands from those manifests - never invent them. **RECALL is a precondition to planning, not an optional nicety:** before you decompose any substantive task you MUST query `claude-mem` (`mem-search`) and `ctx_search` - and the committed `.agents/` notes if present - for prior work, decisions, and gotchas on *this task + this project*, and your orientation MUST either cite what you found (source + the lesson you are reusing) or state explicitly "no prior work found". Then record the recall outcome once so run health reflects it: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_db.py" record-recall "${CLAUDE_CODE_SESSION_ID}" hit` if recall surfaced a usable lesson, else `... miss` (fail-open: skip silently if the command is unavailable). Skipping recall and re-deriving a gotcha that memory already held is a violation of this step. Note live `serena`/LSP/MCP/skill capabilities. Scaffold per-root `docs/` artifacts. On boot or resume, reconcile recent work against docs/ per `${CLAUDE_SKILL_DIR}/references/session-lifecycle.md` before planning new work. Present a 5-10 line orientation + plan. **Gate before mutating anything.**
-1. **Plan (you, `sequentialthinking` for non-trivial; `atlas:planner` for real decomposition).** Produce a **numbered stage map**: each stage yields exactly one verifiable artifact and names a **failable check** (the exact condition that would make the stage fail). The map is a **living document** in `docs/plans/` - update it as reality diverges. Per stage, also fix: agent type, model tier, mandatory tools/skills. Ambiguous *feature* work routes through `brainstorming` -> `make-plan` first. See `references/multi-stage-planning.md`.
+1. **Plan (you, `sequentialthinking` for non-trivial; `atlas:planner` for real decomposition).** Produce a **numbered stage map**: each stage yields exactly one verifiable artifact and names a **failable check** (the exact condition that would make the stage fail). The map is a **living document** in `docs/plans/` - update it as reality diverges. **Mirror it into `TodoWrite` immediately** (one todo per stage, see "The visible plan") - the stage map is for you, the todo list is for the user. Per stage, also fix: agent type, model tier, mandatory tools/skills. Ambiguous *feature* work routes through `brainstorming` -> `make-plan` first. See `references/multi-stage-planning.md`.
 2. **Dispatch (subagents, parallel).** Tight spec from `references/subagent-kit.md`, including the output contract from Token discipline. Each self-discovers best-fit capabilities, pulls Context7 docs for any library it touches, **executes to validate**, returns a short grounded report.
 
    **Batch independent dispatches in ONE message (Law 2 is mechanical, not aspirational).** If stages A, B, C have no data dependency on each other, you MUST dispatch all three in a single assistant message with three `Agent` tool calls. One-agent-per-message is a Law 2 violation even if the eventual work is correct: the metric `parallel_waves` in the observability DB measures this directly, and sequential dispatch is the single most common reason runs stall. Before writing the message, ask yourself: "Can any of these stages start without the output of another?" If yes for all, they go in one message. If only some are independent, fan out the independent set in one message and serialize the rest.
@@ -138,6 +171,25 @@ You may **not** claim a change is done, fixed, working, or complete - and may no
 - **runtime evidence, not only test evidence.** For any user-facing change (page, flow, endpoint the user will click), an `atlas:ui-runtime-tester` pass against the running app is part of the *same wave's* verification - never a close-out garnish after all implementation waves. For any schema-touching backend change, the verifier confirms migration parity with the environment the user actually runs (tests that `create_all` their own schema prove nothing about it). A wave whose verifiers only saw green unit suites has not verified the wave; and
 - **docs/ is current** - `CHANGELOG.md` and `ROADMAP.md` reconciled, and every affected durable subfolder (`architecture/`, `features/`, `specs/`, `audits/`, `lessons/`, etc.) updated by `atlas:docs-curator`. This is mandatory and gate-enforced, not optional cleanup. Session start and end follow `${CLAUDE_SKILL_DIR}/references/session-lifecycle.md`: reconcile docs/ at start; at end a docs-curator moves every completed ROADMAP task to CHANGELOG with date and evidence.
 
+**Close-out, in this order, before you say done.** Steps 1 and 2 are not advice: the completion gate enforces them as conditions (i) and (j), so a run that skips them is blocked at Stop, not merely non-compliant.
+
+1. **Re-read the todo list.** Every item `completed`, or you name the exception out
+   loud. An item still `in_progress` or `pending` means the run is not finished -
+   this check is what stops a stage from being silently dropped.
+2. **Close every worktree you opened.** A run that fans out writers leaves `git
+   worktree` trees behind; they are not self-cleaning once they contain changes.
+   For each one `git worktree list` still shows: **commit inside the worktree first
+   if it is dirty** - `git -C <tree> status --porcelain` non-empty means uncommitted
+   work that a merge would silently skip and `worktree remove --force` would
+   destroy - then merge it into the local working branch (`git merge --no-ff
+   <worktree-branch>`), then `git worktree remove` it and delete the merged branch.
+   A worktree with a conflict is a blocker to report, not something to discard.
+   Leaving trees behind is an incomplete run.
+3. **Offer the push; never take it.** After merging, state the branch and the commit
+   count and ask whether to push. `git push` is a law-6 write: it happens only on an
+   explicit yes, in this message, for this push. Never push on your own initiative,
+   and never treat an earlier approval as standing consent for a later push.
+
 **"Unverified" is not a completion state.** If you cannot produce the artifact, the change is **not** done - say so explicitly and stop; do not declare success and do not let "mark it unverified" stand in for verification. Run `superpowers:verification-before-completion` at the close. The completion-gate `Stop` hook (`references/hooks-automation.md`) is the machine backstop for these conditions (plus ROADMAP/README presence and a code-changed-but-docs-didn't drift check); it is opt-out (on by default when `docs/` exists and the run is flagged orchestrating; disable with `ATLAS_GATE=off`).
 
 ## Rationalization table - STOP if you think any of these
@@ -170,8 +222,8 @@ job, the real defect is an underspecified prompt - fix the prompt, not the model
 
 | Tier | Use for | Set via |
 |---|---|---|
-| **haiku** | read-only discovery, symbol sweeps, catalog dumps, running lint/format, mechanical edits | `atlas:explorer`, `atlas:schema-inventory`, `Agent(model:"haiku")` |
-| **sonnet** | implementation, verification, planning, DB probing, docs curation - every other subagent | default and ceiling for `atlas:*` |
+| **haiku** | read-only discovery, symbol sweeps, catalog dumps, drift and naming audits, running lint/format, mechanical edits | `atlas:explorer`, `atlas:schema-inventory`, `atlas:docs-auditor`, `atlas:naming-glossary-audit`, `Agent(model:"haiku")` |
+| **sonnet** | implementation, verification, planning, DB probing, docs curation - every other subagent | default and ceiling for `atlas:*`; drop a role to haiku the moment its job is read-and-report |
 | **opus** | you, the orchestrator: hard architecture, cross-cutting judgment, final synthesis | the main thread only |
 
 Effort follows the same logic. `effort` is agent frontmatter (`low` \| `medium` \| `high` \| `xhigh`,
@@ -184,6 +236,19 @@ frontmatter key).
 | **medium** | rendering an independent verdict against evidence you did not hand them | `verifier`, `completeness-critic`, `rls-privilege-audit` |
 
 Raising a subagent's effort is a last resort after the prompt has been tightened and still fails.
+
+**Every agent carries a `color:`** so a dispatch is identifiable at a glance in the
+terminal, grouped by role family: cyan = read-only discovery (`explorer`,
+`schema-inventory`), blue = planning (`planner`), green = writes code
+(`implementer`), purple = writes docs (`docs-curator`), pink = live runtime testing
+(`ui-runtime-tester`), yellow/orange = read-only probing and audit (`db-prober`,
+`docs-auditor`, `rls-privilege-audit`, `naming-glossary-audit`), red = adversarial
+verdict (`verifier`, `completeness-critic`). The palette is Claude Code's eight -
+`red blue green yellow purple orange pink cyan` - and it is a closed set: the
+frontmatter value is a key into the CLI's own color map, so anything else misses
+the map and renders uncolored. `test_atlas_contract.py` fails on a missing or
+off-palette value.
+
 
 ## Your squad
 
@@ -256,7 +321,7 @@ this session rather than blocking it.
 
 ## First move
 
-Run **Orient** (step 0) - a handful of cheap calls. Present the orientation + proposed plan and **wait for go-ahead before any write**. Do not edit, migrate, or install on your own initiative - discover, propose, gate, then route to subagents.
+Run **Orient** (step 0) - a handful of cheap calls. Present the orientation + proposed plan, **write the todo list**, and **wait for go-ahead before any write**. Do not edit, migrate, or install on your own initiative - discover, propose, gate, then route to subagents.
 
 **Opening task from a handoff.** When invoked by `atlas-launch <id>`, your opening task is a
 prepared handoff prompt from an audit hub (`docs/audits/atlas-<skill>-<date>/handoffs/<id>.md`). It

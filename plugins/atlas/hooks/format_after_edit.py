@@ -115,17 +115,8 @@ def main() -> int:
         except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
             continue
         if proc.returncode == 0:
-            tool = os.path.basename(base[0])
-            print(
-                json.dumps(
-                    {
-                        "hookSpecificOutput": {
-                            "hookEventName": "PostToolUse",
-                            "additionalContext": f"[atlas] auto-formatted {os.path.basename(fp)} with {tool}.",
-                        }
-                    }
-                )
-            )
+            # Silent on success. A formatter that ran is not news; announcing it on
+            # every edit is the highest-frequency noise source in the plugin.
             return 0
         # non-zero (e.g. syntax error mid-edit): try the next candidate, else give up quietly
     return 0

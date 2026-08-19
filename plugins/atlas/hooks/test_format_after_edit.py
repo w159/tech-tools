@@ -216,14 +216,17 @@ class MainInProcessTest(unittest.TestCase):
         with mock.patch.object(sys, "stdin", new=buf):
             return format_after_edit.main()
 
-    def test_success_path_prints_context_and_returns_zero(self):
+    def test_success_path_is_silent_and_returns_zero(self):
+        """Noise contract: a formatter that succeeded emits nothing at all."""
         payload = _payload("Edit", self.target, cwd=self.tmp)
+        ran = []
 
         class FakeProc:
             returncode = 0
 
         def fake_run(cmd, **kw):
             assert cmd[-1] == self.target
+            ran.append(cmd[0])
             return FakeProc()
 
         with (
@@ -237,13 +240,8 @@ class MainInProcessTest(unittest.TestCase):
         ):
             rc = self._run_main(payload)
         self.assertEqual(rc, 0)
-        prn.assert_called_once()
-        emitted = json.loads(prn.call_args[0][0])
-        self.assertEqual(emitted["hookSpecificOutput"]["hookEventName"], "PostToolUse")
-        self.assertIn(
-            "auto-formatted edited.py with ruff",
-            emitted["hookSpecificOutput"]["additionalContext"],
-        )
+        self.assertTrue(any("ruff" in c for c in ran))
+        prn.assert_not_called()
 
     def test_first_candidate_fails_then_second_succeeds(self):
         payload = _payload("Write", self.target, cwd=self.tmp)
@@ -268,8 +266,8 @@ class MainInProcessTest(unittest.TestCase):
         ):
             rc = self._run_main(payload)
         self.assertEqual(rc, 0)
-        emitted = json.loads(prn.call_args[0][0])
-        self.assertIn("black", emitted["hookSpecificOutput"]["additionalContext"])
+        self.assertEqual(seq, [])  # both candidates were tried
+        prn.assert_not_called()  # success is silent
 
     def test_all_candidates_fail_returns_zero_silently(self):
         payload = _payload("MultiEdit", self.target, cwd=self.tmp)
@@ -445,8 +443,7 @@ class MainInProcessTest(unittest.TestCase):
         ):
             rc = self._run_main(payload)
         self.assertEqual(rc, 0)
-        emitted = json.loads(prn.call_args[0][0])
-        self.assertIn("app.js", emitted["hookSpecificOutput"]["additionalContext"])
+        prn.assert_not_called()  # success is silent
 
     def test_go_success_with_gofmt(self):
         target = os.path.join(self.tmp, "main.go")

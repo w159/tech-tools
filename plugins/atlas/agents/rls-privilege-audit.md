@@ -4,7 +4,7 @@ description: Read-only PostgreSQL security audit of row-level security, table gr
 disallowedTools: [Task, Agent, Edit, MultiEdit, NotebookEdit]
 model: sonnet
 effort: medium
-color: yellow
+color: orange
 ---
 
 ## You do not dispatch

@@ -35,7 +35,7 @@ Configuration (environment variables):
   ATLAS_OPTIMIZE_TIMEOUT  seconds before giving up  (default: 110)
   ATLAS_OPTIMIZE_MINLEN   skip prompts shorter than this many chars, in BOTH trigger
                                 and always mode (default: 12)
-  ATLAS_OPTIMIZE_QUIET    if set, suppress the stderr banner (silent injection)
+  ATLAS_OPTIMIZE_VERBOSE  if set, print a one-line stderr banner (quiet by default)
   ATLAS_OPTIMIZE_LOG      if set, append an audit line (orig -> optimized) to this file
 
 Wire it up (settings.json) with a generous timeout so Claude Code does not kill the
@@ -456,13 +456,14 @@ def is_skip(optimized: str) -> bool:
 
 
 def notify(optimized: str) -> None:
-    """Brief colored banner to STDERR so the user sees the optimizer fired.
+    """One-line stderr banner, off unless ATLAS_OPTIMIZE_VERBOSE is set.
 
     stderr is surfaced in the terminal and renders ANSI color; unlike stdout it never enters
-    Claude's context, so it can't pollute the spec. Silence it with ATLAS_OPTIMIZE_QUIET.
+    Claude's context, so it can't pollute the spec. It is still terminal noise on every
+    optimized prompt, and the spec itself is already in context, so the default is silence.
     """
-    if os.environ.get("ATLAS_OPTIMIZE_QUIET", "").strip():
-        return
+    if not os.environ.get("ATLAS_OPTIMIZE_VERBOSE", "").strip():
+        return  # quiet by default: the spec is in context, the banner adds nothing
     # Pull the one-line Intent out of the spec for an at-a-glance summary, if present.
     intent = ""
     lines = optimized.splitlines()
@@ -475,13 +476,10 @@ def notify(optimized: str) -> None:
             break
     if len(intent) > 96:
         intent = intent[:95].rstrip() + "..."
-    header = (
-        "\033[48;5;22m\033[97;1m * prompt-optimizer \033[0m"
-        f"\033[38;5;108m optimized spec injected - {len(optimized)} chars \033[0m"
+    print(
+        f"\033[38;5;108m[atlas] spec injected: {intent or str(len(optimized)) + ' chars'}\033[0m",
+        file=sys.stderr,
     )
-    print(header, file=sys.stderr)
-    if intent:
-        print(f"\033[38;5;108m   -> {intent}\033[0m", file=sys.stderr)
 
 
 def audit(original: str, optimized: str | None) -> None:

@@ -81,7 +81,7 @@ Use these by name as `subagent_type`. They already carry the orchestrator's disc
 | `atlas:ui-runtime-tester` | actually run the FE and validate observed behavior | sonnet | low | no |
 | `atlas:planner` | decompose a task into a numbered, failable-check stage map | sonnet | low | no |
 | `atlas:docs-curator` | keep `docs/` as the single source of truth, current with the work | sonnet | low | only under `docs/` |
-| `atlas:docs-auditor` | audit `docs/` for drift against the code/behavior | sonnet | low | no |
+| `atlas:docs-auditor` | audit `docs/` for drift against the code/behavior | haiku | low | no |
 | `atlas:completeness-critic` | final "what did we miss" gap pass; findings seed the next wave | sonnet | medium | no |
 
 For domain depth, route instead to the installed specialists (`backend-architect`, `frontend-developer`, `security-engineer`, `debugger`, `devops-automator`, `code-reviewer`, `test-engineer`, `test-executor`, `secondary-expert-validator`, `codebase-explorer`), same spec shape.

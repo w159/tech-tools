@@ -89,23 +89,15 @@ class MainInProcessTest(unittest.TestCase):
         self.assertEqual(code, 0)
         data = json.loads(out)
         self.assertIn(
-            "Atlas runtime active", data["hookSpecificOutput"]["additionalContext"]
+            "Atlas: orchestrator posture", data["hookSpecificOutput"]["additionalContext"]
         )
         self.assertIn(
             "research -> theory", data["hookSpecificOutput"]["additionalContext"]
         )
         self.assertIn("atlas:<role>", data["hookSpecificOutput"]["additionalContext"])
-        # All three deps absent -> all three "absent" lines present.
+        # All three deps absent -> one consolidated "Setup gap" line naming all three.
         self.assertIn(
-            "Memory (claude-mem): absent",
-            data["hookSpecificOutput"]["additionalContext"],
-        )
-        self.assertIn(
-            "Context protection (context-mode): absent",
-            data["hookSpecificOutput"]["additionalContext"],
-        )
-        self.assertIn(
-            "Less-code mode (ponytail): absent",
+            "Setup gap: claude-mem, context-mode, ponytail absent",
             data["hookSpecificOutput"]["additionalContext"],
         )
         self.assertEqual(
@@ -125,17 +117,9 @@ class MainInProcessTest(unittest.TestCase):
             )
         self.assertEqual(code, 0)
         data = json.loads(out)
-        self.assertIn(
-            "Memory (claude-mem): available",
-            data["hookSpecificOutput"]["additionalContext"],
-        )
-        self.assertIn(
-            "Context protection (context-mode): available",
-            data["hookSpecificOutput"]["additionalContext"],
-        )
-        self.assertIn(
-            "Less-code mode (ponytail): available",
-            data["hookSpecificOutput"]["additionalContext"],
+        # Nothing missing -> the noise-reduction contract says say nothing.
+        self.assertNotIn(
+            "Setup gap", data["hookSpecificOutput"]["additionalContext"]
         )
         self.assertEqual(data["systemMessage"], "Atlas ready")
 
@@ -155,10 +139,13 @@ class MainInProcessTest(unittest.TestCase):
             )
         self.assertEqual(code, 0)
         data = json.loads(out)
-        self.assertIn(
-            "Less-code mode (ponytail): available",
-            data["hookSpecificOutput"]["additionalContext"],
-        )
+        gap = [
+            ln
+            for ln in data["hookSpecificOutput"]["additionalContext"].splitlines()
+            if ln.startswith("Setup gap:")
+        ]
+        self.assertTrue(gap)
+        self.assertNotIn("ponytail", gap[0])
 
     # --- DB start_run path ------------------------------------------------
 
@@ -260,7 +247,7 @@ class MainInProcessTest(unittest.TestCase):
             )
         self.assertEqual(code, 0)
         self.assertIn(
-            "Atlas runtime active",
+            "Atlas: orchestrator posture",
             json.loads(out)["hookSpecificOutput"]["additionalContext"],
         )
 
@@ -296,7 +283,7 @@ class MainInProcessTest(unittest.TestCase):
             )
         self.assertEqual(code, 0)
         self.assertIn(
-            "Atlas runtime active",
+            "Atlas: orchestrator posture",
             json.loads(out)["hookSpecificOutput"]["additionalContext"],
         )
 
@@ -311,7 +298,7 @@ class MainInProcessTest(unittest.TestCase):
             code, out = run_main_inprocess("{not valid json", self.env)
         self.assertEqual(code, 0)
         self.assertIn(
-            "Atlas runtime active",
+            "Atlas: orchestrator posture",
             json.loads(out)["hookSpecificOutput"]["additionalContext"],
         )
 
@@ -327,7 +314,7 @@ class MainInProcessTest(unittest.TestCase):
             )
         self.assertEqual(code, 0)
         self.assertIn(
-            "Atlas runtime active",
+            "Atlas: orchestrator posture",
             json.loads(out)["hookSpecificOutput"]["additionalContext"],
         )
 
@@ -631,7 +618,7 @@ class SubprocessExitCodeTest(unittest.TestCase):
             env=env,
         )
         self.assertEqual(p.returncode, 0)
-        self.assertIn("Atlas runtime active", p.stdout)
+        self.assertIn("Atlas: orchestrator posture", p.stdout)
 
     def test_subprocess_garbage_stdin_exits_zero(self):
         """Hook must never block boot, even on garbage stdin."""

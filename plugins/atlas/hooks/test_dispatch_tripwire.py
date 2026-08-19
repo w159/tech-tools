@@ -2,6 +2,7 @@ import contextlib
 import io
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -760,6 +761,77 @@ class InProcessTest(unittest.TestCase):
         self.assertEqual(parsed["hookSpecificOutput"]["hookEventName"], "PreToolUse")
 
 
+class WorktreeFlagTest(unittest.TestCase):
+    """A dispatch with isolation="worktree" is recorded, so the completion gate
+    can demand close-out without firing on worktrees the user created."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.env = dict(os.environ, ATLAS_DB=os.path.join(self.tmp, "atlas.db"))
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db
+
+        conn = atlas_db.connect(self.env["ATLAS_DB"])
+        atlas_db.init(conn)
+        pid = atlas_db.register_project(conn, self.tmp)
+        atlas_db.start_run(conn, pid, "sess-wt")
+        atlas_db.mark_orchestrating(conn, "sess-wt")
+        conn.close()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _flag(self):
+        import atlas_db
+
+        conn = atlas_db.connect(self.env["ATLAS_DB"])
+        try:
+            return atlas_db.run_used_worktrees(conn, "sess-wt")
+        finally:
+            conn.close()
+
+    def _dispatch(self, tinput):
+        return run_hook(
+            {
+                "session_id": "sess-wt",
+                "hook_event_name": "PostToolUse",
+                "tool_name": "Agent",
+                "tool_input": tinput,
+                "cwd": self.tmp,
+            },
+            self.env,
+        )
+
+    def test_flag_starts_off(self):
+        self.assertFalse(self._flag())
+
+    def test_isolated_dispatch_sets_the_flag(self):
+        r = self._dispatch(
+            {"subagent_type": "atlas:implementer", "isolation": "worktree"}
+        )
+        self.assertEqual(r.returncode, 0)
+        self.assertTrue(self._flag())
+
+    def test_plain_dispatch_leaves_the_flag_off(self):
+        """No isolation -> no tree to clean up -> the gate must stay quiet."""
+        r = self._dispatch({"subagent_type": "atlas:implementer"})
+        self.assertEqual(r.returncode, 0)
+        self.assertFalse(self._flag())
+
+    def test_other_isolation_value_leaves_the_flag_off(self):
+        r = self._dispatch({"subagent_type": "atlas:explorer", "isolation": "remote"})
+        self.assertEqual(r.returncode, 0)
+        self.assertFalse(self._flag())
+
+    def test_non_atlas_agent_with_worktree_still_counts(self):
+        """The tree exists regardless of which agent type asked for it."""
+        r = self._dispatch(
+            {"subagent_type": "general-purpose", "isolation": "worktree"}
+        )
+        self.assertEqual(r.returncode, 0)
+        self.assertTrue(self._flag())
+
+
 if __name__ == "__main__":
     unittest.main()
 
@@ -810,9 +882,9 @@ class VerifierVerdictBracketTest(unittest.TestCase):
         self._write_findings([{"id": "S1", "status": "open"}])
         run_hook(self._payload("PreToolUse"), self.env)
         post = run_hook(self._payload("PostToolUse"), self.env)
-        self.assertIn("findings.json gained no entry", post.stdout)
+        self.assertIn("verifier verdict not in findings.json", post.stdout)
         self.assertIn("atlas_finding.py", post.stdout)
-        self.assertIn("Do not re-dispatch", post.stdout)
+        self.assertIn("do not re-dispatch", post.stdout)
 
     def test_verifier_that_wrote_its_verdict_is_silent(self):
         self._write_findings([{"id": "S1", "status": "open"}])
@@ -821,26 +893,26 @@ class VerifierVerdictBracketTest(unittest.TestCase):
             [{"id": "S1", "status": "open"}, {"id": "S2", "status": "verified"}]
         )
         post = run_hook(self._payload("PostToolUse"), self.env)
-        self.assertNotIn("findings.json gained no entry", post.stdout)
+        self.assertNotIn("verifier verdict not in findings.json", post.stdout)
 
     def test_non_verifier_dispatch_is_not_bracketed(self):
         self._write_findings([])
         run_hook(self._payload("PreToolUse", agent="atlas:implementer"), self.env)
         post = run_hook(self._payload("PostToolUse", agent="atlas:implementer"), self.env)
-        self.assertNotIn("findings.json gained no entry", post.stdout)
+        self.assertNotIn("verifier verdict not in findings.json", post.stdout)
 
     def test_no_baseline_stays_silent(self):
         """A PostToolUse with no matching PreToolUse baseline cannot judge, so
         it says nothing rather than warning on a guess."""
         self._write_findings([])
         post = run_hook(self._payload("PostToolUse"), self.env)
-        self.assertNotIn("findings.json gained no entry", post.stdout)
+        self.assertNotIn("verifier verdict not in findings.json", post.stdout)
 
     def test_baseline_from_another_session_is_ignored(self):
         self._write_findings([])
         run_hook(self._payload("PreToolUse", session="other"), self.env)
         post = run_hook(self._payload("PostToolUse"), self.env)
-        self.assertNotIn("findings.json gained no entry", post.stdout)
+        self.assertNotIn("verifier verdict not in findings.json", post.stdout)
 
     def test_dispatch_still_reaches_the_observability_db(self):
         """The flag must not swallow dispatch logging -- condition (g) depends on it."""

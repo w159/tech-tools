@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS projects (
 CREATE TABLE IF NOT EXISTS runs (
   id INTEGER PRIMARY KEY, project_id INTEGER NOT NULL, session_id TEXT,
   started_at REAL, ended_at REAL, wall_clock_s REAL, task_summary TEXT, model TEXT,
-  kind TEXT DEFAULT 'orchestrator', orchestrating INTEGER DEFAULT 0);
+  kind TEXT DEFAULT 'orchestrator', orchestrating INTEGER DEFAULT 0,
+  used_worktrees INTEGER DEFAULT 0);
 CREATE TABLE IF NOT EXISTS events (
   id INTEGER PRIMARY KEY, run_id INTEGER NOT NULL, ts REAL, tool TEXT,
   context TEXT, is_inline_op INTEGER, path TEXT);
@@ -146,6 +147,14 @@ def init(conn):
         conn.commit()
     except sqlite3.OperationalError:
         pass  # column already present
+    # Idempotent migration: records whether this run dispatched an isolated
+    # writer, so the completion gate can demand worktree close-out WITHOUT
+    # firing on worktrees the user created themselves.
+    try:
+        conn.execute("ALTER TABLE runs ADD COLUMN used_worktrees INTEGER DEFAULT 0")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # column already present
     # Idempotent migration: add the agent column to pre-existing DBs so the
     # session_logs mirror can distinguish coding agents (claude, codex, ...).
     # Fresh DBs already have it from the SCHEMA; the OperationalError is the
@@ -263,6 +272,30 @@ def mark_orchestrating(conn, session_id, cwd=None):
     if cwd:
         _write_orchestration_sentinel(cwd)
     return rid
+
+
+def mark_used_worktrees(conn, session_id):
+    """Record that this run dispatched an agent with isolation="worktree".
+
+    Scoping the gate's worktree check to this flag is the whole point: a gate
+    that blocks on any tree `git worktree list` reports would fire on the user's
+    own long-lived trees, and a gate with false positives is one people learn to
+    ignore. No-op when there is no run yet."""
+    rid = current_run_id(conn, session_id) or latest_run_id(conn, session_id)
+    if rid is None:
+        return None
+    conn.execute("UPDATE runs SET used_worktrees=1 WHERE id=?", (rid,))
+    conn.commit()
+    return rid
+
+
+def run_used_worktrees(conn, session_id):
+    """True when this session's current-or-latest run dispatched an isolated writer."""
+    rid = current_run_id(conn, session_id) or latest_run_id(conn, session_id)
+    if rid is None:
+        return False
+    row = conn.execute("SELECT used_worktrees FROM runs WHERE id=?", (rid,)).fetchone()
+    return bool(row and row[0])
 
 
 def is_orchestrating(conn, session_id):

@@ -378,7 +378,7 @@ def resume_block(root):
             threads.extend(mem["threads"])
         if threads:
             lines.append("Open threads:")
-            lines.extend("- %s" % t[:150] for t in threads[:5])
+            lines.extend("- %s" % t[:120] for t in threads[:3])
 
         if atlas_ctx and atlas_ctx.get("unverified"):
             lines.append(
@@ -449,7 +449,15 @@ def main():
         if snapshot.get("project"):
             parts.append(snapshot["project"])
         if parts:
+            # Hard cap: the snapshot is a hint, not a briefing. An uncapped dump
+            # is the single largest block of boot noise. Cut on the record
+            # separator rather than mid-sentence - a half-quoted assumption reads
+            # as a fact the model half-remembers.
             memory_block = "\n\n".join(parts)
+            if len(memory_block) > 700:
+                head = memory_block[:700]
+                cut = head.rfind("\n\u00a7\n")
+                memory_block = head[:cut] if cut > 0 else head.rsplit("\n", 1)[0]
     except Exception:
         pass  # memory is best-effort
 
@@ -463,38 +471,28 @@ def main():
         except Exception:
             pony = False
 
+    # Boot context is terminal noise on every session start. Keep it to the one
+    # fact the model cannot infer (posture + squad) plus setup gaps that are
+    # actually actionable; the rest lives in the skill, not in every boot.
     lines = [
-        "Atlas runtime active. The atlas-orchestrate methodology and operating contract apply:",
-        "research -> theory -> test -> validate -> implement -> test -> verify; evidence before any done claim.",
-        "This session is the atlas orchestrator. Substantive implementation is routed to atlas:<role> subagents "
-        "(atlas:explorer, atlas:implementer, atlas:verifier, etc.); the orchestrator plans, delegates, "
-        "and synthesizes -- it does not directly write production code or run broad tool sweeps.",
-        "Invoke the atlas-orchestrate skill for multi-step or whole-codebase work; route subagents via atlas:<role>.",
-        "Memory (claude-mem): "
-        + (
-            "available"
-            if mem
-            else "absent - run the `atlas` skill to install for self-improvement"
-        )
-        + ".",
-        "Context protection (context-mode): "
-        + (
-            "available"
-            if ctx
-            else "absent - run the `atlas` skill to install for large-output work"
-        )
-        + ".",
-        "Less-code mode (ponytail): "
-        + (
-            "available"
-            if pony
-            else "absent - run the `atlas` skill to install for less-code mode"
-        )
-        + ".",
-        "No-prompt scan: run `atlas` or any atlas skill with no task to scan this project "
-        "and report what is missing to reach atlas standard (claude-mem + context-mode + ponytail, "
-        "loop-library, connectors, hooks, docs/ SSOT).",
+        "Atlas: orchestrator posture. research -> theory -> test -> validate -> implement -> verify; "
+        "evidence before any done claim. Route execution to atlas:<role> subagents; "
+        "invoke atlas-orchestrate for multi-step or whole-codebase work.",
     ]
+    absent = [
+        name
+        for name, present in (
+            ("claude-mem", mem),
+            ("context-mode", ctx),
+            ("ponytail", pony),
+        )
+        if not present
+    ]
+    if absent:
+        lines.append(
+            "Setup gap: %s absent - run the `atlas` skill to install." % ", ".join(absent)
+        )
+
     try:
         missing = missing_structure(payload.get("cwd") or os.getcwd())
         if missing:
@@ -521,7 +519,7 @@ def main():
         + ("" if (mem and ctx) else " (run the `atlas` skill to complete setup)"),
         "hookSpecificOutput": {
             "hookEventName": "SessionStart",
-            "additionalContext": "\n".join(lines)[:9000],
+            "additionalContext": "\n".join(lines)[:3000],
         },
     }
     sys.stdout.write(json.dumps(out))

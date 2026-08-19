@@ -513,6 +513,15 @@ MAX_MODEL = {"haiku", "sonnet"}
 # handed get medium. Everything else executes a clear spec at low.
 MEDIUM_EFFORT_ROLES = {"verifier", "completeness-critic", "rls-privilege-audit"}
 
+# Claude Code's agent palette, confirmed against the shipped CLI binary: the
+# frontmatter value is a KEY into
+#   {red:"red",blue:"blue",green:"green",yellow:"yellow",
+#    purple:"magenta",orange:"colour208",pink:"colour205",cyan:"cyan"}[e]
+# so these eight keys are the whole set. "magenta" appears only as a VALUE
+# (what `purple` maps to); passing it as the frontmatter color misses the map
+# and the dispatch renders uncolored - which is the whole point of the field.
+VALID_COLORS = {"red", "blue", "green", "yellow", "purple", "orange", "pink", "cyan"}
+
 
 def _agent_files() -> list:
     return sorted(AGENTS_DIR.glob("*.md"))
@@ -563,6 +572,15 @@ class AgentTierContract(unittest.TestCase):
             if fm.get("effort") != expected:
                 bad.append("%s: %s (want %s)" % (path.name, fm.get("effort"), expected))
         self.assertEqual(bad, [], "effort tier drift: %s" % bad)
+
+    def test_every_agent_declares_a_valid_color(self):
+        """A dispatch the user cannot tell apart in the terminal is unlabelled work."""
+        bad = [
+            "%s: %r" % (p.name, _frontmatter(p).get("color"))
+            for p in _agent_files()
+            if _frontmatter(p).get("color") not in VALID_COLORS
+        ]
+        self.assertEqual(bad, [], "agents missing/invalid color: %s" % bad)
 
     def test_no_agent_restricts_tools_and_locks_out_mcp(self):
         """A `tools:` allowlist silently excludes every mcp__* tool. Use disallowedTools."""
@@ -834,6 +852,80 @@ class SerenaHealContract(unittest.TestCase):
             any(ln.startswith("languages:") for ln in lines),
             "%s has no top-level languages: key -- serena will refuse to load it" % cfg,
         )
+
+
+class NoiseContract(unittest.TestCase):
+    """Advisory hooks emit nothing on the happy path.
+
+    Terminal noise is not free: a stream of routine advisories trains the user to
+    skim past the one line that mattered. Each check below pins a hook that used to
+    speak on every occurrence and now speaks only when something is actionable.
+    """
+
+    def test_format_after_edit_is_silent_on_success(self):
+        body = (HOOKS_DIR / "format_after_edit.py").read_text(encoding="utf-8")
+        self.assertNotIn("auto-formatted", body, "formatter announces every success")
+
+    def test_prompt_optimizer_banner_is_opt_in(self):
+        body = (HOOKS_DIR / "prompt_optimizer.py").read_text(encoding="utf-8")
+        self.assertIn("ATLAS_OPTIMIZE_VERBOSE", body)
+        self.assertNotIn(
+            "ATLAS_OPTIMIZE_QUIET", body, "banner is still opt-out, not opt-in"
+        )
+
+    def test_session_boot_reports_only_missing_dependencies(self):
+        body = (HOOKS_DIR / "session_boot.py").read_text(encoding="utf-8")
+        self.assertIn("Setup gap:", body)
+        for chatter in (
+            "Memory (claude-mem): ",
+            "Context protection (context-mode): ",
+            "Less-code mode (ponytail): ",
+        ):
+            self.assertNotIn(chatter, body, "boot still narrates present deps")
+
+    def test_boot_context_is_capped(self):
+        """An uncapped boot dump is the largest single block of session noise."""
+        body = (HOOKS_DIR / "session_boot.py").read_text(encoding="utf-8")
+        self.assertIn('"\\n".join(lines)[:3000]', body)
+
+
+class OrchestrationContract(unittest.TestCase):
+    """Run-management rules the user relies on, pinned in the skill itself."""
+
+    SKILL = PLUGIN_ROOT / "skills" / "atlas-orchestrate" / "SKILL.md"
+
+    def _body(self):
+        return self.SKILL.read_text(encoding="utf-8")
+
+    def test_skill_mandates_a_todo_list(self):
+        body = self._body()
+        self.assertIn("TodoWrite", body)
+        self.assertIn("The visible plan", body)
+
+    def test_todo_write_is_an_allowed_tool(self):
+        """Mandating a tool the frontmatter forbids is a dead rule."""
+        head = self._body().split("\n---\n", 1)[0]
+        self.assertIn("TodoWrite", head)
+
+    def test_done_gate_rereads_the_todo_list(self):
+        self.assertIn("Re-read the todo list", self._body())
+
+    def test_done_gate_closes_worktrees_and_never_pushes(self):
+        body = self._body()
+        self.assertIn("git worktree remove", body)
+        self.assertIn("Never push on your own initiative", body)
+
+    def test_skill_classifies_mid_run_user_messages(self):
+        body = self._body()
+        self.assertIn("Steering mid-run", body)
+        for kind in ("A correction", "New scope", "A process change"):
+            self.assertIn(kind, body)
+
+    def test_output_style_carries_the_same_three_rules(self):
+        body = OUTPUT_STYLE.read_text(encoding="utf-8")
+        self.assertIn("The todo list is the progress display", body)
+        self.assertIn("Steering arrives mid-run", body)
+        self.assertIn("Worktrees close before done", body)
 
 
 if __name__ == "__main__":
