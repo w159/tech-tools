@@ -82,7 +82,9 @@ function getTools(): Tool[] {
     {
       name: "ninjaone_devices_list",
       description:
-        "List NinjaOne RMM devices; filter by organization_id, device_class (WINDOWS_WORKSTATION/SERVER/MAC/LINUX/VMWARE_VM), or online status. Returns device IDs needed by other device tools.",
+        "List NinjaOne RMM devices, filtered by organization_id, device_class, or online status. Returns the device IDs every other device tool needs. " +
+        "All three filters are compiled into one NinjaOne device filter (df) expression, since /v2/devices takes no organizationId, class or online params of its own. Pass device_filter to write the df yourself. " +
+        "To find one machine by name or user, ninjaone_devices_search is faster than paging this.",
       inputSchema: {
         type: "object" as const,
         properties: {
@@ -100,13 +102,19 @@ function getTools(): Tool[] {
             type: "boolean",
             description: "When true, returns only currently online devices; false returns only offline devices.",
           },
+          device_filter: {
+            type: "string",
+            description:
+              'Raw NinjaOne device filter (df) expression, e.g. "org = 12 AND class = WINDOWS_SERVER". Overrides organization_id, device_class and online when given.',
+          },
           limit: {
             type: "number",
-            description: "Page size — maximum devices to return in one call (default: 50).",
+            description: "Page size - maximum devices to return in one call (default: 50).",
           },
-          cursor: {
-            type: "string",
-            description: "Opaque pagination cursor from the previous page response.",
+          after: {
+            type: "number",
+            description:
+              "Pagination: the highest device id from the previous page. /v2/devices pages by last-seen ID, not by an opaque cursor.",
           },
         },
       },
@@ -128,7 +136,8 @@ function getTools(): Tool[] {
     },
     {
       name: "ninjaone_devices_reboot",
-      description: "DESTRUCTIVE: Schedule a reboot for a NinjaOne-managed device. The device will restart immediately, interrupting active user sessions.",
+      description:
+        "DESTRUCTIVE: Reboot a NinjaOne-managed device now. The device restarts immediately and active user sessions are interrupted. Confirm with the user before calling.",
       inputSchema: {
         type: "object" as const,
         properties: {
@@ -136,9 +145,15 @@ function getTools(): Tool[] {
             type: "number",
             description: "Integer NinjaOne device ID of the target device to reboot.",
           },
+          mode: {
+            type: "string",
+            enum: ["NORMAL", "FORCED"],
+            description:
+              "NORMAL (default) asks the OS to close applications gracefully and can be blocked by a hung process. FORCED restarts immediately and can lose unsaved user work.",
+          },
           reason: {
             type: "string",
-            description: "Human-readable reason for the reboot; recorded in the activity log.",
+            description: "Human-readable reason for the reboot; recorded in the device activity log.",
           },
         },
         required: ["device_id"],
@@ -210,13 +225,14 @@ function getTools(): Tool[] {
     {
       name: "ninjaone_devices_inventory",
       description:
-        "Get a per-device inventory sub-resource by device_id (required) and kind (required): disks, processors, volumes, software, os-patches, network-interfaces, custom-fields, last-logged-on-user, or scripting-options. Returned records are passed through unshaped since field names are undocumented.",
+        "Read any per-device sub-resource by device_id and kind (GET /v2/device/{id}/{kind}). This one tool covers the whole per-device surface: hardware (disks, processors, volumes, network-interfaces), software inventory, patch state (os-patches, software-patches and their -installs history), running jobs, policy overrides, the last logged-on user, custom field values, and the scripting options that tell you what can run on this device. " +
+        "For the same data across many devices at once, use ninjaone_queries_run instead of looping this tool. Records are passed through unshaped since vendor field names are undocumented.",
       inputSchema: {
         type: "object" as const,
         properties: {
           device_id: {
             type: "number",
-            description: "Integer NinjaOne device ID.",
+            description: "Integer NinjaOne device ID, from ninjaone_devices_list or ninjaone_devices_search.",
           },
           kind: {
             type: "string",
@@ -225,13 +241,34 @@ function getTools(): Tool[] {
               "processors",
               "volumes",
               "software",
-              "os-patches",
               "network-interfaces",
               "custom-fields",
               "last-logged-on-user",
-              "scripting-options",
+              "os-patches",
+              "software-patches",
+              "os-patch-installs",
+              "software-patch-installs",
+              "jobs",
+              "policy/overrides",
+              "scripting/options",
+              "windows-services",
             ],
-            description: "Which inventory sub-resource to fetch.",
+            description:
+              "Which sub-resource to fetch. os-patches / software-patches return pending, failed and rejected patches (filter with status, type, severity); the -installs variants return install history; jobs returns what is running on the device right now; scripting/options lists the scripts, built-in actions and run_as credential roles this device accepts.",
+          },
+          status: {
+            type: "string",
+            description:
+              "Patch status filter for kind=os-patches or software-patches (e.g. APPROVED, FAILED, REJECTED, PENDING). Ignored by other kinds.",
+          },
+          type: {
+            type: "string",
+            description: "Patch type filter for kind=os-patches or software-patches (e.g. PATCH, FEATURE_PACK).",
+          },
+          severity: {
+            type: "string",
+            description:
+              "Patch severity filter for kind=os-patches or software-patches (e.g. CRITICAL, IMPORTANT, MODERATE, LOW, OPTIONAL).",
           },
         },
         required: ["device_id", "kind"],
@@ -257,7 +294,10 @@ function getTools(): Tool[] {
     },
     {
       name: "ninjaone_devices_script_run",
-      description: "DESTRUCTIVE: Run a script on a NinjaOne-managed device. The script executes immediately on the target device with the specified parameters and run-as account.",
+      description:
+        "DESTRUCTIVE: Run a script or a built-in action on a NinjaOne-managed device. This is how you execute a command on an endpoint: the work starts immediately on the target device. Confirm with the user before calling. " +
+        "Two modes. type='SCRIPT' with script_id runs a script from the catalog (get IDs from ninjaone_scripts_list). type='ACTION' with action_uid runs a NinjaOne built-in action such as a service restart or a defrag (get UIDs from ninjaone_scripts_list or ninjaone_devices_inventory with kind='scripting/options'). " +
+        "The call returns as soon as the job is queued, not when the script finishes: poll ninjaone_jobs_list or read the result from ninjaone_activities_list with activity_type='SCRIPTING'.",
       inputSchema: {
         type: "object" as const,
         properties: {
@@ -265,25 +305,116 @@ function getTools(): Tool[] {
             type: "number",
             description: "Integer NinjaOne device ID of the target device.",
           },
+          type: {
+            type: "string",
+            enum: ["SCRIPT", "ACTION"],
+            description:
+              "SCRIPT runs a catalog script identified by script_id. ACTION runs a NinjaOne built-in identified by action_uid. Defaults to SCRIPT when script_id is given and ACTION when action_uid is given.",
+          },
           script_id: {
             type: "number",
-            description: "Integer ID of the script to run, from ninjaone_devices_inventory with kind='scripting-options'.",
+            description: "Integer ID of a catalog script, from ninjaone_scripts_list. Required when type is SCRIPT.",
+          },
+          action_uid: {
+            type: "string",
+            description:
+              "UUID of a built-in action, from ninjaone_scripts_list or kind='scripting/options'. Required when type is ACTION.",
           },
           parameters: {
             type: "string",
-            description: "Parameter string passed to the script.",
+            description:
+              "Parameter string passed to the script or action, exactly as it would be typed on the command line.",
           },
           run_as: {
             type: "string",
-            description: "Account context to run the script as.",
+            description:
+              "Credential role to execute under (e.g. 'system', 'loggedonuser', or a named credential). Valid values for a given device come from ninjaone_devices_inventory with kind='scripting/options'.",
           },
         },
-        required: ["device_id", "script_id"],
+        required: ["device_id"],
+      },
+    },
+    {
+      name: "ninjaone_devices_patch_run",
+      description:
+        "DESTRUCTIVE: Trigger a patch scan or a patch apply on a device (POST /v2/device/{id}/patch/{os|software}/{scan|apply}). " +
+        "action='scan' is safe and read-only in effect: it refreshes what the device reports as missing, and is the right first step when patch data looks stale. action='apply' installs the approved pending patches and can reboot the device - confirm with the user before calling it. " +
+        "Both return as soon as the job is queued. Check progress with ninjaone_jobs_list, and the result with ninjaone_devices_inventory kind='os-patch-installs' or 'software-patch-installs'.",
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          device_id: {
+            type: "number",
+            description: "Integer NinjaOne device ID of the target device.",
+          },
+          patch_type: {
+            type: "string",
+            enum: ["os", "software"],
+            description:
+              "'os' covers operating system updates (Windows Update, macOS updates). 'software' covers NinjaOne third-party application patching.",
+          },
+          action: {
+            type: "string",
+            enum: ["scan", "apply"],
+            description:
+              "'scan' re-detects missing patches without installing anything. 'apply' installs approved pending patches and may reboot the device.",
+          },
+        },
+        required: ["device_id", "patch_type", "action"],
+      },
+    },
+    {
+      name: "ninjaone_devices_service_control",
+      description:
+        "DESTRUCTIVE: Start, stop, pause, or restart a Windows service on a device (POST /v2/device/{id}/windows-service/{serviceId}/control). Stopping a service can take a production application offline - confirm with the user first. " +
+        "Get the service_id from ninjaone_devices_services; it is the service's short name (e.g. 'Spooler'), not its display name.",
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          device_id: {
+            type: "number",
+            description: "Integer NinjaOne device ID. Windows devices only.",
+          },
+          service_id: {
+            type: "string",
+            description:
+              "Windows service short name from ninjaone_devices_services (e.g. 'Spooler', 'W32Time'), not the display name.",
+          },
+          action: {
+            type: "string",
+            enum: ["START", "STOP", "PAUSE", "RESTART"],
+            description: "Which control verb to send to the service.",
+          },
+        },
+        required: ["device_id", "service_id", "action"],
+      },
+    },
+    {
+      name: "ninjaone_devices_search",
+      description:
+        "Find devices by free text (GET /v2/devices/search): hostname, display name, logged-on user, or IP address. Use this when the user names a machine or a person and you need the numeric device_id every other device tool requires. Prefer it over paging ninjaone_devices_list looking for a match.",
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          ...SHAPE_PROPS,
+          query: {
+            type: "string",
+            description:
+              "Search text: a hostname, partial device name, username, or IP address (e.g. 'LAPTOP-42', 'jsmith', '10.1.2.').",
+          },
+          limit: {
+            type: "number",
+            description: "Maximum devices to return (default: 25).",
+          },
+        },
+        required: ["query"],
       },
     },
     {
       name: "ninjaone_devices_maintenance",
-      description: "DESTRUCTIVE: Start or cancel a maintenance window on a NinjaOne device by device_id (required) and action (required: start/cancel). While in maintenance, alerts are suppressed for the device.",
+      description:
+        "DESTRUCTIVE: Schedule or cancel a maintenance window on a device. During the window the chosen subsystems stop firing: use it before a planned reboot or patch run so on-call is not paged. " +
+        "action='start' requires end (a Unix epoch in seconds); omit start to begin now. action='cancel' clears the window immediately.",
       inputSchema: {
         type: "object" as const,
         properties: {
@@ -294,7 +425,29 @@ function getTools(): Tool[] {
           action: {
             type: "string",
             enum: ["start", "cancel"],
-            description: "Whether to start or cancel the maintenance window.",
+            description: "Whether to schedule a maintenance window or cancel the existing one.",
+          },
+          end: {
+            type: "number",
+            description:
+              "Window end as a Unix epoch in SECONDS (not milliseconds). Required when action is 'start' - the API rejects an open-ended window.",
+          },
+          start: {
+            type: "number",
+            description: "Window start as a Unix epoch in seconds. Omit to begin the window immediately.",
+          },
+          disabled_features: {
+            type: "array",
+            items: {
+              type: "string",
+              enum: ["ALERTS", "PATCHING", "AVSCANS", "TASKS"],
+            },
+            description:
+              "Which subsystems to suppress during the window. Defaults to ALERTS alone, which is the usual intent.",
+          },
+          reason: {
+            type: "string",
+            description: "Reason recorded on the device activity log.",
           },
         },
         required: ["device_id", "action"],
@@ -317,7 +470,7 @@ async function handleCall(
   switch (toolName) {
     case "ninjaone_devices_list": {
       const limit = (args.limit as number) || 50;
-      const cursor = args.cursor as string | undefined;
+      const after = args.after as number | undefined;
       let organizationId = args.organization_id as number | undefined;
 
       // If no organization filter provided, elicit organization selection
@@ -346,26 +499,32 @@ async function handleCall(
         }
       }
 
-      logger.info("API call: devices.list", {
-        organizationId,
-        deviceClass: args.device_class,
-        online: args.online,
-        limit,
-        cursor,
-      });
+      // /v2/devices has no organizationId, class or online params: every filter
+      // is one clause of the df expression. Setting them as separate params
+      // filters nothing and returns a whole-tenant list that reads like a
+      // scoped one, which is how device_class and online were silently inert.
+      const deviceFilter = args.device_filter as string | undefined;
+      let df = deviceFilter;
+      if (!df) {
+        const clauses: string[] = [];
+        if (organizationId !== undefined) clauses.push(`org = ${organizationId}`);
+        if (args.device_class !== undefined) clauses.push(`class = ${args.device_class as string}`);
+        if (args.online !== undefined) clauses.push(`online = ${args.online as boolean}`);
+        df = clauses.length > 0 ? clauses.join(" AND ") : undefined;
+      }
+
+      logger.info("API call: devices.list", { df, limit, after });
 
       try {
         const devices = await client.devices.list({
-          organizationId,
+          df,
           pageSize: limit,
-          cursor,
+          after,
         });
         logger.debug("API response: devices.list", { deviceCount: devices.length });
         return shapeList(devices as unknown as Record<string, unknown>[], deviceSummary, shapeArgs);
       } catch (err) {
-        return toolErrorFromCatch("ninjaone_devices_list", err, {
-          hint: "Verify NINJAONE_CLIENT_ID, NINJAONE_CLIENT_SECRET, and NINJAONE_REGION are set.",
-        });
+        return toolErrorFromCatch("ninjaone_devices_list", err);
       }
     }
 
@@ -393,7 +552,7 @@ async function handleCall(
       const reason = args.reason as string | undefined;
       logger.info("API call: devices.reboot", { deviceId, reason });
       try {
-        const result = await client.devices.reboot(deviceId, reason);
+        const result = await client.devices.reboot(deviceId, (args.mode as "NORMAL" | "FORCED" | undefined) ?? "NORMAL", args.reason as string | undefined);
         logger.debug("API response: devices.reboot", { deviceId });
         return shapeRaw({ success: true, message: "Reboot scheduled", result });
       } catch (err) {
@@ -469,7 +628,12 @@ async function handleCall(
       }
       logger.info("API call: devices.getInventoryByKind", { deviceId, kind });
       try {
-        const data = await client.devices.getInventoryByKind(deviceId, kind);
+        const filters: Record<string, string | undefined> = {
+          status: args.status as string | undefined,
+          type: args.type as string | undefined,
+          severity: args.severity as string | undefined,
+        };
+        const data = await client.devices.getInventoryByKind(deviceId, kind, filters);
         logger.debug("API response: devices.getInventoryByKind", { deviceId, kind });
         return shapeRaw(data as Record<string, unknown>);
       } catch (err) {
@@ -498,22 +662,100 @@ async function handleCall(
 
     case "ninjaone_devices_script_run": {
       const deviceId = args.device_id as number;
-      const scriptId = args.script_id as number;
-      if (!deviceId || !scriptId) {
-        return toolError("INVALID_ARGS", "device_id and script_id are required.");
+      const scriptId = args.script_id as number | undefined;
+      const actionUid = args.action_uid as string | undefined;
+      // The caller may name the mode explicitly; otherwise infer it from
+      // whichever identifier was supplied, since only one applies at a time.
+      const runType = (args.type as "SCRIPT" | "ACTION" | undefined) ??
+        (actionUid !== undefined ? "ACTION" : "SCRIPT");
+
+      if (!deviceId) {
+        return toolError("INVALID_ARGS", "device_id is required.");
       }
-      logger.info("API call: devices.runScript", { deviceId, scriptId });
+      if (runType === "SCRIPT" && scriptId === undefined) {
+        return toolError("INVALID_ARGS", "script_id is required when type is SCRIPT.", {
+          hint: "List catalog scripts with ninjaone_scripts_list and pass the numeric id.",
+        });
+      }
+      if (runType === "ACTION" && actionUid === undefined) {
+        return toolError("INVALID_ARGS", "action_uid is required when type is ACTION.", {
+          hint: "List built-in actions with ninjaone_scripts_list and pass the uid.",
+        });
+      }
+
+      logger.info("API call: devices.runScript", { deviceId, runType, scriptId, actionUid });
       try {
         const result = await client.devices.runScript(deviceId, {
-          scriptId,
+          type: runType,
+          id: runType === "SCRIPT" ? scriptId : undefined,
+          uid: runType === "ACTION" ? actionUid : undefined,
           parameters: args.parameters as string | undefined,
           runAs: args.run_as as string | undefined,
         });
-        return shapeRaw({ success: true, message: "Script run scheduled", result });
+        return shapeRaw({
+          success: true,
+          message: "Script run queued. Poll ninjaone_jobs_list for progress, or ninjaone_activities_list with activity_type='SCRIPTING' for the result.",
+          result,
+        });
       } catch (err) {
         return toolErrorFromCatch("ninjaone_devices_script_run", err, {
-          hint: "Verify device_id and script_id with ninjaone_devices_inventory kind='scripting-options'.",
+          hint: "Confirm the script exists with ninjaone_scripts_list, and that this device accepts it with ninjaone_devices_inventory kind='scripting/options'.",
         });
+      }
+    }
+
+    case "ninjaone_devices_patch_run": {
+      const deviceId = args.device_id as number;
+      const patchType = args.patch_type as "os" | "software";
+      const action = args.action as "scan" | "apply";
+      if (!deviceId || !patchType || !action) {
+        return toolError("INVALID_ARGS", "device_id, patch_type and action are all required.");
+      }
+      logger.info("API call: devices.runPatchAction", { deviceId, patchType, action });
+      try {
+        const result = await client.devices.runPatchAction(deviceId, patchType, action);
+        return shapeRaw({
+          success: true,
+          message: `${patchType} patch ${action} queued. Poll ninjaone_jobs_list for progress.`,
+          result,
+        });
+      } catch (err) {
+        return toolErrorFromCatch("ninjaone_devices_patch_run", err, {
+          hint: "Verify device_id with ninjaone_devices_list and confirm the device is online.",
+        });
+      }
+    }
+
+    case "ninjaone_devices_service_control": {
+      const deviceId = args.device_id as number;
+      const serviceId = args.service_id as string;
+      const action = args.action as "START" | "STOP" | "PAUSE" | "RESTART";
+      if (!deviceId || !serviceId || !action) {
+        return toolError("INVALID_ARGS", "device_id, service_id and action are all required.");
+      }
+      logger.info("API call: devices.controlService", { deviceId, serviceId, action });
+      try {
+        await client.devices.controlService(deviceId, serviceId, action);
+        return shapeRaw({ success: true, message: `Sent ${action} to ${serviceId}` });
+      } catch (err) {
+        return toolErrorFromCatch("ninjaone_devices_service_control", err, {
+          hint: "service_id is the service short name from ninjaone_devices_services, not its display name. Windows devices only.",
+        });
+      }
+    }
+
+    case "ninjaone_devices_search": {
+      const query = args.query as string;
+      if (!query) {
+        return toolError("INVALID_ARGS", "query is required.");
+      }
+      const limit = (args.limit as number) || 25;
+      logger.info("API call: devices.search", { query, limit });
+      try {
+        const result = await client.devices.search(query, limit);
+        return shapeRaw(result as Record<string, unknown>);
+      } catch (err) {
+        return toolErrorFromCatch("ninjaone_devices_search", err);
       }
     }
 
@@ -526,8 +768,20 @@ async function handleCall(
       logger.info("API call: devices.maintenance", { deviceId, action });
       try {
         if (action === "start") {
-          const result = await client.devices.startMaintenance(deviceId);
-          return shapeRaw({ success: true, message: "Maintenance window started", result });
+          const end = args.end as number | undefined;
+          if (end === undefined) {
+            return toolError("INVALID_ARGS", "end is required when action is 'start'.", {
+              hint: "Pass a Unix epoch in SECONDS for when the window should close; the API rejects an open-ended window.",
+            });
+          }
+          await client.devices.scheduleMaintenance(deviceId, {
+            end,
+            start: args.start as number | undefined,
+            disabledFeatures:
+              (args.disabled_features as Array<"ALERTS" | "PATCHING" | "AVSCANS" | "TASKS"> | undefined) ?? ["ALERTS"],
+            reasonMessage: args.reason as string | undefined,
+          });
+          return shapeRaw({ success: true, message: "Maintenance window scheduled" });
         } else if (action === "cancel") {
           await client.devices.cancelMaintenance(deviceId);
           return shapeRaw({ success: true, message: "Maintenance window cancelled" });

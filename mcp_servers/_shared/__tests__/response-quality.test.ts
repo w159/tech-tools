@@ -347,6 +347,30 @@ describe("toolErrorFromCatch", () => {
     assert.equal(parsed.error.code, "NOT_FOUND");
   });
 
+  it("tells the agent a 404 is not a credentials problem, overriding the caller hint", () => {
+    // Regression: every ninjaone handler passed "Verify NINJAONE_CLIENT_ID..."
+    // as its hint, so a wrong-path 404 was reported to the user as a missing
+    // API permission that did not exist.
+    const err = { status: 404, body: "not found" };
+    const result = toolErrorFromCatch("ninjaone_scripts_list", err, {
+      hint: "Verify NINJAONE_CLIENT_ID, NINJAONE_CLIENT_SECRET, and NINJAONE_REGION are set.",
+    });
+    const parsed = parseText(result) as { error: Record<string, unknown> };
+    const hint = parsed.error.hint as string;
+
+    assert.equal(parsed.error.code, "NOT_FOUND");
+    assert.ok(hint.includes("NOT a credentials or permissions failure"));
+    assert.ok(hint.includes("Do not tell the user to change API permissions"));
+  });
+
+  it("leaves the caller hint alone for non-404 errors", () => {
+    const err = { status: 403 };
+    const result = toolErrorFromCatch("devices.get", err, { hint: "Grant the Management scope." });
+    const parsed = parseText(result) as { error: Record<string, unknown> };
+
+    assert.equal(parsed.error.hint, "Grant the Management scope.");
+  });
+
   it("maps HTTP 429 to RATE_LIMITED", () => {
     const err = { status: 429 };
     const result = toolErrorFromCatch("reports.list", err);
@@ -367,7 +391,8 @@ describe("toolErrorFromCatch", () => {
       hint: "Use ninjaone_tickets_list to find valid IDs.",
     });
     const parsed = parseText(result) as { error: Record<string, unknown> };
-    assert.equal(parsed.error.hint, "Use ninjaone_tickets_list to find valid IDs.");
+    // The 404 guidance is prepended, but the caller's hint survives intact.
+    assert.ok((parsed.error.hint as string).endsWith("Use ninjaone_tickets_list to find valid IDs."));
   });
 
   it("handles unknown thrown shapes gracefully", () => {
@@ -395,7 +420,7 @@ describe("toolErrorFromCatch", () => {
     const parsed = parseText(result) as { error: Record<string, unknown> };
     assert.equal(parsed.error.code, "NOT_FOUND");
     assert.ok((parsed.error.message as string).includes("cw_get_ticket"));
-    assert.equal(parsed.error.hint, "Verify the ticket_id with cw_search_tickets first.");
+    assert.ok((parsed.error.hint as string).endsWith("Verify the ticket_id with cw_search_tickets first."));
   });
 
   it("maps Error subclass with status 429 to RATE_LIMITED", () => {

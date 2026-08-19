@@ -597,5 +597,65 @@
     "status": "verified",
     "verified_at": "2026-08-18T21:54:33+00:00",
     "verified_by": "live API call; pre-existing, not introduced by 5.13.0"
+  },
+  {
+    "id": "S1-noise-reduction",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas 5.14.0: hook noise cut, TodoWrite/steering/worktree rules added",
+    "evidence": [
+      "plugins/atlas/hooks (pytest): 578 passed, 3 skipped, 67 subtests"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m pytest -q plugins/atlas/hooks",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-08-19T12:49:24+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "S2-gate-mechanisms",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Gate conditions (i) todo-drain and (j) worktree close-out, plus the (f) git cross-check",
+    "evidence": [
+      "hooks+scripts pytest: 1195 passed, 3 skipped; mutation-checked"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m pytest -q plugins/atlas/hooks plugins/atlas/scripts",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-08-19T14:26:43+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "ninjaone-mcp-1.8.0-wrong-endpoints",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "high",
+    "title": "Five NinjaOne endpoints were transcribed wrong, and the 404 hint blamed credentials",
+    "evidence": [
+      "live red: ninjaone_scripts_list -> HTTP 404 with hint Verify NINJAONE_CLIENT_ID... on installed 1.7.0",
+      "spec NinjaRMM-API-v2.json has /v2/automation/scripts, no /v2/scripts",
+      "node-ninjaone: npm test 111 passed (was 94), typecheck clean",
+      "ninjaone-mcp: npm test 162 passed / 11 pre-existing failures (baseline 142/11 on 6df018c)",
+      "_shared: 66 passed / 0 failed",
+      "rebuilt bundle standalone: MCP handshake as ninjaone-mcp 1.8.0, 45 tools"
+    ],
+    "doc_refs": [
+      "docs/vendors/ninjaone/api-reference.md",
+      "docs/CHANGELOG.md",
+      "plugins/atlas/CHANGELOG.md"
+    ],
+    "reproduction": "cd mcp_node/node-ninjaone && npm test; cd ../../mcp_servers/ninjaone-mcp && npm test",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-08-19T15:55:00+00:00",
+    "verified_by": "test-suite"
   }
 ]

@@ -15,6 +15,7 @@ import { WebhooksResource } from './resources/webhooks.js';
 import { QueriesResource } from './resources/queries.js';
 import { AutomationResource } from './resources/automation.js';
 import { DirectoryResource } from './resources/directory.js';
+import { VulnerabilityResource } from './resources/vulnerability.js';
 
 /**
  * NinjaOne API Client
@@ -66,6 +67,8 @@ export class NinjaOneClient {
   readonly automation: AutomationResource;
   /** Policies, groups, users, locations, roles, node classes */
   readonly directory: DirectoryResource;
+  /** Vulnerability scan groups */
+  readonly vulnerability: VulnerabilityResource;
 
   constructor(config: NinjaOneConfig) {
     this.config = resolveConfig(config);
@@ -82,6 +85,7 @@ export class NinjaOneClient {
     this.queries = new QueriesResource(this.httpClient);
     this.automation = new AutomationResource(this.httpClient);
     this.directory = new DirectoryResource(this.httpClient);
+    this.vulnerability = new VulnerabilityResource(this.httpClient);
   }
 
   /**

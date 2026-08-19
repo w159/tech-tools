@@ -21,21 +21,64 @@ import {
 // Constants
 // ---------------------------------------------------------------------------
 
+/**
+ * Every GET /v2/queries/{name} endpoint in the NinjaRMM v2 spec.
+ *
+ * All 24 take the same df/pageSize/cursor contract and return
+ * { cursor, results }. Keeping the list complete here is what lets an agent
+ * answer a fleet question without knowing the REST surface.
+ */
 const QUERY_NAMES = [
-  "custom-fields",
-  "os-patches",
-  "os-patch-installs",
-  "software",
   "antivirus-status",
+  "antivirus-threats",
+  "backup/usage",
   "computer-systems",
-  "operating-systems",
-  "processors",
+  "custom-fields",
+  "custom-fields-detailed",
+  "device-health",
   "disks",
-  "volumes",
-  "network-interfaces",
   "logged-on-users",
+  "network-interfaces",
+  "operating-systems",
+  "os-patch-installs",
+  "os-patches",
   "policy-overrides",
+  "processors",
+  "raid-controllers",
+  "raid-drives",
+  "scoped-custom-fields",
+  "scoped-custom-fields-detailed",
+  "software",
+  "software-patch-installs",
+  "software-patches",
+  "volumes",
+  "windows-services",
 ] as const;
+
+/** One-line purpose per query, inlined into the tool description. */
+const QUERY_GUIDE = [
+  "antivirus-status: AV product name, state and definition age per device",
+  "antivirus-threats: detected threats with device and detection time",
+  "backup/usage: backup storage consumed per device",
+  "computer-systems: make, model, serial, chassis and BIOS per device",
+  "custom-fields / custom-fields-detailed: device custom field values (detailed adds metadata)",
+  "device-health: overall health rollup per device",
+  "disks: physical disk model, size, SMART status",
+  "logged-on-users: last logged-on user per device",
+  "network-interfaces: NICs, MACs and IP addresses",
+  "operating-systems: OS name, build, install date, architecture",
+  "os-patches: pending, failed and rejected OS patches (supports status/type/severity)",
+  "os-patch-installs: OS patch installation history (supports installed_after/before)",
+  "policy-overrides: per-device deviations from assigned policy",
+  "processors: CPU model, cores, clock speed",
+  "raid-controllers / raid-drives: RAID hardware health",
+  "scoped-custom-fields / scoped-custom-fields-detailed: custom fields limited to the API app's scope",
+  "software: installed software inventory across the fleet",
+  "software-patches: pending, failed and rejected third-party patches",
+  "software-patch-installs: third-party patch installation history",
+  "volumes: logical volumes with capacity and free space",
+  "windows-services: service name, state and start type across the fleet",
+].join("; ");
 
 type QueryName = (typeof QUERY_NAMES)[number];
 
@@ -85,6 +128,10 @@ function buildQueryParams(args: Record<string, unknown>): Record<string, string 
   if (args.page_size !== undefined) params.pageSize = args.page_size as number;
   if (args.cursor !== undefined) params.cursor = args.cursor as string;
   if (args.status !== undefined) params.status = args.status as string;
+  if (args.type !== undefined) params.type = args.type as string;
+  if (args.severity !== undefined) params.severity = args.severity as string;
+  if (args.product_name !== undefined) params.productName = args.product_name as string;
+  if (args.product_state !== undefined) params.productState = args.product_state as string;
 
   // Only meaningful for os-patch-installs, but passed through regardless
   // (the query endpoint ignores params it doesn't recognize).
@@ -130,7 +177,26 @@ const FILTER_PROPS = {
   },
   status: {
     type: "string",
-    description: "Status filter passthrough, where the query supports it (e.g. os-patches).",
+    description:
+      "Patch status filter for os-patches / software-patches (e.g. APPROVED, FAILED, REJECTED, PENDING). Ignored by queries that do not support it.",
+  },
+  type: {
+    type: "string",
+    description:
+      "Patch type filter for os-patches / software-patches (e.g. PATCH, INSTALLER, FEATURE_PACK).",
+  },
+  severity: {
+    type: "string",
+    description:
+      "Patch severity filter for os-patches / software-patches (e.g. CRITICAL, IMPORTANT, MODERATE, LOW, OPTIONAL). Use this for a fleet-wide critical-patch-missing report.",
+  },
+  product_name: {
+    type: "string",
+    description: "Antivirus product name filter; only meaningful for query=antivirus-status.",
+  },
+  product_state: {
+    type: "string",
+    description: "Antivirus product state filter; only meaningful for query=antivirus-status.",
   },
 } as const;
 
@@ -139,7 +205,9 @@ function getTools(): Tool[] {
     {
       name: "ninjaone_queries_run",
       description:
-        "Run a NinjaOne cross-org fleet-reporting query (GET /v2/queries/{query}). Returns unshaped vendor records plus a cursor for pagination. Use organization_id or device_filter to scope results — these endpoints accept no organizationId param.",
+        "Run a NinjaOne cross-org fleet-reporting query (GET /v2/queries/{query}). This is the primary tool for any fleet-wide question: patch compliance, antivirus posture, hardware and software inventory, disk capacity, logged-on users. It returns data for every device the API app can see in one call, so prefer it over looping ninjaone_devices_inventory per device. " +
+        "Scope with organization_id or device_filter (these endpoints accept no organizationId param). Page with page_size plus the cursor from the previous response. Results are unshaped vendor records. " +
+        "Available queries -- " + QUERY_GUIDE + ".",
       inputSchema: {
         type: "object" as const,
         properties: {
@@ -148,10 +216,25 @@ function getTools(): Tool[] {
           query: {
             type: "string",
             enum: [...QUERY_NAMES],
-            description: "Which fleet-reporting query to run.",
+            description:
+              "Which fleet-reporting query to run. See the tool description for what each one returns.",
           },
         },
         required: ["query"],
+      },
+    },
+    {
+      name: "ninjaone_vulnerability_scan_groups",
+      description:
+        "List NinjaOne vulnerability scan groups, or read one by scan_group_id (GET /v2/vulnerability/scan-groups). Scope note: the public v2 API exposes only scan-group configuration here, not per-device CVE findings. For actual vulnerability posture use ninjaone_queries_run with query=os-patches (severity=CRITICAL), software-patches, or antivirus-threats.",
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          scan_group_id: {
+            type: "string",
+            description: "Scan group identifier. Omit to list every scan group.",
+          },
+        },
       },
     },
     {
@@ -205,9 +288,7 @@ async function runQuery(
     logger.debug("API response: queries.run", { query: queryName });
     return shapeRaw(result);
   } catch (err) {
-    return toolErrorFromCatch("ninjaone_queries_run", err, {
-      hint: "Verify NINJAONE_CLIENT_ID, NINJAONE_CLIENT_SECRET, and NINJAONE_REGION are set.",
-    });
+    return toolErrorFromCatch("ninjaone_queries_run", err);
   }
 }
 
@@ -228,6 +309,21 @@ async function handleCall(
 
     case "ninjaone_devices_os_patch_installs": {
       return runQuery("os-patch-installs", args);
+    }
+
+    case "ninjaone_vulnerability_scan_groups": {
+      const client = await getClient();
+      const scanGroupId = args.scan_group_id as string | undefined;
+      logger.info("API call: vulnerability.scanGroups", { scanGroupId });
+      try {
+        const result =
+          scanGroupId === undefined
+            ? await client.vulnerability.listScanGroups()
+            : await client.vulnerability.getScanGroup(scanGroupId);
+        return shapeRaw(result);
+      } catch (err) {
+        return toolErrorFromCatch("ninjaone_vulnerability_scan_groups", err);
+      }
     }
 
     default:
