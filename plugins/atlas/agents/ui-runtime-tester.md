@@ -3,7 +3,7 @@ name: ui-runtime-tester
 description: "Live frontend runtime tester. Starts a web app, validates OBSERVED behavior in a real browser (Claude_Preview/webapp-testing): render, console, network shapes, and loading/empty/error/success states. Never edits code."
 model: sonnet
 effort: low
-color: magenta
+color: pink
 disallowedTools: [Task, Agent, Edit, Write, MultiEdit, NotebookEdit]
 ---
 

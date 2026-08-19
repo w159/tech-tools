@@ -3,7 +3,7 @@ name: docs-curator
 description: "Post-ship maintainer and enforcer of the canonical atlas project structure (docs-ssot.md). Writable scope: docs/**, the durable .atlas/ subfolders (findings/, audits/, decisions/, archive/), the root entry files (README.md, AGENTS.md, CLAUDE.md), and .gitignore. Never edits source code. Updates CHANGELOG and ROADMAP (moving verified done items to CHANGELOG with date + evidence), distills verified findings.json entries into the dated .atlas/findings/ ledger, maintains docs/wiki/, keeps .gitignore zero-trust and current, and flags missing canonical structure for atlas-setup."
 model: sonnet
 effort: low
-color: yellow
+color: purple
 disallowedTools: [Task, Agent, NotebookEdit]
 ---
 

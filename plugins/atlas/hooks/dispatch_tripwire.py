@@ -285,18 +285,12 @@ def main():
                         "hookSpecificOutput": {
                             "hookEventName": "PostToolUse",
                             "additionalContext": (
-                                "[atlas] The verifier returned but .atlas/.run/"
-                                "findings.json gained no entry, so its verdict is "
-                                "prose only and the completion gate cannot see it. "
-                                "Write it yourself now, from the verdict it just "
-                                "returned:\n"
+                                "[atlas] verifier verdict not in findings.json - record it "
+                                "yourself (do not re-dispatch):\n"
                                 '  python3 "$CLAUDE_PLUGIN_ROOT/scripts/'
-                                'atlas_finding.py" --id <stage> --status '
-                                "verified|rejected|needs-evidence --title '<one "
-                                "line>' --evidence '<path or test id>' "
-                                "--reproduction '<exact command>'\n"
-                                "Do not re-dispatch the verifier to fix this, and do "
-                                "not treat the chat text as the record."
+                                "atlas_finding.py\" --id <stage> --status "
+                                "verified|rejected|needs-evidence --evidence "
+                                "'<path or test id>' --reproduction '<command>'"
                             ),
                         }
                     }
@@ -333,6 +327,11 @@ def main():
             if agent_type.startswith(("atlas:", "atlas-")):
                 # Dispatching an atlas squad agent is unambiguous orchestration.
                 atlas_db.mark_orchestrating(conn, session, payload.get("cwd"))
+            if str(tinput.get("isolation", "")).strip() == "worktree":
+                # An isolated writer leaves a tree behind once it has changes.
+                # Recording it here is what lets the completion gate demand
+                # close-out without firing on the user's own worktrees.
+                atlas_db.mark_used_worktrees(conn, session)
             return
 
         run_id = atlas_db.current_run_id(conn, session)
@@ -351,14 +350,12 @@ def main():
                 return  # WS1: non-orchestration sessions are logged but never nagged
             if edit_to_target:
                 msg = (
-                    "STOP - atlas orchestrators never edit target code inline. "
-                    "Route this %s of %s to atlas:implementer." % (tool, path)
+                    "STOP - route this %s of %s to atlas:implementer." % (tool, path)
                 )
             else:
                 msg = (
-                    "STOP - %d inline ops since your last dispatch with no dispatch. This is "
-                    "orchestrator drift. Dispatch the next investigative or edit "
-                    "step to a subagent (atlas:explorer / atlas:implementer)." % count
+                    "STOP - %d inline ops, no dispatch. Route the next step to "
+                    "atlas:explorer / atlas:implementer." % count
                 )
             out = {
                 "hookSpecificOutput": {

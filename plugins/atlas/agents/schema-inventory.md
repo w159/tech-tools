@@ -4,7 +4,7 @@ description: Read-only PostgreSQL catalog inventory. Enumerates tables, columns,
 disallowedTools: [Task, Agent, Edit, MultiEdit, NotebookEdit]
 model: haiku
 effort: low
-color: yellow
+color: cyan
 ---
 
 ## You do not dispatch

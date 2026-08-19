@@ -2,9 +2,9 @@
 name: naming-glossary-audit
 description: Read-only audit of PostgreSQL table and column names against a project glossary, focused on a user_* to client_* transition. Use for the nomenclature half of a database audit.
 disallowedTools: [Task, Agent, Edit, MultiEdit, NotebookEdit]
-model: sonnet
+model: haiku
 effort: low
-color: yellow
+color: orange
 ---
 
 ## You do not dispatch

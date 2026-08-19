@@ -1,9 +1,9 @@
 ---
 name: docs-auditor
 description: "READ-ONLY drift auditor for the canonical atlas project structure (docs-ssot.md). Compares docs/ (CHANGELOG, ROADMAP, architecture, AGENTS.md), the .atlas/ structure, root entry files, and .gitignore against real code and returns a per-area verdict (current/stale/missing) with file:line evidence. Never writes."
-model: sonnet
+model: haiku
 effort: low
-color: yellow
+color: orange
 disallowedTools: [Task, Agent, Write, Edit, MultiEdit, NotebookEdit]
 ---
 

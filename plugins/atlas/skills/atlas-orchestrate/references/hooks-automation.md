@@ -107,7 +107,7 @@ orchestrator rationalizes "I'll mark it unverified and move on"); this is the ma
   up to 6 levels) AND the session's run is flagged orchestrating in the atlas DB (the
   dispatch-tripwire hook sets that flag automatically when an orchestration skill is invoked or
   an `atlas:*` subagent is dispatched). In any other session it is a silent no-op.
-- **What satisfies it.** All seven conditions must hold:
+- **What satisfies it.** All nine conditions must hold:
   - (a) At least one file under `.atlas/evidence/` (observed-behavior proof captured).
   - (b) `.atlas/.run/findings.json` exists and records at least one entry with status `verified`
     (an independent check happened - a deterministic test recorded via
@@ -115,9 +115,11 @@ orchestrator rationalizes "I'll mark it unverified and move on"); this is the ma
   - (c) `docs/CHANGELOG.md` exists and is non-empty.
   - (d) `docs/ROADMAP.md` exists and is non-empty.
   - (e) `README.md` at the project root exists and is non-empty.
-  - (f) No docs drift: if non-docs files changed this run (git diff HEAD + staged), at least
-    one `docs/` file changed too -- the deterministic trigger forcing an `atlas:docs-curator`
-    dispatch before "done".
+  - (f) No docs drift: if non-docs files changed this run, at least one `docs/` file changed
+    too -- the deterministic trigger forcing an `atlas:docs-curator` dispatch before "done".
+    The primary signal is `run_changed_paths` (tool calls carrying a `file_path`), which is
+    blind to a file written by a Bash-invoked script, so the gate cross-checks `git` before
+    blocking. That suppression is one-directional: it can only prevent a false block.
   - (g) Law 5 - verification coverage: if non-docs code changed this run, block when
     implementer dispatches outnumber the independent checks that covered them. Two things
     count as a check, and they are interchangeable: an `atlas:verifier` dispatch, or a
@@ -126,6 +128,14 @@ orchestrator rationalizes "I'll mark it unverified and move on"); this is the ma
     `max(0, unpaired_implementer_dispatches - verified_findings_stamped_this_run)`. Entries
     inherited from an earlier run, and undated entries, earn no credit - they prove nothing
     about the code this run shipped.
+  - (i) Todo drain: if this run shipped code and the most recent `TodoWrite` call in the
+    transcript still holds non-`completed` items, block. TodoWrite rewrites the whole list
+    every call, so the last one is current state. A run with no todo list passes -- (i)
+    enforces draining a list, not creating one.
+  - (j) Worktree close-out: if this run dispatched an agent with `isolation: "worktree"`
+    (recorded by the dispatch tripwire in `runs.used_worktrees`) and `git worktree list`
+    still shows trees beyond the main one, block. Scoped to this run's own dispatches, so a
+    user's long-lived worktrees never trip it.
   The block message names exactly which condition(s) are missing.
 - **Single nudge, never a wedge.** It blocks the stop at most **once** (the `stop_hook_active`
   loop-guard), then lets the continuation through. Fail-open on any error. Disable entirely with

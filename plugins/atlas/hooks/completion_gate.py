@@ -12,7 +12,7 @@ of truth that atlas-setup scaffolds. Atlas-internal state (evidence, run
 findings) lives under `.atlas/` directly, never under a `.atlas/docs/` layer. In any
 session with no `docs/` it is a silent no-op, so it is safe to leave installed.
 
-Seven conditions must ALL hold before the gate passes (else block ONCE):
+Nine conditions must ALL hold before the gate passes (else block ONCE):
   (a) At least one file exists under `.atlas/evidence/`. Scoped like (f)/(g):
       only checked when THIS RUN shipped non-docs code (_nondocs_changed on
       the run-write signal). A run that shipped no code has no evidence to
@@ -42,6 +42,15 @@ Seven conditions must ALL hold before the gate passes (else block ONCE):
       "done" that should have been moved to CHANGELOG, block. A "done" item
       in ROADMAP is a defect -- it belongs in CHANGELOG with a date and
       evidence citation.
+  (i) Todo drain: if this run shipped code and the transcript's most recent
+      TodoWrite call still holds non-"completed" items, block. TodoWrite writes
+      the whole list every time, so the last call is current state. A run with
+      no todo list at all passes -- (i) enforces draining a list, not creating
+      one.
+  (j) Worktree close-out: if this run dispatched an agent with
+      isolation="worktree" (recorded by dispatch_tripwire) and `git worktree
+      list` still shows trees beyond the main one, block. Scoped to this run's
+      own dispatches so a user's long-lived worktrees never trip it.
 
 (a), (b), (f), and (g) all share one signal: whether THIS RUN shipped
 non-docs code (_nondocs_changed on the run-write signal from atlas_db). A
@@ -168,6 +177,121 @@ def _nondocs_changed(changed_paths: list) -> bool:
     return False
 
 
+def _docs_moved_in_git(root: Path) -> bool:
+    """True when git sees a changed docs/ path, regardless of how it was written.
+
+    Condition (f)'s primary signal is `run_changed_paths`, which is fed by tool
+    calls carrying a `file_path`. A docs file written by a Bash-invoked script
+    never produces one, so a run whose docs are genuinely current can still be
+    blocked for drift - observed twice while shipping 5.14.0. This is the
+    cross-check: git-visible docs movement suppresses the block.
+
+    Deliberately one-directional. It can only PREVENT a false block, never cause
+    one. The cost is that stale docs edits left by an earlier session can mask
+    this run's real drift; that is the cheaper failure than blocking a run that
+    already did the work, which is how a gate teaches people to ignore it.
+    """
+    try:
+        changed = _git_changed_paths(root)
+    except Exception:
+        return False  # git unavailable -> no suppression, primary signal stands
+    return any(p.startswith("docs/") or "/docs/" in p for p in changed)
+
+
+def _open_todos(transcript_path: str) -> int:
+    """Count non-`completed` items in the run's most recent TodoWrite call.
+
+    TodoWrite always writes the WHOLE list, so the last call in the transcript is
+    the current state - no replay or merging needed. Returns 0 when there is no
+    todo list at all: condition (i) enforces DRAINING a list, not creating one.
+    Creation is the skill's job (and the harness has its own reminder for it);
+    a gate that demands a todo list for a two-line run is the busywork this
+    plugin exists to avoid.
+
+    Fail-open on everything: unreadable file, malformed JSON line, unexpected
+    shape. A gate that cannot read the transcript must not block on it.
+    """
+    if not transcript_path:
+        return 0
+    latest = None
+    try:
+        with open(transcript_path, encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                if '"TodoWrite"' not in line:
+                    continue  # cheap prefilter; the JSON parse below is the real test
+                try:
+                    rec = json.loads(line)
+                except (json.JSONDecodeError, ValueError):
+                    continue
+                content = ((rec.get("message") or {}).get("content")) or []
+                if not isinstance(content, list):
+                    continue
+                for block in content:
+                    if (
+                        isinstance(block, dict)
+                        and block.get("type") == "tool_use"
+                        and block.get("name") == "TodoWrite"
+                    ):
+                        todos = (block.get("input") or {}).get("todos")
+                        if isinstance(todos, list):
+                            latest = todos
+    except (OSError, UnicodeDecodeError):
+        return 0
+    if not latest:
+        return 0
+    return sum(
+        1
+        for item in latest
+        if isinstance(item, dict) and item.get("status") != "completed"
+    )
+
+
+def _leftover_worktrees(root: Path) -> list:
+    """Extra git worktrees still on disk, excluding the main one.
+
+    Only consulted when THIS RUN actually dispatched an isolated writer (the
+    tripwire records that), so a user's own long-lived worktrees never trip the
+    gate. A gate that fires on someone else's tree is exactly the false positive
+    that trains people to stop reading gates.
+    """
+    import subprocess
+
+    try:
+        out = subprocess.check_output(
+            ["git", "-C", str(root), "worktree", "list", "--porcelain"],
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+        ).decode(errors="replace")
+    except Exception:
+        return []  # not a repo, no git, or command error -> nothing to report
+    paths = [
+        ln[len("worktree ") :].strip()
+        for ln in out.splitlines()
+        if ln.startswith("worktree ")
+    ]
+    return paths[1:]  # the first entry is always the main working tree
+
+
+def _run_used_worktrees(session_id: str) -> bool:
+    """Did this run dispatch an agent with isolation="worktree"? Fail-open False."""
+    conn = None
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db
+
+        conn = atlas_db.connect()
+        atlas_db.init(conn)
+        return atlas_db.run_used_worktrees(conn, session_id)
+    except Exception:
+        return False
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
 def _reason(
     missing_a: bool,
     missing_b: bool,
@@ -178,6 +302,8 @@ def _reason(
     unverified: int = 0,
     git_error: str = "",
     roadmap_not_reconciled: bool = False,
+    open_todos: int = 0,
+    worktrees: list | None = None,
 ) -> str:
     parts = []
     if missing_a:
@@ -254,6 +380,21 @@ def _reason(
             "-> Dispatch atlas:docs-curator to move completed and verified "
             "items from ROADMAP to CHANGELOG, then retry Stop."
         )
+    if open_todos > 0:
+        parts.append(
+            "  (i) Todo list not drained: %d item(s) are still open. An item is "
+            "`completed` only when its check passed -- not when a subagent returned. "
+            "-> Finish them, or mark what you are deliberately leaving and say so "
+            "out loud in your reply, then retry Stop." % open_todos
+        )
+    if worktrees:
+        parts.append(
+            "  (j) %d git worktree(s) from this run are still on disk: %s. A worktree "
+            "holding changes does not clean itself up. -> For each: commit inside it if "
+            "`git -C <tree> status --porcelain` is non-empty, merge it into the local "
+            "branch (git merge --no-ff <branch>), then `git worktree remove` it. Offer "
+            "the push; never run it unasked." % (len(worktrees), ", ".join(worktrees[:4]))
+        )
     failed = "\n".join(parts)
     return (
         "[atlas] Definition-of-done gate: the following condition(s) are not met:\n"
@@ -323,7 +464,12 @@ def main() -> int:
         ok_h = _check_roadmap_reconciled(root)
         # (f) Docs drift BLOCKS: THIS RUN's own writes moved code but docs/
         # did not.
+        # (f) Docs drift BLOCKS, but the primary signal is tool-call-scoped and
+        # therefore blind to docs written by a Bash-invoked script. Cross-check
+        # git before blocking so a run whose docs ARE current is not stopped.
         drift = _docs_drift(run_paths) if code_changed else False
+        if drift and _docs_moved_in_git(root):
+            drift = False
         # (g) Law 5 -- verifier coverage. Only when THIS RUN's own writes
         # touched non-docs code: block if implementer dispatches outnumber
         # verifier dispatches. An implementer still in flight, or one that
@@ -335,6 +481,16 @@ def main() -> int:
         # findings.json entry written during this run -- a deterministic test is
         # the stronger evidence of the two, and demanding a second subagent for a
         # one-file change is what turned every simple task into a wave.
+        # (i) Todo drain and (j) worktree close-out: both are run-scoped and
+        # fail-open, and neither fires on a run that shipped no code.
+        open_todos = (
+            _open_todos(str(data.get("transcript_path") or "")) if code_changed else 0
+        )
+        worktrees = (
+            _leftover_worktrees(root)
+            if code_changed and _run_used_worktrees(data.get("session_id", ""))
+            else []
+        )
         unverified = 0
         if code_changed:
             session = data.get("session_id", "")
@@ -352,6 +508,8 @@ def main() -> int:
             and ok_h
             and not drift
             and unverified == 0
+            and open_todos == 0
+            and not worktrees
         ):
             # Silence on pass is the contract: the gate speaks only when it
             # blocks. No advisory, no "not evaluated" narration -- any output
@@ -368,6 +526,8 @@ def main() -> int:
                 ("f", drift),
                 ("g", unverified > 0),
                 ("h", not ok_h),
+                ("i", open_todos > 0),
+                ("j", bool(worktrees)),
             )
             if failing
         ]
@@ -382,6 +542,8 @@ def main() -> int:
             unverified,
             "",
             not ok_h,
+            open_todos,
+            worktrees,
         )
         print(json.dumps({"decision": "block", "reason": block_reason}))
     except Exception as exc:  # noqa: BLE001 -- a Stop hook must never wedge the session

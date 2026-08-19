@@ -6,6 +6,22 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 
 ## In Progress
 
+- [in-progress] atlas 5.14.0 is committed but not installed. The live plugin cache
+  still runs 5.13.0, so the noise reduction, gate conditions (i)/(j), the (f)
+  cross-check, and the skill-level todo/steering/worktree rules are all inert
+  until reinstall. `InstalledParityContract` in
+  `plugins/atlas/hooks/test_atlas_contract.py:447` skips while the versions
+  differ and re-arms afterward.
+- [in-progress] Gate conditions (i) and (j) are verified against fixtures and
+  mutation-checked, but never against a live payload: this session's toolset has
+  no `TodoWrite`, so no real TodoWrite tool_use has passed through `_open_todos`,
+  and no real `isolation: "worktree"` dispatch has passed through the tripwire.
+  To close: after reinstall, run one orchestration task that writes a todo list
+  and dispatches an isolated writer, then `Stop`. Expected: the gate blocks with
+  "(i) Todo list not drained" until the list is completed, and with "(j) N git
+  worktree(s) from this run are still on disk" until the trees are merged and
+  removed.
+
 - [in-progress] Vendored upstream clones (aider/, claude-code/, cline/, codex/, cursor/,
   gemini-cli/, github-copilot/, pi/, windsurf/, frameworks/, vendors/) still live in docs/.
   Decision needed: move to `reference/` at repo root, or keep in docs/ as reference material.
