@@ -27,8 +27,12 @@ class TestAtlasDashboard(unittest.TestCase):
             if s.get("is_live"):
                 # live requires recent tools/events fields present
                 self.assertTrue((s.get("recent_tool_calls") or 0) + (s.get("recent_events") or 0) > 0)
-        self.assertIn("Settings / credentials", self.mod.UI_HTML)
+        self.assertIn("Connector credentials", self.mod.UI_HTML)
         self.assertIn("data-save-connector", self.mod.UI_HTML)
+        self.assertIn("connector-grid", self.mod.UI_HTML)
+        self.assertIn("repeat(3, minmax(0, 1fr))", self.mod.UI_HTML)
+        self.assertIn("Command Center", self.mod.UI_HTML)
+        self.assertIn("/assets/mark.svg", self.mod.UI_HTML)
         self.assertNotIn("_maybe_refresh_open_sessions", self.mod.UI_HTML)
         self.assertFalse(hasattr(self.mod, "_maybe_refresh_open_sessions"))
     def test_env_write_rejects_unknown(self):
