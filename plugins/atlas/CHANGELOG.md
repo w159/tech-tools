@@ -1,5 +1,15 @@
 # Changelog
 
+## 5.18.0
+### Changed
+- Dashboard UI redesign: branded **Atlas Command Center** shell with sidebar nav, hero, KPI cards, SVG icon system, and marketplace hero art (`/assets/*` from repo `img/`).
+- Connector credentials are compact **⅓-width cards** (`grid-template-columns: repeat(3, …)`), not full-bleed forms.
+- Overview / Live / Connectors / Findings as first-class sections; toast on credential save.
+
+### Fixed
+- Credential drafts still survive auto-refresh; set detection remains pluginConfigs + plugin-root `.env` + markers (no install-cache paths).
+
+
 ## 5.17.1
 ### Fixed
 - Local multi-session dashboard accuracy and credentials UX.
