@@ -2,7 +2,7 @@
 name: atlas-harden
 description: Write an idempotent endpoint remediation script using a CHECK/SET/VERIFY pattern for RMM/MDM, proving whether it changed state or was already compliant.
 when_to_use: write an idempotent endpoint remediation script with CHECK/SET/VERIFY for RMM/MDM that proves compliant or changed
-allowed-tools: Read, Glob, Grep, Bash, Edit, MultiEdit
+allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '[objective] [target OS/devices] [deployment context: RMM run-as, one-shot/scheduled, known GPO/MDM interactions]'
 ---
 

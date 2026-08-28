@@ -76,7 +76,6 @@ the practical before and after once the plugin is installed.
 1. **Add the marketplace.** In Claude Code, run `/plugin` and add this repo's
    marketplace file, `.claude-plugin/marketplace.json` (catalog name `tech-tools`,
    version `3.1.0`, listing three plugins: `atlas`, `armada`, `programmer`).
-   Kimi Code CLI is also supported through `.kimi-plugin/marketplace.json`.
 2. **Install the plugin.** Install `atlas` from the marketplace. Two optional
    plugins live in the same catalog: `armada` for the 11-department org
    toolset (`plugins/armada/`), and `programmer` for a Pragmatic Programmer
@@ -408,7 +407,6 @@ atlas/
 
 ## Prerequisites and configuration
 
-- **Claude Code** (or Kimi Code CLI via `.kimi-plugin/marketplace.json`).
 - **Python 3** for all 11 hooks and the `scripts/` tooling. No third-party
   libraries: hooks are stdlib only.
 - **claude-mem** and **context-mode** companion plugins (required;

@@ -24,7 +24,7 @@ from docs_drift import find_root  # noqa: E402
 
 INLINE_TOOLS = {"Read", "Grep", "Glob", "Edit", "Write", "Bash"}
 DISPATCH_TOOLS = {"Agent", "Task"}
-EDIT_TOOLS = {"Edit", "Write", "MultiEdit"}
+EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 # PreToolUse deny tier: the Nth UNSANCTIONED inline op with no intervening dispatch
 # is denied. 6 prior ops means this call is the 7th -> deny. Sanctioned writes (the
 # orchestrator's own docs/ and .atlas/ edits, which the completion gate requires at

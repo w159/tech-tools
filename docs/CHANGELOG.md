@@ -1,6 +1,112 @@
 # Changelog
 
+## 2026-08-28 -- Atlas multi-session dashboard + version bump
+
+- Marketplace `3.7.0`; atlas `5.17.0`; armada `1.1.1`; programmer `0.1.1`.
+- Atlas dashboard: shared UI at `http://127.0.0.1:7421/` for concurrent agent terminals (project/session switcher).
+- Kimi dual-manifest packaging removed earlier the same day.
+
+
+## 2026-08-28 -- Remove Kimi Code CLI dual-manifest support
+
+Removed all Kimi marketplace / dual-manifest packaging from this repo. The tech-tools marketplace is Claude Code only (atlas, armada, programmer via `.claude-plugin/marketplace.json`).
+
+Deleted:
+- root `.kimi-plugin/` (marketplace.json, import-plan.json, import-report.json)
+- root `kimi.plugin.json`
+- `plugins/atlas/.kimi-plugin/`, `plugins/armada/.kimi-plugin/`, `plugins/programmer/.kimi-plugin/`
+
+Updated living docs (README, plugins/README, AGENTS.md, docs/AGENTS.md, .gitignore) and tests that required claude/kimi version parity.
+
+
 Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
+
+---
+
+## 2026-08-20 -- atlas ran on Bash and kept no todo list: both were Claude Code auto mode
+
+Two complaints, one cause. Neither was an atlas regression: `permissionMode:
+"auto"` is recorded in 201 session transcripts, earliest 2026-07-21, a month
+before the 5.15.0 refactor that got blamed.
+
+**Auto mode injects a bash-first steer.** It lands after CLAUDE.md and after the
+output style, so it outranks `assets/rules/mcp-tools.md`:
+
+> Do your work through the Bash tool wherever it can accomplish the job: read
+> files with cat, head, or sed -n, search with grep and find, and make file
+> changes with sed, heredocs, or short scripts, rather than using the dedicated
+> Read, Edit, or Write tools.
+
+Tool census over the last eight sessions matches the directive exactly - MCP is
+reached for only where Bash cannot do the job:
+
+| Session | Bash | MCP |
+|---|---|---|
+| hyper_plugins `eddacb2c` | 24 | 0 |
+| hyper_plugins `0dd963bf` | 106 | 0 |
+| tech-tools `e9d694ab` | 29 | 0 |
+| thfg-crowdstrike `d50e88dd` | 1 | 14 |
+
+The switch, in the 2.1.237 bundle: `bashFirst = hasBash && hasEdit/Write &&
+TYo()`, where `TYo()` returns `G.CLAUDE_CODE_THRIFTY_SONIC` verbatim when that
+env var is defined, otherwise the `tengu_thrifty_sonic` gate. The emitter returns
+nothing when `steerOnly` is set but `bashFirst` is not, so falsifying `TYo()`
+removes the block. Fix, applied to `~/.claude/settings.json` env:
+
+    "CLAUDE_CODE_THRIFTY_SONIC": "false"
+
+Auto mode stays on. Probe (`claude -p --permission-mode auto --model opus`,
+asking whether the system prompt contains "Do your work through the Bash tool"):
+
+    before                 -> YES
+    THRIFTY_SONIC=""       -> YES   (empty string reads as unset)
+    THRIFTY_SONIC=0        -> NO
+    THRIFTY_SONIC=false    -> NO
+    from settings.json     -> NO    (no inline env var)
+    permission-mode default (control) -> NO
+
+`tengu_thrifty_sonic` is an undocumented experiment gate. A CLI upgrade can
+rename or drop it and silently restore the steer, so re-run that probe after
+upgrades.
+
+**Auto mode also strips `TodoWrite` from the toolset.**
+
+    claude -p --permission-mode auto    --model opus  -> TodoWrite absent
+    claude -p --permission-mode default --model opus  -> TodoWrite present
+    CLAUDE_CODE_AUTO_MODE_EDIT_REMOVAL=false / =0     -> still absent
+
+No override restores it. The atlas todo contract therefore named a tool that
+could not be called on any auto-mode run, which is the whole of `todoWrite=0`
+across 14 consecutive hyper_plugins transcripts. It was never a discipline
+failure. `plugins/atlas/output-styles/atlas-orchestrator.md` now names the
+absence and gives an executable fallback - a one-line `LEDGER | 3/5 | now: ... |
+left: ...` under the status header - with the verified-only rule intact.
+`OrchestrationContract.test_todo_contract_degrades_when_todowrite_is_absent`
+locks it in; 77 contract tests pass.
+
+**What was checked and found fine.**
+
+- `outputStyle: "concise"` does not suppress the atlas style. The style declares
+  `force-for-plugin: true` and applies on top wherever the plugin is enabled;
+  probing a live auto-mode session from the repo returns YES for both
+  "Atlas Orchestrator" and the new "LEDGER |". No settings change was needed.
+- serena is healthy. The `unhealthy` record in `mcp-health-cache.json` expired
+  2026-08-05 and came from `--project-from-cwd` resolving into a deleted
+  worktree. `~/.serena/serena_config.yml` lists 5 projects, 0 missing, and a live
+  `find_symbol("main", plugins/atlas/hooks/completion_gate.py)` returns lines
+  420-553.
+- The session reported as hung was not. `eddacb2c` finished at 12:08:08 with a
+  full `ATLAS | verify` message and a `turn_duration` of 340108 ms; the spinner
+  screenshot was taken about 20 seconds early.
+
+**One real trap worth remembering.**
+`~/.claude/plugins/cache/tech-tools/atlas/5.15.0` is a copy of `plugins/atlas`,
+not a link - different inodes. Editing the repo does not change what a running
+session loads until the plugin is reinstalled. That is a genuine
+"my change did nothing" cause, independent of everything above.
+
+Evidence: `.atlas/.run/2026-08-20-tooling-diagnosis.md`, `.atlas/.run/findings.json`
+batch `2026-08-20-tooling`.
 
 ---
 

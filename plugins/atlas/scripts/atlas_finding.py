@@ -3,7 +3,7 @@
 
 Why this exists: the completion gate's condition (b) requires an entry with
 status "verified" in findings.json, but atlas:verifier runs with
-`disallowedTools: [Write, Edit, MultiEdit]`. It had no write path to the file
+`disallowedTools` blocking Write/Edit/NotebookEdit (and legacy MultiEdit). It had no write path to the file
 its verdict is supposed to land in, so verdicts came back as prose, the gate
 tripped, and the orchestrator re-dispatched. Bash IS allowed to the verifier,
 so this CLI is the write path: one command, no file bytes in context, no

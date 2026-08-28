@@ -890,12 +890,22 @@ class NoiseContract(unittest.TestCase):
 
 
 class OrchestrationContract(unittest.TestCase):
-    """Run-management rules the user relies on, pinned in the skill itself."""
+    """Run-management rules the user relies on, pinned in the skill itself.
+
+    As of 5.16.0 the heavy doctrine lives in references/ and SKILL.md is the
+    progressive-disclosure control surface. Assertions search the skill body
+    plus every references/*.md file so thinning the skill cannot drop a rule.
+    """
 
     SKILL = PLUGIN_ROOT / "skills" / "atlas-orchestrate" / "SKILL.md"
+    REFS = PLUGIN_ROOT / "skills" / "atlas-orchestrate" / "references"
 
     def _body(self):
-        return self.SKILL.read_text(encoding="utf-8")
+        parts = [self.SKILL.read_text(encoding="utf-8")]
+        if self.REFS.is_dir():
+            for path in sorted(self.REFS.glob("*.md")):
+                parts.append(path.read_text(encoding="utf-8"))
+        return "\n".join(parts)
 
     def test_skill_mandates_a_todo_list(self):
         body = self._body()
@@ -904,7 +914,7 @@ class OrchestrationContract(unittest.TestCase):
 
     def test_todo_write_is_an_allowed_tool(self):
         """Mandating a tool the frontmatter forbids is a dead rule."""
-        head = self._body().split("\n---\n", 1)[0]
+        head = self.SKILL.read_text(encoding="utf-8").split("\n---\n", 1)[0]
         self.assertIn("TodoWrite", head)
 
     def test_done_gate_rereads_the_todo_list(self):
@@ -926,6 +936,20 @@ class OrchestrationContract(unittest.TestCase):
         self.assertIn("The todo list is the progress display", body)
         self.assertIn("Steering arrives mid-run", body)
         self.assertIn("Worktrees close before done", body)
+
+    def test_todo_contract_degrades_when_todowrite_is_absent(self):
+        """Claude Code's `auto` permission mode ships a toolset with no
+        TodoWrite (measured 2026-08-20: `--permission-mode auto` -> absent,
+        `--permission-mode default` -> present). A contract that only names
+        TodoWrite is unfollowable for every auto-mode run, which is how 14
+        consecutive sessions produced zero todo state. The style must name a
+        fallback the model can actually execute."""
+        body = OUTPUT_STYLE.read_text(encoding="utf-8")
+        self.assertIn("not always in the toolset", body)
+        self.assertIn("LEDGER |", body)
+        self.assertRegex(body, r"auto`? permission mode")
+        # The fallback is worthless if it relaxes the verification rule.
+        self.assertIn("only on verified work", body)
 
 
 if __name__ == "__main__":
@@ -1031,11 +1055,21 @@ class NoNestedSubagentsContract(unittest.TestCase):
     reopen the hole."""
 
     def test_every_agent_disallows_agent_and_task(self):
+        # Nested dispatch must stay blocked. Keep legacy "Task" for older runtimes
+        # and the Task* family used by current Claude Code tool lists.
+        required = (
+            "Agent",
+            "Task",
+            "TaskCreate",
+            "TaskGet",
+            "TaskList",
+            "TaskUpdate",
+        )
         missing = []
         for path in sorted((PLUGIN_ROOT / "agents").glob("*.md")):
             fm = _frontmatter(path)
             declared = fm.get("disallowedTools", "")
-            for tool in ("Agent", "Task"):
+            for tool in required:
                 if tool not in declared:
                     missing.append("%s -> %s" % (path.name, tool))
         self.assertEqual(missing, [], "agents that can still dispatch: %s" % missing)
@@ -1090,9 +1124,7 @@ class RightSizedDelegationContract(unittest.TestCase):
         self.assertIn("_test_verified_this_run(root, session)", src)
 
     def test_orchestrate_skill_documents_the_wave_ladder(self):
-        text = (
-            PLUGIN_ROOT / "skills" / "atlas-orchestrate" / "SKILL.md"
-        ).read_text(encoding="utf-8")
+        text = OrchestrationContract()._body()
         self.assertIn("Right-size the wave", text)
         self.assertIn("Subagents never dispatch subagents", text)
         # The old absolute rule forced a verifier dispatch onto every task.
@@ -1104,9 +1136,7 @@ class RightSizedDelegationContract(unittest.TestCase):
 
     def test_small_change_still_gets_a_subagent(self):
         """Right-sizing must never be read as 'do it inline'."""
-        text = (
-            PLUGIN_ROOT / "skills" / "atlas-orchestrate" / "SKILL.md"
-        ).read_text(encoding="utf-8")
+        text = OrchestrationContract()._body()
         self.assertIn("a one-line change is still an `atlas:implementer` dispatch", text)
 
     def test_deny_tier_excludes_the_orchestrator_sanctioned_writes(self):
@@ -1199,9 +1229,7 @@ class DecisionsAreBlockingContract(unittest.TestCase):
         self.assertNotIn("Prefer the AskUserQuestion tool\nover prose", text)
 
     def test_orchestrate_routes_a_blocked_subagent_to_a_blocking_ask(self):
-        text = (
-            PLUGIN_ROOT / "skills" / "atlas-orchestrate" / "SKILL.md"
-        ).read_text(encoding="utf-8")
+        text = OrchestrationContract()._body()
         self.assertIn("DECISION NEEDED:", text)
         self.assertIn("AskUserQuestion", text)
         decision_at = text.index("A subagent's `DECISION NEEDED:` is a hard stop")

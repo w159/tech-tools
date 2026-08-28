@@ -24,8 +24,6 @@ This directory holds the three plugins published from this repo, plus the shared
 
 All three plugins are published from the `w159/tech-tools` repository through the `tech-tools` marketplace defined in `.claude-plugin/marketplace.json` at the repo root (version 3.5.0). That marketplace lists `atlas`, `armada`, and `programmer`. Add the marketplace in Claude Code with the `/plugin` command, then install the plugin(s) you need.
 
-Kimi Code CLI users can browse the same catalog from the repo root with `/plugins marketplace .kimi-plugin/marketplace.json`, which lists the same three plugins. You can also install a single plugin directly with `/plugins install ./plugins/<name>` (from the repo root). Remote GitHub subpath installs are not supported by Kimi Code CLI's current installer, so distribution requires a local clone or per-plugin zip artifacts.
-
 ## Credentials
 
 All connector credentials live on `atlas`, not `armada`: `atlas`'s manifest (`plugins/atlas/.claude-plugin/plugin.json`) declares the `mcpServers` entry (`plugins/atlas/.mcp.json`) and the full `userConfig` block of per-vendor credential keys (Auvik, Blumira, CIPP, ConnectWise Manage, Kaseya Spanning, KnowBe4, NinjaOne, Paylocity, ThreatLocker, Vanta). `armada`'s own manifest (`plugins/armada/.claude-plugin/plugin.json`) declares neither `userConfig` nor `mcpServers` - see `plugins/armada/skills/armada/references/connector-provisioning.md` for which `userConfig` keys each department connector needs and how they're set via `/plugin config` on `atlas`.

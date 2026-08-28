@@ -2,7 +2,7 @@
 name: atlas-frontend
 description: Build or refactor screens, flows, or components on a single design system (shadcn/ui + Tailwind + Radix) with every state handled and verified live in the browser.
 when_to_use: building or refactoring screens, flows, or components on a single design system with every state handled
-allowed-tools: Read, Glob, Grep, Bash, Edit, MultiEdit
+allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 paths: ["**/*.tsx", "**/*.css", "**/*.scss", "components/**"]
 argument-hint: '[project] [screens/flows] [design intent]'
 ---

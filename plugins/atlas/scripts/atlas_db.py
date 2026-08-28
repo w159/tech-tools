@@ -392,7 +392,7 @@ def unsanctioned_inline_ops_since_last_dispatch(conn, run_id):
     docs/ and .atlas/ records itself at closeout -- counting those against the
     inline budget would deny the very remediation the gate just ordered.
 
-    Excluded: Edit/Write/MultiEdit whose path is under docs/ or .atlas/. NOT
+    Excluded: Edit/Write/MultiEdit/NotebookEdit whose path is under docs/ or .atlas/. NOT
     excluded: any op with no path (all Bash), because 'unknown path' is the
     largest inline surface there is and exempting it would empty the counter.
     """
@@ -402,7 +402,7 @@ def unsanctioned_inline_ops_since_last_dispatch(conn, run_id):
     ).fetchone()[0]
     return conn.execute(
         "SELECT COUNT(*) FROM events WHERE run_id=? AND is_inline_op=1 AND id>? "
-        "AND NOT (tool IN ('Edit','Write','MultiEdit') AND path IS NOT NULL AND ("
+        "AND NOT (tool IN ('Edit','Write','MultiEdit','NotebookEdit') AND path IS NOT NULL AND ("
         "  path LIKE 'docs/%' OR path LIKE '%/docs/%'"
         "  OR path LIKE '.atlas/%' OR path LIKE '%/.atlas/%'))",
         (run_id, last),
@@ -515,7 +515,7 @@ def unpaired_implementer_dispatches(conn, run_id):
     return max(0, impl - ver)
 
 
-_WRITE_TOOLS = ("Edit", "Write", "MultiEdit")
+_WRITE_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
 
 
 def run_changed_paths(conn, run_id):
@@ -524,7 +524,7 @@ def run_changed_paths(conn, run_id):
     a file this run touched from one left dirty by an earlier session.
 
     Combines two existing signals rather than inventing a new one:
-      - `events`: Edit/Write/MultiEdit ops on the main thread, logged by
+      - `events`: Edit/Write/MultiEdit/NotebookEdit ops on the main thread, logged by
         dispatch_tripwire's PostToolUse hook with a clean `path` column.
       - `tool_calls`: the same tool names from ANY thread (including dispatched
         subagents' sidechain work, which dispatch_tripwire never sees since it

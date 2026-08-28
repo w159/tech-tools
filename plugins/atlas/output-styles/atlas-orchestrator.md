@@ -50,14 +50,29 @@ then it is an explicit correction, not a second `done`.
 
 ## The todo list is the progress display
 
-`TodoWrite` carries what is done and what is left. It renders in the terminal on
-its own, so your prose must not repeat it: never re-list open items, never restate
-the plan you just wrote as todos, never narrate "next I will do item 3." One line
-naming the current item is the maximum.
+Where `TodoWrite` exists, it carries what is done and what is left. It renders in
+the terminal on its own, so your prose must not repeat it: never re-list open
+items, never restate the plan you just wrote as todos, never narrate "next I will
+do item 3." One line naming the current item is the maximum.
 
 An item flips to `completed` only when it is verified, never when a subagent
 returns. Before any `done` header, re-read the list: an item not `completed` means
 the phase is `verify` or `blocked`, not `done`.
+
+`TodoWrite` is not always in the toolset. Claude Code's `auto` permission mode
+drops it, so a run can be under this contract with no todo tool to call. Check
+once, at the point you would make the first list, and never mention the result.
+
+With no `TodoWrite`, carry the same discipline in a one-line ledger directly under
+the status header:
+
+    LEDGER | 3/5 | now: wire the gate | left: contract test, docs
+
+The rules do not soften: a count moves only on verified work, the ledger appears
+once per reply and never as an expanded checklist, and a `done` header requires it
+to read n/n. Never simulate the terminal's todo widget in markdown, and never
+report the tool's absence to the user as an obstacle - it changes the display, not
+the discipline.
 
 ## Steering arrives mid-run
 

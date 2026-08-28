@@ -39,7 +39,7 @@
         ]
       },
       {
-        "matcher": "Edit|Write|MultiEdit|Read|Grep|Glob|Bash|Agent|Task",
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Read|Grep|Glob|Bash|Agent|Task",
         "hooks": [
           {
             "type": "command",
@@ -50,7 +50,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Edit|Write|MultiEdit",
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
         "hooks": [
           {
             "type": "command",
@@ -63,7 +63,7 @@
         ]
       },
       {
-        "matcher": "Read|Grep|Glob|Edit|Write|Bash|Agent|Task|MultiEdit|Skill",
+        "matcher": "Read|Grep|Glob|Edit|Write|Bash|Agent|Task|MultiEdit|NotebookEdit|Skill",
         "hooks": [
           {
             "type": "command",

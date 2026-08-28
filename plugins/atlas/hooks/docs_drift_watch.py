@@ -4,7 +4,7 @@
 completion_gate.py's condition (f) catches docs drift at Stop -- often minutes
 and many edits after the code moved. This hook surfaces the same drift
 signal (via the shared docs_drift module) immediately after each Edit/Write/
-MultiEdit, so Stop is a backstop instead of the first notice.
+MultiEdit/NotebookEdit, so Stop is a backstop instead of the first notice.
 
 No-op silently when: no project root with docs/ is found, ATLAS_GATE=off,
 the edited file is itself under docs/, or under .atlas/.
