@@ -1,5 +1,22 @@
 # Changelog
 
+## 5.17.1
+### Fixed
+- Local multi-session dashboard accuracy and credentials UX.
+- Daemon pins `~/.atlas/atlas.db` and restarts when a stale process serves the wrong DB (e.g. pytest temp `ATLAS_DB`).
+- LIVE means tool/event activity in the last 10 minutes only; ended historical sessions are never LIVE.
+- Project/session dropdowns are recent-only (14d/7d, capped) with folder labels and relative age.
+- Settings / Credentials tab: draft inputs survive auto-refresh; saves write `pluginConfigs["atlas@tech-tools"].options`, this plugin root `.env`, and set-markers under `~/.atlas/credential_marks.json` (no secret echo).
+- Credential set-detection uses pluginConfigs, plugin-root `.env`, then markers — not hardcoded `~/.claude/plugins/cache` paths.
+- Removed transcript re-ingest-on-poll that could lock `atlas.db` and starve hooks.
+- `/api/status` sqlite parameter tuple bug fixed.
+
+### Docs
+- `references/connector-config-flow.md` — verified config layers, save contract, E2E status matrix.
+- `skills/atlas-setup/references/connectors.md` and `skills/atlas-orchestrate/references/dashboard-api.md` updated for dashboard credentials path.
+- Marketplace agent rules: never edit consumer install cache; this repo is source only (`AGENTS.md`, `docs/plugin-development-scope.md`).
+
+
 ## 5.17.0
 
 ### Multi-session dashboard UI

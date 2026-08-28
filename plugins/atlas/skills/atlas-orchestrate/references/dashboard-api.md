@@ -47,8 +47,9 @@ PID/log: `~/.atlas/dashboard.pid`, `~/.atlas/dashboard.log`.
 | Many terminals | One daemon, one port (`7421`) |
 | Many projects | Project dropdown filters sessions by `projects.name` / root |
 | Many sessions | Session list + dropdown keyed by `session_id` |
-| Live run | Sessions with `orchestrating=1` and no `ended_at` show **LIVE** |
+| Live run | **LIVE** only when tool/event activity exists in the last 10 minutes |
 | Data source | Shared `~/.atlas/atlas.db` (runs, metrics, session_logs, tool_calls, findings, connectors) |
+| Lists | Recent projects (14d, max 40) and sessions (7d, max 40); folder labels + age |
 
 ## API
 
@@ -63,7 +64,7 @@ PID/log: `~/.atlas/dashboard.pid`, `~/.atlas/dashboard.log`.
 | GET | `/api/connectors` | connector env coverage (no secrets) |
 | GET | `/api/runs` | recent runs/metrics |
 | GET | `/api/findings` | doctor findings |
-| POST | `/api/connectors/env` | allowlisted `.env` writes |
+| POST | `/api/connectors/env` | allowlisted credential writes (pluginConfigs + `.env` + set-markers) |
 
 Binds loopback only.
 
@@ -82,3 +83,22 @@ Binds loopback only.
 - GET responses never echo secret values  
 - POST `/api/connectors/env` only allowlists keys from `.env.example`  
 - After env writes, reload plugins so MCP servers re-read credentials  
+
+
+## Settings / Credentials (5.17.1+)
+- Header **Credentials** button and tab **Settings / credentials**.
+- POST body accepts userConfig keys or UPPER env keys:
+  `{ "updates": { "auvik_api_key": "..." } }`.
+- Writes, in order of importance:
+  1. `~/.claude/settings.json` → `pluginConfigs["atlas@tech-tools"].options`
+  2. this plugin root's `.env` (`CLAUDE_PLUGIN_ROOT/.env`)
+  3. `~/.atlas/credential_marks.json` set-markers (no secret values)
+- GET APIs never echo secrets (set/missing + source only).
+- While typing, drafts are preserved; poll refresh does not rebuild the form.
+- Reload Claude Code after saving so MCP servers re-read credentials.
+- Full flow + E2E matrix: `references/connector-config-flow.md`.
+
+## Daemon DB pinning
+- Dashboard serves `ATLAS_DASHBOARD_DB` or `~/.atlas/atlas.db` — never ambient pytest `ATLAS_DB`.
+- `ensure` restarts the daemon if health/status reports a different `db_path`.
+- Does **not** re-ingest transcripts on every poll (avoids locking hooks out of the DB).

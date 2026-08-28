@@ -16,11 +16,24 @@ The atlas plugin declares all connector `userConfig` credential keys in its own
 never loads. Filling a vendor's required keys on the **atlas plugin** is what
 enables it.
 
+**Where to enter credentials (pick one):**
+
+1. **Atlas dashboard** (preferred for multi-session operators) —
+   `http://127.0.0.1:7421/` → **Credentials** / **Settings / credentials**.
+   Saves `pluginConfigs["atlas@tech-tools"].options`, dual-writes plugin `.env`,
+   and records set-markers (no secret echo). Drafts are not wiped by auto-refresh.
+2. **Claude `/plugin config`** on **atlas@tech-tools** — native Claude form.
+3. **Manual plugin `.env`** — `ATLAS_ENV_FILE` loaded by `mcp/_env/load.mjs`.
+
+After any of the above: **reload Claude Code** so MCP children re-read config.
+Full verified flow + E2E matrix: `references/connector-config-flow.md`
+(relative to the atlas plugin root).
+
 **Elicitation:** when the user has not named a vendor, ask ONE multiSelect
 AskUserQuestion listing the connectors with their current enabled/disabled state
 (detected, not guessed) so they pick what to turn on. Credentials themselves are
-collected via `/plugin config` on the **atlas plugin** per the vendor table -
-never through free-text chat, and never echoed back.
+collected via the dashboard or `/plugin config` on the **atlas plugin** per the
+vendor table - never through free-text chat, and never echoed back.
 
 The full per-vendor table (keys, defaults, where to get each credential, bundle
 path, owning plugin) lives in `vendors.md` next to this file. Read it before
@@ -55,12 +68,14 @@ Work one connector at a time.
      the bundle path);
    - the base-url / region default, and that the optional `*_base_url` key can
      be left blank to use it.
-2. Tell the user to set those keys via `/plugin config` on the **atlas plugin**.
-   Required keys must be non-empty; optional keys, including every base URL, may
-   stay blank.
-3. Confirm: restate which keys were set on the atlas plugin, and note that the
-   connector loads on next use of the atlas plugin's MCP server. If required keys
-   are still empty, the server fails its own credential check and stays inert.
+2. Tell the user to set those keys via the **dashboard Credentials tab** or
+   `/plugin config` on the **atlas plugin**. Required keys must be non-empty;
+   optional keys, including every base URL, may stay blank.
+3. Confirm: restate which keys were set (names only, never values). Require a
+   Claude Code reload. If required keys are still empty, the server fails its
+   own credential check and stays inert. Use each connector's `*_status` tool
+   (or the E2E matrix in `references/connector-config-flow.md`) to distinguish
+   missing creds from vendor auth failures (e.g. HTTP 401).
 
 ## Guardrails
 
@@ -68,11 +83,15 @@ Work one connector at a time.
 - Only collect the keys a chosen connector actually needs; do not over-ask.
 - Leaving an optional base-url key blank is correct and expected; do not push
   the user to set it.
-- Always direct credentials at the **atlas plugin's** `/plugin config`. Atlas now
-  owns every connector.
+- Always direct credentials at the **atlas plugin** (dashboard Credentials tab
+  or `/plugin config`). Atlas owns every connector.
+- Sensitive values may leave plaintext `settings.json` for OS secure storage;
+  the dashboard uses `.env` dual-write + set-markers so badges stay accurate.
 
 ## Supporting files
 
+- `../../references/connector-config-flow.md` - verified configuration flow,
+  detection order, dashboard save contract, and E2E status matrix.
 - `vendors.md` (next to this file) - the per-vendor table: owning plugin,
   required/optional keys, where-to-get-credentials, bundle path.
 - `references/connector-authoring.md` - the connector ownership pattern: how a
