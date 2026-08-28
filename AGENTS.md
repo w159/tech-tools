@@ -27,6 +27,20 @@ atlas and armada happen to be *active in the harness* while you work here (this 
 
 - `.atlas/` (departments, evidence, nudge, self-improvement), `.fallow/`, `.supermemory/`, `.taskmaster/`
 
+### NEVER edit the local Claude install/cache (hard rule)
+
+This repository is **marketplace source code**, not a place to patch a live install.
+
+**Do not create, modify, delete, rsync, or "deploy into" any of:**
+
+- `~/.claude/plugins/cache/**`
+- `~/.claude/plugins/marketplaces/**` (except when the user explicitly asks you to change a separate checkout that is *not* this repo)
+- `~/.claude/plugins/installed_plugins.json` or other Claude install metadata under `~/.claude/plugins/`
+
+Consumer installs are refreshed by **shipping this repo** (commit/push + marketplace update / plugin reinstall). Hot-copying `plugins/atlas/` into the cache is a process defect.
+
+Verify product behavior from **this tree** (`plugins/atlas/...`, tests under the repo). If the user needs a running install to pick up changes, tell them to update/reinstall from the marketplace source — do not mutate their cache yourself.
+
 If a request seems to ask you to operate atlas here rather than change its code, stop and confirm scope before acting. The default interpretation is always: change the plugin source.
 
 ### What "dependencies" covers

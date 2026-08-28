@@ -136,8 +136,28 @@ explicitly asks about atlas's own runtime behavior:
 - `.atlas/` (`departments/`, `evidence/`, `nudge/`, `self-improvement/`)
 - `.fallow/`, `.supermemory/`, `.taskmaster/`
 
-If a task pushes you to write into these instead of into `plugins/`, that is the
-signal you have slipped from "develop" into "operate." Stop and re-read Section 2.
+### 6.1 Local Claude plugin install/cache - never edit
+
+**Hard rule:** do not modify the consumer install layout Claude maintains under
+the home directory. That includes:
+
+- `~/.claude/plugins/cache/**` (versioned installed plugin copies)
+- `~/.claude/plugins/marketplaces/**` when it is Claude's clone/install of a
+  marketplace (not this repository's working tree)
+- `~/.claude/plugins/installed_plugins.json` and related install metadata
+
+This repo is the **source** of the atlas marketplace. The correct delivery path
+is: edit `plugins/<name>/` here → version/CHANGELOG/marketplace manifest →
+commit/push → consumer updates/reinstalls the plugin. Copying or rsyncing source
+into `~/.claude/plugins/cache/...` to "make it work now" is forbidden process.
+
+Product code must not hardcode cache paths either. Runtime paths resolve from
+`CLAUDE_PLUGIN_ROOT` / the plugin package location, not from a fixed list of
+`~/.claude/plugins/cache/tech-tools/atlas/<version>` directories.
+
+If a task pushes you to write into runtime dirs or install caches instead of
+into `plugins/`, that is the signal you have slipped from "develop" into
+"operate." Stop and re-read Section 2.
 
 ## 7. When to confirm scope
 
