@@ -147,7 +147,6 @@ firebase-adminsdk*.json
 !CONTRIBUTING.md
 !SECURITY.md
 !CLA.md
-!kimi.plugin.json
 !marketplace.json
 
 # ---- Root scripts ----
@@ -191,9 +190,6 @@ firebase-adminsdk*.json
 !.claude-plugin/
 !.claude-plugin/**
 
-# ---- .kimi-plugin — root Kimi Code CLI marketplace manifest ----
-!.kimi-plugin/
-!.kimi-plugin/**
 
 # ---- docs — atlas documentation SSOT (CHANGELOG, ROADMAP, plans, specs, evidence,
 #      architecture, features, lessons, audits, wiki, reference_files). Atlas builds and

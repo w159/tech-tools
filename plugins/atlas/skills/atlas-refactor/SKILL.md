@@ -2,7 +2,7 @@
 name: atlas-refactor
 description: Refactor, rename, or restructure code without changing observable behavior. Use when code works but is messy, hard to navigate, or carries dead weight, and you need behavior preserved with before/after evidence.
 when_to_use: code works but is messy, hard to navigate, or carries dead weight
-allowed-tools: Read, Glob, Grep, Bash, Edit, MultiEdit
+allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '<target symbol or file to refactor>'
 ---
 

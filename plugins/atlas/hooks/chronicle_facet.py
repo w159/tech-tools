@@ -39,7 +39,7 @@ GATE_BLOCK_CATEGORY = "gate_block"
 def _edit_read_counts(conn, session_id):
     edit_count = conn.execute(
         "SELECT COUNT(*) FROM tool_calls WHERE session_id=? "
-        "AND tool_name IN ('Edit','Write','MultiEdit')",
+        "AND tool_name IN ('Edit','Write','MultiEdit','NotebookEdit')",
         (session_id,),
     ).fetchone()[0]
     read_count = conn.execute(

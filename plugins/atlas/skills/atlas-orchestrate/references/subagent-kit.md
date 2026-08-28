@@ -59,7 +59,7 @@ For how to slice work into stages and when to fan out at all, see `multi-stage-p
   companion**, and effort is `low` except for the three that render an independent verdict. Only
   override at dispatch time with a stated reason; "this feels hard" is not one. An underspecified
   prompt is the usual cause, and the fix is the prompt.
-- Read-only roles (explore, verify, db-probe, ui-test) -> `disallowedTools: [Write, Edit, MultiEdit, NotebookEdit]`.
+- Read-only roles (explore, verify, db-probe, ui-test) -> `disallowedTools: [Agent, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, Write, Edit, MultiEdit, NotebookEdit]`.
 - Parallel editors of the same tree -> `isolation: "worktree"` so they don't collide.
 - Cap long/background jobs with a turn budget. Spawn all independent jobs in ONE message.
 - **Subagents never talk to the user.** They cannot use AskUserQuestion; a subagent that
@@ -74,7 +74,7 @@ Use these by name as `subagent_type`. They already carry the orchestrator's disc
 
 | Agent | Use for | Model | Effort | Writes? |
 |---|---|---|---|---|
-| `atlas:explorer` | map a feature/module, find owners, trace a call path | haiku | low | no |
+| `atlas:explorer` | map a feature/module, find owners, trace a call path | sonnet | low | no |
 | `atlas:implementer` | make one bounded change correctly, run the local gate | sonnet | low | yes |
 | `atlas:verifier` | adversarially confirm a finding/fix in a fresh context | sonnet | medium | no |
 | `atlas:db-prober` | read-only schema / RLS / grants / indexes / EXPLAIN | sonnet | low | no |
@@ -99,7 +99,7 @@ Route by whether the dispatch's value comes from everything already said this se
 | `atlas:docs-curator` | fork | writes docs reflecting the session's actual decisions, not a re-explained summary |
 | synthesis / summary dispatches | fork | the output IS a compression of this conversation |
 | `atlas:verifier` | never | law 5 independence requires a fresh context carrying none of the orchestrator's assumptions |
-| `atlas:explorer` | never | cheap haiku lookup with no history dependency - forking defeats the point of a light dispatch |
+| `atlas:explorer` | never | cheap read-only lookup with no history dependency - forking defeats the point of a light dispatch |
 
 **Fallback:** if fork is unavailable (env var unset, older CLI), dispatch the same role as a normal fresh subagent with a fuller brief - restate the relevant history in `CONTEXT` - and keep going. A missing fork never fails the wave.
 

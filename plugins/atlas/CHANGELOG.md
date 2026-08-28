@@ -1,5 +1,77 @@
 # Changelog
 
+## 5.17.0
+
+### Multi-session dashboard UI
+
+- `scripts/atlas_dashboard.py` is now a **shared worker UI** (claude-mem / Serena style): one loopback daemon for all concurrent coding-agent terminals.
+- Browser SPA at `http://127.0.0.1:7421/` with **Project** and **Session** switchers, live metrics, savings proxies, connectors, findings, and per-session tool feeds.
+- `session_boot.py` calls `atlas_dashboard.py ensure` and injects the URL into boot context. Does **not** open a browser tab per terminal.
+- CLI: `ensure` / `serve` / `status` / `stop` / `url`. PID at `~/.atlas/dashboard.pid`.
+- Disable with `ATLAS_DASHBOARD=off`.
+
+
+## 2026-08-28 -- Remove Kimi Code CLI dual-manifest support
+
+Removed all Kimi marketplace / dual-manifest packaging from this repo. The tech-tools marketplace is Claude Code only (atlas, armada, programmer via `.claude-plugin/marketplace.json`).
+
+Deleted:
+- root `.kimi-plugin/` (marketplace.json, import-plan.json, import-report.json)
+- root `kimi.plugin.json`
+- `plugins/atlas/.kimi-plugin/`, `plugins/armada/.kimi-plugin/`, `plugins/programmer/.kimi-plugin/`
+
+Updated living docs (README, plugins/README, AGENTS.md, docs/AGENTS.md, .gitignore) and tests that required claude/kimi version parity.
+
+
+## 5.16.0
+
+### Orchestrate context cut + dashboard API foundation
+
+- **`atlas-orchestrate` SKILL.md thinned** (~43KB → ~8KB) via progressive disclosure. Full laws, loop, anti-rationalization, and squad/tiers moved to new references (`laws-and-gates.md`, `the-loop.md`, `anti-rationalization.md`, `squad-and-tiers.md`). Invocation behavior and enforcement hooks unchanged; body is now a control surface that loads depth on trigger.
+- **`scripts/atlas_dashboard.py`**: loopback JSON API for the upcoming browser dashboard. `status` / `serve` CLI. Endpoints for health, full snapshot, connectors (env key coverage without secret values), runs/metrics, and allowlisted `.env` writes. Stdlib-only; binds loopback only.
+- Reference: `skills/atlas-orchestrate/references/dashboard-api.md`.
+- Tests: `scripts/test_atlas_dashboard.py`.
+- Docs: README dashboard section; hook-count prose consistency (13 programs / 17 bindings).
+
+### Carry-forward from 5.15.1
+
+- Anthropic tool-name hygiene (Task* family, no skill MultiEdit primary, NotebookEdit on write paths).
+- Claude/Kimi manifest version parity.
+
+
+## 5.15.1
+
+### Reliability / Anthropic tool-name hygiene (no behavior change to orchestration laws)
+
+- Agent `disallowedTools` now block nested dispatch with current Claude Code names (`Agent`, legacy `Task`, and `TaskCreate`/`TaskGet`/`TaskList`/`TaskUpdate`) while keeping mutation denies for read-only roles (`Write`/`Edit`/`NotebookEdit`, plus legacy `MultiEdit` for older runtimes).
+- Writable roles (`implementer`, `docs-curator`) keep edit access; still cannot nest subagents.
+- Skills that listed `MultiEdit` now allow `Edit` + `Write` (Anthropic tools-reference no longer treats MultiEdit as primary).
+- Hook matchers and write-tool telemetry include `NotebookEdit` alongside Edit/Write/MultiEdit so notebook mutations still trip format/docs-drift/tripwire/observability paths.
+- Agent tool-load preambles tightened (same ToolSearch select list, less duplicated prose) to cut repeated context cost across the 12 subagents.
+- Manifests: claude + kimi versions synced to 5.15.1; hook count wording corrected to 13 programs / 17 bindings; README MCP credential-watch matcher documents plugin-scoped `mcp__plugin_atlas_*` names.
+- Conformance tests: skill MultiEdit ban, known tool-name allowlist, RO Write/Edit denies, claude/kimi version parity.
+
+
+## Unreleased (2026-08-20)
+
+Auto mode strips `TodoWrite` from the toolset, so the todo contract in the
+output style was unfollowable for every auto-mode run - the measured cause of
+zero todo state across 14 consecutive sessions. Auto mode also injects a
+bash-first steer that outranks the repo's MCP tooling rules; that one is a
+Claude Code setting, not an atlas defect, and is documented rather than patched.
+
+- `plugins/atlas/output-styles/atlas-orchestrator.md`: the todo section now
+  names the absence and gives an executable fallback - a one-line `LEDGER |`
+  under the status header - with the verified-only rule intact. It no longer
+  assumes `TodoWrite` exists.
+- `plugins/atlas/hooks/test_atlas_contract.py`:
+  `OrchestrationContract.test_todo_contract_degrades_when_todowrite_is_absent`
+  locks the fallback in. 77 tests pass.
+- Operator note, no code change: set `CLAUDE_CODE_THRIFTY_SONIC=false` in
+  `~/.claude/settings.json` env to drop auto mode's bash-first steer while
+  keeping auto mode. Full evidence in `.atlas/.run/findings.json`
+  (batch `2026-08-20-tooling`).
+
 ## 5.15.0 (2026-08-19)
 
 The NinjaOne connector reported a permissions problem that did not exist.

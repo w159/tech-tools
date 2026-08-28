@@ -165,11 +165,13 @@ class DepartmentTest(unittest.TestCase):
 
 
 class ManifestTest(unittest.TestCase):
-    def test_manifests_agree_on_version(self):
+    def test_claude_manifest_exists_and_kimi_is_gone(self):
         a = json.loads((PLUGIN / ".claude-plugin" / "plugin.json").read_text())
-        b = json.loads((PLUGIN / ".kimi-plugin" / "plugin.json").read_text())
-        self.assertEqual(
-            a["version"], b["version"], "claude and kimi manifests disagree on version"
+        self.assertEqual(a.get("name"), "armada")
+        self.assertTrue(a.get("version"), "armada plugin version required")
+        self.assertFalse(
+            (PLUGIN / ".kimi-plugin").exists(),
+            "kimi plugin manifest must not ship with armada",
         )
 
     def test_marketplace_lists_armada(self):

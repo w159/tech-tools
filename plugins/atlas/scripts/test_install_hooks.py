@@ -149,7 +149,7 @@ class TestApplyInstall(unittest.TestCase):
         self.assertEqual(n, 1)
         groups = settings["hooks"]["PostToolUse"]
         self.assertEqual(len(groups), 1)
-        self.assertEqual(groups[0]["matcher"], "Edit|Write|MultiEdit")
+        self.assertEqual(groups[0]["matcher"], "Edit|Write|MultiEdit|NotebookEdit")
         cmd = groups[0]["hooks"][0]["command"]
         self.assertIn("format_after_edit.py", cmd)
         self.assertTrue(groups[0]["hooks"][0]["async"])

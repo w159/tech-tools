@@ -13,9 +13,9 @@ Org deployment (11 departments, 156 department skills) lives in the separate
 
 ## The skill fleet (21 skills, plainly named)
 
-Two manual skills, twenty auto-trigger skills. Auto-trigger comes from each
-skill's `description` + `when_to_use`; the manual skills have
-`disable-model-invocation: true`.
+Two manual skills, twenty auto-trigger skills. Auto-trigger comes primarily from each skill's `description` (Claude Code
+loads on relevance); `when_to_use` is retained as atlas-local routing metadata.
+Manual skills set `disable-model-invocation: true`.
 
 | Skill | Mode | What it does |
 | --- | --- | --- |
@@ -31,15 +31,15 @@ skill's `description` + `when_to_use`; the manual skills have
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json     # manifest (name: atlas, v5.2.0)
-|-- hooks/                         # 13 auto-loaded hooks (hooks.json wires them all; atlas_doctor.py lives in scripts/, wired as the 13th)
+|-- .claude-plugin/plugin.json     # manifest (name: atlas, v5.16.0)
+|-- hooks/                         # 13 hook programs / 17 bindings (hooks.json wires them all; atlas_doctor.py lives in scripts/, SessionStart)
 |   |-- session_boot.py            #   SessionStart: activate runtime, surface lessons
 |   |-- prompt_optimizer.py        #   UserPromptSubmit: optional rewrite + orchestration arm-early classifier
 |   |-- bash_advisor.py            #   PreToolUse(Bash): advisory warning on catastrophic commands only
 |   |-- format_after_edit.py       #   PostToolUse(Edit/Write): format after edits
-|   |-- docs_drift_watch.py        #   PostToolUse(Edit/Write/MultiEdit): inline docs-drift warning, debounced
+|   |-- docs_drift_watch.py        #   PostToolUse(Edit/Write/MultiEdit/NotebookEdit): inline docs-drift warning, debounced
 |   |-- dispatch_tripwire.py       #   PostToolUse advisory + PreToolUse deny: curb inline drift; flag a verifier that wrote no findings.json row
-|   |-- connector_credential_watch.py # PostToolUse(mcp__.*): one warning when a connector returns an auth failure -- restart, do not sweep endpoints
+|   |-- connector_credential_watch.py # PostToolUse(mcp__plugin_atlas_.* + known bare MCP prefixes): one warning on connector auth failure -- restart, do not sweep endpoints
 |   |-- completion_gate.py         #   Stop: block premature "done" until the definition-of-done holds
 |   |-- ingest_session.py          #   Stop/SubagentStop/SessionEnd/PreCompact: mirror transcript to the observability DB
 |   |-- chronicle_facet.py         #   Stop: write one facets row + mirror signals into friction_events
@@ -88,12 +88,12 @@ hook can never block a session.
 | `atlas_doctor.py --hook` | `SessionStart` | Rollback guard: warn loudly if the installed plugin was downgraded, the marketplace points at a fork, or hooks/assets are missing (warn-only, always exits 0) |
 | `prompt_optimizer.py` | `UserPromptSubmit` | Optional trigger-gated prompt rewrite; also arm-early classifier that flags substantive engineering prompts as orchestration runs (`ATLAS_ENGINE_ARM=off`) |
 | `bash_advisor.py` | `PreToolUse` (Bash) | Advisory only: warns on catastrophic patterns (`rm -rf /`, `mkfs`, `dd` to a disk, fork bomb). Never denies |
-| `dispatch_tripwire.py` | `PostToolUse` + `PreToolUse` | Flag orchestration sessions, count inline ops, advise at the threshold; deny tier blocks at 6 unsanctioned inline ops (the orchestrator's own docs//.atlas/ writes are excluded, since the completion gate requires them at closeout) or any non-docs edit in an orchestration run (`ATLAS_TRIPWIRE=off`, `ATLAS_TRIPWIRE_HARD=off`). Also denies, unconditionally and ahead of the kill switch, any `Agent`/`Task` dispatch whose `transcript_path` is a `subagents/` transcript: a subagent must never dispatch another subagent. Also brackets every `*verifier*` dispatch: snapshots the `findings.json` entry count on `PreToolUse` and, if the verifier returns without adding a row, tells the orchestrator to write the verdict with `scripts/atlas_finding.py` rather than re-dispatching |
+| `dispatch_tripwire.py` | `PostToolUse` + `PreToolUse` | Flag orchestration sessions, count inline ops, advise at the threshold; deny tier blocks at 6 unsanctioned inline ops (the orchestrator's own docs//.atlas/ writes are excluded, since the completion gate requires them at closeout) or any non-docs edit in an orchestration run (`ATLAS_TRIPWIRE=off`, `ATLAS_TRIPWIRE_HARD=off`). Also denies, unconditionally and ahead of the kill switch, any nested `Agent`/`Task` dispatch whose `transcript_path` is a `subagents/` transcript: a subagent must never dispatch another subagent. Also brackets every `*verifier*` dispatch: snapshots the `findings.json` entry count on `PreToolUse` and, if the verifier returns without adding a row, tells the orchestrator to write the verdict with `scripts/atlas_finding.py` rather than re-dispatching |
 | `format_after_edit.py` | `PostToolUse` (Edit/Write) | Run the repo's formatter after edits |
-| `docs_drift_watch.py` | `PostToolUse` (Edit/Write/MultiEdit) | Inline backstop for `completion_gate.py` condition (f): warns the moment a non-docs edit drifts from `docs/`, instead of waiting for Stop. Debounced per session_id (first drifting edit, then every 5th; resets when `docs/` reappears in the diff or a new/missing session_id arrives); silent with no `docs/`, `ATLAS_GATE=off`, or on a `docs/`/`.atlas/` path. The backing `git diff` is cached for 2s (`time.monotonic`) to keep the common-path cost low |
+| `docs_drift_watch.py` | `PostToolUse` (Edit/Write/MultiEdit/NotebookEdit) | Inline backstop for `completion_gate.py` condition (f): warns the moment a non-docs edit drifts from `docs/`, instead of waiting for Stop. Debounced per session_id (first drifting edit, then every 5th; resets when `docs/` reappears in the diff or a new/missing session_id arrives); silent with no `docs/`, `ATLAS_GATE=off`, or on a `docs/`/`.atlas/` path. The backing `git diff` is cached for 2s (`time.monotonic`) to keep the common-path cost low |
 | `completion_gate.py` | `Stop` | Block a premature "done" until the definition-of-done holds: evidence artifact and independent verifier (only once this run shipped non-docs code), current docs, verifier coverage (orchestrating sessions only; `ATLAS_GATE=off`). Silent on pass -- speaks only when it blocks |
 | `memory_capture.py` | `Stop` | Persist session lessons to `~/.atlas/memory/`, silently. Not bound to `SubagentStop`: per-dispatch capture filed the same lesson once per subagent scope (`agent-<hex>`, `.run`), and the parent `Stop` already resolves subagent sessions. Refuses those scopes outright, never captures tool-error tallies (they live in atlas_db; as recall lines they buried every real lesson), and truncates on a word boundary |
-| `connector_credential_watch.py` | `PostToolUse` (`mcp__.*`) | A running MCP server caches credentials at startup, so a rotated secret never reaches it and every endpoint fails identically. On the first 401/403 (or a 400 naming the token) from any `mcp__*` tool, inject one instruction: restart the server, do not retry other endpoints. Once per server per session, advisory only (`ATLAS_CONNECTOR_WATCH=off`) |
+| `connector_credential_watch.py` | `PostToolUse` (`mcp__plugin_atlas_.*`, plus bare `mcp__cipp.*` / `mcp__connectwise.*` / `mcp__falcon-mcp__.*` / `mcp__plaid__.*` / `mcp__gcloud__.*`) | A running MCP server caches credentials at startup, so a rotated secret never reaches it and every endpoint fails identically. On the first 401/403 (or a 400 naming the token) from a matched connector tool, inject one instruction: restart the server, do not retry other endpoints. Once per server per session, advisory only (`ATLAS_CONNECTOR_WATCH=off`). Plugin-scoped tool names look like `mcp__plugin_atlas_<server>__<tool>`. |
 | `nudge.py` | `Stop` only | Self-improvement: prompt to capture a lesson and check docs drift (throttled). Silent when memory_capture already wrote this turn -- a success announcement on Stop is additionalContext, which costs a whole extra model turn to say nothing. Not bound to `SubagentStop` -- landing there injected its prompt into a dispatched subagent's context right before it composed its final response, so the subagent answered the nudge instead of returning its deliverable |
 | `ingest_session.py` | `Stop`, `SubagentStop`, `SessionEnd`, `PreCompact` | Mirror the session transcript into the observability DB for atlas-audit self mode (`ATLAS_INGEST=off`) |
 | `chronicle_facet.py` | `Stop` | Write one deterministic `facets` row per session and mirror `signals` into `friction_events` |
@@ -111,6 +111,20 @@ For installs outside a plugin, `scripts/install_hooks.py` wires the hooks into
 settings manually. The optional ollama-backed optimizer is configured with
 `ATLAS_OPTIMIZE_CMD`, `ATLAS_OPTIMIZER_MODEL`, and `ATLAS_OLLAMA_URL`
 (see `skills/atlas-orchestrate/references/hooks-automation.md`); it is not required.
+
+## Local dashboard (multi-session)
+
+Open `http://127.0.0.1:7421/` once. All concurrent terminals share it; switch via Project/Session controls.
+
+## Local dashboard API
+
+For a browser UI (or any local client) that needs live visibility into runs, savings proxies, and connector configuration:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_dashboard.py" serve --port 7421
+```
+
+Loopback-only JSON API. See `skills/atlas-orchestrate/references/dashboard-api.md`.
 
 ## Self-improvement
 

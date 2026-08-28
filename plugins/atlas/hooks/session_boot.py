@@ -15,6 +15,41 @@ import sys
 import time
 
 
+def ensure_dashboard():
+    """Start the shared multi-session dashboard daemon if needed.
+
+    Mirrors claude-mem/Serena worker UX: one loopback UI for all terminals.
+    Does NOT open a browser tab (avoids focus-stealing on every SessionStart).
+    Returns a short status line with the URL, or None on failure (fail-open).
+    """
+    if os.environ.get("ATLAS_DASHBOARD", "on").lower() in ("0", "off", "false", "no"):
+        return None
+    try:
+        import subprocess
+        scripts = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
+        script = os.path.abspath(os.path.join(scripts, "atlas_dashboard.py"))
+        if not os.path.isfile(script):
+            return None
+        env = os.environ.copy()
+        res = subprocess.run(
+            [sys.executable, script, "ensure"],
+            capture_output=True,
+            text=True,
+            timeout=8,
+            env=env,
+        )
+        if res.returncode != 0:
+            return None
+        data = json.loads(res.stdout or "{}")
+        url = data.get("url")
+        if not url:
+            return None
+        state = "ready" if data.get("already_running") else "started"
+        return "dashboard: %s (%s) — open once; all concurrent terminals share it" % (url, state)
+    except Exception:
+        return None
+
+
 def has_cmd(name):
     return shutil.which(name) is not None
 
@@ -194,7 +229,7 @@ def _atlas_session_context(conn, root):
     last_file = None
     edit_row = conn.execute(
         "SELECT input_summary FROM tool_calls WHERE session_id=? "
-        "AND tool_name IN ('Edit','Write','MultiEdit') "
+        "AND tool_name IN ('Edit','Write','MultiEdit','NotebookEdit') "
         "ORDER BY ts DESC LIMIT 1",
         (session_id,),
     ).fetchone()
@@ -514,6 +549,12 @@ def main():
         lines.append(memory_block)
     if resume:
         lines.append(resume)
+    try:
+        dash = ensure_dashboard()
+        if dash:
+            lines.append(dash)
+    except Exception:
+        pass  # dashboard is best-effort; never block boot
     out = {
         "systemMessage": "Atlas ready"
         + ("" if (mem and ctx) else " (run the `atlas` skill to complete setup)"),

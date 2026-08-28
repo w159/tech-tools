@@ -12,7 +12,7 @@ prompt, a tool call, or wedge a session).
 | `optimizer` | `UserPromptSubmit` | `hooks/prompt_optimizer.py` | optimize the prompt through a local model before Claude sees it; trigger-gated |
 | `advisor` | `PreToolUse` (Bash) | `hooks/bash_advisor.py` | advisory-only; emits a warning on catastrophic, near-irreversible commands only |
 | `format` | `PostToolUse` (Edit\|Write\|MultiEdit) | `hooks/format_after_edit.py` | auto-format the edited file (ruff/prettier/gofmt/rustfmt), async |
-| `dispatch-tripwire` | `PostToolUse` + `PreToolUse` | `hooks/dispatch_tripwire.py` | advisory STOP at the threshold (default 4); a second `PreToolUse` tier DENIES at 8 inline ops or on Edit/Write/MultiEdit to non-docs paths; marker-gated, orchestration sessions only |
+| `dispatch-tripwire` | `PostToolUse` + `PreToolUse` | `hooks/dispatch_tripwire.py` | advisory STOP at the threshold (default 4); a second `PreToolUse` tier DENIES at 8 inline ops or on Edit/Write/MultiEdit/NotebookEdit to non-docs paths; marker-gated, orchestration sessions only |
 | `completion-gate` | `Stop` | `hooks/completion_gate.py` | **opt-out.** block stopping an orchestration run until evidence is captured; marker-gated, on by default when docs/ exists (disable with ATLAS_GATE=off) |
 | `nudge` | `Stop`, `SubagentStop` | `hooks/nudge.py` | self-improvement: surface a past lesson and prompt to capture new ones; marker-gated, throttled |
 | `ingest-session` | `Stop`, `SubagentStop`, `SessionEnd`, `PreCompact` | `hooks/ingest_session.py` | index the session transcript into the observability store for atlas-audit |

@@ -432,5 +432,127 @@ class TestSyntheticDetection(unittest.TestCase):
         )
 
 
+# Anthropic tools-reference names that skills/agents should not treat as current.
+_STALE_PRIMARY_TOOLS = ("MultiEdit",)
+_KNOWN_CLAUDE_TOOLS = {
+    "Agent",
+    "AskUserQuestion",
+    "Bash",
+    "Edit",
+    "Glob",
+    "Grep",
+    "NotebookEdit",
+    "Read",
+    "Skill",
+    "Task",  # legacy alias still matched by hooks
+    "TaskCreate",
+    "TaskGet",
+    "TaskList",
+    "TaskUpdate",
+    "TodoWrite",
+    "Write",
+    "WebFetch",
+    "WebSearch",
+}
+
+
+def _parse_allowed_tools(raw: str):
+    """Split an allowed-tools frontmatter value into bare tool names."""
+    if not raw:
+        return []
+    names = []
+    for part in str(raw).split(","):
+        part = part.strip()
+        if not part:
+            continue
+        # Bash(python3:*) / Write(docs/**) -> Bash / Write
+        name = re.split(r"[(\s]", part, maxsplit=1)[0].strip()
+        if name:
+            names.append(name)
+    return names
+
+
+def _frontmatter_fields(text: str) -> dict:
+    m = re.match(r"^---\n(.*?)\n---", text, re.S)
+    if not m:
+        return {}
+    fields = {}
+    for line in m.group(1).splitlines():
+        if ":" not in line:
+            continue
+        k, v = line.split(":", 1)
+        fields[k.strip()] = v.strip().strip("\"'" )
+    return fields
+
+
+class TestToolNameHygiene(unittest.TestCase):
+    """Keep agent/skill tool names aligned with current Claude Code tools.
+
+    MultiEdit is no longer a primary tool in Anthropic's tools reference.
+    Skills that need mutation should allow Edit and/or Write instead.
+    """
+
+    def test_no_skill_allows_multiedit_as_primary(self):
+        bad = []
+        for skill_md in sorted((PLUGIN_ROOT / "skills").glob("*/SKILL.md")):
+            fm = _frontmatter_fields(skill_md.read_text(encoding="utf-8"))
+            allowed = _parse_allowed_tools(fm.get("allowed-tools", ""))
+            if "MultiEdit" in allowed:
+                bad.append(str(skill_md.relative_to(PLUGIN_ROOT)))
+        self.assertEqual(
+            [],
+            bad,
+            "skills still listing MultiEdit in allowed-tools (use Edit/Write): "
+            + ", ".join(bad),
+        )
+
+    def test_skill_allowed_tools_are_known_or_namespaced(self):
+        bad = []
+        for skill_md in sorted((PLUGIN_ROOT / "skills").glob("*/SKILL.md")):
+            fm = _frontmatter_fields(skill_md.read_text(encoding="utf-8"))
+            for name in _parse_allowed_tools(fm.get("allowed-tools", "")):
+                if name in _KNOWN_CLAUDE_TOOLS:
+                    continue
+                if name.startswith("mcp__"):
+                    continue
+                bad.append(f"{skill_md.parent.name}:{name}")
+        self.assertEqual(
+            [],
+            bad,
+            "skills reference unknown tool names: " + ", ".join(bad),
+        )
+
+    def test_read_only_agents_deny_write_edit(self):
+        writable = {"docs-curator.md", "implementer.md"}
+        missing = []
+        for path in sorted((PLUGIN_ROOT / "agents").glob("*.md")):
+            if path.name in writable:
+                continue
+            fm = _frontmatter_fields(path.read_text(encoding="utf-8"))
+            declared = fm.get("disallowedTools", "")
+            for tool in ("Write", "Edit"):
+                if tool not in declared:
+                    missing.append(f"{path.name}->{tool}")
+        self.assertEqual(
+            [],
+            missing,
+            "read-only agents missing Write/Edit denies: " + ", ".join(missing),
+        )
+
+    def test_claude_plugin_manifest_exists(self):
+        import json
+
+        path = PLUGIN_ROOT / ".claude-plugin" / "plugin.json"
+        self.assertTrue(path.is_file(), "claude plugin manifest missing")
+        claude = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(claude.get("name"), "atlas")
+        self.assertTrue(claude.get("version"), "atlas plugin version required")
+        # Kimi dual-manifest support was removed; ensure it stays gone.
+        self.assertFalse(
+            (PLUGIN_ROOT / ".kimi-plugin").exists(),
+            "kimi plugin manifest must not ship with atlas",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

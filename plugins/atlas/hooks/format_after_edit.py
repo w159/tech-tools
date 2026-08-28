@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """PostToolUse hook - auto-format a file right after Claude edits it.
 
-Matches Edit / Write / MultiEdit. Picks a formatter by file extension, runs it in place
+Matches Edit / Write / MultiEdit / NotebookEdit. Picks a formatter by file extension, runs it in place
 using the project's own config, and is a no-op when the formatter is not installed. Meant
 to run ASYNC so it never blocks the agentic loop. Any failure is swallowed - formatting
 must never break a tool call.
@@ -19,7 +19,7 @@ Formatters (first available wins; all respect the repo's local config):
 
 Wire it up (settings.json), async so it never blocks:
   "PostToolUse": [
-    { "matcher": "Edit|Write|MultiEdit",
+    { "matcher": "Edit|Write|MultiEdit|NotebookEdit",
       "hooks": [ { "type": "command",
                    "command": "python3 ~/.claude/hooks/format_after_edit.py",
                    "async": true, "timeout": 60 } ] }

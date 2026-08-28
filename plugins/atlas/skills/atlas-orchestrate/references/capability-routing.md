@@ -15,7 +15,7 @@ Pass the chosen capabilities into each subagent's spec as directives, **and** te
 
 | Task signal | Agent type | Skill(s) | MCP / tools | Model |
 |---|---|---|---|---|
-| Understand a codebase / map a feature | `atlas:explorer`, `codebase-explorer`*, `Explore`* | `smart-explore`, `learn-codebase`, `graphify`, `pathfinder` | `serena`, LSP, `context-mode` | haiku |
+| Understand a codebase / map a feature | `atlas:explorer`, `codebase-explorer`*, `Explore`* | `smart-explore`, `learn-codebase`, `graphify`, `pathfinder` | `serena`, LSP, `context-mode` | sonnet |
 | Plan a feature / multi-step task | `Plan`* | `superpowers:brainstorming` -> `make-plan` -> `writing-plans` | `sequentialthinking` | opus/sonnet |
 | Implement a feature / bounded change | `atlas:implementer`, `frontend-developer`*, `backend-architect`* | `superpowers:test-driven-development`, `frontend-design`/`ui-ux-pro-max` | `context7` (mandatory), `serena`, LSP | sonnet |
 | Fix a bug / regression / incident | `debugger`* | `superpowers:systematic-debugging` | `serena`, `context-mode`, Sentry MCP if present | sonnet |
@@ -90,7 +90,7 @@ correct and serena is not.
 - **Never grep-then-read when an LSP/`serena` symbol call answers it.** For an LSP-enabled language (TS, Python via `typescript-lsp`/`pyright-lsp`, etc.), instruct subagents: "use find-references / go-to-definition, not grep + read."
 - **`context7` is mandatory** before any library behavior claim or API-targeted edit. A finding that says "library X is misused" with no doc citation is `unverified`.
 - **`context-mode` for anything noisy.** Bash is only for git/mkdir/rm/mv/navigation and short fixed-output observation.
-- **Read-only stays read-only.** Discovery/verification/DB-probing subagents get `disallowedTools: [Write, Edit, MultiEdit, NotebookEdit]` so they cannot mutate.
+- **Read-only stays read-only.** Discovery/verification/DB-probing subagents get `disallowedTools: [Agent, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, Write, Edit, MultiEdit, NotebookEdit]` so they cannot mutate.
 - **`isolation: worktree`** on any two subagents that might edit the same files in parallel - prevents working-tree conflicts.
 
 ## Cross-surface fault localization (which layer owns the bug?)

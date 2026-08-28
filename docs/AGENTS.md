@@ -12,8 +12,6 @@ alongside `atlas` only for org deployment. The 11 armada department agents are:
 `atlas:armada-finance`, `atlas:armada-hr`, `atlas:armada-it-ops`, `atlas:armada-m365`,
 `atlas:armada-product`, `atlas:armada-productivity`, `atlas:armada-security`, and
 `atlas:armada-support`. They are NOT in `plugins/atlas/agents/` and are not part of the
-12-agent count above. The 11 legacy domain clusters also ship their own setup via the Kimi
-manifest at `.kimi-plugin/marketplace.json`, separately from the Claude Code marketplace.
 
 ---
 
