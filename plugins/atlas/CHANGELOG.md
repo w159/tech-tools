@@ -1,6 +1,6 @@
 # Changelog
 
-## 5.19.0
+## 5.20.0
 ### Added
 - **CrowdStrike Falcon connector** (`falcon`), the eleventh bundled connector and
   the first Python one: CrowdStrike's `falcon-mcp` 0.18.0 source vendored into
@@ -13,10 +13,19 @@
 - `mcp/_env/load.py`: the Python twin of `load.mjs`. Empty-value suppression
   matters more here, because a blank `FALCON_BASE_URL` would otherwise beat the
   vendored server's own default in `os.environ.get(key, default)`.
+
+### Changed
 - Connector discovery, the dashboard connector list, and the dashboard Test
   button now recognize a Python connector (`mcp/<name>/pyproject.toml`) alongside
   a Node bundle (`mcp/<name>/server.mjs`), via the new
   `atlas_control.connector_entry()`.
+- Connector count is eleven across `vendors.md`, `connectors.md`,
+  `connector-config-flow.md` and `dashboard-api.md`; the setup guide notes that
+  falcon needs `uv` on PATH where the other ten need Node.
+
+
+## 5.19.0
+### Added
 - **Behavior** page (`/#behavior`): the `ATLAS_*` variables the hooks read, grouped as Session automation, Guardrails, Prompt optimizer and Storage paths, plus an advanced table of every other `ATLAS_*` key discovered in `hooks/` and `scripts/`. Each knob prints the `file:line` that reads it and the hook's own default. Saves write `~/.claude/settings.json` → `"env"`, the block Claude Code exports into hook subprocesses.
 - **Ecosystem** page (`/#ecosystem`): atlas hook wiring (every `hooks.json` binding, matcher, timeout, and whether the program exists on disk), installed plugins with a skills/agents/commands/MCP census and an enable toggle, MCP servers from both plugins and `~/.claude.json` with enable/add/remove, and the skills, agents and output styles this install can reach.
 - Connectors: non-secret fields (base URL, region, tenant) now show their current value and are editable in place; a **Test** button starts the connector bundle and completes an MCP `initialize` + `tools/list`; a per-connector switch writes `disabledMcpServers` without touching credentials; bulk `.env` import and a redacted export.

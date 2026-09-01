@@ -1,5 +1,35 @@
 # Changelog
 
+## 2026-09-01 -- CrowdStrike Falcon joins the bundled connectors
+
+Marketplace `3.10.0`; atlas `5.20.0`.
+
+Falcon is the eleventh bundled connector and the first Python one. CrowdStrike's
+`falcon-mcp` 0.18.0 source is vendored at `plugins/atlas/mcp/falcon/` with no
+`.git`, no submodule, and no remote, so nothing fetches from CrowdStrike's
+repository again; runtime dependencies still resolve from PyPI against the
+vendored `uv.lock`.
+
+- Every other connector is a Node ESM bundle, so this needed a second launch
+  shape: `uv run --project mcp/falcon python mcp/_env/load.py falcon_mcp.server`.
+  The new `mcp/_env/load.py` is the Python twin of the Node env preloader, with
+  the same precedence (`.env` beats `CFG_*`, empty or unexpanded values never
+  promote). Empty-value suppression carries more weight here: a blank
+  `FALCON_BASE_URL` would otherwise beat the vendored server's own default in
+  `os.environ.get(key, default)`.
+- Connector discovery, the wiring test, the dashboard connector list and its Test
+  button now recognize a Python connector (`mcp/<name>/pyproject.toml`) alongside
+  a Node bundle, through the new `atlas_control.connector_entry()`.
+- Four userConfig keys, all defaulting to `""`: `falcon_client_id`,
+  `falcon_client_secret`, `falcon_base_url`, `falcon_member_cid`.
+
+Evidence: `atlas_control.test_connector("falcon")` completed an MCP initialize
+plus `tools/list` handshake -- Falcon MCP Server 0.18.0, 144 tools, 1091 ms --
+with no credentials set, confirming inert-by-default still holds. Suites green:
+`plugins/atlas/scripts` 611 tests OK, `plugins/atlas/hooks` 624 tests OK
+(skipped=3). The user-scope `falcon-mcp` entry in `~/.claude.json` was removed so
+the plugin connector is the only Falcon server.
+
 ## 2026-08-29 -- Dashboard becomes a control plane, not just a viewer
 
 Marketplace `3.9.0`; atlas `5.19.0`.
@@ -17,15 +47,6 @@ now configures atlas and surfaces the rest of the install.
 - **Connectors**: editable non-secret values, a real connection test against the
   connector's own bundle, a per-connector enable switch, bulk `.env` import and
   redacted export.
-- **CrowdStrike Falcon joins the bundled connectors**, the eleventh and the first
-  Python one. CrowdStrike's `falcon-mcp` 0.18.0 source is vendored at
-  `plugins/atlas/mcp/falcon/` with no `.git`, no submodule, and no remote, so
-  nothing fetches from CrowdStrike's repository again; runtime dependencies still
-  resolve from PyPI against the vendored `uv.lock`. It launches through
-  `uv run --project` and a new `mcp/_env/load.py`, the Python twin of the Node env
-  preloader. Evidence: `atlas_control.test_connector("falcon")` completed an MCP
-  initialize plus `tools/list` handshake -- Falcon MCP Server 0.18.0, 144 tools,
-  1091 ms -- with no credentials set, confirming inert-by-default still holds.
 - New `plugins/atlas/scripts/atlas_control.py` plus 21 tests. Full suite green:
   611 scripts tests, 624 hooks tests (77 of them the atlas contract suite).
 
