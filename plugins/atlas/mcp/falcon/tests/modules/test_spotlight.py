@@ -1,0 +1,260 @@
+"""
+Tests for the Spotlight module.
+"""
+
+import unittest
+
+from falcon_mcp.modules.spotlight import SpotlightModule
+from falcon_mcp.resources.spotlight import SEARCH_VULNERABILITIES_FQL_DOCUMENTATION
+from tests.modules.utils.test_modules import TestModules
+
+
+class TestSpotlightModule(TestModules):
+    """Test cases for the Spotlight module."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        self.setup_module(SpotlightModule)
+
+    def test_register_tools(self):
+        """Test registering tools with the server."""
+        expected_tools = [
+            "falcon_search_vulnerabilities",
+        ]
+        self.assert_tools_registered(expected_tools)
+
+    def test_register_resources(self):
+        """Test registering resources with the server."""
+        expected_resources = [
+            "falcon_search_vulnerabilities_fql_guide",
+        ]
+        self.assert_resources_registered(expected_resources)
+
+    def test_search_vulnerabilities_success(self):
+        """Test searching vulnerabilities with successful response."""
+        # Setup mock response with sample vulnerability data
+        mock_response = {
+            "status_code": 200,
+            "body": {
+                "meta": {"pagination": {"offset": 0, "limit": 100, "total": 1}},
+                "resources": [
+                    {
+                        "cve_id": "CVE-2023-12345",
+                        "status": "open",
+                        "severity": "HIGH",
+                        "cvss_base_score": 8.5,
+                        "created_timestamp": "2023-08-01T12:00:00Z",
+                        "updated_timestamp": "2023-08-02T14:30:00Z",
+                        "host_info": {
+                            "hostname": "test-server",
+                            "os_version": "Ubuntu 22.04"
+                        }
+                    }
+                ]
+            },
+        }
+        self.mock_client.command.return_value = mock_response
+
+        # Call search_vulnerabilities with test parameters
+        result = self.module.search_vulnerabilities(filter="status:'open'")
+
+        # Verify client command was called correctly
+        self.assertEqual(self.mock_client.command.call_count, 1)
+        call_args = self.mock_client.command.call_args
+        self.assertEqual(call_args[0][0], "combinedQueryVulnerabilities")
+
+        # Check that the parameters dictionary contains the expected filter
+        params = call_args[1]["parameters"]
+        self.assertEqual(params["filter"], "status:'open'")
+
+        # Verify result contains expected values
+        self.assertIn("results", result)
+        self.assertEqual(len(result["results"]), 1)
+        self.assertEqual(result["results"][0]["cve_id"], "CVE-2023-12345")
+        self.assertEqual(result["results"][0]["severity"], "HIGH")
+        self.assertEqual(result["results"][0]["status"], "open")
+        self.assertEqual(result["results"][0]["cvss_base_score"], 8.5)
+
+    def test_search_vulnerabilities_forwards_sort(self):
+        """The sort parameter is forwarded to combinedQueryVulnerabilities.
+
+        Spotlight is single-step (combinedQueryVulnerabilities returns full entities
+        with sort applied), so no reordering is needed — but we assert sort reaches
+        the operation.
+        """
+        self.mock_client.command.return_value = {
+            "status_code": 200,
+            "body": {"resources": []},
+        }
+
+        self.module.search_vulnerabilities(
+            filter="status:'open'", sort="created_timestamp|desc"
+        )
+
+        call_args = self.mock_client.command.call_args
+        self.assertEqual(call_args[0][0], "combinedQueryVulnerabilities")
+        self.assertEqual(call_args[1]["parameters"]["sort"], "created_timestamp|desc")
+
+    def test_search_vulnerabilities_cursor_paging(self):
+        """A cursor response surfaces the `after` token as `pagination.next`.
+
+        Spotlight is the cursor-paged tool: the API returns `meta.pagination.after`,
+        which must round-trip into the envelope's `next` field so a client can page.
+        """
+        self.mock_client.command.return_value = {
+            "status_code": 200,
+            "body": {
+                "meta": {"pagination": {"total": 500, "after": "NEXT_PAGE_TOKEN"}},
+                "resources": [{"cve_id": "CVE-2023-12345", "status": "open"}],
+            },
+        }
+
+        result = self.module.search_vulnerabilities(filter="status:'open'")
+
+        self.assert_pagination(result, total=500, has_next=True)
+        self.assertEqual(result["pagination"]["next"], "NEXT_PAGE_TOKEN")
+
+    def test_search_vulnerabilities_no_filter(self):
+        """Test searching vulnerabilities with no filter parameter."""
+        # Setup mock response with sample vulnerability data
+        mock_response = {
+            "status_code": 200,
+            "body": {
+                "meta": {"pagination": {"offset": 0, "limit": 100, "total": 1}},
+                "resources": [
+                    {
+                        "cve_id": "CVE-2023-12345",
+                        "status": "open",
+                        "severity": "HIGH"
+                    }
+                ]
+            },
+        }
+        self.mock_client.command.return_value = mock_response
+
+        # Call search_vulnerabilities with no filter
+        result = self.module.search_vulnerabilities()
+
+        # Verify client command was called with the correct operation
+        self.assertEqual(self.mock_client.command.call_count, 1)
+        call_args = self.mock_client.command.call_args
+        self.assertEqual(call_args[0][0], "combinedQueryVulnerabilities")
+
+        # Verify result contains expected values
+        self.assertEqual(len(result["results"]), 1)
+        self.assertEqual(result["results"][0]["cve_id"], "CVE-2023-12345")
+
+    def test_search_vulnerabilities_with_single_facet(self):
+        """Test that a single facet string is forwarded unchanged to the API."""
+        mock_response = {"status_code": 200, "body": {"resources": []}}
+        self.mock_client.command.return_value = mock_response
+
+        result = self.module.search_vulnerabilities(filter="status:'open'", facet="cve")
+
+        self.assertEqual(self.mock_client.command.call_count, 1)
+        call_args = self.mock_client.command.call_args
+        self.assertEqual(call_args[0][0], "combinedQueryVulnerabilities")
+
+        params = call_args[1]["parameters"]
+        self.assertEqual(params["facet"], "cve")
+        self.assertEqual(result["results"], [])
+
+    def test_search_vulnerabilities_with_multiple_facets(self):
+        """Test that a list of facets is forwarded intact (no joining/mangling)."""
+        mock_response = {"status_code": 200, "body": {"resources": []}}
+        self.mock_client.command.return_value = mock_response
+
+        result = self.module.search_vulnerabilities(
+            filter="status:'open'",
+            facet=["cve", "host_info", "remediation"],
+        )
+
+        self.assertEqual(self.mock_client.command.call_count, 1)
+        call_args = self.mock_client.command.call_args
+        self.assertEqual(call_args[0][0], "combinedQueryVulnerabilities")
+
+        params = call_args[1]["parameters"]
+        self.assertEqual(params["facet"], ["cve", "host_info", "remediation"])
+        self.assertEqual(result["results"], [])
+
+    def test_search_vulnerabilities_facet_empty_list(self):
+        """Test that an empty facet list is forwarded as-is (no facets requested)."""
+        mock_response = {"status_code": 200, "body": {"resources": []}}
+        self.mock_client.command.return_value = mock_response
+
+        self.module.search_vulnerabilities(filter="status:'open'", facet=[])
+
+        self.assertEqual(self.mock_client.command.call_count, 1)
+        call_args = self.mock_client.command.call_args
+        params = call_args[1]["parameters"]
+        # An empty list is not None, so prepare_api_parameters does not strip it;
+        # it reaches the API unchanged and is treated as "no facets requested".
+        self.assertEqual(params["facet"], [])
+
+    def test_search_vulnerabilities_facet_none_stripped(self):
+        """Test that a None facet is stripped from the forwarded parameters.
+
+        When the tool runs through FastMCP the unset facet resolves to None;
+        prepare_api_parameters must drop it so it never reaches the API.
+        """
+        mock_response = {"status_code": 200, "body": {"resources": []}}
+        self.mock_client.command.return_value = mock_response
+
+        self.module.search_vulnerabilities(filter="status:'open'", facet=None)
+
+        self.assertEqual(self.mock_client.command.call_count, 1)
+        call_args = self.mock_client.command.call_args
+        params = call_args[1]["parameters"]
+        self.assertNotIn("facet", params)
+
+    def test_search_vulnerabilities_empty_response(self):
+        """Test searching vulnerabilities with empty response."""
+        # Setup mock response with empty resources
+        mock_response = {
+            "status_code": 200,
+            "body": {
+                "meta": {"pagination": {"offset": 0, "limit": 100, "total": 0}},
+                "resources": [],
+            },
+        }
+        self.mock_client.command.return_value = mock_response
+
+        # Call search_vulnerabilities
+        result = self.module.search_vulnerabilities(filter="status:'closed'")
+
+        # Verify client command was called with the correct operation
+        self.assertEqual(self.mock_client.command.call_count, 1)
+        call_args = self.mock_client.command.call_args
+        self.assertEqual(call_args[0][0], "combinedQueryVulnerabilities")
+
+        # Verify result has empty results list
+        self.assertIn("results", result)
+        self.assertEqual(result["results"], [])
+
+    def test_search_vulnerabilities_error(self):
+        """Test searching vulnerabilities with a filter error returns the FQL guide."""
+        # Setup mock response with error
+        mock_response = {
+            "status_code": 400,
+            "body": {"errors": [{"message": "Invalid query"}]},
+        }
+        self.mock_client.command.return_value = mock_response
+
+        # Call search_vulnerabilities
+        result = self.module.search_vulnerabilities(filter="invalid query")
+
+        # Verify result wraps the error alongside the FQL guide and hint
+        self.assertIsInstance(result, dict)
+        self.assertIn("results", result)
+        self.assertIn("error", result["results"][0])
+        self.assertTrue(
+            result["results"][0]["error"].startswith("Failed to search vulnerabilities")
+        )
+        self.assertIn("fql_guide", result)
+        self.assertEqual(result["fql_guide"], SEARCH_VULNERABILITIES_FQL_DOCUMENTATION)
+        self.assertIn("hint", result)
+        self.assertEqual(result["filter_used"], "invalid query")
+
+
+if __name__ == "__main__":
+    unittest.main()

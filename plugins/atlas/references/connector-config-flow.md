@@ -93,6 +93,14 @@ node --import "${CLAUDE_PLUGIN_ROOT}/mcp/_env/load.mjs" \
   "${CLAUDE_PLUGIN_ROOT}/mcp/<vendor>/server.mjs"
 ```
 
+Python connectors (falcon) are vendored as source rather than a bundle, so uv
+resolves their pinned lockfile and `load.py` applies the same env precedence:
+
+```bash
+uv run --project "${CLAUDE_PLUGIN_ROOT}/mcp/falcon" \
+  python "${CLAUDE_PLUGIN_ROOT}/mcp/_env/load.py" falcon_mcp.server
+```
+
 Env template example (Auvik):
 
 - `ATLAS_ENV_FILE=${CLAUDE_PLUGIN_ROOT}/.env`

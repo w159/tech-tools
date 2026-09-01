@@ -657,5 +657,135 @@
     "status": "verified",
     "verified_at": "2026-08-19T15:55:00+00:00",
     "verified_by": "test-suite"
+  },
+  {
+    "id": "S1",
+    "surface": "backend",
+    "category": "feature",
+    "severity": "medium",
+    "title": "Behavior control plane: ATLAS_* knobs are readable, writable and allowlisted",
+    "evidence": [
+      "plugins/atlas/scripts/atlas_control.py:behavior_state,write_behavior_updates",
+      "plugins/atlas/scripts/test_atlas_control.py TestBehaviorKnobs (8 tests pass)",
+      "POST /api/behavior set ATLAS_TRIPWIRE_THRESHOLD=7 then cleared it; PATH rejected as keys_not_allowlisted"
+    ],
+    "doc_refs": [
+      "plugins/atlas/skills/atlas-orchestrate/references/dashboard-api.md#behavior-page-5190"
+    ],
+    "reproduction": "cd plugins/atlas/scripts && python3 -m unittest test_atlas_control",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-08-29T21:43:35+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "S2",
+    "surface": "backend",
+    "category": "feature",
+    "severity": "medium",
+    "title": "Ecosystem inventory and toggles: plugins, MCP servers, atlas hook wiring",
+    "evidence": [
+      "GET /api/ecosystem returns 48 plugins, 26 MCP servers, 17 hook bindings all present on disk",
+      "POST /api/mcp/toggle disabled then re-enabled plugin:atlas:blumira; settings.json diff clean after restore",
+      "POST /api/plugins/toggle refused atlas@tech-tools with cannot_disable_host_plugin"
+    ],
+    "doc_refs": [
+      "plugins/atlas/skills/atlas-orchestrate/references/dashboard-api.md#ecosystem-page-5190"
+    ],
+    "reproduction": "python3 plugins/atlas/scripts/atlas_control.py ecosystem",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-08-29T21:43:35+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "S3",
+    "surface": "backend",
+    "category": "feature",
+    "severity": "medium",
+    "title": "Connector operations: editable non-secrets, live handshake test, bulk env round trip",
+    "evidence": [
+      "python3 atlas_control.py test cipp -> cipp-mcp v0.2.2, 43 tools, 75ms",
+      "GET /api/connectors returns value='' for every sensitive field (test_secret_values_never_leave_the_server)",
+      "test_export_round_trip_never_reimports_a_marker_as_a_secret"
+    ],
+    "doc_refs": [
+      "plugins/atlas/skills/atlas-orchestrate/references/dashboard-api.md#connector-operations-5190"
+    ],
+    "reproduction": "python3 plugins/atlas/scripts/atlas_control.py test cipp",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-08-29T21:43:35+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "S4",
+    "surface": "frontend",
+    "category": "feature",
+    "severity": "medium",
+    "title": "Behavior, Ecosystem and upgraded Connectors render in a real browser with no console errors",
+    "evidence": [
+      "chrome-headless-shell --dump-dom '#behavior': 23 knob rows, 12 switches, advanced table present",
+      "chrome-headless-shell --dump-dom '#ecosystem': 50 plugin toggles, 28 MCP toggles, capability lists",
+      "chrome-headless-shell --dump-dom '#settings': 12 save + 12 test + 12 enable controls; auvik_region prefilled us6",
+      "node --check on the extracted script block: JS SYNTAX OK; static tag balance: none missing"
+    ],
+    "doc_refs": [
+      "plugins/atlas/skills/atlas-orchestrate/references/dashboard-api.md#ui-surfaces"
+    ],
+    "reproduction": "chrome-headless-shell --headless --virtual-time-budget=8000 --dump-dom http://127.0.0.1:7421/#behavior",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-08-29T21:43:35+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "S5",
+    "surface": "repo",
+    "category": "regression",
+    "severity": "medium",
+    "title": "Full atlas suite green after the dashboard control-plane change",
+    "evidence": [
+      "plugins/atlas/scripts: Ran 611 tests OK",
+      "plugins/atlas/hooks: Ran 624 tests OK (skipped=3); test_atlas_contract Ran 77 tests OK"
+    ],
+    "doc_refs": [
+      "docs/CHANGELOG.md"
+    ],
+    "reproduction": "cd plugins/atlas && python3 -m unittest discover -s scripts -p 'test_*.py' && cd hooks && python3 -m unittest discover -s . -p 'test_*.py'",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-08-29T21:43:35+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "S6",
+    "surface": "plugins/atlas/mcp/falcon",
+    "category": "feature",
+    "severity": "medium",
+    "title": "CrowdStrike falcon-mcp vendored as the eleventh atlas connector, unlinked from upstream",
+    "evidence": [
+      "plugins/atlas/mcp/falcon/: falcon-mcp 0.18.0 source, no .git, no submodule; git -C mcp/falcon remote -v -> only origin w159/tech-tools",
+      "atlas_control.test_connector('falcon') with no credentials -> {ok: true, server: 'Falcon MCP Server', version: '0.18.0', tool_count: 144, elapsed_ms: 1091}",
+      "uv run --project mcp/falcon python mcp/_env/load.py falcon_mcp.server --version -> falcon_mcp.server 0.18.0",
+      "plugins/atlas/scripts: Ran 611 tests OK; plugins/atlas/hooks: Ran 624 tests OK (skipped=3)"
+    ],
+    "doc_refs": [
+      "docs/CHANGELOG.md",
+      "plugins/atlas/CHANGELOG.md",
+      "plugins/atlas/skills/atlas-setup/references/vendors.md",
+      "plugins/atlas/references/connector-config-flow.md"
+    ],
+    "reproduction": "cd plugins/atlas/scripts && python3 -c \"import atlas_control,json; print(json.dumps(atlas_control.test_connector('falcon'))[:200])\"",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-09-01T11:36:20+00:00",
+    "verified_by": "atlas:orchestrator (deterministic run)"
   }
 ]

@@ -31,6 +31,7 @@ PLUGIN_ROOT = SCRIPTS_DIR.parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 import atlas_db  # noqa: E402
+import atlas_control  # noqa: E402
 
 DEFAULT_PORT = int(os.environ.get("ATLAS_DASHBOARD_PORT", "7421"))
 LOOPBACK = ".".join(["127", "0", "0", "1"])
@@ -183,15 +184,40 @@ def _plugin_config_options() -> dict:
 
 
 def _env_example_keys():
-    path = PLUGIN_ROOT / ".env.example"
-    keys = []
-    if not path.is_file():
-        return keys
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
+    """Keys from .env.example / .env.template.
+
+    Templates in this repo often comment every assignment (`# AUVIK_API_KEY=`).
+    Those lines still declare allowlisted keys.
+    """
+    keys: list[str] = []
+    seen: set[str] = set()
+    for name in (".env.example", ".env.template"):
+        path = PLUGIN_ROOT / name
+        if not path.is_file():
+            # marketplace root template is one level up from plugins/atlas
+            alt = PLUGIN_ROOT.parent.parent / name
+            path = alt if alt.is_file() else path
+        if not path.is_file():
             continue
-        keys.append(line.split("=", 1)[0].strip())
+        for raw in path.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if not line or line == "#":
+                continue
+            # strip one leading comment marker used for template assignments
+            if line.startswith("#"):
+                rest = line.lstrip("#").strip()
+                # keep pure section headers out (no '=')
+                if "=" not in rest:
+                    continue
+                line = rest
+            if "=" not in line:
+                continue
+            key = line.split("=", 1)[0].strip()
+            if not key or not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", key):
+                continue
+            if key not in seen:
+                seen.add(key)
+                keys.append(key)
     return keys
 
 
@@ -232,6 +258,38 @@ def _env_file_present_keys() -> set:
     return present
 
 
+def _env_file_values() -> dict:
+    """Plaintext values from the plugin .env. Only non-sensitive keys reach the UI."""
+    values: dict = {}
+    for path in _env_candidate_paths():
+        if not path.is_file():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        for line in text.splitlines():
+            s = line.strip()
+            if not s or s.startswith("#") or "=" not in s:
+                continue
+            k, v = s.split("=", 1)
+            v = v.strip().strip('"').strip("'")
+            if v:
+                values[k.strip()] = v
+    return values
+
+
+def _field_value(user_config_key, env_key, opts: dict, env_values: dict) -> str:
+    """Current value for a non-secret field, so the UI can show and edit it."""
+    for candidate in (user_config_key, env_key, (user_config_key or "").upper()):
+        if candidate and opts.get(candidate) not in (None, ""):
+            return str(opts[candidate])
+    for candidate in (env_key, (user_config_key or "").upper(), user_config_key):
+        if candidate and env_values.get(candidate):
+            return str(env_values[candidate])
+    return ""
+
+
 def _load_cred_marks() -> dict:
     if not CRED_MARKS_PATH.is_file():
         return {}
@@ -252,7 +310,13 @@ def _save_cred_marks(updates_keys: list[str]) -> None:
     CRED_MARKS_PATH.write_text(json.dumps(marks, indent=2) + "\n", encoding="utf-8")
 
 
-def _key_is_set(user_config_key: str | None, env_key: str | None, opts: dict, env_present: set, marks: dict) -> tuple[bool, str]:
+def _key_is_set(
+    user_config_key: str | None,
+    env_key: str | None,
+    opts: dict,
+    env_present: set,
+    marks: dict,
+) -> tuple[bool, str]:
     """Return (is_set, source)."""
     if user_config_key and opts.get(user_config_key) not in (None, ""):
         return True, "pluginConfigs"
@@ -307,10 +371,12 @@ def _connector_status():
     servers = mcp.get("mcpServers") or {}
     opts = _plugin_config_options()
     env_present = _env_file_present_keys()
+    env_values = _env_file_values()
     marks = _load_cred_marks()
+    disabled = set(atlas_control._disabled_servers())
     out = []
     for name, cfg in servers.items():
-        bundle = PLUGIN_ROOT / "mcp" / name / "server.mjs"
+        bundle, _launch = atlas_control.connector_entry(name)
         env_map = cfg.get("env") or {}
         # user_config refs in ${user_config.foo}
         uc_refs = []
@@ -320,76 +386,155 @@ def _connector_status():
                     if m.group(1) not in uc_refs:
                         uc_refs.append(m.group(1))
         # also CFG_* keys as env fallbacks
-        cfg_env = [k[4:] for k in env_map if isinstance(k, str) and k.startswith("CFG_")]
+        cfg_env = [
+            k[4:] for k in env_map if isinstance(k, str) and k.startswith("CFG_")
+        ]
         fields = []
         for uk in uc_refs:
             meta = user_config.get(uk) or {}
             is_set, source = _key_is_set(uk, uk.upper(), opts, env_present, marks)
+            sensitive = (
+                bool(meta.get("sensitive"))
+                if isinstance(meta, dict)
+                else any(
+                    s in uk.lower() for s in ("key", "secret", "token", "password")
+                )
+            )
             fields.append(
                 {
                     "user_config_key": uk,
                     "env_key": uk.upper(),
-                    "title": (meta.get("title") if isinstance(meta, dict) else None) or uk,
-                    "description": (meta.get("description") if isinstance(meta, dict) else "")
+                    # Secrets are never read back; everything else is editable in place.
+                    "value": (
+                        ""
+                        if sensitive
+                        else _field_value(uk, uk.upper(), opts, env_values)
+                    ),
+                    "title": (meta.get("title") if isinstance(meta, dict) else None)
+                    or uk,
+                    "description": (
+                        meta.get("description") if isinstance(meta, dict) else ""
+                    )
                     or "",
-                    "sensitive": bool(meta.get("sensitive"))
-                    if isinstance(meta, dict)
-                    else any(s in uk.lower() for s in ("key", "secret", "token", "password")),
+                    "sensitive": sensitive,
                     "is_set": is_set,
                     "source": source,
                 }
             )
         # env-only extras not in userConfig
         for ek in cfg_env:
-            if any(f["env_key"] == ek or (f.get("user_config_key") or "").lower() == ek.lower() for f in fields):
+            if any(
+                f["env_key"] == ek
+                or (f.get("user_config_key") or "").lower() == ek.lower()
+                for f in fields
+            ):
                 continue
             is_set, source = _key_is_set(None, ek, opts, env_present, marks)
+            sensitive = any(
+                s in ek for s in ("KEY", "SECRET", "TOKEN", "PASSWORD", "PRIVATE")
+            )
             fields.append(
                 {
                     "user_config_key": None,
                     "env_key": ek,
+                    "value": ""
+                    if sensitive
+                    else _field_value(None, ek, opts, env_values),
                     "title": ek,
                     "description": "Legacy .env key (also accepted)",
-                    "sensitive": any(
-                        s in ek for s in ("KEY", "SECRET", "TOKEN", "PASSWORD", "PRIVATE")
-                    ),
+                    "sensitive": sensitive,
                     "is_set": is_set,
                     "source": source,
                 }
             )
-        required_uc = [
+
+        def _optional_key(key: str | None) -> bool:
+            if not key:
+                return True
+            k = key.lower()
+            return (
+                any(
+                    s in k
+                    for s in (
+                        "base_url",
+                        "region",
+                        "platform",
+                        "auth_mode",
+                        "sandbox",
+                        "organization_id",
+                        "tenant_id",  # sometimes optional depending on vendor; still not the secret
+                    )
+                )
+                and not k.endswith("_api_key")
+                and "secret" not in k
+                and "token" not in k
+                and "password" not in k
+                and "private" not in k
+            )
+
+        # Auth is "configured" when every non-optional credential field is set.
+        # Optional URL/region/platform fields do not block readiness.
+        must = [
             f
             for f in fields
-            if f.get("user_config_key")
-            and (user_config.get(f["user_config_key"]) or {}).get("required")
+            if (f.get("user_config_key") or f.get("env_key"))
+            and not _optional_key(f.get("user_config_key") or f.get("env_key"))
         ]
-        configured = bool(fields) and all(
-            f["is_set"]
-            for f in fields
-            if f.get("user_config_key")
-            and not str(f.get("user_config_key")).endswith(("_region", "_base_url", "_url", "_platform", "_auth_mode", "_sandbox", "_organization_id"))
-            and "base_url" not in str(f.get("user_config_key"))
-            and "region" not in str(f.get("user_config_key"))
-        )
-        # softer: configured if any secret-ish field set
-        if not configured:
-            configured = any(
-                f["is_set"] and f.get("sensitive") for f in fields
-            )
+        # Prefer sensitive/required fields when present
+        sensitive_must = [
+            f
+            for f in must
+            if f.get("sensitive")
+            or (user_config.get(f.get("user_config_key") or "") or {}).get("required")
+        ]
+        check = sensitive_must or must
+        configured = bool(check) and all(f.get("is_set") for f in check)
+        server_name = f"plugin:atlas:{name}"
         out.append(
             {
                 "name": name,
+                "server_name": server_name,
+                "enabled": server_name not in disabled,
                 "bundle_exists": bundle.is_file(),
                 "bundle_bytes": bundle.stat().st_size if bundle.is_file() else 0,
                 "user_config_fields": uc_refs,
                 "fields": fields,
                 "configured_hint": configured,
                 "missing_required": [
-                    f["user_config_key"] for f in required_uc if not f["is_set"]
+                    (f.get("user_config_key") or f.get("env_key"))
+                    for f in check
+                    if not f.get("is_set")
                 ],
             }
         )
     return out
+
+
+def _connector_env(name: str) -> dict:
+    """Resolve one connector's .mcp.json env map into real values.
+
+    The bundle reads CFG_* vars whose .mcp.json values are ${user_config.x}
+    placeholders; a connection test has to substitute them the way Claude Code
+    would, or the server starts unconfigured and the test proves nothing.
+    """
+    cfg = (_mcp_json().get("mcpServers") or {}).get(name) or {}
+    opts = _plugin_config_options()
+    env_values = _env_file_values()
+    resolved = {}
+    for env_key, template in (cfg.get("env") or {}).items():
+        if not isinstance(template, str):
+            continue
+
+        def substitute(m):
+            uk = m.group(1)
+            return _field_value(uk, uk.upper(), opts, env_values)
+
+        value = re.sub(r"\$\{user_config\.([a-z0-9_]+)\}", substitute, template)
+        if not value and env_key.startswith("CFG_"):
+            value = env_values.get(env_key[4:], "")
+        if value:
+            resolved[env_key] = value
+    return resolved
 
 
 def _annotate_live(conn, sessions: list) -> list:
@@ -498,10 +643,19 @@ def _projects(conn, recent_only=True):
             continue
         if recent_only and _is_generic_folder(folder) and (r.get("run_count") or 0) < 3:
             continue
-        r["folder"] = folder if not _is_generic_folder(folder) else (
-            "home" if folder and folder.lower() == os.path.basename(os.path.expanduser("~")).lower() else folder
+        r["folder"] = (
+            folder
+            if not _is_generic_folder(folder)
+            else (
+                "home"
+                if folder
+                and folder.lower() == os.path.basename(os.path.expanduser("~")).lower()
+                else folder
+            )
         )
-        if _is_generic_folder(r.get("name")) and r["folder"] == os.path.basename(os.path.expanduser("~")):
+        if _is_generic_folder(r.get("name")) and r["folder"] == os.path.basename(
+            os.path.expanduser("~")
+        ):
             r["folder"] = "home"
         if r.get("name") == os.path.basename(os.path.expanduser("~")):
             r["folder"] = "home"
@@ -684,9 +838,10 @@ def _run_health(conn, limit=20, project_id=None):
         """,
         tuple(args),
     )
-    totals = _q(
-        conn,
-        """
+    totals = (
+        _q(
+            conn,
+            """
         SELECT
           COUNT(*) AS runs,
           SUM(CASE WHEN orchestrating=1 THEN 1 ELSE 0 END) AS orchestrating_runs,
@@ -697,8 +852,10 @@ def _run_health(conn, limit=20, project_id=None):
         FROM runs r
         LEFT JOIN metrics m ON m.run_id = r.id
         """,
-        one=True,
-    ) or {}
+            one=True,
+        )
+        or {}
+    )
     open_findings = _q(
         conn, "SELECT COUNT(*) AS n FROM findings WHERE status='open'", one=True
     )
@@ -783,7 +940,9 @@ def snapshot(project_id=None):
     conn, dbpath = _db()
     try:
         manifest = _plugin_manifest()
-        sessions = _sessions(conn, project_id=project_id, limit=MAX_SESSIONS, recent_only=True)
+        sessions = _sessions(
+            conn, project_id=project_id, limit=MAX_SESSIONS, recent_only=True
+        )
         return {
             "ok": True,
             "generated_at": time.time(),
@@ -814,49 +973,91 @@ def snapshot(project_id=None):
         conn.close()
 
 
+def _allowlisted_credential_keys() -> tuple[set[str], set[str], dict[str, str]]:
+    """Return (user_config_keys, env_keys, env_to_user_config)."""
+    manifest = _plugin_manifest()
+    uc = set((manifest.get("userConfig") or {}).keys())
+    env_keys = set(_env_example_keys())
+    env_to_uc = {k.upper(): k for k in uc}
+    # Every userConfig key has an UPPER env form
+    for k in uc:
+        env_keys.add(k.upper())
+        env_keys.add(k)
+    # CFG_* and ${user_config.*} from .mcp.json
+    mcp = _mcp_json()
+    for cfg in (mcp.get("mcpServers") or {}).values():
+        env_map = (cfg or {}).get("env") or {}
+        for ek, ev in env_map.items():
+            if isinstance(ek, str) and ek.startswith("CFG_"):
+                env_keys.add(ek[4:])
+                env_keys.add(ek)
+            if isinstance(ev, str):
+                for m in re.finditer(r"\$\{user_config\.([a-z0-9_]+)\}", ev):
+                    uk = m.group(1)
+                    uc.add(uk)
+                    env_keys.add(uk.upper())
+                    env_to_uc[uk.upper()] = uk
+    return uc, env_keys, env_to_uc
+
+
 def write_settings_updates(updates: dict):
     """Write connector credentials to Claude pluginConfigs options.
 
     `updates` keys are userConfig keys (e.g. auvik_api_key) OR UPPER_ENV keys.
     """
-    manifest = _plugin_manifest()
-    uc = manifest.get("userConfig") or {}
-    allowed_uc = set(uc.keys())
-    # Map ENV-style to user_config
-    env_to_uc = {k.upper(): k for k in allowed_uc}
-    # also allow exact env keys from .env.example for dual-write
-    allowed_env = set(_env_example_keys())
+    allowed_uc, allowed_env, env_to_uc = _allowlisted_credential_keys()
 
     normalized = {}
     env_updates = {}
     bad = []
-    for k, v in updates.items():
+    for k, v in list(updates.items()):
         if not isinstance(v, str):
             v = str(v)
         v = v.replace("\n", "").replace("\r", "")
-        if k in allowed_uc:
-            normalized[k] = v
-            env_updates[k.upper()] = v
-        elif k in env_to_uc:
-            normalized[env_to_uc[k]] = v
-            env_updates[k] = v
-        elif k in allowed_env:
-            env_updates[k] = v
-            # best-effort map to userConfig
-            low = k.lower()
+        key = (k or "").strip()
+        if not key:
+            bad.append(k)
+            continue
+        if key in allowed_uc:
+            normalized[key] = v
+            env_updates[key.upper()] = v
+        elif key in env_to_uc:
+            uk = env_to_uc[key]
+            normalized[uk] = v
+            env_updates[key if key.isupper() else uk.upper()] = v
+        elif key.upper() in env_to_uc:
+            uk = env_to_uc[key.upper()]
+            normalized[uk] = v
+            env_updates[key.upper()] = v
+        elif key in allowed_env or key.upper() in allowed_env:
+            ek = key if key in allowed_env else key.upper()
+            env_updates[ek] = v
+            low = ek.lower()
             if low in allowed_uc:
                 normalized[low] = v
+            elif ek.lower().replace("-", "_") in allowed_uc:
+                normalized[ek.lower().replace("-", "_")] = v
         else:
-            bad.append(k)
+            bad.append(key)
     if bad:
-        return {"ok": False, "error": "keys_not_allowlisted", "keys": bad}
+        return {
+            "ok": False,
+            "error": "keys_not_allowlisted",
+            "keys": bad,
+            "hint": "Use plugin userConfig keys (auvik_api_key) or ENV keys (AUVIK_API_KEY).",
+            "allowed_user_config_sample": sorted(allowed_uc)[:12],
+        }
     if not normalized and not env_updates:
         return {"ok": False, "error": "no_valid_updates"}
 
     settings_path = _settings_path()
     settings_path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        data = json.loads(settings_path.read_text(encoding="utf-8")) if settings_path.is_file() else {}
+        data = (
+            json.loads(settings_path.read_text(encoding="utf-8"))
+            if settings_path.is_file()
+            else {}
+        )
     except Exception:
         data = {}
     if not isinstance(data, dict):
@@ -931,20 +1132,20 @@ def _merge_env_file(path: Path, updates: dict) -> None:
 
 
 def _write_env_file(updates: dict):
-    allowed = set(_env_example_keys())
-    # allow userConfig UPPER names too
-    for k in (_plugin_manifest().get("userConfig") or {}):
-        allowed.add(k.upper())
-        allowed.add(k)
-    for c in _connector_status():
-        for f in c.get("fields") or []:
-            if f.get("env_key"):
-                allowed.add(f["env_key"])
-            if f.get("user_config_key"):
-                allowed.add(f["user_config_key"].upper())
-    bad = [k for k in updates if k not in allowed]
+    _uc, allowed, _map = _allowlisted_credential_keys()
+    # normalize update keys to UPPER env form when possible
+    norm_updates = {}
+    bad = []
+    for k, v in updates.items():
+        if k in allowed or k.upper() in allowed:
+            norm_updates[k if k in allowed else k.upper()] = v
+        elif k.lower() in _uc:
+            norm_updates[k.upper()] = v
+        else:
+            bad.append(k)
     if bad:
         return {"ok": False, "error": "keys_not_allowlisted", "keys": bad}
+    updates = norm_updates
     path = PLUGIN_ROOT / ".env"
     _merge_env_file(path, updates)
     return {
@@ -961,6 +1162,7 @@ def write_env_updates(updates: dict):
 
 
 # --- singleton daemon -------------------------------------------------------
+
 
 def _pid_alive(pid: int) -> bool:
     if pid <= 0:
@@ -1147,398 +1349,630 @@ UI_HTML = r"""<!doctype html>
 <title>Atlas Command Center</title>
 <link rel="icon" href="/assets/mark.svg"/>
 <style>
+/* ===== Design tokens (8px grid) ===== */
 :root{
-  --bg0:#070b14; --bg1:#0d1524; --bg2:#121c2e; --panel:#152036; --panel2:#1a2740;
-  --line:#2a3b5c; --line2:#3a5178; --text:#eaf0ff; --muted:#91a0c0; --faint:#617089;
-  --accent:#4f8cff; --accent2:#7aa2ff; --cyan:#3de0d0; --good:#3ddc97; --warn:#ffc857; --bad:#ff6b7a;
-  --gold:#e6b84d; --violet:#9b7bff; --shadow:0 18px 50px rgba(0,0,0,.45);
-  --r:16px; --r2:12px; --font:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial;
+  --s1:8px; --s2:16px; --s3:24px; --s4:32px;
+  --sidebar:240px;
+  --bg:#080d18; --bg-elev:#0e1626; --panel:#121b2e; --panel-2:#182338;
+  --border:#273552; --border-soft:#1e2b44;
+  --text:#edf2ff; --muted:#8b9bb8; --faint:#5f6f8c;
+  --accent:#4f8cff; --accent-2:#6ea1ff; --cyan:#35d6c7;
+  --good:#34d399; --warn:#fbbf24; --bad:#f87171;
+  --radius:12px; --radius-sm:8px;
+  --shadow:0 8px 24px rgba(0,0,0,.35);
+  --font:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --control-h:36px;
+  --header-h:64px;
 }
-*{box-sizing:border-box}
-html,body{height:100%}
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%; margin:0; overflow-x:hidden}
 body{
-  margin:0; font:14px/1.45 var(--font); color:var(--text);
-  background:
-    radial-gradient(1200px 700px at 10% -10%, rgba(79,140,255,.18), transparent 55%),
-    radial-gradient(900px 500px at 90% 0%, rgba(61,224,208,.10), transparent 50%),
-    radial-gradient(800px 600px at 50% 120%, rgba(155,123,255,.08), transparent 45%),
-    linear-gradient(180deg, var(--bg0), var(--bg1) 40%, var(--bg0));
+  font:13.5px/1.4 var(--font); color:var(--text); background:var(--bg);
+  background-image:
+    radial-gradient(900px 480px at 0% -10%, rgba(79,140,255,.14), transparent 60%),
+    radial-gradient(700px 400px at 100% 0%, rgba(53,214,199,.08), transparent 55%);
   background-attachment:fixed;
 }
-a{color:var(--accent2); text-decoration:none}
+img,svg{display:block; max-width:100%}
 button,input,select,textarea{
-  font:inherit; color:var(--text); background:var(--panel2);
-  border:1px solid var(--line); border-radius:12px; padding:9px 12px;
+  font:inherit; color:var(--text); background:var(--panel-2);
+  border:1px solid var(--border); border-radius:var(--radius-sm);
+  height:var(--control-h); padding:0 12px; margin:0;
 }
-button{cursor:pointer; transition:border-color .15s, background .15s, transform .1s}
-button:hover{border-color:var(--accent); background:#1e2f4d}
-button:active{transform:translateY(1px)}
-button.primary{background:linear-gradient(180deg,#2b63c7,#1d4a9a); border-color:#4f8cff; font-weight:650}
-button.primary:hover{filter:brightness(1.08)}
+button{cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:6px; white-space:nowrap}
+button:hover{border-color:var(--accent); background:#1c2c4a}
+button.primary{background:linear-gradient(180deg,#3b6fd0,#2a56ad); border-color:#5b8fff; font-weight:600}
 button.ghost{background:transparent}
-button.iconbtn{padding:8px; width:36px; height:36px; display:inline-grid; place-items:center}
+input,select{width:100%; min-width:0}
 input:focus,select:focus,button:focus{outline:2px solid rgba(79,140,255,.35); outline-offset:1px}
 .mono{font-family:var(--mono); font-size:12px}
 .muted{color:var(--muted)} .faint{color:var(--faint)}
 .good{color:var(--good)} .warn{color:var(--warn)} .bad{color:var(--bad)}
 .hidden{display:none !important}
+.truncate{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0}
+.sr-only{position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0}
 
-.app{display:grid; grid-template-columns:248px 1fr; min-height:100vh}
-@media(max-width:980px){.app{grid-template-columns:1fr}}
+/* ===== App shell ===== */
+.app{
+  display:grid;
+  grid-template-columns:var(--sidebar) minmax(0,1fr);
+  min-height:100vh;
+  width:100%;
+  max-width:100vw;
+  overflow-x:hidden;
+}
+@media(max-width:960px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  .side{position:relative !important; height:auto !important; border-right:0 !important; border-bottom:1px solid var(--border)}
+}
 
 /* Sidebar */
 .side{
-  position:sticky; top:0; height:100vh; padding:18px 14px;
-  border-right:1px solid rgba(42,59,92,.8);
-  background:linear-gradient(180deg, rgba(13,21,36,.92), rgba(7,11,20,.88));
-  backdrop-filter:blur(14px);
-  display:flex; flex-direction:column; gap:16px;
+  position:sticky; top:0; height:100vh; overflow:auto;
+  padding:var(--s2);
+  border-right:1px solid var(--border);
+  background:linear-gradient(180deg, #0b1322 0%, #090f1b 100%);
+  display:flex; flex-direction:column; gap:var(--s2);
 }
-@media(max-width:980px){
-  .side{position:relative; height:auto; border-right:0; border-bottom:1px solid var(--line)}
-}
-.brand{display:flex; gap:12px; align-items:center; padding:4px 6px}
-.brand img, .brand .mark{
-  width:42px; height:42px; border-radius:12px;
-  box-shadow:0 0 0 1px rgba(79,140,255,.35), 0 8px 24px rgba(79,140,255,.2);
-}
-.brand .titles b{display:block; font-size:15px; letter-spacing:.02em}
-.brand .titles span{display:block; color:var(--muted); font-size:11px}
-.nav{display:flex; flex-direction:column; gap:6px}
+.brand{display:grid; grid-template-columns:40px minmax(0,1fr); gap:12px; align-items:center; padding:4px}
+.brand img{width:40px; height:40px; border-radius:10px; box-shadow:0 0 0 1px rgba(79,140,255,.35)}
+.brand b{font-size:14px; line-height:1.2}
+.brand span{font-size:11px; color:var(--muted)}
+.nav{display:flex; flex-direction:column; gap:4px}
 .nav button{
-  display:flex; align-items:center; gap:10px; width:100%;
-  text-align:left; background:transparent; border:1px solid transparent;
-  border-radius:12px; padding:10px 12px; color:var(--muted);
+  width:100%; height:40px; justify-content:flex-start;
+  padding:0 12px; background:transparent; border-color:transparent; color:var(--muted);
 }
-.nav button svg{width:18px; height:18px; flex:0 0 auto; opacity:.9}
-.nav button.active, .nav button:hover{
-  color:var(--text); background:rgba(79,140,255,.12); border-color:rgba(79,140,255,.28);
+.nav button svg{width:16px; height:16px; flex:0 0 16px}
+.nav button.active,.nav button:hover{color:var(--text); background:rgba(79,140,255,.12); border-color:rgba(79,140,255,.25)}
+.side-meta{
+  margin-top:auto; padding:12px; border:1px solid var(--border-soft); border-radius:var(--radius);
+  background:rgba(255,255,255,.02); display:grid; gap:8px;
 }
-.side-foot{margin-top:auto; padding:10px; border-radius:14px; background:rgba(255,255,255,.03); border:1px solid var(--line)}
-.side-foot .row{display:flex; justify-content:space-between; gap:8px; font-size:12px; margin:4px 0}
+.side-meta .row{display:grid; grid-template-columns:72px minmax(0,1fr); gap:8px; align-items:center; font-size:12px}
+.side-meta .row span:last-child{min-width:0; overflow:hidden; text-overflow:ellipsis}
+
+/* Main column */
+.main{min-width:0; max-width:100%; display:flex; flex-direction:column; overflow-x:hidden}
+.topbar{
+  position:sticky; top:0; z-index:30;
+  height:var(--header-h); min-height:var(--header-h);
+  display:grid; grid-template-columns:minmax(0,1fr) auto; gap:var(--s2); align-items:center;
+  padding:0 var(--s3); border-bottom:1px solid var(--border);
+  background:rgba(8,13,24,.9); backdrop-filter:blur(10px);
+}
+.topbar h1{margin:0; font-size:16px; font-weight:650; line-height:1.2}
+.topbar .sub{margin:2px 0 0; font-size:12px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.toolbar{
+  display:grid; grid-auto-flow:column; grid-auto-columns:minmax(140px,180px) minmax(160px,220px) auto auto;
+  gap:10px; align-items:end;
+}
+.field-ctl{display:grid; gap:4px; min-width:0}
+.field-ctl > span{font-size:11px; color:var(--muted); line-height:1}
+.field-ctl select{width:100%}
+.toolbar > button{align-self:end}
+@media(max-width:1100px){
+  .topbar{height:auto; min-height:var(--header-h); padding:12px var(--s2); grid-template-columns:1fr}
+  .toolbar{grid-auto-flow:row; grid-auto-columns:1fr; grid-template-columns:1fr 1fr; width:100%}
+  .toolbar > button{grid-column:span 1}
+}
+
+.content{
+  padding:var(--s3);
+  display:grid; gap:var(--s2);
+  width:100%; max-width:100%;
+  min-width:0; overflow-x:hidden;
+}
+@media(max-width:960px){.content{padding:var(--s2)}}
+
+/* Surfaces */
+.card{
+  background:var(--panel); border:1px solid var(--border); border-radius:var(--radius);
+  padding:var(--s2); min-width:0; overflow:hidden;
+}
+.card-title{
+  margin:0 0 12px; font-size:11px; letter-spacing:.06em; text-transform:uppercase;
+  color:var(--muted); display:flex; align-items:center; gap:8px; min-width:0;
+}
+.card-title svg{width:14px; height:14px; color:var(--accent-2); flex:0 0 auto}
 .pill{
-  display:inline-flex; align-items:center; gap:6px; padding:3px 9px; border-radius:999px;
-  background:rgba(255,255,255,.05); border:1px solid var(--line); color:var(--muted); font-size:11px;
+  display:inline-flex; align-items:center; gap:6px; height:22px; padding:0 8px;
+  border-radius:999px; border:1px solid var(--border); background:rgba(255,255,255,.04);
+  color:var(--muted); font-size:11px; white-space:nowrap;
 }
-.pill.live{color:var(--good); border-color:rgba(61,220,151,.35); background:rgba(61,220,151,.08)}
-.dot{width:7px; height:7px; border-radius:50%; background:var(--good); box-shadow:0 0 0 0 rgba(61,220,151,.55); animation:pulse 1.6s infinite}
-@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(61,220,151,.55)}70%{box-shadow:0 0 0 9px rgba(61,220,151,0)}100%{box-shadow:0 0 0 0 rgba(61,220,151,0)}}
+.pill.live{color:var(--good); border-color:rgba(52,211,153,.35); background:rgba(52,211,153,.08)}
+.dot{width:6px; height:6px; border-radius:50%; background:var(--good); box-shadow:0 0 0 0 rgba(52,211,153,.5); animation:pulse 1.6s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(52,211,153,.5)}70%{box-shadow:0 0 0 8px transparent}100%{box-shadow:0 0 0 0 transparent}}
 
-/* Main */
-.main{min-width:0; display:flex; flex-direction:column}
-.top{
-  position:sticky; top:0; z-index:20; display:flex; gap:12px; align-items:center; justify-content:space-between;
-  padding:14px 18px; border-bottom:1px solid rgba(42,59,92,.75);
-  background:rgba(7,11,20,.78); backdrop-filter:blur(12px);
-}
-.top h1{margin:0; font-size:16px; font-weight:700; letter-spacing:.01em}
-.top .sub{color:var(--muted); font-size:12px; margin-top:2px}
-.controls{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
-.controls label{display:flex; flex-direction:column; gap:4px; font-size:11px; color:var(--muted)}
-.content{padding:18px; display:flex; flex-direction:column; gap:16px}
-
+/* Overview */
 .hero{
-  position:relative; overflow:hidden; border-radius:22px; border:1px solid rgba(79,140,255,.25);
+  display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,.9fr); gap:var(--s2); align-items:stretch;
+  min-height:140px; padding:var(--s3); border-radius:16px; border:1px solid rgba(79,140,255,.28);
   background:
-    linear-gradient(120deg, rgba(21,32,54,.92), rgba(18,28,46,.75)),
-    url('/assets/hero.jpg') center/cover no-repeat;
-  box-shadow:var(--shadow); min-height:148px; padding:22px 24px;
-  display:grid; grid-template-columns:1.3fr .7fr; gap:16px; align-items:center;
+    linear-gradient(105deg, rgba(10,16,30,.88) 0%, rgba(10,16,30,.55) 48%, rgba(10,16,30,.72) 100%),
+    url('/assets/hero.jpg') right center / cover no-repeat;
+  overflow:hidden;
 }
-.hero::after{
-  content:""; position:absolute; inset:0;
-  background:linear-gradient(90deg, rgba(7,11,20,.78), rgba(7,11,20,.35) 55%, rgba(7,11,20,.55));
-  pointer-events:none;
+.hero h2{margin:0 0 8px; font-size:20px; line-height:1.25}
+.hero p{margin:0; color:#c5d2ec; max-width:48ch}
+.hero-stats{display:grid; grid-template-columns:1fr 1fr; gap:8px; min-width:0}
+.stat{
+  background:rgba(8,13,24,.55); border:1px solid rgba(255,255,255,.1); border-radius:var(--radius-sm);
+  padding:10px 12px; min-width:0;
 }
-.hero > *{position:relative; z-index:1}
-.hero h2{margin:0 0 6px; font-size:22px}
-.hero p{margin:0; color:#c9d6f2; max-width:52ch}
-.hero-stats{display:grid; grid-template-columns:1fr 1fr; gap:8px}
-.hero-stat{
-  background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1);
-  border-radius:14px; padding:10px 12px;
-}
-.hero-stat b{display:block; font-size:18px}
-.hero-stat span{font-size:11px; color:#b7c5e4}
+.stat b{display:block; font-size:18px; line-height:1.2}
+.stat span{display:block; margin-top:2px; font-size:11px; color:#b7c5e4}
 @media(max-width:900px){.hero{grid-template-columns:1fr}}
 
-.kpis{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px}
+.kpis{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:var(--s2)}
 @media(max-width:1100px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .kpi{
-  border-radius:18px; padding:14px; border:1px solid var(--line);
-  background:linear-gradient(180deg, rgba(26,39,64,.95), rgba(18,28,46,.9));
-  box-shadow:0 10px 28px rgba(0,0,0,.22);
+  background:var(--panel); border:1px solid var(--border); border-radius:var(--radius);
+  padding:14px; min-width:0; display:grid; gap:10px;
 }
-.kpi .head{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px}
-.kpi .ico{
-  width:34px; height:34px; border-radius:11px; display:grid; place-items:center;
-  background:rgba(79,140,255,.12); border:1px solid rgba(79,140,255,.25); color:var(--accent2);
+.kpi-top{display:flex; justify-content:space-between; align-items:center; gap:8px}
+.kpi-ico{
+  width:32px; height:32px; border-radius:8px; display:grid; place-items:center;
+  background:rgba(79,140,255,.12); border:1px solid rgba(79,140,255,.25); color:var(--accent-2);
 }
-.kpi .ico svg{width:18px; height:18px}
-.kpi .val{font-size:26px; font-weight:750; letter-spacing:-.02em}
-.kpi .lbl{color:var(--muted); font-size:12px}
-.kpi .bar{margin-top:10px; height:6px; border-radius:99px; background:rgba(255,255,255,.06); overflow:hidden}
-.kpi .bar > i{display:block; height:100%; border-radius:99px; background:linear-gradient(90deg,var(--accent),var(--cyan)); width:0%}
+.kpi-ico svg{width:16px; height:16px}
+.kpi-val{font-size:24px; font-weight:700; letter-spacing:-.02em; line-height:1}
+.kpi-bar{height:6px; border-radius:99px; background:rgba(255,255,255,.06); overflow:hidden}
+.kpi-bar > i{display:block; height:100%; width:0; background:linear-gradient(90deg,var(--accent),var(--cyan))}
 
-.grid-2{display:grid; grid-template-columns:1.05fr .95fr; gap:14px}
-.grid-3{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px}
-@media(max-width:1100px){.grid-2,.grid-3{grid-template-columns:1fr}}
+.grid-2{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:var(--s2); min-width:0}
+@media(max-width:1100px){.grid-2{grid-template-columns:minmax(0,1fr)}}
 
-.card{
-  border-radius:18px; border:1px solid var(--line);
-  background:linear-gradient(180deg, rgba(21,32,54,.95), rgba(18,28,46,.92));
-  box-shadow:0 12px 30px rgba(0,0,0,.2); padding:14px 16px;
-}
-.card h3{margin:0 0 10px; font-size:13px; letter-spacing:.04em; text-transform:uppercase; color:#b9c7e4; display:flex; align-items:center; gap:8px}
-.card h3 svg{width:16px; height:16px; color:var(--accent2)}
-
-.session-list{display:flex; flex-direction:column; gap:8px; max-height:62vh; overflow:auto; padding-right:2px}
+/* Live page */
+.live-layout{display:grid; grid-template-columns:minmax(0,320px) minmax(0,1fr); gap:var(--s2); min-width:0; align-items:start}
+@media(max-width:1100px){.live-layout{grid-template-columns:minmax(0,1fr)}}
+.session-list{display:grid; gap:8px; max-height:calc(100vh - 220px); overflow:auto; padding-right:2px}
 .session-item{
-  border:1px solid var(--line); border-radius:14px; padding:11px 12px; cursor:pointer;
-  background:rgba(255,255,255,.02); transition:border-color .15s, background .15s;
+  border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px;
+  background:rgba(255,255,255,.02); cursor:pointer; min-width:0;
 }
-.session-item:hover,.session-item.active{border-color:rgba(79,140,255,.55); background:rgba(79,140,255,.08)}
-.session-item .t{display:flex; justify-content:space-between; gap:8px; align-items:center}
-.session-item .t strong{font-size:13px}
+.session-item:hover,.session-item.active{border-color:rgba(79,140,255,.5); background:rgba(79,140,255,.08)}
+.session-item .t{display:flex; justify-content:space-between; gap:8px; align-items:center; min-width:0}
+.session-item .t strong{min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .chip{
-  display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:999px;
-  background:rgba(255,255,255,.05); border:1px solid var(--line); color:var(--muted); font-size:11px; margin:0 4px 4px 0;
+  display:inline-flex; align-items:center; height:20px; padding:0 8px; border-radius:999px;
+  border:1px solid var(--border); background:rgba(255,255,255,.04); color:var(--muted);
+  font-size:11px; white-space:nowrap; margin:0 4px 4px 0;
 }
-.chip.live{color:var(--good); border-color:rgba(61,220,151,.35)}
+.chip.live{color:var(--good); border-color:rgba(52,211,153,.35)}
+.chips{display:flex; flex-wrap:wrap; gap:0; margin-top:8px}
 
-table{width:100%; border-collapse:collapse}
-th,td{text-align:left; padding:8px 6px; border-bottom:1px solid rgba(42,59,92,.65); vertical-align:top}
-th{color:var(--muted); font-size:11px; letter-spacing:.04em; text-transform:uppercase}
-.scroll{max-height:320px; overflow:auto}
+table{width:100%; border-collapse:collapse; table-layout:fixed}
+th,td{text-align:left; padding:8px 8px; border-bottom:1px solid var(--border-soft); vertical-align:top; overflow:hidden; text-overflow:ellipsis}
+th{color:var(--muted); font-size:11px; letter-spacing:.04em; text-transform:uppercase; font-weight:600}
+.scroll{max-height:280px; overflow:auto; min-width:0}
+.banner{
+  padding:10px 12px; border-radius:var(--radius-sm); border:1px solid rgba(79,140,255,.28);
+  background:rgba(79,140,255,.08); color:#d3e2ff; font-size:12.5px;
+}
+.empty{
+  padding:20px; text-align:center; color:var(--muted);
+  border:1px dashed var(--border); border-radius:var(--radius-sm);
+}
 
-/* Connectors: 1/3 width cards */
+/* Connectors: equal-height 1/3 cards */
 .connector-grid{
   display:grid;
   grid-template-columns:repeat(3, minmax(0, 1fr));
-  gap:12px;
-  align-items:start;
+  gap:var(--s2);
+  align-items:stretch;
+  width:100%;
+  min-width:0;
 }
-@media(max-width:1100px){.connector-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:720px){.connector-grid{grid-template-columns:1fr}}
+@media(max-width:1100px){.connector-grid{grid-template-columns:repeat(2, minmax(0,1fr))}}
+@media(max-width:720px){.connector-grid{grid-template-columns:minmax(0,1fr)}}
 .conn-card{
-  border:1px solid var(--line); border-radius:16px; padding:12px;
-  background:linear-gradient(180deg, rgba(26,39,64,.9), rgba(15,23,40,.92));
-  display:flex; flex-direction:column; gap:8px; min-width:0;
+  min-width:0; min-height:320px; height:100%;
+  display:grid;
+  grid-template-rows:auto minmax(0,1fr) auto;
+  gap:10px;
+  padding:12px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:var(--panel-2);
+  overflow:hidden;
 }
-.conn-card .hdr{display:flex; justify-content:space-between; gap:8px; align-items:flex-start}
-.conn-card .name{display:flex; gap:8px; align-items:center; min-width:0}
+.conn-card .hdr{
+  display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:start;
+  min-height:40px;
+}
+.conn-card .name{display:grid; grid-template-columns:28px minmax(0,1fr); gap:8px; align-items:center; min-width:0}
 .conn-card .avatar{
-  width:28px; height:28px; border-radius:9px; display:grid; place-items:center;
-  font-size:11px; font-weight:700; color:#dfe9ff;
-  background:linear-gradient(135deg, rgba(79,140,255,.35), rgba(61,224,208,.2));
-  border:1px solid rgba(79,140,255,.3); flex:0 0 auto;
+  width:28px; height:28px; border-radius:8px; display:grid; place-items:center;
+  font-size:10px; font-weight:700; color:#e8efff;
+  background:linear-gradient(135deg, rgba(79,140,255,.4), rgba(53,214,199,.2));
+  border:1px solid rgba(79,140,255,.3);
 }
-.conn-card .name strong{font-size:13px; overflow:hidden; text-overflow:ellipsis}
-.conn-card .fields{display:flex; flex-direction:column; gap:6px}
-.field{display:flex; flex-direction:column; gap:3px}
-.field label{font-size:10px; color:var(--muted); font-family:var(--mono); display:flex; justify-content:space-between; gap:6px}
-.field input{padding:7px 9px; border-radius:10px; font-size:12px; width:100%}
-.conn-card .actions{display:flex; gap:6px; margin-top:2px}
-.conn-card .actions button{flex:1; padding:8px 10px; font-size:12px}
+.conn-card .name strong{font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.conn-card .fields{
+  min-height:0; overflow:auto;
+  display:grid; gap:8px; align-content:start;
+  padding-right:2px;
+}
+.field{display:grid; gap:4px; min-width:0}
+.field label{
+  display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px; align-items:center;
+  font-size:10px; color:var(--muted); font-family:var(--mono);
+}
+.field label span:first-child{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.field input{height:32px; padding:0 8px; font-size:12px; width:100%; min-width:0}
+.conn-card .actions{display:grid; grid-template-columns:1fr; gap:8px}
+.conn-card .actions button{width:100%; height:34px}
 
-.banner{
-  border-radius:14px; padding:10px 12px; border:1px solid rgba(79,140,255,.3);
-  background:rgba(79,140,255,.08); color:#cfe0ff; font-size:12.5px;
-}
-.flash{padding:10px 12px; border-radius:12px; margin:8px 0; border:1px solid var(--line)}
-.flash.ok{border-color:rgba(61,220,151,.4); background:rgba(61,220,151,.08)}
-.flash.err{border-color:rgba(255,107,122,.4); background:rgba(255,107,122,.08)}
-.empty{padding:18px; text-align:center; color:var(--muted); border:1px dashed var(--line); border-radius:14px}
+.sec-note{margin:0 0 12px; color:var(--muted); font-size:12.5px; line-height:1.45}
+.flash{padding:10px 12px; border-radius:var(--radius-sm); margin:0 0 12px; border:1px solid var(--border)}
+.flash.ok{border-color:rgba(52,211,153,.4); background:rgba(52,211,153,.08)}
+.flash.err{border-color:rgba(248,113,113,.4); background:rgba(248,113,113,.08)}
 .toast{
-  position:fixed; right:16px; bottom:16px; z-index:50; min-width:240px; max-width:360px;
-  padding:12px 14px; border-radius:14px; border:1px solid var(--line);
+  position:fixed; right:16px; bottom:16px; z-index:80; max-width:min(360px, calc(100vw - 32px));
+  padding:12px 14px; border-radius:var(--radius); border:1px solid var(--border);
   background:rgba(18,28,46,.96); box-shadow:var(--shadow); display:none;
 }
 .toast.show{display:block}
-.sec-note{font-size:12px; color:var(--muted); margin:0 0 12px}
+
+/* ===== Controls shared by the Behavior and Ecosystem pages ===== */
+textarea{
+  width:100%; min-height:180px; height:auto; padding:10px 12px; resize:vertical;
+  font:12px/1.5 var(--mono);
+}
+.switch{
+  position:relative; flex:0 0 auto; width:42px; height:24px; padding:0; border-radius:999px;
+  background:var(--panel-2); border:1px solid var(--border); cursor:pointer;
+}
+.switch::after{
+  content:""; position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:50%;
+  background:var(--faint); transition:transform .16s ease, background .16s ease;
+}
+.switch[aria-checked="true"]{background:rgba(52,211,153,.16); border-color:rgba(52,211,153,.5)}
+.switch[aria-checked="true"]::after{transform:translateX(18px); background:var(--good)}
+.switch:disabled{opacity:.45; cursor:not-allowed}
+@media(prefers-reduced-motion:reduce){.switch::after{transition:none}}
+
+/* Behavior page */
+.knob-grid{display:grid; gap:10px}
+.knob{
+  display:grid; grid-template-columns:minmax(0,1fr) minmax(150px,260px);
+  gap:12px; align-items:start;
+  padding:12px; border:1px solid var(--border-soft); border-radius:var(--radius-sm);
+  background:rgba(255,255,255,.02);
+}
+.knob .k-name{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+.knob .k-name strong{font-size:13px; font-weight:600}
+.knob p{margin:6px 0 0; color:var(--muted); font-size:12.5px; line-height:1.45; max-width:74ch}
+.knob .k-ref{margin-top:6px; font-family:var(--mono); font-size:11px; color:var(--faint)}
+.knob .k-ctl{display:flex; justify-content:flex-end; align-items:center; gap:8px; min-width:0}
+.knob .k-ctl input,.knob .k-ctl select{max-width:100%}
+@media(max-width:760px){.knob{grid-template-columns:minmax(0,1fr)} .knob .k-ctl{justify-content:flex-start}}
+.src{font-family:var(--mono); font-size:10px; letter-spacing:.04em; text-transform:uppercase; color:var(--faint)}
+.src.settings{color:var(--accent-2)}
+.sticky-save{
+  position:sticky; bottom:0; z-index:20; margin-top:var(--s2);
+  display:flex; gap:10px; align-items:center; justify-content:flex-end; flex-wrap:wrap;
+  padding:12px; border:1px solid var(--border); border-radius:var(--radius);
+  background:rgba(18,28,46,.96); backdrop-filter:blur(8px);
+}
+.sticky-save .msg{margin-right:auto; color:var(--muted); font-size:12.5px}
+
+/* Ecosystem page */
+.eco-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:var(--s2)}
+.eco-card{
+  display:grid; grid-template-rows:auto auto 1fr auto; gap:8px;
+  padding:12px; border:1px solid var(--border); border-radius:var(--radius);
+  background:var(--panel-2); min-width:0;
+}
+.eco-card.off{opacity:.62}
+.eco-card .hdr{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:center}
+.eco-card .hdr strong{font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block}
+.eco-card p{margin:0; color:var(--muted); font-size:12px; line-height:1.45;
+  display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden}
+.eco-card.host{border-color:rgba(79,140,255,.45); background:rgba(79,140,255,.06)}
+.subnav{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:var(--s2)}
+.subnav button{height:30px; padding:0 12px; font-size:12px; background:transparent; color:var(--muted)}
+.subnav button.active{color:var(--text); background:rgba(79,140,255,.14); border-color:rgba(79,140,255,.35)}
+.tag-list{display:flex; flex-wrap:wrap; gap:6px}
+.tag{
+  font-family:var(--mono); font-size:11px; padding:3px 8px; border-radius:6px;
+  border:1px solid var(--border-soft); background:rgba(255,255,255,.03); color:var(--muted);
+}
+.tag.ok{color:var(--good); border-color:rgba(52,211,153,.3)}
+.tag.no{color:var(--bad); border-color:rgba(248,113,113,.3)}
+.form-row{display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; align-items:end}
+.form-row .field-ctl span{font-size:11px}
 </style>
 </head>
 <body>
 <div class="app">
   <aside class="side">
     <div class="brand">
-      <img class="mark" src="/assets/mark.svg" alt="Atlas"/>
-      <div class="titles">
+      <img src="/assets/mark.svg" alt="Atlas mark" width="40" height="40"/>
+      <div class="truncate">
         <b>Atlas</b>
         <span>Command Center</span>
       </div>
     </div>
-    <nav class="nav" id="nav">
+    <nav class="nav" id="nav" aria-label="Primary">
       <button class="active" data-tab="overview" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5z"/></svg>
         Overview
       </button>
       <button data-tab="live" type="button">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12h3l2-7 4 14 2-7h3"/><circle cx="12" cy="12" r="9"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12h3l2-7 4 14 2-7h3"/></svg>
         Live sessions
       </button>
-      <button data-tab="settings" type="button" id="navSettings">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/><path d="M19.4 13a7.8 7.8 0 0 0 .1-2l2-1.2-2-3.4-2.3.5a7.6 7.6 0 0 0-1.7-1L15 3h-6l-.5 2.9a7.6 7.6 0 0 0-1.7 1L4.5 6.4l-2 3.4L4.5 11a7.8 7.8 0 0 0 0 2l-2 1.2 2 3.4 2.3-.5a7.6 7.6 0 0 0 1.7 1L9 21h6l.5-2.9a7.6 7.6 0 0 0 1.7-1l2.3.5 2-3.4-2-1.2z"/></svg>
+      <button data-tab="settings" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/></svg>
         Connectors
       </button>
+      <button data-tab="behavior" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
+        Behavior
+      </button>
+      <button data-tab="ecosystem" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="2.5"/><circle cx="12" cy="4" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="18" r="2"/><path d="M12 6.5v3M10 13.5 6.6 16.4M14 13.5l3.4 2.9"/></svg>
+        Ecosystem
+      </button>
       <button data-tab="findings" type="button">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 3 7v6c0 5 3.8 8.4 9 9 5.2-.6 9-4 9-9V7l-9-4z"/><path d="M12 8v5"/><circle cx="12" cy="16" r=".8" fill="currentColor"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 4 7v5c0 4.5 3.4 7.6 8 8 4.6-.4 8-3.5 8-8V7l-8-4z"/></svg>
         Findings
       </button>
     </nav>
-    <div class="side-foot">
-      <div class="row"><span class="muted">Daemon</span><span class="pill live" id="daemonPill"><span class="dot"></span>online</span></div>
-      <div class="row"><span class="muted">Plugin</span><span class="mono" id="sideVer">—</span></div>
-      <div class="row"><span class="muted">Updated</span><span id="sideUpdated">—</span></div>
-      <div class="row mono faint" id="sideDb" style="display:block;word-break:break-all;margin-top:6px">—</div>
+    <div class="side-meta">
+      <div class="row"><span class="muted">Daemon</span><span class="pill live"><span class="dot"></span>online</span></div>
+      <div class="row"><span class="muted">Plugin</span><span class="mono truncate" id="sideVer">—</span></div>
+      <div class="row"><span class="muted">Updated</span><span class="truncate" id="sideUpdated">—</span></div>
+      <div class="row"><span class="muted">DB</span><span class="mono truncate" id="sideDb" title="">—</span></div>
     </div>
   </aside>
 
   <div class="main">
-    <header class="top">
-      <div>
+    <header class="topbar">
+      <div class="truncate">
         <h1 id="pageTitle">Overview</h1>
         <div class="sub">Shared multi-session observability · <span class="mono" id="url"></span></div>
       </div>
-      <div class="controls">
-        <label>Project
-          <select id="project"></select>
+      <div class="toolbar">
+        <label class="field-ctl">
+          <span>Project</span>
+          <select id="project" aria-label="Project filter"></select>
         </label>
-        <label>Session
-          <select id="session"></select>
+        <label class="field-ctl">
+          <span>Session</span>
+          <select id="session" aria-label="Session selector"></select>
         </label>
         <button type="button" id="refresh" class="ghost">Refresh</button>
         <button type="button" id="gotoSettings" class="primary">Credentials</button>
       </div>
     </header>
 
-    <div class="content">
+    <main class="content">
       <section id="tab-overview">
         <div class="hero">
           <div>
-            <div class="pill live" style="margin-bottom:10px"><span class="dot"></span> Atlas marketplace command center</div>
+            <div class="pill live" style="margin-bottom:10px"><span class="dot"></span> Marketplace command center</div>
             <h2>See what every terminal is doing</h2>
-            <p>Live sessions, tool activity, savings proxies, and connector credentials — one loopback UI for all concurrent agents.</p>
+            <p>Live sessions, tool activity, savings proxies, and connector credentials in one loopback UI.</p>
           </div>
           <div class="hero-stats">
-            <div class="hero-stat"><b id="heroLive">0</b><span>Live sessions (10m)</span></div>
-            <div class="hero-stat"><b id="heroTools">0</b><span>Tool calls (10m)</span></div>
-            <div class="hero-stat"><b id="heroConn">0</b><span>Connectors ready</span></div>
-            <div class="hero-stat"><b id="heroFindings">0</b><span>Open findings</span></div>
+            <div class="stat"><b id="heroLive">0</b><span>Live sessions (10m)</span></div>
+            <div class="stat"><b id="heroTools">0</b><span>Tool calls (10m)</span></div>
+            <div class="stat"><b id="heroConn">0</b><span>Connectors ready</span></div>
+            <div class="stat"><b id="heroFindings">0</b><span>Open findings</span></div>
           </div>
         </div>
         <div class="kpis" id="kpis"></div>
         <div class="grid-2">
-          <div class="card">
-            <h3>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 15v4"/><path d="M12 11v8"/><path d="M16 8v11"/></svg>
-              Savings proxies
-            </h3>
+          <section class="card">
+            <h3 class="card-title">Savings proxies</h3>
             <div id="savings" class="muted">—</div>
-          </div>
-          <div class="card">
-            <h3>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 3 4 14h7l-1 7 10-12h-7l1-6z"/></svg>
-              Live activity pulse
-            </h3>
+          </section>
+          <section class="card">
+            <h3 class="card-title">Live activity pulse</h3>
             <div id="pulse" class="muted">—</div>
-          </div>
+          </section>
         </div>
-        <div class="card">
-          <h3>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
-            Recent runs
-          </h3>
+        <section class="card">
+          <h3 class="card-title">Recent runs</h3>
           <div class="scroll">
-            <table><thead><tr><th>When</th><th>Project</th><th>Kind</th><th>Disp</th><th>Inline</th><th>Verifier</th></tr></thead><tbody id="recentRuns"></tbody></table>
+            <table>
+              <thead><tr><th style="width:18%">When</th><th style="width:28%">Project</th><th style="width:14%">Kind</th><th style="width:12%">Disp</th><th style="width:12%">Inline</th><th style="width:16%">Verifier</th></tr></thead>
+              <tbody id="recentRuns"></tbody>
+            </table>
           </div>
-        </div>
+        </section>
       </section>
 
       <section id="tab-live" class="hidden">
         <div class="banner" id="hint"></div>
-        <div class="grid-2">
-          <div class="card">
-            <h3>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h6"/><path d="M7 12h10"/><path d="M7 16h8"/></svg>
-              Sessions <span class="pill" id="sessionCount" style="margin-left:6px">0</span>
-            </h3>
+        <div class="live-layout">
+          <section class="card">
+            <h3 class="card-title">Sessions <span class="pill" id="sessionCount">0</span></h3>
             <div class="session-list" id="sessionList"></div>
-          </div>
-          <div style="display:flex; flex-direction:column; gap:14px; min-width:0">
-            <div class="card">
-              <h3>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.5"/><path d="M5 19a7 7 0 0 1 14 0"/></svg>
-                Selected session
-              </h3>
+          </section>
+          <div style="display:grid; gap:16px; min-width:0">
+            <section class="card">
+              <h3 class="card-title">Selected session</h3>
               <div id="detail" class="muted">Pick a session…</div>
-            </div>
-            <div class="grid-2" style="grid-template-columns:1fr 1fr">
-              <div class="card">
-                <h3>Recent tools</h3>
+            </section>
+            <div class="grid-2">
+              <section class="card">
+                <h3 class="card-title">Recent tools</h3>
                 <div class="scroll">
-                  <table><thead><tr><th>When</th><th>Tool</th><th>Target</th></tr></thead><tbody id="tools"></tbody></table>
+                  <table>
+                    <thead><tr><th style="width:28%">When</th><th style="width:32%">Tool</th><th>Target</th></tr></thead>
+                    <tbody id="tools"></tbody>
+                  </table>
                 </div>
-              </div>
-              <div class="card">
-                <h3>Events / dispatches</h3>
+              </section>
+              <section class="card">
+                <h3 class="card-title">Events / dispatches</h3>
                 <div class="scroll">
-                  <table><thead><tr><th>When</th><th>Kind</th><th>Detail</th></tr></thead><tbody id="events"></tbody></table>
+                  <table>
+                    <thead><tr><th style="width:28%">When</th><th style="width:24%">Kind</th><th>Detail</th></tr></thead>
+                    <tbody id="events"></tbody>
+                  </table>
                 </div>
-              </div>
+              </section>
             </div>
           </div>
         </div>
       </section>
 
       <section id="tab-settings" class="hidden">
-        <div class="card">
-          <h3>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v3"/><path d="M12 18v3"/><path d="M3 12h3"/><path d="M18 12h3"/><circle cx="12" cy="12" r="4"/></svg>
-            Connector credentials
-          </h3>
+        <section class="card">
+          <h3 class="card-title">Connector credentials</h3>
           <p class="sec-note">
-            Compact cards (⅓ width). Saves to <span class="mono" id="settingsPath">~/.claude/settings.json</span>
-            <span class="mono">pluginConfigs["atlas@tech-tools"].options</span> and this plugin’s
-            <span class="mono">.env</span>. Secrets are never read back — only set/missing.
-            Drafts survive auto-refresh. After save, reload Claude Code.
+            Equal-height cards at one-third width. Saves to
+            <span class="mono" id="settingsPath">~/.claude/settings.json</span>
+            <span class="mono">pluginConfigs["atlas@tech-tools"].options</span>
+            and this plugin’s <span class="mono">.env</span>.
+            Secrets are never read back. Drafts survive auto-refresh. Reload Claude Code after save.
           </p>
           <div id="settingsFlash"></div>
           <div class="connector-grid" id="connectorForms"></div>
+        </section>
+
+        <section class="card">
+          <h3 class="card-title">Bulk import and export</h3>
+          <p class="sec-note">
+            Paste a block of <span class="mono">KEY=VALUE</span> lines to fill many connectors at once.
+            Only keys this plugin declares are accepted; anything else is rejected by name.
+            Export writes a template with secrets blanked out.
+          </p>
+          <textarea id="bulkEnv" spellcheck="false" autocomplete="off"
+            placeholder="AUVIK_USERNAME=you@example.com&#10;AUVIK_API_KEY=..."></textarea>
+          <div class="sticky-save">
+            <span class="msg" id="bulkMsg">Nothing pasted yet.</span>
+            <button type="button" class="ghost" id="bulkExport">Load template</button>
+            <button type="button" class="primary" id="bulkImport">Import pasted keys</button>
+          </div>
+        </section>
+      </section>
+
+      <section id="tab-behavior" class="hidden">
+        <section class="card">
+          <h3 class="card-title">How atlas behaves</h3>
+          <p class="sec-note">
+            These are the environment variables the atlas hooks read at runtime. Saving writes them to
+            <span class="mono" id="behaviorPath">~/.claude/settings.json</span> under
+            <span class="mono">"env"</span>, which Claude Code exports into every hook process.
+            Each knob shows the file and line that reads it. Reload Claude Code for a change to reach a running session.
+          </p>
+          <div id="behaviorFlash"></div>
+          <div id="behaviorGroups"></div>
+          <div class="sticky-save">
+            <span class="msg" id="behaviorMsg">No changes.</span>
+            <button type="button" class="ghost" id="behaviorReset">Discard changes</button>
+            <button type="button" class="primary" id="behaviorSave">Save behavior</button>
+          </div>
+        </section>
+
+        <section class="card">
+          <h3 class="card-title">Advanced variables</h3>
+          <p class="sec-note">
+            Every other <span class="mono">ATLAS_*</span> variable found in the shipped hooks and scripts.
+            Blank means the code falls back to its built-in default. Clear a field to remove the override.
+          </p>
+          <div class="scroll" style="max-height:min(50vh,420px)">
+            <table>
+              <thead><tr><th style="width:32%">Variable</th><th style="width:40%">Value</th><th style="width:28%">Read at</th></tr></thead>
+              <tbody id="behaviorAdvanced"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section id="tab-ecosystem" class="hidden">
+        <div class="subnav" id="ecoNav" role="tablist">
+          <button type="button" class="active" data-eco="wiring">Atlas wiring</button>
+          <button type="button" data-eco="plugins">Plugins</button>
+          <button type="button" data-eco="mcp">MCP servers</button>
+          <button type="button" data-eco="capabilities">Skills &amp; agents</button>
         </div>
+        <div id="ecoFlash"></div>
+
+        <section class="card" id="eco-wiring">
+          <h3 class="card-title">Atlas wiring</h3>
+          <p class="sec-note" id="ecoWiringNote">—</p>
+          <div class="scroll" style="max-height:min(60vh,520px)">
+            <table>
+              <thead><tr><th style="width:22%">Event</th><th style="width:16%">Matcher</th><th style="width:44%">Program</th><th style="width:18%">On disk</th></tr></thead>
+              <tbody id="ecoBindings"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="card hidden" id="eco-plugins">
+          <h3 class="card-title">Installed plugins <span class="pill" id="pluginCount">0</span></h3>
+          <p class="sec-note">
+            Toggling writes <span class="mono">enabledPlugins</span> in settings.json. Reload Claude Code to apply.
+            Atlas serves this page, so it cannot switch itself off here.
+          </p>
+          <div class="eco-grid" id="pluginGrid"></div>
+        </section>
+
+        <section class="card hidden" id="eco-mcp">
+          <h3 class="card-title">MCP servers <span class="pill" id="mcpCount">0</span></h3>
+          <p class="sec-note">
+            Plugin servers and the user-scope servers in <span class="mono" id="claudeJsonPath">~/.claude.json</span>.
+            Turning one off adds it to <span class="mono">disabledMcpServers</span>; the config stays intact.
+          </p>
+          <div class="eco-grid" id="mcpGrid"></div>
+          <h3 class="card-title" style="margin-top:var(--s3)">Add a user-scope server</h3>
+          <div class="form-row">
+            <label class="field-ctl"><span>Name</span><input id="mcpName" placeholder="my-server" autocomplete="off"/></label>
+            <label class="field-ctl"><span>Command</span><input id="mcpCommand" placeholder="npx" autocomplete="off"/></label>
+            <label class="field-ctl"><span>Arguments</span><input id="mcpArgs" placeholder="-y @scope/package" autocomplete="off"/></label>
+            <label class="field-ctl"><span>Or HTTP URL</span><input id="mcpUrl" placeholder="https://example.com/mcp" autocomplete="off"/></label>
+            <button type="button" class="primary" id="mcpAdd">Add server</button>
+          </div>
+        </section>
+
+        <section class="card hidden" id="eco-capabilities">
+          <h3 class="card-title">Skills, agents and output styles</h3>
+          <p class="sec-note">What this install can reach, grouped by where it comes from.</p>
+          <div class="grid-2" id="capabilityGrid"></div>
+        </section>
       </section>
 
       <section id="tab-findings" class="hidden">
-        <div class="card">
-          <h3>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 3 7v6c0 5 3.8 8.4 9 9 5.2-.6 9-4 9-9V7l-9-4z"/></svg>
-            Findings
-          </h3>
-          <div class="scroll" style="max-height:70vh">
-            <table><thead><tr><th>Sev</th><th>Title</th><th>Dimension</th><th>Status</th></tr></thead><tbody id="findings"></tbody></table>
+        <section class="card">
+          <h3 class="card-title">Findings</h3>
+          <div class="scroll" style="max-height:min(70vh,640px)">
+            <table>
+              <thead><tr><th style="width:12%">Sev</th><th style="width:46%">Title</th><th style="width:24%">Dimension</th><th style="width:18%">Status</th></tr></thead>
+              <tbody id="findings"></tbody>
+            </table>
           </div>
-        </div>
+        </section>
       </section>
-    </div>
+    </main>
   </div>
 </div>
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
 const $ = id => document.getElementById(id);
 const state = {
   snapshot:null, selectedSession:null, selectedProject:null, tab:'overview',
-  drafts:{}, settingsDirty:false, settingsFocus:false
+  drafts:{}, settingsDirty:false, settingsFocus:false,
+  behavior:null, behaviorEdits:{}, ecosystem:null, ecoPane:'wiring'
 };
-const ICONS = {
-  sessions: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M3 19a5 5 0 0 1 10 0"/><path d="M11 19a5 5 0 0 1 10 0"/></svg>`,
-  tools: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14.5 6.5 17 4l3 3-2.5 2.5"/><path d="m4 20 7.5-7.5"/><path d="M9 7a5 5 0 0 0 7 7"/></svg>`,
-  bolt: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 3 4 14h7l-1 7 10-12h-7l1-6z"/></svg>`,
-  shield: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 3 7v6c0 5 3.8 8.4 9 9 5.2-.6 9-4 9-9V7l-9-4z"/></svg>`,
+// Plugin manifests and MCP configs are third-party text rendered into innerHTML.
+const esc = v => String(v==null?'':v).replace(/[&<>"']/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ICO = {
+  users:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3"/><circle cx="16" cy="9" r="2.5"/><path d="M3 19a6 6 0 0 1 12 0"/><path d="M13 19a5 5 0 0 1 8 0"/></svg>`,
+  tools:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m14 7 3-3 3 3-3 3"/><path d="m4 20 8-8"/><path d="M10 7a4.5 4.5 0 0 0 6 6"/></svg>`,
+  bolt:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 2 4 14h7l-1 8 10-12h-7l1-8z"/></svg>`,
+  shield:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 4 7v5c0 4.5 3.4 7.6 8 8 4.6-.4 8-3.5 8-8V7l-8-4z"/></svg>`,
 };
 
-function fmtTime(epoch){ if(!epoch) return '—'; return new Date(epoch*1000).toLocaleString(); }
 function ago(epoch){
   if(!epoch) return '';
   const s = Math.max(0, Date.now()/1000 - epoch);
@@ -1550,10 +1984,14 @@ function ago(epoch){
 function shortId(s){ return (s||'').slice(0,8); }
 function pct(x){ return (x==null||Number.isNaN(Number(x))) ? '—' : (100*Number(x)).toFixed(0)+'%'; }
 function num(x){ return x==null ? '—' : Number(x).toLocaleString(); }
-function _folder(p){ if(!p) return ''; const parts=String(p).replace(/\\\\/g,'/').split('/').filter(Boolean); return parts[parts.length-1]||''; }
+function folder(p){ if(!p) return ''; const parts=String(p).replace(/\\\\/g,'/').split('/').filter(Boolean); return parts[parts.length-1]||''; }
 function toast(msg, ok){
-  const el=$('toast'); el.textContent=msg; el.style.borderColor = ok? 'rgba(61,220,151,.45)':'rgba(255,107,122,.45)';
-  el.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>el.classList.remove('show'), 3200);
+  const el=$('toast');
+  el.textContent=msg;
+  el.style.borderColor = ok ? 'rgba(52,211,153,.45)' : 'rgba(248,113,113,.45)';
+  el.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t=setTimeout(()=>el.classList.remove('show'), 3000);
 }
 async function api(path, opts){
   const r = await fetch(path, Object.assign({cache:'no-store'}, opts||{}));
@@ -1562,13 +2000,12 @@ async function api(path, opts){
   return data;
 }
 function avatar(name){
-  const n=(name||'?').slice(0,2).toUpperCase();
-  return `<div class="avatar" title="${name||''}">${n}</div>`;
+  return `<div class="avatar">${(name||'?').slice(0,2).toUpperCase()}</div>`;
 }
-function kpi(icon, label, value, barPct, tone){
-  const w = Math.max(0, Math.min(100, barPct==null?0:barPct));
-  return `<div class="kpi"><div class="head"><div class="ico" style="${tone||''}">${icon}</div><span class="pill">${label}</span></div>
-    <div class="val">${value}</div><div class="bar"><i style="width:${w}%"></i></div></div>`;
+function kpi(icon, label, value, bar){
+  const w = Math.max(0, Math.min(100, bar||0));
+  return `<div class="kpi"><div class="kpi-top"><div class="kpi-ico">${icon}</div><span class="pill">${label}</span></div>
+    <div class="kpi-val">${value}</div><div class="kpi-bar"><i style="width:${w}%"></i></div></div>`;
 }
 
 function renderOverview(s){
@@ -1582,43 +2019,34 @@ function renderOverview(s){
   $('heroTools').textContent = num(act.tool_calls||0);
   $('heroConn').textContent = `${connReady}/${connTotal}`;
   $('heroFindings').textContent = num(findings);
-  const toolBar = Math.min(100, (act.tool_calls||0)*4);
-  const liveBar = Math.min(100, live*25);
-  const connBar = (connReady/connTotal)*100;
-  const ver = t.avg_verifier_coverage==null?0:Number(t.avg_verifier_coverage)*100;
   $('kpis').innerHTML = [
-    kpi(ICONS.sessions, 'Live sessions', num(live), liveBar),
-    kpi(ICONS.tools, 'Tools / 10m', num(act.tool_calls||0), toolBar),
-    kpi(ICONS.bolt, 'Dispatches', num(t.sum_dispatches), Math.min(100,(t.sum_dispatches||0)/10)),
-    kpi(ICONS.shield, 'Avg verifier', pct(t.avg_verifier_coverage), ver),
+    kpi(ICO.users, 'Live sessions', num(live), Math.min(100, live*25)),
+    kpi(ICO.tools, 'Tools / 10m', num(act.tool_calls||0), Math.min(100, (act.tool_calls||0)*4)),
+    kpi(ICO.bolt, 'Dispatches', num(t.sum_dispatches), Math.min(100, (t.sum_dispatches||0)/10)),
+    kpi(ICO.shield, 'Avg verifier', pct(t.avg_verifier_coverage), (t.avg_verifier_coverage==null?0:Number(t.avg_verifier_coverage)*100)),
   ].join('');
-
   const v = s.savings||{};
   $('savings').innerHTML = `
-    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">
+    <div class="chips">
       <span class="chip">dispatch/inline ${v.dispatch_ratio==null?'—':Number(v.dispatch_ratio).toFixed(2)}</span>
       <span class="chip">recall ${pct(v.recall_hit_rate)}</span>
       <span class="chip">verifier ${pct(v.avg_verifier_coverage)}</span>
     </div>
-    <div class="muted" style="margin-bottom:8px">${v.note||''}</div>
+    <div class="muted" style="margin:8px 0">${v.note||''}</div>
     <div>Dispatches <strong>${num(v.dispatches)}</strong> · Inline <strong>${num(v.inline_ops)}</strong> · Est tokens <strong>${num(v.est_context_tokens)}</strong></div>`;
-
   const tools = act.tool_calls||0, events = act.events||0;
   $('pulse').innerHTML = `
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <div class="hero-stat" style="background:rgba(255,255,255,.03)"><b>${num(tools)}</b><span>tool_calls last 10m</span>
-        <div class="bar" style="margin-top:8px"><i style="width:${Math.min(100,tools*5)}%"></i></div></div>
-      <div class="hero-stat" style="background:rgba(255,255,255,.03)"><b>${num(events)}</b><span>events last 10m</span>
-        <div class="bar" style="margin-top:8px"><i style="width:${Math.min(100,events*8)}%;background:linear-gradient(90deg,var(--violet),var(--accent))"></i></div></div>
+    <div class="grid-2" style="margin-bottom:8px">
+      <div class="stat"><b>${num(tools)}</b><span>tool_calls · 10m</span><div class="kpi-bar" style="margin-top:8px"><i style="width:${Math.min(100,tools*5)}%"></i></div></div>
+      <div class="stat"><b>${num(events)}</b><span>events · 10m</span><div class="kpi-bar" style="margin-top:8px"><i style="width:${Math.min(100,events*8)}%;background:linear-gradient(90deg,#9b7bff,var(--accent))"></i></div></div>
     </div>
-    <div class="muted" style="margin-top:10px">LIVE requires real tool/event activity in the last 10 minutes — not merely an open DB row.</div>`;
-
+    <div class="muted">LIVE requires tool/event activity in the last 10 minutes.</div>`;
   const runs = (s.health?.recent_runs||[]).slice(0,12);
   $('recentRuns').innerHTML = runs.map(r => `
     <tr>
       <td class="muted">${ago(r.started_at)}</td>
-      <td>${r.project_name || _folder(r.root_path) || '—'}</td>
-      <td class="mono">${r.kind||'—'}</td>
+      <td class="truncate" title="${r.project_name||''}">${r.project_name || folder(r.root_path) || '—'}</td>
+      <td class="mono truncate">${r.kind||'—'}</td>
       <td>${num(r.dispatches)}</td>
       <td>${num(r.inline_ops)}</td>
       <td>${pct(r.verifier_coverage)}</td>
@@ -1635,7 +2063,7 @@ function renderProjects(s){
   $('project').innerHTML = [`<option value="">All recent projects</option>`].concat(
     (s.projects||[]).map(p => {
       const val = String(p.id);
-      const label = `${p.folder||p.name||'project'} · ${p.age||''}`.trim();
+      const label = `${p.folder||p.name||'project'}${p.age?(' · '+p.age):''}`;
       return `<option value="${val}" ${cur===val?'selected':''}>${label}</option>`;
     })
   ).join('');
@@ -1650,81 +2078,82 @@ function renderSessionList(s){
   $('sessionList').innerHTML = list.map(x => {
     const live = x.is_live ? '<span class="chip live">LIVE</span>' : '';
     const active = state.selectedSession===x.session_id ? 'active' : '';
-    const folder = x.project_folder || x.project_name || _folder(x.cwd) || 'project';
-    const when = ago(x.last_activity_at || x.started_at);
+    const name = x.project_folder || x.project_name || folder(x.cwd) || 'project';
     return `<div class="session-item ${active}" data-sid="${x.session_id}">
-      <div class="t"><strong>${folder}</strong>${live}</div>
-      <div class="mono muted">${shortId(x.session_id)} · ${when}</div>
-      <div class="muted" style="font-size:12px;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(x.cwd||x.project_root||'')}</div>
-      <div style="margin-top:6px">
-        <span class="chip">tools10m ${num(x.recent_tool_calls)}</span>
+      <div class="t"><strong title="${name}">${name}</strong>${live}</div>
+      <div class="mono muted">${shortId(x.session_id)} · ${ago(x.last_activity_at || x.started_at)}</div>
+      <div class="muted truncate" style="margin-top:4px" title="${x.cwd||x.project_root||''}">${x.cwd||x.project_root||''}</div>
+      <div class="chips">
+        <span class="chip">tools ${num(x.recent_tool_calls)}</span>
         <span class="chip">disp ${num(x.dispatches)}</span>
         <span class="chip">inline ${num(x.inline_ops)}</span>
       </div>
     </div>`;
-  }).join('') || '<div class="empty">No recent sessions (last 7 days). Use atlas in a project; Stop/SubagentStop ingest fills history.</div>';
+  }).join('') || '<div class="empty">No recent sessions (last 7 days).</div>';
   document.querySelectorAll('#sessionList .session-item').forEach(el => {
     el.onclick = () => { state.selectedSession = el.dataset.sid; loadDetail(); renderSessionList(state.snapshot); };
   });
 }
 function renderFindings(s){
   $('findings').innerHTML = (s.findings||[]).slice(0,50).map(f =>
-    `<tr><td class="${f.severity==='high'||f.severity==='critical'?'bad':'warn'}">${f.severity||''}</td><td>${f.title||''}</td><td class="muted">${f.dimension||''}</td><td>${f.status||''}</td></tr>`
+    `<tr><td class="${f.severity==='high'||f.severity==='critical'?'bad':'warn'}">${f.severity||''}</td>
+     <td class="truncate" title="${(f.title||'').replace(/"/g,'&quot;')}">${f.title||''}</td>
+     <td class="muted truncate">${f.dimension||''}</td><td>${f.status||''}</td></tr>`
   ).join('') || '<tr><td colspan="4" class="muted">No findings</td></tr>';
 }
 
 function renderSettings(s){
-  if(state.settingsDirty || state.settingsFocus){
-    updateSettingsBadges(s);
-    return;
-  }
+  if(state.settingsDirty || state.settingsFocus){ updateSettingsBadges(s); return; }
   $('settingsPath').textContent = s.settings_path || '~/.claude/settings.json';
   const connectors = s.connectors||[];
+  // Normalize visual density: always render a stable field stack height via scroll area
   $('connectorForms').innerHTML = connectors.map(c => {
     const fields = (c.fields||[]).map(f => {
       const key = f.user_config_key || f.env_key;
       const set = !!f.is_set;
       const src = f.source && f.source !== 'missing' ? f.source : '';
-      const ph = set ? 'set — type to replace' : 'enter value';
-      const type = f.sensitive ? 'password' : 'text';
-      const draft = state.drafts[key] || '';
+      // Secrets come back empty by design; everything else prefills so it can be edited.
+      const current = state.drafts[key] != null ? state.drafts[key] : (f.value || '');
       return `<div class="field">
-        <label><span>${key}</span><span class="${set?'good':'warn'}">${set?'set':'missing'}${src?(' · '+src):''}</span></label>
-        <input data-key="${key}" type="${type}" value="${String(draft).replace(/"/g,'&quot;')}" placeholder="${ph}" autocomplete="off" spellcheck="false"/>
+        <label><span title="${esc(key)}">${esc(key)}</span><span class="${set?'good':'warn'}">${set?'set':'missing'}${src?(' · '+esc(src)):''}</span></label>
+        <input data-key="${esc(key)}" data-original="${esc(f.value||'')}" type="${f.sensitive?'password':'text'}" value="${esc(current)}"
+          placeholder="${f.sensitive?(set?'set — type to replace':'enter secret'):'not set'}" autocomplete="off" spellcheck="false"/>
       </div>`;
     }).join('') || '<div class="muted">No fields</div>';
-    return `<div class="conn-card" data-connector="${c.name}">
+    const on = c.enabled !== false;
+    return `<article class="conn-card${on?'':' off'}" data-connector="${esc(c.name)}">
       <div class="hdr">
-        <div class="name">${avatar(c.name)}<div><strong class="mono">${c.name}</strong>
-          <div class="faint" style="font-size:11px">${(c.fields||[]).length} keys</div></div></div>
-        <span class="chip ${c.configured_hint?'live':''}" data-configured-chip="${c.name}">${c.configured_hint?'ready':'needs keys'}</span>
+        <div class="name">${avatar(c.name)}
+          <div class="truncate"><strong class="mono" title="${esc(c.name)}">${esc(c.name)}</strong>
+          <div class="faint" style="font-size:11px">${(c.fields||[]).length} keys</div></div>
+        </div>
+        <div style="display:grid; gap:6px; justify-items:end">
+          <button type="button" class="switch" role="switch" aria-checked="${on}"
+            aria-label="Enable ${esc(c.name)}" data-toggle-connector="${esc(c.server_name||('plugin:atlas:'+c.name))}"></button>
+          <span class="chip ${c.configured_hint?'live':''}" data-configured-chip="${esc(c.name)}">${c.configured_hint?'ready':'needs keys'}</span>
+        </div>
       </div>
       <div class="fields">${fields}</div>
-      <div class="actions">
-        <button type="button" class="primary" data-save-connector="${c.name}">Save</button>
+      <div class="actions" style="grid-template-columns:1fr 1fr">
+        <button type="button" class="ghost" data-test-connector="${esc(c.name)}">Test</button>
+        <button type="button" class="primary" data-save-connector="${esc(c.name)}">Save</button>
       </div>
-    </div>`;
+    </article>`;
   }).join('') || '<div class="empty">No connectors in .mcp.json</div>';
   bindSettingsHandlers();
 }
 function updateSettingsBadges(s){
-  const byName = {};
-  (s.connectors||[]).forEach(c => byName[c.name]=c);
+  const byName={}; (s.connectors||[]).forEach(c => byName[c.name]=c);
   document.querySelectorAll('[data-configured-chip]').forEach(el => {
-    const c = byName[el.dataset.configuredChip];
-    if(!c) return;
+    const c=byName[el.dataset.configuredChip]; if(!c) return;
     el.textContent = c.configured_hint ? 'ready' : 'needs keys';
     el.classList.toggle('live', !!c.configured_hint);
   });
-  const fieldMap = {};
-  (s.connectors||[]).forEach(c => (c.fields||[]).forEach(f => {
-    fieldMap[f.user_config_key || f.env_key] = f;
-  }));
+  const fieldMap={};
+  (s.connectors||[]).forEach(c => (c.fields||[]).forEach(f => { fieldMap[f.user_config_key||f.env_key]=f; }));
   document.querySelectorAll('#connectorForms input[data-key]').forEach(inp => {
-    const f = fieldMap[inp.dataset.key];
-    if(!f) return;
-    const label = inp.parentElement.querySelector('label span:last-child');
-    if(!label) return;
+    const f=fieldMap[inp.dataset.key]; if(!f) return;
+    const label=inp.parentElement.querySelector('label span:last-child'); if(!label) return;
     const src = f.source && f.source !== 'missing' ? (' · '+f.source) : '';
     label.className = f.is_set ? 'good' : 'warn';
     label.textContent = (f.is_set?'set':'missing') + src;
@@ -1733,71 +2162,104 @@ function updateSettingsBadges(s){
 function bindSettingsHandlers(){
   document.querySelectorAll('#connectorForms input[data-key]').forEach(inp => {
     inp.oninput = () => {
-      state.drafts[inp.dataset.key] = inp.value;
-      state.settingsDirty = Object.values(state.drafts).some(v => String(v||'').length > 0);
+      // A prefilled value that has not been touched is not a draft.
+      if(inp.value === (inp.dataset.original||'')) delete state.drafts[inp.dataset.key];
+      else state.drafts[inp.dataset.key] = inp.value;
+      state.settingsDirty = Object.keys(state.drafts).length > 0;
     };
     inp.onfocus = () => { state.settingsFocus = true; };
     inp.onblur = () => { state.settingsFocus = false; };
+  });
+  document.querySelectorAll('[data-test-connector]').forEach(btn => {
+    btn.onclick = async () => {
+      const name = btn.dataset.testConnector;
+      btn.disabled = true; btn.textContent = 'Testing…';
+      try{
+        const r = await api('/api/connectors/test', {
+          method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name})
+        });
+        if(r.ok){
+          flash(`${name}: ${r.server} v${r.version||'?'} started and listed ${r.tool_count} tools in ${r.elapsed_ms}ms. ${r.note}`, true);
+          toast(`${name} responded with ${r.tool_count} tools`, true);
+        } else {
+          flash(`${name} failed: ${r.error}${r.stderr?(' — '+r.stderr.slice(-200)):''}${r.hint?(' '+r.hint):''}`, false);
+          toast(`${name} test failed`, false);
+        }
+      }catch(e){ flash(String(e.message||e), false); }
+      finally{ btn.disabled=false; btn.textContent='Test'; }
+    };
+  });
+  document.querySelectorAll('[data-toggle-connector]').forEach(btn => {
+    btn.onclick = async () => {
+      const name = btn.dataset.toggleConnector;
+      const next = btn.getAttribute('aria-checked') !== 'true';
+      btn.disabled = true;
+      try{
+        const r = await api('/api/mcp/toggle', {
+          method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name, enabled:next})
+        });
+        if(!r.ok){ flash(r.error || 'toggle failed', false); return; }
+        btn.setAttribute('aria-checked', String(next));
+        btn.closest('.conn-card').classList.toggle('off', !next);
+        flash(`${name} ${next?'enabled':'disabled'}. ${r.note}`, true);
+      }catch(e){ flash(String(e.message||e), false); }
+      finally{ btn.disabled=false; }
+    };
   });
   document.querySelectorAll('[data-save-connector]').forEach(btn => {
     btn.onclick = async () => {
       const card = btn.closest('.conn-card');
       const updates = {};
       card.querySelectorAll('input[data-key]').forEach(inp => {
-        if(inp.value !== '') updates[inp.dataset.key] = inp.value;
+        // Prefilled non-secret values are only sent when actually edited.
+        if(inp.value !== '' && inp.value !== (inp.dataset.original||'')) updates[inp.dataset.key]=inp.value;
       });
-      if(!Object.keys(updates).length){
-        flash('No new values entered (empty fields unchanged).', false);
-        return;
-      }
+      if(!Object.keys(updates).length){ flash('Nothing changed in this connector.', false); return; }
       btn.disabled = true;
       try{
         const res = await api('/api/connectors/env', {
-          method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({updates})
+          method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({updates})
         });
         if(!res.ok){ flash(res.error || 'save failed', false); return; }
         Object.keys(updates).forEach(k => { delete state.drafts[k]; });
         state.settingsDirty = Object.values(state.drafts).some(v => String(v||'').length > 0);
         card.querySelectorAll('input[data-key]').forEach(inp => {
-          if(updates[inp.dataset.key] != null) inp.value = '';
+          if(updates[inp.dataset.key]==null) return;
+          // Clear secrets (never read back); keep visible values and rebaseline them.
+          if(inp.type === 'password') inp.value = '';
+          else inp.dataset.original = inp.value;
         });
         flash((res.note||'Saved') + ' · ' + (res.updated_user_config_keys||res.updated_keys||[]).join(', '), true);
         toast('Credentials saved — reload Claude Code', true);
-        state.settingsDirty = false; state.settingsFocus = false;
+        state.settingsDirty=false; state.settingsFocus=false;
         await refresh(true);
         renderSettings(state.snapshot);
       }catch(e){ flash(String(e.message||e), false); }
-      finally { btn.disabled = false; }
+      finally{ btn.disabled=false; }
     };
   });
 }
-function flash(msg, ok){
-  $('settingsFlash').innerHTML = `<div class="flash ${ok?'ok':'err'}">${msg}</div>`;
-}
+function flash(msg, ok){ $('settingsFlash').innerHTML = `<div class="flash ${ok?'ok':'err'}">${msg}</div>`; }
 
 async function loadDetail(){
   if(!state.selectedSession){
-    $('detail').textContent = 'Pick a session…';
-    $('tools').innerHTML = '';
-    $('events').innerHTML = '';
-    return;
+    $('detail').textContent='Pick a session…'; $('tools').innerHTML=''; $('events').innerHTML=''; return;
   }
   const d = await api('/api/sessions/'+encodeURIComponent(state.selectedSession));
   const s = d.session||{};
   $('detail').innerHTML = `
-    <div style="margin-bottom:8px">
+    <div class="chips" style="margin-bottom:8px">
       ${s.is_live?'<span class="chip live">LIVE</span>':''}
-      <span class="chip">${s.project_folder||s.project_name||_folder(s.cwd)||'—'}</span>
+      <span class="chip">${s.project_folder||s.project_name||folder(s.cwd)||'—'}</span>
       <span class="chip">${s.agent||'claude'}</span>
-      <span class="chip">${s.model||'—'}</span>
+      <span class="chip truncate">${s.model||'—'}</span>
       ${s.git_branch?`<span class="chip">${s.git_branch}</span>`:''}
       <span class="chip">${ago(s.last_activity_at||s.started_at)}</span>
     </div>
-    <div class="mono" style="margin:6px 0">${s.session_id||''}</div>
-    <div class="muted" style="margin-bottom:8px">${s.cwd||s.project_root||''}</div>
+    <div class="mono truncate" title="${s.session_id||''}">${s.session_id||''}</div>
+    <div class="muted truncate" style="margin:6px 0" title="${s.cwd||s.project_root||''}">${s.cwd||s.project_root||''}</div>
     <div>Task: <strong>${s.task_summary||s.brief_summary||'—'}</strong></div>
-    <div style="margin-top:8px">
+    <div class="chips" style="margin-top:8px">
       <span class="chip">dispatches ${num(s.dispatches)}</span>
       <span class="chip">inline ${num(s.inline_ops)}</span>
       <span class="chip">verifier ${pct(s.verifier_coverage)}</span>
@@ -1805,28 +2267,306 @@ async function loadDetail(){
       <span class="chip">tools10m ${num(s.recent_tool_calls)}</span>
     </div>`;
   $('tools').innerHTML = (d.tools||[]).map(t =>
-    `<tr><td class="muted">${ago(t.ts)}</td><td class="mono">${t.tool_name||''}</td>
-     <td class="mono muted">${(t.target||t.server||'').toString().slice(0,48)}</td></tr>`
+    `<tr><td class="muted">${ago(t.ts)}</td><td class="mono truncate">${t.tool_name||''}</td>
+     <td class="mono muted truncate" title="${(t.target||t.server||'')}">${(t.target||t.server||'')}</td></tr>`
   ).join('') || '<tr><td colspan="3" class="muted">No tool_calls yet</td></tr>';
   const ev = []
     .concat((d.dispatches||[]).map(x => ({ts:x.ts, kind:'dispatch', detail:(x.agent_type||'')+' '+(x.model||'')})))
     .concat((d.events||[]).map(x => ({ts:x.ts, kind:x.is_inline_op?'inline':'event', detail:(x.tool||'')+' '+(x.path||x.context||'')})))
     .sort((a,b)=> (b.ts||0)-(a.ts||0)).slice(0,80);
   $('events').innerHTML = ev.map(e =>
-    `<tr><td class="muted">${ago(e.ts)}</td><td>${e.kind}</td><td class="mono muted">${(e.detail||'').toString().slice(0,64)}</td></tr>`
+    `<tr><td class="muted">${ago(e.ts)}</td><td>${e.kind}</td><td class="mono muted truncate" title="${e.detail||''}">${e.detail||''}</td></tr>`
   ).join('') || '<tr><td colspan="3" class="muted">No events/dispatches</td></tr>';
 }
 
-const TITLES = {overview:'Overview', live:'Live sessions', settings:'Connectors & credentials', findings:'Findings'};
+/* ===== Bulk credential import / export ===== */
+$('bulkExport').onclick = async () => {
+  try{
+    const r = await api('/api/connectors/export');
+    $('bulkEnv').value = r.text || '';
+    $('bulkMsg').textContent = 'Template loaded. Secrets are blanked; fill them in and import.';
+  }catch(e){ $('bulkMsg').textContent = String(e.message||e); }
+};
+$('bulkImport').onclick = async () => {
+  const text = $('bulkEnv').value || '';
+  if(!text.trim()){ $('bulkMsg').textContent = 'Paste some KEY=VALUE lines first.'; return; }
+  const btn = $('bulkImport'); btn.disabled = true;
+  try{
+    const r = await api('/api/connectors/import', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({text})
+    });
+    if(!r.ok){
+      $('bulkMsg').textContent = r.error === 'keys_not_allowlisted'
+        ? ('Rejected unknown keys: ' + (r.keys||[]).join(', '))
+        : (r.hint || r.error || 'import failed');
+      toast('Import rejected', false);
+      return;
+    }
+    $('bulkMsg').textContent = 'Imported ' + (r.parsed_keys||[]).length + ' keys. Reload Claude Code.';
+    $('bulkEnv').value = '';
+    toast('Credentials imported — reload Claude Code', true);
+    await refresh(true);
+    if(state.tab==='settings') renderSettings(state.snapshot);
+  }catch(e){ $('bulkMsg').textContent = String(e.message||e); }
+  finally{ btn.disabled = false; }
+};
+
+/* ===== Behavior ===== */
+function knobControl(k){
+  const val = state.behaviorEdits[k.key] != null ? state.behaviorEdits[k.key] : k.value;
+  if(k.kind === 'toggle'){
+    const on = String(val) === String(k.on);
+    return `<button type="button" class="switch" role="switch" aria-checked="${on}"
+      aria-label="${esc(k.title)}" data-knob-toggle="${esc(k.key)}"
+      data-on="${esc(k.on)}" data-off="${esc(k.off)}"></button>`;
+  }
+  if(k.kind === 'choice'){
+    return `<select data-knob="${esc(k.key)}">${(k.options||[]).map(o =>
+      `<option value="${esc(o)}"${String(o)===String(val)?' selected':''}>${esc(o)}</option>`).join('')}</select>`;
+  }
+  const type = k.kind === 'number' ? 'number' : 'text';
+  return `<input type="${type}" data-knob="${esc(k.key)}" value="${esc(val)}"
+    placeholder="${esc(k.default||'not set')}" autocomplete="off" spellcheck="false"/>`;
+}
+function renderBehavior(b){
+  $('behaviorPath').textContent = b.settings_path || '~/.claude/settings.json';
+  $('behaviorGroups').innerHTML = (b.groups||[]).map(g => `
+    <h3 class="card-title" style="margin-top:var(--s3)">${esc(g.title)}</h3>
+    <div class="knob-grid">${(g.knobs||[]).map(k => `
+      <div class="knob">
+        <div>
+          <div class="k-name"><strong>${esc(k.title)}</strong>
+            <span class="mono faint">${esc(k.key)}</span>
+            <span class="src ${esc(k.source)}">${esc(k.source)}</span></div>
+          <p>${esc(k.description)}</p>
+          <div class="k-ref">${esc(k.ref||'')} · default ${esc(k.default||'(unset)')}</div>
+        </div>
+        <div class="k-ctl">${knobControl(k)}</div>
+      </div>`).join('')}</div>`).join('');
+  $('behaviorAdvanced').innerHTML = (b.advanced||[]).map(a => `
+    <tr>
+      <td class="mono truncate" title="${esc(a.key)}">${esc(a.key)}</td>
+      <td><input data-knob="${esc(a.key)}" value="${esc(state.behaviorEdits[a.key] != null ? state.behaviorEdits[a.key] : a.value)}"
+        placeholder="(default)" autocomplete="off" spellcheck="false" style="height:30px; font-size:12px"/></td>
+      <td class="mono faint truncate" title="${esc(a.ref)}">${esc(a.ref)}</td>
+    </tr>`).join('') || '<tr><td colspan="3" class="muted">No additional variables found</td></tr>';
+  bindBehaviorHandlers();
+  updateBehaviorMsg();
+}
+function updateBehaviorMsg(){
+  const n = Object.keys(state.behaviorEdits).length;
+  $('behaviorMsg').textContent = n ? `${n} unsaved change${n===1?'':'s'}.` : 'No changes.';
+}
+function markKnob(key, value, original){
+  if(String(value) === String(original==null?'':original)) delete state.behaviorEdits[key];
+  else state.behaviorEdits[key] = value;
+  updateBehaviorMsg();
+}
+function knobOriginal(key){
+  const b = state.behavior || {};
+  for(const g of (b.groups||[])) for(const k of (g.knobs||[])) if(k.key===key) return k.value;
+  for(const a of (b.advanced||[])) if(a.key===key) return a.value;
+  return '';
+}
+function bindBehaviorHandlers(){
+  document.querySelectorAll('[data-knob-toggle]').forEach(btn => {
+    btn.onclick = () => {
+      const key = btn.dataset.knobToggle;
+      const next = btn.getAttribute('aria-checked') !== 'true';
+      btn.setAttribute('aria-checked', String(next));
+      markKnob(key, next ? btn.dataset.on : btn.dataset.off, knobOriginal(key));
+    };
+  });
+  document.querySelectorAll('[data-knob]').forEach(el => {
+    const handler = () => markKnob(el.dataset.knob, el.value, knobOriginal(el.dataset.knob));
+    el.oninput = handler; el.onchange = handler;
+  });
+}
+async function loadBehavior(){
+  state.behavior = await api('/api/behavior');
+  renderBehavior(state.behavior);
+}
+$('behaviorReset').onclick = () => { state.behaviorEdits = {}; renderBehavior(state.behavior||{}); };
+$('behaviorSave').onclick = async () => {
+  const updates = state.behaviorEdits;
+  if(!Object.keys(updates).length){ behaviorFlash('Nothing to save.', false); return; }
+  const btn = $('behaviorSave'); btn.disabled = true;
+  try{
+    const r = await api('/api/behavior', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({updates})
+    });
+    if(!r.ok){ behaviorFlash((r.hint||r.error) + ' ' + (r.keys||[]).join(', '), false); return; }
+    state.behaviorEdits = {};
+    behaviorFlash(`Set ${(r.set||[]).join(', ')||'nothing'}${(r.cleared||[]).length?(' · cleared '+r.cleared.join(', ')):''}. ${r.note}`, true);
+    toast('Behavior saved — reload Claude Code', true);
+    await loadBehavior();
+  }catch(e){ behaviorFlash(String(e.message||e), false); }
+  finally{ btn.disabled = false; }
+};
+function behaviorFlash(msg, ok){ $('behaviorFlash').innerHTML = `<div class="flash ${ok?'ok':'err'}">${esc(msg)}</div>`; }
+
+/* ===== Ecosystem ===== */
+function ecoFlash(msg, ok){ $('ecoFlash').innerHTML = `<div class="flash ${ok?'ok':'err'}">${esc(msg)}</div>`; }
+function showEcoPane(pane){
+  state.ecoPane = pane;
+  document.querySelectorAll('#ecoNav button').forEach(b => b.classList.toggle('active', b.dataset.eco===pane));
+  ['wiring','plugins','mcp','capabilities'].forEach(p => {
+    const el = $('eco-'+p); if(el) el.classList.toggle('hidden', p!==pane);
+  });
+}
+function renderEcosystem(e){
+  const a = e.atlas || {};
+  $('ecoWiringNote').innerHTML = [
+    `Plugin <span class="tag ${a.plugin_enabled?'ok':'no'}">${a.plugin_enabled?'enabled':'disabled'}</span>`,
+    `Hooks <span class="tag ${a.hooks_disabled_globally?'no':'ok'}">${a.hooks_disabled_globally?'disabled globally':'active'}</span>`,
+    `Output style <span class="tag">${esc(e.user?.active_output_style||'default')}</span>`,
+    `<span class="mono faint">${esc(a.plugin_root||'')}</span>`
+  ].join(' · ');
+  $('ecoBindings').innerHTML = (a.bindings||[]).map(b => `
+    <tr>
+      <td>${esc(b.event)}</td>
+      <td class="mono muted">${esc(b.matcher)}</td>
+      <td class="mono truncate" title="${esc(b.script)}">${esc(b.script)}${b.timeout?` <span class="faint">(${esc(b.timeout)}s)</span>`:''}</td>
+      <td class="${b.present?'good':'bad'}">${b.present?'present':'MISSING'}</td>
+    </tr>`).join('') || '<tr><td colspan="4" class="muted">No hook bindings declared</td></tr>';
+
+  const plugins = e.plugins||[];
+  $('pluginCount').textContent = `${plugins.filter(p=>p.enabled).length}/${plugins.length} on`;
+  $('pluginGrid').innerHTML = plugins.map(p => {
+    const counts = [
+      p.skills ? `${p.skills} skills` : '', p.agents ? `${p.agents} agents` : '',
+      p.commands ? `${p.commands} commands` : '', p.mcp_servers.length ? `${p.mcp_servers.length} MCP` : '',
+      p.hooks ? 'hooks' : ''
+    ].filter(Boolean);
+    const host = p.key.startsWith('atlas@');
+    return `<article class="eco-card${p.enabled?'':' off'}${host?' host':''}">
+      <div class="hdr">
+        <div class="truncate"><strong title="${esc(p.key)}">${esc(p.name)}</strong>
+          <span class="mono faint" style="font-size:11px">${esc(p.marketplace)}${p.version?(' · v'+esc(p.version)):''}</span></div>
+        <button type="button" class="switch" role="switch" aria-checked="${p.enabled}"
+          aria-label="Enable ${esc(p.name)}" data-toggle-plugin="${esc(p.key)}" ${host?'disabled':''}></button>
+      </div>
+      <div class="tag-list">${counts.map(c=>`<span class="tag">${esc(c)}</span>`).join('')}
+        ${p.installed?'':'<span class="tag no">not installed</span>'}</div>
+      <p>${esc(p.description||'No description in the plugin manifest.')}</p>
+      <div class="mono faint truncate" title="${esc(p.path)}">${esc(p.path||'—')}</div>
+    </article>`;
+  }).join('') || '<div class="empty">No plugins found</div>';
+
+  const servers = (e.mcp||{}).servers||[];
+  $('mcpCount').textContent = `${servers.filter(s=>s.enabled).length}/${servers.length} on`;
+  $('claudeJsonPath').textContent = e.claude_json_path || '~/.claude.json';
+  $('mcpGrid').innerHTML = servers.map(s => `
+    <article class="eco-card${s.enabled?'':' off'}">
+      <div class="hdr">
+        <div class="truncate"><strong class="mono" title="${esc(s.name)}">${esc(s.bare_name)}</strong>
+          <span class="faint" style="font-size:11px">${esc(s.origin)} · ${esc(s.origin_detail)}</span></div>
+        <button type="button" class="switch" role="switch" aria-checked="${s.enabled}"
+          aria-label="Enable ${esc(s.name)}" data-toggle-mcp="${esc(s.name)}"></button>
+      </div>
+      <div class="tag-list">
+        <span class="tag">${esc(s.transport)}</span>
+        ${s.plugin_enabled===false?'<span class="tag no">plugin off</span>':''}
+        ${(s.env_keys||[]).length?`<span class="tag">${s.env_keys.length} env</span>`:''}
+      </div>
+      <p class="mono">${esc(s.command||'—')}</p>
+      <div>${s.removable?`<button type="button" class="ghost" data-remove-mcp="${esc(s.name)}" style="height:30px">Remove</button>`:'<span class="faint" style="font-size:11px">Provided by a plugin</span>'}</div>
+    </article>`).join('') || '<div class="empty">No MCP servers found</div>';
+
+  const u = e.user||{};
+  const list = (label, items) => `
+    <section class="card">
+      <h3 class="card-title">${esc(label)} <span class="pill">${items.length}</span></h3>
+      <div class="tag-list">${items.map(i=>`<span class="tag">${esc(i)}</span>`).join('') || '<span class="muted">none</span>'}</div>
+    </section>`;
+  $('capabilityGrid').innerHTML = [
+    list('Atlas skills', a.skills||[]),
+    list('Atlas agents', a.agents||[]),
+    list('Atlas output styles', a.output_styles||[]),
+    list('Your ~/.claude agents', u.agents||[]),
+    list('Your ~/.claude skills', u.skills||[]),
+    list('Your hook events', u.hook_events||[]),
+  ].join('');
+  bindEcosystemHandlers();
+}
+function bindEcosystemHandlers(){
+  const toggle = async (btn, path, body, label) => {
+    btn.disabled = true;
+    try{
+      const r = await api(path, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+      if(!r.ok){ ecoFlash((r.hint || r.error) + (r.key||r.name?(': '+(r.key||r.name)):''), false); return; }
+      ecoFlash(`${label} ${body.enabled?'enabled':'disabled'}. ${r.note||''}`, true);
+      await loadEcosystem();
+    }catch(e){ ecoFlash(String(e.message||e), false); }
+    finally{ btn.disabled = false; }
+  };
+  document.querySelectorAll('[data-toggle-plugin]').forEach(btn => {
+    btn.onclick = () => toggle(btn, '/api/plugins/toggle',
+      {key: btn.dataset.togglePlugin, enabled: btn.getAttribute('aria-checked') !== 'true'},
+      btn.dataset.togglePlugin);
+  });
+  document.querySelectorAll('[data-toggle-mcp]').forEach(btn => {
+    btn.onclick = () => toggle(btn, '/api/mcp/toggle',
+      {name: btn.dataset.toggleMcp, enabled: btn.getAttribute('aria-checked') !== 'true'},
+      btn.dataset.toggleMcp);
+  });
+  document.querySelectorAll('[data-remove-mcp]').forEach(btn => {
+    btn.onclick = async () => {
+      const name = btn.dataset.removeMcp;
+      if(!window.confirm(`Remove the user-scope MCP server "${name}" from ~/.claude.json?`)) return;
+      btn.disabled = true;
+      try{
+        const r = await api('/api/mcp/remove', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name})});
+        if(!r.ok){ ecoFlash(r.error || 'remove failed', false); return; }
+        ecoFlash(`Removed ${name} from ${r.path}.`, true);
+        await loadEcosystem();
+      }catch(e){ ecoFlash(String(e.message||e), false); }
+      finally{ btn.disabled = false; }
+    };
+  });
+}
+async function loadEcosystem(){
+  state.ecosystem = await api('/api/ecosystem');
+  renderEcosystem(state.ecosystem);
+  showEcoPane(state.ecoPane);
+}
+document.querySelectorAll('#ecoNav button').forEach(b => b.onclick = () => showEcoPane(b.dataset.eco));
+$('mcpAdd').onclick = async () => {
+  const spec = {
+    name: $('mcpName').value.trim(),
+    command: $('mcpCommand').value.trim(),
+    args: $('mcpArgs').value.trim(),
+    url: $('mcpUrl').value.trim(),
+  };
+  const btn = $('mcpAdd'); btn.disabled = true;
+  try{
+    const r = await api('/api/mcp/add', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(spec)});
+    if(!r.ok){ ecoFlash((r.hint || r.error), false); return; }
+    ['mcpName','mcpCommand','mcpArgs','mcpUrl'].forEach(id => $(id).value = '');
+    ecoFlash(`${r.replaced?'Replaced':'Added'} ${r.name} in ${r.path}. ${r.note}`, true);
+    toast('MCP server saved — reload Claude Code', true);
+    await loadEcosystem();
+  }catch(e){ ecoFlash(String(e.message||e), false); }
+  finally{ btn.disabled = false; }
+};
+
+const TITLES = {
+  overview:'Overview', live:'Live sessions', settings:'Connectors & credentials',
+  behavior:'Behavior & hooks', ecosystem:'Ecosystem', findings:'Findings'
+};
 function showTab(tab){
   state.tab = tab;
   document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('active', b.dataset.tab===tab));
-  ['overview','live','settings','findings'].forEach(t => {
-    const el = $('tab-'+t); if(el) el.classList.toggle('hidden', t!==tab);
+  ['overview','live','settings','behavior','ecosystem','findings'].forEach(t => {
+    const el=$('tab-'+t); if(el) el.classList.toggle('hidden', t!==tab);
   });
   $('pageTitle').textContent = TITLES[tab] || 'Atlas';
+  // Deep-linkable: /#behavior opens straight to that page across terminals.
+  if(location.hash.slice(1) !== tab) history.replaceState(null, '', '#'+tab);
   if(tab==='settings' && state.snapshot) renderSettings(state.snapshot);
   if(tab==='live' && state.selectedSession) loadDetail();
+  if(tab==='behavior') loadBehavior().catch(e => behaviorFlash(String(e.message||e), false));
+  if(tab==='ecosystem') loadEcosystem().catch(e => ecoFlash(String(e.message||e), false));
 }
 
 async function refresh(forceSettings){
@@ -1836,19 +2576,18 @@ async function refresh(forceSettings){
   $('url').textContent = s.url || location.origin;
   $('sideUpdated').textContent = new Date((s.generated_at||Date.now()/1000)*1000).toLocaleTimeString();
   $('sideVer').textContent = s.plugin?.version || '—';
-  $('sideDb').textContent = s.db_path || '—';
+  const db = s.db_path || '—';
+  $('sideDb').textContent = db;
+  $('sideDb').title = db;
   $('hint').textContent = (s.ui_hints && s.ui_hints.note) || 'LIVE = activity in the last 10 minutes. Lists are recent-only.';
   renderProjects(s);
   renderOverview(s);
   renderFindings(s);
-  if(state.tab==='live' || state.tab==='overview'){
-    renderSessionList(s);
-  }
+  renderSessionList(s);
   if(state.tab==='settings'){
     if(forceSettings){ state.settingsDirty=false; state.settingsFocus=false; }
     renderSettings(s);
   } else {
-    renderSessionList(s);
     if(!state.selectedSession){
       const live = (s.live_sessions||[])[0] || filteredSessions(s)[0];
       if(live) state.selectedSession = live.session_id;
@@ -1863,14 +2602,25 @@ async function refresh(forceSettings){
 document.querySelectorAll('#nav button').forEach(btn => btn.onclick = () => showTab(btn.dataset.tab));
 $('gotoSettings').onclick = () => showTab('settings');
 $('project').onchange = async e => { state.selectedProject = e.target.value || null; state.selectedSession=null; await refresh(); };
-$('session').onchange = async e => { state.selectedSession = e.target.value || null; if(state.tab!=='live') showTab('live'); renderSessionList(state.snapshot||{sessions:[]}); await loadDetail(); };
+$('session').onchange = async e => {
+  state.selectedSession = e.target.value || null;
+  if(state.tab!=='live') showTab('live');
+  renderSessionList(state.snapshot||{sessions:[]});
+  await loadDetail();
+};
 $('refresh').onclick = () => refresh(true);
+window.addEventListener('hashchange', () => {
+  const tab = location.hash.slice(1);
+  if(TITLES[tab] && tab !== state.tab) showTab(tab);
+});
+if(TITLES[location.hash.slice(1)]) showTab(location.hash.slice(1));
 refresh();
 setInterval(() => refresh(false), 8000);
 </script>
 </body>
 </html>
 """
+
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "AtlasDashboard/1.2"
@@ -1894,7 +2644,13 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _bytes(self, code: int, body: bytes, content_type: str, cache: str = "public, max-age=3600"):
+    def _bytes(
+        self,
+        code: int,
+        body: bytes,
+        content_type: str,
+        cache: str = "public, max-age=3600",
+    ):
         self.send_response(code)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
@@ -2007,6 +2763,19 @@ class Handler(BaseHTTPRequestHandler):
                     "settings_path": str(_settings_path()),
                 },
             )
+        if u.path == "/api/behavior":
+            return self._json(200, {"ok": True, **atlas_control.behavior_state()})
+        if u.path == "/api/ecosystem":
+            return self._json(200, {"ok": True, **atlas_control.ecosystem_inventory()})
+        if u.path == "/api/connectors/export":
+            return self._json(
+                200,
+                {
+                    "ok": True,
+                    "text": atlas_control.env_export(_connector_status()),
+                    "env_path": str(PLUGIN_ROOT / ".env"),
+                },
+            )
         if u.path == "/api/findings":
             conn, _ = _db()
             try:
@@ -2040,6 +2809,47 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(updates, dict) or not updates:
                 return self._json(400, {"ok": False, "error": "updates_required"})
             return self._json(200, write_settings_updates(updates))
+        if u.path == "/api/connectors/import":
+            updates = atlas_control.parse_env_block(data.get("text") or "")
+            if not updates:
+                return self._json(
+                    400,
+                    {
+                        "ok": False,
+                        "error": "no_assignments_found",
+                        "hint": "Paste lines shaped like AUVIK_API_KEY=value.",
+                    },
+                )
+            result = write_settings_updates(updates)
+            result["parsed_keys"] = sorted(updates)
+            return self._json(200, result)
+        if u.path == "/api/connectors/test":
+            name = str(data.get("name") or "")
+            return self._json(
+                200, atlas_control.test_connector(name, env=_connector_env(name))
+            )
+        if u.path == "/api/behavior":
+            return self._json(
+                200, atlas_control.write_behavior_updates(data.get("updates") or {})
+            )
+        if u.path == "/api/mcp/toggle":
+            return self._json(
+                200,
+                atlas_control.set_mcp_enabled(
+                    data.get("name"), bool(data.get("enabled"))
+                ),
+            )
+        if u.path == "/api/mcp/add":
+            return self._json(200, atlas_control.add_mcp_server(data))
+        if u.path == "/api/mcp/remove":
+            return self._json(200, atlas_control.remove_mcp_server(data.get("name")))
+        if u.path == "/api/plugins/toggle":
+            return self._json(
+                200,
+                atlas_control.set_plugin_enabled(
+                    data.get("key"), bool(data.get("enabled"))
+                ),
+            )
         return self._json(404, {"ok": False, "error": "not_found"})
 
 

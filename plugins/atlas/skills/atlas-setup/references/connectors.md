@@ -1,13 +1,13 @@
 # Atlas connectors setup guide
 
-Atlas bundles ten vendor MCP connectors inside the atlas plugin itself:
+Atlas bundles eleven vendor MCP connectors inside the atlas plugin itself:
 
 | Department folder | Connectors |
 | --- | --- |
 | `mcp/hr/` | paylocity |
 | `mcp/it-operations/` | auvik, connectwise, ninjaone, spanning |
 | `mcp/microsoft-365/` | cipp |
-| `mcp/security/` | blumira, knowbe4, threatlocker, vanta |
+| `mcp/security/` | blumira, falcon, knowbe4, threatlocker, vanta |
 
 The atlas plugin declares all connector `userConfig` credential keys in its own
 `.claude-plugin/plugin.json` and launches each connector from its own
@@ -23,7 +23,8 @@ enables it.
    Saves `pluginConfigs["atlas@tech-tools"].options`, dual-writes plugin `.env`,
    and records set-markers (no secret echo). Drafts are not wiped by auto-refresh.
 2. **Claude `/plugin config`** on **atlas@tech-tools** — native Claude form.
-3. **Manual plugin `.env`** — `ATLAS_ENV_FILE` loaded by `mcp/_env/load.mjs`.
+3. **Manual plugin `.env`** — `ATLAS_ENV_FILE` loaded by `mcp/_env/load.mjs`
+   (Node connectors) or `mcp/_env/load.py` (Python connectors: falcon).
 
 After any of the above: **reload Claude Code** so MCP children re-read config.
 Full verified flow + E2E matrix: `references/connector-config-flow.md`
@@ -39,11 +40,11 @@ The full per-vendor table (keys, defaults, where to get each credential, bundle
 path, owning plugin) lives in `vendors.md` next to this file. Read it before
 guiding any setup.
 
-## The ten connectors
+## The eleven connectors
 
-auvik, blumira, cipp, connectwise, spanning, knowbe4, ninjaone, paylocity,
-threatlocker, vanta. The bundle folder and userConfig keys are listed in
-`vendors.md`.
+auvik, blumira, cipp, connectwise, falcon, spanning, knowbe4, ninjaone,
+paylocity, threatlocker, vanta. The bundle folder and userConfig keys are listed
+in `vendors.md`. Falcon needs `uv` on PATH; the other ten need Node.
 
 ## No-args behavior: status scan
 
@@ -51,7 +52,7 @@ When invoked with no specific vendor, report which connectors are set up vs not.
 
 1. Read the atlas plugin's effective merged `userConfig` values (the merged
    plugin config).
-2. For each of the ten connectors, mark ENABLED if all of its required keys
+2. For each of the eleven connectors, mark ENABLED if all of its required keys
    (see `vendors.md`, "Required to enable") are non-empty, otherwise DISABLED.
 3. Print a compact table: connector | enabled/disabled. Then say which
    connectors are fully ready and which need credentials set via `/plugin config`
