@@ -1,0 +1,100 @@
+import unittest
+from unittest.mock import MagicMock
+
+from mcp.server import FastMCP
+from mcp.types import ToolAnnotations
+
+from falcon_mcp.client import FalconClient
+
+
+class TestModules(unittest.TestCase):
+    def setup_module(self, module_class):
+        """
+        Set up test fixtures with the specified module class.
+
+        Args:
+            module_class: The module class to instantiate
+        """
+        # Create a mock client
+        self.mock_client = MagicMock(spec=FalconClient)
+
+        # Create a mock server
+        self.mock_server = MagicMock(spec=FastMCP)
+
+        # Create the module
+        self.module = module_class(self.mock_client)
+
+    def assert_tools_registered(self, expected_tools):
+        """
+        Helper method to verify that a module correctly registers its tools.
+
+        Args:
+            expected_tools: List of tool names that should be registered
+        """
+        # Call register_tools
+        self.module.register_tools(self.mock_server)
+
+        # Verify that add_tool was called for each tool
+        self.assertEqual(self.mock_server.add_tool.call_count, len(expected_tools))
+
+        # Get the tool names that were registered
+        registered_tools = [
+            call.kwargs["name"] for call in self.mock_server.add_tool.call_args_list
+        ]
+
+        # Verify that all expected tools were registered
+        for tool in expected_tools:
+            self.assertIn(tool, registered_tools)
+
+    def assert_resources_registered(self, expected_resources):
+        """
+        Helper method to verify that a module correctly registers its resources.
+
+        Args:
+            expected_tools: List of resources names that should be registered
+        """
+        # Call register_tools
+        self.module.register_resources(self.mock_server)
+
+        # Verify that add_resource was called for each resource
+        self.assertEqual(
+            self.mock_server.add_resource.call_count, len(expected_resources)
+        )
+
+        # Get the tool names that were registered
+        registered_resources = [
+            call.kwargs["resource"].name
+            for call in self.mock_server.add_resource.call_args_list
+        ]
+
+        # Verify that all expected tools were registered
+        for tool in expected_resources:
+            self.assertIn(tool, registered_resources)
+
+    def assert_tool_annotations(self, tool_name: str, expected_annotations: ToolAnnotations):
+        """Verify that a tool was registered with the expected annotations.
+
+        Args:
+            tool_name: The full tool name (e.g., "falcon_search_detections")
+            expected_annotations: The expected ToolAnnotations instance
+        """
+        for call in self.mock_server.add_tool.call_args_list:
+            if call.kwargs.get("name") == tool_name:
+                self.assertEqual(call.kwargs.get("annotations"), expected_annotations)
+                return
+        self.fail(f"Tool {tool_name} not found in registered tools")
+
+    def assert_pagination(self, result, total, has_next=False):
+        """Verify the `pagination` key of a search-tool response envelope.
+
+        Args:
+            result: The dict returned by a search tool (must contain "pagination")
+            total: Expected value of pagination["total"]
+            has_next: Whether pagination["next"] is expected to be non-None
+        """
+        self.assertIn("pagination", result)
+        self.assertEqual(result["pagination"]["total"], total)
+        if has_next:
+            self.assertIsNotNone(result["pagination"].get("next"))
+        else:
+            self.assertIsNone(result["pagination"].get("next"))

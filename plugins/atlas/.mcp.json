@@ -81,6 +81,25 @@
         "CFG_SPANNING_API_URL": "${user_config.spanning_api_url}"
       }
     },
+    "falcon": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--project",
+        "${CLAUDE_PLUGIN_ROOT}/mcp/falcon",
+        "python",
+        "${CLAUDE_PLUGIN_ROOT}/mcp/_env/load.py",
+        "falcon_mcp.server"
+      ],
+      "env": {
+        "MCP_TRANSPORT": "stdio",
+        "ATLAS_ENV_FILE": "${CLAUDE_PLUGIN_ROOT}/.env",
+        "CFG_FALCON_CLIENT_ID": "${user_config.falcon_client_id}",
+        "CFG_FALCON_CLIENT_SECRET": "${user_config.falcon_client_secret}",
+        "CFG_FALCON_BASE_URL": "${user_config.falcon_base_url}",
+        "CFG_FALCON_MEMBER_CID": "${user_config.falcon_member_cid}"
+      }
+    },
     "knowbe4": {
       "command": "node",
       "args": [

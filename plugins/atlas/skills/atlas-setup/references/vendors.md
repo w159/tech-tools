@@ -1,6 +1,6 @@
 # Atlas connectors reference
 
-Ten vendor MCP connectors are bundled inside the atlas plugin. All are inert by
+Eleven vendor MCP connectors are bundled inside the atlas plugin. All are inert by
 default: every `userConfig` key on the atlas plugin defaults to `""`, so with no
 credentials each server fails its own credential check and does not load. Filling
 a vendor's required keys **on the atlas plugin** via `/plugin config` is what
@@ -11,7 +11,7 @@ enables it.
 | `mcp/hr/` | paylocity |
 | `mcp/it-operations/` | auvik, connectwise, ninjaone, spanning |
 | `mcp/microsoft-365/` | cipp |
-| `mcp/security/` | blumira, knowbe4, threatlocker, vanta |
+| `mcp/security/` | blumira, falcon, knowbe4, threatlocker, vanta |
 
 ## userConfig key reference
 
@@ -28,6 +28,7 @@ blank.
 | CIPP (cipp.mcpb) | atlas | cipp_base_url, cipp_api_key, cipp_tenant_id, cipp_client_id, cipp_client_secret | cipp_base_url, plus EITHER cipp_api_key (legacy static token) OR cipp_tenant_id + cipp_client_id + cipp_client_secret | base_url is your self-hosted CIPP URL (no public default) | Your self-hosted CIPP instance: API config / Entra app registration. | `plugins/atlas/mcp/microsoft-365/` |
 | ConnectWise Manage (connectwise.mcpb) | atlas | cw_manage_company_id, cw_manage_public_key, cw_manage_private_key, cw_manage_client_id, cw_manage_base_url | cw_manage_company_id, cw_manage_public_key, cw_manage_private_key, cw_manage_client_id | base_url default `https://api-na.myconnectwise.net` | CW Manage: System -> Members -> API Members (public/private keys); developer.connectwise.com (clientId). | `plugins/atlas/mcp/it-operations/` |
 | Spanning (spanning.mcpb) | atlas | spanning_admin_email, spanning_api_token, spanning_platform, spanning_api_url | spanning_admin_email, spanning_api_token | platform default `m365`; api_url default per platform | Spanning admin console: Settings -> API token. | `plugins/atlas/mcp/it-operations/` |
+| CrowdStrike Falcon (vendored Python source) | atlas | falcon_client_id, falcon_client_secret, falcon_base_url, falcon_member_cid | falcon_client_id, falcon_client_secret | base_url default `https://api.crowdstrike.com`; set the region endpoint (e.g. `https://api.us-2.crowdstrike.com`) if your CID is not on US-1 | Falcon console: Support and resources -> API clients and keys. | `plugins/atlas/mcp/falcon/` |
 | KnowBe4 (knowbe4.mcpb) | atlas | knowbe4_api_key, knowbe4_region, knowbe4_base_url | knowbe4_api_key | region default `us`; base_url default per region | KnowBe4 console: Account Settings -> API (Reporting API key). | `plugins/atlas/mcp/security/` |
 | NinjaOne (ninjaone.mcpb) | atlas | ninjaone_client_id, ninjaone_client_secret, ninjaone_region, ninjaone_auth_mode, ninjaone_base_url | ninjaone_client_id, ninjaone_client_secret (for client_credentials) | region default `us`; auth_mode default `client_credentials`; base_url default per region | NinjaOne: Administration -> Apps -> API (create API application). | `plugins/atlas/mcp/it-operations/` |
 | Paylocity (paylocity.mcpb) | atlas | paylocity_client_id, paylocity_client_secret, paylocity_company_id, paylocity_base_url, paylocity_sandbox | paylocity_client_id, paylocity_client_secret | base_url default `https://api.paylocity.com`; sandbox default off | Paylocity: API partner credentials issued by Paylocity. | `plugins/atlas/mcp/hr/` |

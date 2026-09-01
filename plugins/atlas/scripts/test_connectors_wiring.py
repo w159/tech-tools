@@ -20,11 +20,17 @@ _INTERPOLATION_RE = re.compile(r"\$\{user_config\.([a-z_][a-z0-9_]*)\}")
 
 
 def _discover_connectors() -> dict[str, Path]:
-    """Return a map of connector name -> vendored ESM bundle (mcp/<name>/server.mjs)."""
+    """Return a map of connector name -> vendored entry point.
+
+    Node connectors ship a single ESM bundle (mcp/<name>/server.mjs); Python
+    connectors ship a vendored source tree with its own pyproject.toml.
+    """
     connectors: dict[str, Path] = {}
     if MCP_DIR.exists():
         for bundle in sorted(MCP_DIR.glob("*/server.mjs")):
             connectors[bundle.parent.name] = bundle
+        for project in sorted(MCP_DIR.glob("*/pyproject.toml")):
+            connectors.setdefault(project.parent.name, project)
     return connectors
 
 
@@ -53,7 +59,7 @@ class TestConnectorsWiring(unittest.TestCase):
         self.assertEqual(
             missing,
             [],
-            "every vendored server.mjs must have a matching mcpServers entry",
+            "every vendored connector must have a matching mcpServers entry",
         )
 
     def test_every_mcp_server_has_a_bundle(self) -> None:
@@ -61,7 +67,7 @@ class TestConnectorsWiring(unittest.TestCase):
         self.assertEqual(
             extra,
             [],
-            "every mcpServers entry must have a matching mcp/<name>/server.mjs",
+            "every mcpServers entry must have a vendored mcp/<name>/ entry point",
         )
 
     def test_connectors_are_discoverable_at_all(self) -> None:
@@ -72,21 +78,45 @@ class TestConnectorsWiring(unittest.TestCase):
         )
 
     def test_mcp_server_runs_vendored_bundle_through_env_preloader(self) -> None:
-        for name in self.connectors:
+        for name, entry in self.connectors.items():
             server = self.mcp_servers[name]
+            if entry.name == "server.mjs":
+                self.assertEqual(
+                    server.get("command"),
+                    "node",
+                    f"{name}: vendored ESM bundles are launched with node",
+                )
+                self.assertEqual(
+                    server.get("args"),
+                    [
+                        "--import",
+                        "${CLAUDE_PLUGIN_ROOT}/mcp/_env/load.mjs",
+                        f"${{CLAUDE_PLUGIN_ROOT}}/mcp/{name}/server.mjs",
+                    ],
+                    f"{name}: must preload the env loader, then run its own server.mjs",
+                )
+                continue
+            # Python connector: uv resolves the vendored project's own pinned
+            # dependencies, then the Python preloader runs its server module.
             self.assertEqual(
                 server.get("command"),
-                "node",
-                f"{name}: vendored ESM bundles are launched with node",
+                "uv",
+                f"{name}: vendored Python connectors are launched with uv",
+            )
+            args = server.get("args") or []
+            self.assertEqual(
+                args[:5],
+                [
+                    "run",
+                    "--project",
+                    f"${{CLAUDE_PLUGIN_ROOT}}/mcp/{name}",
+                    "python",
+                    "${CLAUDE_PLUGIN_ROOT}/mcp/_env/load.py",
+                ],
+                f"{name}: must run its vendored project through the Python env preloader",
             )
             self.assertEqual(
-                server.get("args"),
-                [
-                    "--import",
-                    "${CLAUDE_PLUGIN_ROOT}/mcp/_env/load.mjs",
-                    f"${{CLAUDE_PLUGIN_ROOT}}/mcp/{name}/server.mjs",
-                ],
-                f"{name}: must preload the env loader, then run its own server.mjs",
+                len(args), 6, f"{name}: preloader takes exactly one module argument"
             )
 
     def test_every_interpolated_user_config_key_exists(self) -> None:

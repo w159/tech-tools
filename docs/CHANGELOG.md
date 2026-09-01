@@ -1,5 +1,37 @@
 # Changelog
 
+## 2026-08-29 -- Dashboard becomes a control plane, not just a viewer
+
+Marketplace `3.9.0`; atlas `5.19.0`.
+
+The dashboard could observe sessions and take credentials, and nothing else. It
+now configures atlas and surfaces the rest of the install.
+
+- **Behavior** page: the `ATLAS_*` knobs the hooks read, each showing the
+  `file:line` that reads it. Writes land in `~/.claude/settings.json` `"env"`,
+  verified as the block Claude Code exports into hook subprocesses.
+- **Ecosystem** page: hook wiring with a present/missing verdict per binding, 48
+  installed plugins with enable toggles, 26 MCP servers (plugin and user scope)
+  with enable / add / remove, and the skills, agents and output styles reachable
+  here.
+- **Connectors**: editable non-secret values, a real connection test against the
+  connector's own bundle, a per-connector enable switch, bulk `.env` import and
+  redacted export.
+- **CrowdStrike Falcon joins the bundled connectors**, the eleventh and the first
+  Python one. CrowdStrike's `falcon-mcp` 0.18.0 source is vendored at
+  `plugins/atlas/mcp/falcon/` with no `.git`, no submodule, and no remote, so
+  nothing fetches from CrowdStrike's repository again; runtime dependencies still
+  resolve from PyPI against the vendored `uv.lock`. It launches through
+  `uv run --project` and a new `mcp/_env/load.py`, the Python twin of the Node env
+  preloader. Evidence: `atlas_control.test_connector("falcon")` completed an MCP
+  initialize plus `tools/list` handshake -- Falcon MCP Server 0.18.0, 144 tools,
+  1091 ms -- with no credentials set, confirming inert-by-default still holds.
+- New `plugins/atlas/scripts/atlas_control.py` plus 21 tests. Full suite green:
+  611 scripts tests, 624 hooks tests (77 of them the atlas contract suite).
+
+Evidence and the API table: `plugins/atlas/skills/atlas-orchestrate/references/dashboard-api.md`.
+
+
 ## 2026-08-28 -- Atlas multi-session dashboard + version bump
 
 - Marketplace `3.7.0`; atlas `5.17.0`; armada `1.1.1`; programmer `0.1.1`.

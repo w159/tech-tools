@@ -1,5 +1,40 @@
 # Changelog
 
+## 5.19.0
+### Added
+- **CrowdStrike Falcon connector** (`falcon`), the eleventh bundled connector and
+  the first Python one: CrowdStrike's `falcon-mcp` 0.18.0 source vendored into
+  `mcp/falcon/` with no git remote, submodule, or upstream fetch. Launched as
+  `uv run --project mcp/falcon python mcp/_env/load.py falcon_mcp.server`, so uv
+  resolves the vendored `uv.lock` and the new Python env preloader applies the
+  same precedence as `load.mjs` (`.env` beats `CFG_*`, empty or unexpanded values
+  never promote). Four userConfig keys: `falcon_client_id`,
+  `falcon_client_secret`, `falcon_base_url`, `falcon_member_cid`.
+- `mcp/_env/load.py`: the Python twin of `load.mjs`. Empty-value suppression
+  matters more here, because a blank `FALCON_BASE_URL` would otherwise beat the
+  vendored server's own default in `os.environ.get(key, default)`.
+- Connector discovery, the dashboard connector list, and the dashboard Test
+  button now recognize a Python connector (`mcp/<name>/pyproject.toml`) alongside
+  a Node bundle (`mcp/<name>/server.mjs`), via the new
+  `atlas_control.connector_entry()`.
+- **Behavior** page (`/#behavior`): the `ATLAS_*` variables the hooks read, grouped as Session automation, Guardrails, Prompt optimizer and Storage paths, plus an advanced table of every other `ATLAS_*` key discovered in `hooks/` and `scripts/`. Each knob prints the `file:line` that reads it and the hook's own default. Saves write `~/.claude/settings.json` → `"env"`, the block Claude Code exports into hook subprocesses.
+- **Ecosystem** page (`/#ecosystem`): atlas hook wiring (every `hooks.json` binding, matcher, timeout, and whether the program exists on disk), installed plugins with a skills/agents/commands/MCP census and an enable toggle, MCP servers from both plugins and `~/.claude.json` with enable/add/remove, and the skills, agents and output styles this install can reach.
+- Connectors: non-secret fields (base URL, region, tenant) now show their current value and are editable in place; a **Test** button starts the connector bundle and completes an MCP `initialize` + `tools/list`; a per-connector switch writes `disabledMcpServers` without touching credentials; bulk `.env` import and a redacted export.
+- Tabs are deep-linkable via the URL hash.
+- `scripts/atlas_control.py`, the control plane behind those routes, so `atlas_dashboard.py` stays the HTTP + UI layer.
+- `scripts/test_atlas_control.py`: 21 tests covering the allowlists, the settings writers, the `.env` round trip, and a guard that fails if a curated knob is not read by any shipped file.
+
+### Fixed
+- Environment discovery now matches the `ATLAS_*` name rather than one call shape, so the five `prompt_optimizer.py` knobs read through its `_env()` wrapper (`ATLAS_OPTIMIZE`, `_TRIGGER`, `_MINLEN`, `_TIMEOUT`, `ATLAS_OPTIMIZER_MODEL`) are no longer rejected as unknown keys.
+- Re-enabling the last disabled MCP server removes `disabledMcpServers` instead of leaving an empty array in settings.
+- Third-party plugin manifest text is HTML-escaped before it reaches `innerHTML`.
+
+### Security
+- Every new write is allowlisted by key name and lands in exactly one of `settings.json`, `~/.claude.json`, or the plugin `.env`; one unknown key rejects the whole batch.
+- Secrets are still never read back: `GET /api/connectors` returns an empty value for every field marked sensitive.
+- The `.env` export marks an already-set secret on its own comment line, so a round trip cannot import the marker text as the secret.
+
+
 ## 5.18.0
 ### Changed
 - Dashboard UI redesign: branded **Atlas Command Center** shell with sidebar nav, hero, KPI cards, SVG icon system, and marketplace hero art (`/assets/*` from repo `img/`).
