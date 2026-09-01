@@ -811,5 +811,30 @@
     "status": "verified",
     "verified_at": "2026-09-01T13:08:08+00:00",
     "verified_by": "atlas:orchestrator (primary-source docs)"
+  },
+  {
+    "id": "S8",
+    "surface": "mcp_servers/threatlocker-mcp + plugins/atlas/mcp/threatlocker",
+    "category": "bug",
+    "severity": "medium",
+    "title": "ThreatLocker 440 TOKEN_REVOKED: credential not recognized by the portal; connector wiring matches the docs; 440 was misclassified as INVALID_ARGS with a misleading hint",
+    "evidence": [
+      "node-threatlocker http.ts:72-82 sends raw Authorization + camelCase managedOrganizationId, matching threatlocker.kb.help/getting-started-with-threatlocker-portalapis/ Authentication and ManagedOrganizationId sections",
+      "Live probe 2026-09-01: Authorization of 64 zeros and of 'not-a-token' both return HTTP 440 {error:TOKEN_REVOKED}; no header returns 403. TOKEN_REVOKED means 'unknown token'",
+      "Configured key (pluginConfigs and plugins/atlas/.env agree, prefix 6507) returns 440 TOKEN_REVOKED on instances b,c,d,e,f,g,h; a,i-m do not resolve",
+      "Running server (started 17:36:24) echoed key prefix CB23, present in neither plugins/atlas/.env nor settings.json pluginConfigs (both prefix 6507, dashboard-saved 2026-08-28 per ~/.atlas/credential_marks.json). plugin.json marks threatlocker_api_key sensitive:true; Keychain item 'Claude Code-credentials' pluginSecrets['atlas@tech-tools'].threatlocker_api_key holds the CB23 token; cache 5.20.0 has no .env, so CFG_ fallback from Keychain is what the server loaded",
+      "node --experimental-strip-types --test mcp_servers/_shared/__tests__/response-quality.test.ts: 66 pass 1 fail before fix, 67 pass 0 fail after",
+      "Stdio smoke on rebuilt plugins/atlas/mcp/threatlocker/server.mjs with fake key: status shows 'prefix 0000...', computer_groups_list -> code FORBIDDEN, HTTP 440, hint starts 'HTTP 440 TOKEN_REVOKED: ThreatLocker does not recognize this token'",
+      "pytest plugins/atlas/scripts/test_connectors_wiring.py -> 9 passed"
+    ],
+    "doc_refs": [
+      "docs/CHANGELOG.md (2026-09-01 ThreatLocker 440 entry)"
+    ],
+    "reproduction": "call threatlocker_computers_list with any key ThreatLocker does not know; before: code INVALID_ARGS, hint 'Verify THREATLOCKER_API_KEY ... are set correctly'",
+    "proposed_fix": "Shipped: 440 -> FORBIDDEN in _shared/error-envelope.ts; 440-specific hint via toolErrorFromCatch wrapper in threatlocker _helpers.ts; key prefix in threatlocker_status; tsup.bundle.config.ts rebuilds the vendored bundle. Not code: mint a new ThreatLocker API User token and enter it via the plugin configure prompt (Keychain), restart Claude Code, confirm prefix via threatlocker_status. Open: atlas_dashboard.py credentials save writes settings.json pluginConfigs + repo .env, neither read by the installed plugin for sensitive fields.",
+    "blast_radius": "threatlocker connector error envelopes; _shared 440 mapping applies to every server using error-envelope",
+    "status": "verified",
+    "verified_at": "2026-09-01T21:53:50+00:00",
+    "verified_by": "atlas:orchestrator (deterministic tests + stdio smoke)"
   }
 ]

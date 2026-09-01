@@ -29,6 +29,20 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 
 ## Backlog
 
+### Bug: dashboard credential save never reaches the installed plugin for sensitive fields (found 2026-09-01)
+
+`atlas_dashboard.py` writes connector credentials to settings.json `pluginConfigs`
+and the repo `plugins/atlas/.env`. Sensitive userConfig fields (`sensitive: true`
+in `plugin.json`, e.g. `threatlocker_api_key`) are read by Claude Code from secure
+storage (macOS Keychain item `Claude Code-credentials`, `pluginSecrets`), and the
+installed plugin cache ships no `.env`, so neither write is seen by a running
+connector. Evidence and the ThreatLocker case are in `docs/CHANGELOG.md`
+(2026-09-01, ThreatLocker 440) and `.atlas/.run/findings.json` S8. Fix options:
+have the dashboard call the plugin configure flow, or write `pluginSecrets`
+directly, and in either case stop writing a repo `.env` that only a dev checkout
+reads. Until then the dashboard note must say sensitive values go through the
+plugin configure prompt.
+
 ### Atlas self-improvement follow-ups (added 2026-08-05)
 
 Chronicle/insights schema and `atlas-doctor` skill shipped this date (see CHANGELOG). One
