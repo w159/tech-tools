@@ -1,5 +1,30 @@
 # Changelog
 
+## 5.20.1
+### Fixed
+- **ThreatLocker connector** (`mcp/threatlocker/server.mjs`, rebuilt from
+  `mcp_servers/threatlocker-mcp` 1.3.1): HTTP 440 `TOKEN_REVOKED` now maps to
+  `FORBIDDEN` instead of `INVALID_ARGS`, and the hint explains that ThreatLocker
+  returns 440 for any token it does not recognize (expired after the inactivity
+  window, deleted, mistyped, or the organization Auth Key pasted in place of an
+  API User token), with the steps to mint a new API User token. The connector
+  wiring itself was verified against the ThreatLocker PortalAPI docs and is
+  unchanged.
+- `threatlocker_status` makes one authenticated call and reports `Auth check:
+  OK` or `Auth check: FAILED HTTP 440 TOKEN_REVOKED: ...` (`isError: true`), so
+  "configured" can no longer be read as "working". It also prints the first four
+  characters of the loaded key so a stale launch-time credential is visible in
+  one call.
+- `mcp_servers/threatlocker-mcp/tsup.bundle.config.ts` is the reproducible
+  recipe for the vendored bundle.
+
+### Known
+- The dashboard credentials form saves to settings.json `pluginConfigs` and the
+  repo `.env`; sensitive userConfig (`threatlocker_api_key` is `sensitive: true`)
+  is read by Claude Code from secure storage (Keychain `Claude Code-credentials`,
+  `pluginSecrets`), and the installed plugin ships no `.env`. Enter sensitive
+  values through the plugin configure prompt until the dashboard writes there.
+
 ## 5.20.0
 ### Added
 - **CrowdStrike Falcon connector** (`falcon`), the eleventh bundled connector and

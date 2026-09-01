@@ -235,7 +235,9 @@ function extractBody(err: {
 }
 
 function httpStatusToCode(status: number): ErrorCode {
-  if (status === 401 || status === 403) return "FORBIDDEN";
+  // 440 is the non-standard "login time-out" status; ThreatLocker uses it for
+  // any token it does not recognize (TOKEN_REVOKED). It is an auth failure.
+  if (status === 401 || status === 403 || status === 440) return "FORBIDDEN";
   if (status === 404) return "NOT_FOUND";
   if (status === 429) return "RATE_LIMITED";
   if (status >= 400 && status < 500) return "INVALID_ARGS";

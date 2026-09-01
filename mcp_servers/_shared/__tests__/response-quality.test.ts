@@ -505,6 +505,15 @@ describe("toolErrorFromCatch — statusCode+response (ServiceError shape)", () =
     );
   });
 
+  it("maps HTTP 440 (ThreatLocker TOKEN_REVOKED) to FORBIDDEN, not INVALID_ARGS", () => {
+    // ThreatLocker answers 440 TOKEN_REVOKED for ANY token it does not recognize
+    // (verified 2026-09-01 with a zero-filled token). It is an auth failure.
+    const err = new ServiceError("Unauthorized", 440, { error: "TOKEN_REVOKED", token: "..." });
+    const result = toolErrorFromCatch("threatlocker.list", err);
+    const parsed = parseText(result) as { error: Record<string, unknown> };
+    assert.equal(parsed.error.code, "FORBIDDEN");
+  });
+
   it("maps NotFoundError (statusCode 404) to NOT_FOUND", () => {
     const err = new NotFoundError("Resource not found", { error: "NOT_FOUND", id: "abc-123" });
     const result = toolErrorFromCatch("vanta.getControl", err);

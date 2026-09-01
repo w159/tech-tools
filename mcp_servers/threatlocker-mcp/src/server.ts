@@ -2,16 +2,32 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { getNavigationTools, DOMAINS } from './domains/navigation.js';
 import { getDomainHandler } from './domains/index.js';
-import { getCredentials } from './utils/client.js';
+import { getCredentials, getClient } from './utils/client.js';
 import { logger } from './utils/logger.js';
 import { setServerRef } from './utils/server-ref.js';
 import type { DomainName } from './utils/types.js';
 import { annotate } from './annotate-tool.js';
 import { describeBaseUrl, toolErrorFromCatch } from './domains/_helpers.js';
 
+/** One authenticated GET (pending approval count). Never throws. */
+async function liveAuthCheck(): Promise<string> {
+  try {
+    const client = await getClient();
+    const count = await client.approvalRequests.getPendingCount();
+    return `OK (authenticated; pending approvals: ${count})`;
+  } catch (err) {
+    const e = err as { statusCode?: number; message?: string; response?: unknown };
+    if (e.statusCode === 440) {
+      return 'FAILED HTTP 440 TOKEN_REVOKED: ThreatLocker does not recognize this API key (it answers 440 for any unknown token). Mint a new API User token; tools will fail until then.';
+    }
+    const body = e.response !== undefined ? ` ${JSON.stringify(e.response).slice(0, 200)}` : '';
+    return `FAILED${e.statusCode ? ` HTTP ${e.statusCode}` : ''}: ${e.message ?? String(err)}${body}`;
+  }
+}
+
 export function createMcpServer(): Server {
   const server = new Server(
-    { name: 'threatlocker-mcp', version: '1.3.0' },
+    { name: 'threatlocker-mcp', version: '1.3.1' },
     {
       capabilities: {
         tools: {},
@@ -74,15 +90,25 @@ export function createMcpServer(): Server {
     if (name === 'threatlocker_status') {
       const creds = getCredentials();
       const urlDesc = describeBaseUrl('threatlocker', process.env.THREATLOCKER_BASE_URL, 'THREATLOCKER_BASE_URL');
+      // Key fingerprint (first 4 chars) lets a caller tell a stale launch-time
+      // credential from the one they just saved without exposing the key.
       const credStatus = creds
-        ? `Configured (API key present; baseUrl=${urlDesc})`
+        ? `Configured (API key present, prefix ${creds.apiKey.slice(0, 4)}...; baseUrl=${urlDesc})`
         : `NOT CONFIGURED — set THREATLOCKER_API_KEY. Base URL: ${urlDesc}`;
+
+      // "Configured" only proves a value is present. Make one cheap authenticated
+      // call so status reports whether ThreatLocker actually accepts the key;
+      // without this a caller can read "configured" as "working".
+      const authCheck = creds ? await liveAuthCheck() : 'SKIPPED (no API key)';
 
       return {
         content: [{
           type: 'text' as const,
-          text: `ThreatLocker MCP Server Status\n\nCredentials: ${credStatus}\nAvailable domains: ${DOMAINS.join(', ')}\n\nAll tools are available at all times. Use threatlocker_navigate to discover tools by domain.`,
+          text: `ThreatLocker MCP Server Status\n\nCredentials: ${credStatus}\nAuth check: ${authCheck}\nAvailable domains: ${DOMAINS.join(', ')}\n\nAll tools are available at all times. Use threatlocker_navigate to discover tools by domain.`,
         }],
+        // Unconfigured is a reduced mode, not an error (see AUDIT_2026-06-12);
+        // only a rejected key flips isError.
+        isError: authCheck.startsWith('FAILED'),
       };
     }
 

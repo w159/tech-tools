@@ -1,5 +1,65 @@
 # Changelog
 
+## 2026-09-01 -- ThreatLocker 440 TOKEN_REVOKED is an auth failure, and the hint now says what it means
+
+Marketplace `3.10.1`; atlas `5.20.1`; threatlocker-mcp `1.3.1`.
+
+Report: every `threatlocker_*` tool returned `HTTP 440 {"error":"TOKEN_REVOKED"}`
+and the user read the wording as a connector bug. Investigation against the
+ThreatLocker docs (`threatlocker.kb.help/getting-started-with-threatlocker-portalapis/`)
+and the live API showed the wiring is correct and the credential is not:
+`node-threatlocker` sends the raw token in `Authorization` and the org GUID in
+`managedOrganizationId`, exactly as documented, and the portal answers
+`440 TOKEN_REVOKED` for any token it does not recognize (a zero-filled token and
+the literal string `not-a-token` get the same body; no header at all gets 403).
+The configured key received the same 440 on every reachable instance (b through h).
+
+- `mcp_servers/_shared/error-envelope.ts`: HTTP 440 now classifies as `FORBIDDEN`
+  instead of falling through to `INVALID_ARGS`. Test added in
+  `_shared/__tests__/response-quality.test.ts`.
+- `mcp_servers/threatlocker-mcp/src/domains/_helpers.ts`: a local
+  `toolErrorFromCatch` wrapper replaces the per-call-site "verify the env vars
+  are set" hint with a 440-specific one: the token is unknown to ThreatLocker
+  (expired after the inactivity window, deleted, mistyped, or the organization
+  Auth Key pasted in place of an API User token), how to mint a new API User
+  token, check the instance letter, and restart the server since credentials
+  are read at launch.
+- `threatlocker_status` now makes one authenticated call (pending approval
+  count) and reports `Auth check: OK (...)` or `Auth check: FAILED HTTP 440
+  TOKEN_REVOKED: ...`, with `isError` set on failure. "Configured" only ever
+  meant a value was present, and a session read it as "reachable" and told the
+  user the connector worked when the very next call was rejected. Status also
+  prints the first four characters of the loaded key,
+  so the credential a server actually loaded is visible in one call. That is how
+  the second defect surfaced: the running server was sending a key (prefix
+  `CB23`, already failing on 2026-08-26) that exists in neither
+  `plugins/atlas/.env` nor settings.json `pluginConfigs` (both hold the newer
+  `6507` value the dashboard saved on 2026-08-28). `threatlocker_api_key` is
+  `sensitive: true` in `plugin.json`, and Claude Code stores sensitive
+  userConfig in secure storage, not settings.json
+  (`code.claude.com/docs/en/plugins-reference.md`, user configuration). On this
+  Mac that is the Keychain item `Claude Code-credentials`, whose
+  `pluginSecrets["atlas@tech-tools"].threatlocker_api_key` still holds the old
+  `CB23` token. The installed plugin (cache `5.20.0`) ships no `.env`, so
+  `ATLAS_ENV_FILE` points at nothing and the `CFG_` fallback is what Claude Code
+  substituted from Keychain. Net: the dashboard credentials form writes to two
+  places the installed plugin never reads for sensitive fields. Not changed in
+  this entry; recorded as an open item.
+- `mcp_servers/threatlocker-mcp/tsup.bundle.config.ts` is the reproducible
+  recipe for `plugins/atlas/mcp/threatlocker/server.mjs` (noExternal, minified,
+  `@shared` aliased); the bundle is rebuilt from it.
+
+Evidence: `node --experimental-strip-types --test mcp_servers/_shared/__tests__/response-quality.test.ts`
+-> 67 pass, 0 fail (66/1 before the envelope change). Stdio smoke against the
+rebuilt bundle with a fake key: `threatlocker_status` shows `prefix 0000...`,
+`threatlocker_computer_groups_list` returns `code: FORBIDDEN`, `HTTP 440`, hint
+starting `HTTP 440 TOKEN_REVOKED: ThreatLocker does not recognize this token`.
+`pytest plugins/atlas/scripts/test_connectors_wiring.py` -> 9 passed.
+Not fixed by code: the stored ThreatLocker key itself. A new API User token
+(Portal > Manage > Users > API Users) is required, entered through the plugin's
+own configure prompt so it lands in Keychain, then a Claude Code restart and a
+`threatlocker_status` call to confirm the printed prefix changed.
+
 ## 2026-09-01 -- CrowdStrike Falcon joins the bundled connectors
 
 Marketplace `3.10.0`; atlas `5.20.0`.
