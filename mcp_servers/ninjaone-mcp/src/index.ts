@@ -208,11 +208,11 @@ async function createMcpServer(credentialOverrides?: NinjaOneCredentials): Promi
    * Handle ListTools requests - always returns ALL tools
    */
   server.setRequestHandler(ListToolsRequestSchema, async () => {
+    // Progressive disclosure: status/auth shell until credentials resolve.
+    const shell = [navigateTool, statusTool, signInTool, signOutTool, authStatusTool];
+    const tools = getCredentials() ? [...shell, ...allDomainTools] : shell;
     return {
-      tools: annotate(
-        [navigateTool, statusTool, signInTool, signOutTool, authStatusTool, ...allDomainTools],
-        "NinjaOne",
-      ),
+      tools: annotate(tools, "NinjaOne"),
     };
   });
 

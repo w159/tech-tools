@@ -1,115 +1,205 @@
 export * from './common.js';
 import type { PaginationParams } from './common.js';
 
-// Computer types
+// Row shapes below are the live PortalAPI responses (instance h, 2026-09-01)
+// trimmed to the fields callers rely on; every row carries more, so each type
+// keeps an index signature rather than pretending to be exhaustive.
+
+// ---------------------------------------------------------------------------
+// Computer  (POST /Computer/ComputerGetByAllParameters, GET /Computer/ComputerGetForEditById)
+// ---------------------------------------------------------------------------
 export interface Computer {
-  id: number;
-  name: string;
-  domain?: string;
-  lastSeen?: string;
+  computerId: string;
+  hostname: string;
+  computerName?: string;
+  username?: string;
   operatingSystem?: string;
-  computerGroupId?: number;
-  organizationId: number;
+  osType?: number;
+  group?: string;
+  groupName?: string;
+  computerGroupId?: string;
+  organization?: string;
+  organizationName?: string;
+  organizationId?: string;
+  action?: string;
+  mode?: string;
+  lastCheckin?: string;
+  lastCheckinIPAddress?: string;
+  serviceVersion?: string;
+  threatLockerVersion?: string;
+  denyCountOneDay?: number;
+  denyCountSevenDays?: number;
+  isIsolated?: boolean;
+  isLockedOut?: boolean;
+  isLockDownMode?: boolean;
+  totalRows?: number;
+  [key: string]: unknown;
 }
 
-export interface ComputerListParams extends Partial<PaginationParams> {
-  // Add specific computer search filters as needed
+/** Body of ComputerGetByAllParameters (swagger ComputerParameterDto). */
+export interface ComputerListParams extends PaginationParams {
+  searchText?: string;
+  /** Computer group GUID, not a name. */
+  computerGroup?: string;
+  /** One of: computername, group, action, lastcheckin, computerinstalldate, deniedcountthreedays, threatlockerversion. */
+  orderBy?: string;
+  isAscending?: boolean;
+  childOrganizations?: boolean;
+  action?: string;
+  showLastCheckIn?: boolean;
+  showDeleted?: boolean;
 }
 
 export interface ComputerCheckin {
-  id: number;
-  computerId: number;
-  checkinTime: string;
-  version?: string;
-  status?: string;
+  computerCheckinId: number;
+  computerId: string;
+  dateTime: string;
+  ipAddress?: string;
+  driverStatus?: number;
+  tlVersion?: string;
+  operatingSystem?: string;
+  memoryUsage?: number;
+  memoryUsageUnit?: string;
+  [key: string]: unknown;
 }
 
-export interface ComputerCheckinParams extends Partial<PaginationParams> {
-  computerId?: number;
-  fromDate?: string;
-  toDate?: string;
+/** Body of ComputerCheckinGetByParameters (swagger ComputerCheckinParametersDto). */
+export interface ComputerCheckinParams extends PaginationParams {
+  computerId: string;
+  hideHeartbeat?: boolean;
 }
 
-// Computer Group types
-export interface ComputerGroup {
-  id: number;
-  name: string;
-  description?: string;
-  organizationId: number;
-  parentGroupId?: number;
-  computersCount?: number;
-}
-
-export interface ComputerGroupListParams {
-  osType?: string;
-  includeAllComputers?: boolean;
-  includeGlobal?: boolean;
-  includeAllPolicies?: boolean;
-  includeOrganizations?: boolean;
-  includeParentGroups?: boolean;
-}
-
+// ---------------------------------------------------------------------------
+// Computer groups (GET /ComputerGroup/ComputerGroupGetDropdownByOrganizationId)
+// ---------------------------------------------------------------------------
 export interface ComputerGroupDropdownParams {
-  organizationId?: number;
+  /** 1 Windows, 2 Mac, 3 Linux, 5 Windows XP. */
+  computerGroupOSTypeId?: number;
+  computerOSType?: string;
+  hideGlobals?: boolean;
 }
 
-// Approval Request types
+// ---------------------------------------------------------------------------
+// Approval requests (POST /ApprovalRequest/ApprovalRequestGetByParameters)
+// ---------------------------------------------------------------------------
 export interface ApprovalRequest {
-  id: number;
-  applicationName: string;
-  filePath: string;
-  status: string;
-  requestedBy?: string;
-  requestedAt: string;
-  computerId?: number;
-  organizationId: number;
+  approvalRequestId: string;
+  dateTime: string;
+  hostname?: string;
+  username?: string;
+  path?: string;
+  hash?: string | null;
+  statusId: number;
+  computerId?: string;
+  organizationName?: string;
+  organizationId?: string;
+  requestor?: string;
+  requestorReason?: string;
+  requestorEmailAddress?: string;
+  comments?: string;
+  approvedBy?: string;
+  actionDate?: string | null;
+  ticketId?: string;
+  [key: string]: unknown;
 }
 
-export interface ApprovalRequestListParams extends Partial<PaginationParams> {
-  status?: string;
-  computerId?: number;
+/** statusId values documented at threatlocker.kb.help/portalapiapprovalrequest/. */
+export const APPROVAL_STATUS_IDS = {
+  Pending: 1,
+  Approved: 4,
+  'Not Learned': 6,
+  Rejected: 10,
+  'Added to Application': 12,
+  'Escalated from the Cyber Heroes': 13,
+  'Self-Approved': 16,
+} as const;
+
+/** Body of ApprovalRequestGetByParameters (swagger ApprovalRequestParametersDto). */
+export interface ApprovalRequestListParams extends PaginationParams {
+  statusId?: number;
+  searchText?: string;
+  showChildOrganizations?: boolean;
+  orderBy?: string;
+  isAscending?: boolean;
 }
 
-export interface PermitApplication {
-  id: number;
-  applicationPath: string;
-  approvalRequestId: number;
-  status: string;
-}
+export type PermitApplication = Record<string, unknown>;
 
-// Audit Log types
+// ---------------------------------------------------------------------------
+// Unified audit (POST /ActionLog/ActionLogGetByParametersV2, header usenewsearch: true)
+// ---------------------------------------------------------------------------
 export interface AuditLogEntry {
-  id: number;
-  actionType: string;
-  timestamp: string;
-  userId?: number;
-  computerId?: number;
-  description: string;
-  details?: Record<string, unknown>;
-}
-
-export interface AuditLogSearchParams extends Partial<PaginationParams> {
+  eActionLogId: string;
+  actionLogId?: number;
+  sourceTableId?: number;
+  dateTime: string;
+  hostname?: string;
+  username?: string;
+  computerId?: string;
+  organizationName?: string | null;
+  action?: string;
+  actionId?: number;
   actionType?: string;
-  fromDate?: string;
-  toDate?: string;
-  userId?: number;
-  computerId?: number;
+  applicationName?: string;
+  applicationId?: string;
+  policyName?: string;
+  policyId?: string;
+  fullPath?: string;
+  processPath?: string;
+  hash?: string;
+  sha256Hash?: string;
+  [key: string]: unknown;
 }
 
-// Organization types
+/**
+ * Body of ActionLogGetByParametersV2 (swagger ActionLogParamsDto). There is no
+ * free-text field. `hostname`, `actionType(s)` and `actionId` filter as
+ * top-level fields; `username`, `fullPath`, `applicationName` and `policyName`
+ * go through the Advanced Search list as exact matches (username tolerates a
+ * partial). actionId 99 = "Any Deny" (documented), 1 = Permit.
+ */
+export interface AuditLogSearchParams extends PaginationParams {
+  /** "YYYY-MM-DDTHH:MM:SSZ" (no milliseconds). */
+  startDate: string;
+  endDate: string;
+  hostname?: string;
+  username?: string;
+  /** Exact full path as logged. */
+  fullPath?: string;
+  /** Exact application name as logged. */
+  applicationName?: string;
+  /** Exact policy name as logged. */
+  policyName?: string;
+  actionType?: string;
+  actionTypes?: string[];
+  actionId?: number;
+  showChildOrganizations?: boolean;
+  sortDescending?: boolean;
+}
+
+export interface AuditFileHistoryParams extends PaginationParams {
+  fullPath: string;
+  hostname?: string;
+  computerId?: string;
+  sourceTableId?: number;
+}
+
+// ---------------------------------------------------------------------------
+// Organizations
+// ---------------------------------------------------------------------------
 export interface Organization {
-  id: number;
-  name: string;
-  parentOrganizationId?: number;
-  childOrganizationsCount?: number;
-  computersCount?: number;
+  organizationId?: string;
+  organizationName?: string;
+  name?: string;
+  [key: string]: unknown;
 }
 
-export interface OrganizationListParams extends Partial<PaginationParams> {
-  // Add specific organization search filters as needed
+/** Body of OrganizationGetChildOrganizationsByParameters (KB only; not in the public swagger). */
+export interface OrganizationListParams extends PaginationParams {
+  searchText?: string;
+  orderBy?: string;
+  isAscending?: boolean;
+  includeAllChildren?: boolean;
 }
 
-export interface AuthKey {
-  key: string;
-  organizationId: number;
-}
+export type AuthKey = Record<string, unknown> | string;

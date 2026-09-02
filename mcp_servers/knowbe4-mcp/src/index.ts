@@ -228,6 +228,10 @@ async function getAllDomainTools(): Promise<Tool[]> {
 
 // Handle ListTools requests - always returns ALL tools
 server.setRequestHandler(ListToolsRequestSchema, async () => {
+  // Progressive disclosure: shell tools only until credentials resolve.
+  if (!getCredentials()) {
+    return { tools: annotate([navigateTool, statusTool], "KnowBe4") };
+  }
   if (isLazyLoadingEnabled()) {
     return { tools: annotate(metaTools, "KnowBe4") };
   }

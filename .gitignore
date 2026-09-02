@@ -148,6 +148,7 @@ firebase-adminsdk*.json
 !SECURITY.md
 !CLA.md
 !marketplace.json
+!pyrightconfig.json
 
 # ---- Root scripts ----
 !test-mcp-tools.mjs
@@ -191,40 +192,13 @@ firebase-adminsdk*.json
 !.claude-plugin/**
 
 
-# ---- docs — atlas documentation SSOT (CHANGELOG, ROADMAP, plans, specs, evidence,
-#      architecture, features, lessons, audits, wiki, reference_files). Atlas builds and
-#      maintains these as the project's single source of truth, so they must be tracked.
-#      Only the SSOT subtree is allowlisted: large vendored doc-site clones under docs/
-#      (cline, aider, vendors, gemini-cli, frameworks, claude-code, ...), each with its own
-#      nested .git, stay ignored as local reference material, not project history.
-#      Do NOT add a blanket !docs/** — that would try to commit those nested repos.
+# ---- docs — PROJECT SSOT (everything under docs/ is documentation, not junk) ----
+# docs/ is the single source of truth for this marketplace and its plugins.
+# Track the entire tree. Do not treat docs content as disposable cache or
+# "reference clones to strip." Agents must never delete docs/ paths.
+# Nested VCS metadata and secrets are still re-excluded in Section 5.
 !docs/
-!docs/*.md
-!docs/architecture/
-!docs/architecture/**
-!docs/features/
-!docs/features/**
-!docs/specs/
-!docs/specs/**
-!docs/audits/
-!docs/audits/**
-!docs/decisions/
-!docs/decisions/**
-!docs/lessons/
-!docs/lessons/**
-!docs/wiki/
-!docs/wiki/**
-!docs/plans/
-!docs/plans/**
-!docs/evidence/
-!docs/evidence/**
-!docs/reference_files/
-!docs/reference_files/**
-# This repo's existing owned doc dirs (small, no nested repo):
-!docs/standards/
-!docs/standards/**
-!docs/superpowers/
-!docs/superpowers/**
+!docs/**
 
 # ---- .atlas/ - atlas-internal state only, never a docs/ subdirectory ----
 # .atlas/ holds atlas's own self-improvement state, all durable and must ship
@@ -282,11 +256,26 @@ docs/.run/**
 .atlas/.run/*
 !.atlas/.run/findings.json
 
-# ---- Safety: keep any nested git repo / vendored doc-site clone under docs/ out ----
-# The docs allowlist above never includes these; this is belt-and-suspenders so a
-# future blanket !docs/** can never drag a gigabyte of nested .git repos into history.
+# ---- Safety under docs/: never track nested VCS metadata ----
+# docs/** is allowlisted as SSOT. Nested .git dirs (if someone clones a reference
+# tree under docs/) must still stay out of this repo's index.
 docs/**/.git/
 docs/**/.git/**
+
+# ---- Local agent scratch (never product) ----
+.scratch/
+.scratch/**
+.agents/
+.agents/**
+improvements/
+improvements/**
+
+# ---- Nested .atlas runtime wrongly created under plugin source ----
+# Root .atlas/ is dogfood state for this marketplace checkout. .atlas/ must NOT
+# appear inside plugins/atlas/ (or other plugin trees) — that is install-style
+# contamination of product source.
+plugins/**/.atlas/
+plugins/**/.atlas/**
 
 **/dist/
 **/dist/**
@@ -338,9 +327,18 @@ mcp_servers/.archive/**
 plugins/atlas/.env
 !plugins/atlas/.env.example
 
-# ---- Claude Desktop config (may contain API keys / session tokens) ----
+# ---- Claude Desktop / Claude Code local config ----
+# Default: ignore .claude (tokens, local settings). Re-allow only the shared
+# project rules + committed project settings that encode marketplace safeguards.
 **/.claude/
 **/.claude/**
+!.claude/
+!.claude/rules/
+!.claude/rules/**
+!.claude/settings.json
+.claude/settings.local.json
+.claude/**/*.local.*
+.claude/.atlas_nudge
 
 # ---- Log files ----
 *.log

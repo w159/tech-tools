@@ -20,7 +20,8 @@
     "clean": "rm -rf dist",
     "prepare": "npm run build",
     "pack:mcpb": "node scripts/pack-mcpb.js",
-    "validate:mcpb": "mcpb validate manifest.json"
+    "validate:mcpb": "mcpb validate manifest.json",
+    "bundle:atlas": "tsup --config tsup.bundle.config.ts"
   },
   "keywords": [
     "blumira",

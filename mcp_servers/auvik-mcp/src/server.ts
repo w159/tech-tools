@@ -2,6 +2,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { toMcpError } from './errors.js';
 import { annotate } from './annotate-tool.js';
+import { getCredentials } from './credentials.js';
 
 import { statusTool, handleStatus } from './tools/status.js';
 import { navigateTool, handleNavigate } from './tools/navigate.js';
@@ -196,7 +197,11 @@ export function createServer(): Server {
   const server = new Server({ name: 'auvik-mcp', version: '0.4.2' }, { capabilities: { tools: {}, logging: {} } });
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
-    return { tools: annotate(TOOLS, 'Auvik') };
+    // Progressive disclosure: status + navigate only until credentials resolve.
+    const tools = getCredentials()
+      ? TOOLS
+      : TOOLS.filter((t) => t.name === 'auvik_status' || t.name === 'auvik_navigate');
+    return { tools: annotate(tools, 'Auvik') };
   });
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {

@@ -83,21 +83,84 @@ class TestFalconMCPServer(unittest.TestCase):
         self.assertEqual(len(server.modules), 1)
         self.assertIn("detections", server.modules)
 
+    @patch.dict("os.environ", {"FALCON_CLIENT_ID": "id", "FALCON_CLIENT_SECRET": "secret"}, clear=False)
     @patch("falcon_mcp.server.FalconClient")
-    def test_authentication_failure(self, mock_client):
-        """Test server initialization with authentication failure includes diagnostics."""
+    @patch("falcon_mcp.server.FastMCP")
+    def test_authentication_failure_boots_inert(self, mock_fastmcp, mock_client):
+        """Auth failure starts inert MCP with falcon_status instead of crashing."""
         mock_client_instance = MagicMock()
         mock_client_instance.authenticate.return_value = False
+        mock_client_instance.is_authenticated.return_value = False
         mock_client_instance.auth_failure_message.return_value = (
             "Failed to authenticate with the Falcon API (HTTP 401). invalid credentials"
         )
         mock_client.return_value = mock_client_instance
 
-        with self.assertRaises(RuntimeError) as ctx:
-            FalconMCPServer()
+        mock_server_instance = MagicMock()
+        mock_server_instance._tool_manager._tools = {}
+        mock_fastmcp.return_value = mock_server_instance
 
-        self.assertIn("HTTP 401", str(ctx.exception))
+        server = FalconMCPServer()
+
+        self.assertEqual(server.mode, "inert")
+        self.assertIn("HTTP 401", server.auth_error or "")
         mock_client_instance.auth_failure_message.assert_called_once()
+        status = server.falcon_status()
+        self.assertEqual(status["state"], "AUTH_FAILED")
+        self.assertEqual(status["mode"], "inert")
+
+    @patch.dict(
+        "os.environ",
+        {"FALCON_CLIENT_ID": "", "FALCON_CLIENT_SECRET": ""},
+        clear=False,
+    )
+    @patch("falcon_mcp.server.FastMCP")
+    def test_missing_credentials_boots_inert(self, mock_fastmcp):
+        """Missing credentials boot inert status surface without FalconClient."""
+        mock_server_instance = MagicMock()
+        mock_server_instance._tool_manager._tools = {"falcon_status": object()}
+        mock_fastmcp.return_value = mock_server_instance
+
+        # Ensure env-based credentials cannot sneak in from the operator shell.
+        with patch.dict(
+            "os.environ",
+            {
+                "FALCON_CLIENT_ID": "",
+                "FALCON_CLIENT_SECRET": "",
+            },
+            clear=False,
+        ):
+            # Pop rather than empty-string if present as only whitespace handled by strip.
+            import os
+
+            os.environ.pop("FALCON_CLIENT_ID", None)
+            os.environ.pop("FALCON_CLIENT_SECRET", None)
+            server = FalconMCPServer(client_id=None, client_secret=None)
+
+        self.assertEqual(server.mode, "inert")
+        self.assertIsNone(server.falcon_client)
+        status = server.falcon_status()
+        self.assertEqual(status["state"], "MISSING_CREDENTIALS")
+        self.assertFalse(status["configured"])
+        self.assertIn("MISSING_CREDENTIALS", status["message"])
+
+    @patch("falcon_mcp.server.FalconClient")
+    @patch("falcon_mcp.server.FastMCP")
+    def test_falcon_status_ok_when_authenticated(self, mock_fastmcp, mock_client):
+        """Authenticated servers expose falcon_status with state OK."""
+        mock_client_instance = MagicMock()
+        mock_client_instance.authenticate.return_value = True
+        mock_client_instance.is_authenticated.return_value = True
+        mock_client.return_value = mock_client_instance
+        mock_server_instance = MagicMock()
+        mock_server_instance._tool_manager._tools = {"falcon_status": object()}
+        mock_fastmcp.return_value = mock_server_instance
+
+        server = FalconMCPServer()
+        status = server.falcon_status()
+        self.assertEqual(status["state"], "OK")
+        self.assertEqual(status["mode"], "full")
+        self.assertTrue(status["authenticated"])
 
     @patch("falcon_mcp.server.FalconClient")
     def test_falcon_check_connectivity_success(self, mock_client):

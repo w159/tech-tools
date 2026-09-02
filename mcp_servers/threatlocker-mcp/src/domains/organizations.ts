@@ -3,50 +3,45 @@ import type { DomainHandler, CallToolResult } from '../utils/types.js';
 import { getClient } from '../utils/client.js';
 import { logger } from '../utils/logger.js';
 import {
-  shapeList, shapeRaw,
-  extractShapeArgs, SHAPE_PROPS,
-  toolErrorFromCatch,
+  shapeList, shapeRaw, extractShapeArgs, SHAPE_PROPS,
+  toolErrorFromCatch, withSummary,
   type SummaryFn,
 } from './_helpers.js';
 
-// Compact summary: id, name, and a couple of identifying fields
-const orgSummary: SummaryFn = (item) => ({
-  id:   item.id ?? item.organizationId,
-  name: item.name ?? item.organizationName,
+const childOrgSummary: SummaryFn = (item) => ({
+  name:         item.organizationName ?? item.name ?? item.displayName,
+  computers:    item.computerCount ?? item.computersCount,
+  dateCreated:  item.dateCreated ?? item.createdDate,
 });
+
+// OrganizationGetForMoveComputers rows are {label, value} (verified live).
+const orgOptionSummary: SummaryFn = (item) => ({ name: item.label });
 
 function getTools(): Tool[] {
   return [
     {
       name: 'threatlocker_organizations_list_children',
-      description: 'List ThreatLocker child (managed) organizations; optionally filter by searchText. Returns organization IDs needed to scope the managedOrganizationId header for child-org operations. Returns compact summaries by default; pass full:true for the complete object.',
+      description: 'List child (managed) organizations by name under the configured organization. Empty for a single-organization tenant, which is normal.',
       inputSchema: {
         type: 'object' as const,
         properties: {
           ...SHAPE_PROPS,
-          searchText: { type: 'string', description: 'Free-text search applied to organization name.' },
-          pageNumber: { type: 'number', description: 'Page number for pagination (default: 1).' },
-          pageSize: { type: 'number', description: 'Page size — records per page (default: 50).' },
+          search: { type: 'string', description: 'Text matched against the organization name.' },
+          includeAllChildren: { type: 'boolean', description: 'Include grandchildren (default false).' },
+          pageNumber: { type: 'number', description: 'Page number (default 1).' },
+          pageSize: { type: 'number', description: 'Rows per page (default 50).' },
         },
       },
     },
     {
       name: 'threatlocker_organizations_get_auth_key',
-      description: 'Get the ThreatLocker organization auth key for the current org. Used when deploying new ThreatLocker agents to enroll computers.',
-      inputSchema: {
-        type: 'object' as const,
-        properties: {},
-      },
+      description: 'Get the organization Auth Key used to enroll new ThreatLocker agents. This is the agent install key, not an API token; treat it as a secret.',
+      inputSchema: { type: 'object' as const, properties: {} },
     },
     {
       name: 'threatlocker_organizations_for_move_computers',
-      description: 'Get ThreatLocker organizations available as move destinations for computers. Use before reassigning a computer to a different managed organization. Returns compact summaries by default; pass full:true for the complete object.',
-      inputSchema: {
-        type: 'object' as const,
-        properties: {
-          ...SHAPE_PROPS,
-        },
-      },
+      description: 'Organizations this API key can act on, by name (the configured organization plus any it manages). Also a quick check of which organization the key is scoped to.',
+      inputSchema: { type: 'object' as const, properties: { ...SHAPE_PROPS, search: { type: 'string', description: 'Text matched against the organization name.' } } },
     },
   ];
 }
@@ -57,45 +52,37 @@ async function handleCall(toolName: string, args: Record<string, unknown>): Prom
   switch (toolName) {
     case 'threatlocker_organizations_list_children': {
       const params = {
-        searchText: args.searchText as string | undefined,
+        searchText: args.search as string | undefined,
+        includeAllChildren: args.includeAllChildren as boolean | undefined,
         pageNumber: args.pageNumber as number | undefined,
-        pageSize: args.pageSize as number | undefined,
+        pageSize: (args.pageSize as number | undefined) ?? 50,
       };
       logger.info('API call: organizations.listChildren', params);
       try {
         const client = await getClient();
-        const result = await client.organizations.listChildren(params);
-        const items = Array.isArray(result) ? result : (result?.items ?? result?.data ?? [result]);
-        return shapeList(items, orgSummary, shapeArgs);
+        const page = await client.organizations.listChildren(params);
+        return withSummary(shapeList(page.items, childOrgSummary, shapeArgs), { childOrganizations: page.total });
       } catch (err) {
-        return toolErrorFromCatch('threatlocker_organizations_list_children', err, {
-          hint: 'Verify THREATLOCKER_API_KEY is set and the key has MSP/parent-org access.',
-        });
+        return toolErrorFromCatch(toolName, err, { hint: 'Child organizations exist only for MSP/parent tenants. Check threatlocker_organizations_for_move_computers for the organization the key is scoped to.' });
       }
     }
     case 'threatlocker_organizations_get_auth_key': {
       logger.info('API call: organizations.getAuthKey');
       try {
         const client = await getClient();
-        const authKey = await client.organizations.getAuthKey();
-        return shapeRaw(authKey);
+        return shapeRaw(await client.organizations.getAuthKey());
       } catch (err) {
-        return toolErrorFromCatch('threatlocker_organizations_get_auth_key', err, {
-          hint: 'Verify THREATLOCKER_API_KEY and THREATLOCKER_ORGANIZATION_ID are set correctly.',
-        });
+        return toolErrorFromCatch(toolName, err, { hint: 'The API User needs the Edit Organizations permission for this call.' });
       }
     }
     case 'threatlocker_organizations_for_move_computers': {
       logger.info('API call: organizations.forMoveComputers');
       try {
         const client = await getClient();
-        const organizations = await client.organizations.listForMoveComputers();
-        const items = Array.isArray(organizations) ? organizations : (organizations?.items ?? organizations?.data ?? [organizations]);
-        return shapeList(items, orgSummary, shapeArgs);
+        const orgs = await client.organizations.listForMoveComputers((args.search as string | undefined) ?? '');
+        return withSummary(shapeList(orgs, orgOptionSummary, shapeArgs), { organizations: orgs.length });
       } catch (err) {
-        return toolErrorFromCatch('threatlocker_organizations_for_move_computers', err, {
-          hint: 'Verify THREATLOCKER_API_KEY and THREATLOCKER_ORGANIZATION_ID are set correctly.',
-        });
+        return toolErrorFromCatch(toolName, err, { hint: 'Call threatlocker_status to confirm the key and instance letter.' });
       }
     }
     default:

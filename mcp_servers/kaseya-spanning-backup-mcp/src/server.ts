@@ -28,12 +28,17 @@ export function createMcpServer(): Server {
   );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
-    const all = [...getNavigationTools()];
+    // Progressive disclosure: status + navigate only until credentials resolve.
+    const navTools = getNavigationTools();
+    if (!getCredentials()) {
+      return { tools: annotate(navTools, 'Spanning') };
+    }
+    const allTools = [...navTools];
     for (const domain of DOMAINS) {
       const handler = await getDomainHandler(domain);
-      all.push(...handler.getTools());
+      allTools.push(...handler.getTools());
     }
-    return { tools: annotate(all, 'Spanning') };
+    return { tools: annotate(allTools, 'Spanning') };
   });
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {

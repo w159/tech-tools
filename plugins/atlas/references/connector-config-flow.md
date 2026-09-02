@@ -93,13 +93,18 @@ node --import "${CLAUDE_PLUGIN_ROOT}/mcp/_env/load.mjs" \
   "${CLAUDE_PLUGIN_ROOT}/mcp/<vendor>/server.mjs"
 ```
 
-Python connectors (falcon) are vendored as source rather than a bundle, so uv
-resolves their pinned lockfile and `load.py` applies the same env precedence:
+Python connectors (falcon) are vendored as source rather than a single
+`server.mjs`, so uv resolves their pinned lockfile and `load.py` applies the
+same env precedence:
 
 ```bash
 uv run --project "${CLAUDE_PLUGIN_ROOT}/mcp/falcon" \
   python "${CLAUDE_PLUGIN_ROOT}/mcp/_env/load.py" falcon_mcp.server
 ```
+
+**Layout note:** connectors live in a **flat** tree `mcp/<name>/` (plus
+`mcp/_env/`). Department folders such as `mcp/hr/` or `mcp/security/` are not
+used in current source.
 
 Env template example (Auvik):
 
@@ -120,9 +125,10 @@ Env template example (Auvik):
 For each connector:
 
 1. **Initialize** over stdio JSON-RPC (`initialize` + `notifications/initialized`).
-2. **List tools** (`tools/list`) — expect at least a `*_status` tool; some
+2. **List tools** (`tools/list`) — expect at least a `*_status` tool. Some
    connectors expand tool count only after credentials resolve (ConnectWise /
-   Blumira progressive disclosure pattern).
+   Blumira progressive disclosure). Unconfigured **Falcon** stays inert with a
+   4-tool diagnostic surface including `falcon_status`.
 3. **Call status** (`tools/call` on `*_status`) with no arguments.
 4. Interpret status honestly:
    - missing credentials → actionable `MISSING_CREDENTIALS` / NOT CONFIGURED
@@ -132,46 +138,51 @@ For each connector:
 Dashboard-side checks:
 
 - `GET /api/health` → canonical `~/.atlas/atlas.db`
-- `GET /api/connectors` or `/api/status` → 10 connectors, set/missing only
+- `GET /api/connectors` or `/api/status` → **11** connectors, set/missing only
 - `POST /api/connectors/env` rejects unknown keys
 - Settings UI contains draft guards (`settingsDirty`) and save buttons
 
 ## End-to-end results (this workspace)
 
-Test harness: stdio MCP client feeding env from
-`pluginConfigs["atlas@tech-tools"].options` + plugin `.env` (no secret logging).
-Date: 2026-08-28.
+Test harness: stdio MCP client with `CLAUDE_PLUGIN_ROOT=plugins/atlas`, env from
+plugin `.env` + CFG passthrough (no secret logging).
+Dates: 2026-08-28 (ten Node connectors) and **2026-09-02** (re-verify including Falcon).
 
-| Connector | Init | Tools listed | Creds fully resolved | Status tool | Status outcome |
-| --- | --- | --- | --- | --- | --- |
-| auvik | ok | 39 | yes | `auvik_status` | credentials present; vendor API **401** (key/region rejected or stale) |
-| blumira | ok | 2 | no | `blumira_status` | MISSING_CREDENTIALS (progressive shell) |
-| cipp | ok | 43 | no | `cipp_status` | MISSING_CREDENTIALS |
-| connectwise | ok | 2 | no (public/private keys missing) | `cw_status` | configured=false; needs keys + restart |
-| spanning | ok | 14 | no (token missing) | `spanning_status` | MISSING_CREDENTIALS |
-| knowbe4 | ok | (listed) | no (api key missing) | `knowbe4_status` | MISSING_CREDENTIALS |
-| ninjaone | ok | (listed) | no (client secret missing) | `ninjaone_status` | MISSING_CREDENTIALS |
-| paylocity | ok | (listed) | no | `paylocity_status` | NOT CONFIGURED |
-| threatlocker | ok | (listed) | no | `threatlocker_status` | NOT CONFIGURED |
-| vanta | ok | (listed) | no | `vanta_status` | NOT CONFIGURED |
+Wiring unit tests (`plugins/atlas/scripts/test_connectors_wiring.py`): **9/9 OK**.
 
-Dashboard API (same session):
+| Connector | Init | Tools listed | Status tool | Status / notes (no secret values) |
+| --- | --- | --- | --- | --- |
+| auvik | ok | 39 | `auvik_status` | reports when username/api key missing; otherwise vendor call may 401 |
+| blumira | ok | 2 | `blumira_status` | progressive shell; MISSING_CREDENTIALS without jwt or oauth pair |
+| cipp | ok | 43 | `cipp_status` | MISSING_CREDENTIALS without base URL + token or oauth trio |
+| connectwise | ok | 2 | `cw_status` | gated shell until company/public/private/client id set |
+| spanning | ok | 14 | `spanning_status` | MISSING_CREDENTIALS without admin email + token |
+| falcon | ok | **4** inert / **144+** when authenticated | `falcon_status` | inert without creds (`MISSING_CREDENTIALS`); full catalog only after auth |
+| knowbe4 | ok | 30 | `knowbe4_status` | status tool present |
+| ninjaone | ok | 45 | `ninjaone_status` | status tool present |
+| paylocity | ok | 16 | `paylocity_status` | NOT CONFIGURED without client id/secret |
+| threatlocker | ok | 19 | `threatlocker_status` | status tool present |
+| vanta | ok | 28 | `vanta_status` | status tool present |
 
-- health ok, DB pinned to `~/.atlas/atlas.db`
-- 10 connectors exposed
-- unknown key POST rejected
-- Auvik UI configured_hint true (`username`/`region` via pluginConfigs, `api_key` via env)
-- unit tests `test_atlas_dashboard.py` green (5/5)
+Dashboard API (2026-09-02):
+
+- `GET /api/connectors` → **11** connectors (includes falcon)
+- health ok, DB `~/.atlas/atlas.db`
+- After `python3 plugins/atlas/scripts/atlas_dashboard.py ensure`, health `script`
+  must be this repo's `plugins/atlas/scripts/atlas_dashboard.py` (not a cache path).
 
 ### Interpretation
 
-- **Transport + packaging are healthy** for all ten connectors (init + tool list).
-- **Credential completeness is partial** in this operator profile: only Auvik has
-  all required keys present locally; Auvik still fails vendor auth (401), which
-  is a credential validity issue, not an MCP wiring issue.
-- **Progressive disclosure works**: Blumira/ConnectWise stay at a tiny tool
-  surface without secrets; others may still list broader catalogs while status
-  reports missing creds (vendor-specific).
+- **Transport + packaging are healthy** for all **eleven** connectors declared in
+  `.mcp.json` (init + tool list from repo source).
+- **Status standard met for all eleven:** each exposes `*_status` or `cw_status`.
+  Falcon boots **inert** without credentials (4 diagnostic tools including
+  `falcon_status` → `MISSING_CREDENTIALS`) and expands only after auth succeeds.
+- **Progressive disclosure works** for Blumira/ConnectWise; other Node connectors
+  list broader catalogs while status reports missing creds.
+- **Dashboard:** run `python3 plugins/atlas/scripts/atlas_dashboard.py ensure` from
+  this repo so health `script` points at source, not an install/cache copy.
+  Verified 2026-09-02: 11 connectors; source script path.
 
 ## Troubleshooting
 

@@ -71,6 +71,25 @@ export class CippMcpServer {
     return server;
   }
 
+
+  /** True when env/gateway credentials are enough to attempt CIPP API calls. */
+  private hasUsableCredentials(configOverride?: McpServerConfig): boolean {
+    const c = (configOverride ?? this.config)?.cipp as {
+      baseUrl?: string;
+      apiKey?: string;
+      tenantId?: string;
+      clientId?: string;
+      clientSecret?: string;
+    } | undefined;
+    const base = (c?.baseUrl || process.env.CIPP_BASE_URL || '').trim();
+    if (!base) return false;
+    if ((c?.apiKey || process.env.CIPP_API_KEY || '').trim()) return true;
+    const tenant = (c?.tenantId || process.env.CIPP_TENANT_ID || '').trim();
+    const clientId = (c?.clientId || process.env.CIPP_CLIENT_ID || '').trim();
+    const secret = (c?.clientSecret || process.env.CIPP_CLIENT_SECRET || '').trim();
+    return Boolean(tenant && clientId && secret);
+  }
+
   /**
    * Returns instructions that help MCP clients understand how to use this server.
    */
@@ -104,7 +123,12 @@ Tool categories:
   private setupHandlers(server: Server): void {
     server.setRequestHandler(ListToolsRequestSchema, async () => {
       this.logger.debug('Handling list tools request');
-      return { tools: annotate(this.toolHandler.getToolDefinitions(), 'CIPP') };
+      // Progressive disclosure: cipp_status only until credentials resolve.
+      const tools = this.toolHandler.getToolDefinitions();
+      if (!this.hasUsableCredentials()) {
+        return { tools: annotate(tools.filter((tool) => tool.name === 'cipp_status'), 'CIPP') };
+      }
+      return { tools: annotate(tools, 'CIPP') };
     });
 
     server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -179,6 +203,7 @@ Tool categories:
 
         let toolHandler = this.toolHandler;
         let cippService = this.cippService;
+        let requestConfig: McpServerConfig | undefined;
 
         if (isGatewayMode) {
           const credentials = parseCredentialsFromHeaders(
@@ -207,7 +232,7 @@ Tool categories:
             return;
           }
 
-          const requestConfig: McpServerConfig = {
+          requestConfig = {
             name: this.config.name,
             version: this.config.version,
             cipp: {
@@ -236,9 +261,19 @@ Tool categories:
         server.onerror = (error) => this.logger.error('MCP request server error:', error);
 
         // Wire up handlers using the (possibly per-request) toolHandler
-        server.setRequestHandler(ListToolsRequestSchema, async () => ({
-          tools: annotate(toolHandler.getToolDefinitions(), 'CIPP'),
-        }));
+        server.setRequestHandler(ListToolsRequestSchema, async () => {
+          const tools = toolHandler.getToolDefinitions();
+          // Prefer per-request config when gateway mode injected credentials.
+          const configured = requestConfig
+            ? this.hasUsableCredentials(requestConfig)
+            : this.hasUsableCredentials();
+          if (!configured) {
+            return {
+              tools: annotate(tools.filter((tool) => tool.name === 'cipp_status'), 'CIPP'),
+            };
+          }
+          return { tools: annotate(tools, 'CIPP') };
+        });
 
         server.setRequestHandler(CallToolRequestSchema, async (request) => {
           this.logger.debug(`Handling tool call: ${request.params.name}`);

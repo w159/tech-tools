@@ -1,5 +1,61 @@
 # Changelog
 
+## [5.22.0] - 2026-09-02
+
+### Fixed
+- Node MCP atlas bundles now inject `createRequire` so ESM self-contained builds no longer crash on dynamic `require` (auvik/cipp init failures).
+- Progressive credential-gated tool disclosure verified unconfigured for all 11 connectors (status/navigate shell only).
+- CIPP HTTP ListTools uses per-request gateway credentials when present; stdio remains env-gated to `cipp_status`.
+- Rebuilt knowbe4/connectwise/auvik/cipp and remaining node connector bundles into `plugins/atlas/mcp/*/server.mjs`.
+
+## Unreleased
+### Fixed
+- **Falcon connector inert-by-default + `falcon_status`.** Missing or invalid
+  CrowdStrike credentials no longer crash the MCP process. The server boots a
+  4-tool diagnostic surface (`falcon_status`, connectivity, list modules/tools)
+  and expands to the full catalog only after authentication succeeds. Setup
+  docs and the connector E2E matrix now match the flat `mcp/<name>/` layout and
+  all eleven connectors.
+
+
+## 5.21.0
+### Changed
+- **ThreatLocker tools now work by name, not GUID** (threatlocker-mcp 1.4.0,
+  node-threatlocker 1.1.0). Devices are addressed by hostname, approval
+  requests by hostname plus a fragment of the file path, audit events by
+  hostname, user, action (Permit/Deny), actionType, or path. Default output
+  carries names only (hostname, user, OS, group, organization, mode, policy,
+  application, file); GUIDs and hashes sit behind `full:true`. Every list
+  starts with a one-line summary (`totalDevices`, `pendingApprovals`, time
+  window) so "how many" is answered at the top. Enums are translated
+  (approval status names, OS names). Ambiguous or unknown names fail closed
+  with the candidate names instead of guessing.
+- Every request body now matches the PortalAPI swagger DTOs. The old shared
+  `buildSearchBody` sent only pagination fields, so approvals never sent
+  `statusId` (500), audit never sent its dates (417) or the required
+  `usenewsearch` header (500), and check-ins never sent `computerId`. Groups
+  and organizations read the `{label, value}` dropdown shape the API returns.
+- New: `threatlocker_computers_maintenance_modes`. Removed the elicitation
+  prompts on list tools; lists default to page one with sensible filters
+  (approvals: Pending; audit: last 24 hours).
+- Tool names are unchanged; argument names changed (`search`, `group`, `mode`,
+  `hostname`, `pathContains`, `status`, `hours`, `includeChildOrganizations`).
+
+## 5.20.2
+### Fixed
+- ThreatLocker tokens are per instance (the letter in the portal URL), and every
+  other instance answers the same 440 `TOKEN_REVOKED`. The connector's default
+  base URL assumes instance `g`. `threatlocker_status` now probes instances
+  `b` through `h` on a 440 and names the one that accepts the key with the exact
+  `threatlocker_base_url` to set; the option description and `.env.example` say
+  the `g` default is not universal. (threatlocker-mcp 1.3.2)
+- Every ThreatLocker list tool returned `[]` once auth worked: the vendored
+  `node-threatlocker` (now 1.0.4) expected an `items`/`data` envelope, but the
+  PortalAPI `*GetByParameters` endpoints return a bare array with `totalRows` on
+  each row. Arrays are unwrapped now; `approvals_pending_count` reads the bare
+  number the API returns; `computers_list` summaries use the real field names
+  (`computerId`, `hostname`, `group`, `action`, `totalRows`).
+
 ## 5.20.1
 ### Fixed
 - **ThreatLocker connector** (`mcp/threatlocker/server.mjs`, rebuilt from

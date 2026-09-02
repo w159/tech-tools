@@ -34,6 +34,14 @@ the authors: we change the plugins' code and ship new versions.
 The repository also holds the plugins' dependencies (see Section 4) and their
 developer documentation (this `docs/` tree).
 
+### `docs/` is SSOT — not disposable
+
+`docs/` is the **project single source of truth**. Agents must **retain and
+update** it. Cleanup, refactor, or "junk removal" tasks must **never** delete
+or hollow out `docs/` content, and `docs/` must remain trackable in git (see
+`.gitignore` allowlist `!docs/**`). Nested `.git` metadata under docs stays
+excluded; the documentation itself does not.
+
 ## 2. Why the distinction matters (the confusion vector)
 
 atlas and armada are unusual to develop because **the harness you are working in
@@ -129,12 +137,17 @@ definition and the mandatory propagation checklist). Follow it.
 
 ## 6. Runtime artifacts - not the product
 
-These directories are state written by a *running* atlas/armada in this session or
-prior ones. They are not the plugin source and are not edit targets unless the user
-explicitly asks about atlas's own runtime behavior:
+Dogfooding atlas **in this marketplace checkout** is allowed and common: the
+plugin may be loaded while you improve it. Runtime state from that dogfood is
+still not the product source.
 
-- `.atlas/` (`departments/`, `evidence/`, `nudge/`, `self-improvement/`)
-- `.fallow/`, `.supermemory/`, `.taskmaster/`
+These directories are state written by a *running* atlas/armada. They are not the
+plugin source and are not edit targets unless the user explicitly asks about
+atlas's own runtime behavior:
+
+- Repo-root `.atlas/` only (`departments/`, `evidence/`, `nudge/`, `self-improvement/`, `.run/`)
+- `.fallow/`, `.supermemory/`, `.taskmaster/`, `.scratch/`
+- **Forbidden shape:** `plugins/**/.atlas/` (do not create; remove if found)
 
 ### 6.1 Local Claude plugin install/cache - never edit
 

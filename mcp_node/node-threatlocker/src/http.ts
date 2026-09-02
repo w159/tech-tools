@@ -21,6 +21,8 @@ export interface RequestOptions {
   method?: string;
   params?: Record<string, unknown>;
   body?: unknown;
+  /** Extra per-request headers (e.g. `usenewsearch: true` for ActionLog V2). */
+  headers?: Record<string, string>;
 }
 
 export class HttpClient {
@@ -39,7 +41,7 @@ export class HttpClient {
   }
 
   async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-    const { method = 'GET', params, body } = options;
+    const { method = 'GET', params, body, headers: extraHeaders } = options;
 
     let url = `${this.baseUrl}${path}`;
     if (params) {
@@ -83,6 +85,7 @@ export class HttpClient {
       }
 
       if (body) headers['Content-Type'] = 'application/json';
+      Object.assign(headers, extraHeaders);
 
       let response: Response;
       try {

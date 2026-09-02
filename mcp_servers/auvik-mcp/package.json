@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
     "clean": "rm -rf dist",
-    "pack:mcpb": "node scripts/pack-mcpb.js"
+    "pack:mcpb": "node scripts/pack-mcpb.js",
+    "bundle:atlas": "tsup --config tsup.bundle.config.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.0",

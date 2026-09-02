@@ -1,34 +1,41 @@
 import type { HttpClient } from '../http.js';
 import type { ApprovalRequest, ApprovalRequestListParams, PermitApplication, PaginatedResponse } from '../types/index.js';
-import { buildSearchBody } from '../types/index.js';
 import { unwrapPaginatedResponse } from '../pagination.js';
 
 export class ApprovalRequestsResource {
   constructor(private readonly http: HttpClient) {}
 
   async list(params: ApprovalRequestListParams = {}): Promise<PaginatedResponse<ApprovalRequest>> {
-    const body = buildSearchBody(params);
-    const response = await this.http.request<any>('/ApprovalRequest/ApprovalRequestGetByParameters', {
-      method: 'POST',
-      body,
-    });
+    // swagger ApprovalRequestParametersDto; statusId is required (Pending = 1).
+    const body = {
+      statusId: params.statusId ?? 1,
+      searchText: params.searchText ?? '',
+      showChildOrganizations: params.showChildOrganizations ?? false,
+      orderBy: params.orderBy ?? 'dateTime',
+      isAscending: params.isAscending ?? false,
+      pageNumber: params.pageNumber ?? 1,
+      pageSize: params.pageSize ?? 25,
+    };
+    const response = await this.http.request<ApprovalRequest[]>('/ApprovalRequest/ApprovalRequestGetByParameters', { method: 'POST', body });
     return unwrapPaginatedResponse<ApprovalRequest>(response, body.pageNumber, body.pageSize);
   }
 
-  async get(id: number): Promise<ApprovalRequest> {
-    return this.http.request<ApprovalRequest>('/ApprovalRequest/ApprovalRequestGetById', {
-      params: { approvalRequestId: id },
+  async get(approvalRequestId: string): Promise<ApprovalRequest> {
+    return this.http.request<ApprovalRequest>('/ApprovalRequest/ApprovalRequestGetById', { params: { approvalRequestId } });
+  }
+
+  async getPendingCount(includeChildOrganizations = false): Promise<number> {
+    // Live API returns a bare number (verified 2026-09-01); keep the {count}
+    // envelope as a fallback.
+    const response = await this.http.request<number | { count: number }>('/ApprovalRequest/ApprovalRequestGetCount', {
+      params: { includeChildOrganizations },
     });
+    return typeof response === 'number' ? response : response.count;
   }
 
-  async getPendingCount(): Promise<number> {
-    const response = await this.http.request<{ count: number }>('/ApprovalRequest/ApprovalRequestGetCount');
-    return response.count;
-  }
-
-  async getPermitApplication(id: number): Promise<PermitApplication> {
+  async getPermitApplication(approvalRequestId: string): Promise<PermitApplication> {
     return this.http.request<PermitApplication>('/ApprovalRequest/ApprovalRequestGetPermitApplicationById', {
-      params: { approvalRequestId: id },
+      params: { approvalRequestId },
     });
   }
 
