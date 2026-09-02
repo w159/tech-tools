@@ -7,11 +7,11 @@ export const DOMAINS: DomainName[] = ['computers', 'computer_groups', 'approval_
  * Domain metadata for navigation help
  */
 const domainDescriptions: Record<DomainName, string> = {
-  computers: "Computer management - list/get computers, get check-ins, and device information",
-  computer_groups: "Computer group management - list computer groups and dropdown options",
-  approval_requests: "Approval request management - list/get approval requests, pending count, permit applications",
-  audit_log: "Audit log management - search audit logs, get audit entries, file history",
-  organizations: "Organization management - list child organizations, get auth key, move computer options",
+  computers: "Devices by hostname - list (with total count), detail, check-in history, maintenance modes",
+  computer_groups: "Computer groups by name with operating system",
+  approval_requests: "Approval requests by device/user/file - list by status, detail, pending count, permit application, approve",
+  audit_log: "Unified Audit by device/user/action - search a time window, event detail, per-file history",
+  organizations: "Organizations by name - children, organizations the key can act on, agent enrollment auth key",
 };
 
 export function getNavigationTools(): Tool[] {

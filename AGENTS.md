@@ -23,25 +23,41 @@ Do the opposite: open the relevant files under `plugins/atlas/` or `plugins/arma
 
 ### Runtime artifacts are not the product
 
-atlas and armada happen to be *active in the harness* while you work here (this session's output style, the loaded skills, the subagent registry). That is incidental. The following are runtime state written by a running atlas, **not** the product source, and are not your edit target unless the user explicitly asks about atlas's own runtime files:
+atlas and armada may be *active in the harness* while you work here (output style, loaded skills, subagent registry). Dogfooding the product in this checkout is expected. That still does **not** make install-cache paths or nested runtime trees the product source.
 
-- `.atlas/` (departments, evidence, nudge, self-improvement), `.fallow/`, `.supermemory/`, `.taskmaster/`
+Runtime / non-product paths (not edit targets for feature work unless the user explicitly asks):
+
+- Repo-root `.atlas/` only (departments, evidence, nudge, self-improvement, `.run/` scratch)
+- `.fallow/`, `.supermemory/`, `.taskmaster/`, `.scratch/`, `.agents/`
+- **Never** create or use `plugins/**/.atlas/` — that is install-shaped contamination of product source
+
+### `docs/` is project SSOT (hard rule)
+
+- `docs/` is the single source of truth for this marketplace and its plugins.
+- **Retain and update** documentation under `docs/`. Do not delete, hollow out, or gitignore docs content as "junk," "unused," or "cleanup."
+- When behavior changes, prefer updating the relevant `docs/` pages (and plugin references under `plugins/*/references/` when those ship with the plugin).
 
 ### NEVER edit the local Claude install/cache (hard rule)
 
 This repository is **marketplace source code**, not a place to patch a live install.
 
-**Do not create, modify, delete, rsync, or "deploy into" any of:**
+**Do not create, modify, delete, rsync, cp, or "deploy into" any of:**
 
 - `~/.claude/plugins/cache/**`
 - `~/.claude/plugins/marketplaces/**` (except when the user explicitly asks you to change a separate checkout that is *not* this repo)
 - `~/.claude/plugins/installed_plugins.json` or other Claude install metadata under `~/.claude/plugins/`
 
+Also enforced for Claude Code via:
+
+- `CLAUDE.md` (session hard gate)
+- `.claude/rules/marketplace-source-only.md`
+- `.claude/settings.json` permission denials on cache/marketplace paths
+
 Consumer installs are refreshed by **shipping this repo** (commit/push + marketplace update / plugin reinstall). Hot-copying `plugins/atlas/` into the cache is a process defect.
 
 Verify product behavior from **this tree** (`plugins/atlas/...`, tests under the repo). If the user needs a running install to pick up changes, tell them to update/reinstall from the marketplace source — do not mutate their cache yourself.
 
-If a request seems to ask you to operate atlas here rather than change its code, stop and confirm scope before acting. The default interpretation is always: change the plugin source.
+If a request seems to ask you to operate atlas here rather than change its code, stop and confirm scope before acting. The default interpretation is always: change the plugin source under `plugins/`.
 
 ### What "dependencies" covers
 

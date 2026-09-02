@@ -21,7 +21,12 @@ export function createMcpServer(): Server {
   );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
-    const allTools = [...getNavigationTools()];
+    // Progressive disclosure: status + navigate only until credentials resolve.
+    const navTools = getNavigationTools();
+    if (!getCredentials()) {
+      return { tools: annotate(navTools, 'Vanta') };
+    }
+    const allTools = [...navTools];
     for (const domain of DOMAINS) {
       const handler = await getDomainHandler(domain);
       allTools.push(...handler.getTools());

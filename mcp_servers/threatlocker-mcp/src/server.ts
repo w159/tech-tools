@@ -4,10 +4,30 @@ import { getNavigationTools, DOMAINS } from './domains/navigation.js';
 import { getDomainHandler } from './domains/index.js';
 import { getCredentials, getClient } from './utils/client.js';
 import { logger } from './utils/logger.js';
-import { setServerRef } from './utils/server-ref.js';
 import type { DomainName } from './utils/types.js';
 import { annotate } from './annotate-tool.js';
 import { describeBaseUrl, toolErrorFromCatch } from './domains/_helpers.js';
+
+// ThreatLocker instance shards that resolve today. A token is only known to the
+// instance that issued it; every other instance answers 440 TOKEN_REVOKED, which
+// is indistinguishable from a dead token. So on 440 we ask each shard directly.
+const THREATLOCKER_INSTANCES = ['b', 'c', 'd', 'e', 'f', 'g', 'h'];
+
+async function findAcceptingInstance(apiKey: string, organizationId?: string): Promise<string | null> {
+  for (const inst of THREATLOCKER_INSTANCES) {
+    try {
+      const headers: Record<string, string> = { Authorization: apiKey };
+      if (organizationId) headers.managedOrganizationId = organizationId;
+      const res = await fetch(`https://portalapi.${inst}.threatlocker.com/portalapi/ApprovalRequest/ApprovalRequestGetCount`, {
+        headers, signal: AbortSignal.timeout(8000),
+      });
+      if (res.ok) return inst;
+    } catch {
+      // unreachable shard: keep looking
+    }
+  }
+  return null;
+}
 
 /** One authenticated GET (pending approval count). Never throws. */
 async function liveAuthCheck(): Promise<string> {
@@ -18,7 +38,13 @@ async function liveAuthCheck(): Promise<string> {
   } catch (err) {
     const e = err as { statusCode?: number; message?: string; response?: unknown };
     if (e.statusCode === 440) {
-      return 'FAILED HTTP 440 TOKEN_REVOKED: ThreatLocker does not recognize this API key (it answers 440 for any unknown token). Mint a new API User token; tools will fail until then.';
+      const creds = getCredentials();
+      const inst = creds ? await findAcceptingInstance(creds.apiKey, creds.organizationId) : null;
+      if (inst) {
+        return `FAILED HTTP 440 TOKEN_REVOKED at ${creds!.baseUrl}, but instance "${inst}" accepts this key. ` +
+          `Set THREATLOCKER_BASE_URL=https://portalapi.${inst}.threatlocker.com/portalapi (plugin option threatlocker_base_url) and restart.`;
+      }
+      return 'FAILED HTTP 440 TOKEN_REVOKED: no ThreatLocker instance (b-h) recognizes this API key (ThreatLocker answers 440 for any unknown token). Mint a new API User token; tools will fail until then.';
     }
     const body = e.response !== undefined ? ` ${JSON.stringify(e.response).slice(0, 200)}` : '';
     return `FAILED${e.statusCode ? ` HTTP ${e.statusCode}` : ''}: ${e.message ?? String(err)}${body}`;
@@ -27,7 +53,7 @@ async function liveAuthCheck(): Promise<string> {
 
 export function createMcpServer(): Server {
   const server = new Server(
-    { name: 'threatlocker-mcp', version: '1.3.1' },
+    { name: 'threatlocker-mcp', version: '1.4.0' },
     {
       capabilities: {
         tools: {},
@@ -36,12 +62,14 @@ export function createMcpServer(): Server {
     }
   );
 
-  // Set server reference for elicitation
-  setServerRef(server);
-
   // Return ALL tools upfront — navigation is a stateless help/discovery tool
   server.setRequestHandler(ListToolsRequestSchema, async () => {
-    const allTools = [...getNavigationTools()];
+    // Progressive disclosure: status + navigate only until credentials resolve.
+    const navTools = getNavigationTools();
+    if (!getCredentials()) {
+      return { tools: annotate(navTools, 'ThreatLocker') };
+    }
+    const allTools = [...navTools];
     for (const domain of DOMAINS) {
       const handler = await getDomainHandler(domain);
       allTools.push(...handler.getTools());

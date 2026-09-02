@@ -1,0 +1,13 @@
+{
+  // Pyright path config for the atlas plugin.
+  // plugins/atlas/hooks/ and plugins/atlas/scripts/ import each other by bare
+  // module name via sys.path.insert at runtime; this mirrors that for static
+  // analysis so imports resolve without masking reportMissingImports. The
+  // atlas-setup skill ships scaffold_docs.py used by scripts/test_scaffold_docs.py.
+  // Paths are relative to this config file (repo root).
+  "extraPaths": [
+    "plugins/atlas/hooks",
+    "plugins/atlas/scripts",
+    "plugins/atlas/skills/atlas-setup/scripts"
+  ]
+}

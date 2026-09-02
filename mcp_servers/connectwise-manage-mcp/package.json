@@ -20,7 +20,8 @@
     "test": "vitest run --passWithNoTests --dir src",
     "test:watch": "vitest --passWithNoTests --dir src",
     "pack:mcpb": "node scripts/pack-mcpb.js",
-    "validate:mcpb": "mcpb validate manifest.json"
+    "validate:mcpb": "mcpb validate manifest.json",
+    "bundle:atlas": "tsup --config tsup.bundle.config.ts"
   },
   "repository": {
     "type": "git",
@@ -43,14 +44,15 @@
   "homepage": "https://github.com/w159/tech-tools/tree/main/mcp_servers/connectwise-manage-mcp",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.25.3",
-    "jose": "^6.2.2"
+    "jose": "^6.2.2",
+    "tsup": "^8.5.1"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
     "@typescript-eslint/eslint-plugin": "^6.19.0",
     "@typescript-eslint/parser": "^6.19.0",
     "eslint": "^8.56.0",
-    "typescript": "^5.3.3",
+    "typescript": "^5.9.3",
     "vitest": "^4.1.10"
   },
   "engines": {

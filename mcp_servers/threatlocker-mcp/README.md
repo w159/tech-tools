@@ -7,8 +7,8 @@ A Model Context Protocol (MCP) server that provides AI assistants with access to
 - **Stateless Architecture**: No session state required, fresh connections per request
 - **Decision-Tree Navigation**: Navigate domains with `threatlocker_navigate`
 - **Gateway Mode**: Multi-tenant support via HTTP headers
-- **Elicitation Support**: Interactive prompts for missing parameters
-- **Comprehensive Error Handling**: Detailed error messages and logging
+- **Names, not GUIDs**: devices by hostname, approval requests by hostname plus file path, audit by hostname / user / action; IDs only behind `full:true`
+- **Comprehensive Error Handling**: Detailed error messages and logging; unknown or ambiguous names fail closed with the candidate names
 
 ## Tools
 
@@ -16,30 +16,42 @@ A Model Context Protocol (MCP) server that provides AI assistants with access to
 - `threatlocker_navigate` - Navigate to a domain to see available tools
 - `threatlocker_status` - Check API connection status and available domains
 
-### Computers
-- `threatlocker_computers_list` - List computers with filters (search, group, pagination)
-- `threatlocker_computers_get` - Get detailed computer information
-- `threatlocker_computers_get_checkins` - Get computer checkin history
+Every tool takes and returns names. GUIDs and hashes appear only with `full:true`.
+List results start with a one-line summary (`totalDevices`, `pendingApprovals`,
+the audit window).
+
+### Computers (by hostname)
+- `threatlocker_computers_list` - devices with `totalDevices`; filters `search`, `group`, `mode`, `includeChildOrganizations`, `orderBy`
+- `threatlocker_computers_get` - one device by `hostname`: OS/version, make/model, serial, group, mode, last check-in, deny counts, recent users
+- `threatlocker_computers_get_checkins` - check-in history by `hostname` (heartbeats hidden unless `includeHeartbeats`)
+- `threatlocker_computers_maintenance_modes` - active/scheduled maintenance modes by `hostname`
 
 ### Computer Groups
-- `threatlocker_computer_groups_list` - List computer groups with filters
-- `threatlocker_computer_groups_dropdown` - Get computer groups for dropdown selection
+- `threatlocker_computer_groups_list` / `threatlocker_computer_groups_dropdown` - group names with operating system; optional `operatingSystem` (Windows, macOS, Linux)
 
-### Approval Requests
-- `threatlocker_approvals_list` - List approval requests with status filters
-- `threatlocker_approvals_get` - Get detailed approval request information
-- `threatlocker_approvals_pending_count` - Get count of pending approvals
-- `threatlocker_approvals_get_permit_application` - Get permit application details
+### Approval Requests (by hostname plus file path fragment)
+- `threatlocker_approvals_list` - `status` (Pending default, Approved, Rejected, Not Learned, Added to Application, Escalated, Self-Approved), `search`, `includeChildOrganizations`
+- `threatlocker_approvals_get` - one request selected by `hostname` + `pathContains` (or `approvalRequestId`)
+- `threatlocker_approvals_pending_count` - pending count, `includeChildOrganizations`
+- `threatlocker_approvals_get_permit_application` - what approving would permit, same selector
+- `threatlocker_approvals_approve` - DESTRUCTIVE; same selector, must match exactly one pending request; pass the unmodified `json` from the permit-application call
 
-### Audit Log
-- `threatlocker_audit_search` - Search audit log entries with filters
-- `threatlocker_audit_get` - Get detailed audit log entry
-- `threatlocker_audit_file_history` - Get audit history for specific file
+### Audit Log (Unified Audit)
+- `threatlocker_audit_search` - `hostname`, `username`, `action` (Permit/Deny), `actionType`, exact `path` / `application` / `policy` (server-side), `contains` (client-side substring), `hours` (default 24) or `startDate`/`endDate`
+- `threatlocker_audit_get` - one event by `auditEntryId` (from `full:true` search output)
+- `threatlocker_audit_file_history` - every event for `hostname` + `fullPath`
 
 ### Organizations
-- `threatlocker_organizations_list_children` - List child organizations
-- `threatlocker_organizations_get_auth_key` - Get organization auth key
-- `threatlocker_organizations_for_move_computers` - Get organizations for computer moves
+- `threatlocker_organizations_list_children` - child organizations by name (empty for a single-org tenant)
+- `threatlocker_organizations_get_auth_key` - agent enrollment Auth Key (a secret; not an API token)
+- `threatlocker_organizations_for_move_computers` - organizations the key can act on, by name
+
+### Instance letter
+`THREATLOCKER_BASE_URL` must point at your instance:
+`https://portalapi.<letter>.threatlocker.com/portalapi`, where the letter is in
+your portal URL (Help menu). The `g` default is not universal; a token from
+another instance gets `440 TOKEN_REVOKED`. `threatlocker_status` probes the
+instances and names the one that accepts the key.
 
 ## Configuration
 
@@ -124,8 +136,7 @@ src/
 │   ├── client.ts      # ThreatLocker API client
 │   ├── logger.ts      # Structured logging
 │   ├── types.ts       # TypeScript types
-│   ├── server-ref.ts  # Server reference for elicitation
-│   └── elicitation.ts # Interactive prompts
+│   └── resolve.ts     # hostname / approval-request name resolution
 ├── server.ts          # MCP server creation
 ├── index.ts           # Stdio transport entry
 └── http.ts            # HTTP transport entry
@@ -136,7 +147,7 @@ src/
 - **Lazy Loading**: Domain handlers are imported on-demand
 - **Fresh Connections**: New server instance per HTTP request for stateless operation
 - **Credential Invalidation**: Client is reset when credentials change
-- **Elicitation Framework**: Interactive prompts for missing parameters
+- **Name Resolution**: every ID-only PortalAPI endpoint is reached through `resolve.ts`, which fails closed on zero or several matches
 
 ## License
 

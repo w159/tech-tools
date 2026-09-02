@@ -144,24 +144,58 @@ class FalconMCPServer:
         configure_logging(debug=self.debug)
         logger.info("Initializing Falcon MCP Server")
 
-        # Initialize the Falcon client
-        self.falcon_client = FalconClient(
-            base_url=self.base_url,
-            debug=self.debug,
-            user_agent_comment=self.user_agent_comment,
-            client_id=client_id,
-            client_secret=client_secret,
-            member_cid=member_cid,
-            proxy=proxy,
+        # Atlas connector contract: inert-by-default. Missing credentials or a
+        # failed auth attempt must still yield a running MCP server that exposes
+        # falcon_status (and a tiny diagnostic surface), not a process crash.
+        self.falcon_client: FalconClient | None = None
+        self.modules: dict[str, Any] = {}
+        self._dynamic_mode: DynamicMode | None = None
+        self.mode: Literal["full", "inert"] = "full"
+        self.auth_error: str | None = None
+        self.credentials_present = self._credentials_present(client_id, client_secret)
+        self.member_cid = member_cid or os.environ.get("FALCON_MEMBER_CID") or None
+        self.resolved_base_url = (
+            base_url
+            or os.environ.get("FALCON_BASE_URL")
+            or "https://api.crowdstrike.com"
         )
 
-        # Authenticate with the Falcon API
-        if not self.falcon_client.authenticate():
-            msg = self.falcon_client.auth_failure_message()
-            logger.error(msg)
-            raise RuntimeError(msg)
+        if not self.credentials_present:
+            self.mode = "inert"
+            self.auth_error = (
+                "MISSING_CREDENTIALS: Set falcon_client_id and falcon_client_secret "
+                "(FALCON_CLIENT_ID / FALCON_CLIENT_SECRET) via atlas dashboard, "
+                "/plugin config, or the plugin .env, then reload Claude Code."
+            )
+            logger.warning("%s", self.auth_error)
+            self._bootstrap_inert_server()
+            return
 
-        # Initialize the MCP server
+        try:
+            self.falcon_client = FalconClient(
+                base_url=self.base_url,
+                debug=self.debug,
+                user_agent_comment=self.user_agent_comment,
+                client_id=client_id,
+                client_secret=client_secret,
+                member_cid=member_cid,
+                proxy=proxy,
+            )
+        except ValueError as err:
+            self.mode = "inert"
+            self.auth_error = f"MISSING_CREDENTIALS: {err}"
+            logger.warning("%s", self.auth_error)
+            self._bootstrap_inert_server()
+            return
+
+        if not self.falcon_client.authenticate():
+            self.mode = "inert"
+            self.auth_error = self.falcon_client.auth_failure_message()
+            logger.error("%s", self.auth_error)
+            self._bootstrap_inert_server()
+            return
+
+        # Authenticated path: full module catalog.
         self.server = FastMCP(
             name="Falcon MCP Server",
             instructions=self._instructions(),
@@ -175,11 +209,6 @@ class FalconMCPServer:
         # Set the server version in MCP protocol metadata (returned in initialize handshake)
         self.server._mcp_server.version = get_version()
 
-        # Initialize and register modules
-        self.modules = {}
-        # Set before _register_tools so list_enabled_tools can tell the two catalog
-        # sources apart.
-        self._dynamic_mode: DynamicMode | None = None
         available_modules = registry.get_available_modules()
         for module_name in self.loaded_modules:
             if module_name in available_modules:
@@ -220,6 +249,120 @@ class FalconMCPServer:
                 withheld,
                 "tool" if withheld == 1 else "tools",
             )
+
+    @staticmethod
+    def _credentials_present(
+        client_id: str | None,
+        client_secret: str | None,
+    ) -> bool:
+        """True when both Falcon API client id and secret resolve from args or env."""
+        resolved_id = (client_id or os.environ.get("FALCON_CLIENT_ID") or "").strip()
+        resolved_secret = (
+            client_secret or os.environ.get("FALCON_CLIENT_SECRET") or ""
+        ).strip()
+        return bool(resolved_id and resolved_secret)
+
+    def _bootstrap_inert_server(self) -> None:
+        """Start MCP with status/diagnostics only (no vendor domain tools)."""
+        self.server = FastMCP(
+            name="Falcon MCP Server",
+            instructions=(
+                f"{BASE_INSTRUCTIONS}\n\n"
+                "This server is running in inert mode: Falcon credentials are missing "
+                "or authentication failed. Call falcon_status for details, configure "
+                "credentials on the atlas plugin, then reload. Domain tools are not "
+                "registered until authentication succeeds."
+            ),
+            debug=self.debug,
+            log_level="DEBUG" if self.debug else "INFO",
+            stateless_http=self.stateless_http,
+            host=self.host,
+            port=self.port,
+        )
+        self.server._mcp_server.version = get_version()
+        self.modules = {}
+        self._dynamic_mode = None
+        # Empty resolution so tool-policy log paths stay safe if touched later.
+        self._resolution = Resolution(
+            keep=frozenset(),
+            removed=frozenset(),
+            withheld_by_rule=frozenset(),
+            reasons={},
+        )
+        tool_count = self._register_inert_tools()
+        logger.info(
+            "Falcon MCP v%s — inert mode (%d diagnostic tools). %s",
+            get_version(),
+            tool_count,
+            self.auth_error or "not authenticated",
+        )
+
+    def _register_inert_tools(self) -> int:
+        """Register the atlas-required status surface without domain modules."""
+        self.server.add_tool(
+            offload_to_thread(self.falcon_status),
+            name="falcon_status",
+            annotations=READ_ONLY_ANNOTATIONS,
+            structured_output=False,
+        )
+        self.server.add_tool(
+            offload_to_thread(self.falcon_check_connectivity),
+            name="falcon_check_connectivity",
+            annotations=READ_ONLY_ANNOTATIONS,
+            structured_output=False,
+        )
+        self.server.add_tool(
+            offload_to_thread(self.list_enabled_modules),
+            name="falcon_list_enabled_modules",
+            annotations=READ_ONLY_ANNOTATIONS,
+            structured_output=False,
+        )
+        self.server.add_tool(
+            offload_to_thread(self.list_enabled_tools),
+            name="falcon_list_enabled_tools",
+            annotations=READ_ONLY_ANNOTATIONS,
+            structured_output=False,
+        )
+        return len(self.server._tool_manager._tools)
+
+    def falcon_status(self) -> dict[str, Any]:
+        """Report Falcon connector configuration and authentication state.
+
+        Prefer this tool before any domain Falcon call. Does not echo secrets.
+        """
+        authenticated = bool(
+            self.falcon_client is not None and self.falcon_client.is_authenticated()
+        )
+        if self.mode == "inert":
+            if self.auth_error and self.auth_error.startswith("MISSING_CREDENTIALS"):
+                state = "MISSING_CREDENTIALS"
+            elif self.auth_error:
+                state = "AUTH_FAILED"
+            else:
+                state = "NOT_CONFIGURED"
+            message = self.auth_error or (
+                "Falcon connector is inert. Configure credentials and reload."
+            )
+        else:
+            state = "OK" if authenticated else "AUTH_FAILED"
+            message = (
+                "Falcon connector authenticated; domain tools are available."
+                if authenticated
+                else (self.auth_error or "Falcon connector is not authenticated.")
+            )
+
+        return {
+            "connector": "falcon",
+            "state": state,
+            "mode": self.mode,
+            "configured": self.credentials_present,
+            "authenticated": authenticated,
+            "base_url": self.resolved_base_url,
+            "member_cid_set": bool(self.member_cid),
+            "modules_loaded": sorted(self.modules.keys()),
+            "tool_count": len(getattr(self.server._tool_manager, "_tools", {})),
+            "message": message,
+        }
 
     def _instructions(self) -> str:
         """Describe the server, and in dynamic mode the loop for reaching a tool.
@@ -291,6 +434,14 @@ class FalconMCPServer:
         Returns:
             int: Number of tools left registered
         """
+        # falcon_status is always first: atlas agents must probe config before domain calls.
+        self.server.add_tool(
+            offload_to_thread(self.falcon_status),
+            name="falcon_status",
+            annotations=READ_ONLY_ANNOTATIONS,
+            structured_output=False,
+        )
+
         # falcon_list_enabled_tools is always registered: it is the cheap way to see
         # every tool available, and dynamic mode's zero-hit hint points here.
         # Meta-tools are exempt from the policy — withholding them leaves the server
@@ -304,9 +455,9 @@ class FalconMCPServer:
 
         if self.dynamic:
             # Dynamic mode: expose only the discovery/execution meta-tools plus
-            # falcon_list_enabled_tools above (3 tools total) so the context window
-            # stays minimal. The catalog applies the policy while building, so a
-            # withheld tool is absent from search and 404s in the executor.
+            # falcon_list_enabled_tools above so the context window stays minimal.
+            # The catalog applies the policy while building, so a withheld tool is
+            # absent from search and 404s in the executor.
             from falcon_mcp.dynamic import DynamicMode
 
             self._dynamic_mode = DynamicMode(self.modules, self.server, self.tool_policy)
@@ -383,6 +534,8 @@ class FalconMCPServer:
 
     def falcon_check_connectivity(self) -> dict[str, bool]:
         """Check connectivity to the Falcon API."""
+        if self.falcon_client is None:
+            return {"connected": False}
         try:
             # Deliberately bypasses FalconClient._token_lock: this is a stateless
             # probe (stateful=False) that never mutates the shared token, so it

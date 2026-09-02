@@ -1,5 +1,91 @@
 # Changelog
 
+## [5.22.0] - 2026-09-02
+
+### Fixed
+- Node MCP atlas bundles now inject `createRequire` so ESM self-contained builds no longer crash on dynamic `require` (auvik/cipp init failures).
+- Progressive credential-gated tool disclosure verified unconfigured for all 11 connectors (status/navigate shell only).
+- CIPP HTTP ListTools uses per-request gateway credentials when present; stdio remains env-gated to `cipp_status`.
+- Rebuilt knowbe4/connectwise/auvik/cipp and remaining node connector bundles into `plugins/atlas/mcp/*/server.mjs`.
+
+## 2026-09-01 -- ThreatLocker connector rebuilt around names: hostnames, users, files, policies, never GUIDs
+
+Marketplace `3.11.0`; atlas `5.21.0`; threatlocker-mcp `1.4.0`; node-threatlocker `1.1.0`.
+
+Once auth worked (previous entry), the user tested the tools from a second
+session and every data call still returned nothing or errored, and the tools
+that did answer led with GUIDs. The requirement stated then: never make a human
+reference an ID; address devices, users, applications, and policies by name.
+
+Contract fixes, each traced to a live probe against instance `h` and the public
+swagger at `portalapi.h.threatlocker.com/swagger/public/swagger.json` (88 paths,
+97 DTOs; the `/swagger/v1` document is empty):
+
+- `buildSearchBody` in node-threatlocker was the shared root cause: it emitted
+  six pagination fields and dropped everything else. Approvals never sent
+  `statusId` (500), audit never sent `startDate`/`endDate` (417), check-ins
+  never sent `computerId`. Replaced by per-resource bodies built from the
+  swagger DTOs (`ComputerParameterDto`, `ApprovalRequestParametersDto`,
+  `ActionLogParamsDto`, `ComputerCheckinParametersDto`).
+- `ActionLogGetByParametersV2` needs the `usenewsearch: true` header (500
+  without it) and dates without fractional seconds; `HttpClient.request` now
+  accepts per-request headers. `ActionLogGetAllForFileHistoryV2` needs
+  `hostname` or `computerId` beside `fullPath` (417 with the path alone).
+- `ComputerGroupGetGroupAndComputer` returns a picker tree, never `.groups`;
+  the dropdown endpoint returns the flat `{label, value, numericValue}` list
+  and is what the groups tools read now. `OrganizationGetForMoveComputers`
+  returns `{label, value}` too, so the old `.organizations || []` was always
+  empty. `ApprovalRequestGetCount` takes `includeChildOrganizations` as a
+  query parameter.
+- Audit `action` filter: `actionId 99` is the documented "Any Deny"; verified
+  live it returns only Deny rows across action types. `actionId 1` is Permit.
+- Audit filters, probed one by one against 50 baseline rows: top-level
+  `hostname` filters; top-level `username` and `fullPath` are silently ignored
+  (identical row set, or zero rows). The Advanced Search list
+  (`paramsFieldsDto`, `filterType 1`) is what filters `username` (partial
+  tolerated), `fullPath`, `applicationName`, and `policyName`, all exact; no
+  filterType produced a substring match. The tool exposes `path`,
+  `application`, `policy` as exact server-side filters and `contains` as a
+  labeled client-side substring over the fetched page.
+- `computers_list group:` resolves the group name to its GUID through the
+  dropdown list (the DTO rejects a name with 400) so the filter is server-side
+  and `totalDevices` is the true group count (Workstations: 141 of 148).
+  `mode:` maps to the DTO `action` field, verified live (Secure 128, Learning
+  20).
+
+Name-first surface (`mcp_servers/threatlocker-mcp/src/utils/resolve.ts`):
+
+- `resolveComputer` turns a hostname (case-insensitive exact match on hostname
+  or computer name) into the row, and `resolveApprovalRequest` turns hostname
+  plus a path fragment into exactly one request. Zero or several matches return
+  NOT_FOUND with the candidate names; approve is destructive and fails closed.
+- Default summaries carry names only: computers `hostname, user, OS, group,
+  organization, mode, lastCheckin, agentVersion, deniesLast7Days`; approvals
+  `requestedAt, hostname, user, file, organization, status, requestor, reason`;
+  audit `time, hostname, user, action, actionType, application, policy, path`.
+  GUIDs and hashes sit behind `full:true`. Every list is prefixed with a
+  one-line summary (`totalDevices` from the per-row `totalRows`,
+  `pendingApprovals`, the audit window). Approval status and OS enums are
+  translated both ways. Elicitation prompts on list tools are gone (the
+  `elicitation.ts` module was deleted); approvals default to Pending, audit to
+  the last 24 hours.
+- New tool `threatlocker_computers_maintenance_modes`. Tool names unchanged.
+
+Evidence: end-to-end stdio run of the rebuilt bundle against instance `h` with
+the real key, 24 checks, all passing on the final run: `tools/list` 19 tools;
+`Auth check: OK`; `computers_list` -> `{"totalDevices":148,...}` with five
+name-only rows and no GUID in the output; `computers_get` by lowercased
+hostname returns make/model and serial; unknown hostname -> `NOT_FOUND` with
+the search hint; check-ins, maintenance modes, groups (6, with OS names),
+organizations (`Henssler Financial`), pending count `1`, approvals list
+Pending and Approved with status names, `approvals_get` and permit
+application resolved by hostname plus `pathContains`, audit search over 48h
+with no id fields in default rows, Deny filter returns only Deny rows, audit
+by hostname returns only that host, file history by hostname plus path (25
+events), `audit_get` from a `full:true` id, and INVALID_ARGS on a bad status
+and a bad date. Unit: `_shared` 67 pass; node-threatlocker pagination 3 pass;
+wiring 9 pass; fake-key smoke and no-key status PASS.
+
 ## 2026-09-01 -- ThreatLocker 440 TOKEN_REVOKED is an auth failure, and the hint now says what it means
 
 Marketplace `3.10.1`; atlas `5.20.1`; threatlocker-mcp `1.3.1`.
@@ -55,10 +141,48 @@ rebuilt bundle with a fake key: `threatlocker_status` shows `prefix 0000...`,
 `threatlocker_computer_groups_list` returns `code: FORBIDDEN`, `HTTP 440`, hint
 starting `HTTP 440 TOKEN_REVOKED: ThreatLocker does not recognize this token`.
 `pytest plugins/atlas/scripts/test_connectors_wiring.py` -> 9 passed.
-Not fixed by code: the stored ThreatLocker key itself. A new API User token
-(Portal > Manage > Users > API Users) is required, entered through the plugin's
-own configure prompt so it lands in Keychain, then a Claude Code restart and a
-`threatlocker_status` call to confirm the printed prefix changed.
+Follow-up in the same day, shipped as marketplace `3.10.2`; atlas `5.20.2`;
+threatlocker-mcp `1.3.2`; node-threatlocker `1.0.4`.
+
+Resolution, found after the user minted a third token and it still got 440: the
+organization lives on ThreatLocker instance `h`, and the connector's default base
+URL assumes instance `g`. A token is only known to the instance that issued it,
+and every other instance answers the same `440 TOKEN_REVOKED`, so a wrong
+instance letter is indistinguishable from a dead token. Probing the new key
+against `b` through `h`: `h` returned `200` (pending count `1`), all others 440.
+
+- `threatlocker_status` now probes every instance on a 440 and names the one that
+  accepts the key, with the exact `THREATLOCKER_BASE_URL` to set. The 440 hint
+  leads with the instance-letter cause and points at status.
+- `plugin.json` `threatlocker_base_url` description, `plugins/atlas/.env.example`,
+  and the `_shared/base-url.ts` vendor table now say the `g` default is not
+  universal and how to find the instance letter.
+- The user's `threatlocker_base_url` plugin option was set to instance `h`.
+  A `/reload-plugins` is needed for the running server to pick it up.
+
+With auth working, the first real calls exposed two response-shape bugs in
+`mcp_node/node-threatlocker` (now `1.0.4`), invisible while every call was 440:
+
+- `unwrapPaginatedResponse` only looked for `items` / `data` / `results`
+  envelopes, but the PortalAPI `*GetByParameters` endpoints (Computer,
+  ApprovalRequest, ComputerCheckin, verified live) return a bare JSON array with
+  the total repeated on every row as `totalRows`. Every list tool returned `[]`
+  against a tenant with 148 devices. Arrays are now unwrapped and `total` comes
+  from `totalRows`. Unit test: `tests/unit/pagination.test.ts`.
+- `getPendingCount` read `response.count`; the endpoint returns a bare number.
+- `threatlocker_computers_list` summary used field names the API does not send
+  (`hostName`, `computerGroup`, `policyStatus`); it now maps `computerId`,
+  `hostname`, `operatingSystem`, `lastCheckin`, `group`, `action`,
+  `organization`, and `totalRows`.
+
+Evidence (rebuilt bundle, real key, instance `h`): `threatlocker_status` ->
+`Auth check: OK (authenticated; pending approvals: 1)`, `isError: false`;
+`threatlocker_computers_list` -> rows with hostName, OS, group, `policyStatus:
+"Secure"`. At the `g` default the same bundle reports `FAILED HTTP 440 ... but
+instance "h" accepts this key. Set THREATLOCKER_BASE_URL=...h...`.
+`vitest run tests/unit/pagination.test.ts` (setup file bypassed: the library's
+`msw` dev dependency is not installed in this checkout, so the pre-existing
+suite cannot load) -> 3 passed.
 
 ## 2026-09-01 -- CrowdStrike Falcon joins the bundled connectors
 

@@ -2,100 +2,103 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { DomainHandler, CallToolResult } from '../utils/types.js';
 import { getClient } from '../utils/client.js';
 import { logger } from '../utils/logger.js';
-import { elicitSelection } from '../utils/elicitation.js';
+import { resolveApprovalRequest, ResolutionError } from '../utils/resolve.js';
 import {
   shapeList, shapeItem, shapeRaw,
   extractShapeArgs, SHAPE_PROPS,
-  toolErrorFromCatch,
+  toolError, toolErrorFromCatch, withSummary,
+  approvalStatusId, APPROVAL_STATUS_NAME,
   type SummaryFn,
 } from './_helpers.js';
 
-// Compact summary: id, action, requesting app/file, user, computer, timestamp, status
+// Live ApprovalRequestGetByParameters row shape (instance h, 2026-09-01).
 const approvalSummary: SummaryFn = (item) => ({
-  id:               item.id,
-  actionRequested:  item.actionRequested,
-  applicationName:  item.applicationName ?? item.fileName,
-  requestedBy:      item.requestedBy ?? item.userName,
-  computerName:     item.computerName,
-  dateTime:         item.dateTime ?? item.requestDateTime,
-  status:           item.status,
+  requestedAt:   item.dateTime,
+  hostname:      item.hostname,
+  user:          item.username,
+  file:          item.path,
+  organization:  item.organizationName,
+  status:        typeof item.statusId === 'number' ? (APPROVAL_STATUS_NAME[item.statusId] ?? item.statusId) : item.status,
+  requestor:     item.requestor || undefined,
+  reason:        item.requestorReason || undefined,
+  approvedBy:    item.approvedBy || undefined,
+  decidedAt:     item.actionDate ?? undefined,
+  ticket:        item.ticketId || undefined,
 });
+
+const SELECTOR_PROPS = {
+  hostname: { type: 'string', description: 'Device hostname the request came from.' },
+  pathContains: { type: 'string', description: 'Fragment of the requested file path or name (e.g. "setup.exe"). Together with hostname it must match exactly one request.' },
+  status: { type: 'string', description: 'Status to search in when resolving by name (default Pending).' },
+  approvalRequestId: { type: 'string', description: 'Optional GUID if you already have it (from full:true output).' },
+};
 
 function getTools(): Tool[] {
   return [
     {
       name: 'threatlocker_approvals_list',
-      description: 'List ThreatLocker software approval requests; filter by status (Pending/Approved/Denied), searchText, or childOrganizations. Use to review pending application allow requests. Returns compact summaries by default; pass full:true for the complete object.',
+      description: 'List software approval requests by name: when, which device, which user, which file, status, requestor reason. Status defaults to Pending; others: Approved, Rejected, Not Learned, Added to Application, Escalated, Self-Approved.',
       inputSchema: {
         type: 'object' as const,
         properties: {
           ...SHAPE_PROPS,
-          status: { type: 'string', description: 'Filter by approval status (e.g. Pending, Approved, Denied).' },
-          pageNumber: { type: 'number', description: 'Page number for pagination (default: 1).' },
-          pageSize: { type: 'number', description: 'Page size — records per page (default: 50).' },
-          searchText: { type: 'string', description: 'Free-text search filter applied to application name, path, or requestor.' },
-          childOrganizations: { type: 'boolean', description: 'When true, includes approval requests from child organizations.' },
+          status: { type: 'string', description: 'Pending (default), Approved, Rejected, Not Learned, Added to Application, Escalated, Self-Approved.' },
+          search: { type: 'string', description: 'Text matched by ThreatLocker against path, hostname, and user.' },
+          includeChildOrganizations: { type: 'boolean', description: 'Include requests from child organizations (default true).' },
+          pageNumber: { type: 'number', description: 'Page number (default 1).' },
+          pageSize: { type: 'number', description: 'Rows per page (default 50).' },
         },
       },
     },
     {
       name: 'threatlocker_approvals_get',
-      description: 'Get details of a single ThreatLocker approval request by approvalRequestId (required). Returns application name, hash, requestor, and current status. Pass full:true for the complete object.',
-      inputSchema: {
-        type: 'object' as const,
-        properties: {
-          ...SHAPE_PROPS,
-          approvalRequestId: { type: 'string', description: 'UUID string identifying the ThreatLocker approval request.' },
-        },
-        required: ['approvalRequestId'],
-      },
+      description: 'Details of one approval request, selected by hostname plus a fragment of the file path (or its GUID): file, hash, user, reason, comments, status, who approved it and when.',
+      inputSchema: { type: 'object' as const, properties: { ...SHAPE_PROPS, ...SELECTOR_PROPS } },
     },
     {
       name: 'threatlocker_approvals_pending_count',
-      description: 'Get the count of pending ThreatLocker approval requests. Use for a quick dashboard check before listing full approval details.',
+      description: 'Number of pending approval requests for the organization (optionally including child organizations).',
       inputSchema: {
         type: 'object' as const,
-        properties: {},
+        properties: { includeChildOrganizations: { type: 'boolean', description: 'Count child organizations too (default true).' } },
       },
     },
     {
       name: 'threatlocker_approvals_get_permit_application',
-      description: 'Get permit application details (allowed hash, policy assignment) for a ThreatLocker approval request by approvalRequestId (required). Use before approving to review what will be permitted. Pass full:true for the complete object.',
-      inputSchema: {
-        type: 'object' as const,
-        properties: {
-          ...SHAPE_PROPS,
-          approvalRequestId: { type: 'string', description: 'UUID string identifying the ThreatLocker approval request.' },
-        },
-        required: ['approvalRequestId'],
-      },
+      description: 'What approving a request would permit (application, files, policy scope), selected by hostname plus path fragment or GUID. Call before threatlocker_approvals_approve and pass its json field through unchanged.',
+      inputSchema: { type: 'object' as const, properties: { ...SHAPE_PROPS, ...SELECTOR_PROPS } },
     },
     {
       name: 'threatlocker_approvals_approve',
-      description: 'DESTRUCTIVE: Approve a ThreatLocker Application Control approval request, creating a permanent allow policy. Calls POST /ApprovalRequest/ApprovalRequestPermitApplication. Fetch the permit application JSON first with threatlocker_approvals_get_permit_application, then pass the complete json payload here. This action changes endpoint security posture.',
+      description: 'DESTRUCTIVE: approve an Application Control request, creating a permanent allow policy. Select it by hostname plus path fragment (must match exactly one pending request) or GUID, and pass the unmodified json from threatlocker_approvals_get_permit_application.',
       inputSchema: {
         type: 'object' as const,
         properties: {
-          approvalRequestId: {
-            type: 'string',
-            description: '(required) UUID of the approval request to approve. Format: "00000000-0000-0000-0000-000000000000". Obtain from threatlocker_approvals_list.',
-          },
-          json: {
-            description: '(required) Complete permit-application JSON object returned by threatlocker_approvals_get_permit_application. Must be passed as-is — do not modify fields.',
-          },
-          comments: {
-            type: 'string',
-            description: '(optional) Text to populate the Comments field in the Ticket Details tab. Overwrites any existing comment. Use to record the reason for approval.',
-          },
-          requestorEmailAddress: {
-            type: 'string',
-            description: '(optional) Email address to record as the requestor in the Ticket Details tab. Used to notify the requestor when the request is processed.',
-          },
+          ...SELECTOR_PROPS,
+          json: { description: '(required) Complete permit-application JSON from threatlocker_approvals_get_permit_application, unmodified.' },
+          comments: { type: 'string', description: 'Reason recorded in the Ticket Details comments.' },
+          requestorEmailAddress: { type: 'string', description: 'Email to notify when processed.' },
         },
-        required: ['approvalRequestId', 'json'],
+        required: ['json'],
       },
     },
   ];
+}
+
+function selectorFrom(args: Record<string, unknown>) {
+  return {
+    approvalRequestId: args.approvalRequestId as string | undefined,
+    hostname: args.hostname as string | undefined,
+    pathContains: args.pathContains as string | undefined,
+    statusId: approvalStatusId(args.status as string | undefined),
+  };
+}
+
+function resolutionResult(toolName: string, err: unknown): CallToolResult | null {
+  if (!(err instanceof ResolutionError)) return null;
+  return toolError('NOT_FOUND', `${toolName}: ${err.message}`, {
+    hint: 'List candidates with threatlocker_approvals_list, then pass hostname plus a longer pathContains.',
+  });
 }
 
 async function handleCall(toolName: string, args: Record<string, unknown>): Promise<CallToolResult> {
@@ -103,92 +106,76 @@ async function handleCall(toolName: string, args: Record<string, unknown>): Prom
 
   switch (toolName) {
     case 'threatlocker_approvals_list': {
-      // Elicitation: if no status filter provided, ask for status preference
-      let status = args.status as string | undefined;
-      if (!status) {
-        const elicited = await elicitSelection(
-          'Select approval request status:',
-          ['Pending', 'Approved', 'Denied', 'All'],
-          'Pending'
-        );
-        status = elicited || 'Pending';
-      }
-
+      let statusId: number;
+      try { statusId = approvalStatusId(args.status as string | undefined); }
+      catch (err) { return toolError('INVALID_ARGS', (err as Error).message); }
       const params = {
-        status: status === 'All' ? undefined : status,
+        statusId,
+        searchText: args.search as string | undefined,
+        showChildOrganizations: (args.includeChildOrganizations as boolean | undefined) ?? true,
         pageNumber: args.pageNumber as number | undefined,
-        pageSize: args.pageSize as number | undefined,
-        searchText: args.searchText as string | undefined,
-        childOrganizations: args.childOrganizations as boolean | undefined,
+        pageSize: (args.pageSize as number | undefined) ?? 50,
       };
       logger.info('API call: approvalRequests.list', params);
       try {
         const client = await getClient();
-        const result = await client.approvalRequests.list(params);
-        const items = Array.isArray(result) ? result : (result?.items ?? result?.data ?? [result]);
-        return shapeList(items, approvalSummary, shapeArgs);
-      } catch (err) {
-        return toolErrorFromCatch('threatlocker_approvals_list', err, {
-          hint: 'Verify THREATLOCKER_API_KEY and THREATLOCKER_ORGANIZATION_ID are set correctly.',
+        const page = await client.approvalRequests.list(params);
+        return withSummary(shapeList(page.items, approvalSummary, shapeArgs), {
+          status: APPROVAL_STATUS_NAME[statusId], requestsOnPage: page.items.length, page: page.page, hasMore: page.hasMore,
         });
+      } catch (err) {
+        return toolErrorFromCatch(toolName, err, { hint: 'The API User needs an Approve or View Approvals role.' });
       }
     }
     case 'threatlocker_approvals_get': {
-      const approvalRequestId = args.approvalRequestId as string;
-      logger.info('API call: approvalRequests.get', { approvalRequestId });
       try {
         const client = await getClient();
-        const approval = await client.approvalRequests.get(approvalRequestId);
-        return shapeItem(approval as Record<string, unknown>, approvalSummary, shapeArgs);
+        const match = await resolveApprovalRequest(client, selectorFrom(args));
+        const detail = await client.approvalRequests.get(match.approvalRequestId);
+        return shapeItem({ ...match, ...detail } as Record<string, unknown>, approvalSummary, shapeArgs);
       } catch (err) {
-        return toolErrorFromCatch('threatlocker_approvals_get', err, {
-          hint: 'Verify the approvalRequestId with threatlocker_approvals_list first.',
-        });
+        return resolutionResult(toolName, err) ?? toolErrorFromCatch(toolName, err, { hint: 'Find the request with threatlocker_approvals_list first.' });
       }
     }
     case 'threatlocker_approvals_pending_count': {
       logger.info('API call: approvalRequests.pendingCount');
       try {
         const client = await getClient();
-        const count = await client.approvalRequests.getPendingCount();
-        return shapeRaw(count);
+        const includeChildren = (args.includeChildOrganizations as boolean | undefined) ?? true;
+        const count = await client.approvalRequests.getPendingCount(includeChildren);
+        return shapeRaw({ pendingApprovals: count, includesChildOrganizations: includeChildren });
       } catch (err) {
-        return toolErrorFromCatch('threatlocker_approvals_pending_count', err, {
-          hint: 'Verify THREATLOCKER_API_KEY is set correctly.',
-        });
+        return toolErrorFromCatch(toolName, err, { hint: 'The API User needs an Approve or View Approvals role.' });
       }
     }
     case 'threatlocker_approvals_get_permit_application': {
-      const approvalRequestId = args.approvalRequestId as string;
-      logger.info('API call: approvalRequests.getPermitApplication', { approvalRequestId });
       try {
         const client = await getClient();
-        const permitApp = await client.approvalRequests.getPermitApplication(approvalRequestId);
-        return shapeRaw(permitApp);
+        const match = await resolveApprovalRequest(client, selectorFrom(args));
+        const permitApp = await client.approvalRequests.getPermitApplication(match.approvalRequestId);
+        return shapeRaw({ hostname: match.hostname, file: match.path, json: permitApp });
       } catch (err) {
-        return toolErrorFromCatch('threatlocker_approvals_get_permit_application', err, {
-          hint: 'Verify the approvalRequestId with threatlocker_approvals_list first.',
-        });
+        return resolutionResult(toolName, err) ?? toolErrorFromCatch(toolName, err, { hint: 'Find the request with threatlocker_approvals_list first.' });
       }
     }
     case 'threatlocker_approvals_approve': {
-      const approvalRequestId = args.approvalRequestId as string;
-      const json = args.json;
-      const comments = args.comments as string | undefined;
-      const requestorEmailAddress = args.requestorEmailAddress as string | undefined;
-      logger.info('API call: approvalRequests.approve', { approvalRequestId });
+      if (args.json === undefined || args.json === null) {
+        return toolError('INVALID_ARGS', 'json is required: fetch it with threatlocker_approvals_get_permit_application.');
+      }
       try {
         const client = await getClient();
+        const match = await resolveApprovalRequest(client, selectorFrom(args));
+        logger.info('API call: approvalRequests.approve', { hostname: match.hostname, path: match.path });
         const result = await client.approvalRequests.approve({
-          approvalRequestId,
-          json,
-          comments,
-          requestorEmailAddress,
+          approvalRequestId: match.approvalRequestId,
+          json: args.json,
+          comments: args.comments as string | undefined,
+          requestorEmailAddress: args.requestorEmailAddress as string | undefined,
         });
-        return shapeRaw(result ?? { approved: true, approvalRequestId });
+        return shapeRaw({ approved: true, hostname: match.hostname, file: match.path, response: result ?? null });
       } catch (err) {
-        return toolErrorFromCatch('threatlocker_approvals_approve', err, {
-          hint: 'Fetch the permit application JSON first with threatlocker_approvals_get_permit_application and pass the complete json field. Verify THREATLOCKER_API_KEY has Approve permissions.',
+        return resolutionResult(toolName, err) ?? toolErrorFromCatch(toolName, err, {
+          hint: 'Pass the unmodified json from threatlocker_approvals_get_permit_application. The API User needs an Approve role.',
         });
       }
     }

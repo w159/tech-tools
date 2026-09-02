@@ -3,82 +3,61 @@ import type { DomainHandler, CallToolResult } from '../utils/types.js';
 import { getClient } from '../utils/client.js';
 import { logger } from '../utils/logger.js';
 import {
-  shapeList, shapeRaw,
-  extractShapeArgs, SHAPE_PROPS,
-  toolErrorFromCatch,
+  shapeList, extractShapeArgs, SHAPE_PROPS,
+  toolError, toolErrorFromCatch, withSummary, OS_TYPE_NAME, OS_TYPE_BY_NAME,
   type SummaryFn,
 } from './_helpers.js';
 
-// Compact summary: id, name, os type, computer count
+// ComputerGroupGetDropdownByOrganizationId rows: {label, value, numericValue}
+// where numericValue is the osType (verified live 2026-09-01).
 const groupSummary: SummaryFn = (item) => ({
-  id:            item.id,
-  name:          item.name,
-  osType:        item.osType,
-  computerCount: item.computerCount ?? item.computers?.length,
+  name:            item.label,
+  operatingSystem: typeof item.numericValue === 'number' ? (OS_TYPE_NAME[item.numericValue] ?? item.numericValue) : undefined,
 });
+
+const OS_PROP = { operatingSystem: { type: 'string', description: 'Windows, macOS, or Linux. Omit for all.' } };
 
 function getTools(): Tool[] {
   return [
     {
       name: 'threatlocker_computer_groups_list',
-      description: 'List ThreatLocker computer groups; filter by osType (Windows/macOS/Linux), and optionally include the All-Computers or global groups. Use to find group names for scoped computer queries. Returns compact summaries by default; pass full:true for the complete object.',
+      description: 'List ThreatLocker computer groups by name with their operating system. Use the group name with threatlocker_computers_list group:<name>.',
       inputSchema: {
         type: 'object' as const,
         properties: {
-          ...SHAPE_PROPS,
-          osType: { type: 'string', description: 'Filter by operating system type (e.g. Windows, macOS, Linux).' },
-          includeAllComputers: { type: 'boolean', description: 'When true, includes the built-in "All Computers" group in results.' },
-          includeGlobal: { type: 'boolean', description: 'When true, includes groups shared across all organizations.' },
+          ...SHAPE_PROPS, ...OS_PROP,
+          includeGlobal: { type: 'boolean', description: 'Include groups shared across organizations (default true).' },
         },
       },
     },
     {
       name: 'threatlocker_computer_groups_dropdown',
-      description: 'Get ThreatLocker computer groups as a compact list (id/name pairs). Use when you need a quick lookup of group IDs for UI-like selection.',
-      inputSchema: {
-        type: 'object' as const,
-        properties: {},
-      },
+      description: 'Same as threatlocker_computer_groups_list (kept for compatibility): group names with operating system.',
+      inputSchema: { type: 'object' as const, properties: { ...SHAPE_PROPS, ...OS_PROP } },
     },
   ];
 }
 
 async function handleCall(toolName: string, args: Record<string, unknown>): Promise<CallToolResult> {
   const shapeArgs = extractShapeArgs(args);
-
-  switch (toolName) {
-    case 'threatlocker_computer_groups_list': {
-      const params = {
-        osType: args.osType as string | undefined,
-        includeAllComputers: args.includeAllComputers as boolean | undefined,
-        includeGlobal: args.includeGlobal as boolean | undefined,
-      };
-      logger.info('API call: computerGroups.list', params);
-      try {
-        const client = await getClient();
-        const result = await client.computerGroups.list(params);
-        const items = Array.isArray(result) ? result : (result?.items ?? result?.data ?? [result]);
-        return shapeList(items, groupSummary, shapeArgs);
-      } catch (err) {
-        return toolErrorFromCatch('threatlocker_computer_groups_list', err, {
-          hint: 'Verify THREATLOCKER_API_KEY and THREATLOCKER_ORGANIZATION_ID are set correctly.',
-        });
-      }
-    }
-    case 'threatlocker_computer_groups_dropdown': {
-      logger.info('API call: computerGroups.dropdown');
-      try {
-        const client = await getClient();
-        const dropdown = await client.computerGroups.getDropdown();
-        return shapeRaw(dropdown);
-      } catch (err) {
-        return toolErrorFromCatch('threatlocker_computer_groups_dropdown', err, {
-          hint: 'Verify THREATLOCKER_API_KEY and THREATLOCKER_ORGANIZATION_ID are set correctly.',
-        });
-      }
-    }
-    default:
-      return { content: [{ type: 'text', text: `Unknown tool: ${toolName}` }], isError: true };
+  if (toolName !== 'threatlocker_computer_groups_list' && toolName !== 'threatlocker_computer_groups_dropdown') {
+    return { content: [{ type: 'text', text: `Unknown tool: ${toolName}` }], isError: true };
+  }
+  const osName = typeof args.operatingSystem === 'string' ? args.operatingSystem.trim().toLowerCase() : '';
+  const osType = osName ? OS_TYPE_BY_NAME[osName] : undefined;
+  if (osName && osType === undefined) {
+    return toolError('INVALID_ARGS', `Unknown operatingSystem "${args.operatingSystem}".`, { hint: 'Use Windows, macOS, or Linux.' });
+  }
+  logger.info('API call: computerGroups.list', { osType });
+  try {
+    const client = await getClient();
+    const groups = await client.computerGroups.list({
+      computerGroupOSTypeId: osType || undefined,
+      hideGlobals: args.includeGlobal === false,
+    });
+    return withSummary(shapeList(groups, groupSummary, shapeArgs), { totalGroups: groups.length });
+  } catch (err) {
+    return toolErrorFromCatch(toolName, err, { hint: 'Call threatlocker_status to confirm the key and instance letter.' });
   }
 }
 
