@@ -817,7 +817,7 @@
     "surface": "mcp_servers/threatlocker-mcp + plugins/atlas/mcp/threatlocker",
     "category": "bug",
     "severity": "medium",
-    "title": "ThreatLocker 440 TOKEN_REVOKED: credential not recognized by the portal; connector wiring matches the docs; 440 was misclassified as INVALID_ARGS with a misleading hint",
+    "title": "ThreatLocker 440 TOKEN_REVOKED: organization is on instance h, connector default assumes g; tokens are per instance and other instances answer the same 440. Also: 440 misclassified as INVALID_ARGS, and sensitive userConfig lives in Keychain, not settings.json/.env",
     "evidence": [
       "node-threatlocker http.ts:72-82 sends raw Authorization + camelCase managedOrganizationId, matching threatlocker.kb.help/getting-started-with-threatlocker-portalapis/ Authentication and ManagedOrganizationId sections",
       "Live probe 2026-09-01: Authorization of 64 zeros and of 'not-a-token' both return HTTP 440 {error:TOKEN_REVOKED}; no header returns 403. TOKEN_REVOKED means 'unknown token'",
@@ -825,16 +825,67 @@
       "Running server (started 17:36:24) echoed key prefix CB23, present in neither plugins/atlas/.env nor settings.json pluginConfigs (both prefix 6507, dashboard-saved 2026-08-28 per ~/.atlas/credential_marks.json). plugin.json marks threatlocker_api_key sensitive:true; Keychain item 'Claude Code-credentials' pluginSecrets['atlas@tech-tools'].threatlocker_api_key holds the CB23 token; cache 5.20.0 has no .env, so CFG_ fallback from Keychain is what the server loaded",
       "node --experimental-strip-types --test mcp_servers/_shared/__tests__/response-quality.test.ts: 66 pass 1 fail before fix, 67 pass 0 fail after",
       "Stdio smoke on rebuilt plugins/atlas/mcp/threatlocker/server.mjs with fake key: status shows 'prefix 0000...', computer_groups_list -> code FORBIDDEN, HTTP 440, hint starts 'HTTP 440 TOKEN_REVOKED: ThreatLocker does not recognize this token'",
-      "pytest plugins/atlas/scripts/test_connectors_wiring.py -> 9 passed"
+      "pytest plugins/atlas/scripts/test_connectors_wiring.py -> 9 passed",
+      "2026-09-01 22:5x: third (fresh) token prefix B1C9 probed on instances b-h with ApprovalRequestGetCount: h -> 200 (count 1), b,c,d,e,f,g -> 440 TOKEN_REVOKED. Earlier keys (CB23, 6507) were 440 on h too, so they were dead regardless",
+      "After base URL h with real key: threatlocker_status -> Auth check: OK (pending approvals: 1), isError false; computers_list initially [] because node-threatlocker unwrapPaginatedResponse ignored bare-array responses (API returns array with totalRows=148 per row) and getPendingCount read .count from a bare number; fixed in node-threatlocker 1.0.4 (pagination.ts, approval-requests.ts) + computers summary field names; live computers_list now returns rows (hostName, OS, group Workstations, policyStatus Secure); vitest pagination.test.ts 3 passed"
     ],
     "doc_refs": [
       "docs/CHANGELOG.md (2026-09-01 ThreatLocker 440 entry)"
     ],
     "reproduction": "call threatlocker_computers_list with any key ThreatLocker does not know; before: code INVALID_ARGS, hint 'Verify THREATLOCKER_API_KEY ... are set correctly'",
-    "proposed_fix": "Shipped: 440 -> FORBIDDEN in _shared/error-envelope.ts; 440-specific hint via toolErrorFromCatch wrapper in threatlocker _helpers.ts; key prefix in threatlocker_status; tsup.bundle.config.ts rebuilds the vendored bundle. Not code: mint a new ThreatLocker API User token and enter it via the plugin configure prompt (Keychain), restart Claude Code, confirm prefix via threatlocker_status. Open: atlas_dashboard.py credentials save writes settings.json pluginConfigs + repo .env, neither read by the installed plugin for sensitive fields.",
+    "proposed_fix": "Shipped: 440 -> FORBIDDEN; 440 hint leads with the instance-letter cause; threatlocker_status makes a live auth call and on 440 probes b-h and names the accepting instance with the exact base URL; plugin.json/.env.example/base-url.ts say g is not universal; bundle rebuilt (tsup.bundle.config.ts). User config: threatlocker_base_url set to https://portalapi.h.threatlocker.com/portalapi in settings.json pluginConfigs (needs /reload-plugins). Open: atlas_dashboard.py credential save writes settings.json pluginConfigs + repo .env, neither read by the installed plugin for sensitive fields (ROADMAP backlog).",
     "blast_radius": "threatlocker connector error envelopes; _shared 440 mapping applies to every server using error-envelope",
     "status": "verified",
     "verified_at": "2026-09-01T21:53:50+00:00",
     "verified_by": "atlas:orchestrator (deterministic tests + stdio smoke)"
+  },
+  {
+    "id": "S9",
+    "surface": "mcp_servers/threatlocker-mcp + mcp_node/node-threatlocker + plugins/atlas/mcp/threatlocker",
+    "category": "bug",
+    "severity": "high",
+    "title": "ThreatLocker connector: every data tool empty or erroring after auth; rebuilt around names (hostname/user/file/policy) with request bodies matching the PortalAPI swagger",
+    "evidence": [
+      "Public swagger portalapi.h.threatlocker.com/swagger/public/swagger.json (88 paths, 97 DTOs); /swagger/v1 is empty",
+      "buildSearchBody sent only pagination fields: approvals lacked statusId (500), audit lacked startDate/endDate (417) and usenewsearch header (500), checkins lacked computerId; file history needs hostname or computerId beside fullPath (417 alone)",
+      "ComputerGroupGetGroupAndComputer returns a picker tree (no .groups); dropdown endpoint returns {label,value,numericValue}; OrganizationGetForMoveComputers returns {label,value}",
+      "actionId 99 (documented Any Deny) verified live: only Deny rows; actionId 1 = Permit",
+      "tl_live2.mjs end-to-end over stdio, real key, instance h: 24/24 checks pass (totalDevices 148, name round-trips, NOT_FOUND on unknown hostname, no id fields in default audit rows, Deny filter, INVALID_ARGS on bad status/date)",
+      "_shared tests 67 pass; node-threatlocker pagination test 3 pass; navigation.test.ts pass; wiring 9 pass; fake-key smoke and no-key status PASS"
+    ],
+    "doc_refs": [
+      "docs/CHANGELOG.md (2026-09-01 names entry)",
+      "plugins/atlas/CHANGELOG.md 5.21.0"
+    ],
+    "reproduction": "On 5.20.x: threatlocker_approvals_list -> HTTP 500; threatlocker_audit_search -> HTTP 417; computer_groups_list -> []; every output led with GUIDs",
+    "proposed_fix": "Shipped in 3.11.0 / 5.21.0 / threatlocker-mcp 1.4.0 / node-threatlocker 1.1.0: per-resource DTO bodies, per-request headers, resolve.ts name resolution, name-only summaries with a summary line, enum translation, elicitation removed, new maintenance_modes tool.",
+    "blast_radius": "threatlocker connector tool argument names changed (tool names unchanged)",
+    "status": "verified",
+    "verified_at": "2026-09-01T23:36:09+00:00",
+    "verified_by": "atlas:orchestrator (deterministic stdio end-to-end + unit tests)"
+  },
+  {
+    "id": "S-todo-board",
+    "surface": "plugins/atlas hooks+scripts",
+    "category": "feature",
+    "severity": "high",
+    "title": "Durable todo board + gate drain fallback + dashboard Work/Agents tabs ship in atlas 5.26.0",
+    "evidence": [
+      "plugins/atlas/hooks/todo_capture.py (PostToolUse TodoWrite mirror, ATLAS_TODO=off)",
+      "plugins/atlas/scripts/atlas_todo.py (list/set/add/claim/complete/counts/carry CLI)",
+      "plugins/atlas/hooks/completion_gate.py:539 (drain priority: transcript -> board -> LEDGER)",
+      "plugins/atlas/scripts/atlas_dashboard.py (/api/todo /api/agents /api/memory, Work+Agents tabs)",
+      "plugins/atlas/hooks/test_atlas_contract.py TodoBoardContract 6/6",
+      "hooks discover: 683 tests OK (3 skipped), scripts discover: 641 tests OK"
+    ],
+    "doc_refs": [
+      "docs/CHANGELOG.md 5.26.0; plugins/atlas/CHANGELOG.md 5.26.0; README.md hooks table + dashboard sections"
+    ],
+    "reproduction": "cd plugins/atlas/hooks && python3 -m unittest discover -s . -p 'test_*.py' -> Ran 683 OK; cd plugins/atlas/scripts && python3 -m unittest discover -s . -p 'test_*.py' -> Ran 641 OK",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-09-09T11:48:20+00:00",
+    "verified_by": "atlas:verifier"
   }
 ]

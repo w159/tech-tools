@@ -32,6 +32,7 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 
 import atlas_db  # noqa: E402
 import atlas_control  # noqa: E402
+import atlas_todo  # noqa: E402
 
 DEFAULT_PORT = int(os.environ.get("ATLAS_DASHBOARD_PORT", "7421"))
 LOOPBACK = ".".join(["127", "0", "0", "1"])
@@ -1721,6 +1722,14 @@ textarea{
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 4 7v5c0 4.5 3.4 7.6 8 8 4.6-.4 8-3.5 8-8V7l-8-4z"/></svg>
         Findings
       </button>
+      <button data-tab="work" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v11a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17.5v-11z"/><path d="m8.5 12 2.2 2.2L15.5 9.5"/></svg>
+        Work board
+      </button>
+      <button data-tab="agents" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="7" width="14" height="12" rx="2"/><path d="M12 7V4M8 4h8"/><circle cx="9.5" cy="12.5" r="1"/><circle cx="14.5" cy="12.5" r="1"/><path d="M9.5 16h5"/></svg>
+        Agents
+      </button>
     </nav>
     <div class="side-meta">
       <div class="row"><span class="muted">Daemon</span><span class="pill live"><span class="dot"></span>online</span></div>
@@ -1951,17 +1960,61 @@ textarea{
           </div>
         </section>
       </section>
+      <section id="tab-work" class="hidden">
+        <section class="card">
+          <h3 class="card-title">Work board</h3>
+          <div class="chips" id="workCounts">Loading...</div>
+          <div style="display:flex;gap:8px;margin:10px 0">
+            <input id="todoAdd" placeholder="Note for the next session (origin: manual, never blocks the gate)..." style="flex:1">
+            <button id="todoAddBtn" type="button">Add</button>
+          </div>
+          <div class="scroll" style="max-height:min(60vh,540px)">
+            <table>
+              <thead><tr><th style="width:44%">Item</th><th style="width:10%">Status</th><th style="width:12%">Owner</th><th style="width:10%">Origin</th><th style="width:18%">Actions</th></tr></thead>
+              <tbody id="todoRows"></tbody>
+            </table>
+          </div>
+          <div class="muted" style="margin-top:8px">The board lives at &lt;project&gt;/.atlas/.run/todos.json. TodoWrite calls mirror into it automatically; subagents claim items before working; the completion gate counts this session's open items (manual notes never block).</div>
+        </section>
+        <section class="card" style="margin-top:14px">
+          <h3 class="card-title">Shared memory</h3>
+          <div class="grid-2">
+            <div>
+              <b>Memory</b>
+              <pre id="memoryMem" class="mono" style="white-space:pre-wrap;max-height:300px;overflow:auto;font-size:12px"></pre>
+            </div>
+            <div>
+              <b>Project context</b>
+              <pre id="memoryProject" class="mono" style="white-space:pre-wrap;max-height:300px;overflow:auto;font-size:12px"></pre>
+            </div>
+          </div>
+        </section>
+      </section>
+      <section id="tab-agents" class="hidden">
+        <section class="card">
+          <h3 class="card-title">Agent overrides</h3>
+          <div class="muted" style="margin-bottom:8px">Plugin agents are listed beside this project's same-name overrides in &lt;project&gt;/.claude/agents/. Edits land in the project tree; Reset deletes the override.</div>
+          <div style="display:flex;gap:8px;margin-bottom:8px">
+            <select id="agentPick" style="min-width:260px"></select>
+            <span class="pill" id="agentSource">—</span>
+            <button id="agentReset" type="button">Reset</button>
+          </div>
+          <textarea id="agentBody" rows="18" style="width:100%;font-family:var(--mono,monospace);font-size:12px"></textarea>
+          <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+            <button id="agentSave" type="button">Save override</button>
+            <span class="muted" id="agentNote"></span>
+          </div>
+        </section>
+      </section>
     </main>
-  </div>
-</div>
-<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
 const $ = id => document.getElementById(id);
 const state = {
   snapshot:null, selectedSession:null, selectedProject:null, tab:'overview',
   drafts:{}, settingsDirty:false, settingsFocus:false,
-  behavior:null, behaviorEdits:{}, ecosystem:null, ecoPane:'wiring'
+  behavior:null, behaviorEdits:{}, ecosystem:null, ecoPane:'wiring',
+  todo:null, agents:null, selectedAgent:null
 };
 // Plugin manifests and MCP configs are third-party text rendered into innerHTML.
 const esc = v => String(v==null?'':v).replace(/[&<>"']/g, c =>
@@ -2550,14 +2603,126 @@ $('mcpAdd').onclick = async () => {
   finally{ btn.disabled = false; }
 };
 
+// --- Work board + Agents editor --------------------------------------------
+
+function workPid(){
+  return state.selectedProject || (state.snapshot?.projects||[])[0]?.id || '';
+}
+async function loadTodo(){
+  const pid = workPid();
+  if(!pid){
+    $('workCounts').textContent = 'Select a project first';
+    $('todoRows').innerHTML = '<tr><td colspan="5" class="muted">No project selected</td></tr>';
+    $('memoryMem').textContent = ''; $('memoryProject').textContent = '';
+    return;
+  }
+  const d = await api('/api/todo?project_id='+encodeURIComponent(pid));
+  state.todo = d;
+  renderTodo();
+  const m = await api('/api/memory');
+  $('memoryMem').textContent = m.memory || '(empty)';
+  $('memoryProject').textContent = m.project || '(empty)';
+}
+function renderTodo(){
+  const d = state.todo; if(!d) return;
+  const c = d.counts||{};
+  $('workCounts').innerHTML = `
+    <span class="chip">needed <b>${num(c.needed)}</b></span>
+    <span class="chip">remaining <b>${num(c.remaining)}</b></span>
+    <span class="chip">complete <b>${num(c.complete)}</b></span>
+    ${c.claimed ? `<span class="chip">claimed ${num(c.claimed)}</span>` : ''}`;
+  const rows = (d.items||[]).filter(i => !i.archived).map(i => `
+    <tr>
+      <td class="truncate" title="${esc(i.content)}">${esc(i.content)}</td>
+      <td><span class="pill">${esc(i.status)}</span></td>
+      <td class="muted">${esc(i.owner||'')}</td>
+      <td class="muted">${esc(i.origin)}</td>
+      <td>
+        <button data-act="complete" data-id="${esc(i.id)}" type="button">Complete</button>
+        <button data-act="reopen" data-id="${esc(i.id)}" type="button">Reopen</button>
+        <button data-act="remove" data-id="${esc(i.id)}" type="button">Delete</button>
+      </td>
+    </tr>`).join('')
+    || '<tr><td colspan="5" class="muted">Empty board</td></tr>';
+  $('todoRows').innerHTML = rows;
+}
+$('todoRows').onclick = async e => {
+  const btn = e.target.closest('button[data-act]'); if(!btn) return;
+  const r = await api('/api/todo', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({project_id: workPid(), action: btn.dataset.act, id: btn.dataset.id})});
+  if(r.ok === false) toast(String(r.error||'action failed'), false);
+  await loadTodo();
+};
+$('todoAddBtn').onclick = async () => {
+  const content = $('todoAdd').value.trim(); if(!content) return;
+  await api('/api/todo', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({project_id: workPid(), action:'add', content})});
+  $('todoAdd').value = '';
+  await loadTodo();
+};
+async function loadAgents(){
+  const pid = workPid();
+  if(!pid){ $('agentPick').innerHTML=''; $('agentBody').value=''; return; }
+  const d = await api('/api/agents?project_id='+encodeURIComponent(pid));
+  state.agents = d.agents||[];
+  const keep = state.agents.some(a => a.name===state.selectedAgent);
+  state.selectedAgent = keep ? state.selectedAgent : (state.agents[0]||{}).name || null;
+  renderAgents();
+  await loadAgentBody();
+}
+function renderAgents(){
+  $('agentPick').innerHTML = (state.agents||[]).map(a =>
+    `<option value="${esc(a.name)}"${a.name===state.selectedAgent?' selected':''}>${esc(a.name)}${a.overridden?' (overridden)':''}</option>`).join('');
+  const a = (state.agents||[]).find(x => x.name===state.selectedAgent);
+  $('agentSource').textContent = a
+    ? (a.overridden ? 'overridden (project)' : (a.source==='override' ? 'override (project-only)' : 'plugin'))
+    : '—';
+  $('agentReset').disabled = !(a && (a.overridden || a.source==='override'));
+}
+async function loadAgentBody(){
+  if(!state.selectedAgent){ $('agentBody').value=''; return; }
+  const d = await api('/api/agents/'+encodeURIComponent(state.selectedAgent)+'?project_id='+encodeURIComponent(workPid()));
+  $('agentBody').value = d.content || '';
+  $('agentNote').textContent = d.source==='override'
+    ? 'Editing the project override.'
+    : 'Editing the plugin source. Save writes a project override under .claude/agents/.';
+}
+$('agentPick').onchange = async e => {
+  state.selectedAgent = e.target.value;
+  renderAgents();
+  await loadAgentBody();
+};
+$('agentSave').onclick = async () => {
+  const btn = $('agentSave'); btn.disabled = true;
+  try{
+    const r = await api('/api/agents', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({project_id: workPid(), action:'save', name: state.selectedAgent, content: $('agentBody').value})});
+    $('agentNote').textContent = r.ok ? (r.note||'saved') : String(r.hint || r.error || 'save failed');
+    if(r.ok) await loadAgents();
+  }catch(e){ $('agentNote').textContent = String(e.message||e); }
+  finally{ btn.disabled = false; }
+};
+$('agentReset').onclick = async () => {
+  const btn = $('agentReset'); btn.disabled = true;
+  try{
+    const r = await api('/api/agents', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({project_id: workPid(), action:'reset', name: state.selectedAgent})});
+    $('agentNote').textContent = r.ok ? (r.note||'reset') : String(r.error||'reset failed');
+    if(r.ok) await loadAgents();
+  }catch(e){ $('agentNote').textContent = String(e.message||e); }
+  finally{ btn.disabled = false; }
+};
+
 const TITLES = {
   overview:'Overview', live:'Live sessions', settings:'Connectors & credentials',
-  behavior:'Behavior & hooks', ecosystem:'Ecosystem', findings:'Findings'
+  behavior:'Behavior & hooks', ecosystem:'Ecosystem', findings:'Findings',
+  work:'Work board', agents:'Agents'
 };
+const TABS = ['overview','live','settings','behavior','ecosystem','findings','work','agents'];
 function showTab(tab){
-  state.tab = tab;
+  state.tab = TABS.includes(tab) ? tab : 'overview';
   document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('active', b.dataset.tab===tab));
-  ['overview','live','settings','behavior','ecosystem','findings'].forEach(t => {
+  TABS.forEach(t => {
     const el=$('tab-'+t); if(el) el.classList.toggle('hidden', t!==tab);
   });
   $('pageTitle').textContent = TITLES[tab] || 'Atlas';
@@ -2567,6 +2732,8 @@ function showTab(tab){
   if(tab==='live' && state.selectedSession) loadDetail();
   if(tab==='behavior') loadBehavior().catch(e => behaviorFlash(String(e.message||e), false));
   if(tab==='ecosystem') loadEcosystem().catch(e => ecoFlash(String(e.message||e), false));
+  if(tab==='work') loadTodo().catch(e => toast(String(e.message||e), false));
+  if(tab==='agents') loadAgents().catch(e => toast(String(e.message||e), false));
 }
 
 async function refresh(forceSettings){
@@ -2584,6 +2751,7 @@ async function refresh(forceSettings){
   renderOverview(s);
   renderFindings(s);
   renderSessionList(s);
+  if(state.tab==='work') await loadTodo();
   if(state.tab==='settings'){
     if(forceSettings){ state.settingsDirty=false; state.settingsFocus=false; }
     renderSettings(s);
@@ -2620,6 +2788,143 @@ setInterval(() => refresh(false), 8000);
 </body>
 </html>
 """
+
+
+# --- Work board (durable todos), agent overrides, memory snapshot ----------
+
+
+def _project_root(project_id):
+    """Resolve a project's root path from the dashboard DB, or None."""
+    try:
+        pid = int(str(project_id))
+    except (TypeError, ValueError):
+        return None
+    conn, _ = _db()
+    try:
+        row = _q(conn, "SELECT root_path FROM projects WHERE id=?", (pid,), one=True)
+    finally:
+        conn.close()
+    return (row or {}).get("root_path")
+
+
+def _todo_payload(root):
+    """Board + counts for one project. Fail-open: the Work tab still renders."""
+    try:
+        board = atlas_todo.load(root)
+        return {
+            "ok": True,
+            "items": board.get("items", []),
+            "counts": atlas_todo.counts(board),
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def _agent_name_ok(name):
+    return (
+        bool(name) and "/" not in name and "\\" not in name and not name.startswith(".")
+    )
+
+
+def _agents_payload(root):
+    """Installed plugin agents plus this project's .claude/agents overrides."""
+    plugin, overrides = {}, {}
+    plugin_dir = PLUGIN_ROOT / "agents"
+    if plugin_dir.is_dir():
+        for p in sorted(plugin_dir.glob("*.md")):
+            plugin[p.stem] = str(p)
+    if root:
+        over_dir = Path(root) / ".claude" / "agents"
+        if over_dir.is_dir():
+            for p in sorted(over_dir.glob("*.md")):
+                overrides[p.stem] = str(p)
+    agents = []
+    for name in sorted(set(plugin) | set(overrides)):
+        agents.append(
+            {
+                "name": name,
+                "source": "override" if name in overrides else "plugin",
+                "overridden": name in plugin and name in overrides,
+                "plugin_path": plugin.get(name, ""),
+                "override_path": overrides.get(name, ""),
+            }
+        )
+    return {"ok": True, "agents": agents}
+
+
+def _agent_content(root, name):
+    """The override file wins; the plugin source is the editing start point."""
+    if not _agent_name_ok(name):
+        return {"ok": False, "error": "invalid_name"}
+    over = Path(root) / ".claude" / "agents" / (name + ".md") if root else None
+    if over and over.is_file():
+        try:
+            return {
+                "ok": True,
+                "name": name,
+                "source": "override",
+                "content": over.read_text(encoding="utf-8", errors="replace"),
+            }
+        except OSError as e:
+            return {"ok": False, "error": str(e)}
+    src = PLUGIN_ROOT / "agents" / (name + ".md")
+    if src.is_file():
+        try:
+            return {
+                "ok": True,
+                "name": name,
+                "source": "plugin",
+                "content": src.read_text(encoding="utf-8", errors="replace"),
+            }
+        except OSError as e:
+            return {"ok": False, "error": str(e)}
+    return {"ok": False, "error": "not_found"}
+
+
+def _agent_save(root, name, content):
+    """Write a same-name override under <root>/.claude/agents/."""
+    if not _agent_name_ok(name):
+        return {"ok": False, "error": "invalid_name"}
+    if not root or not Path(root).is_dir():
+        return {"ok": False, "error": "unknown_project"}
+    text = str(content or "")
+    if not text.lstrip().startswith("---"):
+        return {
+            "ok": False,
+            "error": "frontmatter_required",
+            "hint": "Agent files start with YAML frontmatter: --- on the first line.",
+        }
+    over_dir = Path(root) / ".claude" / "agents"
+    try:
+        over_dir.mkdir(parents=True, exist_ok=True)
+        over = over_dir / (name + ".md")
+        over.write_text(text, encoding="utf-8")
+    except OSError as e:
+        return {"ok": False, "error": str(e)}
+    return {
+        "ok": True,
+        "name": name,
+        "path": str(over),
+        "note": "Override written to the project. Applies when Claude Code next loads agents for it.",
+    }
+
+
+def _agent_reset(root, name):
+    """Delete the project override so the plugin's agent definition wins again."""
+    if not _agent_name_ok(name):
+        return {"ok": False, "error": "invalid_name"}
+    if not root:
+        return {"ok": False, "error": "unknown_project"}
+    over = Path(root) / ".claude" / "agents" / (name + ".md")
+    try:
+        over.unlink(missing_ok=True)
+    except OSError as e:
+        return {"ok": False, "error": str(e)}
+    return {
+        "ok": True,
+        "name": name,
+        "note": "Override removed; the plugin agent definition applies again.",
+    }
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -2794,6 +3099,30 @@ class Handler(BaseHTTPRequestHandler):
                 )
             finally:
                 conn.close()
+        if u.path == "/api/todo":
+            qs = parse_qs(u.query)
+            root = _project_root(qs.get("project_id", [None])[0])
+            if not root:
+                return self._json(400, {"ok": False, "error": "unknown_project"})
+            return self._json(200, _todo_payload(root))
+        if u.path == "/api/agents":
+            qs = parse_qs(u.query)
+            root = _project_root(qs.get("project_id", [None])[0])
+            if not root:
+                return self._json(400, {"ok": False, "error": "unknown_project"})
+            return self._json(200, _agents_payload(root))
+        if u.path.startswith("/api/agents/"):
+            name = unquote(u.path[len("/api/agents/") :])
+            qs = parse_qs(u.query)
+            root = _project_root(qs.get("project_id", [None])[0])
+            return self._json(200, _agent_content(root, name))
+        if u.path == "/api/memory":
+            try:
+                import atlas_memory
+
+                return self._json(200, {"ok": True, **atlas_memory.load_snapshot()})
+            except Exception as e:
+                return self._json(200, {"ok": False, "error": str(e)})
         return self._json(404, {"ok": False, "error": "not_found", "path": u.path})
 
     def do_POST(self):
@@ -2850,6 +3179,65 @@ class Handler(BaseHTTPRequestHandler):
                     data.get("key"), bool(data.get("enabled"))
                 ),
             )
+        if u.path == "/api/todo":
+            root = _project_root(data.get("project_id"))
+            if not root:
+                return self._json(400, {"ok": False, "error": "unknown_project"})
+            action = str(data.get("action") or "")
+            item_id = str(data.get("id") or "")
+            try:
+                if action == "add":
+                    r = atlas_todo.add(
+                        root, str(data.get("content") or ""), origin="manual"
+                    )
+                elif action == "claim":
+                    r = atlas_todo.claim(
+                        root,
+                        item_id,
+                        str(data.get("owner") or "dashboard"),
+                        force=bool(data.get("force")),
+                    )
+                elif action == "complete":
+                    r = atlas_todo.set_status(
+                        root,
+                        item_id,
+                        "completed",
+                        owner=str(data.get("owner") or "dashboard"),
+                        evidence=str(
+                            data.get("evidence") or "completed from dashboard"
+                        ),
+                    )
+                elif action == "reopen":
+                    r = atlas_todo.set_status(
+                        root,
+                        item_id,
+                        "pending",
+                        owner=str(data.get("owner") or "dashboard"),
+                    )
+                elif action == "remove":
+                    r = atlas_todo.remove(root, item_id)
+                else:
+                    r = {"ok": False, "error": "unknown_action"}
+            except Exception as e:
+                return self._json(500, {"ok": False, "error": str(e)})
+            return self._json(200, r)
+        if u.path == "/api/agents":
+            root = _project_root(data.get("project_id"))
+            if not root:
+                return self._json(400, {"ok": False, "error": "unknown_project"})
+            action = str(data.get("action") or "")
+            name = str(data.get("name") or "")
+            content = data.get("content")
+            try:
+                if action == "save":
+                    r = _agent_save(root, name, content)
+                elif action == "reset":
+                    r = _agent_reset(root, name)
+                else:
+                    r = {"ok": False, "error": "unknown_action"}
+            except Exception as e:
+                return self._json(500, {"ok": False, "error": str(e)})
+            return self._json(200, r)
         return self._json(404, {"ok": False, "error": "not_found"})
 
 

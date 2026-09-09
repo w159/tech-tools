@@ -196,6 +196,17 @@ BEHAVIOR_KNOBS = [
         "default": "on",
         "ref": "hooks/prompt_optimizer.py:392",
     },
+    {
+        "key": "ATLAS_FALLOW",
+        "group": "Guardrails",
+        "title": "Fallow agent commit/push gate",
+        "description": "PreToolUse gate: on git commit/push, run fallow audit and deny when verdict is fail. Skips when the fallow CLI is missing. Off disables the gate entirely.",
+        "kind": "toggle",
+        "on": "on",
+        "off": "off",
+        "default": "on",
+        "ref": "hooks/fallow_gate.py:188",
+    },
     # -- Prompt optimizer
     {
         "key": "ATLAS_OPTIMIZE",

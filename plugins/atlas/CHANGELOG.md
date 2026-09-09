@@ -1,5 +1,72 @@
 # Changelog
 
+## [5.26.0] - 2026-09-09
+
+### Added
+- **Durable todo board** (`<project>/.atlas/.run/todos.json`): every `TodoWrite`
+  call is mirrored by the new `hooks/todo_capture.py` (`ATLAS_TODO=off` disables),
+  so the session plan survives the transcript and is visible to the dashboard Work
+  tab, claimable by parallel subagents via `scripts/atlas_todo.py`
+  (`list/set/add/claim/complete/counts`), and carried into the next session by
+  `session_boot.py`.
+- **Drain fallback in the completion gate:** when the transcript's `TodoWrite`
+  count is unavailable or drained, `completion_gate.py` consults the durable board
+  (same session, non-manual items) and then the `LEDGER | n/m` line the
+  orchestrator emits in auto mode, so a run cannot claim done with open todos under
+  any permission mode.
+- **Dashboard Work and Agents tabs:** `/api/todo` (add/claim/complete/reopen/
+  remove), `/api/agents` (same-name overrides under `<project>/.claude/agents/`,
+  frontmatter required, safe names only), and `/api/memory` (shared memory
+  snapshot). Save writes the override; Reset restores plugin source.
+- **Todo board contracts:** 6 permanent `TodoBoardContract` tests in
+  `hooks/test_atlas_contract.py` guard the capture wiring, gate fallback, session
+  carry-over, subagent claim protocol, and dashboard endpoints; 9 `WorkBoardApiTest`
+  cases cover the live HTTP surface.
+
+## [5.25.0] - 2026-09-04
+
+### Fixed
+- **ATLAS | status headers vanishing:** Claude Code lets an explicit user
+  `settings.json` `outputStyle` (e.g. `concise`) beat plugin `force-for-plugin`.
+  SessionStart now always injects the status-header + loop + DISPATCH color contract,
+  warns in `systemMessage` when the style is overridden, and `atlas_doctor` adds
+  check `output-style`. atlas-setup install offers setting `outputStyle` to
+  `Atlas Orchestrator`.
+- **Docs noise hygiene:** docs-curator findings/archive naming is
+  `<YYYY-MM-DD>-<slug>-<status>.md`; fixed one-off notes move to `.atlas/archive/`.
+
+## [5.24.0] - 2026-09-04
+
+### Added
+- **Tool routing (serena / lean-ctx / claude-mem / context-mode / ponytail / fallow)** so
+  atlas actually uses MCP symbol and context tools instead of Bash grep bloat:
+  - `scripts/tool_routing.py` + `skills/atlas-orchestrate/references/tool-routing.md`
+    (decision matrix, `TOOLSEARCH_BATCH`, compact `boot_lines()`).
+  - SessionStart injects 3-6 routing lines (activate_project, lean-ctx, no Bash-first).
+  - `discover_capabilities` recommends serena + lean-ctx on any code tree; catalog + install
+    minimum bar include them; Orient/the-loop/operating-contract/output-style enforce order.
+  - All 12 `agents/*.md` ToolSearch batches include `activate_project`, surgical edits,
+    diagnostics, claude-mem search/timeline/get_observations.
+  - Tripwire toolkit gap now requires ToolSearch **and** a named serena/lean-ctx token
+    (not a decoy ToolSearch alone).
+
+## [5.23.0] - 2026-09-04
+
+### Added
+- **Fallow tools integration** for JS/TS users of the atlas plugin (not a host-project install):
+  - `hooks/fallow_gate.py` PreToolUse Bash gate: on agent `git commit`/`git push`, runs
+    `fallow audit --format json --quiet --explain --gate-marker agent` and denies on
+    `verdict: fail`. Fail-open when the fallow CLI is absent. `ATLAS_FALLOW=off` disables;
+    `FALLOW_GATE_MIN_VERSION` (default `2.85.0`) matches upstream fallow semantics.
+  - Wired in `hooks/hooks.json` alongside `bash_advisor` (14 programs / 18 bindings).
+  - `discover_capabilities.py` detects `js_ts` and recommends fallow CLI, `fallow-mcp`,
+    and `fallow-skills`.
+  - Orchestrator docs: `skills/atlas-orchestrate/references/fallow-tools.md`, plus catalog,
+    routing, hooks-automation, and atlas-setup install stages.
+  - Dashboard behavior knob `ATLAS_FALLOW`; session boot reports fallow presence on JS/TS trees.
+
+## Unreleased
+
 ## [5.22.0] - 2026-09-02
 
 ### Fixed
@@ -7,9 +74,6 @@
 - Progressive credential-gated tool disclosure verified unconfigured for all 11 connectors (status/navigate shell only).
 - CIPP HTTP ListTools uses per-request gateway credentials when present; stdio remains env-gated to `cipp_status`.
 - Rebuilt knowbe4/connectwise/auvik/cipp and remaining node connector bundles into `plugins/atlas/mcp/*/server.mjs`.
-
-## Unreleased
-### Fixed
 - **Falcon connector inert-by-default + `falcon_status`.** Missing or invalid
   CrowdStrike credentials no longer crash the MCP process. The server boots a
   4-tool diagnostic surface (`falcon_status`, connectivity, list modules/tools)

@@ -1,5 +1,5 @@
 {
-  "description": "Atlas automation: boot, doctor rollback guard, guards, formatting, prompt optimization, completion gate, self-improvement (memory capture + auto-skill + nudge), session-transcript ingest.",
+  "description": "Atlas automation: boot, doctor rollback guard, guards (bash advisor + fallow agent gate), formatting, prompt optimization, completion gate, self-improvement (memory capture + nudge), session-transcript ingest.",
   "hooks": {
     "SessionStart": [
       {
@@ -35,6 +35,11 @@
           {
             "type": "command",
             "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/bash_advisor.py\""
+          },
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/fallow_gate.py\"",
+            "timeout": 300
           }
         ]
       },
@@ -49,6 +54,15 @@
       }
     ],
     "PostToolUse": [
+      {
+        "matcher": "TodoWrite",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/todo_capture.py\""
+          }
+        ]
+      },
       {
         "matcher": "Edit|Write|MultiEdit|NotebookEdit",
         "hooks": [

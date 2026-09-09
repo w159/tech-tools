@@ -6,10 +6,10 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 
 ## In Progress
 
-- [in-progress] atlas 5.14.0 is committed but not installed. The live plugin cache
-  still runs 5.13.0, so the noise reduction, gate conditions (i)/(j), the (f)
-  cross-check, and the skill-level todo/steering/worktree rules are all inert
-  until reinstall. `InstalledParityContract` in
+- [in-progress] atlas 5.26.0 is committed but not installed. The live plugin cache
+  still runs 5.25.0, so the durable todo board (`hooks/todo_capture.py`, gate drain
+  fallback, dashboard Work/Agents tabs, `scripts/atlas_todo.py`) is inert until
+  reinstall. `InstalledParityContract` in
   `plugins/atlas/hooks/test_atlas_contract.py:447` skips while the versions
   differ and re-arms afterward.
 - [in-progress] Gate conditions (i) and (j) are verified against fixtures and
@@ -20,7 +20,9 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
   and dispatches an isolated writer, then `Stop`. Expected: the gate blocks with
   "(i) Todo list not drained" until the list is completed, and with "(j) N git
   worktree(s) from this run are still on disk" until the trees are merged and
-  removed.
+  removed. The durable-board/LEDGER drain fallback is fixture-verified as of
+  5.26.0 (`TodoBoardDrainTest`, 8 cases); a live TodoWrite payload through
+  `_open_todos` is still pending.
 
 - [in-progress] Vendored upstream clones (aider/, claude-code/, cline/, codex/, cursor/,
   gemini-cli/, github-copilot/, pi/, windsurf/, frameworks/, vendors/) still live in docs/.

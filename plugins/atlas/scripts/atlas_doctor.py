@@ -231,6 +231,41 @@ def check_orchestration_wiring(ip):
     return problems
 
 
+ATLAS_OUTPUT_STYLE = "Atlas Orchestrator"
+
+
+def check_output_style(settings_path=None):
+    """Detect when a user outputStyle overrides the plugin force-for-plugin style.
+
+    Returns (ok, detail). ok True when unset (plugin force should apply) or when
+    set to Atlas Orchestrator. A different explicit style (e.g. concise) hides
+    ATLAS | phase headers and glyphs until corrected.
+    """
+    path = settings_path or os.path.join(
+        os.path.expanduser("~"), ".claude", "settings.json"
+    )
+    try:
+        data = _load_json(path) if os.path.isfile(path) else {}
+    except Exception as e:
+        return True, f"settings unreadable ({e}); boot will still inject header contract"
+    style = ""
+    if isinstance(data, dict):
+        style = data.get("outputStyle") or ""
+        if not isinstance(style, str):
+            style = ""
+    style = style.strip()
+    if not style:
+        return True, "outputStyle unset (plugin force-for-plugin should apply)"
+    if style == ATLAS_OUTPUT_STYLE:
+        return True, f"outputStyle={style!r}"
+    return (
+        False,
+        f"outputStyle={style!r} overrides plugin style {ATLAS_OUTPUT_STYLE!r}; "
+        f"set settings.json outputStyle to \"{ATLAS_OUTPUT_STYLE}\" so ATLAS | "
+        f"headers and phase glyphs render (SessionStart still injects the contract)",
+    )
+
+
 def run_checks(plugin_name="atlas"):
     results = []
     ctx = {}
@@ -380,6 +415,11 @@ def run_checks(plugin_name="atlas"):
         if wiring
         else "tripwire sees Skill/Agent/Task and auto-marks",
     )
+
+    # C10: explicit user outputStyle must not hide Atlas Orchestrator headers
+    style_ok, style_detail = check_output_style()
+    add("output-style", style_ok, style_detail)
+
     return results, ctx
 
 

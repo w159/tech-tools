@@ -12,6 +12,11 @@ Columns: signal, asset, type (skill / plugin / mcp), why, install command.
 | Any multi-session repo | claude-mem | plugin | Persist lessons, decisions, and errors across sessions; backs the self-improvement layer. | `claude plugin install claude-mem` |
 | Logs present or any file over 1 MB | context-mode | plugin | Process large command output and files in a sandbox so raw bytes stay out of context. | `claude plugin install context-mode` |
 | 8+ third-party deps in package.json | context7 | mcp | Live, version-correct library docs instead of guessing from memory. | `claude mcp add context7 -- npx -y @upstash/context7-mcp` |
+| Any code tree (.py/.ts/.go/.rs/...) | serena | mcp | Symbol nav + surgical edits; `activate_project` first. Primary code tool; never start with Grep. | `claude mcp add serena -- <serena launcher>` |
+| Any code tree | lean-ctx | mcp | ctx_compose/search/read keep raw bytes out of context; serena fallback; prose/config first choice. | `claude mcp add lean-ctx -- <lean-ctx launcher>` |
+| package.json or .ts/.tsx/.js/.jsx (JS/TS) | fallow | cli | Dead code, duplication, health analysis; atlas PreToolUse fallow_gate blocks agent git commit/push on audit fail once CLI is present. | `npm install -g fallow` |
+| package.json or .ts/.tsx/.js/.jsx (JS/TS) | fallow-mcp | mcp | Structured fallow tools (audit, dead_code, dupes, health) for agents. | `claude mcp add fallow -- fallow-mcp` |
+| package.json or .ts/.tsx/.js/.jsx (JS/TS) | fallow-skills | plugin | Agent skills for fallow workflows and adoption recipes. | `/plugin marketplace add fallow-rs/fallow-skills` then `/plugin install fallow-skills@fallow-rs/fallow-skills` |
 | react / vue / svelte / next / angular | playwright | mcp | Drive a real browser for runtime UI checks and end-to-end tests. | `claude mcp add playwright -- npx -y @playwright/mcp@latest` |
 | Frontend framework present | ui-ux-pro-max | skill | Design-system, palette, and UX-guideline intelligence for UI work. | `claude plugin install ui-ux-pro-max` |
 | .ps1 / .csproj / .sln (Microsoft stack) | microsoft-docs | mcp | Official Microsoft/Azure/Graph docs grounding. | `claude mcp add microsoft-docs -- npx -y @microsoft/mcp-docs` |

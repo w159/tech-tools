@@ -74,6 +74,12 @@ PID/log: `~/.atlas/dashboard.pid`, `~/.atlas/dashboard.log`.
 | POST | `/api/mcp/toggle` | enable/disable one server via `disabledMcpServers` |
 | POST | `/api/mcp/add` / `/api/mcp/remove` | user-scope servers in `~/.claude.json` |
 | POST | `/api/plugins/toggle` | `enabledPlugins` (atlas cannot disable itself) |
+| GET | `/api/todo[?project_id=]` | durable todo board `<project>/.atlas/.run/todos.json`: items + counts (needed/remaining/complete/claimed) |
+| POST | `/api/todo` | board writes: `add` (origin `manual`, never blocks the gate), `claim`, `complete`, `reopen`, `remove` |
+| GET | `/api/agents[?project_id=]` | agent roster: plugin agents plus same-name overrides under `<project>/.claude/agents/` |
+| GET | `/api/agents/{name}?project_id=` | one agent's effective body (override wins, else plugin source) |
+| POST | `/api/agents` | write or reset a same-name override `.md` (frontmatter required) |
+| GET | `/api/memory` | shared memory snapshot from `~/.atlas/memory/` |
 
 Binds loopback only. All read/write logic beyond sessions lives in
 `scripts/atlas_control.py`; `atlas_dashboard.py` stays the HTTP + UI layer.
@@ -88,9 +94,11 @@ Binds loopback only. All read/write logic beyond sessions lives in
 6. **Behavior**: the `ATLAS_*` knobs the hooks read, with the file:line that reads each  
 7. **Ecosystem**: atlas hook wiring, installed plugins, MCP servers, skills and agents  
 8. **Findings**: open self-improvement / doctor rows  
+9. **Work board**: the durable todo board with counts (needed/remaining/complete), add/claim/complete/reopen, and the shared memory snapshot  
+10. **Agents**: edit a plugin agent as a same-name override under `<project>/.claude/agents/`, or Reset back to plugin source  
 
 Tabs are deep-linkable: `/#overview`, `/#live`, `/#settings`, `/#behavior`,
-`/#ecosystem`, `/#findings`.
+`/#ecosystem`, `/#findings`, `/#work`, `/#agents`.
 
 ## Security
 
@@ -160,6 +168,21 @@ Atlas serves the page, so it refuses to disable itself; use
 - **Bulk import and export** round-trips a `.env` block. The export marks a set
   secret on its own comment line, never inline, so re-importing cannot write the
   marker text as the secret.
+
+## Work board and Agents (5.26.0+)
+
+Tab **Work** reads `<project>/.atlas/.run/todos.json`: the board `todo_capture.py`
+mirrors every `TodoWrite` into and `scripts/atlas_todo.py` reads and writes. Counts
+show needed/remaining/complete/claimed; rows support complete, reopen, and remove;
+items added here carry origin `manual`, so they never block the completion gate's
+drain check. Claim sets an owner so a parallel subagent does not rebuild the same
+item. The tab also shows the shared memory snapshot from `~/.atlas/memory/`.
+
+Tab **Agents** lists the plugin's agents plus any same-name override. Save writes
+`<project>/.claude/agents/<name>.md` (frontmatter required, safe names only); Reset
+deletes the override so the plugin source applies again. A `project_id` resolves to
+the registered `root_path` first, so the server never reads agent files from
+arbitrary client-supplied paths.
 
 ## Daemon DB pinning
 - Dashboard serves `ATLAS_DASHBOARD_DB` or `~/.atlas/atlas.db` — never ambient pytest `ATLAS_DB`.

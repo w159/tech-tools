@@ -31,11 +31,13 @@ Manual skills set `disable-model-invocation: true`.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json     # manifest (name: atlas, v5.16.0)
-|-- hooks/                         # 13 hook programs / 17 bindings (hooks.json wires them all; atlas_doctor.py lives in scripts/, SessionStart)
+|-- .claude-plugin/plugin.json     # manifest (name: atlas, v5.26.0)
+|-- hooks/                         # 15 hook programs / 19 bindings (hooks.json wires them all; atlas_doctor.py lives in scripts/, SessionStart)
 |   |-- session_boot.py            #   SessionStart: activate runtime, surface lessons
 |   |-- prompt_optimizer.py        #   UserPromptSubmit: optional rewrite + orchestration arm-early classifier
 |   |-- bash_advisor.py            #   PreToolUse(Bash): advisory warning on catastrophic commands only
+|   |-- fallow_gate.py             #   PreToolUse(Bash): fallow audit gate on git commit/push (fail-open if CLI absent)
+|   |-- todo_capture.py            #   PostToolUse(TodoWrite): mirror the plan into the durable board <project>/.atlas/.run/todos.json
 |   |-- format_after_edit.py       #   PostToolUse(Edit/Write): format after edits
 |   |-- docs_drift_watch.py        #   PostToolUse(Edit/Write/MultiEdit/NotebookEdit): inline docs-drift warning, debounced
 |   |-- dispatch_tripwire.py       #   PostToolUse advisory + PreToolUse deny: curb inline drift; flag a verifier that wrote no findings.json row
@@ -47,7 +49,7 @@ atlas/
 |   |-- nudge.py                   #   Stop only: self-improvement nudge (throttled)
 |   |-- docs_drift.py              #   not a hook; shared find_root/docs_drift/git_changed_paths used by completion_gate.py and docs_drift_watch.py
 |   `-- validate-readonly-query.sh #   not auto-loaded; DB-audit subagents wire it during read-only audits
-|-- scripts/                       # atlas_doctor.py (repair; also wired via hooks.json --hook as the 14th auto-loaded hook, SessionStart), atlas_db.py (observability), atlas_context_optimizer.py
+|-- scripts/                       # atlas_doctor.py (repair; also wired via hooks.json --hook as the 15th auto-loaded hook, SessionStart), atlas_db.py (observability), atlas_todo.py (durable todo board), atlas_context_optimizer.py
 |                                  # (disable unused skills/agents), atlas_curator.py, atlas_memory.py,
 |                                  # asset_audit.py, discover_capabilities.py, build_hub.py, install_hooks.py + tests
 |-- output-styles/
@@ -79,8 +81,9 @@ the capabilities your stack needs, and tells you what to run next.
 ## Hooks
 
 The hooks auto-load from `hooks/hooks.json` when the plugin is installed - no
-manual step. Each is stdlib-only and fails safe: any internal error exits 0, so a
-hook can never block a session.
+manual step. Each is stdlib-only and fails open on internal errors (exit 0).
+Two hooks may deny a tool call on purpose: `dispatch_tripwire` (orchestration
+invariants) and `fallow_gate` (fallow audit `verdict: fail` on git commit/push).
 
 | Hook | Event | Purpose |
 | --- | --- | --- |
@@ -88,7 +91,9 @@ hook can never block a session.
 | `atlas_doctor.py --hook` | `SessionStart` | Rollback guard: warn loudly if the installed plugin was downgraded, the marketplace points at a fork, or hooks/assets are missing (warn-only, always exits 0) |
 | `prompt_optimizer.py` | `UserPromptSubmit` | Optional trigger-gated prompt rewrite; also arm-early classifier that flags substantive engineering prompts as orchestration runs (`ATLAS_ENGINE_ARM=off`) |
 | `bash_advisor.py` | `PreToolUse` (Bash) | Advisory only: warns on catastrophic patterns (`rm -rf /`, `mkfs`, `dd` to a disk, fork bomb). Never denies |
+| `fallow_gate.py` | `PreToolUse` (Bash) | Fallow agent gate: on `git commit`/`git push`, runs `fallow audit --format json --quiet --explain --gate-marker agent` and denies when `verdict` is `fail`. Fail-open if the fallow CLI is missing (`ATLAS_FALLOW=off`, `FALLOW_GATE_MIN_VERSION`). Docs: `skills/atlas-orchestrate/references/fallow-tools.md` |
 | `dispatch_tripwire.py` | `PostToolUse` + `PreToolUse` | Flag orchestration sessions, count inline ops, advise at the threshold; deny tier blocks at 6 unsanctioned inline ops (the orchestrator's own docs//.atlas/ writes are excluded, since the completion gate requires them at closeout) or any non-docs edit in an orchestration run (`ATLAS_TRIPWIRE=off`, `ATLAS_TRIPWIRE_HARD=off`). Also denies, unconditionally and ahead of the kill switch, any nested `Agent`/`Task` dispatch whose `transcript_path` is a `subagents/` transcript: a subagent must never dispatch another subagent. Also brackets every `*verifier*` dispatch: snapshots the `findings.json` entry count on `PreToolUse` and, if the verifier returns without adding a row, tells the orchestrator to write the verdict with `scripts/atlas_finding.py` rather than re-dispatching |
+| `todo_capture.py` | `PostToolUse` (TodoWrite) | Mirror every `TodoWrite` plan into the durable board `<project>/.atlas/.run/todos.json` (`ATLAS_TODO=off` disables) so the dashboard Work tab, parallel subagents, and the completion gate's drain fallback all read the session's real progress; keeps existing claims on matching content |
 | `format_after_edit.py` | `PostToolUse` (Edit/Write) | Run the repo's formatter after edits |
 | `docs_drift_watch.py` | `PostToolUse` (Edit/Write/MultiEdit/NotebookEdit) | Inline backstop for `completion_gate.py` condition (f): warns the moment a non-docs edit drifts from `docs/`, instead of waiting for Stop. Debounced per session_id (first drifting edit, then every 5th; resets when `docs/` reappears in the diff or a new/missing session_id arrives); silent with no `docs/`, `ATLAS_GATE=off`, or on a `docs/`/`.atlas/` path. The backing `git diff` is cached for 2s (`time.monotonic`) to keep the common-path cost low |
 | `completion_gate.py` | `Stop` | Block a premature "done" until the definition-of-done holds: evidence artifact and independent verifier (only once this run shipped non-docs code), current docs, verifier coverage (orchestrating sessions only; `ATLAS_GATE=off`). Silent on pass -- speaks only when it blocks |
@@ -114,17 +119,17 @@ settings manually. The optional ollama-backed optimizer is configured with
 
 ## Local dashboard (multi-session)
 
-Open `http://127.0.0.1:7421/` once. All concurrent terminals share it; switch via Project/Session controls.
+Open `http://127.0.0.1:7421/` once. All concurrent terminals share it; switch via Project/Session controls. Beyond run visibility it is where behavior is altered: the Work tab reads and drives the durable todo board `<project>/.atlas/.run/todos.json` (counts, add/claim/complete/reopen; manual items never block the completion gate) and shows the shared memory snapshot from `~/.atlas/memory/`, and the Agents tab edits same-name overrides under `<project>/.claude/agents/` (frontmatter required; Reset restores the plugin source).
 
 ## Local dashboard API
 
-For a browser UI (or any local client) that needs live visibility into runs, savings proxies, and connector configuration:
+For a browser UI (or any local client) that needs live visibility into runs, savings proxies, connector configuration, the todo board, and agent overrides:
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_dashboard.py" serve --port 7421
 ```
 
-Loopback-only JSON API. See `skills/atlas-orchestrate/references/dashboard-api.md`.
+Loopback-only JSON API. `/api/todo`, `/api/agents`, and `/api/memory` sit beside the run and connector endpoints. See `skills/atlas-orchestrate/references/dashboard-api.md`.
 
 ## Self-improvement
 
@@ -140,13 +145,19 @@ atlas-audit's self mode reads the same observability DB to report run health
 
 ## Dependencies
 
-Atlas integrates two companions and recommends installing them during setup:
+Atlas integrates session companions and code-nav tools, recommended during setup:
 - claude-mem - cross-session memory that backs the self-improvement layer.
 - context-mode - large-output sandbox that keeps raw bytes out of the context window.
+- ponytail - optional less-code session posture.
+- **serena** - symbol intelligence (`activate_project` first, then overview/find/edit).
+- **lean-ctx** - shaped compose/search/read; serena fallback; never Bash-grep first.
 
-It also recommends a docs resolver (context7) and a symbol/LSP server (serena) when
-the stack calls for them. Atlas degrades gracefully and uses only the tools present
-in the session.
+SessionStart injects a compact tool-routing blurb; the full matrix is
+`skills/atlas-orchestrate/references/tool-routing.md`. Dispatch tripwire denies
+`atlas:*` prompts that omit ToolSearch + serena/lean-ctx. On JS/TS trees it also
+recommends [Fallow](https://docs.fallow.tools) (CLI + MCP + skills); `fallow_gate`
+audits agent git commit/push when the CLI is present. Atlas degrades gracefully
+and uses only the tools present in the session.
 
 ## License
 

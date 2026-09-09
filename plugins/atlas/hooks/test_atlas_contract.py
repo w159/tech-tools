@@ -25,6 +25,7 @@ from pathlib import Path
 HOOKS_DIR = Path(__file__).resolve().parent
 PLUGIN_ROOT = HOOKS_DIR.parent
 REPO_ROOT = PLUGIN_ROOT.parent.parent
+SCRIPTS_DIR = PLUGIN_ROOT / "scripts"
 HOOKS_JSON = HOOKS_DIR / "hooks.json"
 OUTPUT_STYLE = PLUGIN_ROOT / "output-styles" / "atlas-orchestrator.md"
 
@@ -886,7 +887,7 @@ class NoiseContract(unittest.TestCase):
     def test_boot_context_is_capped(self):
         """An uncapped boot dump is the largest single block of session noise."""
         body = (HOOKS_DIR / "session_boot.py").read_text(encoding="utf-8")
-        self.assertIn('"\\n".join(lines)[:3000]', body)
+        self.assertIn("body = body[:3500]", body)
 
 
 class OrchestrationContract(unittest.TestCase):
@@ -989,9 +990,9 @@ class InsightRemediationContract(unittest.TestCase):
         """The report's single most repeated failure: a handoff request that
         the Stop gate turns into a fresh remediation wave. The preflight has to
         come before the summary body, not after it."""
-        text = (
-            PLUGIN_ROOT / "skills" / "atlas-handoff" / "SKILL.md"
-        ).read_text(encoding="utf-8")
+        text = (PLUGIN_ROOT / "skills" / "atlas-handoff" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("preflight", text.lower())
         preflight_at = text.lower().index("preflight")
         summary_at = text.index("Produce a session handoff")
@@ -1137,7 +1138,9 @@ class RightSizedDelegationContract(unittest.TestCase):
     def test_small_change_still_gets_a_subagent(self):
         """Right-sizing must never be read as 'do it inline'."""
         text = OrchestrationContract()._body()
-        self.assertIn("a one-line change is still an `atlas:implementer` dispatch", text)
+        self.assertIn(
+            "a one-line change is still an `atlas:implementer` dispatch", text
+        )
 
     def test_deny_tier_excludes_the_orchestrator_sanctioned_writes(self):
         """The gate orders docs//.atlas/ writes at closeout. Counting them
@@ -1234,3 +1237,66 @@ class DecisionsAreBlockingContract(unittest.TestCase):
         self.assertIn("AskUserQuestion", text)
         decision_at = text.index("A subagent's `DECISION NEEDED:` is a hard stop")
         self.assertIn("AskUserQuestion", text[decision_at : decision_at + 800])
+
+
+class TodoBoardContract(unittest.TestCase):
+    """The durable todo board: one JSON file per project, three writers
+    (TodoWrite mirror, orchestrator CLI, subagent claims), and the dashboard
+    surfaces that make remaining work visible."""
+
+    def test_todo_capture_is_wired_to_todowrite(self):
+        bound = [c for c in _commands_for("PostToolUse") if "todo_capture.py" in c]
+        self.assertTrue(bound, "hooks.json must run todo_capture.py on PostToolUse")
+        matchers = [
+            e.get("matcher")
+            for e in _hooks_config()["PostToolUse"]
+            if any(
+                "todo_capture.py" in h.get("command", "") for h in e.get("hooks", [])
+            )
+        ]
+        self.assertEqual(matchers, ["TodoWrite"])
+
+    def test_gate_falls_back_to_board_and_ledger(self):
+        src = (HOOKS_DIR / "completion_gate.py").read_text(encoding="utf-8")
+        self.assertIn("_board_open_todos", src)
+        self.assertIn("_ledger_open_todos", src)
+        self.assertIn("todos.json", src)
+        # Manual notes and other sessions' items never block this session.
+        self.assertIn('item.get("origin") != "manual"', src)
+        self.assertIn('item.get("session_id") == session_id', src)
+
+    def test_session_boot_carries_over_the_board(self):
+        src = (HOOKS_DIR / "session_boot.py").read_text(encoding="utf-8")
+        self.assertIn("carry_over", src)
+        self.assertIn("atlas_todo", src)
+
+    def test_orchestrate_names_the_todo_store(self):
+        """The skill must tell the orchestrator where work is recorded when
+        TodoWrite is unavailable."""
+        body = OrchestrationContract()._body()
+        self.assertIn("todos.json", body)
+        self.assertIn("atlas_todo.py", body)
+
+    def test_subagent_kit_carries_the_claim_protocol(self):
+        text = (
+            PLUGIN_ROOT
+            / "skills"
+            / "atlas-orchestrate"
+            / "references"
+            / "subagent-kit.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("claim", text.lower())
+        self.assertIn("atlas_todo.py", text)
+
+    def test_dashboard_serves_board_and_agents(self):
+        ui = (SCRIPTS_DIR / "atlas_dashboard.py").read_text(encoding="utf-8")
+        for marker in (
+            "/api/todo",
+            "/api/agents",
+            "/api/memory",
+            'id="tab-work"',
+            'id="tab-agents"',
+            'data-tab="work"',
+            'data-tab="agents"',
+        ):
+            self.assertIn(marker, ui, marker)

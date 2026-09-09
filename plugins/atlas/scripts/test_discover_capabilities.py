@@ -35,6 +35,8 @@ class ScanTests(unittest.TestCase):
         c = discover_capabilities.scan(self.tmp)
         self.assertEqual(c["files"], 0)
         self.assertFalse(c["frontend"])
+        self.assertFalse(c["js_ts"])
+        self.assertFalse(c["has_code"])
         self.assertFalse(c["terraform"])
         self.assertFalse(c["containers"])
         self.assertFalse(c["microsoft"])
@@ -121,13 +123,28 @@ class ScanTests(unittest.TestCase):
         write(os.path.join(self.tmp, "package.json"), json.dumps(pkg))
         c = discover_capabilities.scan(self.tmp)
         self.assertTrue(c["frontend"])
+        self.assertTrue(c["js_ts"])
         self.assertEqual(c["dep_count"], 2)
+
+
+    def test_scan_py_marks_has_code(self):
+        write(os.path.join(self.tmp, "x.py"), "x=1\n")
+        c = discover_capabilities.scan(self.tmp)
+        self.assertTrue(c["has_code"])
+        self.assertFalse(c["js_ts"])
+
+    def test_scan_ts_file_marks_js_ts(self):
+        write(os.path.join(self.tmp, "app.ts"), "export const x = 1\n")
+        c = discover_capabilities.scan(self.tmp)
+        self.assertTrue(c["js_ts"])
+        self.assertFalse(c["frontend"])
 
     def test_scan_package_json_non_frontend(self):
         pkg = {"dependencies": {"express": "^4.0.0"}}
         write(os.path.join(self.tmp, "package.json"), json.dumps(pkg))
         c = discover_capabilities.scan(self.tmp)
         self.assertFalse(c["frontend"])
+        self.assertTrue(c["js_ts"])
         self.assertEqual(c["dep_count"], 1)
 
     def test_scan_package_json_deps_merge_takes_max(self):
@@ -247,11 +264,17 @@ class MainTests(unittest.TestCase):
         self.assertIn("playwright", ids)
         self.assertIn("ui-ux-pro-max", ids)
         self.assertIn("context7", ids)  # dep_count >= 8
+        self.assertIn("serena", ids)
+        self.assertIn("lean-ctx", ids)
+        self.assertIn("fallow", ids)
+        self.assertIn("fallow-mcp", ids)
+        self.assertIn("fallow-skills", ids)
         self.assertIn("microsoft-docs", ids)
         self.assertIn("iac-skill", ids)
         self.assertIn("container-tooling", ids)
         self.assertIn("context-mode", ids)  # has_logs True
         self.assertIn("connectors (atlas-setup)", ids)  # has_mcp_servers True
+        self.assertTrue(payload["context"]["js_ts"])
         # Each recommendation carries the required fields.
         for r in payload["recommendations"]:
             self.assertIn("type", r)
