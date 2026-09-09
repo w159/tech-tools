@@ -1300,3 +1300,35 @@ class TodoBoardContract(unittest.TestCase):
             'data-tab="agents"',
         ):
             self.assertIn(marker, ui, marker)
+
+
+class StatuslineContract(unittest.TestCase):
+    """The ATLAS statusline segment: the durable board rendered as a static
+    line at the prompt. The native todo widget cannot render when the auto
+    permission mode drops TodoWrite, so the statusline is the terminal
+    surface that never scrolls away."""
+
+    def test_session_boot_syncs_the_shim(self):
+        src = (HOOKS_DIR / "session_boot.py").read_text(encoding="utf-8")
+        self.assertIn("_sync_statusline_shim", src)
+        self.assertIn("atlas_statusline.py", src)
+
+    def test_renderer_reads_the_durable_board(self):
+        src = (SCRIPTS_DIR / "atlas_statusline.py").read_text(encoding="utf-8")
+        self.assertIn("todos.json", src)
+        self.assertIn("session_id", src)
+        # ATLAS_STATUSLINE=off is the documented kill switch.
+        self.assertIn("ATLAS_STATUSLINE", src)
+
+    def test_render_survives_a_missing_board(self):
+        """Fail-open is the contract: import and call render on an empty dir."""
+        import importlib.util
+        import tempfile
+
+        spec = importlib.util.spec_from_file_location(
+            "atlas_statusline", SCRIPTS_DIR / "atlas_statusline.py"
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        with tempfile.TemporaryDirectory() as root:
+            self.assertEqual(mod.render(root, "s1"), "")

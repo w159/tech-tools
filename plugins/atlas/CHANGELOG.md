@@ -1,5 +1,25 @@
 # Changelog
 
+## [5.27.0] - 2026-09-09
+
+### Added
+- **ATLAS statusline segment:** `scripts/atlas_statusline.py` renders the durable
+  todo board as a static ATLAS-branded line at the prompt input (counts, current
+  item, remaining), where output scrolls past it. The native todo widget only
+  renders when `TodoWrite` runs, and the `auto` permission mode drops `TodoWrite`
+  entirely, so the board - not the widget - is the plan surface. The current
+  session's items render first with a whole-board fallback (carried-over work
+  still shows); missing or unreadable boards print nothing (fail-open);
+  `ATLAS_STATUSLINE=off` disables. `session_boot.py` copies the self-contained
+  script to `~/.atlas/atlas_statusline.py` so the statusline command can call a
+  stable path that survives plugin reinstalls. 7 renderer tests plus 3
+  `StatuslineContract` cases in the atlas contract suite.
+- **Tripwire deny tier is subagent-safe:** the PreToolUse deny tier in
+  `dispatch_tripwire.py` now skips dispatched subagents (`_in_subagent` via
+  transcript_path). The tier polices the orchestrator's own inline drift; a
+  subagent's Read/Edit/Write is the delegated work, and its payload can carry the
+  parent's flagged session_id. `SubagentDenyTierSkipTest` covers it.
+
 ## [5.26.0] - 2026-09-09
 
 ### Added

@@ -324,7 +324,14 @@ def main():
         atlas_db.init(conn)
 
         if event == "PreToolUse":
-            _pre_tool_use(conn, atlas_db, tool, session, path, tinput)
+            # The deny tier polices the ORCHESTRATOR's own inline drift; a
+            # subagent's Read/Edit/Write IS the delegated work, not drift.
+            # A subagent's payload can carry the parent's session_id, so
+            # is_orchestrating() alone cannot tell them apart -- transcript_path
+            # (checked by _in_subagent) is the reliable marker. Nested
+            # dispatches are already denied above, before this point.
+            if not _in_subagent(payload):
+                _pre_tool_use(conn, atlas_db, tool, session, path, tinput)
             return
 
         if tool == "Skill":

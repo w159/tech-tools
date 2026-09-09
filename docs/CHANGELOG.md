@@ -1,5 +1,31 @@
 # Changelog
 
+## [5.27.0] - 2026-09-09 -- ATLAS statusline: the todo board as a static line at the prompt
+
+Marketplace `3.16.0`; atlas `5.27.0`.
+
+The user ran atlas after reinstall and saw no todo list in the terminal: their
+`settings.json` sets `"defaultMode": "auto"`, which drops the `TodoWrite` tool, so
+Claude Code's native todo widget can never render and no hook can brand it. The
+durable board (`<project>/.atlas/.run/todos.json`) is the plan, so atlas now
+renders it statically at the prompt: `scripts/atlas_statusline.py` reads the board
+and prints one ATLAS-branded line (counts, current item, remaining) that sits at
+the prompt input while output scrolls. It prefers the current session's items and
+falls back to the whole project board so carried-over work still shows; it prints
+nothing when the board is empty or unreadable (fail-open) and `ATLAS_STATUSLINE=off`
+disables it. `session_boot.py` copies the self-contained script to
+`~/.atlas/atlas_statusline.py` so the statusline command calls a stable path that
+survives plugin reinstalls. Verified live: with a seeded board, the user's
+`statusline-command.sh` renders line 4 as `ATLAS 1/3 | now: wire the ATLAS
+statusline | 2 left`; with no board it renders nothing. 7 renderer unit tests plus
+3 permanent `StatuslineContract` cases in the atlas contract suite.
+
+Also in this release: the dispatch tripwire's PreToolUse deny tier now skips
+dispatched subagents (transcript_path detection, `SubagentDenyTierSkipTest`).
+The tier polices the orchestrator's own inline drift; a subagent's Read/Edit/
+Write is the delegated work, and its payload can carry the parent's flagged
+session_id.
+
 ## [5.26.0] - 2026-09-09 -- durable todo board, gate drain fallback, dashboard Work/Agents tabs
 
 Marketplace `3.15.0`; atlas `5.26.0`.
