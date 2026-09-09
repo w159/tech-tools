@@ -88,6 +88,11 @@ board itself so the dashboard and the gate can see the plan:
 Update it alongside the LEDGER line - whenever the ledger count changes, a one-line
 `set` on the board costs nothing and keeps the whole system honest.
 
+The board also renders itself: the ATLAS statusline segment
+(`scripts/atlas_statusline.py`) draws the plan as a static ATLAS-branded line at
+the prompt input while output scrolls, so the ledger you carry is the line the
+user sees.
+
 ## Steering arrives mid-run
 
 A user message during a wave is a correction, new scope, or a process change.

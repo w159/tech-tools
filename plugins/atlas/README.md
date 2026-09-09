@@ -31,7 +31,7 @@ Manual skills set `disable-model-invocation: true`.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json     # manifest (name: atlas, v5.26.0)
+|-- .claude-plugin/plugin.json     # manifest (name: atlas, v5.27.0)
 |-- hooks/                         # 15 hook programs / 19 bindings (hooks.json wires them all; atlas_doctor.py lives in scripts/, SessionStart)
 |   |-- session_boot.py            #   SessionStart: activate runtime, surface lessons
 |   |-- prompt_optimizer.py        #   UserPromptSubmit: optional rewrite + orchestration arm-early classifier
@@ -49,7 +49,7 @@ atlas/
 |   |-- nudge.py                   #   Stop only: self-improvement nudge (throttled)
 |   |-- docs_drift.py              #   not a hook; shared find_root/docs_drift/git_changed_paths used by completion_gate.py and docs_drift_watch.py
 |   `-- validate-readonly-query.sh #   not auto-loaded; DB-audit subagents wire it during read-only audits
-|-- scripts/                       # atlas_doctor.py (repair; also wired via hooks.json --hook as the 15th auto-loaded hook, SessionStart), atlas_db.py (observability), atlas_todo.py (durable todo board), atlas_context_optimizer.py
+|-- scripts/                       # atlas_doctor.py (repair; also wired via hooks.json --hook as the 15th auto-loaded hook, SessionStart), atlas_db.py (observability), atlas_todo.py (durable todo board), atlas_statusline.py (ATLAS-branded todo line at the prompt; session_boot copies it to ~/.atlas/atlas_statusline.py), atlas_context_optimizer.py
 |                                  # (disable unused skills/agents), atlas_curator.py, atlas_memory.py,
 |                                  # asset_audit.py, discover_capabilities.py, build_hub.py, install_hooks.py + tests
 |-- output-styles/
@@ -116,6 +116,22 @@ For installs outside a plugin, `scripts/install_hooks.py` wires the hooks into
 settings manually. The optional ollama-backed optimizer is configured with
 `ATLAS_OPTIMIZE_CMD`, `ATLAS_OPTIMIZER_MODEL`, and `ATLAS_OLLAMA_URL`
 (see `skills/atlas-orchestrate/references/hooks-automation.md`); it is not required.
+
+## ATLAS statusline (todos at the prompt)
+
+Claude Code renders its native todo widget only when `TodoWrite` runs, and the
+`auto` permission mode drops `TodoWrite` entirely, so in that mode no plan can
+appear there. The durable board is the plan, so atlas renders it statically at
+the prompt instead: `scripts/atlas_statusline.py` reads
+`<project>/.atlas/.run/todos.json` and prints one ATLAS-branded line (counts,
+current item, remaining) that sits at the prompt input while output scrolls.
+`session_boot.py` copies the self-contained script to `~/.atlas/atlas_statusline.py`
+so a statusline command can call a stable path that survives plugin reinstalls.
+Wire it as one more line in your `statusLine` command:
+`printf '%s' "$input" | python3 "$HOME/.atlas/atlas_statusline.py"`. It shows the
+current session's items first and falls back to the whole project board (so
+carried-over work shows), prints nothing when the board is empty or unreadable,
+and `ATLAS_STATUSLINE=off` disables it. Stdlib only, fail-open.
 
 ## Local dashboard (multi-session)
 

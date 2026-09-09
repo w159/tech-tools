@@ -832,6 +832,78 @@ class WorktreeFlagTest(unittest.TestCase):
         self.assertTrue(self._flag())
 
 
+class SubagentDenyTierSkipTest(unittest.TestCase):
+    """The PreToolUse deny tier must never fire inside a dispatched subagent:
+    it polices the ORCHESTRATOR's own inline drift, and a subagent's payload
+    can carry the PARENT session_id (which IS flagged orchestrating), so the
+    tier is skipped by transcript_path (_in_subagent), not by session flag."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.env = dict(os.environ, ATLAS_DB=os.path.join(self.tmp, "atlas.db"))
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db
+
+        conn = atlas_db.connect(self.env["ATLAS_DB"])
+        atlas_db.init(conn)
+        pid = atlas_db.register_project(conn, "/repo/x")
+        atlas_db.start_run(conn, pid, "sess-1")
+        atlas_db.mark_orchestrating(conn, "sess-1")
+        conn.close()
+        self.sub_transcript = os.path.join(
+            self.tmp, "proj", "sess-1", "subagents", "agent-abc123.jsonl"
+        )
+        self.main_transcript = os.path.join(self.tmp, "proj", "sess-1.jsonl")
+
+    def _payload(self, tool, tinput, transcript):
+        return {
+            "session_id": "sess-1",
+            "hook_event_name": "PreToolUse",
+            "tool_name": tool,
+            "transcript_path": transcript,
+            "tool_input": tinput,
+        }
+
+    def _decision(self, stdout):
+        if not stdout.strip():
+            return None
+        return json.loads(stdout)["hookSpecificOutput"].get("permissionDecision")
+
+    def test_edit_from_subagent_with_parent_session_id_is_not_denied(self):
+        r = run_hook(
+            self._payload(
+                "Edit", {"file_path": "src/app.ts"}, self.sub_transcript
+            ),
+            self.env,
+        )
+        self.assertEqual(r.returncode, 0)
+        self.assertIsNone(self._decision(r.stdout))
+
+    def test_same_edit_from_the_main_transcript_is_still_denied(self):
+        r = run_hook(
+            self._payload(
+                "Edit", {"file_path": "src/app.ts"}, self.main_transcript
+            ),
+            self.env,
+        )
+        self.assertEqual(r.returncode, 0)
+        self.assertEqual(self._decision(r.stdout), "deny")
+        self.assertIn("never edit target code inline", r.stdout)
+
+    def test_inline_op_threshold_is_also_skipped_inside_a_subagent(self):
+        last = None
+        for _ in range(5):
+            last = run_hook(
+                self._payload(
+                    "Read", {"file_path": "a.py"}, self.sub_transcript
+                ),
+                self.env,
+            )
+        assert last is not None  # range(5) always runs at least once
+        self.assertEqual(last.returncode, 0)
+        self.assertIsNone(self._decision(last.stdout))
+
+
 if __name__ == "__main__":
     unittest.main()
 

@@ -887,5 +887,25 @@
     "status": "verified",
     "verified_at": "2026-09-09T11:48:20+00:00",
     "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "S-statusline",
+    "surface": "plugins/atlas/scripts/atlas_statusline.py + hooks/session_boot.py + user statusline wiring",
+    "category": "feature",
+    "severity": "low",
+    "title": "ATLAS statusline segment renders the durable todo board as a static branded line at the prompt (5.27.0)",
+    "evidence": [
+      "python3 -m unittest discover (scripts): Ran 648 tests OK, includes 7 test_atlas_statusline cases",
+      "hooks contract suite: Ran 86 tests OK (skipped=3), includes 3 StatuslineContract cases",
+      "live render: /tmp/atlas-sline board -> bash ~/.claude/statusline-command.sh line 4 = ESC[1;36mATLAS ESC[0m ESC[1;90m1/3 | now: wire the ATLAS statusline | 2 left; no-board project prints nothing",
+      "shim seeded to ~/.atlas/atlas_statusline.py, syntax-checked; session_boot._sync_statusline_shim keeps it current on every boot"
+    ],
+    "doc_refs": [],
+    "reproduction": "echo '{\"session_id\":\"live-1\",\"cwd\":\"<root-with-board>\"}' | bash ~/.claude/statusline-command.sh",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-09-09T12:17:16+00:00",
+    "verified_by": "atlas-orchestrator"
   }
 ]
