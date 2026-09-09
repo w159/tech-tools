@@ -26,7 +26,10 @@ def ensure_dashboard():
         return None
     try:
         import subprocess
-        scripts = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
+
+        scripts = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "..", "scripts"
+        )
         script = os.path.abspath(os.path.join(scripts, "atlas_dashboard.py"))
         if not os.path.isfile(script):
             return None
@@ -45,13 +48,77 @@ def ensure_dashboard():
         if not url:
             return None
         state = "ready" if data.get("already_running") else "started"
-        return "dashboard: %s (%s) — open once; all concurrent terminals share it" % (url, state)
+        return "dashboard: %s (%s) — open once; all concurrent terminals share it" % (
+            url,
+            state,
+        )
     except Exception:
         return None
 
 
 def has_cmd(name):
     return shutil.which(name) is not None
+
+
+# Output-style name shipped under output-styles/atlas-orchestrator.md (force-for-plugin).
+# Claude Code still honors an explicit settings.json "outputStyle" over the plugin force,
+# so a user set to "concise" (or anything else) silently kills ATLAS | headers and the
+# phase glyphs. Boot therefore re-injects the contract every session regardless.
+ATLAS_OUTPUT_STYLE = "Atlas Orchestrator"
+_STATUS_GLYPHS = (
+    "research 🔍 | theory 💡 | test 🧪 | validate 📋 | "
+    "implement 🔧 | verify ✅ | done 🏁 | blocked ⛔"
+)
+
+
+def read_output_style(settings_path=None):
+    """Return settings.json outputStyle or '' if unset/unreadable."""
+    path = settings_path or os.path.join(
+        os.path.expanduser("~"), ".claude", "settings.json"
+    )
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+        if not isinstance(data, dict):
+            return ""
+        val = data.get("outputStyle") or ""
+        return val if isinstance(val, str) else ""
+    except Exception:
+        return ""
+
+
+def status_contract_lines(active_style=""):
+    """Always-on reporting + loop contract. Survives outputStyle overrides."""
+    lines = [
+        "STATUS HEADER (mandatory every substantive reply): "
+        "ATLAS | <glyph> <phase> | <one-line state>  "
+        "phases/glyphs: %s. Lead with the decision; no preamble." % _STATUS_GLYPHS,
+        "LOOP (do not skip): research (tools first: serena activate_project + lean-ctx, "
+        "not Bash grep) -> theory -> test (failing check) -> validate -> implement "
+        "(atlas:implementer only) -> verify (test stamp or atlas:verifier) -> docs "
+        "(atlas:docs-curator: CHANGELOG/ROADMAP/findings; archive fixed noise).",
+        "DISPATCH colors (Claude Code activity): explorer cyan, implementer green, "
+        "verifier red, planner blue, docs-curator purple, db-prober yellow, "
+        "ui-runtime-tester pink. Name every dispatch: DISPATCH -> atlas:<role> (...).",
+        "LEDGER under the header when TodoWrite is unavailable: "
+        "LEDGER | n/m | now: ... | left: ...",
+    ]
+    style = (active_style or "").strip()
+    if style and style != ATLAS_OUTPUT_STYLE:
+        lines.append(
+            "STYLE OVERRIDE: settings.json outputStyle is %r, not %r. "
+            "Plugin force-for-plugin cannot win over an explicit user style, so headers "
+            "and phase glyphs vanish unless you follow this boot contract OR set "
+            'outputStyle to "Atlas Orchestrator" (atlas-setup / doctor will offer). '
+            "Until then, still emit ATLAS | headers every substantive reply."
+            % (style, ATLAS_OUTPUT_STYLE)
+        )
+    elif not style:
+        lines.append(
+            "outputStyle unset - atlas output-styles/atlas-orchestrator.md "
+            "(force-for-plugin) should apply; still emit ATLAS | headers."
+        )
+    return lines
 
 
 def detect_dep(module_marker):
@@ -462,6 +529,33 @@ def main():
 
     resume = resume_block(payload.get("cwd") or os.getcwd())
 
+    # Todo board: hand unfinished items from previous sessions to this one
+    # (origin=carried) and archive what completed. The boot line gives the
+    # session its starting ledger; the dashboard Work tab renders the board.
+    # Fail-open; ATLAS_TODO=off skips entirely.
+    todo_line = None
+    try:
+        if os.environ.get("ATLAS_TODO", "").lower() not in ("0", "off", "false", "no"):
+            sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+            import atlas_todo
+
+            _todo_root = atlas_todo.find_root(payload.get("cwd") or os.getcwd())
+            carry = atlas_todo.carry_over(_todo_root, payload.get("session_id", ""))
+            c = carry.get("counts") or {}
+            if c.get("needed") or carry.get("carried"):
+                todo_line = (
+                    "todo board: %d needed / %d remaining / %d complete (%d carried "
+                    "from previous sessions; dashboard Work tab)"
+                    % (
+                        c.get("needed", 0),
+                        c.get("remaining", 0),
+                        c.get("complete", 0),
+                        carry.get("carried", 0),
+                    )
+                )
+    except Exception:
+        pass  # todo carry-over is best-effort; never block boot
+
     # Run the curator to manage auto-created skill lifecycle (fail-open)
     try:
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
@@ -498,6 +592,7 @@ def main():
 
     mem = detect_dep("claude_mem") or has_cmd("claude-mem")
     ctx = detect_dep("context_mode") or has_cmd("context-mode")
+    fallow = has_cmd("fallow")
 
     pony = has_cmd("ponytail")
     if not pony:
@@ -509,11 +604,13 @@ def main():
     # Boot context is terminal noise on every session start. Keep it to the one
     # fact the model cannot infer (posture + squad) plus setup gaps that are
     # actually actionable; the rest lives in the skill, not in every boot.
+    active_style = read_output_style()
     lines = [
         "Atlas: orchestrator posture. research -> theory -> test -> validate -> implement -> verify; "
         "evidence before any done claim. Route execution to atlas:<role> subagents; "
         "invoke atlas-orchestrate for multi-step or whole-codebase work.",
     ]
+    lines.extend(status_contract_lines(active_style))
     absent = [
         name
         for name, present in (
@@ -525,8 +622,48 @@ def main():
     ]
     if absent:
         lines.append(
-            "Setup gap: %s absent - run the `atlas` skill to install." % ", ".join(absent)
+            "Setup gap: %s absent - run the `atlas` skill to install."
+            % ", ".join(absent)
         )
+    if fallow:
+        lines.append(
+            "fallow: CLI on PATH - PreToolUse fallow_gate audits git commit/push "
+            "(ATLAS_FALLOW=off to disable). JS/TS: prefer fallow --format json / fallow-mcp."
+        )
+    else:
+        # Only nudge when the cwd looks like JS/TS so Python-only repos stay quiet.
+        try:
+            cwd = payload.get("cwd") or os.getcwd()
+            js_hint = os.path.isfile(os.path.join(cwd, "package.json"))
+            if not js_hint:
+                for _dp, _dns, fns in os.walk(cwd):
+                    _dns[:] = [
+                        d
+                        for d in _dns
+                        if d
+                        not in (
+                            ".git",
+                            "node_modules",
+                            "dist",
+                            "build",
+                            ".next",
+                            "__pycache__",
+                        )
+                    ]
+                    if any(
+                        fn.endswith((".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"))
+                        for fn in fns
+                    ):
+                        js_hint = True
+                        break
+                    break  # top level only; keep boot cheap
+            if js_hint:
+                lines.append(
+                    "fallow: CLI absent on a JS/TS tree - install with `npm install -g fallow` "
+                    "(atlas fallow_gate stays inert until then; see fallow-tools.md)."
+                )
+        except Exception:
+            pass
 
     try:
         missing = missing_structure(payload.get("cwd") or os.getcwd())
@@ -538,12 +675,27 @@ def main():
     except Exception:
         pass  # structure advisory is best-effort; never block boot
 
+    if todo_line:
+        lines.append(todo_line)
+
     try:
         healed = heal_serena_project(payload.get("cwd") or os.getcwd())
         if healed:
             lines.append(healed)
     except Exception:
         pass  # serena heal is best-effort; never block boot
+
+    # Compact tool-routing lines (serena/lean-ctx/claude-mem/...). Full matrix is
+    # progressive-disclosure under atlas-orchestrate/references/tool-routing.md.
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import tool_routing
+
+        for line in tool_routing.boot_lines(root=payload.get("cwd") or os.getcwd()):
+            if line and line not in lines:
+                lines.append(line)
+    except Exception:
+        pass
 
     if memory_block:
         lines.append(memory_block)
@@ -555,12 +707,23 @@ def main():
             lines.append(dash)
     except Exception:
         pass  # dashboard is best-effort; never block boot
+    sys_msg = "Atlas ready"
+    if not (mem and ctx):
+        sys_msg += " (run the `atlas` skill to complete setup)"
+    if active_style and active_style != ATLAS_OUTPUT_STYLE:
+        sys_msg += (
+            f" | outputStyle={active_style!r} overrides {ATLAS_OUTPUT_STYLE!r} "
+            "(ATLAS | headers may vanish; set outputStyle or follow boot contract)"
+        )
+    # Status contract must never be truncated away: keep it first, then fill.
+    body = "\n".join(lines)
+    if len(body) > 3500:
+        body = body[:3500]
     out = {
-        "systemMessage": "Atlas ready"
-        + ("" if (mem and ctx) else " (run the `atlas` skill to complete setup)"),
+        "systemMessage": sys_msg,
         "hookSpecificOutput": {
             "hookEventName": "SessionStart",
-            "additionalContext": "\n".join(lines)[:3000],
+            "additionalContext": body,
         },
     }
     sys.stdout.write(json.dumps(out))

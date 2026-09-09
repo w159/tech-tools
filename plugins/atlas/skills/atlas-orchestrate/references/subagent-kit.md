@@ -11,14 +11,19 @@ ROLE: <one line, which specialist this is>
 GOAL: <one sentence, measurable>
 CONTEXT: <only what it cannot derive itself: key paths, the inventory line, prior finding ids>
 TOOLS (required - name them, do not say "use the right tools"):
-  ToolSearch first, ONE batched call, before any Read/Grep/Bash - paste it verbatim:
-    ToolSearch("select:mcp__lean-ctx__ctx_compose,mcp__lean-ctx__ctx_search,mcp__lean-ctx__ctx_read,mcp__lean-ctx__ctx_glob,mcp__lean-ctx__ctx_tree,mcp__serena__get_symbols_overview,mcp__serena__find_symbol,mcp__serena__find_referencing_symbols,mcp__serena__find_declaration,mcp__serena__find_implementations,mcp__plugin_context-mode_context-mode__ctx_batch_execute,mcp__plugin_context-mode_context-mode__ctx_execute")
+  ToolSearch first, ONE batched call, before any Read/Grep/Bash - paste it verbatim
+  (also exported as scripts/tool_routing.py TOOLSEARCH_BATCH):
+    ToolSearch("select:mcp__lean-ctx__ctx_compose,mcp__lean-ctx__ctx_search,mcp__lean-ctx__ctx_read,mcp__lean-ctx__ctx_glob,mcp__lean-ctx__ctx_tree,mcp__lean-ctx__ctx_callgraph,mcp__serena__activate_project,mcp__serena__get_symbols_overview,mcp__serena__find_symbol,mcp__serena__find_referencing_symbols,mcp__serena__find_declaration,mcp__serena__find_implementations,mcp__serena__replace_symbol_body,mcp__serena__insert_after_symbol,mcp__serena__get_diagnostics_for_file,mcp__plugin_context-mode_context-mode__ctx_batch_execute,mcp__plugin_context-mode_context-mode__ctx_execute,mcp__plugin_claude-mem_mcp-search__search,mcp__plugin_claude-mem_mcp-search__timeline,mcp__plugin_claude-mem_mcp-search__get_observations")
+  FIRST: activate_project(serena) on the project cwd before any serena symbol call
   Orient:  ctx_compose (lean-ctx)
   Symbols: get_symbols_overview / find_symbol / find_referencing_symbols (serena)
+  Edits:   replace_symbol_body / insert_after_symbol (serena) for implementers
   Search:  ctx_search (lean-ctx); noisy output: ctx_batch_execute / ctx_execute (context-mode)
   Docs:    context7 (resolve-library-id -> query-docs); microsoft-docs for Azure/.NET/M365/Entra
-  Recall:  claude-mem search -> timeline -> get_observations
+  Recall:  claude-mem search -> timeline -> get_observations (ids as numbers)
+  JS/TS:   fallow --format json / fallow-mcp when cleaning or before commit
   (add job-specific tools; never drop the batched ToolSearch line)
+  Matrix:  references/tool-routing.md
   IF SERENA FAILS (`No active project`, `KeyError: 'languages'`, `No such tool available`):
     say so in one line, do NOT retry the rest of serena, and use ctx_search / ctx_read /
     ctx_compose. Dropping to `Bash grep`/`cat`/`sed` instead is the defect this line exists
@@ -131,6 +136,22 @@ Match field names across a wave so results stack. For a verification dispatch, a
 - **Independent vs related:** only parallelize truly independent jobs. Related failures (one fix may resolve several) go to one agent first.
 - **CONFLICT-CHECK before every wave (required):** for each agent in the wave, list its expected write/touch set (files/paths it will create or modify) and any ordering need (whether it consumes another agent's output). If two agents would write the same file or one needs another's output, they are not independent for that wave - either give the colliding agents the dispatch-time `isolation: "worktree"` option (a dispatch-time Agent option, not agent-file frontmatter) so their edits land in isolated worktrees, OR serialize just those agents while still fanning out the rest. Read-only agents have no write set and pass automatically. See `multi-stage-planning.md` for the full precondition.
 - **Integrate:** after a wave, check for conflicting edits, run the affected gate, then mark findings. A verifier's `rejected` sends the item back to a *fresh* implementer with the failure attached: three failed attempts -> mark `needs-human`, defer, move on.
+
+## Claim before work (shared todo board)
+
+The project board at `<root>/.atlas/.run/todos.json` is shared between the
+orchestrator and every subagent. An agent working in parallel claims its item
+before starting, so two agents never build the same thing:
+
+    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py" claim --id <id> --owner <agent-name>
+
+- One item per agent. `claimed_by_other` means someone else holds it: claim a
+  different open item or stop and report.
+- `--force` steals a stale claim (30 min idle). Never force-steal a live agent's item.
+- Done: `complete --id <id> --evidence "<command + output, or file:line>"`.
+- Every `TodoWrite` call is mirrored into the board and keeps claims on matching
+  content, so a claim survives the mirror.
+- Board read: `atlas_todo.py list --session <session_id>` (or the dashboard Work tab).
 
 ## Anti-patterns
 

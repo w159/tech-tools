@@ -34,6 +34,46 @@ RULES = [
         "match": lambda c: c["dep_count"] >= 8,
     },
     {
+        "id": "serena",
+        "type": "mcp",
+        "reason": "Symbol intelligence for code: activate_project, overview, find, "
+        "referencing, surgical edits. Primary nav; never start with Grep/Bash.",
+        "cmd": "claude mcp add serena -- <serena stdio launcher; see serena docs / atlas tool-routing.md>",
+        "match": lambda c: c["has_code"],
+    },
+    {
+        "id": "lean-ctx",
+        "type": "mcp",
+        "reason": "Context-shaped compose/search/read so raw file bytes stay out of the window. "
+        "Fallback when serena is down; first choice for prose/config.",
+        "cmd": "claude mcp add lean-ctx -- <lean-ctx launcher; see atlas tool-routing.md>",
+        "match": lambda c: c["has_code"],
+    },
+    {
+        "id": "fallow",
+        "type": "cli",
+        "reason": "JS/TS codebase intelligence (dead code, duplication, health). "
+        "Atlas ships a PreToolUse fallow_gate that blocks git commit/push on "
+        "fallow audit fail once the CLI is installed.",
+        "cmd": "npm install -g fallow",
+        "match": lambda c: c["js_ts"],
+    },
+    {
+        "id": "fallow-mcp",
+        "type": "mcp",
+        "reason": "Structured fallow tools for agents (audit, dead_code, dupes, health).",
+        "cmd": "claude mcp add fallow -- fallow-mcp",
+        "match": lambda c: c["js_ts"],
+    },
+    {
+        "id": "fallow-skills",
+        "type": "plugin",
+        "reason": "Agent skills teaching fallow workflows, flags, and adoption recipes.",
+        "cmd": "/plugin marketplace add fallow-rs/fallow-skills && "
+        "/plugin install fallow-skills@fallow-rs/fallow-skills",
+        "match": lambda c: c["js_ts"],
+    },
+    {
         "id": "playwright",
         "type": "mcp",
         "reason": "Frontend project; browser tests and runtime UI checks.",
@@ -112,6 +152,8 @@ def scan(root):
     c = {
         "dep_count": 0,
         "frontend": False,
+        "js_ts": False,
+        "has_code": False,
         "terraform": False,
         "containers": False,
         "microsoft": False,
@@ -146,12 +188,40 @@ def scan(root):
                 "k8s" in dp.lower() or "kustomize" in low or "deployment" in low
             ):
                 c["containers"] = True
+            if low.endswith(
+                (
+                    ".ts",
+                    ".tsx",
+                    ".js",
+                    ".jsx",
+                    ".mjs",
+                    ".cjs",
+                    ".mts",
+                    ".cts",
+                    ".py",
+                    ".go",
+                    ".rs",
+                    ".java",
+                    ".cs",
+                )
+            ):
+                c["has_code"] = True
+            if low.endswith(
+                (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts")
+            ):
+                c["js_ts"] = True
+                c["has_code"] = True
+            if fn in ("pyproject.toml", "setup.py", "requirements.txt", "go.mod", "Cargo.toml"):
+                c["has_code"] = True
             if fn == "package.json":
+                c["js_ts"] = True
+                c["has_code"] = True
                 try:
-                    pkg = json.load(open(os.path.join(dp, fn)))
+                    with open(os.path.join(dp, fn), encoding="utf-8") as fh:
+                        pkg = json.load(fh)
                     deps = {}
-                    deps.update(pkg.get("dependencies", {}))
-                    deps.update(pkg.get("devDependencies", {}))
+                    deps.update(pkg.get("dependencies", {}) or {})
+                    deps.update(pkg.get("devDependencies", {}) or {})
                     c["dep_count"] = max(c["dep_count"], len(deps))
                     if any(
                         k in deps

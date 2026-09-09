@@ -17,9 +17,10 @@ Pass the chosen capabilities into each subagent's spec as directives, **and** te
 |---|---|---|---|---|
 | Understand a codebase / map a feature | `atlas:explorer`, `codebase-explorer`*, `Explore`* | `smart-explore`, `learn-codebase`, `graphify`, `pathfinder` | `serena`, LSP, `context-mode` | sonnet |
 | Plan a feature / multi-step task | `Plan`* | `superpowers:brainstorming` -> `make-plan` -> `writing-plans` | `sequentialthinking` | opus/sonnet |
-| Implement a feature / bounded change | `atlas:implementer`, `frontend-developer`*, `backend-architect`* | `superpowers:test-driven-development`, `frontend-design`/`ui-ux-pro-max` | `context7` (mandatory), `serena`, LSP | sonnet |
+| Implement a feature / bounded change | `atlas:implementer`, `frontend-developer`*, `backend-architect`* | `superpowers:test-driven-development`, `frontend-design`/`ui-ux-pro-max` | `context7` (mandatory), `serena`, LSP; on JS/TS also `fallow` MCP/CLI after edits | sonnet |
 | Fix a bug / regression / incident | `debugger`* | `superpowers:systematic-debugging` | `serena`, `context-mode`, Sentry MCP if present | sonnet |
-| Run & validate behavior (FE/BE/DB) | `atlas:ui-runtime-tester`, `test-executor`*, `test-engineer`* | `verify`, `run`, `webapp-testing`, `python-testing-patterns` | Claude_Preview MCP, `context-mode`, curl, playwright | sonnet |
+| Dead code / duplication / complexity / JS-TS cleanup | `atlas:implementer` + `atlas:verifier` | `fallow-skills` if installed | `fallow` MCP or `fallow dead-code|dupes|health|audit --format json`; see `fallow-tools.md` | sonnet |
+| Run & validate behavior (FE/BE/DB) | `atlas:ui-runtime-tester`, `test-executor`*, `test-engineer`* | `verify`, `run`, `webapp-testing`, `python-testing-patterns` | Claude_Preview MCP, `context-mode`, curl, playwright; JS/TS: `fallow audit --format json` before commit | sonnet |
 | Full UI/UX test pass / persona testing / pre-release UX sweep (any app) | (orchestrator dispatches atlas-ux-test) | `atlas-ux-test` (canonical home; auto-discovers routes and fields) | Chrome DevTools MCP / Claude_Preview MCP / `browser-harness` / playwright, `context-mode` | sonnet; opus for the reporter |
 | Probe the database (read-only) | `atlas:db-prober` | - | read-only `psql`, `whodb`/data-agent-kit plugin if present, `gcloud` | sonnet |
 | Verify a finding / fix (adversarial) | `atlas:verifier`, `secondary-expert-validator`* | `superpowers:requesting-code-review` | re-run tests/queries; `codex` for a true second opinion | sonnet -> opus if critical |
@@ -76,6 +77,7 @@ preconditions.
 | Fetch a web page | `ctx_fetch_and_index` (context-mode) | `WebFetch` |
 | Library / SDK behavior | `context7` `resolve-library-id` -> `query-docs` | memory |
 | Azure / .NET / M365 / Entra | `microsoft-docs` `microsoft_docs_search` -> `_fetch` | memory |
+| JS/TS dead code / dupes / health / PR gate | fallow MCP (`audit`, analyze/dead-code tools) or `fallow … --format json` | guessing unused exports from a partial read |
 | "Did we hit this before?" | claude-mem `search` -> `timeline` -> `get_observations` | re-deriving it |
 
 claude-mem worker-runtime arg shapes (the historical error source, see `memory-access.md`):

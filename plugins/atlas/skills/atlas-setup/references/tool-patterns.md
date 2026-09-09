@@ -84,10 +84,10 @@ vendored doc clones that carry their own nested `.git`). Verify with
 
 ## Hooks
 
-A plugin install auto-loads `hooks/hooks.json`. Verify all 11 hooks
-are active (session boot, prompt optimizer, bash advisor,
-format-after-edit, dispatch tripwire, completion gate,
-self-improvement nudge, session-transcript ingest). Outside a plugin
+A plugin install auto-loads `hooks/hooks.json`. Verify the bound hooks
+are active (session boot, prompt optimizer, bash advisor, fallow agent
+gate, format-after-edit, dispatch tripwire, completion gate,
+self-improvement nudge, session-transcript ingest, and the rest). Outside a plugin
 install, offer `scripts/install_hooks.py`. The hooks themselves are
 documented in `../atlas-orchestrate/references/hooks-automation.md`.
 

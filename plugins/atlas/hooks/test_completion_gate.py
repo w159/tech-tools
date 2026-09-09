@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
 import atlas_db  # noqa: E402
+import atlas_todo  # noqa: E402
 import completion_gate  # noqa: E402
 from completion_gate import (
     _check_findings,
@@ -1129,9 +1130,7 @@ class OpenTodosTest(unittest.TestCase):
     def test_other_tool_named_in_line_is_ignored(self):
         """An allowedTools listing mentioning TodoWrite is not a TodoWrite call."""
         with open(self.t, "w", encoding="utf-8") as fh:
-            fh.write(
-                json.dumps({"tools": ["Read", "TodoWrite"], "message": {}}) + "\n"
-            )
+            fh.write(json.dumps({"tools": ["Read", "TodoWrite"], "message": {}}) + "\n")
         self.assertEqual(completion_gate._open_todos(self.t), 0)
 
     def test_malformed_json_line_is_skipped(self):
@@ -1174,9 +1173,7 @@ class GateConditionIJTest(GateOrchestrationTest):
     def _satisfy_everything_else(self):
         """Make (a)-(h) pass so a block can only come from (i)/(j)."""
         os.makedirs(os.path.join(self.tmp, ".atlas", "evidence"), exist_ok=True)
-        with open(
-            os.path.join(self.tmp, ".atlas", "evidence", "e.md"), "w"
-        ) as fh:
+        with open(os.path.join(self.tmp, ".atlas", "evidence", "e.md"), "w") as fh:
             fh.write("red->green")
         os.makedirs(os.path.join(self.tmp, ".atlas", ".run"), exist_ok=True)
         with open(os.path.join(self.tmp, ".atlas", ".run", "findings.json"), "w") as fh:
@@ -1307,10 +1304,9 @@ class TestRunPairsAnImplementerTest(GateOrchestrationTest):
         )
         started = atlas_db.run_started_at(c, rid)
         c.close()
-        return (
-            _dt.datetime.fromtimestamp(started + offset_seconds, _dt.timezone.utc)
-            .isoformat(timespec="seconds")
-        )
+        return _dt.datetime.fromtimestamp(
+            started + offset_seconds, _dt.timezone.utc
+        ).isoformat(timespec="seconds")
 
     def test_one_implementer_plus_a_test_verified_finding_passes(self):
         """The simple-task path: one subagent, verification by test, no verifier
@@ -1374,3 +1370,91 @@ class TestRunPairsAnImplementerTest(GateOrchestrationTest):
         )
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertIn("verification coverage", r.stdout)
+
+
+class TodoBoardDrainTest(GateConditionIJTest):
+    """(i) beyond the transcript: the durable board and the LEDGER line.
+
+    Signals, first to report open items wins: transcript TodoWrite, the
+    .atlas/.run/todos.json board todo_capture mirrors (or the orchestrator CLI
+    writes in auto mode), then the `LEDGER | n/m` line when the board has no
+    items for this session.
+    """
+
+    def _seed_board(self, todos, session_id="sess-orch"):
+        atlas_todo.mirror(self.tmp, todos, session_id)
+
+    def test_open_board_items_block(self):
+        self._satisfy_everything_else()
+        self._seed_board([{"content": "wire the gate", "status": "in_progress"}])
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertIn('"decision": "block"', r.stdout)
+        self.assertIn("(i) Todo list not drained", r.stdout)
+
+    def test_drained_board_passes(self):
+        self._satisfy_everything_else()
+        self._seed_board([{"content": "wire the gate", "status": "completed"}])
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertNotIn('"decision": "block"', r.stdout)
+
+    def test_manual_items_never_block(self):
+        """Only this session's non-manual items count on the shared board."""
+        self._satisfy_everything_else()
+        atlas_todo.add(self.tmp, "human note")
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertNotIn('"decision": "block"', r.stdout)
+
+    def test_other_session_items_never_block(self):
+        """Only this session's non-manual items count on the shared board."""
+        self._satisfy_everything_else()
+        self._seed_board(
+            [{"content": "other run", "status": "pending"}], session_id="sess-other"
+        )
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertNotIn('"decision": "block"', r.stdout)
+
+    def test_board_beats_ledger_when_board_reports_open(self):
+        """The board is consulted before the LEDGER: open board items block
+        even when the last LEDGER line says 3/3 done."""
+        self._satisfy_everything_else()
+        self._seed_board([{"content": "wire the gate", "status": "pending"}])
+        t = os.path.join(self.tmp, "t.jsonl")
+        with open(t, "w", encoding="utf-8") as fh:
+            fh.write("LEDGER | 3/3 | now: done | left: nothing\n")
+        r = _run_gate(
+            {"session_id": "sess-orch", "cwd": self.tmp, "transcript_path": t}, self.env
+        )
+        self.assertIn('"decision": "block"', r.stdout)
+
+    def test_ledger_line_blocks_until_complete(self):
+        """No board items for this session -> the orchestrator's LEDGER line is
+        the only drain signal (auto mode without CLI writes)."""
+        self._satisfy_everything_else()
+        t = os.path.join(self.tmp, "t.jsonl")
+        with open(t, "w", encoding="utf-8") as fh:
+            fh.write("ATLAS | implement | shipping\n")
+            fh.write("LEDGER | 1/3 | now: wire the gate | left: docs, tests\n")
+        r = _run_gate(
+            {"session_id": "sess-orch", "cwd": self.tmp, "transcript_path": t}, self.env
+        )
+        self.assertIn('"decision": "block"', r.stdout)
+        with open(t, "w", encoding="utf-8") as fh:
+            fh.write("LEDGER | 3/3 | now: handoff | left: nothing\n")
+        r2 = _run_gate(
+            {"session_id": "sess-orch", "cwd": self.tmp, "transcript_path": t}, self.env
+        )
+        self.assertNotIn('"decision": "block"', r2.stdout)
+
+    def test_board_replan_blocks_after_drained_todowrite(self):
+        """A CLI re-plan on the board after a drained TodoWrite is open work:
+        the board is consulted even when the transcript shows a drained list."""
+        self._satisfy_everything_else()
+        t = _todo_transcript(
+            os.path.join(self.tmp, "t.jsonl"),
+            [{"content": "ship it", "status": "completed"}],
+        )
+        self._seed_board([{"content": "follow-up", "status": "pending"}])
+        r = _run_gate(
+            {"session_id": "sess-orch", "cwd": self.tmp, "transcript_path": t}, self.env
+        )
+        self.assertIn('"decision": "block"', r.stdout)

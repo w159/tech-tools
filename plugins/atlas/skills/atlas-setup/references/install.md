@@ -37,12 +37,14 @@ the reference before building the recommend-then-confirm shortlist in Stage 2.
    run). Against that stack, check the minimum tooling bar every project gets:
    the session-augmentation trio (claude-mem for cross-session memory,
    context-mode for context-window protection, ponytail for simplicity
-   discipline), the atlas completion/dispatch gate hooks (Stage 3), and any
+   discipline), **code-nav pair for any code tree (serena MCP + lean-ctx MCP)**
+   with `activate_project` on cwd and `.serena/project.yml` `languages:` present,
+   the atlas completion/dispatch/fallow gate hooks (Stage 3), and any
    ecc gate hooks available for the detected stack (Stage 3). If any minimum-
    bar item is missing or inactive, show the exact install/activation command
    and confirm before running it - never silently. Stack-specific items beyond
-   this minimum bar are recommended, not assumed: they join the Stage 2
-   shortlist instead of being installed here.
+   this minimum bar (fallow on JS/TS, context7 on heavy deps) join the Stage 2
+   shortlist. Tool matrix: `../atlas-orchestrate/references/tool-routing.md`.
 2. Discover. Run `${CLAUDE_PLUGIN_ROOT}/scripts/discover_capabilities.py <root>` (read-only). Match its
    signals against `../atlas-orchestrate/references/capability-catalog.md`. Present a
    ranked list (skill / plugin / mcp) with a reason and the exact install command
@@ -53,10 +55,14 @@ the reference before building the recommend-then-confirm shortlist in Stage 2.
    and measurable self-improvement with observability (atlas-audit). Install only
    confirmed items.
 3. Hooks. A plugin install auto-loads `hooks/hooks.json`. Verify all hooks are
-   active (session boot, prompt optimizer, bash advisor, format-after-edit, dispatch
-   tripwire, completion gate, memory capture, auto-skill, self-improvement nudge,
-   session-transcript ingest) - these are the atlas completion/dispatch gate hooks
-   referenced in Stage 1's minimum bar.
+   active (session boot, prompt optimizer, bash advisor, fallow agent gate,
+   format-after-edit, dispatch tripwire, completion gate, memory capture,
+   self-improvement nudge, session-transcript ingest) - these are the atlas
+   completion/dispatch/fallow gate hooks referenced in Stage 1's minimum bar.
+   For JS/TS stacks, Stage 2 should already have offered fallow CLI/MCP/skills;
+   the fallow_gate hook is inert until the CLI is present (fail-open). Do not also
+   run `fallow hooks install --target agent` unless the user wants a second,
+   project-local gate.
    A separate `hooks/validate-readonly-query.sh` SQL guard ships for the DB-audit
    subagents (schema-inventory, rls-privilege-audit, naming-glossary-audit) to use
    during read-only audits; it is not auto-loaded by hooks.json.
@@ -68,7 +74,12 @@ the reference before building the recommend-then-confirm shortlist in Stage 2.
    path.
    Outside a plugin install, offer `scripts/install_hooks.py`.
 4. Config. Write or update `.claude/atlas.local.md` (schema below). Show the diff and
-   confirm before writing.
+   confirm before writing. Also check `~/.claude/settings.json` `outputStyle`:
+   if it is set to anything other than `Atlas Orchestrator`, warn that ATLAS |
+   phase headers and glyphs will not render (Claude Code lets an explicit user
+   style beat plugin `force-for-plugin`). Offer to set
+   `"outputStyle": "Atlas Orchestrator"` after confirm - never silently. SessionStart
+   still injects the header/loop contract when the style is wrong.
 5. Self-improvement. Verify the atlas self-improvement system is deployed:
    - `scripts/atlas_memory.py` exists and `~/.atlas/memory/` is writable
    - `scripts/atlas_curator.py` exists
@@ -119,9 +130,11 @@ recommend-then-confirm. Check, in order:
   map + structural dedup), atlas-audit (quality and security audit), atlas-ux-test
   (UX runtime swarm), and atlas-audit (measurable self-improvement + observability);
 - the automation hooks that auto-load via hooks.json (session boot, prompt
-  optimizer, bash advisor, format-after-edit, dispatch tripwire, completion gate,
-  memory capture, auto-skill, self-improvement nudge, session-transcript ingest),
-  plus any ecc gate hooks available for the detected stack;
+  optimizer, bash advisor, fallow agent gate, format-after-edit, dispatch tripwire,
+  completion gate, memory capture, self-improvement nudge, session-transcript
+  ingest), plus any ecc gate hooks available for the detected stack;
+- for JS/TS projects: fallow CLI on PATH (or local npx), optional fallow-mcp and
+  fallow-skills (see capability-catalog); atlas already ships the agent commit gate;
 - whether `.atlas/decisions/` has a `tooling-activation` record from a prior run,
   so this scan can report drift against it instead of starting cold;
 - the docs/ SSOT scaffold, and whether CHANGELOG.md and ROADMAP.md are current;

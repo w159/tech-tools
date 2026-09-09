@@ -246,6 +246,59 @@ def _open_todos(transcript_path: str) -> int:
     )
 
 
+def _board_open_todos(root: Path, session_id: str) -> int:
+    """Open items for THIS SESSION on the durable todo board
+    (.atlas/.run/todos.json), which todo_capture mirrors from TodoWrite and
+    the orchestrator's CLI maintains when TodoWrite is absent. Manual items
+    are a human's notes, not the orchestrator's plan, so they never count.
+
+    Fail-open: any error counts as 0 open items.
+    """
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_todo
+
+        board = atlas_todo.load(str(root))
+        return sum(
+            1
+            for item in board.get("items", [])
+            if not item.get("archived")
+            and item.get("origin") != "manual"
+            and item.get("session_id") == session_id
+            and item.get("status") != "completed"
+        )
+    except Exception:
+        return 0
+
+
+def _ledger_open_todos(transcript_path: str) -> int:
+    """Open items from the last `LEDGER | n/m | ...` line in the transcript.
+
+    Last-resort fallback for runs where TodoWrite is unavailable AND no board
+    was written: the orchestrator's status-header ledger is the only record of
+    remaining work. open = m - n, clamped at 0. Fail-open on everything.
+    """
+    if not transcript_path:
+        return 0
+    import re
+
+    pattern = re.compile(r"LEDGER\s*\|\s*(\d+)\s*/\s*(\d+)")
+    last = None
+    try:
+        with open(transcript_path, encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                if "LEDGER |" not in line and "LEDGER|" not in line:
+                    continue
+                m = pattern.search(line)
+                if m:
+                    last = (int(m.group(1)), int(m.group(2)))
+    except (OSError, UnicodeDecodeError):
+        return 0
+    if not last:
+        return 0
+    return max(0, last[1] - last[0])
+
+
 def _leftover_worktrees(root: Path) -> list:
     """Extra git worktrees still on disk, excluding the main one.
 
@@ -382,10 +435,11 @@ def _reason(
         )
     if open_todos > 0:
         parts.append(
-            "  (i) Todo list not drained: %d item(s) are still open. An item is "
-            "`completed` only when its check passed -- not when a subagent returned. "
-            "-> Finish them, or mark what you are deliberately leaving and say so "
-            "out loud in your reply, then retry Stop." % open_todos
+            "  (i) Todo list not drained: %d item(s) are still open (transcript "
+            "TodoWrite, the .atlas/.run/todos.json board, or the LEDGER line). An "
+            "item is `completed` only when its check passed -- not when a subagent "
+            "returned. -> Finish them, or mark what you are deliberately leaving and "
+            "say so out loud in your reply, then retry Stop." % open_todos
         )
     if worktrees:
         parts.append(
@@ -393,7 +447,8 @@ def _reason(
             "holding changes does not clean itself up. -> For each: commit inside it if "
             "`git -C <tree> status --porcelain` is non-empty, merge it into the local "
             "branch (git merge --no-ff <branch>), then `git worktree remove` it. Offer "
-            "the push; never run it unasked." % (len(worktrees), ", ".join(worktrees[:4]))
+            "the push; never run it unasked."
+            % (len(worktrees), ", ".join(worktrees[:4]))
         )
     failed = "\n".join(parts)
     return (
@@ -483,9 +538,18 @@ def main() -> int:
         # one-file change is what turned every simple task into a wave.
         # (i) Todo drain and (j) worktree close-out: both are run-scoped and
         # fail-open, and neither fires on a run that shipped no code.
+        # Drain signals, first one to report open items wins: the transcript
+        # TodoWrite (what the harness actually tracked), the durable board
+        # todo_capture mirrors (which also catches a later CLI re-plan the
+        # transcript never saw), then the `LEDGER | n/m` line the orchestrator
+        # must emit when TodoWrite is unavailable (auto mode).
         open_todos = (
             _open_todos(str(data.get("transcript_path") or "")) if code_changed else 0
         )
+        if code_changed and open_todos == 0:
+            open_todos = _board_open_todos(root, str(data.get("session_id") or ""))
+        if code_changed and open_todos == 0:
+            open_todos = _ledger_open_todos(str(data.get("transcript_path") or ""))
         worktrees = (
             _leftover_worktrees(root)
             if code_changed and _run_used_worktrees(data.get("session_id", ""))

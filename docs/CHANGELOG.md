@@ -1,5 +1,36 @@
 # Changelog
 
+## [5.26.0] - 2026-09-09 -- durable todo board, gate drain fallback, dashboard Work/Agents tabs
+
+Marketplace `3.15.0`; atlas `5.26.0`.
+
+The user's charge that started this release: "the dashboard doesn't actually do
+anything ... there's zero way to know how much is needed, remaining, or complete."
+Four pillars closed: run insight, behavior/agent customization, shared memory for
+parallel subagents, and the todo list built and used every session.
+
+- `hooks/todo_capture.py` (PostToolUse TodoWrite, `ATLAS_TODO=off` disables)
+  mirrors every todo plan into `<project>/.atlas/.run/todos.json`;
+  `scripts/atlas_todo.py` is the CLI (list/set/add/claim/complete/reopen/remove/
+  counts/carry). Claims survive mirrors on matching content; manual-origin and
+  other-session items never block the gate.
+- `completion_gate.py` drain fallback: transcript TodoWrite count first, then the
+  board (same session, non-manual), then the `LEDGER | n/m` line the orchestrator
+  emits in auto mode, so a CLI re-plan or auto-mode run cannot slip past the gate
+  with open todos.
+- `session_boot.py` carries unfinished board items into the next session's plan
+  (the accepted carry-over decision: carried items land in the active list).
+- Dashboard Work tab: counts (needed/remaining/complete/claimed), add/claim/
+  complete/reopen/remove, and the shared memory snapshot from `~/.atlas/memory/`;
+  Agents tab: same-name overrides under `<project>/.claude/agents/` (frontmatter
+  required, safe names only) with Reset to plugin source. New endpoints `/api/todo`,
+  `/api/agents`, `/api/memory`.
+- Subagent claim protocol documented in `subagent-kit.md` and the orchestrator
+  style; 6 permanent `TodoBoardContract` tests + 9 live HTTP `WorkBoardApiTest`
+  cases + 8 gate `TodoBoardDrainTest` fixtures. Suites at this writing:
+  test_completion_gate 151 OK, test_atlas_dashboard 17 OK, test_atlas_contract
+  81/83 (the 2 installed-parity failures resolve when the cache moves to 5.26.0).
+
 ## [5.22.0] - 2026-09-02
 
 ### Fixed

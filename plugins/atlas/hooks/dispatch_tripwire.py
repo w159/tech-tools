@@ -171,17 +171,36 @@ def _deny(reason):
 
 
 def _toolkit_gap(tinput):
-    """An atlas:* dispatch whose prompt never orders the batched ToolSearch.
+    """An atlas:* dispatch whose prompt never orders real code-nav tools.
 
     Measured: 3 of 12 recorded subagent runs got no TOOLS block and made 0 MCP calls,
-    reading the repo through Bash grep/cat instead. The agent's own spec says to load
-    the toolset first; a dispatch that repeats the order is what makes it stick.
+    reading the repo through Bash grep/cat instead. Requiring ToolSearch alone was not
+    enough when the batch omitted serena/lean-ctx; require both the load step and a
+    named symbol/context tool so agents cannot "ToolSearch" a decoy and still grep.
     """
     agent = str(tinput.get("subagent_type") or "")
     if not agent.startswith("atlas:"):
         return None  # forks inherit the parent's loaded tools; non-atlas agents opt out
+    # Docs-only roles still benefit from lean-ctx; keep the bar for all atlas:*.
     prompt = str(tinput.get("prompt") or "")
-    if "ToolSearch" in prompt:
+    low = prompt.lower()
+    has_load = "ToolSearch" in prompt or "toolsearch" in low
+    has_nav = any(
+        token in low
+        for token in (
+            "serena",
+            "lean-ctx",
+            "lean_ctx",
+            "ctx_compose",
+            "ctx_search",
+            "ctx_read",
+            "get_symbols_overview",
+            "find_symbol",
+            "activate_project",
+            "replace_symbol_body",
+        )
+    )
+    if has_load and has_nav:
         return None
     return agent
 
@@ -201,12 +220,13 @@ def _pre_tool_use(conn, atlas_db, tool, session, path, tinput=None):
         gap = _toolkit_gap(tinput or {})
         if gap:
             _deny(
-                "DENY - this %s dispatch names no tools. Add the TOOLS block from "
-                "subagent-kit.md, starting with the one batched "
-                'ToolSearch("select:mcp__lean-ctx__...,mcp__serena__...,'
-                'mcp__plugin_context-mode_context-mode__...") the subagent must run '
-                "before its first Read/Grep/Bash, plus the serena-down fallback to "
-                "ctx_search/ctx_read. Without it %s reads the repo through Bash grep."
+                "DENY - this %s dispatch is missing the code-nav TOOLS block. "
+                "Paste subagent-kit.md / tool-routing.md: one batched ToolSearch that "
+                "includes lean-ctx (ctx_compose/ctx_search/ctx_read) AND serena "
+                "(activate_project, get_symbols_overview, find_symbol, and for "
+                "implementers replace_symbol_body), plus context-mode for noisy "
+                "output. The subagent must run that before Read/Grep/Bash; serena "
+                "down -> lean-ctx only, never Bash grep. Without it %s greps the tree."
                 % (tool, gap)
             )
         return

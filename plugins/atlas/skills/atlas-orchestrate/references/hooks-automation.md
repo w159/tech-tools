@@ -1,20 +1,21 @@
 # Hooks - make the discipline automatic
 
 Hooks turn the orchestrator's rules into things that *happen on their own* instead of things
-you have to remember. The plugin ships **eight** hooks, and all eight auto-load via
-`hooks/hooks.json` on install (no manual step). They are stdlib-only Python, self-contained
-under `hooks/`, and every one fails safe (any error -> silent passthrough; none can break a
-prompt, a tool call, or wedge a session).
+you have to remember. The plugin ships auto-loaded hooks via `hooks/hooks.json` on install
+(no manual step). They are stdlib-only Python, self-contained under `hooks/` (except
+`atlas_doctor.py` in `scripts/`), and fail safe on internal errors (fallow_gate is the one
+hook that may *deny* a tool call, and only when fallow audit returns `verdict: fail`).
 
 | id | event | script | what it does |
 |---|---|---|---|
-| `session-boot` | `SessionStart` | `hooks/session_boot.py` | activate the runtime: inject the contract/methodology, report claude-mem/context-mode state, surface past lessons |
+| `session-boot` | `SessionStart` | `hooks/session_boot.py` | activate the runtime: inject the contract/methodology, report claude-mem/context-mode/fallow state, surface past lessons |
 | `optimizer` | `UserPromptSubmit` | `hooks/prompt_optimizer.py` | optimize the prompt through a local model before Claude sees it; trigger-gated |
 | `advisor` | `PreToolUse` (Bash) | `hooks/bash_advisor.py` | advisory-only; emits a warning on catastrophic, near-irreversible commands only |
+| `fallow-gate` | `PreToolUse` (Bash) | `hooks/fallow_gate.py` | agent gate: on `git commit`/`git push`, run `fallow audit --format json --quiet --explain --gate-marker agent`; deny on fail; skip if fallow absent (`ATLAS_FALLOW=off`) |
 | `format` | `PostToolUse` (Edit\|Write\|MultiEdit) | `hooks/format_after_edit.py` | auto-format the edited file (ruff/prettier/gofmt/rustfmt), async |
-| `dispatch-tripwire` | `PostToolUse` + `PreToolUse` | `hooks/dispatch_tripwire.py` | advisory STOP at the threshold (default 4); a second `PreToolUse` tier DENIES at 8 inline ops or on Edit/Write/MultiEdit/NotebookEdit to non-docs paths; marker-gated, orchestration sessions only |
+| `dispatch-tripwire` | `PostToolUse` + `PreToolUse` | `hooks/dispatch_tripwire.py` | advisory STOP at the threshold (default 4); a second `PreToolUse` tier DENIES at the hard inline-op limit or on Edit/Write/MultiEdit/NotebookEdit to non-docs paths; marker-gated, orchestration sessions only |
 | `completion-gate` | `Stop` | `hooks/completion_gate.py` | **opt-out.** block stopping an orchestration run until evidence is captured; marker-gated, on by default when docs/ exists (disable with ATLAS_GATE=off) |
-| `nudge` | `Stop`, `SubagentStop` | `hooks/nudge.py` | self-improvement: surface a past lesson and prompt to capture new ones; marker-gated, throttled |
+| `nudge` | `Stop` | `hooks/nudge.py` | self-improvement: surface a past lesson and prompt to capture new ones; marker-gated, throttled |
 | `ingest-session` | `Stop`, `SubagentStop`, `SessionEnd`, `PreCompact` | `hooks/ingest_session.py` | index the session transcript into the observability store for atlas-audit |
 
 The dispatch tripwire, completion gate, and nudge additionally gate on the per-session

@@ -6,13 +6,17 @@ work."
 
 ## The loop, in order, every time
 
-1. Research - restate the problem in your own words; name the unknowns.
+1. Research - restate the problem in your own words; name the unknowns. For codebases,
+   load tools once (ToolSearch batch), `activate_project` (serena) on cwd, orient with
+   lean-ctx - never open with Bash grep/cat. Recall via claude-mem before re-deriving.
 2. Document - look up the real API/syntax before using it. Use Context7 for third-party
    libraries and SDKs; use Microsoft Learn for anything Microsoft (Graph, Entra, Intune,
    M365, Azure, PowerShell, .NET). Never reconstruct an API signature from memory.
-3. Implement - write the code; comment the why, not the what.
-4. Verify - run it, capture the output, confirm it matches expectation. Exercise one error
-   path (empty input, bad auth, missing file, or network failure).
+3. Implement - write the code with symbol-level edits when possible (serena
+   replace_symbol_body); comment the why, not the what. Keep diffs minimal.
+4. Verify - run it, capture the output, confirm it matches expectation. Route noisy
+   output through context-mode. Exercise one error path (empty input, bad auth, missing
+   file, or network failure). JS/TS: fallow audit on changed code when available.
 5. Report - show the command run, the actual output, and the diff or file path.
 
 ## Grounding rules (these reduce wrong answers)
