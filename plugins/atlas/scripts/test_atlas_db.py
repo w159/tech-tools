@@ -578,6 +578,34 @@ class UncoveredPathsTest(unittest.TestCase):
         self.assertIsNotNone(rid)
         self.assertTrue(atlas_db.is_orchestrating(self.conn, "sess-sentinel"))
 
+    def test_sentinel_walks_up_to_project_root(self):
+        # A session cwd deep inside a repo (e.g. a plugin source checkout) must
+        # never grow its own .atlas/.run tree: the sentinel belongs at the
+        # project root, next to the board and findings the rest of the system
+        # reads. Writing it at the raw cwd made find_root() stop there and sent
+        # the durable todo board into product source (5.27.0 live-install fail).
+        deep = os.path.join(self.tmp, "repo", "a", "b", "c")
+        os.makedirs(deep)
+        git_dir = os.path.join(self.tmp, "repo", ".git")
+        os.makedirs(git_dir)
+        atlas_db._write_orchestration_sentinel(deep)
+        sentinel = os.path.join(
+            self.tmp, "repo", ".atlas", ".run", "atlas-orchestrate.active"
+        )
+        self.assertTrue(os.path.exists(sentinel))
+        self.assertFalse(os.path.exists(os.path.join(deep, ".atlas")))
+
+    def test_sentinel_stays_at_cwd_without_any_marker(self):
+        # No .git/.atlas/docs ancestor: fail open to the cwd as before.
+        deep = os.path.join(self.tmp, "nomarker", "x")
+        os.makedirs(deep)
+        atlas_db._write_orchestration_sentinel(deep)
+        self.assertTrue(
+            os.path.exists(
+                os.path.join(deep, ".atlas", ".run", "atlas-orchestrate.active")
+            )
+        )
+
     def test_run_metrics_empty_for_missing_run(self):
         # No metrics row -> {} (line 337).
         self.assertEqual(atlas_db.run_metrics(self.conn, 999999), {})

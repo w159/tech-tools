@@ -31,7 +31,7 @@ Manual skills set `disable-model-invocation: true`.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json     # manifest (name: atlas, v5.27.0)
+|-- .claude-plugin/plugin.json     # manifest (name: atlas, v5.27.2)
 |-- hooks/                         # 15 hook programs / 19 bindings (hooks.json wires them all; atlas_doctor.py lives in scripts/, SessionStart)
 |   |-- session_boot.py            #   SessionStart: activate runtime, surface lessons
 |   |-- prompt_optimizer.py        #   UserPromptSubmit: optional rewrite + orchestration arm-early classifier
@@ -117,17 +117,31 @@ settings manually. The optional ollama-backed optimizer is configured with
 `ATLAS_OPTIMIZE_CMD`, `ATLAS_OPTIMIZER_MODEL`, and `ATLAS_OLLAMA_URL`
 (see `skills/atlas-orchestrate/references/hooks-automation.md`); it is not required.
 
-## ATLAS statusline (todos at the prompt)
+## ATLAS statusline (todo list at the prompt)
 
-Claude Code renders its native todo widget only when `TodoWrite` runs, and the
-`auto` permission mode drops `TodoWrite` entirely, so in that mode no plan can
-appear there. The durable board is the plan, so atlas renders it statically at
-the prompt instead: `scripts/atlas_statusline.py` reads
-`<project>/.atlas/.run/todos.json` and prints one ATLAS-branded line (counts,
-current item, remaining) that sits at the prompt input while output scrolls.
-`session_boot.py` copies the self-contained script to `~/.atlas/atlas_statusline.py`
-so a statusline command can call a stable path that survives plugin reinstalls.
-Wire it as one more line in your `statusLine` command:
+Claude Code draws its native todo widget inline with the `TodoWrite` tool call,
+which puts three separate conditions between you and a visible plan, and
+`CLAUDE_CODE_ENABLE_TODO_TOOLS=1` only clears the first:
+
+1. Gated model families (Opus 4.8+/Sonnet 5/Fable 5 and later) drop `TodoWrite`
+   and the task tools unless you opt back in with that env var (docs:
+   tools-reference).
+2. `ENABLE_TOOL_SEARCH=1` then defers `TodoWrite` behind `ToolSearch`, so the
+   model has to go looking for it and often never calls it at all.
+3. Focus mode hides tool calls, so on the turns `TodoWrite` does run, the widget
+   it would have drawn is not rendered.
+
+That is why setting the env var alone changes nothing you can see. The durable
+board is the plan, so atlas also renders it statically at
+the prompt, where none of the three conditions apply:
+`scripts/atlas_statusline.py` reads
+`<project>/.atlas/.run/todos.json` and prints a compact ATLAS-branded todo list
+- a header with counts, then one line per item (`✓` completed, `❯` in progress,
+`○` pending) - that sits at the prompt input while output scrolls. It caps at 8
+items with a `+ N more` line. `session_boot.py` copies the self-contained script
+to `~/.atlas/atlas_statusline.py` so a statusline command can call a stable path
+that survives plugin reinstalls. Wire it as one more block in your `statusLine`
+command:
 `printf '%s' "$input" | python3 "$HOME/.atlas/atlas_statusline.py"`. It shows the
 current session's items first and falls back to the whole project board (so
 carried-over work shows), prints nothing when the board is empty or unreadable,

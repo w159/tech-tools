@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
-"""ATLAS statusline: the durable todo board as a static line at the prompt.
+"""ATLAS statusline: the durable todo board as a todo list at the prompt.
 
-Claude Code renders its todo widget only when the session's TodoWrite tool
-runs, and the `auto` permission mode drops TodoWrite entirely - so the plan
+Claude Code draws its todo widget inline with the TodoWrite tool call, so the
+widget depends on three things at once and CLAUDE_CODE_ENABLE_TODO_TOOLS=1
+only buys the first: gated model families drop TodoWrite without it (docs:
+tools-reference); ENABLE_TOOL_SEARCH then defers the tool behind ToolSearch,
+so the model may never load it (observed 2026-09-15 with both env vars set);
+and focus mode hides tool calls, so the widget is invisible even on the turns
+TodoWrite does run (user-confirmed, same session). The plan therefore
 lives in <project>/.atlas/.run/todos.json (mirrored by todo_capture.py, or
-set by the orchestrator via scripts/atlas_todo.py in auto mode). This
-statusline segment renders that board on every redraw: the current session's
-items first, falling back to the whole project board.
+set by the orchestrator via scripts/atlas_todo.py), and this statusline is
+the only surface that shows it unconditionally. This
+statusline segment renders that board as a compact todo list on every redraw:
+one line per item with a status glyph, the current session's items first,
+falling back to the whole project board (carried-over work still shows).
 
 Self-contained on purpose: session_boot.py copies this file to
 ~/.atlas/atlas_statusline.py so the statusline command can call a stable
@@ -21,8 +28,11 @@ import sys
 
 BRAND = "\033[1;36m"
 GREEN = "\033[1;32m"
+CYAN = "\033[1;36m"
 DIM = "\033[1;90m"
 RESET = "\033[0m"
+
+MAX_ITEMS = 8  # list cap; overflow renders as a "+N more" line
 
 
 def _board_items(root):
@@ -41,9 +51,19 @@ def _pick(items, session_id):
     return mine or active
 
 
-def _clip(text, limit=48):
+def _clip(text, limit=56):
     text = str(text).strip()
     return text[: limit - 3] + "..." if len(text) > limit else text
+
+
+def _item_line(item):
+    status = item.get("status")
+    content = _clip(item.get("content") or "(untitled)")
+    if status == "completed":
+        return "%s  ✓ %s%s" % (GREEN, content, RESET)
+    if status == "in_progress":
+        return "%s  ❯ %s%s" % (CYAN, content, RESET)
+    return "%s  ○ %s%s" % (DIM, content, RESET)
 
 
 def render(root, session_id):
@@ -51,34 +71,33 @@ def render(root, session_id):
         items = _board_items(root)
     except (OSError, ValueError):
         return ""  # missing or unreadable board: render nothing, never fail the line
-    if not items:
-        return ""
     picked = _pick(items, session_id)
-    needed = len(picked)
+    if not picked:
+        return ""
     done = sum(1 for i in picked if i.get("status") == "completed")
-    if done == needed:
-        return "%sATLAS%s %s%d/%d done%s" % (BRAND, RESET, DIM, done, needed, RESET)
-    now = next(
-        (
-            i.get("content")
-            for i in picked
-            if i.get("status") == "in_progress" and i.get("content")
-        ),
-        "",
-    )
-    now_seg = " | now: %s" % _clip(now) if now else ""
-    return "%sATLAS%s %s%d/%d%s%s | %s%d left%s" % (
-        BRAND,
-        RESET,
-        DIM,
-        done,
-        needed,
-        RESET,
-        now_seg,
-        DIM,
-        needed - done,
-        RESET,
-    )
+    if done == len(picked):
+        header = "%s✓ ATLAS Todos%s %s%d/%d%s" % (
+            GREEN,
+            RESET,
+            DIM,
+            done,
+            len(picked),
+            RESET,
+        )
+    else:
+        header = "%s⎇ ATLAS Todos%s %s%d/%d done%s" % (
+            BRAND,
+            RESET,
+            DIM,
+            done,
+            len(picked),
+            RESET,
+        )
+    lines = [header]
+    lines.extend(_item_line(i) for i in picked[:MAX_ITEMS])
+    if len(picked) > MAX_ITEMS:
+        lines.append("%s  + %d more%s" % (DIM, len(picked) - MAX_ITEMS, RESET))
+    return "\n".join(lines)
 
 
 def main():
@@ -97,11 +116,11 @@ def main():
     if not cwd or not os.path.isdir(cwd):
         return 0
     try:
-        line = render(cwd, session_id)
+        block = render(cwd, session_id)
     except Exception:
         return 0
-    if line:
-        print(line)
+    if block:
+        print(block)
     return 0
 
 

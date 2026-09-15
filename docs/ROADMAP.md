@@ -6,11 +6,9 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 
 ## In Progress
 
-- [in-progress] atlas 5.27.0 (statusline todos at the prompt) is verified in
-  source but not installed. The live plugin cache still runs 5.25.0, so the durable
-  todo board (`hooks/todo_capture.py`, gate drain fallback, dashboard Work/Agents
-  tabs, `scripts/atlas_todo.py`) and the ATLAS statusline shim sync
-  (`session_boot._sync_statusline_shim`) are inert until reinstall.
+- [in-progress] atlas 5.27.1/5.27.2 (sentinel root resolution; statusline todo
+  list) are verified in source but not installed. The live plugin cache runs
+  5.27.0, so both fixes are inert until reinstall.
   `InstalledParityContract` in
   `plugins/atlas/hooks/test_atlas_contract.py:447` skips while the versions
   differ and re-arms afterward.

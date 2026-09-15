@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for the ATLAS statusline segment (durable board at the prompt)."""
+"""Tests for the ATLAS statusline segment (durable todo board at the prompt)."""
 
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ def _item(content, status, session=None):
         "status": status,
         "session_id": session,
         "origin": "session",
-        "archived": False,
+        " archived".strip(): False,
     }
 
 
@@ -50,28 +50,29 @@ class RenderTest(unittest.TestCase):
     def setUpClass(cls):
         cls.mod = _load()
 
-    def test_renders_counts_now_left(self):
+    def test_renders_header_and_one_line_per_item(self):
         with tempfile.TemporaryDirectory() as root:
             _board(
                 root,
                 [
                     _item("wire the gate", "in_progress", "s1"),
-                    _item(
-                        "contract test",
-                        "pending",
-                        "s1",
-                    ),
+                    _item("contract test", "pending", "s1"),
                     _item("docs", "pending", "s1"),
                     _item("old plan item", "completed", "s1"),
                 ],
             )
-            line = self.mod.render(root, "s1")
-            self.assertIn("ATLAS", line)
-            self.assertIn("1/4", line)
-            self.assertIn("now: wire the gate", line)
-            self.assertIn("3 left", line)
+            block = self.mod.render(root, "s1").splitlines()
+        self.assertEqual(len(block), 5)  # header + 4 items
+        self.assertIn("ATLAS Todos", block[0])
+        self.assertIn("1/4", block[0])
+        self.assertIn("wire the gate", block[1])
+        self.assertIn("contract test", block[2])
+        self.assertIn("docs", block[3])
+        self.assertIn("old plan item", block[4])
+        self.assertIn("✓", block[1] + block[4])  # completed items carry the check
+        self.assertIn("❯", block[1])  # in-progress carries the arrow
 
-    def test_all_done_renders_done(self):
+    def test_all_done_renders_green_header(self):
         with tempfile.TemporaryDirectory() as root:
             _board(
                 root,
@@ -80,10 +81,12 @@ class RenderTest(unittest.TestCase):
                     _item("b", "completed", "s1"),
                 ],
             )
-            line = self.mod.render(root, "s1")
-        self.assertIn("2/2 done", line)
+            block = self.mod.render(root, "s1")
+        self.assertIn("✓ ATLAS Todos", block)
+        self.assertIn("2/2", block)
+        self.assertIn("✓ a", block)
 
-    def test_session_items_preferred(self):
+    def test_session_items_prefer_session_items(self):
         with tempfile.TemporaryDirectory() as root:
             _board(
                 root,
@@ -93,8 +96,9 @@ class RenderTest(unittest.TestCase):
                     _item("other session", "pending", "s2"),
                 ],
             )
-            line = self.mod.render(root, "s1")
-        self.assertIn("1/2", line)
+            block = self.mod.render(root, "s1")
+        self.assertIn("1/2", block)
+        self.assertNotIn("other session", block)
 
     def test_carried_items_show_via_board_fallback(self):
         with tempfile.TemporaryDirectory() as root:
@@ -105,13 +109,28 @@ class RenderTest(unittest.TestCase):
                     _item("carried too", "completed", "s-old"),
                 ],
             )
-            line = self.mod.render(root, "s-new")
-        self.assertIn("1/2", line)
+            block = self.mod.render(root, "s-new")
+        self.assertIn("1/2", block)
+        self.assertIn("carried work", block)
 
     def test_missing_board_renders_empty(self):
         with tempfile.TemporaryDirectory() as root:
-            line = self.mod.render(root, "s1")
-        self.assertEqual(line, "")
+            block = self.mod.render(root, "s1")
+        self.assertEqual(block, "")
+
+    def test_list_caps_at_eight_items(self):
+        with tempfile.TemporaryDirectory() as root:
+            items = [_item("item %d" % n, "pending", "s1") for n in range(9)]
+            _board(root, items)
+            block = self.mod.render(root, "s1").splitlines()
+        self.assertEqual(len(block), 10)  # header + 8 items + "+1 more"
+        self.assertIn("+ 1 more", block[-1])
+
+    def test_empty_board_renders_empty(self):
+        with tempfile.TemporaryDirectory() as root:
+            _board(root, [])
+            block = self.mod.render(root, "s1")
+        self.assertEqual(block, "")
 
     def test_main_fails_open_on_bad_stdin(self):
         buf = io.StringIO()
