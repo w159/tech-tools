@@ -1,5 +1,29 @@
 # Changelog
 
+## [6.0.2] - 2026-09-15 -- the wiring drained its own payload
+
+Marketplace `3.17.1`; atlas `6.0.2`.
+
+6.0.1 made the statusline the surface the plan reaches the user on, then
+documented a `statusLine` snippet that could not work next to an existing
+statusline script. Claude Code pipes the status JSON to the command once. Stdin
+is single-use, so a first segment doing `input=$(cat)` consumes it and every
+later segment reads empty. `atlas_statusline.py` is fail-open by design: empty
+payload, exit 0, no output. The board was full and the prompt showed nothing,
+which reads as a broken board rather than a broken pipe.
+
+Measured on a live four-item board: wired per 6.0.1, the `statusLine` command
+printed the project line and the context-mode line and no ATLAS block. Capturing
+the payload once (`input=$(cat)`) and piping a copy to each segment printed
+`✓ ATLAS Todos 4/4` with all four items. The same capture also restored the
+payload to `context-mode statusline`, which had been reading empty for the same
+reason.
+
+The README now carries the complete `statusLine` JSON, names the trap, and gives
+a one-line way to test the renderer on its own. `test_atlas_contract.py` gains
+`DocsMatchCodeContract.test_readme_statusline_snippet_captures_stdin`, which
+fails if that wiring ever loses its stdin capture. No runtime code changed.
+
 ## [6.0.1] - 2026-09-15 -- the statusline is the plan surface
 
 Marketplace `3.17.0`; atlas `6.0.1`.
