@@ -307,10 +307,27 @@ def is_orchestrating(conn, session_id):
     return bool(row and row[0])
 
 
+def _project_root_for_sentinel(cwd):
+    """Walk up from cwd to the nearest project root (.git, .atlas, or docs
+    marker, same markers find_root uses) so runtime state always lands next to
+    the board and findings the rest of the system reads, never in an arbitrary
+    subdirectory of product source."""
+    d = os.path.abspath(cwd or ".")
+    for _ in range(7):
+        for marker in (".git", ".atlas", "docs"):
+            if os.path.exists(os.path.join(d, marker)):
+                return d
+        parent = os.path.dirname(d)
+        if parent == d:
+            return os.path.abspath(cwd or ".")
+        d = parent
+    return os.path.abspath(cwd or ".")
+
+
 def _write_orchestration_sentinel(cwd):
     """Advisory only. Never read for gating; a stale file must not enable a gate."""
     try:
-        run_dir = os.path.join(cwd, ".atlas", ".run")
+        run_dir = os.path.join(_project_root_for_sentinel(cwd), ".atlas", ".run")
         os.makedirs(run_dir, exist_ok=True)
         with open(os.path.join(run_dir, "atlas-orchestrate.active"), "w") as f:
             f.write(str(time.time()))

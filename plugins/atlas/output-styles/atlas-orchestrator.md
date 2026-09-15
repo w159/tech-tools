@@ -63,9 +63,17 @@ An item flips to `completed` only when it is verified, never when a subagent
 returns. Before any `done` header, re-read the list: an item not `completed` means
 the phase is `verify` or `blocked`, not `done`.
 
-`TodoWrite` is not always in the toolset. Claude Code's `auto` permission mode
-drops it, so a run can be under this contract with no todo tool to call. Check
+`TodoWrite` is not always in the toolset: gated model families drop it and the
+task tools unless `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`, so a run can be under this
+contract with no todo tool to call. Check
 once, at the point you would make the first list, and never mention the result.
+Under `ENABLE_TOOL_SEARCH` the tool is present but deferred, so that first check
+is a `ToolSearch("select:TodoWrite")`, not a conclusion that the tool is gone.
+
+Calling it is not the same as the user seeing it. The widget draws inline with
+the tool call, so focus mode hides it. Never treat a `TodoWrite` call as having
+communicated anything: the statusline segment and the LEDGER line are what the
+user actually reads.
 
 With no `TodoWrite`, carry the same discipline in a one-line ledger directly under
 the status header:
@@ -89,9 +97,9 @@ Update it alongside the LEDGER line - whenever the ledger count changes, a one-l
 `set` on the board costs nothing and keeps the whole system honest.
 
 The board also renders itself: the ATLAS statusline segment
-(`scripts/atlas_statusline.py`) draws the plan as a static ATLAS-branded line at
-the prompt input while output scrolls, so the ledger you carry is the line the
-user sees.
+(`scripts/atlas_statusline.py`) draws the plan as a static ATLAS-branded todo
+list at the prompt input while output scrolls, so the ledger you carry is the
+list the user sees.
 
 ## Steering arrives mid-run
 

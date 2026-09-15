@@ -1,5 +1,96 @@
 # Changelog
 
+## [6.0.1] - 2026-09-15 -- the statusline is the plan surface
+
+Marketplace `3.17.0`; atlas `6.0.1`.
+
+5.27.2 attributed the missing todo list to gated model families and pointed at
+`CLAUDE_CODE_ENABLE_TODO_TOOLS=1`. A user reported that setting it changed
+nothing, and this session found out why: the env var clears one of three
+conditions, not all of them.
+
+With `CLAUDE_CODE_ENABLE_TODO_TOOLS=true` and `ENABLE_TOOL_SEARCH=true` both set
+in `~/.claude/settings.json`, `TodoWrite` was present in the session but
+*deferred* behind `ToolSearch`, so its schema had to be fetched before it could
+be called at all. Fetching it and calling it then produced no visible checklist,
+which the user confirmed: the widget draws inline with the tool call, and focus
+mode suppresses tool calls. So on a focus-mode session the native widget cannot
+be made to appear by configuration at all.
+
+`atlas_statusline.py` is unchanged from 5.27.2 (same list format, same 8-item
+cap, same fail-open, same `ATLAS_STATUSLINE=off`). What changed is its standing:
+the docstring, the README section, and the output style now describe all three
+conditions, the output style tells the orchestrator to open with
+`ToolSearch("select:TodoWrite")` instead of concluding the tool is gone, and it
+forbids treating a `TodoWrite` call as having communicated anything to the user.
+Major bump because the `statusLine` block is no longer optional garnish, it is
+the documented way the plan reaches the reader.
+
+Branch hygiene: `fix/atlas-stop-hook-loop` deleted locally after confirming its
+tip is an ancestor of `main` (`git merge-base --is-ancestor`, exit 0); the only
+worktree is the main checkout.
+
+## [5.27.2] - 2026-09-09 -- statusline segment rebuilt as a real todo list
+
+Marketplace `3.16.2`; atlas `5.27.2`.
+
+The user rejected the 5.27.0 segment on two grounds, both fair: a one-line
+counter is not a todo list, and it looked bad. They also correctly noted the
+statusline modification itself had never been requested; the wiring note below
+is the only change outside plugin source. `atlas_statusline.py` now renders the
+durable board as a compact ATLAS-branded list: a `⎇ ATLAS Todos n/m done`
+header (a green `✓ ATLAS Todos` variant when everything is complete), then one
+line per item - `✓` completed in green, `❯` in progress in cyan, `○` pending
+dim - capped at 8 items with a `+ N more` line. The user's
+`statusline-command.sh` call changed from a single-line `%b` print to a
+multi-line-safe `%s` print. Session preference, whole-board fallback (carried
+items still show), fail-open on missing boards, and `ATLAS_STATUSLINE=off` are
+unchanged. Verified live against the repo's real board:
+
+```
+⎇ ATLAS Todos 0/1 done
+  ❯ prove ATLAS statusline renders at the prompt
+```
+
+9 renderer tests (`test_atlas_statusline.py` rewritten to the list contract,
+including the 8-item cap and `+ N more`).
+
+Correction to the 5.27.0 entry below: its root-cause claim (auto mode drops
+`TodoWrite`) is wrong. The documented mechanism is the model gate: Opus 4.8+/Sonnet
+5/Fable 5+ sessions lack `TodoWrite` and the task tools unless
+`CLAUDE_CODE_ENABLE_TODO_TOOLS=1` (docs: tools-reference), and the env var
+restores them on every model and provider. Applied to the user's `~/.zshrc`
+with their approval (2026-09-09); the native todo list returns on their next
+`claude` launch, and atlas's board mirrors it via `todo_capture.py`. The
+native widget has no branding surface (docs: interactive-mode), so the
+ATLAS-branded list remains a statusline choice the user wires themselves.
+
+## [5.27.1] - 2026-09-09 -- sentinel root resolution (live-install test pass)
+
+Marketplace `3.16.1`; atlas `5.27.1`.
+
+The user reinstalled (cache now runs 5.27.0) and asked for a live-install test
+pass. All three `InstalledParityContract` tests ran and passed for the first
+time (`test_installed_version_matches_manifest`,
+`test_installed_hook_files_match_repo`, `test_installed_hook_bindings_match_repo`),
+the shim at `~/.atlas/atlas_statusline.py` was byte-identical to source, and the
+statusline rendered the board. The pass also caught a real defect: this session
+had been opened with cwd inside `plugins/atlas/`, so hook payloads carried that
+subdirectory as cwd, and `atlas_db._write_orchestration_sentinel` wrote the
+advisory `atlas-orchestrate.active` sentinel at the raw cwd, re-growing a
+`.atlas/.run/` tree inside product source (the exact contamination 5.26.0
+purged). The stray `.atlas` marker then made `atlas_todo.find_root()` stop
+there, so an `atlas_todo.py set` run from that cwd wrote the durable todo board
+into the plugin source tree and the statusline (reading the project root)
+showed nothing. Fix: the sentinel writer walks up to the nearest project marker
+(.git, .atlas, docs) before writing, matching `find_root`'s markers, so runtime
+state always lands at the project root. Verified: failing test first
+(`test_sentinel_walks_up_to_project_root`), then green with
+`test_sentinel_stays_at_cwd_without_any_marker` guarding the fail-open fallback;
+suites 650 scripts OK + 86 hooks OK; board relocated to the repo root and the
+statusline renders it: `ATLAS 1/2 | now: prove ATLAS statusline renders at the
+prompt | 1 left`.
+
 ## [5.27.0] - 2026-09-09 -- ATLAS statusline: the todo board as a static line at the prompt
 
 Marketplace `3.16.0`; atlas `5.27.0`.

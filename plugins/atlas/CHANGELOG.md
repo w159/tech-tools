@@ -1,5 +1,58 @@
 # Changelog
 
+## [6.0.1] - 2026-09-15
+
+### Changed
+- **The statusline is now the plan surface, not a convenience.** 5.27.2 blamed
+  the invisible todo list on gated model families and pointed at
+  `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`. That is true and insufficient: with both
+  `CLAUDE_CODE_ENABLE_TODO_TOOLS=true` and `ENABLE_TOOL_SEARCH=true` set, this
+  session observed `TodoWrite` present but *deferred* behind `ToolSearch` (the
+  model has to fetch its schema before it can call it), and the user confirmed
+  that a `TodoWrite` call which did run drew nothing, because the widget renders
+  inline with the tool call and focus mode hides tool calls. Three independent
+  conditions, only one of which an env var clears. The docstring, the README
+  section, and the output style now say so, and the output style additionally
+  tells the orchestrator to open with `ToolSearch("select:TodoWrite")` rather
+  than concluding the tool is absent, and never to treat a `TodoWrite` call as
+  having communicated anything to the user.
+
+### Notes
+- Major bump because the statusline block in `statusLine` moves from optional
+  garnish to the documented way the plan reaches the user. Behavior of
+  `atlas_statusline.py` itself is unchanged from 5.27.2: same list format, same
+  8-item cap, same fail-open, same `ATLAS_STATUSLINE=off`.
+
+## [5.27.2] - 2026-09-09
+
+### Changed
+- **The statusline segment is a todo list, not a counter:** the user rejected
+  the 5.27.0 one-line counter on two grounds - it is not a todo list, and it
+  looked bad. `atlas_statusline.py` now renders the board as a compact list: a
+  `⎇ ATLAS Todos n/m done` header (green `✓` variant when everything is
+  complete), then one line per item (`✓` completed in green, `❯` in progress in
+  cyan, `○` pending dim), capped at 8 items with a `+ N more` line. Session
+  items first, whole-board fallback, fail-open, `ATLAS_STATUSLINE=off`, all
+  unchanged. 9 renderer tests; the shim and README describe the list format.
+- **Corrects the 5.27.0 root cause:** the docs verdict
+  (`S-todowrite-auto-mode-verdict`) proves `auto` permission mode does not drop
+  `TodoWrite`; gated model families (Opus 4.8+/Sonnet 5/Fable 5+) do, unless
+  `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`. Docs, output style, and docstrings now
+  attribute the tool's absence to the model gate and name the env var.
+
+## [5.27.1] - 2026-09-09
+
+### Fixed
+- **Orchestration sentinel stays at the project root:** the advisory
+  `atlas-orchestrate.active` sentinel was written at the hook payload's raw cwd,
+  so a session opened inside a subdirectory of product source grew its own
+  `.atlas/.run/` tree there (the exact contamination the 5.26.0 release purged),
+  and that stray `.atlas` marker then made `find_root()` stop short, sending
+  `atlas_todo.py set` boards into the wrong tree. The sentinel writer now walks
+  up to the nearest project marker (.git, .atlas, docs) first, same markers the
+  rest of the system uses. Caught by the 5.27.0 live-install test pass;
+  2 permanent tests in `test_atlas_db.py`.
+
 ## [5.27.0] - 2026-09-09
 
 ### Added

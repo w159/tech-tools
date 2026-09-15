@@ -939,16 +939,20 @@ class OrchestrationContract(unittest.TestCase):
         self.assertIn("Worktrees close before done", body)
 
     def test_todo_contract_degrades_when_todowrite_is_absent(self):
-        """Claude Code's `auto` permission mode ships a toolset with no
-        TodoWrite (measured 2026-08-20: `--permission-mode auto` -> absent,
-        `--permission-mode default` -> present). A contract that only names
-        TodoWrite is unfollowable for every auto-mode run, which is how 14
-        consecutive sessions produced zero todo state. The style must name a
-        fallback the model can actually execute."""
+        """A run can be under this contract with no TodoWrite tool. Measured
+        2026-08-20 (`--permission-mode auto` -> absent, `default` -> present);
+        the docs verdict of 2026-09-09 (findings S-todowrite-auto-mode-verdict)
+        attributes the absence to gated model families, not the permission
+        mode, with `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` as the documented opt-in
+        on every model and provider. A contract that only names TodoWrite is
+        unfollowable for every run without it, which is how 14 consecutive
+        sessions produced zero todo state. The style must name a fallback the
+        model can actually execute."""
         body = OUTPUT_STYLE.read_text(encoding="utf-8")
         self.assertIn("not always in the toolset", body)
         self.assertIn("LEDGER |", body)
-        self.assertRegex(body, r"auto`? permission mode")
+        self.assertRegex(body, r"gated model families")
+        self.assertIn("CLAUDE_CODE_ENABLE_TODO_TOOLS", body)
         # The fallback is worthless if it relaxes the verification rule.
         self.assertIn("only on verified work", body)
 
