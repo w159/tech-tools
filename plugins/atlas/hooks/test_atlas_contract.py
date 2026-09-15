@@ -385,6 +385,18 @@ class DocsMatchCodeContract(unittest.TestCase):
         readme = (PLUGIN_ROOT / "README.md").read_text(encoding="utf-8")
         self.assertNotIn("auto_skill.py", readme, "README documents a deleted hook")
 
+    def test_readme_statusline_snippet_captures_stdin(self):
+        """Claude Code pipes the status payload once. A snippet that pipes to
+        the renderer without first capturing stdin renders nothing whenever an
+        earlier segment already drained it, which reads as a broken board."""
+        readme = (PLUGIN_ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("atlas_statusline.py", readme)
+        self.assertIn(
+            "input=$(cat)",
+            readme,
+            "README statusline wiring must capture stdin before piping it",
+        )
+
 
 class GitignoreSecretContract(unittest.TestCase):
     """Secret shapes stay ignored inside allowlisted folders.

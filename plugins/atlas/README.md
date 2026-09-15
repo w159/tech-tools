@@ -141,11 +141,26 @@ the prompt, where none of the three conditions apply:
 items with a `+ N more` line. `session_boot.py` copies the self-contained script
 to `~/.atlas/atlas_statusline.py` so a statusline command can call a stable path
 that survives plugin reinstalls. Wire it as one more block in your `statusLine`
-command:
-`printf '%s' "$input" | python3 "$HOME/.atlas/atlas_statusline.py"`. It shows the
-current session's items first and falls back to the whole project board (so
-carried-over work shows), prints nothing when the board is empty or unreadable,
-and `ATLAS_STATUSLINE=off` disables it. Stdlib only, fail-open.
+command. Claude Code pipes the status JSON to that command once, and stdin is
+single-use: a first segment that does `input=$(cat)` (the common pattern in a
+statusline script) drains it, and every later segment reads an empty payload and
+prints nothing. So capture the payload once in the `statusLine` command itself
+and feed each segment a copy:
+
+```json
+"statusLine": {
+  "type": "command",
+  "command": "input=$(cat); printf '%s' \"$input\" | bash $HOME/.claude/statusline-command.sh; printf \"\\n\"; printf '%s' \"$input\" | python3 \"$HOME/.atlas/atlas_statusline.py\"; exit 0"
+}
+```
+
+A statusline that renders nothing when the board is not empty is this trap, not
+a broken board: check it with
+`printf '%s' "$payload" | python3 "$HOME/.atlas/atlas_statusline.py"` directly,
+where `$payload` is a JSON object carrying `cwd` and `session_id`. The segment
+shows the current session's items first and falls back to the whole project
+board (so carried-over work shows), prints nothing when the board is empty or
+unreadable, and `ATLAS_STATUSLINE=off` disables it. Stdlib only, fail-open.
 
 ## Local dashboard (multi-session)
 

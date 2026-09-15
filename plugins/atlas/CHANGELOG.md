@@ -1,5 +1,28 @@
 # Changelog
 
+## [6.0.2] - 2026-09-15
+
+### Fixed
+- **The documented statusline wiring drained its own payload.** 6.0.1 told users
+  to add `printf '%s' "$input" | python3 "$HOME/.atlas/atlas_statusline.py"` to
+  `statusLine` without saying where `$input` comes from. Claude Code pipes the
+  status JSON to the command once, and a first segment that reads stdin (the
+  usual `input=$(cat)` at the top of a statusline script) drains it, so the
+  renderer received an empty payload, exited 0 by design, and printed nothing.
+  Confirmed on a live board: wired per the old text, `statusLine` rendered no
+  ATLAS block with four items on the board; capturing the payload once in the
+  `statusLine` command and piping a copy to each segment rendered
+  `✓ ATLAS Todos 4/4` with all four items. The README now gives the complete
+  `statusLine` snippet, names the single-use-stdin trap, and shows how to test
+  the renderer directly. A new contract test
+  (`DocsMatchCodeContract.test_readme_statusline_snippet_captures_stdin`) fails
+  if the README's wiring loses `input=$(cat)`.
+
+### Notes
+- Documentation and test only. `atlas_statusline.py`, `todo_capture.py`, and
+  `atlas_todo.py` are unchanged: the board mirror and the renderer were both
+  correct, only the instructions for connecting them were not.
+
 ## [6.0.1] - 2026-09-15
 
 ### Changed
