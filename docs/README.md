@@ -35,22 +35,29 @@ docs/
 
 `node test-mcp-tools.mjs` at the repo root is the boot and tool-count gate `AGENTS.md:95`
 requires for any connector change; `node test-mcp-tools.mjs <svc>` probes one connector and
-`--list` prints the known names. It boots each shipped bundle at
-`plugins/atlas/mcp/<name>/server.mjs` over MCP stdio with placeholder credentials in a
+`--list` prints the known names. It launches each connector exactly as
+`plugins/atlas/.mcp.json` declares it - the eleven Node connectors as
+`plugins/atlas/mcp/<name>/server.mjs` over MCP stdio, `falcon` through its
+`uv run --project plugins/atlas/mcp/falcon ...` entry - with placeholder credentials in a
 from-scratch child environment, so it needs no real credentials and cannot reach a live vendor
 appliance. Four checks per connector: BOOT, FLOOR (no tool-count regression), AGREEMENT
 (`DESTRUCTIVE:` / `VISIBLE-TO-OTHERS:` prose must carry `readOnlyHint: false`), SHAPE. The
 contract it enforces is `standards/connector-safety-signals.md`.
 
-Last run: exit 0, PASS - 348 tools across 11 probed connectors, 0 safety-signal mismatches.
+Last run: exit 0, PASS - 523 tools across 12 connectors, 0 safety-signal mismatches, and every
+connector fully enumerated (0 gated, 0 skipped). "Fully enumerated" is the point: a tool the
+harness never lists is a tool whose safety signals were never checked, so connectors that hide
+tools behind a `<vendor>_navigate` step are walked domain by domain and unioned, and falcon -
+which registers its domain modules only after an OAuth exchange - is probed against a loopback
+stub that answers `POST /oauth2/token` and nothing else.
 
 | Server | Status | Tools (floor) | Notes |
 |--------|--------|---------------|-------|
 | auvik | PASS | 39 (39) | no prose effect markers, so AGREEMENT is vacuous here |
-| blumira | GATED | 2 (2) | remaining tools register behind a `blumira_navigate` domain step |
+| blumira | PASS | 32 (32) | 6 marked, 6 annotated; 2 listed cold + 30 behind 5 `blumira_navigate` domains |
 | cipp | PASS | 43 (43) | 12 marked mutating, 15 annotated mutating |
 | connectwise | PASS | 52 (52) | no prose effect markers, so AGREEMENT is vacuous here |
-| falcon | SKIP | - | Python connector, ships no `server.mjs` bundle |
+| falcon | PASS | 145 (145) | Python connector, launched via `uv`; 45 annotated mutating, 0 prose markers, so AGREEMENT is vacuous here |
 | knowbe4 | PASS | 30 (30) | no prose effect markers, so AGREEMENT is vacuous here |
 | ninjaone | PASS | 45 (45) | 9 marked mutating, 14 annotated mutating |
 | panos | PASS | 60 (60) | 32 marked mutating, 34 annotated mutating |

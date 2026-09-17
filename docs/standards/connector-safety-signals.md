@@ -99,10 +99,13 @@ allowed; the reverse is the defect the gate exists to catch.
 
 ## The gate
 
-`node test-mcp-tools.mjs` at the repo root boots every shipped bundle at
-`plugins/atlas/mcp/<name>/server.mjs` over MCP stdio with placeholder credentials
-in a from-scratch child environment, so it needs no real credentials and cannot
-reach a live appliance. Per connector it asserts:
+`node test-mcp-tools.mjs` at the repo root launches every connector exactly as
+`plugins/atlas/.mcp.json` declares it - the eleven Node connectors as
+`plugins/atlas/mcp/<name>/server.mjs` over MCP stdio, `falcon` as
+`uv run --project plugins/atlas/mcp/falcon python mcp/_env/load.py
+falcon_mcp.server` - with placeholder credentials in a from-scratch child
+environment, so it needs no real credentials and cannot reach a live vendor
+appliance. Per connector it asserts:
 
 1. **BOOT** - the bundle answers `initialize` and `tools/list`.
 2. **FLOOR** - the tool count has not regressed below the observed baseline
@@ -119,11 +122,26 @@ may assert more: `mcp_servers/panos-mcp/tests/boot-probe.mjs`
 exact four flag values, so a listed exception cannot drift on the flags that were
 not the reason it was listed.
 
-Two rows never read as a plain pass, by design: `falcon` is **SKIP** (Python
-connector, ships no `server.mjs` bundle) and `blumira` is **GATED** (only
-`blumira_navigate` and `blumira_status` are listed without credentials, because
-its remaining tools register after a `blumira_navigate` domain selection, so its
-surface is not fully observable here).
+**Every tool a connector can register must be reachable by the gate.** A tool the
+harness never lists is a tool whose safety signals were never checked, so a
+credential-less `tools/list` is not the end of the probe:
+
+- A connector that swaps its listed surface behind a `<vendor>_navigate` domain
+  step is walked domain by domain and the results unioned. `blumira` lists 2 tools
+  cold and 30 more across its five domains (findings, agents, users, msp,
+  resolutions), so it is gated no longer: 32 tools, all four checks applied.
+- A connector that registers its tools only after a successful credential
+  exchange gets a stub, not a skip. `falcon` registers its domain modules only
+  after an OAuth token exchange - 4 inert diagnostic tools otherwise - so the
+  probe points `FALCON_BASE_URL` at a loopback socket answering `POST
+  /oauth2/token` and nothing else, and asserts the stub was never asked for any
+  other route. That takes falcon from unprobed to 145 tools checked.
+- `GATED` and `SKIP` verdicts still exist for a surface that genuinely cannot be
+  enumerated (a missing `uv` or venv for falcon reports a named SKIP with the
+  command that fixes it), but nothing currently uses them: the run reports
+  `12/12 connector(s), 523 tools` fully enumerated, 0 gated, 0 skipped. A new
+  connector that cannot be fully enumerated must say why in its COVERAGE line
+  rather than pass quietly on a partial surface.
 
 ## Known limitation: agreement only catches disagreement
 
@@ -131,8 +149,10 @@ AGREEMENT compares prose against annotations. A connector that marks **nothing**
 as mutating agrees with itself and passes vacuously, no matter how many of its
 tools write. The harness refuses to hide this: such a row reads
 `ok (no prose effect markers - agreement check vacuous here)` rather than a bare
-`ok` (`test-mcp-tools.mjs:302`). As of 2026-09-17 that applies to auvik,
-connectwise, knowbe4, paylocity and vanta.
+`ok` (`test-mcp-tools.mjs:553`). As of 2026-09-17 that applies to auvik,
+connectwise, falcon (145 tools, 45 annotated `readOnlyHint: false`, zero prose
+markers), knowbe4, paylocity and vanta. It no longer applies to blumira, which
+reports 6 marked against 6 annotated-mutating once its domains are walked.
 
 `.atlas/.run/vacuous-check.mjs` is the second-order heuristic used to probe that
 blind spot from the other side: it flags tools that *look* like writes (an HTTP
