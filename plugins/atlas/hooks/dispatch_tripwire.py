@@ -6,7 +6,12 @@ Two tiers, branched on the payload's hook_event_name:
     This is the original behavior, unchanged.
   - PreToolUse (deny): before an op lands, and ONLY in orchestration-flagged
     sessions, DENIES the call when inline ops since the last dispatch reach the
-    hard limit, or when the op edits production target code inline.
+    hard limit, when the op edits production target code inline, or when an
+    atlas:* dispatch is malformed -- no code-nav TOOLS block, missing the
+    bounding dispatch spec from subagent-kit.md (GOAL, DELIVERABLE, SUCCESS
+    CRITERIA, OUT OF SCOPE, STOP CONDITIONS), or bundling several GOALs into a
+    single subagent. The last two are what keep a dispatch small and bounded
+    instead of one agent running for an hour.
 
 Fail-open: any error exits 0. Logs to the atlas observability DB.
 Disable both tiers with ATLAS_TRIPWIRE=off. Disable ONLY the deny tier (advisory
@@ -15,6 +20,7 @@ persists) with ATLAS_TRIPWIRE_HARD=off. Non-orchestration sessions are never den
 
 import json
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -30,6 +36,21 @@ EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 # orchestrator's own docs/ and .atlas/ edits, which the completion gate requires at
 # closeout) are excluded from the count, which is what makes a tighter limit safe.
 DENY_THRESHOLD = 6
+# The dispatch spec every atlas:* prompt must carry (subagent-kit.md, "The
+# dispatch spec (use this shape, nothing extra)"). These five blocks are what
+# bound a subagent's scope and runtime, and they are exactly what went missing
+# on the dispatches that sprawled into 30-60 minute sessions: without
+# DELIVERABLE/SUCCESS CRITERIA there is no finish line, without OUT OF SCOPE it
+# wanders into neighbouring code, without STOP CONDITIONS it pushes through a
+# blocker instead of reporting back. The skill has said this for versions; only
+# a deny makes it true.
+REQUIRED_SPEC_BLOCKS = (
+    "GOAL:",
+    "DELIVERABLE:",
+    "SUCCESS CRITERIA:",
+    "OUT OF SCOPE:",
+    "STOP CONDITIONS:",
+)
 # Skills whose invocation means the session IS an atlas orchestration run.
 # Deliberately excludes advisory/config skills (atlas-setup, atlas-validate)
 # and narrow single-purpose skills (atlas-prompt, atlas-readme,
@@ -205,6 +226,30 @@ def _toolkit_gap(tinput):
     return agent
 
 
+def _unbounded_dispatch(tinput):
+    """An atlas:* dispatch with no finish line, or several tasks crammed in one.
+
+    Two failure modes, one check. A prompt missing the bounding blocks gets a
+    subagent that runs until it wanders; a prompt carrying more than one GOAL
+    is a whole wave compressed into a single context, which is the opposite of
+    delegation - it is the orchestrator's own sprawl moved one level down.
+
+    Returns (agent, missing_blocks, goal_count) or None when the spec holds.
+    """
+    agent = str(tinput.get("subagent_type") or "")
+    if not agent.startswith("atlas:"):
+        return None  # forks inherit the parent's brief; non-atlas agents opt out
+    prompt = str(tinput.get("prompt") or "")
+    low = prompt.lower()
+    missing = [b for b in REQUIRED_SPEC_BLOCKS if b.lower() not in low]
+    # Line-anchored so a mention inside prose ("the goal:") is not a block, and
+    # SUBGOAL:/STRETCH GOAL: never inflate the count.
+    goals = len(re.findall(r"(?im)^[ \t]*GOAL[ \t]*:", prompt))
+    if not missing and goals <= 1:
+        return None
+    return agent, missing, goals
+
+
 def _pre_tool_use(conn, atlas_db, tool, session, path, tinput=None):
     """Deny tier: fires before the op lands, orchestration-flagged sessions only."""
     # The deny tier is independently kill-switchable; the advisory tier persists.
@@ -229,6 +274,28 @@ def _pre_tool_use(conn, atlas_db, tool, session, path, tinput=None):
                 "down -> lean-ctx only, never Bash grep. Without it %s greps the tree."
                 % (tool, gap)
             )
+            return
+        unbounded = _unbounded_dispatch(tinput or {})
+        if unbounded:
+            agent, missing, goals = unbounded
+            if goals > 1:
+                _deny(
+                    "DENY - this %s dispatch carries %d GOAL: blocks. One dispatch is "
+                    "ONE bounded task - that is what keeps a subagent's context small "
+                    "and its runtime short. Split it into %d dispatches, each with its "
+                    "own GOAL, DELIVERABLE, and SUCCESS CRITERIA; independent ones can "
+                    "run in the same parallel wave." % (tool, goals, goals)
+                )
+            else:
+                _deny(
+                    "DENY - this %s dispatch to %s is unbounded: missing %s. A subagent "
+                    "with no finish line runs until it wanders. Paste the dispatch spec "
+                    "from subagent-kit.md: GOAL (one measurable sentence), DELIVERABLE "
+                    "(the exact artifact), SUCCESS CRITERIA (independently checkable, "
+                    "each with its evidence), OUT OF SCOPE (what not to touch), STOP "
+                    "CONDITIONS (when to halt and report back rather than push "
+                    "through)." % (tool, agent, ", ".join(missing))
+                )
         return
     # (b) Editing production target code inline is the sharpest violation.
     if tool in EDIT_TOOLS and not _is_orchestration_path(path):

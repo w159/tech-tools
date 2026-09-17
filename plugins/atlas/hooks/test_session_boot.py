@@ -11,6 +11,7 @@ Scope: session_boot.py only. The hook source is never modified.
 import io
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -632,6 +633,76 @@ class SubprocessExitCodeTest(unittest.TestCase):
             env=env,
         )
         self.assertEqual(p.returncode, 0)
+
+
+class DocsStructureRepairTest(unittest.TestCase):
+    """SessionStart repairs the durable docs/ tree instead of blocking on it.
+
+    Creating an empty, scaffolder-owned subfolder is mechanical and safe, so it
+    is auto-fixed here. Anything needing judgement (a file's name, a CHANGELOG
+    entry) stays a completion-gate block instead.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        subprocess.run(
+            ["git", "init", "-q", self.tmp], check=True, capture_output=True
+        )
+        with open(os.path.join(self.tmp, "README.md"), "w", encoding="utf-8") as fh:
+            fh.write("# r\n")
+        self.env = dict(
+            os.environ,
+            ATLAS_DB=os.path.join(self.tmp, "atlas.db"),
+            ATLAS_HOOKSTATE_DIR=os.path.join(self.tmp, "hookstate"),
+            ATLAS_DASHBOARD="off",
+        )
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _boot(self, session="s1"):
+        return subprocess.run(
+            [sys.executable, BOOT],
+            input=json.dumps({"session_id": session, "cwd": self.tmp}),
+            capture_output=True,
+            text=True,
+            env=self.env,
+        ).stdout
+
+    def _subdirs(self):
+        docs = os.path.join(self.tmp, "docs")
+        if not os.path.isdir(docs):
+            return set()
+        return {n for n in os.listdir(docs) if os.path.isdir(os.path.join(docs, n))}
+
+    def test_partial_docs_tree_is_completed(self):
+        os.makedirs(os.path.join(self.tmp, "docs"), exist_ok=True)
+        out = self._boot()
+        self.assertIn("docs structure repaired", out)
+        for required in ("architecture", "decisions", "plans", "specs", "lessons"):
+            self.assertIn(required, self._subdirs())
+
+    def test_repair_is_idempotent_and_then_silent(self):
+        os.makedirs(os.path.join(self.tmp, "docs"), exist_ok=True)
+        self._boot("s1")
+        before = self._subdirs()
+        out = self._boot("s2")
+        self.assertNotIn("docs structure repaired", out)
+        self.assertEqual(before, self._subdirs())
+
+    def test_project_with_no_docs_tree_is_not_scaffolded_behind_the_users_back(self):
+        """Onboarding a project that never asked for docs/ belongs to
+        atlas-setup. Boot reports the gap and creates nothing."""
+        out = self._boot()
+        self.assertIn("docs SSOT absent", out)
+        self.assertFalse(os.path.isdir(os.path.join(self.tmp, "docs")))
+
+    def test_kill_switch_disables_repair(self):
+        os.makedirs(os.path.join(self.tmp, "docs"), exist_ok=True)
+        self.env["ATLAS_DOCS_REPAIR"] = "off"
+        out = self._boot()
+        self.assertNotIn("docs structure repaired", out)
+        self.assertEqual(self._subdirs(), set())
 
 
 if __name__ == "__main__":

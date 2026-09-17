@@ -81,7 +81,7 @@ surfaced while wiring. Keep targeted - no rewrite.
   cartographer Output trees updated (Task 4).
 - [ ] Final: `node ../../test-mcp-tools.mjs` not needed (no MCP change); run the atlas test suites;
   capture build_hub fixture output + HTML screenshot to
-  `docs/audits/atlas-cohesion-2026-06-29/evidence/ws4-hub.md`.
+  `docs/audits/2026-06-29-atlas-cohesion/evidence/ws4-hub.md`.
 
 ## Acceptance
 On a fixture run dir (handoffs + findings + a real graph.json), build_hub produces a manifest whose

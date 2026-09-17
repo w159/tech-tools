@@ -61,8 +61,8 @@ subdirs present.
 | `docs/ROADMAP.md` | Everything NOT yet completed/verified: backlog items with status (planned, in-progress, blocked, deferred). The curator moves completed+verified items to CHANGELOG. | yes |
 | `docs/AGENTS.md` | Deep orienting guidance that outgrew the root `AGENTS.md`: full architecture, module map, data flows. Optional; root `AGENTS.md` is the minimum. | yes |
 | `docs/architecture/` | Codebase structure, patterns, module boundaries. | yes |
-| `docs/decisions/` | Project ADRs (architecture decision records) for the codebase. | yes |
-| `docs/plans/` | `<task-slug>.md`, one per planned task. | yes |
+| `docs/decisions/` | `<YYYY-MM-DD>-<slug>.md` project ADRs (architecture decision records) for the codebase. | yes |
+| `docs/plans/` | `<YYYY-MM-DD>-<slug>.md`, one per planned task. | yes |
 | `docs/specs/` | `<YYYY-MM-DD>-<slug>.md` feature specs. | yes |
 | `docs/features/` | Per-feature documentation. | yes |
 | `docs/lessons/` | `<YYYY-MM-DD>-<slug>.md` gotchas and patterns learned. | yes |
@@ -173,15 +173,54 @@ Hard boundaries:
 - Evidence dirs: `.atlas/evidence/<YYYY-MM-DD>-<slug>/`. Inside: the raw `run.log`, `before.png`/`after.png`, EXPLAIN output, etc.
 - Durable findings: `.atlas/findings/<YYYY-MM-DD>-<slug>.md` + `.atlas/findings/INDEX.md`.
 - Atlas audits/decisions: `.atlas/audits/<YYYY-MM-DD>-<scope>/`, `.atlas/decisions/<YYYY-MM-DD>-<slug>.md`.
-- Project wiki subfolders: `docs/<subfolder>/<slug>.md` - lowercase-kebab-case. Examples:
-  - Audits: `docs/audits/atlas-<scope>-<YYYY-MM-DD>/` (e.g. `docs/audits/atlas-security-2026-06-15/`).
-  - Plans: `docs/plans/<task-slug>.md`, one per task.
-  - Specs: `docs/specs/<YYYY-MM-DD>-<slug>.md`.
-  - Architecture: `docs/architecture/<slug>.md`.
-  - Lessons: `docs/lessons/<YYYY-MM-DD>-<slug>.md`.
-  - Features: `docs/features/<slug>.md`.
-  - Decisions: `docs/decisions/<slug>.md`.
-  - Wiki (graphify): `docs/wiki/<slug>.md`.
+- Project wiki subfolders: lowercase-kebab-case. Anything that records an **event** (a
+  plan written, an audit run, a spec cut, a lesson learned, a decision taken) is named
+  **date-first**, `<YYYY-MM-DD>-<slug>`, so a plain directory listing sorts
+  chronologically. Anything that describes **living state** (architecture, a feature
+  as-built, a rendered wiki page) is a bare `<slug>`, because it is revised in place
+  rather than superseded by a newer dated sibling.
+  - Audits (dated): `docs/audits/<YYYY-MM-DD>-atlas-<scope>/` (e.g. `docs/audits/2026-06-15-atlas-security/`).
+  - Plans (dated): `docs/plans/<YYYY-MM-DD>-<slug>.md`, one per task.
+  - Specs (dated): `docs/specs/<YYYY-MM-DD>-<slug>.md`.
+  - Lessons (dated): `docs/lessons/<YYYY-MM-DD>-<slug>.md`.
+  - Decisions (dated): `docs/decisions/<YYYY-MM-DD>-<slug>.md`.
+  - Architecture (living): `docs/architecture/<slug>.md`.
+  - Features (living): `docs/features/<slug>.md`.
+  - Wiki (living, graphify): `docs/wiki/<slug>.md`.
+
+  The date goes **first**, never trailing and never behind a prefix. A trailing date
+  (`atlas-security-2026-06-15/`) or a leading sequence number (`00-master-plan.md`)
+  sorts by subject instead of by time, which is what made the order of an existing
+  plan set unreadable. A sequence number is still fine *after* the date
+  (`2026-06-23-01-packer-consolidation.md`) when a same-day set has a real order.
+  `scripts/lint_docs_names.py` enforces this, and fixes it. It is the same tool in
+  three modes, and it needs no per-project configuration, so it applies to any repo
+  atlas is used in:
+
+  ```
+  lint_docs_names.py                          # changed files only (gate condition (l))
+  lint_docs_names.py --all --structure        # whole tree + missing docs/ subfolders
+  lint_docs_names.py --all --fix              # rename, then rewrite every reference
+  ```
+
+  `--fix` never invents a date: it takes the one already embedded in the name (the
+  author's own claim about what the artifact is *about*), else the file's first
+  commit date, else its mtime. Renames go through `git mv` so history follows the
+  file, and every reference is then rewritten tree-wide -- the full path, the bare
+  filename, and the bare stem -- in markdown, code, and comments alike, because a
+  rename that leaves dangling references has traded one defect for a worse one. The
+  tool excludes its own source and tests from that rewrite: they cite example names
+  as fixtures, and rewriting them inverts the tool's own meaning.
+
+  Structure is repaired automatically rather than blocked on: `session_boot.py`
+  (SessionStart) creates any missing durable `docs/` subfolder, because an empty
+  scaffolder-owned directory is mechanical and safe. It only does so when `docs/`
+  already exists -- onboarding a project that never asked for one belongs to
+  atlas-setup, and boot just says so. `ATLAS_DOCS_REPAIR=off` disables it. The
+  required set is imported from the scaffolder's own list, so the checker and the
+  creator cannot diverge; a contract test pins that.
+
+  `README.md` in each scaffolded subfolder states the same shape.
 - Root files: all-caps (`README.md`, `CHANGELOG.md`, `ROADMAP.md`, `AGENTS.md`, `CLAUDE.md`).
 
 **Every `<slug>`, `<id>`, `<scope>`, and `*-slug` above must be filesystem-safe before it goes into a path.** A path that a model composes from a raw feature, task, or finding name can carry a character Windows forbids, and a single bad name makes the whole repo un-checkout-able on Windows (`git error: invalid path` aborts the entire checkout, not just that file). A colon is the usual offender: `docs/plans/frontend:public-site.md` blocks every Windows clone. Derive the slug this way: lowercase; replace every character outside `a-z 0-9 . _ -` (this removes the Windows-reserved set `< > : " / \ | ? *` plus spaces and control characters) with a single `-`; collapse repeated `-` and trim leading/trailing `-` and `.`; if the result is empty or a Windows reserved device name (`con`, `prn`, `aux`, `nul`, `com1`-`com9`, `lpt1`-`lpt9`), prefix it with the artifact kind (`plan-`, `feature-`, `run-`). The human-readable name still goes in the file's heading, so nothing is lost.

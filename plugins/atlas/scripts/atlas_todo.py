@@ -149,11 +149,15 @@ def _touch(item: dict) -> None:
 def mirror(
     root: Optional[str], todos: List[dict], session_id: str, origin: str = "session"
 ) -> dict:
-    """Replace the session's plan with a fresh TodoWrite-style list.
+    """Replace THIS session's plan with a fresh TodoWrite-style list.
 
-    TodoWrite rewrites the whole list every call, so `todos` IS current state.
-    Items keep their id/owner/claim when the content matches (so a subagent
-    claim survives a mirror). Manual items are never touched. Returns counts.
+    TodoWrite rewrites the whole list every call, so `todos` IS current state
+    for `session_id`. Items keep their id/owner/claim when the content matches
+    (so a subagent claim survives a mirror). Two classes of item are never
+    touched: manual items (a human's notes), and items belonging to ANOTHER
+    session -- concurrent terminals share one project board, so a mirror that
+    dropped them would wipe a parallel run's plan and any work carried over
+    from a previous session. Returns counts for this session's slice.
     """
     with _file_lock(board_path(root)):
         board = load(root)
@@ -163,6 +167,11 @@ def mirror(
             if i.get("session_id") == session_id and i.get("origin") != "manual"
         ]
         manual = [i for i in board["items"] if i.get("origin") == "manual"]
+        others = [
+            i
+            for i in board["items"]
+            if i.get("origin") != "manual" and i.get("session_id") != session_id
+        ]
         by_content = {i.get("content"): i for i in old}
 
         fresh = []
@@ -186,7 +195,7 @@ def mirror(
                 "archived": False,
             }
             fresh.append(item)
-        board["items"] = manual + fresh
+        board["items"] = manual + others + fresh
         board["last_session_id"] = session_id
         save(root, board)
         return counts(board, session_id)

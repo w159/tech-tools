@@ -1,6 +1,6 @@
 # Atlas Harden 2026-07-07 - Final Report
 
-Audit hub: `docs/audits/atlas-harden-2026-07-07/` (this directory).
+Audit hub: `docs/audits/2026-07-07-atlas-harden/` (this directory).
 Repo: `/Users/jerry/MEGA/Projects/Agentic/tech-tools`. HEAD unchanged throughout at
 `4cf8fcc` (2026-07-07 05:28:58 -0400) - confirmed via `git log -1 --format='%H %ci'`
 run at report time. **No commits were made by this audit or its remediation stages.**
@@ -145,9 +145,9 @@ wording. Nothing is glossed over.
   stage, and the instructions here are to update only what the shipped change
   requires - the file already matches the shipped state accurately per the earlier
   verifier pass (`stage-verdicts.removals` finding 1).
-- **`docs/audits/atlas-harden-2026-07-07/red-conformance.json`** - written this pass
+- **`docs/audits/2026-07-07-atlas-harden/red-conformance.json`** - written this pass
   (section 1 source).
-- **`docs/audits/atlas-harden-2026-07-07/final-report.md`** - this file.
+- **`docs/audits/2026-07-07-atlas-harden/final-report.md`** - this file.
 - **Knowledge graph:** searched the repo for `graphify-out/graph.json`. One exists at
   `mcp_servers/auvik-mcp/graphify-out/graph.json`, which belongs to an unrelated MCP
   server and was not touched by any atlas-harden change (all edits were under
@@ -173,6 +173,6 @@ wording. Nothing is glossed over.
    `grep -rn 'ux-cartographer\|ux-persona\|ux-fuzzer\|ux-accuracy-oracle\|ux-reporter\|api-usage-map' plugins/atlas/`
    (expect 0 hits in plugin-proper files; `docs/AGENTS.md` will show removal-record
    prose hits by design, per section 5).
-5. This audit directory (`docs/audits/atlas-harden-2026-07-07/`) is the single source
+5. This audit directory (`docs/audits/2026-07-07-atlas-harden/`) is the single source
    of truth for what was checked and how; no other location holds this session's
    verification evidence.

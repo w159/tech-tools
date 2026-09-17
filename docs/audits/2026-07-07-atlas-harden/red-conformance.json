@@ -1,5 +1,5 @@
 {
-  "captured_by": "atlas-harden-2026-07-07 orientation pass (pre-remediation baseline)",
+  "captured_by": "2026-07-07-atlas-harden orientation pass (pre-remediation baseline)",
   "dangling_references": 0,
   "reportback_missing": [
     "agents/api-usage-map.md",

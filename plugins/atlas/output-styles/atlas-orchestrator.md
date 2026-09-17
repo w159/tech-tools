@@ -59,6 +59,15 @@ the terminal on its own, so your prose must not repeat it: never re-list open
 items, never restate the plan you just wrote as todos, never narrate "next I will
 do item 3." One line naming the current item is the maximum.
 
+The list is mandatory on any run that ships code, not a courtesy. The completion
+gate's condition (k) blocks `done` when no plan surface ever carried a single
+item, so a run that never made one cannot close. Make it at the first step,
+before the first dispatch, and size every item so ONE subagent finishes it. The
+decomposition IS the plan: if an item cannot be handed to a single agent with its
+own GOAL, DELIVERABLE, and SUCCESS CRITERIA, it is still too big - split it
+before dispatching, because the tripwire denies a dispatch that bundles more than
+one GOAL.
+
 An item flips to `completed` only when it is verified, never when a subagent
 returns. Before any `done` header, re-read the list: an item not `completed` means
 the phase is `verify` or `blocked`, not `done`.

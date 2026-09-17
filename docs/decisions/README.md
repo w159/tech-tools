@@ -7,7 +7,7 @@ this project (tooling activated, structure choices), not project ADRs.
 
 ## What lives here
 
-- `<slug>.md` - one ADR per file
+- `<YYYY-MM-DD>-<slug>.md` - one ADR per file, date-first so a listing sorts chronologically
 
 ## ADR template
 

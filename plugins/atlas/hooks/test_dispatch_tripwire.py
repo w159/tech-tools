@@ -23,6 +23,21 @@ def run_hook(payload, env):
     return p
 
 
+TOOLS_BLOCK = (
+    'TOOLS: ToolSearch("select:mcp__lean-ctx__ctx_compose,'
+    'mcp__serena__find_symbol")\n'
+)
+# The five blocks subagent-kit.md's dispatch spec requires. Without them
+# _unbounded_dispatch denies the dispatch as having no finish line.
+SPEC_BLOCK = (
+    "GOAL: map the auth path.\n"
+    "DELIVERABLE: a report written to .atlas/evidence/auth-map.md\n"
+    "SUCCESS CRITERIA: every auth entrypoint listed with file:line\n"
+    "OUT OF SCOPE: no edits, no migrations, no dependency changes\n"
+    "STOP CONDITIONS: halt and report if the router cannot be located\n"
+)
+
+
 class TripwireTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
@@ -303,14 +318,59 @@ class TripwireTest(unittest.TestCase):
                 "Agent",
                 {
                     "subagent_type": "atlas:explorer",
-                    "prompt": 'TOOLS: ToolSearch("select:mcp__lean-ctx__ctx_compose,'
-                    'mcp__serena__find_symbol") then map the auth path.',
+                    "prompt": TOOLS_BLOCK + SPEC_BLOCK,
                 },
             ),
             self.env,
         )
         self.assertEqual(r.returncode, 0)
         self.assertEqual(r.stdout.strip(), "")
+
+    def test_pre_deny_atlas_dispatch_missing_the_bounding_spec(self):
+        """A dispatch that names the toolset but gives the agent no finish line
+        -- the exact shape that produced 30-60 minute subagent sessions. The
+        deny must name the blocks that are actually absent."""
+        r = run_hook(
+            self._pre_payload(
+                "Agent",
+                {
+                    "subagent_type": "atlas:implementer",
+                    "prompt": TOOLS_BLOCK + "GOAL: fix the auth bug.\n",
+                },
+            ),
+            self.env,
+        )
+        self.assertEqual(r.returncode, 0)
+        self.assertIn('"permissionDecision": "deny"', r.stdout)
+        self.assertIn("unbounded", r.stdout)
+        for block in (
+            "DELIVERABLE:",
+            "SUCCESS CRITERIA:",
+            "OUT OF SCOPE:",
+            "STOP CONDITIONS:",
+        ):
+            self.assertIn(block, r.stdout)
+        # GOAL was supplied, so it must not be reported among the missing.
+        self.assertNotIn("GOAL:,", r.stdout)
+
+    def test_pre_deny_dispatch_bundling_several_goals(self):
+        """Two GOAL blocks is a whole wave compressed into one context, which
+        is the orchestrator's sprawl moved one level down rather than delegated."""
+        r = run_hook(
+            self._pre_payload(
+                "Agent",
+                {
+                    "subagent_type": "atlas:implementer",
+                    "prompt": TOOLS_BLOCK
+                    + SPEC_BLOCK
+                    + "GOAL: also rewrite the billing module.\n",
+                },
+            ),
+            self.env,
+        )
+        self.assertEqual(r.returncode, 0)
+        self.assertIn('"permissionDecision": "deny"', r.stdout)
+        self.assertIn("2 GOAL: blocks", r.stdout)
 
     def test_pre_toolkit_guard_ignores_forks_and_foreign_agents(self):
         """A fork inherits the parent's already-loaded tools; non-atlas agents carry

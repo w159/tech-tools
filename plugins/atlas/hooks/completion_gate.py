@@ -12,7 +12,7 @@ of truth that atlas-setup scaffolds. Atlas-internal state (evidence, run
 findings) lives under `.atlas/` directly, never under a `.atlas/docs/` layer. In any
 session with no `docs/` it is a silent no-op, so it is safe to leave installed.
 
-Nine conditions must ALL hold before the gate passes (else block ONCE):
+Twelve conditions must ALL hold before the gate passes (else block ONCE):
   (a) At least one file exists under `.atlas/evidence/`. Scoped like (f)/(g):
       only checked when THIS RUN shipped non-docs code (_nondocs_changed on
       the run-write signal). A run that shipped no code has no evidence to
@@ -42,15 +42,29 @@ Nine conditions must ALL hold before the gate passes (else block ONCE):
       "done" that should have been moved to CHANGELOG, block. A "done" item
       in ROADMAP is a defect -- it belongs in CHANGELOG with a date and
       evidence citation.
-  (i) Todo drain: if this run shipped code and the transcript's most recent
-      TodoWrite call still holds non-"completed" items, block. TodoWrite writes
-      the whole list every time, so the last call is current state. A run with
-      no todo list at all passes -- (i) enforces draining a list, not creating
-      one.
+  (i) Todo drain: if this run shipped code and the most recent plan still
+      holds non-"completed" items, block. TodoWrite writes the whole list
+      every time, so the last call is current state. (i) enforces DRAINING a
+      list; (k) is what enforces having one.
   (j) Worktree close-out: if this run dispatched an agent with
       isolation="worktree" (recorded by dispatch_tripwire) and `git worktree
       list` still shows trees beyond the main one, block. Scoped to this run's
       own dispatches so a user's long-lived worktrees never trip it.
+  (k) Plan mandate: if this run shipped code and NO plan surface ever carried
+      a single item -- no transcript TodoWrite call, no non-manual item for
+      this session on the durable board, no LEDGER line -- block. (i) alone
+      let a run that never planned anything pass trivially, since an absent
+      list has zero open items; that gap is why orchestration ran with no
+      todo state at all. Scoped to code-shipping runs and fail-open: a gate
+      that demands a plan for a two-line answer is the busywork this plugin
+      exists to avoid, and an unreadable surface never manufactures a block.
+  (l) Docs naming: every dated record this run touched (plan, spec, lesson,
+      decision, audit, finding, evidence dir) must be named
+      `<YYYY-MM-DD>-<slug>` so a plain listing sorts chronologically. A
+      trailing date or a leading sequence number sorts by subject instead,
+      which is what made an existing plan set unreadable. Run-scoped via git
+      and fail-open: historical names nobody touched never block, or the gate
+      would wedge every run on frozen audit hubs that predate the convention.
 
 (a), (b), (f), and (g) all share one signal: whether THIS RUN shipped
 non-docs code (_nondocs_changed on the run-write signal from atlas_db). A
@@ -198,21 +212,19 @@ def _docs_moved_in_git(root: Path) -> bool:
     return any(p.startswith("docs/") or "/docs/" in p for p in changed)
 
 
-def _open_todos(transcript_path: str) -> int:
-    """Count non-`completed` items in the run's most recent TodoWrite call.
+def _latest_transcript_todos(transcript_path: str) -> list | None:
+    """The `todos` array from the run's LAST TodoWrite call, or None.
 
-    TodoWrite always writes the WHOLE list, so the last call in the transcript is
-    the current state - no replay or merging needed. Returns 0 when there is no
-    todo list at all: condition (i) enforces DRAINING a list, not creating one.
-    Creation is the skill's job (and the harness has its own reminder for it);
-    a gate that demands a todo list for a two-line run is the busywork this
-    plugin exists to avoid.
+    TodoWrite rewrites the WHOLE list every call, so the final call in the
+    transcript is current state - no replay or merging needed. None means the
+    transcript holds no readable TodoWrite call at all, which is what lets
+    (i) and (k) tell "drained a list" apart from "never made one".
 
-    Fail-open on everything: unreadable file, malformed JSON line, unexpected
-    shape. A gate that cannot read the transcript must not block on it.
+    Fail-open to None on everything: unreadable file, malformed JSON line,
+    unexpected shape. A gate that cannot read the transcript must not block.
     """
     if not transcript_path:
-        return 0
+        return None
     latest = None
     try:
         with open(transcript_path, encoding="utf-8", errors="replace") as fh:
@@ -236,7 +248,24 @@ def _open_todos(transcript_path: str) -> int:
                         if isinstance(todos, list):
                             latest = todos
     except (OSError, UnicodeDecodeError):
-        return 0
+        return None
+    return latest
+
+
+def _open_todos(transcript_path: str) -> int:
+    """Count non-`completed` items in the run's most recent TodoWrite call.
+
+    TodoWrite always writes the WHOLE list, so the last call in the transcript is
+    the current state - no replay or merging needed. Returns 0 when there is no
+    todo list at all: condition (i) enforces DRAINING a list, not creating one.
+    Creation is the skill's job (and the harness has its own reminder for it);
+    a gate that demands a todo list for a two-line run is the busywork this
+    plugin exists to avoid.
+
+    Fail-open on everything: unreadable file, malformed JSON line, unexpected
+    shape. A gate that cannot read the transcript must not block on it.
+    """
+    latest = _latest_transcript_todos(transcript_path)
     if not latest:
         return 0
     return sum(
@@ -299,6 +328,70 @@ def _ledger_open_todos(transcript_path: str) -> int:
     return max(0, last[1] - last[0])
 
 
+def _has_ledger_line(transcript_path: str) -> bool:
+    """True when the transcript carries a `LEDGER | n/m | ...` line.
+
+    Presence, not arithmetic: a fully drained ledger (`5/5`) reports zero open
+    items but still proves a plan existed, so (k) must not read it through
+    _ledger_open_todos. Fail-open True.
+    """
+    if not transcript_path:
+        return False
+    try:
+        with open(transcript_path, encoding="utf-8", errors="replace") as fh:
+            return any("LEDGER |" in line for line in fh)
+    except (OSError, UnicodeDecodeError):
+        return True
+
+
+def _has_todo_plan(transcript_path: str, root: Path, session_id: str) -> bool:
+    """(k) Did this run ever commit to a visible plan?
+
+    True when ANY of the three plan surfaces carries at least one item: a
+    transcript TodoWrite call, this session's own items on the durable board,
+    or a LEDGER line. Manual items are a human's notes, not the orchestrator's
+    plan, so they do not count here - same rule as (i).
+
+    Fail-open True: when a surface cannot be read the gate must not invent a
+    block. (k) fires only on positive proof that no plan was ever made.
+    """
+    if _latest_transcript_todos(transcript_path):
+        return True
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_todo
+
+        board = atlas_todo.load(str(root))
+        for item in board.get("items", []):
+            if (
+                not item.get("archived")
+                and item.get("origin") != "manual"
+                and item.get("session_id") == session_id
+            ):
+                return True
+    except Exception:
+        return True  # board unreadable -> fail open, never block on our own error
+    return _has_ledger_line(transcript_path)
+
+
+def _docs_name_violations(root: Path) -> list:
+    """(l) [(path, reason)] for dated artifacts this run touched that are not
+    date-first, via scripts/lint_docs_names.py.
+
+    Run-scoped, not a whole-tree scan: blocking on names nobody is touching
+    would wedge every run in a repo with pre-convention history. Fail-open to
+    [] on any error -- a linter that cannot load must not stop a stop.
+    """
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import lint_docs_names
+
+        return lint_docs_names.violations(lint_docs_names.changed_paths(root))
+    except Exception:
+        return []
+
+
+
 def _leftover_worktrees(root: Path) -> list:
     """Extra git worktrees still on disk, excluding the main one.
 
@@ -357,6 +450,8 @@ def _reason(
     roadmap_not_reconciled: bool = False,
     open_todos: int = 0,
     worktrees: list | None = None,
+    missing_plan: bool = False,
+    name_violations: list | None = None,
 ) -> str:
     parts = []
     if missing_a:
@@ -398,11 +493,13 @@ def _reason(
         )
     if drift:
         parts.append(
-            "  (f) Docs drift: non-docs files changed this run but no docs/ file is "
-            "in the diff. The docs/ tree is the single source of truth and must move "
-            "with the code. -> Dispatch atlas:docs-curator to reconcile docs/ "
-            "(CHANGELOG, ROADMAP, affected subfolders) citing file:line evidence, "
-            "then retry Stop."
+            "  (f) Docs drift: non-docs files changed this run but docs/CHANGELOG.md "
+            "is not in the diff. The CHANGELOG is the record that this change "
+            "happened and was verified; an edit to some other doc is not a "
+            "substitute for it. -> Write the CHANGELOG entry inline yourself (docs/ "
+            "is a tree the orchestrator may edit directly), or dispatch "
+            "atlas:docs-curator to reconcile docs/ (CHANGELOG, ROADMAP, affected "
+            "subfolders) citing file:line evidence, then retry Stop."
         )
     if unverified > 0:
         parts.append(
@@ -433,6 +530,19 @@ def _reason(
             "-> Dispatch atlas:docs-curator to move completed and verified "
             "items from ROADMAP to CHANGELOG, then retry Stop."
         )
+    if missing_plan:
+        parts.append(
+            "  (k) No plan was ever made: this run shipped code with zero items on "
+            "every plan surface (no TodoWrite call, no board items for this session, "
+            "no LEDGER line). The plan is not paperwork - it is how the work gets "
+            "decomposed into small, independently dispatchable pieces instead of one "
+            "sprawling subagent. -> Write the list NOW, one item per bounded step, "
+            "then mark what is already done: TodoWrite if the tool is available "
+            '(load it with ToolSearch("select:TodoWrite") first), otherwise '
+            'python3 "$CLAUDE_PLUGIN_ROOT/scripts/atlas_todo.py" set '
+            "'[{\"content\":\"...\",\"status\":\"completed\"}]' --session <session_id>. "
+            "Then retry Stop."
+        )
     if open_todos > 0:
         parts.append(
             "  (i) Todo list not drained: %d item(s) are still open (transcript "
@@ -449,6 +559,16 @@ def _reason(
             "branch (git merge --no-ff <branch>), then `git worktree remove` it. Offer "
             "the push; never run it unasked."
             % (len(worktrees), ", ".join(worktrees[:4]))
+        )
+    if name_violations:
+        parts.append(
+            "  (l) %d docs artifact(s) this run touched are not named date-first: "
+            "%s. A dated record (plan, spec, lesson, decision, audit, finding) is "
+            "<YYYY-MM-DD>-<slug> so a plain listing sorts chronologically; a "
+            "trailing date or a leading sequence number sorts by subject instead. "
+            "-> Rename with `git mv` (keep the history), then re-check with "
+            'python3 "$CLAUDE_PLUGIN_ROOT/scripts/lint_docs_names.py".'
+            % (len(name_violations), "; ".join(p for p, _ in name_violations[:5]))
         )
     failed = "\n".join(parts)
     return (
@@ -517,10 +637,10 @@ def main() -> int:
         ok_d = _check_roadmap(root)
         ok_e = _check_readme(root)
         ok_h = _check_roadmap_reconciled(root)
-        # (f) Docs drift BLOCKS: THIS RUN's own writes moved code but docs/
-        # did not.
-        # (f) Docs drift BLOCKS, but the primary signal is tool-call-scoped and
-        # therefore blind to docs written by a Bash-invoked script. Cross-check
+        # (f) Docs drift BLOCKS: THIS RUN's own writes shipped code and
+        # docs/CHANGELOG.md was not among them. The primary signal is
+        # tool-call-scoped and therefore blind to docs written by a
+        # Bash-invoked script. Cross-check
         # git before blocking so a run whose docs ARE current is not stopped.
         drift = _docs_drift(run_paths) if code_changed else False
         if drift and _docs_moved_in_git(root):
@@ -550,11 +670,23 @@ def main() -> int:
             open_todos = _board_open_todos(root, str(data.get("session_id") or ""))
         if code_changed and open_todos == 0:
             open_todos = _ledger_open_todos(str(data.get("transcript_path") or ""))
+        # (k) Plan mandate. (i) enforces draining a list, so a run that never
+        # made one passed it trivially -- an absent list has zero open items.
+        # (k) closes that gap on code-shipping runs only.
+        missing_plan = code_changed and not _has_todo_plan(
+            str(data.get("transcript_path") or ""),
+            root,
+            str(data.get("session_id") or ""),
+        )
         worktrees = (
             _leftover_worktrees(root)
             if code_changed and _run_used_worktrees(data.get("session_id", ""))
             else []
         )
+        # (l) Naming: dated records must sort chronologically. Not gated on
+        # code_changed -- a docs-only run that files a misnamed plan is exactly
+        # the case worth catching.
+        name_violations = _docs_name_violations(root)
         unverified = 0
         if code_changed:
             session = data.get("session_id", "")
@@ -574,6 +706,8 @@ def main() -> int:
             and unverified == 0
             and open_todos == 0
             and not worktrees
+            and not missing_plan
+            and not name_violations
         ):
             # Silence on pass is the contract: the gate speaks only when it
             # blocks. No advisory, no "not evaluated" narration -- any output
@@ -592,6 +726,8 @@ def main() -> int:
                 ("h", not ok_h),
                 ("i", open_todos > 0),
                 ("j", bool(worktrees)),
+                ("k", missing_plan),
+                ("l", bool(name_violations)),
             )
             if failing
         ]
@@ -608,6 +744,8 @@ def main() -> int:
             not ok_h,
             open_todos,
             worktrees,
+            missing_plan=missing_plan,
+            name_violations=name_violations,
         )
         print(json.dumps({"decision": "block", "reason": block_reason}))
     except Exception as exc:  # noqa: BLE001 -- a Stop hook must never wedge the session
