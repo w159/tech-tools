@@ -81,8 +81,7 @@ is a `ToolSearch("select:TodoWrite")`, not a conclusion that the tool is gone.
 
 Calling it is not the same as the user seeing it. The widget draws inline with
 the tool call, so focus mode hides it. Never treat a `TodoWrite` call as having
-communicated anything: the statusline segment and the LEDGER line are what the
-user actually reads.
+communicated anything: the LEDGER line is what the user actually reads.
 
 With no `TodoWrite`, carry the same discipline in a one-line ledger directly under
 the status header:
@@ -104,11 +103,6 @@ board itself so the dashboard and the gate can see the plan:
 
 Update it alongside the LEDGER line - whenever the ledger count changes, a one-line
 `set` on the board costs nothing and keeps the whole system honest.
-
-The board also renders itself: the ATLAS statusline segment
-(`scripts/atlas_statusline.py`) draws the plan as a static ATLAS-branded todo
-list at the prompt input while output scrolls, so the ledger you carry is the
-list the user sees.
 
 ## Steering arrives mid-run
 

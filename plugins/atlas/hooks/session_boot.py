@@ -56,36 +56,6 @@ def ensure_dashboard():
         return None
 
 
-def _sync_statusline_shim():
-    """Copy the self-contained statusline renderer to a stable path.
-
-    The statusline command runs outside hook context, so it cannot use
-    CLAUDE_PLUGIN_ROOT; the copy under ~/.atlas survives plugin reinstalls
-    and is kept current on every boot. Fail-open.
-    """
-    src = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        "..",
-        "scripts",
-        "atlas_statusline.py",
-    )
-    dst = os.path.join(os.path.expanduser("~"), ".atlas", "atlas_statusline.py")
-    try:
-        with open(src, encoding="utf-8") as fh:
-            text = fh.read()
-        try:
-            with open(dst, encoding="utf-8") as fh:
-                if fh.read() == text:
-                    return
-        except OSError:
-            pass
-        os.makedirs(os.path.dirname(dst), exist_ok=True)
-        with open(dst, "w", encoding="utf-8") as fh:
-            fh.write(text)
-    except OSError:
-        pass
-
-
 def has_cmd(name):
     return shutil.which(name) is not None
 
@@ -636,12 +606,6 @@ def main():
                 )
     except Exception:
         pass  # structure repair is best-effort; never block boot
-
-    # Keep the ~/.atlas statusline shim current (fail-open; never blocks boot).
-    try:
-        _sync_statusline_shim()
-    except Exception:
-        pass
 
     # Run the curator to manage auto-created skill lifecycle (fail-open)
     try:

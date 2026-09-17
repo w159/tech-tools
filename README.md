@@ -38,7 +38,7 @@ verifying, and gets measurably better the more you use it in a codebase.
 6. [Agents (12)](#agents-12)
 7. [Hooks (11)](#hooks-11)
 8. [Scripts](#scripts)
-9. [Connectors (10 MCP servers)](#connectors-10-mcp-servers)
+9. [Connectors (11 MCP servers)](#connectors-11-mcp-servers)
 10. [Other plugins in this marketplace](#other-plugins-in-this-marketplace)
 11. [Output style](#output-style)
 12. [Docs as the single source of truth](#docs-as-the-single-source-of-truth)
@@ -269,7 +269,7 @@ not tax every prompt's token budget.
 
 ---
 
-## Connectors (10 MCP servers)
+## Connectors (11 MCP servers)
 
 Atlas ships optional MCP connectors for MSP and IT operations, wired through
 `plugins/atlas/.mcp.json` and configured with the `userConfig` fields in
@@ -288,6 +288,7 @@ plugin is safe to install with no config.
 | ThreatLocker | Zero-trust endpoint | `threatlocker_api_key` |
 | Vanta | GRC / compliance | `vanta_client_id`, `vanta_client_secret` |
 | Paylocity | HR / payroll | `paylocity_client_id`, `paylocity_client_secret`, `paylocity_company_id` |
+| PAN-OS | Palo Alto firewall / Panorama | `panos_host`, `panos_api_key` |
 
 Example: set `ninjaone_client_id` and `ninjaone_client_secret` in the plugin
 config, and `atlas-harden` can pull device state from NinjaOne while it drafts

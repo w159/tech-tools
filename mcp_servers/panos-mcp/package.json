@@ -1,0 +1,57 @@
+{
+  "name": "panos-mcp",
+  "version": "0.2.0",
+  "description": "MCP server for the PAN-OS XML and REST APIs (Panorama and firewall)",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "panos-mcp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup",
+    "build:tsup": "tsup",
+    "prebuild": "npm run clean",
+    "dev": "tsup --watch",
+    "start": "node dist/index.js",
+    "test": "npm run test:boot",
+    "clean": "rm -rf dist",
+    "pack:mcpb": "node scripts/pack-mcpb.js",
+    "bundle:atlas": "tsup --config tsup.bundle.config.ts",
+    "test:boot": "node tests/boot-probe.mjs"
+  },
+  "keywords": [
+    "panos",
+    "palo-alto",
+    "panorama",
+    "firewall",
+    "mcp",
+    "model-context-protocol"
+  ],
+  "author": "w159",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "node-panos": "file:../../mcp_node/node-panos"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^4.1.10"
+  },
+  "overrides": {
+    "esbuild": "^0.28.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/w159/tech-tools.git",
+    "directory": "mcp_servers/panos-mcp"
+  },
+  "homepage": "https://github.com/w159/tech-tools/tree/main/mcp_servers/panos-mcp",
+  "bugs": {
+    "url": "https://github.com/w159/tech-tools/issues"
+  }
+}

@@ -1,5 +1,169 @@
 # Changelog
 
+## [Unreleased] -- the PAN-OS connector
+
+New vendor: `panos`, covering Palo Alto firewalls and Panorama. 60 tools across
+eleven domains, sourced from the vendor's own `PAN-OS XML API` postman
+collection (71 requests) rather than from recollection. `mcp_node/node-panos`
+holds the client; `mcp_servers/panos-mcp` holds the server; the bundle lands at
+`plugins/atlas/mcp/panos/server.mjs` and is registered in `.mcp.json` with seven
+`CFG_PANOS_*` values.
+
+The design is written down first, in `docs/panos-connector-design.md`, because
+five agents built against it concurrently and a contract in prose is cheaper
+than a merge conflict in code.
+
+Three decisions are worth reading before touching this connector.
+
+**PAN-OS reports failure with HTTP 200.** An authorization failure, a bad xpath,
+and a malformed element all come back `200 OK` carrying
+`<response status="error" code="403">`. A client that checks `res.ok` calls every
+one of those a success. `PanosApiError` is therefore raised off the parsed
+`status` attribute and never off the HTTP status, and that is the invariant the
+test file exists to hold.
+
+**Objects and policies go over the JSON REST API, not xpath strings.** A model
+composing an xpath from memory writes to the wrong node silently; the REST API
+is schema'd per resource and rejects a bad shape. Where an xpath is unavoidable,
+`action=complete` ships as a first-class tool so the model can enumerate a node's
+valid children, and every xpath-taking write tool's description ends by telling
+it to ground the path first. `panos_policies_move` is the one policy tool still
+on XML: Palo Alto publishes no REST move endpoint, so the connector builds the
+rule's xpath itself from validated arguments, which keeps the no-invented-xpath
+rule intact.
+
+**The API key travels in an `X-PAN-KEY` header and `type=keygen` is a POST.** The
+postman collection shows both as query-string GETs. A key in a URL lands in proxy
+logs, access logs and shell history, which is the wrong answer under the
+Safeguards Rule and Reg S-P, so the collection is not copied here.
+
+Writes touch the candidate config only and never commit; `panos_commit` is a
+separate, explicit call. 32 of the 60 tools carry the `DESTRUCTIVE:` prefix and
+`panos_system_reboot` additionally carries `VISIBLE-TO-OTHERS:`, since it drops
+traffic for every user behind the firewall.
+
+`PANOS_HOST` is required and has no default, which is a deliberate exception to
+the base-URL rule in `AGENTS.md`: PAN-OS publishes no API base URL because the
+base URL is the appliance. The manifest says so rather than leaving a future
+reader to assume the invariant broke by accident.
+
+`tests/boot-probe.mjs` (`npm run test:boot`) drives the bundled server over MCP
+stdio and asserts the progressive-disclosure gate in all three credential states,
+that unresolved `${user_config.*}` placeholders degrade to the no-credential
+state, and that the destructive prefixes are actually present on the tools that
+mutate. It stands in for `test-mcp-tools.mjs`, which `AGENTS.md` names as the
+boot harness but which is absent from this tree.
+
+Not shipped: `type=user-id` (IP-to-user mapping, dynamic address and user
+groups).
+
+**Then it was run against a real firewall, and four defects fell out.** Until
+2026-09-17 no call in this connector had touched hardware; every request shape
+was grounded in the collection and the vendor docs, which turns out to be a
+different claim than "it works". The appliance: a PA-460 on PAN-OS 11.1.13-h6, a
+standalone firewall with `multi-vsys: off` - not Panorama - serving its
+self-signed factory certificate, so `PANOS_VERIFY_TLS=false` was the documented
+exception rather than a shortcut. It was driven through the shipped bundle
+exactly as `plugins/atlas/.mcp.json` launches it, not through `dist/` and not by
+calling the client library directly. `tools/list` returned 60 tools and 14 of 14
+read-only steps passed, `panos_config_complete` among them, which matters because
+every write tool's description tells the model to ground its xpath with that
+tool. The HTTP-200-with-`status="error"` path this connector is designed around
+is now confirmed on real firmware and not only on captured shapes. Redacted
+evidence: `.atlas/evidence/2026-09-17-panos-live-validation.md`.
+
+**The load-bearing find was XML numeric coercion.** `fast-xml-parser` ran with
+its default value parsing, so `<serial>023009014025</serial>` came back as the
+*number* `23009014025`. Every Panorama-routed call addresses a firewall by
+`target=<serial>`; a serial read from the appliance and passed straight back as
+`target` would have addressed nothing, silently, on whatever device the truncated
+string did or did not match. `av-version` and `family` were coerced the same way.
+The fix is two options - `parseTagValue: false`, `parseAttributeValue: false` -
+and three failing-first guards, taking `mcp_node/node-panos` from 6 tests to 9.
+No mock-only suite was ever going to catch it: a fixture author writes the serial
+they already expect to read back, so the coercion only shows up when the string
+comes off real wire. The parser options are now contract in
+`docs/panos-connector-design.md`, with the reason attached, because the next
+person to "clean up" the parser config needs to know what they would be breaking.
+
+The other three were smaller and all in the same family - the connector knew
+something and did not say it.
+
+`panos_devices_list` answered PAN-OS code 17 with "Check PANOS_HOST and
+PANOS_API_KEY are set correctly", in a session where thirteen other calls
+succeeded on those same credentials. `show devices` is Panorama-only; on a
+standalone firewall code 17 is a topology fact, and sending an operator to
+rotate a working credential is the worst available answer. A bad xpath, meanwhile,
+produced a bare "PAN-OS API error" with the appliance's own `<msg>` thrown away:
+`PanosApiError` carries `httpStatus`, not `.status`, so the shared classifier fell
+through to its plain-`Error` branch and dropped `responseText`. Both are fixed by
+one new module, `mcp_servers/panos-mcp/src/utils/panos-error.ts`, mapping vendor
+code -> vendor meaning -> failure class -> canonical code -> hint. 30 call sites
+across the ten domain modules plus one in `src/server.ts` report through it, and
+`src/domains/_helpers.ts` pointedly does not re-export the generic
+`toolErrorFromCatch`, so a domain cannot fall back to a classifier that cannot
+read a `PanosApiError`. The rule the incident produced is now written down: only
+the credential failure class may name `PANOS_API_KEY` or `panos_keygen`, and
+every other class says the request authenticated successfully.
+
+Fourth, log-query and report job ids turn out to live in a namespace of their
+own. `panos_logs_query` and `panos_report_*` return ids that are not in
+`<show><jobs>`: `panos_job_status` on one answers code 7, and so does a
+hand-built `<show><jobs><id>NNN</id></jobs></show>`, which is what proves it is
+PAN-OS behavior and not bad command construction here. `panos_job_status` on a
+commit job is fine and returned `FIN`/100/`OK` live. The descriptions now route a
+log id to `panos_logs_retrieve` and a report id to `panos_report_get`, and both
+job tools say they see only job-table jobs. And `panos_status`, which had been
+echoing a prefix of the API key into the transcript, now reports it as
+`configured (<n> chars)`, with the boot probe failing on any 6-or-more-character
+prefix of the key appearing in that output.
+
+`mcp_servers/panos-mcp` is `0.2.0` for this: error text, several tool
+descriptions, and `panos_status` output are user-visible and all changed, with no
+tool removed or renamed.
+
+**What is still unproven is stated as unproven.** Every mutating tool - config
+set/edit/delete/rename/clone/move/override, every REST create/update/delete,
+commit, commit_all, content and software download/install, system reboot,
+certificate generate/renew/revoke/import, GlobalProtect disconnect - was
+deliberately never called. The appliance is the user's live production firewall,
+the user was away from keyboard, and the safety contract requires approval at the
+point of risk for each of those calls. Sixty tools exist; the fourteen read paths
+exercised above are the ones with evidence behind them.
+
+## [6.4.0] - 2026-09-17 -- the statusline could never be where it was asked to be
+
+atlas `6.4.0`.
+
+The ATLAS statusline segment is removed. Not reworked, not relocated: deleted.
+
+It was built to put the durable todo board at the prompt input. Claude Code
+renders `statusLine` *below* the prompt input, and what was asked for was the
+list *above* it. That single fact was never checked, and three releases went into
+the segment's plumbing instead: `5.27.2` rebuilt it as a real list after the
+one-line counter was rejected, `6.0.1` promoted it to "the plan surface" and took
+a major bump for it, `6.0.2` found the documented wiring drained its own stdin.
+Each was a correct fix to a real defect in a thing that could not satisfy its own
+requirement.
+
+Gone with it: `scripts/atlas_statusline.py` and its renderer tests, the
+`~/.atlas/atlas_statusline.py` shim `session_boot.py` re-synced on every boot, the
+`StatuslineContract` and
+`DocsMatchCodeContract.test_readme_statusline_snippet_captures_stdin` contract
+cases, the README section with its `statusLine` JSON, and the output-style
+paragraph telling the orchestrator that the segment was what the user reads. The
+`ATLAS_STATUSLINE` switch no longer exists because there is nothing to switch off.
+
+The board itself is unchanged and is still the plan record:
+`<project>/.atlas/.run/todos.json`, `atlas_todo.py`, `todo_capture.py`, and the
+dashboard Work tab. The surface the orchestrator owes the user is the one-line
+`LEDGER` under the status header.
+
+No replacement above-the-input surface ships in this release. Claude Code
+documents no way to pin content above the prompt input, so atlas claims none. The
+user's own `statusLine` block and their `~/.atlas/atlas_statusline.py` shim were
+removed from their machine at their explicit request, outside plugin source.
+
 ## [6.3.0] - 2026-09-15 -- conformance that fixes itself, in any repo
 
 Marketplace `3.20.0`; atlas `6.3.0`.
