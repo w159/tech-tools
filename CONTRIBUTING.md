@@ -39,8 +39,10 @@ committed so the test harness runs against a fresh clone without a build step.
 
 - `node test-mcp-tools.mjs` probes every connector; `node test-mcp-tools.mjs <server>` probes
   one; `--list` prints the known names.
-- The harness boots each shipped bundle at `plugins/atlas/mcp/<name>/server.mjs` over MCP
-  stdio with placeholder credentials in a from-scratch child environment, so it needs no real
+- The harness launches each connector exactly as `plugins/atlas/.mcp.json` declares it - the
+  eleven Node connectors as `plugins/atlas/mcp/<name>/server.mjs` over MCP stdio, `falcon`
+  through its `uv run --project plugins/atlas/mcp/falcon ...` entry - with placeholder
+  credentials in a from-scratch child environment, so it needs no real
   credentials and cannot reach a live vendor appliance. Per connector it checks BOOT
   (`initialize` + `tools/list` answered), FLOOR (no tool-count regression below the baseline
   recorded in the file), AGREEMENT (a `DESTRUCTIVE:` / `VISIBLE-TO-OTHERS:` description must
@@ -48,9 +50,16 @@ committed so the test harness runs against a fresh clone without a build step.
   description, object `inputSchema`).
 - A tool-count regression after a change is a bug - investigate before continuing. An
   intentional tool-surface change updates that connector's floor in the same commit.
-- `falcon` reports SKIP (Python connector, no `server.mjs` bundle) and `blumira` reports GATED
-  (its tools register behind a `blumira_navigate` step, so a credential-less `tools/list`
-  cannot see them). Neither is a clean pass and neither is a failure.
+- Every tool a connector can register must be reachable by the gate: a tool the harness never
+  lists is a tool whose safety signals were never checked. Connectors that swap their listed
+  surface behind a `<vendor>_navigate` step are walked domain by domain and unioned (`blumira`:
+  2 cold + 30 across 5 domains), and `falcon`, which registers its domain modules only after an
+  OAuth exchange, is probed against a loopback stub answering `POST /oauth2/token` and nothing
+  else. Current run: 523 tools across 12 connectors, all fully enumerated, 0 gated, 0 skipped.
+- `GATED` and `SKIP` are still real verdicts for a surface that cannot be enumerated (a missing
+  `uv` or venv for falcon reports a named SKIP with the fix command). Neither is a clean pass
+  and neither is a failure; if you add a connector that cannot be fully enumerated, say why in
+  its COVERAGE entry instead of passing on a partial surface.
 - Some servers ship their own deeper probe, e.g. `cd mcp_servers/panos-mcp && npm run
   test:boot`. Run it too when you touch that server.
 

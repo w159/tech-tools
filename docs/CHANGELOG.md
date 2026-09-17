@@ -10,8 +10,10 @@ even carried an explicit `!test-mcp-tools.mjs` negation to keep it tracked - an
 allowlist entry for a file nothing had ever created. Every connector change to
 date passed that gate by never being able to run it.
 
-It exists now: 416 lines, stdlib only, no test framework. It boots each shipped
-bundle at `plugins/atlas/mcp/<name>/server.mjs` over MCP stdio with placeholder
+It exists now: stdlib only, no test framework. It launches each connector exactly
+as `plugins/atlas/.mcp.json` declares it - the Node connectors at
+`plugins/atlas/mcp/<name>/server.mjs` over MCP stdio, `falcon` through its
+`uv run --project plugins/atlas/mcp/falcon ...` entry - with placeholder
 credentials built from scratch (`PATH`/`HOME` only, `ATLAS_ENV_FILE` pointed at
 a nonexistent path), so no configured vendor secret in the parent environment
 can reach a server and no probe can touch a live appliance. Four checks per

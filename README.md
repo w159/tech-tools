@@ -460,10 +460,11 @@ node test-mcp-tools.mjs panos    # probe one connector
 node test-mcp-tools.mjs --list   # print the known connector names
 ```
 
-It boots each shipped bundle at `plugins/atlas/mcp/<name>/server.mjs` over MCP
-stdio with placeholder credentials in a from-scratch child environment, so it
-needs no real credentials and cannot reach a live vendor appliance. Four checks
-per connector:
+It launches each connector exactly as `plugins/atlas/.mcp.json` declares it - the
+eleven Node connectors as `plugins/atlas/mcp/<name>/server.mjs` over MCP stdio,
+`falcon` through its `uv run --project plugins/atlas/mcp/falcon ...` entry - with
+placeholder credentials in a from-scratch child environment, so it needs no real
+credentials and cannot reach a live vendor appliance. Four checks per connector:
 
 - **BOOT** - the bundle answers `initialize` and `tools/list`.
 - **FLOOR** - the tool count has not regressed below the baseline recorded in the
@@ -475,14 +476,22 @@ per connector:
   the prose. See `docs/standards/connector-safety-signals.md` for the contract.
 - **SHAPE** - every tool has a non-empty description and an object `inputSchema`.
 
-Two rows never read as a plain pass, by design:
+It also refuses to check only the surface a cold `tools/list` happens to show, since
+a tool the harness never lists is a tool whose safety signals were never checked:
 
-- `falcon` reports **SKIP**: it is the Python connector and ships no `server.mjs`
-  bundle to boot.
-- `blumira` reports **GATED**: only `blumira_navigate` and `blumira_status` are
-  listed without credentials, because its remaining tools register after a
-  `blumira_navigate` domain selection. Its surface is not fully observable here,
-  so it is reported as gated rather than passing on 2 tools.
+- A connector that swaps its listed tools behind a `<vendor>_navigate` domain step
+  is walked domain by domain and the results unioned. `blumira` lists 2 tools cold
+  and 30 more across its five domains, and is checked on all 32.
+- `falcon` registers its domain modules only after an OAuth token exchange, so the
+  probe points `FALCON_BASE_URL` at a loopback socket that answers
+  `POST /oauth2/token` and nothing else, and fails if the stub is asked for any
+  other route. 145 tools checked.
+- Each run prints a COVERAGE block. The current one reads 12/12 connectors, 523
+  tools, 0 gated, 0 skipped. `GATED` and `SKIP` verdicts still exist for a surface
+  that genuinely cannot be enumerated - a missing `uv` or venv for falcon reports a
+  named SKIP with the command that fixes it - but nothing uses them today, and a new
+  connector that cannot be fully enumerated has to say why rather than pass quietly
+  on a partial surface.
 
 **Common issues.**
 
