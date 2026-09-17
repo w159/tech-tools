@@ -1,0 +1,93 @@
+{
+  "manifest_version": "0.3",
+  "name": "panos-mcp",
+  "version": "0.2.0",
+  "display_name": "PAN-OS MCP Server",
+  "description": "Manage Palo Alto Networks Panorama and firewalls — config, commits, operations, logs, reports, objects, policies, updates, and certificates.",
+  "long_description": "Provides AI assistants with structured access to the PAN-OS XML and REST APIs. Read and write candidate config with an explicit, separate commit step; run operational commands; pull logs and reports; manage address/service/tag objects and security/NAT policy rules over REST; drive content and software update lifecycle; and manage certificates. Works against Panorama (one credential set, with an optional per-call target serial routing to a managed firewall) or directly against a standalone firewall with the target omitted. Read-only validated against a PA-460 on PAN-OS 11.1.13-h6; mutating tools are unexercised against hardware.",
+  "author": {
+    "name": "w159",
+    "url": "https://github.com/w159"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/w159/tech-tools"
+  },
+  "homepage": "https://github.com/w159/tech-tools/tree/main/mcp_servers/panos-mcp",
+  "license": "Apache-2.0",
+  "keywords": ["panos", "palo-alto", "panorama", "firewall", "network-security"],
+  "server": {
+    "type": "node",
+    "entry_point": "dist/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/dist/index.js"],
+      "env": {
+        "PANOS_HOST": "${user_config.panos_host}",
+        "PANOS_API_KEY": "${user_config.panos_api_key}",
+        "PANOS_USERNAME": "${user_config.panos_username}",
+        "PANOS_PASSWORD": "${user_config.panos_password}",
+        "PANOS_TARGET": "${user_config.panos_target}",
+        "PANOS_VERIFY_TLS": "${user_config.panos_verify_tls}",
+        "PANOS_REST_VERSION": "${user_config.panos_rest_version}",
+        "MCP_TRANSPORT": "stdio"
+      }
+    }
+  },
+  "tools_generated": true,
+  "user_config": {
+    "panos_host": {
+      "type": "string",
+      "title": "PAN-OS host",
+      "description": "Panorama or firewall hostname or IP (no scheme, no path). Required with no default: PAN-OS publishes no vendor base URL because the base URL is the appliance itself, not a shared API endpoint.",
+      "required": true
+    },
+    "panos_api_key": {
+      "type": "string",
+      "title": "PAN-OS API key",
+      "description": "API key sent in the X-PAN-KEY header, never in a URL. Leave blank only if panos_username and panos_password are set, in which case the server exposes panos_keygen to mint one; paste the minted key here afterwards. Until a key is set, only panos_status, panos_navigate, and panos_keygen are exposed.",
+      "required": false,
+      "sensitive": true
+    },
+    "panos_username": {
+      "type": "string",
+      "title": "PAN-OS admin username",
+      "description": "Optional. Only used by the panos_keygen tool to mint an API key from credentials.",
+      "required": false
+    },
+    "panos_password": {
+      "type": "string",
+      "title": "PAN-OS admin password",
+      "description": "Optional. Paired with panos_username for panos_keygen.",
+      "required": false,
+      "sensitive": true
+    },
+    "panos_target": {
+      "type": "string",
+      "title": "Default target serial",
+      "description": "Optional. Default managed-firewall serial number when talking through Panorama. Any tool call can override it with its own target argument.",
+      "required": false
+    },
+    "panos_verify_tls": {
+      "type": "string",
+      "title": "Verify TLS",
+      "description": "Optional. Defaults to true. Set to false ONLY for an appliance with a self-signed certificate; that disables certificate verification for this host, so the connection is no longer protected against interception. A PAN-OS appliance serving its factory certificate (subject == issuer) needs it.",
+      "required": false,
+      "default": "true"
+    },
+    "panos_rest_version": {
+      "type": "string",
+      "title": "REST API version",
+      "description": "Optional. REST API version path segment. Defaults to v11.1.",
+      "required": false,
+      "default": "v11.1"
+    }
+  },
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "node": ">=18.0.0"
+    },
+    "claude_desktop": ">=0.10.0"
+  }
+}

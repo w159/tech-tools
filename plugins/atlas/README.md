@@ -49,7 +49,7 @@ atlas/
 |   |-- nudge.py                   #   Stop only: self-improvement nudge (throttled)
 |   |-- docs_drift.py              #   not a hook; shared find_root/docs_drift/git_changed_paths used by completion_gate.py and docs_drift_watch.py
 |   `-- validate-readonly-query.sh #   not auto-loaded; DB-audit subagents wire it during read-only audits
-|-- scripts/                       # atlas_doctor.py (repair; also wired via hooks.json --hook as the 15th auto-loaded hook, SessionStart), atlas_db.py (observability), atlas_todo.py (durable todo board), atlas_statusline.py (ATLAS-branded todo line at the prompt; session_boot copies it to ~/.atlas/atlas_statusline.py), lint_docs_names.py (date-first naming lint for dated docs/.atlas records; gate condition (l)), atlas_context_optimizer.py
+|-- scripts/                       # atlas_doctor.py (repair; also wired via hooks.json --hook as the 15th auto-loaded hook, SessionStart), atlas_db.py (observability), atlas_todo.py (durable todo board), lint_docs_names.py (date-first naming lint for dated docs/.atlas records; gate condition (l)), atlas_context_optimizer.py
 |                                  # (disable unused skills/agents), atlas_curator.py, atlas_memory.py,
 |                                  # asset_audit.py, discover_capabilities.py, build_hub.py, install_hooks.py + tests
 |-- output-styles/
@@ -116,51 +116,6 @@ For installs outside a plugin, `scripts/install_hooks.py` wires the hooks into
 settings manually. The optional ollama-backed optimizer is configured with
 `ATLAS_OPTIMIZE_CMD`, `ATLAS_OPTIMIZER_MODEL`, and `ATLAS_OLLAMA_URL`
 (see `skills/atlas-orchestrate/references/hooks-automation.md`); it is not required.
-
-## ATLAS statusline (todo list at the prompt)
-
-Claude Code draws its native todo widget inline with the `TodoWrite` tool call,
-which puts three separate conditions between you and a visible plan, and
-`CLAUDE_CODE_ENABLE_TODO_TOOLS=1` only clears the first:
-
-1. Gated model families (Opus 4.8+/Sonnet 5/Fable 5 and later) drop `TodoWrite`
-   and the task tools unless you opt back in with that env var (docs:
-   tools-reference).
-2. `ENABLE_TOOL_SEARCH=1` then defers `TodoWrite` behind `ToolSearch`, so the
-   model has to go looking for it and often never calls it at all.
-3. Focus mode hides tool calls, so on the turns `TodoWrite` does run, the widget
-   it would have drawn is not rendered.
-
-That is why setting the env var alone changes nothing you can see. The durable
-board is the plan, so atlas also renders it statically at
-the prompt, where none of the three conditions apply:
-`scripts/atlas_statusline.py` reads
-`<project>/.atlas/.run/todos.json` and prints a compact ATLAS-branded todo list
-- a header with counts, then one line per item (`✓` completed, `❯` in progress,
-`○` pending) - that sits at the prompt input while output scrolls. It caps at 8
-items with a `+ N more` line. `session_boot.py` copies the self-contained script
-to `~/.atlas/atlas_statusline.py` so a statusline command can call a stable path
-that survives plugin reinstalls. Wire it as one more block in your `statusLine`
-command. Claude Code pipes the status JSON to that command once, and stdin is
-single-use: a first segment that does `input=$(cat)` (the common pattern in a
-statusline script) drains it, and every later segment reads an empty payload and
-prints nothing. So capture the payload once in the `statusLine` command itself
-and feed each segment a copy:
-
-```json
-"statusLine": {
-  "type": "command",
-  "command": "input=$(cat); printf '%s' \"$input\" | bash $HOME/.claude/statusline-command.sh; printf \"\\n\"; printf '%s' \"$input\" | python3 \"$HOME/.atlas/atlas_statusline.py\"; exit 0"
-}
-```
-
-A statusline that renders nothing when the board is not empty is this trap, not
-a broken board: check it with
-`printf '%s' "$payload" | python3 "$HOME/.atlas/atlas_statusline.py"` directly,
-where `$payload` is a JSON object carrying `cwd` and `session_id`. The segment
-shows the current session's items first and falls back to the whole project
-board (so carried-over work shows), prints nothing when the board is empty or
-unreadable, and `ATLAS_STATUSLINE=off` disables it. Stdlib only, fail-open.
 
 ## Local dashboard (multi-session)
 

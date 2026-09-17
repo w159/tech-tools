@@ -1,5 +1,141 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **The PAN-OS connector is live-validated.** `panos` shipped in 6.x without ever
+  having reached hardware. It has now been driven against a real PA-460 on PAN-OS
+  11.1.13-h6 - a standalone firewall, `multi-vsys: off`, serving its self-signed
+  factory certificate - through the shipped bundle exactly as
+  `plugins/atlas/.mcp.json` launches it (`node --import mcp/_env/load.mjs
+  mcp/panos/server.mjs`), not through `dist/` and not by calling the client library
+  directly. `tools/list` returned 60 tools and 14 of 14 read-only steps passed,
+  including `panos_config_complete`, which is the grounding tool every write-tool
+  description depends on. The HTTP-200-with-`status="error"` path the whole design
+  is built around is now confirmed on real firmware rather than on captured
+  fixtures. Redacted evidence:
+  `.atlas/evidence/2026-09-17-panos-live-validation.md`.
+- **A single PAN-OS error surface**, `mcp_servers/panos-mcp/src/utils/panos-error.ts`:
+  vendor code -> vendor meaning -> failure class -> canonical error code -> hint,
+  carrying the appliance's own `<msg>` (or the REST half's JSON `message`) through to
+  the caller. 30 call sites across the ten domain modules, plus one in
+  `src/server.ts`, report through it, and `src/domains/_helpers.ts` deliberately
+  does not re-export the generic `toolErrorFromCatch`, so no domain can fall back
+  to a classifier that cannot read a `PanosApiError`.
+- Vendor error codes 6, 7, 16, 17, 18 and 22 are now written down with the failure
+  class each maps to, from Palo Alto's published XML API error-code table, in
+  `docs/panos-connector-design.md`.
+
+### Fixed
+- **XML numeric coercion destroyed identifiers. This is the load-bearing find.**
+  `fast-xml-parser` ran with its default value parsing, so
+  `<serial>023009014025</serial>` parsed as the *number* `23009014025` - leading
+  zero gone. Every Panorama-routed call addresses a firewall by `target=<serial>`,
+  so a serial read from the appliance and handed straight back as `target` would
+  have addressed nothing; `av-version` and `family` were coerced the same way.
+  Fixed with `parseTagValue: false` and `parseAttributeValue: false` in
+  `mcp_node/node-panos/src/xml.ts`, plus three failing-first regression guards
+  (`mcp_node/node-panos` goes from 6 to 9 tests). Live proof: `panos_version` now
+  returns the serial as a string with its leading zero intact. A mock-only suite
+  could not have caught this, because a fixture author writes the serial they
+  already expect to read back.
+- **Errors blamed credentials for failures that were not credential failures.**
+  `panos_devices_list` returned PAN-OS code 17 with the hint "Check PANOS_HOST and
+  PANOS_API_KEY are set correctly" - in a session where thirteen other calls
+  succeeded on those same credentials. `show devices` is Panorama-only, so on a
+  standalone firewall code 17 is a topology fact. It now answers
+  `UNSUPPORTED_COMMAND` and explains that. The general rule is now contract in the
+  design doc: only the credential failure class may name `PANOS_API_KEY` or
+  `panos_keygen`, and every other class states that the request authenticated
+  successfully.
+- **The appliance's own explanation was being discarded.** A bad xpath produced a
+  bare "PAN-OS API error". Root cause: `PanosApiError` carries `httpStatus`, not
+  `.status`, so the shared classifier fell through to its plain-`Error` branch and
+  dropped `responseText` - which is exactly where PAN-OS puts `<msg>`. The same
+  failure now reads `PAN-OS returned status="error" with no error code - No such
+  node`.
+- **Log-query and report job ids are a separate namespace from the job table.**
+  `panos_logs_query` and `panos_report_*` return ids that are not in
+  `<show><jobs>`: `panos_job_status` on one answers code 7, and so does a
+  hand-built `<show><jobs><id>NNN</id></jobs></show>`, which is what proves the
+  behavior is PAN-OS's and not bad command construction. `panos_job_status` on a
+  commit job is unaffected and returned `FIN`/100/`OK` live. Tool descriptions now
+  route a log id to `panos_logs_retrieve` and a report id to `panos_report_get`,
+  and both job tools state that they only see job-table jobs.
+- **`panos_status` echoed a prefix of the API key** into the transcript. It now
+  reports the key as `configured (<n> chars)`, and the boot probe fails if any
+  6-or-more-character prefix of the configured key appears anywhere in that output.
+- **Mutating PAN-OS tools advertised themselves as safe to auto-run.** Tool
+  annotations were inferred from the tool's *name* by a regex classifier that
+  defaulted to "read" for anything it failed to match, so mutating tools -
+  `panos_commit` and `panos_software_install` among those the deleted code's own
+  comment names - shipped `readOnlyHint: true`, the flag a client uses to decide
+  it may run something without asking, while their own descriptions said
+  `DESTRUCTIVE`. The prose and the machine-readable flags disagreed, and the flags
+  are the half a client acts on. Name-pattern classification (`classifyTool` and
+  its regex tables) is deleted. A tool now declares its effect class once, at its
+  declaration site, through `readOnlyTool()` / `destructiveTool()` /
+  `unknownEffectTool()` in `src/domains/_helpers.ts`, and that single decision
+  sets both the `DESTRUCTIVE: ` prefix and the annotations, so the two cannot
+  drift again. An unclassified tool fails closed - annotated mutating, never
+  read-only - and
+  `annotate()` names it on stderr (`src/annotate-tool.ts:51-65`; stdout is the
+  JSON-RPC channel). The split is 27 read / 32 mutating / 1 passthrough = 60, with
+  `panos_op` the passthrough: arbitrary `<cmd>` XML, so it takes the mutating
+  annotations but keeps its own unprefixed description, which already spells out
+  the hazard in full. Tool counts are unchanged (60 with a key, 32
+  `DESTRUCTIVE:`-prefixed, 2 with no credentials, 3 in the bootstrap state).
+  Mutating tools also drop `idempotentHint` from true to false: a second commit
+  pushes whatever landed in the candidate config meanwhile, and a second install
+  or reboot takes the box down again, so a retry is not free.
+
+### Notes
+- `mcp_servers/panos-mcp` is `0.2.0`: the error text, several tool descriptions,
+  and `panos_status` output are all user-visible and all changed, with no tool
+  removed or renamed.
+- **Mutating tools remain UNVERIFIED against hardware.** Config
+  set/edit/delete/rename/clone/move/override, every REST create/update/delete,
+  commit, commit_all, content/software download and install, system reboot,
+  certificate generate/renew/revoke/import, and GlobalProtect disconnect were
+  deliberately never called: the appliance is the user's live production firewall,
+  the user was away from keyboard, and the safety contract requires approval at the
+  point of risk for each of those. Their request shapes are grounded in the vendor
+  collection and docs, which is not the same as proven.
+
+## [6.4.0] - 2026-09-17
+
+### Removed
+- **The ATLAS statusline segment is gone, not relocated.** It existed to put the
+  durable todo board at the prompt input. Claude Code renders `statusLine`
+  *below* the prompt input, and what was asked for was the list *above* it, so
+  the segment could never satisfy its own requirement. That fact was never
+  checked, and three releases went into its plumbing instead: `5.27.2` rebuilt
+  it as a real list after the one-line counter was rejected, `6.0.1` promoted it
+  to "the plan surface" and took a major bump for it, `6.0.2` found the
+  documented wiring drained its own stdin. Deleted:
+  `scripts/atlas_statusline.py`, `scripts/test_atlas_statusline.py`, the
+  `~/.atlas/atlas_statusline.py` shim sync in `hooks/session_boot.py`, the
+  `StatuslineContract` cases and
+  `DocsMatchCodeContract.test_readme_statusline_snippet_captures_stdin` in
+  `hooks/test_atlas_contract.py`, the README section with its `statusLine` JSON
+  snippet, and the output-style paragraph claiming the segment was what the user
+  reads. The `ATLAS_STATUSLINE` switch is gone with it - there is nothing left to
+  switch off.
+
+### Notes
+- The durable board is untouched and remains the plan record:
+  `<project>/.atlas/.run/todos.json`, `scripts/atlas_todo.py`,
+  `hooks/todo_capture.py`, and the dashboard Work tab all behave exactly as in
+  6.3.0. The surface the orchestrator owes the user is the one-line `LEDGER`
+  under the status header, as the output style already required.
+- **No replacement above-the-input surface ships in this release.** Claude Code
+  documents no way to pin content above the prompt input, so atlas claims none
+  rather than shipping another segment that renders in the wrong place.
+- The user's own `statusLine` config block and their
+  `~/.atlas/atlas_statusline.py` shim were removed from their machine at their
+  explicit request. That is outside plugin source and is recorded here only so
+  both ends match.
+
 ## [6.3.0] - 2026-09-15
 
 ### Added

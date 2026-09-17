@@ -178,6 +178,25 @@
         "CFG_VANTA_CLIENT_SECRET": "${user_config.vanta_client_secret}",
         "CFG_VANTA_BASE_URL": "${user_config.vanta_base_url}"
       }
+    },
+    "panos": {
+      "command": "node",
+      "args": [
+        "--import",
+        "${CLAUDE_PLUGIN_ROOT}/mcp/_env/load.mjs",
+        "${CLAUDE_PLUGIN_ROOT}/mcp/panos/server.mjs"
+      ],
+      "env": {
+        "MCP_TRANSPORT": "stdio",
+        "ATLAS_ENV_FILE": "${CLAUDE_PLUGIN_ROOT}/.env",
+        "CFG_PANOS_HOST": "${user_config.panos_host}",
+        "CFG_PANOS_API_KEY": "${user_config.panos_api_key}",
+        "CFG_PANOS_USERNAME": "${user_config.panos_username}",
+        "CFG_PANOS_PASSWORD": "${user_config.panos_password}",
+        "CFG_PANOS_TARGET": "${user_config.panos_target}",
+        "CFG_PANOS_VERIFY_TLS": "${user_config.panos_verify_tls}",
+        "CFG_PANOS_REST_VERSION": "${user_config.panos_rest_version}"
+      }
     }
   }
 }

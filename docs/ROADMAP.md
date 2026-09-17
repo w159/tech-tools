@@ -6,12 +6,11 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 
 ## In Progress
 
-- [in-progress] atlas 5.27.1/5.27.2 (sentinel root resolution; statusline todo
-  list) are verified in source but not installed. The live plugin cache runs
-  5.27.0, so both fixes are inert until reinstall.
-  `InstalledParityContract` in
-  `plugins/atlas/hooks/test_atlas_contract.py:447` skips while the versions
-  differ and re-arms afterward.
+- [in-progress] atlas 5.27.1 (sentinel root resolution) is verified in source, but
+  source/installed parity is only enforced opportunistically:
+  `InstalledParityContract` in `plugins/atlas/hooks/test_atlas_contract.py` skips
+  while the installed plugin cache version differs from source and re-arms after a
+  reinstall.
 - [in-progress] Gate conditions (i) and (j) are verified against fixtures and
   mutation-checked, but never against a live payload: this session's toolset has
   no `TodoWrite`, so no real TodoWrite tool_use has passed through `_open_todos`,

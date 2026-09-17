@@ -1,7 +1,7 @@
 {
   "name": "atlas",
-  "version": "6.3.0",
-  "description": "Multi-agent coding architect with automatic self-improvement. 21 plainly named skills: the atlas architect skill (bootstrap: verify claude-mem/context-mode, scan the project, recommend tooling (serena/lean-ctx/fallow), wire hooks, seed docs/ SSOT), the atlas-orchestrate engine, atlas-audit (code/security audit, architecture map, atlas self-telemetry), atlas-doctor (interactive self-improvement: mine findings from session telemetry, ask per finding, apply what you accept, then re-measure against a baseline), atlas-setup (onboarding, install, connectors, repair - one of two manual skills, alongside the atlas architect skill), atlas-loop (recurring/iterative work), atlas-ux-test (UX runtime swarm), and 14 task skills (atlas-feature, atlas-debug, atlas-refactor, atlas-frontend, atlas-component, atlas-db-audit, atlas-gitignore, atlas-handoff, atlas-harden, atlas-launch, atlas-prompt, atlas-readme, atlas-validate, atlas-wiki). 12 core agents, 15 hook programs / 19 bindings (session boot, prompt optimizer, bash advisor, fallow agent gate, todo-board mirror, format-after-edit, dispatch tripwire, docs-drift watch, connector credential watch, completion gate, session-transcript ingest, chronicle facet capture, memory capture, self-improvement nudge, atlas_doctor session-health check), and the atlas-orchestrate method: independent verification with runtime evidence before any done claim. A durable per-project todo board (`<project>/.atlas/.run/todos.json`) is mirrored from every TodoWrite, claimable by parallel subagents, carried into new sessions, editable from the dashboard's Work and Agents tabs, and rendered with ATLAS branding as a static line at the prompt (`scripts/atlas_statusline.py`, `ATLAS_STATUSLINE=off` disables). Self-improvement: a per-session insight record (facets, friction events, gate blocks, findings) in ~/.atlas/atlas.db, persistent memory at ~/.atlas/memory/ with archive rotation, skill lifecycle curation, and context optimization that disables unused skills/agents. No hook ever creates a skill or a slash command. Org deployment (11 departments) lives in the separate armada plugin; shared multi-session dashboard at http://127.0.0.1:7421/ (SessionStart ensure, no per-terminal browser pop).",
+  "version": "6.4.0",
+  "description": "Multi-agent coding architect with automatic self-improvement. 21 plainly named skills: the atlas architect skill (bootstrap: verify claude-mem/context-mode, scan the project, recommend tooling (serena/lean-ctx/fallow), wire hooks, seed docs/ SSOT), the atlas-orchestrate engine, atlas-audit (code/security audit, architecture map, atlas self-telemetry), atlas-doctor (interactive self-improvement: mine findings from session telemetry, ask per finding, apply what you accept, then re-measure against a baseline), atlas-setup (onboarding, install, connectors, repair - one of two manual skills, alongside the atlas architect skill), atlas-loop (recurring/iterative work), atlas-ux-test (UX runtime swarm), and 14 task skills (atlas-feature, atlas-debug, atlas-refactor, atlas-frontend, atlas-component, atlas-db-audit, atlas-gitignore, atlas-handoff, atlas-harden, atlas-launch, atlas-prompt, atlas-readme, atlas-validate, atlas-wiki). 12 core agents, 15 hook programs / 19 bindings (session boot, prompt optimizer, bash advisor, fallow agent gate, todo-board mirror, format-after-edit, dispatch tripwire, docs-drift watch, connector credential watch, completion gate, session-transcript ingest, chronicle facet capture, memory capture, self-improvement nudge, atlas_doctor session-health check), and the atlas-orchestrate method: independent verification with runtime evidence before any done claim. A durable per-project todo board (`<project>/.atlas/.run/todos.json`) is mirrored from every TodoWrite, claimable by parallel subagents, carried into new sessions, and editable from the dashboard's Work and Agents tabs. Self-improvement: a per-session insight record (facets, friction events, gate blocks, findings) in ~/.atlas/atlas.db, persistent memory at ~/.atlas/memory/ with archive rotation, skill lifecycle curation, and context optimization that disables unused skills/agents. No hook ever creates a skill or a slash command. Org deployment (11 departments) lives in the separate armada plugin; shared multi-session dashboard at http://127.0.0.1:7421/ (SessionStart ensure, no per-terminal browser pop).",
   "author": {
     "name": "w159",
     "url": "https://github.com/w159"
@@ -287,6 +287,50 @@
       "type": "string",
       "title": "Vanta base URL",
       "description": "Optional. Leave blank to use the default (https://api.vanta.com/v1).",
+      "default": ""
+    },
+    "panos_host": {
+      "type": "string",
+      "title": "PAN-OS host",
+      "description": "Panorama or firewall hostname / IP, no scheme and no path. Required, and unlike every other connector here it has no vendor default: PAN-OS publishes no API base URL because the base URL is the appliance itself. Leave blank to disable PAN-OS.",
+      "default": ""
+    },
+    "panos_api_key": {
+      "type": "string",
+      "title": "PAN-OS API key",
+      "description": "API key, sent in an X-PAN-KEY header and never in a URL. Mint one with panos_keygen using the username and password below, then paste it here.",
+      "sensitive": true,
+      "default": ""
+    },
+    "panos_username": {
+      "type": "string",
+      "title": "PAN-OS admin username",
+      "description": "Optional. Used only by panos_keygen to mint an API key when one is not set yet.",
+      "default": ""
+    },
+    "panos_password": {
+      "type": "string",
+      "title": "PAN-OS admin password",
+      "description": "Optional. Used only by panos_keygen to mint an API key when one is not set yet.",
+      "sensitive": true,
+      "default": ""
+    },
+    "panos_target": {
+      "type": "string",
+      "title": "PAN-OS default target serial",
+      "description": "Optional. Default managed-firewall serial to route calls to when the host is Panorama. Every tool can override it per call.",
+      "default": ""
+    },
+    "panos_verify_tls": {
+      "type": "string",
+      "title": "PAN-OS TLS verification",
+      "description": "Optional, defaults to true. Set to false ONLY for an appliance with a self-signed certificate; that disables certificate verification for it.",
+      "default": ""
+    },
+    "panos_rest_version": {
+      "type": "string",
+      "title": "PAN-OS REST API version",
+      "description": "Optional. Leave blank to use the default (v11.1). This is the /restapi/<version>/ path segment and must match the PAN-OS release on the appliance.",
       "default": ""
     }
   },
