@@ -1,7 +1,8 @@
 # Standards Reference Library
 
-Best-practice rulebooks extracted from the awesome-copilot `instructions/` corpus. These are
-reference documents, not auto-imported context. They are deliberately kept out of `rules/`
+Best-practice rulebooks, mostly extracted from the awesome-copilot `instructions/` corpus
+plus a small number of in-house standards written for this repo. These are reference
+documents, not auto-imported context. They are deliberately kept out of `rules/`
 (which `AGENTS.md` expands into every session) so they do not bloat the session context. Agents
 and skills consult them on demand when the work touches a given domain.
 
@@ -23,9 +24,13 @@ and skills consult them on demand when the work touches a given domain.
 | testing | `testing/playwright-python.md` | Playwright (Python) test authoring |
 | code-quality | `code-quality/self-explanatory-code-commenting.md` | Comment-the-why discipline |
 | code-quality | `code-quality/object-calisthenics.md` | Object calisthenics / clean-code rules |
+| connectors | `connector-safety-signals.md` | MCP tool safety signals: `DESTRUCTIVE:` / `VISIBLE-TO-OTHERS:` markers, the four annotation classes, fail-closed classification, and the `test-mcp-tools.mjs` gate (in-house) |
 
 ## Provenance
 
 Source: `awesome-copilot/instructions/*.instructions.md` (the `.instructions.md` suffix and the
 VS Code `applyTo` frontmatter were the only Copilot-specific parts; content is plain markdown).
 Extracted 2026-06-03 during the workspace consolidation.
+
+`connector-safety-signals.md` is in-house, written 2026-09-17 from the connector annotation
+audit; it is not from the awesome-copilot corpus.

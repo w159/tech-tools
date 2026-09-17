@@ -1,6 +1,10 @@
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { CallToolResult } from '../utils/types.js';
-import { MUTATING_ANNOTATIONS, READ_ONLY_ANNOTATIONS } from '../annotate-tool.js';
+import {
+  CREDENTIAL_ISSUING_ANNOTATIONS,
+  MUTATING_ANNOTATIONS,
+  READ_ONLY_ANNOTATIONS,
+} from '../annotate-tool.js';
 
 // Re-export the shared response-quality modules so every domain handler
 // only needs to import from './_helpers.js'.
@@ -51,7 +55,7 @@ export const TARGET_PROP = {
 
 // ---- Effect class, declared once per tool at its declaration site ---------
 //
-// These three wrappers are the ONLY place a panos tool's safety signals are
+// These four wrappers are the ONLY place a panos tool's safety signals are
 // set, so the `DESTRUCTIVE: ` description prefix required by
 // docs/panos-connector-design.md and the readOnlyHint / destructiveHint
 // annotations an MCP client automates on come from a single decision and
@@ -86,4 +90,21 @@ export function readOnlyTool(tool: Tool): Tool {
  */
 export function unknownEffectTool(tool: Tool): Tool {
   return { ...tool, annotations: { ...tool.annotations, ...MUTATING_ANNOTATIONS } };
+}
+
+/**
+ * A tool whose side effect is handing the caller a credential - panos_keygen
+ * mints a PAN-OS API key and returns it into the transcript. readOnlyTool()
+ * would advertise that as safe to auto-run, which is how a long-lived
+ * credential gets printed unattended; destructiveTool() would overstate it,
+ * since keygen destroys nothing and PAN-OS answers the same key for the same
+ * credentials. No `DESTRUCTIVE: ` prefix for the same reason - the tool is not
+ * destructive, and its own description already spells out the
+ * transcript-exposure hazard in full.
+ */
+export function credentialIssuingTool(tool: Tool): Tool {
+  return {
+    ...tool,
+    annotations: { ...tool.annotations, ...CREDENTIAL_ISSUING_ANNOTATIONS },
+  };
 }

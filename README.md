@@ -450,6 +450,40 @@ python3 -m unittest discover -s plugins/atlas/scripts
 Lint with `ruff check plugins/atlas/hooks plugins/atlas/scripts`; typecheck with
 `pyright` (config at `pyrightconfig.json`).
 
+**Connector boot gate.** Any change to a bundled MCP connector must pass the boot
+harness at the repo root before it is done (`AGENTS.md:95` makes it a mandatory
+propagation check):
+
+```bash
+node test-mcp-tools.mjs          # probe every connector
+node test-mcp-tools.mjs panos    # probe one connector
+node test-mcp-tools.mjs --list   # print the known connector names
+```
+
+It boots each shipped bundle at `plugins/atlas/mcp/<name>/server.mjs` over MCP
+stdio with placeholder credentials in a from-scratch child environment, so it
+needs no real credentials and cannot reach a live vendor appliance. Four checks
+per connector:
+
+- **BOOT** - the bundle answers `initialize` and `tools/list`.
+- **FLOOR** - the tool count has not regressed below the baseline recorded in the
+  file (observed values, not targets; update the floor in the same commit as an
+  intentional tool-surface change).
+- **AGREEMENT** - a tool whose description starts `DESTRUCTIVE:` or
+  `VISIBLE-TO-OTHERS:` carries `readOnlyHint: false`, and no tool omits
+  `readOnlyHint`. Clients gate unattended execution on the annotation, never on
+  the prose. See `docs/standards/connector-safety-signals.md` for the contract.
+- **SHAPE** - every tool has a non-empty description and an object `inputSchema`.
+
+Two rows never read as a plain pass, by design:
+
+- `falcon` reports **SKIP**: it is the Python connector and ships no `server.mjs`
+  bundle to boot.
+- `blumira` reports **GATED**: only `blumira_navigate` and `blumira_status` are
+  listed without credentials, because its remaining tools register after a
+  `blumira_navigate` domain selection. Its surface is not fully observable here,
+  so it is reported as gated rather than passing on 2 tools.
+
 **Common issues.**
 
 - *Hooks not firing*: confirm `plugins/atlas/hooks/hooks.json` is present; a

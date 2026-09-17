@@ -3,6 +3,48 @@
 ## Unreleased
 
 ### Added
+- **`test-mcp-tools.mjs` exists.** `AGENTS.md:95` has made
+  `node test-mcp-tools.mjs <svc>` a mandatory propagation check ("Boot test passes
+  without tool-count regression") and `AGENTS.md:77` lists the harness as part of
+  the product surface; `.gitignore:154` carried a `!test-mcp-tools.mjs` negation to
+  keep it tracked. The file itself had never been written, so every connector change
+  to date satisfied that gate by being unable to run it. It is now 416 lines of
+  stdlib-only Node that boots each shipped bundle at
+  `plugins/atlas/mcp/<name>/server.mjs` over MCP stdio with placeholder credentials
+  in a from-scratch child env (`PATH`/`HOME` only, `ATLAS_ENV_FILE` pointed at a
+  nonexistent path), so no vendor secret in the parent environment can reach a server
+  and no probe can touch a live appliance. Four checks per connector: **BOOT**
+  (`initialize` + `tools/list` answered), **FLOOR** (tool count has not regressed
+  below the observed baseline recorded in the file), **AGREEMENT** (a description
+  starting `DESTRUCTIVE:` or `VISIBLE-TO-OTHERS:` must carry `readOnlyHint: false`,
+  and no tool may omit `readOnlyHint`), **SHAPE** (non-empty description, object
+  `inputSchema`). `node test-mcp-tools.mjs` probes all, `<svc>` probes one, `--list`
+  prints known names, an unknown name exits 2. Current run: exit 0, PASS, 348 tools
+  across 11 probed connectors, 0 safety-signal mismatches. `falcon` reports SKIP (it
+  is the Python connector and ships no `server.mjs`); `blumira` reports
+  `GATED (2 tools)` because its remaining tools register only behind a
+  `blumira_navigate` domain step, recorded as gated rather than as a clean pass on 2
+  tools.
+- **A fourth annotation class for a tool that issues credentials.**
+  `CREDENTIAL_ISSUING_ANNOTATIONS` / `credentialIssuingTool()`
+  (`mcp_servers/panos-mcp/src/annotate-tool.ts:62-67`,
+  `src/domains/_helpers.ts:105`) exists because neither existing class was honest
+  about `panos_keygen`: read-only would advertise a call that hands back credential
+  material as safe to run unattended, and destructive would overstate a call that
+  destroys nothing. Flags: `readOnlyHint: false` (issuance is a real side effect),
+  `destructiveHint: false` (nothing on the appliance is destroyed),
+  `idempotentHint: true` (PAN-OS returns the same key for the same credentials),
+  `openWorldHint: true`. No `DESTRUCTIVE:` prefix - it is not destructive, and its
+  description already warns that the key lands in the transcript. panos now reports
+  `read=26, mutating=32, unprefixed-mutating=2` (`panos_op`, `panos_keygen`) = 60,
+  and the boot probe's former one-name allowlist is now a name -> exact-four-flags
+  pin for both, so a pinned name cannot drift on its other flags.
+- **The connector safety-signal contract is written down** at
+  `docs/standards/connector-safety-signals.md`: the description marker is
+  authoritative, prose and annotations come from one decision per tool, an
+  unclassified tool fails closed to mutating, the four annotation classes with their
+  flag values and reasoning, and the known limitation that AGREEMENT only catches
+  disagreement.
 - **The PAN-OS connector is live-validated.** `panos` shipped in 6.x without ever
   having reached hardware. It has now been driven against a real PA-460 on PAN-OS
   11.1.13-h6 - a standalone firewall, `multi-vsys: off`, serving its self-signed
@@ -27,6 +69,44 @@
   `docs/panos-connector-design.md`.
 
 ### Fixed
+- **A destructive NinjaOne tool advertised itself as safe to run unattended.**
+  `ninjaone_devices_service_control` - "DESTRUCTIVE: Start, stop, pause, or restart
+  a Windows service on a device (POST
+  /v2/device/{id}/windows-service/{serviceId}/control). Stopping a service can take
+  a production application offline" - shipped `readOnlyHint: true`.
+  `readOnlyHint` is the flag a client reads to decide it may run a tool without
+  asking the operator, so the prose warned a human while the machine-readable half
+  invited exactly the unattended execution the prose warns about. Found by the first
+  run of `test-mcp-tools.mjs`, which is the check whose absence let it ship.
+- **Nine connectors inferred annotations from the tool's name, defaulting to "read".**
+  auvik, blumira, cipp, kaseya-spanning-backup, knowbe4, ninjaone, paylocity,
+  threatlocker and vanta each ran a regex classifier over the tool *name* and
+  returned `"read"` for any name no table matched. `service_control` matched nothing
+  (`DESTRUCTIVE_PATTERNS` carries `restart`, `reboot`, `reset`, `delete`, but no
+  `control`), so a tool that can take production offline was classified as a read;
+  the other eight connectors' mutating tools passed only because their names happened
+  to match a pattern. A default of "read" fails toward unattended execution. Fixed in
+  all nine plus the `mcp_servers/_shared/annotate-tool.ts` master they were copied
+  from: the `DESTRUCTIVE:` / `VISIBLE-TO-OTHERS:` description marker is authoritative,
+  `classifyTool()` now returns `ToolClass | undefined` with no default, an unmatched
+  name fails closed to mutating and is named on stderr (stdout is the JSON-RPC
+  channel), and 25 names that name-matching got wrong or never matched are declared
+  explicitly in per-connector `CLASS_OVERRIDES` tables (auvik 6, blumira 2, knowbe4 7,
+  ninjaone 9, threatlocker 1). Fleet safety-signal mismatches 1 -> 0.
+- **`panos_keygen` was annotated read-only while minting an API key into the
+  transcript.** Found by asking what AGREEMENT *cannot* catch: it compares prose
+  against annotations, so it only ever catches disagreement, and a connector that
+  marks nothing mutating passes vacuously. `.atlas/.run/vacuous-check.mjs` probes the
+  blind spot from the other side - tools that look like writes while carrying
+  `readOnlyHint: true` and no effect marker - and is a heuristic that produces
+  candidates, not verdicts. Three of its four candidates were false positives
+  (`ninjaone_queries_run` is a GET, `ninjaone_devices_os_patch_installs` is GET patch
+  history, `threatlocker_organizations_for_move_computers` lists organizations);
+  `panos_keygen` was real and now carries the credential-issuing class above. The
+  harness names that blind spot in its own output rather than hiding it: a connector
+  with no prose effect markers reads
+  `ok (no prose effect markers - agreement check vacuous here)`, never a bare `ok`
+  (`test-mcp-tools.mjs:302`).
 - **XML numeric coercion destroyed identifiers. This is the load-bearing find.**
   `fast-xml-parser` ran with its default value parsing, so
   `<serial>023009014025</serial>` parsed as the *number* `23009014025` - leading

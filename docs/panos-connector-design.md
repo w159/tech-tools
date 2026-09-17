@@ -227,12 +227,13 @@ them onto the hyphenated wire keys. Do not invent a `templateStack` field;
 ## Safety rules, non-negotiable
 
 1. **Every mutating tool's description starts with `DESTRUCTIVE:`**, per `AGENTS.md:114`. That covers all of set/edit/delete/rename/clone/move/override, every REST create/update/delete, commit, commit_all, install, reboot, cert revoke, and GlobalProtect disconnect.
-2. **The prefix and the machine-readable annotations come from one decision.** A tool declares its effect class at its declaration site by going through exactly one of three wrappers in `src/domains/_helpers.ts` - `readOnlyTool()`, `destructiveTool()`, `unknownEffectTool()` - and those wrappers set both the `DESTRUCTIVE: ` description prefix and the `readOnlyHint` / `destructiveHint` / `idempotentHint` annotations. The prose a human reads and the flags a client automates on therefore cannot drift apart. Nothing infers an effect class from a tool's *name*: a name-pattern classifier defaults to "read" for every name it fails to match, which is how a mutating tool ends up advertising `readOnlyHint: true` - safe to auto-run - while its own description says `DESTRUCTIVE`. A tool that goes through none of the three wrappers is annotated **mutating**, never read-only, and `annotate()` complains on stderr naming the tool (`src/annotate-tool.ts:51-65`); stdout is the JSON-RPC channel, so the complaint cannot go there. `panos_op` is the one `unknownEffectTool`: its `<cmd>` is arbitrary, so it fails closed to the mutating annotations while keeping its own unprefixed description, because a blanket `DESTRUCTIVE: ` would claim every op command mutates when its description already spells out the hazard. Mutating tools carry `idempotentHint: false` - a second commit pushes whatever landed in the candidate config meanwhile, a second install or reboot takes the box down again - so a client must not treat a retry as free. `openWorldHint` is `true` on every class, read included: every call leaves the process for an appliance whose state this connector does not own.
+2. **The prefix and the machine-readable annotations come from one decision.** Rule 1 on its own is not enough, and this connector proved it: the prefix rule was fully satisfied while **22 of the 32 `DESTRUCTIVE:`-prefixed tools shipped annotated `readOnlyHint: true`** - `panos_commit`, `panos_config_set` and `panos_software_install` among them (commit `5db9bfe`). `readOnlyHint` is the flag a client reads to decide it may run a tool without asking, so the prose warned the operator while the machine-readable half invited unattended execution of exactly what the prose warns about. A tool therefore declares its effect class at its declaration site by going through exactly one of **four** wrappers in `src/domains/_helpers.ts` - `readOnlyTool()`, `destructiveTool()`, `credentialIssuingTool()`, `unknownEffectTool()` - and those wrappers set both the `DESTRUCTIVE: ` description prefix and the `readOnlyHint` / `destructiveHint` / `idempotentHint` / `openWorldHint` annotations. The prose a human reads and the flags a client automates on therefore cannot drift apart. Nothing infers an effect class from a tool's *name*: a name-pattern classifier defaults to "read" for every name it fails to match, which is how a mutating tool ends up advertising `readOnlyHint: true` - safe to auto-run - while its own description says `DESTRUCTIVE`. A tool that goes through none of the four wrappers is annotated **mutating**, never read-only, and `annotate()` complains on stderr naming the tool (`src/annotate-tool.ts:79-88`); stdout is the JSON-RPC channel, so the complaint cannot go there. `panos_op` is the one `unknownEffectTool`: its `<cmd>` is arbitrary, so it fails closed to the mutating annotations while keeping its own unprefixed description, because a blanket `DESTRUCTIVE: ` would claim every op command mutates when its description already spells out the hazard. Mutating tools carry `idempotentHint: false` - a second commit pushes whatever landed in the candidate config meanwhile, a second install or reboot takes the box down again - so a client must not treat a retry as free. `openWorldHint` is `true` on every class, read included: every call leaves the process for an appliance whose state this connector does not own. The fleet-wide version of this rule is `docs/standards/connector-safety-signals.md`.
 3. **Writes never commit.** `panos_config_set` and friends touch the candidate config only. The description of each says so and names `panos_commit` as the separate step.
 4. **Grounding before writing.** Every xpath-taking write tool's description ends with: "Ground the xpath with `panos_config_show` or `panos_config_complete` before calling this. Do not compose an xpath from memory." `panos_config_complete` exists precisely so the model can enumerate valid children of a node.
 5. **`panos_system_reboot` also carries `VISIBLE-TO-OTHERS:`** - it drops traffic for every user behind the firewall.
 6. **Credential errors are actionable**, naming the env var and the doc page, never a stack trace - and, equally binding, a hint never blames credentials for a failure that is not a credential failure. See the error-surface contract under "As shipped".
 7. `panos_status` runs without credentials and reports what is configured.
+8. **`panos_keygen` is credential-issuing, which is its own class.** It mints a long-lived PAN-OS API key and returns it into the transcript. Neither of the other classes is honest about that: `readOnlyTool()` would advertise it as safe to run unattended, and `destructiveTool()` would claim it destroys something. `credentialIssuingTool()` (`CREDENTIAL_ISSUING_ANNOTATIONS`, `src/annotate-tool.ts:62-67`) sets `readOnlyHint: false` because issuance is a real side effect, `destructiveHint: false` because nothing on the appliance is destroyed or overwritten, `idempotentHint: true` because PAN-OS returns the same key for the same credentials, and `openWorldHint: true` as on every class here. It carries **no `DESTRUCTIVE:` prefix**: it is not destructive, and its description already warns that the key lands in the transcript. Do not add one to make the prefix count match the annotated-mutating count - `panos_op` and `panos_keygen` are exactly why those two numbers differ (32 prefixed, 34 annotated-mutating), and the annotations being stricter than the prose is the allowed direction. `panos_keygen` was found by asking what the fleet harness's prose/annotation agreement check *cannot* see: agreement only catches disagreement, so an unmarked tool annotated read-only passes vacuously. The probe for that blind spot is `.atlas/.run/vacuous-check.mjs`, a heuristic that produces candidates for review rather than verdicts; three of its four fleet candidates were false positives and this was the real one.
 
 ## The check
 
@@ -251,15 +252,22 @@ failing-first against the coercing parser. It must cover, at minimum:
 - the `code` attribute on an error envelope is read as a string, so `code === '403'` holds rather than `code === 403`
 
 `AGENTS.md:95` names `node test-mcp-tools.mjs panos` for the boot and tool-count
-check. That harness does not exist anywhere in this tree, so its job is done by
-`mcp_servers/panos-mcp/tests/boot-probe.mjs` (`npm run test:boot`), which drives
-the bundled server over MCP stdio and asserts:
+check. That harness now exists at the repo root and panos is one of the
+connectors it probes: it asserts BOOT, a tool-count FLOOR, prose/annotation
+AGREEMENT and tool SHAPE from a credential-less `tools/list`, and panos reports
+`60 (60)` tools, 32 marked mutating, 34 annotated mutating, 0 mismatches. The
+fleet contract it enforces is `docs/standards/connector-safety-signals.md`.
+
+It does not replace `mcp_servers/panos-mcp/tests/boot-probe.mjs`
+(`npm run test:boot`), which stays because it asserts what a credential-less
+fleet probe cannot see. That probe drives the bundled server over MCP stdio and
+asserts:
 
 - no credentials -> `panos_status` + `panos_navigate` only
 - host + username/password, no key -> those two plus `panos_keygen`
 - host + key -> the full tool set
 - unresolved `${user_config.*}` placeholders -> treated as absent, not as a host
-- every mutating tool carries `DESTRUCTIVE:`, and no read tool does
+- every mutating tool carries `DESTRUCTIVE:`, and no read tool does, with exactly two pinned exceptions: `panos_op` and `panos_keygen` are listed by name against their **exact four annotation flag values**, so a listed exception cannot quietly drift on the flags that were not the reason it was listed
 - `panos_status` reports the key as `configured (<n> chars)` when one is set and `not set` when it is absent or unresolved, and **no 6-or-more-character prefix of the configured key appears anywhere in that output**
 
 That is the whole test burden; no broader suite.
@@ -271,12 +279,15 @@ That is the whole test burden; no broader suite.
 bootstrap state, 60 with a key, 32 of them `DESTRUCTIVE:`-prefixed, and
 `panos_system_reboot` reading `DESTRUCTIVE: VISIBLE-TO-OTHERS: ...`.
 
-By effect class, which is how a client sees them: 27 `readOnlyTool`, 32
-`destructiveTool`, 1 `unknownEffectTool` (`panos_op`) - 60 exactly, with no tool
-left unclassified. The 32 `DESTRUCTIVE:`-prefixed count and the 32 mutating
-annotations are the same 32 tools, because both come from the same wrapper.
-`panos_op` is annotated mutating without carrying the prefix, which is why the
-prefix count is 32 and not 33.
+By effect class, which is how a client sees them: 26 `readOnlyTool`, 32
+`destructiveTool`, 1 `credentialIssuingTool` (`panos_keygen`), 1
+`unknownEffectTool` (`panos_op`) - 60 exactly, with no tool left unclassified.
+The probe prints this as `read=26, mutating=32, unprefixed-mutating=2`, its
+last bucket holding the two tools annotated non-read-only without a prefix. The
+32 `DESTRUCTIVE:`-prefixed count and the 32 `destructiveTool` annotations are
+the same 32 tools, because both come from the same wrapper. `panos_op` and
+`panos_keygen` are annotated non-read-only without carrying the prefix, which is
+why the prefix count is 32 against 34 annotated-mutating rather than 34 and 34.
 
 Log types come from the collection's own `log-type` parameter description on the
 "Retrieve logs" request, not from a recalled list: `traffic`, `threat`, `config`,
@@ -421,8 +432,8 @@ The rules:
 - [x] `mcp_servers/panos-mcp/manifest.json` user_config (seven keys, matching `plugin.json`)
 - [x] `mcp_servers/panos-mcp/package.json` at 0.2.0 (was 0.1.0; the user-visible error text, tool descriptions, and `panos_status` output all changed)
 - [x] `npm run build` + `bundle:atlas` -> `plugins/atlas/mcp/panos/server.mjs` (392,960 bytes, rebuilt after the annotation change; two earlier figures in this repo's history - "377 KB" and 394,516 bytes - are both stale, the first predating the live-run fixes and the second predating the annotation fix)
-- [x] `npm run pack:mcpb` -> `panos-mcp.mcpb`, gitignored by `.gitignore:397` (30,884,839 bytes, 3022 entries, `shasum 47234788344b483b7db4a82187d5240777452acd`)
-- [ ] MCP `serverInfo.version` still reads `0.1.0`. That string is a literal at `src/server.ts:21` rather than read from `package.json`, so it survived the annotation rebuild: `grep -o 'name:"panos-mcp",version:"[^"]*"' plugins/atlas/mcp/panos/server.mjs` still returns `0.1.0` in the current bundle. The 0.2.0 bump is metadata-only until that line changes and the artifacts are rebuilt again. Left unticked on purpose.
+- [x] `npm run pack:mcpb` -> `panos-mcp.mcpb`, gitignored by `.gitignore:397` (30,884,839 bytes, 3022 entries). Both digests of that same file, algorithm named because a bare "shasum" invites a future reader to read a mismatch into two different algorithms: `shasum -a 1` = `47234788344b483b7db4a82187d5240777452acd`, `shasum -a 256` = `f8d48f51f3d8ad276734fdc9c8e9510ec8b61ff01a327b89c78a3adb7ebaf2b3`.
+- [ ] MCP `serverInfo.version` still reads `0.1.0`. That string is a literal at `src/server.ts:21` rather than read from `package.json`, so it survived the annotation rebuild: `grep -o 'name:"panos-mcp",version:"[^"]*"' plugins/atlas/mcp/panos/server.mjs` still returns `0.1.0` in the current bundle. Deliberately deferred to its own change rather than folded into a safety fix: correcting it forces a fresh `build` + `bundle:atlas` + `pack:mcpb`, which moves the size and both digests two lines above. Those figures should move once, on purpose, with the version bump - not as a side effect of an unrelated commit. Until then the 0.2.0 bump is metadata-only, and this box stays unticked rather than being quietly counted as done.
 - [x] `plugins/atlas/.mcp.json` server entry with seven `CFG_PANOS_*` values
 - [x] `plugins/atlas/.claude-plugin/plugin.json` user_config block
 - [x] `README.md` connector row

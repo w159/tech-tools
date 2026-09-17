@@ -5,7 +5,8 @@
 //   const tools = annotate(rawTools, "Panos");
 //
 // A tool's effect class is declared at its declaration site in src/domains/*
-// with readOnlyTool() / destructiveTool() / unknownEffectTool() from
+// with readOnlyTool() / destructiveTool() / unknownEffectTool() /
+// credentialIssuingTool() from
 // domains/_helpers.js. Those wrappers set the `DESTRUCTIVE: ` description
 // prefix AND the machine-readable annotations below from one decision, so the
 // prose a human reads and the flags an MCP client automates on cannot diverge.
@@ -45,6 +46,26 @@ export const MUTATING_ANNOTATIONS: ToolAnnotations = {
   openWorldHint: true,
 };
 
+/**
+ * A tool whose only side effect is issuing a credential back to the caller -
+ * panos_keygen mints a PAN-OS API key and returns it into the transcript.
+ * Neither existing class is honest about it: readOnlyHint:true would tell a
+ * client it is safe to auto-run, which is how a live long-lived credential
+ * gets printed unattended, and destructiveHint:true would overstate it.
+ *
+ * readOnlyHint:false  - it is not a read: it hands back credential material.
+ * destructiveHint:false - nothing on the appliance is destroyed or overwritten.
+ * idempotentHint:true - PAN-OS returns the same key for the same credentials,
+ *                       so a repeat call costs nothing extra.
+ * openWorldHint:true  - as everywhere here, the call leaves the process.
+ */
+export const CREDENTIAL_ISSUING_ANNOTATIONS: ToolAnnotations = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: true,
+};
+
 // Annotate a list of Tool objects (returns new objects). The optional
 // `vendorTitle` prefix produces a friendly display name like
 // "Panos: config show" for the Title column in Claude Desktop.
@@ -60,7 +81,8 @@ export function annotate(tools: Tool[], vendorTitle?: string): Tool[] {
       // stderr only - stdout is the JSON-RPC channel.
       console.error(
         `[panos-mcp] tool ${t.name} declares no effect class; wrap it in ` +
-          `readOnlyTool() / destructiveTool() / unknownEffectTool() in its domain. ` +
+          `readOnlyTool() / destructiveTool() / unknownEffectTool() / ` +
+          `credentialIssuingTool() in its domain. ` +
           `Annotating it as mutating.`
       );
       return { ...t, annotations: { ...(title ? { title } : {}), ...MUTATING_ANNOTATIONS } };
