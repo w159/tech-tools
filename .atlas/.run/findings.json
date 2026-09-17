@@ -1427,5 +1427,50 @@
     "status": "verified",
     "verified_at": "2026-09-17T15:50:25+00:00",
     "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "S-mandated-harness-never-existed",
+    "surface": "AGENTS.md:77,94,95; repo root test-mcp-tools.mjs (absent)",
+    "category": "process",
+    "severity": "high",
+    "title": "AGENTS.md's mandatory propagation checklist requires a boot-test harness that has never existed in the tree",
+    "evidence": [
+      "AGENTS.md:77 lists 'Test harness test-mcp-tools.mjs' as part of the product surface; :94 requires 'test-mcp-tools.mjs probes still target tools that exist'; :95 requires 'Boot test (node test-mcp-tools.mjs <svc>) passes without tool-count regression'.",
+      "ls test-mcp-tools.mjs -> No such file or directory. The file is absent from the repo root and from every subdirectory.",
+      "Consequence: every connector shipped with those checklist boxes satisfied by inspection rather than execution. docs/panos-connector-design.md:230-232 records the workaround ('That harness does not exist anywhere in this tree, so its job is done by tests/boot-probe.mjs') - the gap was known and documented per-connector instead of fixed once.",
+      "This is the same class as S-panos-design-doc-asserted-unverified-state: a checklist box ticked by something other than the check it names."
+    ],
+    "doc_refs": [
+      "AGENTS.md:77",
+      "AGENTS.md:94",
+      "AGENTS.md:95"
+    ],
+    "reproduction": "ls test-mcp-tools.mjs; grep -n test-mcp-tools AGENTS.md",
+    "proposed_fix": "Write the harness AGENTS.md already specifies: boot every shipped bundle over MCP stdio, assert a tool-count floor, and assert prose/annotation agreement. Being fleet-wide, it also catches the class of defect that per-connector probes miss.",
+    "blast_radius": "system",
+    "status": "verified",
+    "verified_at": "2026-09-17T16:20:00+00:00",
+    "verified_by": "main-agent-direct-execution"
+  },
+  {
+    "id": "S-annotation-classifier-defaults-to-safe-fleetwide",
+    "surface": "mcp_servers/{auvik,blumira,cipp,kaseya-spanning-backup,knowbe4,ninjaone,paylocity,threatlocker,vanta}-mcp/src/annotate-tool.ts",
+    "category": "security",
+    "severity": "high",
+    "title": "Nine connectors still infer MCP safety annotations from tool names and answer 'read-only' for any name no pattern matched",
+    "evidence": [
+      "Final fallback 'return \"read\";' present at annotate-tool.ts:132 in auvik, blumira, cipp, kaseya-spanning-backup, knowbe4, paylocity, threatlocker, vanta and at :148 in ninjaone. Only panos (fixed today) and connectwise-manage (no annotate-tool.ts) are clean.",
+      "readOnlyHint is the flag an MCP client reads to decide it may run a tool WITHOUT asking the human. A classifier that guesses from names and defaults to 'read' therefore fails toward unattended execution of unrecognized tools.",
+      "Fleet audit of the shipped bundles (348 tools, 11 connectors, dual-strategy placeholder env) found exactly one CURRENT mislabel: ninjaone_devices_service_control - description 'DESTRUCTIVE: Start, stop, pause, or restart a Windows service ... can take a production application offline', annotation readOnlyHint:true. Cause: 'service_control' matches nothing in DESTRUCTIVE_PATTERNS, which has no 'control' entry.",
+      "The other eight are latent, not safe: they pass today only because their mutating tool names happen to match a pattern. The trap fires on the next tool whose name nobody anticipated - which is exactly how panos shipped 22 mislabeled tools.",
+      "These connectors drive production MSP systems: CIPP disables users and resets passwords, NinjaOne runs scripts and controls services, ThreatLocker changes policies."
+    ],
+    "doc_refs": [],
+    "reproduction": "node .atlas/.run/fleet-annotations.mjs; grep -rn 'return \"read\";' mcp_servers/*/src/annotate-tool.ts",
+    "proposed_fix": "Make the description marker authoritative and fail closed on an unmatched name, per the panos pattern (one decision emits both the DESTRUCTIVE: prefix and the annotations). Delete the name-pattern guess rather than extending its tables.",
+    "blast_radius": "system",
+    "status": "verified",
+    "verified_at": "2026-09-17T16:20:00+00:00",
+    "verified_by": "main-agent-direct-execution"
   }
 ]

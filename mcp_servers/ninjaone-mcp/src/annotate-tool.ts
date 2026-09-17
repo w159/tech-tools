@@ -5,10 +5,23 @@
 //   import { annotate } from "./annotate-tool.js";
 //   const tools = annotate(rawTools, "Vendor");
 //
-// Tools whose names match read-only patterns are marked readOnlyHint:true so
-// Claude Desktop groups them under "Read-only tools". Tools matching destructive
-// patterns get destructiveHint:true. Everything else falls under
-// "Write/delete tools".
+// Two signals decide a tool's effect class, in this order:
+//
+//   1. The tool's own description. A leading "DESTRUCTIVE:" or
+//      "VISIBLE-TO-OTHERS:" marker is a declaration by whoever wrote the tool
+//      and is AUTHORITATIVE: the annotations follow it whatever the name looks
+//      like. The prose a human reads and the flags a client automates on
+//      therefore cannot disagree in the dangerous direction.
+//   2. The name-pattern tables below, plus CLASS_OVERRIDES for the names those
+//      tables get wrong.
+//
+// A name that matches nothing FAILS CLOSED to mutating, and says so on stderr.
+// This module used to `return "read"` for an unmatched name, so a mutating tool
+// the tables did not anticipate shipped readOnlyHint:true - the flag an MCP
+// client reads to decide it may run a tool without asking. That is exactly how
+// ninjaone_devices_service_control ("DESTRUCTIVE: Start, stop, pause, or
+// restart a Windows service") shipped annotated read-only: "control" appears in
+// no pattern, so it fell through to the read default.
 
 import type { Tool, ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 
@@ -124,28 +137,56 @@ function matchesAny(name: string, patterns: RegExp[]): boolean {
 
 export type ToolClass = "read" | "create" | "destructive";
 
+// A tool's own description declaring that it changes state. Authoritative.
+const MUTATING_DESCRIPTION_MARKER = /^\s*(?:DESTRUCTIVE|VISIBLE-TO-OTHERS):/;
+
 /**
- * Tools whose names the patterns above classify wrongly. Name matching is a
- * heuristic: "run" reads as a write (ninjaone_queries_run is a pure read) and
- * a bare noun reads as a read (ninjaone_devices_maintenance mutates state).
- * A mislabelled write is the dangerous direction, so these are explicit.
+ * Effect class for tool names the pattern tables get wrong, or do not cover at
+ * all. This is the declaration site for an unmatched name: without an entry
+ * here (or a "DESTRUCTIVE:" description marker) a tool is annotated mutating
+ * and warned about on stderr, never silently treated as safe.
  */
 const CLASS_OVERRIDES: Record<string, ToolClass> = {
-  ninjaone_queries_run: "read",
-  ninjaone_devices_os_patch_installs: "read",
-  ninjaone_devices_inventory: "read",
-  ninjaone_devices_maintenance: "destructive",
-  ninjaone_devices_script_run: "destructive",
+  ninjaone_queries_run: "read", // "run" reads as a write; this one is a pure query
+  ninjaone_devices_os_patch_installs: "read", // GET /v2/queries/os-patch-installs
+  ninjaone_devices_inventory: "read", // GET /v2/device/{id}/{kind}
+  ninjaone_groups_device_ids: "read", // GET /v2/group/{id}/device-ids
+  ninjaone_devices_maintenance: "destructive", // schedules/cancels a maintenance window
+  ninjaone_devices_script_run: "destructive", // executes arbitrary code on the device
+  ninjaone_devices_service_control: "destructive", // start/stop/restart a Windows service - "control" matched no pattern, so this shipped read-only
+  ninjaone_sign_in: "create", // writes a refresh token to ~/.atlas/ninjaone-tokens.json
+  ninjaone_sign_out: "destructive", // deletes the stored refresh token
 };
 
-export function classifyTool(name: string): ToolClass {
+/**
+ * Classify by name alone, or return undefined when no table matches. This
+ * deliberately has no default: a name-pattern heuristic must never answer
+ * "safe" for a name it does not recognize. Callers use effectClassFor().
+ */
+export function classifyTool(name: string): ToolClass | undefined {
   const override = CLASS_OVERRIDES[name];
   if (override) return override;
   if (matchesAny(name, DESTRUCTIVE_PATTERNS)) return "destructive";
   if (matchesAny(name, CREATE_PATTERNS)) return "create";
   if (matchesAny(name, READ_PATTERNS)) return "read";
-  // Fallback: read so unknown tools don't get scary destructive labels.
-  return "read";
+  return undefined;
+}
+
+/**
+ * The class actually annotated: description marker, then name, then fail
+ * closed. `description` is the tool's own description text.
+ */
+export function effectClassFor(name: string, description?: string): ToolClass {
+  if (MUTATING_DESCRIPTION_MARKER.test(description ?? "")) return "destructive";
+  const byName = classifyTool(name);
+  if (byName) return byName;
+  // stderr only - stdout is the JSON-RPC channel.
+  console.error(
+    `[ninjaone-mcp] tool ${name} matches no effect-class pattern; annotating it as ` +
+      `mutating. Declare it in CLASS_OVERRIDES in src/annotate-tool.ts, or ` +
+      `prefix its description with "DESTRUCTIVE: " if it changes state.`,
+  );
+  return "destructive";
 }
 
 const ANNOTATION_PRESETS: Record<ToolClass, ToolAnnotations> = {
@@ -169,8 +210,8 @@ const ANNOTATION_PRESETS: Record<ToolClass, ToolAnnotations> = {
   },
 };
 
-export function annotationsFor(name: string, title?: string): ToolAnnotations {
-  const base = ANNOTATION_PRESETS[classifyTool(name)];
+export function annotationsFor(name: string, title?: string, description?: string): ToolAnnotations {
+  const base = ANNOTATION_PRESETS[effectClassFor(name, description)];
   return title ? { title, ...base } : base;
 }
 
@@ -179,11 +220,22 @@ export function annotationsFor(name: string, title?: string): ToolAnnotations {
 // "Vanta: list frameworks" for the Title column in Claude Desktop.
 export function annotate(tools: Tool[], vendorTitle?: string): Tool[] {
   return tools.map((t) => {
-    if (t.annotations?.readOnlyHint !== undefined) return t; // already annotated
+    if (t.annotations?.readOnlyHint !== undefined) {
+      // A hand-written annotation wins over the tables - but it may not claim
+      // read-only for a tool whose own description declares it mutating.
+      if (t.annotations.readOnlyHint === true && MUTATING_DESCRIPTION_MARKER.test(t.description ?? "")) {
+        console.error(
+          `[ninjaone-mcp] tool ${t.name} is annotated readOnlyHint:true but its own ` +
+            `description declares it mutating; annotating it as mutating.`,
+        );
+        return { ...t, annotations: { ...t.annotations, ...ANNOTATION_PRESETS.destructive } };
+      }
+      return t;
+    }
     const rest = vendorTitle
       ? t.name.replace(new RegExp(`^${vendorTitle.toLowerCase()}_`), "").replace(/_/g, " ")
       : undefined;
     const title = vendorTitle && rest ? `${vendorTitle}: ${rest}` : undefined;
-    return { ...t, annotations: annotationsFor(t.name, title) };
+    return { ...t, annotations: annotationsFor(t.name, title, t.description) };
   });
 }
