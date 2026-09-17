@@ -190,7 +190,7 @@ export function registerProjectTools(server: McpServer, client: CwManageClient) 
 
   server.tool(
     "cw_add_project_ticket_note",
-    "Add a note to a project ticket. Use internalAnalysisFlag for internal-only notes or resolutionFlag for resolution notes. Defaults to a plain discussion note.",
+    "VISIBLE-TO-OTHERS: Add a note to a project ticket. Use internalAnalysisFlag for internal-only notes or resolutionFlag for resolution notes. Defaults to a plain discussion note, which the customer can see on the project ticket.",
     {
       id: z.number().describe("Project ticket ID"),
       text: z.string().describe("Note text content"),

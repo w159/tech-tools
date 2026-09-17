@@ -94,7 +94,7 @@ export function registerTicketTools(server: McpServer, client: CwManageClient) {
 
   server.tool(
     "cw_create_ticket",
-    "Create a new ConnectWise Manage service ticket (summary required). Optionally associate with boardId, companyId, contactId, statusId, priorityId, typeId, subTypeId, and provide an initialDescription.",
+    "VISIBLE-TO-OTHERS: Create a new ConnectWise Manage service ticket (summary required). The ticket appears on the board for the associated company and, on a board with email notification configured, mails the contact. Optionally associate with boardId, companyId, contactId, statusId, priorityId, typeId, subTypeId, and provide an initialDescription.",
     {
       summary: z.string().describe("Ticket summary/title"),
       boardId: z.number().optional().describe("Service board ID"),
@@ -130,7 +130,7 @@ export function registerTicketTools(server: McpServer, client: CwManageClient) {
 
   server.tool(
     "cw_update_ticket",
-    "Update a ConnectWise Manage service ticket (id required) via JSON Patch operations. Each operation needs op (replace/add/remove), path (e.g. 'status/id', 'summary'), and value.",
+    "DESTRUCTIVE: VISIBLE-TO-OTHERS: Update a ConnectWise Manage service ticket (id required) via JSON Patch operations. Each operation needs op (replace/add/remove), path (e.g. 'status/id', 'summary'), and value. A replace or remove overwrites the stored value with no prior version kept, and status, summary and description are customer-facing, so read the ticket with cw_get_ticket first.",
     {
       id: z.number().describe("Ticket ID"),
       operations: z
@@ -209,7 +209,7 @@ export function registerTicketTools(server: McpServer, client: CwManageClient) {
 
   server.tool(
     "cw_add_ticket_note",
-    "Add a note to a service ticket. Use detailDescriptionFlag for a description note, internalAnalysisFlag for an internal-only note, or resolutionFlag for a resolution note. Defaults to a plain discussion note visible to the customer.",
+    "VISIBLE-TO-OTHERS: Add a note to a service ticket. Use detailDescriptionFlag for a description note, internalAnalysisFlag for an internal-only note, or resolutionFlag for a resolution note. Defaults to a plain discussion note visible to the customer.",
     {
       id: z.number().describe("Ticket ID"),
       text: z.string().describe("Note text content"),
