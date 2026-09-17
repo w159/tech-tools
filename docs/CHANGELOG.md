@@ -118,9 +118,45 @@ echoing a prefix of the API key into the transcript, now reports it as
 `configured (<n> chars)`, with the boot probe failing on any 6-or-more-character
 prefix of the key appearing in that output.
 
-`mcp_servers/panos-mcp` is `0.2.0` for this: error text, several tool
-descriptions, and `panos_status` output are user-visible and all changed, with no
-tool removed or renamed.
+**A fifth defect was in the safety signals themselves, and it was the one a
+client could act on.** Every mutating tool carried `DESTRUCTIVE:` in its
+description, as the design contract required - and simultaneously shipped
+`readOnlyHint: true` in its MCP annotations, which is the flag a client reads to
+decide it may run something without asking. The prose said do not do this
+unattended; the machine-readable half said help yourself. The cause was
+inference: annotations came from a regex classifier over the tool's *name*, and a
+name-pattern classifier has to default somewhere. It defaulted to "read", so
+every mutating tool whose name it did not match - `panos_commit` and
+`panos_software_install` among those the deleted code's own comment names -
+inherited the safe answer.
+
+Name-pattern classification is gone rather than patched, because the defect is
+structural: a classifier that guesses from names will keep being wrong for names
+nobody anticipated, and its failure mode is silent and biased toward unsafe. A
+tool now declares its effect class once, at its declaration site, through one of
+`readOnlyTool()` / `destructiveTool()` / `unknownEffectTool()` in
+`src/domains/_helpers.ts`, and that single decision emits both the `DESTRUCTIVE: `
+prefix a human reads and the `readOnlyHint` / `destructiveHint` /
+`idempotentHint` flags a client automates on - so the two cannot disagree again,
+because there is only one of them. A tool that goes through none of the three
+fails closed to mutating, never to read-only, and `annotate()` names it on stderr
+(stdout is the JSON-RPC channel, so a complaint cannot go there).
+
+The split is 27 read, 32 mutating, 1 passthrough - 60 exactly, nothing
+unclassified. The passthrough is `panos_op`, whose `<cmd>` is arbitrary XML: it
+can show the clock or reboot the appliance, so its effect is not knowable at
+declaration time. It takes the mutating annotations and keeps its own unprefixed
+description, since a blanket `DESTRUCTIVE: ` would claim every op command mutates
+while its description already spells out the hazard. Tool counts are otherwise
+unchanged: 60 with a key, 32 `DESTRUCTIVE:`-prefixed, 2 with no credentials, 3 in
+the bootstrap state. Mutating tools also drop `idempotentHint` from true to
+false, which was simply wrong before: a second commit pushes whatever landed in
+the candidate config meanwhile, and a second install or reboot takes the box down
+again, so a client must not treat a retry as free.
+
+`mcp_servers/panos-mcp` is `0.2.0` for all of this: error text, several tool
+descriptions, the safety annotations, and `panos_status` output are user-visible
+and all changed, with no tool removed or renamed.
 
 **What is still unproven is stated as unproven.** Every mutating tool - config
 set/edit/delete/rename/clone/move/override, every REST create/update/delete,
