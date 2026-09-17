@@ -1,5 +1,108 @@
 # Changelog
 
+## [Unreleased] -- the boot harness the checklist required, which nothing had ever written
+
+`AGENTS.md:95` makes `node test-mcp-tools.mjs <svc>` a mandatory propagation
+check ("Boot test passes without tool-count regression"), `AGENTS.md:94` requires
+its probes to still target tools that exist, and `AGENTS.md:77` lists the harness
+itself as part of the product surface. The file did not exist. `.gitignore:154`
+even carried an explicit `!test-mcp-tools.mjs` negation to keep it tracked - an
+allowlist entry for a file nothing had ever created. Every connector change to
+date passed that gate by never being able to run it.
+
+It exists now: 416 lines, stdlib only, no test framework. It boots each shipped
+bundle at `plugins/atlas/mcp/<name>/server.mjs` over MCP stdio with placeholder
+credentials built from scratch (`PATH`/`HOME` only, `ATLAS_ENV_FILE` pointed at
+a nonexistent path), so no configured vendor secret in the parent environment
+can reach a server and no probe can touch a live appliance. Four checks per
+connector: **BOOT** (the bundle answers `initialize` + `tools/list`), **FLOOR**
+(tool count has not regressed below the observed baseline recorded in the file),
+**AGREEMENT** (any tool whose description starts `DESTRUCTIVE:` or
+`VISIBLE-TO-OTHERS:` carries `readOnlyHint: false`, and no tool is missing
+`readOnlyHint` entirely), and **SHAPE** (non-empty description, object
+`inputSchema`). `node test-mcp-tools.mjs` probes every connector,
+`node test-mcp-tools.mjs <svc>` probes one, `--list` prints the known names, and
+an unknown name exits 2 with the valid names listed.
+
+**The first run found a live mislabel.** `ninjaone_devices_service_control` -
+"DESTRUCTIVE: Start, stop, pause, or restart a Windows service on a device
+(POST /v2/device/{id}/windows-service/{serviceId}/control). Stopping a service
+can take a production application offline" - shipped `readOnlyHint: true`.
+`readOnlyHint` is the flag a client reads to decide it may run a tool without
+asking the operator first, so the prose warned a human while the machine-readable
+half invited unattended execution of the thing the prose warns about.
+
+Root cause: nine connectors (auvik, blumira, cipp, kaseya-spanning-backup,
+knowbe4, ninjaone, paylocity, threatlocker, vanta) inferred MCP annotations from
+a regex over the tool *name* and returned `"read"` for any name no table matched.
+`service_control` matched nothing - `DESTRUCTIVE_PATTERNS` has `restart`,
+`reboot`, `reset` and `delete` entries but no `control` - so a tool that can take
+production offline was classified as a read. The other eight connectors' mutating
+tools passed only because their names happened to match a pattern. A default of
+"read" fails toward unattended execution, which is the wrong direction for a
+default to fail in.
+
+Fixed across all nine plus the `mcp_servers/_shared/annotate-tool.ts` master they
+were copied from: the `DESTRUCTIVE:` / `VISIBLE-TO-OTHERS:` description marker is
+now authoritative, `classifyTool()` returns `ToolClass | undefined` with no
+default, an unmatched name fails closed to mutating and is named on stderr
+(stdout is the JSON-RPC channel), and 25 names that name-matching got wrong or
+never matched are declared explicitly in per-connector `CLASS_OVERRIDES` tables
+(auvik 6, blumira 2, knowbe4 7, ninjaone 9, threatlocker 1). Fleet safety-signal
+mismatches went 1 -> 0. `grep -rn 'return "read";' mcp_servers --include=*.ts`
+still returns 10 hits and every one is guarded by an actual
+`matchesAny(name, READ_PATTERNS)` match; the no-match outcome is
+`return undefined;`.
+
+**Then the second-order question: what can the AGREEMENT check not catch?** It
+compares prose against annotations, so it only ever catches *disagreement*. A
+connector that marks nothing as mutating agrees with itself and passes
+vacuously - which is exactly what auvik, connectwise, knowbe4, paylocity and
+vanta do. The harness refuses to hide that: those rows read
+`ok (no prose effect markers - agreement check vacuous here)` and never a bare
+`ok` (`test-mcp-tools.mjs:302`). `.atlas/.run/vacuous-check.mjs` probes the
+blind spot from the other side: tools that *look* like writes (an HTTP verb in
+the description, a mutating verb in the name) while carrying
+`readOnlyHint: true` and no effect marker. Heuristic by design - it produces candidates for review, not verdicts.
+Of its four candidates, three were false positives (`ninjaone_queries_run` is a
+GET, `ninjaone_devices_os_patch_installs` is GET patch history,
+`threatlocker_organizations_for_move_computers` lists organizations) and one was
+real: `panos_keygen` mints a long-lived PAN-OS API key into the transcript while
+annotated read-only.
+
+`panos_keygen` gets a fourth annotation class rather than being forced into an
+existing one, because neither was honest: read-only would say it is safe to run
+unattended when its output is credential material, and destructive would
+overstate a call that destroys nothing.
+`CREDENTIAL_ISSUING_ANNOTATIONS` / `credentialIssuingTool()` is
+`readOnlyHint: false` (issuance is a real side effect),
+`destructiveHint: false` (nothing on the appliance is destroyed),
+`idempotentHint: true` (PAN-OS returns the same key for the same credentials)
+and `openWorldHint: true`. It carries no `DESTRUCTIVE:` prefix: it is not
+destructive, and its description already warns about transcript exposure. The
+boot probe's former one-name allowlist became a name -> exact-four-flags pin for
+`panos_op` and `panos_keygen`, so a pinned name cannot drift on its other flags;
+both directions were proven by temporarily reverting each.
+
+As shipped, verified 2026-09-17:
+
+- `node test-mcp-tools.mjs` -> exit 0, PASS: 348 tools across 11 probed
+  connectors, 0 safety-signal mismatches.
+- `falcon` reports SKIP: it is the Python connector and ships no `server.mjs`
+  bundle to boot.
+- `blumira` reports `GATED (2 tools)`: `blumira_navigate` + `blumira_status` are
+  the whole credential-less surface because its remaining tools register only
+  after a `blumira_navigate` domain selection. Recorded as gated rather than
+  passing cleanly on 2 tools, since a vacuous pass is the failure mode this whole
+  entry is about.
+- `cd mcp_servers/panos-mcp && npm run test:boot` -> PROBE PASS, annotation
+  classes `read=26, mutating=32, unprefixed-mutating=2` (`panos_op` and
+  `panos_keygen`) = 60.
+
+The contract is written down at `docs/standards/connector-safety-signals.md`,
+including the vacuous-pass limitation, so the next connector is held to it
+without re-deriving it from the code.
+
 ## [Unreleased] -- the PAN-OS connector
 
 New vendor: `panos`, covering Palo Alto firewalls and Panorama. 60 tools across

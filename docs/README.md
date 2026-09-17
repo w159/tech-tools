@@ -31,22 +31,37 @@ docs/
 - **Pointing an AI agent at it?** Reference the absolute path (e.g. `docs/vendors/vanta/README.md`) when asking for changes — the agent will have everything it needs without leaving the repo.
 - **Refreshing docs?** Each cloned repo is a depth-1 clone — `git -C <repo> pull` to update. WebFetched markdown pages note their source URL at the top.
 
-## MCP server test status (2026-05-26)
+## MCP connector boot gate (2026-09-17)
 
-Run `node test-mcp-tools.mjs` to re-test. Last run:
+`node test-mcp-tools.mjs` at the repo root is the boot and tool-count gate `AGENTS.md:95`
+requires for any connector change; `node test-mcp-tools.mjs <svc>` probes one connector and
+`--list` prints the known names. It boots each shipped bundle at
+`plugins/atlas/mcp/<name>/server.mjs` over MCP stdio with placeholder credentials in a
+from-scratch child environment, so it needs no real credentials and cannot reach a live vendor
+appliance. Four checks per connector: BOOT, FLOOR (no tool-count regression), AGREEMENT
+(`DESTRUCTIVE:` / `VISIBLE-TO-OTHERS:` prose must carry `readOnlyHint: false`), SHAPE. The
+contract it enforces is `standards/connector-safety-signals.md`.
 
-| Server | Status | Notes |
-|--------|--------|-------|
-| auvik | ✅ PASS | 39 tools |
-| blumira | ⏭ SKIP | needs `BLUMIRA_JWT_TOKEN` |
-| cipp | ❌ FAIL | HTTP 401 — caller lacks permission for `ListTenants` |
-| connectwise | ✅ PASS | 52 tools (with creds; 2 when unconfigured) |
-| kaseya-spanning-backup | ⏭ SKIP | needs `SPANNING_ADMIN_EMAIL` + `SPANNING_API_TOKEN` |
-| knowbe4 | ⏭ SKIP | needs `KNOWBE4_API_KEY` |
-| ninjaone | ✅ PASS | 26 tools |
-| paylocity | ❌ FAIL | token mint HTTP 406 — check `Accept` header / scope |
-| threatlocker | ✅ PASS | 17 tools |
-| vanta | ✅ PASS | 28 tools |
+Last run: exit 0, PASS - 348 tools across 11 probed connectors, 0 safety-signal mismatches.
+
+| Server | Status | Tools (floor) | Notes |
+|--------|--------|---------------|-------|
+| auvik | PASS | 39 (39) | no prose effect markers, so AGREEMENT is vacuous here |
+| blumira | GATED | 2 (2) | remaining tools register behind a `blumira_navigate` domain step |
+| cipp | PASS | 43 (43) | 12 marked mutating, 15 annotated mutating |
+| connectwise | PASS | 52 (52) | no prose effect markers, so AGREEMENT is vacuous here |
+| falcon | SKIP | - | Python connector, ships no `server.mjs` bundle |
+| knowbe4 | PASS | 30 (30) | no prose effect markers, so AGREEMENT is vacuous here |
+| ninjaone | PASS | 45 (45) | 9 marked mutating, 14 annotated mutating |
+| panos | PASS | 60 (60) | 32 marked mutating, 34 annotated mutating |
+| paylocity | PASS | 16 (16) | no prose effect markers, so AGREEMENT is vacuous here |
+| spanning | PASS | 14 (14) | 1 marked, 1 annotated |
+| threatlocker | PASS | 19 (19) | 1 marked, 1 annotated |
+| vanta | PASS | 28 (28) | no prose effect markers, so AGREEMENT is vacuous here |
+
+A vacuous AGREEMENT row is a known limitation, not a clean bill of health: the check compares
+prose against annotations, so a connector that marks nothing as mutating passes by agreeing with
+itself. `.atlas/.run/vacuous-check.mjs` is the heuristic used to probe that blind spot.
 
 ## Known gaps
 

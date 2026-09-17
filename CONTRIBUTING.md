@@ -37,14 +37,31 @@ committed so the test harness runs against a fresh clone without a build step.
 
 ## Testing
 
-- `node test-mcp-tools.mjs` runs the full suite; `node test-mcp-tools.mjs <server>` runs a subset.
-- The harness extracts the `.mcpb`, spawns it over stdio, lists tools, and calls a couple of safe
-  tools. A tool-count regression after a change is a bug - investigate before continuing.
+- `node test-mcp-tools.mjs` probes every connector; `node test-mcp-tools.mjs <server>` probes
+  one; `--list` prints the known names.
+- The harness boots each shipped bundle at `plugins/atlas/mcp/<name>/server.mjs` over MCP
+  stdio with placeholder credentials in a from-scratch child environment, so it needs no real
+  credentials and cannot reach a live vendor appliance. Per connector it checks BOOT
+  (`initialize` + `tools/list` answered), FLOOR (no tool-count regression below the baseline
+  recorded in the file), AGREEMENT (a `DESTRUCTIVE:` / `VISIBLE-TO-OTHERS:` description must
+  carry `readOnlyHint: false`, and no tool may omit `readOnlyHint`), and SHAPE (non-empty
+  description, object `inputSchema`).
+- A tool-count regression after a change is a bug - investigate before continuing. An
+  intentional tool-surface change updates that connector's floor in the same commit.
+- `falcon` reports SKIP (Python connector, no `server.mjs` bundle) and `blumira` reports GATED
+  (its tools register behind a `blumira_navigate` step, so a credential-less `tools/list`
+  cannot see them). Neither is a clean pass and neither is a failure.
+- Some servers ship their own deeper probe, e.g. `cd mcp_servers/panos-mcp && npm run
+  test:boot`. Run it too when you touch that server.
 
 ## Quality bar
 
 - Every tool has a one-line description that says what it returns and when to call it; destructive
-  or externally-visible tools are prefixed `DESTRUCTIVE:` or `VISIBLE-TO-OTHERS:`.
+  or externally-visible tools are prefixed `DESTRUCTIVE:` or `VISIBLE-TO-OTHERS:`, and the MCP
+  annotations must agree with that prefix. The prefix alone is not enough: `readOnlyHint` is what
+  a client reads to decide it may run a tool unattended. The full contract, including the four
+  annotation classes and the fail-closed rule for an unclassified tool, is
+  `docs/standards/connector-safety-signals.md`.
 - Servers boot without crashing when credentials are missing; the `<vendor>_status` tool always
   runs and reports the missing-creds state.
 - Vendor base-URL env vars are optional and default to the documented vendor URL.

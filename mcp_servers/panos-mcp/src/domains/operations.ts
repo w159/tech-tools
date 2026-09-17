@@ -3,7 +3,7 @@ import { keygen } from 'node-panos';
 import type { DomainHandler, CallToolResult } from '../utils/types.js';
 import { getClient } from '../utils/client.js';
 import { logger } from '../utils/logger.js';
-import { TARGET_PROP, destructiveTool, toolError, panosToolError, jsonResult, readOnlyTool, unknownEffectTool } from './_helpers.js';
+import { TARGET_PROP, credentialIssuingTool, destructiveTool, toolError, panosToolError, jsonResult, readOnlyTool, unknownEffectTool } from './_helpers.js';
 
 // Same placeholder-stripping rule as utils/client.ts, duplicated here because
 // panos_keygen must read raw env vars before any PanosClient (and its apiKey
@@ -73,7 +73,7 @@ function getTools(): Tool[] {
         required: ['gateway', 'user', 'computer'],
       },
     }),
-    readOnlyTool({
+    credentialIssuingTool({
       name: 'panos_keygen',
       description: "Mint a new PAN-OS API key from a username and password (type=keygen, sent as a POST body, never in the URL). Returns the minted key to you; it is NOT stored or persisted by this server - put it in PANOS_API_KEY yourself. The returned key is a long-lived credential and will appear in this conversation's transcript, so treat it accordingly and rotate it if the transcript is shared.",
       inputSchema: {

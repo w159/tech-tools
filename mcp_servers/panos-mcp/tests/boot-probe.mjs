@@ -203,15 +203,29 @@ for (const [label, env] of cases) {
   // survived every green run. Checked in every credential state, since
   // progressive disclosure builds a different tool list in each.
   //
-  // PASSTHROUGH is the one tool whose effect is unknowable at declaration time
-  // (panos_op takes arbitrary <cmd> XML): it fails closed onto the mutating
-  // annotations without its description claiming every op command mutates.
-  // Any OTHER unprefixed tool annotated mutating is a bug - most likely a tool
-  // nobody gave an effect class, which annotate() now fails closed.
-  const PASSTHROUGH = new Set(['panos_op']);
+  // UNPREFIXED_MUTATING is the explicit, named allowlist of tools that are NOT
+  // read-only yet deliberately carry no `DESTRUCTIVE: ` prefix. Each one pins
+  // the exact four flags it must ship, so the allowlist keeps its teeth: a
+  // name being listed here is not a licence for its annotations to drift.
+  //   panos_op     - an arbitrary <cmd> passthrough whose effect is unknowable
+  //                  at declaration time, so it fails closed onto the mutating
+  //                  annotations without its prose claiming every op mutates.
+  //   panos_keygen - mints a PAN-OS API key and returns it into the transcript.
+  //                  It shipped readOnlyHint:true - i.e. safe to auto-run -
+  //                  so a client could print a live long-lived credential
+  //                  unattended. Issuing a credential is a real side effect
+  //                  (readOnlyHint:false), it destroys nothing
+  //                  (destructiveHint:false), and PAN-OS answers the same key
+  //                  for the same credentials (idempotentHint:true).
+  // Any OTHER unprefixed tool annotated mutating still fails below - most
+  // likely a tool nobody gave an effect class, which annotate() fails closed.
+  const UNPREFIXED_MUTATING = {
+    panos_op: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+    panos_keygen: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+  };
   let readClass = 0;
   let mutatingClass = 0;
-  let passthroughClass = 0;
+  let unprefixedMutatingClass = 0;
   for (const t of tools) {
     const prefixed = t.description.startsWith('DESTRUCTIVE:');
     const a = t.annotations ?? {};
@@ -227,10 +241,12 @@ for (const [label, env] of cases) {
         console.log(`  ANNOTATION CONTRADICTS "DESTRUCTIVE:" PREFIX: ${t.name} (${flags})`);
         failures++;
       }
-    } else if (PASSTHROUGH.has(t.name)) {
-      passthroughClass++;
-      if (a.readOnlyHint !== false) {
-        console.log(`  PASSTHROUGH ANNOTATED READ-ONLY: ${t.name} (${flags})`);
+    } else if (Object.hasOwn(UNPREFIXED_MUTATING, t.name)) {
+      unprefixedMutatingClass++;
+      const want = UNPREFIXED_MUTATING[t.name];
+      const got = Object.fromEntries(Object.keys(want).map((k) => [k, a[k]]));
+      if (JSON.stringify(got) !== JSON.stringify(want)) {
+        console.log(`  ALLOWLISTED UNPREFIXED TOOL ANNOTATIONS DRIFTED: ${t.name} expected ${JSON.stringify(want)}, got ${JSON.stringify(got)}`);
         failures++;
       }
     } else {
@@ -241,7 +257,7 @@ for (const [label, env] of cases) {
       }
     }
   }
-  console.log(`  annotation classes: read=${readClass}, mutating=${mutatingClass}, passthrough=${passthroughClass}`);
+  console.log(`  annotation classes: read=${readClass}, mutating=${mutatingClass}, unprefixed-mutating=${unprefixedMutatingClass}`);
   if (mutatingClass !== destructivePrefixed) {
     console.log(`  CLASS COUNT DRIFT: ${destructivePrefixed} prefixed but ${mutatingClass} classed mutating`);
     failures++;
@@ -267,6 +283,25 @@ for (const [label, env] of cases) {
     console.log(`  panos_op annotations: ${JSON.stringify(op?.annotations)}`);
     if (op?.annotations?.readOnlyHint !== false || op?.annotations?.destructiveHint !== true) {
       console.log('  panos_op must be annotated mutating and destructive');
+      failures++;
+    }
+    // A tool that mints a long-lived PAN-OS API key and prints it into the
+    // transcript must not be annotated safe-to-auto-run, and must not be
+    // overstated as destructive either - all four flags are pinned by name so
+    // the failure says which one moved.
+    const keygen = tools.find((t) => t.name === 'panos_keygen');
+    console.log(`  panos_keygen annotations: ${JSON.stringify(keygen?.annotations)}`);
+    const keygenWant = { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true };
+    for (const [flag, want] of Object.entries(keygenWant)) {
+      if (keygen?.annotations?.[flag] !== want) {
+        console.log(`  panos_keygen must ship ${flag}=${want} (credential issuance: real side effect, destroys nothing, same key for same credentials)`);
+        failures++;
+      }
+    }
+    // The credential warning lives in prose too; it is the only thing telling a
+    // human reader the returned key lands in a shareable transcript.
+    if (!keygen?.description.includes('transcript')) {
+      console.log('  panos_keygen description must keep its transcript-exposure warning');
       failures++;
     }
     // Every mutating tool must carry the prefix; spot-check the ones that matter.
