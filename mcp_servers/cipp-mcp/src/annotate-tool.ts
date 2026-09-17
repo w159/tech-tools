@@ -147,7 +147,12 @@ const MUTATING_DESCRIPTION_MARKER = /^\s*(?:DESTRUCTIVE|VISIBLE-TO-OTHERS):/;
  * and warned about on stderr, never silently treated as safe.
  */
 const CLASS_OVERRIDES: Record<string, ToolClass> = {
-  // (nothing yet: every shipped tool name matches a pattern table above)
+  // GET ListAlertsQueue - a plain read. The CREATE table is consulted before the
+  // READ table, and /(^|_)queue(_|$)/ there is meant for "queue a job" tools, so
+  // it claimed this name before /(^|_)alert_queue$/ in READ_PATTERNS could. The
+  // tool shipped readOnlyHint:false: not a hazard (stricter than the truth) but a
+  // wrong signal, which pushes a client to prompt for a listing call.
+  cipp_list_alert_queue: "read",
 };
 
 /**

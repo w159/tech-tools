@@ -110,7 +110,7 @@ export function registerCompanyTools(server: McpServer, client: CwManageClient) 
 
   server.tool(
     "cw_update_company",
-    "Update a ConnectWise Manage company by ID (required) using JSON Patch operations array. Each operation needs op (replace/add/remove), path (e.g. 'name'), and value.",
+    "DESTRUCTIVE: Update a ConnectWise Manage company by ID (required) using JSON Patch operations array. Each operation needs op (replace/add/remove), path (e.g. 'name'), and value. A replace or remove overwrites the stored value with no prior version kept, so read the company with cw_get_company first.",
     {
       id: z.number().describe("Company ID"),
       operations: z

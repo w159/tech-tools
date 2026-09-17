@@ -633,7 +633,15 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
   },
   {
     name: 'cipp_run_standards_check',
-    description: 'Trigger an immediate CIPP standards compliance check for a tenant (tenantFilter required). Use when you need up-to-date drift data without waiting for the scheduled run.',
+    description:
+      'DESTRUCTIVE: Force the CIPP standards engine to run now for a tenant ' +
+      '(tenantFilter required). The run applies every standard assigned to the ' +
+      'tenant using its configured action, so any standard in Remediate mode ' +
+      'rewrites tenant configuration unattended; standards in Report or Alert ' +
+      'mode only refresh drift data. Use when you need up-to-date drift data ' +
+      'without waiting for the scheduled run, and confirm with the user first ' +
+      'unless you have checked with cipp_list_standards that nothing is set to ' +
+      'Remediate. Returns the CIPP action result.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -878,7 +886,14 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
   },
   {
     name: 'cipp_add_scheduled_item',
-    description: 'Create a new CIPP scheduled task (taskName, command, scheduledTime required). Optionally set a recurrence expression and scope to a specific tenant.',
+    description:
+      'Create a new CIPP scheduled task (taskName, command, scheduledTime ' +
+      'required). Optionally set a recurrence expression and scope to a specific ' +
+      'tenant. Creating the task writes a record, but CIPP then executes the ' +
+      'named command unattended with its own tenant permissions at the scheduled ' +
+      'time and on every recurrence - the real effect is whatever that command ' +
+      'does, and a tenantFilter of "allTenants" fans it out across every managed ' +
+      'tenant. Confirm the command with the user before scheduling one that writes.',
     inputSchema: {
       type: 'object',
       properties: {

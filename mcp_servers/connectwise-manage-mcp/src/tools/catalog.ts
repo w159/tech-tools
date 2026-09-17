@@ -155,7 +155,7 @@ export function registerCatalogTools(server: McpServer, client: CwManageClient) 
 
   server.tool(
     "cw_update_catalog_item",
-    "Update an existing catalog item using JSON Patch operations.",
+    "DESTRUCTIVE: Update an existing catalog item using JSON Patch operations. A replace or remove overwrites the stored value with no prior version kept, and cost/price feed every quote and invoice built from this SKU afterwards, so read the item with cw_get_catalog_item first.",
     {
       id: z.number().describe("Catalog item ID"),
       operations: z
