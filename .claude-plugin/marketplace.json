@@ -1,8 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "tech-tools",
-  "description": "The atlas marketplace: a multi-agent coding architect (atlas) with 21 plainly named skills, 12 core agents, self-improvement hooks, and the atlas-orchestrate methodology (evidence before any done claim), plus an optional organizational deployment plugin (armada) with 4 invocable setup skills, 11 department agents, and 156 department skills.",
-  "version": "3.17.1",
+  "description": "The atlas marketplace: a multi-agent coding architect (atlas) with 21 plainly named skills, 12 core agents, self-improvement hooks, and the atlas-orchestrate methodology (evidence before any done claim), plus an optional organizational deployment plugin (armada) with 4 invocable setup skills, 11 department agents, and 156 department skills, and a book-derived code-review engine (programmer) with 4 skills and 7 specialized reviewer agents.",
+  "version": "3.20.0",
   "owner": {
     "name": "w159",
     "url": "https://github.com/w159"
@@ -42,7 +42,7 @@
         "lean-ctx",
         "tool-routing"
       ],
-      "version": "6.0.2"
+      "version": "6.3.0"
     },
     {
       "name": "armada",
@@ -61,7 +61,7 @@
     {
       "name": "programmer",
       "source": "./plugins/programmer",
-      "description": "The Pragmatic Programmer (20th Anniversary Edition) as an active codebase auditor and coding-time advisor: 2 skills (tpp-audit runs a 10-dimension codebase review with file:line evidence; tpp-principles surfaces 1-4 relevant book principles while you work), 1 per-dimension auditor agent (tpp-auditor), a UserPromptSubmit nudge hook, and an 89-concept glossary repackaged as reference files for citation.",
+      "description": "A book-derived code-review engine: 4 skills (code-review runs a 6-lens, multi-agent review across a target or diff and produces an evidence-backed report; code-principles surfaces 1-4 relevant book principles while you work; tpp-audit is the Pragmatic Programmer audit; tpp-principles is the Pragmatic Programmer principles advisor), 7 specialized reviewer agents, and a UserPromptSubmit nudge hook.",
       "category": "developer-tools",
       "keywords": [
         "tpp",

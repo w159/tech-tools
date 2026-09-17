@@ -68,6 +68,15 @@ class BoardBasics(unittest.TestCase):
         }
         self.assertEqual(contents, {"a", "b", "human note"})
 
+    def test_mirror_keeps_other_sessions_items(self):
+        """Concurrent terminals share one project board, so a mirror from one
+        session must not wipe another session's plan."""
+        atlas_todo.mirror(self.root, [{"content": "theirs", "status": "pending"}], "s2")
+        atlas_todo.mirror(self.root, [{"content": "mine", "status": "pending"}], "s1")
+        board = atlas_todo.load(self.root)
+        self.assertEqual({i["content"] for i in board["items"]}, {"theirs", "mine"})
+        self.assertEqual(atlas_todo.counts(board, "s1")["needed"], 1)
+
     def test_mirror_keeps_claim_on_same_content(self):
         atlas_todo.mirror(self.root, [{"content": "task", "status": "pending"}], "s1")
         item_id = atlas_todo.load(self.root)["items"][0]["id"]

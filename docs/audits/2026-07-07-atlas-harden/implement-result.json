@@ -142,7 +142,7 @@
             },
             {
               "claim": "Caches and empty references/ dir remain removed; plugin.json still parses; no commits beyond baseline.",
-              "evidence": "`ls plugins/atlas/.pytest_cache plugins/atlas/.ruff_cache plugins/atlas/scripts/.claude` all report 'No such file or directory'. `python3 -c \"import json; json.load(open('plugins/atlas/.claude-plugin/plugin.json'))\"` returned keys ['name','version','description','author','repository','homepage','license','keywords'] with no error. `git log -1 --format='%H %ci'` shows HEAD is still 4cf8fcc (2026-07-07 05:28:58), the same commit the audit trail (docs/audits/atlas-harden-2026-07-07/stage-removals.md) recorded before this repair, confirming no new commit was created.",
+              "evidence": "`ls plugins/atlas/.pytest_cache plugins/atlas/.ruff_cache plugins/atlas/scripts/.claude` all report 'No such file or directory'. `python3 -c \"import json; json.load(open('plugins/atlas/.claude-plugin/plugin.json'))\"` returned keys ['name','version','description','author','repository','homepage','license','keywords'] with no error. `git log -1 --format='%H %ci'` shows HEAD is still 4cf8fcc (2026-07-07 05:28:58), the same commit the audit trail (docs/audits/2026-07-07-atlas-harden/stage-removals.md) recorded before this repair, confirming no new commit was created.",
               "severity": "low"
             }
           ],
@@ -150,7 +150,7 @@
             "Whether the secrets committed in git history at commit 4cf8fcc (.kimi-plugin/import-plan.json Magic API_KEY, Plaid client-id/secret) still need rotation and a history rewrite. Reverting the working-tree file restores the committed secret values into the working tree and does not touch history; `git show 4cf8fcc:.kimi-plugin/import-plan.json` would still show them. This is a real, separate exposure outside this repair's allowed surface and outside my read-only verifier role to fix.",
             "Whether .kimi-plugin/import-report.json (untracked, present before this repair per its file timestamp of 05:29 versus the repair's later activity) is expected/benign; not inspected in depth since it predates and is unrelated to the allowed change surface."
           ],
-          "next_step": "Full green: (1) docs/AGENTS.md carries only removal-record prose for the 6 deleted agents and the correct 12-agent count, (2) .kimi-plugin/import-plan.json is byte-identical to HEAD, (3) git status --porcelain shows only the allowed surface (docs/AGENTS.md, plugins/atlas/README.md, the 6 agent deletions, output-styles/atlas-orchestrator.md, atlas-engine/SKILL.md, ux-test-swarm.md, atlas-expedition/references/personas.md) plus expected untracked artifacts (.kimi-plugin/import-report.json pre-existing, docs/audits/atlas-harden-2026-07-07/ this session's own audit hub), and (4) HEAD is unchanged at 4cf8fcc with no new commit. No further repair action needed on this defect pair. Separately and outside this verification's scope: escalate the git-history-committed secrets in .kimi-plugin/import-plan.json (commit 4cf8fcc) to the user for an explicit rotate-and-rewrite decision."
+          "next_step": "Full green: (1) docs/AGENTS.md carries only removal-record prose for the 6 deleted agents and the correct 12-agent count, (2) .kimi-plugin/import-plan.json is byte-identical to HEAD, (3) git status --porcelain shows only the allowed surface (docs/AGENTS.md, plugins/atlas/README.md, the 6 agent deletions, output-styles/atlas-orchestrator.md, atlas-engine/SKILL.md, ux-test-swarm.md, atlas-expedition/references/personas.md) plus expected untracked artifacts (.kimi-plugin/import-report.json pre-existing, docs/audits/2026-07-07-atlas-harden/ this session's own audit hub), and (4) HEAD is unchanged at 4cf8fcc with no new commit. No further repair action needed on this defect pair. Separately and outside this verification's scope: escalate the git-history-committed secrets in .kimi-plugin/import-plan.json (commit 4cf8fcc) to the user for an explicit rotate-and-rewrite decision."
         }
       },
       {
@@ -178,7 +178,7 @@
             },
             {
               "claim": "Change surface matches the allowed scope exactly: only the 12 named agent files were touched under plugins/atlas/agents/, no rewrites, and other uncommitted changes in the working tree (.gitignore, docs/AGENTS.md, README.md, output-styles, skills/atlas-engine, personas.md, 6 file deletions) belong to separate, independently documented stages of the same multi-stage session, not this task.",
-              "evidence": "git diff --stat -- plugins/atlas/agents/ returns exactly 12 files / 37 insertions(+) / 1 deletion(-), matching the implementer's claim verbatim. Full-tree git status --porcelain shows additional M/D entries outside that path, but docs/audits/atlas-harden-2026-07-07/stage-removals.md, stage-gitignore.md, and stage-marketplace.md document those exact other files as separate stages with their own before/after evidence, authorized by decisions.md.",
+              "evidence": "git diff --stat -- plugins/atlas/agents/ returns exactly 12 files / 37 insertions(+) / 1 deletion(-), matching the implementer's claim verbatim. Full-tree git status --porcelain shows additional M/D entries outside that path, but docs/audits/2026-07-07-atlas-harden/stage-removals.md, stage-gitignore.md, and stage-marketplace.md document those exact other files as separate stages with their own before/after evidence, authorized by decisions.md.",
               "severity": "low"
             },
             {
@@ -200,7 +200,7 @@
         "attempts": 2,
         "detail": {
           "verdict": "confirmed",
-          "summary": "The routing-table symptom is fixed (three new rows for atlas-architect/atlas-engine/atlas-stacks, 12 external agent-type occurrences annotated with a trailing asterisk plus a footnote), and the stray audit artifact stage-routing.md is no longer inside the shipped plugin tree - it now lives in docs/audits/atlas-harden-2026-07-07/ matching the sibling stage-*.md convention.",
+          "summary": "The routing-table symptom is fixed (three new rows for atlas-architect/atlas-engine/atlas-stacks, 12 external agent-type occurrences annotated with a trailing asterisk plus a footnote), and the stray audit artifact stage-routing.md is no longer inside the shipped plugin tree - it now lives in docs/audits/2026-07-07-atlas-harden/ matching the sibling stage-*.md convention.",
           "findings": [
             {
               "claim": "capability-routing.md now contains rows for atlas-architect, atlas-engine, and atlas-stacks that were missing per the original symptom.",
@@ -214,7 +214,7 @@
             },
             {
               "claim": "No stray audit-diff-summary file remains inside the shipped plugin tree; it was relocated to the audit hub.",
-              "evidence": "find plugins/atlas/skills/atlas-engine/references -iname '*stage*' returns only the pre-existing, unrelated multi-stage-planning.md. git status --porcelain -- plugins/atlas/ shows no untracked entries. docs/audits/atlas-harden-2026-07-07/stage-routing.md exists and its content (read via head -20) is exactly the diff-summary describing the capability-routing.md edit, matching the sibling files' '# Stage: ...' naming convention seen in stage-removals.md, stage-gitignore.md, stage-marketplace.md, stage-conformance.md. grep -rn 'stage-routing' across all .md files found zero stray references pointing at the old plugin-tree location.",
+              "evidence": "find plugins/atlas/skills/atlas-engine/references -iname '*stage*' returns only the pre-existing, unrelated multi-stage-planning.md. git status --porcelain -- plugins/atlas/ shows no untracked entries. docs/audits/2026-07-07-atlas-harden/stage-routing.md exists and its content (read via head -20) is exactly the diff-summary describing the capability-routing.md edit, matching the sibling files' '# Stage: ...' naming convention seen in stage-removals.md, stage-gitignore.md, stage-marketplace.md, stage-conformance.md. grep -rn 'stage-routing' across all .md files found zero stray references pointing at the old plugin-tree location.",
               "severity": "low"
             },
             {
@@ -224,7 +224,7 @@
             }
           ],
           "unverified": [
-            "Whether plugins/atlas/skills/atlas-engine/SKILL.md, references/ux-test-swarm.md, atlas-expedition/references/personas.md, plugins/atlas/README.md, output-styles/atlas-orchestrator.md, the 12 modified agents/*.md files, the 5 deleted ux-*.md/api-usage-map.md agents, and .gitignore/docs/AGENTS.md changes are legitimately in scope for OTHER approved stages of this same multi-stage session. I did not deep-verify each of those individually since they are outside this task's allowed surface (capability-routing.md only); I only confirmed circumstantially that each has a corresponding stage-*.md doc in docs/audits/atlas-harden-2026-07-07/ (stage-removals.md, stage-conformance.md, stage-gitignore.md, stage-marketplace.md) and that their mtimes (06:08-06:27) form a coherent multi-stage timeline distinct from and mostly predating the routing-table stage, per Jerry's Step-0 approval recorded in decisions.md."
+            "Whether plugins/atlas/skills/atlas-engine/SKILL.md, references/ux-test-swarm.md, atlas-expedition/references/personas.md, plugins/atlas/README.md, output-styles/atlas-orchestrator.md, the 12 modified agents/*.md files, the 5 deleted ux-*.md/api-usage-map.md agents, and .gitignore/docs/AGENTS.md changes are legitimately in scope for OTHER approved stages of this same multi-stage session. I did not deep-verify each of those individually since they are outside this task's allowed surface (capability-routing.md only); I only confirmed circumstantially that each has a corresponding stage-*.md doc in docs/audits/2026-07-07-atlas-harden/ (stage-removals.md, stage-conformance.md, stage-gitignore.md, stage-marketplace.md) and that their mtimes (06:08-06:27) form a coherent multi-stage timeline distinct from and mostly predating the routing-table stage, per Jerry's Step-0 approval recorded in decisions.md."
           ],
           "next_step": "None required for this task. If a full-session scope audit is wanted, verify each of the four other stage docs' own claimed diffs against their respective files independently (separate verifier passes), since this pass was scoped only to the capability-routing.md symptom and its stray-file side effect."
         }
@@ -259,7 +259,7 @@
             },
             {
               "claim": "Only .gitignore changed within the allowed surface; the many other modified/deleted files in the working tree belong to a separate, independently-timestamped stage, not this edit.",
-              "evidence": "Fresh git status --porcelain mid-verification shows the repo under live concurrent modification (files changing between my two invocations). docs/audits/atlas-harden-2026-07-07/stage-removals.md (mtime 06:11) references the deleted ux-*/api-usage-map.md files (24 matches via grep), while .gitignore's own mtime is 06:25:06 and stage-gitignore.md was written at 06:25 as a separate, later artifact. git diff --stat confirms .gitignore's own change is 2 insertions, 0 deletions.",
+              "evidence": "Fresh git status --porcelain mid-verification shows the repo under live concurrent modification (files changing between my two invocations). docs/audits/2026-07-07-atlas-harden/stage-removals.md (mtime 06:11) references the deleted ux-*/api-usage-map.md files (24 matches via grep), while .gitignore's own mtime is 06:25:06 and stage-gitignore.md was written at 06:25 as a separate, later artifact. git diff --stat confirms .gitignore's own change is 2 insertions, 0 deletions.",
               "severity": "low"
             },
             {
@@ -305,12 +305,12 @@
             },
             {
               "claim": "Change surface was respected: nothing in the repo working tree (/Users/jerry/MEGA/Projects/Agentic/tech-tools) shows evidence of being touched by this specific fix action.",
-              "evidence": "`git -C /Users/jerry/MEGA/Projects/Agentic/tech-tools reflog show` for this repo contains only ordinary `commit` entries, no `reset`/`checkout` around the fix time - unlike the marketplace clone's reflog which explicitly shows a reset. `git status --porcelain` here does show unrelated modified/deleted files (atlas agent/skill docs, .gitignore, docs/AGENTS.md), but their content (deleted UX agents, capability-routing edits) is topically unrelated to marketplace-source, and no reflog reset entry ties them to this task - consistent with them being pre-existing/concurrent edits from other stages of the same multi-stage atlas-harden-2026-07-07 audit rather than scope creep from this fix.",
+              "evidence": "`git -C /Users/jerry/MEGA/Projects/Agentic/tech-tools reflog show` for this repo contains only ordinary `commit` entries, no `reset`/`checkout` around the fix time - unlike the marketplace clone's reflog which explicitly shows a reset. `git status --porcelain` here does show unrelated modified/deleted files (atlas agent/skill docs, .gitignore, docs/AGENTS.md), but their content (deleted UX agents, capability-routing edits) is topically unrelated to marketplace-source, and no reflog reset entry ties them to this task - consistent with them being pre-existing/concurrent edits from other stages of the same multi-stage 2026-07-07-atlas-harden audit rather than scope creep from this fix.",
               "severity": "low"
             },
             {
               "claim": "The implementer's report file exists at the claimed path and its before/after transcripts match what I independently reproduced.",
-              "evidence": "Read `/Users/jerry/MEGA/Projects/Agentic/tech-tools/docs/audits/atlas-harden-2026-07-07/stage-marketplace.md` in full - its 'Command 3: plain doctor (after)' block matches byte-for-byte the live run I performed independently.",
+              "evidence": "Read `/Users/jerry/MEGA/Projects/Agentic/tech-tools/docs/audits/2026-07-07-atlas-harden/stage-marketplace.md` in full - its 'Command 3: plain doctor (after)' block matches byte-for-byte the live run I performed independently.",
               "severity": "low"
             }
           ],
@@ -338,7 +338,7 @@
         },
         {
           "claim": "G10 - unexpected untracked file .kimi-plugin/import-report.json is unrelated to the atlas harden.",
-          "evidence": "git -C <root> status --porcelain shows '?? .kimi-plugin/import-report.json' alongside the expected '?? docs/audits/atlas-harden-2026-07-07/'. The kimi import report is not an atlas-plugin edit nor a docs/audits artifact.",
+          "evidence": "git -C <root> status --porcelain shows '?? .kimi-plugin/import-report.json' alongside the expected '?? docs/audits/2026-07-07-atlas-harden/'. The kimi import report is not an atlas-plugin edit nor a docs/audits artifact.",
           "severity": "medium"
         },
         {
@@ -360,16 +360,16 @@
       "next_step": "Before committing: (1) decide whether the 4 forbidden-name removal notes in docs/AGENTS.md are acceptable or should move under an explicit CHANGELOG section to satisfy the letter of G2; (2) remove or gitignore the stray .kimi-plugin/import-report.json; (3) confirm the .gitignore .in_use/ edit belongs in this change set or split it out. All 10 functional gates already pass (doctor HEALTHY exit 0, hooks compile, connectors correctly externalized, agents conformant, UX consolidated to atlas-expedition)."
     },
     "docs": {
-      "summary": "Closed the atlas-harden-2026-07-07 audit as docs-curator. Wrote red-conformance.json and final-report.md to the audit hub, and appended an Unreleased CHANGELOG entry to docs/CHANGELOG.md. docs/AGENTS.md was left untouched (already correctly updated by an earlier stage per the removals verifier finding). docs/ROADMAP.md was not touched - no shipped item maps to it and no new roadmap-level follow-up emerged beyond what final-report.md already captures as audit residue. No graphify regen: the only graph.json found (mcp_servers/auvik-mcp/graphify-out/graph.json) is unrelated to the plugins/atlas source that shipped.",
+      "summary": "Closed the 2026-07-07-atlas-harden audit as docs-curator. Wrote red-conformance.json and final-report.md to the audit hub, and appended an Unreleased CHANGELOG entry to docs/CHANGELOG.md. docs/AGENTS.md was left untouched (already correctly updated by an earlier stage per the removals verifier finding). docs/ROADMAP.md was not touched - no shipped item maps to it and no new roadmap-level follow-up emerged beyond what final-report.md already captures as audit residue. No graphify regen: the only graph.json found (mcp_servers/auvik-mcp/graphify-out/graph.json) is unrelated to the plugins/atlas source that shipped.",
       "findings": [
         {
-          "claim": "Wrote docs/audits/atlas-harden-2026-07-07/red-conformance.json capturing the pre-remediation baseline (dangling=0, 4 files missing report-back, 16 missing hallucination-control locations, hooks fail-open behavior).",
-          "evidence": "/Users/jerry/MEGA/Projects/Agentic/tech-tools/docs/audits/atlas-harden-2026-07-07/red-conformance.json (new file), sourced verbatim from the RED BASELINE block in the task input.",
+          "claim": "Wrote docs/audits/2026-07-07-atlas-harden/red-conformance.json capturing the pre-remediation baseline (dangling=0, 4 files missing report-back, 16 missing hallucination-control locations, hooks fail-open behavior).",
+          "evidence": "/Users/jerry/MEGA/Projects/Agentic/tech-tools/docs/audits/2026-07-07-atlas-harden/red-conformance.json (new file), sourced verbatim from the RED BASELINE block in the task input.",
           "severity": "low"
         },
         {
-          "claim": "Wrote docs/audits/atlas-harden-2026-07-07/final-report.md covering: undefined-path resolution note, red baseline, per-stage table (removals/agent-conformance/routing/marketplace/gitignore with verdict+attempts+citations), 10-gate green-gate results, a plainly-stated fable-5 residue list, docs-curator actions, and re-run instructions.",
-          "evidence": "/Users/jerry/MEGA/Projects/Agentic/tech-tools/docs/audits/atlas-harden-2026-07-07/final-report.md (new file), citing stage-removals.md:1-178, stage-conformance.md:1-57, stage-routing.md:1-27, stage-marketplace.md:1-105, stage-gitignore.md:1-119, decisions.md:1-24.",
+          "claim": "Wrote docs/audits/2026-07-07-atlas-harden/final-report.md covering: undefined-path resolution note, red baseline, per-stage table (removals/agent-conformance/routing/marketplace/gitignore with verdict+attempts+citations), 10-gate green-gate results, a plainly-stated fable-5 residue list, docs-curator actions, and re-run instructions.",
+          "evidence": "/Users/jerry/MEGA/Projects/Agentic/tech-tools/docs/audits/2026-07-07-atlas-harden/final-report.md (new file), citing stage-removals.md:1-178, stage-conformance.md:1-57, stage-routing.md:1-27, stage-marketplace.md:1-105, stage-gitignore.md:1-119, decisions.md:1-24.",
           "severity": "low"
         },
         {
@@ -399,7 +399,7 @@
         "Contents and provenance of .kimi-plugin/import-report.json - confirmed untouched and pre-existing by two separate stage reports but not inspected in depth by this docs-curator pass.",
         "Whether commit d1be66b (which baked the local-relative-path marketplace scheme into .kimi-plugin/marketplace.json before the revert step ran) should be reset/reverted, and whether the Magic/Plaid secrets in .kimi-plugin/import-plan.json's git history need rotation and a history rewrite - both require a decision from Jerry and are outside docs/ scope to act on."
       ],
-      "next_step": "Escalate to Jerry (not a docs-only fix): (1) decide whether to git-reset/revert commit d1be66b to actually undo the .kimi-plugin/marketplace.json local-path scheme, since the working-tree revert this session attempted was a no-op against an already-committed change; (2) decide on rotating and history-rewriting the Magic API_KEY / Plaid client-id/secret previously flagged in .kimi-plugin/import-plan.json's committed history. Both are documented with citations in docs/audits/atlas-harden-2026-07-07/final-report.md section 4 and are outside the docs-curator's write scope (docs/ only) and outside this audit's no-commits constraint."
+      "next_step": "Escalate to Jerry (not a docs-only fix): (1) decide whether to git-reset/revert commit d1be66b to actually undo the .kimi-plugin/marketplace.json local-path scheme, since the working-tree revert this session attempted was a no-op against an already-committed change; (2) decide on rotating and history-rewriting the Magic API_KEY / Plaid client-id/secret previously flagged in .kimi-plugin/import-plan.json's committed history. Both are documented with citations in docs/audits/2026-07-07-atlas-harden/final-report.md section 4 and are outside the docs-curator's write scope (docs/ only) and outside this audit's no-commits constraint."
     }
   },
   "workflowProgress": [
@@ -805,7 +805,7 @@
       "tokens": 82651,
       "toolCalls": 8,
       "durationMs": 143795,
-      "resultPreview": "{\"verdict\":\"confirmed\",\"summary\":\"The routing-table symptom is fixed (three new rows for atlas-architect/atlas-engine/atlas-stacks, 12 external agent-type occurrences annotated with a trailing asterisk plus a footnote), and the stray audit artifact stage-routing.md is no longer inside the shipped plugin tree - it now lives in docs/audits/atlas-harden-2026-07-07/ matching the sibling stage-*.md con…"
+      "resultPreview": "{\"verdict\":\"confirmed\",\"summary\":\"The routing-table symptom is fixed (three new rows for atlas-architect/atlas-engine/atlas-stacks, 12 external agent-type occurrences annotated with a trailing asterisk plus a footnote), and the stray audit artifact stage-routing.md is no longer inside the shipped plugin tree - it now lives in docs/audits/2026-07-07-atlas-harden/ matching the sibling stage-*.md con…"
     },
     {
       "type": "workflow_agent",
@@ -843,13 +843,13 @@
       "queuedAt": 1783420988212,
       "attempt": 1,
       "lastToolName": "StructuredOutput",
-      "lastToolSummary": "Closed the atlas-harden-2026-07-07 audit as docs-curator. W…",
+      "lastToolSummary": "Closed the 2026-07-07-atlas-harden audit as docs-curator. W…",
       "promptPreview": "ROLE: docs-curator closing the atlas-harden audit. AUDIT DIR: undefined (contains orientation.md, decisions.md, orient-result.json, stage-*.md artifacts). REPO: undefined. NO commits.\nINPUTS - stage verdicts: [{\"key\":\"removals\",\"verdict\":\"confirmed\",\"attempts\":2,\"detail\":{\"verdict\":\"confirmed\",\"summary\":\"All five implementer claims reproduced independently. docs/AGENTS.md now carries removal-recor…",
       "lastProgressAt": 1783421150059,
       "tokens": 96708,
       "toolCalls": 15,
       "durationMs": 160413,
-      "resultPreview": "{\"summary\":\"Closed the atlas-harden-2026-07-07 audit as docs-curator. Wrote red-conformance.json and final-report.md to the audit hub, and appended an Unreleased CHANGELOG entry to docs/CHANGELOG.md. docs/AGENTS.md was left untouched (already correctly updated by an earlier stage per the removals verifier finding). docs/ROADMAP.md was not touched - no shipped item maps to it and no new roadmap-lev…"
+      "resultPreview": "{\"summary\":\"Closed the 2026-07-07-atlas-harden audit as docs-curator. Wrote red-conformance.json and final-report.md to the audit hub, and appended an Unreleased CHANGELOG entry to docs/CHANGELOG.md. docs/AGENTS.md was left untouched (already correctly updated by an earlier stage per the removals verifier finding). docs/ROADMAP.md was not touched - no shipped item maps to it and no new roadmap-lev…"
     }
   ],
   "totalTokens": 1753588,

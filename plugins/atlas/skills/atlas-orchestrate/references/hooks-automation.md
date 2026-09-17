@@ -13,7 +13,7 @@ hook that may *deny* a tool call, and only when fallow audit returns `verdict: f
 | `advisor` | `PreToolUse` (Bash) | `hooks/bash_advisor.py` | advisory-only; emits a warning on catastrophic, near-irreversible commands only |
 | `fallow-gate` | `PreToolUse` (Bash) | `hooks/fallow_gate.py` | agent gate: on `git commit`/`git push`, run `fallow audit --format json --quiet --explain --gate-marker agent`; deny on fail; skip if fallow absent (`ATLAS_FALLOW=off`) |
 | `format` | `PostToolUse` (Edit\|Write\|MultiEdit) | `hooks/format_after_edit.py` | auto-format the edited file (ruff/prettier/gofmt/rustfmt), async |
-| `dispatch-tripwire` | `PostToolUse` + `PreToolUse` | `hooks/dispatch_tripwire.py` | advisory STOP at the threshold (default 4); a second `PreToolUse` tier DENIES at the hard inline-op limit or on Edit/Write/MultiEdit/NotebookEdit to non-docs paths; marker-gated, orchestration sessions only |
+| `dispatch-tripwire` | `PostToolUse` + `PreToolUse` | `hooks/dispatch_tripwire.py` | advisory STOP at the threshold (default 4); a second `PreToolUse` tier DENIES at the hard inline-op limit, on Edit/Write/MultiEdit/NotebookEdit to non-docs paths, and on an `atlas:*` dispatch that omits the code-nav TOOLS block, omits the bounding dispatch spec (GOAL/DELIVERABLE/SUCCESS CRITERIA/OUT OF SCOPE/STOP CONDITIONS), or bundles more than one GOAL into one subagent; marker-gated, orchestration sessions only |
 | `completion-gate` | `Stop` | `hooks/completion_gate.py` | **opt-out.** block stopping an orchestration run until evidence is captured; marker-gated, on by default when docs/ exists (disable with ATLAS_GATE=off) |
 | `nudge` | `Stop` | `hooks/nudge.py` | self-improvement: surface a past lesson and prompt to capture new ones; marker-gated, throttled |
 | `ingest-session` | `Stop`, `SubagentStop`, `SessionEnd`, `PreCompact` | `hooks/ingest_session.py` | index the session transcript into the observability store for atlas-audit |
@@ -108,7 +108,7 @@ orchestrator rationalizes "I'll mark it unverified and move on"); this is the ma
   up to 6 levels) AND the session's run is flagged orchestrating in the atlas DB (the
   dispatch-tripwire hook sets that flag automatically when an orchestration skill is invoked or
   an `atlas:*` subagent is dispatched). In any other session it is a silent no-op.
-- **What satisfies it.** All nine conditions must hold:
+- **What satisfies it.** All twelve conditions must hold:
   - (a) At least one file under `.atlas/evidence/` (observed-behavior proof captured).
   - (b) `.atlas/.run/findings.json` exists and records at least one entry with status `verified`
     (an independent check happened - a deterministic test recorded via
@@ -116,11 +116,16 @@ orchestrator rationalizes "I'll mark it unverified and move on"); this is the ma
   - (c) `docs/CHANGELOG.md` exists and is non-empty.
   - (d) `docs/ROADMAP.md` exists and is non-empty.
   - (e) `README.md` at the project root exists and is non-empty.
-  - (f) No docs drift: if non-docs files changed this run, at least one `docs/` file changed
-    too -- the deterministic trigger forcing an `atlas:docs-curator` dispatch before "done".
-    The primary signal is `run_changed_paths` (tool calls carrying a `file_path`), which is
-    blind to a file written by a Bash-invoked script, so the gate cross-checks `git` before
-    blocking. That suppression is one-directional: it can only prevent a false block.
+  - (f) No docs drift: if non-docs files changed this run, `docs/CHANGELOG.md` must be
+    among them -- the deterministic trigger forcing an `atlas:docs-curator` dispatch
+    before "done". Any single `docs/` path used to clear this, so a one-line edit to a
+    `docs/architecture/` scratch file kept the gate quiet while the CHANGELOG, the
+    ROADMAP and the README all rotted; the check needs to know "was the record of this
+    change written", and `docs-ssot.md` names the CHANGELOG for exactly that. The
+    primary signal is `run_changed_paths` (tool calls carrying a `file_path`), which is
+    blind to a file written by a Bash-invoked script, so the gate cross-checks `git`
+    before blocking. That suppression is one-directional: it can only prevent a false
+    block.
   - (g) Law 5 - verification coverage: if non-docs code changed this run, block when
     implementer dispatches outnumber the independent checks that covered them. Two things
     count as a check, and they are interchangeable: an `atlas:verifier` dispatch, or a
@@ -129,14 +134,29 @@ orchestrator rationalizes "I'll mark it unverified and move on"); this is the ma
     `max(0, unpaired_implementer_dispatches - verified_findings_stamped_this_run)`. Entries
     inherited from an earlier run, and undated entries, earn no credit - they prove nothing
     about the code this run shipped.
-  - (i) Todo drain: if this run shipped code and the most recent `TodoWrite` call in the
-    transcript still holds non-`completed` items, block. TodoWrite rewrites the whole list
-    every call, so the last one is current state. A run with no todo list passes -- (i)
-    enforces draining a list, not creating one.
+  - (h) ROADMAP reconciliation: a `docs/ROADMAP.md` item marked `done` is a defect -- it
+    belongs in `docs/CHANGELOG.md` with a date and an evidence citation.
+  - (i) Todo drain: if this run shipped code and the most recent plan still holds
+    non-`completed` items, block. TodoWrite rewrites the whole list every call, so the last
+    one is current state. (i) enforces DRAINING a list; (k) is what enforces having one.
   - (j) Worktree close-out: if this run dispatched an agent with `isolation: "worktree"`
     (recorded by the dispatch tripwire in `runs.used_worktrees`) and `git worktree list`
     still shows trees beyond the main one, block. Scoped to this run's own dispatches, so a
     user's long-lived worktrees never trip it.
+  - (k) Plan mandate: if this run shipped code and NO plan surface ever carried a single
+    item -- no `TodoWrite` call, no non-manual board item for this session, no `LEDGER`
+    line -- block. (i) alone let a run that never planned anything pass trivially, since an
+    absent list has zero open items; that gap is how orchestration ran with no todo state at
+    all. Manual board items are a human's notes, not the orchestrator's plan, so they do not
+    satisfy it. Scoped to code-shipping runs, and fail-open: an unreadable surface never
+    manufactures a block.
+  - (l) Docs naming: every dated record this run touched (plan, spec, lesson, decision,
+    audit, finding, evidence dir) must be named `<YYYY-MM-DD>-<slug>` so a plain
+    listing sorts chronologically. A trailing date (`atlas-security-2026-06-15/`) or a
+    leading sequence number (`00-master-plan.md`) sorts by subject instead. Enforced by
+    `scripts/lint_docs_names.py`, run-scoped via git and fail-open, so historical names
+    nobody is touching never wedge a run. Living docs (`architecture/`, `features/`,
+    `wiki/`) are bare slugs and are never checked: they are revised in place.
   The block message names exactly which condition(s) are missing.
 - **Single nudge, never a wedge.** It blocks the stop at most **once** (the `stop_hook_active`
   loop-guard), then lets the continuation through. Fail-open on any error. Disable entirely with

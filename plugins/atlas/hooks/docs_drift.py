@@ -36,17 +36,32 @@ def find_root(start: Path) -> Path | None:
 
 
 def docs_drift(changed_paths: list) -> bool:
-    """Return True when >=1 non-docs file was changed and 0 docs files were changed.
+    """Return True when >=1 non-docs file changed and `docs/CHANGELOG.md` did not.
 
-    A path is 'docs' if it starts with 'docs/' or contains '/docs/'.
+    Previously ANY `docs/` path cleared this, which made condition (f)
+    satisfiable by touching any single document. A one-line edit to a
+    `docs/architecture/` scratch file kept the gate quiet while the CHANGELOG,
+    the ROADMAP and the README all rotted -- the check reported "docs moved"
+    when what it actually needs to know is "was the record of this change
+    written". `docs-ssot.md` names the CHANGELOG specifically in its definition
+    of done ("Before any change is called done: CHANGELOG updated"), and
+    condition (c) already requires the file to exist, so the CHANGELOG is what
+    clears drift.
+
+    A path is 'docs' if it starts with 'docs/' or contains '/docs/', so a
+    docs-only run never counts as drift regardless of the CHANGELOG.
     Pure helper: takes a list of relative path strings, does no I/O.
     """
     if not changed_paths:
         return False
+    nondocs = False
     for p in changed_paths:
-        if p.startswith("docs/") or "/docs/" in p:
-            return False  # at least one docs path -> no drift
-    return True  # paths present, none are docs
+        rel = str(p).replace("\\", "/")
+        if rel == "docs/CHANGELOG.md" or rel.endswith("/docs/CHANGELOG.md"):
+            return False  # the record of this change was written
+        if not (rel.startswith("docs/") or "/docs/" in rel):
+            nondocs = True
+    return nondocs
 
 
 def git_changed_paths(root: Path) -> list:

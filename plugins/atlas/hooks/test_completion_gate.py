@@ -38,13 +38,26 @@ def _run_gate(payload, env):
     )
 
 
+def _seed_plan(root, session_id="sess-orch"):
+    """Satisfy condition (k): prove this run committed to a plan.
+
+    (k) blocks a code-shipping run that never made a todo list at all. Every
+    fixture that asserts "no block" while isolating some OTHER condition needs
+    a plan on the board, or it is really asserting (k). One already-drained
+    item is the smallest plan that leaves (i) at zero open items.
+    """
+    atlas_todo.mirror(
+        root, [{"content": "fixture plan", "status": "completed"}], session_id
+    )
+
+
 class DocsDriftTest(unittest.TestCase):
     def test_non_docs_only_returns_true(self):
         """Non-docs changes with no docs changes -> drift detected."""
         self.assertTrue(_docs_drift(["src/foo.py", "README.md"]))
 
     def test_docs_change_present_returns_false(self):
-        """Any docs/ path in the list -> no drift."""
+        """The CHANGELOG in the list -> no drift: the record was written."""
         self.assertFalse(_docs_drift(["src/foo.py", "docs/CHANGELOG.md"]))
 
     def test_only_docs_path_returns_false(self):
@@ -52,12 +65,29 @@ class DocsDriftTest(unittest.TestCase):
         self.assertFalse(_docs_drift(["docs/ROADMAP.md"]))
 
     def test_nested_docs_path_returns_false(self):
-        """A path containing /docs/ counts as a docs path."""
+        """A path containing /docs/ is a docs path, so a docs-only run is not drift."""
         self.assertFalse(_docs_drift(["plugins/atlas/docs/features.md"]))
 
     def test_empty_list_returns_false(self):
         """Empty input -> no drift (nothing changed)."""
         self.assertFalse(_docs_drift([]))
+
+    def test_unrelated_docs_edit_does_not_clear_drift(self):
+        """The regression that let docs rot: any single docs/ path used to clear
+        (f), so a scratch edit under docs/architecture/ kept the gate quiet while
+        the CHANGELOG went unwritten."""
+        self.assertTrue(_docs_drift(["src/foo.py", "docs/architecture/notes.md"]))
+
+    def test_roadmap_alone_does_not_clear_drift(self):
+        """ROADMAP holds what is NOT done yet, so it is not the record of a
+        shipped change -- only the CHANGELOG is."""
+        self.assertTrue(_docs_drift(["src/foo.py", "docs/ROADMAP.md"]))
+
+    def test_nested_changelog_clears_drift(self):
+        """A nested project (plugins/<x>/docs/CHANGELOG.md) clears it too."""
+        self.assertFalse(
+            _docs_drift(["src/foo.py", "plugins/atlas/docs/CHANGELOG.md"])
+        )
 
 
 class GateOrchestrationTest(unittest.TestCase):
@@ -148,6 +178,7 @@ class GateOrchestrationTest(unittest.TestCase):
                 f.write("# %s\ncontent\n" % name)
         with open(os.path.join(self.tmp, "README.md"), "w") as f:
             f.write("# project\n")
+        _seed_plan(self.tmp)
 
     def test_all_conditions_met_passes(self):
         self._satisfy_all_conditions()
@@ -567,6 +598,7 @@ class InProcessMainTest(unittest.TestCase):
                 f.write("# %s\ncontent\n" % name)
         with open(os.path.join(self.tmp, "README.md"), "w") as f:
             f.write("# project\n")
+        _seed_plan(self.tmp)
 
     def _init_git_repo(self):
         subprocess.run(["git", "init", "-q", self.tmp], check=True, capture_output=True)
@@ -1186,6 +1218,7 @@ class GateConditionIJTest(GateOrchestrationTest):
         # A docs write in the same run clears (f).
         self._log_run_write("docs/CHANGELOG.md")
         self._log_run_write("src/app.py")
+        _seed_plan(self.tmp)
 
     def test_open_todos_block_the_stop(self):
         self._satisfy_everything_else()
@@ -1458,3 +1491,128 @@ class TodoBoardDrainTest(GateConditionIJTest):
             {"session_id": "sess-orch", "cwd": self.tmp, "transcript_path": t}, self.env
         )
         self.assertIn('"decision": "block"', r.stdout)
+
+
+class GatePlanMandateTest(GateConditionIJTest):
+    """(k): a code-shipping run must have committed to a plan somewhere.
+
+    (i) only enforces DRAINING a list, and an absent list has zero open items,
+    so before (k) a run that never planned anything satisfied both trivially.
+    That is the gap that let orchestration runs ship with no todo state at all.
+    """
+
+    def _clear_plan(self):
+        """Remove the plan _satisfy_everything_else seeds, so these tests see
+        a run that genuinely never made a list."""
+        atlas_todo.mirror(self.tmp, [], "sess-orch")
+
+    def test_no_plan_on_any_surface_blocks(self):
+        self._satisfy_everything_else()
+        self._clear_plan()
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertIn('"decision": "block"', r.stdout)
+        self.assertIn("(k) No plan was ever made", r.stdout)
+
+    def test_drained_board_plan_satisfies_k(self):
+        """A fully completed list still proves a plan existed."""
+        self._satisfy_everything_else()  # seeds one already-completed item
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertNotIn("(k) No plan", r.stdout)
+
+    def test_transcript_todowrite_satisfies_k(self):
+        self._satisfy_everything_else()
+        self._clear_plan()
+        t = _todo_transcript(
+            os.path.join(self.tmp, "t.jsonl"),
+            [{"content": "ship it", "status": "completed"}],
+        )
+        r = _run_gate(
+            {"session_id": "sess-orch", "cwd": self.tmp, "transcript_path": t}, self.env
+        )
+        self.assertNotIn('"decision": "block"', r.stdout)
+
+    def test_drained_ledger_line_satisfies_k(self):
+        """Presence, not arithmetic: `3/3` reports zero open items but still
+        proves a plan existed, so (k) reads the line's presence rather than
+        going through _ledger_open_todos."""
+        self._satisfy_everything_else()
+        self._clear_plan()
+        t = os.path.join(self.tmp, "t.jsonl")
+        with open(t, "w", encoding="utf-8") as fh:
+            fh.write("LEDGER | 3/3 | now: handoff | left: nothing\n")
+        r = _run_gate(
+            {"session_id": "sess-orch", "cwd": self.tmp, "transcript_path": t}, self.env
+        )
+        self.assertNotIn('"decision": "block"', r.stdout)
+
+    def test_manual_notes_are_not_a_plan(self):
+        """Manual board items are a human's notes, not the orchestrator's plan
+        -- the same rule (i) applies when counting open items."""
+        self._satisfy_everything_else()
+        self._clear_plan()
+        atlas_todo.add(self.tmp, "human note")
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertIn("(k) No plan was ever made", r.stdout)
+
+    def test_run_that_shipped_no_code_needs_no_plan(self):
+        """(k) is scoped to code-shipping runs: demanding a plan for a
+        read-only answer is the busywork this gate exists to avoid."""
+        os.makedirs(os.path.join(self.tmp, ".atlas", "evidence"), exist_ok=True)
+        with open(os.path.join(self.tmp, ".atlas", "evidence", "e.md"), "w") as fh:
+            fh.write("read-only audit")
+        os.makedirs(os.path.join(self.tmp, ".atlas", ".run"), exist_ok=True)
+        with open(os.path.join(self.tmp, ".atlas", ".run", "findings.json"), "w") as fh:
+            json.dump([{"id": "S1", "status": "verified"}], fh)
+        for name in ("CHANGELOG.md", "ROADMAP.md"):
+            with open(os.path.join(self.tmp, "docs", name), "w") as fh:
+                fh.write("# %s\ncontent\n" % name)
+        with open(os.path.join(self.tmp, "README.md"), "w") as fh:
+            fh.write("# readme\n")
+        self._log_run_read("src/app.py")  # the recorder was working this run
+        self._log_run_write("docs/CHANGELOG.md")  # ...and recorded docs only
+        self._clear_plan()
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertNotIn('"decision": "block"', r.stdout)
+
+
+class GateDocsNamingTest(GateConditionIJTest):
+    """(l) end-to-end: a dated record this run touched must be date-first.
+
+    Uses an untracked file in a bare `git init` -- `ls-files --others` needs no
+    commit, which is also how the linter sees a brand-new plan.
+    """
+
+    def _git_init(self):
+        subprocess.run(["git", "init", "-q", self.tmp], check=True, capture_output=True)
+
+    def _write_plan(self, name):
+        plans = os.path.join(self.tmp, "docs", "plans")
+        os.makedirs(plans, exist_ok=True)
+        with open(os.path.join(plans, name), "w", encoding="utf-8") as fh:
+            fh.write("# plan\n")
+
+    def test_misnamed_plan_blocks_with_condition_l(self):
+        self._satisfy_everything_else()
+        self._git_init()
+        self._write_plan("00-MASTER-plan.md")
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertIn('"decision": "block"', r.stdout)
+        self.assertIn("(l)", r.stdout)
+        self.assertIn("00-MASTER-plan.md", r.stdout)
+
+    def test_trailing_date_plan_blocks_with_condition_l(self):
+        """The reported failure mode: a date that is present but not first."""
+        self._satisfy_everything_else()
+        self._git_init()
+        self._write_plan("packer-consolidation-2026-09-15.md")
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertIn("(l)", r.stdout)
+        self.assertIn("packer-consolidation-2026-09-15.md", r.stdout)
+        self.assertIn("a trailing date", r.stdout)
+
+    def test_date_first_plan_does_not_trip_l(self):
+        self._satisfy_everything_else()
+        self._git_init()
+        self._write_plan("2026-09-15-packer-consolidation.md")
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertNotIn("(l)", r.stdout)

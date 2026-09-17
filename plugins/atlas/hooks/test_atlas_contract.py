@@ -397,6 +397,58 @@ class DocsMatchCodeContract(unittest.TestCase):
             "README statusline wiring must capture stdin before piping it",
         )
 
+    def _inventory(self):
+        """What is actually on disk, the only source of truth for a count."""
+        return {
+            "skills": len([p for p in (PLUGIN_ROOT / "skills").iterdir() if p.is_dir()]),
+            "agents": len(_agent_files()),
+            "programs": len(self._distinct_scripts()),
+            "bindings": sum(
+                1
+                for entries in _hooks_config().values()
+                for entry in entries
+                for hook in entry.get("hooks", [])
+                if hook.get("command")
+            ),
+        }
+
+    def test_plugin_manifest_counts_match_disk(self):
+        """The counts atlas asserts about itself must be facts, not history.
+
+        Nothing verified these, so a skill or agent added without touching the
+        manifest left the plugin advertising a number that was simply wrong --
+        the exact "documentation is not maintained" failure, in the one place a
+        reader trusts most. Deterministic, so drift fails instead of rotting.
+        """
+        inv = self._inventory()
+        manifest = (PLUGIN_ROOT / ".claude-plugin" / "plugin.json").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("%d plainly named skills" % inv["skills"], manifest)
+        self.assertIn("%d core agents" % inv["agents"], manifest)
+        self.assertIn(
+            "%d hook programs / %d bindings" % (inv["programs"], inv["bindings"]),
+            manifest,
+        )
+
+    def test_readme_counts_match_disk(self):
+        inv = self._inventory()
+        readme = (PLUGIN_ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("%d skills" % inv["skills"], readme)
+        self.assertIn(
+            "%d hook programs / %d bindings" % (inv["programs"], inv["bindings"]),
+            readme,
+        )
+
+    def test_marketplace_entry_counts_match_disk(self):
+        """The marketplace description is what a user reads before installing."""
+        inv = self._inventory()
+        text = (REPO_ROOT / ".claude-plugin" / "marketplace.json").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("%d plainly named skills" % inv["skills"], text)
+        self.assertIn("%d core agents" % inv["agents"], text)
+
 
 class GitignoreSecretContract(unittest.TestCase):
     """Secret shapes stay ignored inside allowlisted folders.

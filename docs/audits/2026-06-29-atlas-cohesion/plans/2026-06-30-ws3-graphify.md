@@ -124,7 +124,7 @@ atlas-survey Phase 1 completes on this repo without stalling, producing a `graph
 detected root, each under the 200-file gate; and a direct `/graphify` on an over-threshold path in
 a non-interactive context auto-scopes or hard-fails with an instruction instead of hanging.
 Evidence: the Task 1/6 probe output (counts, exit 0, no prompt) captured under
-`docs/audits/atlas-cohesion-2026-06-29/evidence/`.
+`docs/audits/2026-06-29-atlas-cohesion/evidence/`.
 
 ## Out of scope (YAGNI)
 

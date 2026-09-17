@@ -6,7 +6,7 @@ ATLAS = `/Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas`
 (the task's `undefined/` placeholders resolved to ATLAS for plugin-internal paths and
 to REPO for `.kimi-plugin/marketplace.json` and `plugins/README.md`.)
 
-Authority: `docs/audits/atlas-harden-2026-07-07/decisions.md` (Jerry, Step 0 gate).
+Authority: `docs/audits/2026-07-07-atlas-harden/decisions.md` (Jerry, Step 0 gate).
 
 ---
 
@@ -170,7 +170,7 @@ D  plugins/atlas/agents/ux-reporter.md
  M plugins/atlas/skills/atlas-engine/references/ux-test-swarm.md<- Step 2 (collapsed)
  M plugins/atlas/skills/atlas-expedition/references/personas.md <- Step 2
 ?? .kimi-plugin/import-report.json         <- pre-existing, NOT touched
-?? docs/audits/atlas-harden-2026-07-07/    <- this report + decisions/orientation
+?? docs/audits/2026-07-07-atlas-harden/    <- this report + decisions/orientation
 ```
 
 `plugins/README.md` (repo-level) is absent from status = clean, confirming Step 5 was a no-op

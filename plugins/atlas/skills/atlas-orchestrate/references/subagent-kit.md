@@ -6,6 +6,8 @@ How to dispatch a subagent so it stays small, focused, and returns only what you
 
 Pass paths and goals, not file contents. The subagent's prompt is its entire system prompt; every extra sentence is context it spends before starting.
 
+This shape is enforced, not advised: the dispatch tripwire DENIES an `atlas:*` dispatch whose prompt omits `GOAL:`, `DELIVERABLE:`, `SUCCESS CRITERIA:`, `OUT OF SCOPE:`, or `STOP CONDITIONS:`, and denies one that carries more than a single `GOAL:`. A dispatch with no finish line is the one that runs for an hour; two GOALs in one prompt is a wave crammed into one context instead of delegated.
+
 ```
 ROLE: <one line, which specialist this is>
 GOAL: <one sentence, measurable>

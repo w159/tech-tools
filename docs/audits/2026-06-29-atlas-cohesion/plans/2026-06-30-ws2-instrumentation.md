@@ -57,7 +57,7 @@ implement it.
   with `is_error` from the real result (not forced to 1).
 - [ ] Check: full suites green - `python3 -m unittest discover -s hooks -p "test_*.py"` and
   `... -s scripts -p "test_*.py"`. Capture a live-DB snapshot (dispatch/kind/metric counts) to
-  `docs/audits/atlas-cohesion-2026-06-29/evidence/ws2-instrumentation.md`.
+  `docs/audits/2026-06-29-atlas-cohesion/evidence/ws2-instrumentation.md`.
 
 ### Task 4 - propagation
 - Hook count stays 8 everywhere (no change needed; confirm no doc now claims 9).

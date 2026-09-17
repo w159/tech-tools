@@ -111,7 +111,7 @@ D  plugins/atlas/agents/ux-reporter.md
  M plugins/atlas/skills/atlas-engine/references/ux-test-swarm.md
  M plugins/atlas/skills/atlas-expedition/references/personas.md
 ?? .kimi-plugin/import-report.json
-?? docs/audits/atlas-harden-2026-07-07/
+?? docs/audits/2026-07-07-atlas-harden/
 ```
 
 No file under `.pytest_cache/`, `.ruff_cache/`, `.in_use/`, or `plugins/atlas/scripts/.claude/`

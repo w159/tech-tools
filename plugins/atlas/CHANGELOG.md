@@ -1,5 +1,187 @@
 # Changelog
 
+## [6.3.0] - 2026-09-15
+
+### Added
+- **`lint_docs_names.py` became a fixer, not just a linter.** Three modes, no
+  per-project configuration, so it applies to any repo atlas is used in:
+  changed-files (gate condition (l)), `--all --structure` (whole tree plus
+  missing durable `docs/` subfolders), and `--all --fix` (rename, then rewrite
+  every reference). `--fix` never invents a date: it takes the one already
+  embedded in the name -- the author's own claim about what the artifact is
+  *about*, which beats whenever the file happened to be committed -- else the
+  first-commit date, else the mtime. Renames go through `git mv` so history
+  follows the file, and references are then rewritten tree-wide: the full path,
+  the bare filename, and the bare stem, longest pattern first so a path is never
+  corrupted by a name substitution. Markdown, code, and comments alike, because
+  a rename that leaves dangling references has traded one defect for a worse
+  one.
+- **Automatic docs-structure repair at SessionStart.** `session_boot.py` creates
+  any missing durable `docs/` subfolder so the curator always has somewhere to
+  write. Deliberately auto-fix rather than gate-block: an empty
+  scaffolder-owned directory is mechanical and safe, so spending a block (and a
+  model turn) on it is pure friction. The opposite call still holds for anything
+  needing judgement -- a file's name, a CHANGELOG entry -- which the completion
+  gate blocks on. Gated on `docs/` already existing: onboarding a project that
+  never asked for one belongs to atlas-setup, and boot emits a one-line notice
+  instead of scaffolding behind the user's back. Idempotent, fail-open,
+  `ATLAS_DOCS_REPAIR=off`. The required set is imported from the scaffolder's
+  own `DURABLE_ENTRIES`, so checker and creator cannot diverge; a contract test
+  pins that. 4 permanent tests.
+
+### Fixed
+- **The fixer rewrote its own fixtures and inverted its own tests.** First real
+  run of `--fix` edited `lint_docs_names.py` and `test_lint_docs_names.py`,
+  which cite example artifact names as documentation and as fixtures: one
+  assertion became `is_dated_name("<compliant name>") is False` and three of the
+  tool's own tests failed. The rewriter now excludes its own source and tests by
+  name. A fixer must never rewrite its own definition of the thing it fixes.
+  1 permanent regression test.
+- **Boot's new notice no longer collides with the dependency-gap contract.** The
+  first draft prefixed it `Setup gap:`, which is reserved for a missing
+  dependency and is asserted absent by an existing test when all deps are
+  present. Renamed to `docs SSOT absent:`.
+
+### Changed
+- **Gate condition (m) was written, measured, and removed.** A hard block on
+  missing `docs/` subfolders failed 67 existing gate tests: every fixture builds
+  a bare `docs/` dir, and any project with a minimal tree would have been wedged
+  on its first Stop. Blocking is the wrong lever for a defect whose fix is
+  `mkdir`. Replaced with the SessionStart auto-repair above; the gate stays at
+  twelve conditions.
+
+### Notes
+- Repo migration completed: the three frozen audit hubs are now date-first
+  (`docs/audits/2026-06-29-atlas-cohesion`, `2026-07-07-atlas-harden`,
+  `2026-07-17-atlas-audit`), migrated with `--all --fix`. 3 renames, references
+  rewritten in 12 files, and **0** occurrences of any old name remain outside
+  the tool's own fixtures. A whole-tree recheck reports `docs structure OK` and
+  `docs naming OK (47 path(s) checked, whole tree)`.
+- Reference rewriting deliberately includes the CHANGELOGs. Keeping a link
+  resolvable was judged more valuable than preserving the exact historical
+  spelling of a path, and every rewritten file is listed in the command's
+  output so the change is auditable.
+
+## [6.2.0] - 2026-09-15
+
+### Added
+- **`scripts/lint_docs_names.py`: dated records must be date-first (gate
+  condition (l)).** Nothing enforced the naming convention, and the convention
+  itself had drifted in three directions at once: `docs-ssot.md` specified bare
+  `<task-slug>.md` for plans while the scaffolded `templates/plans/README.md`
+  specified `<YYYY-MM-DD>-<slug>.md`; audits were specified date-LAST
+  (`atlas-<scope>-<YYYY-MM-DD>/`); and `templates/decisions/README.md` and
+  `templates/specs/README.md` specified undated `<slug>.md` /
+  `<feature>-spec.md`. The result was a tree where leading sequence numbers
+  (`00-MASTER-...`) and trailing dates sorted by subject instead of by time, so
+  the order of a plan set was unreadable. The linter splits the tree in two on
+  purpose: **dated** directories (plans, specs, lessons, decisions, audits, plus
+  `.atlas/` findings/decisions/audits/evidence) hold one artifact per event and
+  must be `<YYYY-MM-DD>-<slug>`; **living** directories (architecture, features,
+  wiki) are bare slugs because they are revised in place, so a date would lie. A
+  sequence number is still allowed *after* the date, which is how a same-day
+  ordered set keeps its order. Only the immediate child of a dated directory is
+  judged, so an audit hub's own subtree is its own business. Condition (l) is
+  run-scoped via git and fail-open: historical names nobody is touching never
+  wedge a run. 19 permanent tests.
+- **Automatic inventory-count verification.** `DocsMatchCodeContract` verified
+  that the README lists every wired hook but never that any *count* was true, so
+  a skill or agent added without touching the manifests left atlas advertising a
+  wrong number. Three tests now derive skills/agents/hook-programs/bindings from
+  disk and `hooks.json` and assert `plugin.json`, the plugin `README.md`, and
+  `marketplace.json` all match. Current values 21/12/15/19 are correct today;
+  from now on drift fails instead of rotting. 3 permanent tests.
+
+### Changed
+- **Condition (f) requires `docs/CHANGELOG.md`, not merely "some doc".**
+  `docs_drift()` returned "no drift" the moment ANY `docs/` path appeared in the
+  diff, so a one-line edit to a `docs/architecture/` scratch file satisfied the
+  docs-current gate permanently while the CHANGELOG, the ROADMAP and the README
+  all rotted. The check needs to know whether the *record of this change* was
+  written, and `docs-ssot.md` already names the CHANGELOG for exactly that
+  ("Before any change is called done: CHANGELOG updated"). A docs-only run is
+  still never drift. Verified both directions live: a run shipping `src/app.py`
+  plus `docs/architecture/notes.md` now blocks on (f) where it previously
+  passed, and passes once the CHANGELOG is in the diff. 3 permanent tests; all
+  5 pre-existing `docs_drift` tests still pass unchanged.
+- **Naming convention corrected at the source.** `docs-ssot.md` now states the
+  dated/living split explicitly and specifies date-first for plans, specs,
+  lessons, decisions and audits (audits moved from
+  `atlas-<scope>-<YYYY-MM-DD>/` to `<YYYY-MM-DD>-atlas-<scope>/`).
+  `templates/decisions/README.md` and `templates/specs/README.md` were corrected
+  to match, so newly scaffolded projects no longer inherit the contradiction.
+
+### Notes
+- Repo migration: `docs/plans/*` and `docs/decisions/*` were renamed date-first
+  with `git mv`, dates taken from each file's first commit rather than invented
+  (`2026-06-23-00-master-consolidation.md`, etc. -- the `00`-`05` series keeps
+  its order after the date). The three frozen `docs/audits/<scope>-<date>/` hubs
+  were deliberately left alone: they carry many internal cross-references and
+  renaming an archived audit record rewrites history for no gain. Condition (l)
+  is run-scoped precisely so they never block.
+- **Not fixed, because a hook cannot do it.** Hooks are shell programs: they can
+  advise or block, but they cannot dispatch a subagent or author prose.
+  `atlas:docs-curator` appears in `completion_gate.py`, `docs_drift_watch.py`
+  and `session_boot.py` only as a *string in a message* -- there is no code path
+  that invokes it. "Automatic docs maintenance" has always meant "the gate
+  blocks and the model is told to dispatch". What is now genuinely automatic is
+  the *verification*: (f) catches an unwritten record, (l) catches a misnamed
+  one, and the contract tests catch a false count.
+
+## [6.1.0] - 2026-09-15
+
+### Added
+- **The todo list is mandatory, not advisory: completion gate condition (k).**
+  Condition (i) only ever enforced *draining* a list, and said so in its own
+  docstring ("enforces DRAINING a list, not creating one"). An absent list has
+  zero open items, so a run that never planned anything satisfied (i)
+  trivially - which is exactly how orchestration ran with no todo state at all
+  while every surface (widget, statusline, board, dashboard) was wired
+  correctly and simply had nothing to show. (k) blocks a code-shipping run when
+  NO plan surface ever carried a single item: no transcript `TodoWrite` call, no
+  non-manual board item for this session, no `LEDGER` line. Manual board items
+  are a human's notes and never satisfy it, the same rule (i) already used.
+  Scoped to code-shipping runs and fail-open on every surface, so a read-only
+  answer still needs no plan and an unreadable transcript never manufactures a
+  block. `_open_todos` was refactored onto a new `_latest_transcript_todos`
+  helper so "drained a list" and "never made one" are finally distinguishable,
+  and `_has_ledger_line` reads the ledger's *presence* rather than its
+  arithmetic (a drained `3/3` still proves a plan existed). 6 permanent tests.
+- **Unbounded and multi-task dispatches are denied (dispatch tripwire).**
+  `subagent-kit.md` has defined the dispatch spec for versions - GOAL,
+  DELIVERABLE, SUCCESS CRITERIA, OUT OF SCOPE, STOP CONDITIONS - and nothing
+  checked it, so a dispatch could carry no finish line at all. That is the
+  shape that produced 30-60 minute subagent sessions: an agent with no
+  DELIVERABLE or SUCCESS CRITERIA has nothing to stop at, no OUT OF SCOPE so it
+  wanders into neighbouring code, and no STOP CONDITIONS so it pushes through a
+  blocker instead of reporting back. `_unbounded_dispatch` now denies an
+  `atlas:*` dispatch missing any of the five blocks, naming exactly which are
+  absent, and separately denies one carrying more than a single line-anchored
+  `GOAL:` - a whole wave compressed into one context is the orchestrator's own
+  sprawl moved a level down, not delegation. Both ride the existing
+  `ATLAS_TRIPWIRE_HARD=off` kill switch and skip forks and non-`atlas:*` agents,
+  which carry their own contracts. 2 permanent tests.
+
+### Fixed
+- **`atlas_todo.mirror` wiped other sessions' items.** It rebuilt the board as
+  `manual + fresh`, dropping every non-manual item belonging to a different
+  `session_id`. Concurrent terminals share one project board (the dashboard
+  says so explicitly), so one session's `TodoWrite` mirror silently destroyed a
+  parallel run's plan and any work carried in from a previous session. Now
+  `manual + others + fresh`. Caught by the new (k) fixtures, which seeded a
+  plan and then watched an unrelated `sess-other` mirror delete it.
+  1 permanent test.
+
+### Notes
+- Fixture-level, not assertion-level: every pre-existing gate test that
+  asserted "no block" while isolating another condition now seeds a plan via a
+  shared `_seed_plan` helper. A test that would have been re-pinned to the new
+  text instead keeps testing the condition it names.
+- `hooks/test_atlas_contract.py::InstalledParityContract` fails until the
+  plugin is reinstalled from the marketplace: it compares this tree's hook
+  files against the installed copy, and hook source moved. Reinstall clears it;
+  hot-copying into the install cache is a process defect, not a fix.
+
 ## [6.0.2] - 2026-09-15
 
 ### Fixed
@@ -1278,7 +1460,7 @@ poisoned schema).
 
 ## 5.1.1 (2026-07-17)
 
-Audit remediation: every reproduced defect from atlas-audit-2026-07-17.md
+Audit remediation: every reproduced defect from 2026-07-17-atlas-audit.md
 fixed and verified (972+ tests, 0 failures).
 
 - **SessionStart context restored.** `hooks/session_boot.py` emitted
@@ -1695,7 +1877,7 @@ independently verified (`docs/.run/findings.json` at repo root); 115/115 tests.
 ## Unreleased
 
 Agent-roster and spec-conformance hardening pass (audit:
-`docs/audits/atlas-harden-2026-07-07/`). No version bump in this pass - release
+`docs/audits/2026-07-07-atlas-harden/`). No version bump in this pass - release
 timing left to Jerry.
 
 - **Removed.** The five `ux-*` agent specs (`ux-cartographer`, `ux-persona`,
@@ -1828,7 +2010,7 @@ engine, hooks, and skills disappeared with no error.
 ## 2.3.0
 
 Atlas cohesion program (WS1-WS5) plus adoption follow-ups; each workstream independently
-reviewed before merge. Plans/evidence under `docs/audits/atlas-cohesion-2026-06-29/`.
+reviewed before merge. Plans/evidence under `docs/audits/2026-06-29-atlas-cohesion/`.
 
 - **Orchestration marker (WS1).** Per-session `runs.orchestrating` flag set via the
   `mark-orchestrating` CLI; dispatch tripwire, completion gate, and nudge gate on it so

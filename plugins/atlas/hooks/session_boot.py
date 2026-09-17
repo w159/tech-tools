@@ -586,6 +586,57 @@ def main():
     except Exception:
         pass  # todo carry-over is best-effort; never block boot
 
+    # Docs structure conformance: repair the durable docs/ tree so the curator
+    # always has somewhere to write. Deliberately auto-FIX rather than report:
+    # creating an empty, scaffolder-owned subfolder is mechanical and safe, so
+    # spending a gate block (and a model turn) on it is pure friction. The
+    # opposite call is made for anything needing judgement -- a file's name, a
+    # CHANGELOG entry -- which the completion gate still blocks on.
+    #
+    # Gated on docs/ ALREADY existing: creating a docs/ tree in a project that
+    # never asked for one is intrusive, and first-time onboarding belongs to
+    # atlas-setup. A project with no docs/ gets a one-line notice instead
+    # (deliberately NOT prefixed 'Setup gap:', which means a missing dependency).
+    # Fail-open; ATLAS_DOCS_REPAIR=off skips entirely.
+    docs_line = None
+    try:
+        if os.environ.get("ATLAS_DOCS_REPAIR", "").lower() not in (
+            "0",
+            "off",
+            "false",
+            "no",
+        ):
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+            from pathlib import Path
+
+            import lint_docs_names
+            from docs_drift import find_root as _find_docs_root
+
+            # find_root returns the ancestor holding docs/, or None when the
+            # project has no documentation tree at all.
+            _docs_root = _find_docs_root(Path(payload.get("cwd") or os.getcwd()))
+            if _docs_root is not None:
+                created = []
+                for rel, _reason in lint_docs_names.structure_gaps(_docs_root):
+                    if not rel.endswith("/"):
+                        continue  # a missing FILE is the curator's to write
+                    (_docs_root / rel.rstrip("/")).mkdir(parents=True, exist_ok=True)
+                    created.append(rel)
+                if created:
+                    docs_line = "docs structure repaired: created %s" % ", ".join(
+                        created[:6]
+                    )
+            else:
+                docs_line = (
+                    "docs SSOT absent: no docs/ tree here - run the "
+                    "`atlas-setup` skill to scaffold it. (Not created "
+                    "automatically: onboarding a project that never asked for "
+                    "one is intrusive. ATLAS_DOCS_REPAIR=off silences this.)"
+                )
+    except Exception:
+        pass  # structure repair is best-effort; never block boot
+
     # Keep the ~/.atlas statusline shim current (fail-open; never blocks boot).
     try:
         _sync_statusline_shim()
@@ -713,6 +764,9 @@ def main():
 
     if todo_line:
         lines.append(todo_line)
+
+    if docs_line:
+        lines.append(docs_line)
 
     try:
         healed = heal_serena_project(payload.get("cwd") or os.getcwd())
