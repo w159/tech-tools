@@ -71,23 +71,23 @@
   `panos_commit` and `panos_software_install` among those the deleted code's own
   comment names - shipped `readOnlyHint: true`, the flag a client uses to decide
   it may run something without asking, while their own descriptions said
-  `DESTRUCTIVE`. The prose and the machine-readable flags disagreed, and the flags
-  are the half a client acts on. Name-pattern classification (`classifyTool` and
-  its regex tables) is deleted. A tool now declares its effect class once, at its
-  declaration site, through `readOnlyTool()` / `destructiveTool()` /
-  `unknownEffectTool()` in `src/domains/_helpers.ts`, and that single decision
-  sets both the `DESTRUCTIVE: ` prefix and the annotations, so the two cannot
-  drift again. An unclassified tool fails closed - annotated mutating, never
-  read-only - and
-  `annotate()` names it on stderr (`src/annotate-tool.ts:51-65`; stdout is the
-  JSON-RPC channel). The split is 27 read / 32 mutating / 1 passthrough = 60, with
-  `panos_op` the passthrough: arbitrary `<cmd>` XML, so it takes the mutating
-  annotations but keeps its own unprefixed description, which already spells out
-  the hazard in full. Tool counts are unchanged (60 with a key, 32
-  `DESTRUCTIVE:`-prefixed, 2 with no credentials, 3 in the bootstrap state).
-  Mutating tools also drop `idempotentHint` from true to false: a second commit
-  pushes whatever landed in the candidate config meanwhile, and a second install
-  or reboot takes the box down again, so a retry is not free.
+  `DESTRUCTIVE`. The prose and the machine-readable flags disagreed, and the
+  flags are the half a client acts on. Name-pattern classification
+  (`classifyTool` and its regex tables) is deleted. A tool now declares its
+  effect class once, at its declaration site, through `readOnlyTool()` /
+  `destructiveTool()` / `unknownEffectTool()` in `src/domains/_helpers.ts`, and
+  that one decision sets both the `DESTRUCTIVE: ` prefix and the annotations, so
+  the two cannot drift again. An unclassified tool fails closed - annotated
+  mutating, never read-only - and `annotate()` names it on stderr
+  (`src/annotate-tool.ts:51-65`; stdout is the JSON-RPC channel). The split is 27
+  read / 32 mutating / 1 passthrough = 60, `panos_op` being the passthrough:
+  arbitrary `<cmd>` XML, so it takes the mutating annotations but keeps its own
+  unprefixed description, which already spells out the hazard in full. Tool
+  counts are unchanged (60 with a key, 32 `DESTRUCTIVE:`-prefixed, 2 with no
+  credentials, 3 in the bootstrap state). Mutating tools also drop
+  `idempotentHint` from true to false: a second commit pushes whatever landed in
+  the candidate config meanwhile, and a second install or reboot takes the box
+  down again, so a retry is not free.
 
 ### Notes
 - `mcp_servers/panos-mcp` is `0.2.0`: the error text, several tool descriptions,

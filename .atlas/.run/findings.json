@@ -1018,5 +1018,414 @@
     "status": "verified",
     "verified_at": "2026-09-15T12:27:11+00:00",
     "verified_by": "atlas-orchestrator"
+  },
+  {
+    "id": "S-panos-mcpb-stale-artifact",
+    "surface": "mcp_servers/panos-mcp/panos-mcp.mcpb, plugins/atlas/mcp/panos/server.mjs",
+    "category": "correctness",
+    "severity": "high",
+    "title": "panos-mcp.mcpb was packed before the final src edit, shipping pre-objects.ts code to any installer",
+    "evidence": [
+      "mtime comparison: panos-mcp.mcpb 2026-09-17T14:28:09.507Z vs newest src mcp_servers/panos-mcp/src/domains/objects.ts 2026-09-17T14:28:41.487Z - artifact 32s older than source",
+      "plugins/atlas/mcp/panos/server.mjs 2026-09-17T14:28:45.318Z (386032 bytes) was fresh; only the .mcpb lagged, so the boot probe passed while the installable bundle was stale",
+      "Fix: npm run pack:mcpb, exit 0, 29.5MB / 3022 files, shasum 8532ecee8a876c27927c94e1ad7dd6423f62cae1, mcpb now 2026-09-17T15:11:21.409Z > newest src",
+      "AGENTS.md section 2 checklist line 'npm run build && npm run pack:mcpb re-ran successfully; .mcpb artifact is fresh' was recorded [x] in docs/panos-connector-design.md:269 but was false at read time"
+    ],
+    "doc_refs": [
+      "AGENTS.md:39",
+      "docs/panos-connector-design.md:262-276"
+    ],
+    "reproduction": "node -e \"compare fs.statSync('mcp_servers/panos-mcp/panos-mcp.mcpb').mtimeMs against the max mtime under mcp_servers/panos-mcp/src\"",
+    "proposed_fix": "Freshness assertion (artifact mtime > max src mtime) belongs in the pack script or the boot probe, so a stale .mcpb fails loudly instead of being asserted fresh in a checklist",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-09-17T15:11:21+00:00",
+    "verified_by": "main-agent-direct-execution"
+  },
+  {
+    "id": "S-panos-offline-suite-green",
+    "surface": "mcp_node/node-panos, mcp_servers/panos-mcp",
+    "category": "verification",
+    "severity": "info",
+    "title": "panos connector offline verification is green at 60 tools / 32 destructive; live-appliance validation remains UNVERIFIED",
+    "evidence": [
+      "mcp_node/node-panos: npm test -> vitest 4.1.11, 1 file / 6 tests passed; covers success envelope, HTTP-200 error envelope -> PanosApiError code '403', empty <result/>, commit jobId '42', X-PAN-KEY header with key absent from URL, target present/omitted (tests/client.test.ts:20,27,37,44,51,61)",
+      "mcp_servers/panos-mcp: npm run test:boot -> exit 0, PROBE PASS; gate states 2 / 3 / 60 tools, destructive-prefixed 32, panos_system_reboot description starts 'DESTRUCTIVE: VISIBLE-TO-OTHERS:', unresolved ${user_config.*} -> 2 tools, CFG_-only injection -> 60 tools",
+      "Probe spawns node --import plugins/atlas/mcp/_env/load.mjs plugins/atlas/mcp/panos/server.mjs (tests/boot-probe.mjs:11,26), exercising the shipped bundle through the CFG_ prefix-stripping loader rather than dist/",
+      "UNVERIFIED: no call has reached a real Panorama or firewall. All evidence is mocked fetch plus stdio ListTools. Blocked on PANOS_HOST plus PANOS_API_KEY or PANOS_USERNAME/PANOS_PASSWORD from the user."
+    ],
+    "doc_refs": [
+      "docs/panos-connector-design.md:219-248"
+    ],
+    "reproduction": "cd mcp_node/node-panos && npm test; cd ../../mcp_servers/panos-mcp && npm run test:boot",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-09-17T15:11:21+00:00",
+    "verified_by": "main-agent-direct-execution"
+  },
+  {
+    "id": "S-statusline-wrong-surface-removed",
+    "surface": "plugins/atlas/scripts/atlas_statusline.py (deleted), hooks/session_boot.py, README, output-styles, user ~/.claude/settings.json",
+    "category": "process",
+    "severity": "high",
+    "title": "The ATLAS statusline segment was built on a surface that structurally could not meet the request: statusLine renders BELOW the prompt input, the user asked for the todo list ABOVE it",
+    "evidence": [
+      "User verdict: 'get rid of the ATLAS Todos in the statusline too. it's worthless garbage because i asked to have it above the prompt input.'",
+      "Three releases chased the segment's plumbing instead of its position: 5.27.2 (model gate / CLAUDE_CODE_ENABLE_TODO_TOOLS), 6.0.1 (statusline promoted to THE plan surface), 6.0.2 (single-use-stdin capture). None questioned whether statusLine could ever render above the input.",
+      "Removed from product source: scripts/atlas_statusline.py (128 lines) + test_atlas_statusline.py (149) deleted; _sync_statusline_shim + its call cut from hooks/session_boot.py; StatuslineContract and DocsMatchCodeContract.test_readme_statusline_snippet_captures_stdin cut from test_atlas_contract.py; README section, output-style paragraph, plugin.json description clause, ROADMAP item removed.",
+      "Verification: repo-wide grep for atlas_statusline|ATLAS_STATUSLINE|_sync_statusline_shim across plugins/ docs/ .claude-plugin/ (excluding CHANGELOG history and .atlas telemetry) returns zero matches; test_atlas_contract.py 83 passed / 3 skipped / 62 subtests, zero failures.",
+      "User wiring (explicitly requested): the trailing 'printf \"\\n\"; printf '%s' \"$input\" | python3 $HOME/.atlas/atlas_statusline.py' segment removed from ~/.claude/settings.json statusLine; backup at settings.json.bak-pre-atlas-statusline-removal; live render now prints only the project line and the context-mode line, exit 0.",
+      "Versions: plugin.json 6.3.0 -> 6.4.0, marketplace.json 3.20.0 -> 3.21.0 with atlas pin 6.3.0 -> 6.4.0 (the pin was missed by both implementers; neither owned that file)."
+    ],
+    "doc_refs": [
+      "plugins/atlas/CHANGELOG.md",
+      "docs/CHANGELOG.md",
+      "docs/ROADMAP.md"
+    ],
+    "reproduction": "grep -rn 'atlas_statusline' plugins docs .claude-plugin | grep -v CHANGELOG",
+    "proposed_fix": "No replacement above-the-input surface ships in 6.4.0. The durable board (.atlas/.run/todos.json, atlas_todo.py, todo_capture.py, dashboard Work tab) is unchanged and remains the plan record. Any future above-the-input rendering must be proven to render above the input BEFORE it is documented as a plan surface.",
+    "blast_radius": "plugin",
+    "status": "verified",
+    "verified_at": "2026-09-17T15:16:00+00:00",
+    "verified_by": "main-agent-direct-execution"
+  },
+  {
+    "id": "S-statusline-shim-resurrects-from-install-cache",
+    "surface": "~/.atlas/atlas_statusline.py, ~/.claude/plugins/cache/tech-tools/atlas/6.3.0/hooks/session_boot.py",
+    "category": "process",
+    "severity": "medium",
+    "title": "Deleting ~/.atlas/atlas_statusline.py does not stick: the installed atlas 6.3.0 recreates it on every SessionStart until the user reinstalls",
+    "evidence": [
+      "Shim deleted, then observed present again with mtime 2026-09-17T11:15:42 - after the deletion.",
+      "Source of the rewrite: ~/.claude/plugins/cache/tech-tools/atlas/6.3.0/hooks/session_boot.py still contains _sync_statusline_shim (grep -rl confirmed; 6.0.1 __pycache__ copies also present).",
+      "Not fixable from this repo by design: AGENTS.md forbids creating/modifying/deleting anything under ~/.claude/plugins/cache/** or marketplaces/**. Consumer installs refresh by shipping this repo, not by hot-patching the cache.",
+      "Impact is inert, not broken: ~/.claude/settings.json no longer references the shim (grep -c = 0), so a recreated file is dead weight that renders nothing."
+    ],
+    "doc_refs": [
+      "AGENTS.md:39"
+    ],
+    "reproduction": "rm ~/.atlas/atlas_statusline.py; start a new Claude Code session in a project with atlas installed; stat ~/.atlas/atlas_statusline.py",
+    "proposed_fix": "User reinstalls/updates atlas from the marketplace at >=6.4.0, whose session_boot.py no longer syncs the shim; the stray file can then be deleted permanently.",
+    "blast_radius": "workstation",
+    "status": "verified",
+    "verified_at": "2026-09-17T15:16:00+00:00",
+    "verified_by": "main-agent-direct-execution"
+  },
+  {
+    "id": "S-panos-xml-numeric-coercion-destroys-serials",
+    "surface": "mcp_node/node-panos/src/xml.ts",
+    "category": "correctness",
+    "severity": "critical",
+    "title": "fast-xml-parser default value coercion turned PAN-OS serials into numbers and destroyed the leading zero, silently breaking target=<serial> routing",
+    "evidence": [
+      "Live appliance serial is 023009014025; panos_version returned \"serial\": 23009014025 (number) before the fix. Unit-level repro: parser with {attributeNamePrefix:'@',ignoreAttributes:false} -> {\"serial\":23009014025,\"av-version\":0}; with parseTagValue:false,parseAttributeValue:false -> {\"serial\":\"023009014025\",\"av-version\":\"0\"}.",
+      "Blast radius: every Panorama-routed call addresses a managed firewall by target=<serial>, and PANOS_TARGET is documented as a serial. A serial read back from panos_version/panos_system_info/panos_devices_list and passed as target would be 23009014025 != 023009014025 and address nothing - failing open, with no error.",
+      "Also corrupted: av-version, family, and log-row serial fields; job ids arrived as numbers while commit() and the jobId schemas declared string, so the types were a runtime lie.",
+      "Fixed: parseTagValue:false + parseAttributeValue:false (fast-xml-parser 4.5.7; semantics read from the installed fxp.d.ts, not recalled). 3 regression guards added, all three confirmed FAILING before the fix (expected 23009014025 to be '023009014025').",
+      "Live post-fix: panos_version -> \"serial\": \"023009014025\". node-panos suite 6 -> 9 tests, all green."
+    ],
+    "doc_refs": [
+      "docs/panos-connector-design.md",
+      ".atlas/evidence/2026-09-17-panos-live-validation.md"
+    ],
+    "reproduction": "set -a; . plugins/atlas/.env; set +a; node .atlas/.run/panos-live.mjs call .atlas/.run/panos-proof.json",
+    "proposed_fix": "",
+    "blast_radius": "system",
+    "status": "verified",
+    "verified_at": "2026-09-17T15:45:00+00:00",
+    "verified_by": "main-agent-live-appliance"
+  },
+  {
+    "id": "S-panos-errors-blamed-credentials",
+    "surface": "mcp_servers/panos-mcp/src/utils/panos-error.ts (new), all ten domains, src/server.ts",
+    "category": "correctness",
+    "severity": "high",
+    "title": "Every PAN-OS failure collapsed to an opaque string with a credential-blaming hint, sending operators to debug the one thing that was provably fine",
+    "evidence": [
+      "Live: panos_devices_list on a standalone PA-460 -> 'PAN-OS API error (code 17)' with hint 'Check PANOS_HOST and PANOS_API_KEY are set correctly', while 13 other calls succeeded with those same credentials in the same session. Code 17 = Invalid command (vendor table); appliance text was 'show -> devices is unexpected' because show devices is Panorama-only.",
+      "Live: bad xpath -> bare 'PAN-OS API error', no code, no message, despite PanosApiError already carrying code/httpStatus/responseText where the appliance <msg> lives.",
+      "Root cause: PanosApiError exposes httpStatus, not .status/.statusCode, so the shared @shared classifyError fell through to its plain-Error branch and discarded responseText.",
+      "Fixed: shared vendor-code -> meaning -> failure-class -> hint mapping in src/utils/panos-error.ts, wired into 42 call sites across all ten domains; _helpers.ts no longer re-exports toolErrorFromCatch so the generic path is unreachable from a domain.",
+      "Live post-fix: devices_list -> UNSUPPORTED_COMMAND, 'PAN-OS error code 17 (Invalid command) - show -> devices is unexpected', hint naming the Panorama constraint and stating the request authenticated successfully. Bad xpath -> 'PAN-OS returned status=\"error\" with no error code - No such node'."
+    ],
+    "doc_refs": [
+      "https://docs.paloaltonetworks.com/ngfw/api/getting-started/pan-os-xml-api-error-codes"
+    ],
+    "reproduction": "node .atlas/.run/panos-live.mjs call .atlas/.run/panos-proof.json",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-09-17T15:45:00+00:00",
+    "verified_by": "main-agent-live-appliance"
+  },
+  {
+    "id": "S-panos-log-report-job-namespace",
+    "surface": "mcp_servers/panos-mcp/src/domains/{logs,reports,commits}.ts",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Log-query and report job ids are a separate PAN-OS namespace invisible to panos_job_status, and nothing said so",
+    "evidence": [
+      "Live: panos_logs_query -> 'query job enqueued with jobid 116'; panos_job_status jobId=116 -> code 7. panos_report_dynamic -> jobid 115; job_status -> code 7.",
+      "Proved it is PAN-OS behavior, not bad command construction: raw panos_op '<show><jobs><id>116</id></jobs></show>' also returns code 7, while '<show><jobs><all/></jobs></show>' lists only job-table ids (28 Commit, 29 Device-certificate-fetch).",
+      "panos_job_status / panos_job_wait on commit job 28 work correctly: {\"id\":\"28\",\"status\":\"FIN\",\"progress\":100,\"result\":\"OK\"}. The tools were never broken.",
+      "Failure mode was discoverability: a model reads 'enqueued with jobid 116', reaches for the obviously-named panos_job_status, gets code 7, and concludes the connector is broken. The main agent did exactly that before checking the raw op.",
+      "Fixed: logs_query routes to panos_logs_retrieve, the three report tools route to panos_report_get, both job tools state they only see job-table jobs; boot-probe asserts the descriptions name their retrieval tool."
+    ],
+    "doc_refs": [
+      "docs/panos-connector-design.md"
+    ],
+    "reproduction": "node .atlas/.run/panos-live.mjs call .atlas/.run/panos-jobq.json",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-09-17T15:45:00+00:00",
+    "verified_by": "main-agent-live-appliance"
+  },
+  {
+    "id": "S-panos-status-echoed-key-prefix",
+    "surface": "mcp_servers/panos-mcp/src/server.ts, tests/boot-probe.mjs",
+    "category": "security",
+    "severity": "medium",
+    "title": "panos_status printed a live API-key prefix into the conversation transcript",
+    "evidence": [
+      "Live pre-fix: 'PANOS_API_KEY: <first-6-chars-of-key>...' - the leading characters of a long-lived credential, emitted into a transcript under a compliance regime (FTC Safeguards / Reg S-P) that treats avoidable credential exposure as a finding.",
+      "Fixed: 'PANOS_API_KEY: configured (132 chars)' - presence plus a non-reversible descriptor. Boot probe now asserts no 6+ character prefix of the configured key appears in panos_status output, in every credential state.",
+      "Verified live: grep for the real key's 6-char prefix across all probe output -> clean, no match."
+    ],
+    "doc_refs": [],
+    "reproduction": "PREFIX=${PANOS_API_KEY:0:6}; node .atlas/.run/panos-live.mjs call .atlas/.run/panos-proof.json | grep -c \"$PREFIX\"",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-09-17T15:45:00+00:00",
+    "verified_by": "main-agent-live-appliance"
+  },
+  {
+    "id": "S-panos-design-doc-asserted-unverified-state",
+    "surface": "docs/panos-connector-design.md",
+    "category": "process",
+    "severity": "medium",
+    "title": "A connector contract recorded a fully-ticked propagation checklist while four defects survived in the shipped artifact, because nothing had touched hardware",
+    "evidence": [
+      "The design doc's 'As shipped' section claimed 60 tools / 32 destructive and a complete checklist, then closed with 'Nothing here has been exercised against live hardware.' Both statements were true simultaneously - the checklist measured build steps, not behavior.",
+      "One hour of live read-only calls found: identifier-destroying XML coercion, credential-blaming error hints, discarded appliance messages, an undocumented job namespace, and a leaked key prefix. None were findable offline; the offline suite was green throughout.",
+      "Earlier the same day the .mcpb freshness box was ticked [x] while the artifact predated its newest source by 32 seconds (S-panos-mcpb-stale-artifact).",
+      "Lesson: a checklist box may only be ticked by the check it names. 'Built and packed' is not 'works against the appliance', and a green offline suite over mocked fetch cannot see wire-format coercion."
+    ],
+    "doc_refs": [
+      "docs/panos-connector-design.md",
+      ".atlas/evidence/2026-09-17-panos-live-validation.md"
+    ],
+    "reproduction": "",
+    "proposed_fix": "Connector contracts should carry a live-validation section that names the appliance, the date, and the tool classes actually exercised, with unexercised classes listed by name rather than implied.",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-09-17T15:45:00+00:00",
+    "verified_by": "main-agent-live-appliance"
+  },
+  {
+    "id": "V-panos-claim1-tool-count-and-gate",
+    "surface": "plugins/atlas/mcp/panos/server.mjs",
+    "category": "correctness",
+    "severity": "info",
+    "title": "CLAIM 1 PASS: shipped bundle exposes exactly 60 unique tools with real credentials, and the disclosure gate still yields 2 / 3 / 60",
+    "evidence": [
+      "node .atlas/.run/panos-live.mjs schemas -> 'tools exposed: 60'; independent tools/list via spawn of node --import plugins/atlas/mcp/_env/load.mjs plugins/atlas/mcp/panos/server.mjs -> count 60, unique 60 (no duplicate names)",
+      "mcp_servers/panos-mcp/tests/boot-probe.mjs drives the same SHIPPED bundle (SERVER = plugins/atlas/mcp/panos/server.mjs, line 11): [no credentials] 2 tools; [host + username/password bootstrap] 3 tools (panos_keygen, panos_navigate, panos_status); [host + api key] 60; [unresolved MCP placeholders] 2; [CFG_ only] 60; [CFG_ unresolved] 2 -> PROBE PASS"
+    ],
+    "doc_refs": [],
+    "reproduction": "node .atlas/.run/panos-live.mjs schemas | head -1 && (cd mcp_servers/panos-mcp && npm run test:boot)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-09-17T15:49:08+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "V-panos-claim2-serial-guard-load-bearing",
+    "surface": "mcp_node/node-panos/src/xml.ts",
+    "category": "correctness",
+    "severity": "info",
+    "title": "CLAIM 2 PASS: live panos_version returns serial as the STRING 023009014025, and the regression guards genuinely fail when the parser fix is reverted",
+    "evidence": [
+      "Live PA-460: panos_version -> {\"sw-version\":\"11.1.13-h6\",\"multi-vsys\":\"off\",\"model\":\"PA-460\",\"serial\":\"023009014025\"} - quoted string, leading zero intact",
+      "Reverted parseTagValue/parseAttributeValue to true in a /tmp scratch copy (repo untouched; mcp_node/node-panos/src/xml.ts:15-16 still 'false' after the run): vitest -> 5 failed | 4 passed (9). The three new guards all failed: 'preserves a leading-zero serial as a string' (tests/client.test.ts:93), 'keeps digit-only version and family values as strings' (:103, expected \"0\" received 0), 'reads the error code attribute as a string' (:111, expected code \"403\" received 403). Two pre-existing tests also failed. Guards are load-bearing, not tautological."
+    ],
+    "doc_refs": [],
+    "reproduction": "D=/var/folders/t4/3yydl26s5mqb99t84qw3_wrm0000gn/T/tmp.RPGXDG3RGc; cp -R mcp_node/node-panos/{src,tests,package.json,tsconfig.json,vitest.config.ts} /; ln -s /Users/jerry/MEGA/Projects/Agentic/tech-tools/mcp_node/node-panos/node_modules /node_modules; sed -i '' 's/parseTagValue: false/parseTagValue: true/; s/parseAttributeValue: false/parseAttributeValue: true/' /src/xml.ts; (cd  && npx vitest run)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-09-17T15:49:08+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "V-panos-claim3-read-only-only",
+    "surface": "mcp_servers/panos-mcp",
+    "category": "security",
+    "severity": "info",
+    "title": "CLAIM 3 PASS: every tool this verification invoked is read-only; no mutating tool was called",
+    "evidence": [
+      "Tools invoked by this run (11 unique): panos_status, panos_version, panos_system_info, panos_config_show, panos_config_complete, panos_objects_list, panos_policies_list, panos_logs_query, panos_report_dynamic, panos_devices_list, panos_job_status. None carries the DESTRUCTIVE: description prefix; none is in the 32-tool destructive set; panos_op was never invoked by me.",
+      "Server stderr trace for the proof run shows only reads reaching the appliance: 'API call: version', 'API call: op devices list', 'API call: config.show', 'API call: jobs.status'. panos_logs_query enqueues an ephemeral log-retrieval job (type=log) and writes no configuration."
+    ],
+    "doc_refs": [],
+    "reproduction": "node .atlas/.run/panos-live.mjs call .atlas/.run/panos-plan.json (14 steps, all read-only) and .atlas/.run/panos-proof.json (5 steps)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-09-17T15:49:08+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "V-panos-claim4-error-surfacing",
+    "surface": "mcp_servers/panos-mcp/src/utils/panos-error.ts",
+    "category": "correctness",
+    "severity": "info",
+    "title": "CLAIM 4 PASS: all three error surfaces reproduce live - Panorama constraint named, appliance message carried, job namespace explained, and no credential blame",
+    "evidence": [
+      "panos_devices_list on the standalone PA-460: code=UNSUPPORTED_COMMAND, message='PAN-OS error code 17 (Invalid command) - show -> devices is unexpected', hint states 'the request authenticated successfully' and 'show devices is a Panorama-only command'. Regex checks on the full 754-char payload: /Check PANOS_HOST/i = false, /API_KEY are set correctly/i = false, /Panorama/ = true.",
+      "Bad xpath (deviceconfig/no-such-node-xyz): code=VENDOR_ERROR, message='PAN-OS returned status=\"error\" with no error code - No such node' - the appliance msg survives to the operator.",
+      "panos_job_status on log-query id 117: code=NOT_FOUND, message='PAN-OS error code 7 (Object not present) - job 117 not found', hint explains a log-query or report job ID is NOT in the job table and routes to panos_logs_retrieve / panos_report_get."
+    ],
+    "doc_refs": [],
+    "reproduction": "node .atlas/.run/panos-live.mjs call .atlas/.run/panos-proof.json  # LIVE: 5 passed, 0 failed",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-09-17T15:49:31+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "V-panos-claim5-no-key-fragment-in-status",
+    "surface": "mcp_servers/panos-mcp/src/server.ts",
+    "category": "security",
+    "severity": "info",
+    "title": "CLAIM 5 PASS: panos_status emits no fragment of the API key - the 6, 8 and 12 character prefixes are all absent from its output",
+    "evidence": [
+      "Derived the first 6, 8 and 12 characters of PANOS_API_KEY (132 chars) from plugins/atlas/.env in memory and substring-tested the raw panos_status text. Result: f6=false, f8=false, f12=false, whole-key=false. Same three probes against the raw panos_devices_list error payload: all false. Fragments were never printed.",
+      "panos_status key line is exactly: 'PANOS_API_KEY: configured (132 chars)'."
+    ],
+    "doc_refs": [],
+    "reproduction": "Spawn the shipped bundle, tools/call panos_status, then assert raw text does not include KEY.slice(0,6) / slice(0,8) / slice(0,12); boot-probe.mjs asserts the same invariant offline",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-09-17T15:49:31+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "V-panos-claim6-artifact-freshness",
+    "surface": "plugins/atlas/mcp/panos/server.mjs",
+    "category": "correctness",
+    "severity": "info",
+    "title": "CLAIM 6 PASS: both shipped artifacts are strictly newer than the newest connector source, and the bundle contains the parser fix",
+    "evidence": [
+      "Recomputed mtimes (epoch): newest mcp_node/node-panos/src = 1789659025 (xml.ts); newest mcp_servers/panos-mcp/src = 1789659614 (server.ts); plugins/atlas/mcp/panos/server.mjs = 1789659647; mcp_servers/panos-mcp/panos-mcp.mcpb = 1789659690. Both artifacts strictly newer than 1789659614.",
+      "Bundle carries the fix minified: plugins/atlas/mcp/panos/server.mjs contains 'parseTagValue:!1,parseAttributeValue:!1' at the connector parser construction site. Size 394516 bytes; mcpb shasum 6e5416bb6f762bd6a9db79d265df03a0989bd7be - both match the claimed values."
+    ],
+    "doc_refs": [],
+    "reproduction": "find mcp_node/node-panos/src mcp_servers/panos-mcp/src -type f -print0 | xargs -0 stat -f '%m %N' | sort -rn | head -1; stat -f '%m %N' plugins/atlas/mcp/panos/server.mjs mcp_servers/panos-mcp/panos-mcp.mcpb; grep -o 'parseTagValue:!1,parseAttributeValue:!1' plugins/atlas/mcp/panos/server.mjs",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-09-17T15:49:31+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "V-panos-claim7-offline-suites",
+    "surface": "mcp_node/node-panos/tests/client.test.ts",
+    "category": "correctness",
+    "severity": "info",
+    "title": "CLAIM 7 PASS: node-panos vitest is 9 passed (9) and the panos-mcp boot probe prints PROBE PASS, both re-run independently",
+    "evidence": [
+      "cd mcp_node/node-panos && npm test -> 'Test Files 1 passed (1) / Tests 9 passed (9)' (vitest 4.1.11, 116ms)",
+      "cd mcp_servers/panos-mcp && npm run test:boot -> six credential scenarios, then 'PROBE PASS'; the probe also reports destructive-prefixed: 32 and asserts the reboot description prefix"
+    ],
+    "doc_refs": [],
+    "reproduction": "(cd mcp_node/node-panos && npm test); (cd mcp_servers/panos-mcp && npm run test:boot)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-09-17T15:49:31+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "V-panos-claim8-credential-hygiene",
+    "surface": "plugins/atlas/.env",
+    "category": "security",
+    "severity": "low",
+    "title": "CLAIM 8 PASS on secret material, with one documented exception: no 8-or-more-character run of the key exists anywhere outside the gitignored .env, but its 6-character vendor prefix is written into one TRACKED file",
+    "evidence": [
+      "plugins/atlas/.env is gitignored at .gitignore:327 (git check-ignore -v agrees), untracked (git ls-files --error-unmatch fails), mode -rw------- (600), and not staged (git diff --cached --name-only does not list it).",
+      "Scanned all 1967 tracked files plus the whole working tree (excluding .git, node_modules, and .env) for the key and its 6/8/12-character prefixes: full key 0 hits, 12-char 0 hits, 8-char 0 hits. git diff plus git diff --cached: full/12/8 all absent.",
+      "EXCEPTION: the 6-character prefix has 1 tracked hit (.atlas/.run/findings.json:1192) and 3 untracked hits (.atlas/evidence/2026-09-17-panos-live-validation.md:86, mcp_servers/panos-mcp/tests/boot-probe.mjs:88 and :116 where it opens the synthetic FAKE_KEY, mcp_servers/panos-mcp/src/server.ts:104) plus the two dist copies. Every occurrence is prose or a comment illustrating the old leak. That 6-char run is the fixed vendor prefix shared by every PAN-OS API key, so it carries no entropy about this credential - but it is literally part of this key, so the claim as worded is not absolutely true."
+    ],
+    "doc_refs": [],
+    "reproduction": "git check-ignore -v plugins/atlas/.env; git ls-files -z | scan each file for KEY, KEY[:12], KEY[:8], KEY[:6] in memory and print only paths and counts",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-09-17T15:49:57+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "V-panos-claim9-plugin-availability",
+    "surface": "plugins/atlas/mcp/panos/server.mjs",
+    "category": "correctness",
+    "severity": "critical",
+    "title": "CLAIM 9 FAIL: the panos connector is entirely UNTRACKED by git, so a fresh atlas install gets a .mcp.json server entry pointing at a bundle that does not exist",
+    "evidence": [
+      "Wiring itself is correct: plugins/atlas/.mcp.json has a panos entry running node --import /mcp/_env/load.mjs /mcp/panos/server.mjs with ATLAS_ENV_FILE and all seven CFG_PANOS_* vars, and plugins/atlas/.claude-plugin/plugin.json declares exactly the seven keys panos_host, panos_api_key, panos_username, panos_password, panos_target, panos_verify_tls, panos_rest_version. The bundle those point at is the one I verified (60 tools, parser fix present).",
+      "BUT git status shows '?? plugins/atlas/mcp/panos/', '?? mcp_servers/panos-mcp/', '?? mcp_node/node-panos/', '?? docs/panos-connector-design.md'. git ls-files returns 0 files for all three connector paths. None is gitignored (git check-ignore -q fails on each), so they are simply never added.",
+      "Every sibling connector IS tracked: git ls-files 'plugins/atlas/mcp/*/server.mjs' returns 10 bundles (auvik, blumira, cipp, connectwise, knowbe4, ninjaone, paylocity, spanning, threatlocker, vanta) and falcon ships its Python tree tracked. panos is the only connector missing. git ls-files mcp_servers lists 11 server dirs, all except panos-mcp. Only .mcpb archives are universally untracked, so the mcpb being untracked is the project norm.",
+      "Consequence: the two files that ARE tracked were modified (' M plugins/atlas/.mcp.json', ' M plugins/atlas/.claude-plugin/plugin.json'). Committing only those advertises a panos server and seven config keys while shipping no server.mjs - the panos MCP server fails to spawn on every fresh install."
+    ],
+    "doc_refs": [],
+    "reproduction": "git status --porcelain | grep -i panos; git ls-files plugins/atlas/mcp/panos mcp_servers/panos-mcp mcp_node/node-panos | wc -l; git ls-files 'plugins/atlas/mcp/*/server.mjs' | wc -l",
+    "proposed_fix": "git add plugins/atlas/mcp/panos/server.mjs mcp_servers/panos-mcp/src mcp_servers/panos-mcp/tests mcp_servers/panos-mcp/{package.json,package-lock.json,manifest.json,tsconfig.json,tsup*.ts,vitest.config.ts,.env.example,.gitignore,scripts} mcp_node/node-panos/{src,tests,package.json,package-lock.json,tsconfig.json,tsup.config.ts,vitest.config.ts} docs/panos-connector-design.md - matching exactly what the ten sibling connectors track. Verify with git ls-files 'plugins/atlas/mcp/*/server.mjs' returning 11.",
+    "blast_radius": "Every fresh clone or plugin install of atlas: panos is advertised and non-functional.",
+    "status": "rejected",
+    "verified_at": "2026-09-17T15:49:57+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "S-panos-destructive-tools-annotated-read-only",
+    "surface": "mcp_servers/panos-mcp/src/annotate-tool.ts",
+    "category": "security",
+    "severity": "high",
+    "title": "NEW DEFECT: 22 of the 32 DESTRUCTIVE panos tools ship with readOnlyHint true and destructiveHint false, including panos_commit, panos_config_set and panos_software_install - plus panos_op, which its own description calls destructive",
+    "evidence": [
+      "tools/list through the SHIPPED bundle: 50 of 60 tools carry annotations {readOnlyHint: true, destructiveHint: false, idempotentHint: true}. Of the 32 tools whose description starts with the DESTRUCTIVE: marker, 22 are annotated read-only: panos_config_set, panos_config_rename, panos_config_clone, panos_config_move, panos_config_override, panos_config_multi_move, panos_config_multi_clone, panos_commit, panos_commit_all, panos_globalprotect_disconnect, panos_import_file, panos_import_certificate, panos_policies_move, panos_updates_download, panos_updates_install, panos_software_download, panos_software_install, panos_cert_generate, panos_cert_renew, panos_cert_import, panos_cert_set_trusted_root, panos_cert_set_forward_trust.",
+      "panos_op is annotated {readOnlyHint: true, destructiveHint: false} while its own description (mcp_servers/panos-mcp/src/domains/operations.ts:20) reads: 'An op command can be destructive (for example a restart, a config load, or a session clear) as easily as it can be read-only ... this tool does not know which commands are safe.' A client honoring the annotation would auto-approve <request><restart><system/></restart></request>.",
+      "Root cause, two files: mcp_servers/panos-mcp/src/domains/_helpers.ts:56-59 destructiveTool() only prefixes the DESCRIPTION and never sets annotations; mcp_servers/panos-mcp/src/annotate-tool.ts:164-172 annotate() therefore classifies by NAME, and classifyTool() at :127-133 falls back to 'read' for any unmatched name. 'set', 'commit', 'op', 'move', 'clone', 'rename', 'override', 'import', 'download', 'install', 'generate', 'renew', 'disconnect' match no DESTRUCTIVE_PATTERNS or CREATE_PATTERNS entry. Only 10 names happen to match (config_edit, config_delete, objects_create/update/delete, policies_create/update/delete, system_reboot, cert_revoke) and are correctly labeled.",
+      "No existing test catches this: boot-probe.mjs counts the DESCRIPTION prefix (destructive-prefixed: 32) and never asserts on annotations."
+    ],
+    "doc_refs": [],
+    "reproduction": "Spawn plugins/atlas/mcp/panos/server.mjs, tools/list, then count tools where description.startsWith('DESTRUCTIVE:') and annotations.readOnlyHint === true -> 22",
+    "proposed_fix": "Make destructiveTool() set annotations {readOnlyHint: false, destructiveHint: true} directly (annotate() already skips any tool whose readOnlyHint is defined, annotate-tool.ts:166), and give panos_op an explicit non-read-only annotation. Then assert in boot-probe.mjs that every DESTRUCTIVE:-prefixed tool has readOnlyHint false, and that panos_op does too.",
+    "blast_radius": "Any MCP client that gates or auto-approves on readOnlyHint - including non-interactive agent runs - can commit config, install software, import certificates, drop VPN sessions, or send an arbitrary op command to a production firewall without a destructive-action prompt.",
+    "status": "verified",
+    "verified_at": "2026-09-17T15:50:25+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "S-panos-live-key-prefix-literal-committed",
+    "surface": ".atlas/.run/findings.json",
+    "category": "security",
+    "severity": "low",
+    "title": "The live appliance key's 6-character opening is hardcoded as a literal in a tracked findings entry, a source comment, and the boot probe FAKE_KEY - the same prefix-disclosure pattern the panos_status fix removed",
+    "evidence": [
+      "Substring scan (fragments never printed): the 6-character prefix of the live PANOS_API_KEY appears at .atlas/.run/findings.json:1192 (tracked), .atlas/evidence/2026-09-17-panos-live-validation.md:86, mcp_servers/panos-mcp/tests/boot-probe.mjs:88 (opening of FAKE_KEY) and :116, mcp_servers/panos-mcp/src/server.ts:104, plus the dist copies. No 8-character run appears anywhere.",
+      "Mitigating: that 6-character run is the fixed vendor prefix common to every PAN-OS API key, so it discloses nothing specific to this credential, and the user is rotating the key regardless."
+    ],
+    "doc_refs": [],
+    "reproduction": "Read PANOS_API_KEY in memory, substring-test each tracked and working-tree file for KEY.slice(0,6) and KEY.slice(0,8), print only paths",
+    "proposed_fix": "Replace the literal prefix in prose, comments, and FAKE_KEY with a neutral placeholder such as <redacted-prefix> or a synthetic string that is not a prefix of any real key, so no part of a live credential is committed.",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-09-17T15:50:25+00:00",
+    "verified_by": "atlas:verifier"
   }
 ]
