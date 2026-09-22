@@ -18,7 +18,7 @@ verifying, and gets measurably better the more you use it in a codebase.
 
 - Plugin version `5.1.1` (`plugins/atlas/.claude-plugin/plugin.json:2`)
 - Marketplace catalog version `3.1.0` (`.claude-plugin/marketplace.json:5`)
-- 21 skills, 12 agents, 11 hooks, 10 optional connectors, 1 output style
+- 21 skills, 12 agents, 11 hooks, 12 optional connectors, 1 output style
 - Two more plugins ship in the same marketplace: `armada` (org deployment)
   and `programmer` (a Pragmatic Programmer codebase auditor)
 
@@ -38,7 +38,7 @@ verifying, and gets measurably better the more you use it in a codebase.
 6. [Agents (12)](#agents-12)
 7. [Hooks (11)](#hooks-11)
 8. [Scripts](#scripts)
-9. [Connectors (11 MCP servers)](#connectors-11-mcp-servers)
+9. [Connectors (13 MCP servers)](#connectors-13-mcp-servers)
 10. [Other plugins in this marketplace](#other-plugins-in-this-marketplace)
 11. [Output style](#output-style)
 12. [Docs as the single source of truth](#docs-as-the-single-source-of-truth)
@@ -269,12 +269,15 @@ not tax every prompt's token budget.
 
 ---
 
-## Connectors (11 MCP servers)
+## Connectors (13 MCP servers)
 
 Atlas ships optional MCP connectors for MSP and IT operations, wired through
 `plugins/atlas/.mcp.json` and configured with the `userConfig` fields in
 `plugin.json`. Each stays disabled until you provide its credentials, so the
-plugin is safe to install with no config.
+plugin is safe to install with no config. Thirteen servers are declared: the
+twelve Node bundles whose credentials are listed below, plus the Python
+`falcon` server (CrowdStrike), which reads its credentials from the
+environment rather than `userConfig`.
 
 | Connector | Domain | Enable by setting |
 |---|---|---|
@@ -289,11 +292,13 @@ plugin is safe to install with no config.
 | Vanta | GRC / compliance | `vanta_client_id`, `vanta_client_secret` |
 | Paylocity | HR / payroll | `paylocity_client_id`, `paylocity_client_secret`, `paylocity_company_id` |
 | PAN-OS | Palo Alto firewall / Panorama | `panos_host`, `panos_api_key` |
+| TypeSafe (Jev) | Structured AI decisions (routing/scoring/verification) | `typesafe_api_key` or `typesafe_openrouter_api_key` |
 
 Example: set `ninjaone_client_id` and `ninjaone_client_secret` in the plugin
 config, and `atlas-harden` can pull device state from NinjaOne while it drafts
-an idempotent remediation script. Server source lives under `mcp_servers/`
-(one `*-mcp` project each, plus a `_shared/` helper folder).
+an idempotent remediation script. Node connector source lives under
+`mcp_servers/` (one `*-mcp` project each, plus a `_shared/` helper folder);
+`falcon` is vendored at `plugins/atlas/mcp/falcon`.
 
 ---
 
@@ -383,7 +388,7 @@ atlas/
 |- plugins/
 |  |- atlas/                 # the plugin (v5.1.1)
 |  |  |- .claude-plugin/     # plugin.json manifest + userConfig
-|  |  |- .mcp.json           # 10 connector server definitions
+|  |  |- .mcp.json           # 12 connector server definitions
 |  |  |- skills/             # 21 skills
 |  |  |- agents/             # 12 role agents
 |  |  |- hooks/              # 11 hooks + hooks.json + tests
@@ -396,7 +401,7 @@ atlas/
 |  |- programmer/            # optional Pragmatic Programmer auditor plugin
 |  |- _standards/            # shared authoring standards
 |  \- _templates/            # skill/agent templates
-|- mcp_servers/              # connector source (10 *-mcp projects + _shared)
+|- mcp_servers/              # connector source (11 *-mcp projects + _shared)
 |- mcp_node/                 # Node client libraries the MCP servers depend on
 |- skills/                   # standalone skills not tied to a single plugin
 |- docs/                     # canonical documentation (SSOT)
@@ -461,7 +466,7 @@ node test-mcp-tools.mjs --list   # print the known connector names
 ```
 
 It launches each connector exactly as `plugins/atlas/.mcp.json` declares it - the
-eleven Node connectors as `plugins/atlas/mcp/<name>/server.mjs` over MCP stdio,
+twelve Node connectors as `plugins/atlas/mcp/<name>/server.mjs` over MCP stdio,
 `falcon` through its `uv run --project plugins/atlas/mcp/falcon ...` entry - with
 placeholder credentials in a from-scratch child environment, so it needs no real
 credentials and cannot reach a live vendor appliance. Four checks per connector:

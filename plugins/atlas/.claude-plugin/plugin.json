@@ -1,6 +1,6 @@
 {
   "name": "atlas",
-  "version": "6.4.0",
+  "version": "7.0.0",
   "description": "Multi-agent coding architect with automatic self-improvement. 21 plainly named skills: the atlas architect skill (bootstrap: verify claude-mem/context-mode, scan the project, recommend tooling (serena/lean-ctx/fallow), wire hooks, seed docs/ SSOT), the atlas-orchestrate engine, atlas-audit (code/security audit, architecture map, atlas self-telemetry), atlas-doctor (interactive self-improvement: mine findings from session telemetry, ask per finding, apply what you accept, then re-measure against a baseline), atlas-setup (onboarding, install, connectors, repair - one of two manual skills, alongside the atlas architect skill), atlas-loop (recurring/iterative work), atlas-ux-test (UX runtime swarm), and 14 task skills (atlas-feature, atlas-debug, atlas-refactor, atlas-frontend, atlas-component, atlas-db-audit, atlas-gitignore, atlas-handoff, atlas-harden, atlas-launch, atlas-prompt, atlas-readme, atlas-validate, atlas-wiki). 12 core agents, 15 hook programs / 19 bindings (session boot, prompt optimizer, bash advisor, fallow agent gate, todo-board mirror, format-after-edit, dispatch tripwire, docs-drift watch, connector credential watch, completion gate, session-transcript ingest, chronicle facet capture, memory capture, self-improvement nudge, atlas_doctor session-health check), and the atlas-orchestrate method: independent verification with runtime evidence before any done claim. A durable per-project todo board (`<project>/.atlas/.run/todos.json`) is mirrored from every TodoWrite, claimable by parallel subagents, carried into new sessions, and editable from the dashboard's Work and Agents tabs. Self-improvement: a per-session insight record (facets, friction events, gate blocks, findings) in ~/.atlas/atlas.db, persistent memory at ~/.atlas/memory/ with archive rotation, skill lifecycle curation, and context optimization that disables unused skills/agents. No hook ever creates a skill or a slash command. Org deployment (11 departments) lives in the separate armada plugin; shared multi-session dashboard at http://127.0.0.1:7421/ (SessionStart ensure, no per-terminal browser pop).",
   "author": {
     "name": "w159",
@@ -332,6 +332,44 @@
       "title": "PAN-OS REST API version",
       "description": "Optional. Leave blank to use the default (v11.1). This is the /restapi/<version>/ path segment and must match the PAN-OS release on the appliance.",
       "default": ""
+    },
+    "typesafe_api_key": {
+      "type": "string",
+      "title": "TypeSafe API key",
+      "description": "Direct-provider key from console.typesafe.ai, for TypeSafe AI's Jev System One judgment model. Optional if typesafe_openrouter_api_key is set instead - OpenRouter is a fully supported standalone path, not a fallback, for when console.typesafe.ai is unreachable.",
+      "sensitive": true,
+      "default": ""
+    },
+    "typesafe_base_url": {
+      "type": "string",
+      "title": "TypeSafe base URL",
+      "description": "Optional. Leave blank to use the default (https://api.typesafe.ai/v1). Only set this for a staging or sovereign shard.",
+      "default": ""
+    },
+    "typesafe_openrouter_api_key": {
+      "type": "string",
+      "title": "TypeSafe OpenRouter API key",
+      "description": "OpenRouter key, used only for the Jev Decisions path (openrouter.ai). Optional if typesafe_api_key is set instead.",
+      "sensitive": true,
+      "default": ""
+    },
+    "typesafe_openrouter_base_url": {
+      "type": "string",
+      "title": "TypeSafe OpenRouter base URL",
+      "description": "Optional. Leave blank to use the default (https://openrouter.ai/api).",
+      "default": ""
+    },
+    "typesafe_provider": {
+      "type": "string",
+      "title": "TypeSafe provider",
+      "description": "Optional: typesafe | openrouter | auto. Leave blank for auto (prefers typesafe_api_key if set, else typesafe_openrouter_api_key).",
+      "default": ""
+    },
+    "typesafe_model": {
+      "type": "string",
+      "title": "TypeSafe model override",
+      "description": "Optional. For provider typesafe, used verbatim (default jev-latest). For provider openrouter, a bare slug with no \"/\" is auto-prefixed with \"~typesafe/\" as a convenience (default ~typesafe/jev-latest).",
+      "default": ""
     }
   },
   "keywords": [
@@ -368,6 +406,8 @@
     "code-quality-gate",
     "serena",
     "lean-ctx",
-    "tool-routing"
+    "tool-routing",
+    "typesafe",
+    "jev"
   ]
 }

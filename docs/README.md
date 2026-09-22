@@ -13,6 +13,7 @@ docs/
 │   ├── connectwise-manage/  # ConnectWise Manage REST
 │   ├── knowbe4/      # KnowBe4 Reporting + User Event + GraphQL APIs (OpenAPI YAML)
 │   ├── ninjaone/     # NinjaOne / NinjaRMM Public API v2
+│   ├── panos/        # PAN-OS XML + REST API (Panorama and firewall)
 │   ├── paylocity/    # Paylocity API Hub
 │   ├── spanning/     # Spanning Backup (M365/GWS/SF)
 │   ├── threatlocker/ # ThreatLocker Portal API

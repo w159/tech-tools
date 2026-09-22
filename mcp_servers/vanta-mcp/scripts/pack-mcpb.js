@@ -148,25 +148,117 @@ try {
   } catch (err) {
     prodPathsRaw = err.stdout ? err.stdout.toString() : '';
   }
-  // Drop paths that are transitive deps nested inside a file:-linked package's
-  // own node_modules (e.g. mcp_node/node-spanning/node_modules/ajv).
-  // Those packages are dev/peer deps of the vendor lib itself and must not
-  // land in the bundle (doing so was the root cause of the AJV 6 vs 8 crash).
-  // A path is "nested inside a file: dep" when it contains /node_modules/ at
-  // least twice AND does not start under ROOT (i.e. it comes from an external
-  // file: link whose own node_modules are polluting npm ls --parseable output).
-  const prodPaths = prodPathsRaw
-    .split('\n')
-    .map((p) => p.trim())
-    .filter((p) => p.includes('node_modules'))
-    .filter((p) => {
-      // Paths inside ROOT are always fine: npm manages deduplication there.
-      if (p.startsWith(ROOT + '/')) return true;
-      // External path (file: linked package root or one of its deps).
-      // Only keep the package root itself (contains node_modules exactly once).
-      const count = (p.match(/node_modules/g) || []).length;
-      return count === 1;
-    });
+  // Split npm's --parseable output into two worlds:
+  //   * paths under ROOT — npm already deduplicated those, keep them all;
+  //   * external paths, which exist only because a file:-linked vendor lib
+  //     (e.g. node_modules/node-panos -> ../../mcp_node/node-panos) drags its
+  //     OWN node_modules into `npm ls` output. Those hold the vendor's dev
+  //     toolchain (typescript, vitest, vite, rollup, esbuild, lightningcss…)
+  //     sitting right next to its genuine runtime deps.
+  //
+  //    The old heuristic kept an external path when the substring
+  //    "node_modules" appeared EXACTLY ONCE, on the theory that this describes
+  //    "the vendor package root". It does not, and the test was inverted in
+  //    practice: a vendor root such as mcp_node/node-panos contains
+  //    "node_modules" ZERO times (it is staged through the in-ROOT symlink
+  //    path instead), while every one of that vendor's own devDependencies —
+  //    mcp_node/node-panos/node_modules/typescript — contains it exactly once.
+  //    So the filter admitted precisely the paths it meant to reject, which is
+  //    what inflated panos-mcp.mcpb to 30MB / 3022 files.
+  //
+  //    Dropping every external path is equally wrong: node-panos's runtime dep
+  //    fast-xml-parser (and its own dep strnum) is NOT hoisted into
+  //    ROOT/node_modules and lives only inside the vendor's node_modules, so a
+  //    blanket reject yields a small bundle that dies at launch with
+  //    "Cannot find module 'fast-xml-parser'".
+  //
+  //    Correct rule: compute each vendor's PRODUCTION closure from package.json
+  //    "dependencies", transitively, and keep an external path only when it is
+  //    the resolved directory of a package in that closure.
+  const rootPaths = [];
+  const externalPaths = [];
+  for (const line of prodPathsRaw.split('\n')) {
+    const p = line.trim();
+    if (!p.includes('node_modules')) continue;
+    (p.startsWith(ROOT + '/') ? rootPaths : externalPaths).push(p);
+  }
+
+  // Resolve a package by name the way Node would from `fromDir`: the vendor's
+  // own node_modules first, then the server root's (hoisted) node_modules.
+  function resolvePkgDir(name, fromDir) {
+    const candidates = [
+      join(fromDir, 'node_modules', name),
+      join(ROOT, 'node_modules', name),
+    ];
+    for (const dir of candidates) {
+      if (existsSync(join(dir, 'package.json'))) return dir;
+    }
+    return null;
+  }
+
+  // Transitive "dependencies" closure of a vendor root as name -> real dir.
+  // devDependencies are deliberately never followed: that is the whole point.
+  function prodClosure(vendorRoot) {
+    const closure = new Map();
+    let queue;
+    try {
+      const vpkg = JSON.parse(
+        readFileSync(join(vendorRoot, 'package.json'), 'utf8')
+      );
+      queue = Object.keys(vpkg.dependencies || {});
+    } catch {
+      return closure;
+    }
+    while (queue.length > 0) {
+      const name = queue.shift();
+      if (closure.has(name)) continue;
+      const dir = resolvePkgDir(name, vendorRoot);
+      if (!dir) continue;
+      closure.set(name, realpathSync(dir));
+      try {
+        const dpkg = JSON.parse(
+          readFileSync(join(dir, 'package.json'), 'utf8')
+        );
+        queue.push(...Object.keys(dpkg.dependencies || {}));
+      } catch {}
+    }
+    return closure;
+  }
+
+  // Union the closures of every vendor referenced by an external path. The
+  // vendor root is the path prefix ahead of its FIRST node_modules segment —
+  // and that segment may be an iCloud twin ("node_modules.nosync.noindex"),
+  // so the split has to match those names too. Splitting on the literal
+  // "/node_modules/" alone mistakes e.g.
+  //   mcp_node/node-spanning/node_modules.nosync.noindex/eslint
+  // for a vendor root and would pull eslint's own closure (ajv 6, minimatch 3…)
+  // into the bundle — the exact AJV 6-vs-8 collision this script already fixed
+  // once. Packages that exist ONLY inside a .nosync twin are never staged:
+  // Node's resolver does not read those directories, so they cannot be
+  // runtime deps, and resolvePkgDir() deliberately looks only at real
+  // node_modules directories.
+  const NM_SEGMENT = /\/node_modules(?:\.nosync(?:\.noindex)?)?\//;
+  const vendorClosure = new Map();
+  const allowedExternalDirs = new Set();
+  for (const vendorRoot of new Set(
+    externalPaths.map((p) => p.split(NM_SEGMENT)[0])
+  )) {
+    for (const [name, dir] of prodClosure(vendorRoot)) {
+      vendorClosure.set(name, dir);
+      allowedExternalDirs.add(dir);
+    }
+  }
+
+  const prodPaths = [
+    ...rootPaths,
+    ...externalPaths.filter((p) => {
+      try {
+        return allowedExternalDirs.has(realpathSync(p));
+      } catch {
+        return false;
+      }
+    }),
+  ];
   console.log(`  ${prodPaths.length} production packages`);
   for (const absPath of prodPaths) {
     // Compute relative path against ROOT so file:../../vendor links land
@@ -216,6 +308,17 @@ try {
     assert(
       existsSync(join(STAGING, 'node_modules', dep)),
       `production dependency "${dep}" not staged. Run npm install at ROOT and retry.`
+    );
+  }
+  // Same guard for the file:-linked vendors' own runtime deps. The loop above
+  // only sees THIS server's direct pkg.dependencies, so it is blind to
+  // node-panos -> fast-xml-parser -> strnum. That blind spot is exactly why a
+  // broken external filter could ship: the bundle stayed "verified" while its
+  // vendor lib had no XML parser to require at runtime.
+  for (const name of vendorClosure.keys()) {
+    assert(
+      existsSync(join(STAGING, 'node_modules', name)),
+      `vendor production dependency "${name}" not staged — the file:-linked vendor needs it at runtime.`
     );
   }
 

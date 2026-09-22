@@ -53,7 +53,14 @@ order of completion does not matter).
    and `codeql`.
 3. SOLID / DRY / KISS + best practices - single-responsibility, open/
    closed, leaky abstractions, local code-smell duplication. Composes
-   `quality-playbook`.
+   `quality-playbook`. Optionally corroborates with the standard
+   `type_safety`/`duplication`/`simplicity`/`frailty` question set from
+   `${CLAUDE_PLUGIN_ROOT}/references/jev-decisions.md` via the typesafe MCP
+   connector's `typesafe_decide` tool against each hot-spot file/diff,
+   folding results in as supporting signal alongside its own analysis.
+   Additive only: skip silently if the typesafe tools are unavailable.
+   The adversarial `atlas:verifier` pass in Phase 3 still governs whether
+   any resulting finding survives.
 4. Risk hotspots - churn rate, coupling, coverage density from the
    graph's god nodes and bridge nodes.
 5. Dead code - unreachable branches, unused exports, orphaned modules,

@@ -182,6 +182,62 @@
   point of risk for each of those. Their request shapes are grounded in the vendor
   collection and docs, which is not the same as proven.
 
+## [7.0.0] - 2026-09-22
+
+### Added
+- **TypeSafe (Jev) connector (`typesafe`), the thirteenth bundled connector.**
+  `mcp_node/node-typesafe` (typed client) + `mcp_servers/typesafe-mcp` (three
+  flat tools: `typesafe_status`, `typesafe_decide`, `typesafe_list_models`) +
+  `plugins/atlas/mcp/typesafe/server.mjs` (atlas bundle). Wraps TypeSafe AI's
+  Jev System One model - a judgment primitive, not a chat/coding-agent LLM -
+  which answers typed noul/choice/score questions against a caller-supplied
+  state and returns typed answers with probabilities, never free text.
+- **Dual-provider design: direct (`console.typesafe.ai`, `TYPESAFE_API_KEY`)
+  and OpenRouter (`openrouter.ai`, `OPENROUTER_API_KEY`), auto-resolved from
+  whichever credential is configured.** This is deliberate, not incidental:
+  the motivating case is `console.typesafe.ai` being temporarily
+  inaccessible while only an OpenRouter key is available, and OpenRouter had
+  to work as a fully supported standalone path rather than a degraded
+  fallback. `TypeSafeClient.resolveProvider()` (`mcp_node/node-typesafe/src/client.ts`)
+  prefers an explicit `TYPESAFE_PROVIDER` setting, then `TYPESAFE_API_KEY`,
+  then `OPENROUTER_API_KEY`, and fails with `MISSING_CREDENTIALS` naming
+  both env vars by name when neither is set - never a generic "not
+  configured" that leaves the OpenRouter path undiscoverable.
+- **No navigate/domain-gating step.** Every other multi-tool connector here
+  groups tools behind a `*_navigate` discovery tool because it exposes
+  dozens of tools across several resource domains; typesafe has exactly
+  three tools and one resource concept, so all three are listed up front in
+  every credential state (see `docs/typesafe-connector-design.md`).
+- **OpenRouter response normalization is documented as best-effort, not
+  verified.** OpenRouter's own SDK wraps the Decisions call and exposes a
+  parsed `decision.answers`, but the raw HTTP JSON envelope - flat
+  `{model,answers,usage}` or nested under `decision` - is not spelled out
+  verbatim in the fetched docs. `systemOneOpenRouter` accepts either shape
+  defensively, flagged at the call site and in
+  `docs/typesafe-connector-design.md` for re-verification once
+  `console.typesafe.ai` access is restored or a real OpenRouter Jev call is
+  made. No `TYPESAFE_API_KEY` or `OPENROUTER_API_KEY` was available while
+  building this connector, so this and every live-vendor-response claim is
+  UNVERIFIED - needs live-credential retest.
+- **Jev wired into atlas's own decision-making**, not left as an idle
+  connector. `plugins/atlas/references/jev-decisions.md` is the single
+  canonical question set (type-safety, duplication, simplicity, frailty -
+  Score/Noul questions with thresholds, centralized per TypeSafe's own
+  guidance to keep constants in one reviewable place) that five consumers
+  now point at instead of duplicating: `implementer` (self-checks the
+  finished diff before the gate run), `verifier` (corroborates code-quality
+  claims alongside its own reproduction, never overriding it),
+  `explorer` (Choice-ranks duplicate candidate files before reading them),
+  `atlas-refactor` (before/after dedup/simplicity/frailty signal alongside
+  the behavior-preservation test), and `atlas-audit`'s SOLID/DRY/KISS
+  dimension (folds Jev scores into findings, still gated by the mandatory
+  adversarial verifier pass). Every use is additive and silently skipped
+  when the typesafe MCP tools are unconfigured - never a hard gate, never a
+  substitute for the agent's own verification.
+- Major version bump (6.5.0 -> 7.0.0): this release changes how every core
+  atlas agent makes decisions, not just the connector surface, hence a major
+  rather than minor bump.
+
 ## [6.4.0] - 2026-09-17
 
 ### Removed
