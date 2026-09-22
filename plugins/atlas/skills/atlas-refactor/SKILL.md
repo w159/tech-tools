@@ -37,6 +37,7 @@ VERIFY:
 - Run the test suite or the captured sample runs after each step. Show the exact command and the actual output.
 - Prove observable behavior is unchanged by comparing before/after output, not "it should still work."
 - Exercise one adjacent error path to confirm error handling was preserved.
+- Optionally, before and after each refactor step, run the `duplication`/`simplicity`/`frailty` questions from `${CLAUDE_PLUGIN_ROOT}/references/jev-decisions.md` via the typesafe MCP connector's `typesafe_decide` tool as a supplementary signal alongside the behavior-preservation test. Additive only: skip silently if the typesafe tools are unavailable, and never a substitute for the actual behavior-equivalence proof above.
 
 REPORT:
 - Before/after structure.
