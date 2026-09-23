@@ -52,7 +52,7 @@ Full laws, decision gate, TodoWrite rules, and mid-run steering: **load `referen
 
 ## The loop (load full text when running a wave)
 
-Orient → Plan (+ TodoWrite) → Dispatch (parallel) → Verify (findings.json / test stamp / verifier) → Self-critique → Synthesize → Gate writes → Finish through definition of done.
+Orient → Plan (+ TodoWrite) → Dispatch (parallel) → Verify (findings.json / test stamp / verifier) → Self-critique → Synthesize → Gate writes → Finish through definition of done. **Implementation-unit discipline** governs every implementer dispatch: idempotency check before redoing a unit, an explicit per-unit evidence strategy (`proof-first` / `characterization` / `no-test-exception`) named in the prompt, independent-unit waves isolated via `atlas-worktree`, and a machine-readable per-unit evidence receipt folded into findings.json. Full checklists: `references/implementation-units.md`.
 
 Full loop, fan-out mechanisms, and definition of done: **load `references/the-loop.md`**.
 
@@ -80,6 +80,7 @@ Orchestrator stays Opus-tier; subagents default Sonnet, drop to Haiku for read-a
 |---|---|
 | `references/laws-and-gates.md` | applying laws, decision gate, todos, mid-run steering |
 | `references/the-loop.md` | running Orient→Finish or closing a wave |
+| `references/implementation-units.md` | dispatching implementer units, resuming interrupted runs, parallel implementer waves, evidence receipts |
 | `references/anti-rationalization.md` | catching "I'll just…" thoughts |
 | `references/squad-and-tiers.md` | choosing agent/model/effort |
 | `references/capability-routing.md` | task -> agent/skill/MCP/model |

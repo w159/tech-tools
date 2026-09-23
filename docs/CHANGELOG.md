@@ -1,5 +1,26 @@
 # Changelog
 
+## [Unreleased] -- mcp-gateway: one Entra-authenticated remote connector for every vendor (IN PROGRESS, not verified)
+
+New package `mcp_servers/mcp-gateway/`: a single Streamable HTTP endpoint for
+Claude Enterprise custom connectors. Entra ID is the authorization server
+directly; the gateway only serves RFC 9728 protected resource metadata and
+validates v2 access tokens. Each vendor bundle under `plugins/atlas/mcp/` runs
+as a stdio child with only its own env prefix. Per-vendor app roles
+(`<Vendor>.Read` / `<Vendor>.Write`, 26 total) filter `tools/list` and gate
+`tools/call`; tools without `readOnlyHint: true` require Write. Every call is
+audited (oid, upn, tool, decision), never arguments or results.
+
+Azure (tenant Henssler Financial, RG `gwh-mcp-gateway-rg`): Entra app
+"Henssler MCP Gateway" (appId `c6e1bf1e-2520-4f1d-b329-8f0f05de34a6`),
+identifier URI `https://mcp.henssler.com/mcp`, v2 tokens, scope
+`access_as_user`, redirect `https://claude.ai/api/mcp/auth_callback`, user
+assignment required, admin consent granted. Hosting (ACR, Key Vault, Container
+Apps) is being provisioned. Design and runbook: `docs/mcp-gateway-design.md`.
+
+Status: gateway build/tests and deployment not yet verified. This entry is
+updated when they are.
+
 ## [Unreleased] -- the boot harness the checklist required, which nothing had ever written
 
 `AGENTS.md:95` makes `node test-mcp-tools.mjs <svc>` a mandatory propagation

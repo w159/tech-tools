@@ -1,5 +1,65 @@
 # Changelog
 
+## [8.0.0] - 2026-09-23
+
+### Added
+- **The Compound Engineering plugin's capabilities are ported into atlas as 26 new
+  skills plus enhancements to 5 existing skills/agents, doubling the skill fleet from
+  21 to 47.** Full inventory and design rationale in the skill descriptions themselves;
+  summary here. Atlas's own control plane (orchestrator, named agents, `docs/`/`.atlas/`
+  SSOT, `.atlas/.run/findings.json` verification ledger, explicit-push-consent policy)
+  stays the execution and safety authority throughout - CE contributed artifact schemas,
+  review rubrics, and workflow shapes, never a second engine, never an external-CLI
+  dependency (host portability preserved: no skill shells to codex/cursor/grok).
+- **Core loop:** `atlas-brainstorm` (WHAT-stage requirements elicitation, one question
+  per turn, writes `docs/plans/<date>-<slug>-brainstorm.md`), `atlas-plan` (HOW-stage
+  implementation-ready planning with stable `U<N>` units and a Verification Contract,
+  hands off to `atlas-orchestrate`), `atlas-simplify` (three-persona post-implementation
+  simplification pass), `atlas-review` (risk-selected multi-persona diff review with
+  typed P0-P3 findings and confidence anchors, report-only by default), `atlas-compound`
+  (eligibility-gated durable learning capture into `docs/lessons/`), `atlas-autopilot`
+  (consent-gated equivalent of CE's `lfg`: runs the whole loop end to end, then hard-stops
+  for explicit confirmation before any push/PR/merge - CE's version auto-ships, atlas's
+  never does).
+- **Around-loop and on-demand:** `atlas-strategy`, `atlas-pulse`, `atlas-sweep`,
+  `atlas-bakeoff`, `atlas-pov` (evidence-floored independent "oracle" opinion with
+  optional non-voting peer checks), `atlas-explain` (also covers CE's `wtf`),
+  `atlas-prototype`, `atlas-optimize`, `atlas-feedback-analysis`.
+- **Git workflow, all push/PR/merge/post steps hard-gated behind explicit user
+  confirmation:** `atlas-commit` (local only), `atlas-ship`, `atlas-babysit-pr`,
+  `atlas-resolve-pr-feedback`, `atlas-worktree` (atlas's own host-portable
+  `git worktree` isolation primitive, referenced by `atlas-orchestrate` and others).
+- **Frontend/testing/collaboration:** `atlas-polish`, `atlas-dogfood`,
+  `atlas-test-xcode`, `atlas-test-browser`, `atlas-proof`, `atlas-promote`.
+- **Compound Packs** (`plugins/atlas/scripts/atlas_packs.py`,
+  `plugins/atlas/references/compound-packs.md`): org/team prescriptive-rule roots
+  (local directories or ref-pinned git repos), declared in `.claude/atlas.local.md`,
+  resolved with the same safety boundary CE uses - a symlink escaping a pack's source
+  directory rejects the whole pack (prompt-injection/exfiltration boundary) - and
+  consumed as **evidence, never instructions**, cited inline as `(pack: id, path)`.
+  28 tests cover rule-shape validation and symlink-escape rejection.
+- **Enhancements to existing skills/agents** (no new files, additive only):
+  `atlas-debug` gained CE's ranked-competing-hypotheses-with-predictions discipline,
+  a red-for-the-right-reason check, and a three-failed-fix invalidation/escalation
+  rule; `atlas-orchestrate` gained per-unit idempotency, explicit
+  proof-first/characterization test-strategy naming, and bounded parallel worktree
+  waves; `docs-curator` gained the `docs/lessons/` bug/knowledge frontmatter schema
+  and CE's fact-preserving prose rule (`ce-noslop`, embedded rather than a standalone
+  skill - a competing skill would violate atlas's single-writer-of-docs convention);
+  `atlas-doctor` gained a measurement-first retuning gate and a `docs/lessons/`
+  citation-drift refresh pass; `atlas-setup` gained a Compound Pack health check.
+- **jev-decisions.md and jev-patterns.md remain the canonical Jev question set** for
+  any of the above skills that opt into a `typesafe_decide` signal - additive,
+  silently skipped when the connector is unconfigured, never a hard gate.
+
+### Fixed
+- **Structural conformance across all 26 new skill files**: 6 bare `scripts/<file>`
+  references and 10 cross-skill `references/<file>.md` mentions that resolved under
+  neither the referencing skill's own `references/` dir nor the plugin-level one were
+  corrected to the `${CLAUDE_PLUGIN_ROOT}/skills/<skill>/references/<file>` form
+  `scripts/test_skill_agent_conformance.py` requires. All 17 conformance checks and
+  `lint_skill_names.py` pass clean.
+
 ## [7.1.1] - 2026-09-23
 
 ### Fixed
