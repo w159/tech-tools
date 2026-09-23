@@ -1,77 +1,77 @@
 {
-  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
-  "name": "tech-tools",
-  "description": "The atlas marketplace: a multi-agent coding architect (atlas) with 21 plainly named skills, 12 core agents, self-improvement hooks, and the atlas-orchestrate methodology (evidence before any done claim), plus an optional organizational deployment plugin (armada) with 4 invocable setup skills, 11 department agents, and 156 department skills, and a book-derived code-review engine (programmer) with 4 skills and 7 specialized reviewer agents.",
-  "version": "3.21.0",
-  "owner": {
-    "name": "w159",
-    "url": "https://github.com/w159"
-  },
-  "plugins": [
-    {
-      "name": "atlas",
-      "source": "./plugins/atlas",
-      "description": "Multi-agent coding architect: 21 plainly named skills (the atlas architect skill, atlas-orchestrate engine, atlas-audit code/architecture/self audits, atlas-doctor interactive self-improvement, atlas-setup onboarding/install/connectors/repair, atlas-loop recurring work, atlas-ux-test UX swarm, and 14 task skills), 12 core agents, hooks including the fallow agent commit/push gate, inline docs-drift warning, todo-board mirror, stale-connector-credential detection, self-improvement (session ingest, chronicle facet capture, memory capture, nudge) and atlas_doctor (session-health check), and the atlas-orchestrate method: deterministic contract tests as the verification step, with runtime evidence before any done claim, plus a durable per-project todo board mirrored from TodoWrite, claimable by parallel subagents, editable from the dashboard's Work and Agents tabs, and rendered with ATLAS branding as a static line at the prompt, and a shared multi-session local dashboard at http://*********:7421/.",
-      "category": "developer-tools",
-      "keywords": [
-        "atlas",
-        "architect",
-        "self-improving",
-        "claude-mem",
-        "context-mode",
-        "capability-discovery",
-        "subagents",
-        "prompt-optimization",
-        "verification",
-        "hooks",
-        "agentic",
-        "coding-agent",
-        "docs-as-code",
-        "multi-stage-planning",
-        "ux-testing",
-        "operating-contract",
-        "verify-loop",
-        "observability-db",
-        "architecture-audit",
-        "owasp",
-        "security-audit",
-        "ux-swarm",
-        "fallow",
-        "dead-code",
-        "serena",
-        "lean-ctx",
-        "tool-routing"
-      ],
-      "version": "7.1.1"
+    "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+    "name": "tech-tools",
+    "description": "The atlas marketplace: a multi-agent coding architect (atlas) with 21 plainly named skills, 12 core agents, self-improvement hooks, and the atlas-orchestrate methodology (evidence before any done claim), plus an optional organizational deployment plugin (armada) with 4 invocable setup skills, 11 department agents, and 156 department skills, and a book-derived code-review engine (programmer) with 4 skills and 7 specialized reviewer agents.",
+    "version": "4.0.0",
+    "owner": {
+        "name": "w159",
+        "url": "https://github.com/w159"
     },
-    {
-      "name": "armada",
-      "source": "./plugins/armada",
-      "description": "Organizational deployment layer split out of atlas. Four invocable setup skills in run order: armada (deployment status and router), armada-brand (org name, voice, colors, commit style - run first), armada-department (activate one of 11 departments and its agent), armada-connect (vendor MCP connectors). Behind them: 11 department agents (data, design, engineering, finance, HR, IT ops, M365, product, productivity, security, support) and 156 department skills carrying org branding, policies, and compliance context. Install alongside atlas only for org use.",
-      "category": "developer-tools",
-      "keywords": [
-        "armada",
-        "organization",
-        "departments",
-        "branding",
-        "compliance",
-        "atlas"
-      ]
-    },
-    {
-      "name": "programmer",
-      "source": "./plugins/programmer",
-      "description": "A book-derived code-review engine: 4 skills (code-review runs a 6-lens, multi-agent review across a target or diff and produces an evidence-backed report; code-principles surfaces 1-4 relevant book principles while you work; tpp-audit is the Pragmatic Programmer audit; tpp-principles is the Pragmatic Programmer principles advisor), 7 specialized reviewer agents, and a UserPromptSubmit nudge hook.",
-      "category": "developer-tools",
-      "keywords": [
-        "tpp",
-        "pragmatic-programmer",
-        "audit",
-        "code-review",
-        "principles",
-        "best-practices",
-        "book"
-      ]
-    }
-  ]
+    "plugins": [
+        {
+            "name": "atlas",
+            "source": "./plugins/atlas",
+            "description": "Multi-agent coding architect: 21 plainly named skills (the atlas architect skill, atlas-orchestrate engine, atlas-audit code/architecture/self audits, atlas-doctor interactive self-improvement, atlas-setup onboarding/install/connectors/repair, atlas-loop recurring work, atlas-ux-test UX swarm, and 14 task skills), 12 core agents, hooks including the fallow agent commit/push gate, inline docs-drift warning, todo-board mirror, stale-connector-credential detection, self-improvement (session ingest, chronicle facet capture, memory capture, nudge) and atlas_doctor (session-health check), and the atlas-orchestrate method: deterministic contract tests as the verification step, with runtime evidence before any done claim, plus a durable per-project todo board mirrored from TodoWrite, claimable by parallel subagents, editable from the dashboard's Work and Agents tabs, and rendered with ATLAS branding as a static line at the prompt, and a shared multi-session local dashboard at http://*********:7421/.",
+            "category": "developer-tools",
+            "keywords": [
+                "atlas",
+                "architect",
+                "self-improving",
+                "claude-mem",
+                "context-mode",
+                "capability-discovery",
+                "subagents",
+                "prompt-optimization",
+                "verification",
+                "hooks",
+                "agentic",
+                "coding-agent",
+                "docs-as-code",
+                "multi-stage-planning",
+                "ux-testing",
+                "operating-contract",
+                "verify-loop",
+                "observability-db",
+                "architecture-audit",
+                "owasp",
+                "security-audit",
+                "ux-swarm",
+                "fallow",
+                "dead-code",
+                "serena",
+                "lean-ctx",
+                "tool-routing"
+            ],
+            "version": "7.1.2"
+        },
+        {
+            "name": "armada",
+            "source": "./plugins/armada",
+            "description": "Organizational deployment layer split out of atlas. Four invocable setup skills in run order: armada (deployment status and router), armada-brand (org name, voice, colors, commit style - run first), armada-department (activate one of 11 departments and its agent), armada-connect (vendor MCP connectors). Behind them: 11 department agents (data, design, engineering, finance, HR, IT ops, M365, product, productivity, security, support) and 156 department skills carrying org branding, policies, and compliance context. Install alongside atlas only for org use.",
+            "category": "developer-tools",
+            "keywords": [
+                "armada",
+                "organization",
+                "departments",
+                "branding",
+                "compliance",
+                "atlas"
+            ]
+        },
+        {
+            "name": "programmer",
+            "source": "./plugins/programmer",
+            "description": "A book-derived code-review engine: 4 skills (code-review runs a 6-lens, multi-agent review across a target or diff and produces an evidence-backed report; code-principles surfaces 1-4 relevant book principles while you work; tpp-audit is the Pragmatic Programmer audit; tpp-principles is the Pragmatic Programmer principles advisor), 7 specialized reviewer agents, and a UserPromptSubmit nudge hook.",
+            "category": "developer-tools",
+            "keywords": [
+                "tpp",
+                "pragmatic-programmer",
+                "audit",
+                "code-review",
+                "principles",
+                "best-practices",
+                "book"
+            ]
+        }
+    ]
 }
