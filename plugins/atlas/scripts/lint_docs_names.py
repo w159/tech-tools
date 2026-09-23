@@ -63,6 +63,7 @@ DATED_DIRS = (
     "docs/lessons",
     "docs/decisions",
     "docs/audits",
+    "docs/pulses",
     ".atlas/findings",
     ".atlas/decisions",
     ".atlas/audits",

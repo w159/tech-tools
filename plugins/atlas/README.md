@@ -11,21 +11,41 @@ skill or a slash command: durable knowledge goes to findings, docs, and memory.
 Org deployment (11 departments, 156 department skills) lives in the separate
 `armada` plugin in this repo; install it alongside atlas only for org use.
 
-## The skill fleet (21 skills, plainly named)
+## The skill fleet (47 skills, plainly named)
 
-Two manual skills, twenty auto-trigger skills. Auto-trigger comes primarily from each skill's `description` (Claude Code
+Two manual skills, forty-five auto-trigger skills. Auto-trigger comes primarily from each skill's `description` (Claude Code
 loads on relevance); `when_to_use` is retained as atlas-local routing metadata.
 Manual skills set `disable-model-invocation: true`.
+
+This release ports the Compound Engineering plugin's capabilities onto atlas's control
+plane: atlas keeps its own orchestrator, named agents, docs/.atlas SSOT, findings ledger,
+and explicit-push-consent policy as the execution and safety authority throughout - CE
+contributed artifact schemas, review rubrics, and workflow shapes, not a second engine.
 
 | Skill | Mode | What it does |
 | --- | --- | --- |
 | atlas | MANUAL | Boot the workspace: verify claude-mem and context-mode, scan the project, recommend tooling (confirm first), wire hooks, seed the docs/ SSOT |
-| atlas-setup | MANUAL | The lifecycle skill: onboard (scaffold `docs/`, inventory, recommend what to run next), install (claude-mem, context-mode, hooks, config), connectors (vendor MCP setup), repair (`--fix` runs `scripts/atlas_doctor.py`) |
-| atlas-orchestrate | auto | The engine: decompose a task, route every code edit to a subagent, demand execution evidence, verify with an independent agent (runtime evidence included), keep `docs/` the single source of truth |
+| atlas-setup | MANUAL | The lifecycle skill: onboard (scaffold `docs/`, inventory, recommend what to run next), install (claude-mem, context-mode, hooks, config), connectors (vendor MCP setup), Compound Pack health check, repair (`--fix` runs `scripts/atlas_doctor.py`) |
+| atlas-orchestrate | auto | The engine: decompose a task, route every code edit to a subagent, demand execution evidence, verify with an independent agent (runtime evidence included), keep `docs/` the single source of truth. Now carries CE's implementation-unit rigor: per-unit idempotency, proof-first/characterization test strategy, bounded parallel waves |
 | atlas-audit | auto | Three audit modes: code (quality/security/OWASP swarm), architecture (feature map + duplication + unify proposal), self (atlas run health, context/asset waste, session forensics from the observability DB) |
+| atlas-doctor | auto | Interactive self-improvement: mine findings from session telemetry, ask per finding, apply what you accept, re-measure against a baseline. Now includes CE's measurement-first retuning gate and a `docs/lessons/` citation-drift refresh pass |
 | atlas-loop | auto | Match a recurring or iterative task to a curated loop-library entry (loop-until-dry, fan-out-adversarial-verify, red-green-tdd, and more) and instantiate it |
 | atlas-ux-test | auto | App-discovering UX swarm: auto-finds routes and forms in a running web app, then runs cartographer -> persona -> fuzzer -> oracle -> reporter |
-| 14 task skills | auto | atlas-component, atlas-db-audit, atlas-debug, atlas-feature, atlas-frontend, atlas-gitignore, atlas-handoff, atlas-harden, atlas-launch, atlas-prompt, atlas-readme, atlas-refactor, atlas-validate, atlas-wiki |
+| 14 task skills | auto | atlas-component, atlas-db-audit, atlas-debug (now with CE's ranked-hypothesis/red-for-the-right-reason/three-failed-fix rigor), atlas-feature, atlas-frontend, atlas-gitignore, atlas-handoff, atlas-harden, atlas-launch, atlas-prompt, atlas-readme, atlas-refactor, atlas-validate, atlas-wiki |
+| **The CE core loop (ported from Compound Engineering)** | | |
+| atlas-brainstorm | auto | WHAT-stage requirements elicitation: one-question-at-a-time dialogue, 2-3 approaches with a mandatory non-obvious option, writes a requirements-only `docs/plans/<date>-<slug>-brainstorm.md` |
+| atlas-plan | auto | HOW-stage implementation-ready planning: stable `U<N>` implementation units, a Verification Contract and Definition of Done, mandatory `atlas:completeness-critic` review, hands off to `atlas-orchestrate` |
+| atlas-simplify | auto | Bounded post-implementation simplification pass over a fresh diff: three independent read-only reviewers (reuse/quality/efficiency), behavior-preserving apply, full gate re-run |
+| atlas-review | auto | Risk-selected multi-persona diff/PR review (correctness always-on, conditional security/performance/API/migration/reliability/adversarial/etc.), typed findings with confidence anchors, report-only by default |
+| atlas-compound | auto | Durable learning capture into `docs/lessons/`: a hard solved-and-verified-and-non-obvious eligibility gate, overlap detection before writing, CE's bug/knowledge frontmatter schema |
+| atlas-autopilot | auto | Atlas's consent-gated equivalent of CE's `lfg`: brainstorm/plan -> work -> simplify -> review -> compound -> local commit, then a hard stop for explicit push/PR/merge confirmation |
+| **On-demand and around-loop (ported from Compound Engineering)** | | |
+| atlas-strategy, atlas-pulse, atlas-sweep | auto | Product strategy anchor (`docs/architecture/product-strategy.md`), time-windowed telemetry pulse report, feedback-source ingestion into a rolling triage doc |
+| atlas-bakeoff, atlas-pov, atlas-explain | auto | Competing-approach generation and selection; evidence-floored independent "oracle" opinion with optional non-voting peer checks; evidence-backed explanation of existing behavior (also answers "wtf does this do") |
+| atlas-prototype, atlas-optimize, atlas-feedback-analysis | auto | Throwaway demonstrate-then-decide prototyping; measurement-first optimization experiments; raw feedback (transcripts/tickets/notes) into evidence-quoted findings |
+| atlas-commit, atlas-ship, atlas-babysit-pr, atlas-resolve-pr-feedback | auto | Local-only commit; commit+push+PR with a mandatory confirmation gate before anything leaves the machine; bounded CI-repair loop; review-comment triage, fix, and reply (never auto-posted) |
+| atlas-polish, atlas-dogfood, atlas-test-xcode, atlas-test-browser | auto | Live interactive UX polish; diff-scoped autonomous browser QA with a repair loop; iOS Simulator test runtime; diff-scoped no-fix-loop browser smoke check |
+| atlas-proof, atlas-promote, atlas-worktree | auto | Publish/annotate/collect review workflow for durable docs; post-shipping announcement drafts (never auto-posted); atlas's own host-portable `git worktree` isolation primitive |
 
 ## Layout
 
@@ -74,7 +94,7 @@ atlas/
 |   |-- docs-curator.md            #   maintains the docs/ single source of truth (fork)
 |   |-- docs-auditor.md            #   audits docs/ for drift against code
 |   `-- completeness-critic.md     #   "what did we miss" gap pass before done (fork)
-`-- skills/                        # the 21 skills, one directory each (SKILL.md + references/)
+`-- skills/                        # the 47 skills, one directory each (SKILL.md + references/)
 ```
 
 ## Getting started

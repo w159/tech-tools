@@ -1,0 +1,8 @@
+**/node_modules
+**/.env
+**/.env.*
+.git
+.atlas
+docs
+**/dist
+falcon/.venv

@@ -5,7 +5,7 @@ when_to_use: first run to bring atlas online, workspace setup, SSOT scaffolding,
 disable-model-invocation: true
 user-invocable: true
 argument-hint: "[onboard | install | connectors | repair [--fix] | task description | 'menu']"
-allowed-tools: Read, Glob, Grep, Bash(python3:*), Write(docs/**), Write(.atlas/evidence/**), Write(docs/audits/**)
+allowed-tools: Read, Glob, Grep, Bash(python3:*), Write(docs/**), Write(.atlas/evidence/**), Write(docs/audits/**), Write(.claude/atlas.local.md)
 ---
 
 # atlas-setup - onboarding, install, connectors, repair
@@ -43,11 +43,15 @@ Mode routing rules:
 - No `docs/` before that call -> continue with the rest of onboard (below).
 - `docs/` already existed -> the scaffold call above already repaired it;
   go straight to recommendations (below) instead of repeating onboard steps
-  3-8.
+  3-9.
 - Anything that smells like a broken install (subagents do not launch, the
   plugin acts like an older version, marketplace points at a stale fork)
   -> repair. Auto-repair with `--fix` runs
   `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_doctor.py" --fix`.
+  In repair mode, if a `packs:` declaration exists in
+  `.claude/atlas.local.md` and the resolver
+  `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_packs.py` is present, also run the
+  Compound Pack health check (section below) as part of the diagnosis.
 - To build, fix, audit, or refactor code: this is NOT the skill. Route to
   atlas-orchestrate or the specific task skill.
 
@@ -174,15 +178,53 @@ When `docs/` does not exist:
    This is the single most impactful action for reducing token cost - atlas
    loads 22 skills + 12 agents into every API call; disabling unused ones
    can cut that by 40%+.
-8. **Recommend** - run the recommendation analysis and present the top
+8. **Compound Pack health check** - see the "Compound Pack health check"
+   section below. Conditional: skipped silently when the pack resolver is
+   not installed.
+9. **Recommend** - run the recommendation analysis and present the top
    3-5 next steps.
 
 Every no-args run executes step 2 (`scripts/scaffold_docs.py`) first,
 whether or not `docs/` already exists - that call is what repairs a
 partial, missing, or drifted structure before anything else happens. If
-`docs/` did not exist, continue through the rest of onboarding (steps 3-8)
+`docs/` did not exist, continue through the rest of onboarding (steps 3-9)
 below. If `docs/` already existed, the scaffold call already repaired it;
-skip straight to recommendations (below) instead of repeating steps 3-8.
+skip straight to recommendations (below) instead of repeating steps 3-9.
+
+## Compound Pack health check
+
+Conditionally part of onboard (step 8) and repair mode. Compound Packs are
+org/team conventions that atlas grounds plans and reviews in; the resolver
+is `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_packs.py`. This step is a no-op when it is
+absent - never an error:
+
+1. **Skip check** - if `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_packs.py` does
+   not exist, skip this whole step silently.
+2. **Detect intent** - check whether the project has a `.claude/atlas.local.md`
+   with a `packs:` declaration. If yes, run the resolver on it. If no, ask
+   the user once: "Do you have org or team conventions (coding standards,
+   review checklists, plan templates) you want atlas to ground plans and
+   reviews in?" Only if the user says yes, scaffold a starter block
+   (step 4). Never create `.claude/atlas.local.md` unprompted.
+3. **Run the resolver and report in plain language** -
+   `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_packs.py" <args shown by its --help>`.
+   Translate every warning or error it prints into plain language for the
+   user, e.g.: a pack source URL git cannot reach ("this pack's git repo
+   is unreachable - check the URL or your network"), a pack path that
+   escapes the repo boundary ("this pack points outside this repository,
+   which atlas refuses for safety"), or duplicate pack IDs ("two packs
+   share the same ID; the second overrides the first"). Do not paste raw
+   tracebacks; do not auto-fix a user-authored `packs:` block without
+   approval - propose the corrected line and apply only on confirmation.
+4. **Offer a starter scaffold** - when the user wants packs but has no
+   `packs:` block yet, offer to create `.claude/atlas.local.md` containing
+   a commented starter `packs:` entry. Follow the schema in the Compound
+   Packs documentation (`references/compound-packs.md` in the atlas plugin)
+   for the exact fields. Apply only after the user approves the draft.
+
+If the resolver is present but its output is unintelligible (crash, unknown
+flag), say the pack resolver could not run and move on - a failed health
+check never blocks the rest of onboarding.
 
 ## Subsequent runs: recommendations
 

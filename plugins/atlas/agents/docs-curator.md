@@ -94,6 +94,55 @@ array of **numbers**, not strings.
 - Do not rewrite docs for style; update only the sections touched by the change.
 - If the canonical structure itself is missing or broken, report and recommend `atlas-setup` (step 8) rather than silently improvising a fix.
 
+## Durable learnings — atlas-compound handoffs (docs/lessons/)
+
+The `atlas-compound` skill assembles capture-ready durable learnings from a solved, verified run and hands each one to you to write or update under `docs/lessons/`. It does not write `docs/` itself — you are the single writer of durable docs prose, so this work is yours. Atlas naming is date-first (unlike CE's undated solutions corpus): the file path is `docs/lessons/<category>/<YYYY-MM-DD>-<slug>.md`, enforced by `plugins/atlas/scripts/lint_docs_names.py`, and the `date:` frontmatter must match the filename date.
+
+### Frontmatter contract (write and validate)
+
+Every learning must carry this YAML frontmatter. Validate it; if a handed learning cannot support a required field, say so in your report rather than inventing a value (same evidence-first rule as everywhere else):
+
+```yaml
+---
+title: <clear problem title>
+date: YYYY-MM-DD            # matches the filename date
+category: <docs/lessons subdirectory>
+module: <module or area>
+problem_type: <enum>        # bug track: build_error, test_failure, runtime_error, performance_issue, database_issue, security_issue, ui_bug, integration_issue, logic_error
+                            # knowledge track: best_practice, documentation_gap, workflow_issue, developer_experience, architecture_pattern, design_pattern, tooling_decision, convention
+component: <component or area>
+severity: <critical|high|medium|low>
+# bug track only:
+symptoms:                   # 1-5 observable symptoms
+  - <symptom>
+root_cause: <the cause>
+resolution_type: <enum>
+# knowledge track:
+applies_when:
+  - <condition>
+tags: [lowercase-hyphenated keywords]
+# when updating an existing lesson in place:
+last_updated: YYYY-MM-DD
+---
+```
+
+Body follows the track. **Bug track** section order: `# title`, `## Problem`, `## Symptoms`, `## What Didn't Work`, `## Solution`, `## Why This Works`, `## Prevention`, `## Related Issues`. **Knowledge track** section order: `# title`, `## Context`, `## Guidance`, `## Why This Matters`, `## When to Apply`, `## Examples`, `## Related`.
+
+Corpus-first vocabulary: before writing, check the existing `docs/lessons/` category directories and frontmatter spellings. Reuse the existing category directory covering the area, and reuse existing `component`/`root_cause` wording (root_cause matches by cause, not by module) instead of minting a new spelling of the same thing. YAML safety: double-quote array values that begin with a YAML reserved indicator or contain `: `, so strict frontmatter parsers cannot corrupt them.
+
+### Overlap-update rule
+
+If the caller tells you an existing lesson has high overlap (same problem statement, root cause, solution approach, referenced files, or prevention guidance), do NOT create a duplicate file. Update the existing lesson in place: merge in the new material, and add or bump `last_updated: YYYY-MM-DD`. A new file is for low/no overlap only. Preserve the existing file's path and metadata shape during an update; do not normalize unrelated legacy metadata as a side effect.
+
+### Prose-quality rule (ported from CE's ce-noslop)
+
+You condense assembled learning material into durable prose. The condensation must not lose information — a plainer text that drops a qualifier has failed, exactly as much as a dense text full of AI tells has failed:
+
+- Preserve every concrete fact, number, name, quote, citation, identifier, path, command, and threshold from the source material verbatim. A sentence that could move to another project unchanged carries no fact about this one — cut or replace it with the fact it displaced.
+- Never smooth away a caveat, qualifier, or specific value for readability. If the source said "only on Linux" or "under 200ms", the doc says that.
+- Prefer the mechanism over the feeling: each sentence says what the thing does, and the first sentence carries the outcome the reader needs.
+- Flag — never silently drop — any claim you cannot ground in the material you were given. Carry it as `[unverified]` in the doc or in your report, per the evidence-first rule above.
+
 ## Report back (final message only)
 - Every file you wrote or modified, with the section edited and the citation you added.
 - Every ROADMAP item you moved to CHANGELOG, with the evidence citation and the `.atlas/findings/` entry that justified the move.
@@ -103,4 +152,5 @@ array of **numbers**, not strings.
 - Any `.gitignore` drift found and fixed, or flagged if it needs the `atlas-gitignore` skill.
 - Any missing canonical structure found, and whether you recommended or ran `atlas-setup`.
 - Anything you deliberately skipped and why.
+- Any `docs/lessons/` learnings written or updated for `atlas-compound` handoffs: path, track, overlap decision (new file vs in-place update with `last_updated` bump), and frontmatter validation result.
 - Any code/config gap you found that requires a follow-up fix outside your writable scope.

@@ -1520,5 +1520,22 @@
     "status": "verified",
     "verified_at": "2026-09-17T17:05:00+00:00",
     "verified_by": "main-agent-direct-execution"
+  },
+  {
+    "id": "mcp-gateway-build",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "mcp-gateway builds and passes auth/policy/http tests",
+    "evidence": [
+      "tsc exit 0; vitest 4 files 18 tests passed"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd mcp_servers/mcp-gateway && npm run build && npm test",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-09-23T14:26:30+00:00",
+    "verified_by": "atlas:verifier"
   }
 ]
