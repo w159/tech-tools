@@ -4,6 +4,8 @@ export {
   DEFAULT_OPENROUTER_BASE_URL,
   DEFAULT_TYPESAFE_MODEL,
   DEFAULT_OPENROUTER_MODEL,
+  DEFAULT_OPENROUTER_MAX_TOKENS,
+  MAX_OPENROUTER_MAX_TOKENS,
 } from './client.js';
 export { TypeSafeApiError } from './errors.js';
 export type { TypeSafeErrorCode } from './errors.js';

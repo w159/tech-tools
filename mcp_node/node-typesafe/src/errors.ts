@@ -1,5 +1,6 @@
 export type TypeSafeErrorCode =
   | 'MISSING_CREDENTIALS'
+  | 'INSUFFICIENT_CREDITS'
   | 'INVALID_ARGS'
   | 'NOT_FOUND'
   | 'FORBIDDEN'

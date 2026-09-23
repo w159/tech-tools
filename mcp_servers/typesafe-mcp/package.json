@@ -1,6 +1,6 @@
 {
   "name": "typesafe-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP server for TypeSafe AI's Jev System One model (direct API and OpenRouter Decisions API)",
   "type": "module",
   "main": "./dist/index.js",

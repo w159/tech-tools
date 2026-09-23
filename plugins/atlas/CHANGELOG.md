@@ -1,8 +1,65 @@
 # Changelog
 
-## Unreleased
+## [7.1.1] - 2026-09-23
+
+### Fixed
+- **The typesafe/Jev connector no longer 402-fails on credit-limited OpenRouter keys.**
+  OpenRouter's credit precheck reserves the model's full output budget when a request
+  omits `max_tokens`; for the `~typesafe/jev-latest` alias that is a 65536-token
+  reservation, so any key with a lower monthly limit was rejected with HTTP 402
+  ("requires more credits, or fewer max_tokens") before a single token was generated -
+  even though Jev's answers are tens of tokens and its output tokens are billed at $0.
+  The connector now always sends an explicit `max_tokens` on the OpenRouter Decisions
+  path (default 4096, clamped to Jev's documented `max_completion_tokens` of 28800,
+  overridable per call via the new `max_tokens` tool argument or per deployment via
+  `OPENROUTER_MAX_TOKENS` / `typesafe_openrouter_max_tokens`), grounded in the model's
+  live endpoint metadata (32k context, no sampling parameters, $0 completion price).
+  HTTP 402 now maps to a dedicated `INSUFFICIENT_CREDITS` error code with a hint that
+  explains the precheck, `usage.cost` from OpenRouter responses is passed through, and
+  the flat Decisions response envelope is verified against OpenRouter's published
+  OpenAPI schema. `references/jev-decisions.md` documents the model's capabilities and
+  what a 402 does and does not mean. Direct typesafe calls are unchanged (that API has
+  no `max_tokens` parameter). `mcp_node/node-typesafe` 31->39 tests;
+  `plugins/atlas/mcp/typesafe/server.mjs` rebundled.
 
 ### Added
+- **The Jev connector has a pattern library, not just one question set.** 7.0.0
+  shipped `typesafe` plus exactly one way to use it: four hardcoded code-quality
+  questions on a diff. TypeSafe's published patterns and cookbooks describe a much
+  larger vocabulary, and several of those patterns map onto problems atlas was
+  already solving by hand. `references/jev-patterns.md` ports nine of them, each with
+  when it applies, the question shape, what code does with the answers, and the atlas
+  surface it belongs to: speculative fan-out, confidence-gated routing, composite
+  scoring, intent routing, rank-then-verify shortlisting, hierarchical/beam search
+  over Choice probabilities, self-consistency, structured criteria, and the
+  autoresearch loop (framed as project-level tuning, explicitly not something an
+  agent runs mid-task). `references/jev-decisions.md` is rewritten as the contract
+  the patterns obey rather than as one recipe.
+- **`scripts/jev_reduce.py`** (+ 27 tests), the deterministic half of every pattern:
+  reads a `typesafe_decide` result on stdin and emits normalized scores, confidence
+  bands, tripped thresholds, and an optional weighted composite. TypeSafe's design
+  premise is that the model judges and code does the arithmetic; an agent doing that
+  arithmetic in prose is where it goes wrong. `--standard` applies the four
+  code-quality thresholds, `--weights` composes dimensions with weights that live in
+  atlas rather than in the question. It exits non-zero only on malformed input - a
+  terrible score still exits 0, because Jev never blocks anything in atlas.
+- **Batching is now a house rule, not an aside.** TypeSafe's own measurement of 13
+  questions over one document found one batched call 12.2x cheaper and 10.0x faster
+  than one call per question, with no change in the answers, because questions are
+  evaluated independently and in parallel. The contract now says: one call, every
+  question you might need, up to the 20-question cap, including speculative ones you
+  will filter out in code. Chaining two calls to refine an answer is called out as
+  the anti-pattern it is.
+- **Jev patterns wired into the surfaces that have the matching problem**, each
+  naming its pattern rather than pointing vaguely at the reference: `explorer` (rank
+  candidate files before reading, with an abstain gate), `implementer` and `verifier`
+  (standard set reduced through `jev_reduce.py`), `atlas-orchestrate` (typed intent
+  routing onto the squad, acted on only at confidence >= 0.7), `atlas-debug` (fan out
+  over competing root-cause hypotheses in one call before chasing any),
+  `atlas-refactor` and `atlas-audit` (composite scoring), and `/atlas menu <need>`
+  (rank-then-verify over the skill roster, where recommending nothing is a valid
+  outcome). All remain additive and optional: with no provider configured every one
+  of them is skipped silently.
 - **`test-mcp-tools.mjs` exists.** `AGENTS.md:95` has made
   `node test-mcp-tools.mjs <svc>` a mandatory propagation check ("Boot test passes
   without tool-count regression") and `AGENTS.md:77` lists the harness as part of
@@ -69,6 +126,33 @@
   `docs/panos-connector-design.md`.
 
 ### Fixed
+- **A Jev threshold that could never fire.** `references/jev-decisions.md` gated every
+  answer in the standard set on `confidence < 0.5`, including `duplication`, which is
+  a Noul. A `NoulAnswer` is `{type, noul}` and carries no `confidence` and no
+  `probabilities` (`mcp_node/node-typesafe/src/types.ts:58-61`; TypeSafe's confidence
+  doc says so outright). The rule was unsatisfiable for a quarter of the set, so in
+  practice it was either skipped or the number was invented. A Noul is now
+  thresholded on distance from 0.5, which is the only uncertainty signal it has, and
+  `jev_reduce.py` refuses to emit a confidence band for one so the mistake cannot be
+  made again in prose.
+- **Thresholds compared raw Score values to constants.** `type_safety.score < 1.0`
+  reads as "weakly typed" against the shipped 3-level rubric and as "barely off the
+  floor" against a 10-level one, so editing a rubric silently changed what every
+  threshold meant. All thresholds are now expressed against the normalized value
+  (`score / (levels - 1)`), per TypeSafe's own convention, and normalization is
+  stated as a house rule rather than left to each caller.
+- **The connector's types forbade structured criteria that the API accepts.**
+  `docs.typesafe.ai/primitives/advanced.md` documents that Choice option
+  descriptions, Score level descriptions, and Noul `true`/`false` all accept a
+  string, object, array, or null - Jev is trained to read structure, and flattening a
+  schema or taxonomy into a prose template loses the labels that disambiguate the
+  question. `node-typesafe` allowed structured `instructions` but pinned criteria to
+  strings (`Record<string, string | null>`, `string[]`, `{true?: string}`). The
+  runtime validator never enforced that, so structured criteria already worked on the
+  wire; the types and the tool description - the only schema an agent actually reads
+  - were what said otherwise. Widened to a shared `CriteriaEntry`, with
+  `typesafe_decide`'s description and validator messages updated to match, and
+  `plugins/atlas/mcp/typesafe/server.mjs` rebundled.
 - **A destructive NinjaOne tool advertised itself as safe to run unattended.**
   `ninjaone_devices_service_control` - "DESTRUCTIVE: Start, stop, pause, or restart
   a Windows service on a device (POST
