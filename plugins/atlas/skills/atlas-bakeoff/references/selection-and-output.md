@@ -35,8 +35,6 @@ REPORT BACK: verdict + objections. SCHEMA: bakeoff-verify v1
 
 While the verifier runs, perform your own comparison (do not idle). Reconcile material disagreements against evidence, not vote counts. If the verifier returns `refuted`, address the objection in the selection before reporting — or, if the objection is unanswerable, return `unresolved` with the objection stated. Without a completed independent assessment, return the recommendation explicitly labeled provisional/incomplete.
 
-Optional supplementary signal: run the `${CLAUDE_PLUGIN_ROOT}/references/jev-decisions.md` decision questions (simplicity / reversibility exposure of the proposed choice) via the typesafe connector, batched, as a second lens — same rule: it never overrides evidence, disagreement is a flag to investigate.
-
 Stamp the outcome: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_finding.py"` writing the decision (selected approach, decisive reason, verifier verdict) into `.atlas/.run/findings.json` per `plugins/atlas/agents/verifier.md`.
 
 ## Output

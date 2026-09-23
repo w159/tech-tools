@@ -71,12 +71,9 @@ atlas/
 |   `-- validate-readonly-query.sh #   not auto-loaded; DB-audit subagents wire it during read-only audits
 |-- scripts/                       # atlas_doctor.py (repair; also wired via hooks.json --hook as the 15th auto-loaded hook, SessionStart), atlas_db.py (observability), atlas_todo.py (durable todo board), lint_docs_names.py (date-first naming lint for dated docs/.atlas records; gate condition (l)), atlas_context_optimizer.py
 |                                  # (disable unused skills/agents), atlas_curator.py, atlas_memory.py,
-|                                  # asset_audit.py, discover_capabilities.py, build_hub.py, install_hooks.py,
-|                                  # jev_reduce.py (reduce a typesafe_decide result to normalized scores/bands/composites) + tests
+|                                  # asset_audit.py, discover_capabilities.py, build_hub.py, install_hooks.py
 |-- references/                    # plugin-wide references every skill and agent may load
 |   |-- operating-contract.md      #   the research -> document -> implement -> verify -> report loop
-|   |-- jev-decisions.md           #   the Jev/typesafe contract: primitives, normalization, batching, thresholds
-|   |-- jev-patterns.md            #   the Jev pattern library (fan-out, confidence routing, composite scoring, ...)
 |   |-- connector-config-flow.md   #   how a vendor connector gets configured
 |   `-- connector-tool-disclosure.md
 |-- output-styles/
@@ -178,13 +175,6 @@ Atlas integrates session companions and code-nav tools, recommended during setup
 - ponytail - optional less-code session posture.
 - **serena** - symbol intelligence (`activate_project` first, then overview/find/edit).
 - **lean-ctx** - shaped compose/search/read; serena fallback; never Bash-grep first.
-
-The `typesafe` connector (TypeSafe's Jev) is optional and additive: it answers typed
-Choice/Score/Noul questions and is used for second-opinion signals, ranking, and
-routing, never as a source of truth and never as grounds to block or pass a gate.
-`references/jev-decisions.md` is the contract and `references/jev-patterns.md` is the
-recipe set; with no `TYPESAFE_API_KEY` or `OPENROUTER_API_KEY` configured, every
-Jev-backed step is skipped silently.
 
 SessionStart injects a compact tool-routing blurb; the full matrix is
 `skills/atlas-orchestrate/references/tool-routing.md`. Dispatch tripwire denies

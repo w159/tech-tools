@@ -19,14 +19,6 @@ The honest, portable substitute:
 - Every report must say this in one line: `peers: N fresh same-host subagents (contextual
   independence only; same model family as host)`. Never present peers as cross-model oracle
   routing.
-- **Optional genuinely-different-model supplement:** when the typesafe/Jev MCP connector is
-  available (`typesafe_status` confirms credentials), the orchestrator MAY add one
-  `typesafe_decide` call - a `choice` over the options plus a `noul` on the deciding
-  question - as a supplementary typed judgment from a different model family (Jev). Label it
-  `voice: typesafe-jev (different model family)`. It is best-effort and never a hard
-  dependency: if the connector is unavailable, skip it silently and note availability in the
-  report. A Jev judgment is a typed signal to weigh in reconciliation, not a persona with a
-  full verdict.
 
 ## 2. Activation rules
 

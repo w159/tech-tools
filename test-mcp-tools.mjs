@@ -101,7 +101,6 @@ const CONNECTORS = {
   paylocity: { floor: 16 },
   spanning: { floor: 14 },
   threatlocker: { floor: 19 },
-  typesafe: { floor: 3 },
   vanta: { floor: 28 },
 };
 

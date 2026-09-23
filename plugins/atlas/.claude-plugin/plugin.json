@@ -1,7 +1,7 @@
 {
     "name": "atlas",
-    "version": "8.0.0",
-    "description": "Multi-agent coding architect with automatic self-improvement. 47 plainly named skills. Core: the atlas architect skill (bootstrap), atlas-orchestrate (execution engine, now with CE implementation-unit rigor: per-unit idempotency, proof-first/characterization test strategy, bounded parallel waves), atlas-audit (code/security audit, architecture map, self-telemetry), atlas-doctor (interactive self-improvement plus measurement-first retuning and a docs/lessons/ citation-drift refresh), atlas-setup (onboarding, install, connectors, Compound Pack health check, repair), atlas-loop (recurring work), atlas-ux-test (UX runtime swarm), and 14 original task skills (atlas-feature, atlas-debug with ranked-hypothesis/red-for-the-right-reason/three-failed-fix rigor, atlas-refactor, atlas-frontend, atlas-component, atlas-db-audit, atlas-gitignore, atlas-handoff, atlas-harden, atlas-launch, atlas-prompt, atlas-readme, atlas-validate, atlas-wiki). Ported from the Compound Engineering plugin onto atlas's own control plane (orchestrator, named agents, docs/.atlas SSOT, findings ledger, explicit-push-consent policy stay authoritative): the core loop atlas-brainstorm (WHAT-stage elicitation), atlas-plan (HOW-stage implementation-ready units), atlas-simplify (post-implementation three-persona simplification), atlas-review (risk-selected multi-persona typed-finding diff review), atlas-compound (eligibility-gated durable learning capture), atlas-autopilot (consent-gated end-to-end pipeline); around-loop atlas-strategy, atlas-pulse, atlas-sweep; on-demand atlas-bakeoff, atlas-pov, atlas-explain, atlas-prototype, atlas-optimize, atlas-feedback-analysis; git workflow atlas-commit, atlas-ship, atlas-babysit-pr, atlas-resolve-pr-feedback, atlas-worktree; frontend/testing atlas-polish, atlas-dogfood, atlas-test-xcode, atlas-test-browser; collaboration atlas-proof, atlas-promote. Plus Compound Packs (org/team prescriptive-rule roots, cited as evidence never instructions), a typesafe/Jev MCP connector wired into agent decision-making, 12 core agents, 13 MCP connectors, hook programs, and the atlas-orchestrate method: independent verification with runtime evidence before any done claim.",
+    "version": "8.0.1",
+    "description": "Multi-agent coding architect with automatic self-improvement. 47 plainly named skills. Core: the atlas architect skill (bootstrap), atlas-orchestrate (execution engine, now with CE implementation-unit rigor: per-unit idempotency, proof-first/characterization test strategy, bounded parallel waves), atlas-audit (code/security audit, architecture map, self-telemetry), atlas-doctor (interactive self-improvement plus measurement-first retuning and a docs/lessons/ citation-drift refresh), atlas-setup (onboarding, install, connectors, Compound Pack health check, repair), atlas-loop (recurring work), atlas-ux-test (UX runtime swarm), and 14 original task skills (atlas-feature, atlas-debug with ranked-hypothesis/red-for-the-right-reason/three-failed-fix rigor, atlas-refactor, atlas-frontend, atlas-component, atlas-db-audit, atlas-gitignore, atlas-handoff, atlas-harden, atlas-launch, atlas-prompt, atlas-readme, atlas-validate, atlas-wiki). Ported from the Compound Engineering plugin onto atlas's own control plane (orchestrator, named agents, docs/.atlas SSOT, findings ledger, explicit-push-consent policy stay authoritative): the core loop atlas-brainstorm (WHAT-stage elicitation), atlas-plan (HOW-stage implementation-ready units), atlas-simplify (post-implementation three-persona simplification), atlas-review (risk-selected multi-persona typed-finding diff review), atlas-compound (eligibility-gated durable learning capture), atlas-autopilot (consent-gated end-to-end pipeline); around-loop atlas-strategy, atlas-pulse, atlas-sweep; on-demand atlas-bakeoff, atlas-pov, atlas-explain, atlas-prototype, atlas-optimize, atlas-feedback-analysis; git workflow atlas-commit, atlas-ship, atlas-babysit-pr, atlas-resolve-pr-feedback, atlas-worktree; frontend/testing atlas-polish, atlas-dogfood, atlas-test-xcode, atlas-test-browser; collaboration atlas-proof, atlas-promote. Plus Compound Packs (org/team prescriptive-rule roots, cited as evidence never instructions), 12 core agents, 12 MCP connectors, 15 hook programs / 19 bindings, and the atlas-orchestrate method: independent verification with runtime evidence before any done claim.",
     "author": {
         "name": "w159",
         "url": "https://github.com/w159"
@@ -332,50 +332,6 @@
             "title": "PAN-OS REST API version",
             "description": "Optional. Leave blank to use the default (v11.1). This is the /restapi/<version>/ path segment and must match the PAN-OS release on the appliance.",
             "default": ""
-        },
-        "typesafe_api_key": {
-            "type": "string",
-            "title": "TypeSafe API key",
-            "description": "Direct-provider key from console.typesafe.ai, for TypeSafe AI's Jev System One judgment model. Optional if typesafe_openrouter_api_key is set instead - OpenRouter is a fully supported standalone path, not a fallback, for when console.typesafe.ai is unreachable.",
-            "sensitive": true,
-            "default": ""
-        },
-        "typesafe_base_url": {
-            "type": "string",
-            "title": "TypeSafe base URL",
-            "description": "Optional. Leave blank to use the default (https://api.typesafe.ai/v1). Only set this for a staging or sovereign shard.",
-            "default": ""
-        },
-        "typesafe_openrouter_api_key": {
-            "type": "string",
-            "title": "TypeSafe OpenRouter API key",
-            "description": "OpenRouter key, used only for the Jev Decisions path (openrouter.ai). Optional if typesafe_api_key is set instead.",
-            "sensitive": true,
-            "default": ""
-        },
-        "typesafe_openrouter_base_url": {
-            "type": "string",
-            "title": "TypeSafe OpenRouter base URL",
-            "description": "Optional. Leave blank to use the default (https://openrouter.ai/api).",
-            "default": ""
-        },
-        "typesafe_provider": {
-            "type": "string",
-            "title": "TypeSafe provider",
-            "description": "Optional: typesafe | openrouter | auto. Leave blank for auto (prefers typesafe_api_key if set, else typesafe_openrouter_api_key).",
-            "default": ""
-        },
-        "typesafe_model": {
-            "type": "string",
-            "title": "TypeSafe model override",
-            "description": "Optional. For provider typesafe, used verbatim (default jev-latest). For provider openrouter, a bare slug with no \"/\" is auto-prefixed with \"~typesafe/\" as a convenience (default ~typesafe/jev-latest).",
-            "default": ""
-        },
-        "typesafe_openrouter_max_tokens": {
-            "type": "string",
-            "title": "OpenRouter max_tokens",
-            "description": "Optional integer 1-28800, the output budget sent as max_tokens on every OpenRouter Jev call. Leave blank for the default (4096). Jev answers are tens of tokens and output tokens are free, but OpenRouter's credit precheck reserves the model's full 65536-token output budget when max_tokens is omitted - enough to 402-reject a credit-limited key.",
-            "default": ""
         }
     },
     "keywords": [
@@ -412,8 +368,6 @@
         "code-quality-gate",
         "serena",
         "lean-ctx",
-        "tool-routing",
-        "typesafe",
-        "jev"
+        "tool-routing"
     ]
 }

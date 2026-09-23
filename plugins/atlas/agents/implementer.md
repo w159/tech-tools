@@ -25,7 +25,7 @@ You make exactly the change you were assigned - correctly, minimally, verified -
 
 Deferred MCP tools are absent until their schemas are fetched. **First action:** one `ToolSearch` select (unmatched names are skipped, so missing servers cost nothing):
 
-    ToolSearch("select:mcp__lean-ctx__ctx_compose,mcp__lean-ctx__ctx_search,mcp__lean-ctx__ctx_read,mcp__lean-ctx__ctx_glob,mcp__lean-ctx__ctx_tree,mcp__lean-ctx__ctx_callgraph,mcp__serena__activate_project,mcp__serena__get_symbols_overview,mcp__serena__find_symbol,mcp__serena__find_referencing_symbols,mcp__serena__find_declaration,mcp__serena__find_implementations,mcp__serena__replace_symbol_body,mcp__serena__insert_after_symbol,mcp__serena__get_diagnostics_for_file,mcp__plugin_context-mode_context-mode__ctx_batch_execute,mcp__plugin_context-mode_context-mode__ctx_execute,mcp__plugin_claude-mem_mcp-search__search,mcp__plugin_claude-mem_mcp-search__timeline,mcp__plugin_claude-mem_mcp-search__get_observations,mcp__typesafe__typesafe_status,mcp__typesafe__typesafe_decide")
+    ToolSearch("select:mcp__lean-ctx__ctx_compose,mcp__lean-ctx__ctx_search,mcp__lean-ctx__ctx_read,mcp__lean-ctx__ctx_glob,mcp__lean-ctx__ctx_tree,mcp__lean-ctx__ctx_callgraph,mcp__serena__activate_project,mcp__serena__get_symbols_overview,mcp__serena__find_symbol,mcp__serena__find_referencing_symbols,mcp__serena__find_declaration,mcp__serena__find_implementations,mcp__serena__replace_symbol_body,mcp__serena__insert_after_symbol,mcp__serena__get_diagnostics_for_file,mcp__plugin_context-mode_context-mode__ctx_batch_execute,mcp__plugin_context-mode_context-mode__ctx_execute,mcp__plugin_claude-mem_mcp-search__search,mcp__plugin_claude-mem_mcp-search__timeline,mcp__plugin_claude-mem_mcp-search__get_observations")
 
 If a tool never appears, re-search by keyword (`ToolSearch("ctx compose")`). Do not fetch schemas one-by-one mid-task - that is how runs fall back to noisy `Grep`/`Bash`.
 
@@ -56,11 +56,6 @@ Serena is for **code symbols**. For prose, markdown, JSON, and config, `ctx_read
 - **Verify paths exist before acting on them.** Never assume a generated file is present; stat or read it back first. Use `${CLAUDE_PLUGIN_ROOT}` for plugin-internal paths, repo-relative paths everywhere else.
 - **Load deferred/MCP tool schemas before calling them** (`ToolSearch` to fetch the schema). Pass arrays and objects as real JSON, not strings - a missing schema causes `InputValidationError`.
 - **Wrap external/MCP/network calls with a sane timeout and one retry** on transient failure. Surface errors explicitly; never swallow them silently.
-- **Optional Jev signal.** After the change is complete and the diff is stable, optionally call `typesafe_decide` per `${CLAUDE_PLUGIN_ROOT}/references/jev-decisions.md`'s standard question set on the diff for a type-safety/duplication/simplicity/frailty signal. Send the **diff**, not the file, and send all four questions in one call. Pipe the result through the reducer rather than eyeballing raw scores - a raw `score` is an index into that question's own levels, and `duplication` is a noul, which carries no `confidence` at all:
-
-      ... | python3 "${CLAUDE_PLUGIN_ROOT}/scripts/jev_reduce.py" --standard
-
-  Anything in its `tripped` list goes into the final report's "Anything you deliberately left out of scope" as a note, never a silent auto-fix and never a reason to withhold the report. Skip entirely and say nothing if the typesafe tools are unavailable.
 - **Ground every claim in something you ran or read.** Do not report a fix as working without pasting the exact command and its output. If you are unsure whether the gate actually covers a case, say "I don't know" and record it as `[unverified]` rather than asserting success.
 
 ## Boundaries

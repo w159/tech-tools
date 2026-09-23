@@ -52,6 +52,5 @@ Check whether a historical constraint still applies before presenting it as a cu
 ### Depth and dispatch
 
 - Trivial single-symbol lookups may run inline. Anything needing a real trace goes to `atlas:explorer` per `trace-dispatch.md`.
-- When discovery surfaces more candidate files than the budget can read, use the rank-then-verify pattern in `${CLAUDE_PLUGIN_ROOT}/references/jev-patterns.md` via one `typesafe_decide` call to pick a reading order — a reading order, never a substitute for reading. Skip silently if typesafe is unavailable.
 - Expand investigation to resolve material gaps, not to satisfy a source quota.
 - No artifacts: evidence stays in the explorer's report and the chat answer. Do not write dossiers, run directories, or explainer files.
