@@ -19,12 +19,7 @@ show the discoverability menu in the "## Menu mode" section below and stop. If a
 follows `menu` (a described need, e.g. `/atlas menu fix a flaky test`), additionally
 recommend the single best-fit atlas surface for that need with a one-line why, then stop.
 Recommending nothing is a valid outcome: if no surface fits the described need, say so
-rather than naming the closest one, because a list of names invites a guess. See the
-rank-then-verify pattern in `${CLAUDE_PLUGIN_ROOT}/references/jev-patterns.md`, which the
-typesafe connector can run over the roster when it is configured - one `choice` across
-every surface plus an abstain `noul`, then a second call reading only the top three in
-full. Either way the menu below is still printed in full; the recommendation is a hint
-layered on top of it, never a replacement for it.
+rather than naming the closest one, because a list of names invites a guess.
 
 Otherwise run these stages in order. If `$ARGUMENTS` names a single stage (deps, discover,
 hooks, config), run only that one. Default is all.

@@ -197,25 +197,6 @@
         "CFG_PANOS_VERIFY_TLS": "${user_config.panos_verify_tls}",
         "CFG_PANOS_REST_VERSION": "${user_config.panos_rest_version}"
       }
-    },
-    "typesafe": {
-      "command": "node",
-      "args": [
-        "--import",
-        "${CLAUDE_PLUGIN_ROOT}/mcp/_env/load.mjs",
-        "${CLAUDE_PLUGIN_ROOT}/mcp/typesafe/server.mjs"
-      ],
-      "env": {
-        "MCP_TRANSPORT": "stdio",
-        "ATLAS_ENV_FILE": "${CLAUDE_PLUGIN_ROOT}/.env",
-        "CFG_TYPESAFE_API_KEY": "${user_config.typesafe_api_key}",
-        "CFG_TYPESAFE_BASE_URL": "${user_config.typesafe_base_url}",
-        "CFG_OPENROUTER_API_KEY": "${user_config.typesafe_openrouter_api_key}",
-        "CFG_OPENROUTER_BASE_URL": "${user_config.typesafe_openrouter_base_url}",
-        "CFG_TYPESAFE_PROVIDER": "${user_config.typesafe_provider}",
-        "CFG_TYPESAFE_MODEL": "${user_config.typesafe_model}",
-        "CFG_OPENROUTER_MAX_TOKENS": "${user_config.typesafe_openrouter_max_tokens}"
-      }
     }
   }
 }

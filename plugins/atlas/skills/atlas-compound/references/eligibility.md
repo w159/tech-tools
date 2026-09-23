@@ -32,7 +32,7 @@ Mandatory, ported from CE: each invocation captures exactly ONE lesson. If the s
 | Grounding | full mechanical claims check (`references/grounding.md`) | same - grounding is NEVER reduced; ungrounded claims are the failure mode this skill exists to prevent |
 | Schema validation | full frontmatter + enum + YAML-safety validation | same |
 | Session-history probe | optional: probe claude-mem for a prior session that already hit this problem (7-day window, current branch or >=2 topic-keyword hits) to enrich "What Didn't Work" | skipped |
-| Enhancement reviewers | none in atlas (CE's optional doc-review personas have no atlas equivalent; a second opinion may be requested via a bounded Task dispatch to a generic read-only subagent, or a `typesafe_decide` judgment on the counterfactual question - both optional, never required) | skipped |
+| Enhancement reviewers | none in atlas (CE's optional doc-review personas have no atlas equivalent; a second opinion may be requested via a bounded Task dispatch to a generic read-only subagent - optional, never required) | skipped |
 | Output | `Learning captured` / `Learning skipped` signal | same |
 
 Unknown, multiple, or invalid `depth:`/`mode:` tokens fail closed: emit `Learning skipped` with reason `invalid mode token`. Fail-closed means no documentation, never a guess.

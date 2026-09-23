@@ -1,5 +1,24 @@
 # Changelog
 
+## [8.0.1] - 2026-09-23
+
+### Removed
+- **The typesafe (Jev) connector is removed from atlas.** Despite the 7.1.1
+  `max_tokens` fix, the shipped 7.0.0 bundle kept precheck-rejecting credit-limited
+  OpenRouter keys with HTTP 402 ("requested up to 65536 tokens"), and the connector's
+  judgment calls were never load-bearing: every wiring was additive and skip-silently.
+  Removed: the `typesafe` MCP server from `.mcp.json` (and the bundled
+  `mcp/typesafe/server.mjs`), all `typesafe_*` userConfig entries, the Jev hints from
+  the explorer/implementer/verifier agents and the atlas / atlas-orchestrate /
+  atlas-debug / atlas-refactor skills and atlas-audit's synthesis framework,
+  `references/jev-decisions.md` + `references/jev-patterns.md`, and
+  `scripts/jev_reduce.py` + its tests. The standalone `mcp_servers/typesafe-mcp` and
+  `mcp_node/node-typesafe` trees are also removed, along with
+  `docs/typesafe-connector-design.md`, the `.env.template` block, the README connector
+  row, the mcp-gateway typesafe backend, and the `typesafe: { floor: 3 }` boot-test
+  probe (13 -> 12 connectors). Residual mentions in the 8.0.0-era
+  atlas-bakeoff/atlas-pov/atlas-explain/atlas-compound skill prose are swept too.
+
 ## [8.0.0] - 2026-09-23
 
 ### Added

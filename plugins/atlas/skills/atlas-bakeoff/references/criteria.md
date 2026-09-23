@@ -29,10 +29,6 @@ Add decision-specific criteria when they carry real weight — e.g. operational 
 - Cross-check library claims against current docs (context7 for library APIs, microsoft-docs for Azure/.NET) rather than training-data memory. A "known limitation" that was fixed two major versions ago is a comparison error.
 - Divergence between a candidate's own self-assessment and the orchestrator's reading is normal and informative — record material disagreements; they are exactly what Phase 4's independent judgment should probe.
 
-## Optional: typed second opinion
-
-As a supplementary signal alongside your own scoring, run the typesafe MCP connector (`typesafe_decide`, after checking `typesafe_status`): ask the SAME scored questions for each candidate (e.g. "given this mechanism and constraint set, is reversibility adequate?") as typed judgments, batched in one call across candidates. Reduce per the composite pattern in `${CLAUDE_PLUGIN_ROOT}/references/jev-patterns.md` and report the dimensions, never a single blended number. The typed signal never overrides evidence — a disagreement between it and your scoring is a flag to investigate, not a tiebreaker.
-
 ## Comparison artifact
 
 Keep the working comparison in one place per run:

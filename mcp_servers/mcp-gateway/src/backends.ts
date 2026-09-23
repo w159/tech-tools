@@ -39,7 +39,6 @@ export const BACKEND_CATALOG: readonly BackendSpec[] = [
   { id: "paylocity", role: "Paylocity", envPrefixes: ["PAYLOCITY_"], command: nodeServer("paylocity") },
   { id: "spanning", role: "Spanning", envPrefixes: ["SPANNING_"], command: nodeServer("spanning") },
   { id: "threatlocker", role: "ThreatLocker", envPrefixes: ["THREATLOCKER_"], command: nodeServer("threatlocker") },
-  { id: "typesafe", role: "TypeSafe", envPrefixes: ["TYPESAFE_", "OPENROUTER_"], command: nodeServer("typesafe") },
   { id: "vanta", role: "Vanta", envPrefixes: ["VANTA_"], command: nodeServer("vanta") },
 ] as const;
 

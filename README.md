@@ -292,7 +292,6 @@ environment rather than `userConfig`.
 | Vanta | GRC / compliance | `vanta_client_id`, `vanta_client_secret` |
 | Paylocity | HR / payroll | `paylocity_client_id`, `paylocity_client_secret`, `paylocity_company_id` |
 | PAN-OS | Palo Alto firewall / Panorama | `panos_host`, `panos_api_key` |
-| TypeSafe (Jev) | Structured AI decisions (routing/scoring/verification) | `typesafe_api_key` or `typesafe_openrouter_api_key` |
 
 Example: set `ninjaone_client_id` and `ninjaone_client_secret` in the plugin
 config, and `atlas-harden` can pull device state from NinjaOne while it drafts

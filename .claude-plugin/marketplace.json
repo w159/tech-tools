@@ -11,7 +11,7 @@
         {
             "name": "atlas",
             "source": "./plugins/atlas",
-            "description": "Multi-agent coding architect: 47 plainly named skills (core orchestration/audit/self-improvement, 14 original task skills, and the Compound Engineering loop ported onto atlas's own control plane - brainstorm/plan/simplify/review/compound/autopilot, plus strategy/pulse/sweep, bakeoff/pov/explain/prototype/optimize/feedback-analysis, git workflow, and frontend/testing/collaboration skills), 12 core agents, Compound Packs (org/team prescriptive-rule roots cited as evidence), a typesafe/Jev MCP connector wired into agent decision-making, hooks including the fallow agent commit/push gate, inline docs-drift warning, todo-board mirror, stale-connector-credential detection, self-improvement (session ingest, chronicle facet capture, memory capture, nudge) and atlas_doctor (session-health check), and the atlas-orchestrate method: deterministic contract tests as the verification step, with runtime evidence before any done claim, plus a durable per-project todo board.",
+            "description": "Multi-agent coding architect: 47 plainly named skills (core orchestration/audit/self-improvement, 14 original task skills, and the Compound Engineering loop ported onto atlas's own control plane - brainstorm/plan/simplify/review/compound/autopilot, plus strategy/pulse/sweep, bakeoff/pov/explain/prototype/optimize/feedback-analysis, git workflow, and frontend/testing/collaboration skills), 12 core agents, Compound Packs (org/team prescriptive-rule roots cited as evidence), hooks including the fallow agent commit/push gate, inline docs-drift warning, todo-board mirror, stale-connector-credential detection, self-improvement (session ingest, chronicle facet capture, memory capture, nudge) and atlas_doctor (session-health check), and the atlas-orchestrate method: deterministic contract tests as the verification step, with runtime evidence before any done claim, plus a durable per-project todo board.",
             "category": "developer-tools",
             "keywords": [
                 "atlas",
@@ -47,7 +47,7 @@
                 "learning-capture",
                 "compound-packs"
             ],
-            "version": "8.0.0"
+            "version": "8.0.1"
         },
         {
             "name": "armada",

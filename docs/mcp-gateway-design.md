@@ -51,7 +51,6 @@ Assign Entra groups (not individuals) to the enterprise application
 | Paylocity | Paylocity.Read | Paylocity.Write |
 | Spanning | Spanning.Read | Spanning.Write |
 | ThreatLocker | ThreatLocker.Read | ThreatLocker.Write |
-| TypeSafe | TypeSafe.Read | TypeSafe.Write |
 | Vanta | Vanta.Read | Vanta.Write |
 
 Read exposes only tools the vendor server annotates `readOnlyHint: true`.

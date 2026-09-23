@@ -53,19 +53,7 @@ order of completion does not matter).
    and `codeql`.
 3. SOLID / DRY / KISS + best practices - single-responsibility, open/
    closed, leaky abstractions, local code-smell duplication. Composes
-   `quality-playbook`. Optionally corroborates with the standard
-   `type_safety`/`duplication`/`simplicity`/`frailty` question set from
-   `${CLAUDE_PLUGIN_ROOT}/references/jev-decisions.md` via the typesafe MCP
-   connector's `typesafe_decide` tool against each hot-spot file/diff,
-   folding results in as supporting signal alongside its own analysis.
-   One call per hot spot, all four questions together - never one call
-   per question. Reduce each with `${CLAUDE_PLUGIN_ROOT}/scripts/jev_reduce.py --standard`, and
-   use the composite across hot spots to order which ones get reviewed
-   first (composite scoring, in
-   `${CLAUDE_PLUGIN_ROOT}/references/jev-patterns.md`). A Jev signal is
-   never itself a finding: it points a reviewer at a file, and the
-   reviewer still has to produce the `file:line` and the evidence.
-   Additive only: skip silently if the typesafe tools are unavailable.
+   `quality-playbook`.
    The adversarial `atlas:verifier` pass in Phase 3 still governs whether
    any resulting finding survives.
 4. Risk hotspots - churn rate, coupling, coverage density from the
