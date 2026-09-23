@@ -37,7 +37,7 @@ VERIFY:
 - Run the test suite or the captured sample runs after each step. Show the exact command and the actual output.
 - Prove observable behavior is unchanged by comparing before/after output, not "it should still work."
 - Exercise one adjacent error path to confirm error handling was preserved.
-- Optionally, before and after each refactor step, run the `duplication`/`simplicity`/`frailty` questions from `${CLAUDE_PLUGIN_ROOT}/references/jev-decisions.md` via the typesafe MCP connector's `typesafe_decide` tool as a supplementary signal alongside the behavior-preservation test. Additive only: skip silently if the typesafe tools are unavailable, and never a substitute for the actual behavior-equivalence proof above.
+- Optionally, before and after each refactor step, run the `duplication`/`simplicity`/`frailty` questions from `${CLAUDE_PLUGIN_ROOT}/references/jev-decisions.md` via the typesafe MCP connector's `typesafe_decide` tool as a supplementary signal alongside the behavior-preservation test. Send all three questions in one call, then reduce both the before and after run into one comparable number using the composite-scoring pattern in `${CLAUDE_PLUGIN_ROOT}/references/jev-patterns.md`, weighted for what a refactor is actually for - pipe each result through `${CLAUDE_PLUGIN_ROOT}/scripts/jev_reduce.py` with `--weights` favoring `simplicity` and `frailty` over `type_safety`. Report the dimensions, not just the composite: a single number is unreviewable, and a composite that improved while `frailty` got worse is exactly the trade that needs surfacing. Additive only: skip silently if the typesafe tools are unavailable, and never a substitute for the actual behavior-equivalence proof above.
 
 REPORT:
 - Before/after structure.

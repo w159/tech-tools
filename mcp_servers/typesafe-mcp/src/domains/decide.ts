@@ -1,5 +1,6 @@
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { Provider, Question, Questions } from 'node-typesafe';
+import { DEFAULT_OPENROUTER_MAX_TOKENS, MAX_OPENROUTER_MAX_TOKENS } from 'node-typesafe';
 import { readOnlyTool, shapeRaw, toolError, typesafeToolError, type CallToolResult } from './_helpers.js';
 import { getClient } from '../utils/client.js';
 
@@ -15,10 +16,13 @@ export const decideTool: Tool = readOnlyTool({
     'primitive model, not a chat/coding LLM: it answers typed noul (yes/no probability), choice ' +
     '(pick one of up to 255 named options), or score (2-10 ordered levels) questions and returns ' +
     'typed answers with probabilities and confidence - never free text. Use it for routing, ' +
-    'scoring, and verification decisions. Resolves the typesafe (console.typesafe.ai) or ' +
-    'openrouter (openrouter.ai) provider automatically from configured credentials unless ' +
-    'overridden with provider. Context budget: 64k tokens total / 32k for state plus the longest ' +
-    'single question (not enforced client-side).',
+    'scoring, and verification decisions. Model parameters: 32k-token context (64k request ' +
+    'total, 32k for state plus the longest single question), output is a compact typed payload ' +
+    '(tens of tokens), no sampling parameters supported. The openrouter provider always sends ' +
+    'max_tokens (default 4096, max 28800) so OpenRouter\u2019s credit precheck does not reserve ' +
+    'the model\u2019s full 65536-token output budget against your key. Resolves the typesafe ' +
+    '(console.typesafe.ai) or openrouter (openrouter.ai) provider automatically from configured ' +
+    'credentials unless overridden with provider.',
   inputSchema: {
     type: 'object' as const,
     properties: {
@@ -33,7 +37,11 @@ export const decideTool: Tool = readOnlyTool({
           `${MIN_QUESTIONS}-${MAX_QUESTIONS} entries keyed by an id you choose. Each value is one of: ` +
           '{type:"noul",instructions,criteria?:{true?,false?}} (yes/no probability) | ' +
           '{type:"choice",instructions,criteria:{option:description|null,...}} (max 255 options) | ' +
-          '{type:"score",instructions,criteria:[levelDescription,...]} (2-10 levels, lowest to highest).',
+          '{type:"score",instructions,criteria:[levelDescription,...]} (2-10 levels, lowest to highest). ' +
+          'Jev reads structure: instructions and every criteria description may be prose OR JSON ' +
+          '(an object of labelled parts, or an array of things to check/compare) instead of a string. ' +
+          'Batch every question you might need into one call - they are evaluated in parallel, so ' +
+          'extra questions cost far less than extra calls.',
         minProperties: MIN_QUESTIONS,
         maxProperties: MAX_QUESTIONS,
       },
@@ -43,6 +51,17 @@ export const decideTool: Tool = readOnlyTool({
           'Optional model override for this call only. For provider "typesafe" used verbatim ' +
           '(default jev-latest); for "openrouter" a bare slug with no "/" is auto-prefixed with ' +
           '"~typesafe/" (default ~typesafe/jev-latest).',
+      },
+      max_tokens: {
+        type: 'integer' as const,
+        minimum: 1,
+        maximum: MAX_OPENROUTER_MAX_TOKENS,
+        description:
+          `Optional OpenRouter-only output budget for this call, tokens (default ${DEFAULT_OPENROUTER_MAX_TOKENS}, ` +
+          `hard max ${MAX_OPENROUTER_MAX_TOKENS} - Jev\u2019s documented max_completion_tokens). Jev answers are ` +
+          'tens of tokens, so the default already far exceeds any real answer; lower it only to shrink ' +
+          'OpenRouter\u2019s credit precheck reservation. Ignored on the typesafe provider (that API has ' +
+          'no max_tokens parameter).',
       },
       provider: {
         type: 'string' as const,
@@ -85,11 +104,13 @@ function validateQuestions(questions: unknown): ValidationOk | ValidationFail {
     if (q.instructions === undefined || q.instructions === null) {
       return { ok: false, message: `question "${id}" is missing instructions.` };
     }
+    // Every criteria *description* may be a string, JSON object, JSON array, or null - Jev is
+    // trained to read structure. Only the criteria container's shape and size are validated here.
     if (q.type === 'choice') {
       if (typeof q.criteria !== 'object' || q.criteria === null || Array.isArray(q.criteria)) {
         return {
           ok: false,
-          message: `question "${id}" (choice) requires criteria: an object mapping option name -> description|null.`,
+          message: `question "${id}" (choice) requires criteria: an object mapping option name -> description, where a description is prose, JSON, or null.`,
         };
       }
       const optionCount = Object.keys(q.criteria as object).length;
@@ -98,12 +119,12 @@ function validateQuestions(questions: unknown): ValidationOk | ValidationFail {
       }
     } else if (q.type === 'score') {
       if (!Array.isArray(q.criteria) || q.criteria.length < 2 || q.criteria.length > 10) {
-        return { ok: false, message: `question "${id}" (score) requires criteria: an array of 2-10 level descriptions.` };
+        return { ok: false, message: `question "${id}" (score) requires criteria: an array of 2-10 level descriptions (each prose or JSON), lowest to highest.` };
       }
     } else if (q.criteria !== undefined) {
       // noul: criteria is optional, but if present must be a plain object.
       if (typeof q.criteria !== 'object' || q.criteria === null || Array.isArray(q.criteria)) {
-        return { ok: false, message: `question "${id}" (noul) criteria, if present, must be an object with optional true/false descriptions.` };
+        return { ok: false, message: `question "${id}" (noul) criteria, if present, must be an object with optional true/false descriptions (each prose or JSON).` };
       }
     }
   }
@@ -122,6 +143,17 @@ export async function handleDecide(args: Record<string, unknown>): Promise<CallT
   if (args.provider !== undefined && provider === undefined) {
     return toolError('INVALID_ARGS', 'provider, if set, must be "typesafe" or "openrouter".');
   }
+  let maxTokens: number | undefined;
+  if (args.max_tokens !== undefined) {
+    const n = Number(args.max_tokens);
+    if (!Number.isInteger(n) || n < 1 || n > MAX_OPENROUTER_MAX_TOKENS) {
+      return toolError(
+        'INVALID_ARGS',
+        `max_tokens, if set, must be an integer between 1 and ${MAX_OPENROUTER_MAX_TOKENS} (Jev's documented max_completion_tokens).`
+      );
+    }
+    maxTokens = n;
+  }
 
   try {
     const client = getClient();
@@ -130,11 +162,17 @@ export async function handleDecide(args: Record<string, unknown>): Promise<CallT
       questions: validated.value,
       model: typeof args.model === 'string' ? args.model : undefined,
       provider,
+      maxTokens,
     });
     return shapeRaw(result);
   } catch (err) {
     return typesafeToolError('typesafe_decide', err, {
-      hint: 'Call typesafe_status to check which provider and model resolved for this call.',
+      hint:
+        err instanceof Error && (err as { code?: unknown }).code === 'INSUFFICIENT_CREDITS'
+          ? 'OpenRouter rejected the call on credits. The connector sends a small explicit max_tokens ' +
+            `(default ${DEFAULT_OPENROUTER_MAX_TOKENS}) so its credit precheck does not reserve the ` +
+            "model's full output budget; check the key's monthly limit at openrouter.ai or top up credits."
+          : 'Call typesafe_status to check which provider and model resolved for this call.',
     });
   }
 }

@@ -21,6 +21,13 @@ export interface TypeSafeClientConfig {
   provider?: ProviderSetting;
   /** Model id/slug override. Interpreted per-provider — see resolveModel(). */
   model?: string;
+  /**
+   * max_tokens budget sent on every OpenRouter Decisions call. Defaults to
+   * 4096 (see DEFAULT_OPENROUTER_MAX_TOKENS in client.ts for why); clamped
+   * to [1, 28800] (Jev's documented max_completion_tokens). Ignored on the
+   * direct typesafe path - that API has no max_tokens parameter.
+   */
+  openrouterMaxTokens?: number;
   timeoutMs?: number;
 }
 
@@ -32,24 +39,32 @@ export type State = string | Record<string, JsonValue> | JsonValue[];
 /** A single string|object|array instructions payload for one question. */
 export type Instructions = string | Record<string, JsonValue> | JsonValue[];
 
+/**
+ * One criteria entry: a Choice option description, a Score level description, or a Noul
+ * true/false description. Jev is trained to read structure, so an entry may be plain prose
+ * or JSON (an object of labelled parts, or an array of things to check/compare).
+ * See https://docs.typesafe.ai/primitives/advanced.md.
+ */
+export type CriteriaEntry = string | Record<string, JsonValue> | JsonValue[] | null;
+
 export interface NoulQuestion {
   type: 'noul';
   instructions: Instructions;
-  criteria?: { true?: string; false?: string };
+  criteria?: { true?: CriteriaEntry; false?: CriteriaEntry };
 }
 
 export interface ChoiceQuestion {
   type: 'choice';
   instructions: Instructions;
-  /** Option name -> description (or null). Max 255 options. */
-  criteria: Record<string, string | null>;
+  /** Option name -> description (prose, JSON, or null). Max 255 options. */
+  criteria: Record<string, CriteriaEntry>;
 }
 
 export interface ScoreQuestion {
   type: 'score';
   instructions: Instructions;
-  /** Level descriptions, lowest to highest. 2-10 levels. */
-  criteria: string[];
+  /** Level descriptions (prose or JSON), lowest to highest. 2-10 levels. */
+  criteria: CriteriaEntry[];
 }
 
 export type Question = NoulQuestion | ChoiceQuestion | ScoreQuestion;
@@ -81,6 +96,12 @@ export type Answers = Record<string, Answer>;
 export interface Usage {
   input_tokens: number;
   output_tokens: number;
+  /**
+   * USD cost of the response, reported by the OpenRouter Decisions API (and
+   * absent on the direct typesafe path). Jev bills input tokens only; output
+   * tokens are free.
+   */
+  cost?: number;
 }
 
 export interface SystemOneRequest {
@@ -90,6 +111,8 @@ export interface SystemOneRequest {
   model?: string;
   /** Overrides the client's resolved provider for this call only. */
   provider?: Provider;
+  /** Overrides the configured max_tokens for this OpenRouter call only. */
+  maxTokens?: number;
 }
 
 export interface SystemOneResult {

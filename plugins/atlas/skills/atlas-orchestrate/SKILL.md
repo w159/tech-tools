@@ -68,6 +68,8 @@ Orchestrator stays Opus-tier; subagents default Sonnet, drop to Haiku for read-a
 
 **Fork** planner / completeness-critic / docs-curator when history helps. **Never fork** verifier or explorer.
 
+**Optional typed routing.** When the right agent for a stage is genuinely unclear, the intent-routing pattern in `${CLAUDE_PLUGIN_ROOT}/references/jev-patterns.md` turns it into one `typesafe_decide` call: a `choice` over the squad, a `score` for scope, and a `noul` for destructiveness, all batched. Act on it only at `confidence >= 0.7`; below that, say the top two and pick with your own judgment, and below 0.5 ask. It picks a default, never overrides an explicit user instruction, and never authorizes a write. Skip silently if the typesafe tools are unavailable.
+
 ## Automation (hooks)
 
 14 unique hook programs / 18 bindings auto-load via `hooks/hooks.json` (including the fallow agent gate). Fail-open on missing deps. Key enforcers: `session_boot`, `prompt_optimizer` (+ arm-early), `bash_advisor`, `fallow_gate`, `dispatch_tripwire`, `completion_gate`, `format_after_edit`, `docs_drift_watch`, `connector_credential_watch`, `ingest_session`, `memory_capture`, `chronicle_facet`, `nudge`, `atlas_doctor`. Full contract/env: **load `references/hooks-automation.md`**. JS/TS fallow usage: **load `references/fallow-tools.md`**.
@@ -80,7 +82,8 @@ Orchestrator stays Opus-tier; subagents default Sonnet, drop to Haiku for read-a
 | `references/the-loop.md` | running Orient→Finish or closing a wave |
 | `references/anti-rationalization.md` | catching "I'll just…" thoughts |
 | `references/squad-and-tiers.md` | choosing agent/model/effort |
-| `references/capability-routing.md` | task → agent/skill/MCP/model |
+| `references/capability-routing.md` | task -> agent/skill/MCP/model |
+| `${CLAUDE_PLUGIN_ROOT}/references/jev-patterns.md` | using the typesafe/Jev connector to route, rank, or score |
 | `references/capability-catalog.md` | recommending installs (`/atlas`, atlas-setup) |
 | `references/subagent-kit.md` | writing any dispatch |
 | `references/scaffolding.md` | Orient / findings / per-root docs |

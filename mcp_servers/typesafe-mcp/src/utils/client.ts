@@ -19,6 +19,7 @@ export interface EnvCredentials {
   openrouterBaseUrl: string;
   openrouterHttpReferer: string;
   openrouterXTitle: string;
+  openrouterMaxTokens: string;
   provider: string;
   model: string;
 }
@@ -32,6 +33,7 @@ export function readEnv(): EnvCredentials {
     openrouterBaseUrl: cleanEnv(process.env.OPENROUTER_BASE_URL),
     openrouterHttpReferer: cleanEnv(process.env.OPENROUTER_HTTP_REFERER),
     openrouterXTitle: cleanEnv(process.env.OPENROUTER_X_TITLE),
+    openrouterMaxTokens: cleanEnv(process.env.OPENROUTER_MAX_TOKENS),
     provider: cleanEnv(process.env.TYPESAFE_PROVIDER),
     model: cleanEnv(process.env.TYPESAFE_MODEL),
   };
@@ -49,6 +51,7 @@ export function clientConfigFromEnv(env: EnvCredentials) {
     openrouterBaseUrl: env.openrouterBaseUrl || undefined,
     openrouterHttpReferer: env.openrouterHttpReferer || undefined,
     openrouterXTitle: env.openrouterXTitle || undefined,
+    openrouterMaxTokens: env.openrouterMaxTokens ? Number(env.openrouterMaxTokens) : undefined,
     provider: isProviderSetting(env.provider) ? env.provider : 'auto' as const,
     model: env.model || undefined,
   };

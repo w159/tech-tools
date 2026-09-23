@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { TypeSafeClient, DEFAULT_TYPESAFE_MODEL, DEFAULT_OPENROUTER_MODEL } from '../src/client.js';
+import {
+  TypeSafeClient,
+  DEFAULT_TYPESAFE_MODEL,
+  DEFAULT_OPENROUTER_MODEL,
+  DEFAULT_OPENROUTER_MAX_TOKENS,
+  MAX_OPENROUTER_MAX_TOKENS,
+} from '../src/client.js';
 import { TypeSafeApiError } from '../src/errors.js';
 
 function mockFetchOnce(status: number, body: unknown, headers: Record<string, string> = {}) {
@@ -127,7 +133,7 @@ describe('TypeSafeClient.systemOne request shape', () => {
     expect(JSON.parse(init.body as string)).toEqual({ state: 'a ticket', model: DEFAULT_TYPESAFE_MODEL, questions: QUESTIONS });
   });
 
-  it('POSTs to <base>/alpha/decisions with a Bearer header and {model,state,questions} for the openrouter provider', async () => {
+  it('POSTs to <base>/alpha/decisions with a Bearer header, {model,state,questions}, and the default max_tokens for the openrouter provider', async () => {
     const fetchMock = mockFetchOnce(200, { answers: { q1: { type: 'noul', noul: 0.5 } } });
     const client = new TypeSafeClient({ openrouterApiKey: 'or-key', openrouterHttpReferer: 'https://example.test', openrouterXTitle: 'atlas' });
     await client.systemOne({ state: { ticket: 1 }, questions: QUESTIONS });
@@ -138,7 +144,52 @@ describe('TypeSafeClient.systemOne request shape', () => {
     expect(headers.authorization).toBe('Bearer or-key');
     expect(headers['http-referer']).toBe('https://example.test');
     expect(headers['x-title']).toBe('atlas');
-    expect(JSON.parse(init.body as string)).toEqual({ model: DEFAULT_OPENROUTER_MODEL, state: { ticket: 1 }, questions: QUESTIONS });
+    expect(JSON.parse(init.body as string)).toEqual({
+      model: DEFAULT_OPENROUTER_MODEL,
+      state: { ticket: 1 },
+      questions: QUESTIONS,
+      max_tokens: DEFAULT_OPENROUTER_MAX_TOKENS,
+    });
+  });
+
+  it('never sends max_tokens on the typesafe provider (that API has no such parameter)', async () => {
+    const fetchMock = mockFetchOnce(200, { answers: {} });
+    const client = new TypeSafeClient({ typesafeApiKey: 'ts-key', openrouterMaxTokens: 1234 });
+    await client.systemOne({ state: 'x', questions: QUESTIONS });
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).not.toHaveProperty('max_tokens');
+  });
+
+  it('honors a configured openrouterMaxTokens as max_tokens', async () => {
+    const fetchMock = mockFetchOnce(200, { answers: {} });
+    const client = new TypeSafeClient({ openrouterApiKey: 'or-key', openrouterMaxTokens: 2048 });
+    await client.systemOne({ state: 'x', questions: QUESTIONS });
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string).max_tokens).toBe(2048);
+  });
+
+  it('a per-call maxTokens override wins over the configured one', async () => {
+    const fetchMock = mockFetchOnce(200, { answers: {} });
+    const client = new TypeSafeClient({ openrouterApiKey: 'or-key', openrouterMaxTokens: 2048 });
+    await client.systemOne({ state: 'x', questions: QUESTIONS, maxTokens: 512 });
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string).max_tokens).toBe(512);
+  });
+
+  it('clamps a maxTokens above Jev max_completion_tokens (28800) down to it', async () => {
+    const fetchMock = mockFetchOnce(200, { answers: {} });
+    const client = new TypeSafeClient({ openrouterApiKey: 'or-key' });
+    await client.systemOne({ state: 'x', questions: QUESTIONS, maxTokens: 65536 });
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string).max_tokens).toBe(MAX_OPENROUTER_MAX_TOKENS);
+  });
+
+  it('treats a non-positive or fractional maxTokens override as unset (default)', async () => {
+    const fetchMock = mockFetchOnce(200, { answers: {} });
+    const client = new TypeSafeClient({ openrouterApiKey: 'or-key' });
+    await client.systemOne({ state: 'x', questions: QUESTIONS, maxTokens: 0.5 });
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string).max_tokens).toBe(DEFAULT_OPENROUTER_MAX_TOKENS);
   });
 
   it('honors a typesafeBaseUrl override for a staging/sovereign shard', async () => {
@@ -177,6 +228,21 @@ describe('TypeSafeClient response normalization', () => {
       answers: { q1: { type: 'noul', noul: 0.3 } },
       usage: { input_tokens: 4, output_tokens: 1 },
     });
+  });
+
+  it('passes the OpenRouter usage.cost field through (the flat DecisionsResponse schema carries it)', async () => {
+    mockFetchOnce(200, {
+      id: 'gen-dec-1789738314-X5e5eKGQdvR9rblyX250',
+      model: 'typesafe/jev-1.13-20260917',
+      provider: 'TypeSafe',
+      answers: { q1: { type: 'noul', noul: 0.98 } },
+      usage: { input_tokens: 275, output_tokens: 20, cost: 0.00003 },
+    });
+    const client = new TypeSafeClient({ openrouterApiKey: 'or-key' });
+    const result = await client.systemOne({ state: 'x', questions: QUESTIONS });
+    expect(result.provider).toBe('openrouter');
+    expect(result.model).toBe('typesafe/jev-1.13-20260917');
+    expect(result.usage).toEqual({ input_tokens: 275, output_tokens: 20, cost: 0.00003 });
   });
 
   it('reads an openrouter response nested one level under "decision"', async () => {
@@ -236,6 +302,7 @@ describe('TypeSafeClient error mapping', () => {
 
   const cases: Array<[number, string]> = [
     [401, 'FORBIDDEN'],
+    [402, 'INSUFFICIENT_CREDITS'],
     [403, 'FORBIDDEN'],
     [404, 'NOT_FOUND'],
     [429, 'RATE_LIMITED'],
@@ -266,6 +333,27 @@ describe('TypeSafeClient error mapping', () => {
       expect.unreachable('expected systemOne to throw');
     } catch (err) {
       expect((err as TypeSafeApiError).retryAfter).toBe('30');
+    }
+  });
+
+  it('surfaces the OpenRouter 402 body verbatim (names the max_tokens budget the precheck rejected)', async () => {
+    const body402 = {
+      error: {
+        code: 402,
+        message: 'This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 53924.',
+      },
+    };
+    mockFetchOnce(402, body402);
+    const client = new TypeSafeClient({ openrouterApiKey: 'or-key' });
+    try {
+      await client.systemOne({ state: 'x', questions: QUESTIONS });
+      expect.unreachable('expected systemOne to throw');
+    } catch (err) {
+      expect(err).toBeInstanceOf(TypeSafeApiError);
+      const apiErr = err as TypeSafeApiError;
+      expect(apiErr.code).toBe('INSUFFICIENT_CREDITS');
+      expect(apiErr.status).toBe(402);
+      expect(apiErr.body).toContain('fewer max_tokens');
     }
   });
 

@@ -19,6 +19,28 @@ export const DEFAULT_TYPESAFE_BASE_URL = 'https://api.typesafe.ai/v1';
 export const DEFAULT_OPENROUTER_BASE_URL = 'https://openrouter.ai/api';
 export const DEFAULT_TYPESAFE_MODEL = 'jev-latest';
 export const DEFAULT_OPENROUTER_MODEL = '~typesafe/jev-latest';
+/**
+ * max_tokens sent on every OpenRouter Decisions call. Jev is a decision model,
+ * not a text generator: live Decisions responses carry 20-70 output tokens for
+ * 1-20 typed questions, and output tokens are billed at $0 (verified against
+ * the live endpoint metadata: completion price "0", max_completion_tokens
+ * 28800, context_length 32000). OpenRouter's credit precheck nevertheless
+ * reserves room for the model's FULL output budget when max_tokens is omitted
+ * - for the ~typesafe/jev-latest alias that is a 65536-token reservation,
+ * which any credit-limited key gets rejected on with HTTP 402 ("requires more
+ * credits, or fewer max_tokens"). Sending a small explicit max_tokens both
+ * matches what the model can actually produce and stops that precheck from
+ * pricing in an output budget the model can never use. 4096 is ~2 orders of
+ * magnitude above the largest observed answer payload and far below both
+ * max_completion_tokens and the 32k context.
+ */
+export const DEFAULT_OPENROUTER_MAX_TOKENS = 4096;
+/**
+ * Hard ceiling for any caller-supplied max_tokens: Jev's documented
+ * max_completion_tokens on OpenRouter is 28800 (context_length 32000). A
+ * larger value would just be rejected or silently clamped by OpenRouter.
+ */
+export const MAX_OPENROUTER_MAX_TOKENS = 28800;
 const DEFAULT_TIMEOUT_MS = 60_000;
 
 /**
@@ -46,6 +68,7 @@ function stripTrailingSlash(url: string): string {
 
 function httpStatusToCode(status: number): TypeSafeErrorCode {
   if (status === 401 || status === 403) return 'FORBIDDEN';
+  if (status === 402) return 'INSUFFICIENT_CREDITS';
   if (status === 404) return 'NOT_FOUND';
   if (status === 429) return 'RATE_LIMITED';
   if (status >= 400 && status < 500) return 'INVALID_ARGS';
@@ -115,6 +138,7 @@ export class TypeSafeClient {
   private readonly openrouterXTitle: string | undefined;
   private readonly providerSetting: ProviderSetting;
   private readonly modelOverride: string | undefined;
+  private readonly maxTokensOverride: number | undefined;
   private readonly timeoutMs: number;
 
   constructor(cfg: TypeSafeClientConfig = {}) {
@@ -126,6 +150,7 @@ export class TypeSafeClient {
     this.openrouterXTitle = cfg.openrouterXTitle || undefined;
     this.providerSetting = cfg.provider ?? 'auto';
     this.modelOverride = cfg.model || undefined;
+    this.maxTokensOverride = this.sanitizeMaxTokens(cfg.openrouterMaxTokens);
     this.timeoutMs = cfg.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   }
 
@@ -188,13 +213,36 @@ export class TypeSafeClient {
     return configured.includes('/') ? configured : `~typesafe/${configured}`;
   }
 
+  /**
+   * The max_tokens value sent on every OpenRouter Decisions call. The per-call
+   * override wins over the configured one; both fall back to
+   * DEFAULT_OPENROUTER_MAX_TOKENS. Values are clamped into
+   * [1, MAX_OPENROUTER_MAX_TOKENS] because Jev's OpenRouter endpoint metadata
+   * reports max_completion_tokens 28800 - anything larger is not a setting
+   * the model can honor. Invalid input (NaN, fractional, non-positive) is
+   * treated as unset, never thrown: this is a budget knob, not a contract.
+   */
+  resolveMaxTokens(override?: number): number {
+    const raw = override ?? this.maxTokensOverride ?? DEFAULT_OPENROUTER_MAX_TOKENS;
+    const n = Math.floor(raw);
+    if (!Number.isFinite(n) || n < 1) return DEFAULT_OPENROUTER_MAX_TOKENS;
+    return Math.min(n, MAX_OPENROUTER_MAX_TOKENS);
+  }
+
+  private sanitizeMaxTokens(raw: number | undefined): number | undefined {
+    if (raw === undefined) return undefined;
+    const n = Math.floor(raw);
+    if (!Number.isFinite(n) || n < 1) return undefined;
+    return Math.min(n, MAX_OPENROUTER_MAX_TOKENS);
+  }
+
   /** Ask Jev System One 1-20 typed questions about a state. */
   async systemOne(req: SystemOneRequest): Promise<SystemOneResult> {
     const { provider } = this.resolveProvider(req.provider);
     const model = this.resolveModel(provider, req.model);
     return provider === 'typesafe'
       ? this.systemOneTypesafe(req.state, req.questions, model)
-      : this.systemOneOpenRouter(req.state, req.questions, model);
+      : this.systemOneOpenRouter(req.state, req.questions, model, this.resolveMaxTokens(req.maxTokens));
   }
 
   private async systemOneTypesafe(state: State, questions: Questions, model: string): Promise<SystemOneResult> {
@@ -216,23 +264,33 @@ export class TypeSafeClient {
   }
 
   /**
-   * OpenRouter's own SDK wraps this call as
-   * `openrouter.alpha.decisions.create({ decisionsRequest: { model, state, questions } })`
-   * posted to `POST /api/alpha/decisions`; the docs state "OpenRouter
-   * normalizes requests and responses across providers for this endpoint" and
-   * the parsed SDK result exposes `decision.answers`. The exact raw HTTP JSON
-   * response envelope - whether it is flat `{model,answers,usage}` like the
-   * direct API, or nested one level under a `decision` key - is NOT nailed
-   * down verbatim in the fetched OpenRouter docs.
+   * OpenRouter's Decisions API, POST /api/alpha/decisions. Verified against
+   * OpenRouter's published OpenAPI schema and live endpoint metadata:
    *
-   * BEST-EFFORT / INFERRED normalization below, not a verified raw-HTTP
-   * schema dump: accept `body.answers` directly, or `body.decision.answers`
-   * if nested, whichever is present, and extract `usage`/`model` the same
-   * defensive way. Re-verify against a live call when console.typesafe.ai
-   * access is restored or a real OpenRouter Jev call is made - see
-   * docs/typesafe-connector-design.md.
+   * - Request body: {model, state, questions} required; max_tokens is not a
+   *   documented DecisionsRequest property, but OpenRouter's documented
+   *   max_tokens behavior ("upper limit for tokens the model can generate")
+   *   and its credit precheck both apply: omitted max_tokens makes the
+   *   precheck reserve the model's full output budget, which for the
+   *   ~typesafe/jev-latest alias is 65536 tokens - more than many keys can
+   *   afford - producing HTTP 402 "requires more credits, or fewer
+   *   max_tokens". We therefore always send an explicit, small max_tokens.
+   * - Jev endpoint metadata (typesafe/jev-1.13): context_length 32000,
+   *   max_completion_tokens 28800, supported_parameters [] (no sampling
+   *   parameters), completion price $0. Output tokens are free; only input
+   *   tokens are billed.
+   * - Response envelope: flat {id, model, provider, answers, usage:{cost,
+   *   input_tokens, output_tokens}} per the DecisionsResponse schema and the
+   *   live examples in the docs. The nested `decision` fallback below is kept
+   *   only as defensive cover for the OpenRouter SDK wrapper shape; it can be
+   *   removed once a live call confirms the flat shape holds.
    */
-  private async systemOneOpenRouter(state: State, questions: Questions, model: string): Promise<SystemOneResult> {
+  private async systemOneOpenRouter(
+    state: State,
+    questions: Questions,
+    model: string,
+    maxTokens: number
+  ): Promise<SystemOneResult> {
     if (!this.openrouterApiKey) {
       throw new TypeSafeApiError('OPENROUTER_API_KEY is not configured.', { code: 'MISSING_CREDENTIALS', status: 0 });
     }
@@ -243,7 +301,7 @@ export class TypeSafeClient {
 
     const body = (await request(
       url,
-      { method: 'POST', headers, body: { model, state, questions } },
+      { method: 'POST', headers, body: { model, state, questions, max_tokens: maxTokens } },
       this.timeoutMs
     )) as Record<string, unknown>;
     const nested = (body.decision ?? {}) as Record<string, unknown>;

@@ -50,6 +50,7 @@ npm run build
 | `OPENROUTER_X_TITLE` | No | none | Optional attribution header, never required |
 | `TYPESAFE_PROVIDER` | No | `auto` | `typesafe` \| `openrouter` \| `auto` |
 | `TYPESAFE_MODEL` | No | per-provider default | See model defaulting below |
+| `OPENROUTER_MAX_TOKENS` | No | `4096` | Output budget sent as `max_tokens` on OpenRouter calls; clamped to 1-28800. See "The max_tokens budget" below |
 
 At least one of `TYPESAFE_API_KEY` / `OPENROUTER_API_KEY` must be set for `typesafe_decide` / `typesafe_list_models` to work; `typesafe_status` runs without either.
 
@@ -57,6 +58,12 @@ At least one of `TYPESAFE_API_KEY` / `OPENROUTER_API_KEY` must be set for `types
 
 - `typesafe` defaults to `jev-latest`; a `TYPESAFE_MODEL` override is used verbatim.
 - `openrouter` defaults to `~typesafe/jev-latest`; an override with no `/` (e.g. a bare `jev-latest` pasted in from the direct-API docs) is auto-prefixed with `~typesafe/` as a convenience.
+
+### The max_tokens budget (OpenRouter path)
+
+OpenRouter's credit precheck reserves room for a model's **full** output budget when a request omits `max_tokens`. For the `~typesafe/jev-latest` alias that is a 65536-token reservation, so any key with a lower monthly limit is rejected with HTTP 402 ("This request requires more credits, or fewer max_tokens") before a single token is generated. Jev's actual outputs are tens of tokens (typed answers, not text) and its output tokens are billed at $0 — only input tokens are charged — so the reservation is pure precheck artifact.
+
+The connector therefore always sends an explicit `max_tokens` on the OpenRouter Decisions path: default 4096, clamped to Jev's documented `max_completion_tokens` (28800), overridable per call (`typesafe_decide`'s `max_tokens` argument) or per deployment (`OPENROUTER_MAX_TOKENS`). The direct `typesafe` provider never sends `max_tokens` — that API has no such parameter. A 402 maps to the `INSUFFICIENT_CREDITS` error code with a hint explaining the precheck, so a credit-limited key reports a configuration issue, not a "request too large" issue.
 
 ## Usage
 
@@ -102,11 +109,11 @@ All three tools are `readOnlyHint: true` / `destructiveHint: false`: none of the
 
 ## Error Handling
 
-Every failure surfaces through the standard `mcp_servers/_shared/error-envelope.ts` JSON envelope, with `code` sourced directly from `node-typesafe`'s `TypeSafeApiError.code`: `MISSING_CREDENTIALS`, `INVALID_ARGS`, `NOT_FOUND`, `FORBIDDEN`, `RATE_LIMITED`, `VENDOR_ERROR`, `NETWORK_ERROR`.
+Every failure surfaces through the standard `mcp_servers/_shared/error-envelope.ts` JSON envelope, with `code` sourced directly from `node-typesafe`'s `TypeSafeApiError.code`: `MISSING_CREDENTIALS`, `INSUFFICIENT_CREDITS`, `INVALID_ARGS`, `NOT_FOUND`, `FORBIDDEN`, `RATE_LIMITED`, `VENDOR_ERROR`, `NETWORK_ERROR`.
 
-## OpenRouter response normalization is best-effort
+## OpenRouter response normalization
 
-`node-typesafe`'s OpenRouter client accepts either a flat `{model,answers,usage}` response body or one nested under a `decision` key — the raw HTTP JSON envelope for `POST /api/alpha/decisions` is not verbatim-documented, only the SDK's parsed-result shape is. See `docs/typesafe-connector-design.md` and `mcp_node/node-typesafe/src/client.ts`.
+`node-typesafe`'s OpenRouter client reads the flat `{id, model, provider, answers, usage:{cost, input_tokens, output_tokens}}` envelope verified against OpenRouter's published `DecisionsResponse` OpenAPI schema and live documented examples, passing `usage.cost` through. A nested `decision.answers` fallback remains as defensive cover for the OpenRouter SDK wrapper shape. See `docs/typesafe-connector-design.md` and `mcp_node/node-typesafe/src/client.ts`.
 
 ## Scripts
 
