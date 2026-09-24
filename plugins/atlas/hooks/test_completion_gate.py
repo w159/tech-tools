@@ -1341,11 +1341,38 @@ class TestRunPairsAnImplementerTest(GateOrchestrationTest):
             started + offset_seconds, _dt.timezone.utc
         ).isoformat(timespec="seconds")
 
+    def _exec_test_command(self):
+        """Log a test-runner bash call inside the run window. A `verified`
+        stamp only earns (g) credit when the run actually executed a test
+        (self-attestation without an executed test is the hole that collapsed
+        real verifier coverage to zero)."""
+        import time as _time
+
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db
+
+        c = atlas_db.connect(self.env["ATLAS_DB"])
+        atlas_db.insert_tool_call(
+            c,
+            "sess-orch",
+            {
+                "message_uuid": "msg-testrun",
+                "ts": _time.time(),
+                "tool_use_id": "toolu-testrun",
+                "tool_name": "Bash",
+                "kind": "bash",
+                "input_summary": '{"command": "pytest -q"}',
+            },
+        )
+        c.commit()
+        c.close()
+
     def test_one_implementer_plus_a_test_verified_finding_passes(self):
         """The simple-task path: one subagent, verification by test, no verifier
         dispatch, gate green."""
         self._commit_and_make_mixed_diff()
         self._log_dispatches(implementers=1, verifiers=0)
+        self._exec_test_command()
         self._write_findings(
             [
                 {
@@ -1358,6 +1385,18 @@ class TestRunPairsAnImplementerTest(GateOrchestrationTest):
         )
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertEqual(r.stdout.strip(), "", r.stdout)
+
+    def test_stamp_without_executed_test_earns_no_credit(self):
+        """A `verified` stamp written by the run itself, with no test-runner
+        command executed during the run, is self-attestation: it must not
+        pair an implementer."""
+        self._commit_and_make_mixed_diff()
+        self._log_dispatches(implementers=1, verifiers=0)
+        self._write_findings(
+            [{"id": "S1", "status": "verified", "verified_at": self._stamp(1)}]
+        )
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertIn("verification coverage", r.stdout)
 
     def test_credit_is_scoped_to_the_run_window(self):
         """A verified row inherited from an earlier session proves nothing about
@@ -1379,9 +1418,10 @@ class TestRunPairsAnImplementerTest(GateOrchestrationTest):
         self.assertIn("verification coverage", r.stdout)
 
     def test_credit_does_not_cover_more_implementers_than_it_earned(self):
-        """Three implementers, one test-verified finding -> still 2 unpaired."""
+        """Three implementers, one executed-test-verified finding -> still 2 unpaired."""
         self._commit_and_make_mixed_diff()
         self._log_dispatches(implementers=3, verifiers=0)
+        self._exec_test_command()
         self._write_findings(
             [{"id": "S1", "status": "verified", "verified_at": self._stamp(1)}]
         )

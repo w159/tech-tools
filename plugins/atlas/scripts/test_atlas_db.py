@@ -1157,6 +1157,37 @@ class ChronicleInsightsTest(unittest.TestCase):
         ).fetchone()
         self.assertEqual(row, ("critical", "hardcoded secret", "open"))
 
+    def test_upsert_finding_never_clobbers_decision_status(self):
+        """A re-mine refreshes evidence but must not reset a decided finding
+        back to open (upsert_finding passes status='open' by default, and the
+        conflict update used to write it, silently undoing user decisions)."""
+        fid = atlas_db.upsert_finding(
+            self.conn, "fp-decide", dimension="perf", title="t1"
+        )
+        atlas_db.set_finding_status(self.conn, fid, "accepted", decided_at=42.0)
+        atlas_db.upsert_finding(
+            self.conn, "fp-decide", dimension="perf", title="t2"  # re-mine
+        )
+        row = self.conn.execute(
+            "SELECT status, decided_at, title, created_at FROM findings WHERE id=?",
+            (fid,),
+        ).fetchone()
+        self.assertEqual(row[0], "accepted")
+        self.assertEqual(row[1], 42.0)
+        self.assertEqual(row[2], "t2")  # evidence DID refresh
+        created = self.conn.execute(
+            "SELECT created_at FROM findings WHERE id=?", (fid,)
+        ).fetchone()[0]
+        atlas_db.upsert_finding(
+            self.conn, "fp-decide", dimension="perf", title="t3", created_at=1.0
+        )
+        self.assertEqual(
+            self.conn.execute(
+                "SELECT created_at FROM findings WHERE id=?", (fid,)
+            ).fetchone()[0],
+            created,
+        )
+
     def test_set_finding_status(self):
         fid = atlas_db.upsert_finding(self.conn, "fp-2", dimension="perf", title="t")
         atlas_db.set_finding_status(self.conn, fid, "accepted", decided_at=50.0)

@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest import mock
 
@@ -793,11 +794,25 @@ class AtlasDoctorMiningTest(unittest.TestCase):
         self.assertEqual(found, [])
 
     def test_gate_block_silences_capture_miner(self):
-        atlas_db.upsert_session_log(self.conn, "s1", project_id=self.pid)
+        # Recent session missing a facet row: counted.
+        atlas_db.upsert_session_log(
+            self.conn, "s1", project_id=self.pid, started_at=time.time()
+        )
         found = atlas_doctor.mine_gate_block_silences_capture(self.conn, self.root)
         self.assertEqual(len(found), 1)
         self.assertEqual(found[0]["metric_value"], 1)
         atlas_db.upsert_facet(self.conn, "s1", project_id=self.pid)
+        found = atlas_doctor.mine_gate_block_silences_capture(self.conn, self.root)
+        self.assertEqual(found, [])
+
+        # Pre-window session missing a facet row: the all-time backlog can
+        # never clear, so it must not count -- only recent capture holes do.
+        atlas_db.upsert_session_log(
+            self.conn,
+            "old",
+            project_id=self.pid,
+            started_at=time.time() - (atlas_doctor.FACET_BACKLOG_WINDOW_DAYS + 1) * 86400,
+        )
         found = atlas_doctor.mine_gate_block_silences_capture(self.conn, self.root)
         self.assertEqual(found, [])
 

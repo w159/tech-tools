@@ -848,15 +848,20 @@ def upsert_finding(conn, fingerprint, **fields):
     """Insert a new finding, or update the existing one sharing `fingerprint`
     so re-running the doctor refreshes a finding instead of duplicating it.
     `created_at` defaults to now and `status` defaults to 'open' on first
-    insert. Returns the finding id."""
+    insert. On conflict, `status` and `created_at` are decision/provenance
+    fields and are NEVER overwritten: a re-mine refreshes the evidence but
+    must not clobber the user's accepted/rejected/applied verdict (that
+    clobber is what reset decided findings back to open on every doctor run).
+    Returns the finding id."""
     fields.setdefault("created_at", time.time())
     fields.setdefault("status", "open")
     vals = [fields.get(c) for c in FINDING_COLUMNS]
+    update_cols = [c for c in FINDING_COLUMNS if c not in ("status", "created_at")]
     conn.execute(
         "INSERT INTO findings(fingerprint," + ",".join(FINDING_COLUMNS) + ") "
         "VALUES(?," + ",".join("?" for _ in FINDING_COLUMNS) + ") "
         "ON CONFLICT(fingerprint) DO UPDATE SET "
-        + ",".join(f"{c}=COALESCE(excluded.{c},{c})" for c in FINDING_COLUMNS),
+        + ",".join(f"{c}=COALESCE(excluded.{c},{c})" for c in update_cols),
         (fingerprint, *vals),
     )
     conn.commit()

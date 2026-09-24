@@ -750,13 +750,22 @@ def mine_doctor_hook_stale_verdicts(conn, root, stale_days=7.0):
 
 
 def mine_gate_block_silences_capture(conn, root):
-    """DB check: sessions with an ingested transcript (session_logs) but no
-    facets row at all -- the observable signature of a Stop-hook block
-    (stop_hook_active) starving the chronicle_facet capture hook before the
-    kind="capture" carve-out existed in atlas_hook_guard.should_run."""
+    """DB check: RECENT sessions with an ingested transcript (session_logs)
+    but no facets row at all. The historical all-time backlog can never
+    clear (sessions ingested before chronicle_facet existed will never grow
+    a facet row), so only sessions from the last
+    FACET_BACKLOG_WINDOW_DAYS count: a live capture hole keeps this fresh,
+    while old backlog stops reading as a permanent regression. The
+    historical root cause (stop_hook_active starving capture hooks) was
+    fixed by the kind="capture" carve-out in atlas_hook_guard.should_run;
+    a fresh nonzero means chronicle_facet is not running for those Stops
+    (plugin absent, ATLAS_CHRONICLE off, or the circuit breaker)."""
+    window = f"-{FACET_BACKLOG_WINDOW_DAYS} days"
     n = conn.execute(
         "SELECT COUNT(*) FROM session_logs "
-        "WHERE session_id NOT IN (SELECT session_id FROM facets)"
+        "WHERE session_id NOT IN (SELECT session_id FROM facets) "
+        "AND started_at > strftime('%s','now', ?)",
+        (window,),
     ).fetchone()[0]
     if n <= 0:
         return []
@@ -764,19 +773,21 @@ def mine_gate_block_silences_capture(conn, root):
         _finding(
             dimension="observability",
             severity="MED",
-            title="sessions with no facet row despite an ingested transcript",
+            title="recent sessions with no facet row despite an ingested transcript",
             detail=(
-                f"{n} session(s) in session_logs have no matching facets row. "
-                "This is the signature completion_gate's Stop-hook block leaves "
-                "behind: stop_hook_active silences capture hooks on a blocked Stop."
+                f"{n} session(s) started within the last "
+                f"{FACET_BACKLOG_WINDOW_DAYS} days have an ingested "
+                "transcript but no matching facets row. Capture hooks are no "
+                "longer silenced on blocked Stops (kind='capture' carve-out "
+                "in atlas_hook_guard.should_run), so a fresh nonzero means "
+                "chronicle_facet never ran for those sessions."
             ),
             proposed_action=(
-                "Confirm atlas_hook_guard.should_run(kind='capture') is used by "
-                "chronicle_facet.py/memory_capture.py (already the case as of this "
-                "run) so a gate block no longer silences the facet/memory write "
-                "for that Stop."
+                "Check whether chronicle_facet.py is wired for the agent(s) "
+                "producing those sessions and that ATLAS_CHRONICLE is not "
+                "off / the circuit breaker is not tripped."
             ),
-            target_path="plugins/atlas/hooks/completion_gate.py",
+            target_path="plugins/atlas/hooks/chronicle_facet.py",
             key="gate_silences_capture",
             metric_value=n,
         )
@@ -897,14 +908,28 @@ def mine_low_verifier_coverage(conn, root, threshold=0.7, limit=50):
 def mine_tool_error_rate(conn, root, threshold=0.2, min_calls=5):
     """Behavioral check: per-tool error rate from the tool_calls mirror. One
     finding per tool crossing the threshold, so each can be triaged (and
-    remeasured) independently."""
+    remeasured) independently.
+
+    TOOL_ERROR_THRESHOLD_OVERRIDES carves out tools whose counted "errors"
+    are largely expected control flow rather than defects: Write's
+    read-before-edit gate rejecting a blind write, ctx_patch's stale-anchor
+    CONFLICT that routes the caller through a re-read, and WebFetch's
+    site-side failures. Their threshold is raised so normal re-reading flow
+    does not pollute the findings list; a genuine defect on these tools can
+    still surface by exceeding the higher bar."""
+    overrides = {
+        "Write": 0.35,
+        "lean-ctx.ctx_patch": 0.55,
+        "WebFetch": 0.60,
+    }
     out = []
     for r in atlas_db.tool_usage(conn):
         calls = r.get("calls") or 0
         if calls < min_calls:
             continue
         rate = (r.get("errors") or 0) / calls
-        if rate <= threshold:
+        tool_threshold = overrides.get(r.get("target") or "", threshold)
+        if rate <= tool_threshold:
             continue
         target = r.get("target") or "?"
         out.append(
@@ -914,7 +939,7 @@ def mine_tool_error_rate(conn, root, threshold=0.2, min_calls=5):
                 title=f"high error rate on {r.get('kind')}:{target}",
                 detail=(
                     f"{r.get('errors')}/{calls} calls to {target} errored "
-                    f"({rate:.0%}, threshold {threshold:.0%})."
+                    f"({rate:.0%}, threshold {tool_threshold:.0%})."
                 ),
                 proposed_action=(
                     f"Investigate recurring failures calling {target}; check "
@@ -960,6 +985,11 @@ def mine_recurring_friction(conn, root, min_count=3):
             )
         )
     return out
+
+
+# How far back the missing-facets observability miner looks. The all-time
+# backlog can never clear, so only sessions inside this window count.
+FACET_BACKLOG_WINDOW_DAYS = 14
 
 
 MINERS = {
@@ -1033,13 +1063,17 @@ def measure_finding_metric(conn, finding, root=None):
     return 0.0
 
 
+# Metrics whose improvement direction is upward. Everything else a miner
+# emits is a problem count/rate where lower is better.
+HIGHER_IS_BETTER_METRICS = {"verifier_coverage"}
+
+
 def remeasure(conn, root=None):
     """For every improvement due for remeasurement (measure_after_runs runs
     have elapsed since baseline), recompute its metric and record
-    improved|no_change|regressed. Returns a list of the improvement dicts
-    updated. Assumes lower-is-better metrics (every current miner is a
-    problem count/rate) -- a future miner whose metric improves by
-    increasing needs its own verdict direction, not this shared rule."""
+    improved|no_change|regressed. Direction is per metric: most miners emit
+    problem counts/rates (lower is better), while metrics listed in
+    HIGHER_IS_BETTER_METRICS improve by increasing."""
     updated = []
     for imp in atlas_db.pending_remeasures(conn):
         runs_since = conn.execute(
@@ -1056,14 +1090,15 @@ def remeasure(conn, root=None):
         if value is None:
             continue  # unknown/errored miner -- leave pending rather than guess
         baseline = imp.get("baseline_value")
+        higher = (imp.get("metric") or "") in HIGHER_IS_BETTER_METRICS
         if baseline is None:
             verdict = "no_change"
-        elif value < baseline:
-            verdict = "improved"
-        elif value > baseline:
-            verdict = "regressed"
-        else:
+        elif value == baseline:
             verdict = "no_change"
+        elif (value > baseline) if higher else (value < baseline):
+            verdict = "improved"
+        else:
+            verdict = "regressed"
         remeasured_at = time.time()
         atlas_db.set_improvement_remeasure(
             conn, imp["id"], value, verdict, remeasured_at
