@@ -1,5 +1,51 @@
 # Changelog
 
+## [Unreleased] -- atlas-doctor/gate machinery: decisions survive re-mines, verdicts tell the truth, self-attestation no longer passes law 5
+
+Four defects in atlas-doctor's machinery (one in `atlas_db.py`'s finding
+store, three in `atlas_doctor.py`'s miners and remeasure loop) and one in the
+completion gate, all surfaced by a doctor run fed its first fully enriched
+facet set (264/264).
+
+`upsert_finding` rewrote `status` and `created_at` on every re-mine
+(`COALESCE(excluded...)` across all columns), silently resetting
+accepted/rejected/applied verdicts to open - six decided tool-reliability
+findings were reset mid-run before the fix was noticed. Decision and
+provenance fields are now insert-only; evidence fields still refresh.
+Regression-tested.
+
+`remeasure()` judged every metric lower-is-better, so `verifier_coverage`
+collapsing 0.381 -> 0.062 against a 0.7 target was recorded as verdict
+"improved". Direction is now per metric (`HIGHER_IS_BETTER_METRICS`).
+
+The missing-facets observability miner counted all history (1446 and climbing)
+against a target of 0 that the all-time backlog could never reach even with
+capture working - the real fix (capture hooks no longer silenced on blocked
+Stops) was already live, so the metric read "regressed" forever. It now counts
+only sessions from the last 14 days (`FACET_BACKLOG_WINDOW_DAYS`), the window
+where a live capture hole can actually be seen.
+
+The tool-error miner flagged by-design control flow as defects: Write's
+read-before-edit gate rejecting a blind write (23% of 1857 calls), ctx_patch's
+stale-anchor CONFLICT routing the caller through a re-read (47%), WebFetch
+site-side failures (50%). Per-tool threshold overrides keep those out of the
+findings list while a genuine defect on those tools still surfaces above the
+higher bar.
+
+The completion gate's condition (g) accepted any `status:"verified"`
+findings.json entry stamped during the run as implementer pairing credit -
+self-attestation, since the same session that shipped the code could write the
+stamp. Runs shipped with implementer dispatches, zero verifier dispatches, and
+no test command at all while the gate stayed green (average coverage across
+recent orchestrator runs measured 0.06 against the 0.7 threshold). Credit now
+requires an actually executed test-runner command in the run window
+(pytest, vitest, cargo test, ...); a deterministic test remains the cheapest
+valid pairing, which was the point of the doctrine change.
+
+Full suite: 1460 passed, 3 skipped, 75 subtests
+(`python3 -m pytest scripts/ hooks/ -q` from `plugins/atlas/`). Consumers pick
+up the fix on their next marketplace update / plugin reinstall.
+
 ## [Unreleased] -- mcp-gateway: one Entra-authenticated remote connector for every vendor (IN PROGRESS, not verified)
 
 New package `mcp_servers/mcp-gateway/`: a single Streamable HTTP endpoint for

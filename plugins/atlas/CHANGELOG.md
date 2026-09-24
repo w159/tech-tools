@@ -1,5 +1,37 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- **atlas-doctor machinery: decisions now survive re-mines.** `upsert_finding`'s
+  conflict update no longer rewrites `status` or `created_at`, so an
+  accepted/rejected/applied verdict recorded in one doctor run is not silently
+  reset to `open` by the next `--mine` (this clobber reset six decided
+  tool-reliability findings mid-run before the fix). Regression test:
+  `test_upsert_finding_never_clobbers_decision_status`.
+- **atlas-doctor remeasure: direction-aware verdicts.** All metrics were judged
+  lower-is-better, so a rise in the upward-is-better `verifier_coverage`
+  metric was recorded as `improved` while collapsing (0.381 -> 0.062 against a
+  0.7 target). `HIGHER_IS_BETTER_METRICS` inverts the comparison per metric.
+- **atlas-doctor observability miner: windowed backlog.** The
+  missing-facets finding counted all history (1446 and climbing), so its
+  target of 0 could never be met even with capture working. It now counts only
+  sessions from the last `FACET_BACKLOG_WINDOW_DAYS` (14); the all-time
+  backlog never clears, recent capture holes still surface.
+- **atlas-doctor tool-error miner: expected control flow no longer mined.**
+  Per-tool threshold overrides for `Write` (read-before-edit gate rejects),
+  `lean-ctx.ctx_patch` (stale-anchor CONFLICT re-read flow) and `WebFetch`
+  (site-side failures) stop by-design rejections from polluting the findings
+  list; genuine defects on those tools still surface above the higher bar.
+- **completion gate (g): a `verified` stamp now requires an executed test.**
+  Self-stamping a findings.json entry during the run paired implementers with
+  no verification behind it - runs shipped with implementer dispatches, zero
+  verifier dispatches, and no test command at all while the gate stayed green
+  (verifier coverage across recent orchestrator runs measured 0.06 against a
+  0.7 threshold). `_test_verified_this_run` only earns credit when a
+  test-runner command (pytest, vitest, cargo test, ...) actually executed in
+  the run window; deterministic tests remain the cheapest valid pairing.
+
 ## [8.0.1] - 2026-09-23
 
 ### Removed

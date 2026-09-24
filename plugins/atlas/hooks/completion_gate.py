@@ -33,8 +33,12 @@ Twelve conditions must ALL hold before the gate passes (else block ONCE):
       when implementer dispatches outnumber the independent checks that covered
       them. Two things count and they are interchangeable: an atlas:verifier
       dispatch, or a `verified` findings.json entry stamped DURING this run (a
-      deterministic test result recorded via scripts/atlas_finding.py). The
-      formula is max(0, unpaired_implementer_dispatches - _test_verified_this_run).
+      deterministic test result recorded via scripts/atlas_finding.py) -- but a
+      stamped entry only earns credit when the run actually executed a
+      test-runner command (pytest, vitest, cargo test, ...). A stamp with no
+      executed test behind it is self-attestation, and self-stamping is how
+      coverage collapsed to zero while the gate stayed green.
+      The formula is max(0, unpaired_implementer_dispatches - _test_verified_this_run).
       Requiring a verifier *dispatch* specifically is what made every task,
       however small, cost two subagents; a test run is the better evidence and
       now satisfies the same gate.
@@ -89,6 +93,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -874,6 +879,37 @@ def _run_written_paths(session_id: str, root: Path | None = None) -> list:
             conn.close()
 
 
+_TEST_RUNNER_RE = re.compile(
+    r"\b(pytest|py\.test|npm (run )?test|npx (vitest|jest)|vitest|yarn test|"
+    r"cargo test|go test|tox\b|nox\b|rake test|swift test|mvn test|"
+    r"gradlew? test|dotnet test)\b",
+    re.IGNORECASE,
+)
+
+
+def _tests_executed_this_run(conn, session_id: str, started: float) -> bool:
+    """True when at least one test-runner command executed during this run's
+    window, main thread or sidechain. The (g) test-run credit exists because a
+    deterministic test is stronger evidence than a verifier agent -- but a
+    `verified` stamp with no executed test behind it is self-attestation, not
+    verification, and self-stamping zeroed real coverage (runs shipped with
+    implementer dispatches, no verifier, and no test command at all)."""
+
+    try:
+        rows = conn.execute(
+            "SELECT input_summary FROM tool_calls WHERE session_id=? "
+            "AND ts >= ? AND (kind='bash' OR tool_name='Bash')",
+            (session_id, started),
+        ).fetchall()
+    except Exception:
+        return False
+    for row in rows:
+        summary = row[0] if not hasattr(row, "keys") else row["input_summary"]
+        if summary and _TEST_RUNNER_RE.search(str(summary)):
+            return True
+    return False
+
+
 def _test_verified_this_run(root: Path, session_id: str) -> int:
     """(g) pairing credit for verification that was a TEST RUN, not a subagent.
 
@@ -881,7 +917,11 @@ def _test_verified_this_run(root: Path, session_id: str) -> int:
     checked, which forced a second subagent onto every task no matter how small.
     Atlas's own doctrine is that a deterministic test beats a verifier agent: it
     cannot hallucinate and returns in seconds. So a `verified` entry written into
-    findings.json DURING this run counts toward pairing exactly like a dispatch.
+    findings.json DURING this run counts toward pairing exactly like a dispatch --
+    but only when the run actually executed a test-runner command
+    (_tests_executed_this_run). A stamp alone is self-attestation: it can be
+    written by the same session it vouches for, which is exactly how real
+    verifier coverage collapsed to zero while the gate stayed green.
 
     Scoped to the run window on purpose. A `verified` row inherited from an
     earlier session proves nothing about the code this run shipped, and counting
@@ -903,6 +943,8 @@ def _test_verified_this_run(root: Path, session_id: str) -> int:
             return 0
         started = atlas_db.run_started_at(conn, rid)
         if started is None:
+            return 0
+        if not _tests_executed_this_run(conn, session_id, started):
             return 0
         data = json.loads(findings.read_text(encoding="utf-8"))
         items = data if isinstance(data, list) else data.get("findings", [])
