@@ -60,8 +60,9 @@
   credit. Added a literal `\\n` alternative. A vacuous first version of the
   regression test (it called a helper that wrote its own unrelated matching
   row) was caught and fixed before commit; mutation-tested (fails without
-  the fix, passes with it). Not yet independently verified by a dispatched
-  agent - self-mutation-tested only.
+  the fix, passes with it). Independently verified with mutation-test proof
+  (agent ResponsibleRaccoon); findings.json entry
+  `verify-3bbce5a-test-runner-regex`.
 - **Guided fixes for the measured friction clusters.** `capability-routing.md`
   now states context7's required call shape: `resolve_library_id` needs BOTH
   `libraryName` and `query`. Verified against the recorded calls rather than

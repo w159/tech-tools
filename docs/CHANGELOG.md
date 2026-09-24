@@ -129,11 +129,15 @@ credit. Added a literal `\\n` alternative. Caught a vacuous test in the same
 pass: the first version of the regression test called a helper that wrote its
 own unrelated matching row, so the test passed even with the fix reverted;
 fixed by isolating the row under test, then mutation-tested (fails without the
-fix, passes with it). This pass has not yet had an independent verifier
-dispatched against it - self-mutation-tested only.
+fix, passes with it). Independently verified with mutation-test proof
+(agent ResponsibleRaccoon, including a mutation that re-introduced the
+confounding call to reproduce the vacuous-test shape and confirm it would
+wrongly pass); findings.json entry `verify-3bbce5a-test-runner-regex`.
 
 Full suite after the third pass: 1471 passed, 3 skipped, 75 subtests
-(`python3 -m pytest scripts/ hooks/ -q` from `plugins/atlas/`).
+(`python3 -m pytest scripts/ hooks/ -q` from `plugins/atlas/`; a fresh
+detached-worktree run by the verifier showed 1469 passed, 5 skipped -
+benign environment-dependent fixture-skip variance, no failures either way).
 
 ## [Unreleased] -- mcp-gateway: one Entra-authenticated remote connector for every vendor (IN PROGRESS, not verified)
 
