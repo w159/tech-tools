@@ -1535,6 +1535,134 @@ class TestRunPairsAnImplementerTest(GateOrchestrationTest):
         )
         self.assertIn("verification coverage", r.stdout)
 
+    def test_ctx_execute_multiline_code_earns_credit(self):
+        """context-mode's ctx_execute wraps a multi-line script in a single
+        `code` string. After JSON-encoding (both `input_summary` and the
+        transcript-scan's `json.dumps`), an embedded newline before `pytest`
+        appears as the literal two characters `\\n`, not a real newline byte
+        -- the anchor must recognize that escaped form too, or an honest
+        multi-line ctx_execute test run earns no credit."""
+        self._commit_and_make_mixed_diff()
+        self._log_dispatches(implementers=1, verifiers=0)
+        # No _exec_mcp_test_command call here: that helper writes an
+        # unrelated single-line "pytest -q" row that would satisfy (g) on
+        # its own regardless of this fix, making the test vacuous. Only the
+        # multi-line row below is inserted, isolating the behavior tested.
+        import time as _time
+
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db
+
+        c = atlas_db.connect(self.env["ATLAS_DB"])
+        atlas_db.insert_tool_call(
+            c,
+            "sess-orch",
+            {
+                "message_uuid": "msg-ctx-multiline",
+                "ts": _time.time(),
+                "tool_use_id": "toolu-ctx-multiline",
+                "tool_name": "mcp__plugin_context-mode_context-mode__ctx_execute",
+                "kind": "mcp",
+                "target": "context-mode.ctx_execute",
+                "server": "context-mode",
+                "input_summary": json.dumps({"code": "cd plugins/atlas\npytest -q"}),
+            },
+        )
+        c.commit()
+        c.close()
+        self._write_findings(
+            [{"id": "S1", "status": "verified", "verified_at": self._stamp(1)}]
+        )
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertEqual(r.stdout.strip(), "", r.stdout)
+
+    def test_cd_and_python3_dash_m_pytest_earns_credit(self):
+        """The most common real shape in this repo's own sessions:
+        `cd plugins/atlas && python3 -m pytest scripts/ hooks/ -q`. Explicit
+        regression so anchoring the regex can never silently zero out this
+        specific, extremely common form."""
+        self._commit_and_make_mixed_diff()
+        self._log_dispatches(implementers=1, verifiers=0)
+        transcript = os.path.join(self.tmp, "t.jsonl")
+        with open(transcript, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps({"type": "user", "message": {"content": "go"}}) + "\n")
+            fh.write(
+                json.dumps(
+                    {
+                        "type": "assistant",
+                        "timestamp": self._stamp(1),
+                        "message": {
+                            "content": [
+                                {
+                                    "type": "tool_use",
+                                    "name": "Bash",
+                                    "input": {
+                                        "command": (
+                                            "cd plugins/atlas && "
+                                            "python3 -m pytest scripts/ hooks/ -q"
+                                        )
+                                    },
+                                }
+                            ]
+                        },
+                    }
+                )
+                + "\n"
+            )
+        self._write_findings(
+            [{"id": "S1", "status": "verified", "verified_at": self._stamp(1)}]
+        )
+        r = _run_gate(
+            {
+                "session_id": "sess-orch",
+                "cwd": self.tmp,
+                "transcript_path": transcript,
+            },
+            self.env,
+        )
+        self.assertEqual(r.stdout.strip(), "", r.stdout)
+
+    def test_undated_transcript_record_earns_no_credit(self):
+        """A transcript record with no `timestamp` cannot be proven to belong
+        to this run -- same "undated" rule `_test_verified_this_run` already
+        applies to findings.json stamps. Regression for the strict (fail-
+        closed, not fail-open) undated-record handling in
+        `_transcript_test_commands`."""
+        self._commit_and_make_mixed_diff()
+        self._log_dispatches(implementers=1, verifiers=0)
+        transcript = os.path.join(self.tmp, "t.jsonl")
+        with open(transcript, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps({"type": "user", "message": {"content": "go"}}) + "\n")
+            fh.write(
+                json.dumps(
+                    {
+                        "type": "assistant",
+                        "message": {
+                            "content": [
+                                {
+                                    "type": "tool_use",
+                                    "name": "Bash",
+                                    "input": {"command": "pytest -q"},
+                                }
+                            ]
+                        },
+                    }
+                )
+                + "\n"
+            )
+        self._write_findings(
+            [{"id": "S1", "status": "verified", "verified_at": self._stamp(1)}]
+        )
+        r = _run_gate(
+            {
+                "session_id": "sess-orch",
+                "cwd": self.tmp,
+                "transcript_path": transcript,
+            },
+            self.env,
+        )
+        self.assertIn("verification coverage", r.stdout)
+
     def test_stamp_without_executed_test_earns_no_credit(self):
         """A `verified` stamp written by the run itself, with no test-runner
         command executed during the run, is self-attestation: it must not

@@ -882,7 +882,7 @@ def _run_written_paths(session_id: str, root: Path | None = None) -> list:
 
 
 _TEST_RUNNER_RE = re.compile(
-    r'(?:^|[;&|]\s*|&&\s*|\|\|\s*|"(?:command|code)":\s*"|\n)'
+    r'(?:^|[;&|]\s*|&&\s*|\|\|\s*|"(?:command|code)":\s*"|\n|\\n)'
     r"\s*(?:sudo\s+)?(?:python3?\s+-m\s+)?"
     r"(pytest|py\.test|npm (run )?test|npx (vitest|jest)|vitest|yarn test|"
     r"cargo test|go test|tox\b|nox\b|rake test|swift test|mvn test|"
