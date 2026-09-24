@@ -882,7 +882,9 @@ def _run_written_paths(session_id: str, root: Path | None = None) -> list:
 
 
 _TEST_RUNNER_RE = re.compile(
-    r"\b(pytest|py\.test|npm (run )?test|npx (vitest|jest)|vitest|yarn test|"
+    r'(?:^|[;&|]\s*|&&\s*|\|\|\s*|"(?:command|code)":\s*"|\n)'
+    r"\s*(?:sudo\s+)?(?:python3?\s+-m\s+)?"
+    r"(pytest|py\.test|npm (run )?test|npx (vitest|jest)|vitest|yarn test|"
     r"cargo test|go test|tox\b|nox\b|rake test|swift test|mvn test|"
     r"gradlew? test|dotnet test)\b",
     re.IGNORECASE,
@@ -928,8 +930,8 @@ def _transcript_test_commands(transcript_path: str, started: float | None) -> bo
                             str(ts).replace("Z", "+00:00")
                         ).timestamp()
                     except (TypeError, ValueError):
-                        rec_epoch = None
-                    if rec_epoch is not None and rec_epoch < started:
+                        continue  # undated -> cannot be proven to belong to this run
+                    if rec_epoch < started:
                         continue
                 content = ((rec.get("message") or {}).get("content")) or []
                 if not isinstance(content, list):

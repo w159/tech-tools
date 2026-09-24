@@ -58,6 +58,26 @@ Full suite: 1462 passed, 3 skipped, 75 subtests
 (`python3 -m pytest scripts/ hooks/ -q` from `plugins/atlas/`). Consumers pick
 up the fix on their next marketplace update / plugin reinstall.
 
+Third pass (same session): two more gaps in condition (g), both found by an
+independent verifier during review rather than assumed fixed. First,
+`hooks.json` runs `completion_gate.py` BEFORE `ingest_session.py` at Stop, so
+`tool_calls` (populated only by ingestion) does not yet hold the CURRENT
+turn's own test-runner command when the gate evaluates - an honest run got
+blocked once, spuriously, self-correcting only on the next Stop cycle.
+`_transcript_test_commands` now scans the raw Stop transcript directly (the
+same technique `_latest_transcript_todos` already used for conditions i/k)
+as a second signal OR'd with the DB query. Second, `_TEST_RUNNER_RE` matched
+any MENTION of a runner name anywhere in a command string - `grep -n pytest .`,
+`ls pytest.ini`, `echo pytest` all "earned" credit without running anything,
+which is exactly the self-attestation shape this whole line of fixes exists to
+close. The regex is now anchored to a command-start position (after `;`/`&`/
+`|`/`&&`/`||`/a JSON `"command":`/`"code":` prefix/start-of-string), with a
+regression test proving a mention alone still blocks. Both fixes independently
+verified by fresh subagents with mutation-test proof (the tests fail when the
+fix is reverted in a scratch copy); findings.json entries:
+`verify-9f9eaa2-completion-gate-transcript-fallback`,
+`completion-gate-mcp-shell-credit-2026-09-24`.
+
 Second pass (same day): condition (f)'s commit-scan extension was written, then
 REVERTED after the premise failed checking. It paired a docs path with a commit
 carrying one of the run's own non-docs paths, on the story that runs were being
