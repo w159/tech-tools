@@ -1178,7 +1178,8 @@ class RightSizedDelegationContract(unittest.TestCase):
         src = (HOOKS_DIR / "completion_gate.py").read_text(encoding="utf-8")
         self.assertIn("_test_verified_this_run", src)
         self.assertIn("_unpaired_implementer_dispatches(session)", src)
-        self.assertIn("_test_verified_this_run(root, session)", src)
+        self.assertIn("_test_verified_this_run(\n", src)
+        self.assertIn('root, session, str(data.get("transcript_path")', src)
 
     def test_orchestrate_skill_documents_the_wave_ladder(self):
         text = OrchestrationContract()._body()

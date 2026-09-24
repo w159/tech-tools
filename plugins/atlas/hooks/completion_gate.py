@@ -698,7 +698,9 @@ def main() -> int:
             unverified = max(
                 0,
                 _unpaired_implementer_dispatches(session)
-                - _test_verified_this_run(root, session),
+                - _test_verified_this_run(
+                    root, session, str(data.get("transcript_path") or "")
+                ),
             )
         if (
             ok_a
@@ -887,7 +889,72 @@ _TEST_RUNNER_RE = re.compile(
 )
 
 
-def _tests_executed_this_run(conn, session_id: str, started: float) -> bool:
+def _transcript_test_commands(transcript_path: str, started: float | None) -> bool:
+    """True when the RAW transcript shows a test-runner command, independent of
+    whether `tool_calls` has been ingested yet.
+
+    `tool_calls` only gets rows from ingest_session.py, and hooks.json runs
+    completion_gate.py BEFORE ingest_session.py at Stop (both fire from the
+    same Stop event). A pytest run the main thread makes in the very turn that
+    triggers this Stop is therefore invisible to the `tool_calls` query below:
+    the honest run would get blocked once, spuriously, and only self-correct
+    on the NEXT Stop cycle once ingestion has caught up. Reading the
+    transcript directly - the same source ingestion itself reads, and the
+    same technique `_latest_transcript_todos` already uses for (i)/(k) - closes
+    that gap without waiting on the ingest hook.
+
+    Fail-open to False on everything unreadable/malformed: this is one of two
+    OR'd signals (the other being the DB query), so a transcript read failure
+    only loses this specific gap-closer, not all (g) credit."""
+    if not transcript_path:
+        return False
+    try:
+        with open(transcript_path, encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                if '"tool_use"' not in line or (
+                    '"Bash"' not in line and "ctx_" not in line
+                ):
+                    continue  # cheap prefilter; the JSON parse below is the real test
+                try:
+                    rec = json.loads(line)
+                except (json.JSONDecodeError, ValueError):
+                    continue
+                if started is not None:
+                    from datetime import datetime as _dt
+
+                    ts = rec.get("timestamp")
+                    try:
+                        rec_epoch = _dt.fromisoformat(
+                            str(ts).replace("Z", "+00:00")
+                        ).timestamp()
+                    except (TypeError, ValueError):
+                        rec_epoch = None
+                    if rec_epoch is not None and rec_epoch < started:
+                        continue
+                content = ((rec.get("message") or {}).get("content")) or []
+                if not isinstance(content, list):
+                    continue
+                for block in content:
+                    if not (isinstance(block, dict) and block.get("type") == "tool_use"):
+                        continue
+                    name = block.get("name") or ""
+                    is_bash = name == "Bash"
+                    is_mcp_shell = name.startswith("mcp__") and name.rsplit(
+                        "__", 1
+                    )[-1] in ("ctx_shell", "ctx_execute", "ctx_batch_execute", "ctx_execute_file")
+                    if not (is_bash or is_mcp_shell):
+                        continue
+                    blob = json.dumps(block.get("input") or {}, default=str)
+                    if _TEST_RUNNER_RE.search(blob):
+                        return True
+    except (OSError, UnicodeDecodeError):
+        return False
+    return False
+
+
+def _tests_executed_this_run(
+    conn, session_id: str, started: float, transcript_path: str = ""
+) -> bool:
     """True when at least one test-runner command executed during this run's
     window, main thread or sidechain. The (g) test-run credit exists because a
     deterministic test is stronger evidence than a verifier agent -- but a
@@ -902,8 +969,15 @@ def _tests_executed_this_run(conn, session_id: str, started: float) -> bool:
     short fixed output. A run that ran its pytest honestly through one of
     those MCP tools lands in `tool_calls` as kind='mcp' with a
     `lean-ctx.ctx_shell` / `context-mode.ctx_execute` target, not
-    tool_name='Bash' -- match both paths or those runs get no credit at all."""
+    tool_name='Bash' -- match both paths or those runs get no credit at all.
 
+    Two sources, OR'd together: the ingested `tool_calls` row (covers prior
+    turns and dispatched subagents once ingest has run), and a direct
+    transcript scan (covers THIS turn's own main-thread calls before
+    ingest_session.py has run - see `_transcript_test_commands`)."""
+
+    if _transcript_test_commands(transcript_path, started):
+        return True
     try:
         rows = conn.execute(
             "SELECT input_summary FROM tool_calls WHERE session_id=? "
@@ -921,7 +995,9 @@ def _tests_executed_this_run(conn, session_id: str, started: float) -> bool:
     return False
 
 
-def _test_verified_this_run(root: Path, session_id: str) -> int:
+def _test_verified_this_run(
+    root: Path, session_id: str, transcript_path: str = ""
+) -> int:
     """(g) pairing credit for verification that was a TEST RUN, not a subagent.
 
     Law 5 used to accept only an atlas:verifier *dispatch* as proof a change was
@@ -955,7 +1031,7 @@ def _test_verified_this_run(root: Path, session_id: str) -> int:
         started = atlas_db.run_started_at(conn, rid)
         if started is None:
             return 0
-        if not _tests_executed_this_run(conn, session_id, started):
+        if not _tests_executed_this_run(conn, session_id, started, transcript_path):
             return 0
         data = json.loads(findings.read_text(encoding="utf-8"))
         items = data if isinstance(data, list) else data.get("findings", [])

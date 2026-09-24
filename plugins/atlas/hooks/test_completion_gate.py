@@ -1448,6 +1448,49 @@ class TestRunPairsAnImplementerTest(GateOrchestrationTest):
         )
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertEqual(r.stdout.strip(), "", r.stdout)
+    def test_transcript_only_test_command_earns_credit_before_ingest(self):
+        """The Stop-hook ordering gap: `tool_calls` only gets rows from
+        ingest_session.py, which hooks.json runs AFTER completion_gate.py at
+        the same Stop event. A pytest run the main thread makes in the turn
+        that triggers this Stop is therefore not yet in the DB -- only in the
+        raw transcript. No _exec_test_command/_exec_mcp_test_command call
+        here: the DB has zero matching tool_calls rows, so credit can only
+        come from the transcript scan."""
+        self._commit_and_make_mixed_diff()
+        self._log_dispatches(implementers=1, verifiers=0)
+        transcript = os.path.join(self.tmp, "t.jsonl")
+        with open(transcript, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps({"type": "user", "message": {"content": "go"}}) + "\n")
+            fh.write(
+                json.dumps(
+                    {
+                        "type": "assistant",
+                        "message": {
+                            "content": [
+                                {
+                                    "type": "tool_use",
+                                    "name": "Bash",
+                                    "input": {"command": "pytest -q"},
+                                }
+                            ]
+                        },
+                    }
+                )
+                + "\n"
+            )
+        self._write_findings(
+            [{"id": "S1", "status": "verified", "verified_at": self._stamp(1)}]
+        )
+        r = _run_gate(
+            {
+                "session_id": "sess-orch",
+                "cwd": self.tmp,
+                "transcript_path": transcript,
+            },
+            self.env,
+        )
+        self.assertEqual(r.stdout.strip(), "", r.stdout)
+
     def test_stamp_without_executed_test_earns_no_credit(self):
         """A `verified` stamp written by the run itself, with no test-runner
         command executed during the run, is self-attestation: it must not
