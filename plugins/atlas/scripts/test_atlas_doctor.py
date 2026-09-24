@@ -811,7 +811,7 @@ class AtlasDoctorMiningTest(unittest.TestCase):
             self.conn,
             "old",
             project_id=self.pid,
-            started_at=time.time() - (atlas_doctor.FACET_BACKLOG_WINDOW_DAYS + 1) * 86400,
+            started_at=time.time() - (atlas_doctor.RECENT_WINDOW_DAYS + 1) * 86400,
         )
         found = atlas_doctor.mine_gate_block_silences_capture(self.conn, self.root)
         self.assertEqual(found, [])
@@ -875,6 +875,23 @@ class AtlasDoctorMiningTest(unittest.TestCase):
         self.assertEqual(len(found), 1)
         self.assertEqual(found[0]["key"], "user_correction")
         self.assertEqual(found[0]["metric_value"], 4)
+
+    def test_recurring_friction_miner_window(self):
+        """Old friction must not count: a lifetime count can only grow, so a
+        baseline taken from it can never be met however well behavior
+        improves."""
+        import time as _time
+
+        stale = _time.time() - (atlas_doctor.RECENT_WINDOW_DAYS + 1) * 86400
+        for _ in range(5):
+            atlas_db.record_friction(self.conn, "s1", "gate_block", ts=stale)
+        found = atlas_doctor.mine_recurring_friction(self.conn, self.root, min_count=3)
+        self.assertEqual(found, [])  # five events, all outside the window
+        for _ in range(3):
+            atlas_db.record_friction(self.conn, "s1", "gate_block")
+        found = atlas_doctor.mine_recurring_friction(self.conn, self.root, min_count=3)
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0]["metric_value"], 3)  # recent only
 
     # --- mine() dedupe / registry ------------------------------------------
 

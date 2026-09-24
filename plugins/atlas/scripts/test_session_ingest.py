@@ -743,6 +743,37 @@ class DetectSignalsTest(unittest.TestCase):
         )
         self.assertTrue(any(s[0] == "user_correction" for s in sigs))
 
+    # --- quoted doc / tool-output text is quoting, not behavior ---------------
+
+    def test_markdown_table_row_is_not_a_signal(self):
+        # Real false positive: a findings-table row pasted by the operator.
+        text = "| S11 (wizard 429 data-loss) | uncommitted in a stale worktree, never verified |"
+        self.assertEqual(list(session_ingest.detect_signals("assistant", text)), [])
+
+    def test_fenced_code_is_not_a_signal(self):
+        text = 'Rule text:\n```\nNo "should work" or "looks good" claims.\n```\n'
+        self.assertEqual(list(session_ingest.detect_signals("assistant", text)), [])
+
+    def test_stop_condition_boilerplate_is_not_a_correction(self):
+        # "no stop condition was hit" matched CORRECTION's `no,? stop` arm -
+        # this workflow's own vocabulary colliding with the noise pattern.
+        for text in (
+            "No stop condition was hit - the two guards were genuinely independent.",
+            "No STOP conditions were triggered - both flagged divergence risks.",
+        ):
+            self.assertEqual(
+                list(session_ingest.detect_signals("user", text)), [], text
+            )
+        # A real "no, stop" correction still lands.
+        self.assertTrue(
+            any(
+                s[0] == "user_correction"
+                for s in session_ingest.detect_signals(
+                    "user", "no, stop doing that and read the file first"
+                )
+            )
+        )
+
     def test_correction_wholesale_suppressed_when_sharing_a_message_with_hook_output(
         self,
     ):

@@ -16,7 +16,7 @@
 - **atlas-doctor observability miner: windowed backlog.** The
   missing-facets finding counted all history (1446 and climbing), so its
   target of 0 could never be met even with capture working. It now counts only
-  sessions from the last `FACET_BACKLOG_WINDOW_DAYS` (14); the all-time
+  sessions from the last `RECENT_WINDOW_DAYS` (14); the all-time
   backlog never clears, recent capture holes still surface.
 - **atlas-doctor tool-error miner: expected control flow no longer mined.**
   Per-tool threshold overrides for `Write` (read-before-edit gate rejects),
@@ -31,6 +31,37 @@
   0.7 threshold). `_test_verified_this_run` only earns credit when a
   test-runner command (pytest, vitest, cargo test, ...) actually executed in
   the run window; deterministic tests remain the cheapest valid pairing.
+- **Guided fixes for the measured friction clusters.** `capability-routing.md`
+  now states context7's required call shape: `resolve_library_id` needs BOTH
+  `libraryName` and `query`. Verified against the recorded calls rather than
+  inferred - of the 19 errored calls, 13 lacked `query`, 6 lacked `libraryName`,
+  and none of the 19 carried both; 17 of the 25 successes carried both, so the
+  argument requirement may have tightened over time. `.env.example` documents
+  where an installed copy reads credentials and the two failure shapes a
+  connector can show (missing-var/NOT CONFIGURED vs keys-present-but-stale),
+  without machine-specific state. `anti-rationalization.md` gains rows for
+  after-the-fact assumptions and skipped restatement.
+- **Friction classifier: quoted text no longer mints signals.** Signal phrases
+  inside fenced code and markdown table rows are quoting, not behavior, and
+  CORRECTION's `no,?` arm was matching this workflow's own "no stop condition
+  was hit" boilerplate. Measured on the live corpus before the guard:
+  user_correction 15 -> 9 matching rows, the legacy `friction` bucket 5 -> 0,
+  assumption_admission 51 -> 49. Both guards are tested.
+- **Recurring-friction findings are windowed.** The miner counted lifetime
+  friction_events, so its baselines could never be met however well behavior
+  improved - the same defect the missing-facets metric had. Both now share
+  `RECENT_WINDOW_DAYS` (14).
+
+### Reverted
+- **Condition (f)'s commit-scan extension is rolled back.** It paired a docs
+  path with a commit also carrying one of the run's own non-docs paths, on the
+  premise that runs were being blocked for docs they had already committed. The
+  premise did not survive checking: for a session where (f) fired, the run's
+  recorded writes contained no docs path AND the commit touching its code
+  (`5619171d`) carried no docs either - a correct block, not a false positive.
+  The extension added a per-Stop `git log` and path-normalization machinery for
+  an unreproduced class, so it is reverted to the dirty-tree cross-check and the
+  finding is recorded open with that evidence.
 
 ## [8.0.1] - 2026-09-23
 

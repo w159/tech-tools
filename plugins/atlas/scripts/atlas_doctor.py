@@ -754,13 +754,13 @@ def mine_gate_block_silences_capture(conn, root):
     but no facets row at all. The historical all-time backlog can never
     clear (sessions ingested before chronicle_facet existed will never grow
     a facet row), so only sessions from the last
-    FACET_BACKLOG_WINDOW_DAYS count: a live capture hole keeps this fresh,
+    RECENT_WINDOW_DAYS count: a live capture hole keeps this fresh,
     while old backlog stops reading as a permanent regression. The
     historical root cause (stop_hook_active starving capture hooks) was
     fixed by the kind="capture" carve-out in atlas_hook_guard.should_run;
     a fresh nonzero means chronicle_facet is not running for those Stops
     (plugin absent, ATLAS_CHRONICLE off, or the circuit breaker)."""
-    window = f"-{FACET_BACKLOG_WINDOW_DAYS} days"
+    window = f"-{RECENT_WINDOW_DAYS} days"
     n = conn.execute(
         "SELECT COUNT(*) FROM session_logs "
         "WHERE session_id NOT IN (SELECT session_id FROM facets) "
@@ -776,7 +776,7 @@ def mine_gate_block_silences_capture(conn, root):
             title="recent sessions with no facet row despite an ingested transcript",
             detail=(
                 f"{n} session(s) started within the last "
-                f"{FACET_BACKLOG_WINDOW_DAYS} days have an ingested "
+                f"{RECENT_WINDOW_DAYS} days have an ingested "
                 "transcript but no matching facets row. Capture hooks are no "
                 "longer silenced on blocked Stops (kind='capture' carve-out "
                 "in atlas_hook_guard.should_run), so a fresh nonzero means "
@@ -959,11 +959,18 @@ def mine_tool_error_rate(conn, root, threshold=0.2, min_calls=5):
 def mine_recurring_friction(conn, root, min_count=3):
     """Behavioral check: friction_events categories (user_correction,
     assumption_admission, error_report, ...) recurring often enough to be a
-    pattern rather than a one-off."""
+    pattern rather than a one-off.
+
+    Windowed to RECENT_WINDOW_DAYS on purpose. A lifetime count can only grow,
+    so an improvement baseline taken from it can never be met however well the
+    underlying behavior improves - the same defect the missing-facets miner
+    had. Recent recurrence is the actionable signal; history stays in the DB.
+    """
     rows = conn.execute(
         "SELECT category, COUNT(*) AS n FROM friction_events "
+        "WHERE ts > strftime('%s','now', ?) "
         "GROUP BY category HAVING n >= ? ORDER BY n DESC",
-        (min_count,),
+        ("-%d days" % RECENT_WINDOW_DAYS, min_count),
     ).fetchall()
     out = []
     for category, n in rows:
@@ -971,8 +978,11 @@ def mine_recurring_friction(conn, root, min_count=3):
             _finding(
                 dimension="behavioral friction",
                 severity="MED" if n >= min_count * 2 else "LOW",
-                title=f"recurring {category} friction ({n}x)",
-                detail=f"{n} friction_events row(s) categorized '{category}'.",
+                title=f"recurring {category} friction ({n}x in {RECENT_WINDOW_DAYS}d)",
+                detail=(
+                    f"{n} friction_events row(s) categorized '{category}' in the "
+                    f"last {RECENT_WINDOW_DAYS} days."
+                ),
                 proposed_action=(
                     f"Read the recent snippets for category='{category}' "
                     "(atlas_db.signal_rollup or friction_events directly) and "
@@ -987,9 +997,10 @@ def mine_recurring_friction(conn, root, min_count=3):
     return out
 
 
-# How far back the missing-facets observability miner looks. The all-time
-# backlog can never clear, so only sessions inside this window count.
-FACET_BACKLOG_WINDOW_DAYS = 14
+# How far back the recency-windowed miners look (missing-facets backlog,
+# recurring friction). Lifetime counts can only grow, so a baseline taken from
+# one can never be met however well the behavior improves.
+RECENT_WINDOW_DAYS = 14
 
 
 MINERS = {
