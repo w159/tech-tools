@@ -41,15 +41,27 @@
   derived from `session_ingest.classify()`'s real `mcp__<server>__<tool>`
   parsing. Two regression tests cover both MCP tools directly.
 - **completion gate (g): closed a Stop-hook ingestion race and a regex
-  self-attestation hole.** `hooks.json` runs `completion_gate.py` before
-  `ingest_session.py` at Stop, so a test run made in the very turn that
-  triggers Stop was invisible to the `tool_calls` query - the honest run got
-  blocked once, spuriously. `_transcript_test_commands` now scans the raw
-  Stop transcript directly (the technique `_latest_transcript_todos` already
-  used for i/k) as a second signal. Separately, `_TEST_RUNNER_RE` matched any
-  mention of a runner name (`grep -n pytest .`, `echo pytest`), not an actual
-  invocation; it is now anchored to a command-start position. Both
-  independently verified with mutation-test proof.
+  self-attestation hole.** Found during review, not assumed fixed.
+  `hooks.json` runs `completion_gate.py` before `ingest_session.py` at Stop,
+  so a test run made in the very turn that triggers Stop was invisible to
+  the `tool_calls` query - the honest run got blocked once, spuriously.
+  `_transcript_test_commands` now scans the raw Stop transcript directly
+  (the technique `_latest_transcript_todos` already used for i/k) as a
+  second signal. Independently verified with mutation-test proof (agent
+  NarrowMouse). Separately, `_TEST_RUNNER_RE` matched any mention of a
+  runner name (`grep -n pytest .`, `echo pytest`), not an actual invocation;
+  it is now anchored to a command-start position. Independently verified
+  with mutation-test proof (agent SpontaneousFish).
+- **completion gate (g): matched JSON-escaped newlines too.** Both callers
+  search `json.dumps(...)` output, so an embedded newline in a multi-line
+  `ctx_execute` `code` string is escaped to the literal two characters
+  `\n`, never a real newline byte - the anchor's `\n` alternative only
+  matched a real newline byte, so an honest multi-line test run earned no
+  credit. Added a literal `\\n` alternative. A vacuous first version of the
+  regression test (it called a helper that wrote its own unrelated matching
+  row) was caught and fixed before commit; mutation-tested (fails without
+  the fix, passes with it). Not yet independently verified by a dispatched
+  agent - self-mutation-tested only.
 - **Guided fixes for the measured friction clusters.** `capability-routing.md`
   now states context7's required call shape: `resolve_library_id` needs BOTH
   `libraryName` and `query`. Verified against the recorded calls rather than
