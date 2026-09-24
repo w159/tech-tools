@@ -110,7 +110,19 @@ export function createHttpServer(
   backendIds: readonly string[],
 ): HttpServer {
   return createServer((req: IncomingMessage, res: ServerResponse) => {
-    const origin = `http://${req.headers.host ?? `${config.host}:${config.port}`}`;
+    // This process only ever runs behind Container Apps external ingress
+    // with allowInsecure:false, so every request that reaches it arrived
+    // over HTTPS from the caller's perspective - verified live: the ingress
+    // config on gwh-mcp-gateway carries "allowInsecure": false and
+    // "transport": "Auto". x-forwarded-proto was tried first and measured
+    // live to still read as non-https (Container Apps' internal edge->
+    // container hop does not reliably forward the original external
+    // scheme), so a header-sniffed value here would rebuild the exact
+    // WWW-Authenticate/RFC-9728 "http://" defect this fix exists to close.
+    // If this code ever runs somewhere the external edge legitimately
+    // serves plain HTTP, that deployment needs its own explicit override,
+    // not a guess from a header this platform does not set trustworthily.
+    const origin = `https://${req.headers.host ?? `${config.host}:${config.port}`}`;
     const url = new URL(req.url ?? "/", origin);
 
     if (url.pathname === "/health" && req.method === "GET") {
