@@ -42,9 +42,21 @@ requires an actually executed test-runner command in the run window
 (pytest, vitest, cargo test, ...); a deterministic test remains the cheapest
 valid pairing, which was the point of the doctrine change.
 
-Full suite: 1460 passed, 3 skipped, 75 subtests
+Follow-up (same session): the initial fix matched only `tool_name='Bash'`,
+but this workspace's own CLAUDE.md mandates `lean-ctx`'s `ctx_shell` and
+`context-mode`'s `ctx_execute`/`ctx_batch_execute`/`ctx_execute_file` MCP
+tools for shell commands, reserving native Bash for mutating state and short
+fixed output - so a run that followed that convention and ran pytest through
+`ctx_shell` would have earned no (g) credit at all. `_tests_executed_this_run`
+now also matches `target IN ('lean-ctx.ctx_shell', 'context-mode.ctx_execute',
+'context-mode.ctx_batch_execute', 'context-mode.ctx_execute_file')`, derived
+from `session_ingest.classify()`'s actual `mcp__<server>__<tool>` parsing.
+Two regression tests cover the MCP-shell path directly.
+
+Full suite: 1462 passed, 3 skipped, 75 subtests
 (`python3 -m pytest scripts/ hooks/ -q` from `plugins/atlas/`). Consumers pick
 up the fix on their next marketplace update / plugin reinstall.
+
 
 ## [Unreleased] -- mcp-gateway: one Entra-authenticated remote connector for every vendor (IN PROGRESS, not verified)
 
