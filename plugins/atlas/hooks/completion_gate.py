@@ -893,12 +893,23 @@ def _tests_executed_this_run(conn, session_id: str, started: float) -> bool:
     deterministic test is stronger evidence than a verifier agent -- but a
     `verified` stamp with no executed test behind it is self-attestation, not
     verification, and self-stamping zeroed real coverage (runs shipped with
-    implementer dispatches, no verifier, and no test command at all)."""
+    implementer dispatches, no verifier, and no test command at all).
+
+    Shell execution in this repo is not always the builtin `Bash` tool: this
+    workspace's CLAUDE.md mandates `lean-ctx`'s `ctx_shell` and
+    `context-mode`'s `ctx_execute`/`ctx_batch_execute`/`ctx_execute_file` MCP
+    tools for shell commands, reserving native `Bash` for mutating state and
+    short fixed output. A run that ran its pytest honestly through one of
+    those MCP tools lands in `tool_calls` as kind='mcp' with a
+    `lean-ctx.ctx_shell` / `context-mode.ctx_execute` target, not
+    tool_name='Bash' -- match both paths or those runs get no credit at all."""
 
     try:
         rows = conn.execute(
             "SELECT input_summary FROM tool_calls WHERE session_id=? "
-            "AND ts >= ? AND (kind='bash' OR tool_name='Bash')",
+            "AND ts >= ? AND (tool_name='Bash' OR target IN ("
+            "'lean-ctx.ctx_shell','context-mode.ctx_execute',"
+            "'context-mode.ctx_batch_execute','context-mode.ctx_execute_file'))",
             (session_id, started),
         ).fetchall()
     except Exception:

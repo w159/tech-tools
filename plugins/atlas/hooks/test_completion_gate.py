@@ -1367,6 +1367,35 @@ class TestRunPairsAnImplementerTest(GateOrchestrationTest):
         c.commit()
         c.close()
 
+
+    def _exec_mcp_test_command(self, target, tool_name, server):
+        """Log a test-runner command executed through an MCP shell tool
+        (lean-ctx's ctx_shell or context-mode's ctx_execute/ctx_batch_execute)
+        instead of the builtin Bash tool. This workspace's CLAUDE.md mandates
+        those MCP tools for shell commands, so a run that ran pytest honestly
+        through one of them must earn the same (g) credit a Bash call does."""
+        import time as _time
+
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db
+
+        c = atlas_db.connect(self.env["ATLAS_DB"])
+        atlas_db.insert_tool_call(
+            c,
+            "sess-orch",
+            {
+                "message_uuid": "msg-mcp-testrun",
+                "ts": _time.time(),
+                "tool_use_id": "toolu-mcp-testrun",
+                "tool_name": tool_name,
+                "kind": "mcp",
+                "target": target,
+                "server": server,
+                "input_summary": '{"command": "pytest -q"}',
+            },
+        )
+        c.commit()
+        c.close()
     def test_one_implementer_plus_a_test_verified_finding_passes(self):
         """The simple-task path: one subagent, verification by test, no verifier
         dispatch, gate green."""
@@ -1386,6 +1415,39 @@ class TestRunPairsAnImplementerTest(GateOrchestrationTest):
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertEqual(r.stdout.strip(), "", r.stdout)
 
+
+    def test_lean_ctx_shell_test_command_earns_credit(self):
+        """A pytest run through lean-ctx's ctx_shell MCP tool (this
+        workspace's mandated shell path) must earn (g) credit exactly like a
+        Bash call -- not just tool_name='Bash' rows."""
+        self._commit_and_make_mixed_diff()
+        self._log_dispatches(implementers=1, verifiers=0)
+        self._exec_mcp_test_command(
+            target="lean-ctx.ctx_shell",
+            tool_name="mcp__lean-ctx__ctx_shell",
+            server="lean-ctx",
+        )
+        self._write_findings(
+            [{"id": "S1", "status": "verified", "verified_at": self._stamp(1)}]
+        )
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertEqual(r.stdout.strip(), "", r.stdout)
+
+    def test_context_mode_ctx_execute_test_command_earns_credit(self):
+        """Same as above for context-mode's ctx_execute MCP tool, the other
+        shell path CLAUDE.md mandates over native Bash."""
+        self._commit_and_make_mixed_diff()
+        self._log_dispatches(implementers=1, verifiers=0)
+        self._exec_mcp_test_command(
+            target="context-mode.ctx_execute",
+            tool_name="mcp__plugin_context-mode_context-mode__ctx_execute",
+            server="context-mode",
+        )
+        self._write_findings(
+            [{"id": "S1", "status": "verified", "verified_at": self._stamp(1)}]
+        )
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertEqual(r.stdout.strip(), "", r.stdout)
     def test_stamp_without_executed_test_earns_no_credit(self):
         """A `verified` stamp written by the run itself, with no test-runner
         command executed during the run, is self-attestation: it must not
