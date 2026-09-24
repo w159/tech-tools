@@ -1448,6 +1448,7 @@ class TestRunPairsAnImplementerTest(GateOrchestrationTest):
         )
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertEqual(r.stdout.strip(), "", r.stdout)
+
     def test_transcript_only_test_command_earns_credit_before_ingest(self):
         """The Stop-hook ordering gap: `tool_calls` only gets rows from
         ingest_session.py, which hooks.json runs AFTER completion_gate.py at
@@ -1465,6 +1466,7 @@ class TestRunPairsAnImplementerTest(GateOrchestrationTest):
                 json.dumps(
                     {
                         "type": "assistant",
+                        "timestamp": self._stamp(1),
                         "message": {
                             "content": [
                                 {
@@ -1490,6 +1492,48 @@ class TestRunPairsAnImplementerTest(GateOrchestrationTest):
             self.env,
         )
         self.assertEqual(r.stdout.strip(), "", r.stdout)
+
+    def test_transcript_mention_of_pytest_does_not_earn_credit(self):
+        """`_TEST_RUNNER_RE` must anchor to an actual invocation, not any
+        mention: `grep -n pytest .`, `ls pytest.ini`, `echo pytest` all
+        contain the word without running anything. Matching on mere presence
+        would reopen the exact self-attestation hole condition (g) exists to
+        close (a run could "prove" testing by grepping for the word)."""
+        self._commit_and_make_mixed_diff()
+        self._log_dispatches(implementers=1, verifiers=0)
+        transcript = os.path.join(self.tmp, "t.jsonl")
+        with open(transcript, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps({"type": "user", "message": {"content": "go"}}) + "\n")
+            fh.write(
+                json.dumps(
+                    {
+                        "type": "assistant",
+                        "timestamp": self._stamp(1),
+                        "message": {
+                            "content": [
+                                {
+                                    "type": "tool_use",
+                                    "name": "Bash",
+                                    "input": {"command": "grep -n pytest ."},
+                                }
+                            ]
+                        },
+                    }
+                )
+                + "\n"
+            )
+        self._write_findings(
+            [{"id": "S1", "status": "verified", "verified_at": self._stamp(1)}]
+        )
+        r = _run_gate(
+            {
+                "session_id": "sess-orch",
+                "cwd": self.tmp,
+                "transcript_path": transcript,
+            },
+            self.env,
+        )
+        self.assertIn("verification coverage", r.stdout)
 
     def test_stamp_without_executed_test_earns_no_credit(self):
         """A `verified` stamp written by the run itself, with no test-runner

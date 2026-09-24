@@ -31,6 +31,25 @@
   0.7 threshold). `_test_verified_this_run` only earns credit when a
   test-runner command (pytest, vitest, cargo test, ...) actually executed in
   the run window; deterministic tests remain the cheapest valid pairing.
+- **completion gate (g): MCP shell tools earn test-run credit too.** The
+  executed-test check above matched only `tool_name='Bash'`, but this
+  workspace's CLAUDE.md mandates `lean-ctx`'s `ctx_shell` and
+  `context-mode`'s `ctx_execute`/`ctx_batch_execute`/`ctx_execute_file` MCP
+  tools for shell commands - a run following that convention earned no (g)
+  credit at all. `_tests_executed_this_run` now also matches
+  `target IN ('lean-ctx.ctx_shell', 'context-mode.ctx_execute', ...)`,
+  derived from `session_ingest.classify()`'s real `mcp__<server>__<tool>`
+  parsing. Two regression tests cover both MCP tools directly.
+- **completion gate (g): closed a Stop-hook ingestion race and a regex
+  self-attestation hole.** `hooks.json` runs `completion_gate.py` before
+  `ingest_session.py` at Stop, so a test run made in the very turn that
+  triggers Stop was invisible to the `tool_calls` query - the honest run got
+  blocked once, spuriously. `_transcript_test_commands` now scans the raw
+  Stop transcript directly (the technique `_latest_transcript_todos` already
+  used for i/k) as a second signal. Separately, `_TEST_RUNNER_RE` matched any
+  mention of a runner name (`grep -n pytest .`, `echo pytest`), not an actual
+  invocation; it is now anchored to a command-start position. Both
+  independently verified with mutation-test proof.
 - **Guided fixes for the measured friction clusters.** `capability-routing.md`
   now states context7's required call shape: `resolve_library_id` needs BOTH
   `libraryName` and `query`. Verified against the recorded calls rather than
