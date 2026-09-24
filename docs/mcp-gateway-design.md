@@ -1,6 +1,14 @@
 # MCP gateway: Entra ID authentication and role-based access
 
-Status: in progress. Sections marked UNVERIFIED have not been exercised end to end.
+Status: deployed and live-verified at the infrastructure/code layer as of
+2026-09-24. `https://gwh-mcp-gateway.delightfulpebble-1c14644e.eastus.azurecontainerapps.io/mcp`
+answers unauthenticated requests with `401` + a correct RFC 9728
+`WWW-Authenticate: Bearer resource_metadata="https://.../.well-known/oauth-protected-resource/mcp"`,
+and `/.well-known/oauth-protected-resource/mcp` correctly names Entra as the
+authorization server. `/health` reports all 12 vendor backends discovered.
+Sections marked UNVERIFIED still have not been exercised end to end (they
+need inputs - credentials, DNS access, org role decisions - this doc's
+editor does not have).
 
 ## Why a gateway
 
@@ -94,10 +102,46 @@ tool, which is the per-user accountability the upstream API cannot provide.
   RFC 7523 jwt-bearer grant. Entra does not accept that grant for this purpose,
   so members use "Individually" (one interactive Entra sign-in per connector).
 
-## Remaining setup (UNVERIFIED)
+- **Container Apps environment note:** the original `gwh-mcp-gateway-env`
+  got stuck in a `Failed`/`Updating` provisioning loop
+  (`ManagedEnvironmentOperationTimeout`) that a `containerapp env create`
+  retry did not clear even after 15+ minutes; a delete-and-recreate under a
+  new name (`gwh-mcp-gateway-env2`) resolved it in the normal ~3-5 minutes.
+  The old environment name is retired; the Container App now lives in
+  `gwh-mcp-gateway-env2`. If this recurs, delete/recreate rather than
+  waiting on the stuck one.
+- **`:latest` tag updates do not roll a new Container App revision** on
+  their own - `az containerapp update --image ...:latest` was a no-op
+  against the running revision twice in testing. Deploy by exact image
+  digest (`az acr repository show --image mcp-gateway:latest --query digest`)
+  with an explicit `--revision-suffix` to force a real rollout, then verify
+  live rather than trusting the CLI's success exit code alone.
 
-- DNS at the henssler.com registrar: CNAME `mcp` to the container app FQDN and
-  TXT `asuid.mcp` with the environment's verification ID.
-- Load vendor secrets into Key Vault and reference them as container app secrets.
-- In Claude: add the connector (step 1 above), then set per-role connector
-  permissions under Organization settings > Roles.
+## Remaining setup
+
+Everything below needs an input or an action this doc's editor does not have
+access to. The infrastructure and code are otherwise complete and verified live.
+
+- **Vendor credentials (blocked on you).** Key Vault (`gwh-mcp-gateway-kv`) is
+  currently empty of vendor secrets. Each backend reads its own vendor's real
+  env var names directly (no `CFG_` prefix, unlike the atlas plugin's stdio
+  path) - see `plugins/atlas/.mcp.json` for the exact per-vendor names (e.g.
+  `VANTA_CLIENT_ID`/`VANTA_CLIENT_SECRET`, `PANOS_HOST`/`PANOS_API_KEY`, etc).
+  Provide values and they can be loaded as Key Vault secrets and wired as
+  Container App secret-backed env vars per vendor.
+- **Entra group role assignments (blocked on you - an org-structure
+  decision).** The app registration and all 26 app roles (12 vendors x
+  Read/Write) exist and `appRoleAssignmentRequired` is on, but **zero**
+  functional vendor roles are assigned to anyone yet - only the requesting
+  user holds the bare default-access role. Decide which Entra groups (not
+  individuals, per the design above) get which vendor Read/Write roles, then
+  assign them on the "Henssler MCP Gateway" enterprise application.
+- **DNS at the henssler.com registrar (blocked on you - external to Azure).**
+  CNAME `mcp` -> `gwh-mcp-gateway.delightfulpebble-1c14644e.eastus.azurecontainerapps.io`,
+  and TXT `asuid.mcp` -> `6C95DA3E1BC6F1E9D58EFAEB153F7F939B200E5D9724A72FF6EDE0B651B6CB62`.
+- **Custom domain + managed certificate binding** on the Container App -
+  only possible once the DNS records above are live and resolving.
+- **In Claude (blocked on you - needs org Owner access to the Claude admin
+  UI).** Add the connector (see Flow step 1 above) once the custom domain is
+  bound, then set per-role connector permissions under Organization
+  settings > Roles.
