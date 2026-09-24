@@ -80,6 +80,11 @@ preconditions.
 | JS/TS dead code / dupes / health / PR gate | fallow MCP (`audit`, analyze/dead-code tools) or `fallow … --format json` | guessing unused exports from a partial read |
 | "Did we hit this before?" | claude-mem `search` -> `timeline` -> `get_observations` | re-deriving it |
 
+context7 arg shape (measured cause of its historical 56% error rate): `resolve_library_id`
+requires **both** `libraryName` and `query` - a call with only `libraryName` is rejected by
+schema validation, which is what the errors were. Then `query-docs` takes the returned
+`/org/project` id. Same discipline as claude-mem below: a validated arg shape beats a retry.
+
 claude-mem worker-runtime arg shapes (the historical error source, see `memory-access.md`):
 `timeline` takes `anchor` (int) or `query` and has **no** `limit`; `get_observations` takes `ids` as
 an array of **numbers**. `observation_search` is server-beta only - use `search`.

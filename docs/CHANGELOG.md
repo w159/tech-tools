@@ -22,7 +22,8 @@ The missing-facets observability miner counted all history (1446 and climbing)
 against a target of 0 that the all-time backlog could never reach even with
 capture working - the real fix (capture hooks no longer silenced on blocked
 Stops) was already live, so the metric read "regressed" forever. It now counts
-only sessions from the last 14 days (`FACET_BACKLOG_WINDOW_DAYS`), the window
+only sessions from the last 14 days (`RECENT_WINDOW_DAYS`, shared with the
+friction miner), the window
 where a live capture hole can actually be seen.
 
 The tool-error miner flagged by-design control flow as defects: Write's
@@ -56,6 +57,45 @@ Two regression tests cover the MCP-shell path directly.
 Full suite: 1462 passed, 3 skipped, 75 subtests
 (`python3 -m pytest scripts/ hooks/ -q` from `plugins/atlas/`). Consumers pick
 up the fix on their next marketplace update / plugin reinstall.
+
+Second pass (same day): condition (f)'s commit-scan extension was written, then
+REVERTED after the premise failed checking. It paired a docs path with a commit
+carrying one of the run's own non-docs paths, on the story that runs were being
+blocked for docs they had already committed. Pulling the evidence instead of
+trusting the story: for a session where (f) fired, `run_changed_paths` held no
+docs path AND the commit touching its code (`5619171d`, gwh-firstrespondersapp)
+carried no docs either - a correct block. With the false-positive class
+unreproduced and the extension costing a `git log` per Stop plus path
+normalization, it is rolled back to the dirty-tree cross-check and the finding
+recorded open. The same check killed a claimed win: an initial note said the
+gate's fail-open cascade was resolved per-condition; with `ATLAS_DB` pointed at
+an unusable path the gate still exits silently (rc 0, empty stdout), so the
+2026-07-09 lesson stays open.
+
+Friction measurement was the other real defect found here. The
+recurring-friction miner counted lifetime `friction_events`, so its baselines
+could never be met however well behavior improved - it now shares
+`RECENT_WINDOW_DAYS` (14) with the missing-facets miner. And sampling the
+snippets showed the classifier minting signals from quoted text: fenced code and
+markdown table rows are now stripped before matching, and `CORRECTION`'s `no,?`
+arm was matching the fleet's own "no stop condition was hit" boilerplate.
+Measured on the live corpus before the guard: user_correction 15 -> 9 matching
+rows, the legacy `friction` bucket 5 -> 0, assumption_admission 51 -> 49
+(assumption_admission is genuinely behavioral; user_correction was ~40% noise).
+
+The remaining clusters got measured-cause fixes. context7: of its 19 errored
+calls, 13 lacked the required `query` arg and 6 lacked `libraryName`, none of
+the 19 carried both, and 17 of 25 successes carried both - the call shape
+explains every recorded error, and it is now documented in
+`capability-routing.md`. Credentials: where an installed copy reads them
+(`ATLAS_ENV_FILE=${CLAUDE_PLUGIN_ROOT}/.env`, which resolves into a cache with no
+`.env`) and the two failure shapes that must not be conflated (missing-var /
+NOT CONFIGURED vs keys-present-but-stale 400 Invalid Token / TOKEN_REVOKED) are
+documented in `.env.example` without machine-specific state;
+`anti-rationalization.md` gained rows for after-the-fact assumptions and skipped
+restatement.
+
+Full suite after the second pass: 1467 passed, 3 skipped, 75 subtests (measured on the working tree; the 1469 figure was from the pass-2 gate tests, which were reverted with the (f) work).
 
 
 ## [Unreleased] -- mcp-gateway: one Entra-authenticated remote connector for every vendor (IN PROGRESS, not verified)

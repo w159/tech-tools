@@ -115,10 +115,24 @@ CORRECTION = re.compile(
     r"\b(that'?s (wrong|not right|incorrect|not what)|"
     r"you (lied|never|did ?n'?t actually|claimed|said)|"
     r"stop (doing|assuming|making)|why did you (assume|say|claim|not)|"
-    r"you said .{0,40}? but|no,? (it|that|you|don'?t|stop)|"
+    r"you said .{0,40}? but|no,\s+(it|that|you|don'?t|stop)|"
     r"actually,? (no|it|that|you))\b",
     re.I,
 )
+# Fenced code blocks and markdown table rows: doc excerpts and tool output.
+# Signal phrases inside them are quoting, not behavior - a findings-table row
+# ("... never verified") or a pasted rule ("No 'should work' claims") is not an
+# admission or a correction. Measured on the live corpus before adding this:
+# user_correction 15 -> 9 matching rows, the legacy `friction` bucket 5 -> 0,
+# assumption_admission 51 -> 49.
+QUOTED_BLOCK = re.compile(r"```.*?```|^\s*\|.*$", re.S | re.M)
+
+
+def _matchable_text(text):
+    """Text with quoted doc/tool-output blocks removed for signal matching."""
+    return QUOTED_BLOCK.sub(" ", text or "")
+
+
 SIGNAL_WEIGHT = {
     "assumption_admission": 2.0,
     "user_correction": 1.5,
@@ -230,25 +244,28 @@ def detect_signals(role, text):
     # that never expires.
     if _is_machine_authored(text):
         return
+    scan = _matchable_text(text)
+    if not scan.strip():
+        return
     if role == "assistant":
-        m = ADMISSION.search(text)
+        m = ADMISSION.search(scan)
         if m:
             yield (
                 "assumption_admission",
                 SIGNAL_WEIGHT["assumption_admission"],
-                _snippet(text, m),
+                _snippet(scan, m),
             )
-        m = UNVERIFIED.search(text)
+        m = UNVERIFIED.search(scan)
         if m:
             yield (
                 "unverified_claim",
                 SIGNAL_WEIGHT["unverified_claim"],
-                _snippet(text, m),
+                _snippet(scan, m),
             )
     elif role == "user":
-        m = CORRECTION.search(text)
+        m = CORRECTION.search(scan)
         if m:
-            yield "user_correction", SIGNAL_WEIGHT["user_correction"], _snippet(text, m)
+            yield "user_correction", SIGNAL_WEIGHT["user_correction"], _snippet(scan, m)
 
 
 # --- transcript parsing -------------------------------------------------------
