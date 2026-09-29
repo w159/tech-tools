@@ -24,11 +24,18 @@ run, or "not yet emitted") on any error. A guard that can crash a hook or
 wedge a session is worse than no guard at all.
 """
 
+import contextlib
 import hashlib
 import json
 import os
 import sys
+import tempfile
 import time
+
+try:
+    import fcntl
+except ImportError:  # Windows has no fcntl
+    fcntl = None
 
 # Circuit breaker: a per-hook throttle only asks "have I spoken recently" --
 # none of the five hooks can see the chain thrashing as a whole. If Stop
@@ -46,6 +53,12 @@ STOP_EVENT_DEDUP_SECONDS = 2
 
 STALE_SESSION_SECONDS = 86400  # prune session state files older than a day
 MAX_EMITTED_HASHES = 50  # cap per-session emitted-message memory
+
+# Bound on how long a Stop hook will wait for the per-session lock below --
+# well under any hook timeout, so a stuck lock degrades to "fail open,
+# unlocked" instead of wedging the caller.
+LOCK_TIMEOUT_SECONDS = 1.0
+LOCK_POLL_INTERVAL = 0.02
 
 
 def _now():
@@ -75,6 +88,59 @@ def _state_path(session_id):
     return os.path.join(_state_dir(), _safe_session_id(session_id) + ".json")
 
 
+def _lock_path(session_id):
+    return os.path.join(_state_dir(), _safe_session_id(session_id) + ".lock")
+
+
+@contextlib.contextmanager
+def _locked(session_id):
+    """Exclusive lock around a state file's read-modify-write, so two Stop
+    hooks that fire in parallel (Claude Code runs all matching hooks for an
+    event concurrently) cannot both read the same state, each append their
+    own event, and overwrite each other's write -- the race the old comment
+    on _record_stop_event used to accept.
+
+    Bounded to LOCK_TIMEOUT_SECONDS of non-blocking attempts, not a blocking
+    flock: fail-open is the rule here too. No fcntl (Windows) or a lock that
+    never clears in time both fall through to today's unlocked behavior
+    rather than stalling the hook.
+    """
+    if fcntl is None:
+        yield
+        return
+    lock_file = None
+    acquired = False
+    try:
+        os.makedirs(_state_dir(), exist_ok=True)
+        lock_file = open(_lock_path(session_id), "a+")
+        # time.monotonic(), not _now(): the lock timeout is wall-clock
+        # bookkeeping, unrelated to the business-logic clock tests mock via
+        # _now() -- consuming _now() here would desync those mocks.
+        deadline = time.monotonic() + LOCK_TIMEOUT_SECONDS
+        while time.monotonic() < deadline:
+            try:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                acquired = True
+                break
+            except OSError:
+                time.sleep(LOCK_POLL_INTERVAL)
+    except Exception:
+        lock_file = None
+    try:
+        yield
+    finally:
+        if lock_file is not None:
+            if acquired:
+                try:
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+                except Exception:
+                    pass
+            try:
+                lock_file.close()
+            except Exception:
+                pass
+
+
 def _load_state(session_id):
     try:
         with open(_state_path(session_id)) as f:
@@ -85,9 +151,23 @@ def _load_state(session_id):
 
 def _save_state(session_id, state):
     try:
-        os.makedirs(_state_dir(), exist_ok=True)
-        with open(_state_path(session_id), "w") as f:
-            json.dump(state, f)
+        state_dir = _state_dir()
+        os.makedirs(state_dir, exist_ok=True)
+        path = _state_path(session_id)
+        # Write-then-rename: os.replace is atomic on POSIX and Windows, so a
+        # reader never observes a partially written state file even without
+        # the lock (e.g. the fcntl-unavailable fallback path).
+        fd, tmp_path = tempfile.mkstemp(dir=state_dir, prefix=".tmp-", suffix=".json")
+        try:
+            with os.fdopen(fd, "w") as f:
+                json.dump(state, f)
+            os.replace(tmp_path, path)
+        except Exception:
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+            raise
     except Exception:
         pass  # best-effort: a lost update just costs one extra hook firing
 
@@ -116,10 +196,11 @@ def _record_stop_event(state, now):
     from the several hooks that fire off one real Stop, then drop anything
     outside the burst window so the list cannot grow unbounded.
 
-    ponytail: a file-based counter with no locking, so two truly concurrent
-    hook processes can race and lose an event -- acceptable, since undercounting
-    the breaker is the fail-open direction. Add flock if misses show up in
-    practice.
+    Callers must hold `_locked(session_id)` across load-mutate-save: Claude
+    Code runs every matching Stop hook for an event in parallel, so without
+    that lock two concurrent processes can both read the same state, each
+    append their own event, and the second save silently drops the first
+    hook's write.
     """
     events = state.setdefault("stop_events", [])
     if not events or (now - events[-1]) >= STOP_EVENT_DEDUP_SECONDS:
@@ -166,34 +247,41 @@ def should_run(payload, hook_name, window_seconds=None, kind="emit"):
         if not session_id:
             return True  # nothing to scope state to -- allow rather than crash
 
-        state = _load_state(session_id)
-        now = _now()
-        _record_stop_event(state, now)
+        # The whole read-modify-write below must be one critical section:
+        # Claude Code fires every matching Stop hook for an event in
+        # parallel, so several processes reach this line at once.
+        with _locked(session_id):
+            state = _load_state(session_id)
+            now = _now()
+            _record_stop_event(state, now)
 
-        if state.get("breaker_tripped") or len(state["stop_events"]) > STOP_BURST_LIMIT:
-            if not state.get("breaker_tripped"):
-                state["breaker_tripped"] = True
-                try:
-                    sys.stderr.write(
-                        "[atlas] hook_guard: circuit breaker tripped for "
-                        "session %s -- Stop fired more than %d times within "
-                        "%ds; silencing all atlas Stop hooks for the rest of "
-                        "this session\n"
-                        % (session_id, STOP_BURST_LIMIT, STOP_BURST_WINDOW)
-                    )
-                except Exception:
-                    pass
-            _save_state(session_id, state)
-            return False
-
-        if window_seconds:
-            last_run = state.get("last_run", {}).get(hook_name)
-            if last_run is not None and (now - last_run) < window_seconds:
+            if (
+                state.get("breaker_tripped")
+                or len(state["stop_events"]) > STOP_BURST_LIMIT
+            ):
+                if not state.get("breaker_tripped"):
+                    state["breaker_tripped"] = True
+                    try:
+                        sys.stderr.write(
+                            "[atlas] hook_guard: circuit breaker tripped for "
+                            "session %s -- Stop fired more than %d times within "
+                            "%ds; silencing all atlas Stop hooks for the rest of "
+                            "this session\n"
+                            % (session_id, STOP_BURST_LIMIT, STOP_BURST_WINDOW)
+                        )
+                    except Exception:
+                        pass
                 _save_state(session_id, state)
                 return False
 
-        state.setdefault("last_run", {})[hook_name] = now
-        _save_state(session_id, state)
+            if window_seconds:
+                last_run = state.get("last_run", {}).get(hook_name)
+                if last_run is not None and (now - last_run) < window_seconds:
+                    _save_state(session_id, state)
+                    return False
+
+            state.setdefault("last_run", {})[hook_name] = now
+            _save_state(session_id, state)
         _prune_stale_sessions(now)
         return True
     except Exception:
@@ -212,13 +300,19 @@ def emit(payload, hook_name, message):
                 message.strip().encode("utf-8", "replace")
             ).hexdigest()[:16]
             key = hook_name + ":" + digest
-            state = _load_state(session_id)
-            emitted = state.setdefault("emitted", [])
-            if key in emitted:
-                return False
-            emitted.append(key)
-            state["emitted"] = emitted[-MAX_EMITTED_HASHES:]
-            _save_state(session_id, state)
+            # Same race should_run() guards against: several Stop hooks (or
+            # this hook re-entering via stop_hook_active) can call emit() in
+            # parallel against the same session state file. should_run()
+            # always releases its own _locked() before returning, so taking
+            # the lock again here is sequential, not re-entrant.
+            with _locked(session_id):
+                state = _load_state(session_id)
+                emitted = state.setdefault("emitted", [])
+                if key in emitted:
+                    return False
+                emitted.append(key)
+                state["emitted"] = emitted[-MAX_EMITTED_HASHES:]
+                _save_state(session_id, state)
         sys.stdout.write(
             json.dumps(
                 {

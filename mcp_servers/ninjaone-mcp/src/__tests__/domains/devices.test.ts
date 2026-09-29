@@ -191,7 +191,7 @@ describe("Devices Domain Handler", () => {
         expect(result.content[0].type).toBe("text");
 
         const data = JSON.parse(result.content[0].text);
-        expect(data.devices).toHaveLength(2);
+        expect(data).toHaveLength(2);
       });
 
       it("lets a raw device_filter override the compiled clauses", async () => {
@@ -330,7 +330,7 @@ describe("Devices Domain Handler", () => {
         expect(result.isError).toBeUndefined();
 
         const data = JSON.parse(result.content[0].text);
-        expect(data.activities).toHaveLength(1);
+        expect(data).toHaveLength(1);
       });
 
       it("should pass activity_type through to the request as type (regression: filter was inert)", async () => {

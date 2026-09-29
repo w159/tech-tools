@@ -100,7 +100,7 @@ const CONNECTORS = {
   panos: { floor: 60 },
   paylocity: { floor: 16 },
   spanning: { floor: 14 },
-  threatlocker: { floor: 19 },
+  threatlocker: { floor: 30 },
   vanta: { floor: 28 },
 };
 

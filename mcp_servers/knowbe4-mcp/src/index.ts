@@ -28,39 +28,46 @@
 
 import { createServer as createHttpServer, IncomingMessage, ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
-import type { Tool } from "@modelcontextprotocol/sdk/types.js";
+import type { CallToolResult, Tool } from "@modelcontextprotocol/sdk/types.js";
+import { z } from "zod";
+import { toZodShape } from "@shared/zod-shape.js";
 import { getDomainHandler, getAvailableDomains } from "./domains/index.js";
 import { isDomainName, KNOWBE4_REGIONS, type DomainName } from "./utils/types.js";
 import { getCredentials, credentialStore, describeKnowBe4BaseUrl } from "./utils/client.js";
 import { logger } from "./utils/logger.js";
-import { missingCredsError, toolErrorFromCatch } from "../../_shared/error-envelope.js";
+import { toolErrorFromCatch } from "../../_shared/error-envelope.js";
 import { setServerRef } from "./utils/server-ref.js";
 import { TOOL_CATEGORIES, findDomainForTool, routeIntent } from "./utils/categories.js";
 import { annotate } from "./annotate-tool.js";
+import { createToolRegistrar } from "../../_shared/mcp-server-kit.js";
+import {
+  textResult, formatToolSummary, runMain, requestUrl, respondHealth, httpConfigFromEnv, respondMissingCredentials,
+  respondNotFound, listenHttp, exitOnSignals,
+} from "../../_shared/server-entry.js";
 
 // Navigation state removed - all tools are always available for direct-install compatibility
 
 // Create the MCP server
-const server = new Server(
+const server = new McpServer(
   {
     name: "mcp-server-knowbe4",
     version: "1.1.2",
   },
   {
     capabilities: {
-      tools: {},
+      logging: {},
     },
+    // Loaded at startup even when Claude Code defers tool schemas, so this is
+    // where tool-choice and auth-troubleshooting guidance has to live.
+    instructions:
+      "KnowBe4 security awareness data: account, users, groups, phishing campaigns and security tests, training campaigns and enrollments, policies, store purchases, and reporting summaries. Find user, group, or campaign IDs with the matching list tool before calling a get-by-id tool. On a 401, 403, or 440 response, a not-configured message, or a connection failure, call knowbe4_status once and report its output to the user instead of retrying other tools. When credentials are missing only knowbe4_status and knowbe4_navigate are listed; the user must set KNOWBE4_API_KEY and restart the session.",
   }
 );
 
-setServerRef(server);
+setServerRef(server.server);
 
 /**
  * Navigation tool - stateless discovery helper that describes available tools for a domain.
@@ -158,10 +165,10 @@ const metaTools: Tool[] = [
           type: "string",
           description: "The full tool name to execute (e.g. knowbe4_users_list)",
         },
+        // Free-form object: the target tool validates its own keys.
         arguments: {
           type: "object",
           description: "The arguments to pass to the tool",
-          additionalProperties: true,
         },
       },
       required: ["toolName"],
@@ -226,293 +233,220 @@ async function getAllDomainTools(): Promise<Tool[]> {
   return tools;
 }
 
-// Handle ListTools requests - always returns ALL tools
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-  // Progressive disclosure: shell tools only until credentials resolve.
+const AUTH_CHECK_TIMEOUT_MS = 10_000;
+
+/** The vendor's short "message" field from an error body, else the status text. */
+async function errorMessage(res: Response): Promise<string> {
+  try {
+    const body = (await res.json()) as { message?: unknown };
+    if (typeof body.message === "string") return body.message;
+  } catch {
+    // non-JSON error body: keep the status text
+  }
+  return res.statusText;
+}
+
+/**
+ * One authenticated read of the account endpoint. "Configured" only proves a key
+ * is present; this reports whether KnowBe4 accepts it. Never throws and never
+ * prints response data or the key (only the vendor's short "message" field).
+ */
+async function liveAuthCheck(creds: { apiKey: string; baseUrl: string }): Promise<string> {
+  const started = Date.now();
+  try {
+    const res = await fetch(new URL("/v1/account", creds.baseUrl), {
+      headers: { Authorization: `Bearer ${creds.apiKey}`, Accept: "application/json" },
+      signal: AbortSignal.timeout(AUTH_CHECK_TIMEOUT_MS),
+    });
+    if (res.ok) return `OK (HTTP ${res.status}, ${Date.now() - started} ms)`;
+    return `FAILED HTTP ${res.status}: ${(await errorMessage(res)).slice(0, 200)}`;
+  } catch (err) {
+    return `FAILED: ${(err instanceof Error ? err.message : String(err)).slice(0, 200)}`;
+  }
+}
+
+async function statusResult(): Promise<CallToolResult> {
+  const creds = getCredentials();
+  if (!creds) {
+    return textResult(`KnowBe4 MCP Server Status\n\nCredentials: NOT CONFIGURED (set KNOWBE4_API_KEY)\nAuth check: SKIPPED (no API key)\nAvailable domains: ${getAvailableDomains().join(", ")}\n\nOnly knowbe4_status and knowbe4_navigate are listed until KNOWBE4_API_KEY is set and the session is restarted.`);
+  }
+
+  const authCheck = await liveAuthCheck(creds);
+  // isError is always present here (false when the check passed), unlike textResult.
+  return {
+    ...textResult(`KnowBe4 MCP Server Status\n\nCredentials: Configured\nBase URL: ${describeKnowBe4BaseUrl()}\nAuth check: ${authCheck}\nAvailable domains: ${getAvailableDomains().join(", ")}\n\nDomain tools are listed because credentials are configured. Use knowbe4_navigate to discover tools by domain.`),
+    isError: authCheck.startsWith("FAILED"),
+  };
+}
+
+type ToolArgs = Record<string, unknown>;
+type ToolHandler = (args: ToolArgs) => Promise<CallToolResult>;
+
+const jsonResult = (value: unknown): CallToolResult => textResult(JSON.stringify(value, null, 2));
+
+const domainDescriptions: Record<DomainName, string> = {
+  account: "Account info and risk score history",
+  users: "User management and individual risk scores",
+  groups: "Group management, members, and group risk scores",
+  phishing: "Phishing campaigns, security tests, and recipient results",
+  training: "Training campaigns, enrollments, store purchases, and policies",
+  reporting: "Aggregated reports, risk overview, and phishing/training summaries",
+};
+
+// ---------------------------------------------------------------------------
+// Lazy-loading meta-tool handlers
+// ---------------------------------------------------------------------------
+
+async function listCategories(): Promise<CallToolResult> {
+  const categories = Object.entries(TOOL_CATEGORIES).map(([categoryName, cat]) => ({
+    name: categoryName,
+    description: cat.description,
+    toolCount: cat.tools.length,
+  }));
+  return jsonResult({ categories });
+}
+
+async function listCategoryTools(args: ToolArgs): Promise<CallToolResult> {
+  const category = (args as { category: string }).category;
+  if (!isDomainName(category)) {
+    return textResult(`Invalid category: '${category}'. Available categories: ${Object.keys(TOOL_CATEGORIES).join(", ")}`, true);
+  }
+  const tools = (await getDomainHandler(category)).getTools();
+  return jsonResult({
+    category,
+    description: TOOL_CATEGORIES[category].description,
+    tools: tools.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })),
+  });
+}
+
+async function executeTool(args: ToolArgs): Promise<CallToolResult> {
+  const { toolName, arguments: toolArgs = {} } = args as { toolName: string; arguments?: ToolArgs };
+
   if (!getCredentials()) {
-    return { tools: annotate([navigateTool, statusTool], "KnowBe4") };
-  }
-  if (isLazyLoadingEnabled()) {
-    return { tools: annotate(metaTools, "KnowBe4") };
+    return textResult("Error: No API credentials configured. Please set the KNOWBE4_API_KEY environment variable.", true);
   }
 
-  const domainTools = await getAllDomainTools();
-  return { tools: annotate([navigateTool, backTool, statusTool, ...domainTools], "KnowBe4") };
-});
+  const domain = findDomainForTool(toolName);
+  if (!domain) {
+    return textResult(`Unknown tool: '${toolName}'. Use knowbe4_list_categories and knowbe4_list_category_tools to discover available tools.`, true);
+  }
 
-// Handle CallTool requests
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
+  const result = await (await getDomainHandler(domain)).handleCall(toolName, toolArgs);
+  logger.debug("Meta-tool execute completed", {
+    tool: toolName,
+    domain,
+    responseSize: JSON.stringify(result).length,
+  });
+  return result;
+}
+
+async function routeTool(args: ToolArgs): Promise<CallToolResult> {
+  const intent = (args as { intent: string }).intent;
+  const suggestions = routeIntent(intent);
+  if (suggestions.length === 0) {
+    return jsonResult({
+      intent,
+      suggestions: [],
+      message: "No matching tools found for that intent. Use knowbe4_list_categories to browse all available categories.",
+    });
+  }
+
+  // Enrich suggestions with their category
+  const enriched = suggestions.map((toolName) => {
+    const domain = findDomainForTool(toolName);
+    return {
+      tool: toolName,
+      category: domain,
+      categoryDescription: domain ? TOOL_CATEGORIES[domain].description : null,
+    };
+  });
+  return jsonResult({ intent, suggestions: enriched });
+}
+
+// ---------------------------------------------------------------------------
+// Flat-mode handlers
+// ---------------------------------------------------------------------------
+
+/** Navigate to a domain - stateless discovery helper. */
+async function navigate(args: ToolArgs): Promise<CallToolResult> {
+  const domain = (args as { domain: string }).domain;
+  if (!isDomainName(domain)) {
+    return textResult(`Invalid domain: '${domain}'. Available domains: ${getAvailableDomains().join(", ")}`, true);
+  }
+  const toolSummary = formatToolSummary((await getDomainHandler(domain)).getTools());
+  return textResult(`${domainDescriptions[domain]}\n\nAvailable tools:\n${toolSummary}\n\nYou can call any of these tools directly.`);
+}
+
+/** Now a no-op, kept for backwards compatibility. */
+async function back(): Promise<CallToolResult> {
+  return textResult(`All tools are always available.\n\nAvailable domains: ${getAvailableDomains().join(", ")}\n\nUse knowbe4_navigate to discover tools by domain.`);
+}
+
+/** Route to the domain handler whose name prefix matches. */
+async function routeDomainTool(name: string, args: ToolArgs): Promise<CallToolResult> {
+  const domain = getAvailableDomains().find((d) => name.startsWith(`knowbe4_${d}_`));
+  if (!domain) {
+    return textResult(`Unknown tool: '${name}'. Use knowbe4_navigate to discover available tools by domain.`, true);
+  }
+  return await (await getDomainHandler(domain)).handleCall(name, args);
+}
+
+const localToolHandlers = new Map<string, ToolHandler>([
+  ["knowbe4_list_categories", listCategories],
+  ["knowbe4_list_category_tools", listCategoryTools],
+  ["knowbe4_execute_tool", executeTool],
+  ["knowbe4_router", routeTool],
+  ["knowbe4_navigate", navigate],
+  ["knowbe4_back", back],
+  // Status check must never throw, even with missing credentials
+  ["knowbe4_status", statusResult],
+]);
+
+function toolFailure(name: string, error: unknown): CallToolResult {
+  const stack = error instanceof Error ? error.stack : undefined;
+  logger.error("Tool call failed", { tool: name, stack });
+  return toolErrorFromCatch(name, error, {
+    hint: "Check that KNOWBE4_API_KEY is set and KNOWBE4_REGION matches your account region (us, eu, ca, uk, de).",
+  });
+}
+
+/**
+ * Handle one tool call. Registered per tool with McpServer.registerTool below,
+ * which validates args against the zod shape before this runs.
+ */
+async function callTool(name: string, args: ToolArgs | undefined): Promise<CallToolResult> {
   logger.info("Tool call received", { tool: name, arguments: args });
 
   try {
-    // -----------------------------------------------------------------
-    // Lazy-loading meta-tool handlers
-    // -----------------------------------------------------------------
-
-    if (name === "knowbe4_list_categories") {
-      const categories = Object.entries(TOOL_CATEGORIES).map(
-        ([categoryName, cat]) => ({
-          name: categoryName,
-          description: cat.description,
-          toolCount: cat.tools.length,
-        })
-      );
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify({ categories }, null, 2),
-          },
-        ],
-      };
-    }
-
-    if (name === "knowbe4_list_category_tools") {
-      const category = (args as { category: string }).category;
-      if (!isDomainName(category)) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Invalid category: '${category}'. Available categories: ${Object.keys(TOOL_CATEGORIES).join(", ")}`,
-            },
-          ],
-          isError: true,
-        };
-      }
-
-      const handler = await getDomainHandler(category);
-      const tools = handler.getTools();
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                category,
-                description: TOOL_CATEGORIES[category].description,
-                tools: tools.map((t) => ({
-                  name: t.name,
-                  description: t.description,
-                  inputSchema: t.inputSchema,
-                })),
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
-    }
-
-    if (name === "knowbe4_execute_tool") {
-      const toolName = (args as { toolName: string; arguments?: Record<string, unknown> }).toolName;
-      const toolArgs = (args as { toolName: string; arguments?: Record<string, unknown> }).arguments ?? {};
-
-      // Validate credentials
-      const creds = getCredentials();
-      if (!creds) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: "Error: No API credentials configured. Please set the KNOWBE4_API_KEY environment variable.",
-            },
-          ],
-          isError: true,
-        };
-      }
-
-      const domain = findDomainForTool(toolName);
-      if (!domain) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Unknown tool: '${toolName}'. Use knowbe4_list_categories and knowbe4_list_category_tools to discover available tools.`,
-            },
-          ],
-          isError: true,
-        };
-      }
-
-      const handler = await getDomainHandler(domain);
-      const result = await handler.handleCall(toolName, toolArgs);
-
-      logger.debug("Meta-tool execute completed", {
-        tool: toolName,
-        domain,
-        responseSize: JSON.stringify(result).length,
-      });
-
-      return result;
-    }
-
-    if (name === "knowbe4_router") {
-      const intent = (args as { intent: string }).intent;
-      const suggestions = routeIntent(intent);
-
-      if (suggestions.length === 0) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                {
-                  intent,
-                  suggestions: [],
-                  message:
-                    "No matching tools found for that intent. Use knowbe4_list_categories to browse all available categories.",
-                },
-                null,
-                2
-              ),
-            },
-          ],
-        };
-      }
-
-      // Enrich suggestions with their category
-      const enriched = suggestions.map((toolName) => {
-        const domain = findDomainForTool(toolName);
-        return {
-          tool: toolName,
-          category: domain,
-          categoryDescription: domain ? TOOL_CATEGORIES[domain].description : null,
-        };
-      });
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify({ intent, suggestions: enriched }, null, 2),
-          },
-        ],
-      };
-    }
-
-    // Navigate to a domain - stateless discovery helper
-    if (name === "knowbe4_navigate") {
-      const domain = (args as { domain: string }).domain;
-
-      if (!isDomainName(domain)) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Invalid domain: '${domain}'. Available domains: ${getAvailableDomains().join(", ")}`,
-            },
-          ],
-          isError: true,
-        };
-      }
-
-      const handler = await getDomainHandler(domain);
-      const domainTools = handler.getTools();
-
-      const domainDescriptions: Record<DomainName, string> = {
-        account: "Account info and risk score history",
-        users: "User management and individual risk scores",
-        groups: "Group management, members, and group risk scores",
-        phishing: "Phishing campaigns, security tests, and recipient results",
-        training: "Training campaigns, enrollments, store purchases, and policies",
-        reporting: "Aggregated reports, risk overview, and phishing/training summaries"
-      };
-
-      const toolSummary = domainTools
-        .map((t) => `- ${t.name}: ${t.description}`)
-        .join("\n");
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: `${domainDescriptions[domain]}\n\nAvailable tools:\n${toolSummary}\n\nYou can call any of these tools directly.`,
-          },
-        ],
-      };
-    }
-
-    // Navigate back to root - now a no-op for backwards compatibility
-    if (name === "knowbe4_back") {
-      return {
-        content: [
-          {
-            type: "text",
-            text: `All tools are always available.\n\nAvailable domains: ${getAvailableDomains().join(", ")}\n\nUse knowbe4_navigate to discover tools by domain.`,
-          },
-        ],
-      };
-    }
-
-    // Status check — must never throw, even with missing credentials
-    if (name === "knowbe4_status") {
-      const creds = getCredentials();
-      if (!creds) {
-        return missingCredsError("KnowBe4", ["KNOWBE4_API_KEY"]);
-      }
-
-      const urlDescription = describeKnowBe4BaseUrl();
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: `KnowBe4 MCP Server Status\n\nCredentials: Configured\nBase URL: ${urlDescription}\nAvailable domains: ${getAvailableDomains().join(", ")}\n\nAll tools are available at all times. Use knowbe4_navigate to discover tools by domain.`,
-          },
-        ],
-      };
-    }
-
-    // Route to appropriate domain handler based on tool name pattern
-    const toolArgs = (args ?? {}) as Record<string, unknown>;
-
-    if (name.startsWith("knowbe4_account_")) {
-      const handler = await getDomainHandler("account");
-      return await handler.handleCall(name, toolArgs);
-    }
-    if (name.startsWith("knowbe4_users_")) {
-      const handler = await getDomainHandler("users");
-      return await handler.handleCall(name, toolArgs);
-    }
-    if (name.startsWith("knowbe4_groups_")) {
-      const handler = await getDomainHandler("groups");
-      return await handler.handleCall(name, toolArgs);
-    }
-    if (name.startsWith("knowbe4_phishing_")) {
-      const handler = await getDomainHandler("phishing");
-      return await handler.handleCall(name, toolArgs);
-    }
-    if (name.startsWith("knowbe4_training_")) {
-      const handler = await getDomainHandler("training");
-      return await handler.handleCall(name, toolArgs);
-    }
-    if (name.startsWith("knowbe4_reporting_")) {
-      const handler = await getDomainHandler("reporting");
-      return await handler.handleCall(name, toolArgs);
-    }
-
-    // Unknown tool
-    return {
-      content: [
-        {
-          type: "text",
-          text: `Unknown tool: '${name}'. Use knowbe4_navigate to discover available tools by domain.`,
-        },
-      ],
-      isError: true,
-    };
+    const handler = localToolHandlers.get(name);
+    return await (handler ? handler(args as ToolArgs) : routeDomainTool(name, args ?? {}));
   } catch (error: unknown) {
-    const stack = error instanceof Error ? error.stack : undefined;
-    logger.error("Tool call failed", { tool: name, stack });
-    return toolErrorFromCatch(name, error, {
-      hint: "Check that KNOWBE4_API_KEY is set and KNOWBE4_REGION matches your account region (us, eu, ca, uk, de).",
-    });
+    return toolFailure(name, error);
   }
-});
+}
+
+/**
+ * Register every tool the current credential state allows. Called once before
+ * the transport connects: registering afterwards would emit tools/list_changed,
+ * which the claude.ai connectors this server targets ignore.
+ */
+async function registerTools(): Promise<void> {
+  const registrar = createToolRegistrar({ server, z, toZodShape, annotate, vendorTitle: "KnowBe4" });
+  const register = (tool: Tool) => registrar(tool, (args) => callTool(tool.name, args));
+
+  // Progressive disclosure: shell tools only until credentials resolve. In
+  // gateway mode credentials arrive per request (X-KnowBe4-API-Key), so they
+  // cannot be known here and the full set is registered; a request without a
+  // key is rejected with 401 before it reaches any tool.
+  const credentialsKnown = process.env.AUTH_MODE === "gateway" || getCredentials() !== null;
+  if (!credentialsKnown) {
+    [navigateTool, statusTool].forEach(register);
+  } else if (isLazyLoadingEnabled()) {
+    metaTools.forEach(register);
+  } else {
+    [navigateTool, backTool, statusTool, ...(await getAllDomainTools())].forEach(register);
+  }
+}
 
 /**
  * Start the server with stdio transport (default)
@@ -530,9 +464,7 @@ async function startStdioTransport(): Promise<void> {
  * from the X-KnowBe4-API-Key request header.
  */
 async function startHttpTransport(): Promise<void> {
-  const port = parseInt(process.env.MCP_HTTP_PORT || "8080", 10);
-  const host = process.env.MCP_HTTP_HOST || "0.0.0.0";
-  const isGatewayMode = process.env.AUTH_MODE === "gateway";
+  const { port, host, isGatewayMode } = httpConfigFromEnv();
 
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: () => randomUUID(),
@@ -540,18 +472,8 @@ async function startHttpTransport(): Promise<void> {
   });
 
   const httpServer = createHttpServer((req: IncomingMessage, res: ServerResponse) => {
-    const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
-
-    // Health check - shallow, unauthenticated liveness probe.
-    // Must NOT call getCredentials() or any upstream: in gateway mode
-    // credentials arrive per-request via X-KnowBe4-API-Key, so a
-    // credential-gated /health would always 503 and trip upstream
-    // restart loops.
-    if (url.pathname === "/health" || url.pathname === "/healthz") {
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ status: "ok" }));
-      return;
-    }
+    const url = requestUrl(req);
+    if (respondHealth(url, res)) return;
 
     // MCP endpoint
     if (url.pathname === "/mcp") {
@@ -561,15 +483,11 @@ async function startHttpTransport(): Promise<void> {
         const region = req.headers["x-knowbe4-region"] as string | undefined;
 
         if (!apiKey) {
-          res.writeHead(401, { "Content-Type": "application/json" });
-          res.end(
-            JSON.stringify({
-              error: "Missing credentials",
-              message:
-                "Gateway mode requires X-KnowBe4-API-Key header",
-              required: ["X-KnowBe4-API-Key"],
-              optional: ["X-KnowBe4-Region"],
-            })
+          respondMissingCredentials(
+            res,
+            "Gateway mode requires X-KnowBe4-API-Key header",
+            ["X-KnowBe4-API-Key"],
+            ["X-KnowBe4-Region"],
           );
           return;
         }
@@ -591,35 +509,19 @@ async function startHttpTransport(): Promise<void> {
     }
 
     // 404 for everything else
-    res.writeHead(404, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "Not found", endpoints: ["/mcp", "/health", "/healthz"] }));
+    respondNotFound(res, ["/mcp", "/health", "/healthz"]);
   });
 
   await server.connect(transport);
 
-  await new Promise<void>((resolve) => {
-    httpServer.listen(port, host, () => {
-      logger.info(`KnowBe4 MCP server listening on http://${host}:${port}/mcp`);
-      logger.info(`Health check available at http://${host}:${port}/health`);
-      logger.info(
-        `Authentication mode: ${isGatewayMode ? "gateway (X-KnowBe4-API-Key header)" : "env (KNOWBE4_API_KEY environment variable)"}`
-      );
-      resolve();
-    });
+  await listenHttp(httpServer, port, host, () => {
+    logger.info(`KnowBe4 MCP server listening on http://${host}:${port}/mcp`);
+    logger.info(`Health check available at http://${host}:${port}/health`);
+    logger.info(
+      `Authentication mode: ${isGatewayMode ? "gateway (X-KnowBe4-API-Key header)" : "env (KNOWBE4_API_KEY environment variable)"}`
+    );
   });
-
-  // Graceful shutdown
-  const shutdown = async () => {
-    logger.info("Shutting down KnowBe4 MCP server...");
-    await new Promise<void>((resolve, reject) => {
-      httpServer.close((err) => (err ? reject(err) : resolve()));
-    });
-    await server.close();
-    process.exit(0);
-  };
-
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
+  exitOnSignals(httpServer, () => logger.info("Shutting down KnowBe4 MCP server..."), () => server.close());
 }
 
 /**
@@ -633,6 +535,8 @@ async function main() {
     nodeVersion: process.version,
   });
 
+  await registerTools();
+
   if (transportType === "http") {
     await startHttpTransport();
   } else {
@@ -640,10 +544,4 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  logger.error("Fatal startup error", {
-    error: error instanceof Error ? error.message : String(error),
-    stack: error instanceof Error ? error.stack : undefined,
-  });
-  process.exit(1);
-});
+runMain(main, (message, fields) => logger.error(message, fields));

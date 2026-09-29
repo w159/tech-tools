@@ -47,7 +47,7 @@ function startHttpServer(): void {
     }
 
     // Create fresh server + transport per request (stateless)
-    const server = createMcpServer();
+    const server = await createMcpServer();
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,

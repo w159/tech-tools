@@ -1,0 +1,12 @@
+{
+  "$schema": "https://fallow.dev/schema.json",
+  "ignorePatterns": [
+    "plugins/atlas/mcp/*/server.mjs",
+    "plugins/atlas/mcp/*/http.mjs"
+  ],
+  "entry": [
+    "mcp_servers/_shared/__tests__/*.test.ts",
+    "plugins/atlas/mcp/_env/load.mjs",
+    "test-mcp-tools.mjs"
+  ]
+}

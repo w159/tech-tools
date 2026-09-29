@@ -48,7 +48,7 @@ If a tool never appears, re-search by keyword (`ToolSearch("ctx compose")`). Do 
 - **Schema**: table/column exists; nullability; FKs and `ON DELETE`; primary key present; sane defaults; `created_at`/`updated_at`.
 - **Security/policies** (the silent killers): RLS enabled/forced? policies and the session GUCs they require; `GRANT`s (USAGE on schema, SELECT/INSERT/UPDATE/DELETE) for the runtime role; sequence privileges.
 - **Performance**: `EXPLAIN` (never `ANALYZE` against prod) for the filters/joins the backend actually runs; missing or unused indexes; slow queries only if `pg_stat_statements` is already enabled (do not enable it).
-- Use `whodb` / data-agent-kit / `gcloud` if present and helpful. Route output through `context-mode`; write bulky plans to `.atlas/evidence/`.
+- Use `whodb` / data-agent-kit / `gcloud` if present and helpful. Route output through `context-mode`; you have no Write access, so return bulky plans in your final message for the orchestrator to persist to `.atlas/evidence/`.
 
 ## Report back (final message only)
 - Findings, each with severity, the exact object, and captured evidence (query result snippet / EXPLAIN plan path).

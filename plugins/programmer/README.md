@@ -10,7 +10,7 @@ This plugin ships as part of the [tech-tools marketplace](https://github.com/w15
 |---|---|---|
 | Skills | 4 | `code-review` (user-run 6-lens, multi-agent review), `code-principles` (auto-fires while you work to surface relevant book principles), `tpp-audit` (Pragmatic Programmer audit), and `tpp-principles` (Pragmatic Programmer principles advisor) |
 | Agents | 7 | `code-review-architecture`, `code-review-correctness`, `code-review-craft`, `code-review-security`, `code-review-data`, `code-review-process`, `tpp-auditor` |
-| Hooks | 1 | `UserPromptSubmit` prompt hook that nudges the single most relevant principle based on prompt keywords |
+| Hooks | 0 | disabled — see "The nudge hook" below |
 | References | 89 | the book's concept glossary, repackaged as `references/concepts/*.md` for citation |
 
 ## The 6 review lenses
@@ -78,11 +78,11 @@ What does The Pragmatic Programmer say about inheritance vs composition?
 Is this DRY?
 ```
 
-### The nudge hook
+### The nudge hook (disabled)
 
-On every prompt submission, the `UserPromptSubmit` hook matches your prompt against a domain keyword map and injects a single one-line pointer to the most relevant concept (for example: `TPP relevant: dry-dont-repeat-yourself.md - single source for duplicated knowledge`). If no domain matches, it emits nothing. It never lectures and never outputs more than one line.
+The `UserPromptSubmit` command hook has been disabled: `hooks/hooks.json` now registers no hooks. The implementation (`hooks/tpp_nudge.py`) is preserved on disk, unwired, in case the nudge is wanted again. It matches prompts against a deterministic domain keyword map and injects a single one-line pointer to the most relevant concept; it never lectures, never outputs more than one line, and can never block a prompt (it always exits 0).
 
-To disable the nudge hook: remove the `UserPromptSubmit` entry from `hooks/hooks.json`, or uninstall the plugin. Hook changes require a Claude Code restart to take effect.
+To re-enable: add a `UserPromptSubmit` entry back to `hooks/hooks.json` calling `python3 "${CLAUDE_PLUGIN_ROOT}/hooks/tpp_nudge.py"`. Hook changes require a Claude Code restart to take effect.
 
 ## Book corpus
 
@@ -121,6 +121,9 @@ plugins/programmer/
     code-review-data.md
     code-review-process.md
     tpp-auditor.md
-  hooks/hooks.json
+  hooks/
+    hooks.json
+    tpp_nudge.py
+    test_tpp_nudge.py
   README.md
 ```

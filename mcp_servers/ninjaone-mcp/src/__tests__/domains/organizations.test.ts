@@ -132,7 +132,7 @@ describe("Organizations Domain Handler", () => {
         expect(result.content[0].type).toBe("text");
 
         const data = JSON.parse(result.content[0].text);
-        expect(data.organizations).toHaveLength(2);
+        expect(data).toHaveLength(2);
       });
     });
 
@@ -174,7 +174,7 @@ describe("Organizations Domain Handler", () => {
         expect(result.isError).toBeUndefined();
 
         const data = JSON.parse(result.content[0].text);
-        expect(data.locations).toHaveLength(2);
+        expect(data).toHaveLength(2);
       });
     });
 

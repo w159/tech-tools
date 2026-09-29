@@ -314,6 +314,75 @@ class AtlasDoctorTest(unittest.TestCase):
     def test_hook_mode_always_exits_zero(self):
         self.assertEqual(atlas_doctor.main(["--hook"]), 0)
 
+    def test_context_tooling_missing_marker_fails(self):
+        root = tempfile.mkdtemp()
+        with open(os.path.join(root, "AGENTS.md"), "w") as f:
+            f.write("# AGENTS.md\n\nNo tooling block here.\n")
+        ok, detail = atlas_doctor.check_context_tooling(root_path=root)
+        self.assertFalse(ok)
+        self.assertIn("scaffold_docs.py", detail)
+
+    def test_context_tooling_missing_file_fails(self):
+        root = tempfile.mkdtemp()
+        ok, detail = atlas_doctor.check_context_tooling(root_path=root)
+        self.assertFalse(ok)
+        self.assertIn("does not exist", detail)
+
+    def test_context_tooling_marker_present_passes(self):
+        root = tempfile.mkdtemp()
+        with open(os.path.join(root, "AGENTS.md"), "w") as f:
+            f.write(f"# AGENTS.md\n\n{atlas_doctor.ATLAS_TOOLING_MARKER}\nroutes\n")
+        ok, detail = atlas_doctor.check_context_tooling(root_path=root)
+        self.assertTrue(ok)
+
+    def test_context_tooling_is_warn_severity_not_hook_blocking(self):
+        # An unscaffolded repo (the common case for any project a user
+        # opens that predates atlas-tooling) must not turn every
+        # SessionStart into an "ATLAS-DOCTOR WARNING: plugin is unhealthy"
+        # message - that is a plugin-health signal, and this check is a
+        # project-scaffolding signal. Isolated from this class's own
+        # (deliberately unhealthy) fixture by stubbing run_checks entirely.
+        healthy_plus_warn = [
+            {"check": "registered", "ok": True, "detail": "ok", "severity": "fail"},
+            {
+                "check": "context-tooling",
+                "ok": False,
+                "detail": "no marker",
+                "severity": "warn",
+            },
+        ]
+        with mock.patch.object(
+            atlas_doctor, "run_checks", return_value=(healthy_plus_warn, {})
+        ):
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                rc = atlas_doctor.main(["--hook"])
+        self.assertEqual(rc, 0)
+        self.assertNotIn("ATLAS-DOCTOR WARNING", buf.getvalue())
+
+    def test_context_tooling_warn_shown_but_not_counted_in_check_mode(self):
+        healthy_plus_warn = [
+            {"check": "registered", "ok": True, "detail": "ok", "severity": "fail"},
+            {
+                "check": "context-tooling",
+                "ok": False,
+                "detail": "no marker",
+                "severity": "warn",
+            },
+        ]
+        with mock.patch.object(
+            atlas_doctor, "run_checks", return_value=(healthy_plus_warn, {})
+        ):
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                rc = atlas_doctor.main([])
+        out = buf.getvalue()
+        self.assertIn("WARN  context-tooling", out)
+        # HEALTHY still prints - a warn-severity check alone must not flip
+        # the summary line or the exit code.
+        self.assertIn("HEALTHY", out)
+        self.assertEqual(rc, 0)
+
     def test_trash_dirs_capped(self):
         # M20: per-run trash dirs must not grow unbounded across runs.
         # Seed 8 trash dirs with distinct numeric stamps; cap must keep the
@@ -867,6 +936,36 @@ class AtlasDoctorMiningTest(unittest.TestCase):
         found = atlas_doctor.mine_tool_error_rate(self.conn, self.root, min_calls=5)
         self.assertEqual(len(found), 1)
         self.assertAlmostEqual(found[0]["metric_value"], 0.5)
+
+    def test_low_cache_hit_miner(self):
+        # Thin DB (below the token floor) must stay quiet.
+        self.assertEqual(atlas_doctor.mine_low_cache_hit(self.conn, self.root), [])
+        # Large fresh-input base with almost no cache reads -> fires.
+        atlas_db.upsert_session_log(self.conn, "s1", project_id=self.pid)
+        atlas_db.insert_message(
+            self.conn,
+            "s1",
+            {"uuid": "m1", "role": "assistant", "input_tokens": 400_000},
+        )
+        atlas_db.refresh_session_aggregates(self.conn, "s1")
+        found = atlas_doctor.mine_low_cache_hit(self.conn, self.root)
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0]["key"], "cache_hit_ratio_low")
+        self.assertAlmostEqual(found[0]["metric_value"], 0.0)
+        # Healthy cache share -> silent.
+        atlas_db.upsert_session_log(self.conn, "s2", project_id=self.pid)
+        atlas_db.insert_message(
+            self.conn,
+            "s2",
+            {
+                "uuid": "m2",
+                "role": "assistant",
+                "input_tokens": 100_000,
+                "cache_read_tokens": 900_000,
+            },
+        )
+        atlas_db.refresh_session_aggregates(self.conn, "s2")
+        self.assertEqual(atlas_doctor.mine_low_cache_hit(self.conn, self.root), [])
 
     def test_recurring_friction_miner(self):
         for _ in range(4):

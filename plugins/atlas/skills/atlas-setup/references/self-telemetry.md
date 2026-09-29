@@ -245,6 +245,9 @@ Use these; do not re-parse transcripts.
    `cache_hit_ratio`, or context-mode/claude-mem/ponytail with near-zero calls
    on large-output sessions, means the protection is configured but unused -
    propose a CLAUDE.md nudge or a hook, with the ratio as the baseline.
+   The doctor's `--mine` path surfaces a low ratio automatically as the
+   `cache_hit_ratio_low` finding (fires only above a token floor, so thin
+   histories stay quiet).
 3. **What is being asked repeatedly?** `repeated_prompts` clusters re-typed
    requests. A cluster of 3+ is a workflow that should become a skill/command or
    a standing CLAUDE.md rule so the user stops re-asking.

@@ -1,17 +1,10 @@
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { keygen } from 'node-panos';
 import type { DomainHandler, CallToolResult } from '../utils/types.js';
+import { cleanEnv } from '@shared/clean-env.js';
 import { getClient } from '../utils/client.js';
 import { logger } from '../utils/logger.js';
 import { TARGET_PROP, credentialIssuingTool, destructiveTool, toolError, panosToolError, jsonResult, readOnlyTool, unknownEffectTool } from './_helpers.js';
-
-// Same placeholder-stripping rule as utils/client.ts, duplicated here because
-// panos_keygen must read raw env vars before any PanosClient (and its apiKey
-// requirement) exists.
-const isUnresolvedPlaceholder = (v: string | undefined): boolean =>
-  !!v && /^\$\{[^}]+\}$/.test(v.trim());
-const cleanEnv = (v: string | undefined): string =>
-  !v || isUnresolvedPlaceholder(v) ? '' : v.trim();
 
 function getTools(): Tool[] {
   return [

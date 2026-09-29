@@ -46,6 +46,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.25.3",
     "node-ninjaone": "file:../../mcp_node/node-ninjaone",
+    "zod": "^4.0.0",
     "tsup": "^8.5.1"
   },
   "devDependencies": {

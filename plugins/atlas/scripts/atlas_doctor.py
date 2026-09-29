@@ -235,11 +235,12 @@ ATLAS_OUTPUT_STYLE = "Atlas Orchestrator"
 
 
 def check_output_style(settings_path=None):
-    """Detect when a user outputStyle overrides the plugin force-for-plugin style.
+    """Flag an explicit user outputStyle that may compete with the plugin style.
 
-    Returns (ok, detail). ok True when unset (plugin force should apply) or when
-    set to Atlas Orchestrator. A different explicit style (e.g. concise) hides
-    ATLAS | phase headers and glyphs until corrected.
+    Returns (ok, detail). ok True when unset or set to Atlas Orchestrator. Current
+    Claude Code docs say force-for-plugin overrides the user setting, but 5.25.0
+    observed ATLAS | headers vanishing under an explicit style, so a different
+    value is still reported as a risk rather than a confirmed break.
     """
     path = settings_path or os.path.join(
         os.path.expanduser("~"), ".claude", "settings.json"
@@ -260,9 +261,78 @@ def check_output_style(settings_path=None):
         return True, f"outputStyle={style!r}"
     return (
         False,
-        f"outputStyle={style!r} overrides plugin style {ATLAS_OUTPUT_STYLE!r}; "
-        f"set settings.json outputStyle to \"{ATLAS_OUTPUT_STYLE}\" so ATLAS | "
-        f"headers and phase glyphs render (SessionStart still injects the contract)",
+        f"outputStyle={style!r} differs from {ATLAS_OUTPUT_STYLE!r}; docs say "
+        f"force-for-plugin should still apply, but atlas 5.25.0 saw headers vanish "
+        f"here. Set outputStyle to \"{ATLAS_OUTPUT_STYLE}\" to remove the risk "
+        f"(SessionStart still injects the contract)",
+    )
+
+ATLAS_TOOLING_MARKER = "<!-- atlas-tooling -->"
+
+
+def check_typesafe_scoring(now=None):
+    """(ok, detail) for the optional TypeSafe turn-scoring loop: key present
+    (name only, never the value), turn_scores rows in the last 7 days, and the
+    last scored_at. Never creates or writes the DB."""
+    has_key = bool(os.environ.get("TYPESAFE_API_KEY"))
+    off = os.environ.get("ATLAS_TYPESAFE_SCORING") == "off"
+    path = atlas_db.db_path()
+    rows, last = 0, None
+    if os.path.exists(path):
+        try:
+            conn = atlas_db.connect(path)
+            try:
+                rows, last = conn.execute(
+                    "SELECT COUNT(*), MAX(scored_at) FROM turn_scores "
+                    "WHERE scored_at > ?",
+                    ((now or time.time()) - 7 * 86400,),
+                ).fetchone()
+                last = conn.execute(
+                    "SELECT MAX(scored_at) FROM turn_scores"
+                ).fetchone()[0]
+            finally:
+                conn.close()
+        except Exception:
+            rows, last = 0, None
+    last_s = (
+        datetime.fromtimestamp(last, timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        if last
+        else "never"
+    )
+    detail = (
+        f"TYPESAFE_API_KEY {'set' if has_key else 'not set'}; "
+        f"ATLAS_TYPESAFE_SCORING={'off' if off else 'on'}; "
+        f"{rows or 0} turn_scores row(s) in last 7d; last scored {last_s}"
+    )
+    return (has_key and not off and bool(rows)), detail
+
+
+def check_context_tooling(root_path=None):
+    """Detect whether this project's AGENTS.md carries the atlas-tooling
+    routing block that tells agents to route through context-mode/lean-ctx/
+    claude-mem/serena instead of raw Read/Grep/Bash on source.
+
+    Returns (ok, detail). ok True when the marker is present. A missing
+    AGENTS.md or a pre-atlas-tooling AGENTS.md means every agent working in
+    this project reads/greps source directly, defeating the context-
+    protection stack even when it is installed and reachable - scaffold_docs.py
+    (via atlas-setup) is what inserts the block.
+    """
+    root = root_path or os.getcwd()
+    path = os.path.join(root, "AGENTS.md")
+    if not os.path.isfile(path):
+        return False, f"{path} does not exist; run atlas-setup to scaffold it"
+    try:
+        with open(path, encoding="utf-8") as f:
+            body = f.read()
+    except Exception as e:
+        return False, f"AGENTS.md unreadable: {e}"
+    if ATLAS_TOOLING_MARKER in body:
+        return True, "AGENTS.md carries the atlas-tooling routing block"
+    return (
+        False,
+        "AGENTS.md lacks the atlas-tooling routing block; re-run atlas-setup's "
+        "scaffold_docs.py to insert it",
     )
 
 
@@ -270,8 +340,8 @@ def run_checks(plugin_name="atlas"):
     results = []
     ctx = {}
 
-    def add(cid, ok, detail):
-        results.append({"check": cid, "ok": ok, "detail": detail})
+    def add(cid, ok, detail, severity="fail"):
+        results.append({"check": cid, "ok": ok, "detail": detail, "severity": severity})
 
     try:
         _, manifest = self_manifest()
@@ -419,6 +489,18 @@ def run_checks(plugin_name="atlas"):
     # C10: explicit user outputStyle must not hide Atlas Orchestrator headers
     style_ok, style_detail = check_output_style()
     add("output-style", style_ok, style_detail)
+
+    # C11: the project this doctor runs in should carry the atlas-tooling
+    # routing block. WARN-severity: it does not count toward `failed`/exit
+    # code or --hook's SessionStart warning, because it is a property of the
+    # *consuming project*, not the plugin install, and would otherwise fire
+    # on every unscaffolded repo a user opens.
+    tooling_ok, tooling_detail = check_context_tooling()
+    add("context-tooling", tooling_ok, tooling_detail, severity="warn")
+
+    # C12: TypeSafe turn scoring is optional; WARN-severity, never a failure.
+    ts_ok, ts_detail = check_typesafe_scoring()
+    add("typesafe-scoring", ts_ok, ts_detail, severity="warn")
 
     return results, ctx
 
@@ -956,6 +1038,54 @@ def mine_tool_error_rate(conn, root, threshold=0.2, min_calls=5):
     return out
 
 
+CACHE_HIT_MIN = 0.5
+# Guard so a thin DB (a handful of sessions, or a codex-only history that
+# undercounts cache reads) cannot fire the miner on noise.
+CACHE_HIT_MIN_TOKENS = 100_000
+
+
+def mine_low_cache_hit(conn, root):
+    """Behavioral check: the context-protection layer must actually help.
+    atlas_db.context_tool_health() computes the session cache-read share, but
+    nothing in the doctor's report path surfaced it -- the ratio lived only in
+    the manual audit lens. A low cache_hit_ratio on a non-trivial token base
+    means the trio (claude-mem/context-mode/ponytail) is configured but the
+    cache is not being hit; surface it as a remeasurable finding (the ratio is
+    the baseline the self-telemetry lens already prescribes)."""
+    health = atlas_db.context_tool_health(conn)
+    denom = (health["cache_read_tokens"] or 0) + (health["fresh_input_tokens"] or 0)
+    if denom < CACHE_HIT_MIN_TOKENS:
+        return []
+    ratio = health["cache_hit_ratio"]
+    if ratio >= CACHE_HIT_MIN:
+        return []
+    return [
+        _finding(
+            dimension="context efficiency",
+            severity="MED",
+            title=f"cache hit ratio {ratio:.0%} below {CACHE_HIT_MIN:.0%}",
+            detail=(
+                f"cache_read_tokens={health['cache_read_tokens']} vs "
+                f"fresh_input_tokens={health['fresh_input_tokens']} "
+                f"(cache_hit_ratio={ratio}). Low cache-read share means the "
+                "context-protection layer is not actually helping."
+            ),
+            proposed_action=(
+                "Check whether claude-mem/context-mode/ponytail calls are "
+                "actually being issued (context_tool_health.context_tools); "
+                "if they are absent, the protection is configured but unused - "
+                "propose a CLAUDE.md nudge or a hook with this ratio as the "
+                "baseline."
+            ),
+            target_path="plugins/atlas/scripts/atlas_db.py",
+            key="cache_hit_ratio_low",
+            metric_value=ratio,
+            cache_read_tokens=health["cache_read_tokens"],
+            fresh_input_tokens=health["fresh_input_tokens"],
+        )
+    ]
+
+
 def mine_recurring_friction(conn, root, min_count=3):
     """Behavioral check: friction_events categories (user_correction,
     assumption_admission, error_report, ...) recurring often enough to be a
@@ -997,6 +1127,196 @@ def mine_recurring_friction(conn, root, min_count=3):
     return out
 
 
+# --- turn quality (TypeSafe-scored replies; see docs/atlas-turn-scoring.md) ---
+# Tunable: fraction of scored turns that must hit a failure before a finding
+# is emitted. Conservative on purpose; raise to quiet a noisy judgment.
+TURN_QUALITY_DEFAULT_THRESHOLD = 0.25
+TURN_QUALITY_THRESHOLDS = {}  # judgment id -> override of the default
+NOUL_HIGH = 0.7  # noul probability counted as "yes" (hit=high judgments)
+NOUL_LOW = 0.35  # noul probability counted as "no" (hit=low judgments)
+HEADER_RATE_MIN = 0.8  # header_present rate below this -> finding
+BANNED_PUNCT_RATE_MAX = 0.10  # share of replies with banned glyphs
+
+
+def _turn_hit(spec, row):
+    """Did this scored row hit its judgment's failure direction? Score levels
+    are 0-based and the stored value is probability-weighted, so the top level
+    is round(value) == len(criteria) - 1."""
+    value = row["value"]
+    if value is None:
+        return False
+    if spec["type"] == "score":
+        return round(value) >= len(spec["criteria"]) - 1
+    if spec.get("hit") == "low":
+        return value <= NOUL_LOW
+    return value >= NOUL_HIGH
+
+
+def mine_turn_quality(conn, root, window_days=None, min_turns=20):
+    """Behavioral check: model-scored reply failures from turn_scores.
+
+    One finding per (judgment[, project]) whose hit rate exceeds its
+    threshold, each naming the atlas surface to fix (JUDGMENTS[j]['surface']).
+    Predictive value -- P(next_turn_correction | hit) vs P(... | not hit) --
+    rides in the detail so noise judgments are visible. Deterministic metrics
+    (header_present, banned_punct) yield style-compliance findings. metric_value
+    is always a rate where lower is better, so remeasure() needs no special
+    casing. Judgments need min_turns scored turns in the window (per scope)."""
+    import turn_scoring
+
+    window_days = window_days or RECENT_WINDOW_DAYS
+    cur = conn.execute(
+        "SELECT t.session_id, t.message_uuid, t.judgment, t.kind, t.value, "
+        "t.label, COALESCE(p.name, p.root_path, '(unknown)') "
+        "FROM turn_scores t "
+        "LEFT JOIN session_logs s ON s.session_id = t.session_id "
+        "LEFT JOIN projects p ON p.id = s.project_id "
+        "WHERE t.ts > strftime('%s','now', ?) ORDER BY t.ts",
+        ("-%d days" % window_days,),
+    )
+    rows = [
+        dict(zip(("sid", "uuid", "j", "kind", "value", "label", "project"), r))
+        for r in cur.fetchall()
+    ]
+    by_j = {}
+    for r in rows:
+        by_j.setdefault(r["j"], []).append(r)
+
+    ntc = {
+        (r["sid"], r["uuid"]): _turn_hit(turn_scoring.JUDGMENTS["next_turn_correction"], r)
+        for r in by_j.get("next_turn_correction", [])
+        if "next_turn_correction" in turn_scoring.JUDGMENTS
+    }
+
+    def predictive(j, hits):
+        """(P(corr|hit), n_hit, P(corr|not hit), n_not) over turns that also
+        have a next_turn_correction verdict; None where a side is empty."""
+        a = [ntc[k] for k, h in hits.items() if h and k in ntc]
+        b = [ntc[k] for k, h in hits.items() if not h and k in ntc]
+        return (
+            sum(a) / len(a) if a else None,
+            len(a),
+            sum(b) / len(b) if b else None,
+            len(b),
+        )
+
+    def fmt(p):
+        return "n/a" if p is None else f"{p:.0%}"
+
+    out = []
+    for j, spec in turn_scoring.JUDGMENTS.items():
+        jr = by_j.get(j, [])
+        hits = {(r["sid"], r["uuid"]): _turn_hit(spec, r) for r in jr}
+        pred = predictive(j, hits) if j != "next_turn_correction" else None
+        scopes = [(None, jr)]
+        for proj in sorted({r["project"] for r in jr}):
+            scopes.append((proj, [r for r in jr if r["project"] == proj]))
+        for proj, sub in scopes:
+            n = len(sub)
+            if n < min_turns:
+                continue
+            hit_rows = [r for r in sub if hits[(r["sid"], r["uuid"])]]
+            rate = len(hit_rows) / n
+            threshold = TURN_QUALITY_THRESHOLDS.get(j, TURN_QUALITY_DEFAULT_THRESHOLD)
+            if rate <= threshold:
+                continue
+            examples = [[r["sid"], r["uuid"]] for r in hit_rows[:3]]
+            scope = f" in {proj}" if proj else ""
+            detail = (
+                f"{len(hit_rows)}/{n} scored replies{scope} hit '{j}' "
+                f"({rate:.0%}, threshold {threshold:.0%}) in the last "
+                f"{window_days} days."
+            )
+            if pred:
+                detail += (
+                    f" Predictive value (window-wide): P(next-turn correction | hit)="
+                    f"{fmt(pred[0])} (n={pred[1]}) vs | not hit={fmt(pred[2])} "
+                    f"(n={pred[3]}); a judgment that does not predict corrections "
+                    "is noise."
+                )
+            out.append(
+                _finding(
+                    dimension="reply quality",
+                    severity="MED" if rate >= 2 * threshold else "LOW",
+                    title=f"{j} hit in {rate:.0%} of replies{scope}",
+                    detail=detail,
+                    proposed_action=(
+                        f"Read the example turns, then tighten the surface: "
+                        f"{spec['surface']}. Baseline with --baseline after the "
+                        "change and --remeasure later."
+                    ),
+                    target_path=spec["surface"],
+                    key=f"{j}:{proj}" if proj else j,
+                    metric_value=rate,
+                    rate=rate,
+                    n=n,
+                    project=proj,
+                    examples=examples,
+                    predictive={
+                        "p_corr_given_hit": pred[0],
+                        "n_hit": pred[1],
+                        "p_corr_given_not_hit": pred[2],
+                        "n_not_hit": pred[3],
+                    }
+                    if pred
+                    else None,
+                )
+            )
+
+    hdr = by_j.get("header_present", [])
+    if len(hdr) >= min_turns:
+        missing = [r for r in hdr if not r["value"]]
+        miss_rate = len(missing) / len(hdr)
+        if 1 - miss_rate < HEADER_RATE_MIN:
+            out.append(
+                _finding(
+                    dimension="reply quality",
+                    severity="MED",
+                    title=f"status header missing in {miss_rate:.0%} of replies",
+                    detail=(
+                        f"header_present rate {1 - miss_rate:.0%} over {len(hdr)} "
+                        f"replies in {window_days}d (min {HEADER_RATE_MIN:.0%}). "
+                        "metric_value is the missing rate (lower is better)."
+                    ),
+                    proposed_action=(
+                        "Check the header is injected and the output style is "
+                        "active: style: Status header / hooks/session_boot.py"
+                    ),
+                    target_path="style: Status header / hooks/session_boot.py",
+                    key="metric:header_present",
+                    metric_value=miss_rate,
+                    rate=miss_rate,
+                    n=len(hdr),
+                    examples=[[r["sid"], r["uuid"]] for r in missing[:3]],
+                )
+            )
+    bp = by_j.get("banned_punct", [])
+    if len(bp) >= min_turns:
+        bad = [r for r in bp if (r["value"] or 0) > 0]
+        rate = len(bad) / len(bp)
+        if rate > BANNED_PUNCT_RATE_MAX:
+            out.append(
+                _finding(
+                    dimension="reply quality",
+                    severity="LOW",
+                    title=f"banned punctuation in {rate:.0%} of replies",
+                    detail=(
+                        f"{len(bad)}/{len(bp)} replies in {window_days}d contain "
+                        "em/en dashes, curly quotes or the ellipsis glyph "
+                        f"(max {BANNED_PUNCT_RATE_MAX:.0%})."
+                    ),
+                    proposed_action="Tighten the style: Characters",
+                    target_path="style: Characters",
+                    key="metric:banned_punct",
+                    metric_value=rate,
+                    rate=rate,
+                    n=len(bp),
+                    examples=[[r["sid"], r["uuid"]] for r in bad[:3]],
+                )
+            )
+    return out
+
+
 # How far back the recency-windowed miners look (missing-facets backlog,
 # recurring friction). Lifetime counts can only grow, so a baseline taken from
 # one can never be met however well the behavior improves.
@@ -1011,7 +1331,9 @@ MINERS = {
     "inline_dispatch_ratio_high": mine_inline_dispatch_ratio,
     "verifier_coverage_low": mine_low_verifier_coverage,
     "tool_error_rate_high": mine_tool_error_rate,
+    "cache_hit_ratio_low": mine_low_cache_hit,
     "recurring_friction": mine_recurring_friction,
+    "turn_quality": mine_turn_quality,
 }
 
 
@@ -1338,13 +1660,13 @@ def main(argv=None):
         return 0
 
     results, ctx = run_checks(args.plugin)
-    failed = [r for r in results if not r["ok"]]
+    failed = [r for r in results if not r["ok"] and r.get("severity") != "warn"]
 
     if args.fix and failed:
         for a in apply_fixes(ctx, args.plugin):
             print(f"FIX: {a}")
         results, ctx = run_checks(args.plugin)  # VERIFY
-        failed = [r for r in results if not r["ok"]]
+        failed = [r for r in results if not r["ok"] and r.get("severity") != "warn"]
 
     if args.hook:
         record_hook_verdict(args.plugin, failed)
@@ -1357,7 +1679,8 @@ def main(argv=None):
         return 0
 
     for r in results:
-        print(f"{'PASS' if r['ok'] else 'FAIL'}  {r['check']:20} {r['detail']}")
+        status = "PASS" if r["ok"] else ("WARN" if r.get("severity") == "warn" else "FAIL")
+        print(f"{status}  {r['check']:20} {r['detail']}")
     print(
         ("HEALTHY" if not failed else f"{len(failed)} PROBLEM(S)") + f" - {args.plugin}"
     )

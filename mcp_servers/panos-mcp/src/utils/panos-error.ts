@@ -318,7 +318,10 @@ export function panosToolError(
 ): ToolResult {
   if (!isPanosApiError(err)) return toolErrorFromCatch(operation, err, ctx);
 
-  const entry = classify(err.code);
+  // A rejected key on the REST path arrives as HTTP 401 with no PAN-OS code
+  // (seen live 2026-09-29); classify by the transport status so it reports as
+  // the credential failure it is instead of VENDOR_ERROR.
+  const entry = classify(err.code) ?? (err.httpStatus >= 400 ? classify(String(err.httpStatus)) : undefined);
   const failure: PanosFailureClass = entry?.failure ?? 'unknown';
   const parts = [`${operation} failed:`];
 

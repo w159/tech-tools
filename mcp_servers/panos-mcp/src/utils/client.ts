@@ -1,15 +1,9 @@
 import { PanosClient } from 'node-panos';
+import { cleanEnv } from '@shared/clean-env.js';
 import { logger } from './logger.js';
 
 let _client: PanosClient | null = null;
 let _credKey: string | null = null;
-
-// Strip unresolved MCP host template placeholders (e.g. "${user_config.x}")
-// and whitespace-only values so optional env vars fall through to their defaults.
-const isUnresolvedPlaceholder = (v: string | undefined): boolean =>
-  !!v && /^\$\{[^}]+\}$/.test(v.trim());
-const cleanEnv = (v: string | undefined): string =>
-  !v || isUnresolvedPlaceholder(v) ? '' : v.trim();
 
 interface Credentials {
   host: string;

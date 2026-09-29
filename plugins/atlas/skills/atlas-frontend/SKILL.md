@@ -3,7 +3,10 @@ name: atlas-frontend
 description: Build or refactor screens, flows, or components on a single design system (shadcn/ui + Tailwind + Radix) with every state handled and verified live in the browser.
 when_to_use: building or refactoring screens, flows, or components on a single design system with every state handled
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
-paths: ["**/*.tsx", "**/*.css", "**/*.scss", "components/**"]
+# paths: screens/flows anywhere in the repo (tsx, css, scss); reusable
+# components under components/ route to atlas-component instead, keeping the
+# two skills' literal globs disjoint so they do not co-activate.
+paths: ["**/*.tsx", "**/*.css", "**/*.scss"]
 argument-hint: '[project] [screens/flows] [design intent]'
 ---
 

@@ -3,7 +3,7 @@ import type { ApprovalRequest, ApprovalRequestListParams, PermitApplication, Pag
 import { unwrapPaginatedResponse } from '../pagination.js';
 
 export class ApprovalRequestsResource {
-  constructor(private readonly http: HttpClient) {}
+  constructor(private readonly http: HttpClient) { }
 
   async list(params: ApprovalRequestListParams = {}): Promise<PaginatedResponse<ApprovalRequest>> {
     // swagger ApprovalRequestParametersDto; statusId is required (Pending = 1).
@@ -31,6 +31,13 @@ export class ApprovalRequestsResource {
       params: { includeChildOrganizations },
     });
     return typeof response === 'number' ? response : response.count;
+  }
+
+  // Source: https://threatlocker.kb.help/portalapiapprovalrequest/ > ApprovalRequestGetStorageApprovalById
+  async getStorageApproval(approvalRequestId: string): Promise<Record<string, unknown>> {
+    return this.http.request<Record<string, unknown>>('/ApprovalRequest/ApprovalRequestGetStorageApprovalById', {
+      params: { approvalRequestId },
+    });
   }
 
   async getPermitApplication(approvalRequestId: string): Promise<PermitApplication> {

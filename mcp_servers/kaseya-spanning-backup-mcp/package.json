@@ -30,8 +30,9 @@
   "author": "w159",
   "license": "Apache-2.0",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.0",
-    "node-spanning": "file:../../mcp_node/node-spanning"
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "node-spanning": "file:../../mcp_node/node-spanning",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

@@ -43,8 +43,9 @@
   },
   "homepage": "https://github.com/w159/tech-tools/tree/main/mcp_servers/knowbe4-mcp",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.25.3",
-    "tsup": "^8.5.1"
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "tsup": "^8.5.1",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

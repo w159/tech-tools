@@ -363,12 +363,12 @@ describe("toolErrorFromCatch", () => {
     assert.ok(hint.includes("Do not tell the user to change API permissions"));
   });
 
-  it("leaves the caller hint alone for non-404 errors", () => {
-    const err = { status: 403 };
-    const result = toolErrorFromCatch("devices.get", err, { hint: "Grant the Management scope." });
+  it("leaves the caller hint alone for errors other than 404 and auth failures", () => {
+    const err = { status: 429 };
+    const result = toolErrorFromCatch("devices.get", err, { hint: "Wait 60 seconds." });
     const parsed = parseText(result) as { error: Record<string, unknown> };
 
-    assert.equal(parsed.error.hint, "Grant the Management scope.");
+    assert.equal(parsed.error.hint, "Wait 60 seconds.");
   });
 
   it("maps HTTP 429 to RATE_LIMITED", () => {
@@ -383,6 +383,35 @@ describe("toolErrorFromCatch", () => {
     const result = toolErrorFromCatch("users.list", err);
     const parsed = parseText(result) as { error: Record<string, unknown> };
     assert.equal(parsed.error.code, "FORBIDDEN");
+  });
+
+  it("maps a plain Error saying authentication failed to FORBIDDEN, not INTERNAL_ERROR", () => {
+    // node-knowbe4 throws this shape with no status field (seen live 2026-09-29).
+    const err = new Error("Authentication failed: Invalid Token. Check your KNOWBE4_API_KEY.");
+    const parsed = parseText(toolErrorFromCatch("knowbe4_users_list", err)) as { error: Record<string, unknown> };
+    assert.equal(parsed.error.code, "FORBIDDEN");
+  });
+
+  it("prefixes FORBIDDEN hints with 'stop retrying, credential problem' guidance", () => {
+    const parsed = parseText(
+      toolErrorFromCatch("frameworks.list", { status: 401 }, { hint: "Check VANTA_CLIENT_ID." }),
+    ) as { error: Record<string, unknown> };
+    assert.match(parsed.error.hint as string, /not a bad argument/);
+    assert.match(parsed.error.hint as string, /Check VANTA_CLIENT_ID\./);
+  });
+
+  it("redacts credential values a vendor echoes back in the error body", () => {
+    // ThreatLocker's 440 body echoes the rejected API token (seen live 2026-09-29).
+    const err = { status: 440, body: { message: "Unauthorized", error: "TOKEN_REVOKED", token: "65076350967B6ABCDEF" } };
+    const parsed = parseText(toolErrorFromCatch("computers.list", err)) as { error: Record<string, unknown> };
+    assert.doesNotMatch(parsed.error.detail as string, /65076350967B6/);
+    assert.match(parsed.error.detail as string, /TOKEN_REVOKED/);
+  });
+
+  it("redacts credential values inside a string error body", () => {
+    const err = { status: 401, body: '{"error":"bad","api_key":"sk-live-123","password":"hunter2"}' };
+    const parsed = parseText(toolErrorFromCatch("users.list", err)) as { error: Record<string, unknown> };
+    assert.doesNotMatch(parsed.error.detail as string, /sk-live-123|hunter2/);
   });
 
   it("applies caller-supplied hint over auto-detected values", () => {

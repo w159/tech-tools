@@ -64,11 +64,30 @@ class BootMainStyleTest(unittest.TestCase):
         self.tmp = tempfile.mkdtemp()
         self.db = os.path.join(self.tmp, "atlas.db")
         self.env = dict(os.environ, ATLAS_DB=self.db)
+        self._orig_curator = sys.modules.get("atlas_curator")
+        self._orig_memory = sys.modules.get("atlas_memory")
         self._curator = mock.MagicMock()
         self._memory = mock.MagicMock()
         self._memory.load_snapshot.return_value = {}
         sys.modules["atlas_curator"] = self._curator
         sys.modules["atlas_memory"] = self._memory
+
+    def tearDown(self):
+        # setUp replaces the real atlas_curator/atlas_memory modules in
+        # sys.modules with MagicMocks so session_boot.main() doesn't touch
+        # real state; without restoring them here, every later test in the
+        # same pytest process that does `import atlas_curator` (e.g.
+        # scripts/test_atlas_curator.py) gets the mock instead of the real
+        # module, and mock.patch("atlas_curator.shutil.move", ...) silently
+        # patches the mock's attribute rather than the real one.
+        if self._orig_curator is not None:
+            sys.modules["atlas_curator"] = self._orig_curator
+        else:
+            sys.modules.pop("atlas_curator", None)
+        if self._orig_memory is not None:
+            sys.modules["atlas_memory"] = self._orig_memory
+        else:
+            sys.modules.pop("atlas_memory", None)
 
     def test_boot_includes_contract_and_override_sysmsg(self):
         stdin = io.StringIO(json.dumps({"session_id": "s1", "cwd": self.tmp}))

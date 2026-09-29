@@ -33,6 +33,36 @@ export async function getDomainHandler(domain: DomainName): Promise<DomainHandle
       handler = organizationsHandler;
       break;
     }
+    case 'policies': {
+      const { policiesHandler } = await import('./policies.js');
+      handler = policiesHandler;
+      break;
+    }
+    case 'applications': {
+      const { applicationsHandler } = await import('./applications.js');
+      handler = applicationsHandler;
+      break;
+    }
+    case 'config_manager': {
+      const { configManagerHandler } = await import('./config_manager.js');
+      handler = configManagerHandler;
+      break;
+    }
+    case 'dac': {
+      const { dacHandler } = await import('./dac.js');
+      handler = dacHandler;
+      break;
+    }
+    case 'system_audit': {
+      const { systemAuditHandler } = await import('./system_audit.js');
+      handler = systemAuditHandler;
+      break;
+    }
+    case 'tags': {
+      const { tagsHandler } = await import('./tags.js');
+      handler = tagsHandler;
+      break;
+    }
     default:
       throw new Error(`Unknown domain: ${domain}`);
   }

@@ -82,6 +82,53 @@ ROOT_FILES = {
     "CLAUDE.md": "CLAUDE.md",
 }
 
+# Marker-delimited tool-routing block inserted or replaced (never duplicated
+# ad hoc) in AGENTS.md and CLAUDE.md by ensure_tooling_block(). Re-running
+# scaffold_docs.py after this block's content changes upgrades every
+# scaffolded repo in place, because the whole delimited span is replaced,
+# not just appended once. AGENTS.md is the canonical, shared source of
+# truth: it carries the full routing rule set every agent/harness reads.
+# CLAUDE.md explicitly must not duplicate AGENTS.md (see the CLAUDE.md
+# template itself), so its block is a short cross-reference, not a copy.
+TOOLING_MARKER_START = "<!-- atlas-tooling -->"
+TOOLING_MARKER_END = "<!-- /atlas-tooling -->"
+
+AGENTS_TOOLING_BLOCK = """<!-- atlas-tooling -->
+## Tool Routing
+
+Minimum tooling bar for this project, wired by atlas-setup. Do not read/grep
+source or shell out for things these tools already do:
+
+- **claude-mem** -- cross-session memory. Search it before re-discovering
+  something a prior session already worked out.
+- **context-mode** -- context-window protection for noisy output (build/test
+  logs, large command output, web fetches). Route anything over ~20 lines
+  through it instead of raw shell into context.
+- **serena** + **lean-ctx** -- the code-nav pair for this tree. serena for
+  code symbols (definitions, references, call graphs); lean-ctx for shaped
+  file/tree access, search, and edits on everything else (prose, config,
+  markdown). Native Read/Grep on source is a fallback only when both are
+  unreachable, never a first choice.
+- **ponytail** -- simplicity discipline; keep changes minimal and avoid
+  speculative abstraction.
+
+Run `atlas-doctor` to check whether this project's tooling is actually
+wired (`context-tooling` check) and whether it is doing its job (session
+cache-hit ratio, per-tool error rate).
+<!-- /atlas-tooling -->"""
+
+CLAUDE_TOOLING_BLOCK = """<!-- atlas-tooling -->
+See `AGENTS.md`'s Tool Routing section (canonical, shared) for the
+claude-mem / context-mode / serena+lean-ctx / ponytail tooling bar this
+project expects every agent to use. Nothing Claude-Code-specific to add
+here; do not duplicate it.
+<!-- /atlas-tooling -->"""
+
+TOOLING_BLOCKS = {
+    "AGENTS.md": AGENTS_TOOLING_BLOCK,
+    "CLAUDE.md": CLAUDE_TOOLING_BLOCK,
+}
+
 # Atlas-internal entries: the auditable tracking surface for self-improvement.
 # .run/ is created by the orchestration hooks on first session, not by this
 # scaffold, but is allowlisted here so a fresh repo gets the directory tree
@@ -265,6 +312,53 @@ def copy_seed(src: Path, dst: Path) -> str:
     return f"seeded: {dst}"
 
 
+def ensure_tooling_block(path: Path, block: str) -> str:
+    """Insert or replace the marker-delimited atlas-tooling block in path.
+
+    Unlike copy_seed (which never touches a non-empty destination), this
+    always keeps the block current: a file with exactly one well-formed
+    START...END pair gets that span replaced with the current block content
+    (so a later scaffold_docs.py upgrade propagates to every already-
+    scaffolded repo); a file with no marker at all gets the block appended.
+    A file with any OTHER marker topology (an unpaired START, an unpaired
+    END, or more than one of either -- e.g. the literal marker text quoted
+    in a doc example elsewhere in the file) is never touched: guessing which
+    START pairs with which END risks deleting real content between an
+    orphan marker and an unrelated one, so this returns SKIP instead.
+    path must already exist (root files are seeded before this runs).
+    Returns a one-line status string for the report."""
+    if not path.is_file():
+        return f"SKIP tooling block: {path} does not exist"
+    text = path.read_text(encoding="utf-8")
+    n_start = text.count(TOOLING_MARKER_START)
+    n_end = text.count(TOOLING_MARKER_END)
+    if n_start == 0 and n_end == 0:
+        sep = "" if text.endswith("\n\n") else ("\n" if text.endswith("\n") else "\n\n")
+        new_text = text + sep + block + "\n"
+        verb = "inserted"
+    elif n_start == 1 and n_end == 1:
+        start = text.find(TOOLING_MARKER_START)
+        end = text.find(TOOLING_MARKER_END)
+        if end <= start:
+            return (
+                f"SKIP tooling block: {path} has an END marker before its "
+                "START marker; fix by hand"
+            )
+        new_text = text[:start] + block + text[end + len(TOOLING_MARKER_END) :]
+        verb = "updated" if new_text != text else "unchanged"
+    else:
+        return (
+            f"SKIP tooling block: {path} has {n_start} START/{n_end} END "
+            "marker(s), not a clean 0-0 or 1-1 pair; leaving untouched to "
+            "avoid deleting content between an unpaired marker and an "
+            "unrelated one -- reconcile by hand"
+        )
+    if new_text == text:
+        return f"tooling block {verb}: {path}"
+    path.write_text(new_text, encoding="utf-8")
+    return f"tooling block {verb}: {path}"
+
+
 def scaffold(root: Path, entries: list, seeded_files: list) -> int:
     """Create the given entries/seeded files at root. Returns the count of
     entries that exist after the run (a healthy run ends with len(entries))."""
@@ -429,6 +523,16 @@ def main(argv: list) -> int:
     # the repo root beside .git -- never inside docs/ or .atlas/.
     root_ok = scaffold_named_files(repo_root, ROOT_FILES)
 
+    # Tool-routing block: keeps AGENTS.md/CLAUDE.md carrying the current
+    # claude-mem/context-mode/serena+lean-ctx/ponytail routing rules,
+    # inserted on first scaffold and replaced (upgraded) on every re-run.
+    tooling_ok = True
+    for name, block in TOOLING_BLOCKS.items():
+        status = ensure_tooling_block(repo_root / name, block)
+        print(status)
+        if status.startswith("SKIP"):
+            tooling_ok = False
+
     # Project-adaptive: docs/api/ + docs/endpoints.md, only when the repo
     # shows an API signal. No signal -> nothing created, per the SSOT.
     api_ok = True
@@ -444,7 +548,13 @@ def main(argv: list) -> int:
     print(ensure_gitignore(repo_root))
 
     all_ok = (
-        docs_ok and atlas_ok and docs_root_ok and atlas_root_ok and root_ok and api_ok
+        docs_ok
+        and atlas_ok
+        and docs_root_ok
+        and atlas_root_ok
+        and root_ok
+        and api_ok
+        and tooling_ok
     )
     if all_ok:
         print("OK: full docs/ + .atlas/ + root canonical structure is in place.")

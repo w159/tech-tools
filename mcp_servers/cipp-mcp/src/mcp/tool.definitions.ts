@@ -2,7 +2,7 @@
 // Defines every MCP tool the CIPP MCP server exposes, including name,
 // description, and JSON Schema for input validation.
 
-import { SHAPE_PROPS } from '../_shared/response-shaper.js';
+import { SHAPE_PROPS } from '@shared/response-shaper.js';
 
 // ---------------------------------------------------------------------------
 // Interface

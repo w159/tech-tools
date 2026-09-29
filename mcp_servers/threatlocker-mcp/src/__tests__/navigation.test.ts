@@ -11,6 +11,15 @@ describe('Navigation', () => {
     expect(DOMAINS).toContain('organizations');
   });
 
+  it('should have all v1.5.0 domains', () => {
+    expect(DOMAINS).toContain('policies');
+    expect(DOMAINS).toContain('applications');
+    expect(DOMAINS).toContain('config_manager');
+    expect(DOMAINS).toContain('dac');
+    expect(DOMAINS).toContain('system_audit');
+    expect(DOMAINS).toContain('tags');
+  });
+
   it('should return navigation tools', () => {
     const tools = getNavigationTools();
     expect(tools).toHaveLength(2);

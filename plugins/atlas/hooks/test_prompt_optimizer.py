@@ -380,6 +380,41 @@ class LooksSubstantiveTest(unittest.TestCase):
         )
 
 
+class IsHarnessEventTest(unittest.TestCase):
+    def test_tag_prefixed_event(self):
+        self.assertTrue(
+            po._is_harness_event(
+                "<task-notification>build finished</task-notification>"
+            )
+        )
+
+    def test_system_reminder(self):
+        self.assertTrue(
+            po._is_harness_event("<system-reminder>context</system-reminder>")
+        )
+
+    def test_handback_report(self):
+        self.assertTrue(
+            po._is_harness_event(
+                "Another Claude session sent a message: "
+                '<agent-message from="implementer">[Subagent hand-back] done</agent-message>'
+            )
+        )
+
+    def test_agent_message_anywhere_in_head(self):
+        self.assertTrue(po._is_harness_event('preamble <agent-message from="x">body'))
+
+    def test_genuine_user_prompt_not_harness(self):
+        self.assertFalse(
+            po._is_harness_event(
+                "refactor the auth module and add tests in src/auth.py"
+            )
+        )
+
+    def test_leading_whitespace_stripped(self):
+        self.assertTrue(po._is_harness_event("   <task-notification>x"))
+
+
 class ArmOrchestrationTest(unittest.TestCase):
     def setUp(self):
         self.env = mock.patch.dict(os.environ, {}, clear=False)
@@ -432,6 +467,45 @@ class ArmOrchestrationTest(unittest.TestCase):
             self.assertIsNone(
                 po.arm_orchestration(
                     {"session_id": "s1"}, "refactor the db module now please"
+                )
+            )
+
+
+    def test_mark_orchestrating_failure_records_friction(self):
+        fake_conn = mock.MagicMock()
+        fake = mock.MagicMock()
+        fake.connect.return_value = fake_conn
+        fake.mark_orchestrating.side_effect = Exception("db down")
+        calls = []
+        fake.record_friction.side_effect = (
+            lambda conn, s, cat, **kw: calls.append((conn, s, cat)) or 1
+        )
+        with (
+            mock.patch.dict(sys.modules, {"atlas_db": fake}),
+        ):
+            self.assertIsNone(
+                po.arm_orchestration(
+                    {"session_id": "s1", "cwd": self.tmp},
+                    "refactor the db module now please",
+                )
+            )
+        self.assertEqual(
+            calls, [(fake_conn, "s1", "orchestration_flag_arm_failed")]
+        )
+
+    def test_friction_write_failure_still_fail_open(self):
+        fake_conn = mock.MagicMock()
+        fake = mock.MagicMock()
+        fake.connect.return_value = fake_conn
+        fake.mark_orchestrating.side_effect = Exception("db down")
+        fake.record_friction.side_effect = Exception("db still down")
+        with (
+            mock.patch.dict(sys.modules, {"atlas_db": fake}),
+        ):
+            self.assertIsNone(
+                po.arm_orchestration(
+                    {"session_id": "s1", "cwd": self.tmp},
+                    "refactor the db module now please",
                 )
             )
 
@@ -585,6 +659,70 @@ class MainTest(unittest.TestCase):
 
     def test_empty_prompt(self):
         self.assertEqual(self._run({"prompt": ""}), 0)
+
+    def test_handback_report_no_output_no_arming(self):
+        os.environ["ATLAS_OPTIMIZE"] = "always"
+        os.environ["ATLAS_ENGINE_ARM"] = "on"
+        with mock.patch("prompt_optimizer.arm_orchestration") as arm:
+            with mock.patch("sys.stdout", new_callable=io.StringIO) as out:
+                with mock.patch(
+                    "sys.stdin",
+                    new=_stdin(
+                        {
+                            "prompt": (
+                                "Another Claude session sent a message: "
+                                '<agent-message from="implementer">'
+                                "[Subagent hand-back] refactor done, tests pass"
+                                "</agent-message>"
+                            ),
+                            "session_id": "s",
+                        }
+                    ),
+                ):
+                    self.assertEqual(po.main(), 0)
+            self.assertEqual(out.getvalue(), "")
+            arm.assert_not_called()
+
+    def test_task_notification_no_output(self):
+        os.environ["ATLAS_OPTIMIZE"] = "always"
+        os.environ["ATLAS_ENGINE_ARM"] = "on"
+        with mock.patch("prompt_optimizer.arm_orchestration") as arm:
+            with mock.patch("sys.stdout", new_callable=io.StringIO) as out:
+                with mock.patch(
+                    "sys.stdin",
+                    new=_stdin(
+                        {
+                            "prompt": "<task-notification>build finished successfully</task-notification>",
+                            "session_id": "s",
+                        }
+                    ),
+                ):
+                    self.assertEqual(po.main(), 0)
+            self.assertEqual(out.getvalue(), "")
+            arm.assert_not_called()
+
+    def test_genuine_engineering_prompt_still_arms(self):
+        os.environ["ATLAS_OPTIMIZE"] = "trigger"
+        os.environ["ATLAS_ENGINE_ARM"] = "on"
+        with mock.patch(
+            "prompt_optimizer.arm_orchestration", return_value=po.ENGINE_NUDGE
+        ) as arm:
+            with mock.patch("sys.stdout", new_callable=io.StringIO) as out:
+                with mock.patch(
+                    "sys.stdin",
+                    new=_stdin(
+                        {
+                            "prompt": "refactor the auth module in src/auth.py and add tests",
+                            "session_id": "s",
+                        }
+                    ),
+                ):
+                    self.assertEqual(po.main(), 0)
+            arm.assert_called_once()
+            data = json.loads(out.getvalue())
+            self.assertIn(
+                "atlas-orchestrate", data["hookSpecificOutput"]["additionalContext"]
+            )
 
     def test_no_optimize_passthrough(self):
         # no trigger, no optimize -> nothing emitted, exit 0

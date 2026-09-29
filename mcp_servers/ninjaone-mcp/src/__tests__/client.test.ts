@@ -7,7 +7,7 @@ import { getCredentials, getClient, clearClient } from "../utils/client.js";
 
 // Mock the node-ninjaone library
 vi.mock("node-ninjaone", () => ({
-  NinjaOneClient: vi.fn().mockImplementation((config) => ({
+  NinjaOneClient: vi.fn().mockImplementation(function (config) { return ({
     config,
     devices: {
       list: vi.fn(),
@@ -38,7 +38,7 @@ vi.mock("node-ninjaone", () => ({
       addComment: vi.fn(),
       getComments: vi.fn(),
     },
-  })),
+  }); }),
 }));
 
 describe("NinjaOne Client Utilities", () => {
@@ -103,6 +103,7 @@ describe("NinjaOne Client Utilities", () => {
         clientSecret: "test-secret",
         region: "us",
         baseUrl: "https://app.ninjarmm.com",
+        authMode: "client_credentials",
       });
     });
 
@@ -117,6 +118,7 @@ describe("NinjaOne Client Utilities", () => {
         clientSecret: "test-secret",
         region: "eu",
         baseUrl: "https://eu.ninjarmm.com",
+        authMode: "client_credentials",
       });
     });
 
@@ -131,6 +133,7 @@ describe("NinjaOne Client Utilities", () => {
         clientSecret: "test-secret",
         region: "oc",
         baseUrl: "https://oc.ninjarmm.com",
+        authMode: "client_credentials",
       });
     });
 
@@ -145,6 +148,7 @@ describe("NinjaOne Client Utilities", () => {
         clientSecret: "test-secret",
         region: "eu",
         baseUrl: "https://eu.ninjarmm.com",
+        authMode: "client_credentials",
       });
     });
   });

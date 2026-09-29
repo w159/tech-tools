@@ -383,6 +383,27 @@ def looks_substantive(prompt: str) -> bool:
     return has_common and has_code
 
 
+def _is_harness_event(prompt: str) -> bool:
+    """True when `prompt` is a harness-generated event, not a user request.
+
+    UserPromptSubmit fires for more than typed user input: a subagent
+    hand-back report ("Another Claude session sent a message: ...
+    <agent-message from=...>[Subagent hand-back] ..."), a background task
+    notification ("<task-notification>..."), and other tag-wrapped harness
+    payloads (e.g. "<system-reminder>", "<local-command-...>") all arrive on
+    this same hook. None of these is a user request, so neither the
+    optimizer nor the orchestration classifier should ever see or act on
+    them - re-arming orchestration on a hand-back re-injects the nudge for
+    no new work.
+    """
+    head = prompt.lstrip()[:200]
+    if head.startswith("<"):
+        return True
+    if head.startswith("Another Claude session sent a message"):
+        return True
+    return "<agent-message from=" in head
+
+
 def arm_orchestration(data: dict, prompt: str) -> str | None:
     """Flag this session's run as an atlas orchestration run when the prompt is
     substantive engineering work, and return the engine nudge. Trivial or
@@ -404,7 +425,26 @@ def arm_orchestration(data: dict, prompt: str) -> str | None:
 
         conn = atlas_db.connect()
         atlas_db.init(conn)
-        atlas_db.mark_orchestrating(conn, session, data.get("cwd"))
+        try:
+            atlas_db.mark_orchestrating(conn, session, data.get("cwd"))
+        except Exception:
+            # The arm failed, so this run will not be flagged as an
+            # orchestration run; record one friction row so the silent miss
+            # is observable. The friction write is itself guarded: a doubly
+            # failing DB must not raise out of the hook.
+            try:
+                conn.rollback()
+                atlas_db.record_friction(
+                    conn,
+                    session,
+                    "orchestration_flag_arm_failed",
+                    snippet="mark_orchestrating raised; run not flagged",
+                )
+            except Exception:
+                pass
+            # Preserve the original contract: an arm failure returns None
+            # (no nudge), re-raise into the outer fail-open handler.
+            raise
         conn.close()
     except Exception:
         return None  # fail-open: never block a prompt over a DB hiccup
@@ -508,6 +548,8 @@ def main() -> int:
     prompt = (data.get("prompt") or "").strip()
     if not prompt:
         return 0
+    if _is_harness_event(prompt):
+        return 0  # hand-back report / task-notification / system-reminder, not a user request
 
     # Arm the orchestration flag up front for substantive engineering prompts. This
     # is independent of the optimizer: it runs whether or not the prompt opted in,

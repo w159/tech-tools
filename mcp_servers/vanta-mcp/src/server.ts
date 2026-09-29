@@ -1,96 +1,61 @@
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { CallToolResult as SdkCallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { z } from 'zod';
+import { toZodShape } from '@shared/zod-shape.js';
+import {
+  createToolRegistrar, credentialStatusResult, makeNavigate, registerCredentialGatedTools, runAuthCheck,
+} from '@shared/mcp-server-kit.js';
 import { getNavigationTools, DOMAINS } from './domains/navigation.js';
 import { getDomainHandler } from './domains/index.js';
-import { getCredentials } from './utils/client.js';
+import { getCredentials, getClient } from './utils/client.js';
 import { logger } from './utils/logger.js';
-import type { DomainName } from './utils/types.js';
 import { annotate } from './annotate-tool.js';
-import { describeBaseUrl } from './domains/_helpers.js';
-import { toolErrorFromCatch } from './domains/_helpers.js';
+import { describeBaseUrl, toolErrorFromCatch } from './domains/_helpers.js';
 
-export function createMcpServer(): Server {
-  const server = new Server(
+/** One cheap authenticated read with a hard timeout. Never throws, never prints response data. */
+const liveAuthCheck = (): Promise<string> =>
+  runAuthCheck(async () => (await getClient()).frameworks.list({ pageSize: 1 }), '10s');
+
+const SERVER_INSTRUCTIONS =
+  `Vanta compliance data: frameworks, controls, tests, documents, policies, integrations, people, vendors, risk scenarios, monitored computers, and vulnerabilities. Use the list tool for a domain to find IDs before calling its get-by-id tool. On a 401, 403, or 440 response, a not-configured message, or a connection failure, call vanta_status once and report its output to the user instead of retrying other tools. When credentials are missing only vanta_status and vanta_navigate are listed; the user must set VANTA_CLIENT_ID and VANTA_CLIENT_SECRET and restart the session.`;
+
+const navigateTool = makeNavigate(DOMAINS, getDomainHandler);
+
+// Status must never throw, even with missing creds.
+async function statusTool(): Promise<SdkCallToolResult> {
+  const creds = getCredentials();
+  const urlDesc = describeBaseUrl('vanta', process.env.VANTA_BASE_URL, 'VANTA_BASE_URL');
+  const credStatus = creds
+    ? `Configured (clientId=${creds.clientId.slice(0, 6)}…, baseUrl=${urlDesc})`
+    : 'NOT CONFIGURED — set VANTA_CLIENT_ID and VANTA_CLIENT_SECRET';
+  // "Configured" only proves values are present; one live read shows whether Vanta accepts them.
+  const authCheck = creds ? await liveAuthCheck() : 'SKIPPED (no client credentials)';
+  // Unconfigured is a reduced mode; only a rejected credential flips isError.
+  return credentialStatusResult({
+    vendor: 'Vanta', credStatus, authCheck, domains: DOMAINS,
+    footer: creds ? 'Use vanta_navigate to discover tools by domain.' : 'Only vanta_status and vanta_navigate are listed until VANTA_CLIENT_ID and VANTA_CLIENT_SECRET are set and the session is restarted.',
+  });
+}
+
+export async function createMcpServer(): Promise<McpServer> {
+  const server = new McpServer(
     { name: 'vanta-mcp', version: '0.2.3' },
-    {
-      capabilities: {
-        tools: {},
-        logging: {},
-      },
-    }
+    { capabilities: { logging: {} }, instructions: SERVER_INSTRUCTIONS },
   );
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => {
-    // Progressive disclosure: status + navigate only until credentials resolve.
-    const navTools = getNavigationTools();
-    if (!getCredentials()) {
-      return { tools: annotate(navTools, 'Vanta') };
-    }
-    const allTools = [...navTools];
-    for (const domain of DOMAINS) {
-      const handler = await getDomainHandler(domain);
-      allTools.push(...handler.getTools());
-    }
-    return { tools: annotate(allTools, 'Vanta') };
-  });
-
-  server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
-    const { name, arguments: args } = request.params;
-
-    if (name === 'vanta_navigate') {
-      const domain = (args?.domain as string) as DomainName;
-      if (!DOMAINS.includes(domain)) {
-        return {
-          content: [{ type: 'text' as const, text: `Invalid domain: ${domain}. Valid: ${DOMAINS.join(', ')}` }],
-          isError: true,
-        };
-      }
-      const handler = await getDomainHandler(domain);
-      const tools = handler.getTools();
-      const toolSummary = tools.map(t => `- ${t.name}: ${t.description}`).join('\n');
-      return {
-        content: [{
-          type: 'text' as const,
-          text: `Domain: ${domain}\n\nAvailable tools:\n${toolSummary}\n\nYou can call any of these tools directly.`,
-        }],
-      };
-    }
-
-    if (name === 'vanta_status') {
-      const creds = getCredentials();
-      const urlDesc = describeBaseUrl('vanta', process.env.VANTA_BASE_URL, 'VANTA_BASE_URL');
-      const credStatus = creds
-        ? `Configured (clientId=${creds.clientId.slice(0, 6)}…, baseUrl=${urlDesc})`
-        : 'NOT CONFIGURED — set VANTA_CLIENT_ID and VANTA_CLIENT_SECRET';
-      return {
-        content: [{
-          type: 'text' as const,
-          text: `Vanta MCP Server Status\n\nCredentials: ${credStatus}\nDomains: ${DOMAINS.join(', ')}\n\nAll tools are registered upfront. Use vanta_navigate to discover tools by domain.`,
-        }],
-      };
-    }
-
-    for (const domain of DOMAINS) {
-      const handler = await getDomainHandler(domain);
-      const toolNames = handler.getTools().map(t => t.name);
-      if (toolNames.includes(name)) {
-        // Domain handlers now handle their own errors; this catch is a last-resort
-        // safety net for unexpected throws that escape the handler.
-        try {
-          return await handler.handleCall(name, (args || {}) as Record<string, unknown>, extra);
-        } catch (err) {
-          logger.error('Unhandled error from domain handler', { tool: name, err });
-          return toolErrorFromCatch(name, err, {
-            hint: 'Check VANTA_CLIENT_ID and VANTA_CLIENT_SECRET are set correctly.',
-          });
-        }
-      }
-    }
-
-    return {
-      content: [{ type: 'text' as const, text: `Unknown tool: ${name}. Use vanta_navigate to discover available tools.` }],
-      isError: true,
-    };
+  const register = createToolRegistrar({ server, z, toZodShape, annotate, vendorTitle: 'Vanta' });
+  await registerCredentialGatedTools({
+    register, navigationTools: getNavigationTools(), navigateName: 'vanta_navigate',
+    navigate: navigateTool, status: statusTool, hasCredentials: () => !!getCredentials(),
+    domains: DOMAINS, getHandler: getDomainHandler,
+    // Domain handlers handle their own errors; this catch is a last-resort
+    // safety net for unexpected throws that escape the handler.
+    onError: (toolName, err) => {
+      logger.error('Unhandled error from domain handler', { tool: toolName, err });
+      return toolErrorFromCatch(toolName, err, {
+        hint: 'Check VANTA_CLIENT_ID and VANTA_CLIENT_SECRET are set correctly.',
+      });
+    },
   });
 
   return server;

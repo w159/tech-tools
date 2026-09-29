@@ -13,11 +13,11 @@ import {
   extractShapeArgs,
   type SummaryFn,
   type ToolResult,
-} from '../_shared/response-shaper.js';
+} from '@shared/response-shaper.js';
 import {
   toolErrorFromCatch,
   missingCredsError,
-} from '../_shared/error-envelope.js';
+} from '@shared/error-envelope.js';
 
 // ---------------------------------------------------------------------------
 // Per-resource compact summary functions
@@ -800,31 +800,39 @@ export class CippToolHandler {
   }
 
   // ---------------------------------------------------------------------------
-  // cipp_status — always succeeds, never calls the network.
+  // cipp_status — never throws; makes one cheap authenticated call when configured.
   // ---------------------------------------------------------------------------
 
-  private handleStatus(): McpToolResult {
-    const baseUrl =
-      process.env['CIPP_BASE_URL'] ??
-      process.env['CIPP_URL'] ??
-      process.env['CIPP_API_URL'];
+  private async handleStatus(): Promise<McpToolResult> {
+    const result = this.describeConfiguration();
+    // "Configured" only proves values are present. One PublicPing shows whether
+    // CIPP accepts them. Response data is never printed.
+    const authCheck = result.isError ? 'SKIPPED (no credentials)' : await this.liveAuthCheck();
+    return {
+      content: [...result.content, { type: 'text', text: `Auth check: ${authCheck}` }],
+      isError: authCheck.startsWith('FAILED') ? true : result.isError,
+    } as McpToolResult;
+  }
 
-    const hasBaseUrl = !!baseUrl;
-    const hasApiKey = !!(process.env['CIPP_API_KEY']);
-    const hasClientId = !!(process.env['CIPP_CLIENT_ID']);
-    const hasClientSecret = !!(process.env['CIPP_CLIENT_SECRET']);
-    const hasTenantId = !!(process.env['CIPP_TENANT_ID']);
-    const hasOAuth = hasClientId && hasClientSecret && hasTenantId;
+  private async liveAuthCheck(): Promise<string> {
+    const started = Date.now();
+    try {
+      await Promise.race([
+        this.cippService.ping(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timed out after 10 s')), 10_000)),
+      ]);
+      return `OK (HTTP 200, ${Date.now() - started} ms)`;
+    } catch (err) {
+      const e = err as { statusCode?: number; message?: string };
+      return `FAILED${e.statusCode ? ` HTTP ${e.statusCode}` : ''}: ${(e.message ?? String(err)).slice(0, 200)}`;
+    }
+  }
 
-    if (!hasBaseUrl) {
-      return missingCredsError('CIPP', ['CIPP_BASE_URL']) as McpToolResult;
-    }
-    if (!hasApiKey && !hasOAuth) {
-      return missingCredsError('CIPP', [
-        'CIPP_API_KEY (static Bearer token)',
-        'OR: CIPP_TENANT_ID + CIPP_CLIENT_ID + CIPP_CLIENT_SECRET (OAuth client-credentials)',
-      ]) as McpToolResult;
-    }
+  private describeConfiguration(): McpToolResult {
+    const baseUrl = resolveCippBaseUrl();
+    const hasApiKey = isEnvSet('CIPP_API_KEY');
+    const missing = findMissingCredentials(baseUrl, hasApiKey);
+    if (missing) return missing;
 
     const status = {
       configured: true,
@@ -833,17 +841,34 @@ export class CippToolHandler {
       hint: 'Credentials appear configured. Call cipp_ping to verify live connectivity.',
       credentials: {
         CIPP_BASE_URL: 'set — your CIPP instance URL',
-        CIPP_API_KEY: hasApiKey ? 'set' : 'not set (using OAuth)',
-        CIPP_CLIENT_ID: hasClientId ? 'set' : 'not set',
-        CIPP_CLIENT_SECRET: hasClientSecret ? 'set' : 'not set',
-        CIPP_TENANT_ID: hasTenantId ? 'set' : 'not set',
-        CIPP_TOKEN_SCOPE: process.env['CIPP_TOKEN_SCOPE'] ? 'set' : 'not set (optional)',
+        CIPP_API_KEY: envLabel('CIPP_API_KEY', 'not set (using OAuth)'),
+        CIPP_CLIENT_ID: envLabel('CIPP_CLIENT_ID'),
+        CIPP_CLIENT_SECRET: envLabel('CIPP_CLIENT_SECRET'),
+        CIPP_TENANT_ID: envLabel('CIPP_TENANT_ID'),
+        CIPP_TOKEN_SCOPE: envLabel('CIPP_TOKEN_SCOPE', 'not set (optional)'),
       },
     };
 
     return shapeRaw(status) as McpToolResult;
   }
 }
+
+const resolveCippBaseUrl = (): string | undefined =>
+  process.env['CIPP_BASE_URL'] ?? process.env['CIPP_URL'] ?? process.env['CIPP_API_URL'];
+
+/** Error result naming what to set, or undefined when a base URL and one auth mode are present. */
+function findMissingCredentials(baseUrl: string | undefined, hasApiKey: boolean): McpToolResult | undefined {
+  if (!baseUrl) return missingCredsError('CIPP', ['CIPP_BASE_URL']) as McpToolResult;
+  const hasOAuth = ['CIPP_CLIENT_ID', 'CIPP_CLIENT_SECRET', 'CIPP_TENANT_ID'].every(isEnvSet);
+  if (hasApiKey || hasOAuth) return undefined;
+  return missingCredsError('CIPP', [
+    'CIPP_API_KEY (static Bearer token)',
+    'OR: CIPP_TENANT_ID + CIPP_CLIENT_ID + CIPP_CLIENT_SECRET (OAuth client-credentials)',
+  ]) as McpToolResult;
+}
+
+const isEnvSet = (name: string): boolean => !!process.env[name];
+const envLabel = (name: string, notSetLabel = 'not set'): string => (isEnvSet(name) ? 'set' : notSetLabel);
 
 // ---------------------------------------------------------------------------
 // Helpers

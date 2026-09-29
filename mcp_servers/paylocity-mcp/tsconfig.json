@@ -9,8 +9,25 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "outDir": "dist",
-    "sourceMap": true
+    "sourceMap": true,
+    "paths": {
+      "@shared/*": [
+        "../_shared/*"
+      ],
+      "@modelcontextprotocol/sdk/*": [
+        "./node_modules/@modelcontextprotocol/sdk/dist/esm/*"
+      ],
+      "zod": [
+        "./node_modules/zod"
+      ]
+    }
   },
-  "include": ["src", "../_shared/*.ts"],
-  "exclude": ["node_modules", "dist"]
+  "include": [
+    "src",
+    "../_shared/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
 }

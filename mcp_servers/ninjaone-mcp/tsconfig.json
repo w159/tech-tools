@@ -13,13 +13,20 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "paths": {
+      "@modelcontextprotocol/sdk/*": ["./node_modules/@modelcontextprotocol/sdk/dist/esm/*"],
+      "zod": ["./node_modules/zod/index.d.ts"]
+    }
   },
   "include": [
     "src/**/*",
     "../_shared/response-shaper.ts",
     "../_shared/error-envelope.ts",
-    "../_shared/base-url.ts"
+    "../_shared/base-url.ts",
+    "../_shared/zod-shape.ts",
+    "../_shared/mcp-server-kit.ts",
+    "../_shared/server-entry.ts"
   ],
   "exclude": ["node_modules", "dist"]
 }
