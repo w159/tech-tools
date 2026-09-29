@@ -19,6 +19,10 @@ import runpy
 import sys
 
 
+def _is_unexpanded(value: str) -> bool:
+    return value.startswith("${") and value.endswith("}")
+
+
 def _load_env_file(path: str) -> None:
     try:
         with open(path, encoding="utf-8") as handle:
@@ -37,7 +41,11 @@ def _load_env_file(path: str) -> None:
         value = value.strip()
         if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
             value = value[1:-1]
-        if key:
+        # Never let a blank `KEY=` line (the `.env.example` convention - a
+        # commented-out template uncommented but never filled in) or a
+        # literal unexpanded `${...}` placeholder stomp an already-set value
+        # (e.g. one exported by the launching shell) - both only fill a gap.
+        if key and value != "" and not _is_unexpanded(value):
             os.environ[key] = value
 
 
@@ -47,7 +55,7 @@ def _promote_cfg() -> None:
             continue
         name = key[4:]
         value = os.environ[key]
-        unexpanded = value.startswith("${") and value.endswith("}")
+        unexpanded = _is_unexpanded(value)
         if name not in os.environ and value and not unexpanded:
             os.environ[name] = value
 
@@ -56,6 +64,16 @@ def main() -> None:
     if len(sys.argv) < 2:
         print("[atlas env] usage: load.py <module.to.run>", file=sys.stderr)
         sys.exit(2)
+    # Default path is a convention, not a secret: a per-user KEY=VALUE file
+    # the operator creates (recommended `chmod 600`) so every vendor MCP
+    # server picks up credentials even when the launching harness doesn't
+    # resolve plugin userConfig / ${user_config.*} substitution, or when
+    # ATLAS_ENV_FILE points at a plugin-root .env that doesn't exist for a
+    # cache-installed plugin. Loaded first as a baseline; ATLAS_ENV_FILE,
+    # when explicitly set, loads second and overrides it.
+    default_env_file = os.path.join(os.path.expanduser("~"), ".config", "atlas", "atlas.env")
+    if os.path.isfile(default_env_file):
+        _load_env_file(default_env_file)
     env_file = os.environ.get("ATLAS_ENV_FILE")
     if env_file and os.path.isfile(env_file):
         _load_env_file(env_file)

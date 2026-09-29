@@ -22,6 +22,38 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
   removed. The durable-board/LEDGER drain fallback is fixture-verified as of
   5.26.0 (`TodoBoardDrainTest`, 8 cases); a live TodoWrite payload through
   `_open_todos` is still pending.
+- [in-progress] `atlas_doctor` has no check that verifies claude-mem,
+  context-mode, ponytail, lean-ctx, or serena are actually *registered as MCP
+  servers* -- `context-tooling` (added 2026-09-28) only checks that a
+  project's `AGENTS.md` carries the routing block that tells agents to use
+  them, not that the servers themselves are reachable. `session_boot.py`'s
+  existing `has_cmd()`/`detect_dep()` proxy (checks `$PATH` and importable
+  Python modules) was considered and rejected as the basis for a new check:
+  live on this machine, `which claude-mem` and `which ponytail` both return
+  nothing even though claude-mem shows 145 real `tool_calls` across 88
+  sessions in `~/.atlas/atlas.db` over the last ~6 months -- it *is*
+  registered and working as an MCP server, it just has no CLI binary on
+  `$PATH` here. Extending that same proxy to lean-ctx/serena would risk
+  exactly the false-"ABSENT" noise it already produces for claude-mem. A
+  real check needs to read whatever config surface Claude Code actually
+  uses to register user-scope MCP servers (not `$PATH`); that surface was
+  not identified in this pass. `--fix` still cannot remediate a missing
+  registration for any of the five tools either way (`repair.md` documents
+  this explicitly as of 2026-09-28) -- the repair today is the manual
+  install command from `install.md` Stage 1.
+- [in-progress] `atlas_doctor.py --fix` on a genuinely empty `~/.claude`
+  (no `installed_plugins.json`, no `known_marketplaces.json`) reports
+  "FIX: cannot fix: context incomplete" rather than bootstrapping a
+  first-time install. Verified live (temp `HOME`, empty `.claude/`):
+  `CHECK` fails `config-readable` before any other check can run, and
+  `--fix` correctly declines rather than guessing at a marketplace
+  registration it cannot construct from nothing. This is arguably correct
+  behavior (there is no source of truth to fix *from* on a truly first-run
+  machine -- the marketplace add + `/plugin install` step has to happen
+  once, by a human, before `atlas_doctor` has anything to verify), but it
+  means "reproduce the behavior in any and all new installs" still has a
+  manual first step that `atlas-setup`'s `install.md` documents in prose
+  but no script currently automates end-to-end from a bare machine.
 
 - [in-progress] Vendored upstream clones (aider/, claude-code/, cline/, codex/, cursor/,
   gemini-cli/, github-copilot/, pi/, windsurf/, frameworks/, vendors/) still live in docs/.

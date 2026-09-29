@@ -1,8 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { CwManageClient, getConfig } from "../api-client.js";
 import { READ, titled } from "./annotations.js";
-import { shapeRaw } from "../_shared/response-shaper.js";
-import { toolErrorFromCatch } from "../_shared/error-envelope.js";
+import { shapeRaw } from "@shared/response-shaper.js";
+import { toolErrorFromCatch } from "@shared/error-envelope.js";
 
 export function registerHealthTools(server: McpServer, client: CwManageClient) {
   server.tool(

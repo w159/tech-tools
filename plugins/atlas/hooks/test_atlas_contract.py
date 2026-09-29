@@ -14,6 +14,7 @@ Stdlib only, no network, no fixtures.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import subprocess
@@ -65,23 +66,37 @@ def _script_paths() -> list:
     return paths
 
 
-def _run_hook(script: str, payload, cwd=None, db=None):
+def _run_hook(script: str, payload, cwd=None, db=None, hookstate=None):
     """Invoke a hook exactly as Claude Code does: JSON on stdin, read stdout.
 
     `db` points ATLAS_DB at a throwaway sqlite file so a test never reads or
-    writes the developer's real ~/.atlas/atlas.db.
+    writes the developer's real ~/.atlas/atlas.db. `ATLAS_HOOKSTATE_DIR` is
+    always isolated to a fresh tmpdir too (override with `hookstate` for a
+    caller that wants to inspect/reuse the same state across calls) -- fixed
+    literal session ids repeat across test methods and across repeated test
+    runs, and atlas_hook_guard's circuit breaker persists to disk keyed by
+    session id: without this, enough repeated runs permanently silence
+    completion_gate.py for that session id in the developer's real
+    ~/.atlas/hookstate/, not just in this process.
     """
     env = dict(os.environ)
     if db is not None:
         env["ATLAS_DB"] = str(db)
-    return subprocess.run(
-        [sys.executable, str(HOOKS_DIR / script)],
-        input=payload if isinstance(payload, str) else json.dumps(payload),
-        capture_output=True,
-        text=True,
-        cwd=cwd,
-        env=env,
+    state_ctx = (
+        contextlib.nullcontext(hookstate)
+        if hookstate is not None
+        else tempfile.TemporaryDirectory()
     )
+    with state_ctx as state_dir:
+        env["ATLAS_HOOKSTATE_DIR"] = state_dir
+        return subprocess.run(
+            [sys.executable, str(HOOKS_DIR / script)],
+            input=payload if isinstance(payload, str) else json.dumps(payload),
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+            env=env,
+        )
 
 
 def _mkrepo(with_docs=True):
@@ -278,6 +293,68 @@ class CompletionGateContract(unittest.TestCase):
         )
         self.assertEqual(res.stdout.strip(), "")
 
+    def test_run_hook_isolates_the_circuit_breaker_across_calls(self):
+        """_run_hook must isolate ATLAS_HOOKSTATE_DIR per call, not share the
+        developer's real ~/.atlas/hookstate/, even when the *calling*
+        process's own environment already carries a stale ATLAS_HOOKSTATE_DIR
+        (a parent shell, a CI job, or a previous test in the same process).
+
+        atlas_hook_guard's `should_run` returns False immediately whenever
+        the session's state file has `breaker_tripped: true` -- no need to
+        replay the 5-events-in-120s burst that sets it. Pre-seeding that
+        exact state under an explicit `hookstate=` dir is a direct,
+        deterministic test of the read path.
+
+        The default call (no `hookstate` argument) is then made with
+        `ATLAS_HOOKSTATE_DIR` already set to that same tripped dir in
+        `os.environ` -- `_run_hook` copies `os.environ` first, so a version
+        that only sets the key when `hookstate` is explicitly passed (rather
+        than always overriding with a fresh `tempfile.mkdtemp()`) would
+        silently inherit the tripped state here. Asserting against the real
+        machine's actual (usually untripped) ~/.atlas/hookstate instead
+        would pass either way and prove nothing.
+        """
+        from unittest import mock
+
+        repo, db = _mkorchestrating_repo(
+            session_id="breaker-repro", with_telemetry=False
+        )
+        Path(repo, "app.py").write_text("1\n", encoding="utf-8")
+
+        with tempfile.TemporaryDirectory() as shared_dir:
+            Path(shared_dir, "breaker-repro.json").write_text(
+                json.dumps({"breaker_tripped": True}), encoding="utf-8"
+            )
+            tripped = _run_hook(
+                "completion_gate.py",
+                {"cwd": repo, "session_id": "breaker-repro"},
+                cwd=repo,
+                db=db,
+                hookstate=shared_dir,
+            )
+            self.assertNotIn(
+                "block",
+                tripped.stdout,
+                "sanity check: a pre-tripped breaker should silence the "
+                "gate -- if this fires, atlas_hook_guard's breaker_tripped "
+                "read changed and this test needs updating, not deleting",
+            )
+
+            with mock.patch.dict(os.environ, {"ATLAS_HOOKSTATE_DIR": shared_dir}):
+                isolated = _run_hook(
+                    "completion_gate.py",
+                    {"cwd": repo, "session_id": "breaker-repro"},
+                    cwd=repo,
+                    db=db,
+                )
+        self.assertIn(
+            "block",
+            isolated.stdout,
+            "default _run_hook call inherited a stale ATLAS_HOOKSTATE_DIR "
+            "from the calling environment instead of overriding it with a "
+            "fresh dir -- isolation regressed",
+        )
+
 
 class DocsDriftWatchContract(unittest.TestCase):
     """Drift is surfaced at edit time, not only at Stop."""
@@ -388,7 +465,9 @@ class DocsMatchCodeContract(unittest.TestCase):
     def _inventory(self):
         """What is actually on disk, the only source of truth for a count."""
         return {
-            "skills": len([p for p in (PLUGIN_ROOT / "skills").iterdir() if p.is_dir()]),
+            "skills": len(
+                [p for p in (PLUGIN_ROOT / "skills").iterdir() if p.is_dir()]
+            ),
             "agents": len(_agent_files()),
             "programs": len(self._distinct_scripts()),
             "bindings": sum(
@@ -1141,6 +1220,21 @@ class NoNestedSubagentsContract(unittest.TestCase):
         ]
         self.assertEqual(missing, [])
 
+    def test_verifier_and_explorer_refuse_forking(self):
+        """The fresh-dispatch doctrine must live at the agent-definition source,
+        not only in subagent-kit.md (which loads only with that output style)."""
+        needle = "must always be dispatched fresh, never forked"
+        missing = []
+        for name in ("verifier.md", "explorer.md"):
+            path = PLUGIN_ROOT / "agents" / name
+            if needle not in path.read_text(encoding="utf-8"):
+                missing.append(name)
+        self.assertEqual(
+            missing,
+            [],
+            "agents lacking the fresh-dispatch (never forked) instruction: %s" % missing,
+        )
+
     def test_hook_denies_a_dispatch_from_a_subagent_transcript(self):
         payload = {
             "session_id": "agent-deadbeef",
@@ -1169,6 +1263,37 @@ class NoNestedSubagentsContract(unittest.TestCase):
         self.assertLess(deny_at, body.index("import atlas_db"))
 
 
+class ReadOnlyAgentsDoNotWriteContract(unittest.TestCase):
+    """An agent whose frontmatter disallows Write must not instruct itself,
+    in prose, to write a report file anyway - that contradiction sends the
+    agent to fight its own tool deny instead of returning the report."""
+
+    def test_write_disallowed_agents_do_not_instruct_writing_a_file(self):
+        import re
+
+        narrow_write_instruction = re.compile(
+            r"(?<!not )(?<!never )(?<!don't )"
+            r"\bwrite (your|the|this|a) (full )?"
+            r"(report|audit|inventory|findings|output|plan)s?\b.{0,40}?\bto\b",
+            re.IGNORECASE | re.DOTALL,
+        )
+        bad = []
+        for path in _agent_files():
+            fm = _frontmatter(path)
+            if "Write" not in fm.get("disallowedTools", ""):
+                continue
+            body = path.read_text(encoding="utf-8")
+            match = narrow_write_instruction.search(body)
+            if match:
+                bad.append("%s: %r" % (path.name, match.group(0)))
+        self.assertEqual(
+            bad,
+            [],
+            "read-only agents instructed to write a file despite no Write access: %s"
+            % bad,
+        )
+
+
 class RightSizedDelegationContract(unittest.TestCase):
     """Always delegate, but do not send a squad after a one-file change."""
 
@@ -1178,9 +1303,7 @@ class RightSizedDelegationContract(unittest.TestCase):
         src = (HOOKS_DIR / "completion_gate.py").read_text(encoding="utf-8")
         self.assertIn("_test_verified_this_run", src)
         self.assertIn("_unpaired_implementer_dispatches(session)", src)
-        self.assertRegex(
-            src, r"-\s*_test_verified_this_run\(\s*root,\s*session,"
-        )
+        self.assertRegex(src, r"-\s*_test_verified_this_run\(\s*root,\s*session,")
 
     def test_orchestrate_skill_documents_the_wave_ladder(self):
         text = OrchestrationContract()._body()
@@ -1358,3 +1481,34 @@ class TodoBoardContract(unittest.TestCase):
             'data-tab="agents"',
         ):
             self.assertIn(marker, ui, marker)
+
+
+class SkillPathsContract(unittest.TestCase):
+    """Auto-trigger scoping via the `paths:` frontmatter field.
+
+    Two skills whose paths lists share identical literal globs both
+    auto-activate together on every matching edit, so literal entries must
+    stay unique across the fleet.
+    """
+
+    def _skill_paths(self) -> dict:
+        import ast
+
+        out = {}
+        for skill_md in sorted((PLUGIN_ROOT / "skills").glob("*/SKILL.md")):
+            raw = _frontmatter(skill_md).get("paths", "")
+            if not raw:
+                continue
+            out[skill_md.parent.name] = ast.literal_eval(raw)
+        return out
+
+    def test_no_two_skills_share_identical_paths_globs(self):
+        owners = {}
+        for skill, globs in self._skill_paths().items():
+            for glob in globs:
+                owners.setdefault(glob, []).append(skill)
+        self.assertEqual(
+            [],
+            ["%s: %s" % (glob, skills) for glob, skills in owners.items() if len(skills) > 1],
+            "skills share identical literal paths globs (co-activate together)",
+        )

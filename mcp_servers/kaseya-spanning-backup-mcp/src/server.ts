@@ -1,128 +1,80 @@
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { CallToolResult as SdkCallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { z } from 'zod';
+import { toZodShape } from '@shared/zod-shape.js';
+import {
+  createToolRegistrar, navigateDomain, registerDomainTools, registerNavigationTools, runAuthCheck, statusResult,
+} from '@shared/mcp-server-kit.js';
 import { getNavigationTools, DOMAINS } from './domains/navigation.js';
 import { getDomainHandler } from './domains/index.js';
-import { getCredentials } from './utils/client.js';
+import { getCredentials, getClient } from './utils/client.js';
 import { logger } from './utils/logger.js';
 import type { DomainName } from './utils/types.js';
 import { annotate } from './annotate-tool.js';
-import { missingCredsError, toolErrorFromCatch, describeBaseUrl } from './domains/_helpers.js';
+import { toolErrorFromCatch } from './domains/_helpers.js';
 
-// Per-platform default base URLs (from docs/vendors/spanning/README.md).
-// M365 is the primary documented default for the o365-api.spanning.com surface.
-const PLATFORM_DEFAULTS: Record<string, string> = {
-  m365:        'https://o365-api.spanningbackup.com/external',
-  gws:         'https://api.spanningbackup.com/external',
-  salesforce:  'https://salesforce-api.spanningbackup.com',
-};
+const SERVER_INSTRUCTIONS =
+  'Kaseya Spanning Backup for Microsoft 365, Google Workspace, and Salesforce: backed-up users, per-user service inventory, daily backup runs, restores, audit log, and license usage. ' +
+  'Call the users tools first to find a user ID before per-user services, backups, or restores tools. ' +
+  'On 401/403/440, "not configured", or a connection failure, call spanning_status once and report its output to the user instead of retrying other tools. ' +
+  'When credentials are missing only spanning_status and spanning_navigate are listed; the user must set SPANNING_ADMIN_EMAIL and SPANNING_API_TOKEN and restart the session.';
 
-function resolveSpanningUrl(platform: string, apiUrlOverride?: string): string {
-  if (apiUrlOverride) return apiUrlOverride;
-  return PLATFORM_DEFAULTS[platform] ?? PLATFORM_DEFAULTS['m365'];
+/** One authenticated read (users page of 1) with a 10 s cap. Never throws; never prints response data. */
+const liveAuthCheck = (): Promise<string> =>
+  runAuthCheck(async () => getClient().users.list({ limit: 1 }), '10000 ms');
+
+// Status must never throw, even with missing credentials.
+async function statusTool(): Promise<SdkCallToolResult> {
+  const creds = getCredentials();
+  if (!creds) {
+    return {
+      content: [{
+        type: 'text' as const,
+        text: `Kaseya Spanning Backup MCP Server Status\n\nCredentials: NOT CONFIGURED (set SPANNING_ADMIN_EMAIL and SPANNING_API_TOKEN)\nAuth check: SKIPPED (no credentials)\nAvailable domains: ${DOMAINS.join(', ')}\n\nOnly spanning_status and spanning_navigate are listed until credentials are set and the session is restarted.`,
+      }],
+    };
+  }
+
+  // Per-platform default URL logic lives in getCredentials (creds.apiUrl is the effective URL).
+  const urlDesc = creds.apiUrlIsOverride
+    ? `${creds.apiUrl} (from SPANNING_API_URL env var)`
+    : `${creds.apiUrl} (vendor default for platform=${creds.platform}; set SPANNING_API_URL to override)`;
+  // "Configured" only proves values are present; make one cheap call so status shows whether Spanning accepts them.
+  const authCheck = await liveAuthCheck();
+  return {
+    content: [{
+      type: 'text' as const,
+      text: `Kaseya Spanning Backup MCP Server Status\n\nCredentials: Configured (adminEmail=${creds.adminEmail}, platform=${creds.platform}, baseUrl=${urlDesc})\nAuth check: ${authCheck}\nAvailable domains: ${DOMAINS.join(', ')}\n\nDomain tools are listed because credentials are configured. Use spanning_navigate to discover tools by domain.`,
+    }],
+    isError: authCheck.startsWith('FAILED'),
+  };
 }
 
-export function createMcpServer(): Server {
-  const server = new Server(
-    { name: 'kaseya-spanning-backup-mcp', version: '1.1.3' },
-    { capabilities: { tools: {}, logging: {} } }
-  );
-
-  server.setRequestHandler(ListToolsRequestSchema, async () => {
-    // Progressive disclosure: status + navigate only until credentials resolve.
-    const navTools = getNavigationTools();
-    if (!getCredentials()) {
-      return { tools: annotate(navTools, 'Spanning') };
-    }
-    const allTools = [...navTools];
-    for (const domain of DOMAINS) {
-      const handler = await getDomainHandler(domain);
-      allTools.push(...handler.getTools());
-    }
-    return { tools: annotate(allTools, 'Spanning') };
+const navigateTool = (domain: string): Promise<SdkCallToolResult> =>
+  navigateDomain({
+    domains: DOMAINS, domain, getHandler: getDomainHandler,
+    heading: (d) => `${d} domain`,
+    footer: '',
   });
 
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const { name, arguments: args } = request.params;
+export async function createMcpServer(): Promise<McpServer> {
+  const server = new McpServer(
+    { name: 'kaseya-spanning-backup-mcp', version: '1.1.3' },
+    { capabilities: { logging: {} }, instructions: SERVER_INSTRUCTIONS },
+  );
 
-    // -----------------------------------------------------------------------
-    // spanning_status — must never throw, even with missing credentials.
-    // -----------------------------------------------------------------------
-    if (name === 'spanning_status') {
-      const creds = getCredentials();
-      if (!creds) {
-        return missingCredsError('Kaseya Spanning Backup', [
-          'SPANNING_ADMIN_EMAIL',
-          'SPANNING_API_TOKEN',
-        ]);
-      }
+  const register = createToolRegistrar({ server, z, toZodShape, annotate, vendorTitle: 'Spanning' });
+  registerNavigationTools(register, getNavigationTools(), 'spanning_navigate', navigateTool, statusTool);
 
-      // Use kaseya_spanning vendor key for the _shared base-url helper.
-      // The per-platform URL is handled locally since spanning uses per-platform
-      // defaults rather than a single vendor default.
-      const effectiveUrl = resolveSpanningUrl(creds.platform, creds.apiUrl);
-      const urlDesc = creds.apiUrl
-        ? `${creds.apiUrl} (from SPANNING_API_URL env var)`
-        : `${effectiveUrl} (vendor default for platform=${creds.platform}; set SPANNING_API_URL to override)`;
+  // Progressive disclosure: status + navigate only until credentials resolve.
+  if (!getCredentials()) return server;
 
-      return {
-        content: [
-          {
-            type: 'text' as const,
-            text: JSON.stringify({
-              server:       'kaseya-spanning-backup-mcp',
-              status:       'configured',
-              adminEmail:   creds.adminEmail,
-              platform:     creds.platform,
-              baseUrl:      urlDesc,
-              domains:      DOMAINS,
-              note:         'All tools are available at all times. Use spanning_navigate to discover tools by domain.',
-            }, null, 2),
-          },
-        ],
-      };
-    }
-
-    // -----------------------------------------------------------------------
-    // spanning_navigate — domain discovery aid.
-    // -----------------------------------------------------------------------
-    if (name === 'spanning_navigate') {
-      const domain = (args?.domain as string) as DomainName;
-      if (!DOMAINS.includes(domain)) {
-        return {
-          content: [{ type: 'text' as const, text: `Invalid domain: ${domain}. Valid: ${DOMAINS.join(', ')}` }],
-          isError: true,
-        };
-      }
-      const handler = await getDomainHandler(domain);
-      const tools   = handler.getTools();
-      const summary = tools.map((t) => `- ${t.name}: ${t.description}`).join('\n');
-      return {
-        content: [{ type: 'text' as const, text: `${domain} domain\n\nAvailable tools:\n${summary}` }],
-      };
-    }
-
-    // -----------------------------------------------------------------------
-    // Domain tool dispatch.
-    // -----------------------------------------------------------------------
-    for (const domain of DOMAINS) {
-      const handler = await getDomainHandler(domain);
-      const names   = handler.getTools().map((t) => t.name);
-      if (names.includes(name)) {
-        try {
-          return await handler.handleCall(name, (args || {}) as Record<string, unknown>);
-        } catch (err) {
-          logger.error('Unhandled exception in domain handler', { tool: name, err });
-          return toolErrorFromCatch(name, err, {
-            hint: 'Check SPANNING_ADMIN_EMAIL, SPANNING_API_TOKEN, and SPANNING_PLATFORM (m365, gws, or salesforce).',
-          });
-        }
-      }
-    }
-
-    return {
-      content: [{ type: 'text' as const, text: `Unknown tool: ${name}. Use spanning_navigate to discover.` }],
-      isError: true,
-    };
+  // Last-resort safety net for throws that escape the domain handler.
+  await registerDomainTools(register, DOMAINS, getDomainHandler, (toolName, err) => {
+    logger.error('Unhandled exception in domain handler', { tool: toolName, err });
+    return toolErrorFromCatch(toolName, err, {
+      hint: 'Check SPANNING_ADMIN_EMAIL, SPANNING_API_TOKEN, and SPANNING_PLATFORM (m365, gws, or salesforce).',
+    });
   });
 
   return server;

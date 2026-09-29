@@ -13,17 +13,17 @@ import {
 
 // Live ApprovalRequestGetByParameters row shape (instance h, 2026-09-01).
 const approvalSummary: SummaryFn = (item) => ({
-  requestedAt:   item.dateTime,
-  hostname:      item.hostname,
-  user:          item.username,
-  file:          item.path,
-  organization:  item.organizationName,
-  status:        typeof item.statusId === 'number' ? (APPROVAL_STATUS_NAME[item.statusId] ?? item.statusId) : item.status,
-  requestor:     item.requestor || undefined,
-  reason:        item.requestorReason || undefined,
-  approvedBy:    item.approvedBy || undefined,
-  decidedAt:     item.actionDate ?? undefined,
-  ticket:        item.ticketId || undefined,
+  requestedAt: item.dateTime,
+  hostname: item.hostname,
+  user: item.username,
+  file: item.path,
+  organization: item.organizationName,
+  status: typeof item.statusId === 'number' ? (APPROVAL_STATUS_NAME[item.statusId] ?? item.statusId) : item.status,
+  requestor: item.requestor || undefined,
+  reason: item.requestorReason || undefined,
+  approvedBy: item.approvedBy || undefined,
+  decidedAt: item.actionDate ?? undefined,
+  ticket: item.ticketId || undefined,
 });
 
 const SELECTOR_PROPS = {
@@ -66,6 +66,11 @@ function getTools(): Tool[] {
     {
       name: 'threatlocker_approvals_get_permit_application',
       description: 'What approving a request would permit (application, files, policy scope), selected by hostname plus path fragment or GUID. Call before threatlocker_approvals_approve and pass its json field through unchanged.',
+      inputSchema: { type: 'object' as const, properties: { ...SHAPE_PROPS, ...SELECTOR_PROPS } },
+    },
+    {
+      name: 'threatlocker_approvals_get_storage_approval',
+      description: 'Storage-control approval request detail: what a storage approval would permit (storage policy scope), selected by hostname plus path fragment or GUID. Mirrors threatlocker_approvals_get_permit_application for storage requests.',
       inputSchema: { type: 'object' as const, properties: { ...SHAPE_PROPS, ...SELECTOR_PROPS } },
     },
     {
@@ -154,6 +159,16 @@ async function handleCall(toolName: string, args: Record<string, unknown>): Prom
         const match = await resolveApprovalRequest(client, selectorFrom(args));
         const permitApp = await client.approvalRequests.getPermitApplication(match.approvalRequestId);
         return shapeRaw({ hostname: match.hostname, file: match.path, json: permitApp });
+      } catch (err) {
+        return resolutionResult(toolName, err) ?? toolErrorFromCatch(toolName, err, { hint: 'Find the request with threatlocker_approvals_list first.' });
+      }
+    }
+    case 'threatlocker_approvals_get_storage_approval': {
+      try {
+        const client = await getClient();
+        const match = await resolveApprovalRequest(client, selectorFrom(args));
+        const storage = await client.approvalRequests.getStorageApproval(match.approvalRequestId);
+        return shapeRaw({ hostname: match.hostname, file: match.path, json: storage });
       } catch (err) {
         return resolutionResult(toolName, err) ?? toolErrorFromCatch(toolName, err, { hint: 'Find the request with threatlocker_approvals_list first.' });
       }

@@ -115,6 +115,15 @@ CREATE TABLE IF NOT EXISTS signals (
   signal_type TEXT, weight REAL DEFAULT 1.0, snippet TEXT);
 CREATE INDEX IF NOT EXISTS ix_signals_session ON signals(session_id);
 CREATE UNIQUE INDEX IF NOT EXISTS ix_signals_dedupe ON signals(message_uuid, signal_type);
+
+-- Model-scored per-turn judgments (turn_scoring.py). One row per
+-- (session, assistant message, judgment); kind is noul|score|choice|metric.
+CREATE TABLE IF NOT EXISTS turn_scores (
+  id INTEGER PRIMARY KEY, session_id TEXT NOT NULL, message_uuid TEXT NOT NULL,
+  ts REAL, judgment TEXT NOT NULL, kind TEXT, value REAL, label TEXT,
+  confidence REAL, model TEXT, scored_at REAL, input_tokens INTEGER);
+CREATE UNIQUE INDEX IF NOT EXISTS ix_turn_scores_key ON turn_scores(session_id, message_uuid, judgment);
+CREATE INDEX IF NOT EXISTS ix_turn_scores_ts ON turn_scores(ts);
 """
 
 
@@ -789,6 +798,35 @@ FACET_COLUMNS = (
 )
 
 
+TURN_SCORE_COLUMNS = (
+    "ts",
+    "kind",
+    "value",
+    "label",
+    "confidence",
+    "model",
+    "scored_at",
+    "input_tokens",
+)
+
+
+def upsert_turn_score(conn, session_id, message_uuid, judgment, **fields):
+    """Insert or replace one turn judgment, idempotent on
+    (session_id, message_uuid, judgment). Unknown fields are ignored."""
+    fields.setdefault("scored_at", time.time())
+    vals = [fields.get(c) for c in TURN_SCORE_COLUMNS]
+    conn.execute(
+        "INSERT INTO turn_scores(session_id,message_uuid,judgment,"
+        + ",".join(TURN_SCORE_COLUMNS)
+        + ") VALUES(?,?,?,"
+        + ",".join("?" for _ in TURN_SCORE_COLUMNS)
+        + ") ON CONFLICT(session_id,message_uuid,judgment) DO UPDATE SET "
+        + ",".join(f"{c}=excluded.{c}" for c in TURN_SCORE_COLUMNS),
+        (session_id, message_uuid, judgment, *vals),
+    )
+    conn.commit()
+
+
 def upsert_facet(conn, session_id, **fields):
     """Insert or update the per-session qualitative facet row. Only keys
     passed in `fields` are written; absent keys keep their stored value
@@ -1261,9 +1299,10 @@ def tool_usage(conn, kind=None, project_id=None):
 
 
 def context_tool_health(conn):
-    """Cache efficiency + the context/memory trio's call and error rates. Low
-    cache-read share or a high error rate on context-mode/claude-mem/ponytail
-    means the context-protection layer is not actually helping."""
+    """Cache efficiency + the context/memory/code-nav stack's call and error
+    rates. Low cache-read share or a high error rate on context-mode,
+    claude-mem, ponytail, lean-ctx, or serena means the context-protection
+    layer is not actually helping."""
     tok = conn.execute(
         "SELECT COALESCE(SUM(cache_read_tokens),0), COALESCE(SUM(input_tokens),0),"
         " COALESCE(SUM(cache_creation_tokens),0), COALESCE(SUM(output_tokens),0) "
@@ -1276,7 +1315,8 @@ def context_tool_health(conn):
             "SELECT server, COUNT(*) AS calls, SUM(COALESCE(is_error,0)) AS errors,"
             " COUNT(DISTINCT session_id) AS sessions FROM tool_calls "
             "WHERE kind='mcp' AND server IN "
-            "('context-mode','claude-mem','ponytail') GROUP BY server"
+            "('context-mode','claude-mem','ponytail','lean-ctx','serena') "
+            "GROUP BY server"
         )
     )
     return {

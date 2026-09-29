@@ -99,7 +99,7 @@ describe("Alerts Domain Handler", () => {
         expect(result.content[0].type).toBe("text");
 
         const data = JSON.parse(result.content[0].text);
-        expect(data.alerts).toHaveLength(2);
+        expect(data).toHaveLength(2);
       });
 
       it("should pass filters to API", async () => {

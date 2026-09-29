@@ -105,9 +105,26 @@ the capabilities your stack needs, and tells you what to run next.
 ## Hooks
 
 The hooks auto-load from `hooks/hooks.json` when the plugin is installed - no
-manual step. Each is stdlib-only and fails open on internal errors (exit 0).
-Two hooks may deny a tool call on purpose: `dispatch_tripwire` (orchestration
-invariants) and `fallow_gate` (fallow audit `verdict: fail` on git commit/push).
+manual step. All are stdlib-only. Most fail open on an internal error (exit 0
+or an explicit `fail-open` decision), but two fail closed on purpose:
+`dispatch_tripwire.py` denies a `Skill`/`Agent`/`Task` dispatch outright when it
+cannot read the inline-op count from the observability DB (`_deny`, "DENY -
+tripwire could not verify... Failing closed") and unconditionally denies any
+nested subagent dispatch regardless of DB state; `completion_gate.py` denies
+"done" whenever its checked conditions fail, and only its own unhandled
+exceptions fail open. `fallow_gate.py` also denies on purpose (`verdict: fail`
+from the fallow CLI on git commit/push) but is fail-open by design when the
+CLI itself is missing (`ATLAS_FALLOW=off`).
+
+`completion_gate.py` only ever gates a session flagged `orchestrating` in the
+observability DB; a session that never gets that flag is never blocked. The
+flag is set by two independent writers - `dispatch_tripwire.py`, when a `Skill`
+dispatch names an orchestration skill (gated by `ATLAS_TRIPWIRE`), and
+`prompt_optimizer.py`'s `arm_orchestration`, when a prompt reads as substantive
+engineering work (gated by `ATLAS_ENGINE_ARM`). Either write is enough to arm
+the gate, so `ATLAS_TRIPWIRE=off` alone does not disable `completion_gate.py`;
+both `ATLAS_TRIPWIRE=off` and `ATLAS_ENGINE_ARM=off` are needed to stop the
+flag being set at all (a session already flagged stays flagged either way).
 
 | Hook | Event | Purpose |
 | --- | --- | --- |
@@ -120,7 +137,7 @@ invariants) and `fallow_gate` (fallow audit `verdict: fail` on git commit/push).
 | `todo_capture.py` | `PostToolUse` (TodoWrite) | Mirror every `TodoWrite` plan into the durable board `<project>/.atlas/.run/todos.json` (`ATLAS_TODO=off` disables) so the dashboard Work tab, parallel subagents, and the completion gate's drain fallback all read the session's real progress; keeps existing claims on matching content |
 | `format_after_edit.py` | `PostToolUse` (Edit/Write) | Run the repo's formatter after edits |
 | `docs_drift_watch.py` | `PostToolUse` (Edit/Write/MultiEdit/NotebookEdit) | Inline backstop for `completion_gate.py` condition (f): warns the moment a non-docs edit ships without a `docs/CHANGELOG.md` entry, instead of waiting for Stop. Debounced per session_id (first drifting edit, then every 5th; resets when the CHANGELOG reappears in the diff or a new/missing session_id arrives); silent with no `docs/`, `ATLAS_GATE=off`, or on a `docs/`/`.atlas/` path. The backing `git diff` is cached for 2s (`time.monotonic`) to keep the common-path cost low |
-| `completion_gate.py` | `Stop` | Block a premature "done" until the definition-of-done holds: evidence artifact and independent verifier (only once this run shipped non-docs code), verifier coverage, a drained todo list, and -- condition (k) -- a todo list that was made at all, since an absent list has zero open items and used to satisfy the drain check trivially. Condition (f) requires `docs/CHANGELOG.md` specifically: any single `docs/` path used to clear it, so an unrelated doc edit kept the gate quiet while the CHANGELOG, ROADMAP and README rotted. Condition (l) requires every dated record the run touched (plan, spec, lesson, decision, audit, finding) to be named `<YYYY-MM-DD>-<slug>`, run-scoped via `scripts/lint_docs_names.py` so historical names never wedge a run (orchestrating sessions only; `ATLAS_GATE=off`). Silent on pass -- speaks only when it blocks |
+| `completion_gate.py` | `Stop` | Block a premature "done" until the definition-of-done holds: evidence artifact and independent verifier (only once this run shipped non-docs code), verifier coverage, a drained todo list, and -- condition (k) -- a todo list that was made at all, since an absent list has zero open items and used to satisfy the drain check trivially. Condition (f) requires `docs/CHANGELOG.md` specifically: any single `docs/` path used to clear it, so an unrelated doc edit kept the gate quiet while the CHANGELOG, ROADMAP and README rotted. Condition (l) requires every dated record the run touched (plan, spec, lesson, decision, audit, finding) to be named `<YYYY-MM-DD>-<slug>`, run-scoped via `scripts/lint_docs_names.py` so historical names never wedge a run (orchestrating sessions only; `ATLAS_GATE=off`). Also stays silent, before any condition is evaluated, whenever the Stop payload's `background_tasks` still lists an in-flight `subagent`/`workflow`/`teammate` dispatch -- a wave with implementers still running is not a completion claim yet, so the gate does not re-fire once per Stop of the wave; a long-running `shell` or `monitor` task does not suppress it. Silent on pass -- speaks only when it blocks |
 | `memory_capture.py` | `Stop` | Persist session lessons to `~/.atlas/memory/`, silently. Not bound to `SubagentStop`: per-dispatch capture filed the same lesson once per subagent scope (`agent-<hex>`, `.run`), and the parent `Stop` already resolves subagent sessions. Refuses those scopes outright, never captures tool-error tallies (they live in atlas_db; as recall lines they buried every real lesson), and truncates on a word boundary |
 | `connector_credential_watch.py` | `PostToolUse` (`mcp__plugin_atlas_.*`, plus bare `mcp__cipp.*` / `mcp__connectwise.*` / `mcp__falcon-mcp__.*` / `mcp__plaid__.*` / `mcp__gcloud__.*`) | A running MCP server caches credentials at startup, so a rotated secret never reaches it and every endpoint fails identically. On the first 401/403 (or a 400 naming the token) from a matched connector tool, inject one instruction: restart the server, do not retry other endpoints. Once per server per session, advisory only (`ATLAS_CONNECTOR_WATCH=off`). Plugin-scoped tool names look like `mcp__plugin_atlas_<server>__<tool>`. |
 | `nudge.py` | `Stop` only | Self-improvement: prompt to capture a lesson and check docs drift (throttled). Silent when memory_capture already wrote this turn -- a success announcement on Stop is additionalContext, which costs a whole extra model turn to say nothing. Not bound to `SubagentStop` -- landing there injected its prompt into a dispatched subagent's context right before it composed its final response, so the subagent answered the nudge instead of returning its deliverable |
@@ -153,7 +170,7 @@ For a browser UI (or any local client) that needs live visibility into runs, sav
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_dashboard.py" serve --port 7421
 ```
 
-Loopback-only JSON API. `/api/todo`, `/api/agents`, and `/api/memory` sit beside the run and connector endpoints. See `skills/atlas-orchestrate/references/dashboard-api.md`.
+Loopback-only JSON API: `serve` refuses a non-loopback `--host` (anything besides `127.0.0.1`, `::1`, or `localhost`) unless `--allow-remote` is also passed, since the dashboard has no auth and would otherwise expose session/findings data to the network. `/api/todo`, `/api/agents`, and `/api/memory` sit beside the run and connector endpoints. See `skills/atlas-orchestrate/references/dashboard-api.md`.
 
 ## Self-improvement
 
@@ -166,6 +183,17 @@ Four hooks close the loop the fleet used to leave to manual runs:
 
 atlas-audit's self mode reads the same observability DB to report run health
 (verifier coverage, inline ops, parallel waves) and recommend fixes.
+
+### Turn scoring (optional)
+
+With `TYPESAFE_API_KEY` set in the environment, a detached scorer sends recent
+assistant replies to TypeSafe (api.typesafe.ai, model Jev) and stores verdicts
+in `turn_scores`. The `turn_quality` doctor miner turns recurring failures into
+findings that name the surface to fix, and `--baseline`/`--remeasure` prove the
+fix worked. Transcript excerpts leave the machine (secrets scrubbed);
+`ATLAS_TYPESAFE_SCORING=off` disables it. Knobs: `ATLAS_TYPESAFE_SCORING`,
+`ATLAS_TYPESAFE_MODEL` (default `jev-latest`), `ATLAS_TYPESAFE_MAX_CALLS`
+(default 200). See `docs/atlas-turn-scoring.md`.
 
 ## Dependencies
 

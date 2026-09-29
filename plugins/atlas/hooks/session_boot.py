@@ -61,9 +61,10 @@ def has_cmd(name):
 
 
 # Output-style name shipped under output-styles/atlas-orchestrator.md (force-for-plugin).
-# Claude Code still honors an explicit settings.json "outputStyle" over the plugin force,
-# so a user set to "concise" (or anything else) silently kills ATLAS | headers and the
-# phase glyphs. Boot therefore re-injects the contract every session regardless.
+# Evidence conflicts on whether an explicit settings.json "outputStyle" beats the plugin
+# force: 5.25.0 observed ATLAS | headers vanishing under "concise"; a later live probe
+# saw no suppression, and current Claude Code docs say force-for-plugin overrides the
+# user setting. Boot re-injects the contract every session as a cheap hedge either way.
 ATLAS_OUTPUT_STYLE = "Atlas Orchestrator"
 _STATUS_GLYPHS = (
     "research 🔍 | theory 💡 | test 🧪 | validate 📋 | "
@@ -102,15 +103,22 @@ def status_contract_lines(active_style=""):
         "ui-runtime-tester pink. Name every dispatch: DISPATCH -> atlas:<role> (...).",
         "LEDGER under the header when TodoWrite is unavailable: "
         "LEDGER | n/m | now: ... | left: ...",
+        "BEFORE DONE: re-read the user's request; every named deliverable exists in "
+        "the format asked; nothing unasked was built instead; evidence exercised the "
+        "surface the user reported against; CHANGELOG/docs updated in the same turn. "
+        "A repeated request means the first answer missed.",
+        "SCOPE: build only what was named; never revert changes you did not make; "
+        "name the source-tree edit target (never ~/.claude/plugins/cache). "
+        "Corrections persist all session; a corrected report replaces the old one; "
+        "after one wrong guess on an ambiguity, ask.",
     ]
     style = (active_style or "").strip()
     if style and style != ATLAS_OUTPUT_STYLE:
         lines.append(
-            "STYLE OVERRIDE: settings.json outputStyle is %r, not %r. "
-            "Plugin force-for-plugin cannot win over an explicit user style, so headers "
-            "and phase glyphs vanish unless you follow this boot contract OR set "
-            'outputStyle to "Atlas Orchestrator" (atlas-setup / doctor will offer). '
-            "Until then, still emit ATLAS | headers every substantive reply."
+            "STYLE OVERRIDE: settings.json outputStyle is %r, not %r. Current Claude Code "
+            "docs say plugin force-for-plugin overrides it, but atlas 5.25.0 observed "
+            "headers vanishing in this configuration. Either way, follow this boot "
+            "contract and emit ATLAS | headers every substantive reply."
             % (style, ATLAS_OUTPUT_STYLE)
         )
     elif not style:
@@ -766,8 +774,8 @@ def main():
         sys_msg += " (run the `atlas` skill to complete setup)"
     if active_style and active_style != ATLAS_OUTPUT_STYLE:
         sys_msg += (
-            f" | outputStyle={active_style!r} overrides {ATLAS_OUTPUT_STYLE!r} "
-            "(ATLAS | headers may vanish; set outputStyle or follow boot contract)"
+            f" | outputStyle={active_style!r} (docs: plugin style should still win; "
+            "boot contract injected as a hedge)"
         )
     # Status contract must never be truncated away: keep it first, then fill.
     body = "\n".join(lines)

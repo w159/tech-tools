@@ -38,7 +38,11 @@ the reference before building the recommend-then-confirm shortlist in Stage 2.
    the session-augmentation trio (claude-mem for cross-session memory,
    context-mode for context-window protection, ponytail for simplicity
    discipline), **code-nav pair for any code tree (serena MCP + lean-ctx MCP)**
-   with `activate_project` on cwd and `.serena/project.yml` `languages:` present,
+   with `activate_project` on cwd and `.serena/project.yml` `languages:` present
+   (lean-ctx gets the same rigor: `lean-ctx doctor` must list the project root,
+   or a parent of it, under its effective roots - a lean-ctx MCP that is
+   registered but rooted elsewhere silently refuses every `ctx_*` call with a
+   path error, which looks identical to lean-ctx being absent),
    the atlas completion/dispatch/fallow gate hooks (Stage 3), and any
    ecc gate hooks available for the detected stack (Stage 3). If any minimum-
    bar item is missing or inactive, show the exact install/activation command

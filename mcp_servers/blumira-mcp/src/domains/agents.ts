@@ -121,7 +121,7 @@ async function handleCall(toolName: string, args: Record<string, unknown>): Prom
         if (!id) return toolError('INVALID_ARGS', 'device_id is required.', { hint: 'Pass the device UUID string.' });
         logger.info('API call: agents.getDevice', { id });
         const res = await client.agents.getDevice(id);
-        return shapeItem(res as Record<string, unknown>, deviceSummary, shapeArgs);
+        return shapeItem(res as unknown as Record<string, unknown>, deviceSummary, shapeArgs);
       }
       case 'blumira_agents_keys_list': {
         logger.info('API call: agents.listKeys', args);
@@ -134,7 +134,7 @@ async function handleCall(toolName: string, args: Record<string, unknown>): Prom
         if (!id) return toolError('INVALID_ARGS', 'key_id is required.', { hint: 'Pass the key UUID string.' });
         logger.info('API call: agents.getKey', { id });
         const res = await client.agents.getKey(id);
-        return shapeItem(res as Record<string, unknown>, keySummary, shapeArgs);
+        return shapeItem(res as unknown as Record<string, unknown>, keySummary, shapeArgs);
       }
       default:
         return toolError('INVALID_ARGS', `Unknown tool: ${toolName}`);

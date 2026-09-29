@@ -9,25 +9,46 @@ dashboard 5.17.1 credential UX fixes. It replaces tribal knowledge about
 Connectors ship **inert**. Each MCP server starts, but authenticated vendor
 tools stay gated until required credentials resolve.
 
-Three layers participate:
+Four layers participate:
 
 1. **Claude plugin `userConfig`** — declared in
    `plugins/atlas/.claude-plugin/plugin.json`, values under
    `~/.claude/settings.json` → `pluginConfigs["atlas@tech-tools"].options`.
    Non-sensitive fields (usernames, regions, base URLs) usually remain here in
    plaintext. Sensitive fields may be moved by Claude Code into OS secure
-   storage and then disappear from `settings.json`.
+   storage and then disappear from `settings.json`. **This layer only takes
+   effect in harnesses that resolve plugin `userConfig`/`${user_config.*}`
+   substitution before spawning the server.** **[INFERENCE, not directly
+   observed 2026-09-28]:** at least one harness likely does not, which
+   would leave every `CFG_*` var as a literal unexpanded
+   `${user_config.*}` string for the loader's own unexpanded-value guard
+   to correctly refuse to promote - this is consistent with, but not
+   proven by, an observed `MISSING_CREDENTIALS` result for every vendor
+   except shell-exported Falcon in that harness (no command actually read
+   the env a spawned server received).
 2. **Plugin `.env` files** — read by `plugins/atlas/mcp/_env/load.mjs` via
    `ATLAS_ENV_FILE=${CLAUDE_PLUGIN_ROOT}/.env`, with `CFG_*` passthrough into
    canonical env names. Dashboard dual-writes here so stdio servers and the UI
-   can detect "set" even when Claude strips secrets from settings.
-3. **Dashboard set-markers** — `~/.atlas/credential_marks.json` stores only
+   can detect "set" even when Claude strips secrets from settings. **For a
+   cache-installed plugin this file does not exist until something writes
+   it** - a fresh install has no `${CLAUDE_PLUGIN_ROOT}/.env`.
+3. **Per-user default file** (added 2026-09-28) — both loaders also check
+   `~/.config/atlas/atlas.env` (KEY=VALUE, recommended `chmod 600`) as a
+   baseline loaded *before* `ATLAS_ENV_FILE`, so credentials are available
+   even when layers 1 and 2 don't apply (harness doesn't resolve
+   `userConfig`, and/or the plugin-root `.env` doesn't exist). `ATLAS_ENV_FILE`
+   still loads second and overrides matching keys when explicitly set and
+   present.
+4. **Dashboard set-markers** — `~/.atlas/credential_marks.json` stores only
    key names + timestamps after a successful dashboard save (never secret
    values). Used so the UI can keep showing **set** after secure-storage moves.
 
-Detection order for "is this key set?":
-
+Detection order for "is this key set?" **as shown by the dashboard UI**:
 `pluginConfigs options` → any plugin `.env` candidate path → dashboard marks.
+The per-user default file (layer 3) is read by the server-side loaders at
+process start; it is not one of the paths the dashboard UI itself probes,
+so a key can be live for a running server via that file while the
+dashboard still shows it as **not set**.
 
 ## Operator flow (preferred)
 
@@ -113,12 +134,16 @@ Env template example (Auvik):
 - `CFG_AUVIK_API_KEY=${user_config.auvik_api_key}`
 - `CFG_AUVIK_REGION=${user_config.auvik_region}`
 
-`load.mjs`:
+`load.mjs` (and its Python twin `load.py`):
 
-1. loads `ATLAS_ENV_FILE` into `process.env` (non-destructive for already-set keys
-   depending on implementation details — prefer consistent values across sources)
-2. copies each `CFG_NAME` into `NAME` when the canonical name is empty
-3. expands `${VAR}` placeholders
+1. loads `~/.config/atlas/atlas.env` (per-user default, added 2026-09-28) as a
+   baseline, then `ATLAS_ENV_FILE` on top, overriding matching keys - a blank
+   `KEY=` line in either file never overwrites an already-set value
+2. copies each `CFG_NAME` into `NAME` when the canonical name is unset
+3. refuses to promote a `CFG_NAME` whose value is still the literal
+   unexpanded `${user_config.*}` placeholder string - it does not expand
+   placeholders itself; expansion (if any) is the launching harness's job
+   before the child process starts
 
 ## Verification checklist
 

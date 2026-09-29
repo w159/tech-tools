@@ -151,6 +151,17 @@ export function toolErrorFromCatch(
  * exist. That misdiagnosis is what this override prevents.
  */
 function hintFor(code: ErrorCode, callerHint: string | undefined): string | undefined {
+  if (code === "FORBIDDEN") {
+    // Without this, agents read a 401 as a bad argument and retry sibling
+    // tools, each failing the same way (seen live across vanta/panos/knowbe4).
+    const suffix = callerHint ? ` ${callerHint}` : "";
+    return (
+      "HTTP 401/403/440 is an authentication or permission failure, not a bad argument. " +
+      "Every tool on this server will fail the same way until the credential is replaced or re-scoped: " +
+      "stop retrying and report this to the user." +
+      suffix
+    );
+  }
   if (code === "NOT_FOUND") {
     const suffix = callerHint ? ` ${callerHint}` : "";
     return (
@@ -192,8 +203,11 @@ function classifyError(operation: string, err: unknown): Classification {
       err.message.includes("ECONNREFUSED") ||
       err.message.includes("ETIMEDOUT") ||
       err.message.includes("fetch failed");
+    // Some vendor libraries (node-knowbe4) throw a bare Error for a rejected
+    // token; classify it as the auth failure it is, not a server bug.
+    const isAuth = /authentication failed|unauthori[sz]ed|invalid token|token revoked/i.test(err.message);
     return {
-      code: isNet ? "NETWORK_ERROR" : "INTERNAL_ERROR",
+      code: isNet ? "NETWORK_ERROR" : isAuth ? "FORBIDDEN" : "INTERNAL_ERROR",
       message: `${operation} failed: ${err.message}`,
     };
   }
@@ -222,16 +236,25 @@ function extractBody(err: {
 }): string | undefined {
   // Prefer .body (node-fetch / undici shape); fall back to .response (ServiceError shape)
   const payload = err.body !== undefined ? err.body : err.response;
-  if (typeof payload === "string") return payload.slice(0, 500);
+  if (typeof payload === "string") return redactSecrets(payload).slice(0, 500);
   if (payload !== undefined && payload !== null) {
     try {
-      return JSON.stringify(payload).slice(0, 500);
+      return redactSecrets(JSON.stringify(payload)).slice(0, 500);
     } catch {
       // ignore
     }
   }
   if (typeof err.message === "string") return err.message;
   return undefined;
+}
+
+// Vendors echo the rejected credential in auth-error bodies (ThreatLocker's 440
+// returns the API token). Error detail reaches the model, transcripts and logs,
+// so credential-named JSON fields are masked before it leaves the server.
+const SECRET_FIELD = /("(?:[a-z_]*token|api[_-]?key|apikey|secret|client[_-]?secret|password|authorization)"\s*:\s*)"[^"]*"/gi;
+
+export function redactSecrets(text: string): string {
+  return text.replace(SECRET_FIELD, '$1"[REDACTED]"');
 }
 
 function httpStatusToCode(status: number): ErrorCode {

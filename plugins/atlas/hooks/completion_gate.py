@@ -12,14 +12,25 @@ of truth that atlas-setup scaffolds. Atlas-internal state (evidence, run
 findings) lives under `.atlas/` directly, never under a `.atlas/docs/` layer. In any
 session with no `docs/` it is a silent no-op, so it is safe to leave installed.
 
+The gate also stays silent whenever the Stop payload's `background_tasks`
+still lists an in-flight subagent, workflow, or teammate dispatch (see
+`_has_in_flight_dispatch`): a turn is not a completion claim while dispatched
+work is still running, so the gate does not fire once per wave-Stop. A
+long-running `shell` or `monitor` task does not suppress it.
+
 Twelve conditions must ALL hold before the gate passes (else block ONCE):
-  (a) At least one file exists under `.atlas/evidence/`. Scoped like (f)/(g):
+  (a) At least one file exists under `.atlas/evidence/` with an mtime at or
+      after THIS RUN's start (via `_run_started_at`). Scoped like (f)/(g):
       only checked when THIS RUN shipped non-docs code (_nondocs_changed on
       the run-write signal). A run that shipped no code has no evidence to
-      capture, so (a) is skipped rather than manufacturing busywork.
+      capture, so (a) is skipped rather than manufacturing busywork. When the
+      run's start time cannot be determined, falls back to "any file exists"
+      (fail-open) -- an evidence file left over from an earlier session must
+      never satisfy this run's gate when the timestamp IS available.
   (b) `.atlas/.run/findings.json` exists and contains at least one entry with
-      status "verified". Same scoping as (a): only checked when this run
-      shipped non-docs code.
+      status "verified" whose `verified_at` stamp is at or after THIS RUN's
+      start. Same scoping and same "any entry" fallback as (a): a `verified`
+      row stamped during an earlier session must not satisfy today's gate.
   (c) `docs/CHANGELOG.md` exists and is non-empty (docs-current backstop).
   (d) `docs/ROADMAP.md` exists and is non-empty.
   (e) `README.md` at the project root exists and is non-empty.
@@ -107,17 +118,41 @@ from docs_drift import find_root as _find_root  # noqa: E402
 from docs_drift import git_changed_paths as _git_changed_paths  # noqa: E402
 
 
-def _check_evidence(root: Path) -> bool:
-    """(a) At least one file under .atlas/evidence/."""
+def _check_evidence(root: Path, started: float | None = None) -> bool:
+    """(a) At least one file under .atlas/evidence/ produced during THIS RUN.
+
+    When `started` (this run's start epoch, from `_run_started_at`) is known, a
+    file only counts if its mtime is at or after it -- evidence left over from
+    an earlier session must not satisfy today's gate; that gap is what made (a)
+    spoofable by any stale file already on disk. When `started` is None (run
+    timing unavailable), falls back to "any file exists": fail-open by design,
+    since the gate must never block on its own inability to prove staleness.
+    """
     evidence = root / ".atlas" / "evidence"
     try:
-        return evidence.is_dir() and any(p.is_file() for p in evidence.iterdir())
+        if not evidence.is_dir():
+            return False
+        if started is None:
+            return any(p.is_file() for p in evidence.iterdir())
+        return any(
+            p.is_file() and p.stat().st_mtime >= started for p in evidence.iterdir()
+        )
     except OSError:
-        return True  # can't read -> fail open
+        return True  # can't read -> fail open  # can't read -> fail open
 
 
-def _check_findings(root: Path) -> bool:
-    """(b) .atlas/.run/findings.json has at least one entry with status 'verified'."""
+def _check_findings(root: Path, started: float | None = None) -> bool:
+    """(b) .atlas/.run/findings.json has a 'verified' entry produced during
+    THIS RUN.
+
+    When `started` is known, an entry only counts if its `verified_at` stamp
+    parses and falls at or after it -- a `verified` row inherited from an
+    earlier session must not satisfy today's gate; that gap is what made (b)
+    spoofable by any stale verdict already on disk. An undated verified entry
+    earns no credit once `started` is known, same rule (g) already applies via
+    `_test_verified_this_run`. When `started` is None, falls back to "any
+    verified entry exists": fail-open by design.
+    """
     findings = root / ".atlas" / ".run" / "findings.json"
     try:
         if not findings.is_file():
@@ -125,16 +160,20 @@ def _check_findings(root: Path) -> bool:
         data = json.loads(findings.read_text(encoding="utf-8"))
         items = data if isinstance(data, list) else data.get("findings", [])
         for item in items if isinstance(items, list) else []:
-            if (
-                isinstance(item, dict)
-                and str(item.get("status", "")).lower() == "verified"
-            ):
+            if not isinstance(item, dict):
+                continue
+            if str(item.get("status", "")).lower() != "verified":
+                continue
+            if started is None:
+                return True
+            when = _parse_iso_epoch(item.get("verified_at"))
+            if when is not None and when >= started:
                 return True
         return False
     except OSError:
         return True  # genuine read failure -> fail open
     except (json.JSONDecodeError, ValueError, AttributeError):
-        return False  # structural malformation -> does NOT count as verified
+        return False  # structural malformation -> does NOT count as verified  # structural malformation -> does NOT count as verified
 
 
 def _check_nonempty(path: Path) -> bool:
@@ -143,6 +182,47 @@ def _check_nonempty(path: Path) -> bool:
         return path.is_file() and path.stat().st_size > 0
     except OSError:
         return True  # can't stat -> fail open
+
+
+def _parse_iso_epoch(stamp) -> float | None:
+    """Parse an ISO-8601 timestamp (naive treated as UTC) to epoch seconds, or
+    None if unparseable. Shared by (a)/(b) run-scoping (`_check_evidence`,
+    `_check_findings`) and (g)'s pairing credit (`_test_verified_this_run`), so
+    "does this timestamp belong to this run" is answered one way everywhere."""
+    if not isinstance(stamp, str):
+        return None
+    try:
+        when = datetime.fromisoformat(stamp)
+    except ValueError:
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    return when.timestamp()
+
+
+def _run_started_at(session_id: str) -> float | None:
+    """Epoch seconds THIS RUN began, via atlas_db.current_run_id (falling back
+    to latest_run_id) + atlas_db.run_started_at. Shared by (a)/(b)'s run-scoped
+    evidence/findings checks. Fail-open to None on any error or when no run is
+    on record: callers must treat None as "cannot prove staleness", not as a
+    reason to block."""
+    conn = None
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db
+
+        conn = atlas_db.connect()
+        rid = atlas_db.current_run_id(conn, session_id) or atlas_db.latest_run_id(
+            conn, session_id
+        )
+        if rid is None:
+            return None
+        return atlas_db.run_started_at(conn, rid)
+    except Exception:
+        return None
+    finally:
+        if conn is not None:
+            conn.close()  # can't stat -> fail open
 
 
 def _check_changelog(root: Path) -> bool:
@@ -396,7 +476,6 @@ def _docs_name_violations(root: Path) -> list:
         return []
 
 
-
 def _leftover_worktrees(root: Path) -> list:
     """Extra git worktrees still on disk, excluding the main one.
 
@@ -443,6 +522,37 @@ def _run_used_worktrees(session_id: str) -> bool:
                 pass
 
 
+_IN_FLIGHT_DISPATCH_TYPES = {"subagent", "workflow", "teammate"}
+_TERMINAL_TASK_STATUSES = {"completed", "failed", "killed", "cancelled", "stopped"}
+
+
+def _has_in_flight_dispatch(data: dict) -> bool:
+    """True when the Stop payload's `background_tasks` lists a dispatched
+    subagent/workflow/teammate that has not reached a terminal status.
+
+    Per the hooks docs (Stop input `background_tasks`: id, type, status,
+    description, agent_type), each entry's `type` distinguishes a dispatched
+    task from a long-running shell or monitor job. Only subagent/workflow/
+    teammate suppress the gate here -- a `shell` (e.g. `tail -f`) or
+    `monitor` task must NOT suppress it, or the gate becomes a permanent
+    bypass for anyone with a watcher running. A turn with dispatched work
+    still in flight is not a completion claim, so the gate stays silent
+    rather than blocking (and re-blocking) on every Stop of a wave.
+    Absent/malformed `background_tasks` -> no suppression (current
+    behavior)."""
+    tasks = data.get("background_tasks")
+    if not isinstance(tasks, list):
+        return False
+    for task in tasks:
+        if not isinstance(task, dict):
+            continue
+        if str(task.get("type", "")).lower() not in _IN_FLIGHT_DISPATCH_TYPES:
+            continue
+        if str(task.get("status", "")).lower() not in _TERMINAL_TASK_STATUSES:
+            return True
+    return False
+
+
 def _reason(
     missing_a: bool,
     missing_b: bool,
@@ -474,8 +584,8 @@ def _reason(
             "record is simply unwritten: write it yourself, now, with one command -- "
             'python3 "$CLAUDE_PLUGIN_ROOT/scripts/atlas_finding.py" --id <stage> '
             "--status verified --title '<one line>' --evidence '<path or test id>' "
-            "--reproduction '<exact command>'. Only dispatch atlas:verifier if no "
-            "independent check has actually run yet."
+            "--reproduction '<exact command>'. --title is required. Only dispatch "
+            "atlas:verifier if no independent check has actually run yet."
         )
     if missing_c:
         parts.append(
@@ -513,7 +623,8 @@ def _reason(
             "to close this, cheapest first: (1) run the failing check yourself -- the "
             "project's test/lint/typecheck gate -- and record the result with "
             'python3 "$CLAUDE_PLUGIN_ROOT/scripts/atlas_finding.py" --id <stage> '
-            "--status verified --evidence '<test id>' --reproduction '<command>'; a "
+            "--status verified --title '<one line>' --evidence '<test id>' "
+            "--reproduction '<command>'; a "
             "`verified` entry stamped during this run pairs an implementer exactly "
             "like a dispatch does, and a test cannot hallucinate. (2) Dispatch "
             "atlas:verifier only when no test can express the check. Then retry Stop."
@@ -545,7 +656,7 @@ def _reason(
             "then mark what is already done: TodoWrite if the tool is available "
             '(load it with ToolSearch("select:TodoWrite") first), otherwise '
             'python3 "$CLAUDE_PLUGIN_ROOT/scripts/atlas_todo.py" set '
-            "'[{\"content\":\"...\",\"status\":\"completed\"}]' --session <session_id>. "
+            '\'[{"content":"...","status":"completed"}]\' --session <session_id>. '
             "Then retry Stop."
         )
     if open_todos > 0:
@@ -624,6 +735,8 @@ def main() -> int:
             return 0  # no docs/ SSOT -> not an atlas run -> silent no-op
         if not _session_is_orchestrating(data.get("session_id", "")):
             return 0  # WS1: only real orchestration runs are gated; never block a chat/audit turn
+        if _has_in_flight_dispatch(data):
+            return 0  # dispatched subagent/workflow/teammate still running -- not a completion claim yet
         # (a)/(b)/(f)/(g) share one signal: did THIS RUN's own activity ship
         # non-docs code? Scoped to run_written_paths (atlas_db events +
         # tool_calls), not the whole working tree -- a dirty tree left by an
@@ -635,9 +748,12 @@ def main() -> int:
         # (a)/(b) only apply once this run has shipped non-docs code. A
         # research-only or docs-only run has no evidence/verification to
         # produce, so manufacturing a findings.json entry to satisfy an
-        # inapplicable gate is the defect, not the fix.
-        ok_a = _check_evidence(root) if code_changed else True
-        ok_b = _check_findings(root) if code_changed else True
+        # inapplicable gate is the defect, not the fix. Both are further
+        # scoped to THIS RUN's own window via `started`: evidence/findings
+        # left over from an earlier session must not satisfy today's gate.
+        started = _run_started_at(str(data.get("session_id") or ""))
+        ok_a = _check_evidence(root, started) if code_changed else True
+        ok_b = _check_findings(root, started) if code_changed else True
         ok_c = _check_changelog(root)
         ok_d = _check_roadmap(root)
         ok_e = _check_readme(root)
@@ -886,7 +1002,7 @@ _TEST_RUNNER_RE = re.compile(
     r"\s*(?:sudo\s+)?(?:python3?\s+-m\s+)?"
     r"(pytest|py\.test|npm (run )?test|npx (vitest|jest)|vitest|yarn test|"
     r"cargo test|go test|tox\b|nox\b|rake test|swift test|mvn test|"
-    r"gradlew? test|dotnet test)\b",
+    r"gradlew? test|dotnet test|unittest)\b",
     re.IGNORECASE,
 )
 
@@ -937,13 +1053,20 @@ def _transcript_test_commands(transcript_path: str, started: float | None) -> bo
                 if not isinstance(content, list):
                     continue
                 for block in content:
-                    if not (isinstance(block, dict) and block.get("type") == "tool_use"):
+                    if not (
+                        isinstance(block, dict) and block.get("type") == "tool_use"
+                    ):
                         continue
                     name = block.get("name") or ""
                     is_bash = name == "Bash"
-                    is_mcp_shell = name.startswith("mcp__") and name.rsplit(
-                        "__", 1
-                    )[-1] in ("ctx_shell", "ctx_execute", "ctx_batch_execute", "ctx_execute_file")
+                    is_mcp_shell = name.startswith("mcp__") and name.rsplit("__", 1)[
+                        -1
+                    ] in (
+                        "ctx_shell",
+                        "ctx_execute",
+                        "ctx_batch_execute",
+                        "ctx_execute_file",
+                    )
                     if not (is_bash or is_mcp_shell):
                         continue
                     blob = json.dumps(block.get("input") or {}, default=str)
@@ -1043,16 +1166,10 @@ def _test_verified_this_run(
                 continue
             if str(item.get("status", "")).lower() != "verified":
                 continue
-            stamp = item.get("verified_at")
-            if not isinstance(stamp, str):
+            when = _parse_iso_epoch(item.get("verified_at"))
+            if when is None:
                 continue  # an undated entry cannot be proven to belong to this run
-            try:
-                when = datetime.fromisoformat(stamp)
-            except ValueError:
-                continue
-            if when.tzinfo is None:
-                when = when.replace(tzinfo=timezone.utc)
-            if when.timestamp() >= started:
+            if when >= started:
                 count += 1
         return count
     except Exception:

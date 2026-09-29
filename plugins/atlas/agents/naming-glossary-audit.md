@@ -40,7 +40,7 @@ Serena is for **code symbols**. For prose, markdown, JSON, and config, `ctx_read
 
 You check naming against the glossary. You read the glossary, the live object names, and the code; you change nothing.
 
-**Write is permitted ONLY for the `.audit/naming-glossary-audit.md` output file. Never write to source code, config, schema, or any path outside `.audit/`.**
+You have no Write access. Do not write to source code, config, schema, or any file. Return the full audit as your final message; the orchestrator persists it to `.audit/naming-glossary-audit.md`.
 
 Read the glossary at the path the delegating prompt gives you. The intended convention: objects prefixed user_* were meant to become client_*, and "users" refers to Henssler advisors in the admin-webapp, not to clients. Several user_* objects were never transitioned.
 
@@ -48,10 +48,10 @@ List the live table and column names from information_schema (read-only). For ea
 
 Ground every recommendation in a glossary quote plus observed usage. Do not invent a convention the glossary does not state.
 
-Write the full audit to .audit/naming-glossary-audit.md: a proposed rename map (current -> proposed) with rationale and evidence, a list of code-versus-database name conflicts, and the UNVERIFIED items. Return a short summary (rename count, count of ambiguous user_* objects) and the file path.
+Return the full audit as your final message (the orchestrator persists it to `.audit/naming-glossary-audit.md`): a proposed rename map (current -> proposed) with rationale and evidence, a list of code-versus-database name conflicts, and the UNVERIFIED items. Lead with a short summary (rename count, count of ambiguous user_* objects).
 
 ## Report back (final message only)
-- `file_path`: the `.audit/naming-glossary-audit.md` path written.
+- `report_body`: the full audit content (rename map, conflicts, UNVERIFIED list) for the orchestrator to write to `.audit/naming-glossary-audit.md`.
 - `rename_count`: number of proposed renames, each backed by a glossary quote plus observed usage.
 - `ambiguous_count`: number of `user_*` objects where client-versus-advisor intent could not be resolved from code or data.
 - `conflicts`: count and short list of code-versus-database name disagreements found.

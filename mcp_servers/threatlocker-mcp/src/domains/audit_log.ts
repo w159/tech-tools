@@ -3,10 +3,11 @@ import type { DomainHandler, CallToolResult } from '../utils/types.js';
 import { getClient } from '../utils/client.js';
 import { logger } from '../utils/logger.js';
 import { resolveComputer, ResolutionError } from '../utils/resolve.js';
+import { parseArgs, parseTimeWindow, TIME_WINDOW_PROPS } from './_args.js';
 import {
   shapeList, shapeItem,
   extractShapeArgs, SHAPE_PROPS,
-  toolError, toolErrorFromCatch, withSummary, toPortalDate,
+  toolError, toolErrorFromCatch, withSummary,
   type SummaryFn,
 } from './_helpers.js';
 
@@ -56,9 +57,7 @@ function getTools(): Tool[] {
           application: { type: 'string', description: 'Exact application name as ThreatLocker logs it (server-side).' },
           policy: { type: 'string', description: 'Exact policy name (server-side).' },
           contains: { type: 'string', description: 'Substring matched against path, application, policy, and process on the fetched page (client-side; raise pageSize to widen it).' },
-          hours: { type: 'number', description: 'Look back this many hours from now (default 24). Ignored when startDate is given.' },
-          startDate: { type: 'string', description: 'ISO 8601 start, UTC.' },
-          endDate: { type: 'string', description: 'ISO 8601 end, UTC (default now).' },
+          ...TIME_WINDOW_PROPS,
           includeChildOrganizations: { type: 'boolean', description: 'Include child organizations (default false).' },
           pageNumber: { type: 'number', description: 'Page number (default 1).' },
           pageSize: { type: 'number', description: 'Rows per page (default 50, max 10000).' },
@@ -96,22 +95,14 @@ function getTools(): Tool[] {
   ];
 }
 
-function timeWindow(args: Record<string, unknown>): { startDate: string; endDate: string } {
-  const now = new Date();
-  const endDate = toPortalDate(typeof args.endDate === 'string' ? args.endDate : now);
-  if (typeof args.startDate === 'string') return { startDate: toPortalDate(args.startDate), endDate };
-  const hours = typeof args.hours === 'number' && args.hours > 0 ? args.hours : 24;
-  return { startDate: toPortalDate(new Date(new Date(endDate).getTime() - hours * 3600_000)), endDate };
-}
-
 async function handleCall(toolName: string, args: Record<string, unknown>): Promise<CallToolResult> {
   const shapeArgs = extractShapeArgs(args);
 
   switch (toolName) {
     case 'threatlocker_audit_search': {
-      let window: { startDate: string; endDate: string };
-      try { window = timeWindow(args); }
-      catch (err) { return toolError('INVALID_ARGS', (err as Error).message, { hint: 'Use ISO 8601, e.g. 2026-09-01T00:00:00Z.' }); }
+      const parsedWindow = parseArgs(() => parseTimeWindow(args));
+      if (parsedWindow.error) return parsedWindow.error;
+      const window = parsedWindow.params;
       const action = typeof args.action === 'string' ? args.action.toLowerCase() : '';
       if (action && ACTION_ID[action] === undefined) return toolError('INVALID_ARGS', `action must be Permit or Deny, got "${args.action}".`);
       const params = {

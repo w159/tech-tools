@@ -27,16 +27,16 @@ proceed.
 
 ## The four parallel investigations
 
-| # | Investigation | Dispatched agent | Writes to |
+| # | Investigation | Dispatched agent | Orchestrator persists to |
 |---|---|---|---|
 | 1 | Schema inventory | atlas:schema-inventory | `.audit/schema.json` |
 | 2 | Code-usage map | atlas:explorer | `.audit/code-usage.json` |
 | 3 | Privileges (RLS + grants) | atlas:rls-privilege-audit | `.audit/privileges.json` |
 | 4 | Naming (glossary + conventions) | atlas:naming-glossary-audit | `.audit/naming.json` |
 
-Each subagent writes detailed findings to its own file under `.audit/` and
-returns only a short structured summary plus that file path, so the main
-context stays lean.
+These agents have no Write access. Each returns its full report as its final
+message, led by a short structured summary, and the orchestrator persists that
+report verbatim to its file under `.audit/`, so the main context stays lean.
 
 ## Agent roles
 

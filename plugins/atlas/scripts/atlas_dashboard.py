@@ -3241,6 +3241,23 @@ class Handler(BaseHTTPRequestHandler):
         return self._json(404, {"ok": False, "error": "not_found"})
 
 
+def _is_loopback_host(host: str) -> bool:
+    """True only for 127.0.0.1/::1-range addresses or the literal 'localhost'.
+
+    An unparseable hostname (anything that isn't a literal IP) is treated as
+    non-loopback: 'localhost' is the one named exception ip_address() can't
+    resolve on its own.
+    """
+    if host == "localhost":
+        return True
+    try:
+        import ipaddress
+
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
 def serve(host: str, port: int):
     os.environ["ATLAS_DB"] = dashboard_db_path()
     os.environ["ATLAS_DASHBOARD_DB"] = dashboard_db_path()
@@ -3268,6 +3285,13 @@ def main(argv=None):
     sp.add_argument("--port", type=int, default=DEFAULT_PORT)
     sp.add_argument("--host", default=LOOPBACK)
     sp.add_argument("--foreground", action="store_true")
+    sp.add_argument(
+        "--allow-remote",
+        action="store_true",
+        help="Allow binding a non-loopback --host (e.g. 0.0.0.0 or a LAN IP). "
+        "The dashboard serves session/findings data with no auth; binding it "
+        "to all interfaces exposes that data to the network. Off by default.",
+    )
     ep = sub.add_parser("ensure")
     ep.add_argument("--port", type=int, default=DEFAULT_PORT)
     sub.add_parser("stop")
@@ -3293,6 +3317,12 @@ def main(argv=None):
         sys.stdout.write("\n")
         return 0
     if args.cmd == "serve":
+        if not _is_loopback_host(args.host) and not args.allow_remote:
+            sys.stderr.write(
+                f"[atlas-dashboard] refusing to bind non-loopback host {args.host!r}; "
+                "pass --allow-remote to expose the dashboard beyond localhost\n"
+            )
+            return 1
         if _port_open(args.host, args.port) and not args.foreground:
             if not _daemon_db_ok(args.port):
                 stop_daemon()

@@ -22,6 +22,33 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 import atlas_hook_guard  # noqa: E402
 
 
+def _spawn_scoring(payload):
+    """At SessionEnd only, score the session in a detached process so the
+    network call never touches the hook's latency budget. Fail-open."""
+    sid = payload.get("session_id")
+    if payload.get("hook_event_name") != "SessionEnd" or not sid:
+        return
+    try:
+        import subprocess
+
+        import typesafe_client
+
+        if not typesafe_client.available():
+            return
+        script = os.path.join(
+            os.path.dirname(__file__), "..", "scripts", "turn_scoring.py"
+        )
+        subprocess.Popen(
+            [sys.executable, script, "--session", sid],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except Exception:
+        pass
+
+
 def main():
     if os.environ.get("ATLAS_INGEST", "on").lower() == "off":
         return
@@ -34,6 +61,7 @@ def main():
     import session_ingest
 
     session_ingest.ingest_transcript(path, session_id=payload.get("session_id"))
+    _spawn_scoring(payload)
 
 
 if __name__ == "__main__":

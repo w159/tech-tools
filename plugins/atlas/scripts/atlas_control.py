@@ -292,6 +292,36 @@ BEHAVIOR_KNOBS = [
         "default": "",
         "ref": "hooks/prompt_optimizer.py:486",
     },
+    # -- Turn scoring
+    {
+        "key": "ATLAS_TYPESAFE_SCORING",
+        "group": "Turn scoring",
+        "title": "TypeSafe turn scoring",
+        "description": "Model-scores recent assistant replies via api.typesafe.ai (transcript excerpts leave this machine, secrets scrubbed). Needs TYPESAFE_API_KEY in the environment; off disables scoring even with a key.",
+        "kind": "toggle",
+        "on": "on",
+        "off": "off",
+        "default": "on",
+        "ref": "scripts/typesafe_client.py",
+    },
+    {
+        "key": "ATLAS_TYPESAFE_MODEL",
+        "group": "Turn scoring",
+        "title": "TypeSafe model",
+        "description": "Model id sent with every scoring request.",
+        "kind": "text",
+        "default": "jev-latest",
+        "ref": "scripts/typesafe_client.py",
+    },
+    {
+        "key": "ATLAS_TYPESAFE_MAX_CALLS",
+        "group": "Turn scoring",
+        "title": "Max scoring calls per run",
+        "description": "Upper bound on TypeSafe requests one scoring pass may make.",
+        "kind": "number",
+        "default": "200",
+        "ref": "scripts/turn_scoring.py",
+    },
     # -- Storage paths
     {
         "key": "ATLAS_HOME",

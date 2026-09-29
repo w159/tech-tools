@@ -12,7 +12,13 @@
     "sourceMap": true,
     "paths": {
       "@shared/*": [
-        "../../_shared/*"
+        "../_shared/*"
+      ],
+      "@modelcontextprotocol/sdk/*": [
+        "./node_modules/@modelcontextprotocol/sdk/dist/esm/*"
+      ],
+      "zod": [
+        "./node_modules/zod"
       ]
     }
   },

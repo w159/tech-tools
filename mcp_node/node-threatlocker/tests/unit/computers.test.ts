@@ -33,7 +33,7 @@ describe('ComputersResource', () => {
   });
 
   it('should get computer checkins', async () => {
-    const result = await client.computers.getCheckins();
+    const result = await client.computers.getCheckins({ computerId: '1' });
 
     expect(result).toBeDefined();
     expect(result.items).toHaveLength(1);

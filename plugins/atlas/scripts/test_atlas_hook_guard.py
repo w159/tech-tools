@@ -7,6 +7,8 @@ test_memory_capture.py (mock.patch.object on the module's own path function).
 """
 
 import io
+import json
+import multiprocessing
 import os
 import sys
 import tempfile
@@ -17,6 +19,31 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 import atlas_hook_guard as guard  # noqa: E402
+
+
+def _should_run_worker(hookstate_dir, session_id, hook_name):
+    """Runs in a separate process (multiprocessing "spawn"): re-imports the
+    module fresh, points it at the shared tempdir via the same env override
+    _state_dir() already supports, then exercises the real should_run() path
+    against state every other worker is writing to concurrently."""
+    os.environ["ATLAS_HOOKSTATE_DIR"] = hookstate_dir
+    sys.path.insert(0, HERE)
+    import atlas_hook_guard as worker_guard
+
+    worker_guard.should_run({"session_id": session_id}, hook_name, window_seconds=None)
+
+
+def _emit_worker(hookstate_dir, session_id, message):
+    """Same shape as _should_run_worker, but exercises emit()'s
+    load-mutate-save of the "emitted" hash list -- each worker emits a
+    distinct message on the same session, so a lost update would drop one
+    of the N hashes rather than just an event count."""
+    os.environ["ATLAS_HOOKSTATE_DIR"] = hookstate_dir
+    sys.path.insert(0, HERE)
+    import atlas_hook_guard as worker_guard
+
+    with mock.patch("sys.stdout", io.StringIO()):
+        worker_guard.emit({"session_id": session_id}, "nudge", message)
 
 
 class _GuardTestCase(unittest.TestCase):
@@ -245,6 +272,68 @@ class FailOpenTest(_GuardTestCase):
     def test_should_run_internal_exception_fails_open(self):
         with mock.patch.object(guard, "_load_state", side_effect=RuntimeError("x")):
             self.assertTrue(guard.should_run({"session_id": "boom"}, "nudge"))
+
+
+class ConcurrencyTest(unittest.TestCase):
+    """Proves the fcntl.flock lock in _locked(): without it, N processes
+    racing the same session's read-modify-write lose each other's
+    last_run writes and the recorded count comes back under N."""
+
+    def test_concurrent_should_run_calls_all_recorded(self):
+        tmp = tempfile.mkdtemp()
+        session_id = "concurrent-sess"
+        n = 16
+        procs = [
+            multiprocessing.Process(
+                target=_should_run_worker, args=(tmp, session_id, "hook-%d" % i)
+            )
+            for i in range(n)
+        ]
+        for p in procs:
+            p.start()
+        for p in procs:
+            p.join(timeout=10)
+            self.assertEqual(p.exitcode, 0, "worker process %s failed" % p.pid)
+
+        state_path = os.path.join(tmp, session_id + ".json")
+        with open(state_path) as f:
+            state = json.load(f)
+        last_run = state.get("last_run", {})
+        self.assertEqual(
+            len(last_run),
+            n,
+            "expected %d recorded hooks, got %d: %s"
+            % (n, len(last_run), sorted(last_run)),
+        )
+
+    def test_concurrent_emit_calls_all_recorded(self):
+        """emit()'s "emitted" hash list has the same shared-file
+        read-modify-write race as should_run()'s "last_run" dict; this
+        proves it is covered by the same lock."""
+        tmp = tempfile.mkdtemp()
+        session_id = "concurrent-emit-sess"
+        n = 16
+        procs = [
+            multiprocessing.Process(
+                target=_emit_worker, args=(tmp, session_id, "message-%d" % i)
+            )
+            for i in range(n)
+        ]
+        for p in procs:
+            p.start()
+        for p in procs:
+            p.join(timeout=10)
+            self.assertEqual(p.exitcode, 0, "worker process %s failed" % p.pid)
+
+        state_path = os.path.join(tmp, session_id + ".json")
+        with open(state_path) as f:
+            state = json.load(f)
+        emitted = state.get("emitted", [])
+        self.assertEqual(
+            len(emitted),
+            n,
+            "expected %d recorded hashes, got %d: %s" % (n, len(emitted), emitted),
+        )
 
 
 if __name__ == "__main__":

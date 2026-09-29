@@ -24,8 +24,7 @@ def run_hook(payload, env):
 
 
 TOOLS_BLOCK = (
-    'TOOLS: ToolSearch("select:mcp__lean-ctx__ctx_compose,'
-    'mcp__serena__find_symbol")\n'
+    'TOOLS: ToolSearch("select:mcp__lean-ctx__ctx_compose,mcp__serena__find_symbol")\n'
 )
 # The five blocks subagent-kit.md's dispatch spec requires. Without them
 # _unbounded_dispatch denies the dispatch as having no finish line.
@@ -326,6 +325,29 @@ class TripwireTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0)
         self.assertEqual(r.stdout.strip(), "")
 
+    def test_pre_allows_atlas_dispatch_using_plural_spec_labels(self):
+        """DELIVERABLES:/SUCCESS CRITERIA:/STOP CONDITIONS: plural forms must
+        satisfy the same check as the singular forms in SPEC_BLOCK."""
+        plural_spec = (
+            "GOAL: map the auth path.\n"
+            "DELIVERABLES: a report written to .atlas/evidence/auth-map.md\n"
+            "SUCCESS CRITERIA: every auth entrypoint listed with file:line\n"
+            "OUT OF SCOPE: no edits, no migrations, no dependency changes\n"
+            "STOP CONDITIONS: halt and report if the router cannot be located\n"
+        )
+        r = run_hook(
+            self._pre_payload(
+                "Agent",
+                {
+                    "subagent_type": "atlas:explorer",
+                    "prompt": TOOLS_BLOCK + plural_spec,
+                },
+            ),
+            self.env,
+        )
+        self.assertEqual(r.returncode, 0)
+        self.assertEqual(r.stdout.strip(), "")
+
     def test_pre_deny_atlas_dispatch_missing_the_bounding_spec(self):
         """A dispatch that names the toolset but gives the agent no finish line
         -- the exact shape that produced 30-60 minute subagent sessions. The
@@ -352,6 +374,37 @@ class TripwireTest(unittest.TestCase):
             self.assertIn(block, r.stdout)
         # GOAL was supplied, so it must not be reported among the missing.
         self.assertNotIn("GOAL:,", r.stdout)
+
+    def test_pre_allows_edit_to_the_session_scratchpad(self):
+        """The scratchpad lives under the system temp dir, outside the project
+        root: it is ephemeral session workspace, not production target code,
+        so the inline-edit deny must not fire for it."""
+        scratch = os.path.join(
+            tempfile.gettempdir(), "claude-501", "proj-slug", "sess-uuid", "scratchpad"
+        )
+        os.makedirs(scratch, exist_ok=True)
+        try:
+            r = run_hook(
+                self._pre_payload(
+                    "Write", {"file_path": os.path.join(scratch, "tpp_nudge.py")}
+                ),
+                self.env,
+            )
+            self.assertEqual(r.returncode, 0)
+            self.assertEqual(r.stdout.strip(), "")
+        finally:
+            shutil.rmtree(scratch, ignore_errors=True)
+
+    def test_pre_denies_edit_to_in_root_source(self):
+        """A path that is not docs/.atlas and not under the system temp dir is
+        still treated as production target code and denied."""
+        r = run_hook(
+            self._pre_payload("Edit", {"file_path": "src/app.py"}),
+            self.env,
+        )
+        self.assertEqual(r.returncode, 0)
+        self.assertIn('"permissionDecision": "deny"', r.stdout)
+        self.assertIn("never edit target code inline", r.stdout)
 
     def test_pre_deny_dispatch_bundling_several_goals(self):
         """Two GOAL blocks is a whole wave compressed into one context, which
@@ -686,6 +739,81 @@ class InProcessTest(unittest.TestCase):
 
     # ---- Dispatch branch ----
 
+    def test_ip_skill_arm_failure_records_friction(self):
+        self._fresh_run("sess-skill-fail", mark_orch=False)
+        with (
+            patch.object(
+                self.atlas_db,
+                "mark_orchestrating",
+                side_effect=Exception("db down"),
+            ),
+        ):
+            self._run_main(
+                {
+                    "hook_event_name": "PostToolUse",
+                    "session_id": "sess-skill-fail",
+                    "tool_name": "Skill",
+                    "tool_input": {"skill": "atlas:atlas-orchestrate"},
+                }
+            )
+        conn = self.atlas_db.connect(self.db_path)
+        row = conn.execute(
+            "SELECT session_id, category FROM friction_events"
+        ).fetchone()
+        conn.close()
+        self.assertEqual(
+            row, ("sess-skill-fail", "orchestration_flag_arm_failed")
+        )
+
+    def test_ip_dispatch_arm_failure_records_friction(self):
+        with (
+            patch.object(
+                self.atlas_db,
+                "mark_orchestrating",
+                side_effect=Exception("db down"),
+            ),
+        ):
+            self._run_main(
+                {
+                    "hook_event_name": "PostToolUse",
+                    "session_id": "sess-atlas-fail",
+                    "tool_name": "Agent",
+                    "tool_input": {"subagent_type": "atlas:explorer"},
+                }
+            )
+        conn = self.atlas_db.connect(self.db_path)
+        row = conn.execute(
+            "SELECT session_id, category FROM friction_events"
+        ).fetchone()
+        conn.close()
+        self.assertEqual(
+            row, ("sess-atlas-fail", "orchestration_flag_arm_failed")
+        )
+
+    def test_ip_friction_write_failure_still_fail_open(self):
+        # Doubly failing DB: the friction write itself must not raise out of
+        # the hook, and mark_used_worktrees / later work must still proceed.
+        with (
+            patch.object(
+                self.atlas_db,
+                "mark_orchestrating",
+                side_effect=Exception("db down"),
+            ),
+            patch.object(
+                self.atlas_db,
+                "record_friction",
+                side_effect=Exception("db still down"),
+            ),
+        ):
+            self._run_main(
+                {
+                    "hook_event_name": "PostToolUse",
+                    "session_id": "sess-atlas-fail2",
+                    "tool_name": "Agent",
+                    "tool_input": {"subagent_type": "atlas:explorer"},
+                }
+            )
+
     def test_ip_dispatch_atlas_agent_marks_session(self):
         # A session with no run yet: current_or_last_run_id is None so the
         # dispatch is not logged, but dispatching an atlas: agent still marks
@@ -931,9 +1059,7 @@ class SubagentDenyTierSkipTest(unittest.TestCase):
 
     def test_edit_from_subagent_with_parent_session_id_is_not_denied(self):
         r = run_hook(
-            self._payload(
-                "Edit", {"file_path": "src/app.ts"}, self.sub_transcript
-            ),
+            self._payload("Edit", {"file_path": "src/app.ts"}, self.sub_transcript),
             self.env,
         )
         self.assertEqual(r.returncode, 0)
@@ -941,9 +1067,7 @@ class SubagentDenyTierSkipTest(unittest.TestCase):
 
     def test_same_edit_from_the_main_transcript_is_still_denied(self):
         r = run_hook(
-            self._payload(
-                "Edit", {"file_path": "src/app.ts"}, self.main_transcript
-            ),
+            self._payload("Edit", {"file_path": "src/app.ts"}, self.main_transcript),
             self.env,
         )
         self.assertEqual(r.returncode, 0)
@@ -954,9 +1078,7 @@ class SubagentDenyTierSkipTest(unittest.TestCase):
         last = None
         for _ in range(5):
             last = run_hook(
-                self._payload(
-                    "Read", {"file_path": "a.py"}, self.sub_transcript
-                ),
+                self._payload("Read", {"file_path": "a.py"}, self.sub_transcript),
                 self.env,
             )
         assert last is not None  # range(5) always runs at least once
@@ -1030,7 +1152,9 @@ class VerifierVerdictBracketTest(unittest.TestCase):
     def test_non_verifier_dispatch_is_not_bracketed(self):
         self._write_findings([])
         run_hook(self._payload("PreToolUse", agent="atlas:implementer"), self.env)
-        post = run_hook(self._payload("PostToolUse", agent="atlas:implementer"), self.env)
+        post = run_hook(
+            self._payload("PostToolUse", agent="atlas:implementer"), self.env
+        )
         self.assertNotIn("verifier verdict not in findings.json", post.stdout)
 
     def test_no_baseline_stays_silent(self):

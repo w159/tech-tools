@@ -22,6 +22,7 @@ import json
 import os
 import re
 import sys
+import tempfile
 
 sys.path.insert(0, os.path.dirname(__file__))
 from pathlib import Path  # noqa: E402
@@ -45,11 +46,11 @@ DENY_THRESHOLD = 6
 # blocker instead of reporting back. The skill has said this for versions; only
 # a deny makes it true.
 REQUIRED_SPEC_BLOCKS = (
-    "GOAL:",
-    "DELIVERABLE:",
-    "SUCCESS CRITERIA:",
-    "OUT OF SCOPE:",
-    "STOP CONDITIONS:",
+    ("GOAL:",),
+    ("DELIVERABLE:", "DELIVERABLES:"),
+    ("SUCCESS CRITERIA:", "SUCCESS CRITERION:"),
+    ("OUT OF SCOPE:",),
+    ("STOP CONDITIONS:", "STOP CONDITION:"),
 )
 # Skills whose invocation means the session IS an atlas orchestration run.
 # Deliberately excludes advisory/config skills (atlas-setup, atlas-validate)
@@ -166,15 +167,39 @@ def _threshold():
         return 4
 
 
+def _system_temp_roots():
+    """Realpaths of the system temp dir plus the common macOS/Linux aliases
+    (/tmp, /private/tmp), since /tmp is a symlink to /private/tmp on macOS and
+    tempfile.gettempdir() can report either form."""
+    roots = set()
+    for candidate in (tempfile.gettempdir(), "/tmp", "/private/tmp"):
+        try:
+            roots.add(os.path.realpath(candidate).replace("\\", "/").rstrip("/"))
+        except Exception:
+            pass
+    return roots
+
+
 def _is_orchestration_path(path):
     if not path:
         return True  # unknown path -> do not punish
     norm = path.replace("\\", "/")
-    return (
+    if (
         norm.startswith("docs/")
         or "/docs/" in norm
         or norm.startswith(".atlas/")
         or "/.atlas/" in norm
+    ):
+        return True
+    # Session scratch space (e.g. the Claude Code scratchpad under the system
+    # temp dir) is not target code: it is ephemeral workspace outside the
+    # project root, and denying writes there wastes turns for no benefit.
+    try:
+        real = os.path.realpath(norm).replace("\\", "/").rstrip("/")
+    except Exception:
+        return False
+    return any(
+        real == root or real.startswith(root + "/") for root in _system_temp_roots()
     )
 
 
@@ -241,7 +266,11 @@ def _unbounded_dispatch(tinput):
         return None  # forks inherit the parent's brief; non-atlas agents opt out
     prompt = str(tinput.get("prompt") or "")
     low = prompt.lower()
-    missing = [b for b in REQUIRED_SPEC_BLOCKS if b.lower() not in low]
+    missing = [
+        variants[0]
+        for variants in REQUIRED_SPEC_BLOCKS
+        if not any(v.lower() in low for v in variants)
+    ]
     # Line-anchored so a mention inside prose ("the goal:") is not a block, and
     # SUBGOAL:/STRETCH GOAL: never inflate the count.
     goals = len(re.findall(r"(?im)^[ \t]*GOAL[ \t]*:", prompt))
@@ -328,6 +357,26 @@ def _pre_tool_use(conn, atlas_db, tool, session, path, tinput=None):
         )
 
 
+def _arm_orchestrating(conn, atlas_db, session, cwd):
+    """Flag the run as orchestration; on DB failure record one friction row so
+    the silent miss is observable, then fall through fail-open. The friction
+    write is itself guarded: a doubly failing DB must not raise out of the
+    hook (the outer main try would abort the rest of the tool's processing)."""
+    try:
+        atlas_db.mark_orchestrating(conn, session, cwd)
+    except Exception:
+        try:
+            conn.rollback()
+            atlas_db.record_friction(
+                conn,
+                session,
+                "orchestration_flag_arm_failed",
+                snippet="mark_orchestrating raised; run not flagged",
+            )
+        except Exception:
+            pass
+
+
 def main():
     raw = sys.stdin.read()
     payload = json.loads(raw)  # may raise -> caught below
@@ -375,7 +424,7 @@ def main():
                                 "[atlas] verifier verdict not in findings.json - record it "
                                 "yourself (do not re-dispatch):\n"
                                 '  python3 "$CLAUDE_PLUGIN_ROOT/scripts/'
-                                "atlas_finding.py\" --id <stage> --status "
+                                'atlas_finding.py" --id <stage> --status '
                                 "verified|rejected|needs-evidence --evidence "
                                 "'<path or test id>' --reproduction '<command>'"
                             ),
@@ -406,7 +455,7 @@ def main():
             # nothing else guarantees the model runs `atlas_db.py mark-orchestrating`.
             skill = str(tinput.get("skill", "")).split(":")[-1]
             if skill in ORCH_SKILLS:
-                atlas_db.mark_orchestrating(conn, session, payload.get("cwd"))
+                _arm_orchestrating(conn, atlas_db, session, payload.get("cwd"))
             return
 
         if tool in DISPATCH_TOOLS:
@@ -420,7 +469,7 @@ def main():
             agent_type = str(tinput.get("subagent_type", ""))
             if agent_type.startswith(("atlas:", "atlas-")):
                 # Dispatching an atlas squad agent is unambiguous orchestration.
-                atlas_db.mark_orchestrating(conn, session, payload.get("cwd"))
+                _arm_orchestrating(conn, atlas_db, session, payload.get("cwd"))
             if str(tinput.get("isolation", "")).strip() == "worktree":
                 # An isolated writer leaves a tree behind once it has changes.
                 # Recording it here is what lets the completion gate demand
@@ -443,9 +492,7 @@ def main():
             if not atlas_db.is_orchestrating(conn, session):
                 return  # WS1: non-orchestration sessions are logged but never nagged
             if edit_to_target:
-                msg = (
-                    "STOP - route this %s of %s to atlas:implementer." % (tool, path)
-                )
+                msg = "STOP - route this %s of %s to atlas:implementer." % (tool, path)
             else:
                 msg = (
                     "STOP - %d inline ops, no dispatch. Route the next step to "

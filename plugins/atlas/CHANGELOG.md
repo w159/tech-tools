@@ -1,8 +1,177 @@
 # Changelog
 
-## [Unreleased]
+## [8.2.0] - 2026-09-29
+
+### Changed - MCP connectors
+- All 11 bundled node connectors (`mcp/*/server.mjs`) rebuilt on
+  `McpServer.registerTool` with SDK-side input validation, server
+  `instructions`, honest `<vendor>_status` text with a live auth check, a
+  "stop retrying" hint on 401/403/440, redaction of credentials echoed in
+  vendor error bodies, and the NinjaOne non-US region fix. Details and
+  evidence: `docs/CHANGELOG.md` (2026-09-29 MCP connectors entry).
+- `mcp/_env/load.mjs` also loads `~/.config/atlas/atlas.env` as a baseline, so
+  credentials reach servers launched from an installed plugin cache.
+- New contract test `scripts/test_connector_protocol.py`.
+
+### Added
+- **TypeSafe turn scoring closes the reply-quality loop.** Assistant replies
+  are model-scored (typesafe.ai, Jev) into a new `turn_scores` table; a new
+  `turn_quality` doctor miner turns judgments whose hit rate exceeds a
+  tunable threshold (default 25%, min 20 turns, per judgment and per project)
+  into findings whose `target_path` names the atlas surface to fix (an
+  output-style section, hook, or skill). Each finding reports whether the
+  judgment predicts next-turn user corrections. Deterministic metric findings
+  cover header presence and banned punctuation. `--baseline`/`--remeasure`
+  re-run the miner by name. New WARN check `typesafe-scoring`, and knobs
+  `ATLAS_TYPESAFE_SCORING`, `ATLAS_TYPESAFE_MODEL`, `ATLAS_TYPESAFE_MAX_CALLS`.
+  Needs `TYPESAFE_API_KEY` in the environment; excerpts leave the machine
+  (secrets scrubbed), `ATLAS_TYPESAFE_SCORING=off` disables. See
+  `docs/atlas-turn-scoring.md`. Live smoke on the real DB (one tech-tools
+  session): 5 calls, 34 rows, 18,364 input tokens (~3.7k per call, under a
+  cent); below `min_turns`, so 0 `turn_quality` findings yet.
+
+### Changed
+- **`output-styles/atlas-orchestrator.md` rewritten against the current
+  Claude Code output-styles docs and 60 days of session transcripts.** New
+  rules target the failures the transcripts measured: *Deliver the literal
+  ask* (re-check every named deliverable and format before `done`; a repeated
+  request is proof the first answer missed), *Scope is what was named* (no
+  unasked extras, never revert unrelated changes, name the source-tree edit
+  target, never the plugin cache), *Corrections stick* (echo once, corrected
+  reports replace rather than append, ask after one wrong guess), *Evidence on
+  the user's surface* (verify where the user saw the bug), header on resumed
+  replies, same-turn CHANGELOG/docs to stop completion-gate loops, and
+  in-turn waiting. Per the docs, styles reach only the main thread and forks,
+  so dispatch prompts must carry the deliverable and target paths. On
+  `force-for-plugin` vs an explicit user `outputStyle`, evidence conflicts:
+  current docs say the plugin style wins, 5.25.0 observed headers vanishing,
+  and a later probe saw no suppression (unverified on 2.1.284). The style no
+  longer asserts either way; `session_boot` and `atlas_doctor` now describe it
+  as a risk and keep re-injecting the contract as a hedge. The boot contract
+  also gains BEFORE DONE and SCOPE lines mirroring the new style rules.
+  All pinned contract phrases kept; `test_atlas_contract.py` +
+  `test_status_contract.py` pass; full `hooks` + `scripts` suite 1573 passed, 3 skipped.
+
+## [8.1.0] - 2026-09-28
+
+### Added
+- **New installs and pre-existing repos now get real tool-routing rules, not
+  just plugin-internal prose.** `scaffold_docs.py` inserts (and, on later
+  runs, replaces in place) a marker-delimited `<!-- atlas-tooling -->` block
+  in every scaffolded/repaired repo's `AGENTS.md` (full claude-mem/
+  context-mode/serena+lean-ctx/ponytail routing rules, the canonical shared
+  copy) and `CLAUDE.md` (a short cross-reference, per that template's own
+  no-duplication rule). Previously `grep -r 'context-mode\|lean-ctx\|
+  claude-mem' skills/atlas-setup/templates/` returned nothing: every project
+  atlas-setup scaffolded got zero tool-routing guidance in its own docs,
+  even though the plugin's own skills were fully wired. Idempotent and
+  upgradeable: verified live against a fresh empty repo (block inserted into
+  both files), a repo with a pre-existing hand-written `AGENTS.md` (block
+  appended, existing content untouched), a re-run (`tooling block unchanged`,
+  no duplicate markers), and a direct content bump (`tooling block updated`,
+  old span replaced, hand-written content still intact). 13 existing
+  `test_scaffold_docs.py` tests still pass; no new test file needed since
+  the function is exercised by the live scenarios above -- covered by
+  `ensure_tooling_block`'s own docstring contract.
+- **`atlas_doctor` can now tell whether a project's tooling is wired, not
+  just whether the plugin install is healthy.** New `context-tooling` check
+  (C11) reads the project's `AGENTS.md` for the `<!-- atlas-tooling -->`
+  marker; **WARN-severity**, deliberately excluded from `failed`/exit code/
+  `--hook`'s SessionStart warning (a `check`/`add()` gained a `severity`
+  field; `main()`'s two `failed = [...]` filters and the `--hook` warning
+  path now both exclude `severity="warn"` results) because it is a
+  property of the *consuming project*, not the plugin install, and would
+  otherwise fire on every session start in any repo that predates
+  atlas-tooling. Two tests exercise the filtering logic against a stubbed
+  `run_checks` result (this class's shared fixture is a deliberately-
+  unhealthy sandbox, unsuited to a real pass/fail check): `--hook` exits 0
+  with no `ATLAS-DOCTOR WARNING` when only the warn-severity check fails,
+  and plain `CHECK` mode prints `WARN  context-tooling ...` without
+  flipping the `HEALTHY` summary or exit code. `atlas_db.context_tool_health()`'s
+  per-server IN-list grew from `('context-mode','claude-mem','ponytail')`
+  to also include `'lean-ctx'` and `'serena'` (confirmed those are the real
+  `tool_calls.server` values via the live `~/.atlas/atlas.db`). Re-run
+  against that DB (1718 sessions): `lean-ctx` 3333 calls/113 errors
+  (3.4%)/136 sessions (7.9%); `serena` 99 calls/14 errors (14.1%)/26
+  sessions (1.5%) -- both previously invisible to this telemetry, no prior
+  baseline to compare against. `context-mode` 22.1% of sessions,
+  `claude-mem` 5.1% (19.3% error rate) for reference: most sessions in this
+  history used none of the code-nav pair. Full detail and the cache-hit-
+  ratio caveat (measured trend, unisolated cause): `docs/CHANGELOG.md`
+  2026-09-28 entry.
 
 ### Fixed
+- **Cross-file test-isolation bug in `hooks/test_status_contract.py`.**
+  `BootMainStyleTest.setUp()` replaced `sys.modules["atlas_curator"]` and
+  `["atlas_memory"]` with `MagicMock`s to isolate `session_boot.main()`, but
+  never restored them, so any later test in the same pytest process that did
+  `import atlas_curator` (`scripts/test_atlas_curator.py`) got the mock
+  instead of the real module -- `mock.patch("atlas_curator.shutil.move", ...)`
+  then silently patched the mock's attribute rather than the real one,
+  making the mocked failure never fire. Reproduced (`pytest hooks/
+  scripts/test_atlas_curator.py` -> 2 failed; `pytest scripts/
+  test_atlas_curator.py` alone -> 38 passed; bisected to this one file) and
+  fixed with a `tearDown` that restores the original `sys.modules` entries.
+  Full combined suite before/after: 2 failed, 1540 passed -> 1560 passed, 0
+  failed (`pytest hooks/ scripts/ skills/atlas-setup/scripts/ -q`).
+- **Doctor surfaces session cache health; setup docs close lean-ctx check
+  gap (2026-09-28).** atlas_doctor's `--mine` path now includes the
+  `cache_hit_ratio_low` miner over `atlas_db.context_tool_health()` (previously
+  the ratio was computed and documented for the manual audit lens but never
+  surfaced); atlas-setup's checks-matrix/install.md now give lean-ctx the same
+  concrete reachability check as serena (`lean-ctx doctor` effective roots), and
+  repair.md documents that `--fix` repairs plugin/marketplace install state
+  only -- it has no MCP remediation for any of the five tools.
+  Details and evidence: repo `docs/CHANGELOG.md` 2026-09-28 entry.
+- **Gate and hook integrity pass (2026-09-28).** completion_gate (a)/(b)
+  are run-scoped; atlas_hook_guard state is flock-guarded and atomically
+  written; `atlas_dashboard.py serve` refuses non-loopback hosts without
+  `--allow-remote`; read-only agents return reports instead of being told to
+  write; dispatch_tripwire allows system-temp writes and plural spec labels;
+  prompt_optimizer ignores subagent hand-backs and task notifications.
+  Details and evidence: repo `docs/CHANGELOG.md` 2026-09-28 entry.
+- **Gate/doctrine residual gaps closed (2026-09-28).** Three follow-ups to
+  the pass above: `mark_orchestrating` call sites now record a
+  `friction_events` row on DB write failure instead of silently no-opping;
+  a contract test pins the verifier/explorer "always dispatched fresh,
+  never forked" doctrine at the agent-definition source; `atlas-frontend`
+  and `atlas-component` no longer share identical `paths:` globs, and a
+  fleet-wide contract test guards against future duplicates.
+  Details and evidence: repo `docs/CHANGELOG.md` 2026-09-28 entry.
+- **Vendor MCP env preloader: per-user default file, harness-agnostic.**
+  `mcp/_env/load.mjs` and `load.py` previously only loaded `ATLAS_ENV_FILE`
+  when the launching harness set it to an *existing* file - a
+  cache-installed plugin's `.mcp.json` always sets
+  `ATLAS_ENV_FILE=${CLAUDE_PLUGIN_ROOT}/.env`, but that file does not exist
+  in a fresh cache install, and harnesses that don't resolve plugin
+  `userConfig`/`${user_config.*}` substitution would leave every `CFG_*`
+  var as a literal unexpanded placeholder **[INFERENCE, not directly
+  observed]** - consistent with, but not proven by, one such harness
+  showing every vendor except shell-exported Falcon as
+  `MISSING_CREDENTIALS` regardless of credentials saved via the dashboard
+  or `/plugin config` (no command in that session actually read the env a
+  spawned server received).
+  Both loaders now also load `~/.config/atlas/atlas.env`
+  (KEY=VALUE, recommended `chmod 600`) first as a baseline, with
+  `ATLAS_ENV_FILE` still loading second and overriding it when explicitly
+  set. Verified live: with `ATLAS_ENV_FILE` pointed at a nonexistent path
+  (the real cache-install condition), the loader now resolves
+  `VANTA_CLIENT_ID`/`NINJAONE_CLIENT_ID`/`PANOS_HOST`/`THREATLOCKER_API_KEY`
+  from the default file while correctly leaving vars absent from that file
+  (e.g. `CW_MANAGE_COMPANY_ID`) unset.
+
+  **Second behavior change, same loaders:** a `KEY=` line with a blank
+  value (the `.env.example` convention - a commented-out template
+  uncommented but never filled in), or with a literal unexpanded `${...}`
+  placeholder value, in either env file no longer overwrites a value that
+  is already set (e.g. one exported by the launching shell, such as
+  `FALCON_CLIENT_ID`); such lines now only fill a gap. Previously a blank
+  line set the variable to `""` and clobbered the inherited value.
+  Regression-tested against both real entrypoints (`node --import
+  load.mjs`, `python3 load.py <module>`) with a pre-set shell value and a
+  blank line and a placeholder line in the env file: the shell value
+  survives in both.
+
 - **atlas-doctor machinery: decisions now survive re-mines.** `upsert_finding`'s
   conflict update no longer rewrites `status` or `created_at`, so an
   accepted/rejected/applied verdict recorded in one doctor run is not silently

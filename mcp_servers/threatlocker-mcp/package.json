@@ -1,6 +1,6 @@
 {
   "name": "threatlocker-mcp",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "MCP server for the ThreatLocker Portal API",
   "type": "module",
   "main": "./dist/index.js",
@@ -35,8 +35,9 @@
   "author": "w159",
   "license": "Apache-2.0",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.0",
-    "node-threatlocker": "file:../../mcp_node/node-threatlocker"
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "node-threatlocker": "file:../../mcp_node/node-threatlocker",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^25.3.2",

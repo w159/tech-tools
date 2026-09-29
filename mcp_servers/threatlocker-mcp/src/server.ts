@@ -1,5 +1,11 @@
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { CallToolResult as SdkCallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { z } from 'zod';
+import { toZodShape } from '@shared/zod-shape.js';
+import {
+  createToolRegistrar, credentialStatusResult, makeNavigate, registerCredentialGatedTools,
+} from '@shared/mcp-server-kit.js';
+import { redactSecrets } from '@shared/error-envelope.js';
 import { getNavigationTools, DOMAINS } from './domains/navigation.js';
 import { getDomainHandler } from './domains/index.js';
 import { getCredentials, getClient } from './utils/client.js';
@@ -46,122 +52,70 @@ async function liveAuthCheck(): Promise<string> {
       }
       return 'FAILED HTTP 440 TOKEN_REVOKED: no ThreatLocker instance (b-h) recognizes this API key (ThreatLocker answers 440 for any unknown token). Mint a new API User token; tools will fail until then.';
     }
-    const body = e.response !== undefined ? ` ${JSON.stringify(e.response).slice(0, 200)}` : '';
+    const body = e.response !== undefined ? ` ${redactSecrets(JSON.stringify(e.response)).slice(0, 200)}` : '';
     return `FAILED${e.statusCode ? ` HTTP ${e.statusCode}` : ''}: ${e.message ?? String(err)}${body}`;
   }
 }
 
-export function createMcpServer(): Server {
-  const server = new Server(
-    { name: 'threatlocker-mcp', version: '1.4.0' },
-    {
-      capabilities: {
-        tools: {},
-        logging: {},
-      },
-    }
+const SERVER_INSTRUCTIONS =
+  `ThreatLocker application control: computers, computer groups, approval requests, unified audit log, organizations, policies, applications, Config Manager, DAC Health Center, system audit, and tags. Look up IDs with the matching list or search tool (for example computers or approval requests) before calling a get-by-id tool. On a 401, 403, or 440 response, a not-configured message, or a connection failure, call threatlocker_status once and report its output to the user instead of retrying other tools. When credentials are missing only threatlocker_status and threatlocker_navigate are listed; the user must set THREATLOCKER_API_KEY and restart the session.`;
+
+// One-line domain summary, read from the navigate tool's own `domain` description.
+function navigateDomainLines(): string[] {
+  const navTool = getNavigationTools().find(t => t.name === 'threatlocker_navigate');
+  const domainProp = navTool?.inputSchema?.properties?.domain as { description?: string } | undefined;
+  return (domainProp?.description ?? '').split('\n');
+}
+
+function domainDescription(domain: DomainName): string {
+  const domainLine = navigateDomainLines().find((line) => line.includes(`- ${domain}:`));
+  return domainLine?.replace(`- ${domain}: `, '') ?? `${domain} domain`;
+}
+
+const navigateTool = makeNavigate(DOMAINS, getDomainHandler, domainDescription);
+
+// Status must never throw, even with missing creds.
+async function statusTool(): Promise<SdkCallToolResult> {
+  const creds = getCredentials();
+  const urlDesc = describeBaseUrl('threatlocker', process.env.THREATLOCKER_BASE_URL, 'THREATLOCKER_BASE_URL');
+  // Key fingerprint (first 4 chars) lets a caller tell a stale launch-time
+  // credential from the one they just saved without exposing the key.
+  const credStatus = creds
+    ? `Configured (API key present, prefix ${creds.apiKey.slice(0, 4)}...; baseUrl=${urlDesc})`
+    : `NOT CONFIGURED — set THREATLOCKER_API_KEY. Base URL: ${urlDesc}`;
+
+  // "Configured" only proves a value is present. Make one cheap authenticated
+  // call so status reports whether ThreatLocker actually accepts the key;
+  // without this a caller can read "configured" as "working".
+  const authCheck = creds ? await liveAuthCheck() : 'SKIPPED (no API key)';
+
+  // Unconfigured is a reduced mode, not an error (see AUDIT_2026-06-12);
+  // only a rejected key flips isError.
+  return credentialStatusResult({
+    vendor: 'ThreatLocker', credStatus, authCheck, domains: DOMAINS, domainsLabel: 'Available domains',
+    footer: creds ? 'Domains above are listed by threatlocker_navigate.' : 'Only threatlocker_status and threatlocker_navigate are listed until THREATLOCKER_API_KEY is set and the session is restarted.',
+  });
+}
+
+export async function createMcpServer(): Promise<McpServer> {
+  const server = new McpServer(
+    { name: 'threatlocker-mcp', version: '1.5.0' },
+    { capabilities: { logging: {} }, instructions: SERVER_INSTRUCTIONS },
   );
 
-  // Return ALL tools upfront — navigation is a stateless help/discovery tool
-  server.setRequestHandler(ListToolsRequestSchema, async () => {
-    // Progressive disclosure: status + navigate only until credentials resolve.
-    const navTools = getNavigationTools();
-    if (!getCredentials()) {
-      return { tools: annotate(navTools, 'ThreatLocker') };
-    }
-    const allTools = [...navTools];
-    for (const domain of DOMAINS) {
-      const handler = await getDomainHandler(domain);
-      allTools.push(...handler.getTools());
-    }
-    return { tools: annotate(allTools, 'ThreatLocker') };
-  });
-
-  // Route tool calls
-  server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
-    const { name, arguments: args } = request.params;
-
-    // Navigation: navigate (stateless discovery aid)
-    if (name === 'threatlocker_navigate') {
-      const domain = (args?.domain as string) as DomainName;
-      if (!DOMAINS.includes(domain)) {
-        return {
-          content: [{ type: 'text' as const, text: `Invalid domain: ${domain}. Valid: ${DOMAINS.join(', ')}` }],
-          isError: true,
-        };
-      }
-
-      const handler = await getDomainHandler(domain);
-      const tools = handler.getTools();
-
-      const toolSummary = tools
-        .map(t => `- ${t.name}: ${t.description}`)
-        .join('\n');
-
-      // Get domain description from navigation
-      const navTools = getNavigationTools();
-      const navTool = navTools.find(t => t.name === 'threatlocker_navigate');
-      const domainProp = navTool?.inputSchema?.properties?.domain as { description?: string } | undefined;
-      const domainDesc = domainProp?.description ?? '';
-      const domainLine = domainDesc.split('\n').find((line: string) => line.includes(`- ${domain}:`));
-      const description = domainLine ? domainLine.replace(`- ${domain}: `, '') : `${domain} domain`;
-
-      return {
-        content: [{
-          type: 'text' as const,
-          text: `${description}\n\nAvailable tools:\n${toolSummary}\n\nYou can call any of these tools directly.`,
-        }],
-      };
-    }
-
-    // Navigation: status — must never throw, even with missing creds
-    if (name === 'threatlocker_status') {
-      const creds = getCredentials();
-      const urlDesc = describeBaseUrl('threatlocker', process.env.THREATLOCKER_BASE_URL, 'THREATLOCKER_BASE_URL');
-      // Key fingerprint (first 4 chars) lets a caller tell a stale launch-time
-      // credential from the one they just saved without exposing the key.
-      const credStatus = creds
-        ? `Configured (API key present, prefix ${creds.apiKey.slice(0, 4)}...; baseUrl=${urlDesc})`
-        : `NOT CONFIGURED — set THREATLOCKER_API_KEY. Base URL: ${urlDesc}`;
-
-      // "Configured" only proves a value is present. Make one cheap authenticated
-      // call so status reports whether ThreatLocker actually accepts the key;
-      // without this a caller can read "configured" as "working".
-      const authCheck = creds ? await liveAuthCheck() : 'SKIPPED (no API key)';
-
-      return {
-        content: [{
-          type: 'text' as const,
-          text: `ThreatLocker MCP Server Status\n\nCredentials: ${credStatus}\nAuth check: ${authCheck}\nAvailable domains: ${DOMAINS.join(', ')}\n\nAll tools are available at all times. Use threatlocker_navigate to discover tools by domain.`,
-        }],
-        // Unconfigured is a reduced mode, not an error (see AUDIT_2026-06-12);
-        // only a rejected key flips isError.
-        isError: authCheck.startsWith('FAILED'),
-      };
-    }
-
-    // Domain tool calls — try every domain handler
-    for (const domain of DOMAINS) {
-      const handler = await getDomainHandler(domain);
-      const toolNames = handler.getTools().map(t => t.name);
-      if (toolNames.includes(name)) {
-        // Domain handlers handle their own errors; this catch is a last-resort
-        // safety net for unexpected throws that escape the handler.
-        try {
-          return await handler.handleCall(name, (args || {}) as Record<string, unknown>, extra);
-        } catch (err) {
-          logger.error('Unhandled error from domain handler', { tool: name, err });
-          return toolErrorFromCatch(name, err, {
-            hint: 'Check THREATLOCKER_API_KEY is set. Verify THREATLOCKER_BASE_URL if using a non-default region.',
-          });
-        }
-      }
-    }
-
-    return {
-      content: [{ type: 'text' as const, text: `Unknown tool: ${name}. Use threatlocker_navigate to discover available tools.` }],
-      isError: true,
-    };
+  const register = createToolRegistrar({ server, z, toZodShape, annotate, vendorTitle: 'ThreatLocker' });
+  await registerCredentialGatedTools({
+    register, navigationTools: getNavigationTools(), navigateName: 'threatlocker_navigate',
+    navigate: navigateTool, status: statusTool, hasCredentials: () => !!getCredentials(),
+    domains: DOMAINS, getHandler: getDomainHandler,
+    // Domain handlers handle their own errors; this catch is a last-resort
+    // safety net for unexpected throws that escape the handler.
+    onError: (toolName, err) => {
+      logger.error('Unhandled error from domain handler', { tool: toolName, err });
+      return toolErrorFromCatch(toolName, err, {
+        hint: 'Check THREATLOCKER_API_KEY is set. Verify THREATLOCKER_BASE_URL if using a non-default region.',
+      });
+    },
   });
 
   return server;

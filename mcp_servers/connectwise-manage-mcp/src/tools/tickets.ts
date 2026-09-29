@@ -7,8 +7,8 @@ import {
   shapeItem,
   shapeRaw,
   type SummaryFn,
-} from "../_shared/response-shaper.js";
-import { toolErrorFromCatch } from "../_shared/error-envelope.js";
+} from "@shared/response-shaper.js";
+import { toolErrorFromCatch } from "@shared/error-envelope.js";
 
 // Compact summary for list/search results. Covers triage-relevant fields.
 // Pass full=true or fields=[...] to retrieve additional fields.

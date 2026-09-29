@@ -1,135 +1,108 @@
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { getState, getNavigationTools, getBackTool, DOMAINS } from './domains/navigation.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { CallToolResult as SdkCallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { z } from 'zod';
+import { toZodShape } from '@shared/zod-shape.js';
+import {
+  createToolRegistrar, makeNavigate, registerDomainTools, registerNavigationTools, runAuthCheck, statusResult,
+} from '@shared/mcp-server-kit.js';
+import { getNavigationTools, DOMAINS } from './domains/navigation.js';
 import { getDomainHandler } from './domains/index.js';
-import { getCredentials } from './utils/client.js';
+import { getCredentials, getClient } from './utils/client.js';
 import { elicitCredentials } from './elicitation/forms.js';
 import { logger } from './utils/logger.js';
 import type { DomainName } from './utils/types.js';
 import { annotate } from './annotate-tool.js';
-import { missingCredsError, toolErrorFromCatch, describeBaseUrl } from './domains/_helpers.js';
+import { toolErrorFromCatch, describeBaseUrl } from './domains/_helpers.js';
 
-export function createServer(): Server {
-  const server = new Server(
+// "Configured" only proves a value is present. One cheap authenticated read
+// (resolutions list, no arguments) shows whether Blumira accepts the credentials.
+// Response data is never printed.
+const liveAuthCheck = (): Promise<string> =>
+  runAuthCheck(async () => (await getClient()).resolutions.list(), '10 s');
+
+async function statusTool(): Promise<SdkCallToolResult> {
+  const creds = getCredentials();
+  const authCheck = creds ? await liveAuthCheck() : 'SKIPPED (no credentials)';
+  const credStatus = creds
+    ? 'Configured'
+    : 'NOT CONFIGURED - set BLUMIRA_JWT_TOKEN or BLUMIRA_CLIENT_ID + BLUMIRA_CLIENT_SECRET';
+  return statusResult(
+    `Blumira MCP Server Status\n\nCredentials: ${credStatus}\nBase URL: ${describeBaseUrl('blumira', process.env.BLUMIRA_BASE_URL, 'BLUMIRA_BASE_URL')}\nAuth check: ${authCheck}\nAvailable domains: ${DOMAINS.join(', ')}`,
+    authCheck,
+  );
+}
+
+type ElicitedCredentials = NonNullable<Awaited<ReturnType<typeof elicitCredentials>>>;
+
+// Exported into process.env so getCredentials() sees them on the next call.
+function applyElicitedCredentials(creds: ElicitedCredentials): void {
+  if (creds.jwtToken) {
+    process.env.BLUMIRA_JWT_TOKEN = creds.jwtToken;
+  } else if (creds.clientId && creds.clientSecret) {
+    process.env.BLUMIRA_CLIENT_ID = creds.clientId;
+    process.env.BLUMIRA_CLIENT_SECRET = creds.clientSecret;
+  }
+}
+
+export async function createServer(): Promise<McpServer> {
+  const server = new McpServer(
     { name: 'blumira-mcp', version: '1.1.5' },
     {
-      capabilities: {
-        tools: {},
-        logging: {},
-      },
-    }
+      capabilities: { logging: {} },
+      instructions:
+        'Blumira SIEM and XDR: security findings (list, get, evidence, comments, resolve, assign), agent devices and enrollment keys, organization users, MSP multi-account views, and resolution codes. ' +
+        'Call blumira_findings_list before any get, evidence, comment, or resolve tool that needs a finding ID, and the users list tool to get owner UUIDs before assigning; MSP tools need an account ID from the MSP accounts list. ' +
+        'On a 401, 403, or 440, a not-configured message, or a connection failure, call blumira_status once and report its output to the user instead of retrying other tools. ' +
+        'When credentials are missing only blumira_status and blumira_navigate are listed; the user must set BLUMIRA_JWT_TOKEN (or BLUMIRA_CLIENT_ID and BLUMIRA_CLIENT_SECRET) and restart the session.',
+    },
   );
 
-  // Dynamic tool list based on navigation state
-  server.setRequestHandler(ListToolsRequestSchema, async (_request, extra) => {
-    const sessionId = (extra as any)?.sessionId || 'default';
-    const state = getState(sessionId);
+  const register = createToolRegistrar({ server, z, toZodShape, annotate, vendorTitle: 'Blumira' });
 
-    if (!state.currentDomain) {
-      return { tools: annotate(getNavigationTools(), 'Blumira') };
-    }
+  // Domain tools are registered once credentials resolve, either at startup or
+  // after navigate elicits them. McpServer sends tools/list_changed on registration.
+  let domainToolsRegistered = false;
+  const registerAllDomainTools = async () => {
+    if (domainToolsRegistered) return;
+    domainToolsRegistered = true;
+    // Last-resort safety net; domain handlers handle their own errors.
+    await registerDomainTools(register, DOMAINS, getDomainHandler, (toolName, error) => {
+      logger.error('Tool call failed', { tool: toolName, error });
+      return toolErrorFromCatch(toolName, error, {
+        hint: 'Verify BLUMIRA_JWT_TOKEN or BLUMIRA_CLIENT_ID + BLUMIRA_CLIENT_SECRET are correct.',
+      });
+    });
+  };
 
-    const handler = await getDomainHandler(state.currentDomain);
-    return { tools: annotate([...handler.getTools(), getBackTool()], 'Blumira') };
-  });
-
-  // Route tool calls
-  server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
-    const { name, arguments: args } = request.params;
-    const sessionId = (extra as any)?.sessionId || 'default';
-    const state = getState(sessionId);
-
-    // Navigation: navigate
-    if (name === 'blumira_navigate') {
-      const domain = (args?.domain as string) as DomainName;
-      if (!DOMAINS.includes(domain)) {
-        return {
-          content: [{ type: 'text' as const, text: `Invalid domain: ${domain}. Valid: ${DOMAINS.join(', ')}` }],
-          isError: true,
-        };
-      }
-
-      // Check credentials before navigating
-      if (!getCredentials()) {
-        const creds = await elicitCredentials(server);
-        if (creds) {
-          if (creds.jwtToken) {
-            process.env.BLUMIRA_JWT_TOKEN = creds.jwtToken;
-          } else if (creds.clientId && creds.clientSecret) {
-            process.env.BLUMIRA_CLIENT_ID = creds.clientId;
-            process.env.BLUMIRA_CLIENT_SECRET = creds.clientSecret;
-          }
-        } else {
-          return {
-            content: [{ type: 'text' as const, text: 'Blumira credentials are required. Set BLUMIRA_JWT_TOKEN or BLUMIRA_CLIENT_ID + BLUMIRA_CLIENT_SECRET.' }],
-            isError: true,
-          };
-        }
-      }
-
-      state.currentDomain = domain;
-      const handler = await getDomainHandler(domain);
-      const tools = handler.getTools().map(t => t.name);
-
-      await server.sendToolListChanged();
-
+  // Returns an error result when credentials could not be collected, else undefined.
+  const ensureCredentials = async (): Promise<SdkCallToolResult | undefined> => {
+    const creds = await elicitCredentials(server.server);
+    if (!creds) {
       return {
-        content: [{
-          type: 'text' as const,
-          text: `Navigated to ${domain}. Available tools: ${tools.join(', ')}`,
-        }],
-      };
-    }
-
-    // Navigation: back
-    if (name === 'blumira_back') {
-      state.currentDomain = null;
-      await server.sendToolListChanged();
-      return {
-        content: [{ type: 'text' as const, text: 'Returned to domain navigation.' }],
-      };
-    }
-
-    // Navigation: status — never throws, reports missing creds gracefully
-    if (name === 'blumira_status') {
-      const creds = getCredentials();
-      if (!creds) {
-        return missingCredsError('Blumira', [
-          'BLUMIRA_JWT_TOKEN',
-          'BLUMIRA_CLIENT_ID + BLUMIRA_CLIENT_SECRET',
-        ]);
-      }
-      return {
-        content: [{
-          type: 'text' as const,
-          text: JSON.stringify({
-            connected: true,
-            baseUrl: describeBaseUrl('blumira', process.env.BLUMIRA_BASE_URL, 'BLUMIRA_BASE_URL'),
-            domains: DOMAINS,
-            currentDomain: state.currentDomain,
-          }, null, 2),
-        }],
-      };
-    }
-
-    // Domain tool calls
-    if (!state.currentDomain) {
-      return {
-        content: [{ type: 'text' as const, text: `Unknown tool: ${name}. Use blumira_navigate first.` }],
+        content: [{ type: 'text' as const, text: 'Blumira credentials are required. Set BLUMIRA_JWT_TOKEN or BLUMIRA_CLIENT_ID + BLUMIRA_CLIENT_SECRET.' }],
         isError: true,
       };
     }
+    applyElicitedCredentials(creds);
+    await registerAllDomainTools();
+    return undefined;
+  };
 
-    const handler = await getDomainHandler(state.currentDomain);
-    try {
-      return await handler.handleCall(name, (args || {}) as Record<string, unknown>, extra);
-    } catch (error: unknown) {
-      logger.error('Tool call failed', { tool: name, error });
-      return toolErrorFromCatch(name, error, {
-        hint: 'Verify BLUMIRA_JWT_TOKEN or BLUMIRA_CLIENT_ID + BLUMIRA_CLIENT_SECRET are correct.',
-      });
+  const navigateDomainTools = makeNavigate(DOMAINS, getDomainHandler);
+
+  // An invalid domain skips elicitation and falls through to navigateDomain's error.
+  const navigate = async (domain: string): Promise<SdkCallToolResult> => {
+    if ((DOMAINS as readonly string[]).includes(domain) && !getCredentials()) {
+      const failure = await ensureCredentials();
+      if (failure) return failure;
     }
-  });
+    return navigateDomainTools(domain);
+  };
+
+  registerNavigationTools(register, getNavigationTools(), 'blumira_navigate', navigate, statusTool);
+
+  // Progressive disclosure keyed on credentials only: status + navigate until they resolve.
+  if (getCredentials()) await registerAllDomainTools();
 
   return server;
 }

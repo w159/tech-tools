@@ -15,6 +15,8 @@
  *   CW_MANAGE_REJECT_UNAUTHORIZED - Set to "false" to allow self-signed certs (default: "true")
  */
 
+import { cleanEnv } from "@shared/clean-env.js";
+
 export interface CwManageConfig {
   baseUrl: string;
   companyId: string;
@@ -41,10 +43,6 @@ export function getConfig(): CwManageConfig | null {
   // value when the optional config field is left blank. Strip those, plus any
   // empty/whitespace-only values, before deciding to fall back to the default.
   const DEFAULT_BASE_URL = "https://api-na.myconnectwise.net";
-  const isUnresolvedPlaceholder = (v: string | undefined): boolean =>
-    !!v && /^\$\{[^}]+\}$/.test(v.trim());
-  const cleanEnv = (v: string | undefined): string =>
-    !v || isUnresolvedPlaceholder(v) ? "" : v.trim();
 
   const rawUrl = (
     cleanEnv(process.env.CW_MANAGE_BASE_URL) ||

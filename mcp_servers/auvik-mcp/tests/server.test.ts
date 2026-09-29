@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { createServer } from '../src/server.js';
 import { ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 
@@ -6,12 +6,18 @@ import { ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 async function listTools() {
   const server = createServer();
   // @ts-expect-error - _requestHandlers is private but stable enough for a test
-  const handler = server._requestHandlers.get(ListToolsRequestSchema.shape.method.value);
+  const handler = server.server._requestHandlers.get(ListToolsRequestSchema.shape.method.value);
   const res = await handler({ method: 'tools/list', params: {} }, { signal: new AbortController().signal });
   return res.tools as { name: string; inputSchema: any }[];
 }
 
 describe('tool registry', () => {
+  // The ListTools credential gate hides everything but status/navigate without creds.
+  beforeAll(() => {
+    process.env.AUVIK_USERNAME = 'test-user';
+    process.env.AUVIK_API_KEY = 'test-key';
+  });
+
   it('advertises a stable, de-duplicated set of tools', async () => {
     const tools = await listTools();
     const names = tools.map((t) => t.name);
@@ -29,11 +35,12 @@ describe('tool registry', () => {
     }
   });
 
-  it('every tool has a valid object input schema with additionalProperties:false', async () => {
+  it('every tool has a valid object input schema', async () => {
     const tools = await listTools();
     for (const t of tools) {
       expect(t.inputSchema.type).toBe('object');
-      expect(t.inputSchema.additionalProperties).toBe(false);
+      // additionalProperties is no longer advertised: McpServer derives the wire schema from zod,
+      // which strips unknown keys instead of forbidding them.
     }
   });
 

@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -85,9 +86,7 @@ class DocsDriftTest(unittest.TestCase):
 
     def test_nested_changelog_clears_drift(self):
         """A nested project (plugins/<x>/docs/CHANGELOG.md) clears it too."""
-        self.assertFalse(
-            _docs_drift(["src/foo.py", "plugins/atlas/docs/CHANGELOG.md"])
-        )
+        self.assertFalse(_docs_drift(["src/foo.py", "plugins/atlas/docs/CHANGELOG.md"]))
 
 
 class GateOrchestrationTest(unittest.TestCase):
@@ -172,7 +171,16 @@ class GateOrchestrationTest(unittest.TestCase):
         with open(os.path.join(atlas_dir, "evidence", "run.txt"), "w") as f:
             f.write("observed output")
         with open(os.path.join(atlas_dir, ".run", "findings.json"), "w") as f:
-            json.dump([{"claim": "x works", "status": "verified"}], f)
+            json.dump(
+                [
+                    {
+                        "claim": "x works",
+                        "status": "verified",
+                        "verified_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                ],
+                f,
+            )
         for name in ("CHANGELOG.md", "ROADMAP.md"):
             with open(os.path.join(docs, name), "w") as f:
                 f.write("# %s\ncontent\n" % name)
@@ -592,7 +600,16 @@ class InProcessMainTest(unittest.TestCase):
         with open(os.path.join(atlas_dir, "evidence", "run.txt"), "w") as f:
             f.write("observed output")
         with open(os.path.join(atlas_dir, ".run", "findings.json"), "w") as f:
-            json.dump([{"claim": "x works", "status": "verified"}], f)
+            json.dump(
+                [
+                    {
+                        "claim": "x works",
+                        "status": "verified",
+                        "verified_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                ],
+                f,
+            )
         for name in ("CHANGELOG.md", "ROADMAP.md"):
             with open(os.path.join(docs, name), "w") as f:
                 f.write("# %s\ncontent\n" % name)
@@ -657,6 +674,16 @@ class InProcessMainTest(unittest.TestCase):
             atlas_db.log_dispatch(c, rid, "atlas:verifier")
         c.commit()
         c.close()
+
+    def _run_start_epoch(self):
+        c = atlas_db.connect(self.db_path)
+        rid = atlas_db.current_run_id(c, "sess-orch") or atlas_db.latest_run_id(
+            c, "sess-orch"
+        )
+        started = atlas_db.run_started_at(c, rid)
+        c.close()
+        assert started is not None
+        return started
 
     # -- early-exit / no-op paths -------------------------------------------
 
@@ -784,6 +811,96 @@ class InProcessMainTest(unittest.TestCase):
             f.write('"not-a-findings-file"')
         self._init_git_repo()
         self._stage_mixed_diff()
+        _, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
+        self.assertIn('"decision": "block"', out)
+        self.assertIn("findings.json", out)
+
+    def test_stale_evidence_blocks_condition_a(self):
+        """Evidence left over from an earlier session (mtime before this run
+        started) must not satisfy (a) -- that is the spoofability the run
+        scoping closes."""
+        self._satisfy_all()
+        self._init_git_repo()
+        self._stage_mixed_diff()
+        started = self._run_start_epoch()
+        evidence_file = os.path.join(self.tmp, ".atlas", "evidence", "run.txt")
+        stale = started - 3600
+        os.utime(evidence_file, (stale, stale))
+        _, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
+        self.assertIn('"decision": "block"', out)
+        self.assertIn("evidence/", out)
+
+    def test_fresh_evidence_passes_condition_a(self):
+        """Evidence written during this run (mtime at/after run start) passes."""
+        self._satisfy_all()
+        self._init_git_repo()
+        self._stage_mixed_diff()
+        started = self._run_start_epoch()
+        evidence_file = os.path.join(self.tmp, ".atlas", "evidence", "run.txt")
+        fresh = started + 5
+        os.utime(evidence_file, (fresh, fresh))
+        rc, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
+        self.assertEqual(rc, 0)
+        self.assertNotIn('"decision": "block"', out)
+
+    def test_evidence_started_none_falls_back_to_any_file(self):
+        """When this run's start time cannot be determined, (a) falls back
+        (documented, fail-open) to 'any file exists' rather than blocking."""
+        self._satisfy_all()
+        self._init_git_repo()
+        self._stage_mixed_diff()
+        evidence_file = os.path.join(self.tmp, ".atlas", "evidence", "run.txt")
+        os.utime(evidence_file, (1, 1))  # ancient mtime
+        with mock.patch("completion_gate._run_started_at", return_value=None):
+            rc, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
+        self.assertEqual(rc, 0)
+        self.assertNotIn('"decision": "block"', out)
+
+    def test_stale_verified_finding_blocks_condition_b(self):
+        """A 'verified' row stamped before this run started must not satisfy
+        (b) -- that is the spoofability the run scoping closes."""
+        self._satisfy_all()
+        self._init_git_repo()
+        self._stage_mixed_diff()
+        started = self._run_start_epoch()
+        stale_iso = datetime.fromtimestamp(started - 3600, tz=timezone.utc).isoformat()
+        findings_path = os.path.join(self.tmp, ".atlas", ".run", "findings.json")
+        with open(findings_path, "w") as f:
+            json.dump(
+                [{"claim": "x works", "status": "verified", "verified_at": stale_iso}],
+                f,
+            )
+        _, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
+        self.assertIn('"decision": "block"', out)
+        self.assertIn("findings.json", out)
+
+    def test_fresh_verified_finding_passes_condition_b(self):
+        """A 'verified' row stamped during this run satisfies (b)."""
+        self._satisfy_all()
+        self._init_git_repo()
+        self._stage_mixed_diff()
+        started = self._run_start_epoch()
+        fresh_iso = datetime.fromtimestamp(started + 5, tz=timezone.utc).isoformat()
+        findings_path = os.path.join(self.tmp, ".atlas", ".run", "findings.json")
+        with open(findings_path, "w") as f:
+            json.dump(
+                [{"claim": "x works", "status": "verified", "verified_at": fresh_iso}],
+                f,
+            )
+        rc, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
+        self.assertEqual(rc, 0)
+        self.assertNotIn('"decision": "block"', out)
+
+    def test_undated_verified_finding_blocks_when_started_known_condition_b(self):
+        """An undated 'verified' row cannot be proven to belong to this run,
+        so once `started` is known it earns no credit -- same rule (g)
+        already applies via _test_verified_this_run."""
+        self._satisfy_all()
+        self._init_git_repo()
+        self._stage_mixed_diff()
+        findings_path = os.path.join(self.tmp, ".atlas", ".run", "findings.json")
+        with open(findings_path, "w") as f:
+            json.dump([{"claim": "x works", "status": "verified"}], f)
         _, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertIn('"decision": "block"', out)
         self.assertIn("findings.json", out)
@@ -1209,7 +1326,16 @@ class GateConditionIJTest(GateOrchestrationTest):
             fh.write("red->green")
         os.makedirs(os.path.join(self.tmp, ".atlas", ".run"), exist_ok=True)
         with open(os.path.join(self.tmp, ".atlas", ".run", "findings.json"), "w") as fh:
-            json.dump([{"id": "S1", "status": "verified"}], fh)
+            json.dump(
+                [
+                    {
+                        "id": "S1",
+                        "status": "verified",
+                        "verified_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                ],
+                fh,
+            )
         for name in ("CHANGELOG.md", "ROADMAP.md"):
             with open(os.path.join(self.tmp, "docs", name), "w") as fh:
                 fh.write("# %s\ncontent\n" % name)
@@ -1367,7 +1493,6 @@ class TestRunPairsAnImplementerTest(GateOrchestrationTest):
         c.commit()
         c.close()
 
-
     def _exec_mcp_test_command(self, target, tool_name, server):
         """Log a test-runner command executed through an MCP shell tool
         (lean-ctx's ctx_shell or context-mode's ctx_execute/ctx_batch_execute)
@@ -1396,6 +1521,7 @@ class TestRunPairsAnImplementerTest(GateOrchestrationTest):
         )
         c.commit()
         c.close()
+
     def test_one_implementer_plus_a_test_verified_finding_passes(self):
         """The simple-task path: one subagent, verification by test, no verifier
         dispatch, gate green."""
@@ -1414,7 +1540,6 @@ class TestRunPairsAnImplementerTest(GateOrchestrationTest):
         )
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertEqual(r.stdout.strip(), "", r.stdout)
-
 
     def test_lean_ctx_shell_test_command_earns_credit(self):
         """A pytest run through lean-ctx's ctx_shell MCP tool (this
@@ -1879,7 +2004,16 @@ class GatePlanMandateTest(GateConditionIJTest):
             fh.write("read-only audit")
         os.makedirs(os.path.join(self.tmp, ".atlas", ".run"), exist_ok=True)
         with open(os.path.join(self.tmp, ".atlas", ".run", "findings.json"), "w") as fh:
-            json.dump([{"id": "S1", "status": "verified"}], fh)
+            json.dump(
+                [
+                    {
+                        "id": "S1",
+                        "status": "verified",
+                        "verified_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                ],
+                fh,
+            )
         for name in ("CHANGELOG.md", "ROADMAP.md"):
             with open(os.path.join(self.tmp, "docs", name), "w") as fh:
                 fh.write("# %s\ncontent\n" % name)
@@ -1933,3 +2067,217 @@ class GateDocsNamingTest(GateConditionIJTest):
         self._write_plan("2026-09-15-packer-consolidation.md")
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertNotIn("(l)", r.stdout)
+
+
+class InFlightDispatchHelperTest(unittest.TestCase):
+    """Defect 1: the gate must not fire once per Stop while 1-7 implementer
+    subagents are still running in the background. Per the hooks docs (Stop
+    input `background_tasks`), each entry carries `type` and `status`; an
+    empty/absent list means nothing is in flight."""
+
+    def test_no_background_tasks_field_does_not_suppress(self):
+        self.assertFalse(completion_gate._has_in_flight_dispatch({}))
+
+    def test_empty_background_tasks_does_not_suppress(self):
+        self.assertFalse(
+            completion_gate._has_in_flight_dispatch({"background_tasks": []})
+        )
+
+    def test_running_subagent_suppresses(self):
+        self.assertTrue(
+            completion_gate._has_in_flight_dispatch(
+                {
+                    "background_tasks": [
+                        {"id": "1", "type": "subagent", "status": "running"}
+                    ]
+                }
+            )
+        )
+
+    def test_running_workflow_and_teammate_suppress(self):
+        for task_type in ("workflow", "teammate", "WORKFLOW", "Subagent"):
+            self.assertTrue(
+                completion_gate._has_in_flight_dispatch(
+                    {
+                        "background_tasks": [
+                            {"id": "1", "type": task_type, "status": "in_progress"}
+                        ]
+                    }
+                ),
+                task_type,
+            )
+
+    def test_completed_subagent_does_not_suppress(self):
+        for status in (
+            "completed",
+            "failed",
+            "killed",
+            "cancelled",
+            "stopped",
+            "COMPLETED",
+        ):
+            self.assertFalse(
+                completion_gate._has_in_flight_dispatch(
+                    {
+                        "background_tasks": [
+                            {"id": "1", "type": "subagent", "status": status}
+                        ]
+                    }
+                ),
+                status,
+            )
+
+    def test_running_shell_does_not_suppress(self):
+        """A long-running `shell` (e.g. `tail -f`) must never suppress the
+        gate, or it becomes a permanent bypass."""
+        self.assertFalse(
+            completion_gate._has_in_flight_dispatch(
+                {
+                    "background_tasks": [
+                        {"id": "1", "type": "shell", "status": "running"}
+                    ]
+                }
+            )
+        )
+
+    def test_running_monitor_does_not_suppress(self):
+        self.assertFalse(
+            completion_gate._has_in_flight_dispatch(
+                {
+                    "background_tasks": [
+                        {"id": "1", "type": "monitor", "status": "running"}
+                    ]
+                }
+            )
+        )
+
+    def test_malformed_background_tasks_does_not_suppress(self):
+        self.assertFalse(
+            completion_gate._has_in_flight_dispatch({"background_tasks": "not a list"})
+        )
+        self.assertFalse(
+            completion_gate._has_in_flight_dispatch({"background_tasks": [None, 5]})
+        )
+
+    def test_mixed_list_one_running_subagent_among_completed_suppresses(self):
+        self.assertTrue(
+            completion_gate._has_in_flight_dispatch(
+                {
+                    "background_tasks": [
+                        {"id": "1", "type": "subagent", "status": "completed"},
+                        {"id": "2", "type": "subagent", "status": "running"},
+                        {"id": "3", "type": "shell", "status": "running"},
+                    ]
+                }
+            )
+        )
+
+
+class InFlightDispatchOrchestrationTest(GateOrchestrationTest):
+    """End-to-end: an orchestrating session with everything else missing must
+    still pass silently while a dispatched subagent is in flight."""
+
+    def test_gate_stays_silent_while_subagent_runs(self):
+        r = _run_gate(
+            {
+                "session_id": "sess-orch",
+                "cwd": self.tmp,
+                "background_tasks": [
+                    {"id": "1", "type": "subagent", "status": "running"}
+                ],
+            },
+            self.env,
+        )
+        self.assertEqual(r.returncode, 0)
+        self.assertEqual(r.stdout.strip(), "", r.stdout)
+
+    def test_gate_blocks_once_subagent_completes(self):
+        r = _run_gate(
+            {
+                "session_id": "sess-orch",
+                "cwd": self.tmp,
+                "background_tasks": [
+                    {"id": "1", "type": "subagent", "status": "completed"}
+                ],
+            },
+            self.env,
+        )
+        self.assertIn('"decision": "block"', r.stdout)
+
+
+class AtlasFindingHintTest(unittest.TestCase):
+    """Defect 2: the (b)/(g) block-reason hints tell the orchestrator to run
+    atlas_finding.py without --title, which argparse rejects outright
+    ("the following arguments are required: --title"). Every flag the hint
+    names must actually be accepted by the real parser."""
+
+    def _finding_script(self):
+        return os.path.join(
+            os.path.dirname(__file__), "..", "scripts", "atlas_finding.py"
+        )
+
+    def test_help_lists_title_as_required(self):
+        out = subprocess.run(
+            [sys.executable, self._finding_script(), "--help"],
+            capture_output=True,
+            text=True,
+        ).stdout
+        self.assertIn("--title", out)
+        self.assertIn("--id", out)
+        self.assertIn("--status", out)
+
+    def test_missing_title_is_rejected(self):
+        r = subprocess.run(
+            [
+                sys.executable,
+                self._finding_script(),
+                "--id",
+                "S1",
+                "--status",
+                "verified",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("--title", r.stderr)
+
+    def test_condition_b_hint_names_title_flag(self):
+        reason = _reason(False, True, False)
+        self.assertIn("--title", reason)
+
+    def test_condition_g_hint_names_title_flag(self):
+        reason = _reason(False, False, False, unverified=1)
+        self.assertIn("--title", reason)
+
+
+class TestRunnerRegexUnittestTest(unittest.TestCase):
+    """Defect 3: `_TEST_RUNNER_RE` did not recognize `python -m unittest`,
+    the test runner this repo's own suites actually use (stdlib unittest,
+    not pytest)."""
+
+    def test_python3_dash_m_unittest_discover_matches(self):
+        self.assertTrue(
+            completion_gate._TEST_RUNNER_RE.search(
+                "python3 -m unittest discover -s plugins/atlas/hooks"
+            )
+        )
+
+    def test_cd_and_python3_dash_m_unittest_matches(self):
+        self.assertTrue(
+            completion_gate._TEST_RUNNER_RE.search(
+                "cd plugins/atlas && python3 -m unittest discover -s hooks"
+            )
+        )
+
+    def test_quoted_prose_mention_does_not_match(self):
+        """Mirrors the existing pytest negative test: the anchor group only
+        matches at a command position (start of string, after a shell
+        separator, or inside a `"command"`/`"code"` JSON value) -- never
+        inside an unrelated JSON string value."""
+        blob = json.dumps({"text": "we use python -m unittest here"})
+        self.assertIsNone(completion_gate._TEST_RUNNER_RE.search(blob))
+
+    def test_command_key_with_unittest_matches(self):
+        blob = json.dumps({"command": "python3 -m unittest discover -s ."})
+        self.assertIsNotNone(completion_gate._TEST_RUNNER_RE.search(blob))

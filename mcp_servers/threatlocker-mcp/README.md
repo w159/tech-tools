@@ -1,6 +1,6 @@
 # ThreatLocker MCP Server
 
-A Model Context Protocol (MCP) server that provides AI assistants with access to the ThreatLocker Portal API. Manage computers, approval requests, audit logs, and organizations through natural language interactions.
+A Model Context Protocol (MCP) server that provides AI assistants with access to the ThreatLocker Portal API. Manage computers, policies, applications, Config Manager device configurations, DAC risk findings, approval requests, audit logs, system audit, and organizations through natural language interactions.
 
 ## Features
 
@@ -35,6 +35,7 @@ the audit window).
 - `threatlocker_approvals_pending_count` - pending count, `includeChildOrganizations`
 - `threatlocker_approvals_get_permit_application` - what approving would permit, same selector
 - `threatlocker_approvals_approve` - DESTRUCTIVE; same selector, must match exactly one pending request; pass the unmodified `json` from the permit-application call
+- `threatlocker_approvals_get_storage_approval` - storage-control approval detail (what the storage request would permit), same selector
 
 ### Audit Log (Unified Audit)
 - `threatlocker_audit_search` - `hostname`, `username`, `action` (Permit/Deny), `actionType`, exact `path` / `application` / `policy` (server-side), `contains` (client-side substring), `hours` (default 24) or `startDate`/`endDate`
@@ -45,6 +46,28 @@ the audit window).
 - `threatlocker_organizations_list_children` - child organizations by name (empty for a single-org tenant)
 - `threatlocker_organizations_get_auth_key` - agent enrollment Auth Key (a secret; not an API token)
 - `threatlocker_organizations_for_move_computers` - organizations the key can act on, by name
+
+### Policies (Application Control)
+- `threatlocker_policies_list` - policies by computer group (`scopeId`), `filter` (match, ringfence, elevation, monitor, ...), `osType`, `searchText`
+- `threatlocker_policies_get` - one policy by `name` (exact, case-insensitive) or `policyId` GUID
+
+### Applications
+- `threatlocker_applications_list` - vendor application catalog: `searchText` + `searchBy` (app, process, hash, cert, ...), `category` (custom, built-in, patch-supported), `osType`, `orderBy`
+- `threatlocker_applications_get` - one application by `name` (exact, case-insensitive) or `applicationId` GUID
+
+### Config Manager (device configurations)
+- `threatlocker_config_manager_configurations_list` - catalog of configurable device-configuration checks (category + integer value used by policies)
+- `threatlocker_config_manager_policies_list` - the device-configuration policies enforced on an org/group/computer: `appliesTo`, `status` (not-configured, disabled, enabled, all), `searchText`
+
+### DAC (Defense Against Configurations / storage-risk findings)
+- `threatlocker_dac_results_list` - DAC Health Center risk findings by `category` (network-policy, storage-policy, application-control, ...), `criticality`, `entityType`; the closest available read source for Storage Control and Network Control posture — neither has a documented list/get endpoint in the KB or the live public swagger (checked on two instances); unprobed, not confirmed absent
+- `threatlocker_dac_item_get` - one analysis item by integer `analysisItemId` (not a GUID)
+
+### System Audit
+- `threatlocker_system_audit_search` - the portal's own administrator/login audit trail (who changed what in the portal): `actions` (Create, Delete, Logon, Modify, Read), `effectiveAction`, `emailAddress`, `iPAddress`, `objectId`, `hours` or `startDate`/`endDate`. Not the endpoint Unified Audit — use `threatlocker_audit_search` for device events.
+
+### Tags
+- `threatlocker_tags_list` - tags by name as `{label, value}` options; `includeBuiltIns` to add ThreatLocker built-in tags
 
 ### Instance letter
 `THREATLOCKER_BASE_URL` must point at your instance:
@@ -130,6 +153,12 @@ src/
 │   ├── approval_requests.ts
 │   ├── audit_log.ts
 │   ├── organizations.ts
+│   ├── policies.ts
+│   ├── applications.ts
+│   ├── config_manager.ts
+│   ├── dac.ts
+│   ├── system_audit.ts
+│   ├── tags.ts
 │   ├── navigation.ts
 │   └── index.ts
 ├── utils/             # Utilities

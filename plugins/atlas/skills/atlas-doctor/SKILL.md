@@ -76,6 +76,26 @@ write a `mine_*(conn, root)` function returning `_finding(...)` dicts and
 register it there. Nothing else needs to change - `mine()` fingerprints,
 upserts, and dedupes generically for every registry entry.
 
+### Reply-quality loop (turn_quality miner)
+
+Optional; needs `TYPESAFE_API_KEY` in the environment. The `turn_quality`
+miner reads model-scored replies (`turn_scores`), so score first:
+
+1. Score: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/turn_scoring.py" --recent-days 14`
+2. Mine: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_doctor.py" --mine`
+3. Review `turn_quality:*` findings. Each names the surface to fix
+   (`target_path`: an `atlas-orchestrator.md` section, a hook, or a skill) and
+   its detail shows whether the judgment predicts next-turn user corrections;
+   treat a judgment that does not predict them as noise.
+4. Apply the fix to that surface (Phase 4), then `--baseline`, and later
+   `--remeasure` re-runs the miner and reports improved|no_change|regressed.
+
+Cost: input tokens only, about $0.042 per million (`~/.claude` transcripts are
+small; a 14-day pass is cents). Privacy: transcript excerpts are sent to
+api.typesafe.ai with secrets scrubbed; `ATLAS_TYPESAFE_SCORING=off` disables
+scoring. Thresholds are constants in `atlas_doctor.py` (see
+`docs/atlas-turn-scoring.md`).
+
 ```
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_doctor.py" --list-findings --status open --json
 ```

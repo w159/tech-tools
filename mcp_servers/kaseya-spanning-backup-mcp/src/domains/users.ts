@@ -7,9 +7,11 @@ import {
   shapeItem,
   extractShapeArgs,
   SHAPE_PROPS,
-  toolError,
   toolErrorFromCatch,
   unknownTool,
+  extractItems,
+  userIdInputSchema,
+  missingUserIdError,
   type SummaryFn,
 } from './_helpers.js';
 
@@ -62,14 +64,7 @@ function getTools(): Tool[] {
         'Returns a single Spanning backed-up user by userId (required). ' +
         'Includes backup-enabled state, email, and per-service summary. ' +
         'Obtain userId from spanning_users_list.',
-      inputSchema: {
-        type: 'object' as const,
-        properties: {
-          ...SHAPE_PROPS,
-          userId: { type: 'string', description: 'Spanning user ID (required) — opaque string from spanning_users_list.' },
-        },
-        required: ['userId'],
-      },
+      inputSchema: userIdInputSchema(),
     },
   ];
 }
@@ -87,12 +82,10 @@ async function handleCall(toolName: string, args: Record<string, unknown>): Prom
         };
         logger.info('API call: users.list', params);
         const result = await client.users.list(params);
-        const items: unknown[] = Array.isArray(result)
-          ? result
-          : (result as Record<string, unknown>)['users'] as unknown[] ?? (result as Record<string, unknown>)['items'] as unknown[] ?? [];
-        const next = (result as Record<string, unknown>)['next'] as string | undefined;
+        const items = extractItems(result, 'users');
+        const next = (result as unknown as Record<string, unknown>)['next'] as string | undefined;
         return shapeList(
-          items as Record<string, unknown>[],
+          items,
           userSummary,
           shapeArgs,
           undefined,
@@ -126,11 +119,7 @@ async function handleCall(toolName: string, args: Record<string, unknown>): Prom
 
     case 'spanning_users_get': {
       const userId = args.userId as string;
-      if (!userId) {
-        return toolError('INVALID_ARGS', 'userId is required.', {
-          hint: 'Pass the opaque userId string returned by spanning_users_list.',
-        });
-      }
+      if (!userId) return missingUserIdError();
       try {
         const client = getClient();
         logger.info('API call: users.get', { userId });
