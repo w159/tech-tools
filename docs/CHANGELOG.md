@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-10-01 -- Availability-aware native-tool enforcement, inline-op deny regression fix, colony adherence miner
+
+Marketplace `4.3.0`; atlas `8.5.0`.
+
+- Fixed (regression since 8.3.0): in `docs/` projects the Claude Code
+  tripwire returned early for every native Read/Bash/Grep/Glob, so an armed
+  orchestrator past the inline-op limit was never denied for them. Allowed
+  native calls now reach the threshold deny; a deny replaces the nudge.
+- Claude Code: native Grep/Glob are denied only when lean-ctx is reachable
+  (binary on PATH AND a lean-ctx MCP server configured for the project); the
+  deny names the `ToolSearch("select:mcp__<server>__ctx_search")` load step.
+  Otherwise a one-time allow-nudge.
+- omp: grep/glob deny arms per call only when a replacement is live in the
+  session (`pi.getActiveTools()`): a bare `ctx_*` tool, or a lean-ctx `xd://`
+  device plus the `write` tool. Binary-on-PATH alone no longer arms it.
+- New `colony_adherence` miner in `atlas_doctor.py --mine`: per-harness
+  native-reader share, delegation rate, and named-dispatch rate, with
+  findings that name the enforcement surface. Baseline: Claude Code 0.784 /
+  0.556, omp 0.989 / 0.804 (share / delegation).
+- Verification: pytest 1649 passed / 3 skipped / 0 failed; bun 38 pass; hook
+  subprocess smoke (nudge without MCP config, deny with `.mcp.json`); real
+  omp runs (deny with full tools, allow-nudge with `--tools=grep`).
+
 ## 2026-10-01 -- Colony board safety, dispatch tripwires, native omp agents
 
 Marketplace `4.2.0`; atlas `8.4.0`.

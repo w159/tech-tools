@@ -35,8 +35,15 @@ afterEach(() => {
 	if (oldHard === undefined) delete process.env.ATLAS_TRIPWIRE_HARD; else process.env.ATLAS_TRIPWIRE_HARD = oldHard;
 	if (oldPluginRoot === undefined) delete process.env.CLAUDE_PLUGIN_ROOT; else process.env.CLAUDE_PLUGIN_ROOT = oldPluginRoot;
 });
+// omp tool surfaces. A connected lean-ctx MCP server presents its tools as
+// xd:// devices under minted names (mcp__lean_ctx_ctx_search); a first-class
+// registration exposes plain ctx_* names. Both are "callable in this session".
+const BASE_TOOLS = ["read", "write", "edit", "bash", "grep", "glob", "task", "todo"];
+const ACTIVE_DEVICES: string[] = [...BASE_TOOLS, "mcp__lean_ctx_ctx_search", "mcp__lean_ctx_ctx_glob", "mcp__lean_ctx_ctx_read", "mcp__lean_ctx_ctx_shell"];
+const ACTIVE_BUILTINS: string[] = [...BASE_TOOLS, "ctx_search", "ctx_glob", "ctx_read", "ctx_shell"];
+const ACTIVE_NONE: string[] = [...BASE_TOOLS];
 function harness(
-	available: () => boolean = () => true,
+	active: () => string[] | undefined = () => ACTIVE_DEVICES,
 	spawnBoardMirror?: (argv: string[], opts: { cwd: string }) => void,
 ) {
 	const handlers: Record<string, Handler> = {};
@@ -45,7 +52,7 @@ function harness(
 	const pi = api as unknown as Pick<ExtensionAPI, "on">;
 	const spawns: SpawnCapture[] = [];
 	register(pi, {
-		leanCtxAvailable: available,
+		activeTools: active,
 		spawnBoardMirror: spawnBoardMirror ?? ((argv, opts) => { spawns.push({ argv, opts }); }),
 	});
 	const ctx: Context = { cwd: join(root, "project"), agent: { kind: "main" } };
@@ -62,10 +69,22 @@ test("grep and glob deny with exact reachable replacements", () => {
 	expect(h.call("grep")).toMatchObject({ block: true, reason: expect.stringContaining("xd://mcp__lean_ctx_ctx_search") });
 	expect(h.call("glob")).toMatchObject({ block: true, reason: expect.stringContaining("xd://mcp__lean_ctx_ctx_glob") });
 });
-test("no lean-ctx allows native search", () => {
-	const h = harness(() => false);
+test("no reachable lean-ctx allows native search with one nudge per tool", () => {
+	const h = harness(() => ACTIVE_NONE);
+	expect(h.call("grep")).toMatchObject({ additionalContext: expect.stringContaining("not reachable") });
 	expect(h.call("grep")).toBeUndefined();
-	expect(h.call("glob")).toBeUndefined();
+	expect(h.call("glob")?.block).toBeUndefined();
+});
+test("builtin ctx tools are named directly in the deny", () => {
+	const h = harness(() => ACTIVE_BUILTINS);
+	const r = h.call("grep");
+	expect(r?.block).toBe(true);
+	expect(r?.reason).toContain("call ctx_search directly");
+	expect(r?.reason).not.toContain("xd://");
+});
+test("device routes need the write tool to be callable", () => {
+	const h = harness(() => ACTIVE_DEVICES.filter(name => name !== "write"));
+	expect(h.call("grep")?.block).toBeUndefined();
 });
 test("outside docs scope all checks are silent", () => {
 	const h = harness(); h.ctx.cwd = root;
@@ -78,11 +97,16 @@ test("ancestor docs scope covers nested project cwd", () => {
 	const h = harness(); h.ctx.cwd = join(root, "project", "src", "nested");
 	expect(h.call("grep")?.block).toBe(true);
 });
-test("read and bash nudge once independently even without lean-ctx", () => {
-	const h = harness(() => false);
-	expect(h.call("read")?.additionalContext).toContain("ctx_read");
+test("read and bash nudge once independently, naming the reachable route", () => {
+	const h = harness();
+	expect(h.call("read")?.additionalContext).toContain("xd://mcp__lean_ctx_ctx_read");
 	expect(h.call("read")).toBeUndefined();
-	expect(h.call("bash")?.additionalContext).toContain("context-mode ctx_execute");
+	expect(h.call("bash")?.additionalContext).toContain("xd://mcp__lean_ctx_ctx_shell");
+	expect(h.call("bash")).toBeUndefined();
+});
+test("read and bash stay silent when no replacement is reachable", () => {
+	const h = harness(() => ACTIVE_NONE);
+	expect(h.call("read")).toBeUndefined();
 	expect(h.call("bash")).toBeUndefined();
 });
 test("hard kill switch allows search but preserves nudges", () => {
@@ -125,9 +149,10 @@ test("delegation gate kill switch allows completion", () => {
 	const h = harness(); h.call("write", { path: "src/main.ts" });
 	expect(h.stop()).toBeUndefined();
 });
-test("internal availability failures fail open", () => {
+test("internal availability failures fail open silently", () => {
 	const h = harness(() => { throw new Error("discovery unavailable"); });
 	expect(h.call("grep")).toBeUndefined();
+	expect(h.call("glob")).toBeUndefined();
 });
 test("internal event and context failures fail open", () => {
 	const h = harness();
@@ -148,18 +173,15 @@ test("switching sessions resets nudges and delegation counters", () => {
 	h.call("write", { path: "src/main.ts" });
 	expect(h.stop()?.decision).toBe("block");
 });
-test("runtime factory recognizes configured lean-ctx MCP without binary", () => {
+test("runtime factory arms only on session-active tools, not the binary or configured servers", () => {
 	const h = harness();
-	const originalPath = process.env.PATH;
-	try {
-		process.env.PATH = "";
-		const api = { ...h.pi, getAllTools: () => [{ name: "mcp__lean_ctx_ctx_search", mcpServerName: "lean-ctx" }] };
-		// Fake captures only callbacks; provenance fields match the host's public contract.
-		extension(api as unknown as ExtensionAPI);
-		expect(h.call("grep")?.block).toBe(true);
-	} finally {
-		if (originalPath === undefined) delete process.env.PATH; else process.env.PATH = originalPath;
-	}
+	const base = { ...h.pi, getAllTools: () => [{ name: "mcp__lean_ctx_ctx_search", mcpServerName: "lean-ctx" }] };
+	// Configured server + binary on PATH but no active ctx tool: allowed (nudge only).
+	extension({ ...base, getActiveTools: () => ACTIVE_NONE } as unknown as ExtensionAPI);
+	expect(h.call("grep")?.block).toBeUndefined();
+	// Same server once its device is live in the session: denied.
+	extension({ ...base, getActiveTools: () => ACTIVE_DEVICES } as unknown as ExtensionAPI);
+	expect(h.call("grep")?.block).toBe(true);
 });
 
 // ── Task naming notice (atlas colony sibling addressing) ──
@@ -223,14 +245,14 @@ test("naming notice is main-thread only and silent outside docs scope", () => {
 
 test("factory sets CLAUDE_PLUGIN_ROOT to the atlas plugin root when unset", () => {
 	delete process.env.CLAUDE_PLUGIN_ROOT;
-	const api = { on: () => {}, getAllTools: () => [] };
+	const api = { on: () => { }, getAllTools: () => [] };
 	extension(api as unknown as ExtensionAPI);
 	expect(process.env.CLAUDE_PLUGIN_ROOT).toBe(resolve(import.meta.dir, ".."));
 });
 
 test("factory preserves a non-empty CLAUDE_PLUGIN_ROOT", () => {
 	process.env.CLAUDE_PLUGIN_ROOT = "/custom/plugin-root";
-	const api = { on: () => {}, getAllTools: () => [] };
+	const api = { on: () => { }, getAllTools: () => [] };
 	extension(api as unknown as ExtensionAPI);
 	expect(process.env.CLAUDE_PLUGIN_ROOT).toBe("/custom/plugin-root");
 });

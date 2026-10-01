@@ -21,23 +21,23 @@ export const ATLAS_WORKER_ROLE = "@atlas-worker";
 export const ATLAS_VERIFIER_ROLE = "@atlas-verifier";
 
 export const ATLAS_THINKING_LEVELS: Record<string, "off" | "low" | "medium"> = {
- explorer: "off",
- "docs-auditor": "off",
- "docs-curator": "off",
- "schema-inventory": "off",
- "naming-glossary-audit": "off",
- implementer: "low",
- planner: "low",
- "db-prober": "low",
- "ui-runtime-tester": "low",
- verifier: "medium",
- "completeness-critic": "medium",
- "rls-privilege-audit": "medium",
+	explorer: "off",
+	"docs-auditor": "off",
+	"docs-curator": "off",
+	"schema-inventory": "off",
+	"naming-glossary-audit": "off",
+	implementer: "low",
+	planner: "low",
+	"db-prober": "low",
+	"ui-runtime-tester": "low",
+	verifier: "medium",
+	"completeness-critic": "medium",
+	"rls-privilege-audit": "medium",
 };
 
 /** Role alias for one atlas agent, derived from its thinking tier. */
 export function roleFor(agentName: string): typeof ATLAS_WORKER_ROLE | typeof ATLAS_VERIFIER_ROLE {
- return ATLAS_THINKING_LEVELS[agentName] === "medium" ? ATLAS_VERIFIER_ROLE : ATLAS_WORKER_ROLE;
+	return ATLAS_THINKING_LEVELS[agentName] === "medium" ? ATLAS_VERIFIER_ROLE : ATLAS_WORKER_ROLE;
 }
 
 /**
@@ -66,9 +66,9 @@ export const ATLAS_DEFAULT_FALLBACK_ROLE = "@default";
 
 /** Prioritized `model` list for one atlas agent (frontmatter accepts arrays). */
 export function modelPatternsFor(agentName: string): string[] {
- return ATLAS_THINKING_LEVELS[agentName] === "medium"
-  ? [roleFor(agentName), ATLAS_DEFAULT_FALLBACK_ROLE, SMOL_FALLBACK_ROLE]
-  : [roleFor(agentName), SMOL_FALLBACK_ROLE];
+	return ATLAS_THINKING_LEVELS[agentName] === "medium"
+		? [roleFor(agentName), ATLAS_DEFAULT_FALLBACK_ROLE, SMOL_FALLBACK_ROLE]
+		: [roleFor(agentName), SMOL_FALLBACK_ROLE];
 }
 
 /** Every atlas agent name the omp extension recognizes in task dispatches. */
@@ -76,5 +76,5 @@ export const ATLAS_AGENT_NAMES: readonly string[] = Object.keys(ATLAS_THINKING_L
 
 /** Static membership lookup for task-dispatch targets (see ts-set-map rule). */
 export const ATLAS_AGENT_TARGETABLE: Record<string, true> = Object.fromEntries(
- ATLAS_AGENT_NAMES.map(name => [name, true as const]),
+	ATLAS_AGENT_NAMES.map(name => [name, true as const]),
 );

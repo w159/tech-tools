@@ -145,7 +145,7 @@ Code-shipping runs MUST dispatch an agent for the change, then verify; Stop enfo
 Code investigation follows the tool-routing matrix (serena symbols after
 activate_project, lean-ctx for tree and search, context-mode for noisy output,
 claude-mem for recall), never an opening Bash grep/cat.
-Native Grep/Glob are denied when lean-ctx is available: use `ctx_search`/`ctx_glob`; exploration Read uses `ctx_read`, noisy Bash uses `ctx_shell` / context-mode `ctx_execute` (Read-before-Edit and mutation Bash remain allowed).
+Native Grep/Glob are denied when lean-ctx MCP is configured for the project: use `ctx_search`/`ctx_glob` (ToolSearch-load them first if absent); exploration Read uses `ctx_read`, noisy Bash uses `ctx_shell` / context-mode `ctx_execute` (Read-before-Edit and mutation Bash remain allowed).
 
 ## Worktrees close before done
 

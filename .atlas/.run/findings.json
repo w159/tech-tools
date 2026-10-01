@@ -2316,5 +2316,32 @@
     "status": "verified",
     "verified_at": "2026-10-01",
     "verified_by": "DocsPropagation"
+  },
+  {
+    "id": "verify-atlas-8.5.0-2026-10-01",
+    "surface": "plugin",
+    "category": "enforcement",
+    "severity": "medium",
+    "title": "Atlas 8.5.0: availability-aware native-tool enforcement, inline-op deny regression fixed, colony adherence miner",
+    "evidence": [
+      "plugins/atlas/hooks/dispatch_tripwire.py: _native_tool_policy returns (handled, nudge); allowed calls reach _pre_tool_use; test_threshold_deny_still_applies_to_allowed_native_reads_in_docs_projects fails on 8.4.0 code, passes now",
+      "pytest hooks/ scripts/: 1649 passed, 3 skipped, 0 failed; bun test plugins/atlas/omp: 38 pass",
+      "subprocess smoke: Grep no MCP config -> allow-nudge; with .mcp.json lean-ctx -> deny naming ToolSearch selector",
+      "real omp runs: full tools -> grep blocked naming xd://mcp__lean_ctx_ctx_search; --tools=grep -> allowed with not-reachable nudge",
+      "colony_adherence miner on a DB copy: claude-code share 0.784 delegation 0.556; omp share 0.989 delegation 0.804"
+    ],
+    "doc_refs": [
+      "docs/CHANGELOG.md",
+      "plugins/atlas/CHANGELOG.md",
+      "plugins/atlas/README.md",
+      "plugins/atlas/omp/README.md",
+      "plugins/atlas/skills/atlas-orchestrate/references/hooks-automation.md"
+    ],
+    "reproduction": "cd plugins/atlas && python3 -m pytest hooks/ scripts/ -q && bun test omp",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-01",
+    "verified_by": "main (inline; subagents halted by OpenRouter 402)"
   }
 ]

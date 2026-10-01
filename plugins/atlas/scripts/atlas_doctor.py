@@ -1132,6 +1132,310 @@ def mine_recurring_friction(conn, root, min_count=3):
     return out
 
 
+# --- colony adherence (lean-ctx/context-mode usage + dispatch discipline) ---
+# Thresholds: native_reader_share is measured where LOWER is better (the
+# lean-ctx/CLAUDE.md contract wants native Grep/Glob/Read/Bash routed through
+# ctx_*), delegation_rate where HIGHER is better. A finding uses a single
+# remeasure-friendly metric_value, so it emits violation DEPTH (share over the
+# cap plus the delegation deficit), which is always lower-is-better.
+COLONY_NATIVE_SHARE_MAX = 0.5  # fire when the native reader share exceeds this
+COLONY_DELEGATION_MIN = 0.8  # fire when the delegation rate is below this
+# below COLONY_MIN_SESSIONS in the window the miner is silent: "not known to
+# be broken" must not read as "fixed".
+COLONY_MIN_SESSIONS = 5
+# session_ingest.summarize_input() caps input_summary at 500 chars, so a
+# capped summary can hide the `name` argument of a dispatch.
+COLONY_INPUT_SUMMARY_CAP = 500
+
+_COLONY_EDIT_TOOLS = {
+    "Edit",
+    "Write",
+    "MultiEdit",
+    "NotebookEdit",
+    "edit",
+    "write",
+}
+_COLONY_DISPATCH_TOOLS = {"Agent", "Task", "task"}
+_COLONY_NATIVE_READERS = {
+    "claude-code": ("Read", "Grep", "Glob", "Bash"),
+    "omp": ("read", "grep", "glob", "bash"),
+}
+# Named-dispatch contract for omp/colony agents: the task tool takes `name`.
+_COLONY_NAME_RE = re.compile(
+    r"""(?:"name"\s*:\s*["']?([^"'\n]{1,128})["']?|[\s:]name\s*[=:]\s*["']?"""
+    r"""([A-Za-z0-9_.\-]{2,64})["']?)"""
+)
+
+# Internal/URI-ish targets are tool plumbing, not repo edits; a write to
+# agent://... or xd://mcp__... never counts toward the delegation denominator.
+_COLONY_URI_SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*:(?://|\\\\|_)")
+
+
+def _colony_classify_harness(session_names):
+    """claude-code vs omp from EACH SESSION's tool-name casing (the one
+    property both telemetry paths preserve). Claude Code names its bare
+    builtins Capitalized (Bash, Read, Agent, ToolSearch); omp names the same
+    tools lowercase (bash, read, task, write) and records ctx_* builtins
+    lowercase. MCP tool names are always lowercase on both sides
+    (mcp__lean-ctx__ctx_search), so mcp__ rows carry no casing evidence and
+    are ignored for classification, as are sessions whose window rows are all
+    mcp rows (None). Sessions mixing evidence skew claude-code only if they
+    show a Capitalized bare name (omp never emits one). Note: codex sessions
+    also use lowercase names and are measured inside the omp class; they read
+    through the same enforcement surfaces.
+
+    Returns 'claude-code', 'omp', or None (unclassifiable)."""
+    names = [n for n in session_names if n and not n.startswith("mcp__")]
+    if any(n[:1].isupper() for n in names):
+        return "claude-code"
+    if names:
+        return "omp"
+    return None
+
+
+def _colony_is_doc_path(path):
+    """docs/ and .atlas/ targets are the orchestrator's own closeout writes
+    (same carve-out as atlas_db.unsanctioned_inline_ops_since_last_dispatch:
+    LIKE 'docs/%' OR '%/docs/%' OR '.atlas/%' OR '%/.atlas/%')."""
+    if not path:
+        return False
+    p = path.replace("\\", "/")
+    return (
+        p.startswith("docs/")
+        or "/docs/" in p
+        or p.startswith(".atlas/")
+        or "/.atlas/" in p
+    )
+
+
+def _colony_recover_path(tool_name, summary):
+    """Pull a file path out of a (possibly truncated) input_summary.
+
+    Claude Code Edit/Write carry file_path; omp write carries a bare `path`
+    key; omp edit embeds the target in the patch header `[path#ANCHOR]`. None
+    means the row shows no filesystem target at all (internal-URI callers
+    return the URI instead, so _is_colony_repo_edit can reject it)."""
+    if not summary:
+        return None
+    m = re.search(r'"file_path"\s*:\s*"([^"\n]+)"', summary)
+    if m:
+        return m.group(1)
+    m = re.search(r'\{"path"\s*:\s*"([^"\n]+)"', summary)
+    if m:
+        return m.group(1)
+    m = re.search(r"\[([^\[\]\n]+?)#[A-Za-z0-9]+\]", summary)
+    if m:
+        return m.group(1)
+    return None
+
+
+def _colony_is_repo_edit(tool_name, summary):
+    """Is this edit/write row a non-docs REPO edit? Unknown-path rows count
+    as edits (the same unknown-path-is-work rule the tripwire uses); writes
+    to URIs (agent://, xd://...) and docs/.atlas/ targets do not."""
+    if summary is None:
+        return False  # only reachable with adversarial seeds; not an edit
+    path = _colony_recover_path(tool_name, summary)
+    if path is not None and _COLONY_URI_SCHEME_RE.match(path):
+        return False
+    if path is not None and _colony_is_doc_path(path):
+        return False
+    return True
+
+
+def _colony_is_ctx_call(tool_name, summary):
+    """Any of the three reachable ctx forms:
+    1. an MCP call to lean-ctx or context-mode (mcp__lean-ctx__ctx_search,
+       mcp__plugin_context-mode_context-mode__ctx_execute, ...),
+    2. a bare builtin ctx_* name (omp records `ctx_search`/`ctx_read` as
+       builtins once the MCP server's tools are reachable directly),
+    3. an omp `write` into the eval harness to reach a ctx_* tool device
+       (input_summary paths at xd://mcp__lean_ctx_... or
+       xd://mcp__context_mode_...)."""
+    if tool_name.startswith("mcp__"):
+        return "lean-ctx" in tool_name or "context-mode" in tool_name
+    if tool_name.startswith("ctx_"):
+        return True
+    if tool_name == "write" and summary:
+        return "xd://mcp__lean_ctx" in summary or "xd://mcp__context_mode" in summary
+    return False
+
+
+def _colony_named_dispatch_stats(rows):
+    """(rate, text) over dispatch input_summaries: a dispatch is 'named' when
+    its visible summary carries a non-empty `name` (token or JSON key),
+    'uncounted' when NULL, or visible-only-truncated (>= cap, so the name
+    argument could hide beyond the cap), or 'not named' when the summary is
+    short enough to be complete and shows no name token. Rate is
+    named/(named + not named); any uncountable row makes the summary carry
+    the caveat, and zero countable rows report 'unknown', never 0."""
+    named = not_named = uncountable = 0
+    for summary in rows:
+        s = (summary or "").strip()
+        m = _COLONY_NAME_RE.search(s)
+        val = (m.group(1) if m and m.group(1) else None) or (
+            m.group(2) if m and m.group(2) else None
+        )
+        if val:
+            named += 1
+        elif not s or len(s) >= COLONY_INPUT_SUMMARY_CAP:
+            uncountable += 1
+        else:
+            not_named += 1
+    determinable = named + not_named
+    rate = (named / determinable) if determinable else None
+    total = named + not_named + uncountable
+    if total == 0:
+        text = "no dispatches"
+    elif determinable == 0:
+        text = "unknown (%d dispatch summary/ies %s)" % (
+            total,
+            "NULL or truncated, so a name argument cannot be ruled in or out",
+        )
+    else:
+        text = "%d/%d named" % (named, determinable)
+        if uncountable:
+            text += " (%d more with NULL/truncated summaries excluded)" % uncountable
+    return rate, text
+
+
+def mine_colony_adherence(conn, root, window_days=None, min_sessions=None):
+    """Behavioral check: is the colony contract actually binding per harness?
+
+    Three measurements over main-thread (is_sidechain=0) tool_calls in the
+    recency window, each session classified claude-code vs omp by tool-name
+    casing (see _colony_classify_harness):
+      native_reader_share -- native Read/Grep/Glob/Bash against the ctx_*
+        routes that should have carried them (lean-ctx/context-mode MCP,
+        bare ctx_* builtins, omp writes into xd://mcp tools). The CLAUDE.md
+        lean-ctx contract forbids native Grep/Glob in docs/ projects; the
+        share must sit at COLONY_NATIVE_SHARE_MAX or below.
+      delegation_rate -- of sessions that edited non-docs repo files, the
+        share that also dispatched a subagent (Agent/Task/task).
+      named_dispatch_rate -- dispatches whose input_summary carries a
+        non-empty `name`, informative only (it never fires a finding;
+        truncated summaries report 'unknown' rather than 0).
+    One finding per harness when native_reader_share > 0.5 or
+    delegation_rate < 0.8, naming the enforcement surface for that harness
+    (claude-code: dispatch_tripwire + completion_gate; omp: whether the
+    plugins/atlas/omp extension is loaded). Silent under COLONY_MIN_SESSIONS
+    sessions of that harness in the window."""
+    window_days = window_days or RECENT_WINDOW_DAYS
+    min_sessions = min_sessions if min_sessions is not None else COLONY_MIN_SESSIONS
+    rows = conn.execute(
+        "SELECT session_id, tool_name, input_summary FROM tool_calls "
+        "WHERE is_sidechain=0 AND ts > strftime('%s','now', ?) "
+        "AND tool_name IS NOT NULL",
+        ("-%d days" % window_days,),
+    ).fetchall()
+    sessions = {}
+    for sid, tool_name, summary in rows:
+        s = sessions.setdefault(sid, {"names": [], "rows": []})
+        s["names"].append(tool_name)
+        s["rows"].append((tool_name, summary))
+
+    per = {}
+    for sid, s in sessions.items():
+        harness = _colony_classify_harness(s["names"])
+        if harness is None:
+            continue  # mcp-only session: no casing evidence, not measured
+        agg = per.setdefault(
+            harness,
+            {
+                "sessions": 0,
+                "native": 0,
+                "ctx": 0,
+                "repo_edit_sids": set(),
+                "dispatch_sids": set(),
+                "dispatch_summaries": [],
+            },
+        )
+        agg["sessions"] += 1
+        for tool_name, summary in s["rows"]:
+            if tool_name in _COLONY_NATIVE_READERS[harness]:
+                agg["native"] += 1
+            elif _colony_is_ctx_call(tool_name, summary):
+                agg["ctx"] += 1
+            if tool_name in _COLONY_EDIT_TOOLS and _colony_is_repo_edit(
+                tool_name, summary
+            ):
+                agg["repo_edit_sids"].add(sid)
+            if tool_name in _COLONY_DISPATCH_TOOLS:
+                agg["dispatch_sids"].add(sid)
+                agg["dispatch_summaries"].append(summary)
+
+    out = MinerResult()
+    for harness, agg in per.items():
+        n = agg["sessions"]
+        if n < min_sessions:
+            continue  # not measured: too little data is not "fixed"
+        denom = len(agg["repo_edit_sids"])
+        delegated = len(agg["repo_edit_sids"] & agg["dispatch_sids"])
+        delegation_rate = (delegated / denom) if denom else None
+        reader_denom = agg["native"] + agg["ctx"]
+        native_share = (agg["native"] / reader_denom) if reader_denom else None
+        named_rate, named_text = _colony_named_dispatch_stats(
+            agg["dispatch_summaries"]
+        )
+        out.evaluated.add(harness)
+        excess = 0.0
+        if native_share is not None and native_share > COLONY_NATIVE_SHARE_MAX:
+            excess += native_share - COLONY_NATIVE_SHARE_MAX
+        if delegation_rate is not None and delegation_rate < COLONY_DELEGATION_MIN:
+            excess += COLONY_DELEGATION_MIN - delegation_rate
+        if excess <= 0:
+            # Measured and within contract: only a quiet-window note rides in
+            # evidence; mine() keeps or resolves open findings via `evaluated`.
+            continue
+        if harness == "omp":
+            surface = (
+                "Confirm the plugins/atlas/omp extension is loaded "
+                "(plugins/atlas/omp/index.ts gates native grep/glob on "
+                "lean-ctx/context-mode being reachable) and that colony "
+                "dispatches stay named."
+            )
+            target = "plugins/atlas/omp/index.ts"
+        else:
+            surface = (
+                "Check the native-Grep/Glob deny in "
+                "plugins/atlas/hooks/dispatch_tripwire.py and the dispatch/"
+                "completion enforcement in plugins/atlas/hooks/completion_gate.py."
+            )
+            target = "plugins/atlas/hooks/dispatch_tripwire.py"
+        detail = (
+            f"{harness}: native_reader_share="
+            f"{'n/a' if native_share is None else '%g' % native_share} "
+            f"({agg['native']}/{reader_denom} reader-route calls), "
+            f"delegation_rate="
+            f"{'n/a' if delegation_rate is None else '%g' % delegation_rate} "
+            f"({delegated}/{denom} non-docs edit sessions dispatched), "
+            f"named_dispatch_rate={named_text} "
+            f"({n} sessions in the last {window_days} days)."
+        )
+        out.append(
+            _finding(
+                dimension="colony adherence",
+                severity="MED" if excess >= 0.3 else "LOW",
+                title=(
+                    f"{harness} sessions run native readers / dispatch "
+                    "outside the colony contract"
+                ),
+                detail=detail,
+                proposed_action=surface,
+                target_path=target,
+                key=harness,
+                metric_value=excess,
+                native_reader_share=native_share,
+                delegation_rate=delegation_rate,
+                named_dispatch_rate=named_rate if named_rate is not None else named_text,
+                native_calls=agg["native"],
+                ctx_calls=agg["ctx"],
+                sessions=n,
+            )
+        )
+    return out
+
+
 # --- turn quality (TypeSafe-scored replies; see docs/atlas-turn-scoring.md) ---
 # Tunable: fraction of scored turns that must hit a failure before a finding
 # is emitted. Conservative on purpose; raise to quiet a noisy judgment.
@@ -1397,6 +1701,7 @@ MINERS = {
     "tool_error_rate_high": mine_tool_error_rate,
     "cache_hit_ratio_low": mine_low_cache_hit,
     "recurring_friction": mine_recurring_friction,
+    "colony_adherence": mine_colony_adherence,
     "turn_quality": mine_turn_quality,
 }
 

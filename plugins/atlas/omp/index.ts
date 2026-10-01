@@ -3,10 +3,16 @@
  *
  * Enforces two atlas rules that nothing else enforces in omp:
  *
- * 1. Native-tool tripwire — `grep` / `glob` tool calls are BLOCKED (naming the
- *    lean-ctx replacement devices) when lean-ctx is available and the project
- *    has a docs/ directory. `read` / `bash` receive a one-time per-tool
- *    additionalContext nudge. Applies in subagents too.
+ * 1. Native-tool tripwire — in a docs/ project, `grep` / `glob` are BLOCKED
+ *    only when a lean-ctx replacement is actually callable in THIS session,
+ *    decided per call: a bare `ctx_search` / `ctx_glob` tool being named when
+ *    the session exposes one directly, otherwise the connected lean-ctx MCP
+ *    device named as `xd://mcp__lean_ctx_ctx_search` / `…_ctx_glob`. When
+ *    neither is reachable the call is allowed with a one-time nudge saying
+ *    lean-ctx is not reachable here — the lean-ctx binary on PATH alone no
+ *    longer arms the deny. `read` / `bash` receive a one-time per-tool
+ *    additionalContext nudge that names the actually-reachable replacement
+ *    (or stays silent when nothing is reachable). Applies in subagents too.
  * 2. Delegation-at-Stop — if the main thread edited/wrote non-docs files but
  *    never dispatched a subagent (`task` tool), the session is blocked ONCE at
  *    session_stop with the fix.
@@ -15,7 +21,8 @@
  *    named items double as sibling addresses (`write agent://<name>`).
  *
  * Kill switches: ATLAS_GATE=off disables the delegation check; ATLAS_TRIPWIRE_HARD=off
- * disables the native-tool deny (nudges remain). All handlers fail open: any
+ * disables the whole native-tool tripwire (grep/glob deny and its unreachable
+ * nudge), while read/bash preference nudges remain. All handlers fail open: any
  * internal error returns undefined (omp's tool_call dispatch is fail-closed,
  * so an uncaught throw here would strand the agent).
  *
@@ -108,19 +115,118 @@ export function boardMirrorArgv(
 	return argv;
 }
 
-const DENY_REASONS: Record<string, string> = {
-	grep:
-		"Atlas enforcement: use lean-ctx ctx_search instead of grep — write JSON args to the device xd://mcp__lean_ctx_ctx_search (e.g. {\"pattern\": \"...\", \"path\": \"...\"}).",
-	glob:
-		"Atlas enforcement: use lean-ctx ctx_glob instead of glob — write JSON args to the device xd://mcp__lean_ctx_ctx_glob (e.g. {\"pattern\": \"**/*.ts\"}).",
+/** Kinds of native tool calls the tripwire redirects to a lean-ctx replacement. */
+export type LeanKind = "search" | "glob" | "read" | "shell";
+
+/**
+ * A lean-ctx replacement actually callable in the session right now: either a
+ * first-class tool to call directly, or an xd:// device route to write JSON
+ * args to.
+ */
+export type LeanReplacement = { via: "tool"; name: string } | { via: "device"; device: string };
+
+const LEAN_CTX_SERVER = /lean[-_]?ctx/i;
+const CONTEXT_MODE_SERVER = /context[-_]?mode/i;
+
+/** Plain tool-name candidates per kind, in preference order. */
+const BUILTIN_CANDIDATES: Record<LeanKind, string[]> = {
+	search: ["ctx_search"],
+	glob: ["ctx_glob"],
+	read: ["ctx_read"],
+	shell: ["ctx_shell", "ctx_execute"],
 };
 
-const NUDGES: Record<string, string> = {
-	read:
-		"Atlas nudge: for exploration, prefer lean-ctx ctx_read (write JSON args to xd://mcp__lean_ctx_ctx_read). Native Read is still fine immediately before an Edit.",
-	bash:
-		"Atlas nudge: for anything producing output (~20+ lines, logs, data), prefer lean-ctx ctx_shell (xd://mcp__lean_ctx_ctx_shell) / context-mode ctx_execute (xd://mcp__context_mode_context_mode_ctx_execute). Native Bash remains fine for mutations and short fixed output.",
+/** MCP device-name candidates per kind (server provenance + tool name). */
+const DEVICE_CANDIDATES: Record<LeanKind, Array<{ server: RegExp; tool: string }>> = {
+	search: [{ server: LEAN_CTX_SERVER, tool: "ctx_search" }],
+	glob: [{ server: LEAN_CTX_SERVER, tool: "ctx_glob" }],
+	read: [{ server: LEAN_CTX_SERVER, tool: "ctx_read" }],
+	shell: [
+		{ server: LEAN_CTX_SERVER, tool: "ctx_shell" },
+		{ server: LEAN_CTX_SERVER, tool: "ctx_execute" },
+		{ server: CONTEXT_MODE_SERVER, tool: "ctx_execute" },
+	],
 };
+
+/**
+ * The xd:// device route for one MCP tool. omp mints MCP tool names as
+ * `mcp__<sanitized server>_<tool>` and presents connected MCP tools as `xd://`
+ * devices; the route is live exactly when the minted name is in the session's
+ * enabled set (session-tools: every connected MCP tool is enabled; loadMode
+ * only decides top-level vs device presentation). Matching is by tool-name
+ * suffix plus server-name shape, so mint collisions/caps and server spellings
+ * (`lean-ctx`, `lean_ctx`) both resolve.
+ */
+function deviceRoute(active: string[], serverName: RegExp, mcpToolName: string): string | undefined {
+	for (const name of active) {
+		if (!name.startsWith("mcp__")) continue;
+		const rest = name.slice("mcp__".length);
+		if (!rest.toLowerCase().endsWith(`_${mcpToolName.toLowerCase()}`)) continue;
+		const server = rest.slice(0, rest.length - mcpToolName.length - 1);
+		if (serverName.test(server)) return `xd://${name}`;
+	}
+	return undefined;
+}
+
+/**
+ * Resolve the lean-ctx replacement for one kind from the session's currently
+ * enabled tool names: a bare builtin/custom `ctx_*` tool first (callable
+ * directly), otherwise the connected lean-ctx MCP device route
+ * (`xd://mcp__lean_ctx_ctx_search`; context-mode's execute device is accepted
+ * as a shell surrogate). `undefined` means nothing is reachable in this
+ * session and the caller must allow the native tool (fail open).
+ */
+export function resolveLeanReplacement(kind: LeanKind, active: string[] | undefined): LeanReplacement | undefined {
+	if (!Array.isArray(active)) return undefined;
+	for (const name of BUILTIN_CANDIDATES[kind]) {
+		if (active.includes(name)) return { via: "tool", name };
+	}
+	// xd:// devices are invoked by writing to them; without `write` the route is not callable.
+	if (!active.includes("write")) return undefined;
+	for (const { server, tool } of DEVICE_CANDIDATES[kind]) {
+		const route = deviceRoute(active, server, tool);
+		if (route) return { via: "device", device: route };
+	}
+	return undefined;
+}
+
+const REPLACEMENT_EXAMPLES: Record<"search" | "glob", { tool: string; example: string }> = {
+	search: { tool: "ctx_search", example: '{"pattern": "...", "path": "..."}' },
+	glob: { tool: "ctx_glob", example: '{"pattern": "**/*.ts"}' },
+};
+
+/** Deny text naming the replacement form the session can actually reach. */
+function denyReason(tool: "grep" | "glob", replacement: LeanReplacement): string {
+	const spec = REPLACEMENT_EXAMPLES[tool === "grep" ? "search" : "glob"];
+	if (replacement.via === "tool") {
+		return `Atlas enforcement: use the lean-ctx ${spec.tool} TOOL instead of ${tool} — call ${replacement.name} directly with JSON args (e.g. ${spec.example}).`;
+	}
+	return `Atlas enforcement: use lean-ctx ${spec.tool} instead of ${tool} — write JSON args to the device ${replacement.device} (e.g. ${spec.example}).`;
+}
+
+/** One-time nudge when grep/glob is allowed because nothing lean-ctx is reachable. */
+const UNREACHABLE_NUDGE = (tool: "grep" | "glob") =>
+	`Atlas nudge: lean-ctx is not reachable in this session, so native ${tool} stays allowed. The lean-ctx binary on PATH is not, by itself, a callable session tool; the deny arms only when a ctx_* replacement (tool or xd:// device) is live here.`;
+
+/** Read nudge naming the replacement form the session can actually reach. */
+function readNudge(replacement: LeanReplacement): string {
+	const how =
+		replacement.via === "tool"
+			? `call the lean-ctx ${replacement.name} tool directly`
+			: `write JSON args to ${replacement.device}`;
+	return `Atlas nudge: for exploration, prefer lean-ctx ctx_read (${how}). Native Read is still fine immediately before an Edit.`;
+}
+
+/** Bash nudge naming the replacement form the session can actually reach. */
+function bashNudge(replacement: LeanReplacement, active: string[]): string {
+	const via =
+		replacement.via === "tool"
+			? `the lean-ctx ${replacement.name} tool`
+			: `lean-ctx ctx_shell (write JSON args to ${replacement.device})`;
+	const contextMode = deviceRoute(active, CONTEXT_MODE_SERVER, "ctx_execute");
+	const alt = contextMode && contextMode !== replacement.device ? ` or context-mode ctx_execute (${contextMode})` : "";
+	return `Atlas nudge: for anything producing output (~20+ lines, logs, data), prefer ${via}${alt}. Native Bash remains fine for mutations and short fixed output.`;
+}
 
 const STOP_MESSAGE = (n: number) =>
 	`Atlas delegation gate: this session issued ${n} non-docs edit/write call(s) without dispatching a single subagent (task tool). The orchestrator must delegate code changes to subagents instead of writing them itself. Fix: dispatch the code change via the task tool (e.g. to an atlas:implementer subagent), then verify its result. Inline edits already made may stand; the delegation must still happen. (Set ATLAS_GATE=off to disable this check.)`;
@@ -184,14 +290,29 @@ function taskNamingHint(input: Record<string, unknown>): { count: number; agents
 }
 
 export interface ExtensionDeps {
-	/** Whether lean-ctx is actually available in this runtime. */
-	leanCtxAvailable(): boolean;
+	/**
+	 * Names of the tools callable in the session RIGHT NOW — omp's enabled set
+	 * (top-level names plus live `xd://` device mounts). Returning undefined
+	 * means availability is unknown and every native call fails open (allowed).
+	 * Evaluated per call: tool surfaces change mid-session (MCP connect, code
+	 * mode partitions, restricted subagent sets).
+	 */
+	activeTools(): string[] | undefined;
 	/**
 	 * Fire-and-forget spawn of the board mirror CLI. The real binding detaches
 	 * the child (unref) so the session never waits for python startup; tests
 	 * inject a recording or synchronous runner instead.
 	 */
 	spawnBoardMirror(argv: string[], opts: { cwd: string }): void;
+}
+
+/** Per-call availability read; any internal failure means unknown (allow). */
+function activeToolsOf(deps: ExtensionDeps): string[] | undefined {
+	try {
+		return deps.activeTools();
+	} catch {
+		return undefined;
+	}
 }
 
 /**
@@ -226,25 +347,32 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 			if (!docsRoot(cwd)) return undefined;
 			const isSub = ctx.agent.kind === "sub";
 
-			// 1) Native-tool deny: grep/glob -> lean-ctx devices (subagents included).
+			// 1) Native-tool tripwire: grep/glob -> the replacement reachable NOW,
+			// checked per call (subagents included). Hard-off silences the whole
+			// tripwire; otherwise deny when a replacement is live, else one-time
+			// allow-nudge naming the unavailability.
 			if (tool === "grep" || tool === "glob") {
-				if (
-					deps.leanCtxAvailable() &&
-					process.env.ATLAS_TRIPWIRE_HARD !== "off"
-				) {
-					return { block: true, reason: DENY_REASONS[tool] };
+				if (process.env.ATLAS_TRIPWIRE_HARD === "off") return undefined;
+				const active = activeToolsOf(deps);
+				if (!active) return undefined; // availability unknown: allow silently, never claim "unreachable"
+				const replacement = resolveLeanReplacement(tool === "grep" ? "search" : "glob", active);
+				if (replacement) return { block: true, reason: denyReason(tool, replacement) };
+				if (!nudged.has(tool)) {
+					nudged.add(tool);
+					return { additionalContext: UNREACHABLE_NUDGE(tool) };
 				}
 				return undefined;
 			}
 
-			// 2) One-time per-tool nudges for read/bash.
-			const nudge = NUDGES[tool];
-			if (nudge) {
-				if (!nudged.has(tool)) {
-					nudged.add(tool);
-					return { additionalContext: nudge };
-				}
-				return undefined;
+			// 2) One-time per-tool nudges for read/bash, naming a reachable form;
+			// silent when nothing lean-ctx/context-mode is reachable to prefer.
+			if (tool === "read" || tool === "bash") {
+				if (nudged.has(tool)) return undefined;
+				const active = activeToolsOf(deps);
+				const replacement = resolveLeanReplacement(tool === "read" ? "read" : "shell", active);
+				if (!replacement) return undefined;
+				nudged.add(tool);
+				return { additionalContext: tool === "read" ? readNudge(replacement) : bashNudge(replacement, active ?? []) };
 			}
 
 			// 3) Delegation tracking — main thread only.
@@ -301,12 +429,22 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 	});
 }
 
-/** MCP tool provenance includes configured servers even when tools are inactive. */
+/** Session tool surfaces are per-session: omp rebinds the factory, so state and availability stay session-local. */
 export default function atlasOmpExtension(pi: ExtensionAPI): void {
 	ensureClaudePluginRoot();
 	register(pi, {
-		leanCtxAvailable: () => !!Bun.which("lean-ctx") || pi.getAllTools().some(tool =>
-			/lean[-_]ctx/i.test(tool.mcpServerName ?? "")),
+		// getActiveTools() is omp's enabled set (top-level names plus live xd://
+		// device mounts) — exactly the callable surface. getAllTools() provenance
+		// is deliberately NOT consulted: it lists configured servers even when
+		// their tools are inactive, which must not arm the deny. The lean-ctx
+		// binary on PATH is likewise not a session tool and never consulted.
+		activeTools: () => {
+			try {
+				return pi.getActiveTools();
+			} catch {
+				return undefined; // fail open — runtime not wired yet or API absent means allow
+			}
+		},
 		spawnBoardMirror: (argv, opts) => {
 			try {
 				const child = Bun.spawn(argv, { cwd: opts.cwd, stdin: "ignore", stdout: "ignore", stderr: "ignore" });
