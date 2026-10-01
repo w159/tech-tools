@@ -196,6 +196,27 @@ class ColonyAdherenceMinerTest(unittest.TestCase):
         self.assertIn("unknown", rate)
         self.assertIn("unknown", omp["detail"])
 
+    def test_ingested_omp_batches_count_named_only_when_every_item_is(self):
+        """End to end: real ingest summaries of batched omp `task` calls
+        through the miner. A batch with one unnamed item is NOT named, and an
+        all-empty `names` list never matches the `name` token."""
+        import session_ingest
+
+        big = "w" * 900
+        shapes = [
+            [{"name": "ScoutA", "task": big}, {"name": "FixB", "task": big}],
+            [{"name": "ScoutA", "task": big}, {"task": big}],
+            [{"name": "", "task": big}, {"task": big}],
+        ]
+        for i in range(5):
+            self._omp_session(f"b{i}")
+        for i, tasks in enumerate(shapes):
+            summary, _ = session_ingest.summarize_input({"context": big, "tasks": tasks})
+            self._call(f"b{i}", "task", summary)
+        omp = self._by_key(self._mine())["omp"]
+        self.assertAlmostEqual(omp["evidence"]["named_dispatch_rate"], 1 / 3)
+        self.assertIn("1/3 named", omp["detail"])
+
     # --- classification and silence ------------------------------------------
 
     def test_mcp_only_sessions_are_not_classified(self):
