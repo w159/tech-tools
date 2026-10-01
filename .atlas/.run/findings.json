@@ -2375,13 +2375,15 @@
     "surface": "plugin",
     "category": "enforcement",
     "severity": "medium",
-    "title": "Atlas 8.6.0: shared contracts across Claude Code and omp, omp output style, tool mandates, tmux colony mode",
+    "title": "Atlas 8.6.0: shared contracts, omp output style, tool mandates, hook bridge, tmux colony mode (omp parity partial)",
     "evidence": [
       "pytest hooks/ scripts/: 1692 passed, 3 skipped, 0 failed (baseline 1653); bun test omp: 57 pass across 5 files (baseline 38)",
       "bun omp/gen-agents.ts: omp agent files up to date (12 files)",
       "omp -p -e omp/index.ts in a docs/ project: model quoted the style's LEDGER line, opened with the ATLAS header, confirmed the 'Recall first:' line; with ATLAS_STYLE=off ATLAS_MANDATES=off both absent",
       "real tmux smoke: atlas_mux spawn Alpha (claude tier sonnet/low) + Beta (omp tier @default/medium) with stub workers; atlas_todo notes --to lead returned both notes, reports and exit records; kill -> tmux has-session fails, no atlas-* sessions left",
-      "shared cases: contracts/mandates.json gitCommitCases run by test_bash_advisor.py and omp/mandates.test.ts; contracts/native-tools.json delegationExemptCases run by test_completion_gate.py and omp/contracts.test.ts"
+      "shared cases: contracts/mandates.json gitCommitCases run by test_bash_advisor.py and omp/mandates.test.ts; contracts/native-tools.json delegationExemptCases run by test_completion_gate.py and omp/contracts.test.ts",
+      "hook bridge: omp/hook-bridge.test.ts 7 tests; live omp -p: model confirmed 'Atlas: orchestrator posture' (session_boot via bridge); omp write produced .atlas/.run/docs_drift_watch.json",
+      "benchmark 2026-10-01 same task both harnesses: Claude 66s / 3.55M tok / 1 dispatch unnamed / native share 1.0 / 2 passed; omp 65s / 1.15M tok / 1 dispatch named / native share 1.0 / 2 passed"
     ],
     "doc_refs": [
       "docs/atlas-harness-parity.md",
@@ -2395,8 +2397,12 @@
     "reproduction": "cd plugins/atlas && python3 -m pytest hooks/ scripts/ -q && bun test omp && bun omp/gen-agents.ts",
     "proposed_fix": "",
     "blast_radius": "module",
-    "status": "verified",
+    "status": "partial",
     "verified_at": "2026-10-01",
-    "verified_by": "main (inline; subagents halted by OpenRouter 402)"
+    "verified_by": "main (inline; subagents halted by OpenRouter 402 on 131072-token requests)",
+    "open": [
+      "omp lacks completion-gate (a)-(l), memory capture, nudge, ingest/chronicle (Claude transcript schema), dispatch_tripwire inline-op/spec/prod-edit tiers, connector credential watch (MCP name mint)",
+      "benchmark misses targets: native-reader share 1.0 in both (no lean-ctx in throwaway repos); main-thread code edits in both; Claude dispatch unnamed (session not armed)"
+    ]
   }
 ]
