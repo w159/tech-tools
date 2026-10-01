@@ -25,6 +25,7 @@ import os
 import re
 import sys
 import time
+from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import atlas_db  # noqa: E402
@@ -457,7 +458,7 @@ def _facet_pending(conn, session_id):
 
 def _apply_facet(conn, session_id, resp):
     ans = resp.get("answers") or {}
-    fields = {"enriched_at": time.time()}
+    fields: dict[str, Any] = {"enriched_at": time.time()}
     for col in ("outcome", "user_satisfaction", "session_type"):
         choice = (ans.get(col) or {}).get("choice")
         if choice:
@@ -480,7 +481,7 @@ def default_max_calls():
 
 
 def score_session(
-    conn, session_id, client=typesafe_client, max_calls=None, dry_run=False
+    conn, session_id, client: Any = typesafe_client, max_calls=None, dry_run=False
 ):
     """Score every unscored exchange of one session (one batched call each),
     then enrich the session's pending facet row. Idempotent: exchanges whose
@@ -502,6 +503,17 @@ def score_session(
     have = _existing(conn, session_id)
     exchanges = build_exchanges(conn, session_id)
     summary["exchanges"] = len(exchanges)
+    # Long sessions hit the cap; keep one call for the facet so the sessions
+    # the miners care most about still get outcome/satisfaction filled in.
+    reserve = 1 if max_calls > 1 and _facet_pending(conn, session_id) else 0
+
+    def fail(e):
+        summary["error"] = str(e)
+        if not dry_run:
+            atlas_db.upsert_turn_score(
+                conn, session_id, "_session", "scoring_error", kind="error",
+                label=str(e)[:500], value=float(e.status), scored_at=time.time(),
+            )
 
     def call(state, questions):
         summary["calls"] += 1
@@ -519,13 +531,13 @@ def score_session(
         missing = want - have.get(ex["message_uuid"], set())
         if not missing:
             continue
-        if summary["calls"] >= max_calls:
+        if summary["calls"] >= max_calls - reserve:
             summary["stopped"] = "max_calls"
             break
         try:
             resp = call(ex["state"], _questions_for(ex["state"], only=missing))
         except typesafe_client.TypeSafeError as e:
-            summary["error"] = str(e)
+            fail(e)
             if e.status == 422:
                 continue
             summary["stopped"] = "error"
@@ -534,7 +546,7 @@ def score_session(
         if resp:
             summary["rows"] += _write_answers(conn, session_id, ex, resp, missing)
 
-    if summary["stopped"] is None and _facet_pending(conn, session_id):
+    if summary["stopped"] in (None, "max_calls") and _facet_pending(conn, session_id):
         fstate = build_facet_state(conn, session_id)
         if fstate:
             if summary["calls"] >= max_calls:
@@ -543,7 +555,7 @@ def score_session(
                 try:
                     resp = call(fstate, _facet_questions())
                 except typesafe_client.TypeSafeError as e:
-                    summary["error"] = str(e)
+                    fail(e)
                     summary["stopped"] = "error"
                     return summary
                 if resp:
@@ -571,8 +583,10 @@ def status(conn):
         "SELECT COUNT(*), MAX(scored_at), COALESCE(SUM(input_tokens),0) FROM turn_scores"
     ).fetchone()
     week = conn.execute(
-        "SELECT COUNT(*) FROM turn_scores WHERE scored_at >= ?", (now - 7 * 86400,)
+        "SELECT COUNT(*) FROM turn_scores WHERE scored_at >= ? AND judgment != 'scoring_error'",
+        (now - 7 * 86400,),
     ).fetchone()[0]
+    errors_7d, last_error = recent_errors(conn, now)
     return {
         "key_present": bool(os.environ.get("TYPESAFE_API_KEY", "").strip()),
         "scoring_enabled": typesafe_client.available(),
@@ -580,11 +594,28 @@ def status(conn):
         "rows_last_7d": week,
         "last_scored_at": last,
         "total_input_tokens": tokens,
+        "errors_last_7d": errors_7d,
+        "last_error": last_error,
     }
 
 
+def recent_errors(conn, now=None):
+    """(count in last 7 days, latest error label) of recorded scoring failures,
+    so a bad key or a 429 storm is visible instead of silently scoring nothing."""
+    since = (now or time.time()) - 7 * 86400
+    count = conn.execute(
+        "SELECT COUNT(*) FROM turn_scores WHERE judgment='scoring_error' AND scored_at >= ?",
+        (since,),
+    ).fetchone()[0]
+    row = conn.execute(
+        "SELECT label FROM turn_scores WHERE judgment='scoring_error' "
+        "ORDER BY scored_at DESC LIMIT 1"
+    ).fetchone()
+    return count, (row[0] if row else None)
+
+
 def main(argv=None):
-    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap = argparse.ArgumentParser(description=(__doc__ or "").split("\n")[0])
     ap.add_argument("--session")
     ap.add_argument("--recent-days", type=float)
     ap.add_argument("--limit", type=int)
@@ -601,7 +632,9 @@ def main(argv=None):
             f" (scoring {'enabled' if s['scoring_enabled'] else 'disabled'})\n"
             f"rows total: {s['rows_total']}\nrows last 7d: {s['rows_last_7d']}\n"
             f"last scored_at: {s['last_scored_at']}\n"
-            f"total input_tokens: {s['total_input_tokens']}"
+            f"total input_tokens: {s['total_input_tokens']}\n"
+            f"errors last 7d: {s['errors_last_7d']}"
+            + (f" (latest: {s['last_error'][:200]})" if s["last_error"] else "")
         )
         return 0
     if args.session:

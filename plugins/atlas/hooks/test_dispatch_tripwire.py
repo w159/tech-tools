@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 HOOK = os.path.join(os.path.dirname(__file__), "dispatch_tripwire.py")
@@ -68,6 +69,7 @@ class TripwireTest(unittest.TestCase):
     def _pre_payload(self, tool, tinput=None, session="sess-1"):
         return {
             "session_id": session,
+            "cwd": self.tmp,
             "hook_event_name": "PreToolUse",
             "tool_name": tool,
             "tool_input": tinput or {},
@@ -608,6 +610,7 @@ class InProcessTest(unittest.TestCase):
     def _pre(self, tool, tinput=None, session="sess-1"):
         return {
             "hook_event_name": "PreToolUse",
+            "cwd": self.tmp,
             "session_id": session,
             "tool_name": tool,
             "tool_input": tinput or {},
@@ -1256,3 +1259,53 @@ class NestedSubagentDenyTest(unittest.TestCase):
         win = r"C:\Users\x\.claude\projects\p\sess\subagents\agent-abc.jsonl"
         r = run_hook(self._payload(win), self.env)
         self.assertEqual(self._decision(r.stdout), "deny")
+
+
+class NativeToolPolicyTest(unittest.TestCase):
+    def setUp(self):
+        import dispatch_tripwire
+
+        self.dt = dispatch_tripwire
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        (self.root / "docs").mkdir()
+
+    def call(self, tool, *, available=True, **extra):
+        payload = dict(hook_event_name="PreToolUse", tool_name=tool,
+                       session_id="native-policy", cwd=str(self.root), **extra)
+        output = io.StringIO()
+        with patch.object(self.dt.shutil, "which", return_value="/bin/lean-ctx" if available else None), contextlib.redirect_stdout(output):
+            handled = self.dt._native_tool_policy(payload)
+        return handled, output.getvalue()
+
+    def test_native_search_denied_without_orchestration_including_subagents(self):
+        for tool, replacement in (("Grep", "ctx_search"), ("Glob", "ctx_glob")):
+            _, output = self.call(tool, transcript_path="/session/subagents/agent-x.jsonl")
+            result = json.loads(output)["hookSpecificOutput"]
+            self.assertEqual(result["permissionDecision"], "deny")
+            self.assertIn(replacement, result["permissionDecisionReason"])
+
+    def test_search_allowed_without_replacement_or_with_hard_off(self):
+        for tool in ("Grep", "Glob"):
+            self.assertEqual(self.call(tool, available=False), (True, ""))
+            with patch.dict(os.environ, {"ATLAS_TRIPWIRE_HARD": "off"}):
+                self.assertEqual(self.call(tool), (True, ""))
+
+    def test_outside_docs_projects_is_silent(self):
+        (self.root / "docs").rmdir()
+        for tool in ("Grep", "Glob", "Read", "Bash"):
+            self.assertEqual(self.call(tool), (False, ""))
+
+    def test_read_and_bash_nudge_once_independently_with_hard_off(self):
+        with patch.dict(os.environ, {"ATLAS_TRIPWIRE_HARD": "off"}):
+            for tool, replacement in (("Read", "ctx_read"), ("Bash", "ctx_execute")):
+                _, output = self.call(tool)
+                result = json.loads(output)["hookSpecificOutput"]
+                self.assertNotIn("permissionDecision", result)
+                self.assertIn(replacement, result["additionalContext"])
+                self.assertEqual(self.call(tool), (True, ""))
+
+    def test_internal_policy_error_is_silent_and_allowed(self):
+        with patch.object(self.dt, "find_root", side_effect=RuntimeError("bad filesystem")):
+            self.assertEqual(self.call("Grep"), (True, ""))

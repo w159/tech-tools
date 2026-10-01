@@ -277,19 +277,22 @@ def check_typesafe_scoring(now=None):
     has_key = bool(os.environ.get("TYPESAFE_API_KEY"))
     off = os.environ.get("ATLAS_TYPESAFE_SCORING") == "off"
     path = atlas_db.db_path()
-    rows, last = 0, None
+    rows, last, errs, last_err = 0, None, 0, None
     if os.path.exists(path):
         try:
             conn = atlas_db.connect(path)
             try:
                 rows, last = conn.execute(
                     "SELECT COUNT(*), MAX(scored_at) FROM turn_scores "
-                    "WHERE scored_at > ?",
+                    "WHERE scored_at > ? AND judgment != 'scoring_error'",
                     ((now or time.time()) - 7 * 86400,),
                 ).fetchone()
                 last = conn.execute(
                     "SELECT MAX(scored_at) FROM turn_scores"
                 ).fetchone()[0]
+                import turn_scoring  # lazy: pulls in the ingest/client modules
+
+                errs, last_err = turn_scoring.recent_errors(conn, now)
             finally:
                 conn.close()
         except Exception:
@@ -304,7 +307,9 @@ def check_typesafe_scoring(now=None):
         f"ATLAS_TYPESAFE_SCORING={'off' if off else 'on'}; "
         f"{rows or 0} turn_scores row(s) in last 7d; last scored {last_s}"
     )
-    return (has_key and not off and bool(rows)), detail
+    if errs:
+        detail += f"; {errs} scoring error(s) in last 7d, latest: {(last_err or '')[:200]}"
+    return (has_key and not off and bool(rows) and not errs), detail
 
 
 def check_context_tooling(root_path=None):
@@ -1167,7 +1172,8 @@ def mine_turn_quality(conn, root, window_days=None, min_turns=20):
     window_days = window_days or RECENT_WINDOW_DAYS
     cur = conn.execute(
         "SELECT t.session_id, t.message_uuid, t.judgment, t.kind, t.value, "
-        "t.label, COALESCE(p.name, p.root_path, '(unknown)') "
+        "t.label, COALESCE(p.name, p.root_path, '(unknown)'), "
+        "COALESCE(s.agent, 'claude'), t.ts "
         "FROM turn_scores t "
         "LEFT JOIN session_logs s ON s.session_id = t.session_id "
         "LEFT JOIN projects p ON p.id = s.project_id "
@@ -1175,11 +1181,15 @@ def mine_turn_quality(conn, root, window_days=None, min_turns=20):
         ("-%d days" % window_days,),
     )
     rows = [
-        dict(zip(("sid", "uuid", "j", "kind", "value", "label", "project"), r))
+        dict(zip(("sid", "uuid", "j", "kind", "value", "label", "project", "agent", "ts"), r))
         for r in cur.fetchall()
     ]
     by_j = {}
     for r in rows:
+        # The output style (header, characters) only reaches Claude Code
+        # sessions; omp/codex replies would read as 100% non-compliant.
+        if r["j"] in ("header_present", "banned_punct") and r["agent"] != "claude":
+            continue
         by_j.setdefault(r["j"], []).append(r)
 
     ntc = {
@@ -1188,11 +1198,36 @@ def mine_turn_quality(conn, root, window_days=None, min_turns=20):
         if "next_turn_correction" in turn_scoring.JUDGMENTS
     }
 
-    def predictive(j, hits):
-        """(P(corr|hit), n_hit, P(corr|not hit), n_not) over turns that also
-        have a next_turn_correction verdict; None where a side is empty."""
-        a = [ntc[k] for k, h in hits.items() if h and k in ntc]
-        b = [ntc[k] for k, h in hits.items() if not h and k in ntc]
+    # Deterministic ground truth, independent of Jev: the next real user prompt
+    # after a scored reply carries a regex `user_correction` signal. Comparing a
+    # Jev judgment only against Jev's own next_turn_correction is circular.
+    gt = {}
+    sids = {r["sid"] for r in rows}
+    for sid in sids:
+        prompts = conn.execute(
+            "SELECT uuid, ts FROM user_prompts WHERE session_id=? AND ts IS NOT NULL "
+            "ORDER BY ts",
+            (sid,),
+        ).fetchall()
+        corrected = {
+            u for (u,) in conn.execute(
+                "SELECT message_uuid FROM signals WHERE session_id=? "
+                "AND signal_type='user_correction'",
+                (sid,),
+            )
+        }
+        for r in rows:
+            if r["sid"] != sid or (sid, r["uuid"]) in gt or r["ts"] is None:
+                continue
+            nxt = next((u for u, ts in prompts if ts > r["ts"]), None)
+            if nxt is not None:
+                gt[(sid, r["uuid"])] = nxt in corrected
+
+    def split(truth, hits):
+        """(P(corr|hit), n_hit, P(corr|not hit), n_not) over turns that have a
+        verdict in `truth`; None where a side is empty."""
+        a = [truth[k] for k, h in hits.items() if h and k in truth]
+        b = [truth[k] for k, h in hits.items() if not h and k in truth]
         return (
             sum(a) / len(a) if a else None,
             len(a),
@@ -1200,21 +1235,26 @@ def mine_turn_quality(conn, root, window_days=None, min_turns=20):
             len(b),
         )
 
+    def predictive(j, hits):
+        return split(ntc, hits)
+
     def fmt(p):
         return "n/a" if p is None else f"{p:.0%}"
 
-    out = []
+    out = MinerResult()
     for j, spec in turn_scoring.JUDGMENTS.items():
         jr = by_j.get(j, [])
         hits = {(r["sid"], r["uuid"]): _turn_hit(spec, r) for r in jr}
         pred = predictive(j, hits) if j != "next_turn_correction" else None
+        pred_gt = split(gt, hits)
         scopes = [(None, jr)]
         for proj in sorted({r["project"] for r in jr}):
             scopes.append((proj, [r for r in jr if r["project"] == proj]))
         for proj, sub in scopes:
             n = len(sub)
             if n < min_turns:
-                continue
+                continue  # not measured: too little data is not "fixed"
+            out.evaluated.add(f"{j}:{proj}" if proj else j)
             hit_rows = [r for r in sub if hits[(r["sid"], r["uuid"])]]
             rate = len(hit_rows) / n
             threshold = TURN_QUALITY_THRESHOLDS.get(j, TURN_QUALITY_DEFAULT_THRESHOLD)
@@ -1231,9 +1271,14 @@ def mine_turn_quality(conn, root, window_days=None, min_turns=20):
                 detail += (
                     f" Predictive value (window-wide): P(next-turn correction | hit)="
                     f"{fmt(pred[0])} (n={pred[1]}) vs | not hit={fmt(pred[2])} "
-                    f"(n={pred[3]}); a judgment that does not predict corrections "
-                    "is noise."
+                    f"(n={pred[3]}) per Jev's next_turn_correction (model agreement)."
                 )
+            detail += (
+                f" Ground truth (regex user_correction on the next prompt): "
+                f"P(corr | hit)={fmt(pred_gt[0])} (n={pred_gt[1]}) vs | not hit="
+                f"{fmt(pred_gt[2])} (n={pred_gt[3]}). A judgment that predicts "
+                "neither is noise."
+            )
             out.append(
                 _finding(
                     dimension="reply quality",
@@ -1260,11 +1305,18 @@ def mine_turn_quality(conn, root, window_days=None, min_turns=20):
                     }
                     if pred
                     else None,
+                    ground_truth={
+                        "p_corr_given_hit": pred_gt[0],
+                        "n_hit": pred_gt[1],
+                        "p_corr_given_not_hit": pred_gt[2],
+                        "n_not_hit": pred_gt[3],
+                    },
                 )
             )
 
     hdr = by_j.get("header_present", [])
     if len(hdr) >= min_turns:
+        out.evaluated.add("metric:header_present")
         missing = [r for r in hdr if not r["value"]]
         miss_rate = len(missing) / len(hdr)
         if 1 - miss_rate < HEADER_RATE_MIN:
@@ -1292,6 +1344,7 @@ def mine_turn_quality(conn, root, window_days=None, min_turns=20):
             )
     bp = by_j.get("banned_punct", [])
     if len(bp) >= min_turns:
+        out.evaluated.add("metric:banned_punct")
         bad = [r for r in bp if (r["value"] or 0) > 0]
         rate = len(bad) / len(bp)
         if rate > BANNED_PUNCT_RATE_MAX:
@@ -1323,6 +1376,17 @@ def mine_turn_quality(conn, root, window_days=None, min_turns=20):
 RECENT_WINDOW_DAYS = 14
 
 
+class MinerResult(list):
+    """Findings list that also carries `evaluated`: the keys the miner had
+    enough data to judge this run. mine() auto-resolves an open finding only
+    when its key was evaluated and did not fire, so a quiet or thin window is
+    never mistaken for a fix. Miners returning a plain list are never swept."""
+
+    def __init__(self, *a):
+        super().__init__(*a)
+        self.evaluated = set()
+
+
 MINERS = {
     "memory_capture_silent_drop": mine_memory_capture_silent_drop,
     "doctor_hook_stale_verdicts": mine_doctor_hook_stale_verdicts,
@@ -1350,13 +1414,16 @@ def mine(conn, root=None):
             found = []
             counts[name] = f"error: {e}"
             continue
+        emitted = set()
         for f in found:
             evidence = dict(f["evidence"])
             evidence["miner"] = name
             evidence["metric_value"] = f["metric_value"]
+            fp = f"{name}:{f['key']}"
+            emitted.add(fp)
             atlas_db.upsert_finding(
                 conn,
-                f"{name}:{f['key']}",
+                fp,
                 dimension=f["dimension"],
                 severity=f["severity"],
                 title=f["title"],
@@ -1365,6 +1432,28 @@ def mine(conn, root=None):
                 proposed_action=f["proposed_action"],
                 target_path=f["target_path"],
             )
+            # A finding that fires again after auto-resolving is live again.
+            conn.execute(
+                "UPDATE findings SET status='open' WHERE fingerprint=? AND status='resolved'",
+                (fp,),
+            )
+        # Close only untriaged findings whose key the miner evaluated with
+        # enough data and that no longer fire. Miners that do not report
+        # `evaluated` are never swept; a user's accepted/rejected/applied/
+        # verified verdict is never touched (status must be 'open').
+        evaluated = getattr(found, "evaluated", None) or set()
+        stale = [
+            f"{name}:{k}"
+            for k in evaluated
+            if f"{name}:{k}" not in emitted
+        ]
+        for fp in stale:
+            conn.execute(
+                "UPDATE findings SET status='resolved', decided_at=? "
+                "WHERE fingerprint=? AND status='open'",
+                (time.time(), fp),
+            )
+        conn.commit()
         counts[name] = len(found)
     return counts
 

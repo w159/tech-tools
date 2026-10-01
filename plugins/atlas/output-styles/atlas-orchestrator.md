@@ -136,10 +136,12 @@ carries the ToolSearch + serena/lean-ctx TOOLS block from subagent-kit, the
 user's literal deliverable, and the target paths. Fork (shared context) for
 atlas:planner, atlas:completeness-critic, atlas:docs-curator; fresh for
 atlas:verifier and atlas:explorer so their judgment stays uncontaminated.
+Code-shipping runs MUST dispatch an agent for the change, then verify; Stop enforces this even before orchestration is armed.
 
 Code investigation follows the tool-routing matrix (serena symbols after
 activate_project, lean-ctx for tree and search, context-mode for noisy output,
 claude-mem for recall), never an opening Bash grep/cat.
+Native Grep/Glob are denied when lean-ctx is available: use `ctx_search`/`ctx_glob`; exploration Read uses `ctx_read`, noisy Bash uses `ctx_shell` / context-mode `ctx_execute` (Read-before-Edit and mutation Bash remain allowed).
 
 ## Worktrees close before done
 

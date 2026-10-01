@@ -18,7 +18,7 @@ still lists an in-flight subagent, workflow, or teammate dispatch (see
 work is still running, so the gate does not fire once per wave-Stop. A
 long-running `shell` or `monitor` task does not suppress it.
 
-Twelve conditions must ALL hold before the gate passes (else block ONCE):
+Thirteen conditions must ALL hold before the gate passes (else block ONCE):
   (a) At least one file exists under `.atlas/evidence/` with an mtime at or
       after THIS RUN's start (via `_run_started_at`). Scoped like (f)/(g):
       only checked when THIS RUN shipped non-docs code (_nondocs_changed on
@@ -80,6 +80,10 @@ Twelve conditions must ALL hold before the gate passes (else block ONCE):
       which is what made an existing plan set unreadable. Run-scoped via git
       and fail-open: historical names nobody touched never block, or the gate
       would wedge every run on frozen audit hubs that predate the convention.
+  (m) Delegation mandate: THIS RUN's main-thread non-docs code writes require
+      at least one Task/Agent dispatch. Checked even when orchestration was
+      never armed; sidechains are exempt. DB and current-turn transcript
+      evidence are combined, and internal errors fail open.
 
 (a), (b), (f), and (g) all share one signal: whether THIS RUN shipped
 non-docs code (_nondocs_changed on the run-write signal from atlas_db). A
@@ -553,6 +557,78 @@ def _has_in_flight_dispatch(data: dict) -> bool:
     return False
 
 
+def _missing_delegation(session_id: str, transcript_path: str = "") -> bool:
+    """(m) Main-thread code writes with no dispatch; fail open on any error.
+
+    Unlike the other code gates, sidechain writes and inherited git dirt do
+    not establish a main-thread change. Current-turn dispatches are read
+    directly before Stop-time transcript ingestion has caught up.
+    """
+    if "/subagents/" in transcript_path.replace("\\", "/"):
+        return False
+    conn = None
+    try:
+        import atlas_db
+
+        conn = atlas_db.connect()
+        rid = atlas_db.current_run_id(conn, session_id) or atlas_db.latest_run_id(conn, session_id)
+        if rid is None:
+            return False
+        started = atlas_db.run_started_at(conn, rid)
+        if started is None:
+            return False
+        paths = [row[0] for row in conn.execute(
+            "SELECT path FROM events WHERE run_id=? AND context='main' "
+            "AND tool IN ('Write','Edit','MultiEdit','NotebookEdit') AND path IS NOT NULL",
+            (rid,),
+        )]
+        for (summary,) in conn.execute(
+            "SELECT input_summary FROM tool_calls WHERE session_id=? AND ts>=? "
+            "AND is_sidechain=0 AND tool_name IN ('Write','Edit','MultiEdit','NotebookEdit')",
+            (session_id, started),
+        ):
+            paths.append(json.loads(summary or "{}").get("file_path") or "")
+        code_paths = [p for p in paths if p and not (
+            p.endswith(".md") or p.startswith(".atlas/") or "/.atlas/" in p
+        )]
+        if not _nondocs_changed(code_paths):
+            return False
+        if conn.execute("SELECT 1 FROM dispatches WHERE run_id=? LIMIT 1", (rid,)).fetchone():
+            return False
+        if conn.execute(
+            "SELECT 1 FROM events WHERE run_id=? AND context='main' "
+            "AND tool IN ('Task','Agent') LIMIT 1", (rid,),
+        ).fetchone():
+            return False
+        if conn.execute(
+            "SELECT 1 FROM tool_calls WHERE session_id=? AND ts>=? "
+            "AND is_sidechain=0 AND tool_name IN ('Task','Agent') LIMIT 1",
+            (session_id, started),
+        ).fetchone():
+            return False
+        if transcript_path:
+            with open(transcript_path, encoding="utf-8", errors="replace") as fh:
+                for line in fh:
+                    rec = json.loads(line)
+                    if rec.get("isSidechain"):
+                        continue
+                    when = _parse_iso_epoch(rec.get("timestamp"))
+                    if when is None or when < started:
+                        continue
+                    content = (rec.get("message") or {}).get("content") or []
+                    if isinstance(content, list) and any(
+                        isinstance(b, dict) and b.get("type") == "tool_use"
+                        and b.get("name") in {"Task", "Agent"} for b in content
+                    ):
+                        return False
+        return True
+    except Exception:
+        return False
+    finally:
+        if conn is not None:
+            conn.close()
+
+
 def _reason(
     missing_a: bool,
     missing_b: bool,
@@ -567,6 +643,7 @@ def _reason(
     worktrees: list | None = None,
     missing_plan: bool = False,
     name_violations: list | None = None,
+    missing_delegation: bool = False,
 ) -> str:
     parts = []
     if missing_a:
@@ -686,6 +763,12 @@ def _reason(
             'python3 "$CLAUDE_PLUGIN_ROOT/scripts/lint_docs_names.py".'
             % (len(name_violations), "; ".join(p for p, _ in name_violations[:5]))
         )
+    if missing_delegation:
+        parts.append(
+            "  (m) Delegation mandate: this run shipped non-docs code from the main "
+            "thread with zero Task/Agent dispatches. -> Dispatch atlas:implementer "
+            "(or another atlas:* agent) for the code change, then verify and retry Stop."
+        )
     failed = "\n".join(parts)
     return (
         "[atlas] Definition-of-done gate: the following condition(s) are not met:\n"
@@ -733,8 +816,17 @@ def main() -> int:
         root = _find_root(cwd)
         if root is None:
             return 0  # no docs/ SSOT -> not an atlas run -> silent no-op
-        if not _session_is_orchestrating(data.get("session_id", "")):
-            return 0  # WS1: only real orchestration runs are gated; never block a chat/audit turn
+        session = str(data.get("session_id") or "")
+        missing_delegation = _missing_delegation(
+            session, str(data.get("transcript_path") or "")
+        )
+        if not _session_is_orchestrating(session):
+            if missing_delegation and not _has_in_flight_dispatch(data):
+                _record_gate_block(session, ["m"])
+                print(json.dumps({"decision": "block", "reason": _reason(
+                    False, False, False, missing_delegation=True
+                )}))
+            return 0  # only (m) applies to unflagged runs
         if _has_in_flight_dispatch(data):
             return 0  # dispatched subagent/workflow/teammate still running -- not a completion claim yet
         # (a)/(b)/(f)/(g) share one signal: did THIS RUN's own activity ship
@@ -831,6 +923,7 @@ def main() -> int:
             and not worktrees
             and not missing_plan
             and not name_violations
+            and not missing_delegation
         ):
             # Silence on pass is the contract: the gate speaks only when it
             # blocks. No advisory, no "not evaluated" narration -- any output
@@ -851,6 +944,7 @@ def main() -> int:
                 ("j", bool(worktrees)),
                 ("k", missing_plan),
                 ("l", bool(name_violations)),
+                ("m", missing_delegation),
             )
             if failing
         ]
@@ -869,6 +963,7 @@ def main() -> int:
             worktrees,
             missing_plan=missing_plan,
             name_violations=name_violations,
+            missing_delegation=missing_delegation,
         )
         print(json.dumps({"decision": "block", "reason": block_reason}))
     except Exception as exc:  # noqa: BLE001 -- a Stop hook must never wedge the session

@@ -52,6 +52,13 @@ def _seed_plan(root, session_id="sess-orch"):
     )
 
 
+def _seed_dispatch(db_path, session_id="sess-orch"):
+    with atlas_db.connect(db_path) as conn:
+        rid = atlas_db.current_run_id(conn, session_id) or atlas_db.latest_run_id(conn, session_id)
+        conn.execute("INSERT INTO dispatches(run_id,ts,agent_type) VALUES(?,?,?)",
+                     (rid, datetime.now(timezone.utc).timestamp(), "atlas:explorer"))
+
+
 class DocsDriftTest(unittest.TestCase):
     def test_non_docs_only_returns_true(self):
         """Non-docs changes with no docs changes -> drift detected."""
@@ -187,6 +194,7 @@ class GateOrchestrationTest(unittest.TestCase):
         with open(os.path.join(self.tmp, "README.md"), "w") as f:
             f.write("# project\n")
         _seed_plan(self.tmp)
+        _seed_dispatch(self.env["ATLAS_DB"])
 
     def test_all_conditions_met_passes(self):
         self._satisfy_all_conditions()
@@ -616,6 +624,7 @@ class InProcessMainTest(unittest.TestCase):
         with open(os.path.join(self.tmp, "README.md"), "w") as f:
             f.write("# project\n")
         _seed_plan(self.tmp)
+        _seed_dispatch(self.env["ATLAS_DB"])
 
     def _init_git_repo(self):
         subprocess.run(["git", "init", "-q", self.tmp], check=True, capture_output=True)
@@ -1345,6 +1354,7 @@ class GateConditionIJTest(GateOrchestrationTest):
         self._log_run_write("docs/CHANGELOG.md")
         self._log_run_write("src/app.py")
         _seed_plan(self.tmp)
+        _seed_dispatch(self.env["ATLAS_DB"])
 
     def test_open_todos_block_the_stop(self):
         self._satisfy_everything_else()
@@ -2281,3 +2291,75 @@ class TestRunnerRegexUnittestTest(unittest.TestCase):
     def test_command_key_with_unittest_matches(self):
         blob = json.dumps({"command": "python3 -m unittest discover -s ."})
         self.assertIsNotNone(completion_gate._TEST_RUNNER_RE.search(blob))
+
+
+class DelegationMandateTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        (self.root / "docs").mkdir()
+        self.env = dict(os.environ, ATLAS_DB=str(self.root / "atlas.db"),
+                        ATLAS_HOOKSTATE_DIR=str(self.root / "hookstate"))
+        self.conn = atlas_db.connect(self.env["ATLAS_DB"])
+        self.addCleanup(self.conn.close)
+        atlas_db.init(self.conn)
+        pid = atlas_db.register_project(self.conn, str(self.root))
+        self.rid = atlas_db.start_run(self.conn, pid, "mandate")
+
+    def write(self, path="src/app.py", context="main"):
+        atlas_db.log_event(self.conn, self.rid, "Write", context, 1, path)
+
+    def gate(self, **extra):
+        return _run_gate(dict(session_id="mandate", cwd=str(self.root), **extra), self.env).stdout
+
+    def test_unarmed_code_write_blocks_and_dispatch_clears_m(self):
+        self.write()
+        self.assertIn("(m) Delegation mandate", self.gate())
+        atlas_db.log_event(self.conn, self.rid, "Task", "main", 0)
+        self.assertEqual(self.gate(), "")
+
+    def test_dispatch_table_and_tool_call_dispatch_clear_m(self):
+        self.write()
+        atlas_db.log_dispatch(self.conn, self.rid, "atlas:implementer")
+        self.assertEqual(self.gate(), "")
+        self.conn.execute("DELETE FROM dispatches")
+        self.conn.execute("DELETE FROM events WHERE is_inline_op=0")
+        self.conn.execute("INSERT INTO tool_calls(session_id,ts,tool_name,is_sidechain) VALUES(?,?,?,0)",
+                          ("mandate", datetime.now(timezone.utc).timestamp(), "Agent"))
+        self.conn.commit()
+        self.assertEqual(self.gate(), "")
+
+    def test_transcript_current_dispatch_clears_m(self):
+        self.write()
+        transcript = self.root / "session.jsonl"
+        transcript.write_text(json.dumps({"timestamp": datetime.now(timezone.utc).isoformat(),
+            "message": {"content": [{"type": "tool_use", "name": "Task"}]}}) + "\n")
+        self.assertEqual(self.gate(transcript_path=str(transcript)), "")
+
+    def test_docs_and_metadata_only_writes_are_silent(self):
+        for path in ("docs/CHANGELOG.md", ".atlas/run.json", "README.md"):
+            self.write(path)
+        self.assertEqual(self.gate(), "")
+
+    def test_sidechain_only_writes_are_silent(self):
+        self.write(context="sidechain")
+        self.conn.execute("INSERT INTO tool_calls(session_id,ts,tool_name,is_sidechain,input_summary) VALUES(?,?,?,1,?)",
+                          ("mandate", datetime.now(timezone.utc).timestamp(), "Write", json.dumps({"file_path": "src/app.py"})))
+        self.conn.commit()
+        self.assertEqual(self.gate(), "")
+
+    def test_background_dispatch_and_kill_switch_suppress_m(self):
+        self.write()
+        self.assertEqual(self.gate(background_tasks=[{"type": "subagent", "status": "running"}]), "")
+        self.env["ATLAS_GATE"] = "off"
+        self.assertEqual(self.gate(), "")
+
+    def test_db_error_fails_open(self):
+        self.write()
+        with mock.patch("atlas_db.connect", side_effect=RuntimeError("DB down")):
+            self.assertFalse(completion_gate._missing_delegation("mandate"))
+
+    def test_subagent_transcript_is_exempt(self):
+        self.write()
+        self.assertEqual(self.gate(transcript_path="/session/subagents/agent-a.jsonl"), "")
