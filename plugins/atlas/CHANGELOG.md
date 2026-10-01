@@ -24,7 +24,14 @@
   headless `claude -p --agent atlas:<role>` / `omp -p` workers in one
   `atlas-<run>` tmux session at their definition tiers, streaming note records to
   the board for `atlas_todo.py notes --to lead`.
-- `docs/atlas-harness-parity.md`: per-rule parity matrix with file:line evidence.
+- **Hook bridge for omp.** `omp/hook-bridge.ts` runs the Claude Code hooks that
+  `contracts/hook-bridge.json` marks bridgeable (session boot, prompt optimizer,
+  bash advisor, fallow gate, format-after-edit, docs-drift watch) straight from
+  `hooks/hooks.json`, translating omp events into Claude hook payloads (deny →
+  block, additionalContext → additionalContext/system prompt). The contract
+  records why the rest are not bridged. `ATLAS_HOOK_BRIDGE=off`.
+- `docs/atlas-harness-parity.md`: per-rule parity matrix with file:line evidence
+  and a paired Claude Code / omp benchmark run.
 
 ### Fixed
 - `session_boot.py` reported claude-mem/ponytail/context-mode as a "Setup gap"
@@ -35,8 +42,10 @@
 - omp still lacks completion-gate conditions (a)–(l), the prompt optimizer,
   inline-op thresholds, dispatch-spec checks, docs-drift watch and memory capture
   (listed in the parity doc).
-- Paired Claude Code / omp benchmark not run: omp workers' model key returned
-  HTTP 402 during this release.
+- Benchmark (same task, both harnesses): both fixed the bug and verified, but
+  native-reader share was 1.0 in both (no lean-ctx in the throwaway repos) and
+  both fixed code on the main thread; omp's delegation gate does not see
+  `bash sed -i` edits. See the parity doc.
 
 ## [8.5.1] - 2026-10-01
 

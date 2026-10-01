@@ -12,8 +12,13 @@ Marketplace `4.4.0`; atlas `8.6.0`.
 - claude-mem recall and ponytail-before-commit mandates in both harnesses
   (`ATLAS_MANDATES=off`).
 - `scripts/atlas_mux.py`: opt-in tmux colony mode (`ATLAS_MUX=tmux`).
-- `docs/atlas-harness-parity.md` records each rule's status per harness; omp gaps
-  still open are listed there. Benchmark deferred (model key at credit cap).
+- `omp/hook-bridge.ts` runs the bridgeable Claude Code hooks from
+  `hooks/hooks.json` in omp (session boot, prompt optimizer, bash advisor, fallow
+  gate, format-after-edit, docs-drift watch); `contracts/hook-bridge.json` lists
+  the rest and why.
+- `docs/atlas-harness-parity.md` records each rule's status per harness, the omp
+  gaps still open, and a paired benchmark run (both harnesses fixed and verified
+  the task; native-reader share 1.0 in both; main-thread code edits in both).
 
 ## 2026-10-01 -- Nudge-marker, ingest dispatch-name, and omp indentation fixes
 
