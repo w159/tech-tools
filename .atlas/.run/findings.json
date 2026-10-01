@@ -1648,7 +1648,8 @@
     "blast_radius": "plugin",
     "status": "verified",
     "verified_at": "2026-09-24T22:35:09+00:00",
-    "verified_by": "self (orchestrator-run deterministic pytest; no independent verifier dispatched)"
+    "verified_by": "self (orchestrator-run deterministic pytest; no independent verifier dispatched)",
+    "notes": "| SAME SESSION, DIFFERENT REPO: device-bootstrap deliverable landed in the osprey repo as f45b0e4 (device-bundle-generate.py, bootstrap-device.sh, .gitignore device-bundle rule, docs/evidence record) and 576d6dc (.atlas/docs/CHANGELOG.md + .atlas/docs/evidence/2026-09-29-device-bundle-bootstrap.md); both local, unpushed; bundle at ~/device-bundle self-check OK with 20 checklist entries."
   },
   {
     "id": "verify-7e4876b-test-runner-anchor-and-undated-transcript",
@@ -2260,5 +2261,32 @@
     "status": "verified",
     "verified_at": "2026-09-29T13:34:53+00:00",
     "verified_by": "orchestrator"
+  }
+  ,{
+    "id": "verify-atlas-8.3.0-docs-propagation-2026-10-01",
+    "surface": "plugin",
+    "category": "documentation",
+    "severity": "low",
+    "title": "Atlas 8.3.0: delegation mandate and native tool routing documented for Claude Code and omp",
+    "evidence": [
+      "plugins/atlas/CHANGELOG.md: new 8.3.0 section above the unchanged 8.2.0 turn-scoring text",
+      "plugins/atlas/.claude-plugin/plugin.json version 8.3.0; .claude-plugin/marketplace.json version 4.1.0 with atlas pinned to 8.3.0",
+      "plugins/atlas/README.md: thirteen-condition Stop gate, flag-independent condition (m), native Grep/Glob deny, one-time Read/Bash nudge, and omp extension install command",
+      "Upstream verification supplied for this documentation stage: cd plugins/atlas && python3 -m pytest hooks/ scripts/ -q -> 1598 passed, 3 skipped",
+      "Upstream omp verification supplied for this documentation stage: bun test plugins/atlas/omp/index.test.ts -> 18 pass",
+      "Documentation-stage verification: cd plugins/atlas && python3 -m pytest hooks/test_atlas_contract.py -q -> 87 passed, 3 skipped, 62 subtests passed in 4.31s; InstalledParityContract skips because atlas is not installed at the manifest version",
+      "Upstream subprocess smoke supplied for this documentation stage: (m) blocks an unflagged run and clears after a Task dispatch; Grep/Glob denied; Read nudges once then stays silent"
+    ],
+    "doc_refs": [
+      "docs/CHANGELOG.md",
+      "plugins/atlas/CHANGELOG.md",
+      "plugins/atlas/README.md"
+    ],
+    "reproduction": "cd plugins/atlas && python3 -m pytest hooks/test_atlas_contract.py -q",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-01",
+    "verified_by": "DocsPropagation"
   }
 ]

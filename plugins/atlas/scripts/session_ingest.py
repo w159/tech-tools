@@ -12,12 +12,13 @@ Two entry points:
   - ingest_transcript(path) for one session (the Stop/SessionEnd hook calls this)
   - main() CLI:  session_ingest.py <path>      ingest one transcript
                  session_ingest.py --backfill  walk ~/.claude/projects
-                 session_ingest.py --backfill-agent codex [root]
+                 session_ingest.py --backfill-agent codex|omp [root]
                                                walk another agent's session tree
-                                               (codex defaults to ~/.codex/sessions)
+                                               (codex: ~/.codex/sessions,
+                                               omp: ~/.omp/agent/sessions)
 
 Beyond claude, a pluggable adapter layer (AGENT_ADAPTERS) chronicles other
-coding agents' sessions into the same store; codex is the first adapter. The
+coding agents' sessions into the same store (codex, omp). The
 claude Stop/SessionEnd hook path never triggers cross-agent ingest - that runs
 only via the explicit --backfill-agent CLI.
 
@@ -952,10 +953,119 @@ def codex_adapter(path):
                     }
 
 
-# agent name -> (adapter callable, default session root). Extend both here when
-# adding an agent; the driver and CLI are already generic over this table.
-AGENT_ADAPTERS = {"codex": codex_adapter}
-AGENT_DEFAULT_ROOTS = {"codex": "~/.codex/sessions"}
+def _omp_text(content, kind="text"):
+    if isinstance(content, str):
+        return content if kind == "text" else ""
+    if not isinstance(content, list):
+        return ""
+    return "\n".join(
+        b.get(kind) or ""
+        for b in content
+        if isinstance(b, dict) and b.get("type") == kind and b.get(kind)
+    )
+
+
+def omp_adapter(path):
+    """Parse an omp (oh-my-pi) session JSONL
+    (~/.omp/agent/sessions/<project>/<ts>_<id>.jsonl) into normalized records.
+      session                         -> session id, cwd, start time
+      message role=user               -> prompt only when attribution is "user";
+                                         agent/harness-authored user text is
+                                         stored as role "system", never a prompt
+      message role=assistant          -> text, thinking, usage, model; each
+                                         toolCall block -> tool_call
+      message role=toolResult         -> tool_result (isError is reliable)
+    omp entry ids are only session-unique, so uuids are "<session>:<id>".
+    custom_message/custom (advisories, hook output) are machine-authored and
+    skipped."""
+    sid = None
+    with open(path, "rb") as f:
+        for raw in f:
+            if not raw.strip():
+                continue
+            try:
+                obj = json.loads(raw)
+            except Exception:
+                continue
+            typ = obj.get("type")
+            ts = _epoch(obj.get("timestamp"))
+            if typ == "session":
+                sid = obj.get("id") or os.path.splitext(os.path.basename(path))[0]
+                yield {
+                    "kind": "meta",
+                    "session_id": sid,
+                    "agent": "omp",
+                    "cwd": obj.get("cwd"),
+                    "started_at": ts,
+                }
+                continue
+            if typ == "model_change" and obj.get("model"):
+                yield {"kind": "meta", "model": obj["model"]}
+                continue
+            if typ != "message" or not sid:
+                continue
+            msg = obj.get("message") or {}
+            role = msg.get("role")
+            uuid = f"{sid}:{obj.get('id')}"
+            parent = f"{sid}:{obj['parentId']}" if obj.get("parentId") else None
+            content = msg.get("content")
+            if role == "user":
+                attribution = msg.get("attribution")
+                yield {
+                    "kind": "message",
+                    "uuid": uuid,
+                    "parent_uuid": parent,
+                    "ts": ts,
+                    "role": "user" if attribution in (None, "user") else "system",
+                    "text": _omp_text(content),
+                }
+            elif role == "assistant":
+                usage = msg.get("usage") or {}
+                yield {
+                    "kind": "message",
+                    "uuid": uuid,
+                    "parent_uuid": parent,
+                    "ts": ts,
+                    "role": "assistant",
+                    "model": msg.get("model"),
+                    "text": _omp_text(content),
+                    "thinking": _omp_text(content, "thinking"),
+                    "input_tokens": usage.get("input"),
+                    "output_tokens": usage.get("output"),
+                    "cache_read_tokens": usage.get("cacheRead"),
+                    "cache_creation_tokens": usage.get("cacheWrite"),
+                }
+                for b in content if isinstance(content, list) else []:
+                    if isinstance(b, dict) and b.get("type") == "toolCall":
+                        yield {
+                            "kind": "tool_call",
+                            "message_uuid": uuid,
+                            "ts": ts,
+                            "tool_use_id": f"{sid}:{b.get('id')}",
+                            "tool_name": b.get("name"),
+                            "input": _codex_args(b.get("arguments")),
+                        }
+            elif role == "toolResult" and msg.get("toolCallId"):
+                yield {
+                    "kind": "tool_result",
+                    "tool_use_id": f"{sid}:{msg['toolCallId']}",
+                    "is_error": 1 if msg.get("isError") else 0,
+                    "result_bytes": len(_omp_text(content)),
+                }
+
+
+# agent name -> (adapter callable, default session root, session-file filter).
+# Extend all three here when adding an agent; the driver and CLI are already
+# generic over these tables. The filter gets (root, dirpath, filename).
+AGENT_ADAPTERS = {"codex": codex_adapter, "omp": omp_adapter}
+AGENT_DEFAULT_ROOTS = {"codex": "~/.codex/sessions", "omp": "~/.omp/agent/sessions"}
+AGENT_FILE_FILTERS = {
+    "codex": lambda root, d, fn: fn.startswith("rollout-") and fn.endswith(".jsonl"),
+    # Main sessions sit directly under <root>/<project>/; deeper files are
+    # subagent transcripts, which the adapter layer cannot mark as sidechain.
+    "omp": lambda root, d, fn: fn.endswith(".jsonl")
+    and os.path.dirname(os.path.relpath(d, root)) == "",
+}
 
 
 def backfill_agent(agent, root=None, conn=None):
@@ -974,7 +1084,7 @@ def backfill_agent(agent, root=None, conn=None):
     try:
         for dirpath, _dirs, files in os.walk(root):
             for fn in files:
-                if not (fn.startswith("rollout-") and fn.endswith(".jsonl")):
+                if not AGENT_FILE_FILTERS[agent](root, dirpath, fn):
                     continue
                 p = os.path.join(dirpath, fn)
                 if is_synthetic_session(path=p):

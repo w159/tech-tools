@@ -462,6 +462,82 @@ def _codex_session(sid, prompt, reply, tool_kind="function_call"):
     return lines
 
 
+def _omp_lines(sid, cwd="/w/proj"):
+    def rec(i, parent, role, content, **extra):
+        return json.dumps({
+            "type": "message", "id": i, "parentId": parent,
+            "timestamp": f"2026-09-29T05:00:0{int(i[-1])}Z",
+            "message": {"role": role, "content": content, **extra},
+        })
+    return [
+        json.dumps({"type": "session", "id": sid, "timestamp": "2026-09-29T05:00:00Z", "cwd": cwd}),
+        json.dumps({"type": "custom_message", "customType": "advisory", "content": "you didn't verify", "id": "c1"}),
+        rec("m1", None, "user", [{"type": "text", "text": "Add a per-day table."}], attribution="user"),
+        rec("m2", "m1", "user", [{"type": "text", "text": "Subagent handoff text"}], attribution="agent"),
+        rec("m3", "m2", "assistant", [
+            {"type": "thinking", "thinking": "plan"},
+            {"type": "text", "text": "Done, table added."},
+            {"type": "toolCall", "id": "t1", "name": "bash", "arguments": {"command": "ls"}},
+        ], model="claude-x", usage={"input": 10, "output": 5, "cacheRead": 3, "cacheWrite": 1}),
+        rec("m4", "m3", "toolResult", [{"type": "text", "text": "boom"}], toolCallId="t1", toolName="bash", isError=True),
+    ]
+
+
+class OmpAdapterTest(unittest.TestCase):
+    """omp sessions land in the same tables the scorer reads: real prompts only
+    from attribution=user, tool errors from isError, nested subagent files and
+    advisory custom_messages never become prompts, ids namespaced per session."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.conn = atlas_db.connect(os.path.join(self.tmp, "atlas.db"))
+        atlas_db.init(self.conn)
+        self.addCleanup(self.conn.close)
+        self.root = os.path.join(self.tmp, "sessions")
+        proj = os.path.join(self.root, "-w-proj")
+        os.makedirs(os.path.join(proj, "2026_sess-a"))
+        for path, sid in ((os.path.join(proj, "2026_sess-a.jsonl"), "sess-a"),
+                          (os.path.join(proj, "2026_sess-b.jsonl"), "sess-b"),
+                          (os.path.join(proj, "2026_sess-a", "Sub.jsonl"), "sess-sub")):
+            with open(path, "w") as f:
+                f.write("\n".join(_omp_lines(sid)) + "\n")
+
+    def test_backfill_maps_prompts_tools_errors_and_skips_subagents(self):
+        totals = session_ingest.backfill_agent("omp", root=self.root, conn=self.conn)
+        self.assertEqual(totals["files"], 2)  # nested Sub.jsonl skipped
+        prompts = [r[0] for r in self.conn.execute(
+            "SELECT text FROM user_prompts WHERE session_id='sess-a'")]
+        self.assertEqual(prompts, ["Add a per-day table."])
+        role = self.conn.execute(
+            "SELECT role FROM messages WHERE uuid='sess-a:m2'").fetchone()[0]
+        self.assertEqual(role, "system")
+        row = self.conn.execute(
+            "SELECT tool_name, is_error FROM tool_calls WHERE tool_use_id='sess-a:t1'"
+        ).fetchone()
+        self.assertEqual(tuple(row), ("bash", 1))
+        agent = self.conn.execute(
+            "SELECT agent FROM session_logs WHERE session_id='sess-a'").fetchone()[0]
+        self.assertEqual(agent, "omp")
+        a = self.conn.execute(
+            "SELECT text, input_tokens, cache_read_tokens FROM messages WHERE uuid='sess-a:m3'"
+        ).fetchone()
+        self.assertEqual(tuple(a), ("Done, table added.", 10, 3))
+        # The scorer builds exchanges from these rows; 0 would mean omp
+        # sessions silently never get scored.
+        import turn_scoring
+
+        ex = turn_scoring.build_exchanges(self.conn, "sess-a")
+        self.assertEqual([e["message_uuid"] for e in ex], ["sess-a:m3"])
+        self.assertEqual(ex[0]["state"]["request"], "Add a per-day table.")
+
+    def test_backfill_is_idempotent(self):
+        session_ingest.backfill_agent("omp", root=self.root, conn=self.conn)
+        first = self.conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
+        session_ingest.backfill_agent("omp", root=self.root, conn=self.conn)
+        self.assertEqual(
+            self.conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0], first)
+
+
 class CodexAdapterTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()

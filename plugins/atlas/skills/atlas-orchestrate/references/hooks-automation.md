@@ -13,8 +13,8 @@ hook that may *deny* a tool call, and only when fallow audit returns `verdict: f
 | `advisor` | `PreToolUse` (Bash) | `hooks/bash_advisor.py` | advisory-only; emits a warning on catastrophic, near-irreversible commands only |
 | `fallow-gate` | `PreToolUse` (Bash) | `hooks/fallow_gate.py` | agent gate: on `git commit`/`git push`, run `fallow audit --format json --quiet --explain --gate-marker agent`; deny on fail; skip if fallow absent (`ATLAS_FALLOW=off`) |
 | `format` | `PostToolUse` (Edit\|Write\|MultiEdit) | `hooks/format_after_edit.py` | auto-format the edited file (ruff/prettier/gofmt/rustfmt), async |
-| `dispatch-tripwire` | `PostToolUse` + `PreToolUse` | `hooks/dispatch_tripwire.py` | advisory STOP at the threshold (default 4); a second `PreToolUse` tier DENIES at the hard inline-op limit, on Edit/Write/MultiEdit/NotebookEdit to non-docs paths, and on an `atlas:*` dispatch that omits the code-nav TOOLS block, omits the bounding dispatch spec (GOAL/DELIVERABLE/SUCCESS CRITERIA/OUT OF SCOPE/STOP CONDITIONS), or bundles more than one GOAL into one subagent; marker-gated, orchestration sessions only |
-| `completion-gate` | `Stop` | `hooks/completion_gate.py` | **opt-out.** block stopping an orchestration run until evidence is captured; marker-gated, on by default when docs/ exists (disable with ATLAS_GATE=off) |
+| `dispatch-tripwire` | `PostToolUse` + `PreToolUse` | `hooks/dispatch_tripwire.py` | Existing armed-orchestrator drift/spec guards; independently, docs/ projects deny native Grep/Glob when lean-ctx is available (`ctx_search`/`ctx_glob`), including subagents, and allow-nudge Read/Bash once per tool/session (`ctx_read`; `ctx_shell` / context-mode `ctx_execute`). `ATLAS_TRIPWIRE_HARD=off` disables denies, not nudges. |
+| `completion-gate` | `Stop` | `hooks/completion_gate.py` | **opt-out.** conditions (a)-(l) remain orchestration-marker scoped; (m) blocks main-thread non-docs code with zero Task/Agent dispatches even without that marker. docs/ scope; disable with `ATLAS_GATE=off`. |
 | `nudge` | `Stop` | `hooks/nudge.py` | self-improvement: surface a past lesson and prompt to capture new ones; marker-gated, throttled |
 | `ingest-session` | `Stop`, `SubagentStop`, `SessionEnd`, `PreCompact` | `hooks/ingest_session.py` | index the session transcript into the observability store for atlas-audit |
 
@@ -105,10 +105,10 @@ an independent agent verified it* -- as a `Stop` hook. Prose alone doesn't enfor
 orchestrator rationalizes "I'll mark it unverified and move on"); this is the machine backstop.
 
 - **Scoped.** Engages only when a `docs/` directory is found at or above the working dir (walked
-  up to 6 levels) AND the session's run is flagged orchestrating in the atlas DB (the
-  dispatch-tripwire hook sets that flag automatically when an orchestration skill is invoked or
-  an `atlas:*` subagent is dispatched). In any other session it is a silent no-op.
-- **What satisfies it.** All twelve conditions must hold:
+  up to 6 levels). Conditions (a)-(l) additionally require an orchestration flag in
+  the atlas DB (set by an orchestration skill or `atlas:*` dispatch); condition (m)
+  deliberately checks unarmed runs too. Without docs/ every condition is silent.
+- **What satisfies it.** All thirteen conditions must hold:
   - (a) At least one file under `.atlas/evidence/` (observed-behavior proof captured).
   - (b) `.atlas/.run/findings.json` exists and records at least one entry with status `verified`
     (an independent check happened - a deterministic test recorded via
@@ -157,6 +157,11 @@ orchestrator rationalizes "I'll mark it unverified and move on"); this is the ma
     `scripts/lint_docs_names.py`, run-scoped via git and fail-open, so historical names
     nobody is touching never wedge a run. Living docs (`architecture/`, `features/`,
     `wiki/`) are bare slugs and are never checked: they are revised in place.
+  - (m) Delegation mandate: main-thread non-docs code writes require a Task/Agent
+    dispatch this run. Enforced even if orchestration was never armed; sidechains
+    and docs-only changes are exempt. Dispatch `atlas:implementer` (or another
+    `atlas:*` agent) for the code change, then verify. DB/transcript failures fail open;
+    in-flight dispatches suppress Stop as usual.
   The block message names exactly which condition(s) are missing.
 - **Single nudge, never a wedge.** It blocks the stop at most **once** (the `stop_hook_active`
   loop-guard), then lets the continuation through. Fail-open on any error. Disable entirely with

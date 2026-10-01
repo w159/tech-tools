@@ -81,6 +81,28 @@ reply share one call. Transcript excerpts (reply, request, and for
 `next_turn_correction` the next user message) are sent to api.typesafe.ai after
 the secret scrub used by ingest. Set `ATLAS_TYPESAFE_SCORING=off` to stop.
 
+Compliance (GLBA, FTC Safeguards Rule, SEC Reg S-P): scoring is on by default
+whenever `TYPESAFE_API_KEY` is set, by the owner's decision of 2026-09-29.
+That makes api.typesafe.ai a third-party processor of session excerpts from
+every scored project, including Henssler work (firewall, CrowdStrike,
+Envestnet). Those excerpts can contain nonpublic personal information (NPI):
+the scrub removes credential-shaped strings only, not client names, account
+numbers, or report contents. Per TypeSafe's model docs, zero data retention
+(ZDR) is offered only on enterprise plans and Jev is not trained on customer
+requests; on other plans retention follows TypeSafe's standard terms. Before
+relying on this for regulated work, record TypeSafe as a service provider in
+the vendor-management program (data categories, retention, ZDR status) and
+confirm its Reg S-P service-provider notification terms. To exclude a project,
+set `ATLAS_TYPESAFE_SCORING=off` in that project's `.claude/settings.json`
+`env`.
+
+Scoring failures are recorded as a `scoring_error` row (message_uuid
+`_session`) in `turn_scores`. `turn_scoring.py --status` and the doctor
+`typesafe-scoring` WARN report the 7-day error count and the latest error.
+
+omp sessions are scored after `session_ingest.py --backfill-agent omp`
+(omp runs no Claude Code hooks, so this is a manual or scheduled step).
+
 ## Running it
 
 ```

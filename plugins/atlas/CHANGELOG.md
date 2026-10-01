@@ -1,5 +1,47 @@
 # Changelog
 
+## [8.3.0] - 2026-10-01
+
+### Added
+- **First atlas enforcement in omp.** `omp/index.ts`, registered by
+  `package.json`'s `omp.extensions: ["./omp/index.ts"]`, blocks native
+  `grep`/`glob` toward `xd://mcp__lean_ctx_ctx_search` and
+  `xd://mcp__lean_ctx_ctx_glob`, nudges `read`/`bash` once per session, and
+  blocks `session_stop` once when the main thread made non-docs `edit`/`write`
+  calls without a `task` dispatch. Previously omp ran no atlas hooks at all.
+  Install with `omp --extension <abs>/plugins/atlas/omp/index.ts`, or add
+  that absolute path to `extensions:` in `~/.omp/agent/config.yml`; details
+  in `omp/README.md`. `ATLAS_GATE=off` disables the Stop gate;
+  `ATLAS_TRIPWIRE_HARD=off` disables native-tool enforcement.
+
+### Changed
+- **Completion gate condition (m): delegation mandate.** In a `docs/`
+  project, main-thread code shipping outside `docs/`, `.atlas/`, and `*.md`
+  with zero `Task`/`Agent` dispatches blocks once, independently of the
+  orchestration flag. A run that never delegated could previously escape
+  the gate by never being armed. Sidechains are exempt, errors fail open,
+  and `ATLAS_GATE=off` disables it. The gate now has thirteen conditions.
+- **Native tool routing is enforced before the orchestration flag.** In
+  `docs/` projects with lean-ctx on PATH, `dispatch_tripwire.py` denies
+  native `Grep`/`Glob` toward `ctx_search`/`ctx_glob`, including subagents.
+  `ATLAS_TRIPWIRE_HARD=off` disables enforcement. `Read`/`Bash` receive a
+  one-time per-session nudge toward `ctx_read` and `ctx_shell`/context-mode
+  `ctx_execute`; markers live in `.atlas/.run/native_nudges/`.
+- **Measured reason for the change:** the last 14 days in
+  `~/.atlas/atlas.db` showed 62 omp sessions with zero orchestration flags,
+  about 8.1k native read/grep/bash calls against about 400 lean-ctx calls.
+  Claude Code had 410 native calls versus 255 ctx calls, and three runs
+  shipped code without a dispatch. Prose and flag-dependent enforcement
+  were not reaching those runs.
+
+### Verification
+- `cd plugins/atlas && python3 -m pytest hooks/ scripts/ -q`:
+  **1598 passed, 3 skipped**.
+- `bun test plugins/atlas/omp/index.test.ts`: **18 pass**.
+- Subprocess smoke: (m) blocked an unflagged run and cleared after a
+  `Task` dispatch; `Grep`/`Glob` were denied; `Read` nudged once and then
+  stayed silent.
+
 ## [8.2.0] - 2026-09-29
 
 ### Changed - MCP connectors
@@ -29,6 +71,52 @@
   `docs/atlas-turn-scoring.md`. Live smoke on the real DB (one tech-tools
   session): 5 calls, 34 rows, 18,364 input tokens (~3.7k per call, under a
   cent); below `min_turns`, so 0 `turn_quality` findings yet.
+- **Scorer keeps one call for the session facet and records failures in the
+  DB.** On long sessions the exchange loop used up `ATLAS_TYPESAFE_MAX_CALLS`,
+  so outcome and satisfaction were dropped on exactly the sessions the miners
+  care about. One call is now reserved whenever a facet is pending. TypeSafe
+  errors are stored as a `scoring_error` row in `turn_scores` instead of being
+  lost to the detached process's discarded stderr. Live: a 13-exchange
+  session with `--max-calls 2` scored one reply and enriched the facet
+  (`partial/neutral/4/plugin-dev`). `docs/atlas-turn-scoring.md` gains a
+  GLBA/Reg S-P note: the scrub removes credentials, not client data.
+- **omp sessions are now ingested and scored.** `session_ingest.py
+  --backfill-agent omp` adds an omp adapter: user text counts as a prompt
+  only when `attribution` is `user` (agent and harness text is stored as role
+  `system`), `toolResult.isError` maps to `tool_calls.is_error`, ids are
+  namespaced `<session>:<id>`, and nested subagent files are skipped. Live: 74
+  sessions, 538 prompts, 15,272 messages, 16,310 tool calls.
+- **Scoring failures are visible.** `turn_scoring.py --status` and the
+  doctor `typesafe-scoring` check report the 7-day `scoring_error` count and
+  the latest error; the doctor check WARNs while errors are present.
+- **Style metrics count only Claude Code sessions.** `header_present` and
+  `banned_punct` measure the output style, which omp and codex never load,
+  so their replies made the header look 90% missing. Claude-only figures:
+  header present 45% of the time, banned punctuation in 7% of replies.
+- **First full scoring pass (14 days, 73 sessions, 400 calls, 1.27M input
+  tokens, 0 errors).** Predictive value: replies scored as missing the
+  literal ask were followed by a correction 42% of the time vs 24% otherwise;
+  `done_claim_unverified` (40% vs 33%) and `scope_drift` (39% vs 33%) are
+  weak predictors so far.
+- **`turn_quality` findings that stop firing auto-resolve, and only those.**
+  `mine_turn_quality` returns a `MinerResult` whose `evaluated` set lists
+  the keys it had at least `min_turns` scored replies for. `mine()` marks an
+  `open` finding `resolved` only when its key was evaluated and did not
+  fire, so a thin or quiet window never reads as a fix; miners that return
+  a plain list (every other miner) are never swept. A re-fire reopens only
+  `resolved` rows; accepted, rejected, applied, and verified verdicts are
+  never touched. Live re-mine: 0 rows changed outside `turn_quality`.
+- **Predictive value has a deterministic ground truth, and it is sparse.**
+  `turn_quality` details and evidence report correction rates against the
+  regex `user_correction` signal on the next real prompt, next to Jev's own
+  `next_turn_correction`, which alone was circular (model agreeing with
+  model). The regex misses most real corrections ("again!", "address
+  advisor concerns"), so absolute counts are tiny: `literal_ask_delivered`
+  8/204 corrected when hit vs 1/124 when not; `done_claim_unverified` 6/104
+  vs 3/224; `scope_drift` 7/116 vs 2/212. Same direction as Jev's measure,
+  too few events to call any judgment a reliable predictor yet.
+- `check_typesafe_scoring` no longer counts `scoring_error` rows as healthy
+  activity.
 
 ### Changed
 - **`output-styles/atlas-orchestrator.md` rewritten against the current

@@ -195,6 +195,11 @@ class ScoreTests(Base):
         s = turn_scoring.score_session(self.conn, SID, client=Boom())
         self.assertEqual(s["stopped"], "error")
         self.assertIn("401", s["error"])
+        row = self.conn.execute(
+            "SELECT kind,value,label FROM turn_scores WHERE judgment='scoring_error'"
+        ).fetchone()
+        self.assertEqual(row[:2], ("error", 401.0))
+        self.assertIn("bad key", row[2])
 
 
 class FacetTests(Base):
@@ -223,6 +228,21 @@ class FacetTests(Base):
         again = FakeClient()
         turn_scoring.score_session(self.conn, SID, client=again)
         self.assertEqual(again.calls, [])
+
+    def test_capped_long_session_still_enriches_facet(self):
+        """Long sessions exhaust max_calls on exchanges; one call is reserved
+        so the facet (outcome/satisfaction) is never the one dropped."""
+        self.seed()  # two exchanges
+        atlas_db.upsert_facet(self.conn, SID, correction_count=0)
+        c = FakeClient()
+        s = turn_scoring.score_session(self.conn, SID, client=c, max_calls=2)
+        self.assertEqual(len(c.calls), 2)
+        self.assertTrue(s["facet_enriched"])
+        self.assertEqual(s["stopped"], "max_calls")
+        enriched = self.conn.execute(
+            "SELECT enriched_at FROM facets WHERE session_id=?", (SID,)
+        ).fetchone()[0]
+        self.assertIsNotNone(enriched)
 
 
 if __name__ == "__main__":

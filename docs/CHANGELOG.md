@@ -1,5 +1,55 @@
 # Changelog
 
+## 2026-10-01 -- Delegation mandate and native tool routing in Claude Code and omp
+
+Marketplace `4.1.0`; atlas `8.3.0`.
+
+- `completion_gate.py` gains condition (m), bringing the gate to thirteen
+  conditions: main-thread non-docs code shipping with zero `Task`/`Agent`
+  dispatches blocks once even without an orchestration flag. It is scoped
+  to `docs/` projects, exempts sidechains, fails open on errors, and respects
+  `ATLAS_GATE=off`.
+- `dispatch_tripwire.py` denies native `Grep`/`Glob` in `docs/` projects
+  with lean-ctx on PATH, including subagents, independently of orchestration.
+  It points at `ctx_search`/`ctx_glob`; `Read`/`Bash` get one nudge per
+  session toward `ctx_read` and `ctx_shell`/context-mode `ctx_execute`, with
+  markers under `.atlas/.run/native_nudges/`.
+- New `plugins/atlas/omp/index.ts` is the first atlas enforcement in omp:
+  native `grep`/`glob` are blocked toward the lean-ctx MCP tools, `read`/`bash`
+  get a one-time nudge, and `session_stop` blocks once for main-thread
+  non-docs `edit`/`write` calls without a `task` dispatch. The extension is
+  registered in `plugins/atlas/package.json` and documented in
+  `plugins/atlas/omp/README.md`. Install with
+  `omp --extension <abs>/plugins/atlas/omp/index.ts`, or add that absolute
+  path to `extensions:` in `~/.omp/agent/config.yml`.
+- Both harnesses use `ATLAS_TRIPWIRE_HARD=off` to disable native-tool
+  enforcement and `ATLAS_GATE=off` to disable the delegation Stop gate.
+- Measured in `~/.atlas/atlas.db` over 14 days: 62 omp sessions with zero
+  orchestration flags, about 8.1k native read/grep/bash calls versus about
+  400 lean-ctx calls; Claude Code had 410 native versus 255 ctx calls and
+  three code-shipping runs with no dispatch. The new independent checks
+  close the never-armed-run gap rather than adding another prose rule.
+- Verification: `cd plugins/atlas && python3 -m pytest hooks/ scripts/ -q`
+  -> 1598 passed, 3 skipped; `bun test plugins/atlas/omp/index.test.ts`
+  -> 18 pass. Subprocess smoke confirmed (m) blocks an unflagged run,
+  clears after a `Task` dispatch, denies `Grep`/`Glob`, and nudges `Read`
+  once before staying silent.
+
+## 2026-10-01 -- TypeSafe scoring enabled, omp ingest, scoring-error visibility
+
+- Scoring enabled (`ATLAS_TYPESAFE_SCORING=on` in `~/.claude/settings.json`
+  env; `TYPESAFE_API_KEY` comes from `~/.zshrc`, so hooks in GUI-launched
+  Claude Code sessions will not see the key).
+- `session_ingest.py --backfill-agent omp` ingests omp sessions (74 sessions,
+  538 prompts live) so they can be scored.
+- `--status` and the doctor `typesafe-scoring` WARN report recorded scoring
+  errors. The `turn_quality` style metrics now count Claude Code sessions only.
+- `docs/atlas-turn-scoring.md` names TypeSafe as a third-party processor of
+  possible NPI under GLBA/Reg S-P (ZDR is enterprise-only) and how to exclude
+  a project.
+- First 14-day pass: 400 calls, 1.27M input tokens, 0 errors, `turn_quality`
+  findings in the doctor. Full hooks + scripts suite: 1581 passed, 3 skipped.
+
 ## 2026-09-29 -- MCP connectors: server instructions, honest status, typecheck fixes
 
 - Every node connector (auvik, blumira, cipp, connectwise, knowbe4, ninjaone,

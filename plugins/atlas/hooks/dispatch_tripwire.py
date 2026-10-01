@@ -14,8 +14,9 @@ Two tiers, branched on the payload's hook_event_name:
     instead of one agent running for an hour.
 
 Fail-open: any error exits 0. Logs to the atlas observability DB.
-Disable both tiers with ATLAS_TRIPWIRE=off. Disable ONLY the deny tier (advisory
-persists) with ATLAS_TRIPWIRE_HARD=off. Non-orchestration sessions are never denied.
+Disable drift tiers with ATLAS_TRIPWIRE=off; ATLAS_TRIPWIRE_HARD=off disables
+denies. In docs/ projects, Grep/Glob require lean-ctx when available, regardless
+of orchestration or sidechain state; Read/Bash receive one allow-nudge per session.
 """
 
 import json
@@ -23,6 +24,7 @@ import os
 import re
 import sys
 import tempfile
+import shutil
 
 sys.path.insert(0, os.path.dirname(__file__))
 from pathlib import Path  # noqa: E402
@@ -377,6 +379,50 @@ def _arm_orchestrating(conn, atlas_db, session, cwd):
             pass
 
 
+def _native_tool_policy(payload):
+    """Handle docs-scoped native calls; errors allow without policy output."""
+    if payload.get("hook_event_name") != "PreToolUse":
+        return False
+    tool = payload.get("tool_name")
+    if tool not in {"Grep", "Glob", "Read", "Bash"}:
+        return False
+    try:
+        root = find_root(Path(payload.get("cwd") or os.getcwd()))
+        if root is None or not (root / "docs").is_dir():
+            return False
+        if tool in {"Grep", "Glob"}:
+            if os.environ.get("ATLAS_TRIPWIRE_HARD", "on").lower() == "off" or not shutil.which("lean-ctx"):
+                return True  # allow; legacy drift checks must not strand native search
+            replacement = "ctx_search" if tool == "Grep" else "ctx_glob"
+            _deny(f"DENY - native {tool} is disabled in docs/ projects; use lean-ctx `{replacement}` (1:1 replacement).")
+            return True
+        session = str(payload.get("session_id") or "")
+        if not session:
+            return True
+        # Separate exclusive markers avoid shared read-modify-write races.
+        import hashlib
+
+        key = hashlib.sha256(session.encode()).hexdigest()
+        marker = root / ".atlas" / ".run" / "native_nudges" / f"{key}-{tool}"
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            with marker.open("x", encoding="utf-8"):
+                pass
+        except FileExistsError:
+            return True
+        message = (
+            "[atlas] Use lean-ctx `ctx_read` for exploration; native Read is still fine right before an Edit."
+            if tool == "Read" else
+            "[atlas] Use lean-ctx `ctx_shell` / context-mode `ctx_execute` for anything that produces output over ~20 lines; native Bash remains available for mutations and short fixed output."
+        )
+        print(json.dumps({"hookSpecificOutput": {
+            "hookEventName": "PreToolUse", "additionalContext": message,
+        }}))
+        return True  # Read/Bash allow; PostToolUse still logs the call
+    except Exception:
+        return True  # policy failure must never turn into a legacy drift deny
+
+
 def main():
     raw = sys.stdin.read()
     payload = json.loads(raw)  # may raise -> caught below
@@ -392,6 +438,8 @@ def main():
         and _in_subagent(payload)
     ):
         _deny_nested_dispatch(payload.get("tool_name"))
+        return
+    if _native_tool_policy(payload):
         return
 
     if os.environ.get("ATLAS_TRIPWIRE", "on").lower() == "off":

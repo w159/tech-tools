@@ -177,6 +177,70 @@ class TurnQualityMinerTest(unittest.TestCase):
         finally:
             atlas_doctor.MINERS["turn_quality"] = real
 
+    def test_mine_resolves_findings_that_stop_firing_and_reopens(self):
+        for _ in range(20):
+            self._turn("s", self.pid, {DONE: 0.95})
+        real = atlas_doctor.mine_turn_quality
+        atlas_doctor.MINERS["turn_quality"] = lambda c, r: real(c, r, min_turns=20)
+        fp = f"turn_quality:{DONE}"
+
+        def status():
+            return self.conn.execute(
+                "SELECT status FROM findings WHERE fingerprint=?", (fp,)
+            ).fetchone()[0]
+
+        try:
+            atlas_doctor.mine(self.conn, "/x")
+            self.assertEqual(status(), "open")
+            self.conn.execute("UPDATE turn_scores SET value = 0.05")
+            self.conn.commit()
+            atlas_doctor.mine(self.conn, "/x")
+            self.assertEqual(status(), "resolved")
+            self.conn.execute("UPDATE turn_scores SET value = 0.95")
+            self.conn.commit()
+            atlas_doctor.mine(self.conn, "/x")
+            self.assertEqual(status(), "open")
+            # A user's verdict is never overwritten by auto-resolve.
+            self.conn.execute("UPDATE findings SET status='rejected' WHERE fingerprint=?", (fp,))
+            self.conn.execute("UPDATE turn_scores SET value = 0.05")
+            self.conn.commit()
+            atlas_doctor.mine(self.conn, "/x")
+            self.assertEqual(status(), "rejected")
+        finally:
+            atlas_doctor.MINERS["turn_quality"] = real
+
+    def test_ground_truth_uses_next_prompt_correction_signal(self):
+        """Predictive value must not rest only on Jev agreeing with Jev: the
+        next real prompt's regex user_correction signal is reported too."""
+        base = time.time() - 3600
+        self._session("g", self.pid)
+        for i in range(20):
+            hit = i < 10
+            reply_ts = base + i * 10
+            atlas_db.upsert_turn_score(
+                self.conn, "g", f"r{i}", DONE, ts=reply_ts, kind="noul",
+                value=0.95 if hit else 0.05,
+            )
+            puuid = f"p{i}"
+            self.conn.execute(
+                "INSERT INTO user_prompts(session_id,uuid,ts,text) VALUES(?,?,?,?)",
+                ("g", puuid, reply_ts + 5, "next"),
+            )
+            # hits: 6/10 corrected; not hits: 1/10 corrected
+            if (hit and i < 6) or i == 10:
+                self.conn.execute(
+                    "INSERT INTO signals(session_id,message_uuid,ts,signal_type) "
+                    "VALUES(?,?,?,'user_correction')",
+                    ("g", puuid, reply_ts + 5),
+                )
+        self.conn.commit()
+        f = next(x for x in self._mine(min_turns=20) if x["key"] == DONE)
+        gt = f["evidence"]["ground_truth"]
+        self.assertAlmostEqual(gt["p_corr_given_hit"], 0.6)
+        self.assertAlmostEqual(gt["p_corr_given_not_hit"], 0.1)
+        self.assertEqual((gt["n_hit"], gt["n_not_hit"]), (10, 10))
+        self.assertIn("Ground truth", f["detail"])
+
     def test_health_check_reports_key_name_only(self):
         old = {k: os.environ.get(k) for k in ("TYPESAFE_API_KEY", "ATLAS_DB")}
         os.environ["TYPESAFE_API_KEY"] = "sk-secret-value"
@@ -197,6 +261,47 @@ class TurnQualityMinerTest(unittest.TestCase):
                     os.environ.pop(k, None)
                 else:
                     os.environ[k] = v
+
+
+class SweepScopeTest(TurnQualityMinerTest.__bases__[0]):
+    """Auto-resolve only closes keys evaluated with enough data."""
+
+    setUp = TurnQualityMinerTest.setUp
+    tearDown = TurnQualityMinerTest.tearDown
+    _session = TurnQualityMinerTest._session
+    _turn = TurnQualityMinerTest._turn
+
+    def test_thin_window_does_not_resolve(self):
+        for _ in range(20):
+            self._turn("s", self.pid, {DONE: 0.95})
+        real = atlas_doctor.mine_turn_quality
+        atlas_doctor.MINERS["turn_quality"] = lambda c, r: real(c, r, min_turns=20)
+        fp = f"turn_quality:{DONE}"
+        try:
+            atlas_doctor.mine(self.conn, "/x")
+            self.conn.execute("DELETE FROM turn_scores WHERE rowid % 2 = 0")
+            self.conn.commit()
+            atlas_doctor.mine(self.conn, "/x")
+            status = self.conn.execute(
+                "SELECT status FROM findings WHERE fingerprint=?", (fp,)
+            ).fetchone()[0]
+            self.assertEqual(status, "open")  # too little data is not a fix
+        finally:
+            atlas_doctor.MINERS["turn_quality"] = real
+
+    def test_miners_without_evaluated_keys_are_never_swept(self):
+        atlas_db.upsert_finding(self.conn, "tool_error_rate_high:bash", title="t")
+        self.conn.commit()
+        real = atlas_doctor.MINERS["tool_error_rate_high"]
+        atlas_doctor.MINERS["tool_error_rate_high"] = lambda c, r: []
+        try:
+            atlas_doctor.mine(self.conn, "/x")
+        finally:
+            atlas_doctor.MINERS["tool_error_rate_high"] = real
+        status = self.conn.execute(
+            "SELECT status FROM findings WHERE fingerprint='tool_error_rate_high:bash'"
+        ).fetchone()[0]
+        self.assertEqual(status, "open")
 
 
 if __name__ == "__main__":
