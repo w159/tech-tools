@@ -50,7 +50,11 @@ test("every Claude agent has an omp counterpart with the mapped thinkingLevel, r
 		expect(fm.thinkingLevel).toBe(ATLAS_THINKING_LEVELS[name]);
 		const model = fm.model as string[];
 		expect(model[0]).toBe(roleFor(name));
-		expect(model[1]).toBe(ATLAS_THINKING_LEVELS[name] === "medium" ? ATLAS_DEFAULT_FALLBACK_ROLE : SMOL_FALLBACK_ROLE);
+		expect(model).toEqual(
+			ATLAS_THINKING_LEVELS[name] === "medium"
+				? [roleFor(name), ATLAS_DEFAULT_FALLBACK_ROLE, SMOL_FALLBACK_ROLE]
+				: [roleFor(name), SMOL_FALLBACK_ROLE],
+		);
 		expect(fm.spawns).toBe("none");
 		expect(generated[name].endsWith(body) || generated[name].endsWith(body + "\n")).toBe(true);
 	}

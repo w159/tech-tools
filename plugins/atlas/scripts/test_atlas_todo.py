@@ -298,6 +298,15 @@ class MirrorMonotonicCompletion(unittest.TestCase):
         atlas_todo.mirror(self.root, [{"content": "task", "status": "pending"}], "s1")
         self.assertEqual(self._item()["status"], "completed")
 
+    def test_claimed_in_progress_survives_stale_pending_mirror(self):
+        atlas_todo.mirror(self.root, [{"content": "task", "status": "pending"}], "s1")
+        item_id = self._item()["id"]
+        self.assertTrue(atlas_todo.claim(self.root, item_id, "agent-a")["ok"])
+        atlas_todo.mirror(self.root, [{"content": "task", "status": "pending"}], "s1")
+        item = self._item()
+        self.assertEqual(item["status"], "in_progress")
+        self.assertEqual(item["owner"], "agent-a")
+
     def test_completed_without_evidence_still_reverts(self):
         atlas_todo.mirror(self.root, [{"content": "task", "status": "in_progress"}], "s1")
         item_id = self._item()["id"]

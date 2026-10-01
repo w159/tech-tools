@@ -21,7 +21,7 @@ Why generated copies exist: omp discards the frontmatter `model` of Claude-diale
 The generated frontmatter adds what omp understands and Claude dialect does not:
 
 - `thinkingLevel` — user-approved map: `off` for explorer, docs-auditor, docs-curator, schema-inventory, naming-glossary-audit; `low` for implementer, planner, db-prober, ui-runtime-tester; `medium` for verifier, completeness-critic, rls-privilege-audit.
-- `model` — two-entry ordered list: `["@atlas-worker", "@smol"]` for off/low agents, `["@atlas-verifier", "@default"]` for medium agents. Role aliases resolve through `modelRoles.<role>`; an unconfigured custom role stays a raw pattern that matches no model (empirically the spawned subagent fails with "No model selected" — there is no automatic parent-model fallback), so each list carries a built-in fallback alias that resolves with no user configuration: `@smol` (omp's cheap role) for workers, `@default` (omp's `modelRoles.default` — the session's main model) for verifiers. Verifier-tier correctness therefore requires `modelRoles.default` to be set in the omp config; if it is unset, `@default` expands to nothing and medium agents fail to spawn.
+- `model` — ordered list: `["@atlas-worker", "@smol"]` for off/low agents, `["@atlas-verifier", "@default", "@smol"]` for medium agents. Role aliases resolve through `modelRoles.<role>`; an unconfigured custom role stays a raw pattern that matches no model (empirically the spawned subagent fails with "No model selected" — there is no automatic parent-model fallback), so each list carries built-in fallback aliases that resolve with no user configuration: `@smol` (omp's cheap role) for workers; `@default` (omp's `modelRoles.default` — the session's main model) for verifiers, then `@smol` as a last resort if `modelRoles.default` is unset, because a cheap verifier beats one that fails to spawn.
 - `spawns: "none"` — lead-only dispatch: atlas workers may not spawn subagents.
 
 Point `modelRoles.atlas-worker` / `modelRoles.atlas-verifier` at real models (EXAMPLE — not applied by anything here):
@@ -31,7 +31,7 @@ Point `modelRoles.atlas-worker` / `modelRoles.atlas-verifier` at real models (EX
 modelRoles:
   atlas-worker: openai/gpt-5-mini:low
   atlas-verifier: openai/gpt-5.2:medium
-  default: anthropic/claude-sonnet-5-5:medium   # @default fallback — required for verifier-tier agents
+  default: anthropic/claude-sonnet-5-5:medium   # @default fallback for verifier-tier agents (else @smol)
 ```
 
 Colony messaging: dispatch atlas agents with named task items (unique, CamelCase, <= 32 chars); a worker addresses its sibling via `write agent://<name>`. Shared worker notes go through the atlas board notes CLI — `${CLAUDE_PLUGIN_ROOT}` is set by the extension factory (see above), so these are runnable as-is from any omp worker's bash: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py" note --owner <name> [--to <name|all>] [--item <id>] "<text>"` and `... notes [--to <name>] [--since <ts>]`.

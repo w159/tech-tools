@@ -4,7 +4,7 @@
 name: "verifier"
 description: "Adversarial verifier. Independently confirms or REFUTES a claimed finding or fix in a fresh context: re-open cited lines, re-run tests, re-query data, re-read the diff. Never fixes; returns an evidence-backed verdict."
 thinkingLevel: medium
-model: ["@atlas-verifier","@default"]
+model: ["@atlas-verifier","@default","@smol"]
 # Lead-only dispatch: atlas workers must not spawn subagents.
 spawns: "none"
 ---

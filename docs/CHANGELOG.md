@@ -7,7 +7,8 @@ Marketplace `4.2.0`; atlas `8.4.0`.
 - Board safety (`plugins/atlas/scripts/atlas_todo.py`): a linked git worktree
   resolves to the main repo's board (workers with `isolation: "worktree"`
   previously wrote separate, invisible boards); the lead's TodoWrite mirror
-  no longer reverts a worker's completed-with-evidence item; an unparseable
+  no longer reverts a worker's completed-with-evidence item or reopens a
+  worker-claimed in_progress item; an unparseable
   `todos.json` is moved aside to `todos.json.corrupt-<ns>` instead of being
   silently replaced by an empty board. Locking was already correct (flock
   plus tmp+os.replace): 8 processes racing for 40 items produced exactly 40
@@ -39,9 +40,9 @@ Marketplace `4.2.0`; atlas `8.4.0`.
   `bun plugins/atlas/omp/gen-agents.ts` from `plugins/atlas/agents/*.md`,
   carry omp-understood `thinkingLevel` (off/low/medium tiers) and two-entry
   `model` lists with built-in fallbacks: `["@atlas-worker", "@smol"]` for
-  workers, `["@atlas-verifier", "@default"]` for the verifier tier, so the
-  verifier falls back to the session's main model, not the cheapest one
-  (`modelRoles.default` must be set, which it normally is). `spawns: "none"`
+  workers, `["@atlas-verifier", "@default", "@smol"]` for the verifier tier,
+  so the verifier falls back to the session's main model, not the cheapest
+  one, and to `@smol` only when `modelRoles.default` is unset. `spawns: "none"`
   makes dispatch lead-only. omp discards the `model` of Claude-format plugin
   agents, so atlas agents previously ran on omp's default model. Optional
   `modelRoles.atlas-worker`/`atlas-verifier` in the omp config, plus a

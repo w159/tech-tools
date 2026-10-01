@@ -4,7 +4,7 @@
 name: "rls-privilege-audit"
 description: "Read-only PostgreSQL security audit of row-level security, table grants, and roles against least privilege. Use for the security half of a database audit in regulated environments."
 thinkingLevel: medium
-model: ["@atlas-verifier","@default"]
+model: ["@atlas-verifier","@default","@smol"]
 # Lead-only dispatch: atlas workers must not spawn subagents.
 spawns: "none"
 ---

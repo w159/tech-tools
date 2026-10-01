@@ -287,6 +287,14 @@ def mirror(
                 # Completion is monotonic: a worker's completed-with-evidence
                 # state cannot be reverted by the lead's next TodoWrite.
                 status = "completed"
+            elif (
+                prior
+                and prior.get("owner")
+                and prior.get("status") == "in_progress"
+                and status == "pending"
+            ):
+                # A live worker claim is never reopened by a stale lead plan.
+                status = "in_progress"
             item = {
                 "id": prior["id"] if prior else _new_id(),
                 "content": content,

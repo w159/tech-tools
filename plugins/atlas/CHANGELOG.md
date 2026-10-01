@@ -24,9 +24,10 @@
   db-prober, ui-runtime-tester; medium for verifier, completeness-critic,
   rls-privilege-audit. `model` is a two-entry list with a built-in fallback:
   `["@atlas-worker", "@smol"]` for off/low workers, `["@atlas-verifier",
-  "@default"]` for the verifier tier (verifier, completeness-critic,
+  "@default", "@smol"]` for the verifier tier (verifier, completeness-critic,
   rls-privilege-audit), so the verifier falls back to the session's main model
-  rather than the cheapest one. An unconfigured custom role fails to spawn
+  rather than the cheapest one, and to `@smol` only if `modelRoles.default` is
+  unset (a cheap verifier beats none). An unconfigured custom role fails to spawn
   ("No model selected"), which is why the fallback alias is built in;
   `modelRoles.default` must be set for the verifier tier (it normally is).
   `spawns: "none"` makes dispatch lead-only. Optional `modelRoles.atlas-worker`
@@ -43,7 +44,8 @@
 - **Board safety (`scripts/atlas_todo.py`).** A linked git worktree now
   resolves to the main repo's board -- before, workers started with
   isolation: "worktree" each wrote a separate, invisible board. The lead's
-  TodoWrite mirror no longer reverts a worker's completed-with-evidence item.
+  TodoWrite mirror no longer reverts a worker's completed-with-evidence item,
+  nor reopens a worker-claimed in_progress item to pending.
   An unparseable `todos.json` is moved aside to `todos.json.corrupt-<ns>` --
   before, the next write silently replaced it with an empty board. Locking
   was already correct (flock plus tmp+os.replace): a stress run of 8 processes
