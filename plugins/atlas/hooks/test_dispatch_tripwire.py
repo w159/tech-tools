@@ -1079,6 +1079,20 @@ class InProcessTest(unittest.TestCase):
         self.assertNotIn("additionalContext", out)
         self.assertEqual(out.count("hookSpecificOutput"), 1)
 
+    def test_nudge_replaced_by_deny_is_shown_on_next_allowed_call(self):
+        """The once-per-session marker is claimed only when the nudge is
+        actually printed, so a deny that replaced it does not burn it."""
+        self._docs_project()
+        for _ in range(8):
+            self._run_main(self._post("Read", {"file_path": "a.py"}))
+        denied = self._run_main(self._pre("Read", {"file_path": "b.py"}))
+        self.assertIn('"permissionDecision": "deny"', denied)
+        self._run_main(self._post("Task", {"subagent_type": "atlas:explorer"}))
+        allowed = self._run_main(self._pre("Read", {"file_path": "b.py"}))
+        self.assertNotIn("deny", allowed)
+        self.assertIn("ctx_read", allowed)
+        self.assertEqual(self._run_main(self._pre("Read", {"file_path": "c.py"})), "")
+
 
 class WorktreeFlagTest(unittest.TestCase):
     """A dispatch with isolation="worktree" is recorded, so the completion gate
@@ -1443,7 +1457,7 @@ class NativeToolPolicyTest(unittest.TestCase):
             reason = result["permissionDecisionReason"]
             self.assertIn(replacement, reason)
             # the deny names the subagent load step, not just the tool
-            self.assertIn('ToolSearch("select:mcp__lean-ctx__%s")' % replacement, reason)
+            self.assertIn(f'ToolSearch("select:mcp__lean-ctx__{replacement}")', reason)
 
     def test_deny_fires_from_each_config_source(self):
         # (1) project .mcp.json

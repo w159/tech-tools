@@ -1165,6 +1165,7 @@ _COLONY_NAME_RE = re.compile(
     r"""(?:"name"\s*:\s*["']?([^"'\n]{1,128})["']?|[\s:]name\s*[=:]\s*["']?"""
     r"""([A-Za-z0-9_.\-]{2,64})["']?)"""
 )
+_COLONY_NAMES_RE = re.compile(r'"names":\s*"\[(.*?)\]"')
 
 # Internal/URI-ish targets are tool plumbing, not repo edits; a write to
 # agent://... or xd://mcp__... never counts toward the delegation denominator.
@@ -1200,12 +1201,7 @@ def _colony_is_doc_path(path):
     if not path:
         return False
     p = path.replace("\\", "/")
-    return (
-        p.startswith("docs/")
-        or "/docs/" in p
-        or p.startswith(".atlas/")
-        or "/.atlas/" in p
-    )
+    return p.startswith(("docs/", ".atlas/")) or "/docs/" in p or "/.atlas/" in p
 
 
 def _colony_recover_path(tool_name, summary):
@@ -1238,9 +1234,7 @@ def _colony_is_repo_edit(tool_name, summary):
     path = _colony_recover_path(tool_name, summary)
     if path is not None and _COLONY_URI_SCHEME_RE.match(path):
         return False
-    if path is not None and _colony_is_doc_path(path):
-        return False
-    return True
+    return not (path is not None and _colony_is_doc_path(path))
 
 
 def _colony_is_ctx_call(tool_name, summary):
@@ -1272,6 +1266,16 @@ def _colony_named_dispatch_stats(rows):
     named = not_named = uncountable = 0
     for summary in rows:
         s = (summary or "").strip()
+        batch = _COLONY_NAMES_RE.search(s)
+        if batch:
+            # Batched omp `task`: ingest lifts per-item names into `names`
+            # (first key, so it survives the cap). Named only if every item is.
+            entries = re.findall(r'\\"(.*?)\\"', batch.group(1))
+            if entries and all(e.strip() for e in entries):
+                named += 1
+            else:
+                not_named += 1
+            continue
         m = _COLONY_NAME_RE.search(s)
         val = (m.group(1) if m and m.group(1) else None) or (
             m.group(2) if m and m.group(2) else None
@@ -1288,14 +1292,14 @@ def _colony_named_dispatch_stats(rows):
     if total == 0:
         text = "no dispatches"
     elif determinable == 0:
-        text = "unknown (%d dispatch summary/ies %s)" % (
-            total,
-            "NULL or truncated, so a name argument cannot be ruled in or out",
+        text = (
+            f"unknown ({total} dispatch summary/ies NULL or truncated, "
+            "so a name argument cannot be ruled in or out)"
         )
     else:
-        text = "%d/%d named" % (named, determinable)
+        text = f"{named}/{determinable} named"
         if uncountable:
-            text += " (%d more with NULL/truncated summaries excluded)" % uncountable
+            text += f" ({uncountable} more with NULL/truncated summaries excluded)"
     return rate, text
 
 
@@ -1326,7 +1330,7 @@ def mine_colony_adherence(conn, root, window_days=None, min_sessions=None):
         "SELECT session_id, tool_name, input_summary FROM tool_calls "
         "WHERE is_sidechain=0 AND ts > strftime('%s','now', ?) "
         "AND tool_name IS NOT NULL",
-        ("-%d days" % window_days,),
+        (f"-{window_days} days",),
     ).fetchall()
     sessions = {}
     for sid, tool_name, summary in rows:
@@ -1404,10 +1408,10 @@ def mine_colony_adherence(conn, root, window_days=None, min_sessions=None):
             target = "plugins/atlas/hooks/dispatch_tripwire.py"
         detail = (
             f"{harness}: native_reader_share="
-            f"{'n/a' if native_share is None else '%g' % native_share} "
+            f"{'n/a' if native_share is None else f'{native_share:g}'} "
             f"({agg['native']}/{reader_denom} reader-route calls), "
             f"delegation_rate="
-            f"{'n/a' if delegation_rate is None else '%g' % delegation_rate} "
+            f"{'n/a' if delegation_rate is None else f'{delegation_rate:g}'} "
             f"({delegated}/{denom} non-docs edit sessions dispatched), "
             f"named_dispatch_rate={named_text} "
             f"({n} sessions in the last {window_days} days)."

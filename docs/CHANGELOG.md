@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-10-01 -- Nudge-marker, ingest dispatch-name, and omp indentation fixes
+
+Marketplace `4.3.1`; atlas `8.5.1`.
+
+- The tripwire's once-per-session native-tool nudge is no longer lost when the
+  inline-op threshold deny replaces it; the marker is claimed only on print.
+- Session ingest keeps dispatch identity (`name`, `subagent_type`, omp batch
+  `names`) ahead of the 500-char summary cap, so `colony_adherence`'s
+  named-dispatch rate measures real adoption.
+- `plugins/atlas/omp/.editorconfig` pins tab indentation; omp's formatOnWrite
+  had been reindenting those files to one space (content sniffing on a JSDoc
+  ` *` line).
+- Known limitations: plugin-supplied lean-ctx MCP servers are not detected
+  (falls back to the nudge); marketplace installs still don't surface
+  `omp/agents/` (deferred).
+
 ## 2026-10-01 -- Availability-aware native-tool enforcement, inline-op deny regression fix, colony adherence miner
 
 Marketplace `4.3.0`; atlas `8.5.0`.

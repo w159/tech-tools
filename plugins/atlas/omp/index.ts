@@ -181,7 +181,7 @@ export function resolveLeanReplacement(kind: LeanKind, active: string[] | undefi
 	for (const name of BUILTIN_CANDIDATES[kind]) {
 		if (active.includes(name)) return { via: "tool", name };
 	}
-	// xd:// devices are invoked by writing to them; without `write` the route is not callable.
+	// xd:// devices are invoked by writing to them, so without `write` the route is not callable.
 	if (!active.includes("write")) return undefined;
 	for (const { server, tool } of DEVICE_CANDIDATES[kind]) {
 		const route = deviceRoute(active, server, tool);
