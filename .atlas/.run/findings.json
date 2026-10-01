@@ -2261,8 +2261,8 @@
     "status": "verified",
     "verified_at": "2026-09-29T13:34:53+00:00",
     "verified_by": "orchestrator"
-  }
-  ,{
+  },
+  {
     "id": "verify-atlas-8.3.0-docs-propagation-2026-10-01",
     "surface": "plugin",
     "category": "documentation",
@@ -2288,8 +2288,8 @@
     "status": "verified",
     "verified_at": "2026-10-01",
     "verified_by": "DocsPropagation"
-  }
-  ,{
+  },
+  {
     "id": "verify-atlas-8.4.0-docs-propagation-2026-10-01",
     "surface": "plugin",
     "category": "documentation",
@@ -2364,6 +2364,35 @@
       "plugins/atlas/skills/atlas-orchestrate/references/hooks-automation.md"
     ],
     "reproduction": "cd plugins/atlas && python3 -m pytest hooks/ scripts/ -q && bun test omp",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-01",
+    "verified_by": "main (inline; subagents halted by OpenRouter 402)"
+  },
+  {
+    "id": "verify-atlas-8.6.0-2026-10-01",
+    "surface": "plugin",
+    "category": "enforcement",
+    "severity": "medium",
+    "title": "Atlas 8.6.0: shared contracts across Claude Code and omp, omp output style, tool mandates, tmux colony mode",
+    "evidence": [
+      "pytest hooks/ scripts/: 1692 passed, 3 skipped, 0 failed (baseline 1653); bun test omp: 57 pass across 5 files (baseline 38)",
+      "bun omp/gen-agents.ts: omp agent files up to date (12 files)",
+      "omp -p -e omp/index.ts in a docs/ project: model quoted the style's LEDGER line, opened with the ATLAS header, confirmed the 'Recall first:' line; with ATLAS_STYLE=off ATLAS_MANDATES=off both absent",
+      "real tmux smoke: atlas_mux spawn Alpha (claude tier sonnet/low) + Beta (omp tier @default/medium) with stub workers; atlas_todo notes --to lead returned both notes, reports and exit records; kill -> tmux has-session fails, no atlas-* sessions left",
+      "shared cases: contracts/mandates.json gitCommitCases run by test_bash_advisor.py and omp/mandates.test.ts; contracts/native-tools.json delegationExemptCases run by test_completion_gate.py and omp/contracts.test.ts"
+    ],
+    "doc_refs": [
+      "docs/atlas-harness-parity.md",
+      "docs/CHANGELOG.md",
+      "plugins/atlas/CHANGELOG.md",
+      "plugins/atlas/README.md",
+      "plugins/atlas/omp/README.md",
+      "plugins/atlas/skills/atlas-orchestrate/references/hooks-automation.md",
+      "plugins/atlas/skills/atlas-orchestrate/references/subagent-kit.md"
+    ],
+    "reproduction": "cd plugins/atlas && python3 -m pytest hooks/ scripts/ -q && bun test omp && bun omp/gen-agents.ts",
     "proposed_fix": "",
     "blast_radius": "module",
     "status": "verified",
