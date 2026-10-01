@@ -2343,5 +2343,31 @@
     "status": "verified",
     "verified_at": "2026-10-01",
     "verified_by": "main (inline; subagents halted by OpenRouter 402)"
+  },
+  {
+    "id": "verify-atlas-8.5.1-2026-10-01",
+    "surface": "plugin",
+    "category": "enforcement",
+    "severity": "low",
+    "title": "Atlas 8.5.1: nudge marker survives deny, ingest keeps dispatch names, omp tab editorconfig",
+    "evidence": [
+      "pytest hooks/ scripts/: 1652 passed, 3 skipped, 0 failed; bun test omp: 38 pass",
+      "test_nudge_replaced_by_deny_is_shown_on_next_allowed_call; DispatchNameSurvivesIngestTest (2 tests)",
+      "real $HOME Grep payload in this repo -> deny (lean-ctx in ~/.claude.json)",
+      "fresh-process resolveFormatOptions(omp/index.ts) -> tabSize 4, insertSpaces false"
+    ],
+    "doc_refs": [
+      "docs/CHANGELOG.md",
+      "plugins/atlas/CHANGELOG.md",
+      "plugins/atlas/README.md",
+      "plugins/atlas/omp/README.md",
+      "plugins/atlas/skills/atlas-orchestrate/references/hooks-automation.md"
+    ],
+    "reproduction": "cd plugins/atlas && python3 -m pytest hooks/ scripts/ -q && bun test omp",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-01",
+    "verified_by": "main (inline; subagents halted by OpenRouter 402)"
   }
 ]
