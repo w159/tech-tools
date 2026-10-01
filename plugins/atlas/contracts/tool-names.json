@@ -1,0 +1,25 @@
+{
+	"claudeToOmp": {
+		"and under `ENABLE_TOOL_SEARCH` it is deferred (`ToolSearch(\"select:TodoWrite\")`)": "while in omp the todo tool is always active",
+		"the ToolSearch + serena/lean-ctx TOOLS block": "the available-tools + serena/lean-ctx TOOLS block",
+		"ToolSearch-load": "load",
+		"ToolSearch": "tool search",
+		"AskUserQuestion": "an inline user question",
+		"TodoWrite": "todo",
+		"TodoRead": "todo",
+		"Grep": "grep",
+		"Glob": "glob",
+		"Read": "read",
+		"Edit": "edit",
+		"Write": "write",
+		"Bash": "bash",
+		"Task": "task",
+		"Agent": "task",
+		"SendMessage": "write agent://<name>"
+	},
+	"mcp": {
+		"prefix": "xd://mcp__",
+		"separator": "_",
+		"note": "model-emitted mcp__<server>__<tool>; parts sanitized like omp's mint in mcp/tool-bridge.ts mintMCPToolName: lowercased, [^a-z0-9_] runs -> _, underscore-collapsed and trimmed; a tool name prefixed '<server>_' loses that prefix; no 64-char cap applied here"
+	}
+}

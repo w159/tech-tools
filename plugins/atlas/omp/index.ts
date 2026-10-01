@@ -20,7 +20,17 @@
  *    some targeted item omits `name` gets a one-time additionalContext hint:
  *    named items double as sibling addresses (`write agent://<name>`).
  *
- * Kill switches: ATLAS_GATE=off disables the delegation check; ATLAS_TRIPWIRE_HARD=off
+ * 4. Output style — omp/style.ts appends the translated
+ *    output-styles/atlas-orchestrator.md to the main session's system prompt.
+ * 5. Tool mandates — omp/mandates.ts: claude-mem recall line and the one-time
+ *    ponytail-review nudge before `git commit` (twins of session_boot.py and
+ *    bash_advisor.py; shared text in contracts/mandates.json).
+ *
+ * Native-tool routing data (which tool is denied or nudged, toward which
+ * replacement) and the delegation exemption come from contracts/native-tools.json,
+ * shared with hooks/dispatch_tripwire.py and hooks/completion_gate.py.
+ *
+ * Kill switches: ATLAS_STYLE=off, ATLAS_MANDATES=off; ATLAS_GATE=off disables the delegation check; ATLAS_TRIPWIRE_HARD=off
  * disables the whole native-tool tripwire (grep/glob deny and its unreachable
  * nudge), while read/bash preference nudges remain. All handlers fail open: any
  * internal error returns undefined (omp's tool_call dispatch is fail-closed,
@@ -33,6 +43,9 @@ import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { statSync } from "node:fs";
 import * as nodePath from "node:path";
 import { ATLAS_AGENT_TARGETABLE } from "./atlas-agents";
+import { type LeanKind, kindOfOmpTool, loadNativeTools } from "./contracts";
+import { registerMandates } from "./mandates";
+import { registerStyle } from "./style";
 
 /** Absolute atlas plugin root: the directory containing scripts/atlas_todo.py. */
 const PLUGIN_ROOT = nodePath.resolve(import.meta.dir, "..");
@@ -115,8 +128,8 @@ export function boardMirrorArgv(
 	return argv;
 }
 
-/** Kinds of native tool calls the tripwire redirects to a lean-ctx replacement. */
-export type LeanKind = "search" | "glob" | "read" | "shell";
+/** Kinds of native tool calls the tripwire redirects to a lean-ctx replacement (contracts/native-tools.json). */
+export type { LeanKind };
 
 /**
  * A lean-ctx replacement actually callable in the session right now: either a
@@ -125,28 +138,7 @@ export type LeanKind = "search" | "glob" | "read" | "shell";
  */
 export type LeanReplacement = { via: "tool"; name: string } | { via: "device"; device: string };
 
-const LEAN_CTX_SERVER = /lean[-_]?ctx/i;
 const CONTEXT_MODE_SERVER = /context[-_]?mode/i;
-
-/** Plain tool-name candidates per kind, in preference order. */
-const BUILTIN_CANDIDATES: Record<LeanKind, string[]> = {
-	search: ["ctx_search"],
-	glob: ["ctx_glob"],
-	read: ["ctx_read"],
-	shell: ["ctx_shell", "ctx_execute"],
-};
-
-/** MCP device-name candidates per kind (server provenance + tool name). */
-const DEVICE_CANDIDATES: Record<LeanKind, Array<{ server: RegExp; tool: string }>> = {
-	search: [{ server: LEAN_CTX_SERVER, tool: "ctx_search" }],
-	glob: [{ server: LEAN_CTX_SERVER, tool: "ctx_glob" }],
-	read: [{ server: LEAN_CTX_SERVER, tool: "ctx_read" }],
-	shell: [
-		{ server: LEAN_CTX_SERVER, tool: "ctx_shell" },
-		{ server: LEAN_CTX_SERVER, tool: "ctx_execute" },
-		{ server: CONTEXT_MODE_SERVER, tool: "ctx_execute" },
-	],
-};
 
 /**
  * The xd:// device route for one MCP tool. omp mints MCP tool names as
@@ -178,14 +170,18 @@ function deviceRoute(active: string[], serverName: RegExp, mcpToolName: string):
  */
 export function resolveLeanReplacement(kind: LeanKind, active: string[] | undefined): LeanReplacement | undefined {
 	if (!Array.isArray(active)) return undefined;
-	for (const name of BUILTIN_CANDIDATES[kind]) {
-		if (active.includes(name)) return { via: "tool", name };
+	const replacements = loadNativeTools()?.kinds[kind].replacements;
+	if (!replacements) return undefined; // contract unreadable: allow
+	for (const { tool } of replacements) {
+		if (active.includes(tool)) return { via: "tool", name: tool };
 	}
 	// xd:// devices are invoked by writing to them, so without `write` the route is not callable.
 	if (!active.includes("write")) return undefined;
-	for (const { server, tool } of DEVICE_CANDIDATES[kind]) {
-		const route = deviceRoute(active, server, tool);
-		if (route) return { via: "device", device: route };
+	for (const { tool, servers } of replacements) {
+		for (const server of servers) {
+			const route = deviceRoute(active, server, tool);
+			if (route) return { via: "device", device: route };
+		}
 	}
 	return undefined;
 }
@@ -231,16 +227,19 @@ function bashNudge(replacement: LeanReplacement, active: string[]): string {
 const STOP_MESSAGE = (n: number) =>
 	`Atlas delegation gate: this session issued ${n} non-docs edit/write call(s) without dispatching a single subagent (task tool). The orchestrator must delegate code changes to subagents instead of writing them itself. Fix: dispatch the code change via the task tool (e.g. to an atlas:implementer subagent), then verify its result. Inline edits already made may stand; the delegation must still happen. (Set ATLAS_GATE=off to disable this check.)`;
 
-/** True if the path is a non-docs code file: outside docs/ and .atlas/, not *.md, not an internal URI. */
+/**
+ * True if the path is a non-docs code file: outside the contract's exempt dirs
+ * (docs/, .atlas/), not an exempt extension (*.md), not an internal URI.
+ * Contract unreadable → false (never counted, so the gate fails open).
+ */
 export function isNonDocsPath(p: string): boolean {
 	if (typeof p !== "string" || p.length === 0) return false;
 	if (p.includes("://")) return false;
+	const contract = loadNativeTools();
+	if (!contract) return false;
 	const normalized = nodePath.normalize(p).replaceAll("\\", "/");
-	if (normalized.endsWith(".md")) return false;
-	for (const seg of normalized.split("/")) {
-		if (seg === "docs" || seg === ".atlas") return false;
-	}
-	return true;
+	if (contract.exemptExtensions.some(ext => normalized.endsWith(ext))) return false;
+	return !normalized.split("/").some(seg => contract.exemptDirs.includes(seg));
 }
 
 function inputPaths(input: Record<string, unknown>): string[] {
@@ -351,11 +350,13 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 			// checked per call (subagents included). Hard-off silences the whole
 			// tripwire; otherwise deny when a replacement is live, else one-time
 			// allow-nudge naming the unavailability.
-			if (tool === "grep" || tool === "glob") {
+			const contract = loadNativeTools();
+			const kind = kindOfOmpTool(tool, contract);
+			if ((tool === "grep" || tool === "glob") && kind && contract?.kinds[kind].mode === "deny") {
 				if (process.env.ATLAS_TRIPWIRE_HARD === "off") return undefined;
 				const active = activeToolsOf(deps);
 				if (!active) return undefined; // availability unknown: allow silently, never claim "unreachable"
-				const replacement = resolveLeanReplacement(tool === "grep" ? "search" : "glob", active);
+				const replacement = resolveLeanReplacement(kind, active);
 				if (replacement) return { block: true, reason: denyReason(tool, replacement) };
 				if (!nudged.has(tool)) {
 					nudged.add(tool);
@@ -366,10 +367,10 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 
 			// 2) One-time per-tool nudges for read/bash, naming a reachable form;
 			// silent when nothing lean-ctx/context-mode is reachable to prefer.
-			if (tool === "read" || tool === "bash") {
+			if ((tool === "read" || tool === "bash") && kind) {
 				if (nudged.has(tool)) return undefined;
 				const active = activeToolsOf(deps);
-				const replacement = resolveLeanReplacement(tool === "read" ? "read" : "shell", active);
+				const replacement = resolveLeanReplacement(kind, active);
 				if (!replacement) return undefined;
 				nudged.add(tool);
 				return { additionalContext: tool === "read" ? readNudge(replacement) : bashNudge(replacement, active ?? []) };
@@ -432,19 +433,22 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 /** Session tool surfaces are per-session: omp rebinds the factory, so state and availability stay session-local. */
 export default function atlasOmpExtension(pi: ExtensionAPI): void {
 	ensureClaudePluginRoot();
+	const activeTools = () => {
+		try {
+			return pi.getActiveTools();
+		} catch {
+			return undefined; // fail open — runtime not wired yet or API absent means allow
+		}
+	};
+	registerStyle(pi);
+	registerMandates(pi, { activeTools });
 	register(pi, {
 		// getActiveTools() is omp's enabled set (top-level names plus live xd://
 		// device mounts) — exactly the callable surface. getAllTools() provenance
 		// is deliberately NOT consulted: it lists configured servers even when
 		// their tools are inactive, which must not arm the deny. The lean-ctx
 		// binary on PATH is likewise not a session tool and never consulted.
-		activeTools: () => {
-			try {
-				return pi.getActiveTools();
-			} catch {
-				return undefined; // fail open — runtime not wired yet or API absent means allow
-			}
-		},
+		activeTools,
 		spawnBoardMirror: (argv, opts) => {
 			try {
 				const child = Bun.spawn(argv, { cwd: opts.cwd, stdin: "ignore", stdout: "ignore", stderr: "ignore" });

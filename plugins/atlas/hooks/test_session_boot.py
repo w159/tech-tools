@@ -65,8 +65,12 @@ class MainInProcessTest(unittest.TestCase):
         self._orig_memory = sys.modules.get("atlas_memory")
         sys.modules["atlas_curator"] = self._curator
         sys.modules["atlas_memory"] = self._memory
+        # Plugin enablement reads the real ~/.claude/settings.json; isolate it.
+        self._plugins = mock.patch.object(session_boot, "plugin_enabled", return_value=False)
+        self._plugins.start()
 
     def tearDown(self):
+        self._plugins.stop()
         for name, orig in (
             ("atlas_curator", self._orig_curator),
             ("atlas_memory", self._orig_memory),
@@ -704,6 +708,78 @@ class DocsStructureRepairTest(unittest.TestCase):
         self.assertNotIn("docs structure repaired", out)
         self.assertEqual(self._subdirs(), set())
 
+
+
+class RecallMandateTest(unittest.TestCase):
+    """claude-mem recall mandate: armed only when the claude-mem plugin is enabled."""
+
+    setUp = MainInProcessTest.setUp
+    tearDown = MainInProcessTest.tearDown
+
+    def _context(self, enabled, mandates=""):
+        self._plugins.stop()
+        self._plugins = mock.patch.object(
+            session_boot, "plugin_enabled", side_effect=lambda name, root=None: name in enabled
+        )
+        self._plugins.start()
+        with (
+            mock.patch.object(session_boot, "detect_dep", return_value=False),
+            mock.patch.object(session_boot, "has_cmd", return_value=False),
+        ):
+            code, out = run_main_inprocess(
+                {"session_id": "r1", "cwd": self.tmp}, dict(self.env, ATLAS_MANDATES=mandates)
+            )
+        self.assertEqual(code, 0)
+        return json.loads(out)["hookSpecificOutput"]["additionalContext"]
+
+    def test_enabled_plugin_arms_recall_and_clears_setup_gap(self):
+        ctx = self._context({"claude-mem", "ponytail", "context-mode"})
+        self.assertIn(session_boot.recall_mandate(), ctx)
+        self.assertIn("mcp__plugin_claude-mem_mcp-search__search", ctx)
+        self.assertNotIn("Setup gap", ctx)
+
+    def test_absent_plugin_stays_silent(self):
+        ctx = self._context(set())
+        self.assertNotIn("Recall first", ctx)
+
+    def test_kill_switch(self):
+        ctx = self._context({"claude-mem"}, "off")
+        self.assertNotIn("Recall first", ctx)
+
+
+class PluginEnabledTest(unittest.TestCase):
+    """tool_routing.plugin_enabled: settings precedence and fail-open parsing."""
+
+    def setUp(self):
+        import tool_routing
+
+        self.tr = tool_routing
+        self.home = tempfile.mkdtemp()
+        self.proj = tempfile.mkdtemp()
+        os.makedirs(os.path.join(self.home, ".claude"))
+        os.makedirs(os.path.join(self.proj, ".claude"))
+
+    def tearDown(self):
+        shutil.rmtree(self.home, ignore_errors=True)
+        shutil.rmtree(self.proj, ignore_errors=True)
+
+    def _write(self, base, name, data):
+        with open(os.path.join(base, ".claude", name), "w") as fh:
+            fh.write(data if isinstance(data, str) else json.dumps(data))
+
+    def test_user_setting_enables_and_project_override_disables(self):
+        self._write(self.home, "settings.json", {"enabledPlugins": {"ponytail@ponytail": True}})
+        with mock.patch.dict(os.environ, {"HOME": self.home}):
+            self.assertTrue(self.tr.plugin_enabled("ponytail", self.proj))
+            self.assertFalse(self.tr.plugin_enabled("pony", self.proj))
+            self._write(self.proj, "settings.local.json", {"enabledPlugins": {"ponytail@ponytail": False}})
+            self.assertFalse(self.tr.plugin_enabled("ponytail", self.proj))
+
+    def test_malformed_settings_fail_open(self):
+        self._write(self.home, "settings.json", "{not json")
+        self._write(self.proj, "settings.json", {"enabledPlugins": ["ponytail"]})
+        with mock.patch.dict(os.environ, {"HOME": self.home}):
+            self.assertFalse(self.tr.plugin_enabled("ponytail", self.proj))
 
 if __name__ == "__main__":
     unittest.main()

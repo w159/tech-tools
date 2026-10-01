@@ -144,10 +144,10 @@ writers prevents new flags but does not disable (m) or clear existing flags.
 
 | Hook | Event | Purpose |
 | --- | --- | --- |
-| `session_boot.py` | `SessionStart` | Activate the runtime, report dependency state, surface relevant lessons, carry the todo board over, and repair the durable `docs/` tree (creates any missing scaffolder-owned subfolder; only when `docs/` already exists, so a project that never asked for one is never scaffolded behind the user's back -- it gets a one-line notice instead; `ATLAS_DOCS_REPAIR=off`) |
+| `session_boot.py` | `SessionStart` | Activate the runtime, report dependency state, surface relevant lessons, carry the todo board over, and repair the durable `docs/` tree (creates any missing scaffolder-owned subfolder; only when `docs/` already exists, so a project that never asked for one is never scaffolded behind the user's back -- it gets a one-line notice instead; `ATLAS_DOCS_REPAIR=off`); when the claude-mem plugin is enabled, adds a "Recall first" line telling the session to run one claude-mem search before planning (`ATLAS_MANDATES=off`) |
 | `atlas_doctor.py --hook` | `SessionStart` | Rollback guard: warn loudly if the installed plugin was downgraded, the marketplace points at a fork, or hooks/assets are missing (warn-only, always exits 0) |
 | `prompt_optimizer.py` | `UserPromptSubmit` | Optional trigger-gated prompt rewrite; also arm-early classifier that flags substantive engineering prompts as orchestration runs (`ATLAS_ENGINE_ARM=off`) |
-| `bash_advisor.py` | `PreToolUse` (Bash) | Advisory only: warns on catastrophic patterns (`rm -rf /`, `mkfs`, `dd` to a disk, fork bomb). Never denies |
+| `bash_advisor.py` | `PreToolUse` (Bash) | Advisory only: warns on catastrophic patterns (`rm -rf /`, `mkfs`, `dd` to a disk, fork bomb), and once per session nudges a ponytail-review of the staged diff before `git commit` when the ponytail plugin is enabled (`ATLAS_MANDATES=off`). Never denies |
 | `fallow_gate.py` | `PreToolUse` (Bash) | Fallow agent gate: on `git commit`/`git push`, runs `fallow audit --format json --quiet --explain --gate-marker agent` and denies when `verdict` is `fail`. Fail-open if the fallow CLI is missing (`ATLAS_FALLOW=off`, `FALLOW_GATE_MIN_VERSION`). Docs: `skills/atlas-orchestrate/references/fallow-tools.md` |
 | `dispatch_tripwire.py` | `PostToolUse` + `PreToolUse` | In `docs/` projects where lean-ctx is reachable (binary on PATH AND a lean-ctx MCP server in `.mcp.json` / Claude settings; a server supplied only by an installed plugin's `.mcp.json` is not detected and falls back to the nudge), deny native `Grep`/`Glob` toward `ctx_search`/`ctx_glob` (naming the `ToolSearch` load step), including subagents and unflagged sessions; otherwise allow with a one-time nudge. Allowed native calls still hit the armed inline-op threshold deny; nudge `Read`/`Bash` once per session toward `ctx_read` and `ctx_shell`/context-mode `ctx_execute` (markers: `.atlas/.run/native_nudges/`; `ATLAS_TRIPWIRE_HARD=off`). Flag orchestration sessions, count inline ops, advise at the threshold; deny tier blocks at 6 unsanctioned inline ops (the orchestrator's own docs//.atlas/ writes are excluded, since the completion gate requires them at closeout) or any non-docs edit in an orchestration run (`ATLAS_TRIPWIRE=off`, `ATLAS_TRIPWIRE_HARD=off`). Denies an `atlas:*` dispatch whose `model` param overrides the agent definition's own `model:` frontmatter (`inherit` and an absent param accept anything; an unreadable definition fails open), and denies an `atlas:*` dispatch with no `name` -- named dispatches are what hand a subagent the sibling roster and `SendMessage`. Both follow the existing `atlas:*` gating (`ATLAS_TRIPWIRE_HARD=off` lifts them), except that with `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` the name-required deny is lifted: a named main-conversation dispatch would launch as a teammate that inherits the lead's effort and cwd, defeating the per-worker effort tier. Denies an `atlas:*` dispatch that omits the code-nav TOOLS block, omits the bounding dispatch spec from `subagent-kit.md` (`GOAL:`, `DELIVERABLE:`, `SUCCESS CRITERIA:`, `OUT OF SCOPE:`, `STOP CONDITIONS:`), or bundles more than one `GOAL:` into a single subagent -- an unbounded or multi-task dispatch is how one agent ends up running for an hour instead of a wave of small ones. Also denies, unconditionally and ahead of the kill switch, any nested `Agent`/`Task` dispatch whose `transcript_path` is a `subagents/` transcript: a subagent must never dispatch another subagent. Also brackets every `*verifier*` dispatch: snapshots the `findings.json` entry count on `PreToolUse` and, if the verifier returns without adding a row, tells the orchestrator to write the verdict with `scripts/atlas_finding.py` rather than re-dispatching |
 | `todo_capture.py` | `PostToolUse` (TodoWrite) | Mirror every `TodoWrite` plan into the durable board `<project>/.atlas/.run/todos.json` (`ATLAS_TODO=off` disables) so the dashboard Work tab, parallel subagents, and the completion gate's drain fallback all read the session's real progress; keeps existing claims on matching content |
@@ -173,6 +173,18 @@ For installs outside a plugin, `scripts/install_hooks.py` wires the hooks into
 settings manually. The optional ollama-backed optimizer is configured with
 `ATLAS_OPTIMIZE_CMD`, `ATLAS_OPTIMIZER_MODEL`, and `ATLAS_OLLAMA_URL`
 (see `skills/atlas-orchestrate/references/hooks-automation.md`); it is not required.
+
+## One contract, two harnesses (Claude Code and omp)
+
+The rules atlas enforces are defined once and read by both runtimes:
+`contracts/native-tools.json` (which native tools are denied or nudged, toward
+which lean-ctx/context-mode replacement, and which paths are exempt from the
+delegation mandate), `contracts/mandates.json` (claude-mem recall and
+ponytail-before-commit text plus the shared git-commit parse cases), and
+`contracts/tool-names.json` (Claude to omp tool names, used to render the output
+style for omp). The Python hooks and `omp/` modules each read them; tests in both
+suites run the same shared cases. Row-by-row status, including what omp still
+lacks: `docs/atlas-harness-parity.md`.
 
 ## Colony work (shared board + notes)
 

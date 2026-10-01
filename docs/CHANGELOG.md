@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-10-01 -- One contract per rule across Claude Code and omp, omp output style, tool mandates, tmux colony mode
+
+Marketplace `4.4.0`; atlas `8.6.0`.
+
+- `plugins/atlas/contracts/` holds the native-tool, mandate and tool-name
+  contracts; the Python hooks and the omp extension both read them, and both
+  test suites run the same shared cases.
+- omp main sessions receive the atlas-orchestrator output style rendered from the
+  single `.md` source (`omp/style.ts`); subagents do not.
+- claude-mem recall and ponytail-before-commit mandates in both harnesses
+  (`ATLAS_MANDATES=off`).
+- `scripts/atlas_mux.py`: opt-in tmux colony mode (`ATLAS_MUX=tmux`).
+- `docs/atlas-harness-parity.md` records each rule's status per harness; omp gaps
+  still open are listed there. Benchmark deferred (model key at credit cap).
+
 ## 2026-10-01 -- Nudge-marker, ingest dispatch-name, and omp indentation fixes
 
 Marketplace `4.3.1`; atlas `8.5.1`.

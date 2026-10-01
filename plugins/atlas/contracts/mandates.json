@@ -1,0 +1,33 @@
+{
+  "_doc": "Shared atlas tool-mandate contract. Read by hooks/bash_advisor.py + hooks/session_boot.py (Claude Code) and omp/mandates.ts (omp). Edit here, never per harness.",
+  "killSwitch": {
+    "env": "ATLAS_MANDATES",
+    "value": "off"
+  },
+  "commitNudge": "[atlas mandate] Before this commit, run ponytail-review (less-code review) on the staged diff (`git diff --cached`): delete what the change does not need, then commit. Nudge only; it fires once per session (ATLAS_MANDATES=off disables).",
+  "recall": "Recall first: before planning or asking the user to re-explain prior work, run one claude-mem search for this project ({route}, then timeline/get_observations on hits). ATLAS_MANDATES=off disables this line.",
+  "gitCommitCases": {
+    "match": [
+      "git commit -m 'x'",
+      "git commit",
+      "git -C ./sub commit",
+      "git -c core.editor=true commit -m msg",
+      "cd repo && git commit -m x",
+      "GIT_EDITOR=vim git commit",
+      "git commit --amend",
+      "git --git-dir=.git commit"
+    ],
+    "noMatch": [
+      "git commit-tree x",
+      "git commit-tree -m msg",
+      "echo git commit",
+      "printf \"%s\" \"git commit\"",
+      "git status",
+      "git stash commit",
+      "gitt commit",
+      "cat git commit",
+      "",
+      "git"
+    ]
+  }
+}

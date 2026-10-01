@@ -129,6 +129,28 @@ def status_contract_lines(active_style=""):
     return lines
 
 
+def plugin_enabled(name, root=None):
+    """Claude Code plugin enablement (enabledPlugins); False on any error."""
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import tool_routing
+
+        return tool_routing.plugin_enabled(name, root)
+    except Exception:
+        return False
+
+
+def recall_mandate():
+    """claude-mem recall line from the shared contract (contracts/mandates.json); None if unreadable."""
+    try:
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "contracts", "mandates.json")
+        with open(path) as fh:
+            template = json.load(fh)["recall"]
+        return template.replace("{route}", "mcp__plugin_claude-mem_mcp-search__search")
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return None
+
+
 def detect_dep(module_marker):
     try:
         import importlib.util
@@ -649,11 +671,13 @@ def main():
     except Exception:
         pass  # memory is best-effort
 
-    mem = detect_dep("claude_mem") or has_cmd("claude-mem")
-    ctx = detect_dep("context_mode") or has_cmd("context-mode")
+    boot_root = payload.get("cwd") or os.getcwd()
+    mem_plugin = plugin_enabled("claude-mem", boot_root)
+    mem = detect_dep("claude_mem") or has_cmd("claude-mem") or mem_plugin
+    ctx = detect_dep("context_mode") or has_cmd("context-mode") or plugin_enabled("context-mode", boot_root)
     fallow = has_cmd("fallow")
 
-    pony = has_cmd("ponytail")
+    pony = has_cmd("ponytail") or plugin_enabled("ponytail", boot_root)
     if not pony:
         try:
             pony = os.path.exists(os.path.expanduser("~/.config/ponytail/config.json"))
@@ -670,6 +694,11 @@ def main():
         "invoke atlas-orchestrate for multi-step or whole-codebase work.",
     ]
     lines.extend(status_contract_lines(active_style))
+    # claude-mem recall mandate: armed only when the claude-mem plugin (its MCP
+    # search server) is enabled; a bare CLI/module cannot be called as a tool.
+    recall = recall_mandate() if mem_plugin and os.environ.get("ATLAS_MANDATES") != "off" else None
+    if recall:
+        lines.append(recall)
     absent = [
         name
         for name, present in (

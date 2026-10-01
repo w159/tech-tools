@@ -1,5 +1,43 @@
 # Changelog
 
+## [8.6.0] - 2026-10-01
+
+### Added
+- **Shared contracts, one per rule, read by both harnesses.**
+  `contracts/native-tools.json` (native-tool kinds, deny/nudge mode,
+  lean-ctx/context-mode replacements, delegation exemption + shared cases),
+  `contracts/mandates.json` (mandate text + shared git-commit parse cases),
+  `contracts/tool-names.json` (Claude to omp tool names). `dispatch_tripwire.py`,
+  `completion_gate.py` (m), `bash_advisor.py`, `session_boot.py` and
+  `omp/contracts.ts`/`omp/index.ts`/`omp/mandates.ts`/`omp/style.ts` read them;
+  an unreadable contract fails open.
+- **Output style in omp.** `omp/style.ts` appends the translated
+  `atlas-orchestrator.md` to the main session's system prompt (subagents excluded,
+  as in Claude Code). Drift tests fail if the injected text diverges from the
+  source or a new Claude tool name lacks a mapping. `ATLAS_STYLE=off`.
+- **Tool mandates in both harnesses.** claude-mem "Recall first" line at session
+  start (Claude: SessionStart context when the plugin is enabled; omp: system
+  prompt line naming the live device) and a once-per-session ponytail-review nudge
+  before `git commit` (Claude: `bash_advisor.py`; omp: `omp/mandates.ts`).
+  `ATLAS_MANDATES=off`.
+- **tmux colony mode** `scripts/atlas_mux.py` (`ATLAS_MUX=tmux`): spawn/status/kill
+  headless `claude -p --agent atlas:<role>` / `omp -p` workers in one
+  `atlas-<run>` tmux session at their definition tiers, streaming note records to
+  the board for `atlas_todo.py notes --to lead`.
+- `docs/atlas-harness-parity.md`: per-rule parity matrix with file:line evidence.
+
+### Fixed
+- `session_boot.py` reported claude-mem/ponytail/context-mode as a "Setup gap"
+  when they were installed as Claude Code plugins; `tool_routing.plugin_enabled`
+  now reads `enabledPlugins` (user, then project settings).
+
+### Known limitations
+- omp still lacks completion-gate conditions (a)–(l), the prompt optimizer,
+  inline-op thresholds, dispatch-spec checks, docs-drift watch and memory capture
+  (listed in the parity doc).
+- Paired Claude Code / omp benchmark not run: omp workers' model key returned
+  HTTP 402 during this release.
+
 ## [8.5.1] - 2026-10-01
 
 ### Fixed

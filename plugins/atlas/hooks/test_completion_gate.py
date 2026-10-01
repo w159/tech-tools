@@ -2337,6 +2337,25 @@ class DelegationMandateTest(unittest.TestCase):
             "message": {"content": [{"type": "tool_use", "name": "Task"}]}}) + "\n")
         self.assertEqual(self.gate(transcript_path=str(transcript)), "")
 
+    def test_shared_exemption_cases_match_contract(self):
+        """contracts/native-tools.json delegationExemptCases are asserted by both
+        harnesses (omp/contracts.test.ts runs the same list through isNonDocsPath)."""
+        cases = json.loads(
+            (Path(completion_gate.__file__).resolve().parent.parent / "contracts" / "native-tools.json").read_text()
+        )["delegationExemptCases"]
+        for path in cases["exempt"]:
+            with self.subTest(exempt=path):
+                self.conn.execute("DELETE FROM events")
+                self.conn.commit()
+                self.write(path)
+                self.assertEqual(self.gate(), "")
+        for path in cases["code"]:
+            with self.subTest(code=path):
+                self.conn.execute("DELETE FROM events")
+                self.conn.commit()
+                self.write(path)
+                self.assertIn("(m) Delegation mandate", self.gate())
+
     def test_docs_and_metadata_only_writes_are_silent(self):
         for path in ("docs/CHANGELOG.md", ".atlas/run.json", "README.md"):
             self.write(path)

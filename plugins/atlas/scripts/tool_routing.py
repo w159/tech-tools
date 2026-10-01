@@ -42,6 +42,32 @@ TOOLSEARCH_BATCH = (
     '")'
 )
 
+
+def plugin_enabled(name: str, root: str | None = None) -> bool:
+    """True when a Claude Code plugin named `name` is enabled for this session.
+
+    Reads `enabledPlugins` (keys `<name>@<marketplace>`) from ~/.claude/settings.json
+    then the project's .claude/settings.json and settings.local.json; the most
+    specific file naming the plugin wins, as in Claude Code's settings precedence.
+    Any read/parse error counts as "not enabled" so callers stay silent.
+    """
+    files = [Path.home() / ".claude" / "settings.json"]
+    if root:
+        files += [Path(root) / ".claude" / "settings.json", Path(root) / ".claude" / "settings.local.json"]
+    enabled = False
+    for path in files:
+        try:
+            plugins = json.loads(path.read_text()).get("enabledPlugins") or {}
+        except (OSError, ValueError, AttributeError):
+            continue
+        if not isinstance(plugins, dict):
+            continue
+        for key, value in plugins.items():
+            if str(key).split("@", 1)[0] == name:
+                enabled = bool(value)
+    return enabled
+
+
 _SKIP = {
     ".git",
     "node_modules",
