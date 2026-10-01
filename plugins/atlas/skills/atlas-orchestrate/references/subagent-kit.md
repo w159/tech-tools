@@ -177,6 +177,11 @@ effort/model tier and guardrails.
   same sibling.
 - Quick coordination goes by `SendMessage`; durable state goes on the board:
     python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py" note --owner <name> [--to <name|all>] [--item <id>] "<text>"
+- The sibling roster is a snapshot taken when you start: a sibling spawned after
+  you is not on it. Missing an expected sibling -> read `atlas_todo.py notes`
+  and address it with `note --to <name>` instead.
+- Touch the board only through `atlas_todo.py`. Never edit `todos.json` or
+  `board/*.jsonl` directly: direct writes skip the lock and can erase a sibling's claim.
 - The lead alone dispatches and declares done. Siblings report to the lead,
   never to the user, and never dispatch other subagents.
 
