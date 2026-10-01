@@ -630,11 +630,7 @@ def _native_tool_policy(payload):
 
         key = hashlib.sha256(session.encode()).hexdigest()
         marker = root / ".atlas" / ".run" / "native_nudges" / f"{key}-{tool}"
-        marker.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            with marker.open("x", encoding="utf-8"):
-                pass
-        except FileExistsError:
+        if marker.exists():
             return False, None
         message = {
             "Read": (
@@ -659,17 +655,29 @@ def _native_tool_policy(payload):
                 "projects where lean-ctx MCP is configured."
             ),
         }[tool]
-        return False, message
+        return False, (marker, message)
     except Exception:
         return False, None  # policy failure must never turn into a deny
 
 
 def _emit_nudge(nudge):
-    """Print the native-tool allow-nudge (no-op when there is none)."""
-    if nudge:
-        print(json.dumps({"hookSpecificOutput": {
-            "hookEventName": "PreToolUse", "additionalContext": nudge,
-        }}))
+    """Print the native-tool allow-nudge once per session/tool.
+
+    The once-marker is claimed HERE, not in the policy: a nudge that a later
+    deny tier replaced must still be shown on that tool's next allowed call."""
+    if not nudge:
+        return
+    marker, message = nudge
+    with contextlib.suppress(Exception):  # marker unwritable: show anyway
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            with marker.open("x", encoding="utf-8"):
+                pass
+        except FileExistsError:
+            return  # a concurrent call already showed it
+    print(json.dumps({"hookSpecificOutput": {
+        "hookEventName": "PreToolUse", "additionalContext": message,
+    }}))
 
 
 def main():
@@ -735,8 +743,12 @@ def main():
 
     conn = None
     try:
-        conn = atlas_db.connect()
-        atlas_db.init(conn)
+        try:
+            conn = atlas_db.connect()
+            atlas_db.init(conn)
+        except Exception:
+            _emit_nudge(nudge)  # DB down: the allowed call still gets its nudge
+            raise
 
         if event == "PreToolUse":
             # The deny tier polices the ORCHESTRATOR's own inline drift; a

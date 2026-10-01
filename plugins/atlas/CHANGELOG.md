@@ -1,5 +1,35 @@
 # Changelog
 
+## [8.5.1] - 2026-10-01
+
+### Fixed
+- **The native-tool nudge was burned by a deny.** The once-per-session marker
+  was created before the tripwire knew whether the inline-op threshold deny
+  would replace the nudge, so that tool never showed its nudge again. The
+  marker is now claimed only when the nudge is printed; a DB-connect failure
+  still prints it. Test: `test_nudge_replaced_by_deny_is_shown_on_next_allowed_call`.
+- **Dispatch names could be lost at ingest.** `session_ingest.summarize_input`
+  now writes identity keys (`name`, `subagent_type`, `agent`, `model`,
+  `isolation`) first, and lifts a batched omp `task` call's per-item names into
+  `names`, so they survive the 500-char cap. `colony_adherence` counts a batch
+  as named only when every item is. Claude Code Agent calls do carry `name`;
+  the low 8.5.0 named rate (5/66) reflects sessions from before 8.4.0's
+  requirement.
+- **omp sources were reindented to one space on every write.** omp's
+  `formatOnWrite` resolves indent from `.editorconfig`, else by sniffing file
+  content, and the first indented line in these files is a JSDoc ` *`.
+  `plugins/atlas/omp/.editorconfig` pins tabs; a fresh omp process resolves
+  `{"tabSize":4,"insertSpaces":false}` for `omp/index.ts`.
+
+### Known limitations
+- The Claude Code lean-ctx detector reads `.mcp.json`, project/`~` Claude
+  settings and `~/.claude.json`, not MCP servers supplied by installed plugins'
+  `.mcp.json`. Missing one falls back to the allow-nudge (never a wrong deny).
+  Checked against this machine's real `$HOME`: the deny fires (lean-ctx is in
+  `~/.claude.json`).
+- Marketplace installs still do not surface `omp/agents/`; load
+  `--extension <abs>/plugins/atlas/omp`. Deferred.
+
 ## [8.5.0] - 2026-10-01
 
 ### Fixed

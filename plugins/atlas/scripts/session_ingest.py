@@ -81,13 +81,29 @@ SECRET_VAL = re.compile(
 )
 
 
+# Dispatch identity survives the 500-char cap: these keys go first, and a
+# batched omp `task` call's per-item names are lifted into `names`, so the
+# colony_adherence miner can measure named dispatch instead of reading a
+# truncated prompt.
+_IDENTITY_KEYS = ("name", "names", "subagent_type", "agent", "model", "isolation")
+
+
 def summarize_input(tinput):
     """Compact, secret-scrubbed JSON of a tool input, capped to 500 chars.
     Returns (summary, true_byte_size)."""
     tinput = tinput or {}
     raw = json.dumps(tinput, default=str)
+    items = dict(tinput)
+    tasks = items.get("tasks")
+    if isinstance(tasks, list) and "names" not in items:
+        items["names"] = [
+            str(t.get("name") or "") for t in tasks if isinstance(t, dict)
+        ]
+    ordered = [k for k in _IDENTITY_KEYS if k in items]
+    ordered += [k for k in items if k not in _IDENTITY_KEYS]
     parts = {}
-    for k, v in tinput.items():
+    for k in ordered:
+        v = items[k]
         if SECRET_KEY.search(str(k)):
             parts[k] = "***"
             continue

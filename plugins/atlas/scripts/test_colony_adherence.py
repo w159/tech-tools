@@ -255,5 +255,31 @@ class ColonyAdherenceMinerTest(unittest.TestCase):
         )
 
 
+class DispatchNameSurvivesIngestTest(unittest.TestCase):
+    """The named-dispatch rate is only trustworthy if ingest keeps the name
+    past the 500-char summary cap, for both harnesses' dispatch shapes."""
+
+    def setUp(self):
+        import session_ingest
+
+        self.summarize = session_ingest.summarize_input
+        self.big = "x" * 900
+
+    def test_claude_agent_name_survives_a_long_prompt(self):
+        summary, _ = self.summarize(
+            {"description": "d", "prompt": self.big, "subagent_type": "atlas:implementer", "name": "auth-impl"}
+        )
+        self.assertTrue(summary.startswith('{"name": "auth-impl"'))
+        self.assertEqual(atlas_doctor._colony_named_dispatch_stats([summary])[0], 1.0)
+
+    def test_omp_batch_is_named_only_when_every_item_is(self):
+        full = {"context": self.big, "tasks": [{"name": "ScoutA", "task": self.big}, {"name": "FixB", "task": self.big}]}
+        partial = {"context": self.big, "tasks": [{"name": "ScoutA", "task": self.big}, {"task": self.big}]}
+        rows = [self.summarize(full)[0], self.summarize(partial)[0]]
+        rate, text = atlas_doctor._colony_named_dispatch_stats(rows)
+        self.assertEqual((rate, text), (0.5, "1/2 named"))
+
+
+
 if __name__ == "__main__":
     unittest.main()

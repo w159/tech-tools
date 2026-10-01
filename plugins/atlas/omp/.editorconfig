@@ -1,0 +1,7 @@
+# omp's formatOnWrite reindented these sources to one space per level;
+# pin the house style (tabs, as in omp's own codebase) for every formatter.
+root = false
+
+[*.ts]
+indent_style = tab
+indent_size = 4
