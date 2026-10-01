@@ -15,10 +15,15 @@ Two tiers, branched on the payload's hook_event_name:
 
 Fail-open: any error exits 0. Logs to the atlas observability DB.
 Disable drift tiers with ATLAS_TRIPWIRE=off; ATLAS_TRIPWIRE_HARD=off disables
-denies. In docs/ projects, Grep/Glob require lean-ctx when available, regardless
-of orchestration or sidechain state; Read/Bash receive one allow-nudge per session.
+denies. In docs/ projects, native Grep/Glob are denied toward ctx_search/ctx_glob
+only when lean-ctx is plausibly reachable -- the binary on PATH AND a lean-ctx MCP
+server configured for the project (.mcp.json, project/`~` Claude settings) --
+otherwise a one-time allow-nudge, so no session is stranded without a working
+search. Read/Bash receive one allow-nudge per session.
 """
 
+import contextlib
+import io
 import json
 import os
 import re
@@ -484,26 +489,142 @@ def _arm_orchestrating(conn, atlas_db, session, cwd):
             pass
 
 
+LEAN_CTX_TOKENS = ("lean-ctx", "lean_ctx")
+
+
+def _read_json(path):
+    """Unreadable/invalid config is 'no data': the availability gate must fail
+    open to the nudge, never deny, on a file it could not parse."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except Exception:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _lean_hits(servers):
+    """Server keys (dict) or enabled names (list) that look like lean-ctx:
+    the key, or a dict spec's command, containing 'lean-ctx' or 'lean_ctx'."""
+    try:
+        if isinstance(servers, dict):
+            return [
+                key
+                for key, spec in servers.items()
+                if any(
+                    token in "%s %s" % (key, spec.get("command", "") if isinstance(spec, dict) else "")
+                    for token in LEAN_CTX_TOKENS
+                )
+            ]
+        if isinstance(servers, list):
+            return [
+                name
+                for name in servers
+                if isinstance(name, str) and any(token in name for token in LEAN_CTX_TOKENS)
+            ]
+    except Exception:
+        pass
+    return []
+
+
+def _lean_ctx_server_key(root):
+    """First MCP server key that looks like lean-ctx, checked in the documented
+    precedence: <project>/.mcp.json; <project>/.claude/settings*.json
+    (mcpServers, then enabledMcpjsonServers); ~/.claude.json (top-level
+    mcpServers, then projects[<root>].mcpServers); ~/.claude/settings.json.
+    The key is what the deny text turns into the ToolSearch selector.
+    None means lean-ctx MCP is not plausibly configured for this project, so
+    the Grep/Glob deny must downgrade to the one-time nudge. Unreadable config
+    fails open: None, never an exception."""
+    home = Path.home()
+    try:
+        # (1) <project>/.mcp.json
+        mcp = _read_json(root / ".mcp.json")
+        hits = _lean_hits((mcp or {}).get("mcpServers"))
+        if hits:
+            return hits[0]
+        # (2) <project>/.claude/settings*.json
+        try:
+            settings = sorted((root / ".claude").glob("settings*.json"))
+        except Exception:
+            settings = []
+        for settings_path in settings:
+            data = _read_json(settings_path)
+            if not data:
+                continue
+            hits = _lean_hits(data.get("mcpServers"))
+            if hits:
+                return hits[0]
+            hits = _lean_hits(data.get("enabledMcpjsonServers"))
+            if hits:
+                return hits[0]
+        # (3) ~/.claude.json: top-level mcpServers, then projects[<root>]
+        claude_json = _read_json(home / ".claude.json")
+        if claude_json:
+            hits = _lean_hits(claude_json.get("mcpServers"))
+            if hits:
+                return hits[0]
+            projects = claude_json.get("projects")
+            if isinstance(projects, dict):
+                project = projects.get(str(root))
+                if isinstance(project, dict):
+                    hits = _lean_hits(project.get("mcpServers"))
+                    if hits:
+                        return hits[0]
+        # (4) ~/.claude/settings.json
+        home_settings = _read_json(home / ".claude" / "settings.json")
+        if home_settings:
+            hits = _lean_hits(home_settings.get("mcpServers"))
+            if hits:
+                return hits[0]
+            hits = _lean_hits(home_settings.get("enabledMcpjsonServers"))
+            if hits:
+                return hits[0]
+    except Exception:
+        pass  # fail open: unknown availability must nudge, never deny
+    return None
+
+
 def _native_tool_policy(payload):
-    """Handle docs-scoped native calls; errors allow without policy output."""
+    """Docs-scoped native-call policy. Returns (handled, nudge).
+
+    handled=True means a deny was emitted and the caller must stop. Otherwise
+    the call is allowed and the caller continues into the legacy tiers, so an
+    armed orchestrator's inline-op threshold deny still applies to Read/Bash/
+    Grep/Glob; `nudge` (or None) is printed only if no later tier denies.
+    Errors allow with no output."""
     if payload.get("hook_event_name") != "PreToolUse":
-        return False
+        return False, None
     tool = payload.get("tool_name")
     if tool not in {"Grep", "Glob", "Read", "Bash"}:
-        return False
+        return False, None
     try:
         root = find_root(Path(payload.get("cwd") or os.getcwd()))
         if root is None or not (root / "docs").is_dir():
-            return False
+            return False, None
         if tool in {"Grep", "Glob"}:
-            if os.environ.get("ATLAS_TRIPWIRE_HARD", "on").lower() == "off" or not shutil.which("lean-ctx"):
-                return True  # allow; legacy drift checks must not strand native search
-            replacement = "ctx_search" if tool == "Grep" else "ctx_glob"
-            _deny(f"DENY - native {tool} is disabled in docs/ projects; use lean-ctx `{replacement}` (1:1 replacement).")
-            return True
+            if os.environ.get("ATLAS_TRIPWIRE_HARD", "on").lower() == "off":
+                return False, None  # allow; deny tiers are off too
+            server = _lean_ctx_server_key(root)
+            if shutil.which("lean-ctx") and server:
+                replacement = "ctx_search" if tool == "Grep" else "ctx_glob"
+                selector = "mcp__%s__%s" % (server, replacement)
+                _deny(
+                    f"DENY - native {tool} is disabled in docs/ projects. lean-ctx MCP "
+                    f'(server "{server}") is configured for this project, so the '
+                    f"replacement is reachable even from a subagent: if `{replacement}` "
+                    f"is not in your tool list yet, load it first with "
+                    f'ToolSearch("select:{selector}"), then call `{replacement}` '
+                    "(1:1 replacement)."
+                )
+                return True, None
+            # Not plausibly reachable: no lean-ctx binary on PATH, or no lean-ctx
+            # MCP server configured for this project (unreadable config counts as
+            # not configured - fail open). Denying here would strand the caller,
+            # so fall through to the one-time allow-nudge below.
         session = str(payload.get("session_id") or "")
         if not session:
-            return True
+            return False, None
         # Separate exclusive markers avoid shared read-modify-write races.
         import hashlib
 
@@ -514,18 +635,41 @@ def _native_tool_policy(payload):
             with marker.open("x", encoding="utf-8"):
                 pass
         except FileExistsError:
-            return True
-        message = (
-            "[atlas] Use lean-ctx `ctx_read` for exploration; native Read is still fine right before an Edit."
-            if tool == "Read" else
-            "[atlas] Use lean-ctx `ctx_shell` / context-mode `ctx_execute` for anything that produces output over ~20 lines; native Bash remains available for mutations and short fixed output."
-        )
-        print(json.dumps({"hookSpecificOutput": {
-            "hookEventName": "PreToolUse", "additionalContext": message,
-        }}))
-        return True  # Read/Bash allow; PostToolUse still logs the call
+            return False, None
+        message = {
+            "Read": (
+                "[atlas] Use lean-ctx `ctx_read` for exploration; native Read is still "
+                "fine right before an Edit."
+            ),
+            "Bash": (
+                "[atlas] Use lean-ctx `ctx_shell` / context-mode `ctx_execute` for "
+                "anything that produces output over ~20 lines; native Bash remains "
+                "available for mutations and short fixed output."
+            ),
+            "Grep": (
+                "[atlas] lean-ctx MCP is not configured for this project (no "
+                "`lean-ctx` server in .mcp.json / Claude settings, or the binary is "
+                "off PATH), so native Grep is allowed here; prefer `ctx_search` on "
+                "projects where lean-ctx MCP is configured."
+            ),
+            "Glob": (
+                "[atlas] lean-ctx MCP is not configured for this project (no "
+                "`lean-ctx` server in .mcp.json / Claude settings, or the binary is "
+                "off PATH), so native Glob is allowed here; prefer `ctx_glob` on "
+                "projects where lean-ctx MCP is configured."
+            ),
+        }[tool]
+        return False, message
     except Exception:
-        return True  # policy failure must never turn into a legacy drift deny
+        return False, None  # policy failure must never turn into a deny
+
+
+def _emit_nudge(nudge):
+    """Print the native-tool allow-nudge (no-op when there is none)."""
+    if nudge:
+        print(json.dumps({"hookSpecificOutput": {
+            "hookEventName": "PreToolUse", "additionalContext": nudge,
+        }}))
 
 
 def main():
@@ -544,10 +688,12 @@ def main():
     ):
         _deny_nested_dispatch(payload.get("tool_name"))
         return
-    if _native_tool_policy(payload):
+    handled, nudge = _native_tool_policy(payload)
+    if handled:
         return
 
     if os.environ.get("ATLAS_TRIPWIRE", "on").lower() == "off":
+        _emit_nudge(nudge)
         return
 
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
@@ -600,7 +746,13 @@ def main():
             # (checked by _in_subagent) is the reliable marker. Nested
             # dispatches are already denied above, before this point.
             if not _in_subagent(payload):
-                _pre_tool_use(conn, atlas_db, tool, session, path, tinput)
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    _pre_tool_use(conn, atlas_db, tool, session, path, tinput)
+                if buf.getvalue():
+                    sys.stdout.write(buf.getvalue())  # a deny wins; drop the nudge
+                    return
+            _emit_nudge(nudge)
             return
 
         if tool == "Skill":

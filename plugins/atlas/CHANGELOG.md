@@ -1,5 +1,58 @@
 # Changelog
 
+## [8.5.0] - 2026-10-01
+
+### Fixed
+- **The inline-op deny tier was bypassed for native readers in every `docs/`
+  project (regression since 8.3.0).** `dispatch_tripwire.py`'s native-tool
+  policy returned before the legacy tiers for every docs-project
+  Read/Bash/Grep/Glob, so an armed orchestrator past the inline-op limit was
+  never denied for them. Allowed native calls now fall through to the
+  threshold deny; a deny replaces the one-time nudge (exactly one hook output).
+  Regression test `test_threshold_deny_still_applies_to_allowed_native_reads_in_docs_projects`
+  fails on the 8.4.0 code and passes now.
+
+### Changed
+- **Claude Code native Grep/Glob deny is availability-aware.** It fires only
+  when lean-ctx is reachable: the binary on PATH AND a lean-ctx MCP server
+  configured for the project (`.mcp.json`; project `.claude/settings*.json`
+  `mcpServers`/`enabledMcpjsonServers`; `~/.claude.json` top-level or
+  `projects[<root>]`; `~/.claude/settings.json`). The deny names the subagent
+  load step, `ToolSearch("select:mcp__<server>__ctx_search")`. Otherwise the
+  call is allowed with a one-time nudge; unreadable config fails open to the
+  nudge. Before, the binary alone armed the deny and could strand a session
+  with no reachable `ctx_search`.
+- **omp grep/glob deny arms only on tools callable in THIS session**, decided
+  per call from `pi.getActiveTools()`: a bare `ctx_search`/`ctx_glob` tool is
+  named directly; otherwise a live lean-ctx MCP device
+  (`xd://mcp__lean_ctx_ctx_search`), which also requires the `write` tool. The
+  binary on PATH or a configured-but-inactive server no longer arms it. With
+  nothing reachable: allowed plus a one-time nudge; unknown availability:
+  allowed silently. read/bash nudges name the reachable route, or stay silent.
+
+### Added
+- **`colony_adherence` miner** (`atlas_doctor.py --mine`). Per harness
+  (Claude Code vs omp, classified by tool-name casing), over the 14-day
+  main-thread window: native-reader share (native Read/Grep/Glob/Bash vs ctx
+  routes, counting `mcp__lean-ctx__*`, context-mode, bare `ctx_*`, and omp
+  `write` to `xd://mcp__lean_ctx*`), delegation rate (non-docs-edit sessions
+  that dispatched), and named-dispatch rate (informative; `unknown` when
+  summaries are truncated). Fires when share > 0.5 or delegation < 0.8 with
+  >= 5 sessions, naming the enforcement surface. First real run (pre-8.3
+  history dominates): Claude Code share 0.784 / delegation 0.556; omp share
+  0.989 / delegation 0.804. `--remeasure` tracks whether 8.3-8.5 move them.
+
+### Verification
+- `cd plugins/atlas && python3 -m pytest hooks/ scripts/ -q`: 1649 passed,
+  3 skipped, 0 failed. `bun test plugins/atlas/omp`: 38 pass, 0 fail.
+- Hook subprocess smoke (temp HOME): Grep with no MCP config -> allow-nudge;
+  after adding `.mcp.json` with a lean-ctx server -> deny naming the
+  ToolSearch selector.
+- Real omp runs (`omp --print --mode json --no-session --extension
+  <abs>/plugins/atlas/omp`): full tool set -> grep blocked naming
+  `xd://mcp__lean_ctx_ctx_search`; `--tools=grep` (no `write`, so no device
+  route) -> grep allowed with the "not reachable" nudge.
+
 ## [8.4.0] - 2026-10-01
 
 ### Added

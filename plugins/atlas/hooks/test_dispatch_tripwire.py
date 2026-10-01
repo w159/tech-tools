@@ -464,6 +464,52 @@ class TripwireTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0)
         self.assertEqual(r.stdout.strip(), "")  # deny tier suppressed
 
+    # ---- availability-aware native Grep/Glob, end to end ----
+
+    def _docs_project(self):
+        (Path(self.tmp) / "docs").mkdir()
+
+    def _fake_lean_ctx_bin(self, env):
+        """A deterministic shutil.which('lean-ctx') hit regardless of host PATH."""
+        bin_dir = Path(self.tmp) / "bin"
+        bin_dir.mkdir(exist_ok=True)
+        fake = bin_dir / "lean-ctx"
+        fake.write_text("#!/bin/sh\nexit 0\n")
+        fake.chmod(0o755)
+        env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
+        return env
+
+    def test_pre_nudges_native_grep_when_mcp_unconfigured(self):
+        self._docs_project()
+        env = self._fake_lean_ctx_bin(dict(self.env, HOME=self.tmp))
+        r = run_hook(self._pre_payload("Grep"), env)
+        self.assertEqual(r.returncode, 0)
+        out = json.loads(r.stdout)["hookSpecificOutput"]
+        self.assertNotIn("permissionDecision", out)  # allowed with a nudge
+        self.assertIn("ctx_search", out["additionalContext"])
+        self.assertIn("not configured", out["additionalContext"])
+        # one-time: a second Grep in the same session is silently allowed
+        r2 = run_hook(self._pre_payload("Grep"), env)
+        self.assertEqual(r2.stdout.strip(), "")
+
+    def test_pre_denies_native_grep_when_mcp_configured(self):
+        self._docs_project()
+        (Path(self.tmp) / ".mcp.json").write_text(
+            json.dumps({"mcpServers": {"lean-ctx": {"command": "lean-ctx"}}})
+        )
+        env = self._fake_lean_ctx_bin(dict(self.env, HOME=self.tmp))
+        r = run_hook(self._pre_payload("Grep"), env)
+        self.assertEqual(r.returncode, 0)
+        out = json.loads(r.stdout)["hookSpecificOutput"]
+        self.assertEqual(out["permissionDecision"], "deny")
+        self.assertIn("ToolSearch", out["permissionDecisionReason"])
+        self.assertIn("ctx_search", out["permissionDecisionReason"])
+        # Glob gets the same treatment with the ctx_glob selector
+        r2 = run_hook(self._pre_payload("Glob"), env)
+        out2 = json.loads(r2.stdout)["hookSpecificOutput"]
+        self.assertEqual(out2["permissionDecision"], "deny")
+        self.assertIn("ctx_glob", out2["permissionDecisionReason"])
+
     def test_pre_deny_prod_edit_allows_docs_edit(self):
         r = run_hook(self._pre_payload("Edit", {"file_path": "src/foo.py"}), self.env)
         self.assertEqual(r.returncode, 0)
@@ -968,6 +1014,71 @@ class InProcessTest(unittest.TestCase):
         )
         self.assertEqual(parsed["hookSpecificOutput"]["hookEventName"], "PreToolUse")
 
+    # ---- availability-aware native Grep meets the deny threshold ----
+
+    def _docs_project(self):
+        (Path(self.tmp) / "docs").mkdir()
+
+    def test_nudged_grep_is_allowed_and_counts_toward_threshold(self):
+        """An allowed (one-time-nudged) native Grep still RUNS, so its
+        PostToolUse event counts as an unsanctioned inline op toward the deny
+        threshold. The availability-aware deny may never erase that accounting
+        for a call that actually executed."""
+        self._docs_project()
+        home = tempfile.mkdtemp()  # no lean-ctx MCP config anywhere
+        with patch.object(self.dt.shutil, "which", return_value="/usr/bin/lean-ctx"):
+            out = self._run_main(self._pre("Grep"), env={"HOME": home})
+            # nudge -> allowed: no deny decision, the nudge names ctx_search
+            self.assertNotIn("DENY", out)
+            self.assertIn("ctx_search", out)
+            for _ in range(4):  # env threshold is 4
+                out = self._run_main(self._post("Grep"), env={"HOME": home})
+        # the 4th nudged Grep op tripped the advisory threshold: it counted
+        self.assertIn("STOP - 4 inline ops", out)
+        conn = self.atlas_db.connect(self.db_path)
+        rid = self.atlas_db.current_run_id(conn, "sess-1")
+        self.assertEqual(
+            self.atlas_db.unsanctioned_inline_ops_since_last_dispatch(conn, rid), 4
+        )
+        conn.close()
+
+    def test_denied_grep_does_not_count_toward_threshold(self):
+        """A DENIED native Grep never ran, so it must not add to the inline-op
+        count. With threshold-level ops already seeded, the availability-aware
+        policy deny wins over the threshold deny (lean-ctx reason, not the
+        threshold reason) and the count is unchanged."""
+        self._docs_project()
+        (Path(self.tmp) / ".mcp.json").write_text(
+            json.dumps({"mcpServers": {"lean-ctx": {"command": "lean-ctx"}}})
+        )
+        for _ in range(6):  # DENY_THRESHOLD inline ops, all counted
+            self._run_main(self._post("Grep"))
+        with patch.object(self.dt.shutil, "which", return_value="/usr/bin/lean-ctx"):
+            out = self._run_main(self._pre("Grep"), env={"HOME": tempfile.mkdtemp()})
+        self.assertIn("DENY", out)
+        self.assertIn("ToolSearch", out)
+        # policy deny reason, NOT the threshold deny reason
+        self.assertNotIn("inline ops since your last dispatch", out)
+        conn = self.atlas_db.connect(self.db_path)
+        rid = self.atlas_db.current_run_id(conn, "sess-1")
+        self.assertEqual(
+            self.atlas_db.unsanctioned_inline_ops_since_last_dispatch(conn, rid), 6
+        )
+        conn.close()
+
+    def test_threshold_deny_still_applies_to_allowed_native_reads_in_docs_projects(self):
+        """Regression (8.3.0): the native policy returned early for every
+        docs-project Read/Bash/Grep/Glob, so an armed orchestrator past the
+        inline-op limit was never denied for them. An allowed native call must
+        still reach the threshold deny tier, and the deny replaces the nudge."""
+        self._docs_project()
+        for _ in range(8):
+            self._run_main(self._post("Read", {"file_path": "a.py"}))
+        out = self._run_main(self._pre("Read", {"file_path": "b.py"}))
+        self.assertIn('"permissionDecision": "deny"', out)
+        self.assertNotIn("additionalContext", out)
+        self.assertEqual(out.count("hookSpecificOutput"), 1)
+
 
 class WorktreeFlagTest(unittest.TestCase):
     """A dispatch with isolation="worktree" is recorded, so the completion gate
@@ -1283,6 +1394,13 @@ class NestedSubagentDenyTest(unittest.TestCase):
 
 
 class NativeToolPolicyTest(unittest.TestCase):
+    """docs/ projects: native Grep/Glob are denied ONLY when lean-ctx is
+    plausibly reachable -- binary on PATH AND a lean-ctx MCP server configured
+    for the project (.mcp.json / Claude settings). Otherwise the deny downgrades
+    to the one-time allow-nudge, so no session is stranded without search.
+    HOME is faked per test so the host's real ~/.claude.json can never flip an
+    expectation; deny does not consume a nudge marker, nudge does."""
+
     def setUp(self):
         import dispatch_tripwire
 
@@ -1291,27 +1409,118 @@ class NativeToolPolicyTest(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
         (self.root / "docs").mkdir()
+        self.home = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.home, ignore_errors=True)
 
     def call(self, tool, *, available=True, **extra):
         payload = dict(hook_event_name="PreToolUse", tool_name=tool,
                        session_id="native-policy", cwd=str(self.root), **extra)
         output = io.StringIO()
-        with patch.object(self.dt.shutil, "which", return_value="/bin/lean-ctx" if available else None), contextlib.redirect_stdout(output):
-            handled = self.dt._native_tool_policy(payload)
+        with patch.object(self.dt.shutil, "which", return_value="/bin/lean-ctx" if available else None), \
+                patch.dict(os.environ, {"HOME": str(self.home)}), \
+                contextlib.redirect_stdout(output):
+            handled, nudge = self.dt._native_tool_policy(payload)
+            # main() prints the nudge only when no later deny tier fires.
+            self.dt._emit_nudge(nudge)
         return handled, output.getvalue()
 
-    def test_native_search_denied_without_orchestration_including_subagents(self):
-        for tool, replacement in (("Grep", "ctx_search"), ("Glob", "ctx_glob")):
-            _, output = self.call(tool, transcript_path="/session/subagents/agent-x.jsonl")
-            result = json.loads(output)["hookSpecificOutput"]
-            self.assertEqual(result["permissionDecision"], "deny")
-            self.assertIn(replacement, result["permissionDecisionReason"])
+    def _mcp_json(self, key="lean-ctx", command="lean-ctx"):
+        (self.root / ".mcp.json").write_text(
+            json.dumps({"mcpServers": {key: {"command": command}}}), encoding="utf-8"
+        )
 
-    def test_search_allowed_without_replacement_or_with_hard_off(self):
+    def _deny_output(self, tool, **extra):
+        _, output = self.call(tool, **extra)
+        return json.loads(output)["hookSpecificOutput"]
+
+    def test_native_search_denied_when_mcp_configured_even_for_subagents(self):
+        self._mcp_json()
+        for tool, replacement in (("Grep", "ctx_search"), ("Glob", "ctx_glob")):
+            result = self._deny_output(
+                tool, transcript_path="/session/subagents/agent-x.jsonl"
+            )
+            self.assertEqual(result["permissionDecision"], "deny")
+            reason = result["permissionDecisionReason"]
+            self.assertIn(replacement, reason)
+            # the deny names the subagent load step, not just the tool
+            self.assertIn('ToolSearch("select:mcp__lean-ctx__%s")' % replacement, reason)
+
+    def test_deny_fires_from_each_config_source(self):
+        # (1) project .mcp.json
+        self._mcp_json()
+        self.assertEqual(self._deny_output("Grep")["permissionDecision"], "deny")
+        (self.root / ".mcp.json").unlink()
+        claude_dir = self.root / ".claude"
+        claude_dir.mkdir()
+        # (2a) project .claude/settings.json mcpServers
+        (claude_dir / "settings.json").write_text(
+            json.dumps({"mcpServers": {"lean-ctx": {"command": "lean-ctx"}}})
+        )
+        self.assertEqual(self._deny_output("Grep")["permissionDecision"], "deny")
+        (claude_dir / "settings.json").unlink()
+        # (2b) project .claude/settings.local.json enabledMcpjsonServers
+        (claude_dir / "settings.local.json").write_text(
+            json.dumps({"enabledMcpjsonServers": ["lean-ctx"]})
+        )
+        self.assertEqual(self._deny_output("Grep")["permissionDecision"], "deny")
+        (claude_dir / "settings.local.json").unlink()
+        # (3a) ~/.claude.json top-level mcpServers (underscore key variant)
+        (self.home / ".claude.json").write_text(
+            json.dumps({"mcpServers": {"lean_ctx": {"command": "lean-ctx"}}})
+        )
+        result = self._deny_output("Grep")
+        self.assertEqual(result["permissionDecision"], "deny")
+        self.assertIn("mcp__lean_ctx__ctx_search", result["permissionDecisionReason"])
+        # (3b) ~/.claude.json projects[<root>].mcpServers
+        (self.home / ".claude.json").write_text(
+            json.dumps({
+                "projects": {
+                    str(self.root): {"mcpServers": {"lean-ctx": {"command": "lean-ctx"}}}
+                }
+            })
+        )
+        self.assertEqual(self._deny_output("Grep")["permissionDecision"], "deny")
+        (self.home / ".claude.json").unlink()
+        # (4) ~/.claude/settings.json mcpServers
+        home_claude = self.home / ".claude"
+        home_claude.mkdir()
+        (home_claude / "settings.json").write_text(
+            json.dumps({"mcpServers": {"lean-ctx": {"command": "lean-ctx"}}})
+        )
+        self.assertEqual(self._deny_output("Grep")["permissionDecision"], "deny")
+
+    def test_search_nudged_when_mcp_unconfigured_then_silent(self):
+        for tool, replacement in (("Grep", "ctx_search"), ("Glob", "ctx_glob")):
+            handled, output = self.call(tool)  # binary present, nothing configured
+            self.assertEqual(handled, False)  # allowed: legacy tiers still run
+            result = json.loads(output)["hookSpecificOutput"]
+            self.assertNotIn("permissionDecision", result)
+            self.assertIn(replacement, result["additionalContext"])
+            self.assertIn("not configured", result["additionalContext"])
+            self.assertEqual(self.call(tool), (False, ""))  # one-time marker
+
+    def test_search_nudged_when_binary_missing(self):
+        self._mcp_json()
+        for tool, replacement in (("Grep", "ctx_search"), ("Glob", "ctx_glob")):
+            handled, output = self.call(tool, available=False)
+            self.assertEqual(handled, False)
+            result = json.loads(output)["hookSpecificOutput"]
+            self.assertNotIn("permissionDecision", result)
+            self.assertIn(replacement, result["additionalContext"])
+
+    def test_hard_off_stays_silent_even_when_configured(self):
+        self._mcp_json()
         for tool in ("Grep", "Glob"):
-            self.assertEqual(self.call(tool, available=False), (True, ""))
             with patch.dict(os.environ, {"ATLAS_TRIPWIRE_HARD": "off"}):
-                self.assertEqual(self.call(tool), (True, ""))
+                self.assertEqual(self.call(tool), (False, ""))
+
+    def test_unreadable_config_fails_open_to_nudge(self):
+        (self.root / ".mcp.json").write_text("{not json", encoding="utf-8")
+        handled, output = self.call("Grep")
+        self.assertEqual(handled, False)
+        result = json.loads(output)["hookSpecificOutput"]
+        self.assertNotIn("permissionDecision", result)
+        self.assertIn("ctx_search", result["additionalContext"])
 
     def test_outside_docs_projects_is_silent(self):
         (self.root / "docs").rmdir()
@@ -1325,11 +1534,11 @@ class NativeToolPolicyTest(unittest.TestCase):
                 result = json.loads(output)["hookSpecificOutput"]
                 self.assertNotIn("permissionDecision", result)
                 self.assertIn(replacement, result["additionalContext"])
-                self.assertEqual(self.call(tool), (True, ""))
+                self.assertEqual(self.call(tool), (False, ""))
 
     def test_internal_policy_error_is_silent_and_allowed(self):
         with patch.object(self.dt, "find_root", side_effect=RuntimeError("bad filesystem")):
-            self.assertEqual(self.call("Grep"), (True, ""))
+            self.assertEqual(self.call("Grep"), (False, ""))
 
 
 class ColonyDenyTest(unittest.TestCase):
