@@ -1,0 +1,7 @@
+{
+  "name": "atlas-omp-extension",
+  "private": true,
+  "omp": {
+    "extensions": ["./index.ts"]
+  }
+}

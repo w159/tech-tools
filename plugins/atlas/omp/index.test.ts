@@ -1,21 +1,31 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
-import extension, { register } from "./index";
+import extension, { ensureClaudePluginRoot, register } from "./index";
 
-type Context = { cwd: string; agent: { kind: "main" | "sub" } };
+type Context = {
+	cwd: string;
+	agent: { kind: "main" | "sub" };
+	sessionManager?: { getSessionId(): string };
+};
 type Result = { block?: boolean; reason?: string; additionalContext?: string; decision?: string } | undefined;
-type Handler = (event: { toolName?: string; input: Record<string, unknown> }, ctx: Context) => Result;
+type Handler = (
+	event: { toolName?: string; input: Record<string, unknown>; details?: unknown; isError?: boolean },
+	ctx: Context,
+) => Result;
+type SpawnCapture = { argv: string[]; opts: { cwd: string } };
 let root: string;
 let oldGate: string | undefined;
 let oldHard: string | undefined;
+let oldPluginRoot: string | undefined;
 beforeEach(() => {
 	root = mkdtempSync(join(tmpdir(), "atlas-omp-"));
 	mkdirSync(join(root, "project", "docs"), { recursive: true });
 	oldGate = process.env.ATLAS_GATE;
 	oldHard = process.env.ATLAS_TRIPWIRE_HARD;
+	oldPluginRoot = process.env.CLAUDE_PLUGIN_ROOT;
 	delete process.env.ATLAS_GATE;
 	delete process.env.ATLAS_TRIPWIRE_HARD;
 });
@@ -23,17 +33,27 @@ afterEach(() => {
 	rmSync(root, { recursive: true, force: true });
 	if (oldGate === undefined) delete process.env.ATLAS_GATE; else process.env.ATLAS_GATE = oldGate;
 	if (oldHard === undefined) delete process.env.ATLAS_TRIPWIRE_HARD; else process.env.ATLAS_TRIPWIRE_HARD = oldHard;
+	if (oldPluginRoot === undefined) delete process.env.CLAUDE_PLUGIN_ROOT; else process.env.CLAUDE_PLUGIN_ROOT = oldPluginRoot;
 });
-function harness(available: () => boolean = () => true) {
+function harness(
+	available: () => boolean = () => true,
+	spawnBoardMirror?: (argv: string[], opts: { cwd: string }) => void,
+) {
 	const handlers: Record<string, Handler> = {};
 	const api = { on: (name: string, handler: Handler) => { handlers[name] = handler; } };
 	// Capture the two host-typed callbacks; the fake only supplies fields they consume.
 	const pi = api as unknown as Pick<ExtensionAPI, "on">;
-	register(pi, { leanCtxAvailable: available });
+	const spawns: SpawnCapture[] = [];
+	register(pi, {
+		leanCtxAvailable: available,
+		spawnBoardMirror: spawnBoardMirror ?? ((argv, opts) => { spawns.push({ argv, opts }); }),
+	});
 	const ctx: Context = { cwd: join(root, "project"), agent: { kind: "main" } };
 	return {
-		ctx, handlers, pi,
+		ctx, handlers, pi, spawns,
 		call: (toolName: string, input: Record<string, unknown> = {}) => handlers.tool_call({ toolName, input }, ctx),
+		result: (event: { toolName: string; details?: unknown; isError?: boolean }) =>
+			handlers.tool_result({ toolName: event.toolName, input: {}, details: event.details, isError: event.isError }, ctx),
 		stop: () => handlers.session_stop({ input: {} }, ctx),
 	};
 }
@@ -140,4 +160,177 @@ test("runtime factory recognizes configured lean-ctx MCP without binary", () => 
 	} finally {
 		if (originalPath === undefined) delete process.env.PATH; else process.env.PATH = originalPath;
 	}
+});
+
+// ── Task naming notice (atlas colony sibling addressing) ──
+
+test("unnamed atlas batch items get exactly one naming notice", () => {
+	const h = harness();
+	const batch = {
+		tasks: [
+			{ agent: "explorer", task: "map the flow", solutionSpace: "open" },
+			{ agent: "verifier", task: "verify the fix", solutionSpace: "open" },
+		],
+	};
+	const first = h.call("task", batch);
+	expect(first?.additionalContext).toContain("write agent://<name>");
+	expect(first?.additionalContext).toContain("explorer");
+	expect(first?.additionalContext).toContain("verifier");
+	expect(first?.block).toBeUndefined();
+	expect(first?.decision).toBeUndefined();
+	expect(h.call("task", batch)).toBeUndefined();
+	// The dispatch still satisfies the delegation gate.
+	expect(h.stop()).toBeUndefined();
+});
+
+test("named atlas items and non-atlas dispatches stay silent", () => {
+	const h = harness();
+	expect(h.call("task", { tasks: [{ name: "ScoutA", agent: "explorer", task: "x", solutionSpace: "y" }] })).toBeUndefined();
+	// No agent field defaults to the generic `task` agent, not an atlas agent.
+	expect(h.call("task", { tasks: [{ task: "x", solutionSpace: "y" }] })).toBeUndefined();
+	expect(h.call("task", { agent: "unrelated-agent", task: "x" })).toBeUndefined();
+});
+
+test("single-form unnamed atlas dispatch gets the notice", () => {
+	const h = harness();
+	const first = h.call("task", { agent: "db-prober", task: "inspect the schema" });
+	expect(first?.additionalContext).toContain("write agent://<name>");
+	expect(h.call("task", { agent: "planner", task: "plan it" })).toBeUndefined();
+});
+
+test("mixed named and unnamed atlas batch flags only the unnamed tier", () => {
+	const h = harness();
+	const first = h.call("task", {
+		tasks: [
+			{ name: "ScoutA", agent: "explorer", task: "x", solutionSpace: "y" },
+			{ agent: "verifier", task: "y", solutionSpace: "z" },
+		],
+	});
+	expect(first?.additionalContext).toContain("verifier");
+	expect(first?.additionalContext).not.toContain("explorer, verifier");
+});
+
+test("naming notice is main-thread only and silent outside docs scope", () => {
+	const h = harness();
+	h.ctx.agent.kind = "sub";
+	expect(h.call("task", { tasks: [{ agent: "explorer", task: "x" }] })).toBeUndefined();
+	h.ctx.agent.kind = "main";
+	h.ctx.cwd = root;
+	expect(h.call("task", { tasks: [{ agent: "explorer", task: "x" }] })).toBeUndefined();
+});
+
+// ── CLAUDE_PLUGIN_ROOT default (omp workers' board CLI path) ──
+
+test("factory sets CLAUDE_PLUGIN_ROOT to the atlas plugin root when unset", () => {
+	delete process.env.CLAUDE_PLUGIN_ROOT;
+	const api = { on: () => {}, getAllTools: () => [] };
+	extension(api as unknown as ExtensionAPI);
+	expect(process.env.CLAUDE_PLUGIN_ROOT).toBe(resolve(import.meta.dir, ".."));
+});
+
+test("factory preserves a non-empty CLAUDE_PLUGIN_ROOT", () => {
+	process.env.CLAUDE_PLUGIN_ROOT = "/custom/plugin-root";
+	const api = { on: () => {}, getAllTools: () => [] };
+	extension(api as unknown as ExtensionAPI);
+	expect(process.env.CLAUDE_PLUGIN_ROOT).toBe("/custom/plugin-root");
+});
+
+test("ensureClaudePluginRoot skips an unset value only when the CLI is missing", () => {
+	delete process.env.CLAUDE_PLUGIN_ROOT;
+	const env: Record<string, string | undefined> = {};
+	expect(ensureClaudePluginRoot(env, "/nowhere/scripts/atlas_todo.py")).toBe(false);
+	expect(env.CLAUDE_PLUGIN_ROOT).toBeUndefined();
+	expect(ensureClaudePluginRoot(env, resolve(import.meta.dir, "..", "scripts", "atlas_todo.py"))).toBe(true);
+	expect(env.CLAUDE_PLUGIN_ROOT).toBe(resolve(import.meta.dir, ".."));
+});
+
+// ── Board mirror: the omp lead's todo plan lands in .atlas/.run/todos.json ──
+
+const TODO_PHASES = {
+	op: "init",
+	phases: [
+		{
+			name: "Tasks",
+			tasks: [
+				{ content: "map the flow", status: "in_progress" },
+				{ content: "verify the fix", status: "blocked" },
+				{ content: "ship it", status: "completed" },
+			],
+		},
+	],
+};
+
+test("main-thread todo results mirror the plan with session attribution", () => {
+	const h = harness();
+	h.ctx.sessionManager = { getSessionId: () => "sess-omp-42" };
+	h.result({ toolName: "todo", details: TODO_PHASES });
+	expect(h.spawns).toHaveLength(1);
+	expect(h.spawns[0].argv.slice(0, 5)).toEqual([
+		"python3", expect.any(String), "set", "--root", join(root, "project"),
+	]);
+	expect(h.spawns[0].argv[5]).toBe("--session");
+	expect(h.spawns[0].argv[6]).toBe("sess-omp-42");
+	expect(h.spawns[0].argv[7]).toBe(JSON.stringify([
+		{ content: "map the flow", status: "in_progress" },
+		{ content: "verify the fix", status: "pending" },
+		{ content: "ship it", status: "completed" },
+	]));
+	expect(h.spawns[0].opts.cwd).toBe(join(root, "project"));
+});
+
+test("board mirror argv runs the real python CLI and writes the board", () => {
+	const h = harness();
+	h.ctx.sessionManager = { getSessionId: () => "sess-omp-42" };
+	h.result({ toolName: "todo", details: TODO_PHASES });
+	expect(h.spawns).toHaveLength(1);
+	const run = Bun.spawnSync(h.spawns[0].argv, { cwd: h.spawns[0].opts.cwd, stdout: "pipe", stderr: "pipe" });
+	expect(run.exitCode).toBe(0);
+	const board = JSON.parse(readFileSync(join(root, "project", ".atlas", ".run", "todos.json"), "utf8")) as {
+		items: { content: string; status: string; session_id: string; origin: string }[];
+	};
+	const contents = board.items.map(item => item.content);
+	expect(contents).toContain("map the flow");
+	expect(contents).toContain("ship it");
+	const inProgress = board.items.find(item => item.content === "map the flow");
+	expect(inProgress?.status).toBe("in_progress");
+	expect(inProgress?.session_id).toBe("sess-omp-42");
+	expect(inProgress?.origin).toBe("session");
+});
+
+test("todo mirror is main-thread, docs-scoped, and error-tolerant", () => {
+	const sub = harness();
+	sub.ctx.agent.kind = "sub";
+	sub.ctx.sessionManager = { getSessionId: () => "sess-x" };
+	sub.result({ toolName: "todo", details: TODO_PHASES });
+	expect(sub.spawns).toHaveLength(0);
+
+	const outside = harness();
+	outside.ctx.cwd = root;
+	outside.result({ toolName: "todo", details: TODO_PHASES });
+	expect(outside.spawns).toHaveLength(0);
+
+	const errored = harness();
+	errored.result({ toolName: "todo", details: TODO_PHASES, isError: true });
+	expect(errored.spawns).toHaveLength(0);
+
+	const otherTool = harness();
+	otherTool.result({ toolName: "bash", details: TODO_PHASES });
+	expect(otherTool.spawns).toHaveLength(0);
+
+	const empty = harness();
+	empty.result({ toolName: "todo", details: { op: "view", phases: [] } });
+	expect(empty.spawns).toHaveLength(0);
+	empty.result({ toolName: "todo", details: undefined });
+	expect(empty.spawns).toHaveLength(0);
+
+	const throwingSession = harness();
+	throwingSession.ctx.sessionManager = { getSessionId: () => { throw new Error("boom"); } };
+	throwingSession.result({ toolName: "todo", details: TODO_PHASES });
+	expect(throwingSession.spawns).toHaveLength(0); // fail open, never block
+});
+
+test("todo mirror tolerates a spawning failure", () => {
+	const h = harness(() => true, () => { throw new Error("spawn unavailable"); });
+	h.ctx.sessionManager = { getSessionId: () => "sess-x" };
+	expect(h.result({ toolName: "todo", details: TODO_PHASES })).toBeUndefined();
 });

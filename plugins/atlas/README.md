@@ -102,14 +102,19 @@ automatically. Then run `atlas-setup` once per project: it scaffolds
 `docs/`, installs claude-mem and context-mode if you approve, recommends
 the capabilities your stack needs, and tells you what to run next.
 
-For omp, load the extension with
-`omp --extension <abs>/plugins/atlas/omp/index.ts`, or add that absolute path
-to `extensions:` in `~/.omp/agent/config.yml`. This is atlas's first omp
-enforcement: native `grep`/`glob` route to lean-ctx, `read`/`bash` get one
+For omp, load the extension package by DIRECTORY -- agents are only discovered
+from a directory entry:
+`omp --extension <abs>/plugins/atlas/omp`, or add that directory to
+`extensions:` in `~/.omp/agent/config.yml`. The extension adds the enforcement
+this CLI needs: native `grep`/`glob` route to lean-ctx, `read`/`bash` get one
 nudge per session, and `session_stop` blocks once for main-thread non-docs
-`edit`/`write` calls without a `task` dispatch. The same
-`ATLAS_TRIPWIRE_HARD=off` and `ATLAS_GATE=off` kill switches apply; see
-`omp/README.md`.
+`edit`/`write` calls without a `task` dispatch. Native atlas agents (generated
+from `agents/*.md` with tuned `thinkingLevel` and model-role fallbacks -- see
+`omp/README.md`) make omp workers first-class colony members: the lead's omp
+`todo` plan mirrors into the durable board, and workers get
+`CLAUDE_PLUGIN_ROOT` set so `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py`
+works. The same `ATLAS_TRIPWIRE_HARD=off` and `ATLAS_GATE=off` kill switches
+apply.
 
 ## Hooks
 
@@ -144,7 +149,7 @@ writers prevents new flags but does not disable (m) or clear existing flags.
 | `prompt_optimizer.py` | `UserPromptSubmit` | Optional trigger-gated prompt rewrite; also arm-early classifier that flags substantive engineering prompts as orchestration runs (`ATLAS_ENGINE_ARM=off`) |
 | `bash_advisor.py` | `PreToolUse` (Bash) | Advisory only: warns on catastrophic patterns (`rm -rf /`, `mkfs`, `dd` to a disk, fork bomb). Never denies |
 | `fallow_gate.py` | `PreToolUse` (Bash) | Fallow agent gate: on `git commit`/`git push`, runs `fallow audit --format json --quiet --explain --gate-marker agent` and denies when `verdict` is `fail`. Fail-open if the fallow CLI is missing (`ATLAS_FALLOW=off`, `FALLOW_GATE_MIN_VERSION`). Docs: `skills/atlas-orchestrate/references/fallow-tools.md` |
-| `dispatch_tripwire.py` | `PostToolUse` + `PreToolUse` | In `docs/` projects with lean-ctx on PATH, deny native `Grep`/`Glob` toward `ctx_search`/`ctx_glob`, including subagents and unflagged sessions; nudge `Read`/`Bash` once per session toward `ctx_read` and `ctx_shell`/context-mode `ctx_execute` (markers: `.atlas/.run/native_nudges/`; `ATLAS_TRIPWIRE_HARD=off`). Flag orchestration sessions, count inline ops, advise at the threshold; deny tier blocks at 6 unsanctioned inline ops (the orchestrator's own docs//.atlas/ writes are excluded, since the completion gate requires them at closeout) or any non-docs edit in an orchestration run (`ATLAS_TRIPWIRE=off`, `ATLAS_TRIPWIRE_HARD=off`). Denies an `atlas:*` dispatch that omits the code-nav TOOLS block, omits the bounding dispatch spec from `subagent-kit.md` (`GOAL:`, `DELIVERABLE:`, `SUCCESS CRITERIA:`, `OUT OF SCOPE:`, `STOP CONDITIONS:`), or bundles more than one `GOAL:` into a single subagent -- an unbounded or multi-task dispatch is how one agent ends up running for an hour instead of a wave of small ones. Also denies, unconditionally and ahead of the kill switch, any nested `Agent`/`Task` dispatch whose `transcript_path` is a `subagents/` transcript: a subagent must never dispatch another subagent. Also brackets every `*verifier*` dispatch: snapshots the `findings.json` entry count on `PreToolUse` and, if the verifier returns without adding a row, tells the orchestrator to write the verdict with `scripts/atlas_finding.py` rather than re-dispatching |
+| `dispatch_tripwire.py` | `PostToolUse` + `PreToolUse` | In `docs/` projects with lean-ctx on PATH, deny native `Grep`/`Glob` toward `ctx_search`/`ctx_glob`, including subagents and unflagged sessions; nudge `Read`/`Bash` once per session toward `ctx_read` and `ctx_shell`/context-mode `ctx_execute` (markers: `.atlas/.run/native_nudges/`; `ATLAS_TRIPWIRE_HARD=off`). Flag orchestration sessions, count inline ops, advise at the threshold; deny tier blocks at 6 unsanctioned inline ops (the orchestrator's own docs//.atlas/ writes are excluded, since the completion gate requires them at closeout) or any non-docs edit in an orchestration run (`ATLAS_TRIPWIRE=off`, `ATLAS_TRIPWIRE_HARD=off`). Denies an `atlas:*` dispatch whose `model` param overrides the agent definition's own `model:` frontmatter (`inherit` and an absent param accept anything; an unreadable definition fails open), and denies an `atlas:*` dispatch with no `name` -- named dispatches are what hand a subagent the sibling roster and `SendMessage`. Both follow the existing `atlas:*` gating (`ATLAS_TRIPWIRE_HARD=off` lifts them), except that with `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` the name-required deny is lifted: a named main-conversation dispatch would launch as a teammate that inherits the lead's effort and cwd, defeating the per-worker effort tier. Denies an `atlas:*` dispatch that omits the code-nav TOOLS block, omits the bounding dispatch spec from `subagent-kit.md` (`GOAL:`, `DELIVERABLE:`, `SUCCESS CRITERIA:`, `OUT OF SCOPE:`, `STOP CONDITIONS:`), or bundles more than one `GOAL:` into a single subagent -- an unbounded or multi-task dispatch is how one agent ends up running for an hour instead of a wave of small ones. Also denies, unconditionally and ahead of the kill switch, any nested `Agent`/`Task` dispatch whose `transcript_path` is a `subagents/` transcript: a subagent must never dispatch another subagent. Also brackets every `*verifier*` dispatch: snapshots the `findings.json` entry count on `PreToolUse` and, if the verifier returns without adding a row, tells the orchestrator to write the verdict with `scripts/atlas_finding.py` rather than re-dispatching |
 | `todo_capture.py` | `PostToolUse` (TodoWrite) | Mirror every `TodoWrite` plan into the durable board `<project>/.atlas/.run/todos.json` (`ATLAS_TODO=off` disables) so the dashboard Work tab, parallel subagents, and the completion gate's drain fallback all read the session's real progress; keeps existing claims on matching content |
 | `format_after_edit.py` | `PostToolUse` (Edit/Write) | Run the repo's formatter after edits |
 | `docs_drift_watch.py` | `PostToolUse` (Edit/Write/MultiEdit/NotebookEdit) | Inline backstop for `completion_gate.py` condition (f): warns the moment a non-docs edit ships without a `docs/CHANGELOG.md` entry, instead of waiting for Stop. Debounced per session_id (first drifting edit, then every 5th; resets when the CHANGELOG reappears in the diff or a new/missing session_id arrives); silent with no `docs/`, `ATLAS_GATE=off`, or on a `docs/`/`.atlas/` path. The backing `git diff` is cached for 2s (`time.monotonic`) to keep the common-path cost low |
@@ -168,6 +173,31 @@ For installs outside a plugin, `scripts/install_hooks.py` wires the hooks into
 settings manually. The optional ollama-backed optimizer is configured with
 `ATLAS_OPTIMIZE_CMD`, `ATLAS_OPTIMIZER_MODEL`, and `ATLAS_OLLAMA_URL`
 (see `skills/atlas-orchestrate/references/hooks-automation.md`); it is not required.
+
+## Colony work (shared board + notes)
+
+Subagents work off one durable todo board at `<project>/.atlas/.run/todos.json`:
+flock plus tmp-rename locking (proven with 8 processes racing for 40 items --
+exactly 40 claims), claims survive across harnesses, and an unparseable board is
+moved aside to `todos.json.corrupt-<ns>` instead of being silently replaced by
+an empty one. A linked git worktree resolves to the main repo's board, so
+isolated workers and the lead stay on one queue. For coordination prose, each
+worker has an append-only notes file (`.atlas/.run/board/<owner>.jsonl`; no
+cross-writer contention):
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py" note --owner <name> [--to <name|all>] [--item <id>] "<text>"
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py" notes [--to <name>] [--since <ts>]
+```
+
+How `${CLAUDE_PLUGIN_ROOT}` resolves differs by harness: Claude Code substitutes
+it inline in agent markdown bodies but does NOT set it in the Bash environment;
+the omp extension sets it on load when unset. Name your dispatches (`name:` on
+each task item) -- a named dispatch is what gives a subagent the sibling roster
+it needs to reach peers. One honest limitation: Claude Code has no per-subagent
+thinking setting -- subagents inherit the session's thinking (per
+code.claude.com/docs/en/sub-agents) -- so worker cost there is controlled by
+each agent's existing `model:`/`effort:` frontmatter.
 
 ## Local dashboard (multi-session)
 

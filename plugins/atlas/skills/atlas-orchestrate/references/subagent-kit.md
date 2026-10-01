@@ -151,9 +151,34 @@ before starting, so two agents never build the same thing:
   different open item or stop and report.
 - `--force` steals a stale claim (30 min idle). Never force-steal a live agent's item.
 - Done: `complete --id <id> --evidence "<command + output, or file:line>"`.
+- Post a durable note instead of holding state in chat:
+  `atlas_todo.py note --owner <agent-name> [--to <owner|all>] [--item <id>] "<text>"`,
+  and read what others left with `atlas_todo.py notes`.
 - Every `TodoWrite` call is mirrored into the board and keeps claims on matching
-  content, so a claim survives the mirror.
-- Board read: `atlas_todo.py list --session <session_id>` (or the dashboard Work tab).
+  content, and a completed claim now survives the mirror too: when the lead
+  rewrites its list, your `complete` stays complete. Board read:
+  `atlas_todo.py list --session <session_id>` (or the dashboard Work tab).
+
+## Colony protocol (siblings)
+
+Dispatches into the colony are named, and the name is load-bearing. A dispatch
+without `name: <role>-<slice>` (e.g. `auth-explorer`) is denied by the dispatch
+tripwire: only a named sibling appears on the sibling roster, and the roster is
+what makes the channel below work. One exception: with
+`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` the name requirement is lifted — in
+teams mode a named dispatch from the main conversation launches as a teammate
+(inherits the lead's effort, runs in the lead's cwd) instead of a scoped
+subagent, so atlas workers must stay nameless to keep their definition's
+effort/model tier and guardrails.
+
+- Siblings message each other, not just the lead. Before touching a file a
+  sibling may own, or when blocked on a sibling's output, `SendMessage` that
+  sibling by roster name - one exchange, then move on; never wait twice on the
+  same sibling.
+- Quick coordination goes by `SendMessage`; durable state goes on the board:
+    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py" note --owner <name> [--to <name|all>] [--item <id>] "<text>"
+- The lead alone dispatches and declares done. Siblings report to the lead,
+  never to the user, and never dispatch other subagents.
 
 ## Anti-patterns
 

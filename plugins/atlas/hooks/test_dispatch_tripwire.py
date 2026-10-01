@@ -36,6 +36,19 @@ SPEC_BLOCK = (
     "OUT OF SCOPE: no edits, no migrations, no dependency changes\n"
     "STOP CONDITIONS: halt and report if the router cannot be located\n"
 )
+# Every atlas:* dispatch fixture carries a sibling name: the colony contract
+# (dispatch_tripwire.py) denies unnamed atlas:* dispatches, so tests exercise
+# that deny explicitly instead of tripping it through unrelated fixtures.
+COLONY_NAME = "auth-slice"
+
+
+def _named(tinput):
+    """Inject the fixture name into an atlas:* dispatch payload unless the test
+    set one deliberately (an empty/whitespace name exercises the deny)."""
+    tinput = dict(tinput or {})
+    if "name" not in tinput and str(tinput.get("subagent_type") or "").startswith("atlas:"):
+        tinput["name"] = COLONY_NAME
+    return tinput
 
 
 class TripwireTest(unittest.TestCase):
@@ -56,14 +69,18 @@ class TripwireTest(unittest.TestCase):
         conn.close()
 
     def _payload(self, tool, tinput=None):
-        return {"session_id": "sess-1", "tool_name": tool, "tool_input": tinput or {}}
+        return {
+            "session_id": "sess-1",
+            "tool_name": tool,
+            "tool_input": _named(tinput),
+        }
 
     def _post_payload(self, tool, tinput=None, session="sess-1"):
         return {
             "session_id": session,
             "hook_event_name": "PostToolUse",
             "tool_name": tool,
-            "tool_input": tinput or {},
+            "tool_input": _named(tinput),
         }
 
     def _pre_payload(self, tool, tinput=None, session="sess-1"):
@@ -72,7 +89,7 @@ class TripwireTest(unittest.TestCase):
             "cwd": self.tmp,
             "hook_event_name": "PreToolUse",
             "tool_name": tool,
-            "tool_input": tinput or {},
+            "tool_input": _named(tinput),
         }
 
     def test_under_threshold_is_silent(self):
@@ -247,7 +264,7 @@ class TripwireTest(unittest.TestCase):
             {
                 "session_id": "sess-disp",
                 "tool_name": "Agent",
-                "tool_input": {"subagent_type": "atlas:explorer"},
+                "tool_input": _named({"subagent_type": "atlas:explorer"}),
             },
             self.env,
         )
@@ -604,7 +621,7 @@ class InProcessTest(unittest.TestCase):
             "hook_event_name": "PostToolUse",
             "session_id": session,
             "tool_name": tool,
-            "tool_input": tinput or {},
+            "tool_input": _named(tinput),
         }
 
     def _pre(self, tool, tinput=None, session="sess-1"):
@@ -613,7 +630,7 @@ class InProcessTest(unittest.TestCase):
             "cwd": self.tmp,
             "session_id": session,
             "tool_name": tool,
-            "tool_input": tinput or {},
+            "tool_input": _named(tinput),
         }
 
     def _fresh_run(self, session_id, mark_orch=False):
@@ -781,7 +798,7 @@ class InProcessTest(unittest.TestCase):
                     "hook_event_name": "PostToolUse",
                     "session_id": "sess-atlas-fail",
                     "tool_name": "Agent",
-                    "tool_input": {"subagent_type": "atlas:explorer"},
+                    "tool_input": _named({"subagent_type": "atlas:explorer"}),
                 }
             )
         conn = self.atlas_db.connect(self.db_path)
@@ -813,7 +830,7 @@ class InProcessTest(unittest.TestCase):
                     "hook_event_name": "PostToolUse",
                     "session_id": "sess-atlas-fail2",
                     "tool_name": "Agent",
-                    "tool_input": {"subagent_type": "atlas:explorer"},
+                    "tool_input": _named({"subagent_type": "atlas:explorer"}),
                 }
             )
 
@@ -826,7 +843,7 @@ class InProcessTest(unittest.TestCase):
                 "hook_event_name": "PostToolUse",
                 "session_id": "sess-atlas",
                 "tool_name": "Agent",
-                "tool_input": {"subagent_type": "atlas:explorer"},
+                "tool_input": _named({"subagent_type": "atlas:explorer"}),
             }
         )
         self.assertEqual(out, "")
@@ -987,7 +1004,7 @@ class WorktreeFlagTest(unittest.TestCase):
                 "session_id": "sess-wt",
                 "hook_event_name": "PostToolUse",
                 "tool_name": "Agent",
-                "tool_input": tinput,
+                "tool_input": _named(tinput),
                 "cwd": self.tmp,
             },
             self.env,
@@ -1129,10 +1146,12 @@ class VerifierVerdictBracketTest(unittest.TestCase):
             "hook_event_name": event,
             "tool_name": "Agent",
             "cwd": self.root,
-            "tool_input": {
-                "subagent_type": agent,
-                "prompt": 'ToolSearch("select:mcp__lean-ctx__ctx_read")',
-            },
+            "tool_input": _named(
+                {
+                    "subagent_type": agent,
+                    "prompt": 'ToolSearch("select:mcp__lean-ctx__ctx_read")',
+                }
+            ),
         }
 
     def test_verifier_without_a_findings_write_is_flagged(self):
@@ -1210,10 +1229,12 @@ class NestedSubagentDenyTest(unittest.TestCase):
             "hook_event_name": event,
             "tool_name": tool,
             "transcript_path": transcript,
-            "tool_input": {
-                "subagent_type": "atlas:explorer",
-                "prompt": 'ToolSearch("select:mcp__lean-ctx__ctx_read")',
-            },
+            "tool_input": _named(
+                {
+                    "subagent_type": "atlas:explorer",
+                    "prompt": 'ToolSearch("select:mcp__lean-ctx__ctx_read")',
+                }
+            ),
         }
 
     def _decision(self, stdout):
@@ -1309,3 +1330,231 @@ class NativeToolPolicyTest(unittest.TestCase):
     def test_internal_policy_error_is_silent_and_allowed(self):
         with patch.object(self.dt, "find_root", side_effect=RuntimeError("bad filesystem")):
             self.assertEqual(self.call("Grep"), (True, ""))
+
+
+class ColonyDenyTest(unittest.TestCase):
+    """Colony dispatch guards: named dispatches and frontmatter model tiers.
+
+    An atlas:* dispatch the tripwire accepts carries a sibling `name` and no
+    per-call `model` that drifts the agent definition's frontmatter tier. Both
+    guards share the toolkit/spec gating (armed orchestration, atlas:* only)
+    and the ATLAS_TRIPWIRE_HARD kill switch; a definition file that cannot be
+    read fails open."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.env = dict(os.environ, ATLAS_DB=os.path.join(self.tmp, "atlas.db"))
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db
+
+        conn = atlas_db.connect(self.env["ATLAS_DB"])
+        atlas_db.init(conn)
+        pid = atlas_db.register_project(conn, "/repo/x")
+        atlas_db.start_run(conn, pid, "sess-1")
+        atlas_db.mark_orchestrating(conn, "sess-1")
+        conn.close()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    # Clears every pre-existing guard, so a deny here can only come from the
+    # colony guards under test.
+    SPEC = TOOLS_BLOCK + SPEC_BLOCK
+
+    def _pre(self, tinput):
+        return run_hook(
+            {
+                "session_id": "sess-1",
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Agent",
+                "tool_input": tinput,
+            },
+            self.env,
+        )
+
+    def _dispatch(self, name="auth-slice", model=None, agent="atlas:implementer"):
+        # implementer.md pins model: sonnet, so opus is a real mismatch.
+        tinput = {"subagent_type": agent, "prompt": self.SPEC}
+        if name is not None:
+            tinput["name"] = name
+        if model is not None:
+            tinput["model"] = model
+        return self._pre(tinput)
+
+    def test_model_override_differs_from_definition_is_denied(self):
+        r = self._dispatch(model="opus")
+        self.assertEqual(r.returncode, 0)
+        self.assertEqual(
+            json.loads(r.stdout)["hookSpecificOutput"]["permissionDecision"], "deny"
+        )
+        self.assertIn("model: sonnet", r.stdout)
+        self.assertIn("Drop the `model` param", r.stdout)
+
+    def test_matching_model_is_allowed(self):
+        r = self._dispatch(model="sonnet")
+        self.assertEqual(r.returncode, 0)
+        self.assertEqual(r.stdout.strip(), "")
+
+    def test_case_insensitive_model_match_is_allowed(self):
+        r = self._dispatch(model="Sonnet")
+        self.assertEqual(r.returncode, 0)
+        self.assertEqual(r.stdout.strip(), "")
+
+    def test_absent_model_is_allowed(self):
+        r = self._dispatch(model=None)
+        self.assertEqual(r.returncode, 0)
+        self.assertEqual(r.stdout.strip(), "")
+
+    def test_missing_name_is_denied(self):
+        r = self._dispatch(name="")
+        self.assertEqual(r.returncode, 0)
+        self.assertEqual(
+            json.loads(r.stdout)["hookSpecificOutput"]["permissionDecision"], "deny"
+        )
+        self.assertIn("SendMessage", r.stdout)
+        self.assertIn("<role>-<slice>", r.stdout)
+
+    def test_named_dispatch_is_allowed(self):
+        r = self._dispatch(name="auth-implementer")
+        self.assertEqual(r.returncode, 0)
+        self.assertEqual(r.stdout.strip(), "")
+
+    def test_non_atlas_agent_is_never_gated(self):
+        # No name, a drifting model, no spec: a non-atlas agent opts out of
+        # every colony guard.
+        r = self._pre(
+            {
+                "subagent_type": "Explore",
+                "model": "opus",
+                "prompt": "do the thing",
+            }
+        )
+        self.assertEqual(r.returncode, 0)
+        self.assertEqual(r.stdout.strip(), "")
+
+    def test_unreadable_definition_fails_open(self):
+        # No such agent file -> the tier cannot be proven -> allow.
+        r = self._dispatch(agent="atlas:not-an-atlas-agent", model="opus")
+        self.assertEqual(r.returncode, 0)
+        self.assertEqual(r.stdout.strip(), "")
+
+    def test_hard_off_lifts_both_colony_denies(self):
+        env = dict(self.env, ATLAS_TRIPWIRE_HARD="off")
+        unnamed_override = {
+            "subagent_type": "atlas:implementer",
+            "prompt": self.SPEC,
+            "name": "",
+            "model": "opus",
+        }
+        unnamed = {"subagent_type": "atlas:implementer", "prompt": self.SPEC, "name": ""}
+        for tinput in (unnamed_override, unnamed):
+            p = run_hook(
+                {
+                    "session_id": "sess-1",
+                    "hook_event_name": "PreToolUse",
+                    "tool_name": "Agent",
+                    "tool_input": tinput,
+                },
+                env,
+            )
+            self.assertEqual(p.returncode, 0)
+            self.assertEqual(p.stdout.strip(), "")
+
+    def test_agent_teams_env_lifts_name_requirement(self):
+        # With agent teams enabled, naming a main-conversation dispatch makes
+        # it a teammate (inherits the lead's effort, runs in the main cwd)
+        # instead of a scoped subagent; the guard stands down so atlas workers
+        # stay unnamed subagents and their definition tier applies.
+        env = dict(self.env, CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS="1")
+        p = run_hook(
+            {
+                "session_id": "sess-1",
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Agent",
+                "tool_input": {"subagent_type": "atlas:implementer", "prompt": self.SPEC},
+            },
+            env,
+        )
+        self.assertEqual(p.returncode, 0)
+        self.assertEqual(p.stdout.strip(), "")
+
+    def test_teams_env_unset_or_not_1_still_denies_unnamed(self):
+        # Only the exact value "1" stands the guard down. The env is stripped
+        # explicitly so a leaked host value cannot mask the deny.
+        env = {
+            k: v
+            for k, v in self.env.items()
+            if k != "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS"
+        }
+        payload = {
+            "session_id": "sess-1",
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Agent",
+            "tool_input": {"subagent_type": "atlas:implementer", "prompt": self.SPEC},
+        }
+        for teams_env in (env, dict(env, CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS="0")):
+            r = run_hook(payload, teams_env)
+            self.assertEqual(r.returncode, 0)
+            self.assertEqual(
+                json.loads(r.stdout)["hookSpecificOutput"]["permissionDecision"],
+                "deny",
+            )
+            self.assertIn("SendMessage", r.stdout)
+
+
+class ColonyGuardUnitTest(unittest.TestCase):
+    """Helper-level coverage for definition branches no shipped agent uses:
+    `model: inherit` accepts any model, and an unreadable definition file
+    fails open. Pure functions, no DB."""
+
+    def setUp(self):
+        self.hooks_dir = os.path.dirname(__file__)
+        sys.path.insert(0, self.hooks_dir)
+        sys.path.insert(0, os.path.join(self.hooks_dir, "..", "scripts"))
+        import dispatch_tripwire
+
+        self.dt = dispatch_tripwire
+
+    def test_inherit_definition_accepts_any_model(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            agents = Path(tmp)
+            (agents / "probe.md").write_text(
+                "---\nname: probe\nmodel: inherit\n---\n\nbody\n", encoding="utf-8"
+            )
+            with patch.object(self.dt, "AGENTS_DIR", agents):
+                self.assertEqual(self.dt._frontmatter_model("probe"), "inherit")
+                self.assertIsNone(
+                    self.dt._model_override(
+                        {"subagent_type": "atlas:probe", "model": "opus"}
+                    )
+                )
+
+    def test_unreadable_definition_fails_open_in_the_helper(self):
+        with patch.object(self.dt, "AGENTS_DIR", Path("/nonexistent/atlas/agents")):
+            self.assertIsNone(self.dt._frontmatter_model("probe"))
+            self.assertIsNone(
+                self.dt._model_override(
+                    {"subagent_type": "atlas:probe", "model": "opus"}
+                )
+            )
+
+    def test_guards_ignore_non_atlas_agents(self):
+        self.assertIsNone(self.dt._name_missing({"subagent_type": "Explore"}))
+        self.assertIsNone(
+            self.dt._model_override({"subagent_type": "fork", "model": "opus"})
+        )
+
+    def test_name_missing_accepts_only_a_real_name(self):
+        self.assertEqual(
+            self.dt._name_missing({"subagent_type": "atlas:verifier"}),
+            "atlas:verifier",
+        )
+        self.assertEqual(
+            self.dt._name_missing({"subagent_type": "atlas:verifier", "name": "   "}),
+            "atlas:verifier",
+        )
+        self.assertIsNone(
+            self.dt._name_missing(
+                {"subagent_type": "atlas:verifier", "name": "auth-v"}
+            )
+        )

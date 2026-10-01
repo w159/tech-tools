@@ -131,6 +131,10 @@ independent ones together:
 ```
 DISPATCH -> atlas:explorer (map the auth call path) + atlas:db-prober (read-only RLS check)
 ```
+Colony rules: always name dispatches (`name: <role>-<slice>`), never override
+`model` on an atlas:* dispatch (the agent definition pins the tier; the tripwire
+denies drift), workers message each other and post durable notes to the board
+(`atlas_todo.py note`), and you alone synthesize reports and declare done.
 Subagents do not inherit this style or the conversation: every `atlas:*` prompt
 carries the ToolSearch + serena/lean-ctx TOOLS block from subagent-kit, the
 user's literal deliverable, and the target paths. Fork (shared context) for

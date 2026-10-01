@@ -281,6 +281,86 @@ def _unbounded_dispatch(tinput):
     return agent, missing, goals
 
 
+# Colony protocol guards. The per-call dispatch fields below are what turn a
+# one-off subagent into a colony member: `name` puts the sibling on the roster
+# (SendMessage, board notes), and the definition's frontmatter `model:` fixes
+# its cost/runtime tier. Both guards fire under the same gate as the toolkit
+# and dispatch-spec checks above: armed-orchestration runs, atlas:* agents
+# only, kill-switched by ATLAS_TRIPWIRE_HARD=off. The name requirement lifts
+# under CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 (naming would make the dispatch
+# a teammate, not a scoped subagent).
+AGENTS_DIR = Path(__file__).resolve().parent.parent / "agents"
+_SAFE_AGENT_NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]*$")
+
+
+def _frontmatter_model(agent):
+    """The `model:` value pinned in an atlas agent definition.
+
+    Returns None when the file cannot be read or the agent name is not a plain
+    identifier -- the caller fails open on those. Returns "" when the file has
+    no frontmatter `model:` (nothing pinned, accept any), and "inherit" when it
+    says so (accept any by design).
+    """
+    if not _SAFE_AGENT_NAME.match(agent or ""):
+        return None
+    try:
+        text = (AGENTS_DIR / ("%s.md" % agent)).read_text(encoding="utf-8")
+    except Exception:
+        return None
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return ""  # no frontmatter -> nothing pinned
+    for line in lines[1:]:
+        stripped = line.strip()
+        if stripped == "---":
+            break
+        if stripped.startswith("model:"):
+            return stripped[len("model:"):].strip().strip("'\"")
+    return ""
+
+
+def _name_missing(tinput):
+    """An atlas:* dispatch with no non-empty `name`: the colony channel is
+    unreachable for that worker, so its siblings cannot message it and the
+    board cannot address notes to it. Returns the agent name or None.
+
+    Skipped while `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`: with agent teams
+    enabled, a named dispatch launched from the main conversation becomes a
+    teammate (inherits the lead's effort, runs in the lead's cwd) instead of
+    a scoped subagent (code.claude.com/docs/en/sub-agents, "Subagent
+    names"), and an atlas worker must stay a subagent so its definition's
+    effort/model tier and tool guardrails apply."""
+    agent = str(tinput.get("subagent_type") or "")
+    if not agent.startswith("atlas:"):
+        return None
+    if os.environ.get("CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS") == "1":
+        return None
+    if str(tinput.get("name") or "").strip():
+        return None
+    return agent
+
+
+def _model_override(tinput):
+    """An atlas:* dispatch whose per-call `model` differs from the definition's
+    frontmatter `model:`. Per-role tiers are set once per colony; a per-call
+    override drifts them silently. Returns (agent, declared, given), or None
+    when the definition accepts any model (frontmatter missing, `inherit`),
+    when the dispatch passes no `model`, when the values match
+    case-insensitively, or when the definition cannot be read (fail open)."""
+    agent = str(tinput.get("subagent_type") or "")
+    if not agent.startswith("atlas:"):
+        return None
+    given = str(tinput.get("model") or "").strip()
+    if not given:
+        return None
+    declared = _frontmatter_model(agent[len("atlas:"):])
+    if not declared or declared.lower() == "inherit":
+        return None  # unpinned, inherit, or unreadable -> fail open
+    if given.lower() == declared.lower():
+        return None
+    return agent, declared, given
+
+
 def _pre_tool_use(conn, atlas_db, tool, session, path, tinput=None):
     """Deny tier: fires before the op lands, orchestration-flagged sessions only."""
     # The deny tier is independently kill-switchable; the advisory tier persists.
@@ -291,8 +371,33 @@ def _pre_tool_use(conn, atlas_db, tool, session, path, tinput=None):
         return  # no active run -> nothing to gate
     if not atlas_db.is_orchestrating(conn, session):
         return  # non-orchestration sessions are NEVER denied anything
-    # (c) A dispatch that never names the toolset gets a subagent that greps.
     if tool in DISPATCH_TOOLS:
+        # (c0) A dispatch with no sibling name never joins the colony: without
+        # a name it is absent from the sibling roster (no SendMessage in, no
+        # addressed board notes) and its report is unattributable.
+        unnamed = _name_missing(tinput or {})
+        if unnamed:
+            _deny(
+                "DENY - this %s dispatch to %s carries no `name`. Named dispatches "
+                "are the colony: only a named sibling appears on the sibling roster "
+                "and can SendMessage the others, its report stays attributable, and "
+                "board notes can be addressed to it. Re-dispatch with "
+                "name: <role>-<slice> (e.g. auth-explorer)." % (tool, unnamed)
+            )
+            return
+        # (c1) A per-call model override drifts the colony's cost/runtime tier.
+        override = _model_override(tinput or {})
+        if override:
+            over_agent, declared, given = override
+            _deny(
+                "DENY - this %s dispatch to %s overrides model with '%s'. The agent "
+                "definition pins model: %s; per-role models are the colony's "
+                "cost/runtime contract and a per-call override drifts it quietly. "
+                "Drop the `model` param and re-dispatch. Wrong tier for the job? "
+                "Fix the definition, not the dispatch." % (tool, over_agent, given, declared)
+            )
+            return
+        # (c) A dispatch that never names the toolset gets a subagent that greps.
         gap = _toolkit_gap(tinput or {})
         if gap:
             _deny(
