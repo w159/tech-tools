@@ -22,14 +22,13 @@
   understands: `thinkingLevel` off for explorer, docs-auditor, docs-curator,
   schema-inventory, naming-glossary-audit; low for implementer, planner,
   db-prober, ui-runtime-tester; medium for verifier, completeness-critic,
-  rls-privilege-audit. `model` is a two-entry list with a built-in fallback:
+  rls-privilege-audit. `model` is an ordered list with built-in fallbacks:
   `["@atlas-worker", "@smol"]` for off/low workers, `["@atlas-verifier",
   "@default", "@smol"]` for the verifier tier (verifier, completeness-critic,
   rls-privilege-audit), so the verifier falls back to the session's main model
   rather than the cheapest one, and to `@smol` only if `modelRoles.default` is
   unset (a cheap verifier beats none). An unconfigured custom role fails to spawn
-  ("No model selected"), which is why the fallback alias is built in;
-  `modelRoles.default` must be set for the verifier tier (it normally is).
+  ("No model selected"), which is why the fallback aliases are built in.
   `spawns: "none"` makes dispatch lead-only. Optional `modelRoles.atlas-worker`
   / `atlas-verifier` in `~/.omp/agent/config.yml`. A one-time nudge asks the
   lead to name atlas task items, since siblings address each other with
