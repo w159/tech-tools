@@ -267,6 +267,17 @@ def _check_roadmap_reconciled(root: Path) -> bool:
         return True  # can't read → fail open
 
 
+def _delegation_exempt():
+    """(dirs, extensions) exempt from the (m) delegation mandate, from the shared
+    contracts/native-tools.json (also read by omp/contracts.ts); None if unreadable."""
+    try:
+        path = Path(__file__).resolve().parent.parent / "contracts" / "native-tools.json"
+        spec = json.loads(path.read_text())["delegationExempt"]
+        return tuple(str(d) for d in spec["dirs"]), tuple(str(e) for e in spec["extensions"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
 def _nondocs_changed(changed_paths: list) -> bool:
     """Return True when at least one changed path is NOT a docs/ path.
 
@@ -588,8 +599,12 @@ def _missing_delegation(session_id: str, transcript_path: str = "") -> bool:
             (session_id, started),
         ):
             paths.append(json.loads(summary or "{}").get("file_path") or "")
+        exempt = _delegation_exempt()
+        if exempt is None:
+            return False  # contract unreadable: fail open, never block
+        dirs, exts = exempt
         code_paths = [p for p in paths if p and not (
-            p.endswith(".md") or p.startswith(".atlas/") or "/.atlas/" in p
+            p.endswith(exts) or any(p.startswith(d + "/") or f"/{d}/" in p for d in dirs)
         )]
         if not _nondocs_changed(code_paths):
             return False

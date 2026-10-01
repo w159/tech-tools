@@ -1447,6 +1447,38 @@ class NativeToolPolicyTest(unittest.TestCase):
         _, output = self.call(tool, **extra)
         return json.loads(output)["hookSpecificOutput"]
 
+    def _contract(self, mutate):
+        spec = json.loads(Path(self.dt.NATIVE_TOOLS_PATH).read_text())
+        mutate(spec)
+        path = self.root / "native-tools.json"
+        path.write_text(json.dumps(spec))
+        return patch.object(self.dt, "NATIVE_TOOLS_PATH", str(path))
+
+    def test_contract_drives_replacement_and_mode(self):
+        """contracts/native-tools.json is the single source: renaming the
+        replacement or downgrading the mode changes the hook's behavior."""
+        self._mcp_json()
+
+        def rename(spec):
+            spec["kinds"]["search"]["replacements"][0]["tool"] = "ctx_find"
+
+        with self._contract(rename):
+            reason = self._deny_output("Grep")["permissionDecisionReason"]
+        self.assertIn('ToolSearch("select:mcp__lean-ctx__ctx_find")', reason)
+
+        def soften(spec):
+            spec["kinds"]["search"]["mode"] = "nudge"
+
+        with self._contract(soften):
+            handled, output = self.call("Grep")
+        self.assertFalse(handled)
+        self.assertNotIn('"deny"', output)
+
+    def test_unreadable_contract_allows_silently(self):
+        self._mcp_json()
+        with patch.object(self.dt, "NATIVE_TOOLS_PATH", str(self.root / "absent.json")):
+            self.assertEqual(self.call("Grep"), (False, ""))
+
     def test_native_search_denied_when_mcp_configured_even_for_subagents(self):
         self._mcp_json()
         for tool, replacement in (("Grep", "ctx_search"), ("Glob", "ctx_glob")):

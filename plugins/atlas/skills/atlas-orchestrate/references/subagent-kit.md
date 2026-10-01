@@ -185,6 +185,31 @@ effort/model tier and guardrails.
 - The lead alone dispatches and declares done. Siblings report to the lead,
   never to the user, and never dispatch other subagents.
 
+## Colony mux mode (opt-in, tmux)
+
+`ATLAS_MUX=tmux` runs each worker as its own headless process in a window of one
+tmux session `atlas-<run>`, instead of an in-process subagent. The default
+(in-process named dispatch + board) is unchanged. Use it when workers must run
+fully independently (separate processes, watchable panes) at their own tiers.
+
+    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_mux.py" spawn --run <id> --harness claude|omp \
+        --name <Name> --agent <role> --prompt-file <brief.md> [--model M] [--effort E | --thinking T]
+    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_mux.py" status --run <id>
+    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_mux.py" kill --run <id>     # idempotent
+
+- Tiers come from the agent definition unless overridden: Claude
+  `claude -p --agent atlas:<role> --model <model> --effort <effort> --permission-mode acceptEdits`;
+  omp `omp -p --model=<first resolvable pattern> --thinking=<thinkingLevel>` (omp has
+  no `--agent` flag, so the role's body is prepended to the brief; an `@role` alias is
+  used only when that role is configured in omp `modelRoles`).
+- Each worker gets `ATLAS_PROJECT_ROOT` and `ATLAS_WORKER_NAME`; its stdout lands in
+  `.atlas/.run/board/<Name>.jsonl` as note records addressed to `lead`, then an exit
+  record. Workers post their own notes with `atlas_todo.py note --owner <Name>`.
+- The lead reads everything with `atlas_todo.py notes --to lead`.
+- Not Claude Code agent teams: teammates inherit the lead's effort, which would erase
+  the per-role tiers.
+- Test-only: `ATLAS_MUX_WORKER_CMD` / `--command-override` replaces the harness command.
+
 ## Anti-patterns
 
 - x Pasting file bodies into the prompt when a path + symbol name suffices.

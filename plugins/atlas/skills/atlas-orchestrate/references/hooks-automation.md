@@ -98,6 +98,11 @@ factual warning ("This command matches a catastrophic, near-irreversible pattern
 before running.") and exits 0 so the normal permission flow continues unaffected. Every other
 command exits 0 with no output. It is a signal, not a gate.
 
+Ponytail mandate: a `git commit` (parsed per segment; `git commit-tree` and `echo git commit`
+do not count; shared cases in `contracts/mandates.json`) gets a once-per-session nudge to run
+ponytail-review on `git diff --cached`, only when the ponytail plugin is enabled in Claude
+settings. The omp twin is `omp/mandates.ts`. `ATLAS_MANDATES=off` disables it.
+
 ## 4. `completion-gate` - the Definition-of-done backstop (opt-out)
 
 Encodes the skill's hardest rule -- *a change is not done until observed behavior is captured and

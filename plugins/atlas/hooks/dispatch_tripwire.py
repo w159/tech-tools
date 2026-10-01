@@ -585,6 +585,27 @@ def _lean_ctx_server_key(root):
     return None
 
 
+NATIVE_TOOLS_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "contracts", "native-tools.json"
+)
+
+
+def _native_tool_contract():
+    """{claude tool name: (mode, primary replacement)} from contracts/native-tools.json.
+
+    Shared with omp/contracts.ts. Unreadable or malformed -> {} so every native
+    call is allowed silently (fail open)."""
+    try:
+        with open(NATIVE_TOOLS_PATH) as fh:
+            kinds = json.load(fh)["kinds"]
+        return {
+            spec["claude"]: (spec["mode"], spec["replacements"][0]["tool"])
+            for spec in kinds.values()
+        }
+    except (OSError, ValueError, KeyError, TypeError, IndexError, AttributeError):
+        return {}
+
+
 def _native_tool_policy(payload):
     """Docs-scoped native-call policy. Returns (handled, nudge).
 
@@ -596,18 +617,19 @@ def _native_tool_policy(payload):
     if payload.get("hook_event_name") != "PreToolUse":
         return False, None
     tool = payload.get("tool_name")
-    if tool not in {"Grep", "Glob", "Read", "Bash"}:
+    contract = _native_tool_contract()
+    if tool not in contract:
         return False, None
+    mode, replacement = contract[tool]
     try:
         root = find_root(Path(payload.get("cwd") or os.getcwd()))
         if root is None or not (root / "docs").is_dir():
             return False, None
-        if tool in {"Grep", "Glob"}:
+        if mode == "deny":
             if os.environ.get("ATLAS_TRIPWIRE_HARD", "on").lower() == "off":
                 return False, None  # allow; deny tiers are off too
             server = _lean_ctx_server_key(root)
             if shutil.which("lean-ctx") and server:
-                replacement = "ctx_search" if tool == "Grep" else "ctx_glob"
                 selector = "mcp__%s__%s" % (server, replacement)
                 _deny(
                     f"DENY - native {tool} is disabled in docs/ projects. lean-ctx MCP "
