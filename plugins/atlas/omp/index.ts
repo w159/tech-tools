@@ -26,6 +26,12 @@
  *    ponytail-review nudge before `git commit` (twins of session_boot.py and
  *    bash_advisor.py; shared text in contracts/mandates.json).
  *
+ * 6. Hook bridge — omp/hook-bridge.ts runs the Claude Code hooks that
+ *    contracts/hook-bridge.json marks bridgeable (session boot, prompt
+ *    optimizer, bash advisor, fallow gate, format-after-edit, docs-drift
+ *    watch) straight from hooks/hooks.json, translating omp events to Claude
+ *    payloads. ATLAS_HOOK_BRIDGE=off disables it.
+ *
  * Native-tool routing data (which tool is denied or nudged, toward which
  * replacement) and the delegation exemption come from contracts/native-tools.json,
  * shared with hooks/dispatch_tripwire.py and hooks/completion_gate.py.
@@ -44,6 +50,7 @@ import { statSync } from "node:fs";
 import * as nodePath from "node:path";
 import { ATLAS_AGENT_TARGETABLE } from "./atlas-agents";
 import { type LeanKind, kindOfOmpTool, loadNativeTools } from "./contracts";
+import { registerHookBridge } from "./hook-bridge";
 import { registerMandates } from "./mandates";
 import { registerStyle } from "./style";
 
@@ -442,6 +449,7 @@ export default function atlasOmpExtension(pi: ExtensionAPI): void {
 	};
 	registerStyle(pi);
 	registerMandates(pi, { activeTools });
+	registerHookBridge(pi);
 	register(pi, {
 		// getActiveTools() is omp's enabled set (top-level names plus live xd://
 		// device mounts) — exactly the callable surface. getAllTools() provenance

@@ -1,0 +1,28 @@
+{
+  "_doc": "Which Claude Code hooks (hooks/hooks.json) omp runs through omp/hook-bridge.ts. hooks.json stays the single wiring source; this file only says which scripts are safe to run from omp and why the rest are not. Bridged hooks run with ATLAS_MANDATES=off because omp/mandates.ts owns the mandates with omp-native reachability.",
+  "events": {
+    "SessionStart": "first main before_agent_start",
+    "UserPromptSubmit": "every main before_agent_start",
+    "PreToolUse": "tool_call",
+    "PostToolUse": "tool_result"
+  },
+  "bridged": [
+    "session_boot.py",
+    "prompt_optimizer.py",
+    "bash_advisor.py",
+    "fallow_gate.py",
+    "format_after_edit.py",
+    "docs_drift_watch.py"
+  ],
+  "notBridged": {
+    "dispatch_tripwire.py": "omp/index.ts implements its native-tool and naming rules natively; the inline-op tiers read Claude Code transcript paths and atlas_db events that only Claude hooks write",
+    "todo_capture.py": "omp/index.ts mirrors the omp todo tool to the board natively",
+    "atlas_doctor.py": "mines atlas_db telemetry written by Claude Code hooks",
+    "completion_gate.py": "conditions (a)-(l) read the Claude Code transcript JSONL and atlas_db run events; omp session files use a different schema (needs a transcript adapter); (m) is native in omp/index.ts",
+    "ingest_session.py": "parses Claude Code transcript JSONL",
+    "chronicle_facet.py": "parses Claude Code transcript JSONL",
+    "memory_capture.py": "parses Claude Code transcript JSONL",
+    "nudge.py": "keyed to Claude Code Stop payloads and transcript",
+    "connector_credential_watch.py": "its matchers name Claude MCP tools (mcp__<server>__<tool>); omp mints mcp__<server>_<tool>, so the server/tool split is not recoverable"
+  }
+}
