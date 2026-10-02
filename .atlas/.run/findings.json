@@ -2466,5 +2466,22 @@
     "status": "verified",
     "verified_at": "2026-10-02T17:32:58+00:00",
     "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "omp-parity-87",
+    "status": "verified",
+    "title": "omp parity 8.7.0: all claims reproduced in round 2 (leak fixed, docs honest, suites green)",
+    "verifier": "atlas:verifier (fresh, independent, round 2)",
+    "evidence": [
+      "Claim1 PASS: baseline 0 atlas-ingest-* dirs; stop-bridge.test.ts x3 (24 pass/0 fail) -> 0,0,0; full bun test 200 pass/0 fail -> 0. stop-bridge.test.ts:21-33 saves TMPDIR, sets to dir, afterEach deletes when originally undefined else restores.",
+      "Claim1 mutation: commenting out process.env.TMPDIR = dir -> 9 leaked dirs (cleaned, file restored, diff clean). Removing rmdir from DETACHED_SCRIPT (stop-bridge.ts:176) -> 2 fail: 'detached ingest removes its stdin file AND its temp dir on success', 'still cleans up when child fails'; restored, diff clean, 0 dirs after.",
+      "Claim2 PASS: forbidden-phrase grep hits only docs/CHANGELOG.md:1135 'second run' (pre-existing, unrelated, not in diff). Parity rows a-l/memory/nudge/connector/ingest: proof cells cite checked-in tests or explicitly label live observations as independent/not observed. GateConditionMatrixTest: 10 tests OK. README.md:472 states atlas_doctor mining of omp rows 'is not verified'.",
+      "Claim3 PASS: hooks 921 OK (skipped=3); scripts 908 OK; bun test 200 pass 0 fail; no tracked .py changed under hooks/ or scripts/; git status shows nothing outside plugins/atlas, docs, README.md, .claude-plugin, findings.json.",
+      "Claim4 PASS: exactly one omp-parity-87 entry; evidence now array of strings."
+    ],
+    "reproduction": "bun test stop-bridge.test.ts x3 + full bun test with atlas-ingest-* count; TMPDIR and rmdir mutations (restored); unittest hooks/scripts/GateConditionMatrixTest; grep forbidden phrases",
+    "verified_at": "2026-10-02T22:41:00Z",
+    "failing_claims": [],
+    "verified_by": "atlas:verifier (fresh, independent, round 2)"
   }
 ]

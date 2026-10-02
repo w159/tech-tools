@@ -1,0 +1,214 @@
+"""omp_runstate must leave atlas.db and .atlas/.run in exactly the state the
+Claude hooks (session_boot, dispatch_tripwire) would, so completion_gate sees an
+omp session the same way it sees a Claude one."""
+
+import json
+import os
+import shutil
+import sqlite3
+import subprocess
+import sys
+import tempfile
+import unittest
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+HOOKS = os.path.join(HERE, "..", "hooks")
+sys.path.insert(0, HERE)
+sys.path.insert(0, HOOKS)
+
+import atlas_db  # noqa: E402
+import session_boot  # noqa: E402
+
+RUNSTATE = os.path.join(HERE, "omp_runstate.py")
+
+
+def _git(cwd, *args):
+    subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)
+
+
+class RunstateTest(unittest.TestCase):
+    SID = "omp-run-1"
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.db = os.path.join(self.tmp, "atlas.db")
+        self.proj = os.path.join(self.tmp, "proj")
+        os.makedirs(os.path.join(self.proj, "docs"))
+        _git(self.proj, "init", "-q")
+        with open(os.path.join(self.proj, "tracked.py"), "w") as fh:
+            fh.write("x = 1\n")
+        with open(os.path.join(self.proj, "docs", "CHANGELOG.md"), "w") as fh:
+            fh.write("# c\n")
+        self.env = dict(os.environ, ATLAS_DB=self.db)
+        self._old_db = os.environ.get("ATLAS_DB")
+        os.environ["ATLAS_DB"] = self.db
+        self.addCleanup(self._restore)
+
+    def _restore(self):
+        if self._old_db is None:
+            os.environ.pop("ATLAS_DB", None)
+        else:
+            os.environ["ATLAS_DB"] = self._old_db
+
+    def run_cli(self, cmd, *extra, sid=None, cwd=None):
+        argv = [sys.executable, RUNSTATE, cmd, "--session-id", self.SID if sid is None else sid,
+                "--cwd", cwd or self.proj, *extra]
+        proc = subprocess.run(argv, capture_output=True, text=True, env=self.env)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        lines = [ln for ln in proc.stdout.splitlines() if ln.strip()]
+        self.assertEqual(len(lines), 1, "contract: exactly one JSON line")
+        return json.loads(lines[0])
+
+    def query(self, sql, *args):
+        conn = sqlite3.connect(self.db)
+        try:
+            return conn.execute(sql, args).fetchall()
+        finally:
+            conn.close()
+
+    # ---- begin ---------------------------------------------------------
+    def test_begin_is_idempotent(self):
+        first = self.run_cli("begin")
+        second = self.run_cli("begin")
+        self.assertTrue(first["created"])
+        self.assertFalse(second["created"])
+        self.assertEqual(first["run_id"], second["run_id"])
+        self.assertEqual(self.query("SELECT COUNT(*) FROM runs WHERE session_id=?", self.SID), [(1,)])
+
+    def test_begin_after_run_finalized_starts_a_new_run_like_session_boot(self):
+        """session_boot guards on current_run_id (open runs only), so a resumed
+        session whose run was finalized by Stop gets a fresh run. Same here."""
+        self.run_cli("begin")
+        conn = atlas_db.connect()
+        atlas_db.finalize_run(conn, atlas_db.current_run_id(conn, self.SID))
+        conn.close()
+        again = self.run_cli("begin")
+        self.assertTrue(again["created"])
+        self.assertEqual(self.query("SELECT COUNT(*) FROM runs WHERE session_id=?", self.SID), [(2,)])
+
+    def test_empty_session_id_never_creates_a_phantom_run(self):
+        res = self.run_cli("begin", sid="")
+        self.assertFalse(res["ok"])
+        # Refused before the DB is touched: no file at all, hence no phantom run.
+        self.assertFalse(os.path.exists(self.db))
+
+    def test_two_sessions_do_not_share_a_run(self):
+        a = self.run_cli("begin", sid="s-a")
+        b = self.run_cli("begin", sid="s-b")
+        self.assertNotEqual(a["run_id"], b["run_id"])
+
+    # ---- arm -----------------------------------------------------------
+    def test_arm_makes_session_orchestrating_for_the_gate(self):
+        self.run_cli("begin")
+        conn = atlas_db.connect()
+        self.assertFalse(atlas_db.is_orchestrating(conn, self.SID))
+        conn.close()
+        res = self.run_cli("arm")
+        self.assertTrue(res["orchestrating"])
+        conn = atlas_db.connect()
+        self.assertTrue(atlas_db.is_orchestrating(conn, self.SID))
+        conn.close()
+        # the same advisory sentinel dispatch_tripwire's arming leaves behind
+        self.assertTrue(os.path.exists(os.path.join(self.proj, ".atlas", ".run", "atlas-orchestrate.active")))
+
+    def test_arm_without_begin_creates_the_run(self):
+        res = self.run_cli("arm")
+        self.assertTrue(res["ok"])
+        self.assertEqual(self.query("SELECT COUNT(*), SUM(orchestrating) FROM runs"), [(1, 1)])
+
+    def test_arm_with_agent_type_and_worktree_records_dispatch_and_flag(self):
+        self.run_cli("begin")
+        self.run_cli("arm", "--agent-type", "atlas:implementer", "--model", "m-1", "--worktree")
+        self.assertEqual(self.query("SELECT agent_type, model FROM dispatches"), [("atlas:implementer", "m-1")])
+        conn = atlas_db.connect()
+        self.assertTrue(atlas_db.run_used_worktrees(conn, self.SID))
+        conn.close()
+
+    # ---- event ---------------------------------------------------------
+    def test_event_logs_inline_ops_with_path_on_main_context(self):
+        self.run_cli("begin")
+        self.run_cli("event", "--tool", "Edit", "--path", "src/a.py")
+        self.run_cli("event", "--tool", "Bash")
+        rows = self.query("SELECT tool, context, is_inline_op, path FROM events ORDER BY id")
+        self.assertEqual(rows, [("Edit", "main", 1, "src/a.py"), ("Bash", "main", 1, None)])
+        conn = atlas_db.connect()
+        rid = atlas_db.current_run_id(conn, self.SID)
+        self.assertEqual(atlas_db.run_changed_paths(conn, rid), ["src/a.py"])
+        conn.close()
+
+    def test_event_ignores_untracked_tools_and_missing_run(self):
+        self.assertEqual(self.run_cli("event", "--tool", "Edit", "--path", "p")["logged"], False)  # no run yet
+        self.run_cli("begin")
+        res = self.run_cli("event", "--tool", "TodoWrite")
+        self.assertFalse(res["logged"])
+        self.assertEqual(self.query("SELECT COUNT(*) FROM events"), [(0,)])
+
+    def test_task_event_logs_dispatch_even_after_run_finalized(self):
+        """dispatch_tripwire resolves dispatches against current-or-last run."""
+        self.run_cli("begin")
+        conn = atlas_db.connect()
+        atlas_db.finalize_run(conn, atlas_db.current_run_id(conn, self.SID))
+        conn.close()
+        res = self.run_cli("event", "--tool", "Task", "--dispatch", "atlas:verifier")
+        self.assertTrue(res["logged"])
+        self.assertEqual(self.query("SELECT agent_type FROM dispatches"), [("atlas:verifier",)])
+        # an inline op needs an OPEN run, so it is not attributed to the closed one
+        self.assertFalse(self.run_cli("event", "--tool", "Edit", "--path", "x")["logged"])
+
+    # ---- snapshot ------------------------------------------------------
+    def test_snapshot_shape_matches_session_boot_exactly(self):
+        with open(os.path.join(self.proj, "dirty.py"), "w") as fh:
+            fh.write("y = 2\n")
+        with open(os.path.join(self.proj, "tracked.py"), "a") as fh:
+            fh.write("x = 2\n")
+        res = self.run_cli("snapshot")
+        self.assertTrue(res["written"])
+        with open(res["path"]) as fh:
+            got = json.load(fh)
+
+        # What session_boot itself writes for the same tree + a different session.
+        twin = session_boot.write_dirty_snapshot(self.proj, "twin-session")
+        self.assertIsNotNone(twin)
+        with open(str(twin)) as fh:
+            want = json.load(fh)
+        self.assertEqual(set(got), {"session", "paths"})
+        self.assertEqual(got["session"], self.SID)
+        self.assertEqual(got["paths"], want["paths"])
+        self.assertEqual(set(got["paths"]), {"dirty.py", "tracked.py"})  # docs/ exempt
+        self.assertEqual(res["path"], session_boot.snapshot_path(self.proj, self.SID))
+
+    def test_snapshot_is_written_once_per_session(self):
+        first = self.run_cli("snapshot")
+        with open(os.path.join(self.proj, "late.py"), "w") as fh:
+            fh.write("z = 3\n")
+        second = self.run_cli("snapshot")
+        self.assertTrue(first["written"])
+        self.assertFalse(second["written"])
+        with open(first["path"]) as fh:
+            self.assertNotIn("late.py", json.load(fh)["paths"])
+
+    def test_snapshot_outside_git_is_fail_open(self):
+        plain = os.path.join(self.tmp, "plain")
+        os.makedirs(os.path.join(plain, "docs"))
+        res = self.run_cli("snapshot", cwd=plain)
+        self.assertTrue(res["ok"])
+        self.assertFalse(res["written"])
+
+    # ---- fail-open -----------------------------------------------------
+    def test_unwritable_db_and_bad_args_exit_zero_with_ok_false(self):
+        blocker = os.path.join(self.tmp, "blocker")
+        with open(blocker, "w") as fh:
+            fh.write("file, not dir")
+        bad_env = dict(self.env, ATLAS_DB=os.path.join(blocker, "atlas.db"))
+        proc = subprocess.run([sys.executable, RUNSTATE, "begin", "--session-id", "s", "--cwd", self.proj],
+                              capture_output=True, text=True, env=bad_env)
+        self.assertEqual(proc.returncode, 0)
+        self.assertFalse(json.loads(proc.stdout)["ok"])
+        proc = subprocess.run([sys.executable, RUNSTATE, "bogus"], capture_output=True, text=True, env=self.env)
+        self.assertEqual(proc.returncode, 0)
+        self.assertFalse(json.loads(proc.stdout)["ok"])
+
+
+if __name__ == "__main__":
+    unittest.main()
