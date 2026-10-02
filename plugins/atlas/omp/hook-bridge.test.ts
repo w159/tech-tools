@@ -187,8 +187,8 @@ test("every script hooks.json references is listed in the bridge contract", () =
 		else if (node && typeof node === "object") Object.values(node).forEach(walk);
 	};
 	walk((JSON.parse(readFileSync(HOOKS_JSON, "utf8")) as { hooks: unknown }).hooks);
-	const contract = JSON.parse(readFileSync(BRIDGE_CONTRACT, "utf8")) as { bridged: string[]; notBridged: Record<string, string> };
-	const listed = new Set([...contract.bridged, ...Object.keys(contract.notBridged)]);
+	const contract = JSON.parse(readFileSync(BRIDGE_CONTRACT, "utf8")) as { bridged: string[]; bridgedSessionEnd: string[]; notBridged: Record<string, string> };
+	const listed = new Set([...contract.bridged, ...contract.bridgedSessionEnd, ...Object.keys(contract.notBridged)]);
 	expect(scripts.size).toBeGreaterThan(10);
 	expect([...scripts].filter(s => !listed.has(s))).toEqual([]);
 });

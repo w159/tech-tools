@@ -1,5 +1,56 @@
 # Changelog
 
+## [8.7.0] - 2026-10-02
+
+### Added
+- **The Stop-family hooks run in omp.** `omp/stop-bridge.ts` handles `session_stop`
+  (main), `session_shutdown` (SessionEnd for a main session, SubagentStop for a
+  subagent) and `auto_compaction_start` (PreCompact). On Stop it converts the omp
+  session file first, then runs `completion_gate.py`, `ingest_session.py`,
+  `chronicle_facet.py`, `memory_capture.py` and `nudge.py` in `hooks.json` order,
+  even after the gate blocks, so the capture hooks are not starved. A gate
+  `{decision: block}` becomes the omp `session_stop` result, self-limited to 3
+  consecutive blocks per session and never repeated under `stop_hook_active`.
+- **`scripts/omp_transcript.py`** converts an omp session JSONL into the Claude
+  transcript shape the hooks already read (omp tool names mapped to Claude names,
+  `path` to `file_path`, `task` batches to one `Task` per item, `todo` results to
+  a `TodoWrite` list, colony and advisor files to `subagents/agent-*.jsonl` with
+  `isSidechain`). Atomic, idempotent, fail-open, and deterministic for an
+  already-ingested prefix, so cursor-resume ingest after a full rewrite equals a
+  one-shot ingest (tested on the `scripts/fixtures/omp_session` fixture).
+- **`scripts/omp_runstate.py` and `omp/run-state.ts`** write the run, orchestrating
+  flag, event, dispatch and dirty-snapshot state that `session_boot.py` and
+  `dispatch_tripwire.py` write for Claude. Without a run row the gate evaluated
+  nothing in omp.
+- **`dispatch_tripwire.py` and `connector_credential_watch.py` run through the
+  hook bridge.** omp `task` batches are checked once per item as Claude `Task`
+  dispatches; PostToolUse carries `tool_response`, `transcript_path` and
+  `is_error`; omp-minted `mcp__<server>_<tool>` names of the known connector
+  servers are re-split. The model-override deny runs on `before_subagent_spawn`.
+- `contracts/hook-bridge.json` gains `bridgedSessionEnd` and per-event
+  descriptions for Stop, SessionEnd, SubagentStop and PreCompact.
+
+### Fixed
+- The detached ingest child left one empty `atlas-ingest-*` directory in the OS
+  temp dir per ingest (138 accumulated over one afternoon). Its exit trap now
+  also `rmdir`s the directory (not `rm -rf`, so it can never delete a non-empty
+  one), with real-shell tests, mutation-checked.
+
+### Verified
+- Claude Code is unchanged: no tracked Python file was modified; hooks 921
+  tests and scripts 858 tests pass as before, plus 50 new script tests.
+- `omp` suite 145 to 200 tests. Every gate condition (a)-(l) is individually
+  tested on omp-derived state against the real `completion_gate.py`
+  (`GateConditionMatrixTest`); the dispatch-spec, one-GOAL and production-edit
+  denies are tested against the real hook through the bridge. An independent
+  headless `omp -p` 18.4.12 run had the bridged gate block the stop on the
+  delegation condition (m) and populated `runs`, `messages`, `tool_calls` and
+  `facets` with Claude tool names.
+- Not shown on omp: memory capture's durable write, the connector credential
+  watch against a real stale credential, the inline-op thresholds on a live run,
+  and the gate conditions other than (m) blocking in a live run. See
+  `docs/atlas-harness-parity.md`.
+
 ## [8.6.0] - 2026-10-01
 
 ### Added

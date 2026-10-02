@@ -17,24 +17,26 @@ self-improvement loop. You run `/atlas` once to onboard a project, then drive
 work through 47 plainly named skills. The agent stops guessing, starts
 verifying, and gets measurably better the more you use it in a codebase.
 
-- Plugin version `8.6.0` (`plugins/atlas/.claude-plugin/plugin.json:3`)
-- Marketplace catalog version `4.4.0` (`.claude-plugin/marketplace.json:5`)
-- 47 skills, 12 agents, 16 hook programs (20 event bindings), 23 scripts,
+- Plugin version `8.7.0` (`plugins/atlas/.claude-plugin/plugin.json:3`)
+- Marketplace catalog version `4.5.0` (`.claude-plugin/marketplace.json:5`)
+- 47 skills, 12 agents, 16 hook programs (20 event bindings), 25 scripts,
   12 optional connectors, 1 output style, 1 omp extension package
 - Two more plugins ship in the same marketplace: `armada` (org deployment,
   v1.1.1) and `programmer` (a Pragmatic Programmer codebase auditor, v0.2.1)
 
-> Two version counters, not a typo. The marketplace wrapper (`4.4.0`) versions
+> Two version counters, not a typo. The marketplace wrapper (`4.5.0`) versions
 > the catalog file. The `atlas` plugin it lists versions independently at
-> `8.6.0`. Every `v8.x` reference below is the plugin version.
+> `8.7.0`. Every `v8.x` reference below is the plugin version.
 
-Latest release, 8.6.0 (2026-10-01), is **omp runtime parity**: the output style,
-a hook bridge, the claude-mem recall gate and ponytail-before-commit mandates,
-an exploration-shell deny, lean-ctx shell routing, a shell-edit delegation
-gate, an advisor board gate, and a worker output-token cap
-(`ATLAS_WORKER_MAX_TOKENS`, default 32000) now run in omp as well as Claude
-Code. Colony orchestration (shared board, notes channel, native omp agents)
-landed in 8.4.0. omp parity is **partial**: see
+Latest release, 8.7.0 (2026-10-02), brings the **Stop-family hooks to omp**: the
+definition-of-done gate (a)-(l), ingest, chronicle, the nudge and
+`dispatch_tripwire.py`'s dispatch-spec and production-edit denies now run in omp
+through a transcript adapter and a run-state writer, with the Claude Code path
+unchanged. The omp runtime parity shipped in 8.6.0 (output style, hook bridge,
+claude-mem recall gate, ponytail-before-commit mandates, exploration-shell deny,
+lean-ctx shell routing, shell-edit delegation gate, advisor board gate, worker
+output-token cap `ATLAS_WORKER_MAX_TOKENS`) and colony orchestration (8.4.0) are
+unchanged. omp parity is **broad but not complete**: see
 [omp parity and open gaps](#omp-parity-and-open-gaps).
 
 ---
@@ -88,7 +90,7 @@ the practical before and after once the plugin is installed.
 
 1. **Add the marketplace.** In Claude Code, run `/plugin` and add this repo's
    marketplace file, `.claude-plugin/marketplace.json` (catalog name `tech-tools`,
-   version `4.4.0`, listing three plugins: `atlas`, `armada`, `programmer`).
+   version `4.5.0`, listing three plugins: `atlas`, `armada`, `programmer`).
 2. **Install the plugin.** Install `atlas` from the marketplace. Two optional
    plugins live in the same catalog: `armada` for the 11-department org
    toolset (`plugins/armada/`), and `programmer` for a Pragmatic Programmer
@@ -444,28 +446,47 @@ both suites. Load it by directory:
 omp --extension /absolute/path/to/tech-tools/plugins/atlas/omp
 ```
 
-What runs in omp today (8.6.0): native `grep`/`glob` routed to lean-ctx and
+What runs in omp today (8.7.0): native `grep`/`glob` routed to lean-ctx and
 `read`/`bash` nudged; exploration-only shell commands denied toward the `ctx_*`
 tool; every `bash` routed through `lean-ctx -c`; the claude-mem recall gate and
 ponytail-before-commit nudge; a delegation gate that also counts code written
-through the shell; the output style; a hook bridge that runs the six bridgeable
-Claude hooks (session boot, prompt optimizer, bash advisor, fallow gate,
-format-after-edit, docs-drift watch) from `hooks.json`; an advisor board gate
-(at most 3 blocks); a worker output-token cap (`ATLAS_WORKER_MAX_TOKENS`,
-default 32000); the `todo`-to-board mirror; and 12 generated native agents with
-per-tier `thinkingLevel` and model-role fallbacks.
+through the shell; the output style; a hook bridge that runs the Claude hooks
+from `hooks.json`; an advisor board gate (at most 3 blocks); a worker
+output-token cap (`ATLAS_WORKER_MAX_TOKENS`, default 32000); the `todo`-to-board
+mirror; and 12 generated native agents with per-tier `thinkingLevel` and
+model-role fallbacks. New in 8.7.0:
 
-Open gaps, from `docs/atlas-harness-parity.md` ("Remaining gaps" and the
-delegation-policy note):
+- **The definition-of-done gate (a)-(l) runs in omp.** On `session_stop`,
+  `scripts/omp_transcript.py` converts the omp session JSONL to the Claude
+  transcript shape, `scripts/omp_runstate.py` records the run, dispatch and edit
+  state the Claude hooks would have written, and the unchanged
+  `completion_gate.py` runs; its block becomes the omp `session_stop` result (at
+  most 3 consecutive blocks). Each condition is individually tested on
+  omp-derived state (`scripts/test_omp_transcript.py` `GateConditionMatrixTest`,
+  run against the real `completion_gate.py`). In an independent headless
+  `omp -p` run the bridged gate blocked the stop (on the delegation condition,
+  (m)); the other conditions were not observed blocking in a live run.
+- **Ingest, chronicle and the nudge run in omp.** Sessions are ingested at Stop,
+  `session_shutdown` (SessionEnd / SubagentStop) and `auto_compaction_start`
+  (PreCompact), so omp sessions produce `messages`, `tool_calls` and facet rows
+  in `atlas.db`. Whether `atlas_doctor` mines those rows is not verified
+  (it stays unbridged).
+- **`dispatch_tripwire.py` runs in omp** through the bridge: dispatch-spec
+  blocks, the one-GOAL rule, and the production-edit deny are tested against the
+  real hook (`omp/hook-bridge-session.test.ts`); the model-override deny runs on
+  `before_subagent_spawn`.
 
-- **Completion-gate conditions (a)-(l), memory capture, the nudge, and
-  chronicle** are not ported: they parse Claude Code transcript JSONL.
-  `session_ingest.py` now ingests omp sessions, so they can move onto the
-  ingested rows; not done in 8.6.0.
-- **`dispatch_tripwire.py`'s inline-op thresholds, dispatch-spec checks, and
-  production-edit deny** are still Claude-only.
-- **Connector credential watch** does not work in omp: omp's MCP name mint
-  drops the server/tool separator (a harness limit).
+Still open, from `docs/atlas-harness-parity.md`:
+
+- **Memory capture** runs in omp but its durable-write path has not been shown
+  there (no live omp run produced anything to capture, and no test covers it on omp).
+- **Connector credential watch** is wired (omp's minted `mcp__<server>_<tool>`
+  names of the known connector servers are re-split) but only unit-tested, not
+  exercised against a real stale credential; servers outside the table are not
+  re-split because omp's MCP name mint drops the separator.
+- **The omp inline-op thresholds** (deny at the Nth unsanctioned inline op) rely
+  on run events written by the bridge; they have not been measured on a live omp
+  run.
 - **The output style** still carries Claude-only sentences about `TodoWrite`
   gating (`CLAUDE_CODE_ENABLE_TODO_TOOLS`); a contract test pins them for Claude
   Code.
@@ -530,9 +551,9 @@ are required; `atlas-setup` detects them and offers to install if missing.
 atlas/
 |- README.md                 # this file
 |- img/                      # repo imagery (hero, headers, tiles)
-|- .claude-plugin/           # marketplace.json catalog (name: tech-tools, 4.4.0)
+|- .claude-plugin/           # marketplace.json catalog (name: tech-tools, 4.5.0)
 |- plugins/
-|  |- atlas/                 # the plugin (v8.6.0)
+|  |- atlas/                 # the plugin (v8.7.0)
 |  |  |- .claude-plugin/     # plugin.json manifest + userConfig (51 keys)
 |  |  |- .mcp.json           # 12 connector server definitions
 |  |  |- package.json        # omp.extensions entry for marketplace installs

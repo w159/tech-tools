@@ -26,11 +26,16 @@
  *    ponytail-review nudge before `git commit` (twins of session_boot.py and
  *    bash_advisor.py; shared text in contracts/mandates.json).
  *
- * 6. Hook bridge — omp/hook-bridge.ts runs the Claude Code hooks that
+ * 6. Hook bridge — omp/hook-bridge.ts runs the Claude Code turn hooks that
  *    contracts/hook-bridge.json marks bridgeable (session boot, prompt
  *    optimizer, bash advisor, fallow gate, format-after-edit, docs-drift
- *    watch) straight from hooks/hooks.json, translating omp events to Claude
- *    payloads. ATLAS_HOOK_BRIDGE=off disables it.
+ *    watch, dispatch tripwire, connector credential watch) straight from
+ *    hooks/hooks.json, translating omp events to Claude payloads.
+ *    omp/stop-bridge.ts runs the session-end family (Stop chain, detached
+ *    SessionEnd/SubagentStop/PreCompact ingest) and omp/run-state.ts keeps
+ *    the observability DB's run/dispatch/event rows. The model-override deny
+ *    on before_subagent_spawn lives in register() below.
+ *    ATLAS_HOOK_BRIDGE=off disables the bridges.
  *
  * Native-tool routing data (which tool is denied or nudged, toward which
  * replacement) and the delegation exemption come from contracts/native-tools.json,
@@ -48,11 +53,13 @@
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { statSync } from "node:fs";
 import * as nodePath from "node:path";
-import { ATLAS_AGENT_TARGETABLE } from "./atlas-agents";
+import { ATLAS_AGENT_TARGETABLE, modelPatternsFor, roleFor } from "./atlas-agents";
 import { defaultAdvisorDeps, registerAdvisorGate } from "./advisor";
 import { type LeanKind, explorationDenyReason, explorationTool, kindOfOmpTool, loadNativeTools } from "./contracts";
 import { createShellEditTracker } from "./delegation";
 import { registerHookBridge } from "./hook-bridge";
+import { type RunStateSink, createRunStateSink } from "./run-state";
+import { createTranscriptCache, registerStopBridge, sessionFileOf } from "./stop-bridge";
 import { registerMandates } from "./mandates";
 import { defaultLeanCtxBin, registerShellRoute } from "./shell-route";
 import { registerStyle } from "./style";
@@ -330,6 +337,16 @@ export interface ExtensionDeps {
 	 * inject a recording or synchronous runner instead.
 	 */
 	spawnBoardMirror(argv: string[], opts: { cwd: string }): void;
+	/** Run-state sink (omp_runstate.py begin/snapshot at session start); absent in tests that do not exercise it. */
+	runState?: RunStateSink;
+}
+
+/**
+ * Deny text for a per-call model override of an atlas colony agent. Verbatim twin of
+ * dispatch_tripwire.py's `_pre_tool_use` (c1) text, with the omp-pinned role as `declared`.
+ */
+export function modelOverrideReason(tool: string, agent: string, given: string, declared: string): string {
+	return `DENY - this ${tool} dispatch to ${agent} overrides model with '${given}'. The agent definition pins model: ${declared}; per-role models are the colony's cost/runtime contract and a per-call override drifts it quietly. Drop the \`model\` param and re-dispatch. Wrong tier for the job? Fix the definition, not the dispatch.`;
 }
 
 /** Per-call availability read; any internal failure means unknown (allow). */
@@ -368,7 +385,11 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 	pi.on("session_start", (_event, ctx) => {
 		reset();
 		try {
-			if (ctx.agent.kind !== "sub") shellTracker.capture(docsRoot(ctx.cwd));
+			if (ctx.agent.kind !== "sub") {
+				const root = docsRoot(ctx.cwd);
+				shellTracker.capture(root);
+				deps.runState?.onSessionStart({ cwd: root ?? ctx.cwd, sessionId: sessionIdOf(ctx) ?? "", kind: ctx.agent.kind });
+			}
 		} catch {
 			// fail open: no snapshot means shell edits are not counted
 		}
@@ -460,6 +481,26 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 		}
 	});
 
+	// Model-override deny, twin of dispatch_tripwire._model_override. before_subagent_spawn fires in the
+	// PARENT once per spawn with the caller's requested model patterns; an atlas colony agent's generated
+	// definition pins its tier (atlas-agents.ts), and a per-call override drifts it quietly.
+	pi.on("before_subagent_spawn", event => {
+		try {
+			if (process.env.ATLAS_TRIPWIRE_HARD === "off") return undefined;
+			const spawn = event as { agent?: unknown; patterns?: unknown };
+			const agent = typeof spawn.agent === "string" ? spawn.agent.trim() : "";
+			if (!agent || !ATLAS_AGENT_TARGETABLE[agent] || !Array.isArray(spawn.patterns)) return undefined;
+			const requested = spawn.patterns.filter((p): p is string => typeof p === "string" && p.trim() !== "").map(p => p.trim());
+			if (requested.length === 0) return undefined; // no override: the definition's tier applies
+			const key = (list: string[]) => list.map(p => p.toLowerCase()).sort().join("\n");
+			const pinned = modelPatternsFor(agent);
+			if (key(requested) === key(pinned)) return undefined;
+			return { block: true, reason: modelOverrideReason("Task", agent, requested.join(", "), roleFor(agent)) };
+		} catch {
+			return undefined; // fail open
+		}
+	});
+
 	pi.on("session_stop", (_event, ctx) => {
 		try {
 			if (stopBlocked || ctx.agent.kind === "sub" || !docsRoot(ctx.cwd)) return undefined;
@@ -527,10 +568,21 @@ export default function atlasOmpExtension(pi: ExtensionAPI): void {
 	};
 	registerStyle(pi, { activeTools });
 	registerMandates(pi, { activeTools });
-	registerHookBridge(pi);
+	// One session-scoped transcript cache and run-state sink: omp rebinds this factory per session.
+	const transcripts = createTranscriptCache();
+	const runState = createRunStateSink();
+	registerHookBridge(pi, {
+		// Only subagent tool hooks read a transcript path (dispatch_tripwire keys `_in_subagent` on /subagents/).
+		transcriptPath: ctx => transcripts.forToolHook(sessionFileOf(ctx), sessionIdOf(ctx) ?? "", ctx.agent?.kind === "sub" ? "sub" : "main"),
+		onToolAllowed: info => runState.onToolAllowed(info),
+		onToolResult: info => runState.onToolResult(info),
+	});
+	// Registered before the advisor and delegation gates: omp takes the first `block` across handlers.
+	registerStopBridge(pi, { cache: transcripts });
 	registerWorkerBudget(pi);
 	registerAdvisorGate(pi, defaultAdvisorDeps());
 	register(pi, {
+		runState,
 		// getActiveTools() is omp's enabled set (top-level names plus live xd://
 		// device mounts) — exactly the callable surface. getAllTools() provenance
 		// is deliberately NOT consulted: it lists configured servers even when

@@ -1,10 +1,14 @@
 {
-  "_doc": "Which Claude Code hooks (hooks/hooks.json) omp runs through omp/hook-bridge.ts. hooks.json stays the single wiring source; this file only says which scripts are safe to run from omp and why the rest are not. Bridged hooks run with ATLAS_MANDATES=off because omp/mandates.ts owns the mandates with omp-native reachability.",
+  "_doc": "Which Claude Code hooks (hooks/hooks.json) omp runs: the turn hooks through omp/hook-bridge.ts (`bridged`) and the session-end family through omp/stop-bridge.ts (`bridgedSessionEnd`: Stop chain plus the SessionEnd/SubagentStop/PreCompact ingest). hooks.json stays the single wiring source (order, matchers, timeouts); this file only says which scripts are safe to run from omp and why the rest are not. Bridged hooks run with ATLAS_MANDATES=off because omp/mandates.ts owns the mandates with omp-native reachability. Every Stop/SessionEnd/SubagentStop/PreCompact payload carries a transcript_path that scripts/omp_transcript.py produced (the omp session file converted to a Claude-shaped transcript JSONL in a plugin temp dir): omp/stop-bridge.ts converts BEFORE any Stop hook runs, because the gate and the ingest hooks re-read the converted transcript. Conversion failure degrades individual hooks fail-open; no broken adapter may wedge or block a session. The bridged Stop chain self-limits: at most 3 consecutive block refusals per session (the counter resets on session start/switch and on a passing Stop), and a hook block whose reason repeats while the payload's stop_hook_active is set never blocks again.",
   "events": {
     "SessionStart": "first main before_agent_start",
     "UserPromptSubmit": "every main before_agent_start",
-    "PreToolUse": "tool_call",
-    "PostToolUse": "tool_result"
+    "PreToolUse": "tool_call (main and subagent sessions); an omp task batch is run once per item as a Claude Task dispatch",
+    "PostToolUse": "tool_result (payload carries tool_response = stringified result content, transcript_path and is_error; omp-minted mcp__<server>_<tool> names of the hooks.json connector servers are re-split to mcp__<server>__<tool>)",
+    "Stop": "session_stop (main only): omp_transcript.py converts the omp session file BEFORE any hook runs, then the five Stop hooks all run in hooks.json order (capture hooks must run even when the gate blocks); the first {decision: block, reason} becomes the omp session_stop result {decision: block, reason}, not plain context",
+    "SessionEnd": "session_shutdown on a main session: ingest_session.py spawned detached (never awaited) after transcript conversion",
+    "SubagentStop": "session_shutdown on a subagent session: ingest_session.py spawned detached after transcript conversion",
+    "PreCompact": "auto_compaction_start: ingest_session.py spawned detached (session_before_compact is deliberately NOT used: registering a handler for it disables omp async compaction)"
   },
   "bridged": [
     "session_boot.py",
@@ -12,18 +16,20 @@
     "bash_advisor.py",
     "fallow_gate.py",
     "format_after_edit.py",
-    "docs_drift_watch.py"
+    "docs_drift_watch.py",
+    "dispatch_tripwire.py",
+    "connector_credential_watch.py"
+  ],
+  "bridgedSessionEnd": [
+    "completion_gate.py",
+    "ingest_session.py",
+    "chronicle_facet.py",
+    "memory_capture.py",
+    "nudge.py"
   ],
   "notBridged": {
-    "dispatch_tripwire.py": "omp/index.ts implements its native-tool and naming rules natively; the inline-op tiers read Claude Code transcript paths and atlas_db events that only Claude hooks write",
-    "todo_capture.py": "omp/index.ts mirrors the omp todo tool to the board natively",
-    "atlas_doctor.py": "mines atlas_db telemetry written by Claude Code hooks",
-    "completion_gate.py": "conditions (a)-(l) read the Claude Code transcript JSONL and atlas_db run events; omp session files use a different schema (needs a transcript adapter); (m) is native in omp/index.ts",
-    "ingest_session.py": "parses Claude Code transcript JSONL",
-    "chronicle_facet.py": "parses Claude Code transcript JSONL",
-    "memory_capture.py": "parses Claude Code transcript JSONL",
-    "nudge.py": "keyed to Claude Code Stop payloads and transcript",
-    "connector_credential_watch.py": "its matchers name Claude MCP tools (mcp__<server>__<tool>); omp mints mcp__<server>_<tool>, so the server/tool split is not recoverable",
+    "todo_capture.py": "omp/index.ts mirrors the omp todo tool to the board natively (the board-mirror spawn writes .atlas/.run/todos.json on every todo tool result)",
+    "atlas_doctor.py": "mines atlas_db telemetry written by Claude Code hooks; the omp bridge writes the same run/event/dispatch rows, but the doctor surface is only exercised by the Claude path today",
     "recall_gate.py": "omp/mandates.ts implements the recall gate natively"
   }
 }

@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
-import extension, { ensureClaudePluginRoot, register } from "./index";
+import extension, { ensureClaudePluginRoot, modelOverrideReason, register } from "./index";
 
 type Context = {
 	cwd: string;
@@ -379,4 +379,77 @@ test("todo mirror tolerates a spawning failure", () => {
 	const h = harness(() => true, () => { throw new Error("spawn unavailable"); });
 	h.ctx.sessionManager = { getSessionId: () => "sess-x" };
 	expect(h.result({ toolName: "todo", details: TODO_PHASES })).toBeUndefined();
+});
+
+// ── Model-override deny (twin of dispatch_tripwire._model_override), via before_subagent_spawn ──
+
+type SpawnHandler = (event: Record<string, unknown>, ctx: Context) => { block?: boolean; reason?: string } | undefined;
+const spawnHandler = (h: { handlers: object }) => (h.handlers as Record<string, SpawnHandler>).before_subagent_spawn;
+
+test("a per-call model override of an atlas colony agent is blocked with the tripwire's reason", () => {
+	const h = harness();
+	const spawn = spawnHandler(h);
+	const result = spawn({ type: "before_subagent_spawn", agent: "implementer", patterns: ["openai/gpt-5.2"], invocationKind: "task", spawnKey: "k" }, h.ctx);
+	expect(result?.block).toBe(true);
+	expect(result?.reason).toBe(modelOverrideReason("Task", "implementer", "openai/gpt-5.2", "@atlas-worker"));
+	expect(result?.reason).toContain("overrides model with 'openai/gpt-5.2'");
+	expect(result?.reason).toContain("The agent definition pins model: @atlas-worker");
+	expect(result?.reason).toContain("Fix the definition, not the dispatch.");
+	// A verifier-tier agent names its own pinned role.
+	expect(spawn({ agent: "verifier", patterns: ["@smol"] }, h.ctx)?.reason).toContain("pins model: @atlas-verifier");
+});
+
+test("the pinned tier, no override, other agents and the kill switch all pass", () => {
+	const h = harness();
+	const spawn = spawnHandler(h);
+	expect(spawn({ agent: "implementer", patterns: ["@atlas-worker", "@smol"] }, h.ctx)).toBeUndefined(); // exactly the generated definition's list
+	expect(spawn({ agent: "implementer", patterns: ["@SMOL", "@Atlas-Worker"] }, h.ctx)).toBeUndefined(); // order and case do not matter
+	expect(spawn({ agent: "implementer", patterns: [] }, h.ctx)).toBeUndefined();
+	expect(spawn({ agent: "implementer", patterns: ["  ", ""] }, h.ctx)).toBeUndefined(); // blank patterns are no override
+	expect(spawn({ agent: "implementer" }, h.ctx)).toBeUndefined();
+	expect(spawn({ agent: "task", patterns: ["openai/gpt-5.2"] }, h.ctx)).toBeUndefined(); // not an atlas colony agent
+	expect(spawn({ agent: 7, patterns: ["x"] }, h.ctx)).toBeUndefined();
+	process.env.ATLAS_TRIPWIRE_HARD = "off";
+	expect(spawn({ agent: "implementer", patterns: ["openai/gpt-5.2"] }, h.ctx)).toBeUndefined();
+});
+
+test("a partial match of the pinned list is still an override", () => {
+	const h = harness();
+	expect(spawnHandler(h)({ agent: "implementer", patterns: ["@atlas-worker"] }, h.ctx)?.block).toBe(true); // drops the @smol fallback
+	expect(spawnHandler(h)({ agent: "verifier", patterns: ["@atlas-verifier", "@default", "@smol", "extra"] }, h.ctx)?.block).toBe(true);
+});
+
+test("a hostile spawn event fails open", () => {
+	const h = harness();
+	const hostile = { get agent(): string { throw new Error("boom"); }, patterns: ["x"] };
+	expect(spawnHandler(h)(hostile, h.ctx)).toBeUndefined();
+});
+
+// ── Run-state: begin + snapshot once, on the main session start ──
+
+test("session_start hands the run-state sink the project root and session id, main sessions only", () => {
+	const started: { cwd: string; sessionId: string; kind: string }[] = [];
+	const handlers: Record<string, Handler> = {};
+	register({ on: (name: string, handler: Handler) => { handlers[name] = handler; } } as unknown as Pick<ExtensionAPI, "on">, {
+		activeTools: () => [],
+		spawnBoardMirror: () => {},
+		runState: { onSessionStart: info => void started.push(info), onToolAllowed: () => {}, onToolResult: () => {} },
+	});
+	const project = join(root, "project", "src", "nested");
+	const ctx: Context = { cwd: project, agent: { kind: "main" }, sessionManager: { getSessionId: () => "s-9" } };
+	(handlers.session_start as unknown as (e: unknown, c: Context) => void)({}, ctx);
+	(handlers.session_start as unknown as (e: unknown, c: Context) => void)({}, { ...ctx, agent: { kind: "sub" } });
+	// Docs-scoped: the run row is keyed on the project root that holds docs/, not the nested cwd.
+	expect(started).toEqual([{ cwd: join(root, "project"), sessionId: "s-9", kind: "main" }]);
+});
+
+test("a throwing run-state sink does not break session start or the shell-edit baseline", () => {
+	const handlers: Record<string, Handler> = {};
+	register({ on: (name: string, handler: Handler) => { handlers[name] = handler; } } as unknown as Pick<ExtensionAPI, "on">, {
+		activeTools: () => [],
+		spawnBoardMirror: () => {},
+		runState: { onSessionStart: () => { throw new Error("sink exploded"); }, onToolAllowed: () => {}, onToolResult: () => {} },
+	});
+	const ctx: Context = { cwd: join(root, "project"), agent: { kind: "main" } };
+	expect(() => (handlers.session_start as unknown as (e: unknown, c: Context) => void)({}, ctx)).not.toThrow();
 });

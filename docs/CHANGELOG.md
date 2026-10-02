@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-10-02 -- atlas runs its definition-of-done gate, ingest, chronicle and tripwire rules in omp
+
+Marketplace `4.5.0`; atlas `8.7.0`.
+
+- `plugins/atlas/omp/stop-bridge.ts` bridges `session_stop`, `session_shutdown`
+  and `auto_compaction_start`; `scripts/omp_transcript.py` converts omp sessions
+  to the Claude transcript shape and `scripts/omp_runstate.py` records the run
+  state the gate needs, so the unchanged Claude hooks run in omp.
+- Each gate condition (a)-(l) is tested individually on omp-derived state;
+  `dispatch_tripwire.py` dispatch-spec, one-GOAL and production-edit denies are
+  tested against the real hook through the bridge.
+- Fixed a per-ingest temp-directory leak in the detached ingest child.
+- `docs/atlas-harness-parity.md` rows moved from gap only where tested; memory
+  capture's durable write, the connector watch and the inline-op thresholds are
+  still not shown on a live omp run.
+
 ## 2026-10-01 -- One contract per rule across Claude Code and omp, omp output style, tool mandates, tmux colony mode
 
 Marketplace `4.4.0`; atlas `8.6.0`.
