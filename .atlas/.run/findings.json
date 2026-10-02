@@ -2404,5 +2404,33 @@
       "omp lacks completion-gate (a)-(l), memory capture, nudge, ingest/chronicle (Claude transcript schema), dispatch_tripwire inline-op/spec/prod-edit tiers, connector credential watch (MCP name mint)",
       "benchmark misses targets: native-reader share 1.0 in both (no lean-ctx in throwaway repos); main-thread code edits in both; Claude dispatch unnamed (session not armed)"
     ]
+  },
+  {
+    "id": "verify-atlas-8.6.0-omp-runtime-2026-10-01",
+    "surface": "plugin",
+    "category": "enforcement",
+    "severity": "medium",
+    "title": "Atlas 8.6.0 round two: omp worker budget, advisor gate, recall gate, exploration deny, lean-ctx shell routing, shell-edit delegation, ingest fixes",
+    "evidence": [
+      "pytest hooks/ scripts/: 1750 passed, 3 skipped; bun test plugins/atlas/omp: 137 pass 0 fail with relative AND absolute paths",
+      "red/green per slice recorded by workers (workers 10, advisor 14, style 10, hook-bridge 14 + extension 2, contracts 7, dispatch_tripwire 120, recall_gate 12, mandates 12, delegation 7, completion_gate+session_boot 325, mux 36, proc 5, shell-route 16, session_ingest 196); delegation-gate.test.ts red against HEAD index.ts (1 fail) then green",
+      "real mux run (no stubs): claude implementer sonnet/low and omp explorer anthropic/claude-sonnet-5-5:off both replied READY via atlas_todo notes; unresolvable tier refused rc=2; kill left no atlas-* session",
+      "benchmark run 202920 mined via colony helpers: Claude native share 0.64 named 0/1; omp 0.92 named 1/1; both: recall gate blocked first call then claude-mem search; omp grep denied -> xd lean-ctx ctx_search; omp bash all via lean-ctx -c; tests 2 passed both"
+    ],
+    "open": [
+      "native-reader share above 0.5 in both (Read-before-Edit)",
+      "gate (m) accepts any dispatch: both leads edited code then dispatched a verifier (policy decision pending)",
+      "omp lacks completion-gate (a)-(l), memory capture, nudge, chronicle, tripwire inline-op/spec/prod-edit tiers; connector watch is a harness limit",
+      "omp agent registry on this host points at a removed atlas 8.0.1 install path: reinstall needed"
+    ],
+    "doc_refs": [
+      "docs/atlas-harness-parity.md",
+      "docs/CHANGELOG.md",
+      "plugins/atlas/CHANGELOG.md"
+    ],
+    "reproduction": "cd plugins/atlas && python3 -m pytest hooks/ scripts/ -q && bun test omp; /tmp/atlas-bench/run.sh + analyze.py",
+    "status": "partial",
+    "verified_at": "2026-10-01",
+    "verified_by": "main + task workers (WorkerBudgetAdvisor, BridgeRunner, StyleNames, ExploreShellDeny, RecallGate, ShellEditGate, MuxHardening, ProcCapture, IngestFix, ShellRoute)"
   }
 ]
