@@ -208,33 +208,46 @@ tool, which is the per-user accountability the upstream API cannot provide.
   "works for any MCP client" design goal. Resolving it needs Henssler's
   office/VPN egress CIDRs added as further Allow rules (not supplied yet), or
   an explicit decision that hosted connectors are the only supported client.
-- **Managed certificate vs. allowlist (checked against Microsoft Learn,
-  "Custom domain names and free managed certificates in Container Apps",
-  page dated 2026-01-28, read 2026-10-02).** The free managed certificate
-  requires the app to be "publicly accessible from the DigiCert IP
-  addresses", and the page states "all requirements must be met at all
-  times when the managed certificate is assigned", including automatic
-  renewals. The current allow-only rule (`160.79.104.0/21`) does not admit
-  DigiCert. For a subdomain like `mcp.henssler.com` the page specifies
-  CNAME validation (`az containerapp hostname bind --validation-method
-  CNAME`) rather than HTTP, but it does not say whether CNAME-validated
-  issuance or renewal is exempt from the DigiCert reachability requirement,
-  so that is **UNVERIFIED**: do not assume the allowlist is safe. Options:
-  (a) bind with the allowlist temporarily lifted, then reapply it, and
-  watch the first renewal; (b) use a bring-your-own certificate from Key
-  Vault, which has no DigiCert reachability requirement (not yet confirmed
-  against Learn's bring-your-own-certificate page); (c) accept the risk of
-  a silent renewal failure. (b) is the safer choice for a regulated
-  deployment because the certificate then doesn't depend on the allowlist.
-  Also required by the page: the CNAME must point directly at the app's
-  generated FQDN (no intermediate), and if the root domain has a CAA record
-  it must allow `0 issue digicert.com`. Checked live 2026-10-02 with `dig`:
-  `henssler.com` has **no CAA record** (requirement satisfied), and its
-  nameservers are **Cloudflare** (`theo.ns.cloudflare.com`,
-  `ivy.ns.cloudflare.com`). The page names Cloudflare as an example of an
-  intermediate that blocks managed-certificate issuance and renewal, so the
-  `mcp` CNAME must be created **DNS-only (grey cloud, not proxied)** and
-  point straight at the Container Apps FQDN.
+- **Certificate choice (checked against Microsoft Learn, read 2026-10-02):
+  use a Key Vault certificate, not the free managed certificate, because the
+  managed one conflicts with the allowlist.**
+  - *Free managed certificate* ("Custom domain names and free managed
+    certificates in Container Apps", page dated 2026-01-28): requires the app
+    to be "publicly accessible from the DigiCert IP addresses" and states "all
+    requirements must be met at all times when the managed certificate is
+    assigned", which includes automatic renewals. The current allow-only rule
+    (`160.79.104.0/21`) does not admit DigiCert, and the page states the
+    requirement without exempting CNAME validation (the validation method for
+    a subdomain like `mcp`), so do not assume the allowlist is safe. **Lifting
+    the allowlist during binding is not a fix**: it would get the first
+    certificate issued, but renewal would then fail (Container Apps retries
+    silently) while the allowlist is back on. The only way to keep the managed
+    certificate is permanent Allow rules for DigiCert's published validation
+    IPs (https://knowledge.digicert.com/alerts/ip-address-domain-validation),
+    which Henssler would have to keep tracking.
+  - *Key Vault certificate* ("Import Certificates from Azure Key Vault to
+    Azure Container Apps", page dated 2025-11-14): the environment's managed
+    identity imports it (needs `Key Vault Secrets User` on the vault);
+    "When you rotate your certificate in Key Vault, Container Apps
+    automatically updates the certificate in your environment" (up to 12
+    hours to apply). The page contains no DigiCert or public-reachability
+    requirement, so the allowlist is untouched. Caveats: ECDSA p384/p521 are
+    unsupported; the certificate itself must be issued by a CA Henssler
+    chooses, and Key Vault only auto-renews it if the certificate has an
+    integrated-CA issuance policy (not checked here). A plain `.pfx` upload
+    (the other bring-your-own path) renews only by manual re-upload, within
+    the 60-day expiry warning the page describes.
+  - *Prerequisites either way* (page): the CNAME must point directly at the
+    app's generated FQDN with no intermediate, and if the root domain has a
+    CAA record it must allow the issuing CA. Checked live 2026-10-02 with
+    `dig`: `henssler.com` has **no CAA record**, and its nameservers are
+    **Cloudflare** (`theo.ns.cloudflare.com`, `ivy.ns.cloudflare.com`).
+  - **The `mcp` CNAME must be DNS only (grey cloud), whichever certificate is
+    used.** Two independent reasons: Learn names Cloudflare as an example of
+    an intermediate that blocks managed-certificate issuance and renewal; and,
+    regardless of certificate, a proxied (orange-cloud) record makes all
+    traffic reach Container Apps from Cloudflare's IP addresses, so the
+    `160.79.104.0/21` allowlist would return `403` to Claude itself.
 - Entra's identifier URI must equal the connector URL, and must be on a verified
   domain. `henssler.com` is verified in the tenant.
 
@@ -444,16 +457,23 @@ access to. The infrastructure and code are otherwise complete and verified live.
   to Azure).** Add two records in the Cloudflare dashboard (values
   re-confirmed against the live Container App on 2026-10-02):
   CNAME `mcp` -> `gwh-mcp-gateway.delightfulpebble-1c14644e.eastus.azurecontainerapps.io`
-  with the proxy status set to **DNS only (grey cloud)** - a proxied (orange
-  cloud) record puts Cloudflare between DigiCert and the app, which
-  Microsoft Learn says blocks managed-certificate issuance and renewal;
+  with the proxy status set to **DNS only (grey cloud)**. Proxied (orange
+  cloud) would send all traffic from Cloudflare's IPs, so the
+  `160.79.104.0/21` allowlist would 403 Claude itself, and Microsoft Learn
+  also names Cloudflare as a blocker for managed-certificate issuance;
   and TXT `asuid.mcp` -> `6C95DA3E1BC6F1E9D58EFAEB153F7F939B200E5D9724A72FF6EDE0B651B6CB62`.
   Do this before adding the Claude connector - see the UNVERIFIED
   resource-mismatch note in Status above for why the raw hostname is not a
   substitute.
-- **Custom domain + managed certificate binding** on the Container App -
-  only possible once the DNS records above are live and resolving, and
-  needed before the Claude connector can be tested (see Status above).
+- **Custom domain + certificate binding** on the Container App - only
+  possible once the DNS records above are live and resolving, and needed
+  before the Claude connector can be tested (see Status above). Use a Key
+  Vault certificate, not the free managed one (see Network, "Certificate
+  choice"). Open prerequisites: a certificate for `mcp.henssler.com` issued
+  and stored in `gwh-mcp-gateway-kv` (not done; needs a CA decision from
+  you), and `Key Vault Secrets User` granted to the Container Apps
+  environment's managed identity (not done; the environment currently has
+  no identity of its own, the gateway's `gwh-mcp-gateway-id` is on the app).
 - **In Claude (blocked on you - needs org Owner access to the Claude admin
   UI).** Add the connector once the custom domain is bound (see Flow step 1
   above), then set per-role connector permissions under Organization
