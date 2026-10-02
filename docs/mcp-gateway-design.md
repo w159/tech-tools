@@ -130,9 +130,8 @@ enforced on the server, so the role check does not depend on which client
 connects. Reachability does: the IP allowlist currently admits only
 Anthropic's egress range (see Network), so only Claude's hosted connectors
 can reach the gateway today. Claude's own per-role connector settings
-(Organization settings >
-Roles > Connectors) still apply on top and can narrow further; they cannot
-widen past what the gateway allows.
+(Organization settings > Roles > Connectors) still apply on top and can
+narrow access further; they cannot widen it past what the gateway allows.
 
 ## Flow
 
@@ -209,11 +208,33 @@ tool, which is the per-user accountability the upstream API cannot provide.
   "works for any MCP client" design goal. Resolving it needs Henssler's
   office/VPN egress CIDRs added as further Allow rules (not supplied yet), or
   an explicit decision that hosted connectors are the only supported client.
-- **Managed certificate vs. allowlist: UNVERIFIED.** Not checked whether the
-  Container Apps free managed certificate can complete domain validation
-  while ingress is restricted to `160.79.104.0/21`. If it cannot, lift the
-  allowlist briefly during binding and reapply it, or use a Key Vault
-  certificate. Check Microsoft Learn before binding.
+- **Managed certificate vs. allowlist (checked against Microsoft Learn,
+  "Custom domain names and free managed certificates in Container Apps",
+  page dated 2026-01-28, read 2026-10-02).** The free managed certificate
+  requires the app to be "publicly accessible from the DigiCert IP
+  addresses", and the page states "all requirements must be met at all
+  times when the managed certificate is assigned", including automatic
+  renewals. The current allow-only rule (`160.79.104.0/21`) does not admit
+  DigiCert. For a subdomain like `mcp.henssler.com` the page specifies
+  CNAME validation (`az containerapp hostname bind --validation-method
+  CNAME`) rather than HTTP, but it does not say whether CNAME-validated
+  issuance or renewal is exempt from the DigiCert reachability requirement,
+  so that is **UNVERIFIED**: do not assume the allowlist is safe. Options:
+  (a) bind with the allowlist temporarily lifted, then reapply it, and
+  watch the first renewal; (b) use a bring-your-own certificate from Key
+  Vault, which has no DigiCert reachability requirement (not yet confirmed
+  against Learn's bring-your-own-certificate page); (c) accept the risk of
+  a silent renewal failure. (b) is the safer choice for a regulated
+  deployment because the certificate then doesn't depend on the allowlist.
+  Also required by the page: the CNAME must point directly at the app's
+  generated FQDN (no intermediate), and if the root domain has a CAA record
+  it must allow `0 issue digicert.com`. Checked live 2026-10-02 with `dig`:
+  `henssler.com` has **no CAA record** (requirement satisfied), and its
+  nameservers are **Cloudflare** (`theo.ns.cloudflare.com`,
+  `ivy.ns.cloudflare.com`). The page names Cloudflare as an example of an
+  intermediate that blocks managed-certificate issuance and renewal, so the
+  `mcp` CNAME must be created **DNS-only (grey cloud, not proxied)** and
+  point straight at the Container Apps FQDN.
 - Entra's identifier URI must equal the connector URL, and must be on a verified
   domain. `henssler.com` is verified in the tenant.
 
@@ -419,8 +440,13 @@ access to. The infrastructure and code are otherwise complete and verified live.
   decision not made here. The app's `requestedAccessTokenVersion` is 2 and
   the gateway accepts `aud` of the app ID, `api://<appId>`, or the resource
   URL, so token version and audience are not the obstacle.
-- **DNS at the henssler.com registrar (blocked on you - external to Azure).**
-  CNAME `mcp` -> `gwh-mcp-gateway.delightfulpebble-1c14644e.eastus.azurecontainerapps.io`,
+- **DNS for henssler.com is hosted at Cloudflare (blocked on you - external
+  to Azure).** Add two records in the Cloudflare dashboard (values
+  re-confirmed against the live Container App on 2026-10-02):
+  CNAME `mcp` -> `gwh-mcp-gateway.delightfulpebble-1c14644e.eastus.azurecontainerapps.io`
+  with the proxy status set to **DNS only (grey cloud)** - a proxied (orange
+  cloud) record puts Cloudflare between DigiCert and the app, which
+  Microsoft Learn says blocks managed-certificate issuance and renewal;
   and TXT `asuid.mcp` -> `6C95DA3E1BC6F1E9D58EFAEB153F7F939B200E5D9724A72FF6EDE0B651B6CB62`.
   Do this before adding the Claude connector - see the UNVERIFIED
   resource-mismatch note in Status above for why the raw hostname is not a
