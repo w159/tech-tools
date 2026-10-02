@@ -203,24 +203,31 @@ test("real bash_advisor stdout translates to advisory context, never a deny", as
 });
 
 test("real docs_drift_watch flags the first non-docs edit in a docs/ repo", async () => {
-	const repo = join(dir, "repo");
-	const git = (...args: string[]) => Bun.spawnSync(["git", "-C", repo, "-c", "user.email=t@t", "-c", "user.name=t", ...args], { stdout: "ignore", stderr: "ignore" });
-	mkdirSync(join(repo, "docs"), { recursive: true });
-	mkdirSync(join(repo, "src"), { recursive: true });
-	writeFileSync(join(repo, "docs", "CHANGELOG.md"), "# Changelog\n");
-	writeFileSync(join(repo, "src", "app.ts"), "export {};\n");
-	git("init", "-q");
-	git("add", "-A");
-	git("commit", "-q", "-m", "base");
-	writeFileSync(join(repo, "src", "app.ts"), "export const x = 1;\n");
-	const out = parseHookOutput(
-		await runHook(
-			realCommand("PostToolUse", "docs_drift_watch.py"),
-			{ hook_event_name: "PostToolUse", tool_name: "Edit", tool_input: { file_path: join(repo, "src", "app.ts") }, cwd: repo, session_id: "s-drift" },
-			15_000,
-		),
-	);
-	expect(out.context).toContain("docs drift");
+	const savedGate = process.env.ATLAS_GATE; // the real hook inherits process.env; a developer's kill switch must not leak in
+	delete process.env.ATLAS_GATE;
+	try {
+		const repo = join(dir, "repo");
+		const git = (...args: string[]) => Bun.spawnSync(["git", "-C", repo, "-c", "user.email=t@t", "-c", "user.name=t", ...args], { stdout: "ignore", stderr: "ignore" });
+		mkdirSync(join(repo, "docs"), { recursive: true });
+		mkdirSync(join(repo, "src"), { recursive: true });
+		writeFileSync(join(repo, "docs", "CHANGELOG.md"), "# Changelog\n");
+		writeFileSync(join(repo, "src", "app.ts"), "export {};\n");
+		git("init", "-q");
+		git("add", "-A");
+		git("commit", "-q", "-m", "base");
+		writeFileSync(join(repo, "src", "app.ts"), "export const x = 1;\n");
+		const out = parseHookOutput(
+			await runHook(
+				realCommand("PostToolUse", "docs_drift_watch.py"),
+				{ hook_event_name: "PostToolUse", tool_name: "Edit", tool_input: { file_path: join(repo, "src", "app.ts") }, cwd: repo, session_id: "s-drift" },
+				15_000,
+			),
+		);
+		expect(out.context).toContain("docs drift");
+	} finally {
+		if (savedGate === undefined) delete process.env.ATLAS_GATE;
+		else process.env.ATLAS_GATE = savedGate;
+	}
 });
 
 // ---- Timeouts and the 30 s handler budget (omp cuts handlers at 30 s) ----

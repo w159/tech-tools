@@ -1237,21 +1237,82 @@ def _colony_is_repo_edit(tool_name, summary):
     return not (path is not None and _colony_is_doc_path(path))
 
 
+# `lean-ctx -c '<cmd>'` runs <cmd> through lean-ctx's compressing shell: the
+# Claude Code rewrite hook (updatedInput) and agents both produce it, and the
+# transcript keeps the command as written, so a Bash/bash row whose command
+# starts with it already travelled the ctx route.
+_COLONY_LEAN_WRAP_RE = re.compile(r"^\s*(?:\S*/)?lean-ctx\s+-c\b")
+
+
+def _colony_command(summary):
+    """The bash `command` string from an input_summary, '' when none shows."""
+    if not summary:
+        return ""
+    m = re.search(r'"command"\s*:\s*"((?:[^"\\]|\\.)*)', summary)
+    if not m:
+        return ""
+    return m.group(1).replace('\\"', '"').replace("\\'", "'")
+
+
 def _colony_is_ctx_call(tool_name, summary):
-    """Any of the three reachable ctx forms:
+    """Any of the reachable ctx forms:
     1. an MCP call to lean-ctx or context-mode (mcp__lean-ctx__ctx_search,
        mcp__plugin_context-mode_context-mode__ctx_execute, ...),
     2. a bare builtin ctx_* name (omp records `ctx_search`/`ctx_read` as
        builtins once the MCP server's tools are reachable directly),
     3. an omp `write` into the eval harness to reach a ctx_* tool device
        (input_summary paths at xd://mcp__lean_ctx_... or
-       xd://mcp__context_mode_...)."""
+       xd://mcp__context_mode_...),
+    4. a native shell tool whose command is wrapped in `lean-ctx -c`."""
     if tool_name.startswith("mcp__"):
         return "lean-ctx" in tool_name or "context-mode" in tool_name
     if tool_name.startswith("ctx_"):
         return True
     if tool_name == "write" and summary:
         return "xd://mcp__lean_ctx" in summary or "xd://mcp__context_mode" in summary
+    if tool_name in ("Bash", "bash"):
+        return bool(_COLONY_LEAN_WRAP_RE.match(_colony_command(summary)))
+    return False
+
+
+# Shell writes that change a repo file: `sed -i`, `tee <file>`, and `>`/`>>`
+# redirects. Same idea as omp/delegation.ts's git-snapshot gate, but read from
+# the command text because the miner only has the transcript.
+_COLONY_SED_INPLACE_RE = re.compile(r"\bsed\b[^|;&]*?\s-[A-Za-z]*i")
+_COLONY_TEE_RE = re.compile(r"\btee\b((?:\s+-[A-Za-z]+)*)\s+([^\s|;&<>]+)")
+_COLONY_REDIRECT_RE = re.compile(r"(?<![&0-9<>])(?<!\d)>>?\s*([^\s|;&<>()]+)")
+
+
+def _colony_write_target_is_repo(path):
+    """A shell write target that counts as a repo edit: not a device/fd, not
+    scratch space, not docs/.atlas closeout writes."""
+    path = path.strip("'\"")
+    if not path or path.startswith(("&", "/dev/", "/tmp/", "/private/tmp/", "/var/")):
+        return False
+    if path.startswith(("$TMPDIR", "${TMPDIR")):
+        return False
+    return not _colony_is_doc_path(path)
+
+
+def _colony_is_shell_edit(command):
+    """Does this bash command edit a non-docs repo file through the shell?"""
+    if not command:
+        return False
+    command = re.sub(r"^\s*(?:\S*/)?lean-ctx\s+-c\s+", "", command)
+    sed = _COLONY_SED_INPLACE_RE.search(command)
+    if sed:
+        # sed -i edits its last file operand; take the final word of the sed
+        # segment. No visible operand (truncated summary) counts as an edit.
+        seg = re.split(r"[|;&]", command[sed.start() :])[0]
+        words = [w.strip("'\"") for w in seg.split() if not w.startswith("-")]
+        operand = words[-1] if len(words) > 2 else None
+        return True if operand is None else _colony_write_target_is_repo(operand)
+    for m in _COLONY_TEE_RE.finditer(command):
+        if _colony_write_target_is_repo(m.group(2)):
+            return True
+    for m in _COLONY_REDIRECT_RE.finditer(command):
+        if _colony_write_target_is_repo(m.group(1)):
+            return True
     return False
 
 
@@ -1329,7 +1390,7 @@ def mine_colony_adherence(conn, root, window_days=None, min_sessions=None):
     rows = conn.execute(
         "SELECT session_id, tool_name, input_summary FROM tool_calls "
         "WHERE is_sidechain=0 AND ts > strftime('%s','now', ?) "
-        "AND tool_name IS NOT NULL",
+        "AND tool_name IS NOT NULL AND COALESCE(denied,0)=0",
         (f"-{window_days} days",),
     ).fetchall()
     sessions = {}
@@ -1352,18 +1413,26 @@ def mine_colony_adherence(conn, root, window_days=None, min_sessions=None):
                 "repo_edit_sids": set(),
                 "dispatch_sids": set(),
                 "dispatch_summaries": [],
+                "main_edits": 0,
+                "shell_edits": 0,
             },
         )
         agg["sessions"] += 1
         for tool_name, summary in s["rows"]:
-            if tool_name in _COLONY_NATIVE_READERS[harness]:
-                agg["native"] += 1
-            elif _colony_is_ctx_call(tool_name, summary):
+            if _colony_is_ctx_call(tool_name, summary):
                 agg["ctx"] += 1
-            if tool_name in _COLONY_EDIT_TOOLS and _colony_is_repo_edit(
+            elif tool_name in _COLONY_NATIVE_READERS[harness]:
+                agg["native"] += 1
+            is_edit = tool_name in _COLONY_EDIT_TOOLS and _colony_is_repo_edit(
                 tool_name, summary
-            ):
+            )
+            is_shell_edit = tool_name in ("Bash", "bash") and _colony_is_shell_edit(
+                _colony_command(summary)
+            )
+            if is_edit or is_shell_edit:
                 agg["repo_edit_sids"].add(sid)
+                agg["main_edits"] += 1
+                agg["shell_edits"] += 1 if is_shell_edit else 0
             if tool_name in _COLONY_DISPATCH_TOOLS:
                 agg["dispatch_sids"].add(sid)
                 agg["dispatch_summaries"].append(summary)
@@ -1412,7 +1481,9 @@ def mine_colony_adherence(conn, root, window_days=None, min_sessions=None):
             f"({agg['native']}/{reader_denom} reader-route calls), "
             f"delegation_rate="
             f"{'n/a' if delegation_rate is None else f'{delegation_rate:g}'} "
-            f"({delegated}/{denom} non-docs edit sessions dispatched), "
+            f"({delegated}/{denom} non-docs edit sessions dispatched; "
+            f"{agg['main_edits']} main-thread edit(s), "
+            f"{agg['shell_edits']} via shell), "
             f"named_dispatch_rate={named_text} "
             f"({n} sessions in the last {window_days} days)."
         )
@@ -1435,6 +1506,9 @@ def mine_colony_adherence(conn, root, window_days=None, min_sessions=None):
                 native_calls=agg["native"],
                 ctx_calls=agg["ctx"],
                 sessions=n,
+                main_thread_edits=agg["main_edits"],
+                shell_edits=agg["shell_edits"],
+                edit_sessions=denom,
             )
         )
     return out

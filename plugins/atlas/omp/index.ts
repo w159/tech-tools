@@ -50,7 +50,7 @@ import { statSync } from "node:fs";
 import * as nodePath from "node:path";
 import { ATLAS_AGENT_TARGETABLE } from "./atlas-agents";
 import { defaultAdvisorDeps, registerAdvisorGate } from "./advisor";
-import { type LeanKind, explorationDenyReason, kindOfOmpTool, loadNativeTools } from "./contracts";
+import { type LeanKind, explorationDenyReason, explorationTool, kindOfOmpTool, loadNativeTools } from "./contracts";
 import { createShellEditTracker } from "./delegation";
 import { registerHookBridge } from "./hook-bridge";
 import { registerMandates } from "./mandates";
@@ -197,6 +197,22 @@ export function resolveLeanReplacement(kind: LeanKind, active: string[] | undefi
 	return undefined;
 }
 
+/**
+ * Route to one specific lean-ctx tool by name (ctx_read, ctx_search, ctx_glob,
+ * ctx_tree, ctx_shell): a bare tool of that name, else the lean-ctx device
+ * `xd://mcp__lean_ctx_<tool>`. ctx_shell defers to the shell kind so the
+ * context-mode execute surrogate still counts. `undefined` = that exact tool
+ * is not reachable, and the caller must not deny toward it.
+ */
+export function resolveLeanToolRoute(tool: string, active: string[] | undefined): LeanReplacement | undefined {
+	if (!Array.isArray(active)) return undefined;
+	if (tool === "ctx_shell") return resolveLeanReplacement("shell", active);
+	if (active.includes(tool)) return { via: "tool", name: tool };
+	if (!active.includes("write")) return undefined;
+	const device = deviceRoute(active, /lean[-_]?ctx/i, tool);
+	return device ? { via: "device", device } : undefined;
+}
+
 const REPLACEMENT_EXAMPLES: Record<"search" | "glob", { tool: string; example: string }> = {
 	search: { tool: "ctx_search", example: '{"pattern": "...", "path": "..."}' },
 	glob: { tool: "ctx_glob", example: '{"pattern": "**/*.ts"}' },
@@ -264,7 +280,7 @@ function inputPaths(input: Record<string, unknown>): string[] {
 /** Walk ancestors exactly as the completion gate's docs/ project scope does. */
 function docsRoot(cwd: string): string | undefined {
 	let root = nodePath.resolve(cwd);
-	for (;;) {
+	for (; ;) {
 		try {
 			if (statSync(nodePath.join(root, "docs")).isDirectory()) return root;
 		} catch (error) {
@@ -392,8 +408,9 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 				// Exploration-only shell (cat/grep/find/...) is denied toward lean-ctx when a
 				// replacement is reachable now (contracts/native-tools.json explorationShell).
 				if (tool === "bash" && process.env.ATLAS_TRIPWIRE_HARD !== "off") {
-					const route = resolveLeanReplacement("shell", activeToolsOf(deps));
 					const command = typeof event.input.command === "string" ? event.input.command : "";
+					const picked = explorationTool(command, contract);
+					const route = picked ? resolveLeanToolRoute(picked, activeToolsOf(deps)) : undefined;
 					const reason = route ? explorationDenyReason(command, route, contract) : undefined;
 					if (reason) return { block: true, reason };
 				}
@@ -462,6 +479,21 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 }
 
 /** Session tool surfaces are per-session: omp rebinds the factory, so state and availability stay session-local. */
+/**
+ * Rewrite `${CLAUDE_PLUGIN_ROOT}` in `bash` commands. Setting process.env is
+ * NOT enough: omp's worker bash spawns from a cached, snapshot-taken env, not
+ * live process.env, so a variable an extension injects at tool-call time never
+ * reaches the shell. Rewriting the command text is the layer we control (see
+ * exec/bash-executor.ts `callerEnv`/`spawn env` comments in omp source).
+ */
+const CLAUDE_PLUGIN_ROOT_RE = /\$\{?CLAUDE_PLUGIN_ROOT\}?/g;
+
+function rewritePluginRoot(input: Record<string, unknown> | undefined): string | undefined {
+	const command = input?.command;
+	if (typeof command !== "string" || !command.includes("CLAUDE_PLUGIN_ROOT")) return undefined;
+	return command.replace(CLAUDE_PLUGIN_ROOT_RE, PLUGIN_ROOT);
+}
+
 export default function atlasOmpExtension(pi: ExtensionAPI): void {
 	ensureClaudePluginRoot();
 	// Route bash through `lean-ctx -c` like lean-ctx's Claude Code hook does. Registered first:
@@ -476,6 +508,16 @@ export default function atlasOmpExtension(pi: ExtensionAPI): void {
 			}
 		},
 	});
+	pi.on("tool_call", event => {
+		if (event.toolName !== "bash") return undefined;
+		try {
+			const rewritten = rewritePluginRoot(event.input as Record<string, unknown> | undefined);
+			if (rewritten === undefined) return undefined;
+			return { input: { ...(event.input as Record<string, unknown>), command: rewritten } };
+		} catch {
+			return undefined; // fail open
+		}
+	});
 	const activeTools = () => {
 		try {
 			return pi.getActiveTools();
@@ -483,7 +525,7 @@ export default function atlasOmpExtension(pi: ExtensionAPI): void {
 			return undefined; // fail open — runtime not wired yet or API absent means allow
 		}
 	};
-	registerStyle(pi);
+	registerStyle(pi, { activeTools });
 	registerMandates(pi, { activeTools });
 	registerHookBridge(pi);
 	registerWorkerBudget(pi);

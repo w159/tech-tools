@@ -115,6 +115,15 @@ const EXPLORATION_TOOL: Record<string, string> = {
 };
 
 /**
+ * Redirections that write nothing: fd duplications (`2>&1`, `1>&2`) and
+ * redirects to exactly /dev/null (`>/dev/null`, `2>/dev/null`, `&>/dev/null`,
+ * `>>/dev/null`). Stripped before the "any `>` is a write" check; whatever `>`
+ * is left (`> out.txt`, `2>err.log`, `2>1`, `> /dev/nullx`) still counts as a
+ * write. Twin: dispatch_tripwire._HARMLESS_REDIRECT.
+ */
+const HARMLESS_REDIRECT = /\d*>&\d+|(?:\d*|&)>>?\s*\/dev\/null(?![\w./-])/g;
+
+/**
  * The exploration segments of a command as [command, ...args] token lists, or
  * undefined when it is not exploration-only. Splits the RAW text, so quoted
  * operators (`grep 'a && b'`) over-split and every such misparse lands on
@@ -122,8 +131,10 @@ const EXPLORATION_TOOL: Record<string, string> = {
  */
 function explorationSegments(command: string, contract: NativeToolContract | undefined): string[][] | undefined {
 	const spec = contract?.explorationShell;
-	if (!spec || typeof command !== "string" || command.includes(">")) return undefined;
-	const segments = command.split(/&&|\|\||[;|\n]/).map(s => s.trim().split(/\s+/)).filter(t => t[0]);
+	if (!spec || typeof command !== "string") return undefined;
+	const text = command.replace(HARMLESS_REDIRECT, " ");
+	if (text.includes(">")) return undefined;
+	const segments = text.split(/&&|\|\||[;|\n]/).map(s => s.trim().split(/\s+/)).filter(t => t[0]);
 	while (segments[0]?.[0] === "cd") segments.shift();
 	if (segments.length === 0) return undefined;
 	for (const tokens of segments) {
@@ -153,20 +164,31 @@ export function isExplorationShell(command: string, ...contract: [NativeToolCont
 export type ExplorationRoute = { via: "tool"; name: string } | { via: "device"; device: string };
 
 /**
+ * The ctx_* tool an exploration-only bash command maps to: ctx_read
+ * (cat/head/tail), ctx_search (grep/rg/ag), ctx_tree (ls/tree), ctx_glob
+ * (find/fd), else ctx_shell; a mixed pipeline → ctx_shell. undefined when the
+ * command is not exploration-only. Twin: dispatch_tripwire._exploration_deny.
+ */
+export function explorationTool(command: string, ...contract: [NativeToolContract | undefined?]): string | undefined {
+	const segments = explorationSegments(command, contract.length ? contract[0] : loadNativeTools());
+	if (!segments) return undefined;
+	const tools = new Set(segments.map(t => EXPLORATION_TOOL[t[0]] ?? "ctx_shell"));
+	return tools.size === 1 ? [...tools][0] : "ctx_shell";
+}
+
+/**
  * Deny text for an exploration-only bash command, naming the ctx_* equivalent
- * (ctx_read cat/head/tail, ctx_search grep/rg/ag, ctx_tree ls/tree, ctx_glob
- * find/fd, else ctx_shell) and how the session reaches lean-ctx. undefined when
- * the command is not exploration-only (caller allows).
+ * (see explorationTool) and how the session reaches lean-ctx. `route` must be
+ * the route to THAT tool. undefined when the command is not exploration-only
+ * (caller allows).
  */
 export function explorationDenyReason(
 	command: string,
 	route: ExplorationRoute,
 	...contract: [NativeToolContract | undefined?]
 ): string | undefined {
-	const segments = explorationSegments(command, contract.length ? contract[0] : loadNativeTools());
-	if (!segments) return undefined;
-	const tools = new Set(segments.map(t => EXPLORATION_TOOL[t[0]] ?? "ctx_shell"));
-	const tool = tools.size === 1 ? [...tools][0] : "ctx_shell";
+	const tool = explorationTool(command, ...contract);
+	if (!tool) return undefined;
 	const how =
 		route.via === "tool"
 			? `call ${route.name} directly with JSON args`

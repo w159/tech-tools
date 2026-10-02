@@ -1287,6 +1287,20 @@ class VerifierVerdictBracketTest(unittest.TestCase):
         self.assertIn("atlas_finding.py", post.stdout)
         self.assertIn("do not re-dispatch", post.stdout)
 
+    def test_hint_names_an_existing_absolute_script_path(self):
+        """$CLAUDE_PLUGIN_ROOT is expanded only by the hook runner, never in a
+        model-run shell, so the hint must carry the resolved absolute path."""
+        self._write_findings([{"id": "S1", "status": "open"}])
+        run_hook(self._payload("PreToolUse"), self.env)
+        post = run_hook(self._payload("PostToolUse"), self.env)
+        text = json.loads(post.stdout)["hookSpecificOutput"]["additionalContext"]
+        self.assertNotIn("CLAUDE_PLUGIN_ROOT", text)
+        script = os.path.realpath(
+            os.path.join(os.path.dirname(__file__), "..", "scripts", "atlas_finding.py")
+        )
+        self.assertTrue(os.path.isabs(script) and os.path.exists(script), script)
+        self.assertIn(f'python3 "{script}"', text)
+
     def test_verifier_that_wrote_its_verdict_is_silent(self):
         self._write_findings([{"id": "S1", "status": "open"}])
         run_hook(self._payload("PreToolUse"), self.env)

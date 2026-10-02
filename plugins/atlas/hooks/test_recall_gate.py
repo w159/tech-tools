@@ -70,18 +70,28 @@ class RecallGateTest(unittest.TestCase):
     def _markers(self):
         return sorted(os.listdir(self.tmp))
 
-    def test_first_non_claude_mem_call_is_denied_once_with_the_contract_reason(self):
+    def test_every_non_claude_mem_call_is_denied_until_a_real_recall(self):
         self.assertTrue(CASES["block"])
         for i, case in enumerate(CASES["block"]):
             sid = "block-%d" % i
-            code, out = _run_main(self._payload(case, session_id=sid))
-            self.assertEqual(code, 0)
-            self.assertTrue(_denied(out), case["name"])
-            self.assertEqual(
-                json.loads(out)["hookSpecificOutput"]["permissionDecisionReason"], REASON
-            )
-            code, again = _run_main(self._payload(case, session_id=sid))
-            self.assertEqual((code, again), (0, ""), "denied more than once: %s" % case["name"])
+            for attempt in range(3):  # ignoring a denial never satisfies the gate
+                code, out = _run_main(self._payload(case, session_id=sid))
+                self.assertEqual(code, 0)
+                self.assertTrue(_denied(out), "%s attempt %d" % (case["name"], attempt))
+                self.assertEqual(
+                    json.loads(out)["hookSpecificOutput"]["permissionDecisionReason"], REASON
+                )
+            self.assertEqual(self._markers(), [], "a denial must never write the satisfied marker")
+
+    def test_only_a_claude_mem_call_satisfies_then_later_calls_pass(self):
+        case = CASES["block"][0]
+        sid = "ignore-then-recall"
+        self.assertTrue(_denied(_run_main(self._payload(case, session_id=sid))[1]))
+        self.assertTrue(_denied(_run_main(self._payload(case, session_id=sid))[1]))
+        recall = CASES["satisfy"][0]
+        self.assertEqual(_run_main(self._payload(recall, session_id=sid)), (0, ""))
+        self.assertEqual(self._markers(), ["recall-%s" % sid])
+        self.assertEqual(_run_main(self._payload(case, session_id=sid)), (0, ""))
 
     def test_reason_names_the_claude_mem_route_and_an_example(self):
         self.assertIn(CC_ROUTE, REASON)
@@ -122,7 +132,10 @@ class RecallGateTest(unittest.TestCase):
         case = CASES["block"][0]
         self.assertTrue(_denied(_run_main(self._payload(case, session_id="one"))[1]))
         self.assertTrue(_denied(_run_main(self._payload(case, session_id="two"))[1]))
-        self.assertEqual(len(self._markers()), 2)
+        self.assertEqual(_run_main(self._payload(CASES["satisfy"][0], session_id="one")), (0, ""))
+        self.assertEqual(_run_main(self._payload(case, session_id="one")), (0, ""))
+        self.assertTrue(_denied(_run_main(self._payload(case, session_id="two"))[1]))  # two still unsatisfied
+        self.assertEqual(self._markers(), ["recall-one"])
 
     def test_subagent_transcripts_are_skipped_and_leave_the_main_gate_intact(self):
         case = CASES["block"][0]
@@ -134,6 +147,33 @@ class RecallGateTest(unittest.TestCase):
         self.assertEqual(_run_main(sub), (0, ""))
         self.assertEqual(self._markers(), [])
         self.assertTrue(_denied(_run_main(self._payload(case, session_id="parent"))[1]))
+
+    def test_a_subagent_sharing_the_session_never_re_arms_a_satisfied_gate(self):
+        # Claude Code subagents report the PARENT's session_id; the "*" PreToolUse matcher
+        # fires for them too. State is keyed by session id, so once the main thread recalled,
+        # every subagent call in that session sees the satisfied marker (and is skipped anyway).
+        case = CASES["block"][0]
+        self.assertEqual(_run_main(self._payload(CASES["satisfy"][0], session_id="shared")), (0, ""))
+        for n in range(3):
+            sub = self._payload(
+                case,
+                session_id="shared",
+                transcript_path="/home/u/.claude/projects/p/shared/subagents/agent-%d.jsonl" % n,
+            )
+            self.assertEqual(_run_main(sub), (0, ""))
+        self.assertEqual(_run_main(self._payload(case, session_id="shared")), (0, ""))
+        self.assertEqual(self._markers(), ["recall-shared"])
+
+    def test_a_subagent_with_its_own_session_is_gated_like_a_main_thread(self):
+        # Policy: the gate keys on session_id. A subagent that runs under its OWN session id
+        # (no /subagents/ transcript) has no marker, so it must recall once itself; the
+        # parent's satisfied marker does not leak to it.
+        case = CASES["block"][0]
+        self.assertEqual(_run_main(self._payload(CASES["satisfy"][0], session_id="parent-s")), (0, ""))
+        own = self._payload(case, session_id="child-own-session")
+        self.assertTrue(_denied(_run_main(own)[1]))
+        self.assertEqual(_run_main(self._payload(CASES["satisfy"][0], session_id="child-own-session")), (0, ""))
+        self.assertEqual(_run_main(own), (0, ""))
 
     def test_unarmed_states_never_deny_or_leave_a_marker(self):
         case = CASES["block"][0]
@@ -147,7 +187,7 @@ class RecallGateTest(unittest.TestCase):
         no_sid = self._payload(case)
         del no_sid["session_id"]
         self.assertEqual(_run_main(no_sid), (0, ""))
-        self.assertEqual(self._markers(), ["recall-caps"])
+        self.assertEqual(self._markers(), [])
 
     def test_contract_without_recall_gate_fields_fails_open(self):
         path = os.path.join(self.tmp, "m.json")
@@ -164,7 +204,10 @@ class RecallGateTest(unittest.TestCase):
             self.assertEqual(_run_main(self._payload(CASES["block"][0], session_id="boom")), (0, ""))
         with patch.object(recall_gate, "GATE_MARKER_DIR", os.path.join(self.tmp, "file")):
             open(os.path.join(self.tmp, "file"), "w").close()  # a file where the marker dir should be
-            self.assertEqual(_run_main(self._payload(CASES["block"][0], session_id="nodir")), (0, ""))
+            # the recall path writes the marker: a failure there fails open (no deny, no crash)
+            self.assertEqual(_run_main(self._payload(CASES["satisfy"][0], session_id="nodir")), (0, ""))
+            # a denial needs no state, so a broken marker dir does not disarm the gate
+            self.assertTrue(_denied(_run_main(self._payload(CASES["block"][0], session_id="nodir2"))[1]))
 
     def test_garbage_stdin_is_silent(self):
         for raw in ("", "not json{{{", "[1,2,3]", "null", "{}", '{"tool_name": 7, "session_id": 7}'):

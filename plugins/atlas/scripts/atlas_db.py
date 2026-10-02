@@ -6,6 +6,7 @@ Callers in hooks MUST wrap usage in try/except and fail open; this module may ra
 
 import json
 import os
+import re
 import sqlite3
 import time
 
@@ -100,7 +101,7 @@ CREATE TABLE IF NOT EXISTS tool_calls (
   is_sidechain INTEGER DEFAULT 0, tool_use_id TEXT, tool_name TEXT,
   kind TEXT, target TEXT, server TEXT,
   input_summary TEXT, input_bytes INTEGER DEFAULT 0,
-  is_error INTEGER, result_bytes INTEGER DEFAULT 0);
+  is_error INTEGER, result_bytes INTEGER DEFAULT 0, denied INTEGER DEFAULT 0);
 CREATE INDEX IF NOT EXISTS ix_tool_calls_session ON tool_calls(session_id);
 CREATE INDEX IF NOT EXISTS ix_tool_calls_kind ON tool_calls(kind, target);
 CREATE UNIQUE INDEX IF NOT EXISTS ix_tool_calls_tuid ON tool_calls(tool_use_id);
@@ -115,6 +116,14 @@ CREATE TABLE IF NOT EXISTS signals (
   signal_type TEXT, weight REAL DEFAULT 1.0, snippet TEXT);
 CREATE INDEX IF NOT EXISTS ix_signals_session ON signals(session_id);
 CREATE UNIQUE INDEX IF NOT EXISTS ix_signals_dedupe ON signals(message_uuid, signal_type);
+
+-- Per-(session, transcript file) ingest cursor + the row keys that file
+-- contributed (session_ingest.py). Subagent transcripts share their main
+-- session's id, so cursors cannot live on session_logs alone.
+CREATE TABLE IF NOT EXISTS ingest_files (
+  session_id TEXT NOT NULL, path TEXT NOT NULL,
+  cursor_bytes INTEGER NOT NULL DEFAULT 0, size INTEGER,
+  row_keys TEXT, updated_at REAL, PRIMARY KEY(session_id, path));
 
 -- Model-scored per-turn judgments (turn_scoring.py). One row per
 -- (session, assistant message, judgment); kind is noul|score|choice|metric.
@@ -138,6 +147,14 @@ def connect(path=None):
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=5000")
     return conn
+
+
+def ensure_ingest_files(conn):
+    """Create `ingest_files` on a connection that predates it, using the one DDL
+    in SCHEMA. Cheap (no run backfill), so the per-transcript ingest path can
+    call it on caller-supplied connections."""
+    start = SCHEMA.index("CREATE TABLE IF NOT EXISTS ingest_files")
+    conn.execute(SCHEMA[start : SCHEMA.index(";", start) + 1])
 
 
 def init(conn):
@@ -171,6 +188,13 @@ def init(conn):
     # 'claude' backfills every pre-existing row to the only agent ingested so far.
     try:
         conn.execute("ALTER TABLE session_logs ADD COLUMN agent TEXT DEFAULT 'claude'")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # column already present
+    # Idempotent migration: tool_calls.denied flags calls a hook/extension
+    # blocked (they never ran). Fresh DBs have it from the SCHEMA.
+    try:
+        conn.execute("ALTER TABLE tool_calls ADD COLUMN denied INTEGER DEFAULT 0")
         conn.commit()
     except sqlite3.OperationalError:
         pass  # column already present
@@ -1152,12 +1176,35 @@ def insert_tool_call(conn, session_id, t):
     )
 
 
-def update_tool_result(conn, tool_use_id, is_error, result_bytes):
+# Result-text prefixes of a call that an atlas hook (Claude Code) or the omp
+# extension blocked before it ran: grep/glob + exploration-shell denies
+# ("Atlas enforcement:") and the recall gate ("[atlas gate]").
+# Claude Code prefixes a hook denial with "PreToolUse:<Tool> hook error: ".
+DENY_MARKERS = ("Atlas enforcement:", "[atlas gate]")
+_HOOK_ERROR_PREFIX = re.compile(r"^\s*PreToolUse:\S+ hook error:\s*")
+
+
+def is_denied_result(text):
+    """True when a tool_result's text is an atlas deny, not a real tool failure."""
+    if not text:
+        return False
+    return _HOOK_ERROR_PREFIX.sub("", text, count=1).lstrip().startswith(DENY_MARKERS)
+
+
+def update_tool_result(conn, tool_use_id, is_error, result_bytes, text=None):
     """Join a tool_result back onto its tool_use row (results arrive in the
-    next message, sometimes a later ingest batch). Idempotent."""
+    next message, sometimes a later ingest batch). Idempotent. `text` is the
+    result text, used only to flag a hook/extension denial; a pass without text
+    (codex results carry none) leaves an existing flag untouched."""
+    if text is None:
+        conn.execute(
+            "UPDATE tool_calls SET is_error=?, result_bytes=? WHERE tool_use_id=?",
+            (is_error, result_bytes, tool_use_id),
+        )
+        return
     conn.execute(
-        "UPDATE tool_calls SET is_error=?, result_bytes=? WHERE tool_use_id=?",
-        (is_error, result_bytes, tool_use_id),
+        "UPDATE tool_calls SET is_error=?, result_bytes=?, denied=? WHERE tool_use_id=?",
+        (is_error, result_bytes, 1 if is_denied_result(text) else 0, tool_use_id),
     )
 
 
@@ -1258,6 +1305,9 @@ def purge_observer_sessions(conn):
             f"DELETE FROM {tbl} WHERE session_id IN ({placeholders})", sids
         )
         counts[tbl] = cur.rowcount
+    conn.execute(
+        f"DELETE FROM ingest_files WHERE session_id IN ({placeholders})", sids
+    )
     cur = conn.execute(
         f"DELETE FROM session_logs WHERE session_id IN ({placeholders})", sids
     )

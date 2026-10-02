@@ -549,8 +549,9 @@ def _cli(argv=None) -> int:
                 print("  %s -- %s" % (path, reason))
             print(
                 "  -> run atlas-setup, or "
-                'python3 "$CLAUDE_PLUGIN_ROOT/skills/atlas-setup/scripts/'
-                'scaffold_docs.py" <repo-root> (idempotent)'
+                'python3 "%s" <repo-root> (idempotent)'
+                % (Path(__file__).resolve().parent.parent
+                   / "skills" / "atlas-setup" / "scripts" / "scaffold_docs.py")
             )
         else:
             print("docs structure OK")

@@ -1363,6 +1363,156 @@ class MainCliTest(unittest.TestCase):
         self.assertIn("Usage", err.getvalue())
 
 
+class IngestFilesSchemaTest(unittest.TestCase):
+    """`ingest_files` (per-(session, file) ingest cursors) belongs to the
+    shared schema, so connect()+init(), doctor and purge all see it."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.path = os.path.join(self.tmp, "atlas.db")
+        self.conn = atlas_db.connect(self.path)
+        self.addCleanup(self.conn.close)
+
+    def _cols(self):
+        return [r[1] for r in self.conn.execute("PRAGMA table_info(ingest_files)")]
+
+    def test_fresh_init_creates_ingest_files(self):
+        atlas_db.init(self.conn)
+        self.assertEqual(
+            self._cols(),
+            ["session_id", "path", "cursor_bytes", "size", "row_keys", "updated_at"],
+        )
+
+    def test_init_adds_ingest_files_to_a_pre_existing_db(self):
+        atlas_db.init(self.conn)
+        self.conn.execute("DROP TABLE ingest_files")
+        self.conn.commit()
+        atlas_db.init(self.conn)  # legacy DB: table missing, init must add it
+        self.assertIn("cursor_bytes", self._cols())
+
+    def test_init_keeps_existing_ingest_files_rows(self):
+        atlas_db.init(self.conn)
+        self.conn.execute(
+            "INSERT INTO ingest_files(session_id,path,cursor_bytes) VALUES('s','p',7)"
+        )
+        self.conn.commit()
+        atlas_db.init(self.conn)
+        self.assertEqual(
+            self.conn.execute("SELECT cursor_bytes FROM ingest_files").fetchone()[0], 7
+        )
+
+    def test_purge_observer_sessions_clears_their_ingest_files(self):
+        atlas_db.init(self.conn)
+        marker = atlas_db.OBSERVER_SESSION_MARKER
+        atlas_db.upsert_session_log(
+            self.conn, "obs-1", transcript_path=f"/h/{marker}/x.jsonl"
+        )
+        self.conn.execute(
+            "INSERT INTO ingest_files(session_id,path,cursor_bytes) VALUES('obs-1','p',1)"
+        )
+        self.conn.execute(
+            "INSERT INTO ingest_files(session_id,path,cursor_bytes) VALUES('keep','q',1)"
+        )
+        self.conn.commit()
+        atlas_db.purge_observer_sessions(self.conn)
+        left = [r[0] for r in self.conn.execute("SELECT session_id FROM ingest_files")]
+        self.assertEqual(left, ["keep"])
+
+
+class ToolCallDeniedTest(unittest.TestCase):
+    """A hook/extension-blocked call never ran. update_tool_result flags it
+    `denied` from the result text so the colony miner can drop it from native
+    usage; a genuine tool failure is never flagged."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.conn = atlas_db.connect(os.path.join(self.tmp, "atlas.db"))
+        atlas_db.init(self.conn)
+        self.addCleanup(self.conn.close)
+        atlas_db.insert_tool_call(
+            self.conn, "s1", {"tool_use_id": "tu-1", "tool_name": "grep"}
+        )
+
+    def _denied(self):
+        return self.conn.execute(
+            "SELECT denied FROM tool_calls WHERE tool_use_id='tu-1'"
+        ).fetchone()[0]
+
+    def test_default_is_not_denied(self):
+        self.assertEqual(self._denied(), 0)
+
+    def test_omp_enforcement_deny_text_is_flagged(self):
+        atlas_db.update_tool_result(
+            self.conn, "tu-1", 1, 90,
+            "Atlas enforcement: use lean-ctx ctx_search instead of grep",
+        )
+        self.assertEqual(self._denied(), 1)
+
+    def test_recall_gate_text_is_flagged(self):
+        atlas_db.update_tool_result(
+            self.conn, "tu-1", 1, 90,
+            "[atlas gate] REQUIRED once per session: your first tool call",
+        )
+        self.assertEqual(self._denied(), 1)
+
+    def test_claude_hook_error_prefix_is_flagged(self):
+        atlas_db.update_tool_result(
+            self.conn, "tu-1", 1, 90,
+            "PreToolUse:Grep hook error: Atlas enforcement: use ctx_search",
+        )
+        self.assertEqual(self._denied(), 1)
+
+    def test_ordinary_failure_is_not_flagged(self):
+        atlas_db.update_tool_result(self.conn, "tu-1", 1, 4, "boom")
+        self.assertEqual(self._denied(), 0)
+
+    def test_textless_update_does_not_clear_an_existing_denied_flag(self):
+        atlas_db.update_tool_result(
+            self.conn, "tu-1", 1, 90, "Atlas enforcement: use lean-ctx ctx_search"
+        )
+        atlas_db.update_tool_result(self.conn, "tu-1", 1, 90)  # no text this pass
+        self.assertEqual(self._denied(), 1)
+
+    def test_reingest_with_ordinary_text_does_not_set_the_flag(self):
+        atlas_db.update_tool_result(self.conn, "tu-1", 1, 4, "boom")
+        atlas_db.update_tool_result(self.conn, "tu-1", 1, 4, "boom")
+        self.assertEqual(self._denied(), 0)
+
+    def test_text_argument_is_optional(self):
+        atlas_db.update_tool_result(self.conn, "tu-1", 1, 999)
+        self.assertEqual(self._denied(), 0)
+
+    def test_denied_column_migrates_onto_a_legacy_table(self):
+        self.conn.execute("ALTER TABLE tool_calls DROP COLUMN denied")
+        self.conn.commit()
+        atlas_db.init(self.conn)
+        self.assertEqual(self._denied(), 0)
+
+    def test_deny_markers_match_what_the_enforcers_emit(self):
+        """DENY_MARKERS must stay in lockstep with the deny texts the omp
+        extension and the mandate contract actually emit, or real blocks are
+        counted as native usage again."""
+        import json
+
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(root, "contracts", "mandates.json")) as f:
+            gate = json.load(f)["recallGate"]
+        self.assertTrue(atlas_db.is_denied_result(gate))
+        with open(os.path.join(root, "omp", "index.ts")) as f:
+            index_src = f.read()
+        with open(os.path.join(root, "omp", "contracts.ts")) as f:
+            contracts_src = f.read()
+        # grep/glob deny and exploration-shell deny both open with this prefix
+        self.assertIn("`Atlas enforcement: use ", index_src)
+        self.assertIn("`Atlas enforcement: this bash command only reads files", contracts_src)
+        self.assertTrue(atlas_db.is_denied_result("Atlas enforcement: use lean-ctx ctx_search"))
+        self.assertTrue(atlas_db.is_denied_result(
+            "Atlas enforcement: this bash command only reads files, so use lean-ctx ctx_read"))
+        # the advisory recall line and the unreachable nudge are not denials
+        self.assertFalse(atlas_db.is_denied_result("Recall first: before planning"))
+        self.assertFalse(atlas_db.is_denied_result("Atlas nudge: for exploration, prefer"))
+
+
 if __name__ == "__main__":
     unittest.main()
 

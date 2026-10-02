@@ -16,6 +16,7 @@
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import * as fs from "node:fs";
 import * as nodePath from "node:path";
+import { loadNativeTools } from "./contracts";
 
 export const STYLE_PATH = nodePath.resolve(import.meta.dir, "..", "output-styles", "atlas-orchestrator.md");
 export const TOOL_NAMES_PATH = nodePath.resolve(import.meta.dir, "..", "contracts", "tool-names.json");
@@ -108,13 +109,55 @@ export function translateToolNames(text: string, map: ToolNameMap): string {
 
 let cached: { key: string; text: string } | undefined;
 
+/**
+ * `tool-names.json` bareTools says where each bare `ctx_*` name lives in a session that
+ * has lean-ctx/context-mode connected as MCP. That is a guess about the session, so at
+ * injection time resolve each name against the tools actually callable now (same rules as
+ * index.ts `resolveLeanReplacement`, which cannot be imported here: index.ts imports this
+ * module): a directly callable bare tool keeps its name, a connected MCP device maps to
+ * its `xd://` route (devices are invoked by writing to them, so that needs `write`), and
+ * anything unreachable is left bare instead of pointing at a dead device. `active`
+ * unknown (undefined or not an array) → the static map.
+ */
+export function resolveBareTools(map: ToolNameMap, active: string[] | undefined): Record<string, string> {
+	if (!Array.isArray(active)) return map.bareTools;
+	const contract = loadNativeTools();
+	if (!contract) return map.bareTools; // cannot tell which servers own which tool: keep the static map
+	const servers: Record<string, RegExp[]> = {};
+	for (const { replacements } of Object.values(contract.kinds)) {
+		for (const { tool, servers: patterns } of replacements) servers[tool] = [...(servers[tool] ?? []), ...patterns];
+	}
+	const canWrite = active.includes("write");
+	const resolved: Record<string, string> = {};
+	for (const bare of Object.keys(map.bareTools)) {
+		if (active.includes(bare)) {
+			resolved[bare] = bare;
+			continue;
+		}
+		if (!canWrite) continue;
+		const patterns = servers[bare] ?? [];
+		const device = active.find(name => {
+			if (!name.startsWith("mcp__") || !name.toLowerCase().endsWith(`_${bare}`)) return false;
+			const server = name.slice("mcp__".length, name.length - bare.length - 1);
+			return patterns.some(p => p.test(server));
+		});
+		if (device) resolved[bare] = `xd://${device}`;
+	}
+	return resolved;
+}
+
 /** The style block appended to the omp system prompt; undefined when sources are unreadable. */
-export function renderOmpStyle(stylePath: string = STYLE_PATH, namesPath: string = TOOL_NAMES_PATH): string | undefined {
-	const key = `${stylePath}\0${namesPath}`;
-	if (cached?.key === key) return cached.text;
+export function renderOmpStyle(
+	stylePath: string = STYLE_PATH,
+	namesPath: string = TOOL_NAMES_PATH,
+	active?: string[],
+): string | undefined {
 	const body = loadStyleBody(stylePath);
-	const map = loadToolNames(namesPath);
-	if (!body || !map) return undefined;
+	const loaded = loadToolNames(namesPath);
+	if (!body || !loaded) return undefined;
+	const map = { ...loaded, bareTools: resolveBareTools(loaded, active) };
+	const key = `${stylePath}\0${namesPath}\0${JSON.stringify(map.bareTools)}`;
+	if (cached?.key === key) return cached.text;
 	const text = `${STYLE_BEGIN}\n${PREFACE}\n\n${translateToolNames(body, map)}\n${STYLE_END}`;
 	cached = { key, text };
 	return text;
@@ -124,6 +167,8 @@ export interface StyleDeps {
 	env?: Record<string, string | undefined>;
 	stylePath?: string;
 	namesPath?: string;
+	/** The session's currently callable tool names; undefined (or a throw) means availability is unknown. */
+	activeTools?: () => string[] | undefined;
 }
 
 export function registerStyle(pi: Pick<ExtensionAPI, "on">, deps: StyleDeps = {}): void {
@@ -133,7 +178,13 @@ export function registerStyle(pi: Pick<ExtensionAPI, "on">, deps: StyleDeps = {}
 			if ((deps.env ?? process.env).ATLAS_STYLE === "off") return undefined;
 			const base = Array.isArray(event.systemPrompt) ? event.systemPrompt : [];
 			if (base.some(entry => typeof entry === "string" && entry.includes(STYLE_BEGIN))) return undefined;
-			const rendered = renderOmpStyle(deps.stylePath, deps.namesPath);
+			let active: string[] | undefined;
+			try {
+				active = deps.activeTools?.();
+			} catch {
+				active = undefined; // availability unknown: render with the static bareTools map
+			}
+			const rendered = renderOmpStyle(deps.stylePath, deps.namesPath, active);
 			if (!rendered) return undefined;
 			return { systemPrompt: [...base, rendered] };
 		} catch {

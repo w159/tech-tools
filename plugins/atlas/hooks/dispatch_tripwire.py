@@ -295,6 +295,10 @@ def _unbounded_dispatch(tinput):
 # under CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 (naming would make the dispatch
 # a teammate, not a scoped subagent).
 AGENTS_DIR = Path(__file__).resolve().parent.parent / "agents"
+# Block texts run in a shell the model opens itself, where $CLAUDE_PLUGIN_ROOT is
+# unset (Claude Code expands it only for the hook command line): name scripts by
+# the absolute path resolved here.
+SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "scripts"
 _SAFE_AGENT_NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]*$")
 
 
@@ -617,6 +621,12 @@ _EXPLORATION_TOOL = {
     "find": "ctx_glob", "fd": "ctx_glob",
 }
 _SEGMENT_SPLIT = re.compile(r"&&|\|\||[;|\n]")
+# Redirections that write nothing: fd duplications (`2>&1`, `1>&2`) and redirects
+# to exactly /dev/null (`>/dev/null`, `2>/dev/null`, `&>/dev/null`, `>>/dev/null`).
+# Stripped before the "any `>` is a write" check; whatever `>` is left
+# (`> out.txt`, `2>err.log`, `2>1`, `> /dev/nullx`) still counts as a write.
+# Twin: omp/contracts.ts HARMLESS_REDIRECT.
+_HARMLESS_REDIRECT = re.compile(r"\d*>&\d+|(?:\d*|&)>>?\s*/dev/null(?![\w./-])")
 
 
 def _exploration_segments(command):
@@ -624,7 +634,10 @@ def _exploration_segments(command):
     None. Splits the RAW text, so quoted operators (`grep 'a && b'`) over-split
     and every such misparse lands on 'not exploration' - the allow direction.
     Missing/malformed contract section -> None (fail open)."""
-    if not isinstance(command, str) or ">" in command:
+    if not isinstance(command, str):
+        return None
+    command = _HARMLESS_REDIRECT.sub(" ", command)
+    if ">" in command:
         return None
     try:
         with open(NATIVE_TOOLS_PATH) as fh:
@@ -836,8 +849,8 @@ def main():
                             "additionalContext": (
                                 "[atlas] verifier verdict not in findings.json - record it "
                                 "yourself (do not re-dispatch):\n"
-                                '  python3 "$CLAUDE_PLUGIN_ROOT/scripts/'
-                                'atlas_finding.py" --id <stage> --status '
+                                f'  python3 "{SCRIPTS_DIR / "atlas_finding.py"}" '
+                                "--id <stage> --status "
                                 "verified|rejected|needs-evidence --evidence "
                                 "'<path or test id>' --reproduction '<command>'"
                             ),

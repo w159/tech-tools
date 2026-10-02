@@ -121,6 +121,11 @@ from docs_drift import docs_drift as _docs_drift  # noqa: E402
 from docs_drift import find_root as _find_root  # noqa: E402
 from docs_drift import git_changed_paths as _git_changed_paths  # noqa: E402
 
+# Block texts are read by the model and pasted into a shell it runs itself,
+# where $CLAUDE_PLUGIN_ROOT is NOT set (Claude Code expands it only for the hook
+# command line), so scripts are named by the absolute path resolved here.
+SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "scripts"
+
 
 def _check_evidence(root: Path, started: float | None = None) -> bool:
     """(a) At least one file under .atlas/evidence/ produced during THIS RUN.
@@ -697,7 +702,7 @@ def _reason(
             "  (b) .atlas/.run/findings.json is missing or has no entry with status "
             '"verified". -> If a verifier already reached a verdict this run, the '
             "record is simply unwritten: write it yourself, now, with one command -- "
-            'python3 "$CLAUDE_PLUGIN_ROOT/scripts/atlas_finding.py" --id <stage> '
+            f'python3 "{SCRIPTS_DIR / "atlas_finding.py"}" --id <stage> '
             "--status verified --title '<one line>' --evidence '<path or test id>' "
             "--reproduction '<exact command>'. --title is required. Only dispatch "
             "atlas:verifier if no independent check has actually run yet."
@@ -737,13 +742,13 @@ def _reason(
             "shipped code this run with nothing independent checking them. Two ways "
             "to close this, cheapest first: (1) run the failing check yourself -- the "
             "project's test/lint/typecheck gate -- and record the result with "
-            'python3 "$CLAUDE_PLUGIN_ROOT/scripts/atlas_finding.py" --id <stage> '
+            'python3 "%s" --id <stage> '
             "--status verified --title '<one line>' --evidence '<test id>' "
             "--reproduction '<command>'; a "
             "`verified` entry stamped during this run pairs an implementer exactly "
             "like a dispatch does, and a test cannot hallucinate. (2) Dispatch "
             "atlas:verifier only when no test can express the check. Then retry Stop."
-            % unverified
+            % (unverified, SCRIPTS_DIR / "atlas_finding.py")
         )
     if git_error:
         parts.append(
@@ -770,7 +775,7 @@ def _reason(
             "sprawling subagent. -> Write the list NOW, one item per bounded step, "
             "then mark what is already done: TodoWrite if the tool is available "
             '(load it with ToolSearch("select:TodoWrite") first), otherwise '
-            'python3 "$CLAUDE_PLUGIN_ROOT/scripts/atlas_todo.py" set '
+            f'python3 "{SCRIPTS_DIR / "atlas_todo.py"}" set '
             '\'[{"content":"...","status":"completed"}]\' --session <session_id>. '
             "Then retry Stop."
         )
@@ -798,8 +803,9 @@ def _reason(
             "<YYYY-MM-DD>-<slug> so a plain listing sorts chronologically; a "
             "trailing date or a leading sequence number sorts by subject instead. "
             "-> Rename with `git mv` (keep the history), then re-check with "
-            'python3 "$CLAUDE_PLUGIN_ROOT/scripts/lint_docs_names.py".'
-            % (len(name_violations), "; ".join(p for p, _ in name_violations[:5]))
+            'python3 "%s".'
+            % (len(name_violations), "; ".join(p for p, _ in name_violations[:5]),
+               SCRIPTS_DIR / "lint_docs_names.py")
         )
     if missing_delegation:
         parts.append(
