@@ -241,8 +241,13 @@ tool, which is the per-user accountability the upstream API cannot provide.
     integrated CA**: Key Vault has a documented partnership with **DigiCert
     and GlobalSign** and can issue and renew certificates from them directly;
     this needs a CertCentral/GlobalSign account (DigiCert: account ID,
-    organization ID, API key) that Henssler does not have configured here,
-    and the page's example policy sets `RenewAtNumberOfDaysBeforeExpiry 60`.
+    organization ID, API key). Whether Henssler already has one, or whether a
+    certificate issuer is already configured on `gwh-mcp-gateway-kv`, is
+    **UNVERIFIED**: `az keyvault certificate issuer list` returned
+    `Forbidden` on 2026-10-02 because the signed-in account holds
+    subscription Owner (control plane) but no Key Vault data-plane
+    certificate permission on this RBAC vault. The page's example policy sets
+    `RenewAtNumberOfDaysBeforeExpiry 60`.
     Rotation then happens in Key Vault and Container Apps picks it up. (2)
     **A certificate from any other CA, imported into Key Vault**: Key Vault
     does not renew it; a named person must re-import before expiry. (3)
@@ -507,9 +512,12 @@ access to. The infrastructure and code are otherwise complete and verified live.
   owner - see "Who issues and renews" there); (2) the certificate issued and
   stored in `gwh-mcp-gateway-kv`; (3) a managed identity on the Container
   Apps environment (it currently has none: `identity: null`, checked
-  2026-10-02) holding `Key Vault Secrets User` on the vault; (4) the
-  `containerapp` CLI extension installed, because `--akv-url`/`--identity`
-  are extension-only and Preview.
+  2026-10-02) holding `Key Vault Secrets User` on the vault; (4) either the
+  portal flow (Learn: environment > Certificates > Bring your own
+  certificates > Add certificate > Import from Key Vault, no extension
+  needed) or, for the CLI path only, the `containerapp` extension, because
+  `--akv-url`/`--identity` are extension-only and Preview; confirm the exact
+  flags at bind time, nothing is imported until a certificate exists.
 - **In Claude (blocked on you - needs org Owner access to the Claude admin
   UI).** Add the connector once the custom domain is bound (see Flow step 1
   above), then set per-role connector permissions under Organization
