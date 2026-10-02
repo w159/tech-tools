@@ -231,12 +231,44 @@ tool, which is the per-user accountability the upstream API cannot provide.
     "When you rotate your certificate in Key Vault, Container Apps
     automatically updates the certificate in your environment" (up to 12
     hours to apply). The page contains no DigiCert or public-reachability
-    requirement, so the allowlist is untouched. Caveats: ECDSA p384/p521 are
-    unsupported; the certificate itself must be issued by a CA Henssler
-    chooses, and Key Vault only auto-renews it if the certificate has an
-    integrated-CA issuance policy (not checked here). A plain `.pfx` upload
-    (the other bring-your-own path) renews only by manual re-upload, within
-    the 60-day expiry warning the page describes.
+    requirement, so the allowlist is untouched. Caveat: ECDSA p384/p521 are
+    unsupported.
+  - **Who issues and renews the `mcp.henssler.com` certificate (open
+    decision, owner: Henssler).** Choosing Key Vault only helps if renewal
+    is actually automated; otherwise it swaps a silent renewal failure for a
+    manual expiry. Options, per "Integrating Key Vault with DigiCert
+    certificate authority" (page dated 2026-05-12): (1) **Key Vault
+    integrated CA**: Key Vault has a documented partnership with **DigiCert
+    and GlobalSign** and can issue and renew certificates from them directly;
+    this needs a CertCentral/GlobalSign account (DigiCert: account ID,
+    organization ID, API key) that Henssler does not have configured here,
+    and the page's example policy sets `RenewAtNumberOfDaysBeforeExpiry 60`.
+    Rotation then happens in Key Vault and Container Apps picks it up. (2)
+    **A certificate from any other CA, imported into Key Vault**: Key Vault
+    does not renew it; a named person must re-import before expiry. (3)
+    **A plain `.pfx` uploaded to the environment**: the Learn page says the
+    health status warns within 60 days of expiry and renewal is "upload a
+    new certificate" by hand. Whichever is chosen, record the owner and the
+    renewal date here. Not decided; nothing is issued.
+  - **Import command (UNVERIFIED, not run).** Per the CLI reference
+    (`az containerapp env certificate upload`, containerapp **extension**
+    variant), the Key Vault form is
+    `az containerapp env certificate upload -g gwh-mcp-gateway-rg -n
+    gwh-mcp-gateway-env2 --akv-url <secret-url> --identity <system | identity
+    resource id> --certificate-name <name>`. Three constraints observed on
+    2026-10-02: (a) `--akv-url` and `--identity` exist only in the
+    `containerapp` extension, which is **not installed** on this machine (the
+    core CLI's `upload` accepts only `--certificate-file`); (b) both options
+    are marked **Preview**; (c) the reference describes `--akv-url` only as
+    "the URL pointing to the Azure Key Vault secret that holds the
+    certificate" and says nothing about versioned vs versionless URLs. Use
+    the **versionless** secret URL
+    (`https://gwh-mcp-gateway-kv.vault.azure.net/secrets/<name>`) rather than
+    a version-pinned one, because a pinned version would plausibly stay on
+    the old certificate after rotation; but no Microsoft page states this, so
+    whether rotation is actually picked up is **UNVERIFIED until the first
+    rotation is observed** (check the environment's certificate thumbprint
+    after a rotation, do not assume).
   - *Prerequisites either way* (page): the CNAME must point directly at the
     app's generated FQDN with no intermediate, and if the root domain has a
     CAA record it must allow the issuing CA. Checked live 2026-10-02 with
@@ -469,11 +501,15 @@ access to. The infrastructure and code are otherwise complete and verified live.
   possible once the DNS records above are live and resolving, and needed
   before the Claude connector can be tested (see Status above). Use a Key
   Vault certificate, not the free managed one (see Network, "Certificate
-  choice"). Open prerequisites: a certificate for `mcp.henssler.com` issued
-  and stored in `gwh-mcp-gateway-kv` (not done; needs a CA decision from
-  you), and `Key Vault Secrets User` granted to the Container Apps
-  environment's managed identity (not done; the environment currently has
-  no identity of its own, the gateway's `gwh-mcp-gateway-id` is on the app).
+  choice"). Open prerequisites, none done: (1) **decide who issues and
+  renews the `mcp.henssler.com` certificate** (Key Vault integrated
+  DigiCert/GlobalSign with auto-renewal, or a manual process with a named
+  owner - see "Who issues and renews" there); (2) the certificate issued and
+  stored in `gwh-mcp-gateway-kv`; (3) a managed identity on the Container
+  Apps environment (it currently has none: `identity: null`, checked
+  2026-10-02) holding `Key Vault Secrets User` on the vault; (4) the
+  `containerapp` CLI extension installed, because `--akv-url`/`--identity`
+  are extension-only and Preview.
 - **In Claude (blocked on you - needs org Owner access to the Claude admin
   UI).** Add the connector once the custom domain is bound (see Flow step 1
   above), then set per-role connector permissions under Organization
