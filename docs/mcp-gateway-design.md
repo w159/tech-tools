@@ -52,9 +52,11 @@ vendor-identifiable macOS Keychain entry either (checked by entry name
 only); ConnectWise is complete in `pluginConfigs` but not in Key Vault;
 Falcon is complete only via this machine's shell exports, not in Key
 Vault or `pluginConfigs` - see the corrected table in Remaining setup for
-the full per-vendor, per-layer breakdown. Zero people hold any vendor
-Read/Write role; DNS at the registrar is unstarted; no Claude connector
-has been added or tested against this gateway in any form.
+the full per-vendor, per-layer breakdown. No Entra group holds any vendor
+Read/Write role. One individual smoke-test exception exists:
+`NinjaOne.Read` was assigned directly to `da-jmorgan@henssler.com` on
+2026-10-02 (see Remaining setup); DNS at the registrar is unstarted; no
+Claude connector has been added or tested against this gateway in any form.
 `/.well-known/oauth-protected-resource/mcp` correctly names Entra as the
 authorization server, and the Anthropic-range IP allowlist
 (`160.79.104.0/21`) is applied and verified live. Sections marked
@@ -124,8 +126,11 @@ no code or config change was needed there.
 
 Users get one connector in Claude and one Entra sign-in for every vendor tool
 they are entitled to. Access is decided by Entra app roles in the token and
-enforced on the server, so it holds for any MCP client, not only for Claude's
-own per-role connector settings. Claude's role grants (Organization settings >
+enforced on the server, so the role check does not depend on which client
+connects. Reachability does: the IP allowlist currently admits only
+Anthropic's egress range (see Network), so only Claude's hosted connectors
+can reach the gateway today. Claude's own per-role connector settings
+(Organization settings >
 Roles > Connectors) still apply on top and can narrow further; they cannot
 widen past what the gateway allows.
 
@@ -197,6 +202,18 @@ tool, which is the per-user accountability the upstream API cannot provide.
   platform-level `403` before reaching the gateway. Recheck the Anthropic
   page periodically; they list phased-out ranges there, and a range change
   needs a rule update here too.
+- **Allowlist vs. non-Anthropic clients (known conflict, unresolved).**
+  `160.79.104.0/21` is Anthropic's egress range, so it admits Claude's hosted
+  connectors (claude.ai, Desktop). Claude Code and any other MCP client that
+  connects from a user's own network get a platform `403`. That contradicts a
+  "works for any MCP client" design goal. Resolving it needs Henssler's
+  office/VPN egress CIDRs added as further Allow rules (not supplied yet), or
+  an explicit decision that hosted connectors are the only supported client.
+- **Managed certificate vs. allowlist: UNVERIFIED.** Not checked whether the
+  Container Apps free managed certificate can complete domain validation
+  while ingress is restricted to `160.79.104.0/21`. If it cannot, lift the
+  allowlist briefly during binding and reapply it, or use a Key Vault
+  certificate. Check Microsoft Learn before binding.
 - Entra's identifier URI must equal the connector URL, and must be on a verified
   domain. `henssler.com` is verified in the tenant.
 
@@ -384,13 +401,24 @@ access to. The infrastructure and code are otherwise complete and verified live.
   a session through this gateway using it, since no such backend is
   registered) but should be deleted from the app registration the next
   time someone is in there, so the role list matches the 12-vendor table
-  above exactly. **Zero** functional vendor roles are assigned to anyone
-  yet - only the requesting user holds the bare default-access role, and
-  as of 2026-09-28 the decision to name a first Entra group (or self-assign
-  the requester for an initial end-to-end test) is still pending. Decide
-  which Entra groups (not individuals, per the design above) get which
-  vendor Read/Write roles, then assign them on the "Henssler MCP Gateway"
-  enterprise application.
+  above exactly. **No group** holds a functional vendor role yet.
+  **Smoke-test exception (temporary, individual assignment, which the
+  groups-only design otherwise rules out):** `NinjaOne.Read` was assigned
+  directly to `da-jmorgan@henssler.com` on 2026-10-02 (confirmed by listing
+  `appRoleAssignedTo`). Remove it once a real group assignment replaces it.
+  Decide which Entra groups (not individuals, per the design above) get
+  which vendor Read/Write roles, then assign them on the "Henssler MCP
+  Gateway" enterprise application.
+- **Pre-DNS direct test path: UNVERIFIED and currently BROKEN.**
+  `az account get-access-token --resource c6e1bf1e-2520-4f1d-b329-8f0f05de34a6`
+  fails with `AADSTS65001` (observed 2026-10-02): the Azure CLI first-party
+  client (`04b07795-8ddb-461a-bbee-02f9e1bf7b46`) is not in the app's
+  `api.preAuthorizedApplications` (empty), so no token is issued. Making it
+  work means pre-authorizing that client for `access_as_user`, which lets
+  the Azure CLI mint gateway tokens for any user holding a role - a security
+  decision not made here. The app's `requestedAccessTokenVersion` is 2 and
+  the gateway accepts `aud` of the app ID, `api://<appId>`, or the resource
+  URL, so token version and audience are not the obstacle.
 - **DNS at the henssler.com registrar (blocked on you - external to Azure).**
   CNAME `mcp` -> `gwh-mcp-gateway.delightfulpebble-1c14644e.eastus.azurecontainerapps.io`,
   and TXT `asuid.mcp` -> `6C95DA3E1BC6F1E9D58EFAEB153F7F939B200E5D9724A72FF6EDE0B651B6CB62`.
