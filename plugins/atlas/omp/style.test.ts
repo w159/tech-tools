@@ -12,6 +12,7 @@ import {
 	mcpDevice,
 	registerStyle,
 	renderOmpStyle,
+	resolveBareTools,
 	translateToolNames,
 } from "./style";
 
@@ -139,4 +140,52 @@ test("bare lean-ctx and context-mode names map to the devices a real omp session
 		"context-mode `xd://mcp__context_mode_context_mode_ctx_execute`",
 	);
 	expect(translateToolNames("ctx_searching and my_ctx_search stay", MAP)).toBe("ctx_searching and my_ctx_search stay");
+});
+
+// --- bareTools resolved from the session's active tools at injection time ---
+
+const BARE_PROSE = "`ctx_search` `ctx_glob` `ctx_read` `ctx_shell` `ctx_execute`";
+
+test("active tools: a directly callable ctx_* tool keeps its bare name; a connected MCP device maps to its xd route", () => {
+	const active = ["write", "ctx_search", "mcp__lean_ctx_ctx_glob", "mcp__lean_ctx_ctx_read", "mcp__context_mode_context_mode_ctx_execute"];
+	expect(resolveBareTools(MAP, active)).toEqual({
+		ctx_search: "ctx_search",
+		ctx_glob: "xd://mcp__lean_ctx_ctx_glob",
+		ctx_read: "xd://mcp__lean_ctx_ctx_read",
+		ctx_execute: "xd://mcp__context_mode_context_mode_ctx_execute",
+	});
+	expect(translateToolNames(BARE_PROSE, { ...MAP, bareTools: resolveBareTools(MAP, active) ?? {} })).toBe(
+		"`ctx_search` `xd://mcp__lean_ctx_ctx_glob` `xd://mcp__lean_ctx_ctx_read` `ctx_shell` `xd://mcp__context_mode_context_mode_ctx_execute`",
+	);
+});
+
+test("active tools: a device route needs `write`, and an unreachable tool is left bare rather than pointed at a dead device", () => {
+	expect(resolveBareTools(MAP, ["mcp__lean_ctx_ctx_glob"])).toEqual({}); // no write: devices are not callable
+	expect(resolveBareTools(MAP, ["write", "read", "bash"])).toEqual({}); // nothing lean-ctx connected
+	// a differently spelled server still resolves through the contract's server pattern
+	expect(resolveBareTools(MAP, ["write", "mcp__lean-ctx_ctx_search"])).toEqual({ ctx_search: "xd://mcp__lean-ctx_ctx_search" });
+});
+
+test("unknown availability falls back to the static bareTools map", () => {
+	expect(resolveBareTools(MAP, undefined)).toEqual(MAP.bareTools);
+	expect(resolveBareTools(MAP, "nope" as unknown as string[])).toEqual(MAP.bareTools);
+});
+
+test("registerStyle resolves bareTools from activeTools at injection time, and falls back when activeTools is unknown or throws", () => {
+	const render = (activeTools?: () => string[] | undefined) => {
+		const handlers: Record<string, Handler> = {};
+		const api = { on: (name: string, h: Handler) => { handlers[name] = h; } };
+		registerStyle(api as unknown as Pick<ExtensionAPI, "on">, { env: {}, activeTools });
+		return handlers.before_agent_start({ systemPrompt: [], prompt: "hi" }, { agent: { kind: "main" } })?.systemPrompt?.[0] ?? "";
+	};
+	const live = render(() => ["write", "ctx_search", "ctx_glob", "mcp__lean_ctx_ctx_read", "mcp__lean_ctx_ctx_shell"]);
+	const dead = render(() => ["read", "bash"]);
+	const unknown = render(() => undefined);
+	const throwing = render(() => { throw new Error("boom"); });
+	const omitted = render();
+	expect(live).not.toBe(dead); // the active set changes what is rendered
+	expect(live).toContain("xd://mcp__lean_ctx_ctx_read");
+	expect(live).not.toContain("xd://mcp__lean_ctx_ctx_search"); // callable directly, so no device rewrite
+	expect(dead).not.toMatch(/xd:\/\/mcp__lean_ctx_ctx_/); // unreachable: nothing points at a dead device
+	for (const fallback of [unknown, throwing, omitted]) expect(fallback).toBe(renderOmpStyle());
 });

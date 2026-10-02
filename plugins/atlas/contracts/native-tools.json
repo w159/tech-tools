@@ -71,7 +71,7 @@
     }
   },
   "explorationShell": {
-    "_doc": "Bash is exploration-only (denied toward ctx_* when lean-ctx is reachable) when EVERY segment of the command, split on && || ; |, after optional leading `cd x &&` segments, starts with one of `commands` (basename), plus `sed -n` and `awk`, AND nothing writes: no `>` anywhere, no `tee`, no -delete/-exec/-execdir token, no -i* arg on a sed/awk segment. Algorithm lives in omp/contracts.ts isExplorationShell and hooks/dispatch_tripwire.py _is_exploration_shell; both iterate `cases`. Every ambiguous parse (quoted operators) falls to NOT exploration = allow.",
+    "_doc": "Bash is exploration-only (denied toward ctx_* when lean-ctx is reachable) when EVERY segment of the command, split on && || ; |, after optional leading `cd x &&` segments, starts with one of `commands` (basename), plus `sed -n` and `awk`, AND nothing writes: no `>` anywhere (after first stripping fd duplications like `2>&1` / `1>&2` and redirects to /dev/null like `2>/dev/null`, `>/dev/null`, `&>/dev/null`, which write nothing), no `tee`, no -delete/-exec/-execdir token, no -i* arg on a sed/awk segment. Algorithm lives in omp/contracts.ts isExplorationShell and hooks/dispatch_tripwire.py _is_exploration_shell; both iterate `cases`. Every ambiguous parse (quoted operators) falls to NOT exploration = allow.",
     "commands": [
       "cat",
       "head",
@@ -110,7 +110,14 @@
         "awk '{print $1}' data.csv",
         "cd plugins/atlas && ls",
         "cat a.txt | grep err | wc -l",
-        "cd /tmp && head -3 log && tail -3 log"
+        "cd /tmp && head -3 log && tail -3 log",
+        "ls -la .atlas/.run 2>&1; cat .atlas/.run/findings.json 2>&1 | head -40",
+        "cat a 2>&1",
+        "grep -rn x . 2>/dev/null",
+        "cat a >/dev/null",
+        "find . -name '*.py' &>/dev/null",
+        "ls 2>&1 >/dev/null",
+        "tail -3 log 1>&2"
       ],
       "allow": [
         "python3 -m pytest hooks/test_dispatch_tripwire.py -q",
@@ -119,6 +126,13 @@
         "node -e \"console.log(1)\"",
         "git status --short",
         "cat notes > out.txt",
+        "cat a 2>err.log",
+        "cat a 2>1",
+        "ls > /dev/nullx",
+        "ls &>out.txt",
+        "cat a 2>&1 > out.txt",
+        "cat a 2>&1 >> out.txt",
+        "cat a 2>/dev/null > out.txt",
         "cat notes >> out.txt",
         "grep x f | tee out.txt",
         "sed -i 's/a/b/' f",

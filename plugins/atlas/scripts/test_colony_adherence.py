@@ -302,5 +302,224 @@ class DispatchNameSurvivesIngestTest(unittest.TestCase):
 
 
 
+class _ColonyDb(unittest.TestCase):
+    """Seeded tool_calls DB plus the row/mining helpers the routing and
+    shell-edit tests share (the same row shape session_ingest writes)."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.conn = atlas_db.connect(os.path.join(self.tmp, "atlas.db"))
+        atlas_db.init(self.conn)
+        self.seq = 0
+
+    def tearDown(self):
+        self.conn.close()
+        shutil.rmtree(self.tmp)
+
+    def _call(self, sid, tool_name, summary=None, ts=NOW, sidechain=0):
+        self.seq += 1
+        atlas_db.insert_tool_call(
+            self.conn,
+            sid,
+            {
+                "message_uuid": f"u{self.seq}",
+                "ts": ts,
+                "is_sidechain": sidechain,
+                "tool_use_id": f"t{self.seq}",
+                "tool_name": tool_name,
+                "kind": "agent" if tool_name in ("Agent", "Task") else "builtin",
+                "target": None,
+                "server": None,
+                "input_summary": summary,
+                "input_bytes": None,
+                "is_error": None,
+                "result_bytes": None,
+            },
+        )
+
+    def _deny(self, tool_name):
+        """Mark the most recent row for tool_name as denied (it never ran)."""
+        self.conn.execute(
+            "UPDATE tool_calls SET denied=1 WHERE id=(SELECT MAX(id) FROM "
+            "tool_calls WHERE tool_name=?)",
+            (tool_name,),
+        )
+
+    def _mine(self, **kw):
+        return atlas_doctor.mine_colony_adherence(self.conn, "/x", **kw)
+
+    def _by_key(self, found):
+        return {f["key"]: f for f in found}
+
+    def _balanced(self, sid, ctx=4):
+        """1 native Read against `ctx` ctx calls: leaves headroom so a few Bash
+        rows in a test never push native_reader_share over the cap."""
+        self._call(sid, "Read")
+        for _ in range(ctx):
+            self._call(sid, "mcp__lean-ctx__ctx_search")
+
+
+class ColonyReaderRoutingTest(_ColonyDb):
+    """native_reader_share counts what the agent actually ran natively:
+    `lean-ctx -c`-wrapped bash is a ctx route, and a call a hook/extension
+    denied (it never ran) is neither native usage nor ctx usage."""
+
+    def _share(self, harness):
+        found = self._by_key(self._mine())
+        return found[harness]["evidence"] if harness in found else None
+
+    def test_lean_ctx_wrapped_bash_is_ctx_not_native(self):
+        self.assertTrue(atlas_doctor._colony_is_ctx_call(
+            "Bash", '{"command": "/opt/homebrew/bin/lean-ctx -c \'ls -la\'"}'))
+        self.assertTrue(atlas_doctor._colony_is_ctx_call(
+            "bash", '{"command": "lean-ctx -c git status"}'))
+        self.assertFalse(atlas_doctor._colony_is_ctx_call(
+            "Bash", '{"command": "git status && echo lean-ctx"}'))
+        self.assertFalse(atlas_doctor._colony_is_ctx_call("Bash", None))
+
+    def test_wrapped_bash_leaves_native_share_under_the_cap(self):
+        for i in range(5):
+            sid = f"w{i}"
+            self._call(sid, "Read")
+            for _ in range(3):  # would be 4/4 native without the wrapper rule
+                self._call(sid, "Bash", '{"command": "lean-ctx -c \'pytest -q\'"}')
+        # 5 native Read / (5 native + 15 wrapped-ctx) = 0.25: silent
+        self.assertEqual(self._mine(), [])
+
+    def test_unwrapped_bash_still_counts_native(self):
+        for i in range(5):
+            self._call(f"n{i}", "Bash", '{"command": "pytest -q"}')
+        self.assertEqual(self._share("claude-code")["native_calls"], 5)
+
+    def test_denied_native_calls_are_excluded_from_native(self):
+        for i in range(5):
+            sid = f"x{i}"
+            self._call(sid, "Grep", '{"pattern": "a"}')
+            self._deny("Grep")  # blocked: never ran
+            self._call(sid, "Read")
+            self._call(sid, "mcp__lean-ctx__ctx_search")
+        self.assertEqual(self._mine(), [])  # 5 native / 10 = 0.5, at the cap
+        self._call("x0", "Read")  # one real extra native call tips it
+        ev = self._share("claude-code")
+        self.assertEqual(ev["native_calls"], 6)  # the 5 denied Greps are not in it
+
+    def test_denied_omp_recall_gate_bash_is_excluded(self):
+        for i in range(5):
+            sid = f"g{i}"
+            self._call(sid, "bash", '{"command": "ls"}')
+            self._deny("bash")  # [atlas gate] recall block
+            self._call(sid, "read")
+            self._call(sid, "ctx_read")
+        self.assertEqual(self._mine(), [])
+
+    def test_a_denied_ctx_call_is_not_ctx_usage_either(self):
+        for i in range(5):
+            sid = f"c{i}"
+            self._call(sid, "Read")
+            self._call(sid, "mcp__lean-ctx__ctx_search")
+            self._deny("mcp__lean-ctx__ctx_search")
+        ev = self._share("claude-code")
+        self.assertEqual((ev["native_calls"], ev["ctx_calls"]), (5, 0))
+
+    def test_omp_device_calls_are_recognised_as_ctx(self):
+        for summary in (
+            '{"path": "xd://mcp__lean_ctx_ctx_read", "content": "{}"}',
+            '{"path": "xd://mcp__context_mode_context_mode_ctx_execute", "content": "{}"}',
+            '{"path": "xd://mcp__lean_ctx_ctx_shell", "content": "{}"}',
+        ):
+            self.assertTrue(atlas_doctor._colony_is_ctx_call("write", summary), summary)
+        # a write to any other xd:// device (or a repo file) is not a ctx route
+        self.assertFalse(atlas_doctor._colony_is_ctx_call(
+            "write", '{"path": "xd://mcp__serena_find_symbol", "content": "{}"}'))
+        self.assertFalse(atlas_doctor._colony_is_ctx_call(
+            "write", '{"path": "src/a.py", "content": "x"}'))
+
+
+class ColonyShellEditTest(_ColonyDb):
+    """delegation_rate must see edits made through the shell (sed -i, tee,
+    redirects to repo files) and report main-thread edit counts beside the rate
+    so a high rate over a handful of edits is not misleading."""
+
+    def _mine_cc(self):
+        return self._by_key(self._mine()).get("claude-code")
+
+    def test_shell_edit_classifier(self):
+        yes = [
+            "sed -i 's/a/b/' src/calc.py",
+            "sed -i.bak 's/a/b/' src/calc.py",
+            "sed -i '' 's/a/b/' src/calc.py",
+            "sed 's/a/b/' src/a.py > src/b.py",
+            "git diff > changes.patch",
+            "echo x > src/calc.py",
+            "printf 'x' >> src/calc.py",
+            "cat <<EOF | tee src/calc.py",
+            "tee -a src/calc.py < patch.txt",
+            "lean-ctx -c \"sed -i 's/a/b/' src/calc.py\"",
+        ]
+        no = [
+            "pytest -q > /dev/null",
+            "pytest -q 2>&1 | tee /dev/null",
+            "echo x > docs/CHANGELOG.md",
+            "echo x > .atlas/evidence/out.txt",
+            "sed -n '1,5p' src/calc.py",
+            "sed -i 's/a/b/' docs/CHANGELOG.md",
+            "sed -i 's/a/b/' /tmp/x.txt",
+            "sed 's/a/b/' src/a.py > /tmp/o",
+            "python3 -c 'print(1>0)'",
+            "cmd 2>/dev/null",
+            "git diff > /tmp/p.diff",
+            "git status",
+            "echo x > /tmp/scratch.txt",
+            "ls 2>&1",
+            None,
+        ]
+        for c in yes:
+            self.assertTrue(atlas_doctor._colony_is_shell_edit(c), c)
+        for c in no:
+            self.assertFalse(atlas_doctor._colony_is_shell_edit(c), c)
+
+    def test_shell_edit_sessions_enter_the_delegation_denominator(self):
+        for i in range(5):
+            sid = f"s{i}"
+            self._balanced(sid)
+            self._call(sid, "Bash", '{"command": "sed -i \'s/a/b/\' src/calc.py"}')
+            if i < 1:  # 1/5 = 0.2 delegated
+                self._call(sid, "Agent", '{"subagent_type": "explorer"}')
+        cc = self._mine_cc()
+        self.assertIsNotNone(cc)
+        self.assertAlmostEqual(cc["evidence"]["delegation_rate"], 0.2)
+
+    def test_main_thread_edit_counts_ride_next_to_the_rate(self):
+        for i in range(5):
+            sid = f"m{i}"
+            self._balanced(sid)
+            self._call(sid, "Edit", '{"file_path": "/repo/src/a.py"}')
+            self._call(sid, "Bash", '{"command": "echo y > src/b.py"}')
+        cc = self._mine_cc()
+        ev = cc["evidence"]
+        self.assertEqual(ev["main_thread_edits"], 10)  # 5 Edit + 5 shell
+        self.assertEqual(ev["shell_edits"], 5)
+        self.assertEqual(ev["edit_sessions"], 5)
+        self.assertIn("10 main-thread edit(s)", cc["detail"])
+        self.assertIn("5 via shell", cc["detail"])
+
+    def test_docs_and_devnull_shell_writes_are_not_edits(self):
+        for i in range(5):
+            sid = f"q{i}"
+            self._balanced(sid)
+            self._call(sid, "Bash", '{"command": "echo y > docs/CHANGELOG.md"}')
+            self._call(sid, "Bash", '{"command": "pytest -q > /dev/null 2>&1"}')
+        # no repo edit sessions -> delegation n/a, share 0.5 at cap -> silent
+        self.assertEqual(self._mine(), [])
+
+    def test_denied_shell_edit_never_ran_so_it_is_not_an_edit(self):
+        for i in range(5):
+            sid = f"r{i}"
+            self._balanced(sid)
+            self._call(sid, "Bash", '{"command": "sed -i \'s/a/b/\' src/calc.py"}')
+            self._deny("Bash")
+        self.assertEqual(self._mine(), [])
+
+
 if __name__ == "__main__":
     unittest.main()

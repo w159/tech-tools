@@ -94,7 +94,7 @@ test("ponytail nudge is unarmed without the skill, in subagents, and when killed
 	expect(killed.bash("git commit -m x")).toBeUndefined();
 });
 
-// --- recall gate: first non-claude-mem, non-todo main call is blocked once ---
+// --- recall gate: every non-claude-mem, non-todo main call is blocked until a real claude-mem call ---
 
 type GateCase = { name: string; ompName?: string; input: Record<string, unknown> };
 const GATE = contract.recallGateCases as { satisfy: GateCase[]; block: GateCase[]; exempt: GateCase[] };
@@ -104,7 +104,7 @@ const GATE_REASON = contract.recallGate
 	.replace("{example}", contract.recallGateExample);
 
 
-test("recall gate blocks the first non-claude-mem call once, with the contract reason", () => {
+test("recall gate blocks every non-claude-mem call until a real recall, with the contract reason", () => {
 	expect(GATE.block.length).toBeGreaterThan(0);
 	expect(GATE_REASON).toContain(OMP_ROUTE);
 	expect(GATE_REASON).not.toMatch(/\{(route|example)\}/);
@@ -112,12 +112,23 @@ test("recall gate blocks the first non-claude-mem call once, with the contract r
 		const h = harness();
 		h.start(["base"]);
 		expect(h.call(c.ompName ?? c.name, c.input)).toEqual({ block: true, reason: GATE_REASON });
-		expect(h.call(c.ompName ?? c.name, c.input)).toBeUndefined(); // once
-		expect(h.bash("git status")).toBeUndefined();
+		// ignoring the denial does not satisfy the gate: the next call is denied again
+		expect(h.call(c.ompName ?? c.name, c.input)).toEqual({ block: true, reason: GATE_REASON });
+		expect(h.bash("git status")).toEqual({ block: true, reason: GATE_REASON });
 	}
 });
 
-test("recall gate: a claude-mem call satisfies it and nothing is blocked afterwards", () => {
+test("recall gate: only a real claude-mem call satisfies it, then nothing is blocked", () => {
+	const h = harness();
+	h.start(["base"]);
+	expect(h.bash("git status")?.block).toBe(true);
+	expect(h.bash("git status")?.block).toBe(true);
+	expect(h.call("mcp__claude_mem_mcp_search_search", { query: "x" })).toBeUndefined();
+	expect(h.bash("git status")).toBeUndefined();
+	expect(h.call("edit", { path: "a.ts" })).toBeUndefined();
+});
+
+test("recall gate: each shared satisfy case unblocks the session", () => {
 	expect(GATE.satisfy.length).toBeGreaterThan(0);
 	for (const c of GATE.satisfy) {
 		const h = harness();
@@ -142,7 +153,9 @@ test("recall gate re-arms on session_start and wins over the commit nudge on a f
 	const h = harness();
 	h.start(SKILLS_PROMPT);
 	expect(h.bash("git commit -m x")).toEqual({ block: true, reason: GATE_REASON });
-	expect(h.bash("git commit -m x")?.additionalContext).toBe(COMMIT_NUDGE); // gate consumed, nudge still armed
+	expect(h.bash("git commit -m x")).toEqual({ block: true, reason: GATE_REASON }); // still denied: nothing satisfied it
+	h.call("mcp__claude_mem_mcp_search_search", { query: "x" });
+	expect(h.bash("git commit -m x")?.additionalContext).toBe(COMMIT_NUDGE); // satisfied, nudge still armed
 	h.reset();
 	h.start(SKILLS_PROMPT);
 	expect(h.bash("git status")?.block).toBe(true);

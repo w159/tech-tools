@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """PreToolUse hook -- claude-mem recall gate (REQUIRED once per session).
 
-The first main-thread tool call that is neither a claude-mem call nor TodoWrite is
-denied ONCE, with the `recallGate` text from contracts/mandates.json naming the
-claude-mem search tool and an example argument. A claude-mem call first satisfies
-the gate silently. The omp twin is omp/mandates.ts (same shared cases in
+Every main-thread tool call that is neither a claude-mem call nor TodoWrite is denied,
+with the `recallGate` text from contracts/mandates.json naming the claude-mem search
+tool and an example argument, until the session makes a real claude-mem call. Ignoring
+a denial does not satisfy the gate; only the recall itself does (it is allowed silently
+and writes the session's marker). The omp twin is omp/mandates.ts (same shared cases in
 contracts/mandates.json `recallGateCases`, asserted by both suites).
 
 Armed only when the claude-mem plugin is enabled (tool_routing.plugin_enabled).
@@ -13,20 +14,24 @@ settings" is the closest proxy for "the replacement is reachable"; omp checks th
 real callable set per call instead. ATLAS_MANDATES=off (exact string) disables it.
 
 Main thread only: a payload whose transcript_path lies under /subagents/ is skipped
-(an absent transcript_path is treated as main). One marker file per session id.
+(an absent transcript_path is treated as main), so subagents that share the parent's
+session id never re-arm the gate. State is one marker file per session id, so a session
+that recalled stays satisfied for every later call; a subagent running under its OWN
+session id has no marker and must recall once itself.
 
 Stdlib only. Fail-open by construction: any parse or runtime error exits 0 silently.
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
 import sys
 import tempfile
 
-# Per-session "gate consumed" markers (tests point this at a temp dir).
+# Per-session "recall satisfied" markers (tests point this at a temp dir).
 GATE_MARKER_DIR = os.path.join(tempfile.gettempdir(), "atlas-recall-gate")
 
 # Shared mandate contract (also read by omp/mandates.ts); unreadable -> gate unarmed.
@@ -73,16 +78,15 @@ def _is_recall(tool_name: str, tool_input) -> bool:
     return False
 
 
-def _claim(session: str) -> bool:
-    """Atomically create this session's marker; False when it already exists."""
-    safe = re.sub(r"[^A-Za-z0-9_.-]", "_", session)
+def _marker(session: str) -> str:
+    return os.path.join(GATE_MARKER_DIR, "recall-" + re.sub(r"[^A-Za-z0-9_.-]", "_", session))
+
+
+def _mark_recalled(session: str) -> None:
+    """Record that this session made its claude-mem call (idempotent)."""
     os.makedirs(GATE_MARKER_DIR, exist_ok=True)
-    try:
-        fd = os.open(os.path.join(GATE_MARKER_DIR, f"recall-{safe}"), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-    except FileExistsError:
-        return False
-    os.close(fd)
-    return True
+    with contextlib.suppress(FileExistsError):
+        os.close(os.open(_marker(session), os.O_CREAT | os.O_EXCL | os.O_WRONLY))
 
 
 def _decide(data: dict) -> str | None:
@@ -103,9 +107,11 @@ def _decide(data: dict) -> str | None:
         contract = _contract()
         if contract is None:
             return None
-        satisfied = _is_recall(tool_name, data.get("tool_input"))
-        if not _claim(session) or satisfied:
-            return None  # already consumed, or this call is the recall itself
+        if _is_recall(tool_name, data.get("tool_input")):
+            _mark_recalled(session)  # the recall itself: allow and satisfy the gate
+            return None
+        if os.path.exists(_marker(session)):
+            return None  # already satisfied this session
         return contract["recallGate"].replace("{route}", CC_ROUTE).replace("{example}", contract["recallGateExample"])
     except Exception:
         return None

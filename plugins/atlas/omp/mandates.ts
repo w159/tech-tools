@@ -115,12 +115,12 @@ export interface MandateDeps {
 export function registerMandates(pi: Pick<ExtensionAPI, "on">, deps: MandateDeps): void {
 	let ponytailListed = false;
 	let commitNudged = false;
-	let recallGated = false;
+	let recalled = false; // true only once a real claude-mem call happened; a denial never sets it
 	const off = () => (deps.env ?? process.env).ATLAS_MANDATES === "off";
 	const reset = () => {
 		ponytailListed = false;
 		commitNudged = false;
-		recallGated = false;
+		recalled = false;
 	};
 	pi.on("session_start", reset);
 	pi.on("session_switch", reset);
@@ -150,9 +150,9 @@ export function registerMandates(pi: Pick<ExtensionAPI, "on">, deps: MandateDeps
 		try {
 			if (ctx.agent.kind !== "main" || off()) return undefined;
 			const toolName = event.toolName ?? "";
-			if (!recallGated && !Object.hasOwn(RECALL_EXEMPT, toolName.toLowerCase())) {
+			if (!recalled && !Object.hasOwn(RECALL_EXEMPT, toolName.toLowerCase())) {
 				if (satisfiesRecall(toolName, event.input)) {
-					recallGated = true; // the recall happened; nothing to block
+					recalled = true; // the recall happened; nothing to block from here on
 					return undefined;
 				}
 				let active: string[] | undefined;
@@ -164,7 +164,7 @@ export function registerMandates(pi: Pick<ExtensionAPI, "on">, deps: MandateDeps
 				const route = claudeMemRoute(active);
 				const contract = loadMandates(deps.mandatesPath);
 				if (route && contract) {
-					recallGated = true;
+					// still unsatisfied: the gate stays armed and denies the next call too
 					return {
 						block: true,
 						reason: contract.recallGate.replace("{route}", `write JSON args to ${route}`).replace("{example}", contract.recallGateExample),

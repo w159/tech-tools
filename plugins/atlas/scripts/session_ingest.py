@@ -380,15 +380,6 @@ def _read_session_cwd(path):
 _KEY_CAP = 20000  # attribution per file is bounded; past it the file is "full"
 
 
-def _ensure_ingest_files(conn):
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS ingest_files ("
-        "session_id TEXT NOT NULL, path TEXT NOT NULL, "
-        "cursor_bytes INTEGER NOT NULL DEFAULT 0, size INTEGER, "
-        "row_keys TEXT, updated_at REAL, PRIMARY KEY(session_id, path))"
-    )
-
-
 def _key_add(keys, kind, val):
     """Record one row key this file contributed (bounded by _KEY_CAP)."""
     if not val or keys["full"]:
@@ -467,7 +458,9 @@ def ingest_transcript(path, conn=None, session_id=None, force=False):
                 _read_session_id(path) or os.path.splitext(os.path.basename(path))[0]
             )
         size = os.path.getsize(path)
-        _ensure_ingest_files(conn)
+        # ingest_files is defined once, in atlas_db.SCHEMA. A caller-supplied
+        # connection may predate it (pre-upgrade DB).
+        atlas_db.ensure_ingest_files(conn)
         owner = conn.execute(
             "SELECT transcript_path FROM session_logs WHERE session_id=?",
             (session_id,),
@@ -707,6 +700,17 @@ def _ingest_tool_use(conn, session_id, obj, block, ts, stats, keys):
     _key_add(keys, "t", block.get("id"))
 
 
+def _result_text(content):
+    """Flatten a tool_result `content` (str, or a list of text blocks) to text."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "\n".join(
+            b.get("text", "") for b in content if isinstance(b, dict)
+        )
+    return ""
+
+
 def _ingest_tool_result(conn, block, stats):
     tuid = block.get("tool_use_id")
     if not tuid:
@@ -718,7 +722,7 @@ def _ingest_tool_result(conn, block, stats):
         else len(json.dumps(content, default=str))
     )
     is_err = 1 if block.get("is_error") in (True, "true", "True") else 0
-    atlas_db.update_tool_result(conn, tuid, is_err, rbytes)
+    atlas_db.update_tool_result(conn, tuid, is_err, rbytes, _result_text(content))
     stats["results"] += 1
 
 
@@ -910,7 +914,11 @@ def ingest_agent_session(path, adapter, conn=None, session_id=None, sidechain=Fa
                 tuid = rec.get("tool_use_id")
                 if tuid:
                     atlas_db.update_tool_result(
-                        conn, tuid, rec.get("is_error"), rec.get("result_bytes")
+                        conn,
+                        tuid,
+                        rec.get("is_error"),
+                        rec.get("result_bytes"),
+                        rec.get("text"),
                     )
                     stats["results"] += 1
         sid = meta["session_id"] or os.path.splitext(os.path.basename(path))[0]
@@ -1193,6 +1201,7 @@ def omp_adapter(path):
                     "tool_use_id": f"{sid}:{msg['toolCallId']}",
                     "is_error": 1 if msg.get("isError") else 0,
                     "result_bytes": len(_omp_text(content)),
+                    "text": _omp_text(content)[:400],
                 }
 
 

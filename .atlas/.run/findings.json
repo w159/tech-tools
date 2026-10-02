@@ -2432,5 +2432,39 @@
     "status": "partial",
     "verified_at": "2026-10-01",
     "verified_by": "main + task workers (WorkerBudgetAdvisor, BridgeRunner, StyleNames, ExploreShellDeny, RecallGate, ShellEditGate, MuxHardening, ProcCapture, IngestFix, ShellRoute)"
+  },
+  {
+    "id": "omp-parity-round3",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "omp parity round3: claims 1,2,4,5 hold; lint_docs_names.py has SyntaxError (claim 3 fails), README:160 stale 'denied once'",
+    "evidence": [
+      "plugins/atlas/scripts/lint_docs_names.py:553 stray __omp_magic( -> SyntaxError line 555; pytest (ignoring test_lint_docs_names.py): 4 failed/1758 passed (completion_gate x2, session_boot x2 all via lint script); plugins/atlas/README.md:160 'denied once'; bun test omp: 145 pass 0 fail; docs counts 47/12/16/23/12/8.6.0/20 bindings match source; images 6=6; benchmark not re-run, delegation gate still accepts any dispatch"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && python3 -m pytest scripts hooks -q -p no:cacheprovider; bun test plugins/atlas/omp; python3 plugins/atlas/scripts/lint_docs_names.py --help",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-10-02T17:31:28+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "omp-parity-round3-fixup",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "round-three fixes verified after lint_docs_names syntax repair; PARTIAL: benchmark not re-run, delegation gate still accepts any dispatch",
+    "evidence": [
+      "pytest scripts hooks: 1788 passed 3 skipped; bun test plugins/atlas/omp: 145 pass 0 fail; verifier defects (lint_docs_names SyntaxError, README.md:160 stale 'denied once', atlas_db comment) fixed; Claude 0.64 is atlas+ambient hooks, not re-measured"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && python3 -m pytest scripts hooks -q; bun test plugins/atlas/omp",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-02T17:32:58+00:00",
+    "verified_by": "atlas:verifier"
   }
 ]

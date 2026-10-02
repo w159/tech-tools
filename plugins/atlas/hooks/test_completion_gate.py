@@ -1188,6 +1188,25 @@ class HelperUnitTest(unittest.TestCase):
         self.assertIn("3 implementer", msg)
         self.assertIn("git exploded", msg)
 
+    def test_reason_script_paths_are_absolute_and_exist(self):
+        """Block texts name scripts by absolute path resolved hook-side. The
+        literal $CLAUDE_PLUGIN_ROOT is only expanded by Claude Code's hook
+        runner, never in a model-run shell, so it must not appear."""
+        msg = _reason(
+            missing_a=False,
+            missing_b=True,
+            missing_c=False,
+            unverified=1,
+            missing_plan=True,
+            name_violations=[("docs/plans/x-2026-01-01.md", "trailing date")],
+        )
+        self.assertNotIn("CLAUDE_PLUGIN_ROOT", msg)
+        scripts = Path(completion_gate.__file__).resolve().parent.parent / "scripts"
+        for name in ("atlas_finding.py", "atlas_todo.py", "lint_docs_names.py"):
+            path = str(scripts / name)
+            self.assertTrue(os.path.isabs(path) and os.path.exists(path), path)
+            self.assertIn(f'python3 "{path}"', msg)
+
 
 def _todo_transcript(path, todos, name="TodoWrite"):
     """Write a minimal Claude Code transcript containing one TodoWrite tool_use."""

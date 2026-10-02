@@ -25,7 +25,7 @@ const pi = {
 	getActiveTools: () => [] as string[],
 } as unknown as ExtensionAPI;
 
-const ENV_KEYS = ["HOME", "ATLAS_DB", "ATLAS_DASHBOARD"] as const;
+const ENV_KEYS = ["HOME", "ATLAS_DB", "ATLAS_DASHBOARD", "ATLAS_STYLE"] as const;
 const saved: Record<string, string | undefined> = {};
 let originalCwd = "";
 let proj = "";
@@ -39,6 +39,7 @@ beforeAll(() => {
 	process.env.HOME = proj;
 	process.env.ATLAS_DB = join(proj, "atlas.db");
 	process.env.ATLAS_DASHBOARD = "off";
+	delete process.env.ATLAS_STYLE; // a developer's kill switch must not disable the style under test
 	process.chdir(proj);
 	atlasOmpExtension(pi);
 });

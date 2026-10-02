@@ -104,6 +104,30 @@ test("read and bash nudge once independently, naming the reachable route", () =>
 	expect(h.call("bash")?.additionalContext).toContain("xd://mcp__lean_ctx_ctx_shell");
 	expect(h.call("bash")).toBeUndefined();
 });
+test("exploration deny names the device of the ctx tool the command maps to", () => {
+	const tree = [...ACTIVE_DEVICES, "mcp__lean_ctx_ctx_tree"];
+	const h = harness(() => tree);
+	const deny = (command: string) => h.call("bash", { command })?.reason ?? "";
+	const read = deny("cat x");
+	expect(read).toContain("lean-ctx ctx_read");
+	expect(read).toContain("xd://mcp__lean_ctx_ctx_read");
+	expect(read).not.toContain("ctx_shell");
+	expect(deny("grep -rn x .")).toContain("xd://mcp__lean_ctx_ctx_search");
+	expect(deny("find . -name '*.ts'")).toContain("xd://mcp__lean_ctx_ctx_glob");
+	expect(deny("ls -la .atlas/.run 2>&1")).toContain("xd://mcp__lean_ctx_ctx_tree");
+	expect(deny("cat a | wc -l")).toContain("xd://mcp__lean_ctx_ctx_shell");
+});
+test("exploration deny names a builtin ctx tool directly, per the picked tool", () => {
+	const h = harness(() => ACTIVE_BUILTINS);
+	const reason = h.call("bash", { command: "cat x" })?.reason ?? "";
+	expect(reason).toContain("call ctx_read directly");
+	expect(reason).not.toContain("ctx_shell");
+});
+test("exploration deny falls back to the nudge when the picked ctx tool is unreachable", () => {
+	const h = harness(() => [...BASE_TOOLS, "write", "mcp__lean_ctx_ctx_shell"]);
+	const r = h.call("bash", { command: "ls" });
+	expect(r?.block).toBeUndefined(); // ctx_tree not reachable -> never a contradictory deny
+});
 test("read and bash stay silent when no replacement is reachable", () => {
 	const h = harness(() => ACTIVE_NONE);
 	expect(h.call("read")).toBeUndefined();
