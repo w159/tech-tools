@@ -49,10 +49,14 @@ import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { statSync } from "node:fs";
 import * as nodePath from "node:path";
 import { ATLAS_AGENT_TARGETABLE } from "./atlas-agents";
-import { type LeanKind, kindOfOmpTool, loadNativeTools } from "./contracts";
+import { defaultAdvisorDeps, registerAdvisorGate } from "./advisor";
+import { type LeanKind, explorationDenyReason, kindOfOmpTool, loadNativeTools } from "./contracts";
+import { createShellEditTracker } from "./delegation";
 import { registerHookBridge } from "./hook-bridge";
 import { registerMandates } from "./mandates";
+import { defaultLeanCtxBin, registerShellRoute } from "./shell-route";
 import { registerStyle } from "./style";
+import { registerWorkerBudget } from "./workers";
 
 /** Absolute atlas plugin root: the directory containing scripts/atlas_todo.py. */
 const PLUGIN_ROOT = nodePath.resolve(import.meta.dir, "..");
@@ -330,6 +334,8 @@ function activeToolsOf(deps: ExtensionDeps): string[] | undefined {
 export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): void {
 	let nondocsEdits = 0;
 	let taskCalls = 0;
+	// Code written through the shell (sed -i, python -c, ...) counts as an edit too.
+	const shellTracker = createShellEditTracker();
 	let namingNoticeGiven = false;
 	const nudged = new Set<string>();
 	let stopBlocked = false;
@@ -340,9 +346,17 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 			namingNoticeGiven = false;
 			nudged.clear();
 			stopBlocked = false;
+			shellTracker.reset();
 		} catch { return undefined; }
 	};
-	pi.on("session_start", reset);
+	pi.on("session_start", (_event, ctx) => {
+		reset();
+		try {
+			if (ctx.agent.kind !== "sub") shellTracker.capture(docsRoot(ctx.cwd));
+		} catch {
+			// fail open: no snapshot means shell edits are not counted
+		}
+	});
 	pi.on("session_switch", reset);
 
 
@@ -375,6 +389,14 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 			// 2) One-time per-tool nudges for read/bash, naming a reachable form;
 			// silent when nothing lean-ctx/context-mode is reachable to prefer.
 			if ((tool === "read" || tool === "bash") && kind) {
+				// Exploration-only shell (cat/grep/find/...) is denied toward lean-ctx when a
+				// replacement is reachable now (contracts/native-tools.json explorationShell).
+				if (tool === "bash" && process.env.ATLAS_TRIPWIRE_HARD !== "off") {
+					const route = resolveLeanReplacement("shell", activeToolsOf(deps));
+					const command = typeof event.input.command === "string" ? event.input.command : "";
+					const reason = route ? explorationDenyReason(command, route, contract) : undefined;
+					if (reason) return { block: true, reason };
+				}
 				if (nudged.has(tool)) return undefined;
 				const active = activeToolsOf(deps);
 				const replacement = resolveLeanReplacement(kind, active);
@@ -385,6 +407,7 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 
 			// 3) Delegation tracking — main thread only.
 			if (!isSub) {
+				shellTracker.capture(docsRoot(cwd));
 				if (tool === "edit" || tool === "write") {
 					if (inputPaths(event.input).some(p => !p.includes("://") && isNonDocsPath(nodePath.resolve(cwd, p)))) nondocsEdits++;
 				} else if (tool === "task") {
@@ -426,9 +449,10 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 			if (process.env.ATLAS_GATE === "off") return undefined;
 			// session_stop never fires for task/subagent sessions, so reaching this
 			// handler already implies the main thread.
-			if (nondocsEdits > 0 && taskCalls === 0) {
+			const edits = nondocsEdits + shellTracker.stop(docsRoot(ctx.cwd)).length;
+			if (edits > 0 && taskCalls === 0) {
 				stopBlocked = true;
-				return { decision: "block", reason: STOP_MESSAGE(nondocsEdits) };
+				return { decision: "block", reason: STOP_MESSAGE(edits) };
 			}
 			return undefined;
 		} catch {
@@ -440,6 +464,18 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 /** Session tool surfaces are per-session: omp rebinds the factory, so state and availability stay session-local. */
 export default function atlasOmpExtension(pi: ExtensionAPI): void {
 	ensureClaudePluginRoot();
+	// Route bash through `lean-ctx -c` like lean-ctx's Claude Code hook does. Registered first:
+	// omp applies only the LAST tool_call input revision, so any later bash rewrite wins.
+	registerShellRoute(pi, {
+		leanCtxBin: defaultLeanCtxBin,
+		activeTools: () => {
+			try {
+				return pi.getActiveTools();
+			} catch {
+				return undefined;
+			}
+		},
+	});
 	const activeTools = () => {
 		try {
 			return pi.getActiveTools();
@@ -450,6 +486,8 @@ export default function atlasOmpExtension(pi: ExtensionAPI): void {
 	registerStyle(pi);
 	registerMandates(pi, { activeTools });
 	registerHookBridge(pi);
+	registerWorkerBudget(pi);
+	registerAdvisorGate(pi, defaultAdvisorDeps());
 	register(pi, {
 		// getActiveTools() is omp's enabled set (top-level names plus live xd://
 		// device mounts) — exactly the callable surface. getAllTools() provenance

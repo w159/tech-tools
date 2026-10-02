@@ -23,6 +23,7 @@
     "chronicle_facet.py": "parses Claude Code transcript JSONL",
     "memory_capture.py": "parses Claude Code transcript JSONL",
     "nudge.py": "keyed to Claude Code Stop payloads and transcript",
-    "connector_credential_watch.py": "its matchers name Claude MCP tools (mcp__<server>__<tool>); omp mints mcp__<server>_<tool>, so the server/tool split is not recoverable"
+    "connector_credential_watch.py": "its matchers name Claude MCP tools (mcp__<server>__<tool>); omp mints mcp__<server>_<tool>, so the server/tool split is not recoverable",
+    "recall_gate.py": "omp/mandates.ts implements the recall gate natively"
   }
 }

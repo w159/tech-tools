@@ -606,6 +606,78 @@ def _native_tool_contract():
         return {}
 
 
+# Twin of omp/contracts.ts explorationSegments/EXPLORATION_TOOL: same split
+# regex, same token rules, same ctx_* mapping. Both iterate
+# contracts/native-tools.json explorationShell.cases.
+_WRITE_TOKENS = frozenset(("tee", "-delete", "-exec", "-execdir"))
+_EXPLORATION_TOOL = {
+    "cat": "ctx_read", "head": "ctx_read", "tail": "ctx_read",
+    "grep": "ctx_search", "rg": "ctx_search", "ag": "ctx_search",
+    "ls": "ctx_tree", "tree": "ctx_tree",
+    "find": "ctx_glob", "fd": "ctx_glob",
+}
+_SEGMENT_SPLIT = re.compile(r"&&|\|\||[;|\n]")
+
+
+def _exploration_segments(command):
+    """[[command-basename, *args], ...] when `command` is exploration-only, else
+    None. Splits the RAW text, so quoted operators (`grep 'a && b'`) over-split
+    and every such misparse lands on 'not exploration' - the allow direction.
+    Missing/malformed contract section -> None (fail open)."""
+    if not isinstance(command, str) or ">" in command:
+        return None
+    try:
+        with open(NATIVE_TOOLS_PATH) as fh:
+            commands = json.load(fh)["explorationShell"]["commands"]
+        if not isinstance(commands, list) or not all(isinstance(c, str) for c in commands):
+            return None
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return None
+    segments = [s.split() for s in _SEGMENT_SPLIT.split(command)]
+    segments = [s for s in segments if s]
+    while segments and segments[0][0] == "cd":
+        segments.pop(0)
+    if not segments:
+        return None
+    for tokens in segments:
+        name = tokens[0].rsplit("/", 1)[-1]
+        if any(t in _WRITE_TOKENS for t in tokens):
+            return None
+        in_place = any(t.startswith("-i") for t in tokens[1:])
+        if name == "sed":
+            ok = len(tokens) > 1 and tokens[1].startswith("-n") and not in_place
+        elif name == "awk":
+            ok = not in_place
+        else:
+            ok = name in commands
+        if not ok:
+            return None
+        tokens[0] = name
+    return segments
+
+
+def _is_exploration_shell(command):
+    """True when a Bash command only reads/inspects (see omp isExplorationShell)."""
+    return _exploration_segments(command) is not None
+
+
+def _exploration_deny(command, server):
+    """Deny text for an exploration-only Bash command, or None. The ctx_* tool is
+    ctx_read (cat/head/tail), ctx_search (grep/rg/ag), ctx_tree (ls/tree),
+    ctx_glob (find/fd), else ctx_shell; mixed pipelines -> ctx_shell."""
+    segments = _exploration_segments(command)
+    if segments is None:
+        return None
+    tools = {_EXPLORATION_TOOL.get(t[0], "ctx_shell") for t in segments}
+    tool = tools.pop() if len(tools) == 1 else "ctx_shell"
+    return (
+        f"DENY - this Bash command only reads files, so use lean-ctx `{tool}` instead. "
+        f'lean-ctx MCP (server "{server}") is configured for this project: if `{tool}` is '
+        f'not in your tool list yet, load it first with ToolSearch("select:mcp__{server}__{tool}"), '
+        "then call it. Native Bash stays available for tests, git, builds and anything that writes."
+    )
+
+
 def _native_tool_policy(payload):
     """Docs-scoped native-call policy. Returns (handled, nudge).
 
@@ -644,6 +716,18 @@ def _native_tool_policy(payload):
             # MCP server configured for this project (unreadable config counts as
             # not configured - fail open). Denying here would strand the caller,
             # so fall through to the one-time allow-nudge below.
+        if tool == "Bash" and os.environ.get("ATLAS_TRIPWIRE_HARD", "on").lower() != "off":
+            # A Claude PreToolUse hook cannot see the callable tool set, so
+            # reachability is the same plausibility heuristic as Grep/Glob:
+            # lean-ctx binary on PATH AND an MCP server configured here.
+            server = _lean_ctx_server_key(root) if shutil.which("lean-ctx") else None
+            tinput = payload.get("tool_input")
+            reason = server and _exploration_deny(
+                tinput.get("command") if isinstance(tinput, dict) else None, server
+            )
+            if reason:
+                _deny(reason)
+                return True, None
         session = str(payload.get("session_id") or "")
         if not session:
             return False, None

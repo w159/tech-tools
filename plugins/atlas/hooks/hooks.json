@@ -1,5 +1,5 @@
 {
-  "description": "Atlas automation: boot, doctor rollback guard, guards (bash advisor + fallow agent gate), formatting, prompt optimization, completion gate, self-improvement (memory capture + nudge), session-transcript ingest.",
+  "description": "Atlas automation: boot, doctor rollback guard, guards (claude-mem recall gate + bash advisor + fallow agent gate), formatting, prompt optimization, completion gate, self-improvement (memory capture + nudge), session-transcript ingest.",
   "hooks": {
     "SessionStart": [
       {
@@ -29,6 +29,15 @@
       }
     ],
     "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/recall_gate.py\""
+          }
+        ]
+      },
       {
         "matcher": "Bash",
         "hooks": [

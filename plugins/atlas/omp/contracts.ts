@@ -17,10 +17,26 @@ export interface KindSpec {
 	replacements: Array<{ tool: string; servers: RegExp[] }>;
 }
 
+export interface ExplorationShellSpec {
+	commands: string[];
+	cases: { deny: string[]; allow: string[] };
+}
+
 export interface NativeToolContract {
 	exemptDirs: string[];
 	exemptExtensions: string[];
 	kinds: Record<LeanKind, KindSpec>;
+	/** Absent or malformed → undefined, and nothing is ever classified as exploration (fail open). */
+	explorationShell?: ExplorationShellSpec;
+}
+
+function parseExplorationShell(raw: unknown): ExplorationShellSpec | undefined {
+	if (!raw || typeof raw !== "object") return undefined;
+	const { commands, cases } = raw as { commands?: unknown; cases?: unknown };
+	if (!strings(commands) || !cases || typeof cases !== "object") return undefined;
+	const { deny, allow } = cases as { deny?: unknown; allow?: unknown };
+	if (!strings(deny) || !strings(allow)) return undefined;
+	return { commands, cases: { deny, allow } };
 }
 
 /** "lean-ctx" → /^lean[-_]?ctx$/i-ish shape match, tolerant of omp's `_` sanitizing. */
@@ -69,6 +85,7 @@ export function loadNativeTools(path: string = NATIVE_TOOLS_PATH): NativeToolCon
 						exemptDirs: delegationExempt.dirs,
 						exemptExtensions: delegationExempt.extensions,
 						kinds: parsedKinds as Record<LeanKind, KindSpec>,
+						explorationShell: parseExplorationShell((raw as Record<string, unknown>).explorationShell),
 					};
 				}
 			}
@@ -84,4 +101,75 @@ export function loadNativeTools(path: string = NATIVE_TOOLS_PATH): NativeToolCon
 export function kindOfOmpTool(tool: string, contract: NativeToolContract | undefined): LeanKind | undefined {
 	if (!contract) return undefined;
 	return KINDS.find(k => contract.kinds[k].omp === tool);
+}
+
+/** Words that make a shell command a write regardless of the command that carries them. */
+const WRITE_TOKENS: Record<string, true> = { tee: true, "-delete": true, "-exec": true, "-execdir": true };
+
+/** ctx_* equivalent per exploration command; anything unlisted (wc, stat, file, less, more, sed, awk) → ctx_shell. */
+const EXPLORATION_TOOL: Record<string, string> = {
+	cat: "ctx_read", head: "ctx_read", tail: "ctx_read",
+	grep: "ctx_search", rg: "ctx_search", ag: "ctx_search",
+	ls: "ctx_tree", tree: "ctx_tree",
+	find: "ctx_glob", fd: "ctx_glob",
+};
+
+/**
+ * The exploration segments of a command as [command, ...args] token lists, or
+ * undefined when it is not exploration-only. Splits the RAW text, so quoted
+ * operators (`grep 'a && b'`) over-split and every such misparse lands on
+ * "not exploration" — the allow direction. Twin: dispatch_tripwire._exploration_segments.
+ */
+function explorationSegments(command: string, contract: NativeToolContract | undefined): string[][] | undefined {
+	const spec = contract?.explorationShell;
+	if (!spec || typeof command !== "string" || command.includes(">")) return undefined;
+	const segments = command.split(/&&|\|\||[;|\n]/).map(s => s.trim().split(/\s+/)).filter(t => t[0]);
+	while (segments[0]?.[0] === "cd") segments.shift();
+	if (segments.length === 0) return undefined;
+	for (const tokens of segments) {
+		const name = tokens[0].split("/").pop() ?? "";
+		if (tokens.some(t => Object.hasOwn(WRITE_TOKENS, t))) return undefined;
+		const inPlaceFlag = tokens.slice(1).some(t => t.startsWith("-i"));
+		let ok = spec.commands.includes(name);
+		if (name === "sed") ok = !!tokens[1]?.startsWith("-n") && !inPlaceFlag;
+		else if (name === "awk") ok = !inPlaceFlag;
+		if (!ok) return undefined;
+		tokens[0] = name;
+	}
+	return segments;
+}
+
+/**
+ * True when the command only reads/inspects: every segment is an exploration
+ * command (contracts/native-tools.json explorationShell.commands, `sed -n`,
+ * `awk`) and nothing writes. The contract argument defaults to the shared file
+ * only when OMITTED; an explicit undefined (unreadable contract) → false, fail open.
+ */
+export function isExplorationShell(command: string, ...contract: [NativeToolContract | undefined?]): boolean {
+	return explorationSegments(command, contract.length ? contract[0] : loadNativeTools()) !== undefined;
+}
+
+/** The lean-ctx replacement a session can reach right now (structurally index.ts LeanReplacement). */
+export type ExplorationRoute = { via: "tool"; name: string } | { via: "device"; device: string };
+
+/**
+ * Deny text for an exploration-only bash command, naming the ctx_* equivalent
+ * (ctx_read cat/head/tail, ctx_search grep/rg/ag, ctx_tree ls/tree, ctx_glob
+ * find/fd, else ctx_shell) and how the session reaches lean-ctx. undefined when
+ * the command is not exploration-only (caller allows).
+ */
+export function explorationDenyReason(
+	command: string,
+	route: ExplorationRoute,
+	...contract: [NativeToolContract | undefined?]
+): string | undefined {
+	const segments = explorationSegments(command, contract.length ? contract[0] : loadNativeTools());
+	if (!segments) return undefined;
+	const tools = new Set(segments.map(t => EXPLORATION_TOOL[t[0]] ?? "ctx_shell"));
+	const tool = tools.size === 1 ? [...tools][0] : "ctx_shell";
+	const how =
+		route.via === "tool"
+			? `call ${route.name} directly with JSON args`
+			: `write JSON args to the device ${route.device}`;
+	return `Atlas enforcement: this bash command only reads files, so use lean-ctx ${tool} instead (${how}; lean-ctx is reachable in this session). Native bash stays available for tests, git, builds and anything that writes.`;
 }

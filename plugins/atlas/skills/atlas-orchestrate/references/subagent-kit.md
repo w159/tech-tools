@@ -197,14 +197,25 @@ fully independently (separate processes, watchable panes) at their own tiers.
     python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_mux.py" status --run <id>
     python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_mux.py" kill --run <id>     # idempotent
 
-- Tiers come from the agent definition unless overridden: Claude
+- Tiers come from the agent definition: Claude
   `claude -p --agent atlas:<role> --model <model> --effort <effort> --permission-mode acceptEdits`;
-  omp `omp -p --model=<first resolvable pattern> --thinking=<thinkingLevel>` (omp has
-  no `--agent` flag, so the role's body is prepended to the brief; an `@role` alias is
-  used only when that role is configured in omp `modelRoles`).
-- Each worker gets `ATLAS_PROJECT_ROOT` and `ATLAS_WORKER_NAME`; its stdout lands in
-  `.atlas/.run/board/<Name>.jsonl` as note records addressed to `lead`, then an exit
-  record. Workers post their own notes with `atlas_todo.py note --owner <Name>`.
+  omp `omp -p --model=<concrete> --thinking=<thinkingLevel>` (omp has no `--agent` flag, so
+  the role's body is prepended to the brief).
+- Tier enforcement: `spawn` refuses (`ok:false`, exit 2, before any tmux call; the error
+  names the role and the agents path searched) when the definition is missing or yields no
+  model. The only override is an explicit `--model` AND the harness tier flag (`--effort`
+  for claude, `--thinking` for omp); `--model` alone is still refused.
+- omp model resolution: a `@role` alias in the definition's `model:` list (or in
+  `--model`) is replaced by the CONCRETE selector under `modelRoles` in
+  `~/.omp/agent/config.yml` (`ATLAS_MUX_OMP_CONFIG` overrides the path); the first pattern
+  that resolves wins and omp receives that concrete selector. Nothing resolving = refused.
+- Each worker gets `ATLAS_PROJECT_ROOT` and `ATLAS_WORKER_NAME`. `atlas_todo.note` is the
+  single writer of `.atlas/.run/board/<Name>.jsonl`: run-worker posts, all addressed to
+  `lead`, the exact harness argv (shlex-quoted, so model and effort are auditable) first,
+  then every output line (stderr merged), then `exit <code>`, plus ` [failed: <reason>]`
+  on failure. `omp -p` exits 0 on `Model "..." not found` and on HTTP 402, so output
+  matching model-not-found / 402 / credit / auth patterns is recorded as `exit 1`.
+  Workers post their own notes with `atlas_todo.py note --owner <Name>`.
 - The lead reads everything with `atlas_todo.py notes --to lead`.
 - Not Claude Code agent teams: teammates inherit the lead's effort, which would erase
   the per-role tiers.

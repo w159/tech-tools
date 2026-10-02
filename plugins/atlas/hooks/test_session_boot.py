@@ -781,5 +781,89 @@ class PluginEnabledTest(unittest.TestCase):
         with mock.patch.dict(os.environ, {"HOME": self.home}):
             self.assertFalse(self.tr.plugin_enabled("ponytail", self.proj))
 
+def _git(root, *args):
+    subprocess.run(["git", *args], cwd=root, check=True, capture_output=True)
+
+
+def make_repo():
+    """A REAL git repo: committed src/calc.py and docs/guide.md."""
+    root = os.path.realpath(tempfile.mkdtemp())
+    _git(root, "init", "-q")
+    _git(root, "config", "user.email", "t@example.com")
+    _git(root, "config", "user.name", "t")
+    os.makedirs(os.path.join(root, "src"))
+    os.makedirs(os.path.join(root, "docs"))
+    with open(os.path.join(root, "src", "calc.py"), "w") as fh:
+        fh.write("def add(a, b):\n    return a - b\n")
+    with open(os.path.join(root, "docs", "guide.md"), "w") as fh:
+        fh.write("# guide\n")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "init")
+    return root
+
+
+class DirtySnapshotTest(unittest.TestCase):
+    """SessionStart records which non-docs paths are already dirty, so the Stop
+    gate can tell shell-written code (sed -i, tee, ...) from inherited dirt."""
+
+    def setUp(self):
+        self.root = make_repo()
+        self.addCleanup(shutil.rmtree, self.root, True)
+
+    def snap_path(self, session="s1"):
+        return os.path.join(self.root, ".atlas", ".run", "dirty-snapshot-%s.json" % session)
+
+    def put(self, rel, body):
+        path = os.path.join(self.root, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as fh:
+            fh.write(body)
+
+    def test_snapshot_maps_non_docs_dirty_paths_to_hashes(self):
+        self.put("src/calc.py", "def add(a, b):\n    return a + b\n")
+        self.put("src/new.py", "x = 1\n")
+        self.put("docs/guide.md", "# changed\n")
+        self.put("README.md", "r\n")
+        self.put(".atlas/state.json", "{}\n")
+        self.assertEqual(session_boot.write_dirty_snapshot(self.root, "s1"), self.snap_path())
+        with open(self.snap_path()) as fh:
+            paths = json.load(fh)["paths"]
+        self.assertEqual(sorted(paths), ["src/calc.py", "src/new.py"])
+        self.assertTrue(all(len(h) == 64 for h in paths.values()))
+
+    def test_first_snapshot_wins_on_repeat_session_start(self):
+        self.put("src/new.py", "x = 1\n")
+        session_boot.write_dirty_snapshot(self.root, "s1")
+        self.put("src/later.py", "y = 1\n")  # shell edit between two SessionStart events
+        session_boot.write_dirty_snapshot(self.root, "s1")
+        with open(self.snap_path()) as fh:
+            self.assertEqual(sorted(json.load(fh)["paths"]), ["src/new.py"])
+
+    def test_not_a_git_repo_writes_nothing(self):
+        plain = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, plain, True)
+        self.assertIsNone(session_boot.write_dirty_snapshot(plain, "s1"))
+        self.assertFalse(os.path.exists(os.path.join(plain, ".atlas")))
+
+    def test_missing_session_id_writes_nothing(self):
+        self.assertIsNone(session_boot.write_dirty_snapshot(self.root, ""))
+        self.assertFalse(os.path.exists(os.path.join(self.root, ".atlas")))
+
+    def test_unwritable_target_is_swallowed(self):
+        self.put(".atlas", "a file where the dir should be\n")
+        self.assertIsNone(session_boot.write_dirty_snapshot(self.root, "s1"))
+
+    def test_main_writes_snapshot_for_the_session(self):
+        self.put("src/new.py", "x = 1\n")
+        home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, home, True)
+        env = {"ATLAS_DB": os.path.join(home, "atlas.db"), "HOME": home, "ATLAS_DASHBOARD": "off"}
+        with mock.patch.object(session_boot, "plugin_enabled", return_value=False):
+            code, _ = run_main_inprocess({"session_id": "s1", "cwd": self.root}, env)
+        self.assertEqual(code, 0)
+        with open(self.snap_path()) as fh:
+            self.assertEqual(sorted(json.load(fh)["paths"]), ["src/new.py"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -22,14 +22,24 @@ import * as nodePath from "node:path";
 
 export const MANDATES_PATH = nodePath.resolve(import.meta.dir, "..", "contracts", "mandates.json");
 
-/** The shared mandate contract (also read by the Python hooks); undefined when unreadable. */
-export function loadMandates(path: string = MANDATES_PATH): { commitNudge: string; recall: string } | undefined {
+/** The shared mandate contract (also read by the Python hooks). */
+export interface Mandates {
+	commitNudge: string;
+	recall: string;
+	/** Recall-gate block reason; `{route}` and `{example}` are filled per harness. */
+	recallGate: string;
+	recallGateExample: string;
+}
+
+/** Undefined when the contract is unreadable or lacks a field. */
+export function loadMandates(path: string = MANDATES_PATH): Mandates | undefined {
 	try {
 		const parsed: unknown = JSON.parse(fs.readFileSync(path, "utf8"));
-		if (!parsed || typeof parsed !== "object" || !("commitNudge" in parsed) || !("recall" in parsed)) return undefined;
-		const { commitNudge, recall } = parsed;
+		if (!parsed || typeof parsed !== "object") return undefined;
+		const { commitNudge, recall, recallGate, recallGateExample } = parsed as Record<string, unknown>;
 		if (typeof commitNudge !== "string" || typeof recall !== "string") return undefined;
-		return { commitNudge, recall };
+		if (typeof recallGate !== "string" || typeof recallGateExample !== "string") return undefined;
+		return { commitNudge, recall, recallGate, recallGateExample };
 	} catch {
 		return undefined;
 	}
@@ -52,6 +62,19 @@ export function claudeMemRoute(active: string[] | undefined): string | undefined
 	return undefined;
 }
 
+/** Tools that neither trigger nor satisfy the recall gate (omp `todo`, Claude Code `TodoWrite`). */
+const RECALL_EXEMPT: Record<string, true> = { todo: true, todowrite: true };
+
+/**
+ * True when a tool call IS the claude-mem recall: a bare claude-mem tool, or a `write`
+ * to an `xd://mcp__` claude-mem device (`path`, or `file_path` as Claude Code names it).
+ */
+export function satisfiesRecall(toolName: string, input: unknown): boolean {
+	if (CLAUDE_MEM_SERVER.test(toolName)) return true;
+	if (toolName.toLowerCase() !== "write" || !input || typeof input !== "object") return false;
+	const { path, file_path: filePath } = input as { path?: unknown; file_path?: unknown };
+	return [path, filePath].some(p => typeof p === "string" && p.startsWith("xd://mcp__") && CLAUDE_MEM_SERVER.test(p));
+}
 
 const SEGMENT_SPLIT = /&&|\|\||;|\|/;
 const ENV_ASSIGN = /^[A-Za-z_][A-Za-z0-9_]*=/;
@@ -92,10 +115,12 @@ export interface MandateDeps {
 export function registerMandates(pi: Pick<ExtensionAPI, "on">, deps: MandateDeps): void {
 	let ponytailListed = false;
 	let commitNudged = false;
+	let recallGated = false;
 	const off = () => (deps.env ?? process.env).ATLAS_MANDATES === "off";
 	const reset = () => {
 		ponytailListed = false;
 		commitNudged = false;
+		recallGated = false;
 	};
 	pi.on("session_start", reset);
 	pi.on("session_switch", reset);
@@ -123,7 +148,30 @@ export function registerMandates(pi: Pick<ExtensionAPI, "on">, deps: MandateDeps
 
 	pi.on("tool_call", (event, ctx) => {
 		try {
-			if ((event.toolName ?? "").toLowerCase() !== "bash" || ctx.agent.kind !== "main") return undefined;
+			if (ctx.agent.kind !== "main" || off()) return undefined;
+			const toolName = event.toolName ?? "";
+			if (!recallGated && !Object.hasOwn(RECALL_EXEMPT, toolName.toLowerCase())) {
+				if (satisfiesRecall(toolName, event.input)) {
+					recallGated = true; // the recall happened; nothing to block
+					return undefined;
+				}
+				let active: string[] | undefined;
+				try {
+					active = deps.activeTools();
+				} catch {
+					return undefined; // cannot prove the replacement is reachable: stay unarmed
+				}
+				const route = claudeMemRoute(active);
+				const contract = loadMandates(deps.mandatesPath);
+				if (route && contract) {
+					recallGated = true;
+					return {
+						block: true,
+						reason: contract.recallGate.replace("{route}", `write JSON args to ${route}`).replace("{example}", contract.recallGateExample),
+					};
+				}
+			}
+			if (toolName.toLowerCase() !== "bash") return undefined;
 			if (commitNudged || !ponytailListed || off()) return undefined;
 			const input: unknown = event.input;
 			const command = input && typeof input === "object" && "command" in input ? input.command : undefined;

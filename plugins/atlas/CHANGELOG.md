@@ -33,7 +33,33 @@
 - `docs/atlas-harness-parity.md`: per-rule parity matrix with file:line evidence
   and a paired Claude Code / omp benchmark run.
 
+- **omp runtime parity, round two.**
+  - `omp/workers.ts`: subagent output-token clamp (`ATLAS_WORKER_MAX_TOKENS`,
+    default 32000) for anthropic/openai/openrouter/ollama payloads; workers had
+    died with HTTP 402 after requesting 131072 tokens.
+  - `omp/advisor.ts`: advisor concerns/blockers become board items and block
+    `session_stop` (max 3) until closed with evidence (`ATLAS_ADVISOR_GATE=off`).
+  - `omp/shell-route.ts`: bash runs through `lean-ctx -c`, as lean-ctx's own Claude
+    hook does (`ATLAS_LEAN_SHELL=off`).
+  - Exploration-only shell commands (cat/grep/find/ls/... without writes) are
+    denied toward the ctx_* equivalent in both harnesses when lean-ctx is reachable
+    (`contracts/native-tools.json` `explorationShell`, shared cases).
+  - claude-mem recall is required once per session in both harnesses:
+    `hooks/recall_gate.py` and `omp/mandates.ts` block the first non-recall call.
+  - The delegation gate counts code written through the shell in both harnesses
+    (git-status + hash snapshot at session start).
+  - `omp/proc.ts` temp-file process transport, used by the hook bridge, delegation
+    snapshot and advisor board calls; hook timeouts fit omp's 30 s handler budget.
+  - `contracts/tool-names.json` maps bare `ctx_*` names to omp device names; phrase
+    keys removed.
+
 ### Fixed
+- `session_ingest.py`: ingesting a Claude subagent transcript erased the main
+  session's rows (one cursor per session id); now one cursor per file. omp worker
+  and advisor files ingest as sidechains of the lead instead of separate sessions.
+- `atlas_mux.py`: refuses spawns without a resolvable tier, resolves omp role
+  aliases to concrete models, classifies `omp -p` exit-0 failures (not found, 402,
+  auth), and posts worker output through `atlas_todo.note` (one writer).
 - `session_boot.py` reported claude-mem/ponytail/context-mode as a "Setup gap"
   when they were installed as Claude Code plugins; `tool_routing.plugin_enabled`
   now reads `enabledPlugins` (user, then project settings).
@@ -42,10 +68,11 @@
 - omp still lacks completion-gate conditions (a)–(l), the prompt optimizer,
   inline-op thresholds, dispatch-spec checks, docs-drift watch and memory capture
   (listed in the parity doc).
-- Benchmark (same task, both harnesses): both fixed the bug and verified, but
-  native-reader share was 1.0 in both (no lean-ctx in the throwaway repos) and
-  both fixed code on the main thread; omp's delegation gate does not see
-  `bash sed -i` edits. See the parity doc.
+- Benchmark (same task, both harnesses, measured with the colony miner): both
+  passed, both forced a claude-mem recall first, both routed shell through
+  lean-ctx; native-reader share 0.64 (Claude) / 0.92 (omp), above the 0.5 target,
+  mostly Read-before-Edit. Both leads edited the code and dispatched a verifier,
+  which satisfies gate (m) as written. See docs/atlas-harness-parity.md.
 
 ## [8.5.1] - 2026-10-01
 

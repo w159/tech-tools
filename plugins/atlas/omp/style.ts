@@ -27,6 +27,8 @@ const PREFACE =
 
 export interface ToolNameMap {
 	claudeToOmp: Record<string, string>;
+	/** Bare lean-ctx/context-mode names (`ctx_search`) → the omp device a real session mints. */
+	bareTools: Record<string, string>;
 	mcp: { prefix: string; separator: string };
 }
 
@@ -51,7 +53,13 @@ export function loadToolNames(path: string = TOOL_NAMES_PATH): ToolNameMap | und
 		const { claudeToOmp, mcp } = parsed;
 		if (!claudeToOmp || typeof claudeToOmp !== "object" || !mcp || typeof mcp !== "object") return undefined;
 		if (!("prefix" in mcp) || typeof mcp.prefix !== "string" || !("separator" in mcp) || typeof mcp.separator !== "string") return undefined;
-		return { claudeToOmp: claudeToOmp as Record<string, string>, mcp: { prefix: mcp.prefix, separator: mcp.separator } };
+		const bare = "bareTools" in parsed ? parsed.bareTools : undefined;
+		const bareTools = bare && typeof bare === "object" && !Array.isArray(bare) ? (bare as Record<string, string>) : {};
+		return {
+			claudeToOmp: claudeToOmp as Record<string, string>,
+			bareTools,
+			mcp: { prefix: mcp.prefix, separator: mcp.separator },
+		};
 	} catch {
 		return undefined;
 	}
@@ -83,17 +91,18 @@ export function mcpDevice(server: string, tool: string, map: ToolNameMap): strin
 const MCP_TOKEN = "\\bmcp__([A-Za-z0-9-]+(?:_[A-Za-z0-9-]+)*)__([A-Za-z0-9_-]+)";
 
 /**
- * Single-pass translation: longest key first, so phrase entries win over the
- * bare names they contain, and inserted text is never rescanned.
+ * Single-pass translation: longest key first, and inserted text is never
+ * rescanned. Keys come from claudeToOmp (single tokens, no whitespace, so prose
+ * reflow cannot break them) and bareTools (bare `ctx_*` names → omp devices).
  */
 export function translateToolNames(text: string, map: ToolNameMap): string {
-	const keys = Object.keys(map.claudeToOmp).sort((a, b) => b.length - a.length);
+	const table: Record<string, string> = { ...map.bareTools, ...map.claudeToOmp };
+	const keys = Object.keys(table).sort((a, b) => b.length - a.length);
 	const parts = [MCP_TOKEN, ...keys.map(keyPattern)];
 	const re = new RegExp(parts.map(p => `(?:${p})`).join("|"), "g");
-	const normalized = new Map(keys.map(k => [k.trim().split(/\s+/).join(" "), map.claudeToOmp[k]]));
 	return text.replace(re, (match: string, server?: string, tool?: string) => {
 		if (server && tool) return mcpDevice(server, tool, map);
-		return normalized.get(match.split(/\s+/).join(" ")) ?? match;
+		return table[match] ?? match;
 	});
 }
 
