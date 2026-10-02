@@ -75,11 +75,13 @@ test("tool names translate on word boundaries only", () => {
 	expect(translateToolNames("ask with AskUserQuestion", MAP)).toBe("ask with an inline user question");
 });
 
-test("multi-word entries win over the bare names they contain, across line wraps", () => {
-	const src = "and under `ENABLE_TOOL_SEARCH` it is deferred\n(`ToolSearch(\"select:TodoWrite\")`). Check once.";
-	const out = translateToolNames(src, MAP);
-	expect(out).not.toContain("ToolSearch");
-	expect(out).not.toContain("TodoWrite");
+test("phrase keys are gone; single-token names still translate across wraps", () => {
+	for (const key of Object.keys(MAP.claudeToOmp)) expect(key).not.toMatch(/\s/);
+	expect(Object.keys(MAP.claudeToOmp).filter(k => /^[A-Z]\w*$/.test(k)).length).toBeGreaterThan(0);
+	expect(translateToolNames("carries the ToolSearch\n+ serena/lean-ctx TOOLS block", MAP)).toBe(
+		"carries the xd:// device catalog\n+ serena/lean-ctx TOOLS block",
+	);
+	expect(translateToolNames("(`ToolSearch(\"select:TodoWrite\")`)", MAP)).toBe("(`xd:// device catalog(\"select:todo\")`)");
 });
 
 test("mcp__server__tool maps to omp's xd device mint", () => {
@@ -92,7 +94,15 @@ test("drift: the injected block is exactly the translated single-source style", 
 	const body = loadStyleBody(STYLE_PATH);
 	expect(body).toBeDefined();
 	const rendered = renderOmpStyle() ?? "";
-	expect(rendered).toContain(translateToolNames(body ?? "", MAP));
+	expect(rendered).toContain(STYLE_BEGIN);
+	expect(rendered).toContain(STYLE_END);
+	const begin = rendered.indexOf(STYLE_BEGIN);
+	const end = rendered.indexOf(STYLE_END);
+	expect(begin).toBeGreaterThanOrEqual(0);
+	expect(end).toBeGreaterThan(begin);
+	const inner = rendered.slice(begin + STYLE_BEGIN.length + 1, end - 1);
+	// "preface\n\n" then exactly translate(source) up to the end marker
+	expect(inner.slice(inner.indexOf("\n\n") + 2)).toBe(translateToolNames(body ?? "", MAP));
 	expect(rendered).not.toContain("force-for-plugin");
 });
 
@@ -110,4 +120,23 @@ test("drift: every Claude tool name in the style source has an omp mapping", () 
 	const rendered = renderOmpStyle() ?? "";
 	const leaked = used.filter(t => new RegExp(`\\b${t}\\b`).test(rendered));
 	expect(leaked).toEqual([]);
+	const bareUsed = [...new Set(body.match(/\bctx_\w+/g) ?? [])];
+	expect(bareUsed.length).toBeGreaterThan(0);
+	const bareUnmapped = bareUsed.filter(t => !((MAP.bareTools ?? {})[t]));
+	expect(bareUnmapped).toEqual([]);
+	const bareLeaked = bareUsed.filter(t => new RegExp(`\\b${t}\\b`).test(rendered.replace(/\bxd:\/\/mcp__\w+/g, "")));
+	expect(bareLeaked).toEqual([]);
+});
+
+test("bare lean-ctx and context-mode names map to the devices a real omp session mints", () => {
+	expect(translateToolNames("use `ctx_search`/`ctx_glob` when lean-ctx MCP is configured", MAP)).toBe(
+		"use `xd://mcp__lean_ctx_ctx_search`/`xd://mcp__lean_ctx_ctx_glob` when lean-ctx MCP is configured",
+	);
+	expect(translateToolNames("exploration Read uses `ctx_read`, noisy Bash uses `ctx_shell`", MAP)).toBe(
+		"exploration read uses `xd://mcp__lean_ctx_ctx_read`, noisy bash uses `xd://mcp__lean_ctx_ctx_shell`",
+	);
+	expect(translateToolNames("context-mode `ctx_execute`", MAP)).toBe(
+		"context-mode `xd://mcp__context_mode_context_mode_ctx_execute`",
+	);
+	expect(translateToolNames("ctx_searching and my_ctx_search stay", MAP)).toBe("ctx_searching and my_ctx_search stay");
 });

@@ -16,9 +16,16 @@ Marketplace `4.4.0`; atlas `8.6.0`.
   `hooks/hooks.json` in omp (session boot, prompt optimizer, bash advisor, fallow
   gate, format-after-edit, docs-drift watch); `contracts/hook-bridge.json` lists
   the rest and why.
-- `docs/atlas-harness-parity.md` records each rule's status per harness, the omp
-  gaps still open, and a paired benchmark run (both harnesses fixed and verified
-  the task; native-reader share 1.0 in both; main-thread code edits in both).
+- omp now also has: a worker output-token clamp (the cause of subagent HTTP 402s),
+  an advisor gate that turns advisor concerns into board items and blocks stop
+  until they are closed, `lean-ctx -c` shell routing, and a temp-file process
+  transport for hooks.
+- Both harnesses: exploration-only shell commands denied toward lean-ctx,
+  claude-mem recall required once per session, shell-written code counted by the
+  delegation gate. Session ingest fixed for subagent transcripts (Claude) and
+  worker files (omp).
+- `docs/atlas-harness-parity.md`: status per rule, a miner-measured paired
+  benchmark, the open delegation-policy decision, and remaining gaps.
 
 ## 2026-10-01 -- Nudge-marker, ingest dispatch-name, and omp indentation fixes
 

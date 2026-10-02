@@ -60,7 +60,7 @@ Sources read 2026-10-01: [output-styles](https://code.claude.com/docs/en/output-
 | Session boot (operating-contract context injection) | `hooks/session_boot.py` | SessionStart, `hooks/hooks.json` | `omp/hook-bridge.ts` runs the same script from `hooks/hooks.json` (allowlisted in `contracts/hook-bridge.json`): first main `before_agent_start` → SessionStart payload; its additionalContext is appended to every main prompt (marker-idempotent) | `hooks/test_session_boot.py`; `omp/hook-bridge.test.ts` (SessionStart once, context reaches the system prompt); live `omp --print` smoke 2026-10-01: model confirmed 'Atlas: orchestrator posture' in its system prompt | enforced (same script both harnesses) |
 | Prompt optimizer (augment vague user prompt before turn) | `hooks/prompt_optimizer.py` | UserPromptSubmit, `hooks/hooks.json` (timeout 120) | `omp/hook-bridge.ts` runs the same script from `hooks/hooks.json` (allowlisted in `contracts/hook-bridge.json`): every main `before_agent_start` → UserPromptSubmit payload with the prompt; additionalContext appended for that turn | `hooks/test_prompt_optimizer.py`; `omp/hook-bridge.test.ts` | enforced (same script) |
 | Native-tool routing — Grep/Glob denied toward lean-ctx | `contracts/native-tools.json` `kinds.search/glob` (mode `deny`, replacement + server) | `_native_tool_policy` reads the contract (`_native_tool_contract`), deny when lean-ctx plausibly reachable (`_lean_ctx_server_key`); wired PreToolUse | per-call deny when the replacement is live: `omp/index.ts` tool_call via `kindOfOmpTool` + `resolveLeanReplacement` (both from `omp/contracts.ts`) | `hooks/test_dispatch_tripwire.py` `NativeToolPolicyTest` incl. `test_contract_drives_replacement_and_mode`, `test_unreadable_contract_allows_silently`; `omp/contracts.test.ts`; `omp/index.test.ts` | enforced (reachability is per-harness: CC = configured-server heuristic, omp = live `getActiveTools()`) |
-| Native-tool routing — Read/Bash one-time nudge | `contracts/native-tools.json` `kinds.read/shell` (mode `nudge`) | nudge texts + once-marker in `hooks/dispatch_tripwire.py` (`_native_tool_policy`, `_emit_nudge`) | `omp/index.ts` read/bash branch, `readNudge`/`bashNudge`, replacements from the contract | `omp/index.test.ts`; `hooks/test_dispatch_tripwire.py` | enforced (both advisory-by-design; nudge, never deny; wording per harness because the call mechanism differs) |
+| Native-tool routing — Read/Bash | `contracts/native-tools.json` `kinds.read/shell` + `explorationShell` (shared deny/allow cases) | exploration-only Bash (cat/grep/find/ls/... with no writes) DENIED toward the ctx_* equivalent when lean-ctx is plausibly reachable (`dispatch_tripwire._is_exploration_shell`; a PreToolUse hook cannot see the callable set, so reachability = binary + configured server); other Bash and Read get the one-time nudge; Read-before-Edit stays allowed | same deny via `isExplorationShell`/`explorationDenyReason` in `omp/index.ts` when `resolveLeanReplacement("shell")` is live; every bash call is routed through `lean-ctx -c` by `omp/shell-route.ts` (mirrors lean-ctx's own Claude Code PreToolUse rewrite) | `hooks/test_dispatch_tripwire.py` `ExplorationShellDenyTest`; `omp/contracts.test.ts`; `omp/shell-route.test.ts` (wrapped command executes identically; real `lean-ctx -c` on this host) | enforced (Read cannot be denied in omp: `edit` needs a `read` snapshot tag; same Read-before-Edit carve-out as Claude) |
 | Inline-op threshold (deny tier) | `hooks/dispatch_tripwire.py:42-46` (`DENY_THRESHOLD = 6`) | deny at Nth unsanctioned inline op: `hooks/dispatch_tripwire.py:448-469` (`count >= DENY_THRESHOLD` at `:461`); fail-closed on DB error `:452-459` | `—` (omp counts only edit/write/task for the stop gate; no threshold) | `hooks/test_dispatch_tripwire.py:287-299` (`test_pre_deny_at_ninth_inline_op`, `test_pre_no_deny_when_not_orchestrating`) | gap |
 | Inline-op advisory threshold | `hooks/dispatch_tripwire.py:170-175` (`_threshold()`, `ATLAS_TRIPWIRE_THRESHOLD`, default 4) | PostToolUse STOP nag: `hooks/dispatch_tripwire.py:810-816` via PostToolUse wiring `hooks/hooks.json:79-87` | `—` | `hooks/test_dispatch_tripwire.py:95-112,715-724` (`test_under_threshold_is_silent`, `test_trips_at_threshold`) | gap |
 | Inline edit of production target code denied | `hooks/dispatch_tripwire.py:441-446` | deny for Edit/Write/MultiEdit/NotebookEdit on non-orchestration paths (`_is_orchestration_path` `:190-211`) | `—` (omp notes the edit and acts only at session_stop) | `hooks/test_dispatch_tripwire.py:397-437` (`test_pre_allows_edit_to_the_session_scratchpad`, `test_pre_denies_edit_to_in_root_source`, `test_pre_deny_prod_edit_allows_docs_edit`, `test_pre_deny_notebook_edit`) | gap |
@@ -80,16 +80,16 @@ Sources read 2026-10-01: [output-styles](https://code.claude.com/docs/en/output-
 | Gate (j) — worktree close-out | `hooks/completion_gate.py:63-67` | `_leftover_worktrees` `hooks/completion_gate.py:483-508` + `_run_used_worktrees` `:509-531` | not bridged: `completion_gate.py` reads Claude Code transcript JSONL + atlas_db run events written by Claude hooks (`contracts/hook-bridge.json`) | `hooks/test_completion_gate.py:1312-1439` (incl. `test_recorded_worktree_dispatch_blocks_on_leftovers` at `:1393`) | gap (stated: transcript schema + Claude-only run events) |
 | Gate (k) — plan mandate (a plan surface must exist) | `hooks/completion_gate.py:68-82` | `_has_todo_plan` `hooks/completion_gate.py:436-465` (+ `_has_ledger_line` `:420-435`) | not bridged: `completion_gate.py` reads Claude Code transcript JSONL + atlas_db run events written by Claude hooks (`contracts/hook-bridge.json`) | `hooks/test_completion_gate.py:1961-2009` (`test_no_plan_on_any_surface_blocks`, board/ledger/TodoWrite satisfaction at `:1968-1986`) | gap (stated: transcript schema + Claude-only run events) |
 | Gate (l) — dated-doc naming `<YYYY-MM-DD>-<slug>` | `hooks/completion_gate.py:74-82` | `_docs_name_violations` `hooks/completion_gate.py:466-482` (git-scoped) | not bridged: `completion_gate.py` reads Claude Code transcript JSONL + atlas_db run events written by Claude hooks (`contracts/hook-bridge.json`) | `hooks/test_completion_gate.py:2055-2074` (`test_misnamed_plan_blocks_with_condition_l`, date-first allow at `:2074`) | gap (stated: transcript schema + Claude-only run events) |
-| Gate (m) — delegation mandate (code writes require a dispatch) | `hooks/completion_gate.py` docstring (m); exemption dirs/extensions `contracts/native-tools.json` `delegationExempt` | `_missing_delegation` (exemption from `_delegation_exempt`, fail open when unreadable); Stop wiring | omp `session_stop` block-once in `omp/index.ts`; `isNonDocsPath` reads the same exemption | `hooks/test_completion_gate.py` `DelegationMandateTest` incl. `test_shared_exemption_cases_match_contract`; `omp/contracts.test.ts` runs the same `delegationExemptCases` through `isNonDocsPath`; `omp/index.test.ts` | enforced (omp counters are per-session; CC reads the run DB) |
+| Gate (m) — delegation mandate (code writes require a dispatch) | `hooks/completion_gate.py` (m); exemption `contracts/native-tools.json` `delegationExempt` | `_missing_delegation`: Write/Edit events PLUS non-docs paths dirty vs the SessionStart snapshot (`.atlas/.run/dirty-snapshot-<session>.json`, written by `session_boot.py`), so `sed -i`/script edits count | omp `session_stop`: edit/write calls PLUS `omp/delegation.ts` git-status+hash snapshot diff, so shell edits count | `hooks/test_completion_gate.py` `ShellEditDelegationTest` (real git repos); `omp/delegation.test.ts`; `omp/delegation-gate.test.ts` (red against the previous index.ts, green now) | enforced (any dispatch satisfies it in both; see Delegation policy below) |
 | Board claim/notes (durable colony channel) | `scripts/atlas_todo.py:4` (board file), `note` `:505`, `notes` `:530` | workers run the same CLI; gate reads the board (`_board_open_todos` `hooks/completion_gate.py:367`); dispatch-tripwire `tests` reference claim protocol `hooks/test_atlas_contract.py:1461` | omp workers get `CLAUDE_PLUGIN_ROOT` set so the identical CLI works: `plugins/atlas/omp/index.ts:54-69` (`ensureClaudePluginRoot`), header `:46-53` | `hooks/test_todo_capture.py`; `hooks/test_atlas_contract.py:1461-1472`; omp `plugins/atlas/omp/index.test.ts:246-260` | enforced (same CLI both harnesses) |
 | Todo mirror (plan → board) | `hooks/todo_capture.py:2-7` | PostToolUse TodoWrite → `atlas_todo.mirror`: `hooks/todo_capture.py:35-42` (`atlas_todo.py:247`), wired `hooks/hooks.json:56-64` | `tool_result` todo → board: `plugins/atlas/omp/index.ts:399-413` (`boardItemsFromTodoDetails` `:78-94`, argv `:107-116`), fail-open `:410-412` | `hooks/test_todo_capture.py`; omp `plugins/atlas/omp/index.test.ts:285-355` (mirror argv runs real python CLI `:303`, main-thread/scoped/error-tolerant `:322-355`) | enforced (omp normalizes statuses to board vocabulary, `:43-44,87-90`) |
 | Docs-drift watcher (catch drift at edit time, not Stop) | `hooks/docs_drift_watch.py` | PostToolUse Edit/Write | `omp/hook-bridge.ts` runs the same script from `hooks/hooks.json` (allowlisted in `contracts/hook-bridge.json`): `tool_result` for edit/write → PostToolUse payload (omp `path` → absolute `file_path`); warning returned as additionalContext | `hooks/test_docs_drift_watch.py`; `omp/hook-bridge.test.ts`; live smoke wrote `.atlas/.run/docs_drift_watch.json` after an omp `write` | enforced (same script) |
 | Memory capture (durable facts auto-saved at Stop) | `hooks/memory_capture.py:2-11` | Stop hook main `hooks/memory_capture.py:318-420`, scope guard `_should_capture` `:159`, wired `hooks/hooks.json:114-117` | not bridged: parses Claude Code transcript JSONL; omp session files use a different schema (`contracts/hook-bridge.json` notBridged; needs a transcript adapter) | `hooks/test_memory_capture.py` (33 tests incl. `test_capture_refuses_subagent_scopes` at `hooks/test_atlas_contract.py:1397`) | gap (stated: transcript schema) |
 | Self-improvement nudge | `hooks/nudge.py:2-9` | Stop, after capture: main `hooks/nudge.py:39-77`, wired `hooks/hooks.json:118-121` | not bridged: keyed to Claude Code Stop payloads and transcript (`contracts/hook-bridge.json` notBridged; needs a transcript adapter) | `hooks/test_nudge.py` | gap (stated: transcript schema) |
 | Per-role model/effort/thinking tiers | `agents/*.md` frontmatter (e.g. `agents/verifier.md:4-5` `model: sonnet` / `effort: medium`); tier table `skills/atlas-orchestrate/references/squad-and-tiers.md:13-29`; omp map `plugins/atlas/omp/atlas-agents.ts:23-37` | `model:` + `effort:` frontmatter honored by Claude Code (sub-agents.md frontmatter table); override drift denied by `hooks/dispatch_tripwire.py:348-367,393-405`; ceiling enforced by `hooks/test_atlas_contract.py:681-698` (`test_every_agent_declares_a_valid_effort`, `test_no_agent_exceeds_sonnet`) | generated omp-native agents bake `thinkingLevel:` + `model:` (`plugins/atlas/omp/gen-agents.ts:58-70`, `modelPatternsFor` `plugins/atlas/omp/atlas-agents.ts:68-71`; committed `plugins/atlas/omp/agents/verifier.md:6-7`); harness limit: Claude Code has no per-subagent thinking setting (sub-agents.md), so CC tunes `effort`, omp tunes `thinkingLevel` | `plugins/atlas/omp/gen-agents.test.ts:40-109` (counterpart parity `:40`, idempotent no-diff `:78`, unknown names rejected `:109`); `hooks/test_atlas_contract.py:678-821` (agents exist, effort, sonnet ceiling, color palette at `:708`) | enforced (mechanism differs by harness capability) |
-| Claude-mem recall at session start | `contracts/mandates.json` `recall` | `hooks/session_boot.py` `recall_mandate()` line in SessionStart context, armed only when the claude-mem plugin is enabled (`tool_routing.plugin_enabled`); `ATLAS_MANDATES=off` | `omp/mandates.ts` `before_agent_start` appends the same line naming the live `xd://` claude-mem search route; silent when not callable | `hooks/test_session_boot.py` `RecallMandateTest`, `PluginEnabledTest`; `omp/mandates.test.ts`; live `omp --print` smoke (line present; absent under `ATLAS_MANDATES=off`) | advisory (both; no hook can prove the model ran the search) |
+| Claude-mem recall at session start | `contracts/mandates.json` `recall`, `recallGate`, `recallGateCases` | `hooks/recall_gate.py` (PreToolUse): first main-thread tool call that is not a claude-mem call (or TodoWrite) is DENIED once with the recall instruction, armed when the claude-mem plugin is enabled; plus the SessionStart "Recall first" line | `omp/mandates.ts`: same once-per-session block when a claude-mem search device is callable now; plus the system-prompt line | `hooks/test_recall_gate.py`; `omp/mandates.test.ts` (shared cases); benchmark: both leads' first call was blocked and the next call was a claude-mem search | enforced (once per session; CC arming is plugin-enabled because hooks cannot see the callable set) |
 | Ponytail pre-commit review | `contracts/mandates.json` `commitNudge` + `gitCommitCases` (shared parse cases) | `hooks/bash_advisor.py` `_match_git_commit` + `_commit_nudge`: one-time per session, armed when the ponytail plugin is enabled | `omp/mandates.ts` `matchGitCommit` + tool_call nudge, armed when `ponytail-review` is listed in the session's system prompt | `hooks/test_bash_advisor.py` (`GitCommitParseTest` reads the shared cases, `CommitReviewNudgeTest`); `omp/mandates.test.ts` (same cases) | advisory (both; nudge, never a commit block) |
-| Context-mode routing (noisy shell output) | `contracts/native-tools.json` `kinds.shell.replacements` (`ctx_shell`, `ctx_execute` via lean-ctx or context-mode) | one-time Bash nudge names ctx_shell/ctx_execute (`hooks/dispatch_tripwire.py`) | shell replacements resolved from the contract + context-mode alt text in `bashNudge` (`omp/index.ts`) | `omp/index.test.ts`, `omp/contracts.test.ts`; `hooks/test_completion_gate.py` ctx_execute credit | advisory (both; preference cannot be proven ex ante by a hook) |
+| Context-mode / lean-ctx shell routing | `contracts/native-tools.json` `kinds.shell` | lean-ctx's own Claude plugin hook rewrites every Bash to `lean-ctx -c '<cmd>'` (observed in the benchmark transcript); atlas adds the exploration deny + nudge | `omp/shell-route.ts` performs the same `lean-ctx -c` rewrite (armed when the binary resolves AND a lean-ctx MCP route is active; `ATLAS_LEAN_SHELL=off`, `LEAN_CTX_DISABLED`) | `omp/shell-route.test.ts`; benchmark omp transcript: every bash ran as `/opt/homebrew/bin/lean-ctx -c '...'` | enforced |
 | Serena symbol edits (replace_symbol_body over whole-file rewrites) | `skills/atlas-orchestrate/references/tool-routing.md:20-27`; subagents hard rule `hooks/dispatch_tripwire.py:226-262` | enforced for dispatches: TOOLS block must contain serena (`_toolkit_gap` deny `hooks/dispatch_tripwire.py:408-434`); body rule advisory at edit time (harness limit: no Edit-time hook inspects which symbol-edit tool the model *used*) | `—` | `hooks/test_dispatch_tripwire.py:313-347`; `hooks/test_atlas_contract.py:737-784` (`test_code_agents_name_serena_symbol_tools`, `test_agents_name_lean_ctx_not_bash_as_the_serena_fallback`) | enforced (CC, dispatch scope) / gap (omp) |
 | Fallow gate (commit/push denied below floor) | `hooks/fallow_gate.py` | PreToolUse Bash deny | `omp/hook-bridge.ts` runs the same script from `hooks/hooks.json` (allowlisted in `contracts/hook-bridge.json`): `tool_call` bash → PreToolUse payload; `permissionDecision: deny` becomes `{ block, reason }` | `hooks/test_fallow_gate.py`; `omp/hook-bridge.test.ts` (deny → block) | enforced (same script) |
 | Bash catastrophic-command advisor | `hooks/bash_advisor.py` | PreToolUse Bash, advisory additionalContext | `omp/hook-bridge.ts` runs the same script from `hooks/hooks.json` (allowlisted in `contracts/hook-bridge.json`) (PreToolUse); the ponytail mandate inside it is silenced in omp (`ATLAS_MANDATES=off` for bridged hooks) because `omp/mandates.ts` owns it | `hooks/test_bash_advisor.py`; `omp/hook-bridge.test.ts` | enforced (same script) |
@@ -100,84 +100,68 @@ Sources read 2026-10-01: [output-styles](https://code.claude.com/docs/en/output-
 
 Known drift worth a follow-up (not a row rewrite): `skills/atlas-orchestrate/references/laws-and-gates.md:28-30` still says the tripwire "DENIES the call outright at 8 inline ops"; the code denies at 6 (`hooks/dispatch_tripwire.py:46`) and advises at 4 (`:170-175`).
 
-## Landed in 8.6.0
+## Added in 8.6.0 (omp runtime)
 
-1. **omp output style** — `omp/style.ts` (row *Output-style directives*). Harness
-   limit kept on purpose: the style never reaches subagents in either harness, so
-   subagent rules still travel in dispatch prompts.
-2. **Shared contracts** — `contracts/native-tools.json` (native-tool kinds, modes,
-   replacements, delegation exemption + shared test cases), `contracts/mandates.json`
-   (mandate text + git-commit parse cases), `contracts/tool-names.json` (style
-   translation). Each is read by both runtimes; reachability logic and message
-   wording stay per harness because the call mechanism differs.
-3. **Tool mandates** — claude-mem recall and ponytail pre-commit rows.
-4. **tmux mux mode** — `scripts/atlas_mux.py` (`ATLAS_MUX=tmux`): each worker is a
-   headless `claude -p --agent atlas:<role>` or `omp -p` process in a window of one
-   `atlas-<run>` tmux session, at its definition's tier (claude `model`/`effort`;
-   omp first resolvable `model` pattern + `thinkingLevel`), streaming note-shaped
-   records to `.atlas/.run/board/<name>.jsonl` that `atlas_todo.py notes --to lead`
-   reads. Not agent teams (teammates inherit the lead's effort). Tests:
-   `scripts/test_atlas_mux.py` (fake tmux/claude/omp); real tmux smoke 2026-10-01:
-   two workers (one per harness) posted notes, the lead read both via
-   `atlas_todo.py notes --to lead`, `kill` left no `atlas-*` session.
+| Mechanism | Module | What it does | Proof |
+|---|---|---|---|
+| Output style | `omp/style.ts` + `contracts/tool-names.json` (`claudeToOmp`, `bareTools`) | appends the translated `atlas-orchestrator.md` to the main system prompt; bare `ctx_*` names become live `xd://` device names | `omp/style.test.ts` drift tests; `omp/extension.test.ts` (full extension, omp handler chaining: style marker AND session-start marker present); benchmark: omp lead answered with the `ATLAS |` header |
+| Hook bridge | `omp/hook-bridge.ts`, `omp/proc.ts`, `contracts/hook-bridge.json` | runs the bridgeable Claude hooks straight from `hooks/hooks.json`; per-hook timeout ≤ 25 s inside omp's 30 s handler budget; temp-file stdio transport | `omp/hook-bridge.test.ts` runs REAL `bash_advisor.py` and `docs_drift_watch.py` and asserts their context text; every hooks.json script is classified bridged/notBridged |
+| Worker output budget | `omp/workers.ts` | clamps subagent `max_tokens` / `max_completion_tokens` / `max_output_tokens` / ollama `num_predict` to `ATLAS_WORKER_MAX_TOKENS` (32000) — the cause of the HTTP 402 "requested 131072, can afford 29951" that killed workers | `omp/workers.test.ts` per provider shape (field names verified in omp's provider code) |
+| Advisor gate | `omp/advisor.ts` | every advisor note of severity concern/blocker becomes a board item; `session_stop` blocks (≤ 3 times) while any is open, so the lead must address and close each with evidence | `omp/advisor.test.ts` incl. a real `atlas_todo.py add/list` round trip. Claude Code has no advisor channel (advisory row) |
+| Recall gate, exploration deny, shell routing, shell-edit delegation | `omp/mandates.ts`, `omp/contracts.ts`, `omp/shell-route.ts`, `omp/delegation.ts` | see matrix rows above | see matrix rows above |
+| Session ingest for both harnesses | `scripts/session_ingest.py` | per-file cursors (a Claude subagent transcript no longer erases the main session's rows); omp worker/advisor files ingest as sidechains of the lead | `scripts/test_session_ingest.py` red/green; real fixtures re-ingested |
 
-5. **Hook bridge** — `omp/hook-bridge.ts` runs the Claude Code hooks listed as
-   bridgeable in `contracts/hook-bridge.json` directly from `hooks/hooks.json`
-   (session boot, prompt optimizer, bash advisor, fallow gate, format-after-edit,
-   docs-drift watch). hooks.json stays the one wiring source.
+## Benchmark (measured 2026-10-01, run 202920)
 
-## Remaining gaps (not closed in 8.6.0)
+Same task in fresh git repos (two bugs in `src/calc.py`, two failing tests).
+atlas loaded from this tree on both sides: `claude -p --plugin-dir <repo>/plugins/atlas`
+with the installed `atlas@tech-tools` disabled, and `omp -p --no-extensions -e
+<repo>/plugins/atlas/omp/index.ts`. Proof the Claude leg ran the source-tree
+hooks: its transcript contains the recall-gate denial, which exists only in this
+tree. Other plugins (lean-ctx, context-mode, claude-mem, superpowers) were active
+in both harnesses as installed. Sessions were ingested into a temp `ATLAS_DB` and
+measured with the `colony_adherence` miner's own classifiers.
 
-Still `gap` in omp, each with its reason recorded in `contracts/hook-bridge.json`:
+| harness | wall | tokens | tests | dispatches | named | miner native-reader share | ctx_* calls | claude-mem first | src edits by lead |
+|---|---|---|---|---|---|---|---|---|---|
+| Claude Code | 75 s | 0.83 M ($1.73) | 2 passed | 1 (verifier) | 0/1 | 0.64 (7 native / 4 ctx) | ctx_tree 1, ctx_shell 3 | yes (gate blocked first call) | 1 Edit |
+| omp | 147 s | 1.66 M | 2 passed | 1 (`verifier-calc-fix`) | 1/1 | 0.92 (11 native / 1 ctx) | ctx_search 1 (after the grep deny); all 5 bash ran as `lean-ctx -c` | yes (gate blocked first call) | 1 edit |
+
+Reading the numbers:
+
+- The miner counts Bash as native even when it ran through `lean-ctx -c` (both
+  harnesses). Most remaining native calls are Read-before-Edit, which the contract
+  allows in both. The ≤ 0.5 share target is not met by either harness on this task.
+- Both leads fixed the two-line bug themselves and then dispatched a verifier.
+  Gate (m) is satisfied by any dispatch in both harnesses, so this passes the gate
+  in both — see Delegation policy.
+- Claude's dispatch was unnamed: its named-dispatch deny only arms in orchestrating
+  sessions and this `-p` session was not armed. omp's naming hint is advisory, and the
+  omp lead named its worker.
+- The Claude lead ran board commands through a cached `atlas_todo.py` it found under
+  `~/.claude/plugins/cache` because `CLAUDE_PLUGIN_ROOT` is not exported to Bash
+  with `--plugin-dir`; no cache file was modified.
+
+## Delegation policy (open decision)
+
+Both harnesses accept "lead edits code inline, then dispatches a verifier" because
+the mandate is "at least one dispatch". Making it "code must be written by a
+worker" means denying main-thread code edits in omp (Claude only does this in
+armed sessions via the production-edit deny). That changes behavior for every
+small fix, so it is left as a decision for the maintainer.
+
+## Remaining gaps
 
 - Completion-gate conditions (a)–(l), memory capture, self-improvement nudge,
-  ingest/chronicle: they parse Claude Code transcript JSONL and atlas_db run
-  events that only Claude hooks write. Closing them needs an omp transcript
-  adapter; omp exposes the hook points (`session_stop`, `tool_result`), so this
-  is porting work, not a harness limit.
-- Inline-op thresholds, production-edit deny, dispatch-spec blocks, per-item
-  `effort` override check (`dispatch_tripwire.py` tiers): they read Claude
-  transcript paths and atlas_db events; omp/index.ts implements only the
-  native-tool, naming and delegation parts natively.
-- Connector credential watch: omp's MCP name mint drops the server/tool
-  separator, so the Claude matchers cannot be evaluated (harness limit).
-
-## Benchmark
-
-Run 2026-10-01. Same scripted task in two throwaway git repos (`docs/` with
-CHANGELOG/ROADMAP, `src/calc.py` with two bugs, `tests/test_report.py` with two
-failing tests): "The tests in tests/ fail (run: python3 -m pytest -q). Fix the
-bugs in src/ with the smallest correct change, verify the tests pass, and record
-the fix in docs/CHANGELOG.md."
-
-- Claude Code: `claude -p --plugin-dir <repo>/plugins/atlas --settings '{"enabledPlugins":{"atlas@tech-tools":false}}' --dangerously-skip-permissions`
-- omp: `omp -p --no-extensions -e <repo>/plugins/atlas/omp/index.ts`
-
-Metrics come from the session transcripts (main + subagent files). Tokens are the
-sum of per-assistant-message usage (input + cache read + cache write + output),
-counted the same way for both harnesses.
-
-| harness | wall time | tokens | dispatch count | named-dispatch rate | native-reader share | verification pass |
-|---|---|---|---|---|---|---|
-| Claude Code | 66 s | 3.55 M (cost reported by `claude -p`: $1.70) | 1 (`atlas:verifier`) | 0.0 (0/1) | 1.00 (Bash 8, Read 4; 0 ctx_*) | yes: 2 passed; verifier dispatched |
-| omp | 65 s | 1.15 M | 1 (`verifier-calc-fix`) | 1.0 (1/1) | 1.00 (bash 7; 0 ctx_*) | yes: 2 passed; verifier verdict `verified` |
-
-What the run shows (not a pass against the target thresholds):
-
-- **Native-reader share is 1.0 in both**, above the ≤ 0.5 target. Neither repo has
-  lean-ctx configured for the project (Claude's deny needs a configured server;
-  omp's needs a live device), and both models used only bash/Read, which atlas
-  nudges but never denies. No grep/glob call happened, so the deny never had a
-  chance to fire.
-- **Code was fixed on the main thread in both.** Claude used `Edit`; the (m)
-  delegation gate blocked Stop and the model then dispatched a verifier, which
-  satisfies (m) as written (any dispatch). omp edited with `bash sed -i`, which
-  the omp delegation gate does not count (it tracks `edit`/`write` calls), so
-  omp's gate never fired.
-- **Named dispatch**: omp's verifier was named; Claude's was not. The Claude
-  named-dispatch deny only applies to armed (orchestrating) sessions, and this
-  `-p` session was not armed.
-- The paired run used the main models (Claude: account default; omp:
-  `modelRoles.default`), and the omp verifier ran on `@smol` without a 402, so the
-  earlier "402 blocks the benchmark" note was wrong for small requests; the 402s
-  in this session hit subagents that requested 131072 output tokens.
+  chronicle: they parse Claude Code transcript JSONL. `session_ingest.py` now
+  ingests omp sessions correctly, so these can be ported onto the ingested rows
+  instead of the raw transcript; not done in 8.6.0.
+- dispatch_tripwire's inline-op thresholds, dispatch-spec checks and production-edit
+  deny: still Claude-only.
+- Connector credential watch: omp's MCP name mint drops the server/tool separator
+  (harness limit).
+- The output style still carries Claude-only sentences about `TodoWrite` gating
+  (`CLAUDE_CODE_ENABLE_TODO_TOOLS`); a contract test pins them for Claude Code.
+- omp's agent registry on this machine points at a removed install path
+  (`tech-tools___atlas___8.0.1/agents`), so `atlas:*` agents are not dispatchable
+  in omp until atlas is reinstalled there.

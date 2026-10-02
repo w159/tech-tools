@@ -367,6 +367,77 @@ def _read_session_cwd(path):
     return None
 
 
+# --- per-file ingest cursors --------------------------------------------------
+
+# A Claude Code session is more than one transcript: subagent transcripts live
+# at <session>/subagents/agent-*.jsonl and carry the SAME sessionId as the main
+# one. session_logs holds a single cursor per session, so ingesting a (shorter)
+# subagent file after the main file tripped the truncate reset and wiped the
+# main transcript's rows. Cursors and row attribution are therefore per
+# (session, file): `ingest_files` records, for each file, its byte cursor and
+# the message uuids / tool_use ids it contributed, so a truncate/force reset
+# deletes only that file's rows.
+_KEY_CAP = 20000  # attribution per file is bounded; past it the file is "full"
+
+
+def _ensure_ingest_files(conn):
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS ingest_files ("
+        "session_id TEXT NOT NULL, path TEXT NOT NULL, "
+        "cursor_bytes INTEGER NOT NULL DEFAULT 0, size INTEGER, "
+        "row_keys TEXT, updated_at REAL, PRIMARY KEY(session_id, path))"
+    )
+
+
+def _key_add(keys, kind, val):
+    """Record one row key this file contributed (bounded by _KEY_CAP)."""
+    if not val or keys["full"]:
+        return
+    if len(keys[kind]) >= _KEY_CAP:
+        keys["full"] = True
+        return
+    keys[kind].append(val)
+
+
+def _key_json(keys):
+    """Serialized attribution, or None when empty/over the cap (unattributable)."""
+    if keys["full"] or not (keys["m"] or keys["t"]):
+        return None
+    return json.dumps({"m": keys["m"], "t": keys["t"]})
+
+
+def _reset_file_rows(conn, session_id, path, row_keys, owner_path):
+    """Undo one transcript file's contribution before re-ingesting it from 0.
+
+    With attribution, delete exactly the rows that file wrote. Without it
+    (pre-upgrade state, or a file past the key cap), only the file that owns
+    the session row may fall back to the legacy whole-session reset; any other
+    file just restarts its cursor so sibling files' rows are never erased."""
+    if row_keys:
+        ks = json.loads(row_keys)
+        uuids, tuids = ks.get("m", []), ks.get("t", [])
+        for tbl, col, vals in (
+            ("messages", "uuid", uuids),
+            ("user_prompts", "uuid", uuids),
+            ("signals", "message_uuid", uuids),
+            ("tool_calls", "tool_use_id", tuids),
+        ):
+            for i in range(0, len(vals), 500):
+                chunk = vals[i : i + 500]
+                conn.execute(
+                    f"DELETE FROM {tbl} WHERE session_id=? AND {col} IN "
+                    f"({','.join('?' * len(chunk))})",
+                    (session_id, *chunk),
+                )
+    elif owner_path == path:
+        atlas_db.reset_session_rows(conn, session_id)
+        # every sibling file's rows went with it; make them re-ingest from 0
+        conn.execute("DELETE FROM ingest_files WHERE session_id=?", (session_id,))
+    conn.execute(
+        "DELETE FROM ingest_files WHERE session_id=? AND path=?", (session_id, path)
+    )
+
+
 def ingest_transcript(path, conn=None, session_id=None, force=False):
     """Ingest new lines of one transcript. Returns a small stats dict.
     Incremental via byte cursor; resets cleanly if the file was truncated."""
@@ -396,12 +467,35 @@ def ingest_transcript(path, conn=None, session_id=None, force=False):
                 _read_session_id(path) or os.path.splitext(os.path.basename(path))[0]
             )
         size = os.path.getsize(path)
-        cursor, _prev = atlas_db.session_cursor(conn, session_id)
-        if force or cursor > size:  # truncated/rewritten/forced -> full re-ingest
-            atlas_db.reset_session_rows(conn, session_id)
+        _ensure_ingest_files(conn)
+        owner = conn.execute(
+            "SELECT transcript_path FROM session_logs WHERE session_id=?",
+            (session_id,),
+        ).fetchone()
+        owner_path = owner[0] if owner else None
+        frow = conn.execute(
+            "SELECT cursor_bytes, row_keys FROM ingest_files "
+            "WHERE session_id=? AND path=?",
+            (session_id, path),
+        ).fetchone()
+        if frow is not None:
+            cursor, prev_keys = frow[0] or 0, frow[1]
+        else:
+            # Sessions ingested before per-file cursors kept one cursor on the
+            # session row, valid only for the file that owns it. Any other
+            # file sharing the sessionId (a subagent transcript) starts at 0.
+            cursor = (
+                atlas_db.session_cursor(conn, session_id)[0]
+                if owner_path == path
+                else 0
+            )
+            prev_keys = None
+        if force or cursor > size:  # truncated/rewritten/forced -> re-ingest
+            _reset_file_rows(conn, session_id, path, prev_keys, owner_path)
             cursor = 0
         if cursor == size:
             return stats  # nothing new
+        keys = {"m": [], "t": [], "full": False}
         with open(path, "rb") as f:
             f.seek(cursor)
             data = f.read()
@@ -432,7 +526,7 @@ def ingest_transcript(path, conn=None, session_id=None, force=False):
                         f"json parse failed: {type(e).__name__}: {e}"
                     )
                 continue
-            _ingest_line(conn, session_id, obj, meta, stats)
+            _ingest_line(conn, session_id, obj, meta, stats, keys)
         # link project from the cwd seen in the transcript
         if meta["cwd"]:
             try:
@@ -441,20 +535,34 @@ def ingest_transcript(path, conn=None, session_id=None, force=False):
                 )
             except Exception:
                 pass
-        atlas_db.upsert_session_log(
-            conn,
-            session_id,
-            project_id=meta["project_id"],
-            transcript_path=path,
-            cwd=meta["cwd"],
-            git_branch=meta["git_branch"],
-            model=meta["model"],
-            started_at=meta["started_at"],
-            ended_at=meta["ended_at"],
-            cursor_bytes=new_cursor,
-            file_size=size,
-            file_mtime=os.path.getmtime(path),
-            last_ingest_at=time.time(),
+        if owner_path and owner_path != path:
+            # A different transcript file sharing this sessionId (a subagent
+            # file) must not move the session row's ownership columns: the
+            # transcript_path/cursor stay with the file that created the row.
+            atlas_db.upsert_session_log(
+                conn, session_id, last_ingest_at=time.time()
+            )
+        else:
+            atlas_db.upsert_session_log(
+                conn,
+                session_id,
+                project_id=meta["project_id"],
+                transcript_path=path,
+                cwd=meta["cwd"],
+                git_branch=meta["git_branch"],
+                model=meta["model"],
+                started_at=meta["started_at"],
+                ended_at=meta["ended_at"],
+                cursor_bytes=new_cursor,
+                file_size=size,
+                file_mtime=os.path.getmtime(path),
+                last_ingest_at=time.time(),
+            )
+        conn.execute(
+            "INSERT OR REPLACE INTO ingest_files"
+            "(session_id,path,cursor_bytes,size,row_keys,updated_at) "
+            "VALUES(?,?,?,?,?,?)",
+            (session_id, path, new_cursor, size, _key_json(keys), time.time()),
         )
         atlas_db.refresh_session_aggregates(conn, session_id)
         # The mirror is now current for this session, so the run-health columns
@@ -489,7 +597,7 @@ def _read_session_id(path):
     return None
 
 
-def _ingest_line(conn, session_id, obj, meta, stats):
+def _ingest_line(conn, session_id, obj, meta, stats, keys):
     ts = _epoch(obj.get("timestamp"))
     if obj.get("cwd"):
         meta["cwd"] = obj["cwd"]
@@ -514,7 +622,7 @@ def _ingest_line(conn, session_id, obj, meta, stats):
         elif bt == "thinking":
             thinking.append(b.get("thinking", "") or b.get("text", ""))
         elif bt == "tool_use":
-            _ingest_tool_use(conn, session_id, obj, b, ts, stats)
+            _ingest_tool_use(conn, session_id, obj, b, ts, stats, keys)
         elif bt == "tool_result":
             _ingest_tool_result(conn, b, stats)
     text = "\n".join(t for t in texts if t).strip()
@@ -524,6 +632,7 @@ def _ingest_line(conn, session_id, obj, meta, stats):
         meta["model"] = msg["model"]
     uuid = obj.get("uuid")
     if uuid:
+        _key_add(keys, "m", uuid)
         atlas_db.insert_message(
             conn,
             session_id,
@@ -572,7 +681,7 @@ def _ingest_line(conn, session_id, obj, meta, stats):
         stats["signals"] += 1
 
 
-def _ingest_tool_use(conn, session_id, obj, block, ts, stats):
+def _ingest_tool_use(conn, session_id, obj, block, ts, stats, keys):
     tinput = block.get("input") or {}
     kind, target, server = classify(block.get("name"), tinput)
     summary, ibytes = summarize_input(tinput)
@@ -595,6 +704,7 @@ def _ingest_tool_use(conn, session_id, obj, block, ts, stats):
         },
     )
     stats["tools"] += 1
+    _key_add(keys, "t", block.get("id"))
 
 
 def _ingest_tool_result(conn, block, stats):
@@ -674,7 +784,7 @@ def _persist_agent_message(conn, meta, rec, stats):
                 "parent_uuid": rec.get("parent_uuid"),
                 "ts": ts,
                 "role": role,
-                "is_sidechain": 0,
+                "is_sidechain": int(rec.get("is_sidechain") or 0),
                 "model": rec.get("model") or meta.get("model"),
                 "thinking": think[:CAP] or None,
                 "text": text[:CAP] or None,
@@ -686,7 +796,9 @@ def _persist_agent_message(conn, meta, rec, stats):
             },
         )
         stats["messages"] += 1
-    if role == "user" and _is_real_prompt(text, []):
+    # user_prompts has no sidechain column, so a colony member's prompt would
+    # read as the lead's own request; only main-thread text counts as one.
+    if role == "user" and not rec.get("is_sidechain") and _is_real_prompt(text, []):
         atlas_db.insert_user_prompt(
             conn,
             sid,
@@ -726,7 +838,7 @@ def _persist_agent_tool_call(conn, meta, rec, stats):
         {
             "message_uuid": rec.get("message_uuid"),
             "ts": rec.get("ts"),
-            "is_sidechain": 0,
+            "is_sidechain": int(rec.get("is_sidechain") or 0),
             "tool_use_id": rec.get("tool_use_id"),
             "tool_name": rec.get("tool_name"),
             "kind": kind,
@@ -741,12 +853,14 @@ def _persist_agent_tool_call(conn, meta, rec, stats):
     stats["tools"] += 1
 
 
-def ingest_agent_session(path, adapter, conn=None, session_id=None):
+def ingest_agent_session(path, adapter, conn=None, session_id=None, sidechain=False):
     """Drive one non-claude session file through the normalized records its
     `adapter` yields, persisting via atlas_db. Full-file reparse each call;
     idempotent because every insert helper is INSERT OR IGNORE keyed on a stable
     id the adapter assigns. Honors the same synthetic-session exclusion the
-    claude path does (by path and by the cwd the adapter reports)."""
+    claude path does (by path and by the cwd the adapter reports). `session_id`
+    overrides the adapter's own id; `sidechain` flags every row is_sidechain=1
+    and leaves the session row to the owning main file."""
     stats = {"messages": 0, "tools": 0, "prompts": 0, "signals": 0, "results": 0}
     if is_synthetic_session(path=path):
         return stats
@@ -768,6 +882,10 @@ def ingest_agent_session(path, adapter, conn=None, session_id=None):
             kind = rec.get("kind")
             if kind == "meta":
                 for k in ("session_id", "agent", "cwd", "model"):
+                    # an explicit session_id argument (a colony member landing
+                    # under its lead) outranks the id the adapter reads
+                    if k == "session_id" and session_id is not None:
+                        continue
                     if rec.get(k) is not None:
                         meta[k] = rec[k]
                 if rec.get("started_at") is not None and (
@@ -781,8 +899,12 @@ def ingest_agent_session(path, adapter, conn=None, session_id=None):
                 if meta["cwd"] and is_synthetic_session(cwd=meta["cwd"]):
                     return {k: 0 for k in stats}
             elif kind == "message":
+                if sidechain:
+                    rec = {**rec, "is_sidechain": 1}
                 _persist_agent_message(conn, meta, rec, stats)
             elif kind == "tool_call":
+                if sidechain:
+                    rec = {**rec, "is_sidechain": 1}
                 _persist_agent_tool_call(conn, meta, rec, stats)
             elif kind == "tool_result":
                 tuid = rec.get("tool_use_id")
@@ -801,21 +923,25 @@ def ingest_agent_session(path, adapter, conn=None, session_id=None):
             except Exception:
                 pass
         size = os.path.getsize(path)
-        atlas_db.upsert_session_log(
-            conn,
-            sid,
-            agent=meta["agent"],
-            project_id=meta["project_id"],
-            transcript_path=path,
-            cwd=meta["cwd"],
-            model=meta["model"],
-            started_at=meta["started_at"],
-            ended_at=meta["ended_at"],
-            cursor_bytes=size,
-            file_size=size,
-            file_mtime=os.path.getmtime(path),
-            last_ingest_at=time.time(),
-        )
+        if not sidechain:
+            # Colony members share their lead's session id; the lead's own file
+            # owns the session row, so a member must not overwrite its
+            # transcript_path/cursor columns.
+            atlas_db.upsert_session_log(
+                conn,
+                sid,
+                agent=meta["agent"],
+                project_id=meta["project_id"],
+                transcript_path=path,
+                cwd=meta["cwd"],
+                model=meta["model"],
+                started_at=meta["started_at"],
+                ended_at=meta["ended_at"],
+                cursor_bytes=size,
+                file_size=size,
+                file_mtime=os.path.getmtime(path),
+                last_ingest_at=time.time(),
+            )
         atlas_db.refresh_session_aggregates(conn, sid)
         conn.commit()
     finally:
@@ -1077,17 +1203,55 @@ AGENT_ADAPTERS = {"codex": codex_adapter, "omp": omp_adapter}
 AGENT_DEFAULT_ROOTS = {"codex": "~/.codex/sessions", "omp": "~/.omp/agent/sessions"}
 AGENT_FILE_FILTERS = {
     "codex": lambda root, d, fn: fn.startswith("rollout-") and fn.endswith(".jsonl"),
-    # Main sessions sit directly under <root>/<project>/; deeper files are
-    # subagent transcripts, which the adapter layer cannot mark as sidechain.
+    # Main sessions sit directly under <root>/<project>/; colony member
+    # transcripts one level deeper are routed by AGENT_COLONY_* below.
     "omp": lambda root, d, fn: fn.endswith(".jsonl")
     and os.path.dirname(os.path.relpath(d, root)) == "",
 }
 
 
+def _omp_colony_main(colony_dir):
+    """Path of the main session file a colony directory belongs to: omp keeps a
+    colony's member transcripts (__advisor.jsonl, <AgentName>.jsonl) in a
+    directory named after the lead's session file, next to <stem>.jsonl."""
+    return os.path.join(
+        os.path.dirname(colony_dir), os.path.basename(colony_dir) + ".jsonl"
+    )
+
+
+def _omp_colony_parent(colony_dir):
+    """Session id of the colony's lead, read from its sibling main file's
+    `session` record. None when there is no readable lead to attach to."""
+    try:
+        with open(_omp_colony_main(colony_dir), "rb") as f:
+            for raw in f:
+                try:
+                    obj = json.loads(raw)
+                except Exception:
+                    continue
+                if obj.get("type") == "session" and obj.get("id"):
+                    return obj["id"]
+    except OSError:
+        pass
+    return None
+
+
+# Colony agents (omp): member transcripts carry their own internal session ids
+# and no sidechain marker, so ingesting them like main sessions made every
+# worker/advisor a "lead" to the is_sidechain=0 colony miner. They are instead
+# landed as is_sidechain=1 rows under their lead's session id. A member whose
+# lead cannot be found is skipped, never promoted to a session of its own.
+AGENT_COLONY_FILTERS = {
+    "omp": lambda d, fn: fn.endswith(".jsonl") and os.path.isfile(_omp_colony_main(d)),
+}
+AGENT_COLONY_PARENT = {"omp": _omp_colony_parent}
+
+
 def backfill_agent(agent, root=None, conn=None):
     """Walk an agent's on-disk session tree and ingest every session file via
     that agent's registered adapter. Path-overridable (tests pass a temp tree).
-    Codex files are rollout-*.jsonl under a YYYY/MM/DD date tree."""
+    Codex files are rollout-*.jsonl under a YYYY/MM/DD date tree. For colony
+    agents, member transcripts land as sidechain rows under their lead."""
     adapter = AGENT_ADAPTERS.get(agent)
     if adapter is None:
         raise ValueError(f"no adapter registered for agent {agent!r}")
@@ -1097,16 +1261,24 @@ def backfill_agent(agent, root=None, conn=None):
         conn = atlas_db.connect()
         atlas_db.init(conn)
     totals = {"files": 0, "messages": 0, "tools": 0, "prompts": 0, "signals": 0}
+    colony = AGENT_COLONY_FILTERS.get(agent)
     try:
         for dirpath, _dirs, files in os.walk(root):
-            for fn in files:
-                if not AGENT_FILE_FILTERS[agent](root, dirpath, fn):
-                    continue
+            for fn in sorted(files):
                 p = os.path.join(dirpath, fn)
+                member = bool(colony and colony(dirpath, fn))
+                if not member and not AGENT_FILE_FILTERS[agent](root, dirpath, fn):
+                    continue
                 if is_synthetic_session(path=p):
                     continue
+                kwargs = {}
+                if member:
+                    parent = AGENT_COLONY_PARENT[agent](dirpath)
+                    if not parent:
+                        continue
+                    kwargs = {"session_id": parent, "sidechain": True}
                 try:
-                    s = ingest_agent_session(p, adapter, conn=conn)
+                    s = ingest_agent_session(p, adapter, conn=conn, **kwargs)
                 except Exception:
                     continue
                 totals["files"] += 1

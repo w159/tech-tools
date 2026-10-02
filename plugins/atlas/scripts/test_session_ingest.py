@@ -502,9 +502,9 @@ class OmpAdapterTest(unittest.TestCase):
             with open(path, "w") as f:
                 f.write("\n".join(_omp_lines(sid)) + "\n")
 
-    def test_backfill_maps_prompts_tools_errors_and_skips_subagents(self):
+    def test_backfill_maps_prompts_tools_errors_and_sidechains_subagents(self):
         totals = session_ingest.backfill_agent("omp", root=self.root, conn=self.conn)
-        self.assertEqual(totals["files"], 2)  # nested Sub.jsonl skipped
+        self.assertEqual(totals["files"], 3)  # mains + nested colony member Sub
         prompts = [r[0] for r in self.conn.execute(
             "SELECT text FROM user_prompts WHERE session_id='sess-a'")]
         self.assertEqual(prompts, ["Add a per-day table."])
@@ -515,6 +515,15 @@ class OmpAdapterTest(unittest.TestCase):
             "SELECT tool_name, is_error FROM tool_calls WHERE tool_use_id='sess-a:t1'"
         ).fetchone()
         self.assertEqual(tuple(row), ("bash", 1))
+        # Nested Sub.jsonl is a colony member of sess-a (sibling main file): its
+        # rows land is_sidechain=1 under sess-a, never as a session of its own;
+        # the is_sidechain=0 colony miner must not count it as a lead.
+        self.assertEqual(self.conn.execute(
+            "SELECT COUNT(*) FROM messages WHERE session_id='sess-a' AND is_sidechain=1"
+        ).fetchone()[0], 3)
+        self.assertIsNone(self.conn.execute(
+            "SELECT 1 FROM messages WHERE session_id='sess-sub' LIMIT 1"
+        ).fetchone())
         agent = self.conn.execute(
             "SELECT agent FROM session_logs WHERE session_id='sess-a'").fetchone()[0]
         self.assertEqual(agent, "omp")
@@ -536,6 +545,175 @@ class OmpAdapterTest(unittest.TestCase):
         session_ingest.backfill_agent("omp", root=self.root, conn=self.conn)
         self.assertEqual(
             self.conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0], first)
+
+
+class OmpColonySidechainTest(unittest.TestCase):
+    """Production omp colony layout: <proj>/<stem>.jsonl is the lead's main
+    session; <proj>/<stem>/ holds member transcripts (__advisor.jsonl and
+    <AgentName>.jsonl) that carry their OWN internal session ids and no
+    sidechain flag. Backfill landed them as separate main sessions, so
+    mine_colony_adherence (is_sidechain=0) counted workers as leads. Colony
+    members must land as is_sidechain=1 rows under the lead's session id,
+    parented by the sibling main file."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.conn = atlas_db.connect(os.path.join(self.tmp, "atlas.db"))
+        atlas_db.init(self.conn)
+        self.addCleanup(self.conn.close)
+        self.root = os.path.join(self.tmp, "sessions")
+        proj = os.path.join(self.root, "-w-proj")
+        stem = "2026-10-02T05-00-00Z_lead-1"
+        fixtures = [
+            (os.path.join(proj, f"{stem}.jsonl"), "lead-1"),
+            (os.path.join(proj, stem, "__advisor.jsonl"), "adv-1"),
+            (os.path.join(proj, stem, "WorkerOne.jsonl"), "wrk-1"),
+        ]
+        for path, sid in fixtures:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w") as f:
+                f.write("\n".join(_omp_lines(sid)) + "\n")
+        # A member directory with no sibling main file must be skipped, not
+        # invented into a main session of its own.
+        loner = os.path.join(proj, "2026-10-02T05-00-10Z_lone-1")
+        os.makedirs(loner)
+        with open(os.path.join(loner, "Stray.jsonl"), "w") as f:
+            f.write("\n".join(_omp_lines("lone-1")) + "\n")
+
+    def test_colony_members_land_sidechain_under_lead(self):
+        totals = session_ingest.backfill_agent("omp", root=self.root, conn=self.conn)
+        self.assertEqual(totals["files"], 3)  # lead + advisor + worker; stray skipped
+        self.assertEqual(
+            [r[0] for r in self.conn.execute(
+                "SELECT DISTINCT session_id FROM messages WHERE is_sidechain=0")],
+            ["lead-1"],
+        )
+        # advisor + worker rows share the lead session id, flagged sidechain
+        self.assertEqual(self.conn.execute(
+            "SELECT COUNT(*) FROM messages WHERE session_id='lead-1' "
+            "AND is_sidechain=1").fetchone()[0], 6)
+        self.assertEqual(self.conn.execute(
+            "SELECT COUNT(*) FROM tool_calls WHERE session_id='lead-1' "
+            "AND is_sidechain=1").fetchone()[0], 2)
+        self.assertEqual(self.conn.execute(
+            "SELECT COUNT(*) FROM tool_calls WHERE session_id='lead-1' "
+            "AND is_sidechain=0").fetchone()[0], 1)
+        # member ids never exist as their own sessions
+        self.assertEqual(self.conn.execute(
+            "SELECT COUNT(*) FROM messages WHERE "
+            "session_id IN ('adv-1','wrk-1','lone-1')").fetchone()[0], 0)
+        # the lead's scored exchange surface stays main-thread only
+        import turn_scoring
+
+        ex = turn_scoring.build_exchanges(self.conn, "lead-1")
+        self.assertEqual([e["message_uuid"] for e in ex], ["lead-1:m3"])
+        # user_prompts has no sidechain column: member text must not read as
+        # the lead's own requests (only the lead's single prompt survives)
+        self.assertEqual(self.conn.execute(
+            "SELECT COUNT(*) FROM user_prompts WHERE session_id='lead-1'"
+        ).fetchone()[0], 1)
+
+    def test_omp_colony_backfill_is_idempotent(self):
+        session_ingest.backfill_agent("omp", root=self.root, conn=self.conn)
+        first = self.conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
+        session_ingest.backfill_agent("omp", root=self.root, conn=self.conn)
+        self.assertEqual(
+            self.conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0], first)
+
+
+class ClaudeSubagentTwoFileTest(unittest.TestCase):
+    """Claude Code subagent transcripts live at <session>/subagents/agent-*.jsonl
+    with the SAME sessionId as the main transcript; the SubagentStop hook
+    ingests them after the main one. The ingest cursor was session-scoped, so
+    the short subagent file tripped the truncate reset and wiped the main
+    transcript's rows (repro: 59 main messages -> 11 sidechain ones). Cursors
+    are per file; one file must never reset another file's rows."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.conn = atlas_db.connect(os.path.join(self.tmp, "atlas.db"))
+        atlas_db.init(self.conn)
+        self.addCleanup(self.conn.close)
+        self.main = os.path.join(self.tmp, f"{SID}.jsonl")
+        self.sub = os.path.join(self.tmp, SID, "subagents", "agent-x.jsonl")
+        self._write(self.main, [
+            _msg("u-main", "user", [{"type": "text", "text": "Fix the flaky test."}]),
+            _line(type="assistant", uuid="a-main", timestamp="2026-06-26T12:00:01Z",
+                  message={"role": "assistant", "content": [
+                      {"type": "tool_use", "id": "t-main", "name": "Bash",
+                       "input": {"command": "pytest -q"}}]}),
+        ])
+        self._write(self.sub, [
+            _line(type="user", uuid="u-sub", timestamp="2026-06-26T12:00:02Z",
+                  isSidechain=True,
+                  message={"role": "user",
+                           "content": [{"type": "text", "text": "Run the verifier round."}]}),
+            _line(type="assistant", uuid="a-sub", timestamp="2026-06-26T12:00:03Z",
+                  isSidechain=True,
+                  message={"role": "assistant", "content": [
+                      {"type": "tool_use", "id": "t-sub", "name": "Bash",
+                       "input": {"command": "pytest -q"}}]}),
+        ])
+
+    def _write(self, path, lines):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            f.write("\n".join(lines) + "\n")
+
+    def _mcounts(self):
+        return self.conn.execute(
+            "SELECT is_sidechain, COUNT(*) FROM messages WHERE session_id=? "
+            "GROUP BY is_sidechain ORDER BY is_sidechain", (SID,)).fetchall()
+
+    def _tcounts(self):
+        return self.conn.execute(
+            "SELECT is_sidechain, COUNT(*) FROM tool_calls WHERE session_id=? "
+            "GROUP BY is_sidechain ORDER BY is_sidechain", (SID,)).fetchall()
+
+    def test_subagent_ingest_after_main_keeps_main_rows(self):
+        session_ingest.ingest_transcript(self.main, conn=self.conn)
+        self.assertEqual(self._mcounts(), [(0, 2)])
+        session_ingest.ingest_transcript(self.sub, conn=self.conn)
+        self.assertEqual(self._mcounts(), [(0, 2), (1, 2)])
+        self.assertEqual(self._tcounts(), [(0, 1), (1, 1)])
+        # one session: the subagent's rows belong to the main session
+        self.assertEqual(self.conn.execute(
+            "SELECT COUNT(DISTINCT session_id) FROM messages").fetchone()[0], 1)
+
+    def test_reingesting_main_after_subagent_wipes_nothing(self):
+        session_ingest.ingest_transcript(self.main, conn=self.conn)
+        session_ingest.ingest_transcript(self.sub, conn=self.conn)
+        session_ingest.ingest_transcript(self.main, conn=self.conn)
+        session_ingest.ingest_transcript(self.sub, conn=self.conn)
+        self.assertEqual(self._mcounts(), [(0, 2), (1, 2)])
+        self.assertEqual(self._tcounts(), [(0, 1), (1, 1)])
+
+    def test_truncated_main_is_reset_scoped_to_that_file(self):
+        session_ingest.ingest_transcript(self.main, conn=self.conn)
+        session_ingest.ingest_transcript(self.sub, conn=self.conn)
+        self._write(self.main, [
+            _msg("u-main2", "user", [{"type": "text", "text": "New prompt after rewrite."}])])
+        session_ingest.ingest_transcript(self.main, conn=self.conn)
+        # old main rows replaced (scoped by key); sidechain rows untouched
+        self.assertEqual(self._mcounts(), [(0, 1), (1, 2)])
+        self.assertEqual(self._tcounts(), [(1, 1)])
+        self.assertEqual(self.conn.execute(
+            "SELECT COUNT(*) FROM user_prompts WHERE session_id=? AND uuid='u-main'",
+            (SID,)).fetchone()[0], 0)
+
+    def test_legacy_session_cursor_adopted_for_owning_file(self):
+        session_ingest.ingest_transcript(self.main, conn=self.conn)
+        # pre-upgrade DB: the cursor lived only in session_logs
+        self.conn.execute("DROP TABLE IF EXISTS ingest_files")
+        with open(self.main, "a") as f:
+            f.write(_line(type="user", uuid="u-main3", timestamp="2026-06-26T12:00:05Z",
+                          message={"role": "user",
+                                   "content": [{"type": "text", "text": "Later prompt."}]})
+                    + "\n")
+        s = session_ingest.ingest_transcript(self.main, conn=self.conn)
+        # incremental from the adopted cursor: exactly the appended line parsed
+        self.assertEqual(s["messages"], 1)
+        self.assertEqual(self._mcounts(), [(0, 3)])
 
 
 class CodexAdapterTest(unittest.TestCase):

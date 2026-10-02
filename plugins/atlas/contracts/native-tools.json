@@ -70,6 +70,72 @@
       ]
     }
   },
+  "explorationShell": {
+    "_doc": "Bash is exploration-only (denied toward ctx_* when lean-ctx is reachable) when EVERY segment of the command, split on && || ; |, after optional leading `cd x &&` segments, starts with one of `commands` (basename), plus `sed -n` and `awk`, AND nothing writes: no `>` anywhere, no `tee`, no -delete/-exec/-execdir token, no -i* arg on a sed/awk segment. Algorithm lives in omp/contracts.ts isExplorationShell and hooks/dispatch_tripwire.py _is_exploration_shell; both iterate `cases`. Every ambiguous parse (quoted operators) falls to NOT exploration = allow.",
+    "commands": [
+      "cat",
+      "head",
+      "tail",
+      "less",
+      "more",
+      "grep",
+      "rg",
+      "ag",
+      "find",
+      "fd",
+      "ls",
+      "tree",
+      "wc",
+      "stat",
+      "file"
+    ],
+    "cases": {
+      "deny": [
+        "cat README.md",
+        "head -20 src/app.py",
+        "tail -n 5 app.log",
+        "less /var/log/system.log",
+        "grep -rn TODO src/",
+        "grep -i warn app.log",
+        "rg 'def main' .",
+        "ag pattern lib/",
+        "ls -la src",
+        "find plugins -name '*.py'",
+        "fd todo.txt",
+        "tree -L 2 docs",
+        "wc -l hooks/*.py",
+        "stat package.json",
+        "file build/out.zip",
+        "sed -n '1,50p' NOTES.md",
+        "awk '{print $1}' data.csv",
+        "cd plugins/atlas && ls",
+        "cat a.txt | grep err | wc -l",
+        "cd /tmp && head -3 log && tail -3 log"
+      ],
+      "allow": [
+        "python3 -m pytest hooks/test_dispatch_tripwire.py -q",
+        "bun test plugins/atlas/omp/contracts.test.ts",
+        "npm run build",
+        "node -e \"console.log(1)\"",
+        "git status --short",
+        "cat notes > out.txt",
+        "cat notes >> out.txt",
+        "grep x f | tee out.txt",
+        "sed -i 's/a/b/' f",
+        "sed 's/a/b/' f",
+        "awk -i inplace '{print $1}' f",
+        "find . -name '*.tmp' -delete",
+        "find . -name '*.log' -exec rm {} \\;",
+        "cat a && npm test",
+        "python3 gen.py > gen.log",
+        "grep 'a && b' file | wc -l",
+        "curl -s http://example.com/api | cat",
+        "mkdir -p dist/assets",
+        "rm -rf build/",
+        "docker ps"
+      ]
+    }
+  },
   "delegationExemptCases": {
     "exempt": [
       "docs/CHANGELOG.md",

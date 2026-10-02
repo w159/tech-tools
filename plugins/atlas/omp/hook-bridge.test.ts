@@ -1,17 +1,23 @@
-// Handler logic runs against a recording runner (command -> canned stdout):
-// bun's spawned-child stdio is unreliable under some `bun test <relative dir>`
-// invocations on this host, and the real runner is proven by the live omp smoke.
+// Handler logic runs against a recording runner (command -> canned stdout): it
+// stays fast and records per-hook timeout data. The REAL runner (node
+// child_process) is exercised directly against real hooks/ scripts in the tests
+// below, proving captured-child stdout with EVERY `bun test` path form, since
+// bun's own spawn stdio was unreliable under relative-path test filters.
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import {
+	HOOKS_JSON,
+	BRIDGE_CONTRACT,
 	SESSION_MARKER,
 	claudeNamesFor,
 	loadBridgedHooks,
 	parseHookOutput,
 	registerHookBridge,
+	runHook,
+	type HookRunner,
 } from "./hook-bridge";
 
 type Ctx = { cwd: string; agent: { kind: "main" | "sub" }; sessionManager: { getSessionId(): string } };
@@ -27,16 +33,19 @@ afterEach(() => rmSync(dir, { recursive: true, force: true }));
 /** Fake hook registry: script name -> stdout; every call's payload is recorded. */
 const outputs: Record<string, string> = {};
 const calls: Record<string, Array<Record<string, unknown>>> = {};
+const times: Record<string, number[]> = {};
 function hookScript(name: string, output: unknown): string {
 	outputs[name] = typeof output === "string" ? output : JSON.stringify(output);
 	calls[name] = [];
+	times[name] = [];
 	return join(dir, name);
 }
 const logOf = (name: string) => calls[name] ?? [];
-const recordingRunner = async (command: string, payload: Record<string, unknown>) => {
+const recordingRunner: HookRunner = async (command, payload, timeoutMs) => {
 	const name = /([\w.-]+\.py)/.exec(command)?.[1] ?? "";
 	if (!(name in outputs)) throw new Error(`unexpected hook ${command}`);
 	calls[name].push(payload);
+	times[name].push(timeoutMs);
 	if (outputs[name] === "CRASH") throw new Error("hook crashed");
 	return outputs[name];
 };
@@ -47,10 +56,10 @@ function writeConfig(hooks: Record<string, unknown>, bridged: string[]) {
 	return loadBridgedHooks(join(dir, "hooks.json"), join(dir, "bridge.json"));
 }
 
-function harness(hooks: ReturnType<typeof loadBridgedHooks>, env: Record<string, string | undefined> = {}) {
+function harness(hooks: ReturnType<typeof loadBridgedHooks>, env: Record<string, string | undefined> = {}, run: HookRunner = recordingRunner) {
 	const handlers: Record<string, Handler> = {};
 	const api = { on: (name: string, h: Handler) => { handlers[name] = h; } };
-	registerHookBridge(api as unknown as Pick<ExtensionAPI, "on">, { hooks, run: recordingRunner, env });
+	registerHookBridge(api as unknown as Pick<ExtensionAPI, "on">, { hooks, run, env });
 	const ctx = (kind: "main" | "sub" = "main"): Ctx => ({ cwd: dir, agent: { kind }, sessionManager: { getSessionId: () => "s-1" } });
 	return { handlers, ctx };
 }
@@ -140,4 +149,122 @@ test("the real contract bridges only hooks that exist in hooks.json", () => {
 	const contract = JSON.parse(readFileSync(join(import.meta.dir, "..", "contracts", "hook-bridge.json"), "utf8"));
 	for (const s of contract.bridged) expect(scripts.has(s)).toBe(true);
 	for (const s of Object.keys(contract.notBridged)) expect(scripts.has(s)).toBe(false);
+});
+
+// ---- Real runner against real hooks/ scripts (no fake runner) ----
+
+function realCommand(event: string, script: string): string {
+	const hook = loadBridgedHooks().find(h => h.event === event && h.command.includes(script));
+	if (!hook) throw new Error(`${script} is not bridged for ${event}`);
+	return hook.command;
+}
+
+test("real runHook runs a real python hook and captures its stdout", async () => {
+	const stdout = await runHook(
+		realCommand("PreToolUse", "bash_advisor.py"),
+		{ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "rm -rf /" } },
+		15_000,
+	);
+	// The bun-stdio failure mode: the child runs but stdout comes back empty.
+	expect(stdout.trim().length).toBeGreaterThan(0);
+	expect(stdout).toContain("hookSpecificOutput");
+});
+
+test("runHook kills a hung hook at its timeout and stays fail-open", async () => {
+	const started = Date.now();
+	const out = await runHook('python3 -c "import time; time.sleep(30)"', { hook_event_name: "PreToolUse" }, 700);
+	expect(Date.now() - started).toBeLessThan(5_000);
+	expect(out).toBe("");
+});
+
+test("every script hooks.json references is listed in the bridge contract", () => {
+	const scripts = new Set<string>();
+	const walk = (node: unknown): void => {
+		if (typeof node === "string") {
+			const script = /([\w.-]+\.py)/.exec(node)?.[1];
+			if (script) scripts.add(script);
+		} else if (Array.isArray(node)) node.forEach(walk);
+		else if (node && typeof node === "object") Object.values(node).forEach(walk);
+	};
+	walk((JSON.parse(readFileSync(HOOKS_JSON, "utf8")) as { hooks: unknown }).hooks);
+	const contract = JSON.parse(readFileSync(BRIDGE_CONTRACT, "utf8")) as { bridged: string[]; notBridged: Record<string, string> };
+	const listed = new Set([...contract.bridged, ...Object.keys(contract.notBridged)]);
+	expect(scripts.size).toBeGreaterThan(10);
+	expect([...scripts].filter(s => !listed.has(s))).toEqual([]);
+});
+
+test("real bash_advisor stdout translates to advisory context, never a deny", async () => {
+	const command = realCommand("PreToolUse", "bash_advisor.py");
+	const bad = parseHookOutput(await runHook(command, { hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "rm -rf /" } }, 15_000));
+	expect(bad.deny).toBeUndefined();
+	expect(bad.context).toContain("[atlas advisor]");
+	const benign = parseHookOutput(await runHook(command, { hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "ls" } }, 15_000));
+	expect(benign).toEqual({});
+});
+
+test("real docs_drift_watch flags the first non-docs edit in a docs/ repo", async () => {
+	const repo = join(dir, "repo");
+	const git = (...args: string[]) => Bun.spawnSync(["git", "-C", repo, "-c", "user.email=t@t", "-c", "user.name=t", ...args], { stdout: "ignore", stderr: "ignore" });
+	mkdirSync(join(repo, "docs"), { recursive: true });
+	mkdirSync(join(repo, "src"), { recursive: true });
+	writeFileSync(join(repo, "docs", "CHANGELOG.md"), "# Changelog\n");
+	writeFileSync(join(repo, "src", "app.ts"), "export {};\n");
+	git("init", "-q");
+	git("add", "-A");
+	git("commit", "-q", "-m", "base");
+	writeFileSync(join(repo, "src", "app.ts"), "export const x = 1;\n");
+	const out = parseHookOutput(
+		await runHook(
+			realCommand("PostToolUse", "docs_drift_watch.py"),
+			{ hook_event_name: "PostToolUse", tool_name: "Edit", tool_input: { file_path: join(repo, "src", "app.ts") }, cwd: repo, session_id: "s-drift" },
+			15_000,
+		),
+	);
+	expect(out.context).toContain("docs drift");
+});
+
+// ---- Timeouts and the 30 s handler budget (omp cuts handlers at 30 s) ----
+
+test("per-hook timeout is min(hooks.json timeout, ATLAS_BRIDGE_HOOK_TIMEOUT_S default 25)", async () => {
+	const script = hookScript("cap_boot.py", context("SessionStart", "boot"));
+	const config = () => writeConfig({ SessionStart: [{ hooks: [{ command: `python3 "${script}"`, timeout: 120 }] }] }, ["cap_boot.py"]);
+	const lowered = harness(config(), { ATLAS_BRIDGE_HOOK_TIMEOUT_S: "2" });
+	await lowered.handlers.before_agent_start({ prompt: "x", systemPrompt: [] }, lowered.ctx());
+	expect(times["cap_boot.py"]).toEqual([2_000]);
+	hookScript("cap_boot.py", context("SessionStart", "boot"));
+	const defaulted = harness(config());
+	await defaulted.handlers.before_agent_start({ prompt: "x", systemPrompt: [] }, defaulted.ctx());
+	expect(times["cap_boot.py"]).toEqual([25_000]);
+});
+
+test("hooks share the 30 s handler budget; SessionStart stays cached on re-entry", async () => {
+	const boot = hookScript("bud_boot.py", context("SessionStart", "booted"));
+	const first = hookScript("bud_one.py", context("UserPromptSubmit", "one"));
+	const second = hookScript("bud_two.py", context("UserPromptSubmit", "two"));
+	const slow: HookRunner = async (command, payload, timeoutMs) => {
+		await new Promise(resolve => setTimeout(resolve, 80));
+		return recordingRunner(command, payload, timeoutMs);
+	};
+	const { handlers, ctx } = harness(
+		writeConfig(
+			{
+				SessionStart: [{ hooks: [{ command: `python3 "${boot}"` }] }],
+				UserPromptSubmit: [{ hooks: [{ command: `python3 "${first}"` }, { command: `python3 "${second}"` }] }],
+			},
+			["bud_boot.py", "bud_one.py", "bud_two.py"],
+		),
+		{ ATLAS_BRIDGE_HOOK_TIMEOUT_S: "60" },
+		slow,
+	);
+	await handlers.before_agent_start({ prompt: "a", systemPrompt: [] }, ctx());
+	const [bootMs] = times["bud_boot.py"];
+	const [oneMs] = times["bud_one.py"];
+	const [twoMs] = times["bud_two.py"];
+	expect(bootMs).toBeLessThanOrEqual(30_000);
+	expect(oneMs).toBeLessThan(bootMs);
+	expect(twoMs).toBeLessThan(oneMs);
+	expect(oneMs).toBeGreaterThan(20_000);
+	await handlers.before_agent_start({ prompt: "b", systemPrompt: [] }, ctx());
+	expect(times["bud_boot.py"].length).toBe(1);
+	expect(times["bud_one.py"][1]).toBeGreaterThan(oneMs);
 });

@@ -568,12 +568,34 @@ def _has_in_flight_dispatch(data: dict) -> bool:
     return False
 
 
-def _missing_delegation(session_id: str, transcript_path: str = "") -> bool:
+def _shell_dirty_edits(root, session_id: str) -> list:
+    """Non-docs paths that are dirty now but absent from, or changed since, the
+    SessionStart snapshot (hooks/session_boot.py write_dirty_snapshot): code a
+    main thread wrote through the shell, which no Write/Edit event records.
+    Pre-existing dirt left untouched hashes the same and is not counted.
+    Fail open ([]) on no root, no/corrupt snapshot, git error."""
+    if root is None or not session_id:
+        return []
+    try:
+        import session_boot
+
+        with open(session_boot.snapshot_path(root, session_id), encoding="utf-8") as fh:
+            before = json.load(fh)["paths"]
+        now = session_boot.dirty_map(root)
+        if not isinstance(before, dict) or now is None:
+            return []
+        return sorted(p for p, h in now.items() if before.get(p) != h)
+    except Exception:
+        return []
+
+
+def _missing_delegation(session_id: str, transcript_path: str = "", root=None) -> bool:
     """(m) Main-thread code writes with no dispatch; fail open on any error.
 
     Unlike the other code gates, sidechain writes and inherited git dirt do
     not establish a main-thread change. Current-turn dispatches are read
-    directly before Stop-time transcript ingestion has caught up.
+    directly before Stop-time transcript ingestion has caught up. Code written
+    through the shell counts too when `root` has a SessionStart dirty snapshot.
     """
     if "/subagents/" in transcript_path.replace("\\", "/"):
         return False
@@ -606,6 +628,7 @@ def _missing_delegation(session_id: str, transcript_path: str = "") -> bool:
         code_paths = [p for p in paths if p and not (
             p.endswith(exts) or any(p.startswith(d + "/") or f"/{d}/" in p for d in dirs)
         )]
+        code_paths += _shell_dirty_edits(root, session_id)
         if not _nondocs_changed(code_paths):
             return False
         if conn.execute("SELECT 1 FROM dispatches WHERE run_id=? LIMIT 1", (rid,)).fetchone():
@@ -833,7 +856,7 @@ def main() -> int:
             return 0  # no docs/ SSOT -> not an atlas run -> silent no-op
         session = str(data.get("session_id") or "")
         missing_delegation = _missing_delegation(
-            session, str(data.get("transcript_path") or "")
+            session, str(data.get("transcript_path") or ""), root
         )
         if not _session_is_orchestrating(session):
             if missing_delegation and not _has_in_flight_dispatch(data):

@@ -17,17 +17,25 @@
  * name that maps to it), so hooks.json matchers apply unchanged. Hooks run via
  * /bin/sh with CLAUDE_PLUGIN_ROOT set, ATLAS_HARNESS=omp and
  * ATLAS_MANDATES=off (omp/mandates.ts owns mandates). Every failure, timeout
- * or unparseable output allows. Kill switch: ATLAS_HOOK_BRIDGE=off.
+ * or unparseable output allows. Each hook is killed at min(its hooks.json
+ * timeout, ATLAS_BRIDGE_HOOK_TIMEOUT_S, default 25 s) and all hooks of one
+ * before_agent_start share omp's 30 s handler budget. Kill switch:
+ * ATLAS_HOOK_BRIDGE=off.
  */
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import * as fs from "node:fs";
 import * as nodePath from "node:path";
+import { runCapture } from "./proc";
 
 const PLUGIN_ROOT = nodePath.resolve(import.meta.dir, "..");
 export const HOOKS_JSON = nodePath.join(PLUGIN_ROOT, "hooks", "hooks.json");
 export const BRIDGE_CONTRACT = nodePath.join(PLUGIN_ROOT, "contracts", "hook-bridge.json");
 export const TOOL_NAMES = nodePath.join(PLUGIN_ROOT, "contracts", "tool-names.json");
 const DEFAULT_TIMEOUT_S = 60;
+/** Default per-hook hard cap (s); ATLAS_BRIDGE_HOOK_TIMEOUT_S overrides. omp cuts a handler at 30 s. */
+export const DEFAULT_HOOK_CAP_S = 25;
+/** omp's EXTENSION_HANDLER_TIMEOUT_MS (extensions/runner.ts): all hooks of one before_agent_start share it. */
+export const HANDLER_BUDGET_MS = 30_000;
 export const SESSION_MARKER = "<!-- atlas-session-start -->";
 
 export type ClaudeEvent = "SessionStart" | "UserPromptSubmit" | "PreToolUse" | "PostToolUse";
@@ -116,24 +124,28 @@ export function parseHookOutput(stdout: string): HookOutput {
 	return out;
 }
 
+/** Hard per-hook cap in ms: min(the hooks.json timeout, ATLAS_BRIDGE_HOOK_TIMEOUT_S or the 25 s default). */
+export function hookTimeoutMs(configuredMs: number, env: Record<string, string | undefined> = process.env): number {
+	const requested = Number(env.ATLAS_BRIDGE_HOOK_TIMEOUT_S);
+	const capS = env.ATLAS_BRIDGE_HOOK_TIMEOUT_S && Number.isFinite(requested) && requested > 0 ? requested : DEFAULT_HOOK_CAP_S;
+	return Math.min(configuredMs, capS * 1000);
+}
+
 export type HookRunner = (command: string, payload: Record<string, unknown>, timeoutMs: number) => Promise<string>;
 
-/** Real runner: /bin/sh -c <command>, payload on stdin, stdout captured; any failure → "". */
+/**
+ * Real runner: /bin/sh -c <command>, payload on stdin, stdout captured; any
+ * failure → "". Transport (temp files, own process group, timeout kill) lives
+ * in ./proc.
+ */
 export const runHook: HookRunner = async (command, payload, timeoutMs) => {
 	try {
-		const child = Bun.spawn(["/bin/sh", "-c", command], {
-			stdin: new Blob([JSON.stringify(payload)]),
-			stdout: "pipe",
-			stderr: "ignore",
-			env: { ...process.env, CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT, ATLAS_HARNESS: "omp", ATLAS_MANDATES: "off" },
+		const { stdout } = await runCapture(["/bin/sh", "-c", command], {
+			input: JSON.stringify(payload),
+			timeoutMs,
+			env: { CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT, ATLAS_HARNESS: "omp", ATLAS_MANDATES: "off" },
 		});
-		const timer = setTimeout(() => child.kill(), timeoutMs);
-		try {
-			const [stdout] = await Promise.all([new Response(child.stdout).text(), child.exited]);
-			return stdout;
-		} finally {
-			clearTimeout(timer);
-		}
+		return stdout;
 	} catch {
 		return "";
 	}
@@ -166,11 +178,15 @@ export function registerHookBridge(pi: Pick<ExtensionAPI, "on">, deps: BridgeDep
 	pi.on("session_start", reset);
 	pi.on("session_switch", reset);
 
-	const runAll = async (event: ClaudeEvent, toolNames: string[] | undefined, payload: Record<string, unknown>): Promise<HookOutput[]> => {
+	/** Runs matching hooks in order; each gets min(its capped timeout, what is left before `deadline`). */
+	const runAll = async (event: ClaudeEvent, toolNames: string[] | undefined, payload: Record<string, unknown>, deadline: number = Date.now() + HANDLER_BUDGET_MS): Promise<HookOutput[]> => {
 		const selected = all().filter(h => h.event === event && (!h.matcher || !toolNames || toolNames.some(n => h.matcher?.test(n))));
 		const outputs: HookOutput[] = [];
 		for (const hook of selected) {
-			const out = parseHookOutput(await run(hook.command, payload, hook.timeoutMs));
+			const remaining = deadline - Date.now();
+			if (remaining <= 0) break; // out of handler budget: skip the rest (fail open)
+			const timeoutMs = Math.min(hookTimeoutMs(hook.timeoutMs, deps.env ?? process.env), remaining);
+			const out = parseHookOutput(await run(hook.command, payload, timeoutMs));
 			outputs.push(out);
 			if (out.deny) break; // first deny wins, as in Claude Code
 		}
@@ -191,9 +207,10 @@ export function registerHookBridge(pi: Pick<ExtensionAPI, "on">, deps: BridgeDep
 			if (ctx.agent.kind !== "main" || off()) return undefined;
 			const base = Array.isArray(event.systemPrompt) ? event.systemPrompt : [];
 			const common = { session_id: sessionIdOf(ctx), cwd: ctx.cwd };
-			sessionContext ??= runAll("SessionStart", undefined, { ...common, hook_event_name: "SessionStart", source: "startup" }).then(join);
+			const deadline = Date.now() + HANDLER_BUDGET_MS;
+			sessionContext ??= runAll("SessionStart", undefined, { ...common, hook_event_name: "SessionStart", source: "startup" }, deadline).then(join);
 			const startText = await sessionContext;
-			const promptText = join(await runAll("UserPromptSubmit", undefined, { ...common, hook_event_name: "UserPromptSubmit", prompt: event.prompt ?? "" }));
+			const promptText = join(await runAll("UserPromptSubmit", undefined, { ...common, hook_event_name: "UserPromptSubmit", prompt: event.prompt ?? "" }, deadline));
 			const additions: string[] = [];
 			if (startText && !base.some(e => typeof e === "string" && e.includes(SESSION_MARKER))) additions.push(`${SESSION_MARKER}\n${startText}`);
 			if (promptText) additions.push(promptText);

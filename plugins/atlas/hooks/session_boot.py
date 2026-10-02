@@ -151,6 +151,95 @@ def recall_mandate():
         return None
 
 
+# --- shell-edit snapshot (delegation mandate) ---------------------------------
+# The Stop gate's (m) delegation mandate counts Write/Edit events, so code fixed
+# through the shell (`sed -i`, `tee`, a codegen script) is invisible to it. At
+# SessionStart we hash every non-docs path git reports dirty/untracked; the gate
+# later treats paths that are dirty now but absent/changed vs this snapshot as
+# main-thread code writes. Twin of omp/delegation.ts `snapshotDirty`. Exemptions
+# come from contracts/native-tools.json `delegationExempt`, like the gate.
+
+_DELETED = "deleted"
+
+
+def _delegation_exempt_spec():
+    """(dirs, extensions) from contracts/native-tools.json, or None if unreadable."""
+    try:
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "contracts", "native-tools.json")
+        with open(path) as fh:
+            spec = json.load(fh)["delegationExempt"]
+        return tuple(str(d) for d in spec["dirs"]), tuple(str(e) for e in spec["extensions"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
+def dirty_map(root):
+    """{repo-relative non-docs path: sha256} for paths `git status` reports dirty
+    or untracked under root; None when root is not a git work tree, git is
+    unavailable, or the exemption contract is unreadable (callers fail open)."""
+    import hashlib
+    import subprocess
+
+    exempt = _delegation_exempt_spec()
+    if exempt is None:
+        return None
+    dirs, exts = exempt
+    try:
+        res = subprocess.run(
+            ["git", "status", "--porcelain", "-z", "--untracked-files=all"],
+            cwd=str(root), capture_output=True, timeout=10, check=True,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    paths = {}
+    for field in res.stdout.decode("utf-8", "replace").split("\0"):
+        # "XY path"; the bare original-path field after a rename has no XY prefix.
+        if len(field) < 4 or field[2] != " ":
+            continue
+        rel = field[3:]
+        if rel.endswith(exts) or any(seg in dirs for seg in rel.split("/")):
+            continue
+        try:
+            with open(os.path.join(str(root), rel), "rb") as fh:
+                paths[rel] = hashlib.sha256(fh.read()).hexdigest()
+        except OSError:
+            paths[rel] = _DELETED
+    return paths
+
+
+def snapshot_path(root, session_id):
+    return os.path.join(str(root), ".atlas", ".run", "dirty-snapshot-%s.json" % session_id)
+
+
+def write_dirty_snapshot(cwd, session_id):
+    """Write `<root>/.atlas/.run/dirty-snapshot-<session>.json` once per session
+    (a repeat SessionStart -- resume/compact -- keeps the first). Best-effort:
+    returns the path written, else None (no session id, not git, unwritable)."""
+    try:
+        if not session_id:
+            return None
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from pathlib import Path
+
+        from docs_drift import find_root as _find_docs_root
+
+        root = _find_docs_root(Path(cwd)) or Path(cwd)
+        target = snapshot_path(root, session_id)
+        if os.path.exists(target):
+            return None
+        paths = dirty_map(root)
+        if paths is None:
+            return None
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        tmp = target + ".tmp"
+        with open(tmp, "w") as fh:
+            json.dump({"session": session_id, "paths": paths}, fh)
+        os.replace(tmp, target)
+        return target
+    except Exception:
+        return None
+
+
 def detect_dep(module_marker):
     try:
         import importlib.util
@@ -670,6 +759,11 @@ def main():
                 memory_block = head[:cut] if cut > 0 else head.rsplit("\n", 1)[0]
     except Exception:
         pass  # memory is best-effort
+
+    # Hash already-dirty non-docs paths so the Stop gate's delegation mandate can
+    # tell shell-written code from inherited dirt. Best-effort, never blocks boot.
+    if os.environ.get("ATLAS_GATE", "").lower() != "off":
+        write_dirty_snapshot(payload.get("cwd") or os.getcwd(), payload.get("session_id", ""))
 
     boot_root = payload.get("cwd") or os.getcwd()
     mem_plugin = plugin_enabled("claude-mem", boot_root)

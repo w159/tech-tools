@@ -6,6 +6,27 @@
   },
   "commitNudge": "[atlas mandate] Before this commit, run ponytail-review (less-code review) on the staged diff (`git diff --cached`): delete what the change does not need, then commit. Nudge only; it fires once per session (ATLAS_MANDATES=off disables).",
   "recall": "Recall first: before planning or asking the user to re-explain prior work, run one claude-mem search for this project ({route}, then timeline/get_observations on hits). ATLAS_MANDATES=off disables this line.",
+  "recallGate": "[atlas gate] REQUIRED once per session: your first tool call must be one claude-mem recall for this project ({route}). {example} Then continue; this denial fires once. ATLAS_MANDATES=off disables it.",
+  "recallGateExample": "Example search args: {\"query\": \"<prior work on this project>\"}",
+  "recallGateCases": {
+    "_doc": "Tool calls the recall gate classifies; asserted by omp/mandates.test.ts and hooks/test_recall_gate.py. name = Claude Code tool name, ompName = omp tool name when it differs. satisfy: a claude-mem call (consumes the gate silently). block: the first such call is denied once. exempt: neither denied nor satisfying.",
+    "satisfy": [
+      { "name": "mcp__plugin_claude-mem_mcp-search__search", "input": { "query": "prior work" } },
+      { "name": "mcp__claude_mem_mcp_search_search", "input": { "query": "prior work" } },
+      { "name": "mcp__mcp_search_search", "input": {} },
+      { "name": "Write", "ompName": "write", "input": { "path": "xd://mcp__claude_mem_mcp_search_search", "content": "{\"query\":\"prior work\"}" } },
+      { "name": "Write", "ompName": "write", "input": { "path": "xd://mcp__mcp_search_search", "content": "{}" } }
+    ],
+    "block": [
+      { "name": "Bash", "ompName": "bash", "input": { "command": "git status" } },
+      { "name": "Read", "ompName": "read", "input": { "path": "docs/CHANGELOG.md" } },
+      { "name": "Write", "ompName": "write", "input": { "path": "/tmp/atlas-probe.py", "content": "x = 1" } },
+      { "name": "mcp__lean-ctx__ctx_search", "ompName": "mcp__lean_ctx_ctx_search", "input": { "pattern": "x" } }
+    ],
+    "exempt": [
+      { "name": "TodoWrite", "ompName": "todo", "input": {} }
+    ]
+  },
   "gitCommitCases": {
     "match": [
       "git commit -m 'x'",

@@ -1,9 +1,7 @@
 {
 	"claudeToOmp": {
-		"and under `ENABLE_TOOL_SEARCH` it is deferred (`ToolSearch(\"select:TodoWrite\")`)": "while in omp the todo tool is always active",
-		"the ToolSearch + serena/lean-ctx TOOLS block": "the available-tools + serena/lean-ctx TOOLS block",
 		"ToolSearch-load": "load",
-		"ToolSearch": "tool search",
+		"ToolSearch": "xd:// device catalog",
 		"AskUserQuestion": "an inline user question",
 		"TodoWrite": "todo",
 		"TodoRead": "todo",
@@ -17,9 +15,16 @@
 		"Agent": "task",
 		"SendMessage": "write agent://<name>"
 	},
+	"bareTools": {
+		"ctx_search": "xd://mcp__lean_ctx_ctx_search",
+		"ctx_glob": "xd://mcp__lean_ctx_ctx_glob",
+		"ctx_read": "xd://mcp__lean_ctx_ctx_read",
+		"ctx_shell": "xd://mcp__lean_ctx_ctx_shell",
+		"ctx_execute": "xd://mcp__context_mode_context_mode_ctx_execute"
+	},
 	"mcp": {
 		"prefix": "xd://mcp__",
 		"separator": "_",
-		"note": "model-emitted mcp__<server>__<tool>; parts sanitized like omp's mint in mcp/tool-bridge.ts mintMCPToolName: lowercased, [^a-z0-9_] runs -> _, underscore-collapsed and trimmed; a tool name prefixed '<server>_' loses that prefix; no 64-char cap applied here"
+		"note": "model-emitted mcp__<server>__<tool>; parts sanitized like omp's mint in mcp/tool-bridge.ts mintMCPToolName: lowercased, [^a-z0-9_] runs -> _, underscore-collapsed and trimmed; a tool name prefixed '<server>_' loses that prefix; no 64-char cap applied here. bareTools: bare lean-ctx/context-mode names used in output-styles/atlas-orchestrator.md -> device names a real omp session mints (verified with `omp --print --no-session` listing ctx_ devices). Keys in claudeToOmp must contain no whitespace (phrase keys break on .md reflow); omp/hook-bridge.ts claudeNamesFor only reverse-maps keys matching /^[A-Z]\\w*$/."
 	}
 }

@@ -6,17 +6,28 @@ session `atlas-<run>`, at the cost tier its agent definition declares:
 
   claude: claude -p --agent atlas:<role> --model <m> --effort <e> --permission-mode <p> <prompt>
           (tier from plugins/atlas/agents/<role>.md `model:` / `effort:`)
-  omp:    omp -p --model=<m> --thinking=<t> <role brief + prompt>
+  omp:    omp -p --model=<concrete> --thinking=<t> <role brief + prompt>
           (tier from plugins/atlas/omp/agents/<role>.md `model:` list / `thinkingLevel:`;
-          omp has no --agent flag, so the role's body is prepended to the prompt,
-          and the first model pattern whose @role alias is configured is used)
+          omp has no --agent flag, so the role's body is prepended to the prompt.
+          The first model pattern that resolves wins; an @role alias resolves to the
+          CONCRETE selector under modelRoles in ~/.omp/agent/config.yml
+          (ATLAS_MUX_OMP_CONFIG overrides the path) and that selector is what omp gets)
+
+Tier enforcement: spawn refuses (ok:false, exit 2, before any tmux call) when the
+role's definition is missing or yields no model, unless the caller passes an explicit
+--model AND the harness tier flag (--effort claude | --thinking omp). An omp --model
+(or definition pattern list) that resolves to nothing is always refused.
 
 Workers share the lead's board: ATLAS_PROJECT_ROOT=<root> and
-ATLAS_WORKER_NAME=<name> are pinned in the worker env. Every stdout line is
-appended to <root>/.atlas/.run/board/<name>.jsonl as a note-shaped record
-({ts, owner, name, to:"lead", kind:"report", text}) plus a final
-{kind:"exit", code}; `atlas_todo.py notes --to lead` reads them alongside the
-workers' own `atlas_todo.py note --owner <name>` messages.
+ATLAS_WORKER_NAME=<name> are pinned in the worker env. atlas_todo.note is the single
+writer of <root>/.atlas/.run/board/<name>.jsonl: run-worker posts, all to "lead",
+the exact harness argv (shlex-quoted, so the tier is auditable) first, then every
+output line (stderr merged into stdout), then `exit <code>` (+ ` [failed: reason]`).
+`omp -p` exits 0 on `Model "..." not found` and on HTTP 402, so output matching
+not-found / 402 / credit / auth patterns is classified failed and recorded as exit 1
+(`Warning: MCP server ... its tools are unavailable` lines are posted but not scanned).
+`atlas_todo.py notes --to lead` reads them alongside the workers' own
+`atlas_todo.py note --owner <name>` messages.
 
 Not Claude Code agent teams: teammates inherit the lead's effort, which would
 erase the per-role tiers. The default in-process colony is unchanged.
@@ -39,10 +50,24 @@ import sys
 import time
 from pathlib import Path
 
+import atlas_todo
+
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_AGENT_DIRS = {"claude": PLUGIN_ROOT / "agents", "omp": PLUGIN_ROOT / "omp" / "agents"}
 NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 BOARD_REL = Path(".atlas") / ".run" / "board"
+# omp prints one of these per unreachable MCP server; the run itself is fine.
+NOISE_RE = re.compile(r"^Warning: MCP server .* its tools are unavailable")
+EXIT_NOTE_RE = re.compile(r"^exit (-?\d+)")
+# omp -p exits 0 on these, so run-worker classifies by output. First match wins.
+FAIL_SIGNS = (
+    (re.compile(r"\bmodel\b[^\n]{0,60}\bnot found\b", re.I), "model not found"),
+    (re.compile(r"(?<!\d)402(?!\d)"), "http 402"),
+    (re.compile(r"insufficient credit|credit balance|out of credit|credits? (?:exhausted|depleted)|payment required", re.I),
+     "credits exhausted"),
+    (re.compile(r"\bunauthori[sz]ed\b|\bunauthenticated\b|authentication (?:failed|required|error)|invalid api[ _-]?key|(?<!\d)401(?!\d)", re.I),
+     "auth rejected"),
+)
 
 
 def _emit(obj: dict, code: int = 0) -> int:
@@ -81,9 +106,14 @@ def _frontmatter(path: Path) -> tuple[dict, str]:
     return fields, text[text.find("\n", end + 1) + 1 :]
 
 
-def _omp_roles(config: Path) -> set:
-    """Configured omp modelRoles keys (simple YAML scan); empty on error."""
-    roles: set = set()
+def _omp_config_path() -> Path:
+    return Path(os.environ.get("ATLAS_MUX_OMP_CONFIG") or Path.home() / ".omp" / "agent" / "config.yml")
+
+
+def _omp_roles(config: Path) -> dict:
+    """omp modelRoles as {alias: concrete selector} (simple YAML scan of inline
+    scalars); empty on error."""
+    roles: dict = {}
     try:
         lines = config.read_text(encoding="utf-8").splitlines()
     except OSError:
@@ -94,36 +124,66 @@ def _omp_roles(config: Path) -> set:
             inside = True
             continue
         if inside:
-            m = re.match(r"^\s+([A-Za-z0-9_.-]+):", line)
+            m = re.match(r"^\s+([A-Za-z0-9_.-]+):[ \t]*(\S.*?)\s*$", line)
             if m:
-                roles.add(m.group(1))
+                roles[m.group(1)] = m.group(2).strip("\"'")
             elif line.strip() and not line.startswith((" ", "\t")):
                 break
     return roles
 
 
-def _pick_omp_model(raw: str) -> str | None:
-    """First pattern from a frontmatter model list that omp's CLI can resolve:
-    a concrete selector, or an @role alias configured in modelRoles."""
+def _patterns(raw: str | None) -> list:
+    """Model patterns from a frontmatter value or --model: a JSON list or one scalar."""
+    if not raw:
+        return []
     try:
-        patterns = json.loads(raw) if raw.startswith("[") else [raw.strip("\"'")]
+        found = json.loads(raw) if raw.startswith("[") else [raw.strip("\"'")]
     except ValueError:
-        return None
-    patterns = [p for p in patterns if isinstance(p, str) and p]
-    config = Path(os.environ.get("ATLAS_MUX_OMP_CONFIG") or Path.home() / ".omp" / "agent" / "config.yml")
-    roles = _omp_roles(config)
+        return []
+    return [p for p in found if isinstance(p, str) and p]
+
+
+def _resolve_omp_model(patterns: list, roles: dict) -> str | None:
+    """First pattern omp can take: a concrete selector as-is, or an @role alias
+    replaced by its concrete modelRoles value. None when nothing resolves."""
     for p in patterns:
-        if not p.startswith("@") or p[1:] in roles:
+        if not p.startswith("@"):
             return p
-    return patterns[-1] if patterns else None
+        if roles.get(p[1:]):
+            return roles[p[1:]]
+    return None
 
 
 def _tier(harness: str, role: str, agents_dir: str | None, model: str | None, level: str | None):
-    fields, body = _frontmatter(_agents_dir(harness, agents_dir) / f"{role}.md")
+    """(model, level, body, error). `error` names the role and the path searched.
+
+    The definition must yield a model. When it does not (file missing, no `model:`,
+    or for omp no pattern that resolves), the caller must pass an explicit --model
+    AND the harness tier flag; the explicit model always wins and, for omp, must
+    itself resolve to a concrete selector."""
+    def_path = _agents_dir(harness, agents_dir) / f"{role}.md"
+    fields, body = _frontmatter(def_path)
+    flag = "--effort" if harness == "claude" else "--thinking"
+    fm_level = fields.get("effort" if harness == "claude" else "thinkingLevel") or None
     if harness == "claude":
-        return model or fields.get("model") or None, level or fields.get("effort") or None, body
-    picked = _pick_omp_model(fields["model"]) if fields.get("model") else None
-    return model or picked, level or fields.get("thinkingLevel") or None, body
+        def_model = fields.get("model") or None
+        explicit = model
+    else:
+        config = _omp_config_path()
+        roles = _omp_roles(config)
+        patterns = _patterns(fields.get("model"))
+        def_model = _resolve_omp_model(patterns, roles)
+        explicit = _resolve_omp_model(_patterns(model), roles) if model else None
+        if model and explicit is None:
+            return None, None, body, f"tier enforcement: --model {model!r} for role '{role}' resolves to nothing in modelRoles of {config}"
+    if def_model:
+        return explicit or def_model, level or fm_level, body, None
+    if model and level:  # explicit tier overrides a definition that yields no model
+        return explicit, level, body, None
+    why = (f"lists {patterns!r}, none found in modelRoles of {config}" if harness == "omp" and patterns
+           else "is missing or has no `model:`")
+    return None, None, body, (f"tier enforcement: no model for role '{role}': {def_path} {why}; "
+                              f"pass an explicit --model together with {flag}")
 
 
 def harness_argv(harness: str, role: str, prompt: str, model, level, body: str, permission_mode: str) -> list:
@@ -177,7 +237,10 @@ def cmd_spawn(args) -> int:
         return _emit({"ok": False, "error": error}, 2)
     root = os.path.abspath(args.root or os.environ.get("ATLAS_PROJECT_ROOT") or os.getcwd())
     session = _session(args.run)
-    model, level, _ = _tier(args.harness, args.agent, args.agents_dir, args.model, args.effort or args.thinking)
+    model, level, _, tier_error = _tier(args.harness, args.agent, args.agents_dir, args.model,
+                                        args.effort or args.thinking)
+    if tier_error:
+        return _emit({"ok": False, "error": tier_error}, 2)
     if _tmux("has-session", "-t", session).returncode != 0:
         created = _tmux("new-session", "-d", "-s", session, "-n", "lead")
         if created.returncode != 0:
@@ -209,42 +272,52 @@ def cmd_spawn(args) -> int:
                   "model": model, "level": level, "board": str(Path(root) / BOARD_REL / f"{args.name}.jsonl")})
 
 
-def _append(path: Path, record: dict) -> None:
-    line = (json.dumps(record, separators=(",", ":")) + "\n").encode("utf-8")
-    fd = os.open(str(path), os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
-    try:
-        os.write(fd, line)
-    finally:
-        os.close(fd)
+def _classify(output: str, code: int) -> tuple[int, str | None]:
+    """(recorded exit code, failure reason). Output evidence beats a zero exit."""
+    for pattern, reason in FAIL_SIGNS:
+        if pattern.search(output):
+            return 1, reason
+    if code != 0:
+        return code, "nonzero exit"
+    return 0, None
 
 
 def cmd_run_worker(args) -> int:
     root = os.path.abspath(args.root)
-    board = Path(root) / BOARD_REL
-    board.mkdir(parents=True, exist_ok=True)
-    target = board / f"{args.name}.jsonl"
     prompt = Path(args.prompt_file).read_text(encoding="utf-8")
     override = args.command_override or os.environ.get("ATLAS_MUX_WORKER_CMD")
     if override:
         argv = ["/bin/sh", "-c", override]
     else:
-        model, level, body = _tier(args.harness, args.agent, args.agents_dir, args.model, args.effort or args.thinking)
+        model, level, body, tier_error = _tier(args.harness, args.agent, args.agents_dir, args.model,
+                                               args.effort or args.thinking)
+        if tier_error:
+            return _emit({"ok": False, "error": tier_error}, 2)
         argv = harness_argv(args.harness, args.agent, prompt, model, level, body, args.permission_mode)
     env = dict(os.environ, ATLAS_PROJECT_ROOT=root, ATLAS_WORKER_NAME=args.name)
-    base = {"owner": args.name, "name": args.name, "to": "lead", "item": None}
+
+    def post(text: str) -> None:
+        atlas_todo.note(root, args.name, text, to="lead")
+
+    post(shlex.join(argv))
     try:
-        proc = subprocess.Popen(argv, cwd=root, env=env, stdout=subprocess.PIPE, stderr=None, text=True, bufsize=1)
+        proc = subprocess.Popen(argv, cwd=root, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                text=True, bufsize=1)
     except OSError as exc:
-        _append(target, {"ts": time.time(), **base, "kind": "exit", "code": 127, "text": f"spawn failed: {exc}"})
+        post(f"spawn failed: {exc}")
+        post("exit 127 [failed: spawn error]")
         return 127
     assert proc.stdout is not None
+    seen = []
     for raw in proc.stdout:
         text = raw.rstrip("\n")
         print(text, flush=True)
         if text.strip():
-            _append(target, {"ts": time.time(), **base, "kind": "report", "text": text})
-    code = proc.wait()
-    _append(target, {"ts": time.time(), **base, "kind": "exit", "code": code, "text": f"exit {code}"})
+            if not NOISE_RE.match(text):
+                seen.append(text)
+            post(text)
+    code, reason = _classify("\n".join(seen), proc.wait())
+    post(f"exit {code}" + (f" [failed: {reason}]" if reason else ""))
     return code
 
 
@@ -261,8 +334,9 @@ def cmd_status(args) -> int:
                     rec = json.loads(line)
                 except ValueError:
                     continue
-                if isinstance(rec, dict) and rec.get("kind") == "exit":
-                    exit_code = rec.get("code")
+                m = EXIT_NOTE_RE.match(str(rec.get("text", ""))) if isinstance(rec, dict) else None
+                if m:
+                    exit_code = int(m.group(1))
         except OSError:
             continue
         board.append({"name": path.stem, "path": str(path), "exit": exit_code})
@@ -290,7 +364,7 @@ def _parser() -> argparse.ArgumentParser:
         sp.add_argument("--harness", choices=("claude", "omp"), required=True)
         sp.add_argument("--agent", required=True, help="atlas role, e.g. implementer")
         sp.add_argument("--prompt-file", required=True)
-        sp.add_argument("--model", help="override the agent definition's model")
+        sp.add_argument("--model", help="override the definition's model (for omp an @role alias resolves via modelRoles); with no usable definition it must be paired with --effort/--thinking")
         sp.add_argument("--effort", help="claude only: override the definition's effort")
         sp.add_argument("--thinking", help="omp only: override the definition's thinkingLevel")
         sp.add_argument("--agents-dir", help="dir holding claude/ and omp/ agent definitions (tests)")

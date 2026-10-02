@@ -1443,6 +1443,118 @@ class DocsMovedInGitTest(unittest.TestCase):
             self.assertFalse(completion_gate._docs_moved_in_git(Path("/x")))
 
 
+class ShellEditDelegationTest(unittest.TestCase):
+    """(m) also sees code written through the shell (sed -i, tee, ...): non-docs
+    paths dirty now but absent/changed vs the SessionStart snapshot."""
+
+    SESSION = "shell-edit"
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(os.path.realpath(self.tmp.name))
+        self.git("init", "-q")
+        self.git("config", "user.email", "t@example.com")
+        self.git("config", "user.name", "t")
+        self.put("src/calc.py", "def add(a, b):\n    return a - b\n")
+        self.put("docs/guide.md", "# guide\n")
+        self.git("add", "-A")
+        self.git("commit", "-q", "-m", "init")
+        # Gate state lives OUTSIDE the repo so it never shows up as dirty code.
+        self.state = tempfile.TemporaryDirectory()
+        self.addCleanup(self.state.cleanup)
+        state = Path(self.state.name)
+        self.env = dict(os.environ, ATLAS_DB=str(state / "atlas.db"),
+                        ATLAS_HOOKSTATE_DIR=str(state / "hookstate"))
+        self.conn = atlas_db.connect(self.env["ATLAS_DB"])
+        self.addCleanup(self.conn.close)
+        atlas_db.init(self.conn)
+        pid = atlas_db.register_project(self.conn, str(self.root))
+        self.rid = atlas_db.start_run(self.conn, pid, self.SESSION)
+
+    def git(self, *args):
+        subprocess.run(["git", *args], cwd=self.root, check=True, capture_output=True)
+
+    def put(self, rel, body):
+        path = self.root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(body)
+
+    def snapshot(self):
+        import session_boot
+        return session_boot.write_dirty_snapshot(str(self.root), self.SESSION)
+
+    def gate(self, **extra):
+        return _run_gate(dict(session_id=self.SESSION, cwd=str(self.root), **extra), self.env).stdout
+
+    def test_shell_edit_after_snapshot_blocks_and_dispatch_clears_it(self):
+        self.snapshot()
+        subprocess.run(["sed", "-i.bak", "s/a - b/a + b/", str(self.root / "src/calc.py")], check=True)
+        (self.root / "src/calc.py.bak").unlink()
+        self.assertIn("(m) Delegation mandate", self.gate())
+        atlas_db.log_event(self.conn, self.rid, "Task", "main", 0)
+        self.assertEqual(self.gate(), "")
+
+    def test_new_untracked_code_after_snapshot_blocks(self):
+        self.snapshot()
+        self.put("src/extra.py", "x = 1\n")
+        self.assertIn("(m) Delegation mandate", self.gate())
+
+    def test_pre_dirty_file_left_untouched_is_not_counted(self):
+        self.put("src/calc.py", "def add(a, b):\n    return a + b  # dirty at start\n")
+        self.put("src/wip.py", "x = 1\n")
+        self.snapshot()
+        self.assertEqual(self.gate(), "")
+
+    def test_pre_dirty_file_edited_again_is_counted(self):
+        self.put("src/wip.py", "x = 1\n")
+        self.snapshot()
+        self.put("src/wip.py", "x = 2\n")
+        self.assertIn("(m) Delegation mandate", self.gate())
+
+    def test_docs_markdown_and_atlas_changes_are_not_counted(self):
+        self.snapshot()
+        self.put("docs/guide.md", "# changed\n")
+        self.put("docs/notes.txt", "n\n")
+        self.put("README.md", "r\n")
+        self.put("sub/.atlas/state.json", "{}\n")
+        self.assertEqual(self.gate(), "")
+
+    def test_mdx_is_code(self):
+        self.snapshot()
+        self.put("notes.mdx", "m\n")
+        self.assertIn("(m) Delegation mandate", self.gate())
+
+    def test_no_snapshot_fails_open(self):
+        self.put("src/calc.py", "def add(a, b):\n    return a + b\n")
+        self.assertEqual(self.gate(), "")
+
+    def test_corrupt_snapshot_fails_open(self):
+        self.snapshot()
+        snap = self.root / ".atlas" / ".run" / ("dirty-snapshot-%s.json" % self.SESSION)
+        snap.write_text("{not json")
+        self.put("src/calc.py", "def add(a, b):\n    return a + b\n")
+        self.assertEqual(self.gate(), "")
+
+    def test_non_git_project_fails_open(self):
+        with tempfile.TemporaryDirectory() as plain:
+            plain = Path(os.path.realpath(plain))
+            (plain / "docs").mkdir()
+            run = plain / ".atlas" / ".run"
+            run.mkdir(parents=True)
+            (run / ("dirty-snapshot-%s.json" % self.SESSION)).write_text(json.dumps({"paths": {}}))
+            (plain / "app.py").write_text("x = 1\n")
+            pid = atlas_db.register_project(self.conn, str(plain))
+            atlas_db.start_run(self.conn, pid, "plain-sess")
+            out = _run_gate(dict(session_id=self.SESSION, cwd=str(plain)), self.env).stdout
+            self.assertEqual(out, "")
+
+    def test_subagent_transcript_stays_exempt(self):
+        self.snapshot()
+        self.put("src/extra.py", "x = 1\n")
+        self.assertEqual(self.gate(transcript_path="/session/subagents/agent-a.jsonl"), "")
+
+
 if __name__ == "__main__":
     unittest.main()
 

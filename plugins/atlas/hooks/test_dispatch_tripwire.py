@@ -1587,6 +1587,114 @@ class NativeToolPolicyTest(unittest.TestCase):
             self.assertEqual(self.call("Grep"), (False, ""))
 
 
+class ExplorationShellDenyTest(unittest.TestCase):
+    """Bash that only reads/inspects is DENIED toward ctx_* when lean-ctx is
+    plausibly reachable (binary on PATH AND an MCP server configured; a Claude
+    PreToolUse hook cannot see the callable tool set). Everything else keeps the
+    one-time nudge. The verdict cases are shared with omp/contracts.test.ts via
+    contracts/native-tools.json explorationShell.cases."""
+
+    def setUp(self):
+        import dispatch_tripwire
+
+        self.dt = dispatch_tripwire
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        (self.root / "docs").mkdir()
+        self.home = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.home, ignore_errors=True)
+        self.cases = json.loads(Path(self.dt.NATIVE_TOOLS_PATH).read_text())["explorationShell"]["cases"]
+
+    def call(self, command, *, available=True, configured=True, session="explore"):
+        if configured:
+            (self.root / ".mcp.json").write_text(
+                json.dumps({"mcpServers": {"lean-ctx": {"command": "lean-ctx"}}}), encoding="utf-8"
+            )
+        payload = dict(hook_event_name="PreToolUse", tool_name="Bash", session_id=session,
+                       cwd=str(self.root), tool_input={"command": command})
+        output = io.StringIO()
+        with patch.object(self.dt.shutil, "which", return_value="/bin/lean-ctx" if available else None), \
+                patch.dict(os.environ, {"HOME": str(self.home)}), \
+                contextlib.redirect_stdout(output):
+            handled, nudge = self.dt._native_tool_policy(payload)
+            self.dt._emit_nudge(nudge)
+        return handled, output.getvalue()
+
+    def test_shared_cases_classify_identically_to_omp(self):
+        self.assertGreaterEqual(len(self.cases["deny"]), 12)
+        self.assertGreaterEqual(len(self.cases["allow"]), 12)
+        for command in self.cases["deny"]:
+            self.assertTrue(self.dt._is_exploration_shell(command), command)
+        for command in self.cases["allow"]:
+            self.assertFalse(self.dt._is_exploration_shell(command), command)
+
+    def test_exploration_denied_naming_ctx_tool_and_toolsearch_load_step(self):
+        expected = {
+            "cat README.md": "ctx_read", "head -5 a": "ctx_read", "tail -3 a": "ctx_read",
+            "grep -rn x .": "ctx_search", "rg x": "ctx_search", "ag x": "ctx_search",
+            "ls -la": "ctx_tree", "tree -L 2": "ctx_tree",
+            "find . -name '*.py'": "ctx_glob", "fd x": "ctx_glob",
+            "wc -l a": "ctx_shell", "stat a": "ctx_shell", "sed -n 1p a": "ctx_shell",
+            "cat a | grep b | wc -l": "ctx_shell", "cd src && cat a": "ctx_read",
+        }
+        for command, tool in expected.items():
+            handled, output = self.call(command, session=command)
+            self.assertTrue(handled, command)
+            result = json.loads(output)["hookSpecificOutput"]
+            self.assertEqual(result["permissionDecision"], "deny", command)
+            reason = result["permissionDecisionReason"]
+            self.assertIn(tool, reason, command)
+            self.assertIn(f'ToolSearch("select:mcp__lean-ctx__{tool}")', reason, command)
+
+    def test_every_shared_deny_case_is_denied_end_to_end(self):
+        for command in self.cases["deny"]:
+            handled, output = self.call(command, session=command)
+            self.assertTrue(handled, command)
+            self.assertEqual(json.loads(output)["hookSpecificOutput"]["permissionDecision"], "deny", command)
+
+    def test_every_shared_allow_case_is_allowed_with_at_most_a_nudge(self):
+        for command in self.cases["allow"]:
+            handled, output = self.call(command, session=command)
+            self.assertFalse(handled, command)
+            if output:
+                self.assertNotIn("permissionDecision", json.loads(output)["hookSpecificOutput"], command)
+
+    def test_not_plausibly_reachable_keeps_the_nudge(self):
+        for available, configured in ((False, True), (True, False)):
+            handled, output = self.call("cat README.md", available=available, configured=configured)
+            self.assertFalse(handled)
+            self.assertNotIn("permissionDecision", json.loads(output)["hookSpecificOutput"])
+            (self.root / ".mcp.json").unlink(missing_ok=True)
+            shutil.rmtree(self.root / ".atlas", ignore_errors=True)
+
+    def test_hard_off_and_outside_docs_projects_allow_silently(self):
+        with patch.dict(os.environ, {"ATLAS_TRIPWIRE_HARD": "off"}):
+            handled, output = self.call("cat README.md")
+        self.assertFalse(handled)
+        self.assertNotIn("permissionDecision", output)
+        (self.root / "docs").rmdir()
+        self.assertEqual(self.call("cat README.md", session="other"), (False, ""))
+
+    def test_contract_without_exploration_section_fails_open(self):
+        spec = json.loads(Path(self.dt.NATIVE_TOOLS_PATH).read_text())
+        del spec["explorationShell"]
+        path = self.root / "native-tools.json"
+        path.write_text(json.dumps(spec))
+        with patch.object(self.dt, "NATIVE_TOOLS_PATH", str(path)):
+            self.assertFalse(self.dt._is_exploration_shell("cat README.md"))
+            handled, output = self.call("cat README.md")
+        self.assertFalse(handled)
+        self.assertNotIn("permissionDecision", output)
+        path.write_text(json.dumps({**spec, "explorationShell": {"commands": "cat", "cases": {}}}))
+        with patch.object(self.dt, "NATIVE_TOOLS_PATH", str(path)):
+            self.assertFalse(self.dt._is_exploration_shell("cat README.md"))
+
+    def test_missing_command_or_non_string_command_is_not_exploration(self):
+        for command in ("", "   ", None, 7, "cd /tmp"):
+            self.assertFalse(self.dt._is_exploration_shell(command), command)
+
+
 class ColonyDenyTest(unittest.TestCase):
     """Colony dispatch guards: named dispatches and frontmatter model tiers.
 
