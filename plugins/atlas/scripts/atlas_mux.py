@@ -47,7 +47,6 @@ import re
 import shlex
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 import atlas_todo
@@ -167,6 +166,8 @@ def _tier(harness: str, role: str, agents_dir: str | None, model: str | None, le
     fields, body = _frontmatter(def_path)
     flag = "--effort" if harness == "claude" else "--thinking"
     fm_level = fields.get("effort" if harness == "claude" else "thinkingLevel") or None
+    config: Path | None = None
+    patterns: list = []
     if harness == "claude":
         def_model = fields.get("model") or None
         explicit = model
@@ -225,6 +226,11 @@ def _validate(args) -> str | None:
     return None
 
 
+def _dead_flag(raw: str) -> int:
+    """tmux #{window_dead} as 0/1; anything that is not a plain digit string is 0."""
+    return int(raw) if raw.isdigit() else 0
+
+
 def _windows(session: str) -> list | None:
     res = _tmux("list-windows", "-t", session, "-F", "#{window_name}\t#{window_dead}\t#{pane_pid}")
     if res.returncode != 0:
@@ -233,7 +239,7 @@ def _windows(session: str) -> list | None:
     for line in res.stdout.splitlines():
         parts = line.split("\t")
         if parts and parts[0]:
-            out.append({"name": parts[0], "dead": int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0,
+            out.append({"name": parts[0], "dead": _dead_flag(parts[1]) if len(parts) > 1 else 0,
                         "pid": parts[2] if len(parts) > 2 else ""})
     return out
 
