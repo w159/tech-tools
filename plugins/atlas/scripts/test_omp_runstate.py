@@ -195,6 +195,51 @@ class RunstateTest(unittest.TestCase):
         self.assertTrue(res["ok"])
         self.assertFalse(res["written"])
 
+    # ---- rebaseline (omp only: MCP servers write tool state after SessionStart) ----
+    def _snapshot_paths(self):
+        with open(session_boot.snapshot_path(self.proj, self.SID)) as fh:
+            return json.load(fh)["paths"]
+
+    def _gate_diff(self):
+        """What completion_gate._shell_dirty_edits would count for this session."""
+        now = session_boot.dirty_map(self.proj) or {}
+        before = self._snapshot_paths()
+        return sorted(p for p, h in now.items() if before.get(p) != h)
+
+    def _write(self, rel, text="x\n"):
+        path = os.path.join(self.proj, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as fh:
+            fh.write(text)
+
+    def test_rebaseline_absorbs_tool_state_written_after_the_snapshot(self):
+        self.run_cli("snapshot")
+        self._write(".serena/project.yml", "a\n")
+        self._write(".serena/.gitignore", "b\n")
+        res = self.run_cli("rebaseline")
+        self.assertTrue(res["ok"])
+        self.assertEqual(sorted(res["absorbed"]), [".serena/.gitignore", ".serena/project.yml"])
+        # the Stop gate's own comparison now sees no shell edits
+        self.assertEqual(self._gate_diff(), [])
+
+    def test_rebaseline_never_absorbs_a_real_code_edit(self):
+        self.run_cli("snapshot")
+        self._write("src/app.py", "print(1)\n")
+        self._write(".serena/project.yml")
+        res = self.run_cli("rebaseline")
+        self.assertEqual(res["absorbed"], [".serena/project.yml"])
+        self.assertNotIn("src/app.py", self._snapshot_paths())
+        self.assertEqual(self._gate_diff(), ["src/app.py"])
+
+    def test_rebaseline_is_a_noop_without_a_snapshot_and_keeps_earlier_entries(self):
+        self._write(".serena/project.yml")
+        self.assertFalse(self.run_cli("rebaseline")["absorbed"])  # no snapshot: nothing to rebaseline
+        self._write("pre.py")
+        self.run_cli("snapshot", sid="s2")
+        self.run_cli("rebaseline", sid="s2")
+        with open(session_boot.snapshot_path(self.proj, "s2")) as fh:
+            self.assertIn("pre.py", json.load(fh)["paths"])  # entries the snapshot already held survive
+
     # ---- fail-open -----------------------------------------------------
     def test_unwritable_db_and_bad_args_exit_zero_with_ok_false(self):
         blocker = os.path.join(self.tmp, "blocker")

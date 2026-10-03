@@ -237,7 +237,9 @@ def _toolkit_gap(tinput):
     # Docs-only roles still benefit from lean-ctx; keep the bar for all atlas:*.
     prompt = str(tinput.get("prompt") or "")
     low = prompt.lower()
-    has_load = "ToolSearch" in prompt or "toolsearch" in low
+    # ATLAS_TOOLKIT_LOAD=omp is set only by the omp hook bridge: omp has no ToolSearch (tools are xd:// devices),
+    # so the load step cannot be asked of it. The named-navigation-tool requirement below still applies.
+    has_load = "ToolSearch" in prompt or "toolsearch" in low or os.environ.get("ATLAS_TOOLKIT_LOAD") == "omp"
     has_nav = any(
         token in low
         for token in (

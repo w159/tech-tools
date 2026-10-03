@@ -54,6 +54,7 @@ import {
 	SESSION_END_EVENTS,
 } from "./hook-bridge";
 import { runCapture } from "./proc";
+import { runStateArgv } from "./run-state";
 
 const PLUGIN_ROOT = nodePath.resolve(import.meta.dir, "..");
 export const TRANSCRIPT_SCRIPT = nodePath.join(PLUGIN_ROOT, "scripts", "omp_transcript.py");
@@ -61,6 +62,8 @@ export const MAX_STOP_BLOCKS = 3;
 export const MAX_INGEST_PER_EVENT = 4;
 export const MAX_INGEST_PER_SESSION = 12;
 const MAX_TRACKED_SESSIONS = 64;
+/** Budget for folding tool state into the dirty snapshot; the gate runs after it, so it must stay small. */
+export const REBASELINE_BUDGET_MS = 3_000;
 const COMPACT_THROTTLE_MS = 60_000;
 /** Conversion budget for tool-hook and Stop payloads. */
 const CONVERT_TIMEOUT_MS = 15_000;
@@ -202,6 +205,8 @@ export interface StopBridgeDeps {
 	tmpDir?: string;
 	/** Converter used for the detached ingest, which converts into the spawn's own directory; default omp_transcript.py. */
 	convert?: ConvertFn;
+	/** Folds tool state written after SessionStart into the dirty snapshot (omp_runstate.py rebaseline); awaited before the gate. */
+	rebaseline?(cwd: string, sessionId: string): Promise<void>;
 	now?: () => number;
 }
 
@@ -306,6 +311,20 @@ export function registerStopBridge(pi: Pick<ExtensionAPI, "on">, deps: StopBridg
 		}
 	};
 	const now = deps.now ?? Date.now;
+	/** Default: omp_runstate.py rebaseline. Fire-and-forget callers would race the gate, so this is awaited (and time-boxed) below. */
+	const rebaseline = deps.rebaseline ?? (async (cwd: string, sessionId: string) => void (await runCapture(runStateArgv("rebaseline", { sessionId, cwd }), { timeoutMs: REBASELINE_BUDGET_MS })));
+	/** Never throws and never waits longer than REBASELINE_BUDGET_MS, whatever `rebaseline` does. */
+	const rebaselineBounded = async (cwd: string, sessionId: string): Promise<void> => {
+		const budget = Promise.withResolvers<void>();
+		const timer = setTimeout(budget.resolve, REBASELINE_BUDGET_MS);
+		try {
+			await Promise.race([rebaseline(cwd, sessionId), budget.promise]);
+		} catch {
+			// fail open: a missed rebaseline only means a possible false (m), never a lost verdict
+		} finally {
+			clearTimeout(timer);
+		}
+	};
 	let hooks: BridgedHook[] | undefined = deps.hooks;
 	const hooksFor = (event: string): BridgedHook[] => (hooks ??= loadBridgedHooksFor(SESSION_END_EVENTS, "bridgedSessionEnd")).filter(h => h.event === event);
 
@@ -323,6 +342,7 @@ export function registerStopBridge(pi: Pick<ExtensionAPI, "on">, deps: StopBridg
 			const sessionId = sessionIdOf(bridgeCtx) || str(event.session_id);
 			// Ordering hazard: convert BEFORE any hook runs. The gate and ingest re-read this file.
 			const transcriptPath = await cache.convertFresh(str(event.session_file) || sessionFileOf(bridgeCtx), sessionId, "main");
+			if (sessionId) await rebaselineBounded(bridgeCtx.cwd, sessionId); // tool state written since SessionStart must be in the snapshot BEFORE the gate compares
 			const stopHookActive = event.stop_hook_active === true;
 			const payload = claudeLifecyclePayload("Stop", { sessionId, cwd: bridgeCtx.cwd, transcriptPath, stopHookActive });
 			const deadline = now() + HANDLER_BUDGET_MS;

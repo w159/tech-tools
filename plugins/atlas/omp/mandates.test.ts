@@ -57,6 +57,35 @@ test("recall line is appended once, naming the reachable claude-mem route", () =
 	expect(h.start(result?.systemPrompt ?? [])).toBeUndefined();
 });
 
+test("the recall line is frozen once rendered: a different route later does not change the prompt bytes", () => {
+	let tools: string[] | undefined = MEM_TOOLS;
+	const h = harness(() => tools);
+	const first = h.start(["base"])?.systemPrompt ?? [];
+	tools = ["read", "write", "mcp__plugin_claude_mem_mcp_search_search"]; // another claude-mem route mounts later
+	const second = h.start(["base"])?.systemPrompt ?? [];
+	expect(first.length).toBe(2);
+	expect(second).toEqual(first); // same bytes: the cached prefix survives the next agent loop
+});
+
+test("an absent recall line is never frozen: it appears as soon as claude-mem becomes callable", () => {
+	let tools: string[] | undefined = ["read", "bash"];
+	const h = harness(() => tools);
+	expect(h.start(["base"])).toBeUndefined();
+	tools = MEM_TOOLS;
+	expect(h.start(["base"])?.systemPrompt?.length).toBe(2);
+});
+
+test("session_start drops the frozen recall line", () => {
+	let tools: string[] | undefined = MEM_TOOLS;
+	const h = harness(() => tools);
+	const first = h.start(["base"])?.systemPrompt?.[1];
+	tools = ["read", "write", "mcp__plugin_claude_mem_mcp_search_search"];
+	h.reset();
+	const after = h.start(["base"])?.systemPrompt?.[1];
+	expect(after).toBeDefined();
+	expect(after).not.toBe(first);
+});
+
 test("recall stays silent when claude-mem is not callable, in subagents, or when killed", () => {
 	expect(claudeMemRoute(["read", "write", "mcp__lean_ctx_ctx_search"])).toBeUndefined();
 	expect(claudeMemRoute(["read", "mcp__claude_mem_mcp_search_search"])).toBeUndefined(); // no write: device unreachable
