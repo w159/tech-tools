@@ -25,6 +25,8 @@ export interface ExplorationShellSpec {
 export interface NativeToolContract {
 	exemptDirs: string[];
 	exemptExtensions: string[];
+	/** Dirs agent tooling writes on its own (.serena, .lean-ctx, ...); shell dirt under them is not a model edit. Absent or malformed → [] so older contract files still load. */
+	toolStateDirs: string[];
 	kinds: Record<LeanKind, KindSpec>;
 	/** Absent or malformed → undefined, and nothing is ever classified as exploration (fail open). */
 	explorationShell?: ExplorationShellSpec;
@@ -79,11 +81,13 @@ export function loadNativeTools(path: string = NATIVE_TOOLS_PATH): NativeToolCon
 				kinds && typeof kinds === "object"
 			) {
 				const table = kinds as Record<string, unknown>;
+				const rawToolState = (raw as Record<string, unknown>).ompToolStateDirs;
 				const parsedKinds = Object.fromEntries(KINDS.map(k => [k, parseKind(table[k])]));
 				if (KINDS.every(k => parsedKinds[k])) {
 					value = {
 						exemptDirs: delegationExempt.dirs,
 						exemptExtensions: delegationExempt.extensions,
+						toolStateDirs: strings(rawToolState) ? rawToolState : [],
 						kinds: parsedKinds as Record<LeanKind, KindSpec>,
 						explorationShell: parseExplorationShell((raw as Record<string, unknown>).explorationShell),
 					};

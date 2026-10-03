@@ -487,14 +487,16 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 	pi.on("before_subagent_spawn", event => {
 		try {
 			if (process.env.ATLAS_TRIPWIRE_HARD === "off") return undefined;
-			const spawn = event as { agent?: unknown; patterns?: unknown };
+			const spawn = event as { agent?: unknown; patterns?: unknown; modelRole?: unknown };
 			const agent = typeof spawn.agent === "string" ? spawn.agent.trim() : "";
 			if (!agent || !ATLAS_AGENT_TARGETABLE[agent] || !Array.isArray(spawn.patterns)) return undefined;
 			const requested = spawn.patterns.filter((p): p is string => typeof p === "string" && p.trim() !== "").map(p => p.trim());
 			if (requested.length === 0) return undefined; // no override: the definition's tier applies
-			const key = (list: string[]) => list.map(p => p.toLowerCase()).sort().join("\n");
-			const pinned = modelPatternsFor(agent);
-			if (key(requested) === key(pinned)) return undefined;
+			// omp hands EXPANDED patterns: an override is a token that is neither a pinned alias nor a selector explained by a pinned modelRole.
+			const pinned = modelPatternsFor(agent).map(p => p.toLowerCase());
+			const role = typeof spawn.modelRole === "string" ? spawn.modelRole.trim().replace(/^@+/, "").toLowerCase() : "";
+			const roleExplained = role !== "" && pinned.some(p => p.replace(/^@+/, "") === role);
+			if (requested.every(p => pinned.includes(p.toLowerCase()) || (p.includes("/") && roleExplained))) return undefined;
 			return { block: true, reason: modelOverrideReason("Task", agent, requested.join(", "), roleFor(agent)) };
 		} catch {
 			return undefined; // fail open

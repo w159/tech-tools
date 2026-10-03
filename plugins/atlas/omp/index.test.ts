@@ -389,34 +389,58 @@ const spawnHandler = (h: { handlers: object }) => (h.handlers as Record<string, 
 test("a per-call model override of an atlas colony agent is blocked with the tripwire's reason", () => {
 	const h = harness();
 	const spawn = spawnHandler(h);
-	const result = spawn({ type: "before_subagent_spawn", agent: "implementer", patterns: ["openai/gpt-5.2"], invocationKind: "task", spawnKey: "k" }, h.ctx);
+	// modelRole "task" is outside implementer's pinned roles, so the selector is a real override.
+	const result = spawn({ type: "before_subagent_spawn", agent: "implementer", invocationKind: "task", modelRole: "task", patterns: ["ollama/glm-5.3-flash:cloud:medium"], spawnKey: "OverrideOne" }, h.ctx);
 	expect(result?.block).toBe(true);
-	expect(result?.reason).toBe(modelOverrideReason("Task", "implementer", "openai/gpt-5.2", "@atlas-worker"));
-	expect(result?.reason).toContain("overrides model with 'openai/gpt-5.2'");
+	expect(result?.reason).toBe(modelOverrideReason("Task", "implementer", "ollama/glm-5.3-flash:cloud:medium", "@atlas-worker"));
+	expect(result?.reason).toContain("overrides model with 'ollama/glm-5.3-flash:cloud:medium'");
 	expect(result?.reason).toContain("The agent definition pins model: @atlas-worker");
 	expect(result?.reason).toContain("Fix the definition, not the dispatch.");
-	// A verifier-tier agent names its own pinned role.
-	expect(spawn({ agent: "verifier", patterns: ["@smol"] }, h.ctx)?.reason).toContain("pins model: @atlas-verifier");
+	// Same for a verifier-tier agent overridden off its pinned roles.
+	expect(spawn({ type: "before_subagent_spawn", agent: "verifier", invocationKind: "task", modelRole: "task", patterns: ["anthropic/claude-opus-5-5:high"], spawnKey: "OverrideTwo" }, h.ctx)?.reason).toContain("pins model: @atlas-verifier");
 });
 
-test("the pinned tier, no override, other agents and the kill switch all pass", () => {
+test("the expanded pinned tier, no override, other agents and the kill switch all pass", () => {
 	const h = harness();
 	const spawn = spawnHandler(h);
-	expect(spawn({ agent: "implementer", patterns: ["@atlas-worker", "@smol"] }, h.ctx)).toBeUndefined(); // exactly the generated definition's list
-	expect(spawn({ agent: "implementer", patterns: ["@SMOL", "@Atlas-Worker"] }, h.ctx)).toBeUndefined(); // order and case do not matter
-	expect(spawn({ agent: "implementer", patterns: [] }, h.ctx)).toBeUndefined();
-	expect(spawn({ agent: "implementer", patterns: ["  ", ""] }, h.ctx)).toBeUndefined(); // blank patterns are no override
-	expect(spawn({ agent: "implementer" }, h.ctx)).toBeUndefined();
-	expect(spawn({ agent: "task", patterns: ["openai/gpt-5.2"] }, h.ctx)).toBeUndefined(); // not an atlas colony agent
+	expect(spawn({ type: "before_subagent_spawn", agent: "implementer", invocationKind: "task", modelRole: "smol", patterns: ["@atlas-worker", "anthropic/claude-sonnet-5-5:off"], spawnKey: "SpawnOne" }, h.ctx)).toBeUndefined(); // omp's own expansion of the definition's list
+	expect(spawn({ agent: "implementer", invocationKind: "task", modelRole: "smol", patterns: ["anthropic/claude-sonnet-5-5:off", "@Atlas-Worker"] }, h.ctx)).toBeUndefined(); // order and case do not matter
+	expect(spawn({ agent: "implementer", modelRole: "smol", patterns: [] }, h.ctx)).toBeUndefined();
+	expect(spawn({ agent: "implementer", modelRole: "smol", patterns: ["  ", ""] }, h.ctx)).toBeUndefined(); // blank patterns are no override
+	expect(spawn({ agent: "implementer", modelRole: "smol" }, h.ctx)).toBeUndefined();
+	expect(spawn({ agent: "task", modelRole: "smol", patterns: ["ollama/glm-5.3-flash:cloud:medium"] }, h.ctx)).toBeUndefined(); // not an atlas colony agent
 	expect(spawn({ agent: 7, patterns: ["x"] }, h.ctx)).toBeUndefined();
 	process.env.ATLAS_TRIPWIRE_HARD = "off";
-	expect(spawn({ agent: "implementer", patterns: ["openai/gpt-5.2"] }, h.ctx)).toBeUndefined();
+	expect(spawn({ agent: "implementer", modelRole: "task", patterns: ["ollama/glm-5.3-flash:cloud:medium"] }, h.ctx)).toBeUndefined();
 });
 
-test("a partial match of the pinned list is still an override", () => {
+test("pinned-alias-only lists pass even when partial, unpinned bare tokens deny", () => {
 	const h = harness();
-	expect(spawnHandler(h)({ agent: "implementer", patterns: ["@atlas-worker"] }, h.ctx)?.block).toBe(true); // drops the @smol fallback
-	expect(spawnHandler(h)({ agent: "verifier", patterns: ["@atlas-verifier", "@default", "@smol", "extra"] }, h.ctx)?.block).toBe(true);
+	expect(spawnHandler(h)({ agent: "implementer", modelRole: "smol", patterns: ["@atlas-worker"] }, h.ctx)).toBeUndefined(); // subset of pinned aliases carries no override evidence
+	expect(spawnHandler(h)({ agent: "verifier", modelRole: "task", patterns: ["@atlas-verifier", "extra"] }, h.ctx)?.block).toBe(true); // "extra" is neither a pinned alias nor a selector
+});
+
+test("the exact captured omp spawn event for implementer is allowed", () => {
+	const h = harness();
+	expect(spawnHandler(h)({ type: "before_subagent_spawn", agent: "implementer", invocationKind: "task", modelRole: "smol", patterns: ["@atlas-worker", "anthropic/claude-sonnet-5-5:off"], spawnKey: "ProbeThree" }, h.ctx)).toBeUndefined();
+});
+
+test("the expanded verifier event with a pinned-role modelRole is allowed", () => {
+	const h = harness();
+	expect(spawnHandler(h)({ type: "before_subagent_spawn", agent: "verifier", invocationKind: "task", modelRole: "default", patterns: ["@atlas-verifier", "anthropic/claude-opus-5-5:medium"], spawnKey: "VerifyOne" }, h.ctx)).toBeUndefined();
+});
+
+test("a concrete selector with a modelRole outside the pinned roles denies", () => {
+	const h = harness();
+	const result = spawnHandler(h)({ type: "before_subagent_spawn", agent: "implementer", invocationKind: "task", modelRole: "task", patterns: ["ollama/glm-5.3-flash:cloud:medium"], spawnKey: "ForeignTier" }, h.ctx);
+	expect(result?.block).toBe(true);
+	expect(result?.reason).toBe(modelOverrideReason("Task", "implementer", "ollama/glm-5.3-flash:cloud:medium", "@atlas-worker"));
+});
+
+test("a concrete selector with modelRole undefined denies", () => {
+	const h = harness();
+	const result = spawnHandler(h)({ type: "before_subagent_spawn", agent: "implementer", invocationKind: "task", patterns: ["anthropic/claude-sonnet-5-5:high"], spawnKey: "NoRole" }, h.ctx);
+	expect(result?.block).toBe(true);
 });
 
 test("a hostile spawn event fails open", () => {

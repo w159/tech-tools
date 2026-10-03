@@ -1,0 +1,18 @@
+{
+	"connectorWatch": ["plugin_atlas", "falcon-mcp", "connectwise", "gcloud", "plaid", "cipp"],
+	"underscoredServers": [
+		"lean_ctx",
+		"context_mode_context_mode",
+		"context_mode",
+		"claude_mem",
+		"browser_use",
+		"azure",
+		"serena",
+		"context7",
+		"microsoft_docs",
+		"plaid",
+		"mobbin",
+		"clippy"
+	],
+	"note": "Two lists with different purposes; do not merge. connectorWatch = servers named by hooks/hooks.json's connector_credential_watch.py matcher, longest prefix first (read by omp/hook-bridge.ts CONNECTOR_SERVERS). underscoredServers = servers whose underscored names break xd://mcp__<server>_<tool> boundary guessing, longest match wins (read by scripts/omp_transcript.py). Both readers fall back to their built-in literal if this file is unreadable; parity tests pin them."
+}

@@ -23,12 +23,18 @@ import { runCaptureSync } from "./proc";
 /** Hash recorded for a path git reports dirty but that no longer exists. */
 const DELETED = "deleted";
 
-/** Repo-relative path exempt from the mandate (docs dirs / *.md); unreadable contract → exempt. */
+/**
+ * Repo-relative path exempt from the mandate: docs dirs, *.md, and dirs agent
+ * tooling writes by itself (`toolStateDirs`, e.g. serena's .serena/project.yml
+ * at session start). Unreadable contract → exempt. Only the shell-dirt snapshot
+ * uses this: an explicit edit/write of such a path (index.ts isNonDocsPath) is
+ * still a model edit.
+ */
 function exempt(rel: string): boolean {
 	const contract = loadNativeTools();
 	if (!contract) return true;
 	if (contract.exemptExtensions.some(ext => rel.endsWith(ext))) return true;
-	return rel.split("/").some(seg => contract.exemptDirs.includes(seg));
+	return rel.split("/").some(seg => contract.exemptDirs.includes(seg) || contract.toolStateDirs.includes(seg));
 }
 
 function hashOf(abs: string): string {

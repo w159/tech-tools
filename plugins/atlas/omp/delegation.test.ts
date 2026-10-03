@@ -113,3 +113,13 @@ test("tracker fails open: no root, non-git root, never captured", () => {
 	write(dir, "src/a.py", "a\n");
 	expect(tracker.stop(dir)).toEqual([]);
 });
+
+test("agent tool-state dirs (.serena, .lean-ctx, ...) are never counted; src/app.py still is", () => {
+	const root = repo();
+	const before = snapshotDirty(root);
+	write(root, ".serena/project.yml", "name: x\n");
+	write(root, ".serena/.gitignore", "/cache\n");
+	write(root, "src/app.py", "x = 1\n");
+	expect(Object.keys(snapshotDirty(root) ?? {})).toEqual(["src/app.py"]);
+	expect(newShellEdits(before, snapshotDirty(root))).toEqual(["src/app.py"]);
+});

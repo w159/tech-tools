@@ -770,3 +770,104 @@ class GateConditionMatrixTest(GateEndToEndTest):
         self.assertEqual(self._letters(self.gate(session(None))), ["k"])
         self.assertEqual(self._letters(self.gate(session("in_progress"))), ["i"])
         self.assertIsNone(self.gate(session("completed")))
+
+
+_EXPECTED_TOOL_MAP = {
+    "bash": "Bash",
+    "edit": "Edit",
+    "write": "Write",
+    "read": "Read",
+    "grep": "Grep",
+    "glob": "Glob",
+    "find": "Glob",
+    "task": "Task",
+    "todo": "TodoWrite",
+    "web_search": "WebSearch",
+}
+
+
+class ToolMapContractTest(unittest.TestCase):
+    """TOOL_MAP is derived from contracts/tool-names.json, not hand-copied."""
+
+    def test_derived_map_equals_the_historical_literal(self):
+        self.assertEqual(omp_transcript.TOOL_MAP, _EXPECTED_TOOL_MAP)
+        self.assertEqual(omp_transcript._load_tool_map(), _EXPECTED_TOOL_MAP)
+
+    def test_derivation_follows_a_modified_contract(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "tool-names.json")
+            with open(path, "w", encoding="utf-8") as fh:
+                json.dump({"claudeToOmp": {
+                    "ToolSearch-load": "load",
+                    "ToolSearch": "xd:// device catalog",
+                    "AskUserQuestion": "an inline user question",
+                    "SendMessage": "write agent://<name>",
+                    "Alpha": "beta",
+                    "Gamma": "beta",
+                    "Delta": "epsilon",
+                }}, fh)
+            derived = omp_transcript._load_tool_map(path)
+        # first matching key in file order wins; phrase-valued and dashed keys never leak;
+        # omp-only tools with no claudeToOmp entry are still added
+        self.assertEqual(derived, {
+            "beta": "Alpha",
+            "epsilon": "Delta",
+            "find": "Glob",
+            "web_search": "WebSearch",
+        })
+
+    def test_unreadable_contract_falls_back_to_the_same_map(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = os.path.join(tmp, "nope.json")
+            garbage = os.path.join(tmp, "garbage.json")
+            with open(garbage, "w", encoding="utf-8") as fh:
+                fh.write("{not json")
+            wrong_shape = os.path.join(tmp, "list.json")
+            with open(wrong_shape, "w", encoding="utf-8") as fh:
+                fh.write("[]")
+            for path in (missing, garbage, wrong_shape):
+                self.assertEqual(omp_transcript._load_tool_map(path), _EXPECTED_TOOL_MAP, path)
+
+
+def _mcp_contract():
+    with open(os.path.join(HERE, "..", "contracts", "mcp-servers.json"), encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def _connector_matcher_servers():
+    """Server names in the matcher of the hooks.json hook that runs connector_credential_watch.py."""
+    with open(os.path.join(HOOKS, "hooks.json"), encoding="utf-8") as fh:
+        events = json.load(fh)["hooks"]
+    for groups in events.values():
+        for group in groups:
+            if any("connector_credential_watch.py" in h.get("command", "") for h in group["hooks"]):
+                names = []
+                for alt in group["matcher"].split("|"):
+                    name = alt.strip().removeprefix("mcp__").removesuffix(".*").rstrip("_")
+                    if name:
+                        names.append(name)
+                return names
+    raise AssertionError("no hook runs connector_credential_watch.py")
+
+
+class McpServersContractTest(unittest.TestCase):
+    """contracts/mcp-servers.json: two lists with different purposes, each pinned to its reader."""
+
+    def test_connector_watch_equals_the_hooks_json_connector_matcher(self):
+        self.assertEqual(set(_mcp_contract()["connectorWatch"]), set(_connector_matcher_servers()))
+        self.assertEqual(len(_mcp_contract()["connectorWatch"]), len(set(_mcp_contract()["connectorWatch"])))
+
+    def test_known_mcp_servers_equal_the_contract_underscored_servers(self):
+        self.assertEqual(list(omp_transcript._KNOWN_MCP_SERVERS), _mcp_contract()["underscoredServers"])
+
+    def test_underscored_servers_follow_a_modified_contract_and_fail_open(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            good = os.path.join(tmp, "mcp-servers.json")
+            with open(good, "w", encoding="utf-8") as fh:
+                json.dump({"underscoredServers": ["only_one"]}, fh)
+            self.assertEqual(omp_transcript._load_mcp_servers(good), ("only_one",))
+            bad = os.path.join(tmp, "bad.json")
+            with open(bad, "w", encoding="utf-8") as fh:
+                fh.write("{not json")
+            for path in (bad, os.path.join(tmp, "missing.json")):
+                self.assertEqual(omp_transcript._load_mcp_servers(path), omp_transcript._KNOWN_MCP_SERVERS_FALLBACK)
