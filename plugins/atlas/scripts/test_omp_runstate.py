@@ -240,6 +240,33 @@ class RunstateTest(unittest.TestCase):
         with open(session_boot.snapshot_path(self.proj, "s2")) as fh:
             self.assertIn("pre.py", json.load(fh)["paths"])  # entries the snapshot already held survive
 
+    def test_rebaseline_absorbs_tool_state_already_in_the_snapshot_whose_content_changed(self):
+        # serena rewrites project.yml each session: a file present at SessionStart can differ by Stop
+        self._write(".serena/project.yml", "before\n")
+        self.run_cli("snapshot")
+        self.assertIn(".serena/project.yml", self._snapshot_paths())
+        self._write(".serena/project.yml", "after\n")
+        self.assertEqual(self._gate_diff(), [".serena/project.yml"])  # what the gate would wrongly count
+        res = self.run_cli("rebaseline")
+        self.assertEqual(res["absorbed"], [".serena/project.yml"])
+        self.assertEqual(self._gate_diff(), [])
+
+    def test_rebaseline_never_rewrites_a_changed_code_file_already_in_the_snapshot(self):
+        self._write("src/app.py", "v1\n")
+        self.run_cli("snapshot")
+        self._write("src/app.py", "v2\n")  # the lead edited it through the shell after the snapshot
+        self.assertEqual(self.run_cli("rebaseline")["absorbed"], [])
+        self.assertEqual(self._gate_diff(), ["src/app.py"])
+
+    def test_rebaseline_resolves_the_docs_root_from_a_subdirectory_cwd(self):
+        self.run_cli("snapshot")  # written under the docs root, as session_boot does
+        self._write(".serena/project.yml")
+        sub = os.path.join(self.proj, "src", "pkg")
+        os.makedirs(sub)
+        res = self.run_cli("rebaseline", cwd=sub)
+        self.assertEqual(res["absorbed"], [".serena/project.yml"])
+        self.assertEqual(self._gate_diff(), [])
+
     # ---- fail-open -----------------------------------------------------
     def test_unwritable_db_and_bad_args_exit_zero_with_ok_false(self):
         blocker = os.path.join(self.tmp, "blocker")

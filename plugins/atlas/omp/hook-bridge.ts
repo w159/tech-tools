@@ -250,6 +250,62 @@ export function claudeMcpName(name: string): string {
 	return name;
 }
 
+/** Built-in underscoredServers list: the fail-open fallback when contracts/mcp-servers.json is unreadable (twin of omp_transcript._KNOWN_MCP_SERVERS_FALLBACK). */
+const UNDERSCORED_SERVERS_FALLBACK: readonly string[] = [
+	"lean_ctx", "context_mode_context_mode", "context_mode", "claude_mem", "browser_use", "azure", "serena", "context7", "microsoft_docs", "plaid", "mobbin", "clippy",
+];
+
+/** `underscoredServers` from the MCP server contract, longest first; the built-in list when the file is unreadable or malformed. */
+export function loadUnderscoredServers(path: string = MCP_SERVERS, fallback: readonly string[] = UNDERSCORED_SERVERS_FALLBACK): readonly string[] {
+	let list: readonly string[] = fallback;
+	try {
+		const doc = readJson(path);
+		const found = doc && typeof doc === "object" && !Array.isArray(doc) ? doc.underscoredServers : undefined;
+		if (Array.isArray(found) && found.length > 0 && found.every((s): s is string => typeof s === "string" && s.length > 0)) list = found;
+	} catch {
+		// fail open: keep the built-in list
+	}
+	return [...list].sort((a, b) => b.length - a.length);
+}
+
+const UNDERSCORED_SERVERS: readonly string[] = loadUnderscoredServers();
+
+/**
+ * `xd://mcp__<server>_<tool>` → `mcp__<server>__<tool>`, the same split scripts/omp_transcript.py `_split_mcp_xd` makes,
+ * so the live hooks and the converted transcript name one device the same way: a listed server prefix (longest wins),
+ * else the doubled token omp mints for a tool that repeats its server (`atlas_falcon` + `falcon_status`).
+ * Undefined when the shape is not recognisable.
+ */
+export function splitMcpDevice(path: string): string | undefined {
+	const m = /^xd:\/\/mcp__([A-Za-z0-9_]+)$/.exec(path);
+	if (!m) return undefined;
+	const rest = m[1];
+	for (const server of UNDERSCORED_SERVERS) {
+		if (rest.startsWith(`${server}_`) && rest.length > server.length + 1) return `mcp__${server}__${rest.slice(server.length + 1)}`;
+	}
+	const tokens = rest.split("_");
+	for (let i = 0; i < tokens.length - 1; i++) {
+		if (tokens[i] && tokens[i] === tokens[i + 1]) {
+			const tool = tokens.slice(i + 2).join("_");
+			return tool ? `mcp__${tokens.slice(0, i + 1).join("_")}__${tool}` : undefined;
+		}
+	}
+	return undefined;
+}
+
+/**
+ * The Claude tool names for one omp call. An omp `write` whose `path` is an `xd://mcp__…` URI is an MCP device CALL, not a
+ * file edit, so it is that MCP tool (the production-edit deny and the Edit/Write matchers must not see it); every other
+ * call maps by tool name exactly as before.
+ */
+export function claudeNamesForCall(tool: string, input: unknown, namesPath?: string): string[] {
+	if (tool === "write" && input && typeof input === "object" && "path" in input && typeof input.path === "string") {
+		const device = splitMcpDevice(input.path);
+		if (device) return [claudeMcpName(device)];
+	}
+	return claudeNamesFor(tool, namesPath).map(claudeMcpName);
+}
+
 /** The omp `task` tool's dispatch items: `tasks[]` entries, else the single top-level dispatch. */
 export function taskItems(input: unknown): Record<string, unknown>[] {
 	if (!input || typeof input !== "object") return [];
@@ -457,7 +513,8 @@ export function registerHookBridge(pi: Pick<ExtensionAPI, "on">, deps: BridgeDep
 		try {
 			if (off()) return undefined;
 			const tool = event.toolName ?? "";
-			const names = claudeNamesFor(tool, deps.namesPath);
+			// omp mints `mcp__<server>_<tool>` and a `write` to an xd:// device is an MCP call; hooks.json matchers expect Claude's names.
+			const names = claudeNamesForCall(tool, event.input, deps.namesPath);
 			const cwd = ctx.cwd;
 			const sessionId = sessionIdOf(ctx);
 			const transcriptPath = await transcriptPathOf(deps, ctx as BridgeCtx);
@@ -489,8 +546,8 @@ export function registerHookBridge(pi: Pick<ExtensionAPI, "on">, deps: BridgeDep
 		try {
 			if (off() || event.isError) return undefined;
 			const tool = event.toolName ?? "";
-			// omp mints `mcp__<server>_<tool>`; hooks.json matchers (and the connector hook) expect `mcp__<server>__<tool>`.
-			const names = claudeNamesFor(tool, deps.namesPath).map(claudeMcpName);
+			// omp mints `mcp__<server>_<tool>` and a `write` to an xd:// device is an MCP call; hooks.json matchers expect Claude's names.
+			const names = claudeNamesForCall(tool, event.input, deps.namesPath);
 			const cwd = ctx.cwd;
 			const sessionId = sessionIdOf(ctx);
 			const transcriptPath = await transcriptPathOf(deps, ctx as BridgeCtx);
