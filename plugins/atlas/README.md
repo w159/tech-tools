@@ -206,11 +206,16 @@ transcript shape (`scripts/omp_transcript.py`), records run state
 (`scripts/omp_runstate.py`, `omp/run-state.ts`), and runs the definition-of-done
 gate (a)-(l), ingest, chronicle, memory capture and the nudge on `session_stop`,
 `session_shutdown` and `auto_compaction_start`. `dispatch_tripwire.py` runs
-through the bridge (dispatch-spec blocks, one-GOAL rule, production-edit deny),
-and the model-override deny runs on `before_subagent_spawn`. Still open, per
+through the bridge (dispatch-spec blocks, one-GOAL rule, production-edit deny,
+inline-op threshold deny), and the model-override deny runs on
+`before_subagent_spawn`. The bridge sets `ATLAS_NATIVE_POLICY=off` for the hooks
+it runs, which makes `dispatch_tripwire.py` skip its own native-tool deny/nudge
+(omp's `index.ts` already produces it) and still reach the inline-op threshold;
+Claude Code never sets it, so nothing changes there. Still open, per
 `docs/atlas-harness-parity.md`: memory capture's durable-write path and the
 connector credential watch are not yet shown working on a live omp run; the omp
-inline-op thresholds are unmeasured live; the output style's Claude-only
+inline-op, production-edit and dispatch-spec denies are tested against the real
+hook but not observed in a live omp session; the output style's Claude-only
 `TodoWrite` sentences; and the delegation-policy decision (the lead may still
 edit inline and then dispatch a verifier). Row-by-row status:
 `docs/atlas-harness-parity.md`. How each surface is created, read, updated, and

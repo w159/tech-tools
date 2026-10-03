@@ -13,8 +13,15 @@ Marketplace `4.5.0`; atlas `8.7.0`.
   tested against the real hook through the bridge.
 - Fixed a per-ingest temp-directory leak in the detached ingest child.
 - `docs/atlas-harness-parity.md` rows moved from gap only where tested; memory
-  capture's durable write, the connector watch and the inline-op thresholds are
-  still not shown on a live omp run.
+  capture's durable write and the connector watch are not shown on a live omp run,
+  and the inline-op, production-edit and dispatch-spec denies are tested against
+  the real hook but not observed live.
+- Fixed: the inline-op threshold deny never fired in omp (the bridge skipped the
+  tripwire's PreToolUse for Read/Grep/Glob/Bash); plaintext session copies are now
+  deleted after use; a main conversion no longer deletes a running subagent's
+  transcript. `dispatch_tripwire.py` gained one env-gated guard
+  (`ATLAS_NATIVE_POLICY=off`, set only by the omp bridge); unset, Claude Code is
+  unchanged.
 
 ## 2026-10-01 -- One contract per rule across Claude Code and omp, omp output style, tool mandates, tmux colony mode
 

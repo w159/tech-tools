@@ -472,9 +472,13 @@ model-role fallbacks. New in 8.7.0:
   in `atlas.db`. Whether `atlas_doctor` mines those rows is not verified
   (it stays unbridged).
 - **`dispatch_tripwire.py` runs in omp** through the bridge: dispatch-spec
-  blocks, the one-GOAL rule, and the production-edit deny are tested against the
-  real hook (`omp/hook-bridge-session.test.ts`); the model-override deny runs on
-  `before_subagent_spawn`.
+  blocks, the one-GOAL rule, the production-edit deny and the inline-op
+  threshold deny are tested against the real hook
+  (`omp/hook-bridge-session.test.ts`); the model-override deny runs on
+  `before_subagent_spawn`. The one change to a Claude hook for this is an
+  env-gated guard in `dispatch_tripwire.py` (`ATLAS_NATIVE_POLICY=off`, set only
+  by the omp bridge so the tripwire does not repeat the native-tool text omp's
+  `index.ts` already produces); unset, as in Claude Code, behavior is unchanged.
 
 Still open, from `docs/atlas-harness-parity.md`:
 
@@ -484,9 +488,9 @@ Still open, from `docs/atlas-harness-parity.md`:
   names of the known connector servers are re-split) but only unit-tested, not
   exercised against a real stale credential; servers outside the table are not
   re-split because omp's MCP name mint drops the separator.
-- **The omp inline-op thresholds** (deny at the Nth unsanctioned inline op) rely
-  on run events written by the bridge; they have not been measured on a live omp
-  run.
+- **The inline-op threshold, production-edit deny and dispatch-spec checks** run
+  in omp and are tested against the real `dispatch_tripwire.py` through the real
+  bridge, but none has been observed in a live omp session.
 - **The output style** still carries Claude-only sentences about `TodoWrite`
   gating (`CLAUDE_CODE_ENABLE_TODO_TOOLS`); a contract test pins them for Claude
   Code.

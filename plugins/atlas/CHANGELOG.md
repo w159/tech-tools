@@ -31,15 +31,36 @@
   descriptions for Stop, SessionEnd, SubagentStop and PreCompact.
 
 ### Fixed
-- The detached ingest child left one empty `atlas-ingest-*` directory in the OS
-  temp dir per ingest (138 accumulated over one afternoon). Its exit trap now
-  also `rmdir`s the directory (not `rm -rf`, so it can never delete a non-empty
-  one), with real-shell tests, mutation-checked.
+- **The inline-op threshold deny never fired in omp.** The bridge skipped
+  `dispatch_tripwire.py`'s PreToolUse for Read/Grep/Glob/Bash (omp polices them
+  natively), but that is exactly the hook that counts them and denies at the
+  threshold: 12 inline read/bash calls on an armed run were never denied although
+  the database counted all 12. The tripwire now runs for every matched tool, and
+  the bridge sets `ATLAS_NATIVE_POLICY=off` so the tripwire skips only its own
+  native-tool deny/nudge text (omp's `index.ts` already produces it) and still
+  reaches the threshold tiers. Filtering that text on the TypeScript side would
+  not have worked: with lean-ctx reachable, the native-policy deny returns from
+  `main()` before the count is evaluated.
+- **Plaintext session copies were never deleted.** The converter's output is a
+  full plaintext copy of a session. The Stop path now discards it after the Stop
+  hooks have read it; each detached ingest converts into its own `atlas-ingest-*`
+  directory, and the child's exit trap removes that directory's files (the
+  transcript, the lead's colony and advisor sidecars, the payload) with `rm -f`
+  on named globs and `rmdir`, never `rm -rf`, and only for a directory named
+  `atlas-ingest-*`. A live `omp -p` run left zero `atlas-omp-*` / `atlas-ingest-*`
+  directories, down from one before.
+- **A main conversion deleted a running subagent's transcript.** The converter
+  prunes any `subagents/agent-*.jsonl` it did not just write, and the cache shared
+  that directory between the lead and each subagent (reproduced). Each main
+  conversion now gets its own directory.
 
 ### Verified
-- Claude Code is unchanged: no tracked Python file was modified; hooks 921
-  tests and scripts 858 tests pass as before, plus 50 new script tests.
-- `omp` suite 145 to 200 tests. Every gate condition (a)-(l) is individually
+- Claude Code is unchanged when `ATLAS_NATIVE_POLICY` is unset: `dispatch_tripwire.py`
+  gained one env-gated guard (5 lines in `_native_tool_policy`); with the variable
+  unset a native Grep in a lean-ctx docs project is still denied (checked directly),
+  and hooks 921 tests and scripts 858 tests pass as before, plus 50 new script tests.
+  No other tracked Python file was modified.
+- `omp` suite 145 to 214 tests. Every gate condition (a)-(l) is individually
   tested on omp-derived state against the real `completion_gate.py`
   (`GateConditionMatrixTest`); the dispatch-spec, one-GOAL and production-edit
   denies are tested against the real hook through the bridge. An independent
@@ -47,8 +68,10 @@
   delegation condition (m) and populated `runs`, `messages`, `tool_calls` and
   `facets` with Claude tool names.
 - Not shown on omp: memory capture's durable write, the connector credential
-  watch against a real stale credential, the inline-op thresholds on a live run,
-  and the gate conditions other than (m) blocking in a live run. See
+  watch against a real stale credential, and the gate conditions other than (m)
+  blocking in a live run. The inline-op deny, production-edit deny and
+  dispatch-spec checks are tested against the real hook through the bridge but
+  not observed in a live omp session. See
   `docs/atlas-harness-parity.md`.
 
 ## [8.6.0] - 2026-10-01

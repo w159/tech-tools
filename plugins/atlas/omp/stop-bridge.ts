@@ -94,19 +94,76 @@ export interface TranscriptCache {
 	forToolHook(sessionFile: string | undefined, sessionId: string, kind: "main" | "sub"): Promise<string>;
 	/** Convert now (no reuse) and return the transcript path, or undefined when conversion failed. */
 	convertFresh(sessionFile: string | undefined, sessionId: string, kind: "main" | "sub", timeoutMs?: number): Promise<string | undefined>;
+	/**
+	 * Delete a converted transcript this cache wrote, then its now-empty parents up to the cache base. The converted
+	 * file is a plaintext copy of the whole session (prompts, tool output, anything a client file contained), so it
+	 * must not outlive the hook that read it. Uses unlink + rmdir only (never a recursive delete) and refuses any
+	 * path outside the base, so a bad argument cannot remove anything else.
+	 */
+	discard?(transcriptPath: string | undefined): void;
 }
 
 const safeId = (id: string): string => id.replace(/[^\w.-]+/g, "-").slice(0, 80) || "session";
 
-export function createTranscriptCache(deps: { convert?: ConvertFn; baseDir?: string; now?: () => number } = {}): TranscriptCache {
+export function createTranscriptCache(deps: { convert?: ConvertFn; baseDir?: string; tmpDir?: string; now?: () => number } = {}): TranscriptCache {
 	const convert = deps.convert ?? convertTranscript;
 	const now = deps.now ?? Date.now;
 	let base: string | undefined;
+	let ownsBase = false; // true only when this cache made the base with mkdtemp; an injected baseDir is never forgotten
 	const last = new Map<string, { out: string; at: number }>();
 
+	// A MAIN conversion gets its own fresh directory under the base. omp_transcript.py writes the lead's colony and
+	// advisor files next to its output as `subagents/agent-*.jsonl` and prunes any such file it did not just write, so
+	// a shared `subagents/` would let one conversion delete a running subagent's transcript (reproduced). Isolating
+	// each main conversion keeps those sidecars, and that prune, inside a directory nothing else uses.
+	// A SUB conversion keeps a stable path of its own: `<base>/subagents/agent-<id>.jsonl`.
 	const outFor = (sessionId: string, kind: "main" | "sub"): string => {
-		base ??= deps.baseDir ?? fs.mkdtempSync(nodePath.join(os.tmpdir(), "atlas-omp-"));
-		return kind === "sub" ? nodePath.join(base, "subagents", `agent-${safeId(sessionId)}.jsonl`) : nodePath.join(base, `session-${safeId(sessionId)}.jsonl`);
+		if (base === undefined) {
+			ownsBase = deps.baseDir === undefined;
+			base = deps.baseDir ?? fs.mkdtempSync(nodePath.join(deps.tmpDir ?? os.tmpdir(), "atlas-omp-"));
+		}
+		if (kind === "sub") return nodePath.join(base, "subagents", `agent-${safeId(sessionId)}.jsonl`);
+		fs.mkdirSync(base, { recursive: true });
+		return nodePath.join(fs.mkdtempSync(nodePath.join(base, "main-")), `session-${safeId(sessionId)}.jsonl`);
+	};
+	const discard: TranscriptCache["discard"] = transcriptPath => {
+		try {
+			if (!transcriptPath || !base) return;
+			const root = nodePath.resolve(base);
+			const target = nodePath.resolve(transcriptPath);
+			if (!target.startsWith(root + nodePath.sep)) return; // never touch anything outside the cache base
+			const dir = nodePath.dirname(target);
+			if (nodePath.basename(dir).startsWith("main-") && nodePath.dirname(dir) === root) {
+				// A main conversion directory: this cache made it for exactly one conversion, so everything in it is that
+				// conversion's own output (the transcript and its sidecars). Delete those files by name, then the directory.
+				for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+					if (entry.isDirectory()) {
+						for (const sidecar of fs.readdirSync(nodePath.join(dir, entry.name))) fs.rmSync(nodePath.join(dir, entry.name, sidecar), { force: true });
+						fs.rmdirSync(nodePath.join(dir, entry.name));
+					} else {
+						fs.rmSync(nodePath.join(dir, entry.name), { force: true });
+					}
+				}
+			} else {
+				fs.rmSync(target, { force: true }); // a sub transcript: exactly one file
+			}
+			// Walk upward removing EMPTY directories only (rmdir refuses a non-empty one, so a sibling transcript
+			// survives), and stop at the base: never above it, and never a sibling like `<base>-other`.
+			for (let up = dir; up === root || up.startsWith(root + nodePath.sep); up = nodePath.dirname(up)) {
+				try {
+					fs.rmdirSync(up);
+				} catch {
+					break;
+				}
+				if (up === root) {
+					if (ownsBase) base = undefined; // the next conversion makes a fresh mkdtemp base
+					break;
+				}
+			}
+			for (const [key, hit] of last) if (hit.out === target) last.delete(key);
+		} catch {
+			// fail open: a leftover file is a privacy nit, never a reason to break the hook chain
+		}
 	};
 	const convertFresh: TranscriptCache["convertFresh"] = async (sessionFile, sessionId, kind, timeoutMs = CONVERT_TIMEOUT_MS) => {
 		try {
@@ -123,6 +180,7 @@ export function createTranscriptCache(deps: { convert?: ConvertFn; baseDir?: str
 	};
 	return {
 		convertFresh,
+		discard,
 		async forToolHook(sessionFile, sessionId, kind) {
 			if (kind === "main") return "";
 			const hit = sessionFile ? last.get(`${kind}\0${sessionFile}`) : undefined;
@@ -139,7 +197,11 @@ export interface StopBridgeDeps {
 	env?: Record<string, string | undefined>;
 	cache?: TranscriptCache;
 	/** Detached, never-awaited spawn of `argv` with `stdinFile` as its stdin. Tests inject a recorder. */
-	spawnDetached?(argv: string[], opts: { cwd: string; stdinFile: string; env: Record<string, string> }): void;
+	spawnDetached?(argv: string[], opts: DetachedOpts): void;
+	/** Base directory for the per-ingest owned dirs; default os.tmpdir(). Tests pass a per-test dir. */
+	tmpDir?: string;
+	/** Converter used for the detached ingest, which converts into the spawn's own directory; default omp_transcript.py. */
+	convert?: ConvertFn;
 	now?: () => number;
 }
 
@@ -168,14 +230,32 @@ export function sessionFileOf(ctx: BridgeCtx): string {
 }
 
 /**
- * Runs `argv` with stdin from `stdinFile`, output discarded. On child exit the stdin file is removed and
- * then its parent temp dir via `rmdir` (not `rm -rf`): `rmdir` only succeeds on an EMPTY directory, so an
- * empty or wrong `$ATLAS_PROC_STDIN` can never delete anything it should not. Without the `rmdir`, every
- * ingest left one empty `atlas-ingest-*` directory behind in the OS temp dir.
+ * Removes a converted transcript, never letting cleanup affect a hook verdict: a cache without `discard` (a test
+ * double, an older custom cache) or one that throws just leaves the file, which is a privacy nit, not a reason to
+ * lose the gate's block.
  */
-export const DETACHED_SCRIPT = `trap 'rm -f "$ATLAS_PROC_STDIN"; rmdir "$(dirname "$ATLAS_PROC_STDIN")" 2>/dev/null' EXIT; ("$@") <"$ATLAS_PROC_STDIN" >/dev/null 2>&1`;
+function discardQuietly(cache: TranscriptCache, transcriptPath: string | undefined): void {
+	try {
+		cache.discard?.(transcriptPath);
+	} catch {
+		// ignore: cleanup is best effort
+	}
+}
 
-type DetachedOpts = { cwd: string; stdinFile: string; env: Record<string, string> };
+/**
+ * Runs `argv` with stdin from `stdinFile`, output discarded. The spawn owns `ownedDir` (an `atlas-ingest-*`
+ * directory the bridge made for this one ingest, holding the payload, the converted transcript, and the lead's
+ * colony and advisor sidecars under `subagents/`). On child exit the trap removes exactly that directory:
+ *   - `rm -f` on the files directly inside it and inside its `subagents/` (named globs, never `rm -rf`);
+ *   - then `rmdir` on `subagents/` and the directory, which refuse to remove anything non-empty, so an unexpected
+ *     extra file survives loudly instead of being deleted.
+ * The shell refuses to act unless the directory's name starts with `atlas-ingest-`, so an empty or wrong
+ * variable cannot point the cleanup anywhere else. No path is shared with another child or with the synchronous
+ * Stop path, so one child's exit can never remove a file another child is about to open.
+ */
+export const DETACHED_SCRIPT = `trap 'case "$(basename "$ATLAS_OWNED_DIR")" in atlas-ingest-*) rm -f "$ATLAS_OWNED_DIR"/*.json "$ATLAS_OWNED_DIR"/*.jsonl "$ATLAS_OWNED_DIR"/subagents/*.jsonl; rmdir "$ATLAS_OWNED_DIR"/subagents "$ATLAS_OWNED_DIR" 2>/dev/null;; esac' EXIT; ("$@") <"$ATLAS_PROC_STDIN" >/dev/null 2>&1`;
+
+type DetachedOpts = { cwd: string; stdinFile: string; env: Record<string, string>; ownedDir: string };
 
 /** Starts the detached child and returns its handle; `undefined` if the spawn itself failed (fail open). */
 export function startDetached(argv: string[], opts: DetachedOpts): { unref(): void; exited: Promise<number> } | undefined {
@@ -185,7 +265,7 @@ export function startDetached(argv: string[], opts: DetachedOpts): { unref(): vo
 			stdin: "ignore",
 			stdout: "ignore",
 			stderr: "ignore",
-			env: { ...process.env, ...opts.env, ATLAS_PROC_STDIN: opts.stdinFile },
+			env: { ...process.env, ...opts.env, ATLAS_PROC_STDIN: opts.stdinFile, ATLAS_OWNED_DIR: opts.ownedDir },
 		});
 	} catch {
 		// fail open: no ingest this time
@@ -197,12 +277,34 @@ function spawnDetachedReal(argv: string[], opts: DetachedOpts): void {
 	startDetached(argv, opts)?.unref();
 }
 
+/** Removes a directory this bridge just made for one ingest, only if it is empty after its known files are gone. */
+function removeOwnedDir(dir: string): void {
+	try {
+		for (const sub of [nodePath.join(dir, "subagents"), dir]) {
+			if (!fs.existsSync(sub)) continue;
+			for (const name of fs.readdirSync(sub, { withFileTypes: true })) if (name.isFile()) fs.rmSync(nodePath.join(sub, name.name), { force: true });
+		}
+		for (const sub of [nodePath.join(dir, "subagents"), dir]) if (fs.existsSync(sub)) fs.rmdirSync(sub);
+	} catch {
+		// best effort: a leftover empty directory is not worth failing the ingest path
+	}
+}
+
 export function registerStopBridge(pi: Pick<ExtensionAPI, "on">, deps: StopBridgeDeps = {}): void {
 	const env = () => deps.env ?? process.env;
 	const off = () => env().ATLAS_HOOK_BRIDGE === "off" || env().ATLAS_STOP_BRIDGE === "off";
 	const run = deps.run ?? runHook;
-	const cache = deps.cache ?? createTranscriptCache();
+	const cache = deps.cache ?? createTranscriptCache({ tmpDir: deps.tmpDir });
 	const spawnDetached = deps.spawnDetached ?? spawnDetachedReal;
+	const convert = deps.convert ?? convertTranscript;
+	/** Convert `sessionFile` into exactly `out`; false (never a throw) when there is nothing to convert or it failed. */
+	const convertInto = async (sessionFile: string, out: string, timeoutMs: number): Promise<boolean> => {
+		try {
+			return sessionFile.length > 0 && (await convert(sessionFile, out, timeoutMs));
+		} catch {
+			return false;
+		}
+	};
 	const now = deps.now ?? Date.now;
 	let hooks: BridgedHook[] | undefined = deps.hooks;
 	const hooksFor = (event: string): BridgedHook[] => (hooks ??= loadBridgedHooksFor(SESSION_END_EVENTS, "bridgedSessionEnd")).filter(h => h.event === event);
@@ -216,19 +318,26 @@ export function registerStopBridge(pi: Pick<ExtensionAPI, "on">, deps: StopBridg
 		try {
 			const bridgeCtx = ctx as BridgeCtx;
 			if (bridgeCtx.agent?.kind !== "main" || off()) return undefined;
-			const raw = event as Record<string, unknown>;
-			const sessionId = sessionIdOf(bridgeCtx) || str(raw.session_id);
+			// Typed off omp's SessionStopEvent so tsc checks these names against the host; the coercion stays because
+			// the event comes from a runtime we do not control and tests hand-build partial events.
+			const sessionId = sessionIdOf(bridgeCtx) || str(event.session_id);
 			// Ordering hazard: convert BEFORE any hook runs. The gate and ingest re-read this file.
-			const transcriptPath = await cache.convertFresh(str(raw.session_file) || sessionFileOf(bridgeCtx), sessionId, "main");
-			const stopHookActive = raw.stop_hook_active === true;
+			const transcriptPath = await cache.convertFresh(str(event.session_file) || sessionFileOf(bridgeCtx), sessionId, "main");
+			const stopHookActive = event.stop_hook_active === true;
 			const payload = claudeLifecyclePayload("Stop", { sessionId, cwd: bridgeCtx.cwd, transcriptPath, stopHookActive });
 			const deadline = now() + HANDLER_BUDGET_MS;
 			let blockReason: string | undefined;
-			for (const hook of hooksFor("Stop")) {
-				const remaining = deadline - now();
-				if (remaining <= 0) break; // out of handler budget: skip the rest (fail open)
-				const out = parseStopHookOutput(await run(hook.command, payload, Math.min(hookTimeoutMs(hook.timeoutMs, env()), remaining)));
-				if (out.block && blockReason === undefined) blockReason = out.reason;
+			try {
+				for (const hook of hooksFor("Stop")) {
+					const remaining = deadline - now();
+					if (remaining <= 0) break; // out of handler budget: skip the rest (fail open)
+					const out = parseStopHookOutput(await run(hook.command, payload, Math.min(hookTimeoutMs(hook.timeoutMs, env()), remaining)));
+					if (out.block && blockReason === undefined) blockReason = out.reason;
+				}
+			} finally {
+				// Every Stop hook has been awaited, so nothing is reading the converted copy any more. It is a plaintext
+				// copy of the whole session; do not leave it in the OS temp dir.
+				discardQuietly(cache, transcriptPath);
 			}
 			const state = stops.get(sessionId) ?? { streak: 0 };
 			stops.set(sessionId, state);
@@ -267,14 +376,22 @@ export function registerStopBridge(pi: Pick<ExtensionAPI, "on">, deps: StopBridg
 		const sessionId = sessionIdOf(ctx);
 		const command = hooksFor(hookEvent)[0]?.command;
 		if (!sessionId || !command) return;
-		const transcriptPath = await cache.convertFresh(sessionFileOf(ctx), sessionId, kind, timeoutMs);
-		if (!transcriptPath || !admitIngest(sessionId, hookEvent)) return;
-		const dir = fs.mkdtempSync(nodePath.join(os.tmpdir(), "atlas-ingest-"));
+		if (!admitIngest(sessionId, hookEvent)) return; // refused before any conversion: nothing to clean up
+		// This spawn owns a directory of its own. The transcript (and the lead's colony and advisor sidecars, which
+		// omp_transcript.py writes next to it) are converted INTO it, so no path is shared with another child or the
+		// synchronous Stop path, and the child's exit trap removes exactly this directory's files.
+		const dir = fs.mkdtempSync(nodePath.join(deps.tmpDir ?? os.tmpdir(), "atlas-ingest-"));
+		const transcriptPath = nodePath.join(dir, kind === "sub" ? `agent-${safeId(sessionId)}.jsonl` : `session-${safeId(sessionId)}.jsonl`);
+		if (!(await convertInto(sessionFileOf(ctx), transcriptPath, timeoutMs))) {
+			removeOwnedDir(dir); // conversion failed: leave nothing behind and spawn nothing
+			return;
+		}
 		const stdinFile = nodePath.join(dir, "payload.json");
 		fs.writeFileSync(stdinFile, JSON.stringify(claudeLifecyclePayload(hookEvent, { sessionId, cwd: ctx.cwd, transcriptPath })));
 		spawnDetached(["/bin/sh", "-c", command], {
 			cwd: ctx.cwd,
 			stdinFile,
+			ownedDir: dir,
 			env: { CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT, ATLAS_HARNESS: "omp", ATLAS_MANDATES: "off" },
 		});
 	};

@@ -289,7 +289,9 @@ export const runHook: HookRunner = async (command, payload, timeoutMs) => {
 		const { stdout } = await runCapture(["/bin/sh", "-c", command], {
 			input: JSON.stringify(payload),
 			timeoutMs,
-			env: { CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT, ATLAS_HARNESS: "omp", ATLAS_MANDATES: "off" },
+			// ATLAS_NATIVE_POLICY=off: omp/index.ts already denies/nudges native Read/Grep/Glob/Bash, so the tripwire must not
+			// repeat that text; it still runs the inline-op threshold tiers. Only dispatch_tripwire.py reads it.
+			env: { CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT, ATLAS_HARNESS: "omp", ATLAS_MANDATES: "off", ATLAS_NATIVE_POLICY: "off" },
 		});
 		return stdout;
 	} catch {
@@ -312,8 +314,6 @@ interface HookRun {
 }
 
 const TRIPWIRE_SCRIPT = "dispatch_tripwire.py";
-/** Claude tool names whose native-tool policy (deny/nudge toward lean-ctx) omp/index.ts already implements. */
-const NATIVELY_POLICED: readonly string[] = ["Read", "Grep", "Glob", "Bash"];
 const scriptOf = (command: string): string => /([\w.-]+\.py)/.exec(command)?.[1] ?? "";
 const tripwireRan = (runs: HookRun[]): boolean => runs.some(r => r.script === TRIPWIRE_SCRIPT);
 
@@ -386,15 +386,16 @@ export function registerHookBridge(pi: Pick<ExtensionAPI, "on">, deps: BridgeDep
 
 	/**
 	 * Runs matching hooks in order; each gets min(its capped timeout, what is left before `deadline`).
-	 * dispatch_tripwire.py skips the tools index.ts already polices natively (Read/Grep/Glob/Bash), so
-	 * one native-tool deny text reaches the model, not two.
+	 * dispatch_tripwire.py runs for every matched tool, including Read/Grep/Glob/Bash: its inline-op
+	 * threshold deny lives in PreToolUse and counts exactly those tools, so skipping it removed the deny tier.
+	 * The native-tool deny/nudge text index.ts already produces is suppressed at the source instead, by
+	 * ATLAS_NATIVE_POLICY=off in runHook, so one native-tool message reaches the model, not two.
 	 */
 	const runAllRuns = async (event: ClaudeEvent, toolNames: string[] | undefined, payload: Record<string, unknown>, deadline: number = Date.now() + HANDLER_BUDGET_MS): Promise<HookRun[]> => {
 		const selected = all().filter(h => h.event === event && (!h.matcher || !toolNames || toolNames.some(n => h.matcher?.test(n))));
 		const runs: HookRun[] = [];
 		for (const hook of selected) {
 			const script = scriptOf(hook.command);
-			if (script === TRIPWIRE_SCRIPT && event === "PreToolUse" && toolNames?.some(n => NATIVELY_POLICED.includes(n))) continue;
 			const remaining = deadline - Date.now();
 			if (remaining <= 0) break; // out of handler budget: skip the rest (fail open)
 			const timeoutMs = Math.min(hookTimeoutMs(hook.timeoutMs, deps.env ?? process.env), remaining);

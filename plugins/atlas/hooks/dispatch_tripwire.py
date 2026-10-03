@@ -699,7 +699,11 @@ def _native_tool_policy(payload):
     armed orchestrator's inline-op threshold deny still applies to Read/Bash/
     Grep/Glob; `nudge` (or None) is printed only if no later tier denies.
     Errors allow with no output."""
-    if payload.get("hook_event_name") != "PreToolUse":
+    # ATLAS_NATIVE_POLICY=off is set only by the omp hook bridge: omp/index.ts already
+    # denies/nudges native Read/Grep/Glob/Bash itself, and a deny here would return from
+    # main() before the inline-op threshold below is evaluated. Unset = Claude Code.
+    native_off = os.environ.get("ATLAS_NATIVE_POLICY", "on").lower() == "off"
+    if payload.get("hook_event_name") != "PreToolUse" or native_off:
         return False, None
     tool = payload.get("tool_name")
     contract = _native_tool_contract()
