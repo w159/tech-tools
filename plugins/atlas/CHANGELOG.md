@@ -86,12 +86,13 @@
   grader, same launcher; workers pinned to the tree under test with `--omp-extension`,
   runs alternated base, current, current, base so prompt-cache warm-up favours neither:
   the 8.7.0 tree scored 10/26 and 1/26, this tree 26/26 and 26/26. The 8.7.0 workers hit
-  the "orchestrators never edit target code inline" deny 11 to 12 times per run (the two
-  counting methods differ by one); this tree, 0. Cost per run $5.38 and $3.67 against
-  $2.32 and $2.36, but the 8.7.0 runs were failing and retrying, so that is not a
-  like-for-like efficiency number. This is n=2 per side with a categorical difference in
-  outcome; it shows the colony now works, not a precise speed-up. The harness and results
-  are local (`.scratch/`, gitignored), not checked in.
+  the "orchestrators never edit target code inline" deny 12 times in each run (tool
+  results counted per run, workers only); this tree, 0. Cost per run, worker and advisor
+  sub-sessions together, was $5.38 and $3.67 against $2.32 and $2.36 (workers alone:
+  $4.15, $2.56, $1.44, $1.46), but the 8.7.0 runs were failing and retrying, so that is
+  not a like-for-like efficiency number. This is n=2 per side with a categorical
+  difference in outcome; it shows the colony now works, not a precise speed-up. The
+  harness and results are local (`.scratch/`, gitignored), not checked in.
 - In-process colony (`omp -p` lead dispatching `task` workers), 2 runs per side, isolated
   with `--no-extensions`: median cost $2.56 to $1.90 (-26%), wall 259 s to 203 s (-22%).
   **Not statistically significant**: ranges overlap, permutation p=1.0. The per-defect
