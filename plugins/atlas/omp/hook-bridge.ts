@@ -332,6 +332,22 @@ export function claudeTaskInput(item: Record<string, unknown>): Record<string, u
 	return mapped;
 }
 
+/**
+ * Every dispatch in an omp `task` call as a Claude `Task` input. omp gives each child the batch-level `context` AND its
+ * own `task` (and its prompt tells the lead to put the shared `# Goal`/contract in `context`, never per task), so the
+ * dispatch_tripwire guards, which read `prompt`, must see the same text the child sees: `context`, then `task`.
+ * A blank or non-string `context` adds nothing; the single-dispatch form has none.
+ */
+export function claudeTaskInputs(input: unknown): Record<string, unknown>[] {
+	const context = input && typeof input === "object" && "context" in input && typeof input.context === "string" ? input.context.trim() : "";
+	return taskItems(input).map(item => {
+		const mapped = claudeTaskInput(item);
+		const task = typeof mapped.prompt === "string" ? mapped.prompt : "";
+		mapped.prompt = context && task ? `${context}\n\n${task}` : context || task;
+		return mapped;
+	});
+}
+
 /** PostToolUse `tool_response`: string content as-is, anything else JSON-stringified; absent → "". */
 export function toolResponseText(content: unknown): string {
 	if (typeof content === "string") return content;
@@ -519,7 +535,7 @@ export function registerHookBridge(pi: Pick<ExtensionAPI, "on">, deps: BridgeDep
 			const sessionId = sessionIdOf(ctx);
 			const transcriptPath = await transcriptPathOf(deps, ctx as BridgeCtx);
 			// omp `task` carries a batch; each item is one Claude Task dispatch and any deny blocks the batch.
-			const inputs = names[0] === "Task" ? taskItems(event.input).map(claudeTaskInput) : [claudeToolInput(event.input, cwd)];
+			const inputs = names[0] === "Task" ? claudeTaskInputs(event.input) : [claudeToolInput(event.input, cwd)];
 			const runs: HookRun[] = [];
 			for (const toolInput of inputs.length ? inputs : [{}]) {
 				const batch = await runAllRuns("PreToolUse", names, {
@@ -552,7 +568,7 @@ export function registerHookBridge(pi: Pick<ExtensionAPI, "on">, deps: BridgeDep
 			const sessionId = sessionIdOf(ctx);
 			const transcriptPath = await transcriptPathOf(deps, ctx as BridgeCtx);
 			const toolResponse = toolResponseText(event.content);
-			const inputs = names[0] === "Task" ? taskItems(event.input).map(claudeTaskInput) : [claudeToolInput(event.input, cwd)];
+			const inputs = names[0] === "Task" ? claudeTaskInputs(event.input) : [claudeToolInput(event.input, cwd)];
 			const runs: HookRun[] = [];
 			for (const toolInput of inputs.length ? inputs : [{}]) {
 				runs.push(
