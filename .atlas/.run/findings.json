@@ -2469,19 +2469,249 @@
   },
   {
     "id": "omp-parity-87",
-    "status": "verified",
+    "status": "needs-evidence",
     "title": "omp parity 8.7.0: all claims reproduced in round 2 (leak fixed, docs honest, suites green)",
-    "verifier": "atlas:verifier (fresh, independent, round 2)",
+    "verifier": "atlas:verifier (fresh, independent, round 4)",
     "evidence": [
       "Claim1 PASS: baseline 0 atlas-ingest-* dirs; stop-bridge.test.ts x3 (24 pass/0 fail) -> 0,0,0; full bun test 200 pass/0 fail -> 0. stop-bridge.test.ts:21-33 saves TMPDIR, sets to dir, afterEach deletes when originally undefined else restores.",
       "Claim1 mutation: commenting out process.env.TMPDIR = dir -> 9 leaked dirs (cleaned, file restored, diff clean). Removing rmdir from DETACHED_SCRIPT (stop-bridge.ts:176) -> 2 fail: 'detached ingest removes its stdin file AND its temp dir on success', 'still cleans up when child fails'; restored, diff clean, 0 dirs after.",
       "Claim2 PASS: forbidden-phrase grep hits only docs/CHANGELOG.md:1135 'second run' (pre-existing, unrelated, not in diff). Parity rows a-l/memory/nudge/connector/ingest: proof cells cite checked-in tests or explicitly label live observations as independent/not observed. GateConditionMatrixTest: 10 tests OK. README.md:472 states atlas_doctor mining of omp rows 'is not verified'.",
       "Claim3 PASS: hooks 921 OK (skipped=3); scripts 908 OK; bun test 200 pass 0 fail; no tracked .py changed under hooks/ or scripts/; git status shows nothing outside plugins/atlas, docs, README.md, .claude-plugin, findings.json.",
-      "Claim4 PASS: exactly one omp-parity-87 entry; evidence now array of strings."
+      "Claim4 PASS: exactly one omp-parity-87 entry; evidence now array of strings.",
+      "ROUND 3 (fresh, independent) claim 1 PASS: git diff -U0 HEAD dispatch_tripwire.py = only the 5-line ATLAS_NATIVE_POLICY guard at :702-706; `git diff --name-only HEAD -- '*.py'` = that one file. Throwaway project (~/.atlas-verify-r3, removed) with docs/CHANGELOG.md + .mcp.json lean-ctx: flag UNSET -> deny 'native Grep is disabled in docs/ projects'; flag=off -> no output. hooks 921 OK (skipped=3); scripts 908 OK; omp bun test 214 pass / 0 fail.",
+      "R3 claim 2 PASS: both 'REAL tripwire through the bridge' tests pass (hook-bridge-session 18 pass). withSandbox: root = mkdtemp under repo .scratch (git check-ignore: .gitignore:266), HOME = empty mkdtemp. Mutation (a) removing ATLAS_NATIVE_POLICY:'off' -> exactly the lean-ctx-configured test fails (17 pass/1 fail). Mutation (b) skipping tripwire PreToolUse for read/grep/glob/bash -> 3 fail (both threshold tests + 'runs for every matched tool'). hook-bridge.ts restored (cmp identical). CAVEAT: _lean_ctx_server_key returned None for a project without .mcp.json under BOTH real HOME and empty HOME (also for the repo root, repo .scratch and /tmp) on this machine, so the code-comment assertion in withSandbox ('verified: it resolved lean-ctx for a project with no .mcp.json') is NOT reproducible here; the HOME pin is harmless but its stated necessity is unproven.",
+      "R3 claim 3 PASS: stop-bridge.test.ts 36 pass; tests exist for transcript+sidecars+dir removal, wrong-name refusal, extra-file survives (rmdir), two concurrent children. Mutation (a) drop subagents/*.jsonl -> 3 fail (removes-everything, cleans-on-failure, two-children); mutation (b) case guard -> `*)` -> 1 fail (refuses-wrong-name). stop-bridge.ts restored (cmp). atlas-omp-*/atlas-ingest-* in $TMPDIR: 0 before, 0 after full bun test.",
+      "R3 claim 4 PASS: live `omp -p --no-extensions -e .../omp/index.ts --model haiku` in scratch repo under ~/.atlas-verify-r3live (removed): reply 'ok'; temp atlas-omp-*/atlas-ingest-* count 0 before, 0 immediately after, 0 after 8s. DB: runs=1, messages=4, ingest_files=2, count(*)=4 = count(distinct uuid)=4 (no duplicates).",
+      "R3 claim 5 PASS: test 'a main conversion and its discard leave a running subagent's transcript alone (real converter)' passes. Direct hazard reproduced: omp_transcript.py convert into a dir containing subagents/agent-live-sub-1.jsonl deleted it (only agent-VerifierCalcFix.jsonl and agent-advisor.jsonl remained) -> pre-existing converter behavior, avoided by per-conversion directories.",
+      "R3 claim 6 PASS: throwaway tsconfig under ~/.atlas-verify-r3ts (removed). --listFiles contains omp/stop-bridge.ts and pi-coding-agent/src/extensibility/extensions/types.ts. 957 errors total all in omp internals plus ONE in transitive import omp/proc.ts(129,4) TS2769 (not one of the three files); zero in stop-bridge.ts/run-state.ts/hook-bridge.ts. Mutation event.stop_hook_activ -> stop-bridge.ts(326,33) TS2551 'Did you mean stop_hook_active'; restored (cmp).",
+      "R3 claim 7 FAIL (minor, documentation precision only; no behavior false): (i) docs/atlas-harness-parity.md row 'Inline-op threshold' cites `count >= DENY_THRESHOLD` at :461, actual line is 465 (:461 is a message string); '448-469' begins inside the production-edit deny, '441-446' is the tail of the dispatch deny plus the `if tool in EDIT_TOOLS` line. (ii) row 'Inline edit of production target code' cites test `test_pre_deny_notebook_edit`, which does not exist (actual `test_ip_pre_deny_notebook_edit` at test_dispatch_tripwire.py:732) and range 397-437 omits `test_pre_deny_prod_edit_allows_docs_edit` (:513). (iii) `DENY_THRESHOLD = 6` while cited test is named `..._ninth_inline_op`. (iv) Root README.md, plugins/atlas/README.md and omp/README.md do NOT mention the env-gated guard/ATLAS_NATIVE_POLICY (only the two CHANGELOGs and the parity doc do). (v) the withSandbox comment claim noted under claim 2. PASSING parts: no doc says 'no tracked Python file was modified' (grep 0; plugins/atlas/CHANGELOG.md:62 says 'No other tracked Python file was modified' after naming the guard); every doc states the threshold/prod-edit/dispatch-spec denies are tested against the real hook but NOT observed in a live omp session; plugin.json version 8.7.0 and CHANGELOG top entry [8.7.0].",
+      "R3 claim 8: single omp-parity-87 entry updated in place; evidence kept as JSON array.",
+      "ROUND4 claim1 FAIL: docs/atlas-harness-parity.md row 'Inline-op advisory threshold' cites hooks/dispatch_tripwire.py:810-816 as the PostToolUse STOP nag, but those lines are the subagent-nesting deny comment/condition; the nag is at dispatch_tripwire.py:931-938 (count >= _threshold()). It also cites hooks/hooks.json:79-87 as the PostToolUse wiring, but those lines are format_after_edit/docs_drift_watch; dispatch_tripwire is wired at hooks.json:60 and :93. All other citations in the four rows (46,373,465,287,541,1222,170,95,103,715,720,445,190,397,417,513,529,732,925,49-59,261,226,313,370,428 and test names) match.",
+      "ROUND4 claim2 PASS: ninth row states it does not pin value 6; mutation DENY_THRESHOLD=60 made 2 omp tests fail (16 pass 2 fail); restored, cmp clean; unmutated 18 pass 0 fail.",
+      "ROUND4 claim3 PASS: ATLAS_NATIVE_POLICY in all 6 docs with unset/unchanged wording; no stale phrases; one hunk @@ -702 +702,5 @@; only dispatch_tripwire.py modified .py.",
+      "ROUND4 claim4 PASS: real HOME -> 'lean-ctx', empty HOME -> None, ~/.claude.json has lean mcpServers key True; comment matches.",
+      "ROUND4 claim5 PASS: hooks 921 OK skipped=3; scripts 908 OK; omp 214 pass 0 fail; ruff All checks passed; tmp/scratch leftovers 0 before and after."
     ],
     "reproduction": "bun test stop-bridge.test.ts x3 + full bun test with atlas-ingest-* count; TMPDIR and rmdir mutations (restored); unittest hooks/scripts/GateConditionMatrixTest; grep forbidden phrases",
-    "verified_at": "2026-10-02T22:41:00Z",
-    "failing_claims": [],
-    "verified_by": "atlas:verifier (fresh, independent, round 2)"
+    "verified_at": "2026-10-02T23:38:12.889224+00:00",
+    "failing_claims": [
+      "1"
+    ],
+    "verified_by": "atlas:verifier (fresh, independent, round 3)"
+  },
+  {
+    "id": "omp-parity-87",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "omp parity: claims 1-6 PASS; claim 7 FAIL - named rows still carry wrong file:line citations",
+    "evidence": [
+      "Claim1 PASS: git diff HEAD dispatch_tripwire.py = 5 ins/1 del, only ATLAS_NATIVE_POLICY guard at :702-707",
+      "Claim2 PASS: hook-bridge.ts:294 env has ATLAS_NATIVE_POLICY off; NATIVELY_POLICED removed; comment :389-393",
+      "Claim3 PASS: stop-bridge.ts:383 mkdtemp atlas-ingest-, :256 trap removes it; :127 main- dirs",
+      "Claim4 PASS: hooks 921 OK skipped=3; scripts 908 OK; bun test omp 214 pass 0 fail",
+      "Claim5 PASS (in /tmp copy): dropping ATLAS_NATIVE_POLICY from env -> 2 red (hook-bridge-session.test.ts REAL tripwire lean-ctx configured; REAL dispatch_tripwire production-edit); removing DETACHED_SCRIPT trap -> 4 red in stop-bridge.test.ts",
+      "Claim6 PASS: _lean_ctx_server_key(Path) real HOME=lean-ctx, empty HOME=None; str -> None; ~/.claude.json has top-level lean-ctx; comment accurate",
+      "Claim7 FAIL docs/atlas-harness-parity.md: Gate (a) row hooks.json:98-104 is connector_credential_watch PostToolUse; Stop block is hooks.json:107-132 (completion_gate :111-114); Gate (a) block text completion_gate.py:774-794 is the (k) plan-mandate text, (a) text is :694-698",
+      "Claim7 FAIL: memory-capture row hooks.json:114-117 is ingest_session boundary; memory_capture is :123-126. Nudge row hooks.json:118-121 is chronicle_facet; nudge is :127-130. Ingest row hooks.json:106-156 starts 1 early (Stop :107) and ends where PreCompact begins (PreCompact :156-168)",
+      "Claim7 FAIL named-dispatch row: _pre_tool_use cited :369, def at dispatch_tripwire.py:373; tests cited test_dispatch_tripwire.py:1631-1704, real tests at :1785 :1794 :1840 (range holds none)",
+      "Claim7 FAIL model-override row: _frontmatter_model cited :301-326, def at :305; test cited :1607+, test_model_override_differs_from_definition_is_denied at :1761. Preamble does not list these rows as re-audited but task scope names them; preamble also says named rows were re-checked while Gate(a)/memory/nudge/ingest hooks.json cites are wrong",
+      "Claim7 OK parts: 94 of 136 parsed cites OK incl. every def/class/test in gate (a)-(m) rows, inline-op, production-edit, dispatch-spec; omp README:11, README.md:479, plugins/atlas/README.md:211, omp/README.md all mention guard"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 /tmp/cite.py (regex extractor of Name path:N cites) + sed -n on hooks/hooks.json:98-130 and dispatch_tripwire.py:305,373; bun test; unittest discover",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-02T23:51:27+00:00",
+    "verified_by": "atlas:verifier round 4 (OmpParityVerifierRound4-2)"
+  },
+  {
+    "id": "omp-parity-87",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Claim 7 FAIL: 1 definite miss (omp/index.test.ts:189-245 starts 24 lines early), 1 minor external (task/index.ts:290)",
+    "evidence": [
+      "docs/atlas-harness-parity.md:74",
+      "plugins/atlas/omp/index.test.ts:213-245",
+      "/tmp/c2.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 /tmp/ex2.py (own extraction, 136 cites); sed -n 187,193p plugins/atlas/omp/index.test.ts",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-02T23:55:22+00:00",
+    "verified_by": "OmpParityVerifierRound5"
+  },
+  {
+    "id": "omp-parity-87",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Round6 claim 7: 132 cites parsed, 128 exact; 4 range-end overshoots into unrelated code",
+    "evidence": [
+      "docs/atlas-harness-parity.md:87 hooks/completion_gate.py:525-546 (_run_used_worktrees ends 542; 545-546 are _IN_FLIGHT_DISPATCH_TYPES/_TERMINAL_TASK_STATUSES constants)",
+      "docs/atlas-harness-parity.md:84 hooks/completion_gate.py:1321-1346 (_unpaired_implementer_dispatches ends 1342; 1345-1346 is __main__ guard)",
+      "docs/atlas-harness-parity.md:105 hooks/chronicle_facet.py:39-61 (_edit_read_counts 39-50, _gate_block_count 53-58, ends on def line of _compute_facet_fields which spans 61-~134; compute body not covered)",
+      "docs/atlas-harness-parity.md:105 hooks/ingest_session.py:25-52 (_spawn_scoring ends 49; 52 is def main)",
+      "verified OK: omp/index.test.ts:213-266 (213 and 266 are first/last naming-notice tests); omp task/index.ts:292,315 both effort plumbing"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 /tmp/x6.py (own extractor) + ast end_lineno comparison for hooks/*.py def ranges",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-02T23:57:43+00:00",
+    "verified_by": "OmpParityVerifierRound6"
+  },
+  {
+    "id": "omp-parity-87",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Claim 7 FAIL: 11 genuine range-end/start misses in target rows of atlas-harness-parity.md",
+    "evidence": [
+      "docs row105 hooks/hooks.json:107-168 -> PreCompact block ends 166 (167-168 close hooks/root)",
+      "docs row79 hooks/test_completion_gate.py:353-354 (def 353-368), :796-815 (test 796-803), :868-903 (test 868-884; 903 is next def)",
+      "docs row94 memory_capture.py:2-11 (docstring 2-21); row95 nudge.py:2-9 (2-13); row105 ingest_session.py:2-8 and chronicle_facet.py:2-8 (docstrings 2-16)",
+      "docs row75 omp/atlas-agents.ts:68-70 (modelPatternsFor 68-72); omp/gen-agents.test.ts:40-109 (last test 109-112); row74 omp/index.ts:305-322 (fn closes 323)",
+      "borderline: row77 subagent-kit.md:16-27 (TOOLS block 15-39); row75 gen-agents.ts:58-70 (array continues to 73)"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 /tmp/ex7b.py (own extractor, ast end_lineno) + manual awk line inspection",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-03T00:01:24+00:00",
+    "verified_by": "OmpParityVerifierRound7"
+  },
+  {
+    "id": "omp-parity-87",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Round 8: N+ / comma-list citations survive in Gate (c),(d),(e) rows",
+    "evidence": [
+      "docs/atlas-harness-parity.md:83 (hooks/test_completion_gate.py:917+)",
+      "docs/atlas-harness-parity.md:84 (:205+,924+)",
+      "docs/atlas-harness-parity.md:85 (:212+,931+)"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 /tmp/ex8.py (own extractor; 129 file:N cites parsed, all land on start lines; 3 RANGE hits)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-03T00:04:00+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "omp-parity-87",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Round 9: citation rule holds on re-checked rows; preamble scope honest",
+    "evidence": [
+      "docs/atlas-harness-parity.md:5-14",
+      "/tmp/ex.py: 134 spans parsed in 10 row-prefix families (rows 74-78,80-92,97,98,108; rows 93,107 have no colon-digit spans), 133 exact path:N/:N, 1 parser false positive (~/.bun/.../index.ts:292 is still path:N, regex class excluded ~); 0 ranges/N+/comma lists",
+      "start lines: all 134 opened, 0 misses (defs/classes/tests, gate (a)-(m) docstring lines 22-76, hooks.json 93/107/123/127/134/145/156 block openers, omp index.ts 302 const/311 taskNamingHint/456, squad-and-tiers.md:16 haiku row, subagent-kit.md:5 heading)",
+      "stale rows confirmed: Board claim/notes (completion_gate.py:367 is docstring not _board_open_todos at 383; omp index.ts:54 is an import not ensureClaudePluginRoot at 85); Todo mirror (index.ts:107 comment not argv, hooks.json:56 matcher, todo_capture.py:35 'return 0'); Colony adherence (mine_colony_adherence at 1367 not 1306; :1708 severity line)"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 /tmp/ex.py; python3 /tmp/res2.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-03T00:06:21+00:00",
+    "verified_by": "OmpParityVerifierRound9"
+  },
+  {
+    "id": "omp-perf-1",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "omp perf claims: Claude-unchanged/bugs/numbers/mutations PASS; 26%/22% A-vs-D n=2 WEAKER-THAN-STATED; parity doc untouched + README batch-prompt sentence FALSE (overall FAIL on docs/stats)",
+    "evidence": [
+      "git diff a7ba0e8..HEAD (only dispatch_tripwire.py Claude-facing; deny text byte-identical via AST extraction, len 459)",
+      "plugins/atlas/omp/README.md:26 (prompt from task - stale vs hook-bridge.ts:341 claudeTaskInputs; ATLAS_TOOLKIT_LOAD behaviour undocumented)",
+      "docs/atlas-harness-parity.md rows 79/81/94/118 (no diff since a7ba0e8; stale cites dispatch_tripwire.py :352/:398/:305/:261 now :377/:330/:286)",
+      ".scratch/mux-bench/sessions/{baseline,after} (installed atlas 8.6.0 loaded; base-r2 dispatch items lack agent key)",
+      ".scratch/mux-bench/sessions/base-r1 (3 overrides-model DENY, 5 xd:// Write DENY)"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 jsonl recompute over sessions/*; unittest hooks 929 OK(3 skip); scripts 920 (1 flaky tempdir error test_atlas_mux.test_name_taken in 2/3 runs, OK on rerun); bun test omp 242 pass (HEAD cc87408 adds 1); mutations style.ts/stop-bridge.ts/hook-bridge.ts all RED then restored (cmp)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-03T05:55:23+00:00",
+    "verified_by": "OmpPerfAuditor"
+  },
+  {
+    "id": "omp-mux-8.7.1",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "e5b75b7 behavior verified, but CHANGELOG [8.7.1] has wrong numbers (scripts 926 vs 927; baseline denies 11 vs 12) and 2 doc cites imprecise",
+    "evidence": [
+      "bun test: 245 pass 0 fail; hooks 929 OK; scripts 927 OK (CHANGELOG says 926)",
+      "old-tree red: delegation-gate worker test, hook-bridge ENGINE_ARM test, 4 test_atlas_mux pin/forwarding tests fail on 20c1f58, pass on e5b75b7",
+      "Claude assets/hooks unchanged; manifests version-only; no non-test hooks/*.py changed",
+      "mux2 json scores 10/26,1/26,26/26,26/26; grade.py cur-1 = 26/26; omp sessions: base deny tool results 12 and 12 (CHANGELOG says 11 and 12), cur 0; costs 5.38/3.67/2.32/2.36 reproduce",
+      "docs/atlas-harness-parity.md row 96 cite 'header :46-53' does not describe ensureClaudePluginRoot (doc is at index.ts:78-79); index.test.ts :293-385 ends at 383; row 95 test_atlas_contract.py:1461 is a subagent-kit test, not tripwire tests",
+      "real tmux pane: ATLAS_DB/ATLAS_GATE with spaces,quotes,$,; round-trip byte-exact; LEAD_ONLY_SECRET not forwarded; ~/.atlas/atlas.db integrity ok, 0 mux-bench projects"
+    ],
+    "doc_refs": [],
+    "reproduction": "see per-claim commands in Verify871 report",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-03T07:26:20+00:00",
+    "verified_by": "Verify871"
+  },
+  {
+    "id": "omp-mux-8.7.1-r2",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "b140ae1: counts, golden, no-hook-change, bench numbers hold; 2 imprecise parity cites, '11 to 12' deny count only half-reproducible, ruff F401 in atlas_mux.py",
+    "evidence": [
+      "suites: hooks 930 (OK, skipped=3), scripts 927 OK, omp 245 pass 0 fail - all match CHANGELOG",
+      "docs/atlas-harness-parity.md Todo mirror row: omp/index.ts:77-83 doc comment closes at line 84 ('*/'), range stops before block closes",
+      "docs/atlas-harness-parity.md Todo mirror row: hooks/todo_capture.py:2-7 stops mid-sentence; docstring spans 2-10",
+      "Gate (m) row carries no path:LINE cites; Board claim/notes row all cites exact",
+      "golden passes; pinned 469-char string == stdout of a7ba0e8 hook run e2e; released==current stdout; one-word mutation in /tmp copy fails golden",
+      "git diff e5b75b7 b140ae1 (non-test hooks .py) empty; git diff a7ba0e8 b140ae1 (output-styles agents skills commands hooks.json) empty",
+      "bench: 10/26,1/26,26/26,26/26 and costs 5.3835/3.6687/2.3223/2.3573 (main+advisor omp session jsonl sums) match; inline-edit deny toolResult count 12/12/0/0, '11' not reproduced; sources are local .scratch + ~/.omp, not checked in",
+      "ruff: F401 'time' imported but unused scripts/atlas_mux.py:50:8 (1 error, blame ea7bf776); test files clean"
+    ],
+    "doc_refs": [],
+    "reproduction": "bun test; unittest discover (hooks, scripts); git show a7ba0e8:plugins/atlas/hooks/dispatch_tripwire.py run in /tmp tree copy; ruff check hooks/test_dispatch_tripwire.py scripts/test_atlas_mux.py scripts/atlas_mux.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-03T07:35:19+00:00",
+    "verified_by": "Verify871b"
+  },
+  {
+    "id": "omp-mux-8.7.1-r3",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "4d8d809: cites cover full blocks, deny 12/12 and four cost totals re-derived, ruff+pyright clean, atlas_mux.py hunks behaviour-neutral",
+    "evidence": [
+      "parity: todo_capture.py:2-10 spans docstring 2-10; index.ts:77-84 spans comment through '*/'; all other cites in Gate(m)/Board/Todo rows re-swept, exact",
+      "omp session jsonl: tool results containing 'never edit target code inline', non-advisor files: 12,12,0,0; cost all=5.3835/3.6687/2.3223/2.3573, workers=4.1498/2.5632/1.4356/1.4619",
+      "ruff: All checks passed; pyright: 0 errors; test_atlas_mux 43 tests OK",
+      "atlas_mux.py diff b140ae1..4d8d809: unused 'import time' removed (no other use), config/patterns pre-initialised (both assigned in omp branch, unchanged use), _dead_flag extracts identical isdigit logic",
+      "also reproduced: 54,956 cacheWrite/$0.46003 turn in sessions/baseline; SUMMARY.txt A vs D medians give -26% cost, -22% wall"
+    ],
+    "doc_refs": [],
+    "reproduction": "ruff check; pyright; python3 -m unittest test_atlas_mux; python scan of ~/.omp/agent/sessions/*mux2-*",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-03T07:40:21+00:00",
+    "verified_by": "Verify871b"
   }
 ]
