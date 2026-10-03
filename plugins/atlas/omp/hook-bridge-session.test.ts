@@ -20,6 +20,7 @@ import {
 	claudeNamesForCall,
 	splitMcpDevice,
 	claudeTaskInput,
+	claudeTaskInputs,
 	loadBridgedHooks,
 	loadBridgedHooksFor,
 	registerHookBridge,
@@ -461,5 +462,44 @@ test("REAL dispatch_tripwire through the bridge: device writes are never 'inline
 		expect(await fire("write", { path: "xd://mcp__claude_mem_mcp_search_search", content: '{"query":"x"}' })).toBeUndefined();
 		expect(await fire("write", { path: "xd://mcp__lean_ctx_ctx_search", content: '{"pattern":"x"}' })).toBeUndefined();
 		expect(String((await fire("write", { path: "src/a.py", content: "x" }))?.reason)).toContain("never edit target code inline"); // a real file edit is still denied
+	});
+});
+
+// omp's `task` tool takes a batch-level `context` (shared `# Goal`/contract) plus per-item `task`, and gives every child
+// BOTH. The bridge built the tripwire's `prompt` from `task` alone, so a well-formed omp dispatch whose spec and TOOLS
+// line live in `context` (as omp's own prompt instructs) was denied as unbounded / missing TOOLS (measured: 2-3 denied
+// dispatches per run, each costing a lead turn at ~100k context).
+test("claudeTaskInputs folds the batch context into every item's prompt, once, before the task", () => {
+	const out = claudeTaskInputs({ context: "# Goal\nshared", tasks: [{ agent: "implementer", name: "A", task: "do A" }, { agent: "verifier", name: "B", task: "do B" }] });
+	expect(out.map(i => i.prompt)).toEqual(["# Goal\nshared\n\ndo A", "# Goal\nshared\n\ndo B"]);
+	expect(out.map(i => i.subagent_type)).toEqual(["atlas:implementer", "atlas:verifier"]);
+	expect(claudeTaskInputs({ agent: "implementer", task: "solo" })[0].prompt).toBe("solo"); // single form: no context to fold
+	expect(claudeTaskInputs({ context: "  ", tasks: [{ task: "t" }] })[0].prompt).toBe("t"); // blank context adds nothing
+	expect(claudeTaskInputs({ context: 7, tasks: [{ task: "t" }] })[0].prompt).toBe("t"); // hostile context ignored
+	expect(claudeTaskInputs(undefined)).toEqual([]);
+	expect(claudeTaskInputs({ context: "c", tasks: [{ task: 5 }] })[0].prompt).toBe("c"); // a non-string task contributes nothing
+});
+
+test("REAL dispatch_tripwire through the bridge: spec and TOOLS carried by the batch context bound every item; a second GOAL in one task is still bundling", async () => {
+	await withSandbox(async root => {
+		const runstate = join(import.meta.dir, "..", "scripts", "omp_runstate.py");
+		const sh = (...argv: string[]) => Bun.spawnSync(["python3", runstate, ...argv, "--session-id", "ctx-sess", "--cwd", root], { env: process.env });
+		sh("begin");
+		sh("arm", "--agent-type", "atlas:implementer");
+		const handlers: Record<string, Handler[]> = {};
+		registerHookBridge({ on: (ev: string, fn: Handler) => void (handlers[ev] ??= []).push(fn) } as unknown as ExtensionAPI);
+		const ctx: Ctx = { cwd: root, agent: { kind: "main" }, sessionManager: { getSessionId: () => "ctx-sess" } };
+		const fire = async (input: Record<string, unknown>) => {
+			for (const h of handlers.tool_call ?? []) {
+				const r = await h({ toolCallId: `c${Math.random()}`, toolName: "task", input }, ctx);
+				if (r?.block) return r;
+			}
+			return undefined;
+		};
+		const SHARED = "TOOLS: use lean-ctx via xd://mcp__lean_ctx_ctx_search; do not activate serena.\nGOAL: implement the slice named below\nDELIVERABLE: the file\nSUCCESS CRITERIA: its tests pass\nOUT OF SCOPE: other files\nSTOP CONDITIONS: tests green\n";
+		const items = [{ name: "A", agent: "implementer", task: "# Target\nsrc/a.py" }, { name: "B", agent: "implementer", task: "# Target\nsrc/b.py" }];
+		expect(await fire({ context: SHARED.replace("GOAL: implement the slice named below\n", "").concat("GOAL: g\n"), tasks: items })).toBeUndefined(); // spec only in context: bounded
+		expect(String((await fire({ tasks: items }))?.reason)).toContain("missing the code-nav TOOLS block"); // same items, no context: still denied
+		expect(String((await fire({ context: SHARED, tasks: [{ name: "C", agent: "implementer", task: "GOAL: and also rewrite billing\n# Target\nsrc/c.py" }] }))?.reason)).toContain("2 GOAL: blocks");
 	});
 });
