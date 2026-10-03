@@ -334,7 +334,9 @@ class ConversionShapeTest(_TmpCase):
         self.assertIsNone(omp_transcript._split_mcp_xd("xd://retain"))
         self.assertIsNone(omp_transcript._split_mcp_xd("src/file.py"))
         # the gate keys shell MCP tools off the part after the last "__"
-        self.assertEqual(omp_transcript._split_mcp_xd("xd://mcp__lean_ctx_ctx_shell").rsplit("__", 1)[-1], "ctx_shell")
+        shell_tool = omp_transcript._split_mcp_xd("xd://mcp__lean_ctx_ctx_shell")
+        self.assertIsNotNone(shell_tool)
+        self.assertEqual((shell_tool or "").rsplit("__", 1)[-1], "ctx_shell")
 
     def test_epoch_ms_only_timestamp_is_converted_to_iso(self):
         entry = {"type": "message", "id": "a1", "parentId": None,
