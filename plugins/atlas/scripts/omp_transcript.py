@@ -42,7 +42,23 @@ from datetime import datetime, timezone
 # than being dressed up as something Claude does not have. Entry types other than
 # `message` (custom, title, credential_pin, model_usage, ...) carry no
 # conversation and are never emitted.
-TOOL_MAP = {
+#
+# The map is derived from contracts/tool-names.json (`claudeToOmp`, Claude -> omp;
+# several Claude names may share one omp name) so the two cannot drift. For each
+# omp tool the canonical Claude name is the FIRST plain-name key in file order
+# (task -> Task, todo -> TodoWrite). Keys whose omp side is a phrase
+# (ToolSearch, AskUserQuestion, SendMessage) or that are not plain names
+# (ToolSearch-load) never become a rename.
+_CONTRACTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "contracts")
+_TOOL_NAMES_JSON = os.path.join(_CONTRACTS_DIR, "tool-names.json")
+_CLAUDE_PLAIN_NAME = re.compile(r"^[A-Z]\w*$")
+_OMP_PLAIN_NAME = re.compile(r"^[a-z]\w*$")
+
+# omp tools with no claudeToOmp entry (Claude has no 1:1 name for them in the contract).
+_OMP_ONLY_TOOLS = {"find": "Glob", "web_search": "WebSearch"}
+
+# Used only when the contract is unreadable, so conversion never breaks.
+_TOOL_MAP_FALLBACK = {
     "bash": "Bash",
     "edit": "Edit",
     "write": "Write",
@@ -54,6 +70,22 @@ TOOL_MAP = {
     "todo": "TodoWrite",
     "web_search": "WebSearch",
 }
+
+
+def _load_tool_map(path: str | None = None) -> dict[str, str]:
+    try:
+        with open(path or _TOOL_NAMES_JSON, encoding="utf-8") as fh:
+            claude_to_omp = json.load(fh)["claudeToOmp"]
+        derived: dict[str, str] = {}
+        for claude, omp in claude_to_omp.items():
+            if _CLAUDE_PLAIN_NAME.match(claude) and _OMP_PLAIN_NAME.match(omp):
+                derived.setdefault(omp, claude)
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return dict(_TOOL_MAP_FALLBACK)
+    return {**derived, **_OMP_ONLY_TOOLS}
+
+
+TOOL_MAP = _load_tool_map()
 
 # A `[path#TAG]` header opens each file section of an omp hashline `edit` input.
 _EDIT_HEADER = re.compile(r"^\[(?P<path>[^\]\n#]+)(?:#[0-9A-Fa-f]+)?\]\s*$", re.M)
@@ -105,8 +137,10 @@ def _entry_timestamp(entry: dict) -> str | None:
 # Servers whose names contain underscores, so the server/tool boundary in an
 # `xd://mcp__<server>_<tool>` device name cannot be guessed from the string
 # alone. Longest match wins. Anything else falls back to the duplicate-token
-# rule below (atlas_falcon + falcon_status).
-_KNOWN_MCP_SERVERS = (
+# rule below (atlas_falcon + falcon_status). Read from contracts/mcp-servers.json
+# (`underscoredServers`); the literal below is the fail-open fallback.
+_MCP_SERVERS_JSON = os.path.join(_CONTRACTS_DIR, "mcp-servers.json")
+_KNOWN_MCP_SERVERS_FALLBACK = (
     "lean_ctx",
     "context_mode_context_mode",
     "context_mode",
@@ -120,6 +154,20 @@ _KNOWN_MCP_SERVERS = (
     "mobbin",
     "clippy",
 )
+
+
+def _load_mcp_servers(path: str | None = None) -> tuple[str, ...]:
+    try:
+        with open(path or _MCP_SERVERS_JSON, encoding="utf-8") as fh:
+            servers = json.load(fh)["underscoredServers"]
+        if isinstance(servers, list) and servers and all(isinstance(s, str) and s for s in servers):
+            return tuple(servers)
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    return _KNOWN_MCP_SERVERS_FALLBACK
+
+
+_KNOWN_MCP_SERVERS = _load_mcp_servers()
 
 
 def _split_mcp_xd(path: str) -> str | None:

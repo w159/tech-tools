@@ -38,6 +38,7 @@ const PLUGIN_ROOT = nodePath.resolve(import.meta.dir, "..");
 export const HOOKS_JSON = nodePath.join(PLUGIN_ROOT, "hooks", "hooks.json");
 export const BRIDGE_CONTRACT = nodePath.join(PLUGIN_ROOT, "contracts", "hook-bridge.json");
 export const TOOL_NAMES = nodePath.join(PLUGIN_ROOT, "contracts", "tool-names.json");
+export const MCP_SERVERS = nodePath.join(PLUGIN_ROOT, "contracts", "mcp-servers.json");
 const DEFAULT_TIMEOUT_S = 60;
 /** Default per-hook hard cap (s); ATLAS_BRIDGE_HOOK_TIMEOUT_S overrides. omp cuts a handler at 30 s. */
 export const DEFAULT_HOOK_CAP_S = 25;
@@ -210,13 +211,29 @@ export function claudeLifecyclePayload(
 	return payload;
 }
 
+/** Built-in connectorWatch list: the fail-open fallback when contracts/mcp-servers.json is unreadable. */
+const CONNECTOR_SERVERS_FALLBACK: readonly string[] = ["plugin_atlas", "falcon-mcp", "connectwise", "gcloud", "plaid", "cipp"];
+
+/** `connectorWatch` from the MCP server contract; the built-in list when the file is unreadable or malformed. */
+export function loadConnectorServers(path: string = MCP_SERVERS, fallback: readonly string[] = CONNECTOR_SERVERS_FALLBACK): readonly string[] {
+	try {
+		const doc = readJson(path);
+		const list = doc && typeof doc === "object" && !Array.isArray(doc) ? doc.connectorWatch : undefined;
+		if (Array.isArray(list) && list.length > 0 && list.every((s): s is string => typeof s === "string" && s.length > 0)) return list;
+	} catch {
+		// fail open: keep the built-in list
+	}
+	return fallback;
+}
+
 /**
  * MCP servers hooks.json's connector matcher names (`mcp__plugin_atlas_.*|mcp__falcon-mcp__.*|
  * mcp__cipp.*|mcp__connectwise.*|mcp__plaid__.*|mcp__gcloud__.*`). omp mints
  * `mcp__<server>_<tool>` with ONE underscore, so the server/tool boundary is lost;
  * this table (longest prefix first) recovers it for the servers hooks.json cares about.
+ * Read from contracts/mcp-servers.json `connectorWatch`.
  */
-export const CONNECTOR_SERVERS: readonly string[] = ["plugin_atlas", "falcon-mcp", "connectwise", "gcloud", "plaid", "cipp"];
+export const CONNECTOR_SERVERS: readonly string[] = loadConnectorServers();
 
 /**
  * The Claude-style `mcp__<server>__<tool>` name for an omp-minted MCP tool name of

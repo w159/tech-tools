@@ -88,3 +88,24 @@ test("exploration deny names the ctx_* equivalent and the reachable route", () =
 	expect(explorationDenyReason("cat a", device)).toContain("xd://mcp__lean_ctx_ctx_shell");
 	expect(explorationDenyReason("npm test", tool)).toBeUndefined();
 });
+
+test("toolStateDirs loads from ompToolStateDirs and defaults to [] when the key is missing", () => {
+	const c = loadNativeTools();
+	expect(c?.toolStateDirs).toEqual(contract.ompToolStateDirs);
+	expect(c?.toolStateDirs).toContain(".serena");
+	const dir = mkdtempSync(join(tmpdir(), "atlas-contract-"));
+	try {
+		const p = join(dir, "no-tool-state.json");
+		const copy: Record<string, unknown> = structuredClone(contract);
+		delete copy.ompToolStateDirs;
+		writeFileSync(p, JSON.stringify(copy));
+		const loaded = loadNativeTools(p);
+		expect(loaded?.kinds.shell.omp).toBe("bash"); // older contract files still load
+		expect(loaded?.toolStateDirs).toEqual([]);
+		const bad = join(dir, "bad-tool-state.json");
+		writeFileSync(bad, JSON.stringify({ ...copy, ompToolStateDirs: "nope" }));
+		expect(loadNativeTools(bad)?.toolStateDirs).toEqual([]);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});

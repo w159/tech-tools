@@ -3,17 +3,19 @@
 // as Claude Task dispatches, the run-state sink contract (allowed-only, no
 // double-writes), and the tripwire/native-policy overlap guard.
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import {
 	CONNECTOR_SERVERS,
+	MCP_SERVERS,
 	type BridgeDeps,
 	type BridgedHook,
 	type HookRunner,
 	type ToolEventInfo,
 	claudeMcpName,
+	loadConnectorServers,
 	claudeTaskInput,
 	loadBridgedHooks,
 	loadBridgedHooksFor,
@@ -102,6 +104,28 @@ test("claudeMcpName splits on the longest known server, accepts the xd:// form, 
 	expect(claudeMcpName("mcp__serena_find_symbol")).toBe("mcp__serena_find_symbol");
 	expect(claudeMcpName("bash")).toBe("bash");
 	expect([...CONNECTOR_SERVERS].sort()).toEqual(["cipp", "connectwise", "falcon-mcp", "gcloud", "plaid", "plugin_atlas"]);
+});
+
+// ---- contracts/mcp-servers.json is the connector list's source ----
+
+test("CONNECTOR_SERVERS equals the contract's connectorWatch, in order", () => {
+	const contract = JSON.parse(readFileSync(MCP_SERVERS, "utf8")) as { connectorWatch: string[] };
+	expect([...CONNECTOR_SERVERS]).toEqual(contract.connectorWatch);
+});
+
+test("loadConnectorServers follows a modified contract and fails open on a missing, malformed or empty one", () => {
+	const write = (name: string, body: string) => {
+		const p = join(dir, name);
+		writeFileSync(p, body);
+		return p;
+	};
+	const fallback = ["fallback_server"];
+	expect(loadConnectorServers(write("ok.json", JSON.stringify({ connectorWatch: ["a_b", "c"] })), fallback)).toEqual(["a_b", "c"]);
+	expect(loadConnectorServers(join(dir, "missing.json"), fallback)).toBe(fallback);
+	expect(loadConnectorServers(write("bad.json", "{not json"), fallback)).toBe(fallback);
+	expect(loadConnectorServers(write("list.json", "[]"), fallback)).toBe(fallback);
+	expect(loadConnectorServers(write("empty.json", JSON.stringify({ connectorWatch: [] })), fallback)).toBe(fallback);
+	expect(loadConnectorServers(write("mixed.json", JSON.stringify({ connectorWatch: ["a", 3] })), fallback)).toBe(fallback);
 });
 
 // ---- task batches as Claude Task dispatches ----
