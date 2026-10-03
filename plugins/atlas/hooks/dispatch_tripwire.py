@@ -267,10 +267,10 @@ def _toolkit_gap_reason(tool, gap):
     caller has no ToolSearch, so it is told the one-line block it can actually write instead."""
     if os.environ.get("ATLAS_TOOLKIT_LOAD") == "omp":
         return (
-            "DENY - this %s dispatch is missing the code-nav TOOLS block. Add one line to the task, "
+            f"DENY - this {tool} dispatch is missing the code-nav TOOLS block. Add one line to the task, "
             "e.g. `TOOLS: use lean-ctx via its xd:// devices (write JSON to xd://mcp__lean_ctx_ctx_search, "
             "_ctx_read, _ctx_glob); noisy output via context-mode ctx_execute; do not activate serena "
-            "unless a symbol edit needs it`. Without it %s greps the tree." % (tool, gap)
+            f"unless a symbol edit needs it`. Without it {gap} greps the tree."
         )
     return (
         "DENY - this %s dispatch is missing the code-nav TOOLS block. "

@@ -16,6 +16,7 @@ import json
 import os
 import pathlib
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -172,9 +173,25 @@ def _pairs(argv):
 
 
 class Base(unittest.TestCase):
+    def _cleanup_tmp(self):
+        """The fake tmux starts each worker in a detached shell that writes into fake-state (out.<name>, log), and
+        a test that does not wait for it can reach teardown first: rmtree then sees the directory non-empty
+        (measured: test_name_taken failed 2 runs in 12). Retry until the short-lived writer has exited."""
+        deadline = time.time() + 10
+        while True:
+            try:
+                shutil.rmtree(self._tmp.name)
+                return
+            except FileNotFoundError:
+                return
+            except OSError:
+                if time.time() > deadline:
+                    raise
+                time.sleep(0.05)
+
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(self._tmp.cleanup)
+        self.addCleanup(self._cleanup_tmp)
         self.root = self._tmp.name
         self.state = os.path.join(self.root, "fake-state")
         os.makedirs(self.state)
