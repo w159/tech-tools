@@ -3,33 +3,23 @@
 // ingest, and fail-open behavior. Handler logic runs against recording fakes; one
 // test drives the REAL completion_gate.py end to end through the real runner.
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { type BridgedHook, type HookRunner, claudeLifecyclePayload, loadBridgedHooksFor, parseStopHookOutput, runHook } from "./hook-bridge";
 import { register } from "./index";
-import { type TranscriptCache, MAX_INGEST_PER_EVENT, MAX_STOP_BLOCKS, createTranscriptCache, registerStopBridge, startDetached } from "./stop-bridge";
+import { type TranscriptCache, MAX_INGEST_PER_EVENT, MAX_STOP_BLOCKS, convertTranscript, createTranscriptCache, registerStopBridge, startDetached } from "./stop-bridge";
 
 type Ctx = { cwd: string; agent: { kind: "main" | "sub" }; sessionManager: { getSessionId(): string; getSessionFile(): string } };
 type Handler = (event: Record<string, unknown>, ctx: Ctx) => unknown;
 type Spawn = { argv: string[]; opts: { cwd: string; stdinFile: string; env: Record<string, string> } };
 
 let dir: string;
-let realTmpdir: string | undefined;
 beforeEach(() => {
 	dir = mkdtempSync(join(tmpdir(), "atlas-stop-"));
-	// The bridge creates its ingest temp dirs under os.tmpdir(). Tests that inject a spy spawner never run the
-	// child's cleanup trap, so those dirs piled up in the real OS temp dir (9 per run). Redirecting TMPDIR into
-	// the per-test dir lets the afterEach below remove them along with everything else.
-	realTmpdir = process.env.TMPDIR;
-	process.env.TMPDIR = dir;
 });
-afterEach(() => {
-	if (realTmpdir === undefined) delete process.env.TMPDIR;
-	else process.env.TMPDIR = realTmpdir;
-	rmSync(dir, { recursive: true, force: true });
-});
+afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 const hook = (name: string, event: BridgedHook["event"] = "Stop"): BridgedHook => ({ event, matcher: undefined, command: `python3 "/x/${name}"`, timeoutMs: 60_000 });
 const scriptOf = (command: string) => /([\w.-]+\.py)/.exec(command)?.[1] ?? "";
@@ -49,22 +39,22 @@ function harness(opts: { stdout?: Record<string, string>; hooks?: BridgedHook[];
 		payloads.push(payload);
 		return opts.stdout?.[name] ?? "";
 	};
-	const cache = createTranscriptCache({
-		baseDir: join(dir, "cache"),
-		convert: async (sessionFile, out) => {
-			log.push("convert");
-			converts.push({ sessionFile, out });
-			if (opts.convertOk === false) return false;
-			writeFileSync(out, "{}\n");
-			return true;
-		},
-	});
+	const convert = async (sessionFile: string, out: string) => {
+		log.push("convert");
+		converts.push({ sessionFile, out });
+		if (opts.convertOk === false) return false;
+		writeFileSync(out, "{}\n");
+		return true;
+	};
+	const cache = createTranscriptCache({ baseDir: join(dir, "cache"), convert });
 	const hooks = opts.hooks ?? [hook("completion_gate.py"), hook("ingest_session.py"), hook("chronicle_facet.py"), hook("memory_capture.py"), hook("nudge.py"), hook("ingest_session.py", "SessionEnd"), hook("ingest_session.py", "SubagentStop"), hook("ingest_session.py", "PreCompact")];
 	registerStopBridge(api as unknown as Pick<ExtensionAPI, "on">, {
 		hooks,
 		run,
 		cache,
+		convert,
 		env: opts.env ?? {},
+		tmpDir: dir,
 		spawnDetached: (argv, o) => {
 			log.push("spawn");
 			spawns.push({ argv, opts: o });
@@ -244,11 +234,25 @@ test("session_shutdown spawns a detached ingest: SessionEnd for main, SubagentSt
 	expect(payload).toEqual({ hook_event_name: "SessionEnd", session_id: "m-1", cwd: dir, transcript_path: main.converts[0].out });
 	expect(main.spawns[0].argv.join(" ")).toContain("ingest_session.py");
 	expect(main.spawns[0].opts.env).toMatchObject({ ATLAS_HARNESS: "omp", ATLAS_MANDATES: "off" });
+	// the child owns the directory its payload AND its transcript live in: nothing is shared with another child
+	expect(main.converts[0].out.startsWith(main.spawns[0].opts.ownedDir + "/")).toBe(true);
+	expect(main.spawns[0].opts.stdinFile.startsWith(main.spawns[0].opts.ownedDir + "/")).toBe(true);
 
 	const sub = harness();
 	await sub.emit("session_shutdown", {}, sub.ctx("sub", "agent-7"));
 	expect(JSON.parse(readFileSync(sub.spawns[0].opts.stdinFile, "utf8"))).toMatchObject({ hook_event_name: "SubagentStop", session_id: "agent-7" });
-	expect(sub.converts[0].out).toContain("/subagents/agent-agent-7.jsonl"); // the path dispatch_tripwire keys _in_subagent on
+	expect(sub.converts[0].out).toContain("agent-agent-7.jsonl");
+});
+
+test("every detached ingest converts into its OWN directory, so no two children can share or delete a file", async () => {
+	const h = harness();
+	const c = h.ctx("main", "dup");
+	for (let i = 0; i < MAX_INGEST_PER_EVENT; i++) await h.emit("session_shutdown", {}, c);
+	const dirs = h.spawns.map(sp => sp.opts.ownedDir);
+	const transcripts = h.converts.map(cv => cv.out);
+	expect(new Set(dirs).size).toBe(MAX_INGEST_PER_EVENT);
+	expect(new Set(transcripts).size).toBe(MAX_INGEST_PER_EVENT);
+	for (const sp of h.spawns) expect(existsSync(sp.opts.ownedDir)).toBe(true);
 });
 
 test("ingest spawns are deduped per session and event, and bounded per session", async () => {
@@ -256,6 +260,9 @@ test("ingest spawns are deduped per session and event, and bounded per session",
 	const c = h.ctx("main", "dup");
 	for (let i = 0; i < MAX_INGEST_PER_EVENT + 3; i++) await h.emit("session_shutdown", {}, c);
 	expect(h.spawns.length).toBe(MAX_INGEST_PER_EVENT);
+	// a refused ingest converts nothing, so there is nothing to clean up and nothing it can disturb
+	expect(h.converts.length).toBe(MAX_INGEST_PER_EVENT);
+	expect(readdirSync(dir).filter(n => n.startsWith("atlas-ingest-")).length).toBe(MAX_INGEST_PER_EVENT);
 	await h.emit("session_shutdown", {}, h.ctx("main", "other"));
 	expect(h.spawns.length).toBe(MAX_INGEST_PER_EVENT + 1); // a different session is independent
 });
@@ -268,7 +275,9 @@ test("auto_compaction_start ingests as PreCompact and is throttled", async () =>
 		hooks: [hook("ingest_session.py", "PreCompact")],
 		run: async () => "",
 		cache: { convertFresh: async () => "/t.jsonl", forToolHook: async () => "" },
+		convert: async (_f, out) => (writeFileSync(out, "{}\n"), true),
 		env: {},
+		tmpDir: dir,
 		now: () => t,
 		spawnDetached: (argv, opts) => spawns.push({ argv, opts }),
 	});
@@ -281,6 +290,13 @@ test("auto_compaction_start ingests as PreCompact and is throttled", async () =>
 	await handlers.auto_compaction_start[0]({}, ctx);
 	expect(spawns.length).toBe(2);
 	expect(handlers.session_before_compact).toBeUndefined(); // registering it would disable async compaction
+});
+
+test("a failed detached conversion spawns nothing and leaves no directory behind", async () => {
+	const h = harness({ convertOk: false });
+	await h.emit("session_shutdown", {}, h.ctx());
+	expect(h.spawns).toEqual([]);
+	expect(readdirSync(dir).filter(n => n.startsWith("atlas-ingest-"))).toEqual([]);
 });
 
 test("no spawn without a converted transcript, a session id, or with ATLAS_INGEST=off", async () => {
@@ -403,34 +419,212 @@ test("claudeLifecyclePayload carries stop_hook_active only on Stop", () => {
 	expect(claudeLifecyclePayload("PreCompact", { sessionId: "s", cwd: "/p" })).toMatchObject({ transcript_path: "" });
 });
 
-// The detached ingest child is the one place the bridge shells out for real; every other test injects a fake
-// spawner, which is how a leaked temp dir per ingest shipped past the whole suite. These run the REAL script.
-async function runDetached(argv: string[], setup: (spawnDir: string) => void = () => { }) {
-	const spawnDir = mkdtempSync(join(tmpdir(), "atlas-ingest-test-"));
-	const stdinFile = join(spawnDir, "payload.json");
-	writeFileSync(stdinFile, "{}");
-	setup(spawnDir);
-	const child = startDetached(argv, { cwd: dir, stdinFile, env: {} });
-	expect(child).toBeDefined();
-	await child!.exited;
-	return { spawnDir, stdinFile };
+// ---- converted transcripts are plaintext copies of whole sessions: none may outlive the hook that read it ----
+
+/** Every file or directory left anywhere under `root` (relative), so a leak shows up by name. */
+function leftovers(root: string): string[] {
+	if (!existsSync(root)) return [];
+	const out: string[] = [];
+	const walk = (d: string) => {
+		for (const name of readdirSync(d, { withFileTypes: true })) {
+			const full = join(d, name.name);
+			out.push(full.slice(root.length + 1));
+			if (name.isDirectory()) walk(full);
+		}
+	};
+	walk(root);
+	return out.sort();
 }
 
-test("detached ingest removes its stdin file AND its temp dir on success", async () => {
-	const { spawnDir, stdinFile } = await runDetached(["true"]);
-	expect(existsSync(stdinFile)).toBe(false);
-	expect(existsSync(spawnDir)).toBe(false);
+test("Stop deletes the converted transcript after the hooks have read it, whether they pass or block", async () => {
+	for (const stdout of [{}, { "completion_gate.py": block("not done") }]) {
+		const h = harness({ stdout });
+		const seenDuringHooks: boolean[] = [];
+		const realRun = h.payloads; // payload.transcript_path is what each hook was handed
+		await h.stop({ session_id: "s-1", session_file: join(dir, "s-1.jsonl") }, h.ctx());
+		const handed = String((realRun[0] as Record<string, unknown>).transcript_path);
+		seenDuringHooks.push(handed.length > 0);
+		expect(seenDuringHooks).toEqual([true]); // the hooks were given a real path...
+		expect(existsSync(handed)).toBe(false); // ...and it is gone once they finished
+		expect(leftovers(join(dir, "cache"))).toEqual([]); // no file and no empty dir left
+	}
 });
 
-test("detached ingest still cleans up when the child command fails", async () => {
-	const { spawnDir, stdinFile } = await runDetached(["false"]);
-	expect(existsSync(stdinFile)).toBe(false);
-	expect(existsSync(spawnDir)).toBe(false);
+test("Stop's transcript still exists while each hook runs (deletion happens after, never before)", async () => {
+	const existedAt: boolean[] = [];
+	const h = harness({ hooks: [hook("completion_gate.py"), hook("ingest_session.py")] });
+	// replace the recording runner by checking the file from inside a second harness run
+	const handlers: Record<string, Handler[]> = {};
+	const cache = createTranscriptCache({
+		baseDir: join(dir, "cache2"),
+		convert: async (_f, out) => {
+			writeFileSync(out, "{}\n");
+			return true;
+		},
+	});
+	registerStopBridge({ on: (n: string, f: Handler) => (handlers[n] ??= []).push(f) } as unknown as Pick<ExtensionAPI, "on">, {
+		hooks: [hook("completion_gate.py"), hook("ingest_session.py")],
+		run: async (_cmd, payload) => {
+			existedAt.push(existsSync(String((payload as Record<string, unknown>).transcript_path)));
+			return "";
+		},
+		cache,
+		env: {},
+		tmpDir: dir,
+	});
+	void h;
+	await handlers.session_stop[0]({ session_id: "s", session_file: join(dir, "s.jsonl") }, { cwd: dir, agent: { kind: "main" }, sessionManager: { getSessionId: () => "s", getSessionFile: () => join(dir, "s.jsonl") } });
+	expect(existedAt).toEqual([true, true]);
+	expect(leftovers(join(dir, "cache2"))).toEqual([]);
 });
 
-test("detached cleanup never deletes a temp dir that holds anything besides the payload (rmdir, not rm -rf)", async () => {
-	const { spawnDir, stdinFile } = await runDetached(["true"], d => writeFileSync(join(d, "keep.txt"), "do not delete"));
-	expect(existsSync(stdinFile)).toBe(false);
-	expect(existsSync(join(spawnDir, "keep.txt"))).toBe(true);
-	rmSync(spawnDir, { recursive: true, force: true });
+// The advisor's scenario: a running subagent's transcript lives in the shared base; a main conversion and its
+// discard must not touch it. Uses the REAL converter so its sidecar writing and pruning are exercised too.
+test("a main conversion and its discard leave a running subagent's transcript alone (real converter)", async () => {
+	const fixture = join(import.meta.dir, "..", "scripts", "fixtures", "omp_session", "omp-fixture-session.jsonl");
+	const base = join(dir, "shared-base");
+	const cache = createTranscriptCache({ baseDir: base });
+	mkdirSync(join(base, "subagents"), { recursive: true });
+	const live = join(base, "subagents", "agent-live-sub-1.jsonl");
+	writeFileSync(live, "{\"type\":\"user\",\"sessionId\":\"live-sub-1\"}\n");
+
+	const main = await cache.convertFresh(fixture, "lead", "main");
+	expect(main).toBeDefined();
+	expect(readdirSync(join(main!, "..", "subagents")).length).toBeGreaterThan(0); // the real converter wrote sidecars...
+	expect(readFileSync(live, "utf8")).toContain("live-sub-1"); // ...without pruning the live subagent's file
+
+	cache.discard!(main);
+	expect(existsSync(main!)).toBe(false);
+	expect(existsSync(join(main!, ".."))).toBe(false); // the whole per-conversion directory is gone, sidecars included
+	expect(readFileSync(live, "utf8")).toContain("live-sub-1"); // and the live subagent's transcript still exists
+});
+
+test("two overlapping main conversions for one session do not share files, so discarding one leaves the other", async () => {
+	const fixture = join(import.meta.dir, "..", "scripts", "fixtures", "omp_session", "omp-fixture-session.jsonl");
+	const cache = createTranscriptCache({ baseDir: join(dir, "b2") });
+	const first = await cache.convertFresh(fixture, "lead", "main");
+	const second = await cache.convertFresh(fixture, "lead", "main");
+	expect(first).not.toBe(second);
+	cache.discard!(first);
+	expect(existsSync(first!)).toBe(false);
+	expect(existsSync(second!)).toBe(true);
+	expect(readdirSync(join(second!, "..", "subagents")).length).toBeGreaterThan(0); // its sidecars are intact too
+	cache.discard!(second);
+	expect(leftovers(join(dir, "b2"))).toEqual([]);
+});
+
+test("discard removes only the named file and empty parents, never a sibling transcript", () => {
+	const base = join(dir, "base");
+	const cache = createTranscriptCache({ baseDir: base, convert: async () => true });
+	mkdirSync(join(base, "subagents"), { recursive: true });
+	const a = join(base, "subagents", "agent-a.jsonl");
+	const b = join(base, "subagents", "agent-b.jsonl");
+	writeFileSync(a, "a");
+	writeFileSync(b, "b");
+	void cache.convertFresh; // primes nothing; base is set lazily by convertFresh below
+	return cache.convertFresh("f", "s", "main").then(() => {
+		cache.discard!(a);
+		expect(existsSync(a)).toBe(false);
+		expect(existsSync(b)).toBe(true); // sibling survives, so subagents/ and base survive too
+		expect(existsSync(join(base, "subagents"))).toBe(true);
+		cache.discard!(b);
+		expect(existsSync(b)).toBe(false);
+		expect(existsSync(join(base, "subagents"))).toBe(false);
+	});
+});
+
+test("discard refuses a path outside the cache base, including a sibling that merely shares its prefix", async () => {
+	const base = join(dir, "base");
+	const cache = createTranscriptCache({ baseDir: base, convert: async (_f, out) => (writeFileSync(out, "{}"), true) });
+	await cache.convertFresh("f", "s", "main");
+	const outside = join(dir, "important.txt");
+	const prefixSibling = join(dir, "base-other");
+	mkdirSync(prefixSibling);
+	const sibFile = join(prefixSibling, "x.jsonl");
+	writeFileSync(outside, "keep");
+	writeFileSync(sibFile, "keep");
+	cache.discard!(outside);
+	cache.discard!(sibFile);
+	cache.discard!(join(base, "..", "important.txt")); // traversal that resolves outside
+	cache.discard!("");
+	cache.discard!(undefined);
+	expect(readFileSync(outside, "utf8")).toBe("keep");
+	expect(readFileSync(sibFile, "utf8")).toBe("keep");
+	expect(existsSync(prefixSibling)).toBe(true);
+});
+
+test("a cache without discard (or one that throws) never costs the gate its verdict", async () => {
+	for (const discard of [undefined, () => { throw new Error("boom"); }]) {
+		const handlers: Record<string, Handler[]> = {};
+		registerStopBridge({ on: (n: string, f: Handler) => (handlers[n] ??= []).push(f) } as unknown as Pick<ExtensionAPI, "on">, {
+			hooks: [hook("completion_gate.py")],
+			run: async () => block("still blocks"),
+			cache: { convertFresh: async () => "/t.jsonl", forToolHook: async () => "", discard },
+			env: {},
+			tmpDir: dir,
+		});
+		const result = await handlers.session_stop[0]({ session_id: "s", session_file: "f" }, { cwd: dir, agent: { kind: "main" }, sessionManager: { getSessionId: () => "s", getSessionFile: () => "f" } });
+		expect(result).toMatchObject({ decision: "block", reason: "still blocks" });
+	}
+});
+
+// ---- the detached child owns one directory and removes exactly that directory (real /bin/sh, real converter) ----
+
+const FIXTURE = join(import.meta.dir, "..", "scripts", "fixtures", "omp_session", "omp-fixture-session.jsonl");
+
+/** Makes an `atlas-ingest-*` dir, converts the fixture into it with the REAL converter, and runs `argv` as the child. */
+async function runOwned(argv: string[], opts: { name?: string; extra?: (d: string) => void } = {}) {
+	const owned = mkdtempSync(join(dir, opts.name ?? "atlas-ingest-"));
+	const transcript = join(owned, "session-x.jsonl");
+	expect(await convertTranscript(FIXTURE, transcript, 10_000)).toBe(true);
+	const stdinFile = join(owned, "payload.json");
+	writeFileSync(stdinFile, "{}");
+	opts.extra?.(owned);
+	await startDetached(argv, { cwd: dir, stdinFile, ownedDir: owned, env: {} })!.exited;
+	return owned;
+}
+
+test("the real converter really does write colony and advisor sidecars next to its output (precondition of the next tests)", async () => {
+	const owned = mkdtempSync(join(dir, "atlas-ingest-"));
+	expect(await convertTranscript(FIXTURE, join(owned, "session-x.jsonl"), 10_000)).toBe(true);
+	expect(readdirSync(join(owned, "subagents")).length).toBeGreaterThan(0);
+});
+
+test("the detached child removes the transcript, every sidecar and the directory: no atlas-ingest-* survives", async () => {
+	const owned = await runOwned(["true"]);
+	expect(existsSync(owned)).toBe(false);
+	expect(readdirSync(dir).filter(n => n.startsWith("atlas-ingest-"))).toEqual([]);
+});
+
+test("the detached child cleans up the same way when the ingest command fails", async () => {
+	const owned = await runOwned(["false"]);
+	expect(existsSync(owned)).toBe(false);
+});
+
+test("the shell refuses to clean a directory that is not named atlas-ingest-*", async () => {
+	const owned = await runOwned(["true"], { name: "precious-" });
+	expect(existsSync(join(owned, "session-x.jsonl"))).toBe(true); // wrong name: nothing deleted
+	expect(existsSync(join(owned, "subagents"))).toBe(true);
+});
+
+test("an unexpected extra file survives (rmdir, not rm -rf), and so does its directory", async () => {
+	const owned = await runOwned(["true"], { extra: d => writeFileSync(join(d, "keep.txt"), "do not delete") });
+	expect(readFileSync(join(owned, "keep.txt"), "utf8")).toBe("do not delete");
+	expect(existsSync(join(owned, "session-x.jsonl"))).toBe(false); // the files it owns are still gone
+});
+
+test("two children running at once each remove only their own directory", async () => {
+	const a = mkdtempSync(join(dir, "atlas-ingest-"));
+	const b = mkdtempSync(join(dir, "atlas-ingest-"));
+	for (const d of [a, b]) {
+		expect(await convertTranscript(FIXTURE, join(d, "session-x.jsonl"), 10_000)).toBe(true);
+		writeFileSync(join(d, "payload.json"), "{}");
+	}
+	const slow = startDetached(["sh", "-c", "sleep 0.4"], { cwd: dir, stdinFile: join(a, "payload.json"), ownedDir: a, env: {} })!;
+	const fast = startDetached(["true"], { cwd: dir, stdinFile: join(b, "payload.json"), ownedDir: b, env: {} })!;
+	await fast.exited;
+	expect(existsSync(b)).toBe(false); // the fast child cleaned its own
+	expect(existsSync(join(a, "session-x.jsonl"))).toBe(true); // and did not touch the slow child's still-running files
+	await slow.exited;
+	expect(existsSync(a)).toBe(false);
 });

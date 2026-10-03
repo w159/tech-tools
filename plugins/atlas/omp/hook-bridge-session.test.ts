@@ -4,7 +4,7 @@
 // double-writes), and the tripwire/native-policy overlap guard.
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import {
@@ -136,14 +136,11 @@ test("taskItems and claudeTaskInput handle single, batch and malformed shapes", 
 
 // ---- tripwire / native-policy overlap ----
 
-test("dispatch_tripwire is skipped for tools index.ts already polices natively, and runs for Edit/Task", async () => {
+test("dispatch_tripwire runs for every matched tool, including the natively policed ones, so its inline-op threshold can fire", async () => {
 	const h = harness([hook("PreToolUse", "dispatch_tripwire.py", "Edit|Write|Read|Grep|Glob|Bash|Task")]);
 	for (const tool of ["read", "grep", "glob", "bash"]) await h.handlers.tool_call({ toolName: tool, input: {} }, h.ctx());
-	expect(h.payloads).toEqual([]);
 	await h.handlers.tool_call({ toolName: "edit", input: { path: "src/a.ts" } }, h.ctx());
-	await h.handlers.tool_call({ toolName: "write", input: { path: "src/b.ts" } }, h.ctx());
-	expect(h.payloads.map(p => p.payload.tool_name)).toEqual(["Edit", "Write"]);
-	// PostToolUse logging is NOT skipped for the policed tools: that is the inline-op counter.
+	expect(h.payloads.map(p => p.payload.tool_name)).toEqual(["Read", "Grep", "Glob", "Bash", "Edit"]);
 	const post = harness([hook("PostToolUse", "dispatch_tripwire.py", "Read|Bash")]);
 	await post.handlers.tool_result({ toolName: "read", input: {}, content: "x", isError: false }, post.ctx());
 	expect(post.payloads.length).toBe(1);
@@ -228,30 +225,120 @@ test("loadBridgedHooks stays turn-only; the session-end family loads through its
 	expect(loadBridgedHooksFor(["Stop"], "bridgedSessionEnd", undefined, noKey)).toEqual([]); // a contract without the list bridges nothing
 });
 
+/**
+ * Runs `body` with a fixture project root and an isolated environment for the REAL dispatch_tripwire.py:
+ *  - the root lives under the repo's gitignored `.scratch/`, never under the user's home: a checked-in test must not
+ *    write into the home directory of whoever runs it, and it must still be OUTSIDE the system temp roots, which the
+ *    tripwire exempts from its "never edit target code inline" rule;
+ *  - HOME is pinned to an empty directory, because the tripwire reads `~/.claude.json` and `~/.claude/settings.json`
+ *    to decide whether lean-ctx is configured, so the answer depends on the machine running the test. Measured on
+ *    the author's machine, whose `~/.claude.json` declares a top-level lean-ctx server: `_lean_ctx_server_key` returned
+ *    'lean-ctx' for a project with no .mcp.json under the real HOME and None under an empty HOME. To reproduce, pass
+ *    `_lean_ctx_server_key` a `pathlib.Path`: it does `root / ".mcp.json"`, so a `str` raises, the fail-open `except`
+ *    swallows it, and the call returns None under ANY home, which looks like "HOME does not matter". On a machine
+ *    without such a config both are None, so the pin changes nothing there; it exists so the "lean-ctx not
+ *    configured" case means the same thing on every machine.
+ * Process env is restored afterwards, including variables that were originally unset.
+ */
+async function withSandbox<T>(body: (root: string) => Promise<T>): Promise<T> {
+	const scratch = join(import.meta.dir, "..", "..", "..", ".scratch");
+	mkdirSync(scratch, { recursive: true });
+	const root = mkdtempSync(join(scratch, "bridge-real-"));
+	const emptyHome = mkdtempSync(join(dir, "home-"));
+	const names = ["ATLAS_DB", "ATLAS_HOOKSTATE_DIR", "ATLAS_HARNESS", "HOME"] as const;
+	const keep: Record<string, string | undefined> = Object.fromEntries(names.map(n => [n, process.env[n]]));
+	try {
+		mkdirSync(join(root, "docs"));
+		mkdirSync(join(root, "src"));
+		writeFileSync(join(root, "docs", "CHANGELOG.md"), "x\n");
+		writeFileSync(join(root, "src", "a.py"), "print(0)\n");
+		process.env.ATLAS_DB = join(dir, "atlas.db");
+		process.env.ATLAS_HOOKSTATE_DIR = join(dir, "hookstate");
+		process.env.ATLAS_HARNESS = "omp";
+		process.env.HOME = emptyHome;
+		return await body(root);
+	} finally {
+		for (const n of names) {
+			if (keep[n] === undefined) delete process.env[n];
+			else process.env[n] = keep[n];
+		}
+		rmSync(root, { recursive: true, force: true });
+	}
+}
+
+// dispatch_tripwire's inline-op threshold deny lives in PreToolUse and counts Read/Grep/Glob/Bash. The bridge used to
+// skip the tripwire's PreToolUse for exactly those tools (index.ts polices them natively), which silently removed the
+// deny tier in omp: 12 inline read/bash calls on an armed run were never denied although the DB counted all 12.
+/**
+ * Drives the REAL dispatch_tripwire.py through the REAL bridge on an armed run: inline read/bash/grep calls with no
+ * dispatch must hit the inline-op threshold, and a dispatch must reset it. `leanCtx` configures a lean-ctx MCP server in
+ * the fixture's .mcp.json; with lean-ctx reachable, the tripwire's native-tool policy DENIES native Grep/Glob and
+ * exploration-only Bash and returns from main() before the count is ever evaluated, so a fixture without it cannot
+ * tell whether the threshold tier is still reachable in the setup this repo actually uses.
+ */
+async function thresholdScenario(leanCtx: boolean) {
+	return withSandbox(async root => {
+		if (leanCtx) writeFileSync(join(root, ".mcp.json"), JSON.stringify({ mcpServers: { "lean-ctx": { command: "lean-ctx", args: [] } } }));
+		const runstate = join(import.meta.dir, "..", "scripts", "omp_runstate.py");
+		const sh = (...argv: string[]) => Bun.spawnSync(["python3", runstate, ...argv, "--session-id", "thr-sess", "--cwd", root], { env: process.env });
+		sh("begin");
+		sh("arm", "--agent-type", "atlas:implementer");
+
+		const handlers: Record<string, Handler[]> = {};
+		registerHookBridge({ on: (ev: string, fn: Handler) => void (handlers[ev] ??= []).push(fn) } as unknown as ExtensionAPI);
+		const ctx: Ctx = { cwd: root, agent: { kind: "main" }, sessionManager: { getSessionId: () => "thr-sess" } };
+		const call = async (toolName: string, input: Record<string, unknown>) => {
+			let text = "";
+			for (const h of handlers.tool_call ?? []) {
+				const r = await h({ toolCallId: `c${Math.random()}`, toolName, input }, ctx);
+				if (r?.block) return { blocked: true, text: String(r.reason) };
+				if (typeof r?.additionalContext === "string") text += r.additionalContext;
+			}
+			for (const h of handlers.tool_result ?? []) await h({ toolCallId: "r", toolName, input, content: [{ type: "text", text: "ok" }], isError: false, details: {} }, ctx);
+			return { blocked: false, text };
+		};
+		// read and a mutating bash: neither is denied by the native policy even with lean-ctx configured, so any deny is the threshold
+		const inline = (i: number) => (i % 2 ? call("read", { path: "src/a.py" }) : call("bash", { command: `touch src/f${i}.txt` }));
+
+		const verdicts: { blocked: boolean; text: string }[] = [];
+		for (let i = 1; i <= 12; i++) verdicts.push(await inline(i));
+		const firstDeny = verdicts.findIndex(v => v.blocked);
+
+		const TOOLS = "TOOLS: first load them with ToolSearch, then use serena and lean-ctx for code navigation.\n";
+		const SPEC = "GOAL: g\nDELIVERABLE: d\nSUCCESS CRITERIA: s\nOUT OF SCOPE: o\nSTOP CONDITIONS: c\n";
+		const dispatch = await call("task", { tasks: [{ name: "W", agent: "implementer", task: TOOLS + SPEC }] });
+		const afterReset = await inline(1);
+		// native Grep with lean-ctx configured: the tripwire's own native-policy deny must NOT reach the model (index.ts owns that text)
+		const grep = await call("grep", { pattern: "x" });
+		return { verdicts, firstDeny, dispatch, afterReset, grep };
+	});
+}
+
+for (const leanCtx of [false, true]) {
+	test(`REAL tripwire through the bridge (lean-ctx ${leanCtx ? "configured" : "not configured"}): the inline-op threshold denies and a dispatch resets it`, async () => {
+		const r = await thresholdScenario(leanCtx);
+		expect(r.firstDeny).toBeGreaterThanOrEqual(0);
+		expect(r.verdicts[r.firstDeny].text).toMatch(/inline ops since your last dispatch/);
+		expect(r.verdicts.slice(0, r.firstDeny).every(v => !v.blocked)).toBe(true);
+		expect(r.dispatch.blocked).toBe(false);
+		expect(r.afterReset.blocked).toBe(false);
+		expect(r.grep.text + (r.grep.blocked ? r.grep.text : "")).not.toMatch(/native Grep is disabled/);
+	});
+}
+
 // The tests above inject fake hook runners, so none of them would notice the REAL dispatch_tripwire.py
 // disagreeing with the payload the bridge builds. This drives the real hook through the real bridge.
 // The project root must NOT be under the OS temp dir: the tripwire exempts temp paths from its
 // "never edit target code inline" rule, which made an earlier hand check wrongly report that rule dead on omp.
 test("REAL dispatch_tripwire through the bridge: spec-less, bundled and production-edit calls are denied; well-formed and docs calls pass", async () => {
-	const root = mkdtempSync(join(homedir(), ".atlas-bridge-real-"));
-	const db = join(dir, "atlas.db");
-	const keep = { db: process.env.ATLAS_DB, state: process.env.ATLAS_HOOKSTATE_DIR, harness: process.env.ATLAS_HARNESS };
-	try {
-		mkdirSync(join(root, "docs"));
-		mkdirSync(join(root, "src"));
-		writeFileSync(join(root, "docs", "CHANGELOG.md"), "x\n");
-		writeFileSync(join(root, "src", "app.py"), "print(0)\n");
-		process.env.ATLAS_DB = db;
-		process.env.ATLAS_HOOKSTATE_DIR = join(dir, "hookstate");
-		process.env.ATLAS_HARNESS = "omp";
+	await withSandbox(async root => {
 		const runstate = join(import.meta.dir, "..", "scripts", "omp_runstate.py");
 		const sh = (...argv: string[]) => Bun.spawnSync(["python3", runstate, ...argv, "--session-id", "real-sess", "--cwd", root], { env: process.env });
 		sh("begin");
 		sh("arm", "--agent-type", "atlas:implementer");
 
 		const handlers: Record<string, Handler[]> = {};
-		const pi = { on: (ev: string, fn: Handler) => void (handlers[ev] ??= []).push(fn) } as unknown as Pick<ExtensionAPI, "on">;
-		registerHookBridge(pi as ExtensionAPI);
+		registerHookBridge({ on: (ev: string, fn: Handler) => void (handlers[ev] ??= []).push(fn) } as unknown as ExtensionAPI);
 		const ctx: Ctx = { cwd: root, agent: { kind: "main" }, sessionManager: { getSessionId: () => "real-sess" } };
 		const fire = async (toolName: string, input: Record<string, unknown>) => {
 			for (const h of handlers.tool_call ?? []) {
@@ -267,15 +354,7 @@ test("REAL dispatch_tripwire through the bridge: spec-less, bundled and producti
 		expect(await fire("task", task(TOOLS + SPEC))).toBeUndefined();
 		expect(String((await fire("task", task(`${TOOLS}just fix it`)))?.reason)).toContain("unbounded: missing GOAL:");
 		expect(String((await fire("task", task(`${TOOLS}${SPEC}GOAL: and also rewrite billing\n`)))?.reason)).toContain("2 GOAL: blocks");
-		expect(String((await fire("edit", { path: "src/app.py", input: "x" }))?.reason)).toContain("never edit target code inline");
+		expect(String((await fire("edit", { path: "src/a.py", input: "x" }))?.reason)).toContain("never edit target code inline");
 		expect(await fire("edit", { path: "docs/CHANGELOG.md", input: "x" })).toBeUndefined();
-	} finally {
-		process.env.ATLAS_DB = keep.db;
-		process.env.ATLAS_HOOKSTATE_DIR = keep.state;
-		process.env.ATLAS_HARNESS = keep.harness;
-		if (keep.db === undefined) delete process.env.ATLAS_DB;
-		if (keep.state === undefined) delete process.env.ATLAS_HOOKSTATE_DIR;
-		if (keep.harness === undefined) delete process.env.ATLAS_HARNESS;
-		rmSync(root, { recursive: true, force: true });
-	}
+	});
 });
