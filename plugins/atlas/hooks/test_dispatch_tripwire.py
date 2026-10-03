@@ -1995,3 +1995,19 @@ class ToolkitGapOmpTest(unittest.TestCase):
         self.assertIsNone(self.gap("anything", "Explore"))
         with patch.dict(os.environ, {"ATLAS_TOOLKIT_LOAD": "omp"}):
             self.assertIsNone(self.gap("anything", "Explore"))
+
+    def test_deny_text_is_claude_wording_unless_the_omp_bridge_asked_for_omp(self):
+        claude = self.dt._toolkit_gap_reason("Task", "atlas:implementer")
+        self.assertIn("ToolSearch", claude)
+        self.assertIn("Without it atlas:implementer greps the tree.", claude)
+        with patch.dict(os.environ, {"ATLAS_TOOLKIT_LOAD": "claude"}):
+            self.assertEqual(self.dt._toolkit_gap_reason("Task", "atlas:implementer"), claude)
+
+    def test_omp_deny_text_names_what_an_omp_lead_can_actually_do(self):
+        with patch.dict(os.environ, {"ATLAS_TOOLKIT_LOAD": "omp"}):
+            text = self.dt._toolkit_gap_reason("Task", "atlas:implementer")
+        self.assertNotIn("ToolSearch", text)  # omp has no such tool; asking for it is an instruction nobody can follow
+        self.assertIn("xd://mcp__lean_ctx_ctx_search", text)
+        self.assertIn("TOOLS:", text)  # a one-line block the lead can paste as is
+        self.assertIn("atlas:implementer", text)
+        self.assertTrue(text.startswith("DENY - this Task dispatch is missing the code-nav TOOLS block."))

@@ -260,6 +260,29 @@ def _toolkit_gap(tinput):
     return agent
 
 
+def _toolkit_gap_reason(tool, gap):
+    """Deny text for a dispatch missing its code-nav TOOLS block.
+
+    Claude wording asks for a batched ToolSearch. ATLAS_TOOLKIT_LOAD=omp (set only by the omp bridge) means the
+    caller has no ToolSearch, so it is told the one-line block it can actually write instead."""
+    if os.environ.get("ATLAS_TOOLKIT_LOAD") == "omp":
+        return (
+            "DENY - this %s dispatch is missing the code-nav TOOLS block. Add one line to the task, "
+            "e.g. `TOOLS: use lean-ctx via its xd:// devices (write JSON to xd://mcp__lean_ctx_ctx_search, "
+            "_ctx_read, _ctx_glob); noisy output via context-mode ctx_execute; do not activate serena "
+            "unless a symbol edit needs it`. Without it %s greps the tree." % (tool, gap)
+        )
+    return (
+        "DENY - this %s dispatch is missing the code-nav TOOLS block. "
+        "Paste subagent-kit.md / tool-routing.md: one batched ToolSearch that "
+        "includes lean-ctx (ctx_compose/ctx_search/ctx_read) AND serena "
+        "(activate_project, get_symbols_overview, find_symbol, and for "
+        "implementers replace_symbol_body), plus context-mode for noisy "
+        "output. The subagent must run that before Read/Grep/Bash; serena "
+        "down -> lean-ctx only, never Bash grep. Without it %s greps the tree." % (tool, gap)
+    )
+
+
 def _unbounded_dispatch(tinput):
     """An atlas:* dispatch with no finish line, or several tasks crammed in one.
 
@@ -411,16 +434,7 @@ def _pre_tool_use(conn, atlas_db, tool, session, path, tinput=None):
         # (c) A dispatch that never names the toolset gets a subagent that greps.
         gap = _toolkit_gap(tinput or {})
         if gap:
-            _deny(
-                "DENY - this %s dispatch is missing the code-nav TOOLS block. "
-                "Paste subagent-kit.md / tool-routing.md: one batched ToolSearch that "
-                "includes lean-ctx (ctx_compose/ctx_search/ctx_read) AND serena "
-                "(activate_project, get_symbols_overview, find_symbol, and for "
-                "implementers replace_symbol_body), plus context-mode for noisy "
-                "output. The subagent must run that before Read/Grep/Bash; serena "
-                "down -> lean-ctx only, never Bash grep. Without it %s greps the tree."
-                % (tool, gap)
-            )
+            _deny(_toolkit_gap_reason(tool, gap))
             return
         unbounded = _unbounded_dispatch(tinput or {})
         if unbounded:
