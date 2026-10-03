@@ -116,11 +116,14 @@ export function registerMandates(pi: Pick<ExtensionAPI, "on">, deps: MandateDeps
 	let ponytailListed = false;
 	let commitNudged = false;
 	let recalled = false; // true only once a real claude-mem call happened; a denial never sets it
+	/** The recall line once rendered, re-served byte for byte so the provider's prompt cache is not rewritten when a route changes mid-session. Absence is never stored. */
+	let recallLine: string | undefined;
 	const off = () => (deps.env ?? process.env).ATLAS_MANDATES === "off";
 	const reset = () => {
 		ponytailListed = false;
 		commitNudged = false;
 		recalled = false;
+		recallLine = undefined;
 	};
 	pi.on("session_start", reset);
 	pi.on("session_switch", reset);
@@ -131,16 +134,19 @@ export function registerMandates(pi: Pick<ExtensionAPI, "on">, deps: MandateDeps
 			const base = Array.isArray(event.systemPrompt) ? event.systemPrompt : [];
 			ponytailListed = base.some(entry => typeof entry === "string" && entry.includes("ponytail-review"));
 			if (base.some(entry => typeof entry === "string" && entry.includes(RECALL_MARKER))) return undefined;
-			let active: string[] | undefined;
-			try {
-				active = deps.activeTools();
-			} catch {
-				return undefined;
+			if (recallLine === undefined) {
+				let active: string[] | undefined;
+				try {
+					active = deps.activeTools();
+				} catch {
+					return undefined;
+				}
+				const route = claudeMemRoute(active);
+				const contract = loadMandates(deps.mandatesPath);
+				if (!route || !contract) return undefined;
+				recallLine = contract.recall.replace("{route}", `write JSON args to ${route}`);
 			}
-			const route = claudeMemRoute(active);
-			const contract = loadMandates(deps.mandatesPath);
-			if (!route || !contract) return undefined;
-			return { systemPrompt: [...base, contract.recall.replace("{route}", `write JSON args to ${route}`)] };
+			return { systemPrompt: [...base, recallLine] };
 		} catch {
 			return undefined; // fail open
 		}

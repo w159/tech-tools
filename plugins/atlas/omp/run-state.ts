@@ -33,7 +33,7 @@ const PLUGIN_ROOT = nodePath.resolve(import.meta.dir, "..");
 export const RUNSTATE_SCRIPT = nodePath.join(PLUGIN_ROOT, "scripts", "omp_runstate.py");
 const CLI_TIMEOUT_MS = 10_000;
 
-export type RunStateCommand = "begin" | "snapshot" | "arm" | "event";
+export type RunStateCommand = "begin" | "snapshot" | "rebaseline" | "arm" | "event";
 
 export interface RunStateArgs {
 	sessionId: string;

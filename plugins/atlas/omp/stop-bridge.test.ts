@@ -26,7 +26,7 @@ const scriptOf = (command: string) => /([\w.-]+\.py)/.exec(command)?.[1] ?? "";
 const block = (reason: string) => JSON.stringify({ decision: "block", reason });
 
 /** Event log shared by the fakes so cross-component ORDER is assertable. */
-function harness(opts: { stdout?: Record<string, string>; hooks?: BridgedHook[]; convertOk?: boolean; env?: Record<string, string | undefined> } = {}) {
+function harness(opts: { stdout?: Record<string, string>; hooks?: BridgedHook[]; convertOk?: boolean; env?: Record<string, string | undefined>; rebaseline?: (cwd: string, sessionId: string) => Promise<void> } = {}) {
 	const log: string[] = [];
 	const payloads: Record<string, unknown>[] = [];
 	const spawns: Spawn[] = [];
@@ -49,6 +49,10 @@ function harness(opts: { stdout?: Record<string, string>; hooks?: BridgedHook[];
 	const cache = createTranscriptCache({ baseDir: join(dir, "cache"), convert });
 	const hooks = opts.hooks ?? [hook("completion_gate.py"), hook("ingest_session.py"), hook("chronicle_facet.py"), hook("memory_capture.py"), hook("nudge.py"), hook("ingest_session.py", "SessionEnd"), hook("ingest_session.py", "SubagentStop"), hook("ingest_session.py", "PreCompact")];
 	registerStopBridge(api as unknown as Pick<ExtensionAPI, "on">, {
+		rebaseline: async (cwd, sessionId) => {
+			log.push(`rebaseline:${sessionId}`);
+			await opts.rebaseline?.(cwd, sessionId);
+		},
 		hooks,
 		run,
 		cache,
@@ -88,6 +92,36 @@ test("all five Stop hooks run in hooks.json order, even after the gate blocks", 
 	const result = await h.stop();
 	expect(result).toEqual({ decision: "block", reason: "(d) ROADMAP missing" });
 	expect(h.log.filter(l => l.startsWith("hook:"))).toEqual(["hook:completion_gate.py", "hook:ingest_session.py", "hook:chronicle_facet.py", "hook:memory_capture.py", "hook:nudge.py"]);
+});
+
+test("Stop folds tool state into the dirty snapshot after conversion and strictly before the gate reads it", async () => {
+	const h = harness();
+	await h.stop();
+	expect(h.log.filter(l => l === "convert" || l.startsWith("rebaseline:") || l === "hook:completion_gate.py")).toEqual(["convert", "rebaseline:s-1", "hook:completion_gate.py"]);
+	expect(h.log.filter(l => l.startsWith("rebaseline:")).length).toBe(1);
+});
+
+test("a throwing rebaseline costs the gate nothing: the block still reaches omp", async () => {
+	const h = harness({ stdout: { "completion_gate.py": block("(d) ROADMAP missing") }, rebaseline: async () => { throw new Error("boom"); } });
+	expect(await h.stop()).toEqual({ decision: "block", reason: "(d) ROADMAP missing" });
+	expect(h.log).toContain("hook:completion_gate.py");
+});
+
+test("a hung rebaseline is abandoned at its budget and the gate still runs", async () => {
+	const h = harness({ rebaseline: () => new Promise<void>(() => { }) }); // never settles
+	const t0 = Date.now();
+	await h.stop();
+	expect(Date.now() - t0).toBeLessThan(5_000);
+	expect(h.log).toContain("hook:completion_gate.py");
+});
+
+test("rebaseline is main-only and stands down with the bridge", async () => {
+	const sub = harness();
+	await sub.stop({}, sub.ctx("sub"));
+	expect(sub.log.some(l => l.startsWith("rebaseline:"))).toBe(false);
+	const off = harness({ env: { ATLAS_STOP_BRIDGE: "off" } });
+	await off.stop();
+	expect(off.log.some(l => l.startsWith("rebaseline:"))).toBe(false);
 });
 
 test("a Stop block is a decision:block refusal, never plain context", async () => {

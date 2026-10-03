@@ -382,3 +382,30 @@ test("REAL dispatch_tripwire through the bridge: spec-less, bundled and producti
 		expect(await fire("edit", { path: "docs/CHANGELOG.md", input: "x" })).toBeUndefined();
 	});
 });
+
+// omp has no ToolSearch: its tools are xd:// devices. The Claude tripwire asks every atlas dispatch for a `ToolSearch`
+// load step, so a faithful omp lead could never satisfy it and was pushed into writing Claude-only wording (and into
+// activating serena). The bridge sets ATLAS_TOOLKIT_LOAD=omp so only that half of the requirement is waived.
+test("REAL dispatch_tripwire through the bridge: an omp-shaped TOOLS block passes, a dispatch naming no navigation tool is still denied", async () => {
+	await withSandbox(async root => {
+		const runstate = join(import.meta.dir, "..", "scripts", "omp_runstate.py");
+		const sh = (...argv: string[]) => Bun.spawnSync(["python3", runstate, ...argv, "--session-id", "omp-tools", "--cwd", root], { env: process.env });
+		sh("begin");
+		sh("arm", "--agent-type", "atlas:implementer");
+		const handlers: Record<string, Handler[]> = {};
+		registerHookBridge({ on: (ev: string, fn: Handler) => void (handlers[ev] ??= []).push(fn) } as unknown as ExtensionAPI);
+		const ctx: Ctx = { cwd: root, agent: { kind: "main" }, sessionManager: { getSessionId: () => "omp-tools" } };
+		const fire = async (input: Record<string, unknown>) => {
+			for (const h of handlers.tool_call ?? []) {
+				const r = await h({ toolCallId: `c${Math.random()}`, toolName: "task", input }, ctx);
+				if (r?.block) return r;
+			}
+			return undefined;
+		};
+		const SPEC = "GOAL: fix add\nDELIVERABLE: patched src/calc.py\nSUCCESS CRITERIA: pytest passes\nOUT OF SCOPE: docs\nSTOP CONDITIONS: tests green\n";
+		const OMP_TOOLS = "TOOLS: use lean-ctx via its xd:// devices (xd://mcp__lean_ctx_ctx_search); do not activate serena.\n";
+		const task = (prompt: string) => ({ tasks: [{ name: "W", agent: "implementer", task: prompt }] });
+		expect(await fire(task(OMP_TOOLS + SPEC))).toBeUndefined();
+		expect(String((await fire(task(`read the files you need\n${SPEC}`)))?.reason)).toContain("missing the code-nav TOOLS block");
+	});
+});

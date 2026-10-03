@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import {
+	ADDENDUM_BEGIN,
+	ADDENDUM_END,
+	ADDENDUM_PATH,
 	STYLE_BEGIN,
 	STYLE_END,
 	STYLE_PATH,
@@ -11,6 +14,7 @@ import {
 	loadToolNames,
 	mcpDevice,
 	registerStyle,
+	renderOmpAddendum,
 	renderOmpStyle,
 	resolveBareTools,
 	translateToolNames,
@@ -26,10 +30,10 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-function harness(env: Record<string, string | undefined> = {}, stylePath?: string) {
+function harness(env: Record<string, string | undefined> = {}, stylePath?: string, addendumPath?: string) {
 	const handlers: Record<string, Handler> = {};
 	const api = { on: (name: string, h: Handler) => { handlers[name] = h; } };
-	registerStyle(api as unknown as Pick<ExtensionAPI, "on">, { env, stylePath });
+	registerStyle(api as unknown as Pick<ExtensionAPI, "on">, { env, stylePath, addendumPath });
 	return (systemPrompt: string[], kind: "main" | "sub" = "main") =>
 		handlers.before_agent_start({ systemPrompt, prompt: "hi" }, { agent: { kind } });
 }
@@ -37,15 +41,15 @@ function harness(env: Record<string, string | undefined> = {}, stylePath?: strin
 const MAP = loadToolNames();
 if (!MAP) throw new Error("contracts/tool-names.json must load");
 
-test("main session gets the translated style appended exactly once", () => {
+test("main session gets the translated style appended exactly once, then the lead addendum", () => {
 	const run = harness();
 	const result = run(["base prompt"]);
-	expect(result?.systemPrompt?.length).toBe(2);
+	expect(result?.systemPrompt?.length).toBe(3);
 	expect(result?.systemPrompt?.[0]).toBe("base prompt");
 	const block = result?.systemPrompt?.[1] ?? "";
 	expect(block.startsWith(STYLE_BEGIN)).toBe(true);
 	expect(block.endsWith(STYLE_END)).toBe(true);
-	// handler re-entry with the style already present is a no-op
+	// handler re-entry with both blocks already present is a no-op
 	expect(run(result?.systemPrompt ?? [])).toBeUndefined();
 });
 
@@ -57,12 +61,43 @@ test("ATLAS_STYLE=off disables injection", () => {
 	expect(harness({ ATLAS_STYLE: "off" })(["base"])).toBeUndefined();
 });
 
-test("missing or malformed style source fails open", () => {
-	expect(harness({}, join(dir, "absent.md"))(["base"])).toBeUndefined();
+test("missing or malformed style source fails open: no style block, and the independent addendum still arrives", () => {
+	const none = join(dir, "absent-addendum.md");
+	expect(harness({}, join(dir, "absent.md"), none)(["base"])).toBeUndefined();
+	expect(harness({}, join(dir, "absent.md"))(["base"])?.systemPrompt?.length).toBe(2); // addendum only
 	const bad = join(dir, "bad.md");
 	writeFileSync(bad, "---\nname: x\nno closing fence\n");
 	expect(loadStyleBody(bad)).toBeUndefined();
-	expect(harness({}, bad)(["base"])).toBeUndefined();
+	expect(harness({}, bad, none)(["base"])).toBeUndefined();
+});
+
+test("the omp lead addendum is its own marked block after the style block, main session only", () => {
+	const result = harness()(["base"]);
+	expect(result?.systemPrompt?.length).toBe(3);
+	const [, style, addendum] = result?.systemPrompt ?? [];
+	expect(style.startsWith(STYLE_BEGIN) && style.endsWith(STYLE_END)).toBe(true); // the drift-guarded block is untouched
+	expect(addendum.startsWith(ADDENDUM_BEGIN) && addendum.endsWith(ADDENDUM_END)).toBe(true);
+	expect(addendum).toContain(readFileSync(ADDENDUM_PATH, "utf8").trim());
+	expect(harness()(["base"], "sub")).toBeUndefined();
+	expect(harness()(result?.systemPrompt ?? [])).toBeUndefined(); // re-entry adds neither block again
+});
+
+test("the addendum is small and restates nothing omp's own task and wait prompts teach", () => {
+	const text = readFileSync(ADDENDUM_PATH, "utf8");
+	expect(text.length).toBeLessThan(900); // it rides on every lead turn
+	for (const taught of ["auto-deliver", "Never poll", "outputSchema", "local://"]) expect(text).not.toContain(taught);
+});
+
+test("an unreadable addendum degrades to the style block alone; a half-present pair still adds only what is missing", () => {
+	expect(renderOmpAddendum(join(dir, "absent.md"))).toBeUndefined();
+	const blank = join(dir, "blank.md");
+	writeFileSync(blank, "  \n");
+	expect(renderOmpAddendum(blank)).toBeUndefined();
+	const run = harness({}, undefined, join(dir, "absent.md"));
+	expect(run(["base"])?.systemPrompt?.length).toBe(2);
+	const addendumOnly = harness()(["base", `${STYLE_BEGIN}\nalready\n${STYLE_END}`]);
+	expect(addendumOnly?.systemPrompt?.length).toBe(3);
+	expect(addendumOnly?.systemPrompt?.[2].startsWith(ADDENDUM_BEGIN)).toBe(true);
 });
 
 test("tool names translate on word boundaries only", () => {
@@ -188,4 +223,53 @@ test("registerStyle resolves bareTools from activeTools at injection time, and f
 	expect(live).not.toContain("xd://mcp__lean_ctx_ctx_search"); // callable directly, so no device rewrite
 	expect(dead).not.toMatch(/xd:\/\/mcp__lean_ctx_ctx_/); // unreachable: nothing points at a dead device
 	for (const fallback of [unknown, throwing, omitted]) expect(fallback).toBe(renderOmpStyle());
+});
+
+// --- one stable prefix per session: a re-render mid-session rewrites the whole prompt cache ---
+
+function frozenHarness(active: { current: string[] | undefined }) {
+	const handlers: Record<string, (event: never, ctx: never) => unknown> = {};
+	const api = { on: (name: string, h: (event: never, ctx: never) => unknown) => { handlers[name] = h; } };
+	registerStyle(api as unknown as Pick<ExtensionAPI, "on">, { env: {}, activeTools: () => active.current });
+	const turn = () => (handlers.before_agent_start as unknown as Handler)({ systemPrompt: ["base"], prompt: "hi" }, { agent: { kind: "main" } })?.systemPrompt?.slice(1) ?? [];
+	return { turn, reset: (name: "session_start" | "session_switch") => handlers[name]?.({} as never, {} as never) };
+}
+
+const EARLY = ["read", "bash", "write"];
+const LATE = ["write", "mcp__lean_ctx_ctx_read", "mcp__lean_ctx_ctx_shell", "mcp__lean_ctx_ctx_search", "mcp__lean_ctx_ctx_glob"];
+
+test("the rendered blocks are frozen for the session: devices mounting later do not change the prompt bytes", () => {
+	const active = { current: EARLY as string[] | undefined };
+	const h = frozenHarness(active);
+	const first = h.turn();
+	active.current = LATE; // xd:// devices mounted after turn 1, as in a real session
+	const second = h.turn();
+	expect(first.length).toBe(2);
+	expect(second).toEqual(first); // byte-identical: the cached prefix survives the next agent loop
+	expect(renderOmpStyle(undefined, undefined, LATE)).not.toBe(first[0]); // the freeze, not coincidence, is what holds it
+});
+
+test("session_start and session_switch drop the frozen render so a new session renders against its own tools", () => {
+	for (const event of ["session_start", "session_switch"] as const) {
+		const active = { current: EARLY as string[] | undefined };
+		const h = frozenHarness(active);
+		const before = h.turn();
+		active.current = LATE;
+		h.reset(event);
+		const after = h.turn();
+		expect(after).not.toEqual(before);
+		expect(after[0]).toBe(renderOmpStyle(undefined, undefined, LATE));
+	}
+});
+
+test("a render that failed (unreadable sources) is not frozen: the next turn retries", () => {
+	const active = { current: EARLY as string[] | undefined };
+	const handlers: Record<string, unknown> = {};
+	const api = { on: (name: string, h: unknown) => { handlers[name] = h; } };
+	const bad = join(dir, "later.md");
+	registerStyle(api as unknown as Pick<ExtensionAPI, "on">, { env: {}, stylePath: bad, addendumPath: join(dir, "none.md"), activeTools: () => active.current });
+	const turn = () => (handlers.before_agent_start as Handler)({ systemPrompt: ["base"], prompt: "hi" }, { agent: { kind: "main" } });
+	expect(turn()).toBeUndefined(); // style missing
+	writeFileSync(bad, "---\nname: x\n---\nbody\n");
+	expect(turn()?.systemPrompt?.length).toBe(2); // now readable: rendered, not stuck on the earlier failure
 });

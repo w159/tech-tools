@@ -12,6 +12,7 @@ rows are indistinguishable from a Claude session's.
     omp_runstate.py arm      --session-id S --cwd D [--agent-type T] [--model M] [--worktree]
     omp_runstate.py event    --session-id S --cwd D --tool <ClaudeToolName> [--path P] [--dispatch AGENT]
     omp_runstate.py snapshot --session-id S --cwd D
+    omp_runstate.py rebaseline --session-id S --cwd D
 
 Each prints one JSON line and exits 0 (fail-open: a broken bridge must never
 wedge a session). Stdlib only.
@@ -31,6 +32,18 @@ sys.path.insert(0, os.path.join(_HERE, "..", "hooks"))
 # Mirrors dispatch_tripwire.INLINE_TOOLS / DISPATCH_TOOLS: the only tools it logs.
 INLINE_TOOLS = {"Read", "Grep", "Glob", "Edit", "Write", "Bash"}
 DISPATCH_TOOLS = {"Agent", "Task"}
+
+
+def _tool_state_dirs() -> tuple:
+    """Dirs agent tooling writes by itself (contracts/native-tools.json `ompToolStateDirs`).
+    Read by omp code only: the Claude hooks never look at this key. Unreadable -> ()."""
+    try:
+        path = os.path.join(_HERE, "..", "contracts", "native-tools.json")
+        with open(path, encoding="utf-8") as fh:
+            dirs = json.load(fh)["ompToolStateDirs"]
+        return tuple(d for d in dirs if isinstance(d, str) and d)
+    except (OSError, ValueError, KeyError, TypeError):
+        return ()
 
 
 def _connect():
@@ -119,7 +132,36 @@ def cmd_snapshot(args) -> dict:
     return {"ok": True, "path": target, "written": bool(target)}
 
 
-COMMANDS = {"begin": cmd_begin, "arm": cmd_arm, "event": cmd_event, "snapshot": cmd_snapshot}
+def cmd_rebaseline(args) -> dict:
+    """Fold tool state written AFTER the SessionStart snapshot into that snapshot.
+
+    MCP servers (serena, ...) write `.serena/` only once they start, which on omp is
+    after the snapshot was taken, so completion_gate's shell-dirt check (m) would count
+    those files as code the lead wrote. Only paths under `ompToolStateDirs` are merged;
+    every other path, and every path the snapshot already holds, is left exactly as is,
+    so a real code edit still counts. No snapshot, no git tree, or no dirs: no-op."""
+    import session_boot
+
+    dirs = _tool_state_dirs()
+    path = session_boot.snapshot_path(args.cwd, args.session_id)
+    absorbed: list = []
+    if dirs and args.session_id:
+        try:
+            with open(path, encoding="utf-8") as fh:
+                snap = json.load(fh)
+            held = snap["paths"]
+            now = session_boot.dirty_map(args.cwd) or {}
+            absorbed = sorted(p for p in now if p not in held and any(seg in dirs for seg in p.split("/")))
+            if absorbed:
+                held.update({p: now[p] for p in absorbed})
+                with open(path, "w", encoding="utf-8") as fh:
+                    json.dump(snap, fh)
+        except (OSError, ValueError, KeyError, TypeError):
+            absorbed = []
+    return {"ok": True, "absorbed": absorbed}
+
+
+COMMANDS = {"begin": cmd_begin, "arm": cmd_arm, "event": cmd_event, "snapshot": cmd_snapshot, "rebaseline": cmd_rebaseline}
 
 
 def main(argv=None) -> int:

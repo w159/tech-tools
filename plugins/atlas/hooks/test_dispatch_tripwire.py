@@ -1954,3 +1954,44 @@ class ColonyGuardUnitTest(unittest.TestCase):
                 {"subagent_type": "atlas:verifier", "name": "auth-v"}
             )
         )
+
+
+class ToolkitGapOmpTest(unittest.TestCase):
+    """ATLAS_TOOLKIT_LOAD=omp is set only by the omp hook bridge. omp has no ToolSearch (its tools are xd://
+    devices), so the load-step half of the requirement cannot be met there; the named-navigation-tool half stays.
+    Unset, as in Claude Code, nothing changes."""
+
+    def setUp(self):
+        sys.path.insert(0, os.path.dirname(__file__))
+        import dispatch_tripwire
+
+        self.dt = dispatch_tripwire
+        env = {k: v for k, v in os.environ.items() if k != "ATLAS_TOOLKIT_LOAD"}
+        patcher = patch.dict(os.environ, env, clear=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    OMP_TOOLS = "use lean-ctx via its xd:// devices (xd://mcp__lean_ctx_ctx_search)"
+
+    def gap(self, prompt, agent="atlas:implementer"):
+        return self.dt._toolkit_gap({"subagent_type": agent, "prompt": prompt})
+
+    def test_claude_unset_still_requires_the_toolsearch_load_step(self):
+        self.assertEqual(self.gap(self.OMP_TOOLS), "atlas:implementer")
+        with patch.dict(os.environ, {"ATLAS_TOOLKIT_LOAD": "claude"}):
+            self.assertEqual(self.gap(self.OMP_TOOLS), "atlas:implementer")
+        self.assertIsNone(self.gap('ToolSearch("select:mcp__lean-ctx__ctx_read") and lean-ctx'))
+
+    def test_omp_mode_accepts_a_navigation_tool_without_toolsearch(self):
+        with patch.dict(os.environ, {"ATLAS_TOOLKIT_LOAD": "omp"}):
+            self.assertIsNone(self.gap(self.OMP_TOOLS))
+
+    def test_omp_mode_still_denies_a_prompt_that_names_no_navigation_tool(self):
+        with patch.dict(os.environ, {"ATLAS_TOOLKIT_LOAD": "omp"}):
+            self.assertEqual(self.gap("implement the money module, read the files you need"), "atlas:implementer")
+            self.assertEqual(self.gap("", "atlas:verifier"), "atlas:verifier")
+
+    def test_non_atlas_agents_are_exempt_in_both_modes(self):
+        self.assertIsNone(self.gap("anything", "Explore"))
+        with patch.dict(os.environ, {"ATLAS_TOOLKIT_LOAD": "omp"}):
+            self.assertIsNone(self.gap("anything", "Explore"))

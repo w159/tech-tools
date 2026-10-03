@@ -307,8 +307,9 @@ export const runHook: HookRunner = async (command, payload, timeoutMs) => {
 			input: JSON.stringify(payload),
 			timeoutMs,
 			// ATLAS_NATIVE_POLICY=off: omp/index.ts already denies/nudges native Read/Grep/Glob/Bash, so the tripwire must not
-			// repeat that text; it still runs the inline-op threshold tiers. Only dispatch_tripwire.py reads it.
-			env: { CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT, ATLAS_HARNESS: "omp", ATLAS_MANDATES: "off", ATLAS_NATIVE_POLICY: "off" },
+			// repeat that text; it still runs the inline-op threshold tiers. ATLAS_TOOLKIT_LOAD=omp: omp has no ToolSearch,
+			// so the tripwire waives only that load step of the atlas-dispatch TOOLS requirement. Only dispatch_tripwire.py reads either.
+			env: { CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT, ATLAS_HARNESS: "omp", ATLAS_MANDATES: "off", ATLAS_NATIVE_POLICY: "off", ATLAS_TOOLKIT_LOAD: "omp" },
 		});
 		return stdout;
 	} catch {

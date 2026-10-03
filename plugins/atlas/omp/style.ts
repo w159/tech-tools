@@ -23,6 +23,10 @@ export const TOOL_NAMES_PATH = nodePath.resolve(import.meta.dir, "..", "contract
 
 export const STYLE_BEGIN = "<!-- atlas-orchestrator-style:begin -->";
 export const STYLE_END = "<!-- atlas-orchestrator-style:end -->";
+/** omp-only lead guidance (atlas-specific deltas omp's own prompts do not teach). Lives in omp/, never in output-styles/, which Claude Code scans. */
+export const ADDENDUM_PATH = nodePath.resolve(import.meta.dir, "lead-addendum.md");
+export const ADDENDUM_BEGIN = "<!-- atlas-omp-lead:begin -->";
+export const ADDENDUM_END = "<!-- atlas-omp-lead:end -->";
 const PREFACE =
 	"Atlas output style (source: plugins/atlas/output-styles/atlas-orchestrator.md, Claude tool names translated to omp). It governs this main session only; subagents get their rules from the dispatch brief.";
 
@@ -163,30 +167,68 @@ export function renderOmpStyle(
 	return text;
 }
 
+/** The omp lead addendum as its own marked block; undefined when the file is missing or blank. */
+export function renderOmpAddendum(path: string = ADDENDUM_PATH): string | undefined {
+	try {
+		const body = fs.readFileSync(path, "utf8").trim();
+		return body ? `${ADDENDUM_BEGIN}\n${body}\n${ADDENDUM_END}` : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
 export interface StyleDeps {
 	env?: Record<string, string | undefined>;
 	stylePath?: string;
 	namesPath?: string;
+	addendumPath?: string;
 	/** The session's currently callable tool names; undefined (or a throw) means availability is unknown. */
 	activeTools?: () => string[] | undefined;
 }
 
+/**
+ * The blocks injected for one session. Rendered once and then re-served byte for byte: the style text depends on
+ * which tools are callable (`resolveBareTools`), so re-rendering after xd:// devices mount changes the system
+ * prompt mid-session, and the provider's prompt cache then rewrites every token after the shared prefix
+ * (measured: one gated stop cost a 55k-token cache write). `undefined` means "not rendered yet or failed", so
+ * a failed render is retried on the next turn instead of being frozen.
+ */
+export interface FrozenBlocks {
+	style?: string;
+	addendum?: string;
+}
+
 export function registerStyle(pi: Pick<ExtensionAPI, "on">, deps: StyleDeps = {}): void {
+	let frozen: FrozenBlocks = {};
+	const reset = () => {
+		frozen = {};
+	};
+	pi.on("session_start", reset);
+	pi.on("session_switch", reset);
 	pi.on("before_agent_start", (event, ctx) => {
 		try {
 			if (ctx.agent.kind !== "main") return undefined;
 			if ((deps.env ?? process.env).ATLAS_STYLE === "off") return undefined;
 			const base = Array.isArray(event.systemPrompt) ? event.systemPrompt : [];
-			if (base.some(entry => typeof entry === "string" && entry.includes(STYLE_BEGIN))) return undefined;
-			let active: string[] | undefined;
-			try {
-				active = deps.activeTools?.();
-			} catch {
-				active = undefined; // availability unknown: render with the static bareTools map
+			const has = (marker: string) => base.some(entry => typeof entry === "string" && entry.includes(marker));
+			const additions: string[] = [];
+			if (!has(STYLE_BEGIN)) {
+				if (frozen.style === undefined) {
+					let active: string[] | undefined;
+					try {
+						active = deps.activeTools?.();
+					} catch {
+						active = undefined; // availability unknown: render with the static bareTools map
+					}
+					frozen.style = renderOmpStyle(deps.stylePath, deps.namesPath, active);
+				}
+				if (frozen.style) additions.push(frozen.style);
 			}
-			const rendered = renderOmpStyle(deps.stylePath, deps.namesPath, active);
-			if (!rendered) return undefined;
-			return { systemPrompt: [...base, rendered] };
+			if (!has(ADDENDUM_BEGIN)) {
+				frozen.addendum ??= renderOmpAddendum(deps.addendumPath);
+				if (frozen.addendum) additions.push(frozen.addendum);
+			}
+			return additions.length ? { systemPrompt: [...base, ...additions] } : undefined;
 		} catch {
 			return undefined; // fail open — a missing style never strands the session
 		}
