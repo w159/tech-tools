@@ -26,7 +26,7 @@
  */
 import { statSync } from "node:fs";
 import * as nodePath from "node:path";
-import { type ToolEventInfo, claudeNamesFor, taskItems } from "./hook-bridge";
+import { type ToolEventInfo, claudeNamesForCall, taskItems } from "./hook-bridge";
 import { runCapture } from "./proc";
 
 const PLUGIN_ROOT = nodePath.resolve(import.meta.dir, "..");
@@ -81,9 +81,13 @@ const defaultRun = async (argv: string[]): Promise<void> => {
 	await runCapture(argv, { timeoutMs: CLI_TIMEOUT_MS });
 };
 
-/** Claude tool name the CLI logs for an omp tool, or undefined when it is not tracked. */
-function trackedTool(toolName: string): "Task" | "Edit" | "Write" | undefined {
-	const claude = claudeNamesFor(toolName).find(n => n === "Task" || n === "Edit" || n === "Write");
+/**
+ * Claude tool name the CLI logs for an omp call, or undefined when it is not tracked. Classified by call, not by tool
+ * name alone: an omp `write` to an `xd://mcp__…` URI is an MCP device call (claude-mem, lean-ctx, …), so it is that MCP
+ * tool and is not an inline Write, which would count toward the inline-op threshold and can read as a code write.
+ */
+function trackedTool(toolName: string, input: unknown): "Task" | "Edit" | "Write" | undefined {
+	const claude = claudeNamesForCall(toolName, input).find(n => n === "Task" || n === "Edit" || n === "Write");
 	return claude === "Task" || claude === "Edit" || claude === "Write" ? claude : undefined;
 }
 
@@ -136,7 +140,7 @@ export function createRunStateSink(deps: RunStateDeps = {}): RunStateSink & { id
 			call(["begin", { sessionId, cwd }], ["snapshot", { sessionId, cwd }]);
 		},
 		onToolAllowed(info) {
-			if (info.tripwireRan || !info.sessionId || trackedTool(info.toolName) !== "Task") return;
+			if (info.tripwireRan || !info.sessionId || trackedTool(info.toolName, info.input) !== "Task") return;
 			const items = taskItems(info.input);
 			const agent = items.map(i => (typeof i.agent === "string" ? i.agent.trim() : "")).find(Boolean);
 			const worktree = items.some(i => i.isolated === true || (typeof i.isolation === "string" && i.isolation.trim() === "worktree"));
@@ -144,7 +148,7 @@ export function createRunStateSink(deps: RunStateDeps = {}): RunStateSink & { id
 		},
 		onToolResult(info) {
 			if (info.tripwireRan || !info.sessionId) return;
-			const tool = trackedTool(info.toolName);
+			const tool = trackedTool(info.toolName, info.input);
 			if (tool === "Task") {
 				const agent = taskItems(info.input).map(i => (typeof i.agent === "string" ? i.agent.trim() : "")).find(Boolean);
 				call(["event", { sessionId: info.sessionId, cwd: info.cwd, tool, dispatch: agent }]);

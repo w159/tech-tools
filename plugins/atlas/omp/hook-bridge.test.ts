@@ -177,6 +177,29 @@ test("runHook kills a hung hook at its timeout and stays fail-open", async () =>
 	expect(out).toBe("");
 });
 
+// An atlas_mux worker is a leaf. prompt_optimizer.py arms a session as an orchestrator from prompt text alone, and a
+// worker's task prompt ("implement X, add tests") reads as engineering work, so without this the tripwire then denied
+// every edit the worker was spawned to make (seen live: money.py stayed a stub). The bridge must hand hooks the existing
+// ATLAS_ENGINE_ARM=off kill switch for a worker, and must not for a lead.
+test("runHook sets ATLAS_ENGINE_ARM=off for an atlas_mux worker and leaves a lead alone", async () => {
+	const probe = `python3 -c "import os,sys; sys.stdout.write(os.environ.get('ATLAS_ENGINE_ARM','<unset>'))"`;
+	const saved = { worker: process.env.ATLAS_WORKER_NAME, arm: process.env.ATLAS_ENGINE_ARM };
+	try {
+		delete process.env.ATLAS_ENGINE_ARM;
+		delete process.env.ATLAS_WORKER_NAME;
+		expect(await runHook(probe, { hook_event_name: "UserPromptSubmit" }, 15_000)).toBe("<unset>");
+		process.env.ATLAS_WORKER_NAME = "money";
+		expect(await runHook(probe, { hook_event_name: "UserPromptSubmit" }, 15_000)).toBe("off");
+		process.env.ATLAS_WORKER_NAME = "   "; // blank is not a worker
+		expect(await runHook(probe, { hook_event_name: "UserPromptSubmit" }, 15_000)).toBe("<unset>");
+	} finally {
+		if (saved.worker === undefined) delete process.env.ATLAS_WORKER_NAME;
+		else process.env.ATLAS_WORKER_NAME = saved.worker;
+		if (saved.arm === undefined) delete process.env.ATLAS_ENGINE_ARM;
+		else process.env.ATLAS_ENGINE_ARM = saved.arm;
+	}
+});
+
 test("every script hooks.json references is listed in the bridge contract", () => {
 	const scripts = new Set<string>();
 	const walk = (node: unknown): void => {

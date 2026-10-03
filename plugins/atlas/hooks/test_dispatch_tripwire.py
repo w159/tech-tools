@@ -1231,9 +1231,6 @@ class SubagentDenyTierSkipTest(unittest.TestCase):
         self.assertIsNone(self._decision(last.stdout))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class VerifierVerdictBracketTest(unittest.TestCase):
     """A verifier that returns prose and writes no findings.json row is the
@@ -1644,8 +1641,8 @@ class ExplorationShellDenyTest(unittest.TestCase):
             (self.root / ".mcp.json").write_text(
                 json.dumps({"mcpServers": {"lean-ctx": {"command": "lean-ctx"}}}), encoding="utf-8"
             )
-        payload = dict(hook_event_name="PreToolUse", tool_name="Bash", session_id=session,
-                       cwd=str(self.root), tool_input={"command": command})
+        payload = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": session,
+                   "cwd": str(self.root), "tool_input": {"command": command}}
         output = io.StringIO()
         with patch.object(self.dt.shutil, "which", return_value="/bin/lean-ctx" if available else None), \
                 patch.dict(os.environ, {"HOME": str(self.home)}), \
@@ -2011,3 +2008,7 @@ class ToolkitGapOmpTest(unittest.TestCase):
         self.assertIn("TOOLS:", text)  # a one-line block the lead can paste as is
         self.assertIn("atlas:implementer", text)
         self.assertTrue(text.startswith("DENY - this Task dispatch is missing the code-nav TOOLS block."))
+
+
+if __name__ == "__main__":
+    unittest.main()

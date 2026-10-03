@@ -307,6 +307,25 @@ class SpawnClaudeTests(Base):
             argv += ["--effort", effort]
         return _run(*argv, env=self.spawn_env(), cwd=self.root)
 
+    def test_claude_worker_gets_lead_db_and_gate_in_the_pane_but_its_argv_is_unchanged(self):
+        # The forwarding cause (a tmux pane inherits the tmux SERVER env) is the same for both harnesses. It changes the
+        # pane environment only: the harness argv a Claude user sees is the same one every other claude test pins.
+        self.make_agent("claude", "explorer", "---\nname: explorer\nmodel: haiku\neffort: low\n---\nbody\n")
+        lead_db = os.path.join(self.root, "lead", "atlas.db")
+        env = dict(self.spawn_env(), ATLAS_DB=lead_db, ATLAS_GATE="off")
+        rc, data, _, err = _run("spawn", "--run", "r1", "--harness", "claude", "--name", "Alpha", "--agent", "explorer",
+                                "--prompt-file", self.make_prompt("p", "go"),
+                                "--agents-dir", os.path.join(self.root, "agents"), env=env, cwd=self.root)
+        self.assertEqual(0, rc, (data, err))
+        pane = next(c for c in _tmux_log_calls(self.state) if "new-window" in c)
+        self.assertIn(f"ATLAS_DB={lead_db}", pane)
+        self.assertIn("ATLAS_GATE=off", pane)
+        _wait_exit(self.root, "Alpha")
+        base, cargv = _fake_harness_argv(self.state)
+        self.assertEqual("claude", base)
+        self.assertEqual(["-p", "--agent", "atlas:explorer", "--model", "haiku", "--effort", "low"], cargv[:7])
+        self.assertNotIn("env", cargv)  # the forwarding prefix belongs to the pane command, not the harness argv
+
     def test_claude_argv_and_tier_from_frontmatter(self):
         self.make_agent(
             "claude",
@@ -474,6 +493,93 @@ class SpawnOmpTests(Base):
         self.assertTrue(hargv[3].endswith("# Task\ncolonize the pane"))
         first = _texts(_notes(self.root, "Beta"))[0]
         self.assertEqual(["omp", *hargv], shlex.split(first))  # tier auditable from the first note
+
+    def _omp_ready(self):
+        self.make_agent("omp", "explorer", '---\nthinkingLevel: low\nmodel: ["@smol"]\n---\nexplorer body\n')
+        self.omp_config.write_text("modelRoles:\n  smol: openrouter/some-model:off\n")
+
+    def test_omp_extension_pin_via_flag_adds_no_extensions_and_the_path(self):
+        self._omp_ready()
+        ext = os.path.join(self.root, "tree", "plugins", "atlas", "omp")
+        argv = ["spawn", "--run", "r1", "--harness", "omp", "--name", "Beta", "--agent", "explorer",
+                "--prompt-file", self.make_prompt("p", "go"), "--agents-dir", os.path.join(self.root, "agents"),
+                "--omp-extension", ext]
+        rc, data, _, err = _run(*argv, env=self.spawn_env(), cwd=self.root)
+        self.assertEqual(0, rc, (data, err))
+        _wait_exit(self.root, "Beta")
+        _, hargv = _fake_harness_argv(self.state)
+        self.assertEqual(["-p", "--model=openrouter/some-model:off", "--thinking=low",
+                          "--no-extensions", f"--extension={ext}"], hargv[:5])
+        self.assertIn("You are the atlas:explorer worker.", hargv[5])  # the brief is still the last argument
+
+    def test_omp_extension_pin_from_lead_env_reaches_the_pane_as_a_flag(self):
+        # A tmux pane inherits the tmux SERVER env, so an env var set for the spawning client alone would be lost
+        # unless spawn forwards it; the worker must still be pinned.
+        self._omp_ready()
+        ext = os.path.join(self.root, "tree", "plugins", "atlas", "omp")
+        env = dict(self.spawn_env(), ATLAS_MUX_OMP_EXTENSION=ext)
+        rc, data, _, err = _run("spawn", "--run", "r1", "--harness", "omp", "--name", "Beta", "--agent", "explorer",
+                                "--prompt-file", self.make_prompt("p", "go"),
+                                "--agents-dir", os.path.join(self.root, "agents"), env=env, cwd=self.root)
+        self.assertEqual(0, rc, (data, err))
+        pane = next(c for c in _tmux_log_calls(self.state) if "new-window" in c)
+        self.assertIn("--omp-extension", pane)
+        _wait_exit(self.root, "Beta")
+        _, hargv = _fake_harness_argv(self.state)
+        self.assertIn("--no-extensions", hargv)
+        self.assertIn(f"--extension={ext}", hargv)
+
+    def test_omp_without_a_pin_keeps_the_original_argv(self):
+        self._omp_ready()
+        env = {k: v for k, v in self.spawn_env().items() if k != "ATLAS_MUX_OMP_EXTENSION"}
+        rc, data, _, err = _run("spawn", "--run", "r1", "--harness", "omp", "--name", "Beta", "--agent", "explorer",
+                                "--prompt-file", self.make_prompt("p", "go"),
+                                "--agents-dir", os.path.join(self.root, "agents"), env=env, cwd=self.root)
+        self.assertEqual(0, rc, (data, err))
+        _wait_exit(self.root, "Beta")
+        _, hargv = _fake_harness_argv(self.state)
+        self.assertNotIn("--no-extensions", hargv)
+        self.assertFalse([a for a in hargv if a.startswith("--extension")])
+        self.assertEqual(["-p", "--model=openrouter/some-model:off", "--thinking=low"], hargv[:3])
+
+    def test_claude_workers_ignore_the_omp_extension_pin(self):
+        self.make_agent("claude", "explorer", "---\nmodel: haiku\neffort: low\n---\nbody\n")
+        env = dict(self.spawn_env(), ATLAS_MUX_OMP_EXTENSION="/some/tree/omp")
+        rc, data, _, err = _run("spawn", "--run", "r1", "--harness", "claude", "--name", "Alpha",
+                                "--agent", "explorer", "--prompt-file", self.make_prompt("p", "go"),
+                                "--agents-dir", os.path.join(self.root, "agents"), env=env, cwd=self.root)
+        self.assertEqual(0, rc, (data, err))
+        _wait_exit(self.root, "Alpha")
+        _, cargv = _fake_harness_argv(self.state)
+        self.assertNotIn("--no-extensions", cargv)
+        self.assertFalse([a for a in cargv if "extension" in a])
+
+    def test_lead_db_and_gate_switch_reach_the_worker_pane(self):
+        # A tmux pane inherits the tmux SERVER env. Without forwarding, a lead that points ATLAS_DB at a project DB (or
+        # turned ATLAS_GATE off) has its workers silently write to the default DB and run with the gate on.
+        self._omp_ready()
+        lead_db = os.path.join(self.root, "lead", "atlas.db")
+        env = dict(self.spawn_env(), ATLAS_DB=lead_db, ATLAS_GATE="off", ATLAS_NOT_ALLOWLISTED="sentinel-value")
+        rc, data, _, err = _run("spawn", "--run", "r1", "--harness", "omp", "--name", "Beta", "--agent", "explorer",
+                                "--prompt-file", self.make_prompt("p", "go"),
+                                "--agents-dir", os.path.join(self.root, "agents"), env=env, cwd=self.root)
+        self.assertEqual(0, rc, (data, err))
+        pane = next(c for c in _tmux_log_calls(self.state) if "new-window" in c)
+        self.assertIn(f"ATLAS_DB={lead_db}", pane)
+        self.assertIn("ATLAS_GATE=off", pane)
+        self.assertNotIn("sentinel-value", pane)  # an allowlist, not a copy of the lead's environment
+        self.assertNotIn("ATLAS_NOT_ALLOWLISTED", pane)
+
+    def test_worker_pane_gets_no_forwarded_vars_when_the_lead_set_none(self):
+        self._omp_ready()
+        env = {k: v for k, v in self.spawn_env().items() if k not in ("ATLAS_DB", "ATLAS_GATE")}
+        rc, data, _, err = _run("spawn", "--run", "r1", "--harness", "omp", "--name", "Beta", "--agent", "explorer",
+                                "--prompt-file", self.make_prompt("p", "go"),
+                                "--agents-dir", os.path.join(self.root, "agents"), env=env, cwd=self.root)
+        self.assertEqual(0, rc, (data, err))
+        pane = next(c for c in _tmux_log_calls(self.state) if "new-window" in c)
+        self.assertNotIn("ATLAS_DB", pane)
+        self.assertNotIn("ATLAS_GATE", pane)
 
     def test_omp_unresolvable_alias_refused(self):
         self.make_agent("omp", "explorer", '---\nthinkingLevel: low\nmodel: ["@atlas-worker"]\n---\nbody\n')

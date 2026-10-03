@@ -56,6 +56,8 @@ PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_AGENT_DIRS = {"claude": PLUGIN_ROOT / "agents", "omp": PLUGIN_ROOT / "omp" / "agents"}
 NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 BOARD_REL = Path(".atlas") / ".run" / "board"
+# Lead env vars a tmux pane would otherwise lose (a pane inherits the tmux SERVER env, not the spawning client's).
+FORWARDED_ENV = ("ATLAS_DB", "ATLAS_GATE")
 # omp prints one of these per unreachable MCP server; the run itself is fine.
 NOISE_RE = re.compile(r"^Warning: MCP server .* its tools are unavailable")
 EXIT_NOTE_RE = re.compile(r"^exit (-?\d+)")
@@ -186,7 +188,8 @@ def _tier(harness: str, role: str, agents_dir: str | None, model: str | None, le
                               f"pass an explicit --model together with {flag}")
 
 
-def harness_argv(harness: str, role: str, prompt: str, model, level, body: str, permission_mode: str) -> list:
+def harness_argv(harness: str, role: str, prompt: str, model, level, body: str, permission_mode: str,
+                 omp_extension: str | None = None) -> list:
     if harness == "claude":
         argv = ["claude", "-p", "--agent", f"atlas:{role}"]
         if model:
@@ -199,6 +202,10 @@ def harness_argv(harness: str, role: str, prompt: str, model, level, body: str, 
         argv.append(f"--model={model}")
     if level:
         argv.append(f"--thinking={level}")
+    if omp_extension:
+        # Pin the worker to one atlas tree. Without this a worker loads whichever atlas omp has installed, which
+        # can be an older release than the lead's. --no-extensions keeps discovery from loading a second copy.
+        argv += ["--no-extensions", f"--extension={omp_extension}"]
     brief = f"You are the atlas:{role} worker.\n\n{body.strip()}\n\n# Task\n{prompt}" if body.strip() else prompt
     return argv + [brief]
 
@@ -264,7 +271,14 @@ def cmd_spawn(args) -> int:
     override = args.command_override or os.environ.get("ATLAS_MUX_WORKER_CMD")
     if override:
         worker += ["--command-override", override]
-    pane = "exec " + shlex.join(worker)
+    # Same reason: the omp extension pin set in the lead's env would be lost, so it travels as a flag too.
+    extension = args.omp_extension or os.environ.get("ATLAS_MUX_OMP_EXTENSION")
+    if extension and args.harness == "omp":
+        worker += ["--omp-extension", os.path.abspath(extension)]
+    # Lead env a pane would silently lose, forwarded by name: ATLAS_DB (workers would write a different database) and
+    # ATLAS_GATE (a gate the lead switched off would come back on). An allowlist, never a copy of the lead's environment.
+    forwarded = [f"{k}={os.environ[k]}" for k in FORWARDED_ENV if os.environ.get(k)]
+    pane = "exec " + (shlex.join(["env", *forwarded]) + " " if forwarded else "") + shlex.join(worker)
     res = _tmux("new-window", "-d", "-t", session, "-n", args.name, pane)
     if res.returncode != 0:
         return _emit({"ok": False, "error": f"tmux new-window failed: {res.stderr.strip()}"}, 1)
@@ -293,7 +307,8 @@ def cmd_run_worker(args) -> int:
                                                args.effort or args.thinking)
         if tier_error:
             return _emit({"ok": False, "error": tier_error}, 2)
-        argv = harness_argv(args.harness, args.agent, prompt, model, level, body, args.permission_mode)
+        argv = harness_argv(args.harness, args.agent, prompt, model, level, body, args.permission_mode,
+                            args.omp_extension)
     env = dict(os.environ, ATLAS_PROJECT_ROOT=root, ATLAS_WORKER_NAME=args.name)
 
     def post(text: str) -> None:
@@ -370,6 +385,8 @@ def _parser() -> argparse.ArgumentParser:
         sp.add_argument("--agents-dir", help="dir holding claude/ and omp/ agent definitions (tests)")
         sp.add_argument("--permission-mode", default="acceptEdits", help="claude --permission-mode (default acceptEdits)")
         sp.add_argument("--command-override", help="test-only: shell command replacing the harness")
+        sp.add_argument("--omp-extension", help="omp only: pin the worker to this atlas extension dir/file with "
+                        "--no-extensions --extension=<path> (default env ATLAS_MUX_OMP_EXTENSION; unset = whichever atlas omp has installed)")
         sp.add_argument("--root", required=internal, help="project root (default ATLAS_PROJECT_ROOT or cwd)")
 
     worker_opts(sub.add_parser("spawn", help="start one worker window"))

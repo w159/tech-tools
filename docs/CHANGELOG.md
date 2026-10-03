@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-10-03 -- omp colony dispatch no longer self-denies; prompt prefix is stable; tool state stops tripping the delegation gate
+
+Marketplace `4.5.1`; atlas `8.7.1`.
+
+- Fixed five false denies that sent the omp lead off the atlas roles on a fixed
+  three-module task (model-override expanded-pattern compare, `xd://` writes counted as
+  inline edits, `ToolSearch` demanded for the TOOLS block, batch `context` dropped by the
+  tripwire, tool-state dirs counted as lead-written code). Per-run counts 3-4, 1-5, 2-3,
+  2-3 and one false gate block, all 0 after. Details in `plugins/atlas/CHANGELOG.md`.
+- The omp output style, a new lead addendum and the recall line render once per session
+  and stay frozen, removing one 54,956-token cache rewrite observed in a transcript.
+- Claude Code behavior is unchanged: its output style, agents, skills, commands and
+  hooks.json are byte-identical; `dispatch_tripwire.py` gained two branches that only
+  run when the omp bridge sets `ATLAS_TOOLKIT_LOAD=omp`.
+- Fixed the tmux colony (`atlas_mux`) for omp: a worker is a standalone `omp -p` that omp
+  reports as a main session, so it was armed as an orchestrator from its own task prompt
+  and every edit it was spawned to make was denied (one baseline worker left its module
+  a stub). Workers now carry the leaf marker `ATLAS_WORKER_NAME` through the bridge
+  (`ATLAS_ENGINE_ARM=off`, no Python hook changed) and the delegation check. `atlas_mux`
+  can pin workers to one atlas tree (`--omp-extension` / `ATLAS_MUX_OMP_EXTENSION`;
+  unpinned they load whichever atlas omp has installed) and forwards the lead's
+  `ATLAS_DB` and `ATLAS_GATE` into the pane.
+- Measured cost and time deltas (-26%, -22% median) are **not statistically
+  significant** at n=2 per side; the mechanism counts are the evidence.
+
 ## 2026-10-02 -- atlas runs its definition-of-done gate, ingest, chronicle and tripwire rules in omp
 
 Marketplace `4.5.0`; atlas `8.7.0`.

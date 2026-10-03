@@ -1,5 +1,103 @@
 # Changelog
 
+## [8.7.1] - 2026-10-03
+
+### Fixed
+- **The model-override deny blocked every colony dispatch in omp.** omp hands
+  `before_subagent_spawn` the EXPANDED model patterns, and the hook compared them with
+  the unexpanded pinned list. It now allows a spawn when each pattern is a pinned alias
+  or a selector explained by a pinned `modelRole`. Measured on a fixed three-module
+  task: 3-4 false denies per run, 0 after; without the fix the lead dropped `agent` and
+  the work ran on the generic agent instead of the atlas role.
+- **A `write` to an `xd://` tool device was counted as an inline edit of target code**
+  (including the claude-mem recall atlas's own gate requires): 1-5 false denies per run,
+  0 after. The hook bridge and `run-state.ts` now classify the call by destination, so an
+  `xd://mcp__<server>_<tool>` write is that MCP tool, never a `Write`.
+- **The code-nav TOOLS deny asked omp for a `ToolSearch` it does not have** (2-3 denied
+  dispatches per run, 0 after). With `ATLAS_TOOLKIT_LOAD=omp`, set only by the omp bridge,
+  the deny gives a paste-ready one-line `TOOLS:` block instead. Unset, the Claude text is
+  byte-identical to 8.7.0.
+- **The dispatch tripwire discarded the batch `context` omp gives each child**, so a spec
+  whose goal lived in the shared context was denied. The bridge now folds it into the
+  checked prompt (2-3 denied dispatches per run, 0 after).
+- **Tool state files counted as lead-written code in the delegation gate (condition m).**
+  `.serena/`, `.lean-ctx/`, `.context-mode/`, `.fallow/`, `.supermemory/`,
+  `.taskmaster/`, `.scratch/` and `.agents/` are listed under `ompToolStateDirs` in
+  `contracts/native-tools.json` (omp only; Claude's list is unchanged). A new
+  `omp_runstate.py rebaseline` absorbs them into the dirty snapshot, and `stop-bridge.ts`
+  awaits it (3 s budget) before the gate runs. No condition (m) fired in any later run.
+- **The system prompt was re-rendered mid-session, rewriting the provider cache.** One
+  turn re-wrote 54,956 cached tokens (about $0.46). The output style, the new lead
+  addendum and the recall line are now rendered once per session and frozen until
+  `session_start` or a session switch; a failed render is not frozen.
+- `test_atlas_mux.py` cleanup raced a detached fake-tmux worker (2 of 12 failures alone,
+  1 of 3 under load; 0 of 30 and 0 of 4 after retrying `rmtree`).
+- **A tmux colony worker was told to delegate.** `atlas_mux` workers are standalone
+  `omp -p` processes, which omp reports as main sessions, so the in-extension delegation
+  check told a leaf implementer that had made 10 edits to dispatch a subagent (an extra
+  stop-continuation turn per worker, seen in all three workers of a live run). The check
+  now skips a session whose env carries `ATLAS_WORKER_NAME`, which `atlas_mux` already
+  pinned and nothing read. A lead (no marker) still blocks; both cases are tested.
+- **A tmux colony worker could not edit the code it was spawned to write.**
+  `prompt_optimizer.py` arms a session as an orchestrator from its first prompt alone, and
+  a worker's task prompt ("implement `money.py`, add tests") reads as engineering work, so
+  `dispatch_tripwire.py` then denied every edit with "atlas orchestrators never edit target
+  code inline". In the baseline tree a worker gave up with `money.py` still a stub, and the
+  run scored 10 of 26 on the hidden grader. The omp hook bridge now hands every bridged hook
+  the existing `ATLAS_ENGINE_ARM=off` kill switch when `ATLAS_WORKER_NAME` is set
+  (`hookEnv` in `omp/hook-bridge.ts`); a lead is armed exactly as before. No Python hook
+  changed. Checked with the real `prompt_optimizer.py` on the benchmark worker prompt: lead
+  armed (`orchestrating=1`, nudge emitted), worker not armed (no run row, no nudge).
+- **A tmux colony worker lost the lead's `ATLAS_DB` and `ATLAS_GATE`.** A tmux pane
+  inherits the tmux server's environment, not the spawning client's, so a lead that pointed
+  `ATLAS_DB` at a project database had its workers write to the default one, and a gate the
+  lead switched off came back on. `atlas_mux spawn` now forwards exactly those two variables
+  by name (`FORWARDED_ENV`; an allowlist, never a copy of the environment). A value with
+  spaces, quotes, `$` and `;` round-trips byte for byte through a real tmux pane.
+
+### Added
+- **`omp/lead-addendum.md`**, a short omp-only block after the output style naming the
+  five dispatch-spec labels (`GOAL:`, `OWNS:`, `READS:`, `DONE:`, `AVOID:`) the tripwire
+  checks, so the lead writes a conforming spec first time. Claude's output style is not
+  touched.
+- `contracts/mcp-servers.json` (connector watch and underscored-server lists) and
+  `omp_transcript.TOOL_MAP` derived from `contracts/tool-names.json`, each with parity
+  tests against the TypeScript side.
+- **`atlas_mux` can pin omp workers to one atlas tree** (`--omp-extension`, or
+  `ATLAS_MUX_OMP_EXTENSION`). Unpinned, a worker loads whichever atlas omp has installed:
+  in a live run all three workers loaded the installed 8.6.0, not the lead's tree. The pin
+  adds `--no-extensions --extension=<path>` to the omp worker argv only, travels to the
+  pane as a flag (a tmux pane inherits the tmux server env, not the lead's), and is off by
+  default so existing behavior and the Claude worker argv are unchanged.
+
+### Verified
+- Claude Code is unchanged: `output-styles/`, `agents/`, `skills/`, `commands/` and
+  `hooks/hooks.json` are byte-identical to 8.7.0; the manifests differ only in version
+  strings. `dispatch_tripwire.py` has two env-gated branches (`ATLAS_TOOLKIT_LOAD=omp`);
+  with it unset, the 8.7.0 and 8.7.1 hooks produced byte-identical stdout and exit code
+  on 7 payloads covering every deny tier (run, not only diffed).
+- Suites: hooks 929, scripts 926, omp 245, all passing. Each new behavior has a test that
+  failed before its fix; the `atlas_mux` pin and forwarding tests also fail when the
+  implementation is mutated.
+- **tmux colony (`atlas_mux`), the measured result.** Same fixture, same hidden 26-case
+  grader, same launcher; workers pinned to the tree under test with `--omp-extension`,
+  runs alternated base, current, current, base so prompt-cache warm-up favours neither:
+  8.7.0 tree scored 10/26 and 1/26, this tree scored 26/26 and 26/26. In both 8.7.0 runs
+  the workers hit the "orchestrators never edit target code inline" deny 11 and 12
+  times; this tree, 0. Cost per run $5.38 and $3.67 against $2.32 and $2.36, but the
+  8.7.0 runs were failing and retrying, so that is not a like-for-like efficiency number.
+  This is n=2 per side with a categorical difference in outcome; it shows the colony now
+  works, not a precise speed-up.
+- In-process colony (`omp -p` lead dispatching `task` workers), 2 runs per side, isolated
+  with `--no-extensions`: median cost $2.56 to $1.90 (-26%), wall 259 s to 203 s (-22%).
+  **Not statistically significant**: ranges overlap, permutation p=1.0. The mechanism
+  counts above are the evidence; these deltas are suggestive only.
+- Not measured: the lead addendum in a live run (the in-process runs predate it), and
+  `atlas_mux` with Claude workers (`--harness claude`). The Claude worker argv and the
+  pane command are unchanged when `ATLAS_DB` and `ATLAS_GATE` are unset; when the lead
+  sets them, Claude workers now receive them too, because the lost-environment cause is
+  the same for both harnesses. That path is covered by the fake-tmux tests, not run live.
+
 ## [8.7.0] - 2026-10-02
 
 ### Added

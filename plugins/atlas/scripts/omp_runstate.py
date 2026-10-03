@@ -142,9 +142,9 @@ def cmd_rebaseline(args) -> dict:
     Every other path is left exactly as it is, so a real code edit still counts. The root is
     resolved the way session_boot.write_dirty_snapshot resolves it (nearest docs/ ancestor of
     the cwd), because that is where the snapshot lives. No snapshot, no git tree, or no dirs: no-op."""
-    import session_boot
     from pathlib import Path
 
+    import session_boot
     from docs_drift import find_root
 
     dirs = _tool_state_dirs()
