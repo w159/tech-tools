@@ -73,25 +73,30 @@
 ### Verified
 - Claude Code is unchanged: `output-styles/`, `agents/`, `skills/`, `commands/` and
   `hooks/hooks.json` are byte-identical to 8.7.0; the manifests differ only in version
-  strings. `dispatch_tripwire.py` has two env-gated branches (`ATLAS_TOOLKIT_LOAD=omp`);
-  with it unset, the 8.7.0 and 8.7.1 hooks produced byte-identical stdout and exit code
-  on 7 payloads covering every deny tier (run, not only diffed).
-- Suites: hooks 929, scripts 926, omp 245, all passing. Each new behavior has a test that
-  failed before its fix; the `atlas_mux` pin and forwarding tests also fail when the
-  implementation is mutated.
+  strings; no non-test Python hook changed in the final commit. `dispatch_tripwire.py`
+  has two env-gated branches (`ATLAS_TOOLKIT_LOAD=omp`), added earlier in the 8.7.1 work;
+  with it unset, the 8.7.0 and 8.7.1 hooks produced identical stdout and exit code on 7
+  payloads covering every deny tier (run once by the author). The Claude deny wording is
+  additionally pinned byte for byte by a checked-in golden test
+  (`ToolkitGapOmpTest.test_claude_deny_text_is_byte_identical_to_the_released_wording`,
+  captured by running the released hook); changing one word of it fails the test.
+- Suites: hooks 930, scripts 927, omp 245, all passing. An independent verifier confirmed
+  that the new omp and `atlas_mux` tests fail on the previous commit and pass on this one.
 - **tmux colony (`atlas_mux`), the measured result.** Same fixture, same hidden 26-case
   grader, same launcher; workers pinned to the tree under test with `--omp-extension`,
   runs alternated base, current, current, base so prompt-cache warm-up favours neither:
-  8.7.0 tree scored 10/26 and 1/26, this tree scored 26/26 and 26/26. In both 8.7.0 runs
-  the workers hit the "orchestrators never edit target code inline" deny 11 and 12
-  times; this tree, 0. Cost per run $5.38 and $3.67 against $2.32 and $2.36, but the
-  8.7.0 runs were failing and retrying, so that is not a like-for-like efficiency number.
-  This is n=2 per side with a categorical difference in outcome; it shows the colony now
-  works, not a precise speed-up.
+  the 8.7.0 tree scored 10/26 and 1/26, this tree 26/26 and 26/26. The 8.7.0 workers hit
+  the "orchestrators never edit target code inline" deny 11 to 12 times per run (the two
+  counting methods differ by one); this tree, 0. Cost per run $5.38 and $3.67 against
+  $2.32 and $2.36, but the 8.7.0 runs were failing and retrying, so that is not a
+  like-for-like efficiency number. This is n=2 per side with a categorical difference in
+  outcome; it shows the colony now works, not a precise speed-up. The harness and results
+  are local (`.scratch/`, gitignored), not checked in.
 - In-process colony (`omp -p` lead dispatching `task` workers), 2 runs per side, isolated
   with `--no-extensions`: median cost $2.56 to $1.90 (-26%), wall 259 s to 203 s (-22%).
-  **Not statistically significant**: ranges overlap, permutation p=1.0. The mechanism
-  counts above are the evidence; these deltas are suggestive only.
+  **Not statistically significant**: ranges overlap, permutation p=1.0. The per-defect
+  counts under Fixed (false denies per run, before and after) come from the same local
+  transcripts. The 54,956-token cache rewrite is one observed turn, not a rate.
 - Not measured: the lead addendum in a live run (the in-process runs predate it), and
   `atlas_mux` with Claude workers (`--harness claude`). The Claude worker argv and the
   pane command are unchanged when `ATLAS_DB` and `ATLAS_GATE` are unset; when the lead

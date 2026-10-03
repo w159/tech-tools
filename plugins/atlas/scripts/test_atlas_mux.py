@@ -105,7 +105,7 @@ def _tmux_log_calls(state):
     log = pathlib.Path(state) / "log"
     if not log.exists():
         return []
-    with open(log, "r", encoding="utf-8") as fh:
+    with open(log, encoding="utf-8") as fh:
         return [line.rstrip("\n") for line in fh if line.startswith("tmux ")]
 
 
@@ -122,7 +122,7 @@ def _read_board(path):
     out = []
     if not os.path.exists(path):
         return out
-    with open(path, "r", encoding="utf-8") as fh:
+    with open(path, encoding="utf-8") as fh:
         for line in fh:
             line = line.strip()
             if not line:
@@ -143,6 +143,8 @@ def _atlas_todo():
         import importlib.util
 
         spec = importlib.util.spec_from_file_location("atlas_todo_for_mux_tests", str(SCRIPT.parent / "atlas_todo.py"))
+        if spec is None or spec.loader is None:
+            raise AssertionError(f"cannot load {SCRIPT.parent / 'atlas_todo.py'} as a module")
         _TODO_MOD = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(_TODO_MOD)
     return _TODO_MOD
@@ -244,7 +246,7 @@ class Base(unittest.TestCase):
 
 class SpawnGateTests(Base):
     def test_spawn_requires_mux_opt_in(self):
-        with open(self.make_prompt("p", "hello"), "r", encoding="utf-8"):
+        with open(self.make_prompt("p", "hello"), encoding="utf-8"):
             pass
         rc, data, _, _ = _run(
             "spawn",
@@ -368,7 +370,7 @@ class SpawnClaudeTests(Base):
         rc, data, _, err = self.spawn()
         self.assertEqual(0, rc, (data, err))
         _wait_exit(self.root, "Alpha")
-        with open(os.path.join(self.state, "log"), "r", encoding="utf-8") as fh:
+        with open(os.path.join(self.state, "log"), encoding="utf-8") as fh:
             env_line = next(
                 (line for line in fh if line.startswith("env:")), ""
             )
