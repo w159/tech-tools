@@ -88,6 +88,16 @@ test("the addendum is small and restates nothing omp's own task and wait prompts
 	for (const taught of ["auto-deliver", "Never poll", "outputSchema", "local://"]) expect(text).not.toContain(taught);
 });
 
+test("the addendum names every dispatch-spec label dispatch_tripwire requires, so the lead writes them before the deny teaches it", () => {
+	const text = readFileSync(ADDENDUM_PATH, "utf8");
+	const tripwire = readFileSync(join(import.meta.dir, "..", "hooks", "dispatch_tripwire.py"), "utf8");
+	const block = /REQUIRED_SPEC_BLOCKS = \(([\s\S]*?)\n\)/.exec(tripwire)?.[1] ?? "";
+	const labels = [...block.matchAll(/\("([A-Z ]+:)"/g)].map(m => m[1]); // first variant of each required block
+	expect(labels).toEqual(["GOAL:", "DELIVERABLE:", "SUCCESS CRITERIA:", "OUT OF SCOPE:", "STOP CONDITIONS:"]);
+	for (const label of labels) expect(text).toContain(label);
+	expect(text.length).toBeLessThan(900);
+});
+
 test("an unreadable addendum degrades to the style block alone; a half-present pair still adds only what is missing", () => {
 	expect(renderOmpAddendum(join(dir, "absent.md"))).toBeUndefined();
 	const blank = join(dir, "blank.md");
