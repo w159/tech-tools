@@ -1493,6 +1493,25 @@ class NativeToolPolicyTest(unittest.TestCase):
         with patch.object(self.dt, "NATIVE_TOOLS_PATH", str(self.root / "absent.json")):
             self.assertEqual(self.call("Grep"), (False, ""))
 
+    def test_native_policy_env_unset_or_on_still_denies_native_grep(self):
+        # Claude Code never sets ATLAS_NATIVE_POLICY: the deny must be unchanged.
+        self._mcp_json()
+        with patch.dict(os.environ):
+            os.environ.pop("ATLAS_NATIVE_POLICY", None)
+            self.assertEqual(self._deny_output("Grep")["permissionDecision"], "deny")
+        with patch.dict(os.environ, {"ATLAS_NATIVE_POLICY": "on"}):
+            self.assertEqual(self._deny_output("Grep")["permissionDecision"], "deny")
+
+    def test_native_policy_off_skips_only_the_native_text(self):
+        # The omp bridge sets ATLAS_NATIVE_POLICY=off because omp/index.ts already
+        # produces the native-tool text: no deny, no nudge, and the caller falls
+        # through to the inline-op tiers (handled=False).
+        self._mcp_json()
+        for value in ("off", "OFF"):
+            with patch.dict(os.environ, {"ATLAS_NATIVE_POLICY": value}):
+                self.assertEqual(self.call("Grep"), (False, ""))
+                self.assertEqual(self.call("Read"), (False, ""))
+
     def test_native_search_denied_when_mcp_configured_even_for_subagents(self):
         self._mcp_json()
         for tool, replacement in (("Grep", "ctx_search"), ("Glob", "ctx_glob")):
