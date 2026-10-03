@@ -78,15 +78,26 @@ test("task results log the dispatch; edit and write results log the resolved pat
 	s.onToolResult(info({ input: { agent: "implementer", task: "x" } }));
 	s.onToolResult(info({ toolName: "edit", input: { path: "src/a.ts" } }));
 	s.onToolResult(info({ toolName: "write", input: { paths: ["src/b.ts"] } }));
-	s.onToolResult(info({ toolName: "write", input: { path: "xd://mcp__x_y" } })); // an internal device is not a file
 	s.onToolResult(info({ toolName: "read", input: { path: "a.ts" } })); // not tracked
 	await flush();
 	expect(calls.map(c => c.slice(2).join(" "))).toEqual([
 		"event --session-id s-1 --cwd /p --tool Task --dispatch implementer",
 		"event --session-id s-1 --cwd /p --tool Edit --path /p/src/a.ts",
 		"event --session-id s-1 --cwd /p --tool Write --path /p/src/b.ts",
-		"event --session-id s-1 --cwd /p --tool Write",
 	]);
+});
+
+// An omp `write` to an `xd://mcp__...` URI is an MCP device call, not a file edit. Logged as a pathless Write event it
+// counted toward the inline-op threshold and could register as a main-thread code write for condition (m).
+test("an xd:// device write is an MCP call: it is neither armed nor logged as an inline Write", async () => {
+	const { s, calls, flush } = sink();
+	for (const path of ["xd://mcp__claude_mem_mcp_search_search", "xd://mcp__lean_ctx_ctx_search", "xd://mcp__atlas_falcon_falcon_status"]) {
+		s.onToolAllowed(info({ toolName: "write", input: { path, content: "{}" } }));
+		s.onToolResult(info({ toolName: "write", input: { path, content: "{}" } }));
+	}
+	s.onToolResult(info({ toolName: "write", input: { path: "local://notes.md", content: "x" } })); // not an MCP device: still a Write
+	await flush();
+	expect(calls.map(c => c.slice(2).join(" "))).toEqual(["event --session-id s-1 --cwd /p --tool Write"]);
 });
 
 test("nothing is written when the bridged dispatch_tripwire already ran (no double-counting)", async () => {

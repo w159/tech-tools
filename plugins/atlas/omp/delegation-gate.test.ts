@@ -39,7 +39,7 @@ afterEach(() => {
 function harness() {
 	const handlers: Record<string, Handler> = {};
 	const api = { on: (name: string, h: Handler) => { handlers[name] = h; } };
-	register(api as unknown as Pick<ExtensionAPI, "on">, { activeTools: () => ["read", "write", "edit", "bash", "task"], spawnBoardMirror: () => {} });
+	register(api as unknown as Pick<ExtensionAPI, "on">, { activeTools: () => ["read", "write", "edit", "bash", "task"], spawnBoardMirror: () => { } });
 	const ctx = { cwd: repo, agent: { kind: "main" } };
 	handlers.session_start({}, ctx);
 	return { handlers, ctx };
@@ -64,4 +64,25 @@ test("a shell-written change plus a task dispatch is allowed; docs-only shell wr
 	b.handlers.tool_call({ toolName: "bash", input: { command: "true" } }, b.ctx);
 	writeFileSync(join(repo, "docs", "CHANGELOG.md"), "# c\n- fixed\n");
 	expect(b.handlers.session_stop({}, b.ctx)).toBeUndefined();
+});
+
+// An atlas_mux worker is a standalone `omp -p` that omp reports as a main session, so ctx.agent.kind never says "sub".
+// Its lead already owns delegation; telling a leaf implementer to dispatch a subagent only costs an extra turn.
+// atlas_mux pins ATLAS_WORKER_NAME in the worker env, and that is the leaf marker.
+test("a mux worker (ATLAS_WORKER_NAME set) is never told to delegate; the same edit still blocks a lead", () => {
+	const old = process.env.ATLAS_WORKER_NAME;
+	try {
+		delete process.env.ATLAS_WORKER_NAME;
+		const lead = harness();
+		lead.handlers.tool_call({ toolName: "edit", input: { path: "src/calc.py" } }, lead.ctx);
+		expect((lead.handlers.session_stop({}, lead.ctx) as { decision?: string } | undefined)?.decision).toBe("block");
+
+		process.env.ATLAS_WORKER_NAME = "money";
+		const worker = harness();
+		worker.handlers.tool_call({ toolName: "edit", input: { path: "src/calc.py" } }, worker.ctx);
+		expect(worker.handlers.session_stop({}, worker.ctx)).toBeUndefined();
+	} finally {
+		if (old === undefined) delete process.env.ATLAS_WORKER_NAME;
+		else process.env.ATLAS_WORKER_NAME = old;
+	}
 });

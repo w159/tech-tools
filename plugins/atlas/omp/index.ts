@@ -507,8 +507,10 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 		try {
 			if (stopBlocked || ctx.agent.kind === "sub" || !docsRoot(ctx.cwd)) return undefined;
 			if (process.env.ATLAS_GATE === "off") return undefined;
-			// session_stop never fires for task/subagent sessions, so reaching this
-			// handler already implies the main thread.
+			// A standalone `omp -p` worker launched by atlas_mux is reported as a main session (kind is never "sub"), but its
+			// lead owns delegation. atlas_mux pins ATLAS_WORKER_NAME in the worker env, and nothing else sets it.
+			if ((process.env.ATLAS_WORKER_NAME ?? "").trim() !== "") return undefined;
+			// session_stop never fires for in-process task/subagent sessions, so past the checks above this is a lead.
 			const edits = nondocsEdits + shellTracker.stop(docsRoot(ctx.cwd)).length;
 			if (edits > 0 && taskCalls === 0) {
 				stopBlocked = true;

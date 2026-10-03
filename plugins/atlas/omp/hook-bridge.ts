@@ -369,20 +369,29 @@ export function hookTimeoutMs(configuredMs: number, env: Record<string, string |
 export type HookRunner = (command: string, payload: Record<string, unknown>, timeoutMs: number) => Promise<string>;
 
 /**
+ * Env layered over process.env for every bridged hook.
+ * ATLAS_NATIVE_POLICY=off: omp/index.ts already denies/nudges native Read/Grep/Glob/Bash, so the tripwire must not
+ * repeat that text; it still runs the inline-op threshold tiers. ATLAS_TOOLKIT_LOAD=omp: omp has no ToolSearch, so the
+ * tripwire waives only that load step of the atlas-dispatch TOOLS requirement. Only dispatch_tripwire.py reads either.
+ * ATLAS_ENGINE_ARM=off for an atlas_mux worker (ATLAS_WORKER_NAME, pinned by atlas_mux and nothing else): the worker is a
+ * standalone `omp -p` that omp reports as a main session, and prompt_optimizer.py arms a session as an orchestrator from
+ * its prompt text alone. A worker's task prompt reads as engineering work, so it was armed and the tripwire then denied
+ * every edit it was spawned to make. A lead (no marker) is armed exactly as before.
+ */
+export function hookEnv(env: Record<string, string | undefined> = process.env): Record<string, string> {
+	const base: Record<string, string> = { CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT, ATLAS_HARNESS: "omp", ATLAS_MANDATES: "off", ATLAS_NATIVE_POLICY: "off", ATLAS_TOOLKIT_LOAD: "omp" };
+	if ((env.ATLAS_WORKER_NAME ?? "").trim() !== "") base.ATLAS_ENGINE_ARM = "off";
+	return base;
+}
+
+/**
  * Real runner: /bin/sh -c <command>, payload on stdin, stdout captured; any
  * failure → "". Transport (temp files, own process group, timeout kill) lives
  * in ./proc.
  */
 export const runHook: HookRunner = async (command, payload, timeoutMs) => {
 	try {
-		const { stdout } = await runCapture(["/bin/sh", "-c", command], {
-			input: JSON.stringify(payload),
-			timeoutMs,
-			// ATLAS_NATIVE_POLICY=off: omp/index.ts already denies/nudges native Read/Grep/Glob/Bash, so the tripwire must not
-			// repeat that text; it still runs the inline-op threshold tiers. ATLAS_TOOLKIT_LOAD=omp: omp has no ToolSearch,
-			// so the tripwire waives only that load step of the atlas-dispatch TOOLS requirement. Only dispatch_tripwire.py reads either.
-			env: { CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT, ATLAS_HARNESS: "omp", ATLAS_MANDATES: "off", ATLAS_NATIVE_POLICY: "off", ATLAS_TOOLKIT_LOAD: "omp" },
-		});
+		const { stdout } = await runCapture(["/bin/sh", "-c", command], { input: JSON.stringify(payload), timeoutMs, env: hookEnv() });
 		return stdout;
 	} catch {
 		return "";

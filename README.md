@@ -17,18 +17,24 @@ self-improvement loop. You run `/atlas` once to onboard a project, then drive
 work through 47 plainly named skills. The agent stops guessing, starts
 verifying, and gets measurably better the more you use it in a codebase.
 
-- Plugin version `8.7.0` (`plugins/atlas/.claude-plugin/plugin.json:3`)
-- Marketplace catalog version `4.5.0` (`.claude-plugin/marketplace.json:5`)
+- Plugin version `8.7.1` (`plugins/atlas/.claude-plugin/plugin.json:3`)
+- Marketplace catalog version `4.5.1` (`.claude-plugin/marketplace.json:5`)
 - 47 skills, 12 agents, 16 hook programs (20 event bindings), 25 scripts,
   12 optional connectors, 1 output style, 1 omp extension package
 - Two more plugins ship in the same marketplace: `armada` (org deployment,
   v1.1.1) and `programmer` (a Pragmatic Programmer codebase auditor, v0.2.1)
 
-> Two version counters, not a typo. The marketplace wrapper (`4.5.0`) versions
+> Two version counters, not a typo. The marketplace wrapper (`4.5.1`) versions
 > the catalog file. The `atlas` plugin it lists versions independently at
-> `8.7.0`. Every `v8.x` reference below is the plugin version.
+> `8.7.1`. Every `v8.x` reference below is the plugin version.
 
-Latest release, 8.7.0 (2026-10-02), brings the **Stop-family hooks to omp**: the
+Latest release, 8.7.1 (2026-10-03), fixes the omp colony path: five false denies
+that sent the lead off the atlas roles on a fixed three-module task are gone
+(model-override compare, `xd://` writes counted as inline edits, a `ToolSearch`
+demand omp cannot meet, dropped batch `context`, tool-state dirs counted as
+lead-written code), and the omp output style, a new lead addendum and the recall
+line are rendered once per session so the prompt prefix stays cacheable. Claude
+Code behavior is unchanged. 8.7.0 (2026-10-02) brought the **Stop-family hooks to omp**: the
 definition-of-done gate (a)-(l), ingest, chronicle, the nudge and
 `dispatch_tripwire.py`'s dispatch-spec and production-edit denies now run in omp
 through a transcript adapter and a run-state writer, with the Claude Code path
@@ -90,7 +96,7 @@ the practical before and after once the plugin is installed.
 
 1. **Add the marketplace.** In Claude Code, run `/plugin` and add this repo's
    marketplace file, `.claude-plugin/marketplace.json` (catalog name `tech-tools`,
-   version `4.5.0`, listing three plugins: `atlas`, `armada`, `programmer`).
+   version `4.5.1`, listing three plugins: `atlas`, `armada`, `programmer`).
 2. **Install the plugin.** Install `atlas` from the marketplace. Two optional
    plugins live in the same catalog: `armada` for the 11-department org
    toolset (`plugins/armada/`), and `programmer` for a Pragmatic Programmer
@@ -555,9 +561,9 @@ are required; `atlas-setup` detects them and offers to install if missing.
 atlas/
 |- README.md                 # this file
 |- img/                      # repo imagery (hero, headers, tiles)
-|- .claude-plugin/           # marketplace.json catalog (name: tech-tools, 4.5.0)
+|- .claude-plugin/           # marketplace.json catalog (name: tech-tools, 4.5.1)
 |- plugins/
-|  |- atlas/                 # the plugin (v8.7.0)
+|  |- atlas/                 # the plugin (v8.7.1)
 |  |  |- .claude-plugin/     # plugin.json manifest + userConfig (51 keys)
 |  |  |- .mcp.json           # 12 connector server definitions
 |  |  |- package.json        # omp.extensions entry for marketplace installs

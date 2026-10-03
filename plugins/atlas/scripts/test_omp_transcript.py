@@ -600,9 +600,6 @@ class GateEndToEndTest(_TmpCase):
         self.assertTrue(completion_gate._transcript_test_commands(after, started))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class GateConditionMatrixTest(GateEndToEndTest):
     """Each Definition-of-done condition individually, on omp-derived state.
@@ -872,3 +869,7 @@ class McpServersContractTest(unittest.TestCase):
                 fh.write("{not json")
             for path in (bad, os.path.join(tmp, "missing.json")):
                 self.assertEqual(omp_transcript._load_mcp_servers(path), omp_transcript._KNOWN_MCP_SERVERS_FALLBACK)
+
+
+if __name__ == "__main__":
+    unittest.main()
