@@ -3,6 +3,7 @@
 // as Claude Task dispatches, the run-state sink contract (allowed-only, no
 // double-writes), and the tripwire/native-policy overlap guard.
 import { afterEach, beforeEach, expect, test } from "bun:test";
+import { runCaptureSync } from "./proc";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,6 +17,8 @@ import {
 	type ToolEventInfo,
 	claudeMcpName,
 	loadConnectorServers,
+	claudeNamesForCall,
+	splitMcpDevice,
 	claudeTaskInput,
 	loadBridgedHooks,
 	loadBridgedHooksFor,
@@ -407,5 +410,56 @@ test("REAL dispatch_tripwire through the bridge: an omp-shaped TOOLS block passe
 		const task = (prompt: string) => ({ tasks: [{ name: "W", agent: "implementer", task: prompt }] });
 		expect(await fire(task(OMP_TOOLS + SPEC))).toBeUndefined();
 		expect(String((await fire(task(`read the files you need\n${SPEC}`)))?.reason)).toContain("missing the code-nav TOOLS block");
+	});
+});
+
+// A `write` to an `xd://` URI is an MCP DEVICE CALL in omp, not a file edit. The bridge classified it by tool name only
+// (`Write`), so the REAL tripwire denied the claude-mem recall that atlas's own recall gate demands, and every lean-ctx
+// device call, as "never edit target code inline" (measured: the denial text named xd://mcp__claude_mem_mcp_search_search).
+test("claudeNamesForCall: a write to an xd:// device is the MCP tool, a write to a file stays Write", () => {
+	expect(claudeNamesForCall("write", { path: "xd://mcp__lean_ctx_ctx_search", content: "{}" })).toEqual(["mcp__lean_ctx__ctx_search"]);
+	expect(claudeNamesForCall("write", { path: "xd://mcp__claude_mem_mcp_search_search", content: "{}" })).toEqual(["mcp__claude_mem__mcp_search_search"]);
+	expect(claudeNamesForCall("write", { path: "xd://mcp__atlas_falcon_falcon_status", content: "{}" })).toEqual(["mcp__atlas_falcon__status"]); // doubled token: omp drops the redundant `falcon_`
+	expect(claudeNamesForCall("write", { path: "src/a.py", content: "x" })).toEqual(["Write"]);
+	expect(claudeNamesForCall("write", { path: "local://notes.md", content: "x" })).toEqual(["Write"]); // not an MCP device
+	expect(claudeNamesForCall("edit", { path: "xd://mcp__lean_ctx_ctx_read" })).toEqual(["Edit"]); // only `write` invokes devices
+	expect(claudeNamesForCall("write", undefined)).toEqual(["Write"]);
+	expect(claudeNamesForCall("write", { path: 7 })).toEqual(["Write"]);
+});
+
+test("splitMcpDevice agrees with scripts/omp_transcript.py _split_mcp_xd on every device, so live hooks and the converted transcript name a tool the same way", () => {
+	const devices = [
+		"xd://mcp__lean_ctx_ctx_search", "xd://mcp__lean_ctx_ctx_shell", "xd://mcp__claude_mem_mcp_search_search",
+		"xd://mcp__context_mode_context_mode_ctx_execute", "xd://mcp__atlas_falcon_falcon_get_host_details", "xd://mcp__azure_azure_acr",
+		"xd://mcp__serena_find_symbol", "xd://mcp__microsoft_docs_microsoft_docs_search", "xd://mcp__plaid_search_documentation",
+		"xd://mcp__unknownserver_thing", "xd://mcp__x", "xd://mcp__a_a", "xd://not_a_device", "xd://mcp__",
+	];
+	const script = "import json,sys; sys.path.insert(0, sys.argv[1]); import omp_transcript as o; print(json.dumps([o._split_mcp_xd(d) for d in json.loads(sys.argv[2])]))";
+	// proc.ts transport: piped child stdio comes back empty under `bun test` on some hosts (see omp/README).
+	const out = runCaptureSync(["python3", "-c", script, join(import.meta.dir, "..", "scripts"), JSON.stringify(devices)], { cwd: join(import.meta.dir, "..", "scripts") });
+	if (out.code !== 0) throw new Error(`python split failed (exit ${out.code})`);
+	const python: (string | null)[] = JSON.parse(out.stdout);
+	expect(devices.map(d => splitMcpDevice(d) ?? null)).toEqual(python);
+});
+
+test("REAL dispatch_tripwire through the bridge: device writes are never 'inline edits of target code'", async () => {
+	await withSandbox(async root => {
+		const runstate = join(import.meta.dir, "..", "scripts", "omp_runstate.py");
+		const sh = (...argv: string[]) => Bun.spawnSync(["python3", runstate, ...argv, "--session-id", "dev-w", "--cwd", root], { env: process.env });
+		sh("begin");
+		sh("arm", "--agent-type", "atlas:implementer");
+		const handlers: Record<string, Handler[]> = {};
+		registerHookBridge({ on: (ev: string, fn: Handler) => void (handlers[ev] ??= []).push(fn) } as unknown as ExtensionAPI);
+		const ctx: Ctx = { cwd: root, agent: { kind: "main" }, sessionManager: { getSessionId: () => "dev-w" } };
+		const fire = async (toolName: string, input: Record<string, unknown>) => {
+			for (const h of handlers.tool_call ?? []) {
+				const r = await h({ toolCallId: `c${Math.random()}`, toolName, input }, ctx);
+				if (r?.block) return r;
+			}
+			return undefined;
+		};
+		expect(await fire("write", { path: "xd://mcp__claude_mem_mcp_search_search", content: '{"query":"x"}' })).toBeUndefined();
+		expect(await fire("write", { path: "xd://mcp__lean_ctx_ctx_search", content: '{"pattern":"x"}' })).toBeUndefined();
+		expect(String((await fire("write", { path: "src/a.py", content: "x" }))?.reason)).toContain("never edit target code inline"); // a real file edit is still denied
 	});
 });

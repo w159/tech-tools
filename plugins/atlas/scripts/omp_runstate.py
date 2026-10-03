@@ -133,25 +133,31 @@ def cmd_snapshot(args) -> dict:
 
 
 def cmd_rebaseline(args) -> dict:
-    """Fold tool state written AFTER the SessionStart snapshot into that snapshot.
+    """Fold tool state written or rewritten AFTER the SessionStart snapshot into that snapshot.
 
-    MCP servers (serena, ...) write `.serena/` only once they start, which on omp is
-    after the snapshot was taken, so completion_gate's shell-dirt check (m) would count
-    those files as code the lead wrote. Only paths under `ompToolStateDirs` are merged;
-    every other path, and every path the snapshot already holds, is left exactly as is,
-    so a real code edit still counts. No snapshot, no git tree, or no dirs: no-op."""
+    MCP servers (serena, ...) write `.serena/` only once they start, which on omp is after the
+    snapshot was taken, and rewrite files such as `.serena/project.yml` every session, so
+    completion_gate's shell-dirt check (m) would count them as code the lead wrote. A path under
+    `ompToolStateDirs` that is new, or whose content differs from the snapshot, is merged in.
+    Every other path is left exactly as it is, so a real code edit still counts. The root is
+    resolved the way session_boot.write_dirty_snapshot resolves it (nearest docs/ ancestor of
+    the cwd), because that is where the snapshot lives. No snapshot, no git tree, or no dirs: no-op."""
     import session_boot
+    from pathlib import Path
+
+    from docs_drift import find_root
 
     dirs = _tool_state_dirs()
-    path = session_boot.snapshot_path(args.cwd, args.session_id)
     absorbed: list = []
     if dirs and args.session_id:
         try:
+            root = find_root(Path(args.cwd)) or Path(args.cwd)
+            path = session_boot.snapshot_path(root, args.session_id)
             with open(path, encoding="utf-8") as fh:
                 snap = json.load(fh)
             held = snap["paths"]
-            now = session_boot.dirty_map(args.cwd) or {}
-            absorbed = sorted(p for p in now if p not in held and any(seg in dirs for seg in p.split("/")))
+            now = session_boot.dirty_map(root) or {}
+            absorbed = sorted(p for p, h in now.items() if held.get(p) != h and any(seg in dirs for seg in p.split("/")))
             if absorbed:
                 held.update({p: now[p] for p in absorbed})
                 with open(path, "w", encoding="utf-8") as fh:
