@@ -2000,6 +2000,21 @@ class ToolkitGapOmpTest(unittest.TestCase):
         with patch.dict(os.environ, {"ATLAS_TOOLKIT_LOAD": "claude"}):
             self.assertEqual(self.dt._toolkit_gap_reason("Task", "atlas:implementer"), claude)
 
+    # Captured by running the released 8.7.0 hook (a7ba0e8) end to end on a no-TOOLS atlas dispatch. The substring checks
+    # above would still pass if the Claude wording drifted; this one pins every byte of what Claude Code users see.
+    CLAUDE_870_DENY = (
+        "DENY - this Task dispatch is missing the code-nav TOOLS block. Paste subagent-kit.md / tool-routing.md: one "
+        "batched ToolSearch that includes lean-ctx (ctx_compose/ctx_search/ctx_read) AND serena (activate_project, "
+        "get_symbols_overview, find_symbol, and for implementers replace_symbol_body), plus context-mode for noisy "
+        "output. The subagent must run that before Read/Grep/Bash; serena down -> lean-ctx only, never Bash grep. "
+        "Without it atlas:implementer greps the tree."
+    )
+
+    def test_claude_deny_text_is_byte_identical_to_the_released_wording(self):
+        self.assertEqual(self.dt._toolkit_gap_reason("Task", "atlas:implementer"), self.CLAUDE_870_DENY)
+        with patch.dict(os.environ, {"ATLAS_TOOLKIT_LOAD": "claude"}):
+            self.assertEqual(self.dt._toolkit_gap_reason("Task", "atlas:implementer"), self.CLAUDE_870_DENY)
+
     def test_omp_deny_text_names_what_an_omp_lead_can_actually_do(self):
         with patch.dict(os.environ, {"ATLAS_TOOLKIT_LOAD": "omp"}):
             text = self.dt._toolkit_gap_reason("Task", "atlas:implementer")
