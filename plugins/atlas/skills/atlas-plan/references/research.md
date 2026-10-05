@@ -33,7 +33,7 @@ If `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_packs.py` exists, consult it. If it does
 
 **Discover the real CLI first - run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/atlas_packs.py --help`; never guess flags.** The actual interface (verified): `atlas_packs.py [--repo PATH]`, printing `{"packs": [...]}` as JSON on stdout. Pack declarations are read from `.claude/atlas.local.md`. Per entry: `id`, `rootPath` (absolute realpath, or `None` when the declaration resolved to nothing), `warnings`, `errors`. Per-entry failures are data, never crashes - a broken declaration is loud, not fatal: surface warnings/errors once in the Planning Contract and continue; they are never planning blockers.
 
-**Rule shape** (full contract: the compound-packs reference linked from SKILL.md): a rule is a top-level `.md` in a pack root whose closed YAML frontmatter carries a non-empty `title` and a non-empty `applies_when` list. Subdirectories are storage, never rules; top-level `README.md` is description-only regardless of frontmatter.
+**Rule shape** (full contract: `${CLAUDE_PLUGIN_ROOT}/references/compound-packs.md`): a rule is a top-level `.md` in a pack root whose closed YAML frontmatter carries a non-empty `title` and a non-empty `applies_when` list. Subdirectories are storage, never rules; top-level `README.md` is description-only regardless of frontmatter.
 
 **Matching and citation:**
 

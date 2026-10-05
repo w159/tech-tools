@@ -18,7 +18,7 @@ One loop per change; never batch unrelated surfaces:
 
 Subagents cannot reach the user; every acceptance/rejection decision flows through you. Batch your questions to the user rather than interrupting per micro-change when several iterations are in flight.
 
-For empty/loading/error-state polish, hold the quality bar in the frontend-states reference (linked from SKILL.md; all four states reachable, no dead screen during latency) but change only styling and feel - the states already exist.
+For empty/loading/error-state polish, hold the quality bar in `${CLAUDE_PLUGIN_ROOT}/skills/atlas-frontend/references/frontend-states.md` (all four states reachable, no dead screen during latency) but change only styling and feel - the states already exist.
 
 ## Convergence gate (user says done)
 

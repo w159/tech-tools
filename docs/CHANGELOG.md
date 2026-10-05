@@ -11,11 +11,10 @@ Marketplace `4.5.1`; atlas `9.0.0`.
   parser against HEAD: 29074 -> 17454 (about -40%), saved on every session
   start.
 - 46 reference files over 100 lines gained a table of contents; 42 orphaned
-  reference files are now linked from their SKILL.md; nested reference
-  directives were flattened to one level deep, except in the two dispatch
-  templates a subagent reads cold (they keep a `${CLAUDE_PLUGIN_ROOT}` path);
-  all 12 agent descriptions reworded to the same third-person/"Use when"
-  shape.
+  reference files are now linked from their SKILL.md; no reference requires
+  another through a markdown link, and every `${CLAUDE_PLUGIN_ROOT}` path was
+  kept literal (141 directives in 8.7.1, 141 now); all 12 agent descriptions
+  reworded to the same third-person/"Use when" shape.
 - New `TestAnthropicSkillChecklist`/`TestAnthropicAgentChecklist` conformance
   tests (35 in the module) enforce the format going forward. An independent
   verifier found the orphan-file test passed with an orphan present; it was

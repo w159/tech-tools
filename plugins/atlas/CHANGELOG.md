@@ -20,14 +20,19 @@
   42 reference files that existed in skill directories but were never named in
   their SKILL.md are now linked with a read-when cue (atlas-audit,
   atlas-babysit-pr, atlas-loop [12 loop files], atlas-orchestrate,
-  atlas-setup). Nested reference directives were flattened to one level deep
-  from SKILL.md (Anthropic: keep references one level from SKILL.md), except
-  inside the two dispatch-prompt templates a subagent reads cold
+  atlas-setup). No reference file requires another reference file through a
+  markdown link (Anthropic: keep references one level from SKILL.md; the
+  conformance test checks `](x.md)` links). The pass first replaced some
+  `${CLAUDE_PLUGIN_ROOT}` paths with "linked from SKILL.md" prose; all of
+  them were put back. Measured across the 251 markdown files under
+  `skills/`: 141 `${CLAUDE_PLUGIN_ROOT}`/`${CLAUDE_SKILL_DIR}` directives in
+  8.7.1 and 141 now, none differing per file. Every directive keeps a
+  literal, directly readable path: a subagent reading a dispatch template has
+  no SKILL.md to look a path up in
   (`atlas-optimize/references/verifier-brief.md`,
-  `atlas-plan/references/handoff.md`): those keep a `${CLAUDE_PLUGIN_ROOT}`
-  path, because a subagent has no SKILL.md to look the path up in. The
-  flattening had first replaced them with "the dispatcher pastes the path",
-  which the independent verifier showed SKILL.md never told anyone to do.
+  `atlas-plan/references/handoff.md`), and prose for the orchestrator only
+  cost it an extra lookup. The independent verifier had shown SKILL.md never
+  told a dispatcher to paste a path.
 - All 12 agent descriptions (`agents/*.md`) reworded third person with a
   "Use when ..." clause (9 previously lacked one; docs-curator shrank 579 ->
   408 chars). `model`/`effort`/`color`/`disallowedTools` untouched.
