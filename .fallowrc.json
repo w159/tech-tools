@@ -7,6 +7,13 @@
   "entry": [
     "mcp_servers/_shared/__tests__/*.test.ts",
     "plugins/atlas/mcp/_env/load.mjs",
+    "plugins/atlas/omp/*.test.ts",
+    "plugins/atlas/omp/index.ts",
     "test-mcp-tools.mjs"
-  ]
+  ],
+  "audit": {
+    "deadCodeBaseline": "fallow-baselines/dead-code.json",
+    "healthBaseline": "fallow-baselines/health.json",
+    "dupesBaseline": "fallow-baselines/dupes.json"
+  }
 }

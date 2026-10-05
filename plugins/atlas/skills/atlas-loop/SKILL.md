@@ -1,7 +1,7 @@
 ---
 name: atlas-loop
-description: Match a recurring or iterative task to the best-fit reusable loop from a curated loop-library and instantiate it, handing interval/self-paced loops to the built-in /loop skill and running fan-out loops as a parallel adversarial-verify Workflow. Use when the user wants to run something repeatedly, poll for status, iterate until a condition is met, sweep a backlog, or stand up a recurring/scheduled workflow.
-when_to_use: the user wants to run something repeatedly, poll for status, iterate until a condition is met, sweep a backlog, or stand up a recurring/scheduled workflow
+description: "Matches a recurring or iterative task to a reusable loop from the loop library and instantiates it, handing interval loops to the built-in /loop skill and running fan-out loops as a parallel verify workflow. Use when something must run repeatedly, poll for status, iterate until a condition holds, or sweep a backlog."
+when_to_use: "run repeatedly, poll for status, keep going until, sweep a backlog, recurring task, scheduled workflow"
 allowed-tools: Read, Glob, Grep, Bash
 ---
 
@@ -63,3 +63,20 @@ If this skill is invoked with **no task** (bare invocation, or "what loops do yo
 ## First move
 
 Read `loops/INDEX.md`. If the user named a task, match and present the top candidates. If they did not, list the library grouped by category and ask for a task.
+
+## Loop files
+
+`loops/INDEX.md` indexes the library. Each loop is one file in `loops/`; read the one you matched:
+
+- [flaky-test-hunt](loops/flaky-test-hunt.md): read when a test passes and fails intermittently.
+- [incident-triage](loops/incident-triage.md): read when triaging a live incident or alert.
+- [dependency-bump-sweep](loops/dependency-bump-sweep.md): read when bumping many dependencies safely.
+- [loop-until-dry](loops/loop-until-dry.md): read when repeating a sweep until it finds nothing new.
+- [fan-out-adversarial-verify](loops/fan-out-adversarial-verify.md): read when fanning out workers and verifying each result adversarially.
+- [security-finding-verify](loops/security-finding-verify.md): read when verifying security findings for real exploitability.
+- [code-review-iterate](loops/code-review-iterate.md): read when iterating review and fix rounds on a diff.
+- [perf-profile-iterate](loops/perf-profile-iterate.md): read when profiling and optimizing against a metric.
+- [migration-pipeline](loops/migration-pipeline.md): read when running a staged migration.
+- [doc-reconcile](loops/doc-reconcile.md): read when reconciling docs against code.
+- [red-green-tdd](loops/red-green-tdd.md): read when driving a change test-first.
+- [build-fix-loop](loops/build-fix-loop.md): read when a build or typecheck fails and must be driven green.

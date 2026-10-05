@@ -1,5 +1,13 @@
 # Test and report
 
+## Contents
+
+- [Exercise the requested surfaces](#exercise-the-requested-surfaces)
+- [Human-only verification](#human-only-verification)
+- [Failure route](#failure-route)
+- [Cleanup](#cleanup)
+- [Summary (fixed fields - omit none, even when zero)](#summary-fixed-fields---omit-none-even-when-zero)
+
 This reference owns evidence collection after the app launches (or after the `test` target
 finishes). Status derives from evidence, never from intent.
 

@@ -1,7 +1,7 @@
 ---
 name: atlas-dogfood
-description: Diff-scoped autonomous browser dogfood of the current branch or PR: maps exactly which user-facing routes/flows the diff touches, derives a scenario matrix for those flows only, drives each flow live through atlas:ui-runtime-tester exactly as a real user would (including edge and invalid inputs), and on a genuine break enters a bounded repair loop (atlas:implementer fix + independent atlas:verifier + regression test + re-drive) before moving on. The middle weight between atlas-test-browser (diff-scoped smoke check, never fixes) and atlas-ux-test (whole-app multi-persona swarm, never fixes); this is the only one of the three that autonomously repairs what it breaks.
-when_to_use: you want the flows touched by this branch or PR actually working end to end, with small breakages fixed autonomously before reporting
+description: "Dogfoods the current branch or PR diff in a live browser: maps touched routes, drives each flow like a real user via atlas:ui-runtime-tester, and repairs genuine breaks in a bounded fix-verify loop. Use when changed flows must work end to end and small breakages should be fixed autonomously."
+when_to_use: "dogfood this change, drive the changed flows, exercise the diff in the browser, find and fix UI breakage"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: "[PR number, branch name, or 'current'] [--port PORT] [--fix-budget N]"
 ---

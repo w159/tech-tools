@@ -1,6 +1,6 @@
 ---
 name: completeness-critic
-description: "Pre-done completeness auditor. Hunts unverified claims, unread sources, unexercised paths, unmet requirements; returns a gap list and refutes 'done' on a load-bearing gap. Defers docs-drift to docs-auditor. Never fixes."
+description: "Pre-done completeness auditor that hunts unverified claims, unread sources, unexercised paths, and unmet requirements, and returns a gap list; refutes 'done' on a load-bearing gap. Defers docs-drift to docs-auditor. Never fixes. Use when work is about to be declared done and its completeness needs an independent check."
 model: sonnet
 effort: medium
 color: red

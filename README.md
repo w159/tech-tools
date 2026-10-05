@@ -17,7 +17,7 @@ self-improvement loop. You run `/atlas` once to onboard a project, then drive
 work through 47 plainly named skills. The agent stops guessing, starts
 verifying, and gets measurably better the more you use it in a codebase.
 
-- Plugin version `8.7.1` (`plugins/atlas/.claude-plugin/plugin.json:3`)
+- Plugin version `9.0.0` (`plugins/atlas/.claude-plugin/plugin.json:3`)
 - Marketplace catalog version `4.5.1` (`.claude-plugin/marketplace.json:5`)
 - 47 skills, 12 agents, 16 hook programs (20 event bindings), 25 scripts,
   12 optional connectors, 1 output style, 1 omp extension package
@@ -26,9 +26,22 @@ verifying, and gets measurably better the more you use it in a codebase.
 
 > Two version counters, not a typo. The marketplace wrapper (`4.5.1`) versions
 > the catalog file. The `atlas` plugin it lists versions independently at
-> `8.7.1`. Every `v8.x` reference below is the plugin version.
+> `9.0.0`. Every `vN.x` reference below is the plugin version.
 
-Latest release, 8.7.1 (2026-10-03), fixes the omp colony path: five false denies
+Latest release, 9.0.0 (2026-10-05), aligns every skill and agent with Anthropic's
+[skill authoring best practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices):
+all 47 skill descriptions are third person with a "Use when ..." trigger and at
+most 400 characters (preloaded metadata fell from 29,074 to 17,454 characters),
+46 long reference files gained a table of contents, every skill resource is linked
+from its `SKILL.md`, and the 12 agent descriptions carry a "Use when ..." trigger.
+The checklist is enforced by `scripts/test_skill_agent_conformance.py`. For omp,
+tmux colony workers now inherit 18 lead env switches instead of 2 (a lead's
+`ATLAS_MANDATES=off` no longer re-arms the recall gate), boot reads omp's own plugin
+lock instead of reporting omp-only plugins as absent, and the omp output style no
+longer carries the Claude-only `TodoWrite` gating text. No skill was renamed. These
+omp fixes are covered by `bun test` and pytest, not yet observed in a live omp
+session, and an existing omp install stays on its old version until upgraded.
+8.7.1 (2026-10-03) fixed the omp colony path: five false denies
 that sent the lead off the atlas roles on a fixed three-module task are gone
 (model-override compare, `xd://` writes counted as inline edits, a `ToolSearch`
 demand omp cannot meet, dropped batch `context`, tool-state dirs counted as
@@ -563,7 +576,7 @@ atlas/
 |- img/                      # repo imagery (hero, headers, tiles)
 |- .claude-plugin/           # marketplace.json catalog (name: tech-tools, 4.5.1)
 |- plugins/
-|  |- atlas/                 # the plugin (v8.7.1)
+|  |- atlas/                 # the plugin (v9.0.0)
 |  |  |- .claude-plugin/     # plugin.json manifest + userConfig (51 keys)
 |  |  |- .mcp.json           # 12 connector server definitions
 |  |  |- package.json        # omp.extensions entry for marketplace installs

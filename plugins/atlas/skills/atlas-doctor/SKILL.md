@@ -1,7 +1,7 @@
 ---
 name: atlas-doctor
-description: Closes atlas's self-improvement loop interactively - mine cross-session findings from atlas.db, ask the user how to handle each one (apply / skip / modify), apply what they accept, and record a measurable baseline that a later run remeasures. Also refreshes docs/lessons/ citations that have drifted from current code, and enforces measurement-first discipline on any change to atlas's own skill/hook/agent corpus. Not a report generator and not a prompt vending machine - the changes land in this run.
-when_to_use: after a batch of sessions have accumulated telemetry, when the user wants atlas to self-improve rather than just report on itself, to check on/remeasure improvements applied by a previous /atlas-doctor run, after a refactor that moved or deleted code that docs/lessons/ cites, or before accepting any claimed improvement to a skill/hook/agent file
+description: "Closes atlas's self-improvement loop: mines cross-session findings from atlas.db, asks how to handle each (apply, skip, modify), applies accepted changes, records a measurable baseline, and refreshes drifted docs/lessons/ citations. Use when telemetry has accumulated and atlas should improve itself, or before accepting a change to a skill, hook or agent."
+when_to_use: "atlas self-improve, remeasure improvements, apply accepted findings, stale lesson citations, validate a skill change, atlas.db findings"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write, AskUserQuestion
 argument-hint: (no args; run periodically or after a heavy session)
 ---

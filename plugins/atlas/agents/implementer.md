@@ -1,6 +1,6 @@
 ---
 name: implementer
-description: "Focused implementer. Makes ONE bounded, well-specified change as a minimal diff, checks docs, then runs the project's gate (lint/typecheck/test/build) and reports the result with evidence. Never expands scope."
+description: "Focused implementer that makes ONE bounded, well-specified change as a minimal diff, checks docs, then runs the project's gate (lint/typecheck/test/build) and reports the result with evidence. Never expands scope. Use when a single, clearly specified code change is ready to be made and verified."
 model: sonnet
 effort: low
 color: green

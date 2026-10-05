@@ -1,7 +1,7 @@
 ---
 name: atlas-explain
-description: Evidence-backed explanation of how or why existing behavior works, answered directly in chat. Use when the user asks "how does X work", "why does Y happen", "explain this module/call path", or a plain-language "wtf does this do" / "what the" question about a file, message, or passage. Dispatches atlas:explorer to trace the actual code path (never answers from memory), grounds every claim in file:line evidence, separates what the code does from why it was likely built that way (inference marked as such), read-only with no artifacts written — fast and cheap. This one skill intentionally covers both ce-explain's how/why investigation and the wtf utility's plain-language "what is this" explainer as a single atlas entry to avoid two near-duplicate skills in the catalog.
-when_to_use: how does X work, why does Y happen, explain this code, wtf does this do, what the
+description: "Explains how or why existing code behaves, answered in chat with file:line evidence from an atlas:explorer trace; read-only, writes no artifacts, marks inference as such. Use when asked how something works, why something happens, to explain a module or call path, or what a file or message means."
+when_to_use: "how does X work, why does Y happen, explain this code, wtf does this do, what is this, walk me through"
 allowed-tools: Read, Glob, Grep, Bash
 argument-hint: '[question, concept, file, diff ref, or work window; blank = your last message]'
 ---

@@ -1,5 +1,12 @@
 # Session lifecycle - reconcile at start, curate at end
 
+## Contents
+
+- [START - reconcile before new work](#start---reconcile-before-new-work)
+- [RESUMING ACROSS SESSIONS - a multi-wave run picks up where it stopped](#resuming-across-sessions---a-multi-wave-run-picks-up-where-it-stopped)
+- [DURING - work is tracked in ROADMAP](#during---work-is-tracked-in-roadmap)
+- [END - curate before the session is complete](#end---curate-before-the-session-is-complete)
+
 This file makes the docs/ lifecycle explicit at the two session boundaries. It does
 not redefine the docs/ layout or the "move done items" convention - those live in
 `docs-ssot.md`. Read this for *when* the reconcile and curate happen; read

@@ -1,7 +1,7 @@
 ---
 name: atlas-setup
-description: 'MANUAL skill covering the full atlas lifecycle outside of task work: onboard (scaffold the docs/ SSOT plus .atlas/ internal state, inventory skills, recommend what to run next), install (verify and wire claude-mem, context-mode, hooks, project config), connectors (guided vendor MCP connector setup across domain plugins), and repair (fix a broken atlas install: marketplace, rollbacks, hooks, assets). Run with no args for onboarding plus recommendations; run with --fix to auto-repair.'
-when_to_use: first run to bring atlas online, workspace setup, SSOT scaffolding, tooling install, vendor connector setup, what to run next, or a broken atlas install (subagents not launching, plugin acting like an older version)
+description: "Manual skill for the atlas lifecycle: onboard (scaffold docs/ and .atlas/, recommend next steps), install (wire claude-mem, context-mode, hooks), connectors (vendor MCP setup) and repair (fix a broken install). Use when first bringing atlas online, setting up a workspace, or fixing atlas; pass --fix to auto-repair."
+when_to_use: "first run, set up atlas, SSOT scaffolding, tooling install, vendor connectors, what to run next, subagents not launching, plugin acting like an older version"
 disable-model-invocation: true
 user-invocable: true
 argument-hint: "[onboard | install | connectors | repair [--fix] | task description | 'menu']"
@@ -304,3 +304,12 @@ already correct. If `docs/` did not exist before that call: continue with
 wire graphify, inventory, recommend. If it already existed: analyze and
 recommend. If anything about the install itself looks broken, switch to
 repair mode (`references/repair.md`).
+
+## Additional references
+
+- [Connector authoring](references/connector-authoring.md): how a vendor MCP connector is structured. Read when guiding connector setup alongside the vendors table.
+- [Vendors](references/vendors.md): the bundled connector table. Read when enabling or diagnosing a specific vendor connector.
+- [Checks matrix](references/checks-matrix.md): what each doctor check proves and what FAIL means. Read when interpreting doctor output.
+- [Tool patterns](references/tool-patterns.md): skill vs plugin vs MCP decision rule. Read when building the Stage 2 recommendation shortlist.
+- Scripts (run, do not read into context): `scripts/plugin-health.py` (read-only skill/agent count check against the manifest) and `scripts/test_scaffold_docs.py` (unit tests for `scaffold_docs.py`).
+- Templates in `templates/`: `docs-agents.md`, `atlas-agents.md`, `atlas-claude.md` (orientation files for `docs/` and `.atlas/`), `endpoints.md` (API reference stub), `new-tool-scaffold.md` (new capability proposal), `connector-manifest.seed.json` (connector manifest seed). The empty scaffold directories (`understand-anything`, `memory`, `evidence`, `archive`, `plans`, `audits`, `specs`, `wiki`, `decisions`, `self-improvement`, `nudge`, `architecture`, `lessons`, `graphify`) each hold a `.gitkeep` placeholder so git keeps them; read only when changing the scaffold tree.

@@ -1,5 +1,14 @@
 # Peer dispatch (optional, explicit-request only)
 
+## Contents
+
+- [1. The substitution - state this honestly, every time](#1-the-substitution---state-this-honestly-every-time)
+- [2. Activation rules](#2-activation-rules)
+- [3. Independence rules (hard, all five)](#3-independence-rules-hard-all-five)
+- [4. Dispatch template](#4-dispatch-template)
+- [5. Reconciliation and the schema's role](#5-reconciliation-and-the-schemas-role)
+- [6. What peers can never do](#6-what-peers-can-never-do)
+
 How to add independent voices to an atlas-pov run. This file is read ONLY after Phase 3
 (`atlas-verdict.md` exists). Read `verdict-protocol.md` first.
 

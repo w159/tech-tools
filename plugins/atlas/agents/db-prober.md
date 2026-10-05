@@ -1,6 +1,6 @@
 ---
 name: db-prober
-description: "Read-only database prober. Inspects SQL/Postgres schema, RLS policies, runtime-role GRANTs, indexes, constraints, and EXPLAIN plans. Read-only: no writes or migrations, only proposals. Returns findings with evidence."
+description: "Read-only database prober that inspects SQL/Postgres schema, RLS policies, runtime-role GRANTs, indexes, constraints, and EXPLAIN plans, and returns findings with evidence. Read-only: no writes or migrations, only proposals. Use when a task needs facts about database structure, privileges, or query plans."
 model: sonnet
 effort: low
 color: yellow

@@ -1,5 +1,19 @@
 # Dashboard API & multi-session UI
 
+## Contents
+
+- [Access](#access)
+- [Multi-session model](#multi-session-model)
+- [API](#api)
+- [UI surfaces](#ui-surfaces)
+- [Security](#security)
+- [Settings / Credentials (5.17.1+)](#settings--credentials-5171)
+- [Behavior page (5.19.0+)](#behavior-page-5190)
+- [Ecosystem page (5.19.0+)](#ecosystem-page-5190)
+- [Connector operations (5.19.0+)](#connector-operations-5190)
+- [Work board and Agents (5.26.0+)](#work-board-and-agents-5260)
+- [Daemon DB pinning](#daemon-db-pinning)
+
 Atlas ships a **single shared loopback dashboard** for all concurrent coding-agent terminals (same idea as claude-mem’s worker UI on `:37777` and Serena’s dashboard — but without opening a new browser tab on every session).
 
 ## Access

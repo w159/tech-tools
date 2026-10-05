@@ -1,5 +1,12 @@
 # Prompt Optimization
 
+## Contents
+
+- [1. The user's prompt - automatic, via the shipped hook](#1-the-users-prompt---automatic-via-the-shipped-hook)
+- [2. Subagent prompts - your job, every dispatch](#2-subagent-prompts---your-job-every-dispatch)
+- [3. When NOT to optimize](#3-when-not-to-optimize)
+- [4. Writing prompts for chat interfaces (user-facing rewriting)](#4-writing-prompts-for-chat-interfaces-user-facing-rewriting)
+
 A sharp prompt is the cheapest lever in the whole run. A vague one makes every downstream
 subagent guess, wander, and burn tokens. The orchestrator optimizes prompts at two levels:
 the **user's prompt coming in**, and **every subagent prompt going out**.

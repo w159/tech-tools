@@ -1,5 +1,11 @@
 # Sweep run phases (2a-2i)
 
+## Contents
+
+- [Config keys (`.atlas/sweep.yaml`)](#config-keys-atlassweepyaml)
+- [Run identity](#run-identity)
+- [Engine invocation](#engine-invocation)
+
 Required read before Phase 2 of `atlas-sweep`. `SKILL.md` carries the ordering
 invariant and the boundaries; this file carries the detail of each phase.
 The boundaries in `SKILL.md` (untrusted input, `approved: false`, never

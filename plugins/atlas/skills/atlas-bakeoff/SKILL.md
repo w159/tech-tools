@@ -1,7 +1,7 @@
 ---
 name: atlas-bakeoff
-description: 'Competing-approach bake-off for costly, hard-to-reverse technical decisions. Generates 2-3 genuinely distinct concrete approaches (always including one non-obvious option), evaluates each against explicit named criteria (migration cost, blast radius, team familiarity, reversibility), optionally dispatches cheap proof-of-concept spikes via atlas:implementer when a decisive claim is genuinely uncertain, and recommends one approach with decisive reasoning. Use when committing to one of 2-3 architectural approaches, libraries, or data-model shapes: a single hard implementation-unit decision inside atlas-plan, or a standalone pre-project technology choice. Do not use for routine reversible choices - ordinary implementation picks belong to the plan itself.'
-when_to_use: choose between competing architectural approaches, libraries, or data-model shapes before committing
+description: "Compares 2-3 concrete approaches for a costly, hard-to-reverse technical choice against named criteria, optionally runs cheap proof-of-concept spikes, and recommends one. Use when choosing an architecture, library or data-model shape; not for routine reversible picks, which belong in atlas-plan."
+when_to_use: "compare approaches, library choice, data-model decision, build vs buy, which architecture, tradeoff analysis, spike"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '<the decision to bake off>'
 ---

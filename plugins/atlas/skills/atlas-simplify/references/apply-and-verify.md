@@ -1,5 +1,16 @@
 # Apply and Verify — triage, mutation boundary, gate
 
+## Contents
+
+- [Finding acceptance (triage)](#finding-acceptance-triage)
+- [Mutation boundary](#mutation-boundary)
+- [Compatibility scaffolding (unshipped scope only)](#compatibility-scaffolding-unshipped-scope-only)
+- [Session-settled structure pins](#session-settled-structure-pins)
+- [Applying via atlas:implementer](#applying-via-atlasimplementer)
+- [The gate (blast-radius verification)](#the-gate-blast-radius-verification)
+- [Verifying via atlas:verifier](#verifying-via-atlasverifier)
+- [Report format](#report-format)
+
 The rules that turn three reviewers' findings into a behavior-preserving applied pass.
 The SKILL.md summarizes these; this file is authoritative.
 

@@ -1,5 +1,14 @@
 # Setup and build
 
+## Contents
+
+- [1. Detect the project](#1-detect-the-project)
+- [2. Discover schemes](#2-discover-schemes)
+- [3. Choose and boot the simulator](#3-choose-and-boot-the-simulator)
+- [4. Build](#4-build)
+- [5. Install, launch, start log capture](#5-install-launch-start-log-capture)
+- [Evidence layout](#evidence-layout)
+
 This reference owns the path from invocation to a launched app with log capture running.
 All commands run through `bash`. Everything below is host-portable tooling: `xcodebuild`,
 `xcrun simctl`, and plain file reads - no external AI CLI dependency.

@@ -1,7 +1,7 @@
 ---
 name: atlas-optimize
-description: Optimize a named target with a measured, single-experiment loop - capture a real baseline before any change, form one evidence-grounded bottleneck hypothesis, make ONE bounded change via atlas:implementer, re-measure with the identical method, and report the actual before/after delta even when it is zero or negative. Use when a working system's metric should move and the winning change is not already known; use atlas-debug when the job is diagnosis and atlas-refactor when the job is behavior-preserving restructuring.
-when_to_use: a working system's metric should move and the winning change is not already known
+description: "Optimizes a target with a measured single-experiment loop: capture a baseline, form one hypothesis, make one bounded change, re-measure identically, and report the real delta even if zero or negative. Use when a working system's metric should improve and the winning change is unknown; use atlas-debug for diagnosis and atlas-refactor for restructuring."
+when_to_use: "performance tuning, reduce latency, bundle size, build time, benchmark, bottleneck, make it faster"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '<target to optimize and the metric that should move>'
 ---

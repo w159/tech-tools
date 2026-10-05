@@ -1,5 +1,16 @@
 # Refactor Checklist
 
+## Contents
+
+- [1. Behavior is frozen before any edit](#1-behavior-is-frozen-before-any-edit)
+- [2. Test coverage before AND after](#2-test-coverage-before-and-after)
+- [3. Behavior-preserving rules](#3-behavior-preserving-rules)
+- [4. Naming rules](#4-naming-rules)
+- [5. Incremental, verified steps](#5-incremental-verified-steps)
+- [6. Precision edits](#6-precision-edits)
+- [7. What this checklist is not](#7-what-this-checklist-is-not)
+- [Report shape](#report-shape)
+
 The contract every atlas-refactor run obeys. Behavior is frozen. The
 refactor is safe only when every item on this list closes with
 evidence.

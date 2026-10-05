@@ -1,5 +1,18 @@
 # Subagent Kit
 
+## Contents
+
+- [The dispatch spec (use this shape, nothing extra)](#the-dispatch-spec-use-this-shape-nothing-extra)
+- [Choosing the agent + model + effort](#choosing-the-agent--model--effort)
+- [Companion agents (this skill's core squad)](#companion-agents-this-skills-core-squad)
+- [Fork subagents (`subagent_type: "fork"`) - when to inherit history instead of starting fresh](#fork-subagents-subagent_type-fork---when-to-inherit-history-instead-of-starting-fresh)
+- [Structured output (define the shape, every time)](#structured-output-define-the-shape-every-time)
+- [Parallelism & integration](#parallelism--integration)
+- [Claim before work (shared todo board)](#claim-before-work-shared-todo-board)
+- [Colony protocol (siblings)](#colony-protocol-siblings)
+- [Colony mux mode (opt-in, tmux)](#colony-mux-mode-opt-in-tmux)
+- [Anti-patterns](#anti-patterns)
+
 How to dispatch a subagent so it stays small, focused, and returns only what you need.
 
 ## The dispatch spec (use this shape, nothing extra)

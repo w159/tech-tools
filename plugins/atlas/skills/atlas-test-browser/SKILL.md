@@ -1,7 +1,7 @@
 ---
 name: atlas-test-browser
-description: 'Fast, no-fix-loop browser smoke check of the routes affected by the current branch or PR diff: maps the changed files to the routes/components they render, loads each affected route live via atlas:ui-runtime-tester, captures console errors, network failures, and render breaks, and reports Pass/Fail/Skip per route with evidence. Read-only diagnosis - it NEVER attempts fixes (that is atlas-dogfood, the same diff-scoping idea plus an autonomous repair loop) and is far lighter than the app-wide, persona-based atlas-ux-test swarm.'
-when_to_use: quick browser smoke check of routes touched by the current change
+description: "Runs a fast, read-only browser smoke check of routes affected by the current branch or PR diff, reporting Pass, Fail or Skip per route with console and network evidence. Never fixes. Use when a quick check that changed routes still render is needed."
+when_to_use: "smoke test, check changed routes, does it load, console errors, quick browser check"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: "[PR number, branch name, 'current', or --port PORT]"
 ---

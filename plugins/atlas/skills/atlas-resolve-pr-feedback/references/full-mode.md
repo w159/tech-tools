@@ -1,5 +1,17 @@
 # Full Mode
 
+## Contents
+
+- [1. Fetch Unresolved Threads](#1-fetch-unresolved-threads)
+- [2. Triage: Separate New from Pending](#2-triage-separate-new-from-pending)
+- [3. Consolidate & Decide (the legitimacy gate)](#3-consolidate--decide-the-legitimacy-gate)
+- [4. Fix (fix-list only)](#4-fix-fix-list-only)
+- [5. Verify (atlas:verifier, fresh context)](#5-verify-atlasverifier-fresh-context)
+- [6. Validate Combined State and Commit](#6-validate-combined-state-and-commit)
+- [7. Confirmation Gate (STOP AND ASK)](#7-confirmation-gate-stop-and-ask)
+- [8. Push, Reply, and Resolve](#8-push-reply-and-resolve)
+- [9. Verify and Summarize](#9-verify-and-summarize)
+
 Read this reference when Mode Detection (in SKILL.md) routes to **Full Mode** - no argument given, a PR number was provided, or a whole-PR URL was provided. Full mode processes all unresolved threads on the PR. When the argument is a PR URL, parse the host, `OWNER/REPO`, and number from it - the host feeds the `GH_HOST` prefix below, and `OWNER/REPO` targets the correct repo for a fork-to-upstream PR.
 
 The shape: **fetch once, judge centrally, dispatch subagents only for the fixes.** You, the orchestrator, hold every thread from a single fetch, so you judge validity in your own context, where you can read each file once, spot a reviewer who is wrong across several threads, and weigh the author's design intent. Subagents are dispatched only to *implement* fixes you have already approved. Do not delegate the judgment: a subagent per thread pays per-agent overhead, re-reads the same files, loses the cross-thread view, and you would pay that even for threads that turn out to be skips.

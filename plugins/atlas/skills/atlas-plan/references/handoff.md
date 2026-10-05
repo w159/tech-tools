@@ -6,7 +6,7 @@ Ported from CE `ce-plan/references/final-review.md` + `plan-handoff.md`, with CE
 
 **This dispatch is not skippable.** CE gated every plan behind `ce-doc-review mode:non-interactive <plan-path>`; atlas's equivalent pre-done gap hunter is `atlas:completeness-critic`. A plan handed off without this review is invalid - not "weaker", invalid.
 
-Dispatch (subagent-kit shape, fork per `subagent-kit.md` when `CLAUDE_CODE_FORK_SUBAGENT=1` - the critic judges gaps against everything this session established, which is the point):
+Dispatch (subagent-kit shape, fork per the subagent-kit reference linked from SKILL.md when `CLAUDE_CODE_FORK_SUBAGENT=1` - the critic judges gaps against everything this session established, which is the point):
 
 ```
 ROLE: pre-done gap critic over an implementation-ready plan

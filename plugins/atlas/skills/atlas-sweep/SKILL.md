@@ -1,7 +1,7 @@
 ---
 name: atlas-sweep
-description: 'Feedback sweep: ingests new items from configured feedback sources (GitHub issues via the GitHub connector; any other declared source type is manual-input-only until a connector exists), acknowledges them at source under standing approval, clusters and triages them, verifies claimed fixes actually merged, and folds everything open into a rolling dated triage doc at docs/features/<YYYY-MM-DD>-feedback-sweep.md with proposed next actions. Lease-based state at .atlas/.run/sweep-state.json (written only by the bundled state-engine script) prevents double-processing across repeated or concurrent runs; an ack cap circuit-breaks runaway sweeps. Never auto-closes or auto-replies to anything without explicit user confirmation, and never pushes. First run is an interactive setup interview. Use when the user asks to sweep feedback, triage new issues or user feedback, or run/check the feedback sweep.'
-when_to_use: sweep and triage new feedback items from GitHub issues into a rolling triage doc
+description: "Ingests new feedback from configured sources (GitHub issues), acknowledges, clusters and triages it, verifies claimed fixes merged, and folds results into a rolling docs/features/ triage doc. Never auto-closes, auto-replies or pushes without confirmation. Use when new issues or feedback need sweeping and triage."
+when_to_use: "triage issues, feedback sweep, new GitHub issues, backlog triage, what came in"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '[setup|reconfigure] [mode:non-interactive]'
 ---

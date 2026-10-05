@@ -1,5 +1,16 @@
 # Debug Workflow
 
+## Contents
+
+- [Stage 1: Reproduce (RED)](#stage-1-reproduce-red)
+- [Stage 2: Localize to a layer](#stage-2-localize-to-a-layer)
+- [Stage 3: Fix the cause in place](#stage-3-fix-the-cause-in-place)
+- [Stage 4: Verify (GREEN)](#stage-4-verify-green)
+- [Stage 5: Negative case](#stage-5-negative-case)
+- [Optional: Defense-in-depth pass (conditional — NOT applied by default)](#optional-defense-in-depth-pass-conditional--not-applied-by-default)
+- [What this workflow is not](#what-this-workflow-is-not)
+- [Report shape](#report-shape)
+
 The deterministic loop every atlas-debug run follows. Five stages,
 each with a gate that must close before the next opens. No stage is
 skipped because the symptom "looks obvious." Obvious symptoms hide

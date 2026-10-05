@@ -1,5 +1,14 @@
 # Hooks - make the discipline automatic
 
+## Contents
+
+- [Install (gated, idempotent)](#install-gated-idempotent)
+- [1. `optimizer` - automatic prompt optimization](#1-optimizer---automatic-prompt-optimization)
+- [2. `format` - format-on-edit](#2-format---format-on-edit)
+- [3. `advisor` - catastrophic-command warning](#3-advisor---catastrophic-command-warning)
+- [4. `completion-gate` - the Definition-of-done backstop (opt-out)](#4-completion-gate---the-definition-of-done-backstop-opt-out)
+- [Extending](#extending)
+
 Hooks turn the orchestrator's rules into things that *happen on their own* instead of things
 you have to remember. The plugin ships auto-loaded hooks via `hooks/hooks.json` on install
 (no manual step). They are stdlib-only Python, self-contained under `hooks/` (except
@@ -32,12 +41,12 @@ subagents to invoke during read-only audits.
 ## Install (gated, idempotent)
 
 ```
-python3 ${CLAUDE_SKILL_DIR}/scripts/install_hooks.py --list            # current coverage
-python3 ${CLAUDE_SKILL_DIR}/scripts/install_hooks.py                   # plan (dry-run)
-python3 ${CLAUDE_SKILL_DIR}/scripts/install_hooks.py --apply           # install the DEFAULT set (optimizer, format, advisor, completion-gate)
-python3 ${CLAUDE_SKILL_DIR}/scripts/install_hooks.py --select completion-gate --apply   # opt into the Stop gate
-python3 ${CLAUDE_SKILL_DIR}/scripts/install_hooks.py --select optimizer --apply
-python3 ${CLAUDE_SKILL_DIR}/scripts/install_hooks.py --uninstall --apply
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/install_hooks.py --list            # current coverage
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/install_hooks.py                   # plan (dry-run)
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/install_hooks.py --apply           # install the DEFAULT set (optimizer, format, advisor, completion-gate)
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/install_hooks.py --select completion-gate --apply   # opt into the Stop gate
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/install_hooks.py --select optimizer --apply
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/install_hooks.py --uninstall --apply
 ```
 
 It MERGES into the target settings file (default `~/.claude/settings.json`), never clobbering

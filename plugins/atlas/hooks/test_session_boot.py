@@ -781,6 +781,20 @@ class PluginEnabledTest(unittest.TestCase):
         with mock.patch.dict(os.environ, {"HOME": self.home}):
             self.assertFalse(self.tr.plugin_enabled("ponytail", self.proj))
 
+    def test_omp_lock_decides_under_omp_only(self):
+        # An omp-installed plugin is absent from the Claude settings; boot called it "absent - run the atlas skill".
+        os.makedirs(os.path.join(self.home, ".omp", "plugins"))
+        with open(os.path.join(self.home, ".omp", "plugins", "omp-plugins.lock.json"), "w") as fh:
+            json.dump({"plugins": {"ponytail": {"enabled": True}, "pyright-lsp": {"enabled": False}}}, fh)
+        self._write(self.home, "settings.json", {"enabledPlugins": {"pyright-lsp@x": True}})
+        with mock.patch.dict(os.environ, {"HOME": self.home}):
+            self.assertFalse(self.tr.plugin_enabled("ponytail", self.proj))  # Claude Code never reads the omp lock
+            self.assertTrue(self.tr.plugin_enabled("pyright-lsp", self.proj))
+        with mock.patch.dict(os.environ, {"HOME": self.home, "ATLAS_HARNESS": "omp"}):
+            self.assertTrue(self.tr.plugin_enabled("ponytail", self.proj))
+            self.assertFalse(self.tr.plugin_enabled("pyright-lsp", self.proj))  # omp lock disables it for omp
+            self.assertFalse(self.tr.plugin_enabled("unknown", self.proj))
+
 def _git(root, *args):
     subprocess.run(["git", *args], cwd=root, check=True, capture_output=True)
 

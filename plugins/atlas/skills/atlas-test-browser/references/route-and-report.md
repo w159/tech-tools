@@ -1,5 +1,16 @@
 # Routes, dispatch, and reporting
 
+## Contents
+
+- [Map changed files to routes](#map-changed-files-to-routes)
+- [Determine the port and verify the dev server is running (manual mode)](#determine-the-port-and-verify-the-dev-server-is-running-manual-mode)
+- [Dispatch template (per route batch)](#dispatch-template-per-route-batch)
+- [Test each affected route](#test-each-affected-route)
+- [Human verification (when required)](#human-verification-when-required)
+- [Handling failures - capture, do not fix](#handling-failures---capture-do-not-fix)
+- [Stamp the verdict](#stamp-the-verdict)
+- [Test summary](#test-summary)
+
 Read this before mapping changed files to routes (SKILL.md step 2). It carries the
 route-mapping starting points, the port and server commands, the dispatch template, the
 per-page checks, and the summary format.

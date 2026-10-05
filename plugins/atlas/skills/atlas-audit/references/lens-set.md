@@ -1,5 +1,13 @@
 # The three lenses
 
+## Contents
+
+- [Lens 1 - run health](#lens-1---run-health)
+- [Lens 2 - asset/context audit](#lens-2---assetcontext-audit)
+- [Lens 3 - session forensics](#lens-3---session-forensics)
+- [Trends (the no-arg path)](#trends-the-no-arg-path)
+- [The nudge hook](#the-nudge-hook)
+
 atlas-audit is a measurement skill with three independent lenses. Each
 lens reads a different source, answers a different question, and writes a
 different output. Read this reference when you need to pick a lens, or to

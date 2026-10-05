@@ -1,6 +1,6 @@
 ---
 name: docs-auditor
-description: "READ-ONLY drift auditor for the canonical atlas project structure (docs-ssot.md). Compares docs/ (CHANGELOG, ROADMAP, architecture, AGENTS.md), the .atlas/ structure, root entry files, and .gitignore against real code and returns a per-area verdict (current/stale/missing) with file:line evidence. Never writes."
+description: "Read-only drift auditor for the canonical atlas project structure (docs-ssot.md). Compares docs/ (CHANGELOG, ROADMAP, architecture, AGENTS.md), .atlas/, root entry files, and .gitignore against real code and returns a per-area verdict (current/stale/missing) with file:line evidence. Never writes. Use when checking whether docs and project structure still match the code."
 model: haiku
 effort: low
 color: orange

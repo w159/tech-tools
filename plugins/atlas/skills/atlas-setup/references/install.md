@@ -1,5 +1,12 @@
 # Project bootstrap and install (atlas-setup mode)
 
+## Contents
+
+- [Stages](#stages)
+- [Recommend-then-confirm](#recommend-then-confirm)
+- [No-args behavior (standard scan)](#no-args-behavior-standard-scan)
+- [Project config schema](#project-config-schema)
+
 The architect makes a project ready for atlas: the project's stack detected, the
 tooling that fits that stack recommended and activated, memory on, context
 protection on, hooks wired and confirmed active, config written, docs/ seeded. It

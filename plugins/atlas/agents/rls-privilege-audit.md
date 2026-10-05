@@ -1,6 +1,6 @@
 ---
 name: rls-privilege-audit
-description: Read-only PostgreSQL security audit of row-level security, table grants, and roles against least privilege. Use for the security half of a database audit in regulated environments.
+description: "Read-only PostgreSQL security audit of row-level security, table grants, and roles against least privilege. Use when running the security half of a database audit in regulated environments."
 disallowedTools: [Agent, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, Write, Edit, MultiEdit, NotebookEdit]
 model: sonnet
 effort: medium

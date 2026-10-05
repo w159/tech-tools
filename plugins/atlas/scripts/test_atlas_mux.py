@@ -572,6 +572,22 @@ class SpawnOmpTests(Base):
         self.assertNotIn("sentinel-value", pane)  # an allowlist, not a copy of the lead's environment
         self.assertNotIn("ATLAS_NOT_ALLOWLISTED", pane)
 
+    def test_lead_kill_switches_and_omp_profile_reach_the_worker_pane(self):
+        # ATLAS_MANDATES=off in the lead was lost in the pane: the worker came up with the recall gate armed.
+        self._omp_ready()
+        env = dict(self.spawn_env(), ATLAS_MANDATES="off", ATLAS_HOOK_BRIDGE="off", ATLAS_LEAN_SHELL="off",
+                   PI_CODING_AGENT_DIR="/tmp/lead-agent-dir", ATLAS_TOOLKIT_LOAD="lead-value", ATLAS_WORKER_NAME="lead")
+        rc, data, _, err = _run("spawn", "--run", "r1", "--harness", "omp", "--name", "Beta", "--agent", "explorer",
+                                "--prompt-file", self.make_prompt("p", "go"),
+                                "--agents-dir", os.path.join(self.root, "agents"), env=env, cwd=self.root)
+        self.assertEqual(0, rc, (data, err))
+        pane = next(c for c in _tmux_log_calls(self.state) if "new-window" in c)
+        for pair in ("ATLAS_MANDATES=off", "ATLAS_HOOK_BRIDGE=off", "ATLAS_LEAN_SHELL=off",
+                     "PI_CODING_AGENT_DIR=/tmp/lead-agent-dir"):
+            self.assertIn(pair, pane)
+        self.assertNotIn("ATLAS_TOOLKIT_LOAD", pane)  # bridge-pinned, never forwarded
+        self.assertNotIn("lead-value", pane)
+
     def test_worker_pane_gets_no_forwarded_vars_when_the_lead_set_none(self):
         self._omp_ready()
         env = {k: v for k, v in self.spawn_env().items() if k not in ("ATLAS_DB", "ATLAS_GATE")}
