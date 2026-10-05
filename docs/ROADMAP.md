@@ -89,17 +89,22 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 - Write at least three realistic evaluation prompts per skill (per the same
   Anthropic checklist) to catch description regressions going forward. Not
   done in the 9.0.0 release.
-- Pay down the 8.7.x omp findings now recorded in `fallow-baselines/` (added
-  with 9.0.0 so the fallow commit/push gate stops failing on code this release
-  does not author). From the baseline: 30 complexity findings, led by
-  `omp/hook-bridge.ts` `loadBridgedHooksFor` (cyclomatic 32) and
-  `omp/stop-bridge.ts` `discard` (17), `runStateArgv` in `run-state.ts` (9);
-  8 unused exports (`TURN_EVENTS`, `loadUnderscoredServers`, `hookEnv`,
+- Pay down the findings recorded in `fallow-baselines/` (added with 9.0.0 so the
+  fallow commit/push gate stops failing on code this release does not author).
+  The baselines are WHOLE-REPO, not only the 8.7.x omp code. Dead-code: 165
+  entries (141 `mcp_servers/*`, 21 `plugins/atlas`, 2 `mcp_node/*`, 1
+  `skills/webapp-testing`). Health: 145 files (113 `mcp_servers/*`, 21
+  `plugins/atlas`, 10 `mcp_node/*`, plus `test-mcp-tools.mjs`). Everything in
+  them is exempt from the gate until fixed. The omp part: 30 complexity
+  findings, led by `omp/hook-bridge.ts` `loadBridgedHooksFor` (cyclomatic 32)
+  and `omp/stop-bridge.ts` `discard` (17), `runStateArgv` in `run-state.ts`
+  (9); 8 unused exports (`TURN_EVENTS`, `loadUnderscoredServers`, `hookEnv`,
   `TRANSCRIPT_SCRIPT`, `MAX_INGEST_PER_SESSION`, `REBASELINE_BUDGET_MS`,
-  `DETACHED_SCRIPT`, and the `FrozenBlocks` type in `style.ts`); and 3
-  duplicate groups in `hook-bridge.ts`. Refactor or remove them, then re-save
-  each baseline with `fallow dead-code|health|dupes --save-baseline
-  fallow-baselines/<name>.json` so the file only shrinks.
+  `DETACHED_SCRIPT`, and the `FrozenBlocks` type in `style.ts`); and duplicate
+  groups in `hook-bridge.ts`. One of those groups (`hook-bridge.ts` 545-561
+  vs 579-595) still shows as a `warn` in the gate's default audit. Refactor or
+  remove them, then re-save each baseline with `fallow dead-code|health|dupes
+  --save-baseline fallow-baselines/<name>.json` so the files only shrink.
 
 ### Bug: dashboard credential save never reaches the installed plugin for sensitive fields (found 2026-09-01)
 
