@@ -1,7 +1,7 @@
 ---
 name: atlas-brainstorm
-description: Requirements elicitation for a WHAT before any HOW - ports CE ce-brainstorm as an interactive dialogue that classifies the work (software/non-software), scopes it into Lightweight/Standard/Deep tiers, grounds itself via an atlas:explorer dispatch plus optional Compound Pack citations, then runs one-question-at-a-time broad-to-narrow questioning bounded to atlas-prompt's question discipline, synthesizes 2-3 concrete approaches (always including one non-obvious option), and writes a requirements-only plan to docs/plans/<YYYY-MM-DD>-<slug>-brainstorm.md with stable requirement IDs and a Goal Capsule + Product Contract shape. Never writes product code and never includes implementation units - that is atlas-plan's job next.
-when_to_use: a vague feature idea or request needs requirements elicited before planning
+description: "Elicits requirements for a WHAT before any HOW through one-question-at-a-time dialogue, then writes a requirements-only artifact to docs/plans/ and never writes product code. Use when a feature idea or request is vague and needs scoping before planning with atlas-plan."
+when_to_use: "brainstorm, flesh out this idea, what should we build, scope this feature, requirements discovery, product requirements"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '<the idea, feature, or request to brainstorm>'
 ---

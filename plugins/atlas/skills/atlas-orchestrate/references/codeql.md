@@ -1,5 +1,16 @@
 # CodeQL Code Scanning
 
+## Contents
+
+- [When to Load This Reference](#when-to-load-this-reference)
+- [Supported Languages](#supported-languages)
+- [Core Workflow -- GitHub Actions](#core-workflow----github-actions)
+- [Core Workflow -- CodeQL CLI](#core-workflow----codeql-cli)
+- [Alert Management](#alert-management)
+- [Custom Queries and Packs](#custom-queries-and-packs)
+- [Troubleshooting](#troubleshooting)
+- [Hardware Requirements (Self-Hosted Runners)](#hardware-requirements-self-hosted-runners)
+
 Sourced from the codeql skill. Procedural guidance for configuring and running CodeQL code
 scanning through GitHub Actions workflows and the standalone CodeQL CLI.
 

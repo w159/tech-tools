@@ -1,6 +1,6 @@
 ---
 name: verifier
-description: "Adversarial verifier. Independently confirms or REFUTES a claimed finding or fix in a fresh context: re-open cited lines, re-run tests, re-query data, re-read the diff. Never fixes; returns an evidence-backed verdict."
+description: "Adversarial verifier that independently confirms or REFUTES a claimed finding or fix in a fresh context: re-opens cited lines, re-runs tests, re-queries data, re-reads the diff. Never fixes; returns an evidence-backed verdict. Use when a finding or fix must be checked before it is recorded as verified."
 model: sonnet
 effort: medium
 color: red

@@ -1,7 +1,7 @@
 ---
 name: atlas-strategy
-description: Product strategy anchor - ports CE ce-strategy as a one-question-at-a-time interview (purpose, positioning, users, metrics, tracks, stress test, boundaries, optional milestones/brand) that writes or refreshes the durable strategy doc at docs/architecture/product-strategy.md (or adapts an existing repo-root STRATEGY.md in its own shape). Grounded by an atlas:explorer dispatch building a repo model - what the product is and where attention is going - used only to sharpen questions and seed proposals the user confirms or corrects, never to silently derive strategy. Runs a pushback pass on weak answers, a stress test that checks the strategy actually decides things, and a drift-aware update run that preserves every other section. Output is citable by atlas-brainstorm and atlas-plan as optional grounding input. Never writes product code, never edits the tracker or roadmap.
-when_to_use: starting a product, adding a strategy doc, or changing direction or roadmap
+description: "Runs a one-question-at-a-time interview to write or refresh the product strategy doc at docs/architecture/product-strategy.md, grounded in an atlas:explorer repo model and stress-tested against weak answers. Use when starting a product, adding a strategy doc, or changing direction."
+when_to_use: "product strategy, positioning, target users, success metrics, product direction, STRATEGY.md"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '[optional: section to revisit, e.g. metrics, positioning, tracks]'
 ---

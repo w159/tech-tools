@@ -1,5 +1,14 @@
 # Phase 3: Plan artifact contract
 
+## Contents
+
+- [Path and naming](#path-and-naming)
+- [Section contract](#section-contract)
+- [Metadata contract](#metadata-contract)
+- [Consumption by atlas-orchestrate](#consumption-by-atlas-orchestrate)
+- [Ready checks (gate before Phase 4)](#ready-checks-gate-before-phase-4)
+- [Write via atlas:docs-curator](#write-via-atlasdocs-curator)
+
 Ported from CE `ce-plan/references/plan-sections.md` (Goal Capsule + Product Contract + Planning Contract + Implementation Units + Verification Contract + DoD), adapted to atlas date-first naming, docs-ssot write ownership, and orchestrate's consumption contract. This artifact is **implementation-ready** - the exact complement of the brainstorm artifact, which is requirements-only.
 
 ## Path and naming

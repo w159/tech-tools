@@ -1,5 +1,16 @@
 # Pipeline: steps 1-8 (source gate through UI testing)
 
+## Contents
+
+- [Step 1 - Intake routing](#step-1---intake-routing)
+- [Step 2 - Execution gate](#step-2---execution-gate)
+- [Step 3 - Simplify](#step-3---simplify)
+- [Step 4 - Review](#step-4---review)
+- [Step 5 - Apply mechanical fixes (bounded)](#step-5---apply-mechanical-fixes-bounded)
+- [Step 6 - Persist residuals](#step-6---persist-residuals)
+- [Step 7 - Compound (conditional)](#step-7---compound-conditional)
+- [Step 8 - UI testing (conditional)](#step-8---ui-testing-conditional)
+
 Per-step contracts for the autonomous portion of atlas-autopilot - everything from
 intake up to (but not including) the local commit. The shipping tail is a separate
 contract: `shipping-gate.md`. Step numbers here match the pipeline table in SKILL.md.

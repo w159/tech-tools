@@ -1,7 +1,7 @@
 ---
 name: atlas-worktree
-description: Atlas's portable git-worktree primitive - create a detached or branched linked worktree for isolated experimental/parallel work, discover and reuse an active one from the run ledger instead of creating duplicates, and tear it down with dirty-state protection. Use when preparing worktree isolation for parallel implementer waves, spikes, or bakeoffs, or when closing worktrees out at wave end.
-when_to_use: worktree isolation for parallel waves, spikes, or bakeoffs; discovering or reusing an active worktree; closing out worktrees at run end
+description: "Provides atlas's portable git-worktree primitive: creates detached or branched linked worktrees, reuses an active one from the run ledger, and tears down with dirty-state protection. Use when isolating parallel implementer waves, spikes or bakeoffs, or closing worktrees at wave end."
+when_to_use: "worktree isolation, parallel waves, spike branch, reuse worktree, clean up worktrees"
 allowed-tools: Read, Glob, Grep, Bash, Write, Edit
 ---
 

@@ -1,7 +1,7 @@
 ---
 name: atlas-frontend
-description: Build or refactor screens, flows, or components on a single design system (shadcn/ui + Tailwind + Radix) with every state handled and verified live in the browser.
-when_to_use: building or refactoring screens, flows, or components on a single design system with every state handled
+description: "Builds or refactors screens, flows and components on one design system (shadcn/ui, Tailwind, Radix) with every state handled and verified live in the browser. Use when creating or reworking frontend UI."
+when_to_use: "build a screen, shadcn, Tailwind, Radix, refactor UI, design system, form, dashboard, page"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 # paths: screens/flows anywhere in the repo (tsx, css, scss); reusable
 # components under components/ route to atlas-component instead, keeping the

@@ -1,7 +1,7 @@
 ---
 name: atlas-review
-description: 'Risk-selected multi-persona review of a diff, branch, or PR: determines scope and depth from the actual change, selects reviewer personas by trigger signals (always-on correctness; conditional security, performance, data-migration, maintainability, testing, reliability, API-contract, agent-native, learnings, adversarial, previous-comments, standards), dispatches each as an independent read-only subagent seeded with a persona prompt asset, merges their typed findings into a stable-numbered report, validates every P0/P1 through atlas:verifier, and delivers a report-only verdict (Ready-to-merge / Ready-with-fixes / Not-ready). Local mutation only behind an explicit apply:local flag. Use when reviewing a changeset before merge - NOT for whole-codebase sweeps (use atlas-audit) and NOT for single-claim verification (use atlas:verifier directly).'
-when_to_use: review a diff, branch, or PR with multiple independent expert reviewers before merge
+description: "Runs a risk-selected multi-persona review of a diff, branch or PR: selects reviewers by change signals, validates P0/P1 findings through atlas:verifier, and delivers a report-only verdict (Ready, Ready-with-fixes, Not-ready). Use when reviewing a changeset before merge; not for whole-codebase audits."
+when_to_use: "review this PR, code review, pre-merge review, review my diff, is this ready to merge"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Agent, Task
 argument-hint: '[base-ref | PR-number | diff spec] [depth:full|auto] [apply:local]'
 context: fork

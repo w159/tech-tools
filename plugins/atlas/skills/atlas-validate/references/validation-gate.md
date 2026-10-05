@@ -1,5 +1,14 @@
 # Validation Gate
 
+## Contents
+
+- [Gate 1: Execution-evidence artifact](#gate-1-execution-evidence-artifact)
+- [Gate 2: Independent verifier](#gate-2-independent-verifier)
+- [Gate 3: Docs current](#gate-3-docs-current)
+- [What counts as PASS, WARN, FAIL](#what-counts-as-pass-warn-fail)
+- [What this gate is not](#what-this-gate-is-not)
+- [Report shape](#report-shape)
+
 The completion gate every atlas-validate run applies. A check is PASS
 only when all three gates close with evidence. A check that lacks
 evidence is not PASS, even if the code is correct.

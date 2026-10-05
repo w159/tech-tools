@@ -1,8 +1,7 @@
 ---
 name: atlas
-description: 'Atlas architect: boot the workspace. Verify claude-mem and context-mode,
-  scan the project, recommend tooling (confirm first), wire hooks, seed the docs/
-  SSOT.'
+description: "Boots the atlas workspace: verifies claude-mem and context-mode, scans the project, recommends tooling (confirming first), wires hooks and seeds the docs/ SSOT. Use when setting up atlas in a project; manual invocation only."
+when_to_use: "atlas architect, boot the workspace, project bootstrap, seed docs SSOT"
 argument-hint: '[menu [described need] | deps | discover | hooks | config | all]'
 disable-model-invocation: true
 ---

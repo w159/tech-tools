@@ -1,7 +1,7 @@
 ---
 name: atlas-test-xcode
-description: "iOS simulator test runtime. Detects an Xcode/iOS project (.xcodeproj/.xcworkspace/Package.swift with an iOS target), boots a simulator via xcrun simctl, builds and runs the app or its test target via xcodebuild, captures simulator screenshots and logs as evidence under .atlas/evidence/, and reports PASS/FAIL/PARTIAL per surface with the actual xcodebuild output and exit statuses pasted - never a claimed pass. Reports 'Xcode/simctl not available' explicitly on non-macOS hosts or missing toolchains instead of failing silently. Net-new for atlas: nothing else in the catalog touches iOS/Xcode."
-when_to_use: test an iOS app or Xcode test target on a simulator before handoff
+description: "Tests an iOS app on the simulator: detects the Xcode project, boots a simulator with xcrun simctl, builds and tests via xcodebuild, captures screenshots and logs, and reports PASS, FAIL or PARTIAL with real output. Use when building or testing an iOS or Xcode project; macOS only."
+when_to_use: "iOS simulator, xcodebuild, XCTest, simctl, Swift app test, run the app on simulator"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: "[scheme name or 'current' for default]"
 ---

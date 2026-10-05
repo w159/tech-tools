@@ -43,17 +43,37 @@ TOOLSEARCH_BATCH = (
 )
 
 
+def _omp_plugin_state(name: str) -> bool | None:
+    """enabled flag of an omp-installed plugin from ~/.omp/plugins/omp-plugins.lock.json
+    (`{"plugins": {<name>: {"enabled": bool}}}`), None when the lock does not name it."""
+    try:
+        entry = (
+            json.loads(
+                (Path.home() / ".omp" / "plugins" / "omp-plugins.lock.json").read_text()
+            ).get("plugins")
+            or {}
+        ).get(name)
+    except (OSError, ValueError, AttributeError):
+        return None
+    return bool(entry.get("enabled")) if isinstance(entry, dict) else None
+
+
 def plugin_enabled(name: str, root: str | None = None) -> bool:
-    """True when a Claude Code plugin named `name` is enabled for this session.
+    """True when a plugin named `name` is enabled for this session.
 
     Reads `enabledPlugins` (keys `<name>@<marketplace>`) from ~/.claude/settings.json
     then the project's .claude/settings.json and settings.local.json; the most
     specific file naming the plugin wins, as in Claude Code's settings precedence.
-    Any read/parse error counts as "not enabled" so callers stay silent.
+    Under omp (ATLAS_HARNESS=omp, set by the hook bridge) a plugin the omp lock names
+    (installed with omp, not Claude Code) decides instead: omp does not read the Claude
+    settings for its own installs. Any read/parse error counts as "not enabled" so callers stay silent.
     """
     files = [Path.home() / ".claude" / "settings.json"]
     if root:
-        files += [Path(root) / ".claude" / "settings.json", Path(root) / ".claude" / "settings.local.json"]
+        files += [
+            Path(root) / ".claude" / "settings.json",
+            Path(root) / ".claude" / "settings.local.json",
+        ]
     enabled = False
     for path in files:
         try:
@@ -65,6 +85,10 @@ def plugin_enabled(name: str, root: str | None = None) -> bool:
         for key, value in plugins.items():
             if str(key).split("@", 1)[0] == name:
                 enabled = bool(value)
+    if os.environ.get("ATLAS_HARNESS") == "omp":
+        omp_state = _omp_plugin_state(name)
+        if omp_state is not None:
+            return omp_state
     return enabled
 
 
@@ -139,13 +163,16 @@ def scan_stack(root: str | Path, budget: int = 4000) -> dict:
                     out["has_pyproject"] = True
                     out["python"] = True
                     out["has_code"] = True
-                if rel in (".serena",) or dp.rstrip(os.sep).endswith(os.sep + ".serena"):
+                if rel in (".serena",) or dp.rstrip(os.sep).endswith(
+                    os.sep + ".serena"
+                ):
                     if low in ("project.yml", "project.yaml"):
                         out["serena_yml"] = True
                         try:
                             text = Path(path).read_text(encoding="utf-8")
                             out["serena_languages_ok"] = any(
-                                line.startswith("languages:") for line in text.splitlines()
+                                line.startswith("languages:")
+                                for line in text.splitlines()
                             )
                         except Exception:
                             pass
@@ -197,8 +224,7 @@ def boot_lines(stack: dict | None = None, root: str | None = None) -> list[str]:
         lines.append(
             "Code stack (%s): load ToolSearch batch once before Read/Grep/Bash; "
             "serena down -> lean-ctx only, still no Bash file reads. "
-            "Matrix: atlas-orchestrate/references/tool-routing.md"
-            % langs
+            "Matrix: atlas-orchestrate/references/tool-routing.md" % langs
         )
         if not stack.get("serena_yml"):
             lines.append(
@@ -249,7 +275,16 @@ def main() -> int:
 
     root = sys.argv[1] if len(sys.argv) > 1 else "."
     stack = scan_stack(root)
-    print(json.dumps({"stack": stack, "boot_lines": boot_lines(stack), "toolsearch": TOOLSEARCH_BATCH}, indent=2))
+    print(
+        json.dumps(
+            {
+                "stack": stack,
+                "boot_lines": boot_lines(stack),
+                "toolsearch": TOOLSEARCH_BATCH,
+            },
+            indent=2,
+        )
+    )
     return 0
 
 

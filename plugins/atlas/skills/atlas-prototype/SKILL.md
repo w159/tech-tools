@@ -1,7 +1,7 @@
 ---
 name: atlas-prototype
-description: 'Throwaway prototype runtime for questions that are cheaper to demonstrate than argue about. Builds an explicitly-throwaway implementation at the fidelity that can answer one high-uncertainty visual, interaction, or product-shape question - isolated run directory or scratch worktree, never product feature code - gets it running, composes atlas:ui-runtime-tester for live UI evidence, hands it to the human to react to, then promotes the settled decisions into an atlas-brainstorm/atlas-plan artifact or discards the code entirely. The human reacting to the real artifact is the verification of record; no headless run may fake it.'
-when_to_use: a visual, interaction, or product-shape question that is cheaper to demonstrate than argue about
+description: "Builds an explicitly throwaway prototype in an isolated run directory to answer one visual, interaction or product-shape question, shows it to the human, then promotes the settled decisions into a plan or discards the code. Use when a question is cheaper to demonstrate than argue about."
+when_to_use: "prototype, quick demo, try it and see, mockup that runs, spike a UI, show me options"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '[question, brainstorm path, or plan path]'
 ---

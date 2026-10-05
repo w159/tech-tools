@@ -1,5 +1,13 @@
 # Capability Routing
 
+## Contents
+
+- [Step 1 - Discover what is actually live (do this once per session, cheaply)](#step-1---discover-what-is-actually-live-do-this-once-per-session-cheaply)
+- [Step 2 - Route by task signal](#step-2---route-by-task-signal)
+- [Step 2b - The tool names to actually put in the prompt](#step-2b---the-tool-names-to-actually-put-in-the-prompt)
+- [Step 3 - Hard rules that override convenience](#step-3---hard-rules-that-override-convenience)
+- [Cross-surface fault localization (which layer owns the bug?)](#cross-surface-fault-localization-which-layer-owns-the-bug)
+
 The orchestrator's job is to put the *right* capability on each task. This file maps task signals -> agent type + skill + MCP tools + model. It is a default; always prefer a live-discovered better fit.
 
 ## Step 1 - Discover what is actually live (do this once per session, cheaply)

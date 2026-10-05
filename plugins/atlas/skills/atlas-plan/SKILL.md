@@ -1,7 +1,7 @@
 ---
 name: atlas-plan
-description: Implementation-ready planning for a settled WHAT - ports CE ce-plan as the HOW stage that consumes an atlas-brainstorm requirements artifact (or a bare feature description), runs grep-first research over docs/lessons/ and .atlas/findings/ plus optional Compound Pack citations, forces every open question into a resolved-vs-deferred inventory, runs a challenge pass over unexamined directives, and writes a durable implementation-ready plan to docs/plans/<YYYY-MM-DD>-<slug>-plan.md with stable U<N> implementation units (goal, requirements, dependencies, files, approach, test scenarios, verification, definition of done - each unit, all eight fields), a Verification Contract, and a plan-level Definition of Done. A mandatory atlas:completeness-critic review gate replaces CE's ce-doc-review before handoff to atlas-orchestrate for execution. Never writes product code and never runs tests or builds as proof - planning reads only.
-when_to_use: a requirements artifact or feature description needs an implementation-ready plan before execution
+description: "Writes a durable implementation-ready plan to docs/plans/ from an atlas-brainstorm artifact or feature description, with researched context, resolved open questions, U-numbered implementation units and a verification contract. Use when requirements are settled and a plan is needed before execution."
+when_to_use: "plan this, implementation plan, break into units, how should we build, technical plan, ready for execution"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Task
 argument-hint: '<requirements artifact path or feature description>'
 ---
@@ -81,3 +81,8 @@ Read `references/handoff.md` in full.
 ## Boundary
 
 atlas-plan owns: intake classification, research, the question inventory, the challenge pass, unit decomposition, and the implementation-ready artifact. It does NOT own: requirements elicitation (`atlas-brainstorm`), writing `docs/` (atlas:docs-curator per docs-ssot), execution (`atlas-orchestrate` + atlas agents - no `atlas-work` skill exists or will be created), verification of implemented behavior (orchestrate's verifiers, post-execution), or any git action - it never commits, pushes, or opens a PR.
+
+## Additional references
+
+- [Subagent kit](../atlas-orchestrate/references/subagent-kit.md): the required dispatch shape and ToolSearch-first TOOLS line. Read when dispatching the explorer, critic, or verifier.
+- [Compound packs](../../references/compound-packs.md): the full compound-pack rule contract. Read when matching pack rules during research.

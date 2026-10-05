@@ -781,7 +781,8 @@ def main():
     # Boot context is terminal noise on every session start. Keep it to the one
     # fact the model cannot infer (posture + squad) plus setup gaps that are
     # actually actionable; the rest lives in the skill, not in every boot.
-    active_style = read_output_style()
+    # omp renders its own output style (omp/style.ts); ~/.claude/settings.json outputStyle does not apply there.
+    active_style = ATLAS_OUTPUT_STYLE if os.environ.get("ATLAS_HARNESS") == "omp" else read_output_style()
     lines = [
         "Atlas: orchestrator posture. research -> theory -> test -> validate -> implement -> verify; "
         "evidence before any done claim. Route execution to atlas:<role> subagents; "

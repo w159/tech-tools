@@ -1,5 +1,17 @@
 # Sweep state schema (v1)
 
+## Contents
+
+- [Top-level shape](#top-level-shape)
+- [Compatibility rule](#compatibility-rule)
+- [Status enum](#status-enum)
+- [Closed-item evidence rule](#closed-item-evidence-rule)
+- [Lease (single-writer mutex)](#lease-single-writer-mutex)
+- [run-record](#run-record)
+- [File lock vs lease](#file-lock-vs-lease)
+- [Sensitive semantics](#sensitive-semantics)
+- [Status words](#status-words)
+
 Canonical contract for `.atlas/.run/sweep-state.json`, enforced by
 `plugins/atlas/scripts/sweep_state.py` — the **only** writer of the file.
 Every peer (source connectors, cluster analysis, the orchestrator) reads via

@@ -1,7 +1,7 @@
 ---
 name: atlas-simplify
-description: 'Bounded, behavior-preserving simplification pass over a FRESH DIFF (post-implementation cleanup), not a restructuring pass: resolves a scope (branch diff, staged/unstaged, or named files, excluding docs/generated/vendor/lock churn), dispatches exactly three read-only reviewer personas (code reuse, code quality, efficiency) in parallel, applies only worthwhile behavior-preserving findings through atlas:implementer, re-runs the project typecheck/lint/test gate as blast-radius proof through atlas:verifier, and reports applied/skipped counts by category. Use right after implementing a change and before review or commit. Distinct from atlas-refactor (behavior-preserving RESTRUCTURING over an arbitrary named target across many verified steps) and atlas-audit (whole-codebase survey); atlas-debug owns bugs.'
-when_to_use: simplify freshly implemented code for reuse, quality, and efficiency without changing behavior
+description: "Runs a bounded, behavior-preserving simplification pass over a fresh diff using three read-only reviewers (reuse, quality, efficiency) and verifies the gate still passes. Use after implementing a change and before review or commit; not for broad restructuring (atlas-refactor)."
+when_to_use: "simplify my changes, tidy the diff, reduce duplication in new code, post-implementation cleanup"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '[blank = current branch diff; base:<ref> = diff against base; or named files/dirs]'
 ---

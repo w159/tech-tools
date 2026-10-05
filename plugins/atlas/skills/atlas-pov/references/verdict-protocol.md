@@ -1,5 +1,15 @@
 # Verdict protocol
 
+## Contents
+
+- [1. Frame the decision (Phase 0)](#1-frame-the-decision-phase-0)
+- [2. Grounding scout (Phase 1)](#2-grounding-scout-phase-1)
+- [3. Evidence floor (Phase 2) - hard gate](#3-evidence-floor-phase-2---hard-gate)
+- [4. Form the atlas verdict (Phase 3)](#4-form-the-atlas-verdict-phase-3)
+- [5. Reconcile (Phase 5)](#5-reconcile-phase-5)
+- [6. Grade (Phase 6)](#6-grade-phase-6)
+- [7. Deliver and record (Phase 6 continued)](#7-deliver-and-record-phase-6-continued)
+
 The spine of atlas-pov: framing, grounding, the evidence floor, the verdict, reconciliation,
 and grading. Peer dispatch is deliberately NOT here - it lives in `peer-dispatch.md` and only
 runs on explicit request after the verdict exists.

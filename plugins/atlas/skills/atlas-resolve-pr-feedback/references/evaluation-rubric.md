@@ -1,5 +1,17 @@
 # Evaluation Rubric
 
+## Contents
+
+- [Default to fixing](#default-to-fixing)
+- [Instruction prose is not code (skills, agent prompts, rule files)](#instruction-prose-is-not-code-skills-agent-prompts-rule-files)
+- [How deep to read](#how-deep-to-read)
+- [Cross-item reasoning (when judging more than one item)](#cross-item-reasoning-when-judging-more-than-one-item)
+- [Diverts (apply per item)](#diverts-apply-per-item)
+- [Outdated threads (`isOutdated=true`)](#outdated-threads-isoutdatedtrue)
+- [Escalate sparingly (`needs-human`)](#escalate-sparingly-needs-human)
+- [Adjudicate before escalating](#adjudicate-before-escalating)
+- [Reply text for reply-list and human-list items](#reply-text-for-reply-list-and-human-list-items)
+
 The **orchestrator** applies this to decide each item's verdict **before** any fix is dispatched. This is where validity is decided: judgment happens here, in the one context that holds every thread at once, not inside an isolated fixer that cannot see the author's design intent. Read the actual code when a verdict turns on it; never decide validity from the comment text alone.
 
 The output of applying this rubric is a verdict per item, sorted into:

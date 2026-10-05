@@ -62,6 +62,45 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 
 ## Backlog
 
+### Atlas 9.0.0 follow-ups (added 2026-10-05)
+
+- Four duplicate reference-file pairs found during the skills best-practices
+  pass were reported but not merged: `workflow-template.md` x2 (identical),
+  `graphify-wiring.md` x2 (identical), `self-telemetry.md` x2 (differ by 3
+  lines), `docs-ssot.md` x2 (differ by 61 lines). Decide whether to merge to
+  one canonical copy per pair or keep both with a documented reason.
+- The 9.0.0 omp fixes (`atlas_mux.py` `FORWARDED_ENV` widening, omp
+  plugin-enablement detection via `omp-plugins.lock.json`, the
+  `outputStyle`/`TodoWrite`-gating fixes in `omp/style.ts` and
+  `hooks/session_boot.py`) were verified by `bun test` (245 pass, 0 fail) and
+  pytest only. Live-omp verification is still needed: the user's omp
+  currently has atlas 8.6.0 installed from the plugin cache, so the fixes
+  reach a live session only after `omp plugin upgrade` / reinstall from the
+  marketplace once 9.0.0 is published. Re-run the paired Claude Code / omp
+  benchmark in `docs/atlas-harness-parity.md` against a live 9.0.0 omp
+  install once upgraded.
+- Evaluate the 47 rewritten SKILL.md descriptions for trigger accuracy against
+  Anthropic's testing checklist (https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices):
+  run realistic prompts through Haiku, Sonnet, and Opus and confirm each
+  skill is selected on relevant prompts and skipped on irrelevant ones. Not
+  done in the 9.0.0 release; descriptions were rewritten to the structural
+  checklist (third person, "Use when ...", length limits) but not behaviorally
+  evaluated against multiple models.
+- Write at least three realistic evaluation prompts per skill (per the same
+  Anthropic checklist) to catch description regressions going forward. Not
+  done in the 9.0.0 release.
+- Pay down the 8.7.x omp findings now recorded in `fallow-baselines/` (added
+  with 9.0.0 so the fallow commit/push gate stops failing on code this release
+  does not author). From the baseline: 30 complexity findings, led by
+  `omp/hook-bridge.ts` `loadBridgedHooksFor` (cyclomatic 32) and
+  `omp/stop-bridge.ts` `discard` (17), `runStateArgv` in `run-state.ts` (9);
+  8 unused exports (`TURN_EVENTS`, `loadUnderscoredServers`, `hookEnv`,
+  `TRANSCRIPT_SCRIPT`, `MAX_INGEST_PER_SESSION`, `REBASELINE_BUDGET_MS`,
+  `DETACHED_SCRIPT`, and the `FrozenBlocks` type in `style.ts`); and 3
+  duplicate groups in `hook-bridge.ts`. Refactor or remove them, then re-save
+  each baseline with `fallow dead-code|health|dupes --save-baseline
+  fallow-baselines/<name>.json` so the file only shrinks.
+
 ### Bug: dashboard credential save never reaches the installed plugin for sensitive fields (found 2026-09-01)
 
 `atlas_dashboard.py` writes connector credentials to settings.json `pluginConfigs`

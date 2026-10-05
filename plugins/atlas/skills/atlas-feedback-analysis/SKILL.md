@@ -1,7 +1,7 @@
 ---
 name: atlas-feedback-analysis
-description: 'Turns a raw user-feedback artifact - call transcript, support-ticket thread, session-recording transcript, or pasted notes - into structured, evidence-quoted findings: verbatim pain points, feature requests, usability friction, and sentiment, each tagged, prioritized, and traceable to an exact source quote. Routes a quick single-issue pass (inline report, no durable artifact) versus an extensive multi-issue pass (durable docs/features/<YYYY-MM-DD>-feedback-analysis-<slug>.md plus a requirements kickoff for downstream brainstorm/planning). Every quoted finding is adversarially verified against the source artifact before it counts; unquotable claims are marked as inference or dropped.'
-when_to_use: analyze a feedback transcript, ticket thread, or session notes into prioritized findings
+description: "Turns raw feedback (call transcript, support thread, session notes) into prioritized findings, each tied to a verbatim source quote; quick passes report inline, extensive passes write a docs/features/ artifact. Use when analyzing user feedback, transcripts or tickets for pain points and requests."
+when_to_use: "analyze feedback, customer call transcript, support tickets, pain points, feature requests, usability friction, sentiment"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '<feedback artifact path, or nothing if pasting notes>'
 ---

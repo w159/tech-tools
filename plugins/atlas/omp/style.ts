@@ -111,6 +111,19 @@ export function translateToolNames(text: string, map: ToolNameMap): string {
 	});
 }
 
+/**
+ * The style's paragraph on why `TodoWrite` may be missing is Claude Code mechanics (`CLAUDE_CODE_ENABLE_TODO_TOOLS`,
+ * `ENABLE_TOOL_SEARCH`, a ToolSearch select) with nothing omp can act on; translated, it read as a nonsense
+ * `xd:// device catalog("select:todo")` instruction. Under omp keep only the actionable part: check once, then the
+ * LEDGER line. The source file is untouched, so the contract test that pins the Claude wording still holds.
+ * A source that no longer matches is passed through unchanged.
+ */
+const CLAUDE_TODO_GATING = /`TodoWrite` is not always in the toolset:[\s\S]*?Check once, silently\. Without it, carry one\s+line under the header:/;
+
+export function adaptTodoGatingForOmp(body: string): string {
+	return body.replace(CLAUDE_TODO_GATING, "If `TodoWrite` is not callable (check once, silently), carry one line under the header:");
+}
+
 let cached: { key: string; text: string } | undefined;
 
 /**
@@ -162,7 +175,7 @@ export function renderOmpStyle(
 	const map = { ...loaded, bareTools: resolveBareTools(loaded, active) };
 	const key = `${stylePath}\0${namesPath}\0${JSON.stringify(map.bareTools)}`;
 	if (cached?.key === key) return cached.text;
-	const text = `${STYLE_BEGIN}\n${PREFACE}\n\n${translateToolNames(body, map)}\n${STYLE_END}`;
+	const text = `${STYLE_BEGIN}\n${PREFACE}\n\n${translateToolNames(adaptTodoGatingForOmp(body), map)}\n${STYLE_END}`;
 	cached = { key, text };
 	return text;
 }

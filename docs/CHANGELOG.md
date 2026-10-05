@@ -1,5 +1,41 @@
 # Changelog
 
+## 2026-10-05 -- Skills and agents rewritten to Anthropic's agent-skills best practices; omp mux/hook parity audit
+
+Marketplace `4.5.1`; atlas `9.0.0`.
+
+- All 47 SKILL.md descriptions rewritten third person with a "Use when ..."
+  clause, each <=400 chars (was 29 over 400, 2 over the 1024 hard limit; 21
+  had no when-to-use clause; 3 were first/second person). Total preloaded
+  description+when_to_use chars across all 47 skills, measured with a YAML
+  parser against HEAD: 29074 -> 17454 (about -40%), saved on every session
+  start.
+- 46 reference files over 100 lines gained a table of contents; 42 orphaned
+  reference files are now linked from their SKILL.md; nested reference
+  directives were flattened to one level deep, except in the two dispatch
+  templates a subagent reads cold (they keep a `${CLAUDE_PLUGIN_ROOT}` path);
+  all 12 agent descriptions reworded to the same third-person/"Use when"
+  shape.
+- New `TestAnthropicSkillChecklist`/`TestAnthropicAgentChecklist` conformance
+  tests (35 in the module) enforce the format going forward. An independent
+  verifier found the orphan-file test passed with an orphan present; it was
+  tightened and now fails on one.
+- Two older defects fixed on the way: `atlas-orchestrate/references/hooks-automation.md`
+  pointed at an `install_hooks.py` path that never existed, and
+  `atlas-dogfood`'s description was invalid YAML.
+- omp/mux parity fixes: `atlas_mux.py` now forwards 18 lead environment
+  switches into tmux colony worker panes (was 2; a tmux pane does not inherit
+  the spawning client's environment, so switches like `ATLAS_MANDATES=off`
+  were silently lost); omp plugin-enablement detection now reads
+  `~/.omp/plugins/omp-plugins.lock.json` instead of only
+  `~/.claude/settings.json`; the omp output style no longer injects Claude's
+  `outputStyle` override line or a broken `TodoWrite`-gating paragraph.
+- No skill was renamed and no frontmatter key was removed; `bun test` (245
+  pass) and the atlas hooks and scripts pytest suites verify the change, but
+  the omp-side fixes were not exercised in a live omp session, and the user's
+  installed omp plugin cache (8.6.0) only picks up 9.0.0 after an upgrade or
+  reinstall from the marketplace. Full detail in `plugins/atlas/CHANGELOG.md`.
+
 ## 2026-10-03 -- omp colony dispatch no longer self-denies; prompt prefix is stable; tool state stops tripping the delegation gate
 
 Marketplace `4.5.1`; atlas `8.7.1`.

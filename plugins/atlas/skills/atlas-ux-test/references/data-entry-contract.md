@@ -1,5 +1,13 @@
 # data-entry-contract.md
 
+## Contents
+
+- [Background: why the contract matters](#background-why-the-contract-matters)
+- [Step order](#step-order)
+- [Pass / fail definition (gate G1)](#pass--fail-definition-gate-g1)
+- [Known bug classes -- surface as evidence, do not fix](#known-bug-classes----surface-as-evidence-do-not-fix)
+- [Reference](#reference)
+
 Canonical ordered API contract for the scripted-persona role and `run_persona.py`.
 Both MUST obey this contract exactly. Any deviation is a harness defect, not a
 test finding.

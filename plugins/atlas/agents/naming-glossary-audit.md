@@ -1,6 +1,6 @@
 ---
 name: naming-glossary-audit
-description: Read-only audit of PostgreSQL table and column names against a project glossary, focused on a user_* to client_* transition. Use for the nomenclature half of a database audit.
+description: "Read-only audit of PostgreSQL table and column names against a project glossary, focused on a user_* to client_* transition. Use when running the nomenclature half of a database audit."
 disallowedTools: [Agent, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, Write, Edit, MultiEdit, NotebookEdit]
 model: haiku
 effort: low

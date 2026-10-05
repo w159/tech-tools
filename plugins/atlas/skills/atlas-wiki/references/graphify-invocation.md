@@ -1,5 +1,15 @@
 # Graphify Invocation
 
+## Contents
+
+- [The invocation](#the-invocation)
+- [Why there is no output-path flag](#why-there-is-no-output-path-flag)
+- [Flags used and why](#flags-used-and-why)
+- [Flags NOT used and why](#flags-not-used-and-why)
+- [How atlas-audit graph.json fits in](#how-atlas-audit-graphjson-fits-in)
+- [Pre-flight and post-flight](#pre-flight-and-post-flight)
+- [Limitation](#limitation)
+
 The exact, confirmed invocation of the repo-root graphify skill used by
 atlas-wiki to render `docs/architecture/` into
 `docs/wiki/diagrams/`. Every flag and path here is grounded in

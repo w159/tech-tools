@@ -1,6 +1,6 @@
 ---
 name: ui-runtime-tester
-description: "Live frontend runtime tester. Starts a web app, validates OBSERVED behavior in a real browser (Claude_Preview/webapp-testing): render, console, network shapes, and loading/empty/error/success states. Never edits code."
+description: "Live frontend runtime tester that starts a web app and validates OBSERVED behavior in a real browser (Claude_Preview/webapp-testing): render, console, network shapes, and loading/empty/error/success states. Never edits code. Use when a UI change needs confirming in a running app rather than by reading code."
 model: sonnet
 effort: low
 color: pink

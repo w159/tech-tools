@@ -1,7 +1,7 @@
 ---
 name: atlas-orchestrate
-description: Orchestrate any multi-step, multi-surface, or whole-codebase engineering task (build, fix, audit, refactor, investigate) through subagents with real execution and independent verification instead of inline work, keeping docs/ the single source of truth. Triggers on orchestrate, whole-repo work, cross-layer (frontend/backend/database) bugs, and audits. To first install and configure atlas itself, use atlas-setup.
-when_to_use: orchestrate, whole-repo work, cross-layer (frontend/backend/database) bugs, and audits. To first install and configure atlas itself, use atlas-setup
+description: "Orchestrates multi-step, multi-surface or whole-codebase engineering work (build, fix, audit, refactor, investigate) through subagents with real execution and independent verification, keeping docs/ the single source of truth. Use when a task spans layers or the whole repo; use atlas-setup to install atlas itself."
+when_to_use: "orchestrate, whole-repo work, cross-layer bug, frontend and backend and database, multi-step task, subagent waves"
 allowed-tools: Read, Glob, Grep, Bash, TodoWrite, AskUserQuestion
 ---
 
@@ -117,3 +117,7 @@ Run **Orient** (recall + roots + manifests + capabilities). Present orientation 
 
 **Opening from `atlas-launch <id>`:** treat the handoff acceptance criterion as done; still Orient; do not re-derive the finding.
 
+
+## Additional references
+
+- [Operating contract](references/operating-contract.md): the skill-local copy of the operating contract. Read when you need the verify-before-done loop in full.

@@ -1,7 +1,7 @@
 ---
 name: atlas-launch
-description: Launch a remediation session preloaded with a finding from the latest audit hub; use after an atlas-audit run. No args lists findings.
-when_to_use: launch a remediation session preloaded with a finding from the latest audit hub, or list actionable findings with no args
+description: "Launches a remediation session preloaded with one finding from the latest audit hub; with no arguments it lists actionable findings. Use after an atlas-audit run to act on a finding."
+when_to_use: "fix finding, remediate audit finding, pick a finding, act on audit results, list findings"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '[finding-id]  (no args: list actionable findings from the latest hub)'
 ---

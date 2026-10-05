@@ -1,7 +1,7 @@
 ---
 name: atlas-babysit-pr
-description: 'Babysits a single open GitHub PR until it looks merge-ready: watches CI status via the github device run_watch tool, classifies each failure (flaky/infra vs genuine), and on a genuine failure runs a bounded repair round - atlas:explorer diagnoses, atlas:implementer applies a minimal fix, atlas:verifier confirms - then commits locally and STOPS TO ASK before pushing. Default repair budget 3 rounds (configurable); reports plainly when the budget is exhausted with CI still red instead of looping. Surfaces new human review comments read-only; never replies or resolves threads (that is atlas-resolve-pr-feedback), never merges, never rebases or force-pushes.'
-when_to_use: watch an open PR's CI over time and repair genuine failures within a bounded budget
+description: "Watches one open GitHub PR's CI until merge-ready, classifies failures as flaky or genuine, and runs a bounded repair loop that commits locally and asks before pushing. Never merges or force-pushes. Use when an open PR needs CI watched and genuine failures repaired."
+when_to_use: "babysit this PR, watch CI, fix red checks on the PR, get PR green, flaky test vs real failure"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 ---
 
@@ -88,3 +88,7 @@ One fixed status line first, then a recap a reader could act on without scrollin
 ```
 
 The recap covers: each repair round (round number, root cause, fix, verifier verdict + findings.json id, committed/pushed state), every surfaced review comment (author, verbatim quote, pointer to `atlas-resolve-pr-feedback`), flaky reruns attempted, local commits awaiting push consent, rounds remaining, and judgment calls made. Evidence paths come from `.atlas/.run/findings.json` and the `run_watch` failure artifacts — never from memory.
+
+## Additional references
+
+- [Boundaries and consent envelope](references/boundaries.md): the complete authority statement behind the boundary list. Read whenever unsure a mutation is authorized.

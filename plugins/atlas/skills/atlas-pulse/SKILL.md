@@ -1,7 +1,7 @@
 ---
 name: atlas-pulse
-description: 'Generates a time-windowed product pulse report (usage, performance, errors, followups) from the telemetry the project ACTUALLY has wired. Discovers real analytics/tracing/payments sources first (PostHog, Mixpanel, Amplitude, Segment, Sentry, Datadog, New Relic, Honeycomb, Stripe - via atlas:explorer dependency/env-var/event-name greps, never assumed config), asks the user to name primary/value/completion events only when genuinely undiscoverable, then queries each source read-only and writes a dated single-page report to docs/pulses/. Hard rule: a project with zero telemetry wiring gets a plain "you have no telemetry" statement and a stop - never fabricated numbers. Use when asked for a product pulse, product health report, usage/performance/error snapshot over a time window, or recurring product telemetry review.'
-when_to_use: generate a time-windowed product telemetry pulse report from real analytics/tracing/payments data
+description: "Generates a time-windowed product pulse report (usage, performance, errors, followups) from the telemetry the project actually has wired, querying sources read-only and writing to docs/pulses/. Reports plainly when no telemetry exists rather than inventing numbers. Use when asked for a product pulse, health snapshot, or usage and error summary."
+when_to_use: "product pulse, how is the product doing, usage report, error rate, PostHog, Sentry, Mixpanel, Stripe metrics"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '[lookback window, e.g. 24h, 7d, 30d; default 24h]'
 ---

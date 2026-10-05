@@ -1,7 +1,7 @@
 ---
 name: atlas-polish
-description: "Polish an already-functional UI through user-directed live browser feedback: observe the running app with atlas:ui-runtime-tester, iterate small visual/CSS/animation changes (spacing, transitions, micro-interactions, empty/loading/error state polish) via atlas:implementer, and converge interactively with the user reacting to each iteration. NOT new functionality, NOT whole-screen builds - a fast, narrow, already-built-surface refinement loop."
-when_to_use: a working UI needs visual or interaction refinement before shipping
+description: "Refines an already-working UI through live, user-directed browser iteration: observes with atlas:ui-runtime-tester and applies small visual, CSS and animation changes via atlas:implementer. Use when a built surface needs spacing, transition or micro-interaction polish; not for new functionality."
+when_to_use: "polish the UI, tweak spacing, animation, visual refinement, make it feel better, final UI touches"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '[branch or worktree to polish; blank = current checkout]'
 ---
@@ -51,3 +51,7 @@ The user ends the polish loop, every requested fix is reflected in the live feat
 2. **Wait for observations.** Tell the user where the server is running and ask what could be better. They browse; you wait.
 3. **Iterate.** Follow `references/polish-loop.md`: for each requested change, dispatch `atlas:implementer` for one bounded edit, then `atlas:ui-runtime-tester` to re-observe the live page and capture before/after evidence, then show the user and let them accept, reject, or refine. Repeat until they say done.
 4. **Verify and close locally.** Run the convergence gate in `references/polish-loop.md`: final observation sweep, one independent `atlas:verifier` over the accepted set stamping `.atlas/.run/findings.json` via `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_finding.py"`, then `atlas-commit` for the polish changes. Report the commit(s), the still-running server URL, and any residual blocker.
+
+## Additional references
+
+- [Frontend states](../atlas-frontend/references/frontend-states.md): the empty/loading/error quality bar. Read when polishing state screens.

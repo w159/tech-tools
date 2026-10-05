@@ -1,7 +1,7 @@
 ---
 name: atlas-compound
-description: 'Capture exactly ONE durable, verified engineering lesson per invocation into the project docs/lessons/ corpus. Ported from CE ce-compound: hard eligibility gate (solved AND verified AND non-obvious AND durably useful - the counterfactual test; completion phrases identify the checkpoint but never waive the gate), two-track typed frontmatter (bug track: symptoms/root_cause/resolution_type; knowledge track: applies_when/tags), corpus-first vocabulary, a 5-dimension overlap check against existing docs/lessons/** and .atlas/findings/** where high overlap updates the existing file with a last_updated bump instead of duplicating, a mechanical grounding-claims re-verification of every cited file:line against current source, and final assembly dispatched through atlas:docs-curator as the sole durable-doc writer. Use after any solved-and-verified checkpoint worth remembering.'
-when_to_use: a problem was solved and verified and the lesson is non-obvious enough that a future engineer would re-make the mistake without a note
+description: "Captures exactly one durable, verified engineering lesson into docs/lessons/ after passing an eligibility gate (solved, verified, non-obvious), checking overlap with existing lessons and re-verifying cited file:line claims. Use when a problem was just solved and verified and a future engineer would repeat the mistake without a note."
+when_to_use: "record this lesson, capture what we learned, write up the root cause, post-mortem note, institutional knowledge"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '<optional context: what was solved and why it was non-obvious>'
 ---

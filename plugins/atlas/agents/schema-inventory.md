@@ -1,6 +1,6 @@
 ---
 name: schema-inventory
-description: Read-only PostgreSQL catalog inventory. Enumerates tables, columns, types, constraints, indexes, and RLS flags from the live database. Use for the schema half of a database audit.
+description: "Read-only PostgreSQL catalog inventory that enumerates tables, columns, types, constraints, indexes, and RLS flags from the live database. Use when running the schema half of a database audit."
 disallowedTools: [Agent, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, Write, Edit, MultiEdit, NotebookEdit]
 model: haiku
 effort: low

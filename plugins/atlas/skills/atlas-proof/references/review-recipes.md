@@ -1,5 +1,12 @@
 # Review recipes
 
+## Contents
+
+- [Annotations file format](#annotations-file-format)
+- [Publish checklist](#publish-checklist)
+- [Collect recipe](#collect-recipe)
+- [Gated PR review (only on explicit user request)](#gated-pr-review-only-on-explicit-user-request)
+
 Exact mechanics for atlas-proof's three modes. Read once before first use.
 
 ## Annotations file format

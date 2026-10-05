@@ -1,5 +1,14 @@
 # The loop library
 
+## Contents
+
+- [The three cadences](#the-three-cadences)
+- [How to pick a cadence](#how-to-pick-a-cadence)
+- [The library catalog](#the-library-catalog)
+- [Adding a new loop](#adding-a-new-loop)
+- [Loops compose](#loops-compose)
+- [Instantiation rules (apply to every loop)](#instantiation-rules-apply-to-every-loop)
+
 atlas-loop matches a recurring or iterative task to the best-fit loop
 from a curated library, then instantiates it. The library lives in
 `loops/` (one file per loop plus an `INDEX.md` catalog). This reference

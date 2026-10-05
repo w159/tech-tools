@@ -1,7 +1,7 @@
 ---
 name: atlas-autopilot
-description: Atlas's autonomous end-to-end pipeline and its SAFER, consent-gated equivalent of Compound Engineering's `lfg` - NOT a literal behavioral clone. Routes an incoming request to a verified work source (an atlas-plan implementation-ready plan artifact, or a diagnosed atlas-debug fix), executes it through atlas-orchestrate with independent verification, runs atlas-simplify, runs atlas-review in report-only mode and applies only high-confidence mechanical fixes through atlas:implementer under a bounded repair budget, persists residual findings, runs atlas-compound when durable learning exists, runs atlas-dogfood/atlas-test-browser where the change is UI-shaped, and reaches the shipping tail - where it hard-stops after local commit and requires explicit user confirmation before any push, PR, or merge (CE's lfg auto-pushes, auto-opens PRs, and auto-babysits CI; atlas-autopilot never does). Use when the user wants the whole loop run end to end with minimal interruption but still wants to be asked before anything externally visible.
-when_to_use: the user wants a complete plan or diagnosed fix executed end to end autonomously through execution, simplification, review, and local commit, with an explicit confirmation stop before any push/PR/merge
+description: "Runs atlas's consent-gated autonomous pipeline: takes an implementation-ready plan or diagnosed fix, executes it through atlas-orchestrate, simplifies, reviews report-only, applies high-confidence fixes under a bounded budget, then hard-stops after the local commit. Use when the user wants a plan or fix executed end to end autonomously with a confirmation stop before any push, PR or merge."
+when_to_use: "autopilot, run the whole pipeline, execute this plan end to end, plan to commit, lfg, hands-off build"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Agent, Task
 argument-hint: '[plan-path | debug finding | task description] [budget:3]'
 ---

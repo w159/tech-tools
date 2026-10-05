@@ -2,7 +2,7 @@
 
 Dispatch this as a generic read-only Task when Phase 2b fetches a
 `github-issues` source. Fill the dispatch from
-`${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/subagent-kit.md`'s
+the subagent-kit reference (linked from SKILL.md)'s
 required shape — the GOAL/DELIVERABLE/SUCCESS CRITERIA/OUT OF SCOPE/STOP
 CONDITIONS blocks below ARE that shape; the TOOLS line and non-interactive
 note come from the kit. The connector reports facts only. The state engine

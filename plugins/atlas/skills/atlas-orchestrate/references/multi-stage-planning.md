@@ -1,5 +1,16 @@
 # Multi-Stage Planning
 
+## Contents
+
+- [The stage map](#the-stage-map)
+- [The bidirectional loop](#the-bidirectional-loop)
+- [The per-stage gate](#the-per-stage-gate)
+- [Delegation decision](#delegation-decision)
+- [Standing-consent orchestration mode](#standing-consent-orchestration-mode)
+- [Effort and granularity sizing](#effort-and-granularity-sizing)
+- [Resumability](#resumability)
+- [Right-size the wave before you dispatch](#right-size-the-wave-before-you-dispatch)
+
 The principle: **plan before you touch anything, and make every stage prove itself.** Assumption-driven work is banned. You move forward only on checked output, and you move backward the moment a later fix invalidates an earlier check.
 
 ## The stage map

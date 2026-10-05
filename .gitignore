@@ -153,6 +153,12 @@ firebase-adminsdk*.json
 # ---- Root scripts ----
 !test-mcp-tools.mjs
 
+# ---- fallow baselines (audit gate: pre-existing findings recorded as debt, not hidden) ----
+# Written by `fallow dead-code|health|dupes --save-baseline`; read via the `audit` key in
+# .fallowrc.json. They hold file paths and finding counts only (no secrets).
+!fallow-baselines/
+!fallow-baselines/**
+
 # ---- CI/CD at repo root (if added in future) ----
 !.github/
 !.github/**

@@ -1,6 +1,6 @@
 # Atlas harness parity matrix
 
-Last verified: 2026-10-01 against atlas 8.6.0 in this repo (`plugins/atlas/`). Paths are repo-relative.
+Last verified: 2026-10-01 against atlas 8.6.0 in this repo (`plugins/atlas/`); the rows and gaps named in "Changed in 9.0.0" were re-verified 2026-10-05 against atlas 9.0.0 and omp 18.6.1. Paths are repo-relative.
 
 **Citation rule.** A `file:N` citation names the START line of the thing cited: the `def`/`class`/test
 line, the lettered condition line in a docstring, or the opening line of a `hooks/hooks.json` event
@@ -122,6 +122,19 @@ Known drift worth a follow-up (not a row rewrite): `skills/atlas-orchestrate/ref
 | Recall gate, exploration deny, shell routing, shell-edit delegation | `omp/mandates.ts`, `omp/contracts.ts`, `omp/shell-route.ts`, `omp/delegation.ts` | see matrix rows above | see matrix rows above |
 | Session ingest for both harnesses | `scripts/session_ingest.py` | per-file cursors (a Claude subagent transcript no longer erases the main session's rows); omp worker/advisor files ingest as sidechains of the lead | `scripts/test_session_ingest.py` red/green; real fixtures re-ingested |
 
+## Changed in 9.0.0 (omp, mux and hook parity audit)
+
+Re-verified 2026-10-05 (the 8.6.0 rows above keep their 2026-10-01 date unless named here).
+
+| Mechanism | Where | Defect and fix | Proof |
+|---|---|---|---|
+| Lead switches reach tmux workers | `scripts/atlas_mux.py:68` (`FORWARDED_ENV`) | A tmux pane inherits the tmux server env, so a lead's `ATLAS_MANDATES=off`, `ATLAS_HOOK_BRIDGE=off`, `ATLAS_LEAN_SHELL=off`, `PI_CODING_AGENT_DIR` ... were silently dropped (probed with `tmux -L` on a server started under a clean env: `PATH` reaches a new window, `ATLAS_MANDATES` does not). The allowlist now carries the worker-read `ATLAS_*` switches and `PI_CODING_AGENT_DIR`/`PI_PROFILE`/`OMP_PROFILE`; bridge-pinned variables (`ATLAS_TOOLKIT_LOAD`, `ATLAS_WORKER_NAME`, ...) are deliberately not forwarded | `scripts/test_atlas_mux.py:575` (`test_lead_kill_switches_and_omp_profile_reach_the_worker_pane`) |
+| omp plugin enablement | `scripts/tool_routing.py:61` (`plugin_enabled`, `_omp_plugin_state:46`) | Boot read only `~/.claude/settings.json`, so a plugin installed with omp (`~/.omp/plugins/omp-plugins.lock.json`) counted as absent and boot printed "Setup gap: ... absent". Under `ATLAS_HARNESS=omp` the omp lock now decides for plugins it names; Claude Code never reads it | `hooks/test_session_boot.py:784` (`test_omp_lock_decides_under_omp_only`) |
+| Claude `outputStyle` on omp | `hooks/session_boot.py:785` | Boot injected "STYLE OVERRIDE: settings.json outputStyle is 'concise' ..." on omp from `~/.claude/settings.json`, which omp does not use (its style is `omp/style.ts`). Under `ATLAS_HARNESS=omp` the style lines are skipped | `hooks/test_status_contract.py:118` (`test_omp_ignores_claude_output_style`) |
+| Output style `TodoWrite` gating text | `omp/style.ts:123` (`adaptTodoGatingForOmp`) | see Remaining gaps | `omp/style.test.ts` first drift test |
+
+Audited and found correct (no change): every `hooks/hooks.json` script is classified in `contracts/hook-bridge.json` (`bridged`, `bridgedSessionEnd` or `notBridged`; none missing, none extra); the three `notBridged` reasons are true (`todo_capture.py` is mirrored by `omp/index.ts`, `recall_gate.py` by `omp/mandates.ts`, `atlas_doctor.py` is a SessionStart miner of the atlas DB). The recall gate treats both mounted claude-mem families as a claude-mem call: `CLAUDE_MEM_SERVER = /claude[-_]?mem|mcp[-_]?search/i` (`omp/mandates.ts:51`) and `_MEM_NAME` (`hooks/recall_gate.py:45`) match `mcp__claude_mem_mcp_search_*` and `mcp__mcp_search_*`, bare or as an `xd://` write target; `contracts/mandates.json` `recallGateCases` pins both, in both languages. The context-mode route is `xd://mcp__context_mode_context_mode_ctx_execute` (`contracts/tool-names.json`, `omp/index.ts` `CONTEXT_MODE_SERVER`). `omp -p --model=<m> --thinking=<t> --no-extensions --extension=<path> <brief>` uses only flags that `omp --help` (18.6.1) lists; omp's `tools.approvalMode` defaults to `yolo`, so an unattended worker does not stall on approval.
+
 ## Benchmark (measured 2026-10-01, run 202920)
 
 Same task in fresh git repos (two bugs in `src/calc.py`, two failing tests).
@@ -179,10 +192,18 @@ Still open:
 - Existing DB rows ingested before the `denied` column stay `denied=0` until
   re-ingested; Claude `updatedInput` rewrites are not recorded on the tool_use block,
   so only `lean-ctx -c` command text is recognised.
-- `scripts/lint_docs_names.py:552` still prints a `$CLAUDE_PLUGIN_ROOT` path.
-- The omp install of atlas ships no `agents/` (marketplace install does not surface
-  `omp/agents/`); dispatch as `task` with the role contract inlined. Cause (atlas
-  packaging vs omp installer) not yet determined in source.
+- `scripts/lint_docs_names.py:552` no longer depends on `$CLAUDE_PLUGIN_ROOT`: the scaffold command it prints is
+  built from `Path(__file__)` (re-verified 2026-10-05, 9.0.0), so it is the same absolute path under Claude Code
+  and omp.
+- Plugin agents on omp (cause determined 2026-10-05 from omp 18.6.1 `src/task/discovery.ts:86`). omp reads
+  `<plugin root>/agents` and nothing else: a marketplace install is a Claude plugin root, so atlas's Claude
+  `agents/*.md` ARE surfaced (the 8.6.0 cache holds all twelve) but with `model:` dropped, because a root carrying
+  `.claude-plugin/plugin.json` and no `.omp-plugin/plugin.json` is Claude-dialect (`pluginUsesClaudeModelDialect`).
+  The generated `omp/agents/` (tiers `@atlas-worker`/`@atlas-verifier`) is never scanned for a marketplace root:
+  omp does not honour a plugin-manifest `agents` path and `omp.extensions: ["./omp/index.ts"]` is a file entry, which
+  contributes no sub-discovery. The only fix inside atlas would be moving the omp-native files to `agents/`, which
+  Claude Code also reads, so none is made. Workaround, outside the source tree: load the directory
+  (`omp --extension <repo>/plugins/atlas/omp` or `extensions:` in `config.yml`; `omp/README.md`, Install).
 - `node test-mcp-tools.mjs`: blumira lists 31 tools vs recorded floor 32.
 
 - Completion-gate conditions (a)–(l), self-improvement nudge, chronicle and ingest now
@@ -192,10 +213,15 @@ Still open:
   and the inline-op threshold deny run in omp through the hook bridge and are tested
   against the real hook; none has been observed in a live omp session, and the advisory
   (nag) tier's text delivery is not tested on omp.
-- Connector credential watch: omp's MCP name mint drops the server/tool separator
-  (harness limit).
-- The output style still carries Claude-only sentences about `TodoWrite` gating
-  (`CLAUDE_CODE_ENABLE_TODO_TOOLS`); a contract test pins them for Claude Code.
-- omp's agent registry on this machine points at a removed install path
-  (`tech-tools___atlas___8.0.1/agents`), so `atlas:*` agents are not dispatchable
-  in omp until atlas is reinstalled there.
+- Connector credential watch: omp's MCP name mint drops the server/tool separator (harness limit). The hook bridge
+  re-splits the `connectorWatch` servers of `contracts/mcp-servers.json` back to `mcp__<server>__<tool>`
+  (`omp/README.md`, Tool-hook bridge additions), so the six hooks.json connector servers are covered; any other
+  MCP server is passed through unchanged and not watched.
+- The output style's Claude-only `TodoWrite` gating paragraph (`CLAUDE_CODE_ENABLE_TODO_TOOLS`, `ToolSearch`) is
+  no longer rendered on omp: `omp/style.ts:123` (`adaptTodoGatingForOmp`) rewrites it to one actionable clause
+  before the tool-name translation (9.0.0). The source file and the contract test that pins it for Claude Code
+  are unchanged.
+- omp's agent registry once pointed at a removed install path (`tech-tools___atlas___8.0.1/agents`). Re-checked
+  2026-10-05: `~/.omp/plugins/installed_plugins.json` and `node_modules/atlas` now resolve to
+  `tech-tools___atlas___8.6.0`, and `8.0.1` survives only in past session logs and `history.db`, not in live config.
+  Not an atlas defect; nothing to fix in the source tree.

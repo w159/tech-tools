@@ -1,7 +1,7 @@
 ---
 name: atlas-commit
-description: Create one well-scoped local git commit from a set of changed files (explicit list or the current diff) with a conventional-style message grounded in the real diff. Stages exactly the intended files, commits locally only, never pushes.
-when_to_use: commit changed files locally with a grounded message
+description: "Creates one well-scoped local git commit from an explicit file list or the current diff, with a conventional message grounded in the real diff. Stages only the intended files and never pushes. Use when changed files are ready to commit locally."
+when_to_use: "commit these changes, make a commit, conventional commit message, stage and commit"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '<file list, or omit for the current diff>'
 ---

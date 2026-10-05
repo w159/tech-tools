@@ -1,5 +1,17 @@
 # First-run setup
 
+## Contents
+
+- [Interaction method](#interaction-method)
+- [1. Sources (repeatable loop)](#1-sources-repeatable-loop)
+- [2. Ack actions + standing approval (per source)](#2-ack-actions--standing-approval-per-source)
+- [3. Sensitive flag (per source)](#3-sensitive-flag-per-source)
+- [4. Ack cap](#4-ack-cap)
+- [5. Lease TTL](#5-lease-ttl)
+- [6. Write config](#6-write-config)
+- [7. Schedule offer](#7-schedule-offer)
+- [Reconfigure](#reconfigure)
+
 Loaded by `atlas-sweep` when `feedback_sources` is unset or empty in
 `.atlas/sweep.yaml`, or when a `setup`/`reconfigure` argument is present.
 This phase is **interactive only**: a `mode:non-interactive` run with no

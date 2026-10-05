@@ -1,5 +1,15 @@
 # Synthesis framework
 
+## Contents
+
+- [The pipeline shape](#the-pipeline-shape)
+- [What synthesis owns](#what-synthesis-owns)
+- [The seven dimensions](#the-seven-dimensions)
+- [Severity assignment](#severity-assignment)
+- [Handoff prompts](#handoff-prompts)
+- [The docs gate](#the-docs-gate)
+- [Anti-patterns to reject in synthesis](#anti-patterns-to-reject-in-synthesis)
+
 How atlas-audit turns seven independent dimension reviews into one
 prioritized, file:line-anchored report. Read this when you are running
 Phase 4 (synthesize and output) of an the code-audit mode run, or when a report came

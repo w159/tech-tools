@@ -2713,5 +2713,60 @@
     "status": "verified",
     "verified_at": "2026-10-03T07:40:21+00:00",
     "verified_by": "Verify871b"
+  },
+  {
+    "id": "atlas-9.0.0-verify",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas 9.0.0: C1,C2,C4-C7,C10 confirmed; C3/C8/C9 partial (orphan test toothless for references/, pre-existing dangling install_hooks.py directive, 36-vs-35 and 7/6 counts imprecise)",
+    "evidence": [
+      "C1 CONFIRMED (47 skills yaml-parsed, desc<=400, total 17454, no renames); C2 CONFIRMED (autopilot/pov/orchestrate/setup/ship/commit/strategy/babysit facts present in body); C3 PARTIAL (46 TOCs match, no orphans by name, but /scripts/install_hooks.py in atlas-orchestrate/references/hooks-automation.md:35-40 dangles [pre-existing at HEAD]; observed 6 flattened directives in 5 files not 7/6; verifier-brief says dispatcher pastes path but SKILL.md never instructs it); C4 CONFIRMED (gen-agents idempotent in /tmp copy, only description lines differ); C5 CONFIRMED (AST diff: only FORWARDED_ENV 2->18; tool_routing only _omp_plugin_state+plugin_enabled branch; unset ATLAS_HARNESS identical to HEAD); C6 CONFIRMED; C7 CONFIRMED; C8 PARTIAL (17454, 12, 18, 245, 87/3 true; 1887 passed true; module has 35 tests, 36 only incl test_lint_skill_names; old total 29074 by my parse vs 29077; no live-omp overclaim); C9 PARTIAL (bun 245/0; pytest subset 222 passed 3 skipped; 4 mutations each fail a test, but test_every_skill_resource_is_reachable_from_its_skill_md passes when all SKILL.md mentions of a reference are removed because any 'references/' mention exempts the whole dir); C10 CONFIRMED (git diff HEAD --stat empty)"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 yaml parse of skills; git show HEAD comparisons; bun plugins/atlas/omp/gen-agents.ts in /tmp copy; bun test; pytest -q plugins/atlas/scripts plugins/atlas/hooks (1887 passed, 3 skipped); mutations in /tmp/atlas-verify",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-10-05T15:34:23+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "atlas-9.0.0-verify-fixes",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas 9.0.0: the four problems in verifier row atlas-9.0.0-verify are fixed and re-demonstrated; the verifier did not re-run",
+    "evidence": [
+      "orphan test: mutation copy (atlas-audit/SKILL.md minus lens-set.md, references/ still mentioned) -> 1 failed naming atlas-audit/references/lens-set.md; real tree -> 35 passed",
+      "dispatch templates restored: atlas-optimize/references/verifier-brief.md:25-28 and atlas-plan/references/handoff.md:17-18 carry ${CLAUDE_PLUGIN_ROOT}/skills/... paths again (verifier-brief is byte-identical to HEAD)",
+      "hooks-automation.md:44-49 now uses ${CLAUDE_PLUGIN_ROOT}/scripts/install_hooks.py; /tmp/run_install_hooks_list.sh ran the SOURCE-tree script (plugins/atlas/scripts/install_hooks.py), exit 0. Three earlier ad-hoc --list runs hit the omp 8.6.0 cache read-only (nothing written); they are not the proof.",
+      "counts re-measured vs HEAD with a YAML parser: old total 29074 (was 29077), atlas-pov 1518 (was 1521), docs-curator 579 (was 581); conformance module 35 tests; changelogs and README corrected",
+      "post-fix full run: bun test 245 pass 0 fail; pytest hooks+scripts 1887 passed 3 skipped; lint_skill_names and lint_docs_names clean; manifests parse"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && python3 -m pytest -q hooks scripts && (cd omp && bun test)",
+    "proposed_fix": "none outstanding; live-omp verification of the omp fixes is NOT done and is tracked in docs/ROADMAP.md",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-05T15:42:23+00:00",
+    "verified_by": "orchestrator (self re-check of verifier findings; not an independent agent)"
+  },
+  {
+    "id": "atlas-9.0.0-reverify",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas 9.0.0 RC second pass: F1-F4, N1-N4, E1-E3, R1-R3 all independently reproduced",
+    "evidence": [
+      "F1 CONFIRMED (E1 removing lens-set.md mention with references/ still present -> 1 failed naming atlas-audit/references/lens-set.md; real tree 35 passed). F2 CONFIRMED (verifier-brief.md git diff --stat HEAD empty; literal ${CLAUDE_PLUGIN_ROOT}/skills/... at verifier-brief.md:26 and handoff.md:18 inside dispatch templates; targets exist). F3 CONFIRMED (hooks-automation.md:44-49 use ${CLAUDE_PLUGIN_ROOT}/scripts/install_hooks.py; plugins/atlas/scripts/install_hooks.py exists). F4 CONFIRMED (own YAML-parse of HEAD, tolerant fallback for atlas-dogfood: old 29074, new 17454, pov 1518, docs-curator 579; module 35 tests). N1 CONFIRMED (stdlib _skill_meta equals yaml.safe_load on 7 keys x 59 files, 0 diffs; module has no import yaml; passes 35 with yaml import blocked via meta_path). N2 CONFIRMED (omp 18.6.1 src/task/discovery.ts:145-155 reads only <plugin root>/agents; discovery/agent-plugin-format.ts:566-571 pluginUsesClaudeModelDialect true when .claude-plugin/plugin.json present and no .omp-plugin/plugin.json; atlas has neither plugin.json nor .omp-plugin). N3 CONFIRMED (findings.json numstat 38 0, zero removed lines; new row evidence has no omp-cache path, only prose omp 8.6.0 cache; row claims true but verified_by is the orchestrator). N4 CONFIRMED (bun test 245 pass 0 fail; pytest hooks scripts 1887 passed 3 skipped). E1 E2 E3 CONFIRMED (500-char desc -> test_description_stays_concise failed atlas-pov 500 chars; TOC removed -> toc test failed self-telemetry.md; Use when stripped -> agent test failed verifier.md; block scalar -> AssertionError block scalar not supported for description). R1 CONFIRMED (empty diff). R2 CONFIRMED (numstat 1 1 each; plugin.json 9.0.0; marketplace atlas 9.0.0; root 4.5.1). R3 CONFIRMED with caveat (no file under ~/.claude/plugins newer than 07:00; under ~/.omp/plugins nothing newer than 08:00; lock and tech-tools___atlas___8.6.0 mtime Oct 3 00:25; only marketplace clone dirs refreshed 07:45-07:46 coincident with omp binary startup, content is Oct 2 upstream 8.6.0, cannot prove who triggered)."
+    ],
+    "doc_refs": [],
+    "reproduction": "bash /tmp/exp.sh; python3 /tmp/n1.py; python3 /tmp/f4.py; cd plugins/atlas/omp && bun test; cd plugins/atlas && python3 -m pytest -q hooks scripts; git diff --numstat .atlas/.run/findings.json; git diff --stat HEAD -- <R1 paths>; find ~/.omp/plugins ~/.claude/plugins -newermt 2026-10-05",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-05T15:49:25+00:00",
+    "verified_by": "atlas:verifier"
   }
 ]

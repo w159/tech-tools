@@ -1,5 +1,16 @@
 # Audit Workflow
 
+## Contents
+
+- [Hard constraint: read-only](#hard-constraint-read-only)
+- [Inputs](#inputs)
+- [The four parallel investigations](#the-four-parallel-investigations)
+- [Agent roles](#agent-roles)
+- [Grounding](#grounding)
+- [Synthesis (main context, after all four return)](#synthesis-main-context-after-all-four-return)
+- [Verify](#verify)
+- [Query templates](#query-templates)
+
 The read-only database audit runs four investigations in parallel, each in a
 fresh context, then synthesizes in the main context. This reference documents
 the workflow and the three agent roles the skill dispatches.

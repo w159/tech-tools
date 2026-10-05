@@ -10,6 +10,7 @@ import {
 	STYLE_BEGIN,
 	STYLE_END,
 	STYLE_PATH,
+	adaptTodoGatingForOmp,
 	loadStyleBody,
 	loadToolNames,
 	mcpDevice,
@@ -148,7 +149,12 @@ test("drift: the injected block is exactly the translated single-source style", 
 	expect(end).toBeGreaterThan(begin);
 	const inner = rendered.slice(begin + STYLE_BEGIN.length + 1, end - 1);
 	// "preface\n\n" then exactly translate(source) up to the end marker
-	expect(inner.slice(inner.indexOf("\n\n") + 2)).toBe(translateToolNames(body ?? "", MAP));
+	expect(inner.slice(inner.indexOf("\n\n") + 2)).toBe(translateToolNames(adaptTodoGatingForOmp(body ?? ""), MAP));
+	expect(rendered).not.toContain("CLAUDE_CODE_ENABLE_TODO_TOOLS");
+	expect(rendered).not.toContain("ENABLE_TOOL_SEARCH");
+	expect(rendered).not.toContain("device catalog(");
+	expect(rendered).toContain("If `todo` is not callable (check once, silently), carry one line under the header:");
+	expect(body).toContain("CLAUDE_CODE_ENABLE_TODO_TOOLS"); // Claude Code's source text is unchanged
 	expect(rendered).not.toContain("force-for-plugin");
 });
 

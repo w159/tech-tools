@@ -1,5 +1,20 @@
 # Strategy interview
 
+## Contents
+
+- [Overall rules](#overall-rules)
+- [1. Purpose](#1-purpose)
+- [2. Positioning](#2-positioning)
+- [3. Users](#3-users)
+- [4. Key metrics](#4-key-metrics)
+- [5. Tracks](#5-tracks)
+- [Stress test](#stress-test)
+- [6. Boundaries](#6-boundaries)
+- [7. Milestones (optional)](#7-milestones-optional)
+- [8. Brand (optional)](#8-brand-optional)
+- [After the interview](#after-the-interview)
+- [Why these questions](#why-these-questions)
+
 Loaded by `SKILL.md` at the start of Phase 1 and revisited per-section in Phase 2. Every section below maps one-to-one to a section in `strategy-template.md`.
 
 For each section: ask the opening question, evaluate the answer against the quality bar, push back when it falls into a named anti-pattern, and capture the final answer in the user's own language.

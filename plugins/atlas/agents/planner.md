@@ -1,6 +1,6 @@
 ---
 name: planner
-description: "Multi-stage decomposition specialist. Turns a task into a numbered stage map where each stage has one failable check, flags concurrent stages, and marks unverifiable output as proven versus assumed."
+description: "Multi-stage decomposition specialist that turns a task into a numbered stage map where each stage has one failable check, flags concurrent stages, and marks unverifiable output as proven versus assumed. Use when a task spans several stages or layers and needs an ordered, verifiable plan before work starts."
 model: sonnet
 effort: low
 color: blue
