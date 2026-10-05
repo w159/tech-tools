@@ -2768,5 +2768,73 @@
     "status": "verified",
     "verified_at": "2026-10-05T15:49:25+00:00",
     "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "uri-write-paths",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "URI-scheme writes (agent://, xd://, proc://) are non-file writes across hooks",
+    "evidence": [
+      "real dispatch_tripwire.py w/ seeded orchestrating DB: Write agent://X -> rc0 empty (allow); Write src/real.py -> permissionDecision deny; 10 PostToolUse agent:// writes then Read a.py -> allowed. hooks pytest 956 passed; only failure test_atlas_contract.py::InstalledParityContract (6 files differ from installed 9.0.0: completion_gate, dispatch_tripwire, docs_drift_watch, format_after_edit, prompt_optimizer differ; prompt_decision.py missing from install) = expected until reinstall. scripts pytest 964 passed. Caveat: docs_drift_watch/format_after_edit/completion_gate verified via source diff + unit tests, not driven live; HEAD-baseline run was inconclusive (symlink harness rc=1); SQL counter uses LIKE '%://%' (any path containing ://)."
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/hooks && python3 -m pytest -q -p no:cacheprovider; cd ../scripts && python3 -m pytest -q -p no:cacheprovider; python3 /tmp/demo.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-05T20:26:22+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "omp-plugin-root",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "ensureClaudePluginRoot replaces stale CLAUDE_PLUGIN_ROOT, keeps valid",
+    "evidence": [
+      "plugins/atlas/omp/index.ts diff: pre-existing value kept only if <value>/scripts/atlas_todo.py isFile(), else falls through to replace; cd plugins/atlas/omp && bun test -> 252 pass 0 fail. Caveat: behavior confirmed from diff + suite, no separate live stale-root run."
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/omp && bun test",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-05T20:26:22+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "omp-irc-mirror",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "IRC mirror writes board note for delivered write agent://",
+    "evidence": [
+      "bun-imported ircNoteArgv: Main->agent://Worker1 'hello' -> owner lead,to Worker1; Worker1->agent://Main 700 chars -> owner Worker1,to lead, text 500 chars + ' [+200 chars]'; write src/a.py -> undefined. Argv executed in mkdtemp root exit 0; 'atlas_todo.py notes --root R --to lead' returned the Worker1 note; board/lead.jsonl and board/Worker1.jsonl created. tool_result handler skips event.isError (diff)."
+    ],
+    "doc_refs": [],
+    "reproduction": "bun /tmp/m.ts",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-05T20:26:22+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "readme-rewrite",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Root README rewrite: images, counts, commands",
+    "evidence": [
+      "6 images exist, each referenced exactly once, no others. Counts from source: 47 SKILL.md, 12 agents, 25 non-test scripts, 12 .mcp.json servers, hooks.json 8 events/20 bindings/16 programs (15 hooks/*.py + scripts/atlas_doctor.py), FORWARDED_ENV=18. --help: atlas_mux spawn flags (--run --name --harness --agent --prompt-file --root --model --effort --thinking) all exist; atlas_doctor flags (--fix --hook --purge --mine --list-findings --set-status --baseline --remeasure) exist; atlas_todo note/notes with --owner --to --root work, claim/complete --id/--owner/--evidence parsed. Caveats: README tree line 'hooks/ 16 bound programs' is really 15 in hooks/ (+doctor in scripts/); atlas_todo.py has no --help (treats it as content)."
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 /tmp/r.py; python3 /tmp/h.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-05T20:26:22+00:00",
+    "verified_by": "atlas:verifier"
   }
 ]

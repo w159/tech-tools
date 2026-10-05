@@ -64,7 +64,7 @@ modelRoles:
   default: anthropic/claude-sonnet-5-5:medium   # @default fallback for verifier-tier agents (else @smol)
 ```
 
-Colony messaging: dispatch atlas agents with named task items (unique, CamelCase, <= 32 chars); a worker addresses its sibling via `write agent://<name>`. Shared worker notes go through the atlas board notes CLI — `${CLAUDE_PLUGIN_ROOT}` is set by the extension factory (see above), so these are runnable as-is from any omp worker's bash: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py" note --owner <name> [--to <name|all>] [--item <id>] "<text>"` and `... notes [--to <name>] [--since <ts>]`.
+Colony messaging: dispatch atlas agents with named task items (unique, CamelCase, <= 32 chars); a worker addresses its sibling via `write agent://<name>`. Every delivered IRC message (a `write agent://<name>` whose result is not an error, from the lead or any subagent) is mirrored to `<root>/.atlas/.run/board/<sender>.jsonl`, where the sender is `lead` for the main thread or the item name for a subagent, addressed to the target (`Main`/`parent` are recorded as `lead`, `all` stays `all`) with the text cut to 500 chars plus ` [+N chars]`; read them with `atlas_todo.py notes --to <name>`. Shared worker notes go through the atlas board notes CLI — `${CLAUDE_PLUGIN_ROOT}` is set by the extension factory (see above), so these are runnable as-is from any omp worker's bash: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py" note --owner <name> [--to <name|all>] [--item <id>] "<text>"` and `... notes [--to <name>] [--since <ts>]`. An omp process started before a plugin upgrade keeps the old extension and its `CLAUDE_PLUGIN_ROOT`; restart omp after `omp plugin upgrade atlas`.
 
 ## Install (not performed automatically)
 

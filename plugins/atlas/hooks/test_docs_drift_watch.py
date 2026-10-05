@@ -328,6 +328,47 @@ class DocsDriftWatchInProcessTest(unittest.TestCase):
         leftovers = [p.name for p in state_path.parent.iterdir() if p != state_path]
         self.assertEqual(leftovers, [])
 
+    def test_uri_paths_skip_before_git_call_and_leave_streak_untouched(self):
+        # `write agent://X` (IRC) and `write xd://...` reach PostToolUse with a
+        # URI file_path. That is a message, not a file edit: it must not query
+        # git, advance the drift streak, or create the state file.
+        calls = {"n": 0}
+
+        def counting(_root):
+            calls["n"] += 1
+            return ["app.py"]
+
+        state_path = dw._state_path(Path(self.tmp))
+        with mock.patch.object(dw, "git_changed_paths", side_effect=counting):
+            for uri in ("agent://BetaSend", "xd://mcp__serena_find_symbol", "proc://1"):
+                for key in ("file_path", "path"):
+                    out = self._call(
+                        {
+                            "cwd": self.tmp,
+                            "tool_name": "Write",
+                            "tool_input": {key: uri},
+                            "session_id": "s",
+                        }
+                    )
+                    self.assertEqual(out, "")
+        self.assertEqual(calls["n"], 0)
+        self.assertFalse(state_path.exists())
+
+    def test_real_source_path_still_advances_streak(self):
+        # Control: the URI guard must not swallow ordinary file edits.
+        path = os.path.join(self.tmp, "app.py")
+        payload = {
+            "cwd": self.tmp,
+            "tool_name": "Write",
+            "tool_input": {"file_path": path},
+            "session_id": "s",
+        }
+        with mock.patch.object(dw, "git_changed_paths", return_value=["app.py"]):
+            out = self._call(payload)
+        self.assertIn("docs drift", out)
+        state = json.loads(dw._state_path(Path(self.tmp)).read_text())
+        self.assertEqual(state["streak"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

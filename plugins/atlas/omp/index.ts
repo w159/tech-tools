@@ -75,19 +75,27 @@ const TODO_SCRIPT = nodePath.join(PLUGIN_ROOT, "scripts", "atlas_todo.py");
 const BOARD_STATUSES: Record<string, true> = { pending: true, in_progress: true, completed: true };
 
 /**
- * Point `CLAUDE_PLUGIN_ROOT` at the atlas plugin root when it is unset, so omp
- * workers can run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py" ...`.
- * omp substitutes that placeholder only during Claude-plugin discovery, so it
- * is unset for omp-native agents; the value comes from this module's own
- * location and is only written when the board CLI actually exists there. A
- * non-empty pre-existing value is never overwritten.
+ * Point `CLAUDE_PLUGIN_ROOT` at the atlas plugin root so omp workers can run
+ * `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py" ...`. omp substitutes
+ * that placeholder only during Claude-plugin discovery, so it is unset for
+ * omp-native agents; the value comes from this module's own location and is
+ * only written when the board CLI actually exists there. A pre-existing value
+ * is preserved only while `<value>/scripts/atlas_todo.py` exists: a stale one
+ * (the plugin was upgraded under a long-lived omp process, so the old versioned
+ * cache dir is gone) would otherwise leave every worker's board CLI unresolved.
  */
 export function ensureClaudePluginRoot(
 	env: Record<string, string | undefined> = process.env,
 	scriptPath: string = TODO_SCRIPT,
 ): boolean {
 	const current = env.CLAUDE_PLUGIN_ROOT;
-	if (typeof current === "string" && current.trim() !== "") return true;
+	if (typeof current === "string" && current.trim() !== "") {
+		try {
+			if (statSync(nodePath.join(current, "scripts", "atlas_todo.py")).isFile()) return true;
+		} catch {
+			// stale or foreign root without the board CLI: fall through and replace it
+		}
+	}
 	try {
 		if (statSync(scriptPath).isFile()) {
 			env.CLAUDE_PLUGIN_ROOT = PLUGIN_ROOT;
@@ -144,6 +152,48 @@ export function boardMirrorArgv(
 	if (sessionId) argv.push("--session", sessionId);
 	argv.push(JSON.stringify(items));
 	return argv;
+}
+
+/** Longest IRC message body logged to the board; longer text is cut with a ` [+N chars]` suffix. */
+const IRC_NOTE_MAX_CHARS = 500;
+
+/** Board owner for an omp agent id: the main thread (`Main`) is the colony `lead`. */
+function ircOwner(agentId: string | undefined): string {
+	const id = (agentId ?? "").trim();
+	return id === "" || id.toLowerCase() === "main" ? "lead" : id;
+}
+
+/** Board recipient for an IRC address: `Main`/`main`/`parent` are the `lead`; `all` and worker names stay. */
+function ircRecipient(address: string): string {
+	const lowered = address.toLowerCase();
+	return lowered === "main" || lowered === "parent" ? "lead" : address;
+}
+
+/**
+ * CLI for `atlas_todo.py note`, recording one delivered IRC message
+ * (`write agent://<name>`) on the project board so colony conversation lands in
+ * `<root>/.atlas/.run/board/<sender>.jsonl` next to worker notes instead of only
+ * the omp session transcript. Undefined for any other tool call. The sender is
+ * the omp agent id (`Main` -> `lead`; the CLI sanitizes the file name), the
+ * recipient is the address with `Main`/`parent` -> `lead`, and the logged text
+ * is the first 500 chars plus ` [+N chars]` when longer.
+ */
+export function ircNoteArgv(
+	agentId: string | undefined,
+	toolName: string,
+	input: Record<string, unknown> | undefined,
+	root: string,
+): string[] | undefined {
+	if (toolName.toLowerCase() !== "write") return undefined;
+	const path = typeof input?.path === "string" ? input.path.trim() : "";
+	const content = typeof input?.content === "string" ? input.content : "";
+	if (!path.startsWith("agent://") || content.trim() === "") return undefined;
+	const target = ircRecipient(path.slice("agent://".length).split("/")[0] || "all");
+	const text =
+		content.length > IRC_NOTE_MAX_CHARS
+			? `${content.slice(0, IRC_NOTE_MAX_CHARS)} [+${content.length - IRC_NOTE_MAX_CHARS} chars]`
+			: content;
+	return ["python3", TODO_SCRIPT, "note", "--root", root, "--owner", ircOwner(agentId), "--to", target, text];
 }
 
 /** Kinds of native tool calls the tripwire redirects to a lean-ctx replacement (contracts/native-tools.json). */
@@ -464,11 +514,19 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 	});
 
 	// 4) Board mirror: the omp lead's todo plan lands in .atlas/.run/todos.json
-	// so workers can claim items. Main thread only; fails open, never blocks.
+	// so workers can claim items (main thread only), and every DELIVERED IRC
+	// message (`write agent://<name>`, any agent) lands as a board note. Runs on
+	// tool_result so failed sends are never logged. Fails open, never blocks.
 	pi.on("tool_result", (event, ctx) => {
 		try {
 			if (event.isError) return undefined;
-			if ((event.toolName ?? "").toLowerCase() !== "todo") return undefined;
+			const tool = (event.toolName ?? "").toLowerCase();
+			if (tool === "write") {
+				const ircArgv = ircNoteArgv(ctx.agent.id, tool, event.input, docsRoot(ctx.cwd) ?? ctx.cwd);
+				if (ircArgv) deps.spawnBoardMirror(ircArgv, { cwd: ctx.cwd });
+				return undefined;
+			}
+			if (tool !== "todo") return undefined;
 			if (ctx.agent.kind !== "main") return undefined;
 			const root = docsRoot(ctx.cwd);
 			if (!root) return undefined;

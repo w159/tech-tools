@@ -187,9 +187,24 @@ def _system_temp_roots():
     return roots
 
 
+def _is_uri_path(path):
+    """URI-scheme path (`agent://`, `xd://`, ...): one shared definition lives in
+    atlas_db.is_uri_path, which the inline-op counter and completion gate also use."""
+    scripts = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
+    if scripts not in sys.path:
+        sys.path.insert(0, scripts)
+    from atlas_db import is_uri_path
+
+    return is_uri_path(path)
+
+
 def _is_orchestration_path(path):
     if not path:
         return True  # unknown path -> do not punish
+    # IRC messages and xd:// device calls arrive as a Write whose "path" is a
+    # URI. That is a message, not a file: never target code, never an inline edit.
+    if _is_uri_path(path):
+        return True
     norm = path.replace("\\", "/")
     if (
         norm.startswith("docs/")
