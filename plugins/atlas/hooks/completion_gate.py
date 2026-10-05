@@ -115,6 +115,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 import atlas_hook_guard  # noqa: E402
+from atlas_db import is_uri_path  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(__file__))
 from docs_drift import docs_drift as _docs_drift  # noqa: E402
@@ -288,9 +289,13 @@ def _nondocs_changed(changed_paths: list) -> bool:
 
     Unlike _docs_drift this ignores whether docs also moved: it answers only
     "did code change this run?" -- the trigger for the Law 5 verifier check (g).
-    A path is 'docs' if it starts with 'docs/' or contains '/docs/'.
+    A path is 'docs' if it starts with 'docs/' or contains '/docs/'. A URI
+    (`agent://Foo` IRC message, `xd://tool` device call) is not a file at all, so
+    it is never shipped code and never counts.
     """
     for p in changed_paths:
+        if is_uri_path(p):
+            continue
         if not (p.startswith("docs/") or "/docs/" in p):
             return True
     return False

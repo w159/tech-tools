@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-10-05 -- atlas 9.5.1: IRC no longer denied by the delegation gates; IRC mirrored to the project board; stale plugin root
+
+- `write agent://<name>` (IRC) and `write xd://...` reach the hooks as a `Write`
+  whose path is a URI. In an orchestrating session `dispatch_tripwire` denied
+  every IRC message as an inline edit of target code, the inline-op counter and
+  `completion_gate` counted them as shipped code, and the PostToolUse hooks
+  (`docs_drift_watch`, `format_after_edit`) treated them as file edits. URI-scheme
+  paths (`atlas_db.is_uri_path`) are now non-file writes everywhere; real source
+  writes are still denied. Regression tests in `hooks/` and `scripts/test_atlas_db.py`.
+- omp extension: IRC messages are appended to the project board
+  (`.atlas/.run/board/<sender>.jsonl`, delivered messages only), so colony
+  conversation is stored in the project and readable with `atlas_todo.py notes`.
+- omp extension: `ensureClaudePluginRoot` replaces a stale `CLAUDE_PLUGIN_ROOT`
+  (a long-lived omp process keeps the pre-upgrade cache path; the board CLI
+  was unresolved for workers). Restart omp after a plugin upgrade.
+- README.md rewritten as a current reference (install for Claude Code and omp,
+  hooks, skills, agents, connectors, colony, troubleshooting).
+
 ## 2026-10-05 -- Skills and agents rewritten to Anthropic's agent-skills best practices; omp mux/hook parity audit
 
 Marketplace `4.5.1`; atlas `9.0.0`.

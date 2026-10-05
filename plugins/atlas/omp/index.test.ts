@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
-import extension, { ensureClaudePluginRoot, modelOverrideReason, register } from "./index";
+import extension, { ensureClaudePluginRoot, ircNoteArgv, modelOverrideReason, register } from "./index";
 
 type Context = {
 	cwd: string;
-	agent: { kind: "main" | "sub" };
+	agent: { kind: "main" | "sub"; id?: string };
 	sessionManager?: { getSessionId(): string };
 };
 type Result = { block?: boolean; reason?: string; additionalContext?: string; decision?: string } | undefined;
@@ -55,12 +55,12 @@ function harness(
 		activeTools: active,
 		spawnBoardMirror: spawnBoardMirror ?? ((argv, opts) => { spawns.push({ argv, opts }); }),
 	});
-	const ctx: Context = { cwd: join(root, "project"), agent: { kind: "main" } };
+	const ctx: Context = { cwd: join(root, "project"), agent: { kind: "main", id: "Main" } };
 	return {
 		ctx, handlers, pi, spawns,
 		call: (toolName: string, input: Record<string, unknown> = {}) => handlers.tool_call({ toolName, input }, ctx),
-		result: (event: { toolName: string; details?: unknown; isError?: boolean }) =>
-			handlers.tool_result({ toolName: event.toolName, input: {}, details: event.details, isError: event.isError }, ctx),
+		result: (event: { toolName: string; input?: Record<string, unknown>; details?: unknown; isError?: boolean }) =>
+			handlers.tool_result({ toolName: event.toolName, input: event.input ?? {}, details: event.details, isError: event.isError }, ctx),
 		stop: () => handlers.session_stop({ input: {} }, ctx),
 	};
 }
@@ -274,11 +274,109 @@ test("factory sets CLAUDE_PLUGIN_ROOT to the atlas plugin root when unset", () =
 	expect(process.env.CLAUDE_PLUGIN_ROOT).toBe(resolve(import.meta.dir, ".."));
 });
 
-test("factory preserves a non-empty CLAUDE_PLUGIN_ROOT", () => {
-	process.env.CLAUDE_PLUGIN_ROOT = "/custom/plugin-root";
+test("factory preserves a CLAUDE_PLUGIN_ROOT that contains the board CLI", () => {
+	const custom = join(root, "custom-plugin-root");
+	mkdirSync(join(custom, "scripts"), { recursive: true });
+	writeFileSync(join(custom, "scripts", "atlas_todo.py"), "");
+	process.env.CLAUDE_PLUGIN_ROOT = custom;
 	const api = { on: () => { }, getAllTools: () => [] };
 	extension(api as unknown as ExtensionAPI);
-	expect(process.env.CLAUDE_PLUGIN_ROOT).toBe("/custom/plugin-root");
+	expect(process.env.CLAUDE_PLUGIN_ROOT).toBe(custom);
+	expect(custom).not.toBe(resolve(import.meta.dir, ".."));
+});
+
+test("factory replaces a stale CLAUDE_PLUGIN_ROOT whose board CLI is gone", () => {
+	process.env.CLAUDE_PLUGIN_ROOT = "/nowhere/tech-tools___atlas___8.6.0";
+	const api = { on: () => { }, getAllTools: () => [] };
+	extension(api as unknown as ExtensionAPI);
+	expect(process.env.CLAUDE_PLUGIN_ROOT).toBe(resolve(import.meta.dir, ".."));
+});
+
+
+test("ircNoteArgv maps Main and parent to lead and records the sender, recipient and text", () => {
+	const main = ircNoteArgv("Main", "write", { path: "agent://BetaSend", content: "hi" }, "/proj") ?? [];
+	expect(main.slice(2)).toEqual(["note", "--root", "/proj", "--owner", "lead", "--to", "BetaSend", "hi"]);
+	for (const address of ["agent://Main", "agent://main", "agent://parent"]) {
+		const reply = ircNoteArgv("BetaSend", "write", { path: address, content: "done" }, "/p") ?? [];
+		expect(reply.slice(2)).toEqual(["note", "--root", "/p", "--owner", "BetaSend", "--to", "lead", "done"]);
+	}
+	const broadcast = ircNoteArgv("GammaRun", "write", { path: "agent://all", content: "x" }, "/p") ?? [];
+	expect(broadcast.slice(2)).toEqual(["note", "--root", "/p", "--owner", "GammaRun", "--to", "all", "x"]);
+	expect((ircNoteArgv(undefined, "write", { path: "agent://A", content: "x" }, "/p") ?? [])[6]).toBe("lead");
+});
+
+test("ircNoteArgv truncates long messages to 500 chars with a [+N chars] suffix", () => {
+	const exact = "a".repeat(500);
+	expect((ircNoteArgv("Main", "write", { path: "agent://A", content: exact }, "/p") ?? []).at(-1)).toBe(exact);
+	const long = "b".repeat(1234);
+	expect((ircNoteArgv("Main", "write", { path: "agent://A", content: long }, "/p") ?? []).at(-1)).toBe(`${"b".repeat(500)} [+734 chars]`);
+});
+
+test("ircNoteArgv ignores non-IRC writes and empty messages", () => {
+	expect(ircNoteArgv("Main", "write", { path: "src/a.ts", content: "x" }, "/p")).toBeUndefined();
+	expect(ircNoteArgv("Main", "write", { path: "xd://mcp__x", content: "{}" }, "/p")).toBeUndefined();
+	expect(ircNoteArgv("Main", "write", { path: "agent://A", content: "  " }, "/p")).toBeUndefined();
+	expect(ircNoteArgv("Main", "read", { path: "agent://A", content: "x" }, "/p")).toBeUndefined();
+	expect(ircNoteArgv("Main", "write", undefined, "/p")).toBeUndefined();
+});
+
+test("IRC mirror fires on a delivered write result from any agent, not on errors or non-agent writes", () => {
+	const main = harness();
+	main.result({ toolName: "write", input: { path: "agent://BetaSend", content: "start" } });
+	expect(main.spawns).toHaveLength(1);
+	expect(main.spawns[0].argv.slice(2)).toEqual([
+		"note", "--root", join(root, "project"), "--owner", "lead", "--to", "BetaSend", "start",
+	]);
+	expect(main.spawns[0].opts.cwd).toBe(join(root, "project"));
+
+	const sub = harness();
+	sub.ctx.agent = { kind: "sub", id: "BetaSend" };
+	sub.result({ toolName: "write", input: { path: "agent://Main", content: "reply" } });
+	expect(sub.spawns).toHaveLength(1);
+	expect(sub.spawns[0].argv.slice(2)).toEqual([
+		"note", "--root", join(root, "project"), "--owner", "BetaSend", "--to", "lead", "reply",
+	]);
+
+	const errored = harness();
+	errored.result({ toolName: "write", input: { path: "agent://BetaSend", content: "x" }, isError: true });
+	expect(errored.spawns).toHaveLength(0);
+
+	const plain = harness();
+	plain.result({ toolName: "write", input: { path: join(root, "project", "src", "a.ts"), content: "x" } });
+	expect(plain.spawns).toHaveLength(0);
+
+	const beforeDelivery = harness();
+	beforeDelivery.call("write", { path: "agent://BetaSend", content: "x" });
+	expect(beforeDelivery.spawns).toHaveLength(0); // tool_call no longer logs undelivered sends
+});
+
+test("IRC mirror falls back to the cwd when no docs root exists and tolerates a spawn failure", () => {
+	const outside = harness();
+	outside.ctx.cwd = root;
+	outside.result({ toolName: "write", input: { path: "agent://A", content: "x" } });
+	expect(outside.spawns).toHaveLength(1);
+	expect(outside.spawns[0].argv[4]).toBe(root);
+
+	const failing = harness(() => ACTIVE_NONE, () => { throw new Error("spawn unavailable"); });
+	expect(failing.result({ toolName: "write", input: { path: "agent://A", content: "x" } })).toBeUndefined();
+});
+
+test("IRC mirror argv runs the real CLI: a sub's reply to agent://Main is readable by lead", () => {
+	const sub = harness();
+	sub.ctx.agent = { kind: "sub", id: "BetaSend" };
+	sub.result({ toolName: "write", input: { path: "agent://Main", content: "shipped the fix" } });
+	expect(sub.spawns).toHaveLength(1);
+	const run = Bun.spawnSync(sub.spawns[0].argv, { cwd: sub.spawns[0].opts.cwd, stdout: "pipe", stderr: "pipe" });
+	expect(run.exitCode).toBe(0);
+	const read = Bun.spawnSync(
+		["python3", resolve(import.meta.dir, "..", "scripts", "atlas_todo.py"), "notes", "--to", "lead", "--root", join(root, "project")],
+		{ stdout: "pipe", stderr: "pipe" },
+	);
+	expect(read.exitCode).toBe(0);
+	const out = JSON.parse(read.stdout.toString()) as { notes: { owner: string; to: string; text: string }[] };
+	expect(out.notes).toHaveLength(1);
+	expect(out.notes[0]).toMatchObject({ owner: "BetaSend", to: "lead", text: "shipped the fix" });
+	expect(readFileSync(join(root, "project", ".atlas", ".run", "board", "BetaSend.jsonl"), "utf8")).toContain("shipped the fix");
 });
 
 test("ensureClaudePluginRoot skips an unset value only when the CLI is missing", () => {
@@ -456,8 +554,8 @@ test("session_start hands the run-state sink the project root and session id, ma
 	const handlers: Record<string, Handler> = {};
 	register({ on: (name: string, handler: Handler) => { handlers[name] = handler; } } as unknown as Pick<ExtensionAPI, "on">, {
 		activeTools: () => [],
-		spawnBoardMirror: () => {},
-		runState: { onSessionStart: info => void started.push(info), onToolAllowed: () => {}, onToolResult: () => {} },
+		spawnBoardMirror: () => { },
+		runState: { onSessionStart: info => void started.push(info), onToolAllowed: () => { }, onToolResult: () => { } },
 	});
 	const project = join(root, "project", "src", "nested");
 	const ctx: Context = { cwd: project, agent: { kind: "main" }, sessionManager: { getSessionId: () => "s-9" } };
@@ -471,8 +569,8 @@ test("a throwing run-state sink does not break session start or the shell-edit b
 	const handlers: Record<string, Handler> = {};
 	register({ on: (name: string, handler: Handler) => { handlers[name] = handler; } } as unknown as Pick<ExtensionAPI, "on">, {
 		activeTools: () => [],
-		spawnBoardMirror: () => {},
-		runState: { onSessionStart: () => { throw new Error("sink exploded"); }, onToolAllowed: () => {}, onToolResult: () => {} },
+		spawnBoardMirror: () => { },
+		runState: { onSessionStart: () => { throw new Error("sink exploded"); }, onToolAllowed: () => { }, onToolResult: () => { } },
 	});
 	const ctx: Context = { cwd: join(root, "project"), agent: { kind: "main" } };
 	expect(() => (handlers.session_start as unknown as (e: unknown, c: Context) => void)({}, ctx)).not.toThrow();

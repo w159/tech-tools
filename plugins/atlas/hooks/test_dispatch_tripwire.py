@@ -425,6 +425,35 @@ class TripwireTest(unittest.TestCase):
         self.assertIn('"permissionDecision": "deny"', r.stdout)
         self.assertIn("never edit target code inline", r.stdout)
 
+    def test_pre_allows_write_to_uri_scheme_path(self):
+        """IRC messages and xd:// device calls reach the hook as a Write whose
+        path is a URI (agent://Foo). A URI is not a file, so it is never target
+        code and the inline-edit deny must not fire for it."""
+        for uri in ("agent://ParityHarness", "xd://report_issue", "proc://job1/kill"):
+            r = run_hook(self._pre_payload("Write", {"file_path": uri}), self.env)
+            self.assertEqual(r.returncode, 0)
+            self.assertNotIn("deny", r.stdout, uri)
+            self.assertEqual(r.stdout.strip(), "", uri)
+
+    def test_uri_writes_never_reach_the_inline_op_deny_threshold(self):
+        """Eight logged agent:// writes must not count toward DENY_THRESHOLD:
+        a following real Read is still allowed."""
+        for _ in range(8):
+            run_hook(
+                self._post_payload("Write", {"file_path": "agent://Foo"}), self.env
+            )
+        r = run_hook(self._pre_payload("Read", {"file_path": "a.py"}), self.env)
+        self.assertEqual(r.returncode, 0)
+        self.assertNotIn("inline ops since your last dispatch", r.stdout)
+        self.assertNotIn('"permissionDecision": "deny"', r.stdout)
+
+    def test_post_uri_write_does_not_nag_as_target_edit(self):
+        r = run_hook(
+            self._post_payload("Write", {"file_path": "agent://Foo"}), self.env
+        )
+        self.assertEqual(r.returncode, 0)
+        self.assertNotIn("atlas:implementer", r.stdout)
+
     def test_pre_deny_dispatch_bundling_several_goals(self):
         """Two GOAL blocks is a whole wave compressed into one context, which
         is the orchestrator's sprawl moved one level down rather than delegated."""
@@ -942,6 +971,32 @@ class InProcessTest(unittest.TestCase):
         out = self._run_main(self._pre("Edit", {"file_path": ".atlas/evidence/x.md"}))
         self.assertEqual(out, "")
 
+    def test_ip_pre_uri_write_allowed(self):
+        # agent:// (IRC), xd:// (devices) etc. are not files -> never inline edits.
+        for uri in ("agent://ParityHarness", "xd://report_issue", "local://n.md"):
+            for tool in ("Write", "Edit", "MultiEdit", "NotebookEdit"):
+                self.assertEqual(
+                    self._run_main(self._pre(tool, {"file_path": uri})), "", (tool, uri)
+                )
+
+    def test_ip_pre_uri_writes_do_not_reach_deny_threshold(self):
+        # 8+ logged agent:// writes (>= DENY_THRESHOLD) must not trip the
+        # unsanctioned-inline-op deny for the next op.
+        for _ in range(10):
+            self._run_main(self._post("Write", {"file_path": "agent://Foo"}))
+        out = self._run_main(self._pre("Write", {"file_path": "agent://Foo"}))
+        self.assertEqual(out, "")
+        out = self._run_main(self._pre("Read", {"file_path": "b.py"}))
+        self.assertNotIn("inline ops since your last dispatch", out)
+        self.assertNotIn('"permissionDecision": "deny"', out)
+
+    def test_ip_pre_real_source_write_still_denied_after_uri_writes(self):
+        for _ in range(3):
+            self._run_main(self._post("Write", {"file_path": "agent://Foo"}))
+        out = self._run_main(self._pre("Write", {"file_path": "src/foo.py"}))
+        self.assertIn('"permissionDecision": "deny"', out)
+        self.assertIn("never edit target code inline", out)
+
     def test_ip_pre_no_active_run_is_silent(self):
         # No run -> nothing to gate.
         out = self._run_main(
@@ -996,6 +1051,18 @@ class InProcessTest(unittest.TestCase):
         self.assertTrue(f("/repo/.atlas/audits/x.md"))  # contains /.atlas/
         self.assertTrue(f("docs\\x.md"))  # backslash normalization
         self.assertFalse(f("src/foo.py"))  # production target
+        # URI-scheme paths (IRC agent://, xd:// devices, ...) are not files.
+        self.assertTrue(f("agent://ParityHarness"))
+        self.assertTrue(f("xd://report_issue"))
+        self.assertTrue(f("proc://job1/kill"))
+        self.assertTrue(f("local://plan.md"))
+        self.assertTrue(f("artifact://3"))
+        self.assertTrue(f("mcp://srv/res"))
+        self.assertTrue(f("git+ssh://host/x"))  # scheme may carry + . -
+        # Not URIs: a Windows drive path and a bare colon stay target code.
+        self.assertFalse(f("C:\\repo\\src\\app.py"))
+        self.assertFalse(f("src/a:b.py"))
+        self.assertFalse(f("1bad://x"))  # scheme must start with a letter
 
     def test_ip_threshold_value_error_branch(self):
         with patch.dict(os.environ, {"ATLAS_TRIPWIRE_THRESHOLD": "garbage"}):

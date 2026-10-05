@@ -85,10 +85,25 @@ def candidates_for(path: str, cwd: str) -> list[list[str]]:
     return []
 
 
+def _is_uri_path(path: str) -> bool:
+    """URI-scheme path (`agent://`, `xd://`, ...): an IRC/device message, not a file.
+    Shared definition lives in atlas_db.is_uri_path; fail open (treat as a file)
+    if it cannot be imported."""
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        from atlas_db import is_uri_path
+
+        return is_uri_path(path)
+    except Exception:
+        return False
+
+
 def file_path_from(data: dict) -> str | None:
     ti = data.get("tool_input") or {}
     fp = ti.get("file_path") or ti.get("path") or ti.get("notebook_path")
-    return fp if isinstance(fp, str) and fp else None
+    if not isinstance(fp, str) or not fp or _is_uri_path(fp):
+        return None
+    return fp
 
 
 def main() -> int:

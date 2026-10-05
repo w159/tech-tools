@@ -1,5 +1,42 @@
 # Changelog
 
+## [9.5.1] - 2026-10-05
+
+### Added
+- omp extension: every delivered IRC message (`write agent://<name>`, from the
+  lead or any subagent; failed sends are not logged) is now also appended to
+  the project board as a note (`<root>/.atlas/.run/board/<sender>.jsonl`,
+  sender `lead` for the main thread or the item name for a subagent,
+  addressed to the target with `Main`/`parent` recorded as `lead`, text cut
+  to 500 chars plus ` [+N chars]`), so colony conversation is stored in the
+  project's `.atlas` and readable with `atlas_todo.py notes --to <name>`,
+  not only in the omp session transcript. Mirrored on `tool_result`. Fails open.
+
+### Fixed
+- URI-scheme writes are no longer treated as target-code edits. The harness
+  exposes IRC messages (`agent://<Name>`) and `xd://` device calls as a
+  `Write` whose path is a URI, so an orchestrating session had every IRC
+  message denied (`never edit target code inline. Route this Write of
+  agent://ParityHarness to atlas:implementer`). One shared
+  `atlas_db.is_uri_path` (`^[A-Za-z][A-Za-z0-9+.-]*://`; Windows `C:\` paths
+  never match) now feeds three places: the tripwire's `_is_orchestration_path`
+  (no inline-edit deny or post-edit nag), the unsanctioned inline-op counter
+  (URI writes no longer climb toward `DENY_THRESHOLD`), and
+  `run_changed_paths` / `_nondocs_changed` (a URI is never shipped code, so it
+  cannot force evidence, verifier, or docs requirements at Stop). Real source
+  writes are still denied.
+  The PostToolUse hooks share the guard: `docs_drift_watch.py` returns before
+  touching git or its state file (an IRC message no longer advances the drift
+  streak), and `format_after_edit.py` ignores URI paths so no formatter is run
+  on them. Both stay fail-open if `atlas_db` cannot be imported (the watcher
+  no-ops, the formatter treats the path as a file).
+- omp extension: `ensureClaudePluginRoot` no longer trusts a non-empty
+  `CLAUDE_PLUGIN_ROOT` blindly. A long-lived omp process that predates a plugin
+  upgrade keeps the old versioned cache path, which left every worker's
+  `atlas_todo.py` board CLI unresolved (observed: 8.6.0 path after the 9.0.0
+  upgrade). The value is now kept only while `<root>/scripts/atlas_todo.py`
+  exists; otherwise it is replaced with the extension's own plugin root.
+
 ## [9.0.0] - 2026-10-05
 
 ### Changed

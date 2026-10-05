@@ -284,6 +284,41 @@ class MainInProcessTest(unittest.TestCase):
         self.assertEqual(rc, 0)
         prn.assert_not_called()
 
+    def test_uri_path_is_never_formatted_even_if_a_file_exists_there(self):
+        # `write agent://X` / `write xd://...` carry a URI path. Even when a
+        # same-named relative file exists on disk (agent:/X.py), the hook must
+        # treat it as a message, not a file, and never invoke a formatter.
+        uri = "agent://BetaSend.py"
+        os.makedirs(os.path.join(self.tmp, "agent:"), exist_ok=True)
+        with open(os.path.join(self.tmp, "agent:", "BetaSend.py"), "w") as f:
+            f.write("x = 1\n")
+        old = os.getcwd()
+        os.chdir(self.tmp)
+        try:
+            with (
+                mock.patch.object(format_after_edit.shutil, "which", return_value="x"),
+                mock.patch.object(format_after_edit.subprocess, "run") as run,
+            ):
+                rc = self._run_main(_payload("Write", uri, cwd=self.tmp))
+        finally:
+            os.chdir(old)
+        self.assertEqual(rc, 0)
+        run.assert_not_called()
+
+    def test_real_path_still_formatted_control(self):
+        class Ok:
+            returncode = 0
+
+        with (
+            mock.patch.object(format_after_edit.shutil, "which", return_value="x"),
+            mock.patch.object(
+                format_after_edit.subprocess, "run", return_value=Ok()
+            ) as run,
+        ):
+            rc = self._run_main(_payload("Write", self.target, cwd=self.tmp))
+        self.assertEqual(rc, 0)
+        run.assert_called()
+
     def test_formatter_not_installed_noop(self):
         payload = _payload("Edit", self.target, cwd=self.tmp)
         with (

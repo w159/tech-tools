@@ -130,6 +130,13 @@ def main() -> int:
         fp = ti.get("file_path") or ti.get("path") or ti.get("notebook_path")
         if not fp or not isinstance(fp, str):
             return 0
+        # `write agent://X` (IRC) / `write xd://...` arrive with a URI path: a
+        # message, not a file edit, so it must not count toward the streak.
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        from atlas_db import is_uri_path
+
+        if is_uri_path(fp):
+            return 0
         if _is_docs_or_atlas_path(fp):
             return 0
 

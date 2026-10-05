@@ -474,6 +474,14 @@ class ConditionGHelperTest(unittest.TestCase):
     def test_nondocs_changed_false_for_empty(self):
         self.assertFalse(_nondocs_changed([]))
 
+    def test_nondocs_changed_ignores_uri_paths(self):
+        """agent:// / xd:// are not files: they are never shipped code."""
+        self.assertFalse(_nondocs_changed(["agent://Foo", "xd://x", "proc://j/kill"]))
+        self.assertFalse(_nondocs_changed(["docs/CHANGELOG.md", "agent://Foo"]))
+        self.assertTrue(_nondocs_changed(["agent://Foo", "src/foo.py"]))
+        # A Windows drive path is a file, not a URI.
+        self.assertTrue(_nondocs_changed(["C:\\repo\\src\\app.py"]))
+
     def test_unpaired_fails_open_to_zero_on_db_error(self):
         """atlas_db unavailable (DB path unopenable) -> helper returns 0, no crash."""
         blocker = tempfile.NamedTemporaryFile(delete=False)
@@ -2513,3 +2521,22 @@ class DelegationMandateTest(unittest.TestCase):
     def test_subagent_transcript_is_exempt(self):
         self.write()
         self.assertEqual(self.gate(transcript_path="/session/subagents/agent-a.jsonl"), "")
+
+    def test_uri_scheme_writes_are_not_main_thread_code(self):
+        """An IRC message (agent://) or xd:// device call is logged as a Write
+        with a URI path. It is not a file, so it must not make (m) demand a
+        dispatch."""
+        for path in ("agent://Foo", "xd://report_issue", "proc://j/kill"):
+            self.write(path)
+        self.conn.execute(
+            "INSERT INTO tool_calls(session_id,ts,tool_name,is_sidechain,input_summary) VALUES(?,?,?,0,?)",
+            ("mandate", datetime.now(timezone.utc).timestamp(), "Write",
+             json.dumps({"file_path": "agent://Bar"})),
+        )
+        self.conn.commit()
+        self.assertEqual(self.gate(), "")
+
+    def test_real_code_write_next_to_uri_writes_still_blocks(self):
+        self.write("agent://Foo")
+        self.write("src/app.py")
+        self.assertIn("(m) Delegation mandate", self.gate())

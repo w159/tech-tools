@@ -423,6 +423,19 @@ def record_recall(conn, run_id, hit):
     conn.commit()
 
 
+# A URI-scheme path (`agent://Foo` IRC messages, `xd://tool` device calls,
+# `proc://`, `local://`, `artifact://`, `mcp://`, ...) is a harness message
+# routed through a Write/Edit tool call, not a file. It is never target code, so
+# the tripwire, the inline-op counter and the completion gate all share this one
+# notion. `://` is required: a Windows drive path (`C:\repo\a.py`) has no `//`.
+_URI_PATH = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")
+
+
+def is_uri_path(path):
+    """True when `path` is a URI (`scheme://...`), not a filesystem path."""
+    return bool(path) and _URI_PATH.match(str(path)) is not None
+
+
 def inline_ops_since_last_dispatch(conn, run_id):
     last = conn.execute(
         "SELECT COALESCE(MAX(id),0) FROM events WHERE run_id=? AND is_inline_op=0",
@@ -442,9 +455,11 @@ def unsanctioned_inline_ops_since_last_dispatch(conn, run_id):
     docs/ and .atlas/ records itself at closeout -- counting those against the
     inline budget would deny the very remediation the gate just ordered.
 
-    Excluded: Edit/Write/MultiEdit/NotebookEdit whose path is under docs/ or .atlas/. NOT
-    excluded: any op with no path (all Bash), because 'unknown path' is the
-    largest inline surface there is and exempting it would empty the counter.
+    Excluded: Edit/Write/MultiEdit/NotebookEdit whose path is under docs/ or
+    .atlas/, or is a URI (`agent://`, `xd://`, ...: IRC and device calls the
+    harness routes through a Write, which are not file edits). NOT excluded: any
+    op with no path (all Bash), because 'unknown path' is the largest inline
+    surface there is and exempting it would empty the counter.
     """
     last = conn.execute(
         "SELECT COALESCE(MAX(id),0) FROM events WHERE run_id=? AND is_inline_op=0",
@@ -454,7 +469,8 @@ def unsanctioned_inline_ops_since_last_dispatch(conn, run_id):
         "SELECT COUNT(*) FROM events WHERE run_id=? AND is_inline_op=1 AND id>? "
         "AND NOT (tool IN ('Edit','Write','MultiEdit','NotebookEdit') AND path IS NOT NULL AND ("
         "  path LIKE 'docs/%' OR path LIKE '%/docs/%'"
-        "  OR path LIKE '.atlas/%' OR path LIKE '%/.atlas/%'))",
+        "  OR path LIKE '.atlas/%' OR path LIKE '%/.atlas/%'"
+        "  OR path LIKE '%://%'))",
         (run_id, last),
     ).fetchone()[0]
 
@@ -601,7 +617,7 @@ def run_changed_paths(conn, run_id):
             f"({placeholders}) AND path IS NOT NULL",
             (run_id, *_WRITE_TOOLS),
         ):
-            if path:
+            if path and not is_uri_path(path):
                 paths.add(path)
         if session_id:
             end = ended_at if ended_at is not None else time.time()
@@ -618,7 +634,7 @@ def run_changed_paths(conn, run_id):
                     file_path = json.loads(summary).get("file_path")
                 except Exception:
                     continue
-                if file_path:
+                if file_path and not is_uri_path(file_path):
                     paths.add(file_path)
         return list(paths)
     except Exception:

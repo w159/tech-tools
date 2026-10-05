@@ -1,9 +1,11 @@
 import contextlib
 import io
+import json
 import os
 import runpy
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -1577,4 +1579,82 @@ class UnsanctionedInlineOpsTest(unittest.TestCase):
         atlas_db.log_dispatch(self.conn, self.rid, "atlas:implementer")
         self.assertEqual(
             atlas_db.unsanctioned_inline_ops_since_last_dispatch(self.conn, self.rid), 0
+        )
+
+    def test_uri_scheme_writes_are_not_counted(self):
+        """IRC (agent://) and device (xd://) writes surface as Write calls with a
+        URI path. They are messages, not file edits, so they never count toward
+        the inline-op deny threshold."""
+        for path in (
+            "agent://ParityHarness",
+            "xd://report_issue",
+            "proc://job1/kill",
+            "local://plan.md",
+        ):
+            for tool in ("Write", "Edit", "MultiEdit", "NotebookEdit"):
+                self._log(tool, path)
+        self.assertEqual(
+            atlas_db.unsanctioned_inline_ops_since_last_dispatch(self.conn, self.rid), 0
+        )
+
+    def test_uri_exclusion_keeps_real_code_and_non_write_tools_counted(self):
+        self._log("Write", "agent://Foo")
+        self._log("Write", "src/real.py")
+        self._log("Read", "agent://Foo")  # only WRITE tools are sanctioned
+        self.assertEqual(
+            atlas_db.unsanctioned_inline_ops_since_last_dispatch(self.conn, self.rid), 2
+        )
+
+
+class UriPathTest(unittest.TestCase):
+    """One shared notion of 'URI path' for the tripwire, the inline-op counter
+    and the completion gate."""
+
+    def test_is_uri_path(self):
+        for p in ("agent://Foo", "xd://x", "proc://j/kill", "git+ssh://h/p", "a1.b-c://z"):
+            self.assertTrue(atlas_db.is_uri_path(p), p)
+        for p in (
+            "",
+            None,
+            "src/app.py",
+            "/abs/path.py",
+            "C:\\repo\\a.py",  # Windows drive path: no '://'
+            "1bad://x",  # scheme must start with a letter
+            "src/a://b.py",  # '/' before '://' means a relative file path
+        ):
+            self.assertFalse(atlas_db.is_uri_path(p), p)
+
+
+class RunChangedPathsUriTest(unittest.TestCase):
+    """A URI is not a shipped file: it must never reach the completion gate's
+    'did this run ship non-docs code' signal."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.conn = atlas_db.connect(os.path.join(self.tmp, "atlas.db"))
+        atlas_db.init(self.conn)
+        pid = atlas_db.register_project(self.conn, "/repo")
+        self.rid = atlas_db.start_run(self.conn, pid, "s-uri")
+
+    def tearDown(self):
+        self.conn.close()
+
+    def test_uri_paths_from_events_and_tool_calls_are_dropped(self):
+        atlas_db.log_event(self.conn, self.rid, "Write", "main", 1, "agent://Foo")
+        atlas_db.log_event(self.conn, self.rid, "Write", "main", 1, "xd://report_issue")
+        atlas_db.log_event(self.conn, self.rid, "Edit", "main", 1, "src/real.py")
+        self.conn.execute(
+            "INSERT INTO tool_calls(session_id,ts,tool_name,is_sidechain,input_summary) "
+            "VALUES(?,?,?,?,?)",
+            ("s-uri", time.time(), "Write", 1, json.dumps({"file_path": "agent://Bar"})),
+        )
+        self.conn.execute(
+            "INSERT INTO tool_calls(session_id,ts,tool_name,is_sidechain,input_summary) "
+            "VALUES(?,?,?,?,?)",
+            ("s-uri", time.time(), "Write", 1, json.dumps({"file_path": "src/other.py"})),
+        )
+        self.conn.commit()
+        self.assertEqual(
+            sorted(atlas_db.run_changed_paths(self.conn, self.rid)),
+            ["src/other.py", "src/real.py"],
         )
