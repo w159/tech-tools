@@ -4,7 +4,9 @@ import * as path from "node:path";
 import { YAML } from "bun";
 import {
 	ATLAS_AGENT_NAMES,
+	ATLAS_AGENT_TARGETABLE,
 	ATLAS_DEFAULT_FALLBACK_ROLE,
+	ATLAS_MECHANIC_ROLE,
 	ATLAS_THINKING_LEVELS,
 	modelPatternsFor,
 	roleFor,
@@ -37,27 +39,32 @@ function frontmatterOf(content: string): Record<string, unknown> {
 	return YAML.parse(content.slice(content.indexOf("---") + 3, content.indexOf("\n---", 4))) as Record<string, unknown>;
 }
 
+function expectedModelChain(name: string): string[] {
+	if (name === "runner") return [ATLAS_MECHANIC_ROLE, SMOL_FALLBACK_ROLE];
+	if (ATLAS_THINKING_LEVELS[name] === "medium") return [roleFor(name), ATLAS_DEFAULT_FALLBACK_ROLE, SMOL_FALLBACK_ROLE];
+	return [roleFor(name), SMOL_FALLBACK_ROLE];
+}
+
+function expectAgentMatches(name: string, source: string, generatedContent: string): void {
+	const { frontmatter, body } = parseSource(source);
+	const fm = frontmatterOf(generatedContent);
+	expect(fm.name).toBe(name);
+	expect(fm.description).toBe(frontmatter.description);
+	expect(fm.thinkingLevel).toBe(ATLAS_THINKING_LEVELS[name]);
+	const model = fm.model as string[];
+	expect(model[0]).toBe(roleFor(name));
+	expect(model).toEqual(modelPatternsFor(name));
+	expect(model).toEqual(expectedModelChain(name));
+	expect(fm.spawns).toBe("none");
+	expect(generatedContent.endsWith(body) || generatedContent.endsWith(body + "\n")).toBe(true);
+}
+
 test("every Claude agent has an omp counterpart with the mapped thinkingLevel, role, and body", () => {
 	const sources = claudeAgentSources();
 	expect(Object.keys(sources).sort()).toEqual([...ATLAS_AGENT_NAMES].sort());
 	const generated = generatedAgents();
 	expect(Object.keys(generated).sort()).toEqual([...ATLAS_AGENT_NAMES].sort());
-	for (const [name, source] of Object.entries(sources)) {
-		const { frontmatter, body } = { ...parseSource(source) };
-		const fm = frontmatterOf(generated[name]);
-		expect(fm.name).toBe(name);
-		expect(fm.description).toBe(frontmatter.description);
-		expect(fm.thinkingLevel).toBe(ATLAS_THINKING_LEVELS[name]);
-		const model = fm.model as string[];
-		expect(model[0]).toBe(roleFor(name));
-		expect(model).toEqual(
-			ATLAS_THINKING_LEVELS[name] === "medium"
-				? [roleFor(name), ATLAS_DEFAULT_FALLBACK_ROLE, SMOL_FALLBACK_ROLE]
-				: [roleFor(name), SMOL_FALLBACK_ROLE],
-		);
-		expect(fm.spawns).toBe("none");
-		expect(generated[name].endsWith(body) || generated[name].endsWith(body + "\n")).toBe(true);
-	}
+	for (const [name, source] of Object.entries(sources)) expectAgentMatches(name, source, generated[name]);
 });
 
 function parseSource(source: string): { frontmatter: Record<string, unknown>; body: string } {
@@ -109,4 +116,15 @@ test("renderGeneratedAgent YAML-safes descriptions and keeps the body verbatim",
 test("unknown agent names are rejected instead of guessed", () => {
 	const source = "---\nname: mystery-agent\ndescription: Not in the colony map.\n---\n\nBody.\n";
 	expect(() => renderGeneratedAgent("mystery-agent.md", source)).toThrow("mystery-agent");
+});
+
+test("runner is registered on the mechanical tier: off thinking, @atlas-mechanic with @smol fallback", () => {
+	expect(ATLAS_THINKING_LEVELS.runner).toBe("off");
+	expect(roleFor("runner")).toBe("@atlas-mechanic");
+	expect(modelPatternsFor("runner")).toEqual(["@atlas-mechanic", "@smol"]);
+	expect(ATLAS_AGENT_TARGETABLE.runner).toBe(true);
+	const fm = frontmatterOf(generatedAgents().runner);
+	expect(fm.thinkingLevel).toBe("off");
+	expect(fm.model).toEqual(["@atlas-mechanic", "@smol"]);
+	expect(readFileSync(path.join(outDir, "runner.md"), "utf8")).toContain("thinkingLevel: off");
 });

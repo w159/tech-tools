@@ -1,0 +1,47 @@
+{
+  "_doc": "Single source for the atlas worker protocol: the cheap mechanical tier, the dispatch blocks it adds on top of the five in hooks/dispatch_tripwire.py REQUIRED_SPEC_BLOCKS, and the fixed report every atlas worker returns. Read by hooks/dispatch_tripwire.py (REPORT: required on every atlas:* dispatch; STEPS: required and capped for the mechanical agent), hooks/worker_report_gate.py (Claude Code SubagentStop check of the final message) and omp/worker-report.ts (injects the report outputSchema, strict, into atlas task items on omp). The tier is chosen by the lead through the agent name: runner = mechanical (exact steps, no decisions), implementer and explorer = standard (bounded work from a stated spec), verifier and the audit agents = judgment. Claude Code tiers are the agent frontmatter model and effort; omp tiers are role aliases resolved through modelRoles with the built-in @smol as the guaranteed fallback (omp ships smol, not tiny).",
+  "mechanicalTier": {
+    "agent": "runner",
+    "claude": { "model": "haiku", "effort": "low" },
+    "omp": { "models": ["@atlas-mechanic", "@smol"], "thinkingLevel": "off" },
+    "maxSteps": 7,
+    "maxFiles": 5
+  },
+  "dispatchBlocksAddedToAllAtlasAgents": ["REPORT:"],
+  "dispatchBlocksAddedToMechanicalAgent": ["STEPS:"],
+  "report": {
+    "textFields": ["STATUS", "STEPS", "FILES_CHANGED", "EVIDENCE", "DELIVERABLE", "NEXT"],
+    "statusValues": ["DONE", "FAILED", "BLOCKED"],
+    "firstLinePattern": "^STATUS: (DONE|FAILED|BLOCKED)\\s*$",
+    "jsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "stepsDone", "stepsTotal", "filesChanged", "evidence", "deliverable", "next"],
+      "properties": {
+        "status": { "type": "string", "enum": ["DONE", "FAILED", "BLOCKED"] },
+        "stepsDone": { "type": "integer", "minimum": 0 },
+        "stepsTotal": { "type": "integer", "minimum": 0 },
+        "filesChanged": { "type": "array", "items": { "type": "string" } },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["step", "command", "output"],
+            "properties": {
+              "step": { "type": "integer", "minimum": 1 },
+              "command": { "type": "string" },
+              "output": { "type": "string" }
+            }
+          }
+        },
+        "deliverable": { "type": "string" },
+        "next": { "type": "string" }
+      }
+    }
+  },
+  "switches": {
+    "reportBlock": "ATLAS_GATE_REPORT",
+    "workerSchema": "ATLAS_WORKER_SCHEMA"
+  }
+}

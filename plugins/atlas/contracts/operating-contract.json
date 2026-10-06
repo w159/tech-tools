@@ -1,0 +1,22 @@
+{
+  "_doc": "Single source for the visible surface of the atlas operating contract. Read by hooks/completion_gate.py (conditions n, o, p), scripts/atlas_todo.py (item phase, scaffold), hooks/todo_capture.py (Claude TodoWrite -> board) and omp/index.ts (omp todo phases -> board). The header text itself is defined in output-styles/atlas-orchestrator.md; scripts/turn_scoring.py HEADER_RE is a looser telemetry regex (matches anywhere) and is not this contract. A todo item carries its phase as: the omp todo phase name (lowercase phase id), or on Claude Code TodoWrite a content prefix '[<phase>] ' (for example '[verify] run the suites'). The three visibility conditions (n header, o phased todo, p colony channel) ask the model to repair presentation, so each blocks at most once per session.",
+  "phases": [
+    { "id": "research", "glyph": "🔍" },
+    { "id": "theory", "glyph": "💡" },
+    { "id": "test", "glyph": "🧪" },
+    { "id": "validate", "glyph": "📋" },
+    { "id": "implement", "glyph": "🔧" },
+    { "id": "verify", "glyph": "✅" },
+    { "id": "done", "glyph": "🏁" },
+    { "id": "blocked", "glyph": "⛔" }
+  ],
+  "headerFirstLinePattern": "^ATLAS \\| \\S+ (research|theory|test|validate|implement|verify|done|blocked) \\| \\S",
+  "todoPhases": ["research", "theory", "test", "validate", "implement", "verify"],
+  "requiredTodoPhasesWhenCodeShipped": ["implement", "verify"],
+  "itemPhasePrefix": "[<phase>] ",
+  "switches": {
+    "header": "ATLAS_GATE_HEADER",
+    "phasedTodo": "ATLAS_GATE_PHASES",
+    "colonyChannel": "ATLAS_GATE_COLONY"
+  }
+}

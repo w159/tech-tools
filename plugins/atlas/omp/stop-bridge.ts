@@ -217,6 +217,24 @@ interface StopState {
 
 const str = (value: unknown): string => (typeof value === "string" ? value : "");
 
+/** The non-empty string `text` of a `{type:"text", text}` content block; undefined for any other block. */
+function blockText(block: unknown): string | undefined {
+	if (typeof block !== "object" || block === null) return undefined;
+	if (!("type" in block) || block.type !== "text" || !("text" in block)) return undefined;
+	return typeof block.text === "string" && block.text.length > 0 ? block.text : undefined;
+}
+
+/**
+ * The text of an omp AgentMessage (`session_stop.last_assistant_message`): its `{type:"text", text}` content blocks
+ * joined by newlines. Thinking and tool blocks are not part of the reply the user reads, so they are dropped. Returns
+ * "" for anything that is not an object with an array `content`, so a malformed event can only cost the check, never
+ * the Stop.
+ */
+function lastAssistantMessageText(message: unknown): string {
+	if (typeof message !== "object" || message === null || !("content" in message) || !Array.isArray(message.content)) return "";
+	return message.content.map(blockText).filter((text): text is string => text !== undefined).join("\n");
+}
+
 function sessionIdOf(ctx: BridgeCtx): string {
 	try {
 		return str(ctx.sessionManager?.getSessionId?.());
@@ -345,6 +363,11 @@ export function registerStopBridge(pi: Pick<ExtensionAPI, "on">, deps: StopBridg
 			if (sessionId) await rebaselineBounded(bridgeCtx.cwd, sessionId); // tool state written since SessionStart must be in the snapshot BEFORE the gate compares
 			const stopHookActive = event.stop_hook_active === true;
 			const payload = claudeLifecyclePayload("Stop", { sessionId, cwd: bridgeCtx.cwd, transcriptPath, stopHookActive });
+			// Claude Code's Stop payload carries the final reply as `last_assistant_message` (text); condition (n) of
+			// completion_gate.py reads it. omp's session_stop hands over the AgentMessage itself, so no converted transcript
+			// is needed. Absent or text-less means the key is left off and the gate fails open.
+			const lastText = lastAssistantMessageText(event.last_assistant_message);
+			if (lastText) payload.last_assistant_message = lastText;
 			const deadline = now() + HANDLER_BUDGET_MS;
 			let blockReason: string | undefined;
 			try {
