@@ -1068,23 +1068,38 @@ def mine_tool_error_rate(conn, root, threshold=0.2, min_calls=5):
     }
     out = []
     for r in atlas_db.tool_usage(conn):
-        calls = r.get("calls") or 0
+        # Gate denials (denied=1) are atlas's own redirects (e.g. the lean-ctx
+        # Grep/Glob block), not tool failures: the call never ran. They are
+        # removed from BOTH the error numerator and the call population, so the
+        # gate's own volume can neither inflate the rate (127/128 Grep "errors"
+        # were the redirect) nor dilute a genuinely failing tool's rate. A tool
+        # that was only ever blocked has no executed calls and is skipped.
+        denied = r.get("denied") or 0
+        calls = (r.get("calls") or 0) - denied
         if calls < min_calls:
             continue
-        rate = (r.get("errors") or 0) / calls
+        errors = r.get("real_errors") or 0
+        rate = errors / calls
         tool_threshold = overrides.get(r.get("target") or "", threshold)
         if rate <= tool_threshold:
             continue
         target = r.get("target") or "?"
+        snippets = atlas_db.top_error_snippets(conn, r.get("kind"), r.get("target"))
+        detail = (
+            f"{errors}/{calls} executed calls to {target} errored "
+            f"({rate:.0%}, threshold {tool_threshold:.0%}; {denied} gate-denied "
+            "calls excluded)."
+        )
+        if snippets:
+            detail += " Top errors: " + "; ".join(
+                f"{s['count']}x {s['snippet'][:120]}" for s in snippets
+            )
         out.append(
             _finding(
                 dimension="tool reliability",
                 severity="MED",
                 title=f"high error rate on {r.get('kind')}:{target}",
-                detail=(
-                    f"{r.get('errors')}/{calls} calls to {target} errored "
-                    f"({rate:.0%}, threshold {tool_threshold:.0%})."
-                ),
+                detail=detail,
                 proposed_action=(
                     f"Investigate recurring failures calling {target}; check "
                     "for a wrong argument shape, a missing precondition check, "
@@ -1094,7 +1109,9 @@ def mine_tool_error_rate(conn, root, threshold=0.2, min_calls=5):
                 key=f"{r.get('kind')}:{target}",
                 metric_value=rate,
                 calls=calls,
-                errors=r.get("errors"),
+                errors=errors,
+                denied=denied,
+                top_errors=snippets,
             )
         )
     return out
@@ -2075,7 +2092,8 @@ def main(argv=None):
         nargs=2,
         default=None,
         metavar=("SESSION_ID", "JSON"),
-        help="write LLM-judged facet columns for one session, e.g. "
+        help="write LLM-judged facet columns for one session and mark it enriched "
+        "(enriched_at is set automatically unless the JSON supplies it), e.g. "
         '--enrich-facet abc123 \'{"primary_success":"...","brief_summary":"..."}\'',
     )
     ap.add_argument(
@@ -2101,6 +2119,10 @@ def main(argv=None):
             return 2
         conn = atlas_db.connect()
         atlas_db.init(conn)
+        # enriched_at is what retires a row from --pending-facets; stamp it here
+        # so a caller that only supplies the judged columns does not leave the
+        # row pending forever. A caller-supplied value still wins.
+        fields.setdefault("enriched_at", time.time())
         atlas_db.upsert_facet(conn, session_id, **fields)
         conn.close()
         print(json.dumps({"session_id": session_id, "written": sorted(fields)}))

@@ -472,6 +472,58 @@ class GateOrchestrationTest(unittest.TestCase):
         self.assertNotIn('"decision": "block"', r.stdout)
 
 
+class GateBlockSnippetTest(unittest.TestCase):
+    """friction_events.snippet for a gate block used to be the bare letters
+    ("conditions: m", "conditions: c,d,e"), which names no rule. It must keep the
+    stable `conditions: <letters>` lead and add the human-readable reasons."""
+
+    def test_single_condition_is_named(self):
+        self.assertEqual(
+            completion_gate._gate_block_snippet(["m"]),
+            "conditions: m (delegation mandate)",
+        )
+
+    def test_multiple_conditions_keep_the_letters_and_all_names(self):
+        snip = completion_gate._gate_block_snippet(["c", "d", "e"])
+        self.assertTrue(snip.startswith("conditions: c,d,e "))
+        self.assertIn("CHANGELOG missing", snip)
+        self.assertIn("ROADMAP missing", snip)
+        self.assertIn("README missing", snip)
+        self.assertFalse(snip.endswith(" "))
+
+    def test_unknown_letter_is_kept_not_dropped(self):
+        self.assertEqual(
+            completion_gate._gate_block_snippet(["z"]), "conditions: z (z)"
+        )
+
+    def test_every_letter_the_gate_can_emit_has_a_name(self):
+        """main() builds `failed` from letters a..p; each must be named or a new
+        condition silently regresses to an unreadable bare letter."""
+        for letter in "abcdefghijklmnop":
+            self.assertIn(letter, completion_gate._CONDITION_NAMES, letter)
+
+    def test_record_gate_block_stores_the_named_snippet(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        db = os.path.join(tmp, "atlas.db")
+        # The hook writes into an existing DB (the session's own init created it),
+        # so seed the schema the way a real session would have.
+        conn = atlas_db.connect(db)
+        self.addCleanup(conn.close)
+        atlas_db.init(conn)
+        with mock.patch.dict(os.environ, {"ATLAS_DB": db}):
+            completion_gate._record_gate_block("sess-snip", ["c", "d", "e"])
+        row = conn.execute(
+            "SELECT category, snippet FROM friction_events WHERE session_id=?",
+            ("sess-snip",),
+        ).fetchone()
+        self.assertEqual(row[0], "gate_block")
+        self.assertEqual(
+            row[1],
+            "conditions: c,d,e (CHANGELOG missing, ROADMAP missing, README missing)",
+        )
+
+
 class ConditionGHelperTest(unittest.TestCase):
     def test_nondocs_changed_true_for_code_path(self):
         self.assertTrue(_nondocs_changed(["src/foo.py", "docs/CHANGELOG.md"]))
@@ -2766,8 +2818,11 @@ class ContractVisibilityTest(unittest.TestCase):
             "SELECT snippet FROM friction_events WHERE session_id=?", (self.SID_A,)
         ).fetchall()
         conn.close()
+        # The snippet names the failed condition, not just its letter, so a
+        # friction row is diagnosable on its own (was the bare "conditions: n").
         self.assertEqual(
-            [r[0] for r in rows if r[0].startswith("conditions:")], ["conditions: n"]
+            [r[0] for r in rows if r[0].startswith("conditions:")],
+            ["conditions: n (status header missing)"],
         )
 
     def test_n_passes_when_header_is_the_first_non_empty_line(self):

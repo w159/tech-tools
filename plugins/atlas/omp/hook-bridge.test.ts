@@ -96,6 +96,20 @@ test("PreToolUse deny blocks the omp call; payload is Claude-shaped", async () =
 	expect(logOf("gate.py").length).toBe(1);
 });
 
+test("PreToolUse forwards the parent's live model as session_model, only when the context has one", async () => {
+	const script = hookScript("model_gate.py", {});
+	const { handlers, ctx } = harness(writeConfig({ PreToolUse: [{ matcher: "Task", hooks: [{ command: `python3 "${script}"` }] }] }, ["model_gate.py"]));
+	const dispatch = { toolName: "task", input: { agent: "implementer", task: "do it", name: "Impl" } };
+	await handlers.tool_call(dispatch, ctx());
+	expect(logOf("model_gate.py")[0]).not.toHaveProperty("session_model"); // no model on the context: nothing invented
+	for (const [provider, id] of [["anthropic", "claude-opus-5-5"], ["ollama", "glm-5.3-flash:cloud"]]) {
+		await handlers.tool_call(dispatch, { ...ctx(), model: { provider, id } } as Ctx);
+		expect(logOf("model_gate.py").at(-1)).toMatchObject({ session_model: `${provider}/${id}`, tool_name: "Task" });
+	}
+	await handlers.tool_call(dispatch, { ...ctx(), model: { provider: "anthropic" } } as Ctx); // incomplete model: dropped
+	expect(logOf("model_gate.py").at(-1)).not.toHaveProperty("session_model");
+});
+
 test("PostToolUse context returns as additionalContext with an absolute file_path", async () => {
 	const script = hookScript("drift.py", context("PostToolUse", "docs drift: update docs/"));
 	const { handlers, ctx } = harness(writeConfig({ PostToolUse: [{ matcher: "Edit|Write", hooks: [{ command: `python3 "${script}"` }] }] }, ["drift.py"]));

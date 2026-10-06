@@ -1182,6 +1182,39 @@ def _run_has_telemetry(conn, run_id, session_id: str) -> bool:
         return True
 
 
+# Human-readable name per gate condition letter. The block snippet used to be the
+# bare letters ("conditions: m", "conditions: c,d,e"), which says a gate fired
+# but not which rule or why; the names make a friction row diagnosable on its
+# own. Letters match the (a)..(p) labels in _reason().
+_CONDITION_NAMES: dict[str, str] = {
+    "a": "no .atlas/evidence",
+    "b": "no verified finding",
+    "c": "CHANGELOG missing",
+    "d": "ROADMAP missing",
+    "e": "README missing",
+    "f": "docs drift",
+    "g": "unverified implementer",
+    "h": "ROADMAP not reconciled",
+    "i": "open todos",
+    "j": "worktrees left",
+    "k": "no plan",
+    "l": "docs names not date-first",
+    "m": "delegation mandate",
+    "n": "status header missing",
+    "o": "required phases missing",
+    "p": "colony channel unused",
+}
+
+
+def _gate_block_snippet(failed: list) -> str:
+    """`conditions: <letters> (<name>, <name>)` -- the leading
+    `conditions: <letters>` is the stable machine-readable part (tests and
+    dashboards key on it); the parenthesised names are the reason. Unknown
+    letters are kept verbatim rather than dropped."""
+    names = ", ".join(_CONDITION_NAMES.get(letter, letter) for letter in failed)
+    return "conditions: " + ",".join(failed) + " (" + names + ")"
+
+
 def _record_gate_block(session_id: str, failed: list) -> None:
     """Persist one friction_events row per block decision, so a gate block is a
     measurable event (facets.gate_block_count) and not just a line of stdout the
@@ -1199,7 +1232,7 @@ def _record_gate_block(session_id: str, failed: list) -> None:
             session_id,
             "gate_block",
             weight=float(len(failed)),
-            snippet="conditions: " + ",".join(failed),
+            snippet=_gate_block_snippet(failed),
         )
     except Exception:
         pass

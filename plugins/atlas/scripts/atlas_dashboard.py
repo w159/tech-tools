@@ -14,9 +14,11 @@ from __future__ import annotations
 
 import argparse
 import atexit
+import hmac
 import json
 import os
 import re
+import secrets
 import signal
 import socket
 import subprocess
@@ -364,6 +366,18 @@ def _user_config_schema():
     return out
 
 
+def _connector_usage_map() -> dict:
+    """tool_calls stats per connector (best effort: no DB means no usage)."""
+    try:
+        conn, _ = _db()
+    except Exception:
+        return {}
+    try:
+        return atlas_control.connector_usage(conn)
+    finally:
+        conn.close()
+
+
 def _connector_status():
     """Group userConfig fields by MCP connector for the Settings UI."""
     manifest = _plugin_manifest()
@@ -375,6 +389,7 @@ def _connector_status():
     env_values = _env_file_values()
     marks = _load_cred_marks()
     disabled = set(atlas_control._disabled_servers())
+    usage = _connector_usage_map()
     out = []
     for name, cfg in servers.items():
         bundle, _launch = atlas_control.connector_entry(name)
@@ -491,11 +506,13 @@ def _connector_status():
         check = sensitive_must or must
         configured = bool(check) and all(f.get("is_set") for f in check)
         server_name = f"plugin:atlas:{name}"
+        enabled = server_name not in disabled
+        u = usage.get(name) or {}
         out.append(
             {
                 "name": name,
                 "server_name": server_name,
-                "enabled": server_name not in disabled,
+                "enabled": enabled,
                 "bundle_exists": bundle.is_file(),
                 "bundle_bytes": bundle.stat().st_size if bundle.is_file() else 0,
                 "user_config_fields": uc_refs,
@@ -506,6 +523,15 @@ def _connector_status():
                     for f in check
                     if not f.get("is_set")
                 ],
+                "usage": {
+                    "calls": u.get("calls", 0),
+                    "calls_total": u.get("calls_total", 0),
+                    "errors": u.get("errors", 0),
+                    "error_rate": u.get("error_rate", 0.0),
+                    "last_used": u.get("last_used"),
+                    "window_days": int(atlas_control.CONNECTOR_USAGE_WINDOW_S // 86400),
+                },
+                "health": atlas_control.connector_health(configured, enabled, u),
             }
         )
     return out
@@ -618,7 +644,12 @@ def _annotate_live(conn, sessions: list) -> list:
     return sessions
 
 
-def _projects(conn, recent_only=True):
+def _is_junk_project(root) -> bool:
+    """Roots that can never hold a real `.claude/agents` override (fixtures, scratch, gone)."""
+    return atlas_control.is_fixture_project(root)
+
+
+def _projects(conn, recent_only=True, editable_only=False):
     now = time.time()
     # Prefer projects with recent runs/session activity.
     rows = _q(
@@ -635,6 +666,8 @@ def _projects(conn, recent_only=True):
     )
     out = []
     for r in rows:
+        if editable_only and _is_junk_project(r.get("root_path")):
+            continue
         folder = r.get("name") or _folder_name(r.get("root_path"))
         if _is_generic_folder(folder) and _folder_name(r.get("root_path")):
             # still allow home but deprioritize
@@ -1342,1454 +1375,6 @@ def ensure_daemon(port: int | None = None) -> dict:
     }
 
 
-UI_HTML = r"""<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Atlas Command Center</title>
-<link rel="icon" href="/assets/mark.svg"/>
-<style>
-/* ===== Design tokens (8px grid) ===== */
-:root{
-  --s1:8px; --s2:16px; --s3:24px; --s4:32px;
-  --sidebar:240px;
-  --bg:#080d18; --bg-elev:#0e1626; --panel:#121b2e; --panel-2:#182338;
-  --border:#273552; --border-soft:#1e2b44;
-  --text:#edf2ff; --muted:#8b9bb8; --faint:#5f6f8c;
-  --accent:#4f8cff; --accent-2:#6ea1ff; --cyan:#35d6c7;
-  --good:#34d399; --warn:#fbbf24; --bad:#f87171;
-  --radius:12px; --radius-sm:8px;
-  --shadow:0 8px 24px rgba(0,0,0,.35);
-  --font:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  --control-h:36px;
-  --header-h:64px;
-}
-*,*::before,*::after{box-sizing:border-box}
-html,body{height:100%; margin:0; overflow-x:hidden}
-body{
-  font:13.5px/1.4 var(--font); color:var(--text); background:var(--bg);
-  background-image:
-    radial-gradient(900px 480px at 0% -10%, rgba(79,140,255,.14), transparent 60%),
-    radial-gradient(700px 400px at 100% 0%, rgba(53,214,199,.08), transparent 55%);
-  background-attachment:fixed;
-}
-img,svg{display:block; max-width:100%}
-button,input,select,textarea{
-  font:inherit; color:var(--text); background:var(--panel-2);
-  border:1px solid var(--border); border-radius:var(--radius-sm);
-  height:var(--control-h); padding:0 12px; margin:0;
-}
-button{cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:6px; white-space:nowrap}
-button:hover{border-color:var(--accent); background:#1c2c4a}
-button.primary{background:linear-gradient(180deg,#3b6fd0,#2a56ad); border-color:#5b8fff; font-weight:600}
-button.ghost{background:transparent}
-input,select{width:100%; min-width:0}
-input:focus,select:focus,button:focus{outline:2px solid rgba(79,140,255,.35); outline-offset:1px}
-.mono{font-family:var(--mono); font-size:12px}
-.muted{color:var(--muted)} .faint{color:var(--faint)}
-.good{color:var(--good)} .warn{color:var(--warn)} .bad{color:var(--bad)}
-.hidden{display:none !important}
-.truncate{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0}
-.sr-only{position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0}
-
-/* ===== App shell ===== */
-.app{
-  display:grid;
-  grid-template-columns:var(--sidebar) minmax(0,1fr);
-  min-height:100vh;
-  width:100%;
-  max-width:100vw;
-  overflow-x:hidden;
-}
-@media(max-width:960px){
-  .app{grid-template-columns:minmax(0,1fr)}
-  .side{position:relative !important; height:auto !important; border-right:0 !important; border-bottom:1px solid var(--border)}
-}
-
-/* Sidebar */
-.side{
-  position:sticky; top:0; height:100vh; overflow:auto;
-  padding:var(--s2);
-  border-right:1px solid var(--border);
-  background:linear-gradient(180deg, #0b1322 0%, #090f1b 100%);
-  display:flex; flex-direction:column; gap:var(--s2);
-}
-.brand{display:grid; grid-template-columns:40px minmax(0,1fr); gap:12px; align-items:center; padding:4px}
-.brand img{width:40px; height:40px; border-radius:10px; box-shadow:0 0 0 1px rgba(79,140,255,.35)}
-.brand b{font-size:14px; line-height:1.2}
-.brand span{font-size:11px; color:var(--muted)}
-.nav{display:flex; flex-direction:column; gap:4px}
-.nav button{
-  width:100%; height:40px; justify-content:flex-start;
-  padding:0 12px; background:transparent; border-color:transparent; color:var(--muted);
-}
-.nav button svg{width:16px; height:16px; flex:0 0 16px}
-.nav button.active,.nav button:hover{color:var(--text); background:rgba(79,140,255,.12); border-color:rgba(79,140,255,.25)}
-.side-meta{
-  margin-top:auto; padding:12px; border:1px solid var(--border-soft); border-radius:var(--radius);
-  background:rgba(255,255,255,.02); display:grid; gap:8px;
-}
-.side-meta .row{display:grid; grid-template-columns:72px minmax(0,1fr); gap:8px; align-items:center; font-size:12px}
-.side-meta .row span:last-child{min-width:0; overflow:hidden; text-overflow:ellipsis}
-
-/* Main column */
-.main{min-width:0; max-width:100%; display:flex; flex-direction:column; overflow-x:hidden}
-.topbar{
-  position:sticky; top:0; z-index:30;
-  height:var(--header-h); min-height:var(--header-h);
-  display:grid; grid-template-columns:minmax(0,1fr) auto; gap:var(--s2); align-items:center;
-  padding:0 var(--s3); border-bottom:1px solid var(--border);
-  background:rgba(8,13,24,.9); backdrop-filter:blur(10px);
-}
-.topbar h1{margin:0; font-size:16px; font-weight:650; line-height:1.2}
-.topbar .sub{margin:2px 0 0; font-size:12px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-.toolbar{
-  display:grid; grid-auto-flow:column; grid-auto-columns:minmax(140px,180px) minmax(160px,220px) auto auto;
-  gap:10px; align-items:end;
-}
-.field-ctl{display:grid; gap:4px; min-width:0}
-.field-ctl > span{font-size:11px; color:var(--muted); line-height:1}
-.field-ctl select{width:100%}
-.toolbar > button{align-self:end}
-@media(max-width:1100px){
-  .topbar{height:auto; min-height:var(--header-h); padding:12px var(--s2); grid-template-columns:1fr}
-  .toolbar{grid-auto-flow:row; grid-auto-columns:1fr; grid-template-columns:1fr 1fr; width:100%}
-  .toolbar > button{grid-column:span 1}
-}
-
-.content{
-  padding:var(--s3);
-  display:grid; gap:var(--s2);
-  width:100%; max-width:100%;
-  min-width:0; overflow-x:hidden;
-}
-@media(max-width:960px){.content{padding:var(--s2)}}
-
-/* Surfaces */
-.card{
-  background:var(--panel); border:1px solid var(--border); border-radius:var(--radius);
-  padding:var(--s2); min-width:0; overflow:hidden;
-}
-.card-title{
-  margin:0 0 12px; font-size:11px; letter-spacing:.06em; text-transform:uppercase;
-  color:var(--muted); display:flex; align-items:center; gap:8px; min-width:0;
-}
-.card-title svg{width:14px; height:14px; color:var(--accent-2); flex:0 0 auto}
-.pill{
-  display:inline-flex; align-items:center; gap:6px; height:22px; padding:0 8px;
-  border-radius:999px; border:1px solid var(--border); background:rgba(255,255,255,.04);
-  color:var(--muted); font-size:11px; white-space:nowrap;
-}
-.pill.live{color:var(--good); border-color:rgba(52,211,153,.35); background:rgba(52,211,153,.08)}
-.dot{width:6px; height:6px; border-radius:50%; background:var(--good); box-shadow:0 0 0 0 rgba(52,211,153,.5); animation:pulse 1.6s infinite}
-@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(52,211,153,.5)}70%{box-shadow:0 0 0 8px transparent}100%{box-shadow:0 0 0 0 transparent}}
-
-/* Overview */
-.hero{
-  display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,.9fr); gap:var(--s2); align-items:stretch;
-  min-height:140px; padding:var(--s3); border-radius:16px; border:1px solid rgba(79,140,255,.28);
-  background:
-    linear-gradient(105deg, rgba(10,16,30,.88) 0%, rgba(10,16,30,.55) 48%, rgba(10,16,30,.72) 100%),
-    url('/assets/hero.jpg') right center / cover no-repeat;
-  overflow:hidden;
-}
-.hero h2{margin:0 0 8px; font-size:20px; line-height:1.25}
-.hero p{margin:0; color:#c5d2ec; max-width:48ch}
-.hero-stats{display:grid; grid-template-columns:1fr 1fr; gap:8px; min-width:0}
-.stat{
-  background:rgba(8,13,24,.55); border:1px solid rgba(255,255,255,.1); border-radius:var(--radius-sm);
-  padding:10px 12px; min-width:0;
-}
-.stat b{display:block; font-size:18px; line-height:1.2}
-.stat span{display:block; margin-top:2px; font-size:11px; color:#b7c5e4}
-@media(max-width:900px){.hero{grid-template-columns:1fr}}
-
-.kpis{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:var(--s2)}
-@media(max-width:1100px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
-.kpi{
-  background:var(--panel); border:1px solid var(--border); border-radius:var(--radius);
-  padding:14px; min-width:0; display:grid; gap:10px;
-}
-.kpi-top{display:flex; justify-content:space-between; align-items:center; gap:8px}
-.kpi-ico{
-  width:32px; height:32px; border-radius:8px; display:grid; place-items:center;
-  background:rgba(79,140,255,.12); border:1px solid rgba(79,140,255,.25); color:var(--accent-2);
-}
-.kpi-ico svg{width:16px; height:16px}
-.kpi-val{font-size:24px; font-weight:700; letter-spacing:-.02em; line-height:1}
-.kpi-bar{height:6px; border-radius:99px; background:rgba(255,255,255,.06); overflow:hidden}
-.kpi-bar > i{display:block; height:100%; width:0; background:linear-gradient(90deg,var(--accent),var(--cyan))}
-
-.grid-2{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:var(--s2); min-width:0}
-@media(max-width:1100px){.grid-2{grid-template-columns:minmax(0,1fr)}}
-
-/* Live page */
-.live-layout{display:grid; grid-template-columns:minmax(0,320px) minmax(0,1fr); gap:var(--s2); min-width:0; align-items:start}
-@media(max-width:1100px){.live-layout{grid-template-columns:minmax(0,1fr)}}
-.session-list{display:grid; gap:8px; max-height:calc(100vh - 220px); overflow:auto; padding-right:2px}
-.session-item{
-  border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px;
-  background:rgba(255,255,255,.02); cursor:pointer; min-width:0;
-}
-.session-item:hover,.session-item.active{border-color:rgba(79,140,255,.5); background:rgba(79,140,255,.08)}
-.session-item .t{display:flex; justify-content:space-between; gap:8px; align-items:center; min-width:0}
-.session-item .t strong{min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-.chip{
-  display:inline-flex; align-items:center; height:20px; padding:0 8px; border-radius:999px;
-  border:1px solid var(--border); background:rgba(255,255,255,.04); color:var(--muted);
-  font-size:11px; white-space:nowrap; margin:0 4px 4px 0;
-}
-.chip.live{color:var(--good); border-color:rgba(52,211,153,.35)}
-.chips{display:flex; flex-wrap:wrap; gap:0; margin-top:8px}
-
-table{width:100%; border-collapse:collapse; table-layout:fixed}
-th,td{text-align:left; padding:8px 8px; border-bottom:1px solid var(--border-soft); vertical-align:top; overflow:hidden; text-overflow:ellipsis}
-th{color:var(--muted); font-size:11px; letter-spacing:.04em; text-transform:uppercase; font-weight:600}
-.scroll{max-height:280px; overflow:auto; min-width:0}
-.banner{
-  padding:10px 12px; border-radius:var(--radius-sm); border:1px solid rgba(79,140,255,.28);
-  background:rgba(79,140,255,.08); color:#d3e2ff; font-size:12.5px;
-}
-.empty{
-  padding:20px; text-align:center; color:var(--muted);
-  border:1px dashed var(--border); border-radius:var(--radius-sm);
-}
-
-/* Connectors: equal-height 1/3 cards */
-.connector-grid{
-  display:grid;
-  grid-template-columns:repeat(3, minmax(0, 1fr));
-  gap:var(--s2);
-  align-items:stretch;
-  width:100%;
-  min-width:0;
-}
-@media(max-width:1100px){.connector-grid{grid-template-columns:repeat(2, minmax(0,1fr))}}
-@media(max-width:720px){.connector-grid{grid-template-columns:minmax(0,1fr)}}
-.conn-card{
-  min-width:0; min-height:320px; height:100%;
-  display:grid;
-  grid-template-rows:auto minmax(0,1fr) auto;
-  gap:10px;
-  padding:12px;
-  border:1px solid var(--border);
-  border-radius:var(--radius);
-  background:var(--panel-2);
-  overflow:hidden;
-}
-.conn-card .hdr{
-  display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:start;
-  min-height:40px;
-}
-.conn-card .name{display:grid; grid-template-columns:28px minmax(0,1fr); gap:8px; align-items:center; min-width:0}
-.conn-card .avatar{
-  width:28px; height:28px; border-radius:8px; display:grid; place-items:center;
-  font-size:10px; font-weight:700; color:#e8efff;
-  background:linear-gradient(135deg, rgba(79,140,255,.4), rgba(53,214,199,.2));
-  border:1px solid rgba(79,140,255,.3);
-}
-.conn-card .name strong{font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-.conn-card .fields{
-  min-height:0; overflow:auto;
-  display:grid; gap:8px; align-content:start;
-  padding-right:2px;
-}
-.field{display:grid; gap:4px; min-width:0}
-.field label{
-  display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px; align-items:center;
-  font-size:10px; color:var(--muted); font-family:var(--mono);
-}
-.field label span:first-child{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-.field input{height:32px; padding:0 8px; font-size:12px; width:100%; min-width:0}
-.conn-card .actions{display:grid; grid-template-columns:1fr; gap:8px}
-.conn-card .actions button{width:100%; height:34px}
-
-.sec-note{margin:0 0 12px; color:var(--muted); font-size:12.5px; line-height:1.45}
-.flash{padding:10px 12px; border-radius:var(--radius-sm); margin:0 0 12px; border:1px solid var(--border)}
-.flash.ok{border-color:rgba(52,211,153,.4); background:rgba(52,211,153,.08)}
-.flash.err{border-color:rgba(248,113,113,.4); background:rgba(248,113,113,.08)}
-.toast{
-  position:fixed; right:16px; bottom:16px; z-index:80; max-width:min(360px, calc(100vw - 32px));
-  padding:12px 14px; border-radius:var(--radius); border:1px solid var(--border);
-  background:rgba(18,28,46,.96); box-shadow:var(--shadow); display:none;
-}
-.toast.show{display:block}
-
-/* ===== Controls shared by the Behavior and Ecosystem pages ===== */
-textarea{
-  width:100%; min-height:180px; height:auto; padding:10px 12px; resize:vertical;
-  font:12px/1.5 var(--mono);
-}
-.switch{
-  position:relative; flex:0 0 auto; width:42px; height:24px; padding:0; border-radius:999px;
-  background:var(--panel-2); border:1px solid var(--border); cursor:pointer;
-}
-.switch::after{
-  content:""; position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:50%;
-  background:var(--faint); transition:transform .16s ease, background .16s ease;
-}
-.switch[aria-checked="true"]{background:rgba(52,211,153,.16); border-color:rgba(52,211,153,.5)}
-.switch[aria-checked="true"]::after{transform:translateX(18px); background:var(--good)}
-.switch:disabled{opacity:.45; cursor:not-allowed}
-@media(prefers-reduced-motion:reduce){.switch::after{transition:none}}
-
-/* Behavior page */
-.knob-grid{display:grid; gap:10px}
-.knob{
-  display:grid; grid-template-columns:minmax(0,1fr) minmax(150px,260px);
-  gap:12px; align-items:start;
-  padding:12px; border:1px solid var(--border-soft); border-radius:var(--radius-sm);
-  background:rgba(255,255,255,.02);
-}
-.knob .k-name{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
-.knob .k-name strong{font-size:13px; font-weight:600}
-.knob p{margin:6px 0 0; color:var(--muted); font-size:12.5px; line-height:1.45; max-width:74ch}
-.knob .k-ref{margin-top:6px; font-family:var(--mono); font-size:11px; color:var(--faint)}
-.knob .k-ctl{display:flex; justify-content:flex-end; align-items:center; gap:8px; min-width:0}
-.knob .k-ctl input,.knob .k-ctl select{max-width:100%}
-@media(max-width:760px){.knob{grid-template-columns:minmax(0,1fr)} .knob .k-ctl{justify-content:flex-start}}
-.src{font-family:var(--mono); font-size:10px; letter-spacing:.04em; text-transform:uppercase; color:var(--faint)}
-.src.settings{color:var(--accent-2)}
-.sticky-save{
-  position:sticky; bottom:0; z-index:20; margin-top:var(--s2);
-  display:flex; gap:10px; align-items:center; justify-content:flex-end; flex-wrap:wrap;
-  padding:12px; border:1px solid var(--border); border-radius:var(--radius);
-  background:rgba(18,28,46,.96); backdrop-filter:blur(8px);
-}
-.sticky-save .msg{margin-right:auto; color:var(--muted); font-size:12.5px}
-
-/* Ecosystem page */
-.eco-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:var(--s2)}
-.eco-card{
-  display:grid; grid-template-rows:auto auto 1fr auto; gap:8px;
-  padding:12px; border:1px solid var(--border); border-radius:var(--radius);
-  background:var(--panel-2); min-width:0;
-}
-.eco-card.off{opacity:.62}
-.eco-card .hdr{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:center}
-.eco-card .hdr strong{font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block}
-.eco-card p{margin:0; color:var(--muted); font-size:12px; line-height:1.45;
-  display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden}
-.eco-card.host{border-color:rgba(79,140,255,.45); background:rgba(79,140,255,.06)}
-.subnav{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:var(--s2)}
-.subnav button{height:30px; padding:0 12px; font-size:12px; background:transparent; color:var(--muted)}
-.subnav button.active{color:var(--text); background:rgba(79,140,255,.14); border-color:rgba(79,140,255,.35)}
-.tag-list{display:flex; flex-wrap:wrap; gap:6px}
-.tag{
-  font-family:var(--mono); font-size:11px; padding:3px 8px; border-radius:6px;
-  border:1px solid var(--border-soft); background:rgba(255,255,255,.03); color:var(--muted);
-}
-.tag.ok{color:var(--good); border-color:rgba(52,211,153,.3)}
-.tag.no{color:var(--bad); border-color:rgba(248,113,113,.3)}
-.form-row{display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; align-items:end}
-.form-row .field-ctl span{font-size:11px}
-</style>
-</head>
-<body>
-<div class="app">
-  <aside class="side">
-    <div class="brand">
-      <img src="/assets/mark.svg" alt="Atlas mark" width="40" height="40"/>
-      <div class="truncate">
-        <b>Atlas</b>
-        <span>Command Center</span>
-      </div>
-    </div>
-    <nav class="nav" id="nav" aria-label="Primary">
-      <button class="active" data-tab="overview" type="button">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5z"/></svg>
-        Overview
-      </button>
-      <button data-tab="live" type="button">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12h3l2-7 4 14 2-7h3"/></svg>
-        Live sessions
-      </button>
-      <button data-tab="settings" type="button">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/></svg>
-        Connectors
-      </button>
-      <button data-tab="behavior" type="button">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
-        Behavior
-      </button>
-      <button data-tab="ecosystem" type="button">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="2.5"/><circle cx="12" cy="4" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="18" r="2"/><path d="M12 6.5v3M10 13.5 6.6 16.4M14 13.5l3.4 2.9"/></svg>
-        Ecosystem
-      </button>
-      <button data-tab="findings" type="button">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 4 7v5c0 4.5 3.4 7.6 8 8 4.6-.4 8-3.5 8-8V7l-8-4z"/></svg>
-        Findings
-      </button>
-      <button data-tab="work" type="button">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v11a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17.5v-11z"/><path d="m8.5 12 2.2 2.2L15.5 9.5"/></svg>
-        Work board
-      </button>
-      <button data-tab="agents" type="button">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="7" width="14" height="12" rx="2"/><path d="M12 7V4M8 4h8"/><circle cx="9.5" cy="12.5" r="1"/><circle cx="14.5" cy="12.5" r="1"/><path d="M9.5 16h5"/></svg>
-        Agents
-      </button>
-    </nav>
-    <div class="side-meta">
-      <div class="row"><span class="muted">Daemon</span><span class="pill live"><span class="dot"></span>online</span></div>
-      <div class="row"><span class="muted">Plugin</span><span class="mono truncate" id="sideVer">—</span></div>
-      <div class="row"><span class="muted">Updated</span><span class="truncate" id="sideUpdated">—</span></div>
-      <div class="row"><span class="muted">DB</span><span class="mono truncate" id="sideDb" title="">—</span></div>
-    </div>
-  </aside>
-
-  <div class="main">
-    <header class="topbar">
-      <div class="truncate">
-        <h1 id="pageTitle">Overview</h1>
-        <div class="sub">Shared multi-session observability · <span class="mono" id="url"></span></div>
-      </div>
-      <div class="toolbar">
-        <label class="field-ctl">
-          <span>Project</span>
-          <select id="project" aria-label="Project filter"></select>
-        </label>
-        <label class="field-ctl">
-          <span>Session</span>
-          <select id="session" aria-label="Session selector"></select>
-        </label>
-        <button type="button" id="refresh" class="ghost">Refresh</button>
-        <button type="button" id="gotoSettings" class="primary">Credentials</button>
-      </div>
-    </header>
-
-    <main class="content">
-      <section id="tab-overview">
-        <div class="hero">
-          <div>
-            <div class="pill live" style="margin-bottom:10px"><span class="dot"></span> Marketplace command center</div>
-            <h2>See what every terminal is doing</h2>
-            <p>Live sessions, tool activity, savings proxies, and connector credentials in one loopback UI.</p>
-          </div>
-          <div class="hero-stats">
-            <div class="stat"><b id="heroLive">0</b><span>Live sessions (10m)</span></div>
-            <div class="stat"><b id="heroTools">0</b><span>Tool calls (10m)</span></div>
-            <div class="stat"><b id="heroConn">0</b><span>Connectors ready</span></div>
-            <div class="stat"><b id="heroFindings">0</b><span>Open findings</span></div>
-          </div>
-        </div>
-        <div class="kpis" id="kpis"></div>
-        <div class="grid-2">
-          <section class="card">
-            <h3 class="card-title">Savings proxies</h3>
-            <div id="savings" class="muted">—</div>
-          </section>
-          <section class="card">
-            <h3 class="card-title">Live activity pulse</h3>
-            <div id="pulse" class="muted">—</div>
-          </section>
-        </div>
-        <section class="card">
-          <h3 class="card-title">Recent runs</h3>
-          <div class="scroll">
-            <table>
-              <thead><tr><th style="width:18%">When</th><th style="width:28%">Project</th><th style="width:14%">Kind</th><th style="width:12%">Disp</th><th style="width:12%">Inline</th><th style="width:16%">Verifier</th></tr></thead>
-              <tbody id="recentRuns"></tbody>
-            </table>
-          </div>
-        </section>
-      </section>
-
-      <section id="tab-live" class="hidden">
-        <div class="banner" id="hint"></div>
-        <div class="live-layout">
-          <section class="card">
-            <h3 class="card-title">Sessions <span class="pill" id="sessionCount">0</span></h3>
-            <div class="session-list" id="sessionList"></div>
-          </section>
-          <div style="display:grid; gap:16px; min-width:0">
-            <section class="card">
-              <h3 class="card-title">Selected session</h3>
-              <div id="detail" class="muted">Pick a session…</div>
-            </section>
-            <div class="grid-2">
-              <section class="card">
-                <h3 class="card-title">Recent tools</h3>
-                <div class="scroll">
-                  <table>
-                    <thead><tr><th style="width:28%">When</th><th style="width:32%">Tool</th><th>Target</th></tr></thead>
-                    <tbody id="tools"></tbody>
-                  </table>
-                </div>
-              </section>
-              <section class="card">
-                <h3 class="card-title">Events / dispatches</h3>
-                <div class="scroll">
-                  <table>
-                    <thead><tr><th style="width:28%">When</th><th style="width:24%">Kind</th><th>Detail</th></tr></thead>
-                    <tbody id="events"></tbody>
-                  </table>
-                </div>
-              </section>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="tab-settings" class="hidden">
-        <section class="card">
-          <h3 class="card-title">Connector credentials</h3>
-          <p class="sec-note">
-            Equal-height cards at one-third width. Saves to
-            <span class="mono" id="settingsPath">~/.claude/settings.json</span>
-            <span class="mono">pluginConfigs["atlas@tech-tools"].options</span>
-            and this plugin’s <span class="mono">.env</span>.
-            Secrets are never read back. Drafts survive auto-refresh. Reload Claude Code after save.
-          </p>
-          <div id="settingsFlash"></div>
-          <div class="connector-grid" id="connectorForms"></div>
-        </section>
-
-        <section class="card">
-          <h3 class="card-title">Bulk import and export</h3>
-          <p class="sec-note">
-            Paste a block of <span class="mono">KEY=VALUE</span> lines to fill many connectors at once.
-            Only keys this plugin declares are accepted; anything else is rejected by name.
-            Export writes a template with secrets blanked out.
-          </p>
-          <textarea id="bulkEnv" spellcheck="false" autocomplete="off"
-            placeholder="AUVIK_USERNAME=you@example.com&#10;AUVIK_API_KEY=..."></textarea>
-          <div class="sticky-save">
-            <span class="msg" id="bulkMsg">Nothing pasted yet.</span>
-            <button type="button" class="ghost" id="bulkExport">Load template</button>
-            <button type="button" class="primary" id="bulkImport">Import pasted keys</button>
-          </div>
-        </section>
-      </section>
-
-      <section id="tab-behavior" class="hidden">
-        <section class="card">
-          <h3 class="card-title">How atlas behaves</h3>
-          <p class="sec-note">
-            These are the environment variables the atlas hooks read at runtime. Saving writes them to
-            <span class="mono" id="behaviorPath">~/.claude/settings.json</span> under
-            <span class="mono">"env"</span>, which Claude Code exports into every hook process.
-            Each knob shows the file and line that reads it. Reload Claude Code for a change to reach a running session.
-          </p>
-          <div id="behaviorFlash"></div>
-          <div id="behaviorGroups"></div>
-          <div class="sticky-save">
-            <span class="msg" id="behaviorMsg">No changes.</span>
-            <button type="button" class="ghost" id="behaviorReset">Discard changes</button>
-            <button type="button" class="primary" id="behaviorSave">Save behavior</button>
-          </div>
-        </section>
-
-        <section class="card">
-          <h3 class="card-title">Advanced variables</h3>
-          <p class="sec-note">
-            Every other <span class="mono">ATLAS_*</span> variable found in the shipped hooks and scripts.
-            Blank means the code falls back to its built-in default. Clear a field to remove the override.
-          </p>
-          <div class="scroll" style="max-height:min(50vh,420px)">
-            <table>
-              <thead><tr><th style="width:32%">Variable</th><th style="width:40%">Value</th><th style="width:28%">Read at</th></tr></thead>
-              <tbody id="behaviorAdvanced"></tbody>
-            </table>
-          </div>
-        </section>
-      </section>
-
-      <section id="tab-ecosystem" class="hidden">
-        <div class="subnav" id="ecoNav" role="tablist">
-          <button type="button" class="active" data-eco="wiring">Atlas wiring</button>
-          <button type="button" data-eco="plugins">Plugins</button>
-          <button type="button" data-eco="mcp">MCP servers</button>
-          <button type="button" data-eco="capabilities">Skills &amp; agents</button>
-        </div>
-        <div id="ecoFlash"></div>
-
-        <section class="card" id="eco-wiring">
-          <h3 class="card-title">Atlas wiring</h3>
-          <p class="sec-note" id="ecoWiringNote">—</p>
-          <div class="scroll" style="max-height:min(60vh,520px)">
-            <table>
-              <thead><tr><th style="width:22%">Event</th><th style="width:16%">Matcher</th><th style="width:44%">Program</th><th style="width:18%">On disk</th></tr></thead>
-              <tbody id="ecoBindings"></tbody>
-            </table>
-          </div>
-        </section>
-
-        <section class="card hidden" id="eco-plugins">
-          <h3 class="card-title">Installed plugins <span class="pill" id="pluginCount">0</span></h3>
-          <p class="sec-note">
-            Toggling writes <span class="mono">enabledPlugins</span> in settings.json. Reload Claude Code to apply.
-            Atlas serves this page, so it cannot switch itself off here.
-          </p>
-          <div class="eco-grid" id="pluginGrid"></div>
-        </section>
-
-        <section class="card hidden" id="eco-mcp">
-          <h3 class="card-title">MCP servers <span class="pill" id="mcpCount">0</span></h3>
-          <p class="sec-note">
-            Plugin servers and the user-scope servers in <span class="mono" id="claudeJsonPath">~/.claude.json</span>.
-            Turning one off adds it to <span class="mono">disabledMcpServers</span>; the config stays intact.
-          </p>
-          <div class="eco-grid" id="mcpGrid"></div>
-          <h3 class="card-title" style="margin-top:var(--s3)">Add a user-scope server</h3>
-          <div class="form-row">
-            <label class="field-ctl"><span>Name</span><input id="mcpName" placeholder="my-server" autocomplete="off"/></label>
-            <label class="field-ctl"><span>Command</span><input id="mcpCommand" placeholder="npx" autocomplete="off"/></label>
-            <label class="field-ctl"><span>Arguments</span><input id="mcpArgs" placeholder="-y @scope/package" autocomplete="off"/></label>
-            <label class="field-ctl"><span>Or HTTP URL</span><input id="mcpUrl" placeholder="https://example.com/mcp" autocomplete="off"/></label>
-            <button type="button" class="primary" id="mcpAdd">Add server</button>
-          </div>
-        </section>
-
-        <section class="card hidden" id="eco-capabilities">
-          <h3 class="card-title">Skills, agents and output styles</h3>
-          <p class="sec-note">What this install can reach, grouped by where it comes from.</p>
-          <div class="grid-2" id="capabilityGrid"></div>
-        </section>
-      </section>
-
-      <section id="tab-findings" class="hidden">
-        <section class="card">
-          <h3 class="card-title">Findings</h3>
-          <div class="scroll" style="max-height:min(70vh,640px)">
-            <table>
-              <thead><tr><th style="width:12%">Sev</th><th style="width:46%">Title</th><th style="width:24%">Dimension</th><th style="width:18%">Status</th></tr></thead>
-              <tbody id="findings"></tbody>
-            </table>
-          </div>
-        </section>
-      </section>
-      <section id="tab-work" class="hidden">
-        <section class="card">
-          <h3 class="card-title">Work board</h3>
-          <div class="chips" id="workCounts">Loading...</div>
-          <div style="display:flex;gap:8px;margin:10px 0">
-            <input id="todoAdd" placeholder="Note for the next session (origin: manual, never blocks the gate)..." style="flex:1">
-            <button id="todoAddBtn" type="button">Add</button>
-          </div>
-          <div class="scroll" style="max-height:min(60vh,540px)">
-            <table>
-              <thead><tr><th style="width:44%">Item</th><th style="width:10%">Status</th><th style="width:12%">Owner</th><th style="width:10%">Origin</th><th style="width:18%">Actions</th></tr></thead>
-              <tbody id="todoRows"></tbody>
-            </table>
-          </div>
-          <div class="muted" style="margin-top:8px">The board lives at &lt;project&gt;/.atlas/.run/todos.json. TodoWrite calls mirror into it automatically; subagents claim items before working; the completion gate counts this session's open items (manual notes never block).</div>
-        </section>
-        <section class="card" style="margin-top:14px">
-          <h3 class="card-title">Shared memory</h3>
-          <div class="grid-2">
-            <div>
-              <b>Memory</b>
-              <pre id="memoryMem" class="mono" style="white-space:pre-wrap;max-height:300px;overflow:auto;font-size:12px"></pre>
-            </div>
-            <div>
-              <b>Project context</b>
-              <pre id="memoryProject" class="mono" style="white-space:pre-wrap;max-height:300px;overflow:auto;font-size:12px"></pre>
-            </div>
-          </div>
-        </section>
-      </section>
-      <section id="tab-agents" class="hidden">
-        <section class="card">
-          <h3 class="card-title">Agent overrides</h3>
-          <div class="muted" style="margin-bottom:8px">Plugin agents are listed beside this project's same-name overrides in &lt;project&gt;/.claude/agents/. Edits land in the project tree; Reset deletes the override.</div>
-          <div style="display:flex;gap:8px;margin-bottom:8px">
-            <select id="agentPick" style="min-width:260px"></select>
-            <span class="pill" id="agentSource">—</span>
-            <button id="agentReset" type="button">Reset</button>
-          </div>
-          <textarea id="agentBody" rows="18" style="width:100%;font-family:var(--mono,monospace);font-size:12px"></textarea>
-          <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
-            <button id="agentSave" type="button">Save override</button>
-            <span class="muted" id="agentNote"></span>
-          </div>
-        </section>
-      </section>
-    </main>
-
-<script>
-const $ = id => document.getElementById(id);
-const state = {
-  snapshot:null, selectedSession:null, selectedProject:null, tab:'overview',
-  drafts:{}, settingsDirty:false, settingsFocus:false,
-  behavior:null, behaviorEdits:{}, ecosystem:null, ecoPane:'wiring',
-  todo:null, agents:null, selectedAgent:null
-};
-// Plugin manifests and MCP configs are third-party text rendered into innerHTML.
-const esc = v => String(v==null?'':v).replace(/[&<>"']/g, c =>
-  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const ICO = {
-  users:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3"/><circle cx="16" cy="9" r="2.5"/><path d="M3 19a6 6 0 0 1 12 0"/><path d="M13 19a5 5 0 0 1 8 0"/></svg>`,
-  tools:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m14 7 3-3 3 3-3 3"/><path d="m4 20 8-8"/><path d="M10 7a4.5 4.5 0 0 0 6 6"/></svg>`,
-  bolt:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 2 4 14h7l-1 8 10-12h-7l1-8z"/></svg>`,
-  shield:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 4 7v5c0 4.5 3.4 7.6 8 8 4.6-.4 8-3.5 8-8V7l-8-4z"/></svg>`,
-};
-
-function ago(epoch){
-  if(!epoch) return '';
-  const s = Math.max(0, Date.now()/1000 - epoch);
-  if(s<60) return Math.floor(s)+'s ago';
-  if(s<3600) return Math.floor(s/60)+'m ago';
-  if(s<86400) return Math.floor(s/3600)+'h ago';
-  return Math.floor(s/86400)+'d ago';
-}
-function shortId(s){ return (s||'').slice(0,8); }
-function pct(x){ return (x==null||Number.isNaN(Number(x))) ? '—' : (100*Number(x)).toFixed(0)+'%'; }
-function num(x){ return x==null ? '—' : Number(x).toLocaleString(); }
-function folder(p){ if(!p) return ''; const parts=String(p).replace(/\\\\/g,'/').split('/').filter(Boolean); return parts[parts.length-1]||''; }
-function toast(msg, ok){
-  const el=$('toast');
-  el.textContent=msg;
-  el.style.borderColor = ok ? 'rgba(52,211,153,.45)' : 'rgba(248,113,113,.45)';
-  el.classList.add('show');
-  clearTimeout(toast._t);
-  toast._t=setTimeout(()=>el.classList.remove('show'), 3000);
-}
-async function api(path, opts){
-  const r = await fetch(path, Object.assign({cache:'no-store'}, opts||{}));
-  const data = await r.json();
-  if(!r.ok) throw new Error(data.error || (path+' '+r.status));
-  return data;
-}
-function avatar(name){
-  return `<div class="avatar">${(name||'?').slice(0,2).toUpperCase()}</div>`;
-}
-function kpi(icon, label, value, bar){
-  const w = Math.max(0, Math.min(100, bar||0));
-  return `<div class="kpi"><div class="kpi-top"><div class="kpi-ico">${icon}</div><span class="pill">${label}</span></div>
-    <div class="kpi-val">${value}</div><div class="kpi-bar"><i style="width:${w}%"></i></div></div>`;
-}
-
-function renderOverview(s){
-  const t = s.health?.totals || {};
-  const act = s.health?.activity_last_10m || {};
-  const live = (s.live_sessions||[]).length;
-  const connReady = (s.connectors||[]).filter(c=>c.configured_hint).length;
-  const connTotal = (s.connectors||[]).length || 1;
-  const findings = s.health?.open_findings || 0;
-  $('heroLive').textContent = num(live);
-  $('heroTools').textContent = num(act.tool_calls||0);
-  $('heroConn').textContent = `${connReady}/${connTotal}`;
-  $('heroFindings').textContent = num(findings);
-  $('kpis').innerHTML = [
-    kpi(ICO.users, 'Live sessions', num(live), Math.min(100, live*25)),
-    kpi(ICO.tools, 'Tools / 10m', num(act.tool_calls||0), Math.min(100, (act.tool_calls||0)*4)),
-    kpi(ICO.bolt, 'Dispatches', num(t.sum_dispatches), Math.min(100, (t.sum_dispatches||0)/10)),
-    kpi(ICO.shield, 'Avg verifier', pct(t.avg_verifier_coverage), (t.avg_verifier_coverage==null?0:Number(t.avg_verifier_coverage)*100)),
-  ].join('');
-  const v = s.savings||{};
-  $('savings').innerHTML = `
-    <div class="chips">
-      <span class="chip">dispatch/inline ${v.dispatch_ratio==null?'—':Number(v.dispatch_ratio).toFixed(2)}</span>
-      <span class="chip">recall ${pct(v.recall_hit_rate)}</span>
-      <span class="chip">verifier ${pct(v.avg_verifier_coverage)}</span>
-    </div>
-    <div class="muted" style="margin:8px 0">${v.note||''}</div>
-    <div>Dispatches <strong>${num(v.dispatches)}</strong> · Inline <strong>${num(v.inline_ops)}</strong> · Est tokens <strong>${num(v.est_context_tokens)}</strong></div>`;
-  const tools = act.tool_calls||0, events = act.events||0;
-  $('pulse').innerHTML = `
-    <div class="grid-2" style="margin-bottom:8px">
-      <div class="stat"><b>${num(tools)}</b><span>tool_calls · 10m</span><div class="kpi-bar" style="margin-top:8px"><i style="width:${Math.min(100,tools*5)}%"></i></div></div>
-      <div class="stat"><b>${num(events)}</b><span>events · 10m</span><div class="kpi-bar" style="margin-top:8px"><i style="width:${Math.min(100,events*8)}%;background:linear-gradient(90deg,#9b7bff,var(--accent))"></i></div></div>
-    </div>
-    <div class="muted">LIVE requires tool/event activity in the last 10 minutes.</div>`;
-  const runs = (s.health?.recent_runs||[]).slice(0,12);
-  $('recentRuns').innerHTML = runs.map(r => `
-    <tr>
-      <td class="muted">${ago(r.started_at)}</td>
-      <td class="truncate" title="${r.project_name||''}">${r.project_name || folder(r.root_path) || '—'}</td>
-      <td class="mono truncate">${r.kind||'—'}</td>
-      <td>${num(r.dispatches)}</td>
-      <td>${num(r.inline_ops)}</td>
-      <td>${pct(r.verifier_coverage)}</td>
-    </tr>`).join('') || `<tr><td colspan="6" class="muted">No runs yet</td></tr>`;
-}
-
-function filteredSessions(s){
-  let list = s.sessions||[];
-  if(state.selectedProject) list = list.filter(x => String(x.project_id)===String(state.selectedProject));
-  return list;
-}
-function renderProjects(s){
-  const cur = state.selectedProject;
-  $('project').innerHTML = [`<option value="">All recent projects</option>`].concat(
-    (s.projects||[]).map(p => {
-      const val = String(p.id);
-      const label = `${p.folder||p.name||'project'}${p.age?(' · '+p.age):''}`;
-      return `<option value="${val}" ${cur===val?'selected':''}>${label}</option>`;
-    })
-  ).join('');
-}
-function renderSessionList(s){
-  const list = filteredSessions(s);
-  $('sessionCount').textContent = list.length + ' shown';
-  $('session').innerHTML = list.map(x => {
-    const label = x.label || `${x.project_folder||x.project_name||'project'} · ${shortId(x.session_id)}`;
-    return `<option value="${x.session_id}" ${state.selectedSession===x.session_id?'selected':''}>${label}</option>`;
-  }).join('');
-  $('sessionList').innerHTML = list.map(x => {
-    const live = x.is_live ? '<span class="chip live">LIVE</span>' : '';
-    const active = state.selectedSession===x.session_id ? 'active' : '';
-    const name = x.project_folder || x.project_name || folder(x.cwd) || 'project';
-    return `<div class="session-item ${active}" data-sid="${x.session_id}">
-      <div class="t"><strong title="${name}">${name}</strong>${live}</div>
-      <div class="mono muted">${shortId(x.session_id)} · ${ago(x.last_activity_at || x.started_at)}</div>
-      <div class="muted truncate" style="margin-top:4px" title="${x.cwd||x.project_root||''}">${x.cwd||x.project_root||''}</div>
-      <div class="chips">
-        <span class="chip">tools ${num(x.recent_tool_calls)}</span>
-        <span class="chip">disp ${num(x.dispatches)}</span>
-        <span class="chip">inline ${num(x.inline_ops)}</span>
-      </div>
-    </div>`;
-  }).join('') || '<div class="empty">No recent sessions (last 7 days).</div>';
-  document.querySelectorAll('#sessionList .session-item').forEach(el => {
-    el.onclick = () => { state.selectedSession = el.dataset.sid; loadDetail(); renderSessionList(state.snapshot); };
-  });
-}
-function renderFindings(s){
-  $('findings').innerHTML = (s.findings||[]).slice(0,50).map(f =>
-    `<tr><td class="${f.severity==='high'||f.severity==='critical'?'bad':'warn'}">${f.severity||''}</td>
-     <td class="truncate" title="${(f.title||'').replace(/"/g,'&quot;')}">${f.title||''}</td>
-     <td class="muted truncate">${f.dimension||''}</td><td>${f.status||''}</td></tr>`
-  ).join('') || '<tr><td colspan="4" class="muted">No findings</td></tr>';
-}
-
-function renderSettings(s){
-  if(state.settingsDirty || state.settingsFocus){ updateSettingsBadges(s); return; }
-  $('settingsPath').textContent = s.settings_path || '~/.claude/settings.json';
-  const connectors = s.connectors||[];
-  // Normalize visual density: always render a stable field stack height via scroll area
-  $('connectorForms').innerHTML = connectors.map(c => {
-    const fields = (c.fields||[]).map(f => {
-      const key = f.user_config_key || f.env_key;
-      const set = !!f.is_set;
-      const src = f.source && f.source !== 'missing' ? f.source : '';
-      // Secrets come back empty by design; everything else prefills so it can be edited.
-      const current = state.drafts[key] != null ? state.drafts[key] : (f.value || '');
-      return `<div class="field">
-        <label><span title="${esc(key)}">${esc(key)}</span><span class="${set?'good':'warn'}">${set?'set':'missing'}${src?(' · '+esc(src)):''}</span></label>
-        <input data-key="${esc(key)}" data-original="${esc(f.value||'')}" type="${f.sensitive?'password':'text'}" value="${esc(current)}"
-          placeholder="${f.sensitive?(set?'set — type to replace':'enter secret'):'not set'}" autocomplete="off" spellcheck="false"/>
-      </div>`;
-    }).join('') || '<div class="muted">No fields</div>';
-    const on = c.enabled !== false;
-    return `<article class="conn-card${on?'':' off'}" data-connector="${esc(c.name)}">
-      <div class="hdr">
-        <div class="name">${avatar(c.name)}
-          <div class="truncate"><strong class="mono" title="${esc(c.name)}">${esc(c.name)}</strong>
-          <div class="faint" style="font-size:11px">${(c.fields||[]).length} keys</div></div>
-        </div>
-        <div style="display:grid; gap:6px; justify-items:end">
-          <button type="button" class="switch" role="switch" aria-checked="${on}"
-            aria-label="Enable ${esc(c.name)}" data-toggle-connector="${esc(c.server_name||('plugin:atlas:'+c.name))}"></button>
-          <span class="chip ${c.configured_hint?'live':''}" data-configured-chip="${esc(c.name)}">${c.configured_hint?'ready':'needs keys'}</span>
-        </div>
-      </div>
-      <div class="fields">${fields}</div>
-      <div class="actions" style="grid-template-columns:1fr 1fr">
-        <button type="button" class="ghost" data-test-connector="${esc(c.name)}">Test</button>
-        <button type="button" class="primary" data-save-connector="${esc(c.name)}">Save</button>
-      </div>
-    </article>`;
-  }).join('') || '<div class="empty">No connectors in .mcp.json</div>';
-  bindSettingsHandlers();
-}
-function updateSettingsBadges(s){
-  const byName={}; (s.connectors||[]).forEach(c => byName[c.name]=c);
-  document.querySelectorAll('[data-configured-chip]').forEach(el => {
-    const c=byName[el.dataset.configuredChip]; if(!c) return;
-    el.textContent = c.configured_hint ? 'ready' : 'needs keys';
-    el.classList.toggle('live', !!c.configured_hint);
-  });
-  const fieldMap={};
-  (s.connectors||[]).forEach(c => (c.fields||[]).forEach(f => { fieldMap[f.user_config_key||f.env_key]=f; }));
-  document.querySelectorAll('#connectorForms input[data-key]').forEach(inp => {
-    const f=fieldMap[inp.dataset.key]; if(!f) return;
-    const label=inp.parentElement.querySelector('label span:last-child'); if(!label) return;
-    const src = f.source && f.source !== 'missing' ? (' · '+f.source) : '';
-    label.className = f.is_set ? 'good' : 'warn';
-    label.textContent = (f.is_set?'set':'missing') + src;
-  });
-}
-function bindSettingsHandlers(){
-  document.querySelectorAll('#connectorForms input[data-key]').forEach(inp => {
-    inp.oninput = () => {
-      // A prefilled value that has not been touched is not a draft.
-      if(inp.value === (inp.dataset.original||'')) delete state.drafts[inp.dataset.key];
-      else state.drafts[inp.dataset.key] = inp.value;
-      state.settingsDirty = Object.keys(state.drafts).length > 0;
-    };
-    inp.onfocus = () => { state.settingsFocus = true; };
-    inp.onblur = () => { state.settingsFocus = false; };
-  });
-  document.querySelectorAll('[data-test-connector]').forEach(btn => {
-    btn.onclick = async () => {
-      const name = btn.dataset.testConnector;
-      btn.disabled = true; btn.textContent = 'Testing…';
-      try{
-        const r = await api('/api/connectors/test', {
-          method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name})
-        });
-        if(r.ok){
-          flash(`${name}: ${r.server} v${r.version||'?'} started and listed ${r.tool_count} tools in ${r.elapsed_ms}ms. ${r.note}`, true);
-          toast(`${name} responded with ${r.tool_count} tools`, true);
-        } else {
-          flash(`${name} failed: ${r.error}${r.stderr?(' — '+r.stderr.slice(-200)):''}${r.hint?(' '+r.hint):''}`, false);
-          toast(`${name} test failed`, false);
-        }
-      }catch(e){ flash(String(e.message||e), false); }
-      finally{ btn.disabled=false; btn.textContent='Test'; }
-    };
-  });
-  document.querySelectorAll('[data-toggle-connector]').forEach(btn => {
-    btn.onclick = async () => {
-      const name = btn.dataset.toggleConnector;
-      const next = btn.getAttribute('aria-checked') !== 'true';
-      btn.disabled = true;
-      try{
-        const r = await api('/api/mcp/toggle', {
-          method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name, enabled:next})
-        });
-        if(!r.ok){ flash(r.error || 'toggle failed', false); return; }
-        btn.setAttribute('aria-checked', String(next));
-        btn.closest('.conn-card').classList.toggle('off', !next);
-        flash(`${name} ${next?'enabled':'disabled'}. ${r.note}`, true);
-      }catch(e){ flash(String(e.message||e), false); }
-      finally{ btn.disabled=false; }
-    };
-  });
-  document.querySelectorAll('[data-save-connector]').forEach(btn => {
-    btn.onclick = async () => {
-      const card = btn.closest('.conn-card');
-      const updates = {};
-      card.querySelectorAll('input[data-key]').forEach(inp => {
-        // Prefilled non-secret values are only sent when actually edited.
-        if(inp.value !== '' && inp.value !== (inp.dataset.original||'')) updates[inp.dataset.key]=inp.value;
-      });
-      if(!Object.keys(updates).length){ flash('Nothing changed in this connector.', false); return; }
-      btn.disabled = true;
-      try{
-        const res = await api('/api/connectors/env', {
-          method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({updates})
-        });
-        if(!res.ok){ flash(res.error || 'save failed', false); return; }
-        Object.keys(updates).forEach(k => { delete state.drafts[k]; });
-        state.settingsDirty = Object.values(state.drafts).some(v => String(v||'').length > 0);
-        card.querySelectorAll('input[data-key]').forEach(inp => {
-          if(updates[inp.dataset.key]==null) return;
-          // Clear secrets (never read back); keep visible values and rebaseline them.
-          if(inp.type === 'password') inp.value = '';
-          else inp.dataset.original = inp.value;
-        });
-        flash((res.note||'Saved') + ' · ' + (res.updated_user_config_keys||res.updated_keys||[]).join(', '), true);
-        toast('Credentials saved — reload Claude Code', true);
-        state.settingsDirty=false; state.settingsFocus=false;
-        await refresh(true);
-        renderSettings(state.snapshot);
-      }catch(e){ flash(String(e.message||e), false); }
-      finally{ btn.disabled=false; }
-    };
-  });
-}
-function flash(msg, ok){ $('settingsFlash').innerHTML = `<div class="flash ${ok?'ok':'err'}">${msg}</div>`; }
-
-async function loadDetail(){
-  if(!state.selectedSession){
-    $('detail').textContent='Pick a session…'; $('tools').innerHTML=''; $('events').innerHTML=''; return;
-  }
-  const d = await api('/api/sessions/'+encodeURIComponent(state.selectedSession));
-  const s = d.session||{};
-  $('detail').innerHTML = `
-    <div class="chips" style="margin-bottom:8px">
-      ${s.is_live?'<span class="chip live">LIVE</span>':''}
-      <span class="chip">${s.project_folder||s.project_name||folder(s.cwd)||'—'}</span>
-      <span class="chip">${s.agent||'claude'}</span>
-      <span class="chip truncate">${s.model||'—'}</span>
-      ${s.git_branch?`<span class="chip">${s.git_branch}</span>`:''}
-      <span class="chip">${ago(s.last_activity_at||s.started_at)}</span>
-    </div>
-    <div class="mono truncate" title="${s.session_id||''}">${s.session_id||''}</div>
-    <div class="muted truncate" style="margin:6px 0" title="${s.cwd||s.project_root||''}">${s.cwd||s.project_root||''}</div>
-    <div>Task: <strong>${s.task_summary||s.brief_summary||'—'}</strong></div>
-    <div class="chips" style="margin-top:8px">
-      <span class="chip">dispatches ${num(s.dispatches)}</span>
-      <span class="chip">inline ${num(s.inline_ops)}</span>
-      <span class="chip">verifier ${pct(s.verifier_coverage)}</span>
-      <span class="chip">tokens ~${num(s.est_context_tokens)}</span>
-      <span class="chip">tools10m ${num(s.recent_tool_calls)}</span>
-    </div>`;
-  $('tools').innerHTML = (d.tools||[]).map(t =>
-    `<tr><td class="muted">${ago(t.ts)}</td><td class="mono truncate">${t.tool_name||''}</td>
-     <td class="mono muted truncate" title="${(t.target||t.server||'')}">${(t.target||t.server||'')}</td></tr>`
-  ).join('') || '<tr><td colspan="3" class="muted">No tool_calls yet</td></tr>';
-  const ev = []
-    .concat((d.dispatches||[]).map(x => ({ts:x.ts, kind:'dispatch', detail:(x.agent_type||'')+' '+(x.model||'')})))
-    .concat((d.events||[]).map(x => ({ts:x.ts, kind:x.is_inline_op?'inline':'event', detail:(x.tool||'')+' '+(x.path||x.context||'')})))
-    .sort((a,b)=> (b.ts||0)-(a.ts||0)).slice(0,80);
-  $('events').innerHTML = ev.map(e =>
-    `<tr><td class="muted">${ago(e.ts)}</td><td>${e.kind}</td><td class="mono muted truncate" title="${e.detail||''}">${e.detail||''}</td></tr>`
-  ).join('') || '<tr><td colspan="3" class="muted">No events/dispatches</td></tr>';
-}
-
-/* ===== Bulk credential import / export ===== */
-$('bulkExport').onclick = async () => {
-  try{
-    const r = await api('/api/connectors/export');
-    $('bulkEnv').value = r.text || '';
-    $('bulkMsg').textContent = 'Template loaded. Secrets are blanked; fill them in and import.';
-  }catch(e){ $('bulkMsg').textContent = String(e.message||e); }
-};
-$('bulkImport').onclick = async () => {
-  const text = $('bulkEnv').value || '';
-  if(!text.trim()){ $('bulkMsg').textContent = 'Paste some KEY=VALUE lines first.'; return; }
-  const btn = $('bulkImport'); btn.disabled = true;
-  try{
-    const r = await api('/api/connectors/import', {
-      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({text})
-    });
-    if(!r.ok){
-      $('bulkMsg').textContent = r.error === 'keys_not_allowlisted'
-        ? ('Rejected unknown keys: ' + (r.keys||[]).join(', '))
-        : (r.hint || r.error || 'import failed');
-      toast('Import rejected', false);
-      return;
-    }
-    $('bulkMsg').textContent = 'Imported ' + (r.parsed_keys||[]).length + ' keys. Reload Claude Code.';
-    $('bulkEnv').value = '';
-    toast('Credentials imported — reload Claude Code', true);
-    await refresh(true);
-    if(state.tab==='settings') renderSettings(state.snapshot);
-  }catch(e){ $('bulkMsg').textContent = String(e.message||e); }
-  finally{ btn.disabled = false; }
-};
-
-/* ===== Behavior ===== */
-function knobControl(k){
-  const val = state.behaviorEdits[k.key] != null ? state.behaviorEdits[k.key] : k.value;
-  if(k.kind === 'toggle'){
-    const on = String(val) === String(k.on);
-    return `<button type="button" class="switch" role="switch" aria-checked="${on}"
-      aria-label="${esc(k.title)}" data-knob-toggle="${esc(k.key)}"
-      data-on="${esc(k.on)}" data-off="${esc(k.off)}"></button>`;
-  }
-  if(k.kind === 'choice'){
-    return `<select data-knob="${esc(k.key)}">${(k.options||[]).map(o =>
-      `<option value="${esc(o)}"${String(o)===String(val)?' selected':''}>${esc(o)}</option>`).join('')}</select>`;
-  }
-  const type = k.kind === 'number' ? 'number' : 'text';
-  return `<input type="${type}" data-knob="${esc(k.key)}" value="${esc(val)}"
-    placeholder="${esc(k.default||'not set')}" autocomplete="off" spellcheck="false"/>`;
-}
-function renderBehavior(b){
-  $('behaviorPath').textContent = b.settings_path || '~/.claude/settings.json';
-  $('behaviorGroups').innerHTML = (b.groups||[]).map(g => `
-    <h3 class="card-title" style="margin-top:var(--s3)">${esc(g.title)}</h3>
-    <div class="knob-grid">${(g.knobs||[]).map(k => `
-      <div class="knob">
-        <div>
-          <div class="k-name"><strong>${esc(k.title)}</strong>
-            <span class="mono faint">${esc(k.key)}</span>
-            <span class="src ${esc(k.source)}">${esc(k.source)}</span></div>
-          <p>${esc(k.description)}</p>
-          <div class="k-ref">${esc(k.ref||'')} · default ${esc(k.default||'(unset)')}</div>
-        </div>
-        <div class="k-ctl">${knobControl(k)}</div>
-      </div>`).join('')}</div>`).join('');
-  $('behaviorAdvanced').innerHTML = (b.advanced||[]).map(a => `
-    <tr>
-      <td class="mono truncate" title="${esc(a.key)}">${esc(a.key)}</td>
-      <td><input data-knob="${esc(a.key)}" value="${esc(state.behaviorEdits[a.key] != null ? state.behaviorEdits[a.key] : a.value)}"
-        placeholder="(default)" autocomplete="off" spellcheck="false" style="height:30px; font-size:12px"/></td>
-      <td class="mono faint truncate" title="${esc(a.ref)}">${esc(a.ref)}</td>
-    </tr>`).join('') || '<tr><td colspan="3" class="muted">No additional variables found</td></tr>';
-  bindBehaviorHandlers();
-  updateBehaviorMsg();
-}
-function updateBehaviorMsg(){
-  const n = Object.keys(state.behaviorEdits).length;
-  $('behaviorMsg').textContent = n ? `${n} unsaved change${n===1?'':'s'}.` : 'No changes.';
-}
-function markKnob(key, value, original){
-  if(String(value) === String(original==null?'':original)) delete state.behaviorEdits[key];
-  else state.behaviorEdits[key] = value;
-  updateBehaviorMsg();
-}
-function knobOriginal(key){
-  const b = state.behavior || {};
-  for(const g of (b.groups||[])) for(const k of (g.knobs||[])) if(k.key===key) return k.value;
-  for(const a of (b.advanced||[])) if(a.key===key) return a.value;
-  return '';
-}
-function bindBehaviorHandlers(){
-  document.querySelectorAll('[data-knob-toggle]').forEach(btn => {
-    btn.onclick = () => {
-      const key = btn.dataset.knobToggle;
-      const next = btn.getAttribute('aria-checked') !== 'true';
-      btn.setAttribute('aria-checked', String(next));
-      markKnob(key, next ? btn.dataset.on : btn.dataset.off, knobOriginal(key));
-    };
-  });
-  document.querySelectorAll('[data-knob]').forEach(el => {
-    const handler = () => markKnob(el.dataset.knob, el.value, knobOriginal(el.dataset.knob));
-    el.oninput = handler; el.onchange = handler;
-  });
-}
-async function loadBehavior(){
-  state.behavior = await api('/api/behavior');
-  renderBehavior(state.behavior);
-}
-$('behaviorReset').onclick = () => { state.behaviorEdits = {}; renderBehavior(state.behavior||{}); };
-$('behaviorSave').onclick = async () => {
-  const updates = state.behaviorEdits;
-  if(!Object.keys(updates).length){ behaviorFlash('Nothing to save.', false); return; }
-  const btn = $('behaviorSave'); btn.disabled = true;
-  try{
-    const r = await api('/api/behavior', {
-      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({updates})
-    });
-    if(!r.ok){ behaviorFlash((r.hint||r.error) + ' ' + (r.keys||[]).join(', '), false); return; }
-    state.behaviorEdits = {};
-    behaviorFlash(`Set ${(r.set||[]).join(', ')||'nothing'}${(r.cleared||[]).length?(' · cleared '+r.cleared.join(', ')):''}. ${r.note}`, true);
-    toast('Behavior saved — reload Claude Code', true);
-    await loadBehavior();
-  }catch(e){ behaviorFlash(String(e.message||e), false); }
-  finally{ btn.disabled = false; }
-};
-function behaviorFlash(msg, ok){ $('behaviorFlash').innerHTML = `<div class="flash ${ok?'ok':'err'}">${esc(msg)}</div>`; }
-
-/* ===== Ecosystem ===== */
-function ecoFlash(msg, ok){ $('ecoFlash').innerHTML = `<div class="flash ${ok?'ok':'err'}">${esc(msg)}</div>`; }
-function showEcoPane(pane){
-  state.ecoPane = pane;
-  document.querySelectorAll('#ecoNav button').forEach(b => b.classList.toggle('active', b.dataset.eco===pane));
-  ['wiring','plugins','mcp','capabilities'].forEach(p => {
-    const el = $('eco-'+p); if(el) el.classList.toggle('hidden', p!==pane);
-  });
-}
-function renderEcosystem(e){
-  const a = e.atlas || {};
-  $('ecoWiringNote').innerHTML = [
-    `Plugin <span class="tag ${a.plugin_enabled?'ok':'no'}">${a.plugin_enabled?'enabled':'disabled'}</span>`,
-    `Hooks <span class="tag ${a.hooks_disabled_globally?'no':'ok'}">${a.hooks_disabled_globally?'disabled globally':'active'}</span>`,
-    `Output style <span class="tag">${esc(e.user?.active_output_style||'default')}</span>`,
-    `<span class="mono faint">${esc(a.plugin_root||'')}</span>`
-  ].join(' · ');
-  $('ecoBindings').innerHTML = (a.bindings||[]).map(b => `
-    <tr>
-      <td>${esc(b.event)}</td>
-      <td class="mono muted">${esc(b.matcher)}</td>
-      <td class="mono truncate" title="${esc(b.script)}">${esc(b.script)}${b.timeout?` <span class="faint">(${esc(b.timeout)}s)</span>`:''}</td>
-      <td class="${b.present?'good':'bad'}">${b.present?'present':'MISSING'}</td>
-    </tr>`).join('') || '<tr><td colspan="4" class="muted">No hook bindings declared</td></tr>';
-
-  const plugins = e.plugins||[];
-  $('pluginCount').textContent = `${plugins.filter(p=>p.enabled).length}/${plugins.length} on`;
-  $('pluginGrid').innerHTML = plugins.map(p => {
-    const counts = [
-      p.skills ? `${p.skills} skills` : '', p.agents ? `${p.agents} agents` : '',
-      p.commands ? `${p.commands} commands` : '', p.mcp_servers.length ? `${p.mcp_servers.length} MCP` : '',
-      p.hooks ? 'hooks' : ''
-    ].filter(Boolean);
-    const host = p.key.startsWith('atlas@');
-    return `<article class="eco-card${p.enabled?'':' off'}${host?' host':''}">
-      <div class="hdr">
-        <div class="truncate"><strong title="${esc(p.key)}">${esc(p.name)}</strong>
-          <span class="mono faint" style="font-size:11px">${esc(p.marketplace)}${p.version?(' · v'+esc(p.version)):''}</span></div>
-        <button type="button" class="switch" role="switch" aria-checked="${p.enabled}"
-          aria-label="Enable ${esc(p.name)}" data-toggle-plugin="${esc(p.key)}" ${host?'disabled':''}></button>
-      </div>
-      <div class="tag-list">${counts.map(c=>`<span class="tag">${esc(c)}</span>`).join('')}
-        ${p.installed?'':'<span class="tag no">not installed</span>'}</div>
-      <p>${esc(p.description||'No description in the plugin manifest.')}</p>
-      <div class="mono faint truncate" title="${esc(p.path)}">${esc(p.path||'—')}</div>
-    </article>`;
-  }).join('') || '<div class="empty">No plugins found</div>';
-
-  const servers = (e.mcp||{}).servers||[];
-  $('mcpCount').textContent = `${servers.filter(s=>s.enabled).length}/${servers.length} on`;
-  $('claudeJsonPath').textContent = e.claude_json_path || '~/.claude.json';
-  $('mcpGrid').innerHTML = servers.map(s => `
-    <article class="eco-card${s.enabled?'':' off'}">
-      <div class="hdr">
-        <div class="truncate"><strong class="mono" title="${esc(s.name)}">${esc(s.bare_name)}</strong>
-          <span class="faint" style="font-size:11px">${esc(s.origin)} · ${esc(s.origin_detail)}</span></div>
-        <button type="button" class="switch" role="switch" aria-checked="${s.enabled}"
-          aria-label="Enable ${esc(s.name)}" data-toggle-mcp="${esc(s.name)}"></button>
-      </div>
-      <div class="tag-list">
-        <span class="tag">${esc(s.transport)}</span>
-        ${s.plugin_enabled===false?'<span class="tag no">plugin off</span>':''}
-        ${(s.env_keys||[]).length?`<span class="tag">${s.env_keys.length} env</span>`:''}
-      </div>
-      <p class="mono">${esc(s.command||'—')}</p>
-      <div>${s.removable?`<button type="button" class="ghost" data-remove-mcp="${esc(s.name)}" style="height:30px">Remove</button>`:'<span class="faint" style="font-size:11px">Provided by a plugin</span>'}</div>
-    </article>`).join('') || '<div class="empty">No MCP servers found</div>';
-
-  const u = e.user||{};
-  const list = (label, items) => `
-    <section class="card">
-      <h3 class="card-title">${esc(label)} <span class="pill">${items.length}</span></h3>
-      <div class="tag-list">${items.map(i=>`<span class="tag">${esc(i)}</span>`).join('') || '<span class="muted">none</span>'}</div>
-    </section>`;
-  $('capabilityGrid').innerHTML = [
-    list('Atlas skills', a.skills||[]),
-    list('Atlas agents', a.agents||[]),
-    list('Atlas output styles', a.output_styles||[]),
-    list('Your ~/.claude agents', u.agents||[]),
-    list('Your ~/.claude skills', u.skills||[]),
-    list('Your hook events', u.hook_events||[]),
-  ].join('');
-  bindEcosystemHandlers();
-}
-function bindEcosystemHandlers(){
-  const toggle = async (btn, path, body, label) => {
-    btn.disabled = true;
-    try{
-      const r = await api(path, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
-      if(!r.ok){ ecoFlash((r.hint || r.error) + (r.key||r.name?(': '+(r.key||r.name)):''), false); return; }
-      ecoFlash(`${label} ${body.enabled?'enabled':'disabled'}. ${r.note||''}`, true);
-      await loadEcosystem();
-    }catch(e){ ecoFlash(String(e.message||e), false); }
-    finally{ btn.disabled = false; }
-  };
-  document.querySelectorAll('[data-toggle-plugin]').forEach(btn => {
-    btn.onclick = () => toggle(btn, '/api/plugins/toggle',
-      {key: btn.dataset.togglePlugin, enabled: btn.getAttribute('aria-checked') !== 'true'},
-      btn.dataset.togglePlugin);
-  });
-  document.querySelectorAll('[data-toggle-mcp]').forEach(btn => {
-    btn.onclick = () => toggle(btn, '/api/mcp/toggle',
-      {name: btn.dataset.toggleMcp, enabled: btn.getAttribute('aria-checked') !== 'true'},
-      btn.dataset.toggleMcp);
-  });
-  document.querySelectorAll('[data-remove-mcp]').forEach(btn => {
-    btn.onclick = async () => {
-      const name = btn.dataset.removeMcp;
-      if(!window.confirm(`Remove the user-scope MCP server "${name}" from ~/.claude.json?`)) return;
-      btn.disabled = true;
-      try{
-        const r = await api('/api/mcp/remove', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name})});
-        if(!r.ok){ ecoFlash(r.error || 'remove failed', false); return; }
-        ecoFlash(`Removed ${name} from ${r.path}.`, true);
-        await loadEcosystem();
-      }catch(e){ ecoFlash(String(e.message||e), false); }
-      finally{ btn.disabled = false; }
-    };
-  });
-}
-async function loadEcosystem(){
-  state.ecosystem = await api('/api/ecosystem');
-  renderEcosystem(state.ecosystem);
-  showEcoPane(state.ecoPane);
-}
-document.querySelectorAll('#ecoNav button').forEach(b => b.onclick = () => showEcoPane(b.dataset.eco));
-$('mcpAdd').onclick = async () => {
-  const spec = {
-    name: $('mcpName').value.trim(),
-    command: $('mcpCommand').value.trim(),
-    args: $('mcpArgs').value.trim(),
-    url: $('mcpUrl').value.trim(),
-  };
-  const btn = $('mcpAdd'); btn.disabled = true;
-  try{
-    const r = await api('/api/mcp/add', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(spec)});
-    if(!r.ok){ ecoFlash((r.hint || r.error), false); return; }
-    ['mcpName','mcpCommand','mcpArgs','mcpUrl'].forEach(id => $(id).value = '');
-    ecoFlash(`${r.replaced?'Replaced':'Added'} ${r.name} in ${r.path}. ${r.note}`, true);
-    toast('MCP server saved — reload Claude Code', true);
-    await loadEcosystem();
-  }catch(e){ ecoFlash(String(e.message||e), false); }
-  finally{ btn.disabled = false; }
-};
-
-// --- Work board + Agents editor --------------------------------------------
-
-function workPid(){
-  return state.selectedProject || (state.snapshot?.projects||[])[0]?.id || '';
-}
-async function loadTodo(){
-  const pid = workPid();
-  if(!pid){
-    $('workCounts').textContent = 'Select a project first';
-    $('todoRows').innerHTML = '<tr><td colspan="5" class="muted">No project selected</td></tr>';
-    $('memoryMem').textContent = ''; $('memoryProject').textContent = '';
-    return;
-  }
-  const d = await api('/api/todo?project_id='+encodeURIComponent(pid));
-  state.todo = d;
-  renderTodo();
-  const m = await api('/api/memory');
-  $('memoryMem').textContent = m.memory || '(empty)';
-  $('memoryProject').textContent = m.project || '(empty)';
-}
-function renderTodo(){
-  const d = state.todo; if(!d) return;
-  const c = d.counts||{};
-  $('workCounts').innerHTML = `
-    <span class="chip">needed <b>${num(c.needed)}</b></span>
-    <span class="chip">remaining <b>${num(c.remaining)}</b></span>
-    <span class="chip">complete <b>${num(c.complete)}</b></span>
-    ${c.claimed ? `<span class="chip">claimed ${num(c.claimed)}</span>` : ''}`;
-  const rows = (d.items||[]).filter(i => !i.archived).map(i => `
-    <tr>
-      <td class="truncate" title="${esc(i.content)}">${esc(i.content)}</td>
-      <td><span class="pill">${esc(i.status)}</span></td>
-      <td class="muted">${esc(i.owner||'')}</td>
-      <td class="muted">${esc(i.origin)}</td>
-      <td>
-        <button data-act="complete" data-id="${esc(i.id)}" type="button">Complete</button>
-        <button data-act="reopen" data-id="${esc(i.id)}" type="button">Reopen</button>
-        <button data-act="remove" data-id="${esc(i.id)}" type="button">Delete</button>
-      </td>
-    </tr>`).join('')
-    || '<tr><td colspan="5" class="muted">Empty board</td></tr>';
-  $('todoRows').innerHTML = rows;
-}
-$('todoRows').onclick = async e => {
-  const btn = e.target.closest('button[data-act]'); if(!btn) return;
-  const r = await api('/api/todo', {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({project_id: workPid(), action: btn.dataset.act, id: btn.dataset.id})});
-  if(r.ok === false) toast(String(r.error||'action failed'), false);
-  await loadTodo();
-};
-$('todoAddBtn').onclick = async () => {
-  const content = $('todoAdd').value.trim(); if(!content) return;
-  await api('/api/todo', {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({project_id: workPid(), action:'add', content})});
-  $('todoAdd').value = '';
-  await loadTodo();
-};
-async function loadAgents(){
-  const pid = workPid();
-  if(!pid){ $('agentPick').innerHTML=''; $('agentBody').value=''; return; }
-  const d = await api('/api/agents?project_id='+encodeURIComponent(pid));
-  state.agents = d.agents||[];
-  const keep = state.agents.some(a => a.name===state.selectedAgent);
-  state.selectedAgent = keep ? state.selectedAgent : (state.agents[0]||{}).name || null;
-  renderAgents();
-  await loadAgentBody();
-}
-function renderAgents(){
-  $('agentPick').innerHTML = (state.agents||[]).map(a =>
-    `<option value="${esc(a.name)}"${a.name===state.selectedAgent?' selected':''}>${esc(a.name)}${a.overridden?' (overridden)':''}</option>`).join('');
-  const a = (state.agents||[]).find(x => x.name===state.selectedAgent);
-  $('agentSource').textContent = a
-    ? (a.overridden ? 'overridden (project)' : (a.source==='override' ? 'override (project-only)' : 'plugin'))
-    : '—';
-  $('agentReset').disabled = !(a && (a.overridden || a.source==='override'));
-}
-async function loadAgentBody(){
-  if(!state.selectedAgent){ $('agentBody').value=''; return; }
-  const d = await api('/api/agents/'+encodeURIComponent(state.selectedAgent)+'?project_id='+encodeURIComponent(workPid()));
-  $('agentBody').value = d.content || '';
-  $('agentNote').textContent = d.source==='override'
-    ? 'Editing the project override.'
-    : 'Editing the plugin source. Save writes a project override under .claude/agents/.';
-}
-$('agentPick').onchange = async e => {
-  state.selectedAgent = e.target.value;
-  renderAgents();
-  await loadAgentBody();
-};
-$('agentSave').onclick = async () => {
-  const btn = $('agentSave'); btn.disabled = true;
-  try{
-    const r = await api('/api/agents', {method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({project_id: workPid(), action:'save', name: state.selectedAgent, content: $('agentBody').value})});
-    $('agentNote').textContent = r.ok ? (r.note||'saved') : String(r.hint || r.error || 'save failed');
-    if(r.ok) await loadAgents();
-  }catch(e){ $('agentNote').textContent = String(e.message||e); }
-  finally{ btn.disabled = false; }
-};
-$('agentReset').onclick = async () => {
-  const btn = $('agentReset'); btn.disabled = true;
-  try{
-    const r = await api('/api/agents', {method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({project_id: workPid(), action:'reset', name: state.selectedAgent})});
-    $('agentNote').textContent = r.ok ? (r.note||'reset') : String(r.error||'reset failed');
-    if(r.ok) await loadAgents();
-  }catch(e){ $('agentNote').textContent = String(e.message||e); }
-  finally{ btn.disabled = false; }
-};
-
-const TITLES = {
-  overview:'Overview', live:'Live sessions', settings:'Connectors & credentials',
-  behavior:'Behavior & hooks', ecosystem:'Ecosystem', findings:'Findings',
-  work:'Work board', agents:'Agents'
-};
-const TABS = ['overview','live','settings','behavior','ecosystem','findings','work','agents'];
-function showTab(tab){
-  state.tab = TABS.includes(tab) ? tab : 'overview';
-  document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('active', b.dataset.tab===tab));
-  TABS.forEach(t => {
-    const el=$('tab-'+t); if(el) el.classList.toggle('hidden', t!==tab);
-  });
-  $('pageTitle').textContent = TITLES[tab] || 'Atlas';
-  // Deep-linkable: /#behavior opens straight to that page across terminals.
-  if(location.hash.slice(1) !== tab) history.replaceState(null, '', '#'+tab);
-  if(tab==='settings' && state.snapshot) renderSettings(state.snapshot);
-  if(tab==='live' && state.selectedSession) loadDetail();
-  if(tab==='behavior') loadBehavior().catch(e => behaviorFlash(String(e.message||e), false));
-  if(tab==='ecosystem') loadEcosystem().catch(e => ecoFlash(String(e.message||e), false));
-  if(tab==='work') loadTodo().catch(e => toast(String(e.message||e), false));
-  if(tab==='agents') loadAgents().catch(e => toast(String(e.message||e), false));
-}
-
-async function refresh(forceSettings){
-  const q = state.selectedProject ? ('?project_id='+encodeURIComponent(state.selectedProject)) : '';
-  const s = await api('/api/status'+q);
-  state.snapshot = s;
-  $('url').textContent = s.url || location.origin;
-  $('sideUpdated').textContent = new Date((s.generated_at||Date.now()/1000)*1000).toLocaleTimeString();
-  $('sideVer').textContent = s.plugin?.version || '—';
-  const db = s.db_path || '—';
-  $('sideDb').textContent = db;
-  $('sideDb').title = db;
-  $('hint').textContent = (s.ui_hints && s.ui_hints.note) || 'LIVE = activity in the last 10 minutes. Lists are recent-only.';
-  renderProjects(s);
-  renderOverview(s);
-  renderFindings(s);
-  renderSessionList(s);
-  if(state.tab==='work') await loadTodo();
-  if(state.tab==='settings'){
-    if(forceSettings){ state.settingsDirty=false; state.settingsFocus=false; }
-    renderSettings(s);
-  } else {
-    if(!state.selectedSession){
-      const live = (s.live_sessions||[])[0] || filteredSessions(s)[0];
-      if(live) state.selectedSession = live.session_id;
-    }
-    if(state.selectedSession && !(s.sessions||[]).some(x=>x.session_id===state.selectedSession)){
-      state.selectedSession = (filteredSessions(s)[0]||{}).session_id || null;
-    }
-    if(state.tab==='live' && state.selectedSession) await loadDetail();
-  }
-}
-
-document.querySelectorAll('#nav button').forEach(btn => btn.onclick = () => showTab(btn.dataset.tab));
-$('gotoSettings').onclick = () => showTab('settings');
-$('project').onchange = async e => { state.selectedProject = e.target.value || null; state.selectedSession=null; await refresh(); };
-$('session').onchange = async e => {
-  state.selectedSession = e.target.value || null;
-  if(state.tab!=='live') showTab('live');
-  renderSessionList(state.snapshot||{sessions:[]});
-  await loadDetail();
-};
-$('refresh').onclick = () => refresh(true);
-window.addEventListener('hashchange', () => {
-  const tab = location.hash.slice(1);
-  if(TITLES[tab] && tab !== state.tab) showTab(tab);
-});
-if(TITLES[location.hash.slice(1)]) showTab(location.hash.slice(1));
-refresh();
-setInterval(() => refresh(false), 8000);
-</script>
-</body>
-</html>
-"""
-
-
 # --- Work board (durable todos), agent overrides, memory snapshot ----------
 
 
@@ -2826,29 +1411,121 @@ def _agent_name_ok(name):
     )
 
 
+def _frontmatter(path) -> dict:
+    """Flat ``key: value`` pairs from a markdown file's leading ``---`` block."""
+    try:
+        text = Path(path).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return {}
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return {}
+    out = {}
+    for raw in lines[1:]:
+        if raw.strip() == "---":
+            break
+        if raw.startswith(("#", " ", "\t")) or ":" not in raw:
+            continue
+        key, _, value = raw.partition(":")
+        out[key.strip()] = value.strip().strip("\"'")
+    return out
+
+
+def _omp_agent_info(path) -> dict:
+    """Model chain, role and thinking level from a generated omp agent file."""
+    fm = _frontmatter(path)
+    chain = re.findall(r"@[A-Za-z0-9_-]+", fm.get("model", ""))
+    role = next((c[1:] for c in chain if c.startswith("@atlas-")), "")
+    return {
+        "model_chain": chain,
+        "tier": role or (chain[0][1:] if chain else ""),
+        "effort": fm.get("thinkingLevel", ""),
+    }
+
+
+def _dispatch_stats() -> dict:
+    """{agent_type: {total, last7d, last_used}} from the dispatches table."""
+    try:
+        conn, _ = _db()
+    except Exception:
+        return {}
+    try:
+        since = time.time() - 7 * 86400
+        rows = _q(
+            conn,
+            "SELECT agent_type, COUNT(*) AS n, "
+            "SUM(CASE WHEN ts>=? THEN 1 ELSE 0 END) AS n7, MAX(ts) AS last_ts "
+            "FROM dispatches WHERE agent_type IS NOT NULL AND agent_type<>'' "
+            "GROUP BY agent_type",
+            (since,),
+        )
+    except Exception:
+        return {}
+    finally:
+        conn.close()
+    return {
+        r["agent_type"]: {
+            "total": r["n"] or 0,
+            "last7d": r["n7"] or 0,
+            "last_used": r["last_ts"],
+        }
+        for r in rows
+    }
+
+
+def _stats_for(name: str, stats: dict) -> dict:
+    """Sum dispatches recorded as ``name`` or the plugin-qualified ``atlas:name``."""
+    total = last7d = 0
+    last = None
+    for key in (name, "atlas:" + name):
+        s = stats.get(key)
+        if not s:
+            continue
+        total += s["total"]
+        last7d += s["last7d"]
+        if s["last_used"] and (last is None or s["last_used"] > last):
+            last = s["last_used"]
+    return {"total": total, "last7d": last7d, "last_used": last}
+
+
 def _agents_payload(root):
-    """Installed plugin agents plus this project's .claude/agents overrides."""
-    plugin, overrides = {}, {}
+    """Installed plugin agents plus this project's .claude/agents overrides.
+
+    Each row carries frontmatter model/effort, the omp (oh-my-pi) model chain when
+    a generated omp agent exists, and dispatch stats from the dispatches table.
+    """
+    plugin, overrides, omp = {}, {}, {}
     plugin_dir = PLUGIN_ROOT / "agents"
     if plugin_dir.is_dir():
         for p in sorted(plugin_dir.glob("*.md")):
             plugin[p.stem] = str(p)
+    omp_dir = PLUGIN_ROOT / "omp" / "agents"
+    if omp_dir.is_dir():
+        for p in sorted(omp_dir.glob("*.md")):
+            omp[p.stem] = str(p)
     if root:
         over_dir = Path(root) / ".claude" / "agents"
         if over_dir.is_dir():
             for p in sorted(over_dir.glob("*.md")):
                 overrides[p.stem] = str(p)
+    stats = _dispatch_stats()
     agents = []
-    for name in sorted(set(plugin) | set(overrides)):
-        agents.append(
-            {
-                "name": name,
-                "source": "override" if name in overrides else "plugin",
-                "overridden": name in plugin and name in overrides,
-                "plugin_path": plugin.get(name, ""),
-                "override_path": overrides.get(name, ""),
-            }
-        )
+    for name in sorted(set(plugin) | set(overrides) | set(omp)):
+        fm = _frontmatter(overrides.get(name) or plugin.get(name) or "")
+        row = {
+            "name": name,
+            "source": "override" if name in overrides else "plugin",
+            "overridden": name in plugin and name in overrides,
+            "plugin_path": plugin.get(name, ""),
+            "override_path": overrides.get(name, ""),
+            "model": fm.get("model", ""),
+            "effort": fm.get("effort", ""),
+            "omp": None,
+            "dispatches": _stats_for(name, stats),
+        }
+        if name in omp:
+            row["omp"] = dict(_omp_agent_info(omp[name]), path=omp[name])
+        agents.append(row)
     return {"ok": True, "agents": agents}
 
 
@@ -2927,6 +1604,139 @@ def _agent_reset(root, name):
     }
 
 
+# --- v2 surface: security guard, static UI, route mounting, SSE -------------------
+
+# Per-daemon secret. Injected into index.html (<meta name="atlas-token">) and
+# required as X-Atlas-Token on mutations, /api/v2/stream and sensitive GETs.
+DASH_TOKEN = secrets.token_urlsafe(32)
+STATIC_DIR = SCRIPTS_DIR / "dashboard_ui"
+TOKEN_PLACEHOLDER = "__ATLAS_TOKEN__"
+# GETs that expose transcripts/agent output or live streams: token required.
+_SENSITIVE_GET = re.compile(
+    r"^/api/v2/(stream|irc|colony/(capture|agent)|[^/]+/transcript)$|^/api/sessions/[^/]+/transcript$"
+)
+_TOKEN_EXEMPT = ("/api/health", "/health")
+_MIME = {
+    ".html": "text/html; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".js": "text/javascript; charset=utf-8",
+    ".mjs": "text/javascript; charset=utf-8",
+    ".json": "application/json; charset=utf-8",
+    ".svg": "image/svg+xml; charset=utf-8",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".ico": "image/x-icon",
+    ".woff2": "font/woff2",
+    ".txt": "text/plain; charset=utf-8",
+    ".map": "application/json; charset=utf-8",
+}
+
+V2_ROUTES: list = []  # (method, compiled regex, callable)
+V2_MOUNT_ERRORS: dict = {}
+
+
+def _mount_v2_routes() -> None:
+    """Tolerant mount: a missing or broken module never stops the server."""
+    import importlib
+
+    V2_ROUTES.clear()
+    V2_MOUNT_ERRORS.clear()
+    for name in ("atlas_dash_colony", "atlas_dash_insights"):
+        try:
+            mod = importlib.import_module(name)
+            for method, pattern, fn in getattr(mod, "ROUTES", []):
+                V2_ROUTES.append((method.upper(), re.compile(pattern), fn))
+        except ImportError as e:
+            V2_MOUNT_ERRORS[name] = f"not available: {e}"
+        except Exception as e:  # a bad module must not take the daemon down
+            V2_MOUNT_ERRORS[name] = f"{type(e).__name__}: {e}"
+            sys.stderr.write(f"[atlas-dashboard] {name} failed to mount: {e}\n")
+
+
+_mount_v2_routes()
+try:  # Health reports connectors with the same definition Settings uses
+    import atlas_dash_insights as _ins  # already imported by the mount above
+
+    _ins.CONNECTOR_STATUS_PROVIDER = lambda: _connector_status()
+except Exception:  # Health then reports connectors as unavailable
+    pass
+
+
+class _Ctx:
+    """Per-request context handed to v2 route callables."""
+
+    def __init__(self, query: dict, body: dict, groups: tuple):
+        self.query = query
+        self._body = body
+        self.groups = groups
+
+    def json(self) -> dict:
+        return self._body
+
+    def db(self):
+        conn, _ = _db()
+        return conn
+
+    def project_root(self, project_param):
+        """Absolute root path (has `.atlas/` or exists), or a numeric project id."""
+        if project_param in (None, "", "all"):
+            return None
+        p = str(project_param)
+        if p.isdigit():
+            return _project_root(p)
+        if os.path.isabs(p) and os.path.isdir(p):
+            return os.path.realpath(p)
+        return None
+
+
+def _static_file(rel: str):
+    """Resolve rel inside STATIC_DIR or None. Rejects traversal, symlink escape, dotfiles."""
+    if not rel or "\x00" in rel or "\\" in rel:
+        return None
+    parts = [p for p in rel.split("/") if p not in ("", ".")]
+    if any(p == ".." or p.startswith(".") for p in parts):
+        return None
+    base = STATIC_DIR.resolve()
+    target = (base / "/".join(parts)).resolve()
+    try:
+        target.relative_to(base)
+    except ValueError:
+        return None
+    return target if target.is_file() else None
+
+
+def _snapshot_hash(obj) -> str:
+    import hashlib
+
+    return hashlib.sha256(
+        json.dumps(obj, sort_keys=True, default=str).encode("utf-8")
+    ).hexdigest()
+
+
+def _v2_get(path: str, query: dict):
+    """Run a mounted GET route directly (used by SSE). Returns body or None."""
+    for method, rx, fn in V2_ROUTES:
+        if method == "GET" and rx.fullmatch(path):
+            try:
+                status, body = fn(_Ctx(query, {}, ()))
+            except Exception:
+                return None
+            return body if status == 200 else None
+    return None
+
+
+SSE_TICK_S = 5
+SSE_HEARTBEAT_S = 15
+SSE_TOPICS = (
+    ("colony", "/api/v2/colony"),
+    ("todos", "/api/v2/todos"),
+    ("irc", "/api/v2/irc"),
+    ("health", "/api/v2/health"),
+    ("improve", "/api/v2/improve"),
+)
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "AtlasDashboard/1.2"
 
@@ -2936,7 +1746,6 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
-        self.send_header("Access-Control-Allow-Origin", f"http://{LOOPBACK}")
         self.end_headers()
         self.wfile.write(body)
 
@@ -2987,20 +1796,220 @@ class Handler(BaseHTTPRequestHandler):
         svg = b'<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="600" viewBox="0 0 1600 600">\n  <defs>\n    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">\n      <stop stop-color="#0B1220"/><stop offset="0.5" stop-color="#15284a"/><stop offset="1" stop-color="#0d1b2a"/>\n    </linearGradient>\n    <radialGradient id="glow" cx="0.2" cy="0.2" r="0.8">\n      <stop stop-color="#4F8CFF" stop-opacity="0.45"/><stop offset="1" stop-color="#4F8CFF" stop-opacity="0"/>\n    </radialGradient>\n  </defs>\n  <rect width="1600" height="600" fill="url(#bg)"/>\n  <rect width="1600" height="600" fill="url(#glow)"/>\n  <g fill="none" stroke="#3DE0D0" stroke-opacity="0.2" stroke-width="2">\n    <path d="M0 420 C300 360 500 500 800 420 S1300 300 1600 380"/>\n    <path d="M0 460 C350 400 550 520 850 450 S1350 340 1600 420"/>\n  </g>\n</svg>'
         return self._bytes(200, svg, "image/svg+xml; charset=utf-8")
 
-    def log_message(self, fmt, *args):
-        sys.stderr.write("[atlas-dashboard] " + (fmt % args) + "\n")
+    def log_message(self, format, *args):  # noqa: A002 - base-class signature
+        sys.stderr.write("[atlas-dashboard] " + (format % args) + "\n")
+
+    # -- central security guard (every route, every method) ------------------
+
+    def _served_port(self) -> int:
+        return int(self.server.server_address[1])
+
+    def _deny(self, code: int, error: str, why: str, do: str):
+        return self._json(code, {"ok": False, "error": error, "why": why, "do": do})
+
+    def _guard(self, method: str, path: str, query: dict) -> bool:
+        """True when the request may proceed; otherwise the reply is already sent.
+
+        Order: Host (403) -> Content-Type on non-GET/HEAD (415) -> Origin (403)
+        -> X-Atlas-Token (401) on mutations, /api/v2/stream and sensitive GETs.
+        /api/health is Host-checked only so hooks and ensure probes keep working.
+        """
+        port = self._served_port()
+        allowed_hosts = {f"{LOOPBACK}:{port}", f"localhost:{port}"}
+        host = (self.headers.get("Host") or "").strip().lower()
+        if host not in allowed_hosts:
+            self._deny(
+                403,
+                "bad_host",
+                f"Host {host!r} is not this dashboard",
+                f"use http://{LOOPBACK}:{port}/ or http://localhost:{port}/",
+            )
+            return False
+        mutating = method not in ("GET", "HEAD")
+        if mutating:
+            ctype = (
+                (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+            )
+            if ctype != "application/json":
+                self._deny(
+                    415,
+                    "unsupported_media_type",
+                    "mutations must send Content-Type: application/json",
+                    "set the Content-Type header to application/json",
+                )
+                return False
+        origin = self.headers.get("Origin")
+        if origin is not None and origin not in {f"http://{h}" for h in allowed_hosts}:
+            self._deny(
+                403,
+                "bad_origin",
+                f"Origin {origin!r} is not this dashboard",
+                "call the API from the dashboard page itself",
+            )
+            return False
+        if path in _TOKEN_EXEMPT:
+            return True
+        if mutating or _SENSITIVE_GET.match(path):
+            supplied = self.headers.get("X-Atlas-Token") or ""
+            if not supplied and path == "/api/v2/stream":
+                supplied = query.get("token", "")
+            if not hmac.compare_digest(supplied.encode(), DASH_TOKEN.encode()):
+                self._deny(
+                    401,
+                    "bad_token",
+                    "missing or invalid X-Atlas-Token",
+                    "reload the dashboard page to obtain a fresh token",
+                )
+                return False
+        return True
+
+    # -- static UI --------------------------------------------------------------
+
+    def _serve_static(self, path: str, head_only: bool = False) -> bool:
+        """Serve / and /ui/*. True when the path was a static route."""
+        if path in ("/", "/index.html", "/dashboard", "/dashboard/"):
+            target = _static_file("index.html")
+            if target is None:
+                self._json(
+                    404,
+                    {
+                        "ok": False,
+                        "error": "ui_missing",
+                        "why": f"{STATIC_DIR / 'index.html'} does not exist",
+                        "do": "reinstall the atlas plugin",
+                    },
+                )
+                return True
+            body = target.read_bytes().replace(
+                TOKEN_PLACEHOLDER.encode(), DASH_TOKEN.encode()
+            )
+            if DASH_TOKEN.encode() not in body:
+                tag = f'<meta name="atlas-token" content="{DASH_TOKEN}">'.encode()
+                body = re.sub(rb"(<head[^>]*>)", rb"\1" + tag, body, count=1)
+            return self._send_static(body, "text/html; charset=utf-8", head_only)
+        if path.startswith("/ui/"):
+            target = _static_file(unquote(path[len("/ui/") :]))
+            if target is None:
+                self._json(404, {"ok": False, "error": "not_found", "path": path})
+                return True
+            ctype = _MIME.get(target.suffix.lower(), "application/octet-stream")
+            return self._send_static(target.read_bytes(), ctype, head_only)
+        return False
+
+    def _send_static(self, body: bytes, ctype: str, head_only: bool) -> bool:
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.end_headers()
+        if not head_only:
+            self.wfile.write(body)
+        return True
+
+    # -- SSE -----------------------------------------------------------------------
+
+    def _sse(self, query: dict):
+        """Hash-gated colony/todos/irc/health/improve events; tick every 5s; heartbeat every 15s."""
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Connection", "close")
+        self.send_header("X-Accel-Buffering", "no")
+        self.end_headers()
+        self.close_connection = True
+        project = {k: v for k, v in query.items() if k == "project"}
+        last: dict = {}
+
+        def emit(event: str, data) -> None:
+            payload = json.dumps(data, default=str, separators=(",", ":"))
+            self.wfile.write(f"event: {event}\ndata: {payload}\n\n".encode())
+            self.wfile.flush()
+
+        try:
+            self.wfile.write(b"retry: 3000\n\n")
+            self.wfile.flush()
+            last_beat = time.time()
+            while True:
+                for event, route in SSE_TOPICS:
+                    body = _v2_get(route, dict(project))
+                    if body is None:
+                        continue
+                    digest = _snapshot_hash(body)
+                    if last.get(event) != digest:
+                        last[event] = digest
+                        emit(event, body)
+                emit("tick", {"ts": time.time()})
+                slept = 0.0
+                while slept < SSE_TICK_S:
+                    time.sleep(1.0)
+                    slept += 1.0
+                    if time.time() - last_beat >= SSE_HEARTBEAT_S:
+                        self.wfile.write(b": heartbeat\n\n")
+                        self.wfile.flush()
+                        last_beat = time.time()
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            return  # client went away; the thread ends with the connection
+
+    # -- v2 dispatch ---------------------------------------------------------------
+
+    def _dispatch_v2(self, method: str, path: str, query: dict, body: dict) -> bool:
+        """Run a mounted v2 route. True when one matched (reply already sent)."""
+        for m, rx, fn in V2_ROUTES:
+            if m != method:
+                continue
+            match = rx.fullmatch(path)
+            if not match:
+                continue
+            try:
+                status, payload = fn(_Ctx(query, body, match.groups()))
+            except Exception as e:  # one module's bug never kills the server
+                sys.stderr.write(f"[atlas-dashboard] v2 {method} {path}: {e!r}\n")
+                self._json(
+                    500,
+                    {
+                        "ok": False,
+                        "error": str(e) or type(e).__name__,
+                        "why": "the route raised an exception",
+                        "do": "check dashboard.log",
+                    },
+                )
+                return True
+            self._json(status, payload)
+            return True
+        return False
+
+    def _query(self, u) -> dict:
+        return {k: v[0] for k, v in parse_qs(u.query).items()}
 
     def do_OPTIONS(self):
+        # No CORS preflight is honoured: the UI is same-origin, so cross-origin
+        # pages get no Allow-* headers and the browser blocks them.
         self.send_response(204)
-        self.send_header("Access-Control-Allow-Origin", f"http://{LOOPBACK}")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Allow", "GET, HEAD, POST, PUT")
         self.end_headers()
+
+    def do_HEAD(self):
+        u = urlparse(self.path)
+        if self._guard("HEAD", u.path, self._query(u)):
+            if not self._serve_static(u.path, head_only=True):
+                self._json(404, {"ok": False, "error": "not_found", "path": u.path})
 
     def do_GET(self):
         u = urlparse(self.path)
-        if u.path in ("/", "/index.html", "/dashboard", "/dashboard/"):
-            return self._html(200, UI_HTML)
+        query = self._query(u)
+        if not self._guard("GET", u.path, query):
+            return
+        if self._serve_static(u.path):
+            return
+        if u.path == "/api/v2/stream":
+            return self._sse(query)
+        if self._dispatch_v2("GET", u.path, query, {}):
+            return
+        return self._legacy_get(u)
+
+    def _legacy_get(self, u):
         if u.path in ("/assets/mark.svg", "/assets/logo.svg"):
             return self._asset_mark()
         if u.path in ("/assets/hero.jpg", "/assets/hero.png"):
@@ -3011,7 +2020,7 @@ class Handler(BaseHTTPRequestHandler):
                 {
                     "ok": True,
                     "service": "atlas-dashboard",
-                    "url": dashboard_url(),
+                    "url": dashboard_url(self._served_port()),
                     "pid": os.getpid(),
                     "db_path": dashboard_db_path(),
                     "script": str(Path(__file__).resolve()),
@@ -3027,9 +2036,14 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 return self._json(500, {"ok": False, "error": str(e)})
         if u.path == "/api/projects":
+            qs = parse_qs(u.query)
+            editable = qs.get("editable", [""])[0] in ("1", "true")
             conn, _ = _db()
             try:
-                return self._json(200, {"ok": True, "projects": _projects(conn)})
+                return self._json(
+                    200,
+                    {"ok": True, "projects": _projects(conn, editable_only=editable)},
+                )
             finally:
                 conn.close()
         if u.path == "/api/sessions":
@@ -3125,14 +2139,51 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, {"ok": False, "error": str(e)})
         return self._json(404, {"ok": False, "error": "not_found", "path": u.path})
 
-    def do_POST(self):
+    MAX_BODY = 4 * 1024 * 1024
+
+    def _mutate(self, method: str):
         u = urlparse(self.path)
-        length = int(self.headers.get("Content-Length") or 0)
+        query = self._query(u)
+        if not self._guard(method, u.path, query):
+            return
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            return self._deny(
+                400,
+                "bad_length",
+                "Content-Length is not a number",
+                "send a valid length",
+            )
+        if length > self.MAX_BODY:
+            return self._deny(
+                413,
+                "body_too_large",
+                f"{length} bytes exceeds {self.MAX_BODY}",
+                "send a smaller body",
+            )
         raw = self.rfile.read(length) if length else b"{}"
         try:
             data = json.loads(raw.decode("utf-8") or "{}")
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, UnicodeDecodeError):
             return self._json(400, {"ok": False, "error": "invalid_json"})
+        if not isinstance(data, dict):
+            return self._deny(
+                400, "invalid_json", "body must be a JSON object", "wrap it in {}"
+            )
+        if self._dispatch_v2(method, u.path, query, data):
+            return
+        if method == "POST":
+            return self._legacy_post(u, data)
+        return self._json(404, {"ok": False, "error": "not_found", "path": u.path})
+
+    def do_POST(self):
+        return self._mutate("POST")
+
+    def do_PUT(self):
+        return self._mutate("PUT")
+
+    def _legacy_post(self, u, data):
         if u.path == "/api/connectors/env":
             updates = data.get("updates") or {}
             if not isinstance(updates, dict) or not updates:

@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import * as nodePath from "node:path";
+
 /**
  * Single source of truth for the atlas omp colony worker map.
  *
@@ -14,10 +17,11 @@
  *
  * Roles: off/low agents run on the `@atlas-worker` role alias, medium agents
  * on `@atlas-verifier`. Role values resolve through `modelRoles.<role>` in the
- * omp config; an unconfigured custom role resolves to zero model patterns and
- * the subagent fails with "No model selected", so every tier carries a
- * guaranteed-resolvable fallback alias (see SMOL_FALLBACK_ROLE and
- * ATLAS_DEFAULT_FALLBACK_ROLE).
+ * omp config; in omp 18.6.1 an unresolved custom role alias stays a literal
+ * token that matches no model while `@smol` still expands, and if nothing
+ * resolves `createAgentSession` falls back to the parent's active model. The
+ * fallback aliases are still kept so the cheap tier is chosen rather than the
+ * parent (see SMOL_FALLBACK_ROLE and ATLAS_DEFAULT_FALLBACK_ROLE).
  */
 export const ATLAS_WORKER_ROLE = "@atlas-worker";
 export const ATLAS_VERIFIER_ROLE = "@atlas-verifier";
@@ -50,10 +54,11 @@ export function roleFor(
 /**
  * Cheap fallback role used when `modelRoles.atlas-worker` / `atlas-verifier`
  * are not configured. `@smol` is omp's built-in cheap role, so it resolves
- * even with no user configuration. Empirically (omp 18.4.9), an unconfigured
- * custom role makes the spawned subagent fail with "No model selected" —
- * there is NO automatic fall back to the parent model — hence these ordered
- * lists: the role alias first, then a guaranteed-resolvable fallback.
+ * even with no user configuration. In omp 18.6.1 an unresolved custom role
+ * alias stays a literal token and `@smol` still expands; if nothing resolves,
+ * `createAgentSession` falls back to the parent's active model. These ordered
+ * lists keep the cheap tier chosen rather than the parent: the role alias
+ * first, then a guaranteed-resolvable fallback.
  */
 
 /**
@@ -77,6 +82,47 @@ export function modelPatternsFor(agentName: string): string[] {
 	return ATLAS_THINKING_LEVELS[agentName] === "medium"
 		? [roleFor(agentName), ATLAS_DEFAULT_FALLBACK_ROLE, SMOL_FALLBACK_ROLE]
 		: [roleFor(agentName), SMOL_FALLBACK_ROLE];
+}
+
+/**
+ * The `model:` value pinned in the Claude-format definition `agents/<name>.md` (e.g. `sonnet`), the representation
+ * dispatch_tripwire.py's `_frontmatter_model` reads. "" when the file is unreadable or pins nothing, so callers
+ * fail open. Read per call: the files are tiny and the gate runs once per spawn.
+ */
+export function frontmatterModelFor(agentName: string): string {
+	try {
+		if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(agentName)) return "";
+		const text = readFileSync(nodePath.resolve(import.meta.dir, "..", "agents", `${agentName}.md`), "utf8");
+		const lines = text.split(/\r?\n/);
+		if (lines[0]?.trim() !== "---") return "";
+		for (const line of lines.slice(1)) {
+			const stripped = line.trim();
+			if (stripped === "---") break;
+			if (stripped.startsWith("model:")) return stripped.slice("model:".length).trim().replace(/^['"]|['"]$/g, "");
+		}
+		return "";
+	} catch {
+		return "";
+	}
+}
+
+/**
+ * True when `selector` is the parent's live model `live` (both `provider/id`, any case), optionally carrying ONE
+ * `:<thinking-level>` suffix on either side. omp injects the parent's selector, with or without its level, when a
+ * dispatch passes no `model`; that is the inherited default, never a per-call override. Twin of
+ * dispatch_tripwire.py `_inherited_selector`.
+ */
+export function isInheritedSelector(selector: string, live: string): boolean {
+	const a = selector.trim().toLowerCase();
+	const b = live.trim().toLowerCase();
+	if (a === "" || b === "") return false;
+	if (a === b) return true;
+	const withLevel = (longer: string, base: string): boolean => {
+		if (!longer.startsWith(`${base}:`)) return false;
+		const level = longer.slice(base.length + 1);
+		return level !== "" && !level.includes(":") && !level.includes("/");
+	};
+	return withLevel(a, b) || withLevel(b, a);
 }
 
 /** Every atlas agent name the omp extension recognizes in task dispatches. */

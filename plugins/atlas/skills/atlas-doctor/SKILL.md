@@ -52,12 +52,19 @@ already recorded for that `session_id` (already ingested - do not re-parse the
 raw transcript) and judge: `underlying_goal`, `outcome`, `session_type`,
 `primary_success`, `friction_detail`, `brief_summary`, `goal_categories_json`,
 `friction_counts_json`, `user_satisfaction`, `claude_helpfulness`. Write the
-judged columns back with `atlas_db.upsert_facet(conn, session_id, enriched_at=<now>, **judged)`
-via a short inline Python call (there is no CLI flag for this step because it
-is inherently an LLM judgment call, not deterministic logic - `--pending-facets`
-is the only machinery this phase needs). Batch in groups of ~10-20 sessions per
-pass so the doctor stays cheap on a heavy backlog; run this loop until
-`--pending-facets` returns empty.
+judged columns back with the deterministic CLI (the judgment stays yours; the
+write is a validated call, unknown columns and bad JSON exit 2):
+
+```
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_doctor.py" --enrich-facet <session_id> \
+  '{"primary_success":"...","brief_summary":"...","outcome":"..."}'
+```
+
+`--enrich-facet` stamps `enriched_at` itself when the JSON omits it - that stamp
+is what retires the row from `--pending-facets`, so do not add it by hand (a
+caller-supplied `enriched_at` is still honored). Batch in groups of ~10-20
+sessions per pass so the doctor stays cheap on a heavy backlog; run this loop
+until `--pending-facets` returns empty.
 
 ## Phase 2 - MINE
 
@@ -75,6 +82,20 @@ That dict is the extension point: to add a new class of defect detection,
 write a `mine_*(conn, root)` function returning `_finding(...)` dicts and
 register it there. Nothing else needs to change - `mine()` fingerprints,
 upserts, and dedupes generically for every registry entry.
+
+`tool_error_rate_high:*` findings count only calls that actually ran and failed:
+calls an atlas gate blocked (`tool_calls.denied=1` - the lean-ctx Grep/Glob
+redirect, recall gate, `DENY - ...` dispatch/edit denials) are excluded from both
+the error count and the call total, and are reported separately as `denied` in
+the evidence. The finding's detail and `evidence.top_errors` carry the most
+frequent `tool_calls.error_snippet` texts (first 500 chars of the failed
+result), so triage starts from the actual failure, not a bare rate. Rows
+ingested before `error_snippet` existed have no text; an empty `top_errors`
+means "no text captured", not "no errors".
+
+`friction_events` rows with category `gate_block` carry
+`conditions: <letters> (<names>)` - e.g. `conditions: c,d,e (CHANGELOG missing,
+ROADMAP missing, README missing)` - so a block names the rule that fired.
 
 ### Reply-quality loop (turn_quality miner)
 

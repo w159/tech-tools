@@ -1480,17 +1480,27 @@ class TodoBoardContract(unittest.TestCase):
         self.assertIn("atlas_todo.py", text)
 
     def test_dashboard_serves_board_and_agents(self):
-        ui = (SCRIPTS_DIR / "atlas_dashboard.py").read_text(encoding="utf-8")
+        server = (SCRIPTS_DIR / "atlas_dashboard.py").read_text(encoding="utf-8")
         for marker in (
             "/api/todo",
             "/api/agents",
             "/api/memory",
-            'id="tab-work"',
-            'id="tab-agents"',
-            'data-tab="work"',
-            'data-tab="agents"',
+            "dashboard_ui",
+            "/ui/",
+            "/api/v2/stream",
+            "atlas_dash_colony",
+            "X-Atlas-Token",
+            "compare_digest",
         ):
-            self.assertIn(marker, ui, marker)
+            self.assertIn(marker, server, marker)
+        # The page itself is static now: no embedded UI string in the server.
+        self.assertNotIn("UI_HTML", server)
+        ui_dir = SCRIPTS_DIR / "dashboard_ui"
+        self.assertTrue((ui_dir / "index.html").is_file())
+        self.assertTrue((ui_dir / "js" / "pages" / "work.js").is_file())
+        colony = (SCRIPTS_DIR / "atlas_dash_colony.py").read_text(encoding="utf-8")
+        for route in ("/api/v2/todos", "/api/v2/colony", "/api/v2/irc"):
+            self.assertIn(route, colony, route)
 
 
 class SkillPathsContract(unittest.TestCase):

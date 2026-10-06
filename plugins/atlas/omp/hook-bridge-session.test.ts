@@ -294,9 +294,10 @@ async function withSandbox<T>(body: (root: string) => Promise<T>): Promise<T> {
 	}
 }
 
-// dispatch_tripwire's inline-op threshold deny lives in PreToolUse and counts Read/Grep/Glob/Bash. The bridge used to
-// skip the tripwire's PreToolUse for exactly those tools (index.ts polices them natively), which silently removed the
-// deny tier in omp: 12 inline read/bash calls on an armed run were never denied although the DB counted all 12.
+// dispatch_tripwire's inline-op threshold deny lives in PreToolUse and counts mutating bash and edits; read-only
+// investigation (read/grep/glob, exploration or read-only-git bash) is neither counted nor blocked. The bridge used to
+// skip the tripwire's PreToolUse for the inline tools (index.ts polices them natively), which silently removed the
+// deny tier in omp: 12 inline bash calls on an armed run were never denied although the DB counted all 12.
 /**
  * Drives the REAL dispatch_tripwire.py through the REAL bridge on an armed run: inline read/bash/grep calls with no
  * dispatch must hit the inline-op threshold, and a dispatch must reset it. `leanCtx` configures a lean-ctx MCP server in
@@ -325,11 +326,16 @@ async function thresholdScenario(leanCtx: boolean) {
 			for (const h of handlers.tool_result ?? []) await h({ toolCallId: "r", toolName, input, content: [{ type: "text", text: "ok" }], isError: false, details: {} }, ctx);
 			return { blocked: false, text };
 		};
-		// read and a mutating bash: neither is denied by the native policy even with lean-ctx configured, so any deny is the threshold
-		const inline = (i: number) => (i % 2 ? call("read", { path: "src/a.py" }) : call("bash", { command: `touch src/f${i}.txt` }));
+		// A mutating bash counts toward the threshold and is never denied by the native policy even with lean-ctx configured,
+		// so any deny is the threshold. Interleaved reads must neither count nor be blocked, even past the threshold.
+		const inline = (i: number) => call("bash", { command: `touch src/f${i}.txt` });
+		const reads: { blocked: boolean; text: string }[] = [];
 
 		const verdicts: { blocked: boolean; text: string }[] = [];
-		for (let i = 1; i <= 12; i++) verdicts.push(await inline(i));
+		for (let i = 1; i <= 12; i++) {
+			verdicts.push(await inline(i));
+			reads.push(await call("read", { path: "src/a.py" }));
+		}
 		const firstDeny = verdicts.findIndex(v => v.blocked);
 
 		const TOOLS = "TOOLS: first load them with ToolSearch, then use serena and lean-ctx for code navigation.\n";
@@ -338,7 +344,7 @@ async function thresholdScenario(leanCtx: boolean) {
 		const afterReset = await inline(1);
 		// native Grep with lean-ctx configured: the tripwire's own native-policy deny must NOT reach the model (index.ts owns that text)
 		const grep = await call("grep", { pattern: "x" });
-		return { verdicts, firstDeny, dispatch, afterReset, grep };
+		return { verdicts, reads, firstDeny, dispatch, afterReset, grep };
 	});
 }
 
@@ -348,6 +354,7 @@ for (const leanCtx of [false, true]) {
 		expect(r.firstDeny).toBeGreaterThanOrEqual(0);
 		expect(r.verdicts[r.firstDeny].text).toMatch(/inline ops since your last dispatch/);
 		expect(r.verdicts.slice(0, r.firstDeny).every(v => !v.blocked)).toBe(true);
+		expect(r.reads.every(v => !v.blocked)).toBe(true); // reads past the threshold are never blocked
 		expect(r.dispatch.blocked).toBe(false);
 		expect(r.afterReset.blocked).toBe(false);
 		expect(r.grep.text + (r.grep.blocked ? r.grep.text : "")).not.toMatch(/native Grep is disabled/);

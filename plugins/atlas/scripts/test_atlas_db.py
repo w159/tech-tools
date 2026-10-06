@@ -1529,6 +1529,107 @@ class ToolCallDeniedTest(unittest.TestCase):
         atlas_db.init(self.conn)
         self.assertEqual(self._denied(), 0)
 
+    def _snippet(self, tuid="tu-1"):
+        return self.conn.execute(
+            "SELECT error_snippet FROM tool_calls WHERE tool_use_id=?", (tuid,)
+        ).fetchone()[0]
+
+    def test_omp_dispatch_deny_text_is_flagged(self):
+        """omp surfaces a gate denial of a Task dispatch as 'DENY - ...' or
+        'Task execution failed: DENY - ...'; neither is a tool failure."""
+        atlas_db.update_tool_result(
+            self.conn, "tu-1", 1, 90, "DENY - this Task dispatch overrides model"
+        )
+        self.assertEqual(self._denied(), 1)
+        atlas_db.update_tool_result(
+            self.conn, "tu-1", 1, 90, "Task execution failed: DENY - 6 inline ops"
+        )
+        self.assertEqual(self._denied(), 1)
+
+    def test_deny_prefix_must_lead_the_text(self):
+        """A real failure that merely mentions DENY mid-text is not a denial."""
+        atlas_db.update_tool_result(
+            self.conn, "tu-1", 1, 40, "request failed: DENY - from upstream proxy"
+        )
+        self.assertEqual(self._denied(), 0)
+
+    def test_error_snippet_stored_for_a_real_failure(self):
+        atlas_db.update_tool_result(
+            self.conn, "tu-1", 1, 30, "Exit code 1\n  grep:   no  such file"
+        )
+        # whitespace is collapsed so one row is one readable line
+        self.assertEqual(self._snippet(), "Exit code 1 grep: no such file")
+
+    def test_error_snippet_is_capped(self):
+        atlas_db.update_tool_result(self.conn, "tu-1", 1, 9000, "x" * 9000)
+        self.assertEqual(len(self._snippet()), atlas_db.ERROR_SNIPPET_CAP)
+        self.assertEqual(atlas_db.ERROR_SNIPPET_CAP, 500)
+
+    def test_no_snippet_for_a_successful_call(self):
+        atlas_db.update_tool_result(self.conn, "tu-1", 0, 12, "all good")
+        self.assertIsNone(self._snippet())
+
+    def test_denied_row_keeps_the_gate_text(self):
+        atlas_db.update_tool_result(
+            self.conn, "tu-1", 1, 90, "Atlas enforcement: use lean-ctx ctx_search"
+        )
+        self.assertEqual(self._denied(), 1)
+        self.assertIn("lean-ctx ctx_search", self._snippet())
+
+    def test_textless_update_keeps_an_existing_snippet(self):
+        atlas_db.update_tool_result(self.conn, "tu-1", 1, 4, "boom")
+        atlas_db.update_tool_result(self.conn, "tu-1", 1, 4)  # codex-style, no text
+        self.assertEqual(self._snippet(), "boom")
+
+    def test_error_snippet_column_migrates_onto_a_legacy_table(self):
+        """A DB created before error_snippet existed upgrades in place, keeps
+        its rows, and the new column starts NULL."""
+        atlas_db.update_tool_result(self.conn, "tu-1", 1, 4, "boom")
+        self.conn.execute("ALTER TABLE tool_calls DROP COLUMN error_snippet")
+        self.conn.commit()
+        atlas_db.init(self.conn)
+        self.assertIsNone(self._snippet())
+        self.assertEqual(
+            self.conn.execute("SELECT COUNT(*) FROM tool_calls").fetchone()[0], 1
+        )
+        atlas_db.init(self.conn)  # idempotent second run
+        atlas_db.update_tool_result(self.conn, "tu-1", 1, 4, "boom")
+        self.assertEqual(self._snippet(), "boom")
+
+    def test_tool_usage_separates_denials_from_real_errors(self):
+        for i, text in enumerate(
+            ["Atlas enforcement: use ctx_search", "Atlas enforcement: use ctx_search"]
+        ):
+            atlas_db.insert_tool_call(
+                self.conn,
+                "s1",
+                {
+                    "tool_use_id": f"d{i}",
+                    "tool_name": "Glob",
+                    "kind": "builtin",
+                    "target": "Glob",
+                },
+            )
+            atlas_db.update_tool_result(self.conn, f"d{i}", 1, 9, text)
+        atlas_db.insert_tool_call(
+            self.conn,
+            "s1",
+            {
+                "tool_use_id": "r1",
+                "tool_name": "Glob",
+                "kind": "builtin",
+                "target": "Glob",
+            },
+        )
+        atlas_db.update_tool_result(self.conn, "r1", 1, 9, "ENOENT")
+        row = next(r for r in atlas_db.tool_usage(self.conn) if r["target"] == "Glob")
+        self.assertEqual(
+            (row["calls"], row["errors"], row["denied"], row["real_errors"]),
+            (3, 3, 2, 1),
+        )
+        top = atlas_db.top_error_snippets(self.conn, "builtin", "Glob")
+        self.assertEqual(top, [{"snippet": "ENOENT", "count": 1}])
+
     def test_deny_markers_match_what_the_enforcers_emit(self):
         """DENY_MARKERS must stay in lockstep with the deny texts the omp
         extension and the mandate contract actually emit, or real blocks are

@@ -7,7 +7,7 @@ Developer documentation, vendor SDKs, and framework references for every MCP ser
 ```
 docs/
 ├── AGENTS.md  CHANGELOG.md  ROADMAP.md  README.md
-├── atlas-harness-parity.md  atlas-turn-scoring.md
+├── atlas-harness-parity.md  atlas-turn-scoring.md  atlas-workboard.md
 ├── mcp-gateway-design.md  panos-connector-design.md  plugin-development-scope.md
 ├── architecture/  audits/  decisions/  features/  lessons/
 └── plans/  specs/  standards/  superpowers/  wiki/

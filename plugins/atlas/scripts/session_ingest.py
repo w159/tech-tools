@@ -1238,7 +1238,7 @@ def omp_adapter(path):
                     "tool_use_id": f"{sid}:{msg['toolCallId']}",
                     "is_error": 1 if msg.get("isError") else 0,
                     "result_bytes": len(_omp_text(content)),
-                    "text": _omp_text(content)[:400],
+                    "text": _omp_text(content)[:500],
                 }
 
 

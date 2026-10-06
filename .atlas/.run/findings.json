@@ -2955,5 +2955,247 @@
     "status": "needs-evidence",
     "verified_at": "2026-10-06T08:03:59+00:00",
     "verified_by": "orchestrator"
+  },
+  {
+    "id": "WBV2-1",
+    "surface": "workboard-v2",
+    "category": "correctness",
+    "severity": "high",
+    "title": "VERDICT verified: backend colony/IRC/todos + central guard + SSE work on the live daemon",
+    "evidence": [
+      "unittest scripts: test_atlas_dash_colony 68 OK, test_atlas_dashboard 32 OK, test_atlas_dashboard_bind 4 OK, test_atlas_todo 44 OK, test_atlas_mux 44 OK",
+      "live daemon (temp ATLAS_HOME/HOME, port 54812): UI-added todo t2bfe5a0f visible in GET /api/v2/todos and todos.json",
+      "guard matrix: no token 401 bad_token; wrong token 401; wrong Host 403 bad_host; text/plain and urlencoded 415; foreign and null Origin 403 bad_origin; GET /api/health and /health 200 tokenless; ?token= honoured only on /api/v2/stream (irc?token= 401); OPTIONS 204 Allow only, no Access-Control-*; rejected POSTs wrote nothing (only control GUARDCTL landed)",
+      "SSE: retry 3000, heartbeat comment, tick every ~5.2s, todos event carried the newly added SSE-trigger todo"
+    ],
+    "doc_refs": [],
+    "reproduction": "ATLAS_HOME=<tmp> HOME=<tmp> python3 plugin-copy/scripts/atlas_dashboard.py serve --foreground --port <p>; curl matrix; curl -N /api/v2/stream?token=<meta token>",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-06T13:38:01+00:00",
+    "verified_by": "atlas:Verify-V2"
+  },
+  {
+    "id": "WBV2-2",
+    "surface": "workboard-v2",
+    "category": "correctness",
+    "severity": "high",
+    "title": "VERDICT verified: insights backend keeps gate_deny out of Health failures (enforcement split) with real data",
+    "evidence": [
+      "unittest test_atlas_dash_insights 25 OK",
+      "all-projects GET /api/v2/health: silent_failures kinds {tool_error:824, dispatch_unclassified:19, doctor_regression:2}; enforcement counts gate_deny 348 gate_block 36; gate_deny in silent_failures = False; gate subsystem status ok",
+      "project-scoped with seeded rows: 2 denied Write rows appear only under enforcement.gate_deny=2; seeded tool_error VFYERR appears in silent_failures; overview attention has no gate-deny entries",
+      "caveat: project-scoped query needs projects.root_path stored as realpath (macOS /tmp -> /private/tmp); my first seed used the symlink path and returned zeros until corrected - seeding artifact, not a product defect"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 /tmp/atlas-vfy/chk_health.py and chk2.py against the temp daemon",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-06T13:38:01+00:00",
+    "verified_by": "atlas:Verify-V2"
+  },
+  {
+    "id": "WBV2-3",
+    "surface": "workboard-v2",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "VERDICT verified: all 9 pages render in dark and light with zero console or HTTP errors on a clean pass",
+    "evidence": [
+      "18 screenshots in /tmp/atlas-shots2/<page>-{dark,light}.png (overview activity health colony work irc improve projects settings) plus irc-shell-refused.png and irc-after-hook.png; page body text 2.9k-80k chars each",
+      "collector (console.error/warn, window error, unhandledrejection, fetch status>=400) after hard reload: errs=[] across both theme passes",
+      "theme toggle via UI button (aria-label Switch to light/dark theme) flips html[data-theme]; 9 nav routes present",
+      "caveat: an earlier pass logged http401 on /api/v2/irc only because the page held the previous daemon token after I restarted the daemon (guard behaving as designed); the first daemon was killed by my lean-ctx service wrapper 120s cap, not a product crash"
+    ],
+    "doc_refs": [],
+    "reproduction": "cmux browser surface:30 reload; loop location.hash over 9 routes; cmux browser screenshot --out",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-06T13:38:01+00:00",
+    "verified_by": "atlas:Verify-V2"
+  },
+  {
+    "id": "WBV2-4",
+    "surface": "workboard-v2",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "VERDICT partial: send guard refuses shells and queues -p workers, but message status labels and IRC status code mislead",
+    "evidence": [
+      "POST /api/v2/colony/send to bash pane: 409 pane_not_steerable, pane capture byte-identical, canary file never created; force:true also 409; same via IRC UI shows explicit why/do text",
+      "interactive stub named claude: text physically typed (From/To envelope visible, 2 echoes), response delivered:true next:delivered to the pane",
+      "headless -p worker: delivered:queued, pane unchanged",
+      "DEFECT A: typed-to-interactive message keeps status:queued forever (no cursor reader), contradicting delivered:true",
+      "DEFECT B: refused shell-pane message is recorded with status:queued and delivered:false, so it shows as waiting forever",
+      "DEFECT C: POST /api/v2/irc to a shell pane returns HTTP 200 with ok:false error:pane_not_steerable, while /colony/send returns 409; CHANGELOG states 409 without that distinction"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 /tmp/atlas-vfy/irc_post.py shellpane x; POST /api/v2/colony/send run vfy1 name shellpane; GET /api/v2/irc and inspect status",
+    "proposed_fix": "derive status from delivery outcome: typed -> delivered, refused -> refused, only headless -p notes -> queued/read; make IRC post return the guard status code or document 200+ok:false",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-10-06T13:38:01+00:00",
+    "verified_by": "atlas:Verify-V2"
+  },
+  {
+    "id": "WBV2-5",
+    "surface": "workboard-v2",
+    "category": "correctness",
+    "severity": "high",
+    "title": "VERDICT verified: worker inbox hook flips queued to read via the real PostToolUse entrypoint",
+    "evidence": [
+      "unittest test_worker_inbox 19 OK; test_dispatch_tripwire 158 OK",
+      "IRC UI send to headless: status queued, pane untouched; running dispatch_tripwire.py PostToolUse with ATLAS_WORKER_NAME=headless ATLAS_PROJECT_ROOT=<proj> emitted additionalContext with the note, wrote inbox/headless.json cursor; GET /api/v2/irc then showed read and the IRC page row showed read",
+      "caveat: installed plugin copy (cache 9.5.1) lacks worker_inbox.py, so the installed hook would not deliver until reinstall (see parity failure)"
+    ],
+    "doc_refs": [],
+    "reproduction": "echo PostToolUse json | ATLAS_WORKER_NAME=headless ATLAS_PROJECT_ROOT=<proj> python3 hooks/dispatch_tripwire.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-06T13:38:01+00:00",
+    "verified_by": "atlas:Verify-V2"
+  },
+  {
+    "id": "WBV2-6",
+    "surface": "workboard-v2",
+    "category": "correctness",
+    "severity": "high",
+    "title": "VERDICT verified: Settings credential save works and never echoes the secret",
+    "evidence": [
+      "UI Save credentials for auvik -> POST /api/connectors/env 200, body lists key names only; sentinel absent from the DOM after save",
+      "6 GET routes (connectors, ecosystem, behavior, connectors/export, status, v2/prefs) returned 0 sentinel hits; daemon stdout/stderr 0 hits; GET /api/connectors shows auvik_api_key is_set:true with empty value",
+      "secret landed only in isolated HOME settings.json and plugin-copy .env; real ~/.claude/settings.json sha unchanged and repo plugins/atlas/.env sha verified OK",
+      "note: credential save writes plugin-root .env and ~/.claude/settings.json by design, so the daemon ran from a copy with HOME redirected"
+    ],
+    "doc_refs": [],
+    "reproduction": "UI Settings: set auvik API key, click Save credentials for auvik; grep sentinel across GET responses",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-06T13:38:01+00:00",
+    "verified_by": "atlas:Verify-V2"
+  },
+  {
+    "id": "WBV2-7",
+    "surface": "workboard-v2",
+    "category": "correctness",
+    "severity": "low",
+    "title": "VERDICT partial: docs match observed behaviour except send status code and installed-parity drift",
+    "evidence": [
+      "CHANGELOG, dashboard-api.md and docs/atlas-workboard.md accurately describe guard order, token delivery, SSE cadence, enforcement split, credential form, headless queue",
+      "inaccuracy: docs say shell panes get 409 pane_not_steerable without noting /api/v2/irc returns 200 ok:false; docs say messages carry status queued|read without noting typed or refused messages stay queued",
+      "hooks suite: 267 ran, 1 failure test_installed_hook_files_match_repo (dispatch_tripwire.py differs from install; worker_inbox.py missing from install); installed cache 9.5.1 predates repo edits, reinstall needed, not a code defect"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/hooks && python3 -m unittest test_atlas_contract.InstalledParityContract.test_installed_hook_files_match_repo",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-10-06T13:38:01+00:00",
+    "verified_by": "atlas:Verify-V2"
+  },
+  {
+    "id": "WBV2-4",
+    "surface": "dashboard",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "VERDICT verified: send guard refuses shells and queues -p workers; delivered/refused/queued/read statuses and badges are correct on IRC and Colony drawer",
+    "evidence": [
+      "live matrix (temp ATLAS_HOME+HOME, port 65385, real tmux session atlas-vfy3: shell pane, stub process named claude, atlas_mux.py spawn run-worker pane): POST /api/v2/irc -> shellpane status refused (HTTP 200 ok:false pane_not_steerable), interactive status delivered (delivered:true, From/To envelope typed once), headless status queued (delivered:queued); POST /api/v2/colony/send shellpane -> 409 pane_not_steerable, status refused; force:true on shell still 409 and pane capture stayed Mac% (nothing typed)",
+      "browser (cmux surface:32): Colony drawer tags refused x2 (shellpane), delivered (interactive), queued (headless) then read after the real dispatch_tripwire.py PostToolUse hook ran with ATLAS_WORKER_NAME=headless (drawer polled queued->read without reload); IRC page rows refused/delivered/read/refused, plus a message sent through the IRC UI composer showed queued then read after the hook; cmux console list and errors list empty after hard reload",
+      "screenshots /tmp/atlas-shots3/: colony-drawer-shell-refused.png colony-drawer-interactive-delivered.png colony-drawer-headless-queued.png colony-drawer-headless-read-after-hook.png irc-all-badges-after-hook.png irc-ui-send-queued.png irc-ui-send-read-after-hook.png",
+      "deny+inbox merge via dispatch_tripwire.main(): /tmp/atlas-vfy3/deny_inbox_case.py 19/19 checks pass (/tmp/atlas-vfy3/deny_inbox_case.out): real gate STOP + inbox merge into one JSON doc; real PreToolUse deny with pending note = one doc, deny verbatim, note not drained; PostToolUse deny (forced) = one doc byte-identical, inbox text absent; _run raising = one valid doc; deny-then-raise = one doc byte-identical; hostile inbox text (quotes, braces, embedded JSON, control char) = one doc, no permissionDecision injected; real subprocess entry point rc 0 one doc",
+      "tests: scripts test_atlas_dash_colony 75 OK, test_atlas_dashboard 32 OK, test_atlas_dash_insights 25 OK, test_atlas_todo 44 OK; hooks test_worker_inbox 19 OK, test_dispatch_tripwire 158 OK; test_installed_hook_files_match_repo fails as expected (dispatch_tripwire.py differs, worker_inbox.py missing from install) and was not touched",
+      "code: atlas_dash_colony.py:278-299 _delivery_status, :857-885 probe_pane fails closed, :932-964 send_to_agent (refuse -> 409 + recorded refused), :1137-1174 h_irc_post (200 ok:false); dispatch_tripwire.py:1004-1027 _merge_context, :1030-1055 main",
+      "caveat 1 (hardening, unreachable from real code): _merge_context drops inbox text when stdout holds a deny, but worker_inbox.drain already advanced the cursor, so such a note would read read without being shown. No real _run path prints a deny on PostToolUse (all stdout writers enumerated: dispatch_tripwire.py:240,653,992,1097,1137,1203; deny only via _deny from PreToolUse callers, and main() drains only on PostToolUse); PreToolUse deny leaves the cursor at 0.0 (C2/C9)",
+      "caveat 2 (unreachable): a synthetic _run that writes a truncated non-JSON fragment then raises leaves stdout unparseable (_merge_context returns it unchanged); every real writer emits a whole print(json.dumps(...)) document",
+      "caveat 3: installed plugin cache has no worker_inbox.py (all cache versions), so the installed hook would not deliver or flip queued to read until reinstall"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/scripts && ATLAS_HOME=<tmp> ATLAS_DASHBOARD_DB=<tmp>/atlas.db python3 atlas_dashboard.py serve --foreground --port <p>; tmux session atlas-<run> with windows: atlas_mux.py spawn --command-override (headless), exec <stub named claude> (interactive), exec zsh -f (shell); POST /api/v2/irc {project,to,body} with X-Atlas-Token; echo PostToolUse json | ATLAS_WORKER_NAME=<w> ATLAS_PROJECT_ROOT=<root> python3 plugins/atlas/hooks/dispatch_tripwire.py; cd <repo> && python3 /tmp/atlas-vfy3/deny_inbox_case.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-06T14:08:06+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "WBV2-7",
+    "surface": "workboard-v2",
+    "category": "correctness",
+    "severity": "low",
+    "title": "VERDICT verified: docs match observed behaviour; connector count corrected to twelve (panos) after verifier refutation",
+    "evidence": [
+      "CHANGELOG, dashboard-api.md and docs/atlas-workboard.md accurately describe guard order, token delivery, SSE cadence, enforcement split, credential form, headless queue",
+      "inaccuracy: docs say shell panes get 409 pane_not_steerable without noting /api/v2/irc returns 200 ok:false; docs say messages carry status queued|read without noting typed or refused messages stay queued",
+      "hooks suite: 267 ran, 1 failure test_installed_hook_files_match_repo (dispatch_tripwire.py differs from install; worker_inbox.py missing from install); installed cache 9.5.1 predates repo edits, reinstall needed, not a code defect",
+      "REFUTED then FIXED: verifier refuted the docs connector count (eleven/11 vs actual 12: panos is declared in plugins/atlas/.mcp.json mcpServers, which atlas_dashboard.py _connector_status() iterates for GET /api/connectors; panos_status exists in mcp/panos/server.mjs). Fixed in plugins/atlas/skills/atlas-setup/references/connectors.md (count, 'The twelve connectors' list, panos in Node row, uv/Node line) and plugins/atlas/references/connector-config-flow.md (L179 12, L215/L217 twelve, 2026-09-02 matrix and API result labelled historical)",
+      "ctx_search 'eleven|11 connectors|other ten|ten need Node' over plugins/atlas and docs after the fix: remaining hits are only CHANGELOG release history, flow-doc lines explicitly labelled historical (L190, L221, L231), 'eleven Node connectors' (10 + panos, correct) in docs/README.md:27 and docs/standards/connector-safety-signals.md:104, connectors.md:38 'other eleven (including panos) need Node' (12 minus falcon), and skills/atlas/SKILL.md:49 (eleven hooks, unrelated); no unlabelled 'eleven connectors' claim remains"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/hooks && python3 -m unittest test_atlas_contract.InstalledParityContract.test_installed_hook_files_match_repo",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-06T14:08:29+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "WBV2-7",
+    "surface": "workboard-v2",
+    "category": "correctness",
+    "severity": "low",
+    "title": "VERDICT verified: docs match observed behaviour (IRC 200 ok:false and status values documented); connector count corrected to twelve (panos) after verifier refutation",
+    "evidence": [
+      "CHANGELOG, dashboard-api.md and docs/atlas-workboard.md accurately describe guard order, token delivery, SSE cadence, enforcement split, credential form, headless queue",
+      "earlier inaccuracy now fixed in docs: plugins/atlas/skills/atlas-orchestrate/references/dashboard-api.md:135 states POST /api/v2/irc refusal is HTTP 200 with ok:false (message recorded status:refused) while /api/v2/colony/send returns 409 pane_not_steerable; dashboard-api.md:148 documents status queued|read|delivered|refused with delivered and refused terminal; docs/atlas-workboard.md pane-delivery section says an IRC post reports ok:false when delivery was refused",
+      "hooks suite: 267 ran, 1 failure test_installed_hook_files_match_repo (dispatch_tripwire.py differs from install; worker_inbox.py missing from install); installed cache 9.5.1 predates repo edits, reinstall needed, not a docs defect and not a code defect",
+      "REFUTED then FIXED: verifier refuted the docs connector count (eleven/11 vs actual 12). Ground truth: plugins/atlas/.mcp.json mcpServers has 12 entries (auvik, blumira, cipp, connectwise, falcon, knowbe4, ninjaone, panos, paylocity, spanning, threatlocker, vanta); atlas_dashboard.py _connector_status() iterates exactly that map for GET /api/connectors; panos is a Node server (mcp/panos/server.mjs, panos_status present x4). Fixed in plugins/atlas/skills/atlas-setup/references/connectors.md (twelve, panos in Node row and 'The twelve connectors' list, uv/Node line) and plugins/atlas/references/connector-config-flow.md (L179 12, L215-224 twelve, 2026-09-02 matrix/API result labelled historical)",
+      "ctx_search 'eleven|11 connectors|other ten|ten need Node' over plugins/atlas/skills, plugins/atlas/references and docs after the fix: only connector-config-flow.md L190/L221/L231 (labelled historical 2026-09-02), connectors.md:38 'other eleven (including panos) need Node' (12 minus falcon), docs/README.md:27 and docs/standards/connector-safety-signals.md:104 'eleven Node connectors' (11 Node + falcon uv = 12, correct), docs/CHANGELOG.md dated release history, and plugins/atlas/skills/atlas/SKILL.md:49 (eleven hooks, unrelated); no unlabelled stale connector-count claim remains"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/hooks && python3 -m unittest test_atlas_contract.InstalledParityContract.test_installed_hook_files_match_repo",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-06T14:09:26+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "batch": "2026-10-06-gates",
+    "claim": "Model-pin gates agree (omp index.ts + dispatch_tripwire.py accept omitted/sonnet/@atlas-worker/@smol/parent live model; deny opus, other providers, cross-tier roles). Inline-op counter exempts read-only calls; read-only Bash classifier hardened fail-closed (git --output/--ext-diff/--textconv/-O, $()/backtick/<(), redirects, bare &, find -fprint/-ok, rg --pre, tree -o, sed w/e/-i, awk system/pipe/redirect).",
+    "status": "verified",
+    "verifier": "VerifyGates (fresh, adversarial) + lead re-run",
+    "evidence": "VerifyGates: 29 Python + 30 TS model cases TOTAL_BAD 0; initial PARTIAL on 5 classifier bypasses -> fixed by HardenReadOnlyBash (79-row table test). Lead re-run: _is_read_only_call('git log --output=f')=False, 'ls $(rm x)'=False, 'git status & rm z'=False, 'git status'=True; pytest test_dispatch_tripwire+test_atlas_contract 264 passed, 1 failed (InstalledParityContract cache drift, clears on reinstall); bun test omp 307 pass 0 fail."
+  },
+  {
+    "batch": "2026-10-06-doctor",
+    "claim": "atlas-doctor: tool_error_rate miner excludes denied rows; tool_calls.error_snippet (idempotent migration, 500-char cap, DENY-prefix classification); readable gate-block condition names; --enrich-facet sets enriched_at.",
+    "status": "verified",
+    "verifier": "VerifyDoctor (fresh, adversarial)",
+    "evidence": "On real-DB copy: Grep 194/198 and Glob 75/78 errors were denials, 0 Grep/Glob findings after change; ALTER idempotent across 2 inits on legacy copy; 9-case DENY prefix probe all correct; --enrich-facet pending 5->4; pytest doctor/db/session_ingest/completion_gate 634 passed. Caveat: only 7 historical error rows carry snippets (new ingest only)."
+  },
+  {
+    "batch": "2026-10-06-dashboard",
+    "claim": "Workboard v2: Self-improvement page fixed (propose count, wontfix state, normalized ledger rows without actions, per-rule baseline/verdicts, per-judgment charts, hookstate nudges, improve SSE topic, remeasure persists, project-scoped lessons); Settings Ecosystem/Connectors/Agents/omp sections populated; Work 'all' API, Colony unknown count, fixture filtering.",
+    "status": "verified",
+    "verifier": "VerifyDashboard (fresh, real browser)",
+    "evidence": "Remeasure click -> improvements 47->48 row id 51 and 'baseline -> now 0.231 -> 0.231' after hard reload; lessons 50 -> 1 on tech-tools filter matching docs/lessons; #pg-agent-project present on all/specific/reload (earlier 'missing' was an un-awaited probe); 9 pages 0 console errors; screenshots .atlas/.run/vd-*.webp. Residual low defects dispatched to DashPolish."
+  },
+  {
+    "batch": "2026-10-06-dashpolish",
+    "claim": "Dashboard polish: _todo_counts skips archived (shares todos_state); Work 'all' merged board grouped by status with per-task project write routing; ledger Show-all toggle; /api/health reports bound port.",
+    "status": "verified",
+    "verifier": "VerifyPolish (fresh, adversarial, temp project roots)",
+    "evidence": "Status writes in merged view landed only in their own temp todos.json across 2 rounds (no cross-write); ledger 45-row toggle 40<->45; /api/health on 7733 reported 7733; pytest dash suites 162 passed. claim/edit/assign/remove routing verified by code only."
+  },
+  {
+    "batch": "2026-10-06-omp-tier-rewrite",
+    "claim": "omp before_subagent_spawn rewrites omitted/parent-inherited model to modelPatternsFor(agent) so atlas agents keep their tier instead of inheriting the parent model.",
+    "status": "verified",
+    "verifier": "VerifyTierRewrite (fresh, adversarial; real register() harness + omp 18.6.1 dist reducer replay)",
+    "evidence": "types.d.ts:888-897 shape matches; reducer: undefined/{} cannot clear model, block wins; omitted-model event carries expanded parent selector -> rewritten for 24 provider/level cases; genuine override blocked; tier lists, non-atlas agents, HARD=off untouched; bun 310 pass. Prose-only defects fixed by FixFallbackProse. Live omp spawn pending reinstall."
   }
 ]

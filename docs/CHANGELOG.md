@@ -1,5 +1,65 @@
 # Changelog
 
+## 2026-10-06 -- atlas: Workboard v2 dashboard (static UI, SSE, /api/v2), BREAKING request guard
+
+### Breaking
+
+- The dashboard now guards every route and method: `Host` must be
+  `127.0.0.1:<port>` or `localhost:<port>` (403), POST/PUT need
+  `Content-Type: application/json` (415), a present `Origin` must be that loopback
+  origin (403), and every mutation, `GET /api/v2/stream` and the sensitive GETs
+  (`/api/v2/irc`, `/api/v2/colony/capture`, `/api/v2/colony/agent`,
+  `.../transcript`) need the per-daemon `X-Atlas-Token` (401). The token is
+  regenerated on each daemon start and delivered only as
+  `<meta name="atlas-token">` in `GET /`; `?token=` works on the stream only.
+  External callers that POST to the dashboard must fetch `GET /` first, read the
+  token from the meta tag, and send `X-Atlas-Token` plus the JSON `Content-Type`.
+  `/api/health` and `/health` stay token-exempt.
+- `Access-Control-Allow-Origin` is removed from all responses and `OPTIONS`
+  answers 204 with `Allow` only; cross-origin pages can no longer call the
+  dashboard.
+
+### Added
+
+- New static-asset UI (`plugins/atlas/scripts/dashboard_ui/`) replaces the inline
+  `UI_HTML` page: nine pages (Overview, Activity, Health, Colony, Work, IRC,
+  Self-improvement, Projects, Settings) on one design system, no build step and no
+  CDN.
+- `GET /api/v2/stream` (SSE: hash-gated `colony`, `todos`, `irc`, `health`,
+  `tick`, 15 s heartbeat, 8 s polling fallback) and 21 `/api/v2` routes in
+  `atlas_dash_colony.py` (colony, IRC, todos) and `atlas_dash_insights.py`
+  (projects, overview, health, activity, improve, prefs).
+- `POST /api/v2/colony/send`: interactive `claude`/`omp` panes are typed into;
+  shell, python, node and other non-harness panes are refused with 409; headless
+  `-p` mux workers are queued as board notes.
+- Health returns policy enforcement (`gate_deny`, `gate_block`) as a stream
+  separate from real failures.
+- Worker inbox delivery: queued board notes reach a mux worker as hook
+  `additionalContext` from the PostToolUse branch of `dispatch_tripwire.py`
+  (`hooks/worker_inbox.py`); omp receives it through the existing hook bridge
+  (`dispatch_tripwire.py` is a bridged hook), with no `omp/index.ts` change.
+  Messages carry `status: queued|read|delivered|refused`
+  (`queued`/`read` for `-p` workers, `delivered` when typed into an interactive
+  pane, `refused` for a shell pane). `POST /api/v2/colony/send` returns 409 on
+  refusal; `POST /api/v2/irc` returns HTTP 200 with `ok:false` and
+  `error:"pane_not_steerable"`.
+- Settings connector credential form and Agents editor are present in the v2
+  UI: password inputs (set/missing only, nothing echoed, token carried, unsaved
+  draft guard) post to `POST /api/connectors/env`; the Agents editor saves or
+  resets per-project overrides through `POST /api/agents`.
+
+### Changed
+
+- `plugins/atlas/skills/atlas-orchestrate/references/dashboard-api.md` rewritten
+  from `atlas_dashboard.py`, `atlas_dash_colony.py`, `atlas_dash_insights.py` and
+  `dashboard_ui/`: request guard, legacy and v2 routes (21 v2), SSE events and the
+  8 s polling fallback, pages, prefs file, shortcuts, design tokens, components.
+- `plugins/atlas/README.md` and `plugins/atlas/references/connector-config-flow.md`
+  no longer describe the removed inline page or polling as the update path.
+- New `docs/atlas-workboard.md`: overview, information architecture, OpenRig-derived
+  concepts and an OpenRig-to-atlas mapping table. Full detail in
+  `plugins/atlas/CHANGELOG.md` [Unreleased].
+
 ## 2026-10-06 -- atlas: minimal-task worker tier, deterministic reports, header/phase/colony gates
 
 - New `atlas:runner` agent and `contracts/worker-protocol.json`: singular,

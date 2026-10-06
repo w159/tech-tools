@@ -11,6 +11,7 @@ import extension, {
 	modelOverrideReason,
 	register,
 } from "./index";
+import { frontmatterModelFor, isInheritedSelector } from "./atlas-agents";
 
 type Context = {
 	cwd: string;
@@ -547,7 +548,8 @@ test("todo mirror tolerates a spawning failure", () => {
 
 // ── Model-override deny (twin of dispatch_tripwire._model_override), via before_subagent_spawn ──
 
-type SpawnHandler = (event: Record<string, unknown>, ctx: Context) => { block?: boolean; reason?: string } | undefined;
+type SpawnResult = { block?: boolean; reason?: string; model?: string[]; note?: string } | undefined;
+type SpawnHandler = (event: Record<string, unknown>, ctx: Context) => SpawnResult;
 const spawnHandler = (h: { handlers: object }) => (h.handlers as Record<string, SpawnHandler>).before_subagent_spawn;
 
 test("a per-call model override of an atlas colony agent is blocked with the tripwire's reason", () => {
@@ -569,9 +571,10 @@ test("the expanded pinned tier, no override, other agents and the kill switch al
 	const spawn = spawnHandler(h);
 	expect(spawn({ type: "before_subagent_spawn", agent: "implementer", invocationKind: "task", modelRole: "smol", patterns: ["@atlas-worker", "anthropic/claude-sonnet-5-5:off"], spawnKey: "SpawnOne" }, h.ctx)).toBeUndefined(); // omp's own expansion of the definition's list
 	expect(spawn({ agent: "implementer", invocationKind: "task", modelRole: "smol", patterns: ["anthropic/claude-sonnet-5-5:off", "@Atlas-Worker"] }, h.ctx)).toBeUndefined(); // order and case do not matter
-	expect(spawn({ agent: "implementer", modelRole: "smol", patterns: [] }, h.ctx)).toBeUndefined();
-	expect(spawn({ agent: "implementer", modelRole: "smol", patterns: ["  ", ""] }, h.ctx)).toBeUndefined(); // blank patterns are no override
-	expect(spawn({ agent: "implementer", modelRole: "smol" }, h.ctx)).toBeUndefined();
+	const WORKER_TIER = ["@atlas-worker", "@smol"];
+	expect(spawn({ agent: "implementer", modelRole: "smol", patterns: [] }, h.ctx)?.model).toEqual(WORKER_TIER); // omitted model: restore the tier
+	expect(spawn({ agent: "implementer", modelRole: "smol", patterns: ["  ", ""] }, h.ctx)?.model).toEqual(WORKER_TIER); // blank patterns are no override
+	expect(spawn({ agent: "implementer", modelRole: "smol" }, h.ctx)).toBeUndefined(); // no patterns array at all: nothing to rewrite
 	expect(spawn({ agent: "task", modelRole: "smol", patterns: ["ollama/glm-5.3-flash:cloud:medium"] }, h.ctx)).toBeUndefined(); // not an atlas colony agent
 	expect(spawn({ agent: 7, patterns: ["x"] }, h.ctx)).toBeUndefined();
 	process.env.ATLAS_TRIPWIRE_HARD = "off";
@@ -615,8 +618,8 @@ const inheritedSpawn = (patterns: string[]) => ({ type: "before_subagent_spawn",
 test("a selector equal to the parent's live model plus a thinking level is inherited, not an override", () => {
 	const h = harness();
 	h.ctx.model = LIVE_MODEL;
-	expect(spawnHandler(h)(inheritedSpawn(["anthropic/claude-sonnet-5-5:low"]), h.ctx)).toBeUndefined();
-	expect(spawnHandler(h)(inheritedSpawn(["Anthropic/Claude-Sonnet-5-5:HIGH"]), h.ctx)).toBeUndefined(); // case does not matter
+	expect(spawnHandler(h)(inheritedSpawn(["anthropic/claude-sonnet-5-5:low"]), h.ctx)?.block).toBeUndefined();
+	expect(spawnHandler(h)(inheritedSpawn(["Anthropic/Claude-Sonnet-5-5:HIGH"]), h.ctx)?.block).toBeUndefined(); // case does not matter
 });
 
 test("the same inherited selector denies when the context carries no model", () => {
@@ -638,7 +641,106 @@ test("a different concrete selector still denies when the parent's live model is
 test("the bare live model selector with no thinking suffix is inherited", () => {
 	const h = harness();
 	h.ctx.model = LIVE_MODEL;
-	expect(spawnHandler(h)(inheritedSpawn(["anthropic/claude-sonnet-5-5"]), h.ctx)).toBeUndefined();
+	expect(spawnHandler(h)(inheritedSpawn(["anthropic/claude-sonnet-5-5"]), h.ctx)?.block).toBeUndefined();
+});
+
+// ── Both pin representations pass this gate AND dispatch_tripwire.py's: `@atlas-worker` (omp role) and `sonnet` (agents/*.md) ──
+
+const pinSpawn = (agent: string, patterns: string[], modelRole?: string) => ({ type: "before_subagent_spawn", agent, invocationKind: "task", modelRole, patterns, spawnKey: "Pin" });
+
+test("an omitted model is rewritten to the pinned tier instead of running on the parent's model", () => {
+	const h = harness();
+	const result = spawnHandler(h)(pinSpawn("implementer", []), h.ctx);
+	expect(result?.block).toBeUndefined();
+	expect(result?.model).toEqual(["@atlas-worker", "@smol"]);
+	expect(result?.note).toBe("atlas: implementer pinned to @atlas-worker");
+});
+
+test("the omp role pin passes for its own tier", () => {
+	const h = harness();
+	expect(spawnHandler(h)(pinSpawn("implementer", ["@atlas-worker"]), h.ctx)).toBeUndefined();
+	expect(spawnHandler(h)(pinSpawn("implementer", ["@smol"]), h.ctx)).toBeUndefined();
+	expect(spawnHandler(h)(pinSpawn("verifier", ["@atlas-verifier"]), h.ctx)).toBeUndefined();
+});
+
+test("the Claude-format pin (`model: sonnet`) passes too, in any case", () => {
+	const h = harness();
+	expect(spawnHandler(h)(pinSpawn("implementer", ["sonnet"]), h.ctx)).toBeUndefined();
+	expect(spawnHandler(h)(pinSpawn("implementer", ["Sonnet"]), h.ctx)).toBeUndefined();
+	expect(spawnHandler(h)(pinSpawn("docs-auditor", ["haiku"]), h.ctx)).toBeUndefined(); // that agent pins haiku
+});
+
+test("a parent-model injection passes for any provider, with or without a level on either side", () => {
+	for (const [provider, id] of [["anthropic", "claude-opus-5-5"], ["ollama", "glm-5.3-flash:cloud"], ["openai", "gpt-5"]]) {
+		const live = `${provider}/${id}`;
+		const h = harness();
+		h.ctx.model = { provider, id };
+		for (const patterns of [[live], [`${live}:medium`]]) {
+			const result = spawnHandler(h)(pinSpawn("implementer", patterns), h.ctx);
+			expect(result?.block).toBeUndefined();
+			expect(result?.model).toEqual(["@atlas-worker", "@smol"]); // inherited parent model is replaced by the tier
+		}
+		const withLevel = harness();
+		withLevel.ctx.model = { provider, id: `${id}:medium` }; // live model string already carries its level
+		expect(spawnHandler(withLevel)(pinSpawn("implementer", [live]), withLevel.ctx)?.model).toEqual(["@atlas-worker", "@smol"]);
+	}
+});
+
+test("the rewrite carries each tier's own pinned list", () => {
+	const h = harness();
+	h.ctx.model = { provider: "anthropic", id: "claude-opus-5-5" };
+	const live = "anthropic/claude-opus-5-5:medium";
+	expect(spawnHandler(h)(pinSpawn("verifier", [live]), h.ctx)?.model).toEqual(["@atlas-verifier", "@default", "@smol"]);
+	expect(spawnHandler(h)(pinSpawn("verifier", [live]), h.ctx)?.note).toBe("atlas: verifier pinned to @atlas-verifier");
+	expect(spawnHandler(h)(pinSpawn("runner", [live]), h.ctx)?.model).toEqual(["@atlas-mechanic", "@smol"]);
+	expect(spawnHandler(h)(pinSpawn("explorer", []), h.ctx)?.model).toEqual(["@atlas-worker", "@smol"]);
+});
+
+test("a list that already carries the tier is left untouched, even beside the inherited parent model", () => {
+	const h = harness();
+	h.ctx.model = { provider: "anthropic", id: "claude-opus-5-5" };
+	expect(spawnHandler(h)(pinSpawn("implementer", ["@atlas-worker", "anthropic/claude-opus-5-5:low"], "smol"), h.ctx)).toBeUndefined();
+	expect(spawnHandler(h)(pinSpawn("implementer", ["sonnet"]), h.ctx)).toBeUndefined(); // Claude-format pin
+	expect(spawnHandler(h)(pinSpawn("implementer", ["anthropic/claude-opus-5-5:low", "@smol"]), h.ctx)).toBeUndefined();
+});
+
+test("no rewrite when the gate is off, the agent is not an atlas colony agent, or the model is a real override", () => {
+	const h = harness();
+	h.ctx.model = { provider: "anthropic", id: "claude-opus-5-5" };
+	expect(spawnHandler(h)(pinSpawn("general-purpose", []), h.ctx)).toBeUndefined();
+	expect(spawnHandler(h)(pinSpawn("implementer", ["openai/gpt-5"]), h.ctx)?.model).toBeUndefined(); // still a deny, never a rewrite
+	expect(spawnHandler(h)(pinSpawn("implementer", ["openai/gpt-5"]), h.ctx)?.block).toBe(true);
+	process.env.ATLAS_TRIPWIRE_HARD = "off";
+	expect(spawnHandler(h)(pinSpawn("implementer", []), h.ctx)).toBeUndefined();
+});
+
+test("genuine overrides are still denied: opus, another provider, another tier's role", () => {
+	const h = harness();
+	h.ctx.model = { provider: "anthropic", id: "claude-opus-5-5" };
+	for (const patterns of [["opus"], ["openai/gpt-5"], ["anthropic/claude-sonnet-5-5"], ["@atlas-verifier"], ["sonnet", "opus"]]) {
+		const result = spawnHandler(h)(pinSpawn("implementer", patterns), h.ctx);
+		expect(result?.block).toBe(true);
+		expect(result?.reason).toBe(modelOverrideReason("Task", "implementer", patterns.join(", "), "@atlas-worker"));
+	}
+	expect(spawnHandler(h)(pinSpawn("verifier", ["opus"]), h.ctx)?.block).toBe(true);
+});
+
+test("isInheritedSelector: equal, or one `:level` suffix on either side, never two or a path", () => {
+	expect(isInheritedSelector("a/b", "a/b")).toBe(true);
+	expect(isInheritedSelector("A/B:low", "a/b")).toBe(true);
+	expect(isInheritedSelector("a/b", "a/b:low")).toBe(true);
+	expect(isInheritedSelector("a/b:low:high", "a/b")).toBe(false);
+	expect(isInheritedSelector("a/b:x/y", "a/b")).toBe(false);
+	expect(isInheritedSelector("a/b2", "a/b")).toBe(false);
+	expect(isInheritedSelector("", "a/b")).toBe(false);
+	expect(isInheritedSelector("a/b", "")).toBe(false);
+});
+
+test("frontmatterModelFor reads the Claude-format pin and fails open to empty", () => {
+	expect(frontmatterModelFor("implementer")).toBe("sonnet");
+	expect(frontmatterModelFor("docs-auditor")).toBe("haiku");
+	expect(frontmatterModelFor("not-an-agent")).toBe("");
+	expect(frontmatterModelFor("../index")).toBe("");
 });
 
 test("a hostile spawn event fails open", () => {

@@ -421,6 +421,17 @@ export interface BridgeCtx {
 	cwd: string;
 	agent?: { kind?: string };
 	sessionManager?: { getSessionId?: () => unknown; getSessionFile?: () => unknown };
+	/** The parent's live model; absent in tests and when omp has none selected. */
+	model?: { provider?: unknown; id?: unknown };
+}
+
+/**
+ * The parent's live model as `provider/id`, or "" when the context carries none. dispatch_tripwire.py reads it as
+ * `session_model` to tell the parent selector omp injects for a model-less dispatch (inherited) from a real override.
+ */
+function sessionModelOf(ctx: BridgeCtx): string {
+	const { provider, id } = ctx.model ?? {};
+	return typeof provider === "string" && typeof id === "string" && provider !== "" && id !== "" ? `${provider}/${id}` : "";
 }
 
 /** One tool event handed to a run-state sink after the bridged hooks allowed it. */
@@ -547,6 +558,7 @@ export function registerHookBridge(pi: Pick<ExtensionAPI, "on">, deps: BridgeDep
 			const inputs = names[0] === "Task" ? claudeTaskInputs(event.input) : [claudeToolInput(event.input, cwd)];
 			const runs: HookRun[] = [];
 			for (const toolInput of inputs.length ? inputs : [{}]) {
+				const sessionModel = sessionModelOf(ctx as BridgeCtx);
 				const batch = await runAllRuns("PreToolUse", names, {
 					hook_event_name: "PreToolUse",
 					session_id: sessionId,
@@ -554,6 +566,7 @@ export function registerHookBridge(pi: Pick<ExtensionAPI, "on">, deps: BridgeDep
 					tool_name: names[0],
 					tool_input: toolInput,
 					transcript_path: transcriptPath,
+					...(sessionModel ? { session_model: sessionModel } : {}),
 				});
 				const deny = batch.find(r => r.out.deny)?.out.deny;
 				if (deny) return { block: true, reason: deny };

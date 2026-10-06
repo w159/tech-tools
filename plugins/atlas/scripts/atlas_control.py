@@ -96,7 +96,7 @@ BEHAVIOR_KNOBS = [
         "description": "Loopback port for the shared daemon. Every terminal must agree on it.",
         "kind": "number",
         "default": "7421",
-        "ref": "scripts/atlas_dashboard.py:35",
+        "ref": "scripts/atlas_dashboard.py:39",
     },
     {
         "key": "ATLAS_INGEST",
@@ -322,6 +322,47 @@ BEHAVIOR_KNOBS = [
         "default": "200",
         "ref": "scripts/turn_scoring.py",
     },
+    # -- omp extension
+    {
+        "key": "ATLAS_HOOK_BRIDGE",
+        "group": "omp extension",
+        "title": "Hook bridge",
+        "description": "The omp extension runs atlas's Claude hooks inside omp. Off disables the bridge, so none of the hook guardrails run under omp.",
+        "kind": "toggle",
+        "on": "",
+        "off": "off",
+        "default": "",
+        "ref": "omp/hook-bridge.ts:489",
+    },
+    {
+        "key": "ATLAS_BRIDGE_HOOK_TIMEOUT_S",
+        "group": "omp extension",
+        "title": "Bridged hook time limit (s)",
+        "description": "Hard cap per bridged hook, lower of this and the hook's own timeout. omp cuts a handler at 30 s, so the default stays below that.",
+        "kind": "number",
+        "default": "25",
+        "ref": "omp/hook-bridge.ts:364",
+    },
+    {
+        "key": "ATLAS_WORKER_MAX_TOKENS",
+        "group": "omp extension",
+        "title": "Worker output-token cap",
+        "description": "Atlas workers have any larger max_tokens request lowered to this. It is never raised.",
+        "kind": "number",
+        "default": "32000",
+        "ref": "omp/workers.ts:31",
+    },
+    {
+        "key": "ATLAS_ADVISOR_GATE",
+        "group": "omp extension",
+        "title": "Advisor gate",
+        "description": "Requires the advisor check before a done claim under omp. Off skips it.",
+        "kind": "toggle",
+        "on": "",
+        "off": "off",
+        "default": "",
+        "ref": "omp/advisor.ts:108",
+    },
     # -- Storage paths
     {
         "key": "ATLAS_HOME",
@@ -431,6 +472,7 @@ def behavior_state() -> dict:
         "groups": list(groups.values()),
         "advanced": advanced,
         "settings_path": str(SETTINGS_PATH),
+        "omp": omp_model_roles(),
         "note": 'Values are written to settings.json "env", which Claude Code exports into every hook process. Reload Claude Code for a change to reach a running session.',
     }
 
@@ -960,6 +1002,174 @@ def test_connector(name: str, env: dict | None = None, timeout: float = 20.0) ->
         "elapsed_ms": int((time.time() - started) * 1000),
         "note": "The bundle started and listed its tools. Vendor credentials are only proven by a live call.",
     }
+
+
+# --- project fixtures (shared by the Agents editor and the Projects page) -----
+
+_JUNK_PARTS = {"node_modules", "worktrees", "local-agent-mode-sessions", ".run"}
+_JUNK_SUBSTRINGS = (
+    "/.cache/",
+    "/atlas-work/",
+    "/atlas-demo/",
+    "/T/atlas-",
+    "/tmp/probe",
+)
+_JUNK_BASENAMES = {"repo", "demo", "wt", "stage", "outputs", "tmp", "T"}
+
+
+def is_fixture_project(root, must_exist: bool = True) -> bool:
+    """True for roots that are test fixtures, scratch dirs, or (optionally) gone.
+
+    Covers the filesystem root and home, atlas demo/probe scratch dirs, throwaway
+    worktrees, tmp dirs and agent-mode output folders. ``must_exist`` also rejects
+    paths that are not directories: right for the agent editor (it writes into the
+    project) and wrong for history views, which keep projects deleted since.
+    """
+    if not root:
+        return True
+    p = os.path.normpath(str(root))
+    if p in (os.sep, os.path.expanduser("~")) or (must_exist and not os.path.isdir(p)):
+        return True
+    if _JUNK_PARTS & set(Path(p).parts):
+        return True
+    if any(m in p + "/" for m in _JUNK_SUBSTRINGS):
+        return True
+    if p.startswith(("/private/tmp", "/private/var/folders", "/tmp", "/var/folders")):
+        return True
+    return os.path.basename(p) in _JUNK_BASENAMES and "/Projects/" not in p
+
+
+_CONNECTOR_USAGE_SQL = (
+    "SELECT server, COUNT(*), SUM(CASE WHEN ts>=? THEN 1 ELSE 0 END), "
+    "SUM(CASE WHEN ts>=? AND COALESCE(is_error,0)=1 THEN 1 ELSE 0 END), MAX(ts) "
+    "FROM tool_calls WHERE kind='mcp' AND server IS NOT NULL AND server<>'' "
+    "GROUP BY server"
+)
+# Same aggregate minus calls a hook refused (denied=1): policy, not connector failure.
+_CONNECTOR_USAGE_SQL_DENIED = _CONNECTOR_USAGE_SQL.replace(
+    "AND server<>'' ", "AND server<>'' AND COALESCE(denied,0)=0 "
+)
+
+
+# --- connector usage + health (one definition for Settings and Health) --------
+
+# Older sessions logged some connectors under their former server names.
+CONNECTOR_ALIASES = {"falcon-mcp": "falcon", "falcon_mcp": "falcon"}
+# A connector with this many calls and at least this error share is degraded.
+CONNECTOR_MIN_CALLS = 10
+CONNECTOR_ERROR_RATE = 0.25
+CONNECTOR_USAGE_WINDOW_S = 30 * 86400
+
+
+def connector_usage(conn, since_s: float = CONNECTOR_USAGE_WINDOW_S, now=None) -> dict:
+    """Per-connector call stats from tool_calls: {name: calls, errors, error_rate, last_used}.
+
+    Calls the hooks refused (``denied=1``, when that column exists) are policy, not
+    connector failures, so they count neither as calls nor as errors. ``last_used``
+    is the newest call ever seen (epoch seconds); the counts cover ``since_s``.
+    """
+    out: dict = {}
+    if conn is None:
+        return out
+    now = time.time() if now is None else now
+    try:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(tool_calls)")}
+        if not {"server", "ts", "is_error"} <= cols:
+            return out
+        sql = _CONNECTOR_USAGE_SQL_DENIED if "denied" in cols else _CONNECTOR_USAGE_SQL
+        rows = conn.execute(sql, (now - since_s, now - since_s)).fetchall()
+    except Exception:
+        return out
+    for server, total, recent, errors, last in rows:
+        name = CONNECTOR_ALIASES.get(server, server)
+        agg = out.setdefault(
+            name, {"calls_total": 0, "calls": 0, "errors": 0, "last_used": None}
+        )
+        agg["calls_total"] += int(total or 0)
+        agg["calls"] += int(recent or 0)
+        agg["errors"] += int(errors or 0)
+        if last and (agg["last_used"] is None or last > agg["last_used"]):
+            agg["last_used"] = float(last)
+    for agg in out.values():
+        agg["error_rate"] = (
+            round(agg["errors"] / agg["calls"], 3) if agg["calls"] else 0.0
+        )
+    return out
+
+
+def connector_health(configured: bool, enabled: bool, usage: dict | None) -> str:
+    """unconfigured | disabled | degraded | ok | idle -- shared by Settings and Health."""
+    if not enabled:
+        return "disabled"
+    if not configured:
+        return "unconfigured"
+    u = usage or {}
+    if (
+        u.get("calls", 0) >= CONNECTOR_MIN_CALLS
+        and u.get("error_rate", 0.0) >= CONNECTOR_ERROR_RATE
+    ):
+        return "degraded"
+    return "ok" if u.get("calls", 0) else "idle"
+
+
+# --- omp (oh-my-pi) model roles, read-only ------------------------------------
+
+OMP_CONFIG_PATH = Path.home() / ".omp" / "agent" / "config.yml"
+OMP_ROLES = ("atlas-worker", "atlas-verifier", "atlas-mechanic", "default", "smol")
+
+
+def _yaml_block(text: str, key: str) -> dict:
+    """Flat ``name: value`` pairs under a top-level ``key:`` (stdlib; no PyYAML)."""
+    out: dict = {}
+    inside = False
+    for raw in text.splitlines():
+        if not inside:
+            inside = raw.rstrip() == f"{key}:"
+            continue
+        if raw.strip() == "" or raw.lstrip().startswith("#"):
+            continue
+        if not raw.startswith((" ", "\t")):
+            break
+        name, sep, value = raw.strip().partition(":")
+        if sep and value.strip():
+            out[name.strip()] = value.strip().strip("\"'")
+    return out
+
+
+def omp_model_roles(path: Path | None = None) -> dict:
+    """The omp roles atlas depends on and whether each resolves to a model.
+
+    Atlas's omp agents name ``@atlas-worker`` / ``@atlas-verifier`` /
+    ``@atlas-mechanic`` first and fall back to ``@default`` / ``@smol``; a role
+    missing from ``modelRoles`` means that agent falls through to its fallback.
+    """
+    path = path or OMP_CONFIG_PATH
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return {"path": str(path), "exists": False, "roles": [], "other": []}
+    roles_cfg = _yaml_block(text, "modelRoles")
+    roles = []
+    for role in OMP_ROLES:
+        model = roles_cfg.get(role, "")
+        fallback = None
+        if not model and role.startswith("atlas-"):
+            fallback = "default" if role == "atlas-verifier" else "smol"
+            if not roles_cfg.get(fallback):
+                fallback = None
+        roles.append(
+            {
+                "role": role,
+                "model": model,
+                "resolves": bool(model),
+                "falls_back_to": fallback,
+                "fallback_model": roles_cfg.get(fallback, "") if fallback else "",
+            }
+        )
+    other = [
+        {"role": r, "model": m} for r, m in roles_cfg.items() if r not in OMP_ROLES
+    ]
+    return {"path": str(path), "exists": True, "roles": roles, "other": other}
 
 
 # --- bulk env import / export -------------------------------------------------
