@@ -1287,20 +1287,32 @@ def stop_daemon() -> dict:
     pid = int(info.get("pid") or 0)
     port = int(info.get("port") or DEFAULT_PORT)
     stopped = False
-    if pid and _pid_alive(pid):
+    me = os.getpid()
+    if pid and pid != me and _pid_alive(pid):
         try:
             os.kill(pid, signal.SIGTERM)
             stopped = True
         except OSError as e:
             return {"ok": False, "error": str(e)}
+        # Let the old daemon release its port before deciding whether a
+        # fallback is needed; checking at once would always see it still bound.
+        for _ in range(20):
+            if not _pid_alive(pid):
+                break
+            time.sleep(0.1)
     if _port_open(LOOPBACK, port):
         try:
+            # LISTEN only: plain `tcp:<port>` also returns client sockets
+            # (e.g. a browser holding an SSE connection), which must survive.
             out = subprocess.check_output(
-                ["lsof", "-ti", f"tcp:{port}"], text=True
+                ["lsof", "-ti", f"tcp:{port}", "-sTCP:LISTEN"], text=True
             ).strip()
             for p in out.splitlines():
                 try:
-                    os.kill(int(p), signal.SIGTERM)
+                    target = int(p)
+                    if target == me:
+                        continue
+                    os.kill(target, signal.SIGTERM)
                     stopped = True
                 except Exception:
                     pass

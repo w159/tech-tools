@@ -9,7 +9,9 @@
   daemon whose database matched. `/api/health` now reports the plugin
   `version`; `ensure` replaces a daemon whose version is missing or older than
   its own script's, and keeps a newer one so harnesses on different versions do
-  not restart each other's daemon. Update, then restart the session (SessionStart
+  not restart each other's daemon. `stop_daemon` now stops only the listening
+  process and waits for the old daemon to exit; it no longer signals browser
+  or other client processes. Update, then restart the session (SessionStart
   runs `ensure`). Verified by an independent verifier: `pytest hooks scripts`
   2230 passed, 0 failed, and the new tests fail against the previous
   `ensure_daemon`. Not yet observed: a real upgrade from an older install on a

@@ -21,6 +21,8 @@
   `python3 <plugin>/scripts/atlas_dashboard.py stop` yourself.
 - `marketplace.json` listed atlas at 10.0.1 while `plugin.json` was 10.1.1;
   both now say 10.1.2. 10.1.1 has no changelog entry of its own.
+- `stop_daemon` now stops only the listening process and waits for the old
+  daemon to exit; it no longer signals browser or other client processes.
 
 ## [10.0.1] - 2026-10-06
 
