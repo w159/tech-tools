@@ -1,0 +1,135 @@
+/* Atlas Workboard v2 design tokens. Dark-first; light via [data-theme="light"];
+   density via [data-density]. Binding for every page module. */
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0e1213;
+  --surface-1: #151b1e;
+  --surface-2: #1b2226;
+  --surface-3: #232b30;
+  --border: #2b3539;
+  --border-strong: #3a474c;
+  --text: #e8edef;
+  --text-dim: #98a5aa;
+  --accent: #2fbd9f;
+  --accent-ink: #06201a;
+  --ok: #3fb950;
+  --warn: #e0823c;
+  --fail: #f8514f;
+  --info: #a690f7;
+  --working: #f2c14e;
+  --idle: #7d8c94;
+  --overlay: rgba(4, 7, 8, 0.62);
+  --shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  --focus: #6fd6bf;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f4f7f7;
+  --surface-1: #ffffff;
+  --surface-2: #eef2f3;
+  --surface-3: #e3e9eb;
+  --border: #d3dcdf;
+  --border-strong: #b4c1c6;
+  --text: #14222a;
+  --text-dim: #4d5f67;
+  --accent: #0c7d6c;
+  --accent-ink: #ffffff;
+  --ok: #1a7f37;
+  --warn: #a84d0c;
+  --fail: #c4292d;
+  --info: #6a45c9;
+  --working: #8a5a00;
+  --idle: #566670;
+  --overlay: rgba(20, 34, 42, 0.42);
+  --shadow: 0 8px 28px rgba(20, 34, 42, 0.18);
+  --focus: #0c7d6c;
+}
+
+@media (prefers-color-scheme: light) {
+  :root[data-theme="system"] {
+    color-scheme: light;
+    --bg: #f4f7f7;
+    --surface-1: #ffffff;
+    --surface-2: #eef2f3;
+    --surface-3: #e3e9eb;
+    --border: #d3dcdf;
+    --border-strong: #b4c1c6;
+    --text: #14222a;
+    --text-dim: #4d5f67;
+    --accent: #0c7d6c;
+    --accent-ink: #ffffff;
+    --ok: #1a7f37;
+    --warn: #a84d0c;
+    --fail: #c4292d;
+    --info: #6a45c9;
+    --working: #8a5a00;
+    --idle: #566670;
+    --overlay: rgba(20, 34, 42, 0.42);
+    --shadow: 0 8px 28px rgba(20, 34, 42, 0.18);
+    --focus: #0c7d6c;
+  }
+}
+
+:root {
+  /* 4px spacing scale */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+  --s-10: 40px;
+
+  --r-1: 6px;
+  --r-2: 10px;
+  --r-3: 14px;
+
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --fs-base: 13px;
+  --fs-sm: 12px;
+  --fs-xs: 11.5px;
+  --fs-lg: 15px;
+  --fs-xl: 20px;
+  --fs-kpi: 26px;
+  --lh: 1.5;
+
+  --sidebar-w: 224px;
+  --topbar-h: 48px;
+  --content-max: 1320px;
+
+  /* density-controlled */
+  --pad-card: var(--s-4);
+  --pad-row: var(--s-3);
+  --gap: var(--s-4);
+  --ctl-h: 32px;
+
+  --dur-fast: 120ms;
+  --dur: 180ms;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+:root[data-density="compact"] {
+  --pad-card: var(--s-3);
+  --pad-row: var(--s-2);
+  --gap: var(--s-3);
+  --ctl-h: 28px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur: 0ms;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

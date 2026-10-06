@@ -256,7 +256,11 @@ def _toolkit_gap(tinput):
     low = prompt.lower()
     # ATLAS_TOOLKIT_LOAD=omp is set only by the omp hook bridge: omp has no ToolSearch (tools are xd:// devices),
     # so the load step cannot be asked of it. The named-navigation-tool requirement below still applies.
-    has_load = "ToolSearch" in prompt or "toolsearch" in low or os.environ.get("ATLAS_TOOLKIT_LOAD") == "omp"
+    has_load = (
+        "ToolSearch" in prompt
+        or "toolsearch" in low
+        or os.environ.get("ATLAS_TOOLKIT_LOAD") == "omp"
+    )
     has_nav = any(
         token in low
         for token in (
@@ -296,7 +300,8 @@ def _toolkit_gap_reason(tool, gap):
         "(activate_project, get_symbols_overview, find_symbol, and for "
         "implementers replace_symbol_body), plus context-mode for noisy "
         "output. The subagent must run that before Read/Grep/Bash; serena "
-        "down -> lean-ctx only, never Bash grep. Without it %s greps the tree." % (tool, gap)
+        "down -> lean-ctx only, never Bash grep. Without it %s greps the tree."
+        % (tool, gap)
     )
 
 
@@ -328,7 +333,9 @@ def _unbounded_dispatch(tinput):
     return agent, missing, goals
 
 
-_PROTOCOL_FILE = Path(__file__).resolve().parent.parent / "contracts" / "worker-protocol.json"
+_PROTOCOL_FILE = (
+    Path(__file__).resolve().parent.parent / "contracts" / "worker-protocol.json"
+)
 _PROTOCOL_CACHE = {}
 
 
@@ -337,7 +344,9 @@ def _mechanical_tier():
     if "tier" not in _PROTOCOL_CACHE:
         agent, max_steps = "runner", 7
         try:
-            tier = json.loads(_PROTOCOL_FILE.read_text(encoding="utf-8")).get("mechanicalTier", {})
+            tier = json.loads(_PROTOCOL_FILE.read_text(encoding="utf-8")).get(
+                "mechanicalTier", {}
+            )
             agent = str(tier.get("agent") or agent)
             max_steps = int(tier.get("maxSteps") or max_steps)
         except Exception:
@@ -365,8 +374,8 @@ def _runner_steps_problem(tinput):
             % (agent, max_steps)
         )
     count = 0
-    rest = prompt[m.end():].split("\n")[1:]  # lines after the STEPS: line
-    inline = prompt[m.end():].split("\n", 1)[0]
+    rest = prompt[m.end() :].split("\n")[1:]  # lines after the STEPS: line
+    inline = prompt[m.end() :].split("\n", 1)[0]
     if _NUMBERED_RE.match(inline):
         count += 1
     for line in rest:
@@ -427,7 +436,7 @@ def _frontmatter_model(agent):
         if stripped == "---":
             break
         if stripped.startswith("model:"):
-            return stripped[len("model:"):].strip().strip("'\"")
+            return stripped[len("model:") :].strip().strip("'\"")
     return ""
 
 
@@ -452,28 +461,150 @@ def _name_missing(tinput):
     return agent
 
 
-def _model_override(tinput):
-    """An atlas:* dispatch whose per-call `model` differs from the definition's
-    frontmatter `model:`. Per-role tiers are set once per colony; a per-call
-    override drifts them silently. Returns (agent, declared, given), or None
-    when the definition accepts any model (frontmatter missing, `inherit`),
-    when the dispatch passes no `model`, when the values match
-    case-insensitively, or when the definition cannot be read (fail open)."""
+OMP_AGENTS_DIR = Path(__file__).resolve().parent.parent / "omp" / "agents"
+
+
+def _omp_pinned_models(agent):
+    """The omp-generated pin for an atlas agent: the `model:` list in
+    omp/agents/<agent>.md (e.g. ["@atlas-worker","@smol"]), lowercased. omp
+    keeps this representation of the same pin that agents/<agent>.md carries
+    as `model: sonnet`, so a dispatch naming either one is not an override.
+    [] when the file is absent or unreadable (the caller then relies on the
+    Claude-format pin alone)."""
+    if not _SAFE_AGENT_NAME.match(agent or ""):
+        return []
+    try:
+        text = (OMP_AGENTS_DIR / ("%s.md" % agent)).read_text(encoding="utf-8")
+    except Exception:
+        return []
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return []
+    for line in lines[1:]:
+        stripped = line.strip()
+        if stripped == "---":
+            break
+        if stripped.startswith("model:"):
+            value = stripped[len("model:") :].strip().strip("[]")
+            return [
+                v.strip().strip("'\"").lower() for v in value.split(",") if v.strip()
+            ]
+    return []
+
+
+def _inherited_selector(selector, live):
+    """True when `selector` is the parent's live model `live`, either side
+    optionally carrying ONE `:<thinking-level>` suffix (case-insensitive).
+    omp injects the parent's selector when a dispatch passes no `model`; that
+    is the inherited default, never an override. Twin of omp/atlas-agents.ts
+    isInheritedSelector."""
+    a = str(selector or "").strip().lower()
+    b = str(live or "").strip().lower()
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+
+    def with_level(longer, base):
+        if not longer.startswith(base + ":"):
+            return False
+        level = longer[len(base) + 1 :]
+        return bool(level) and ":" not in level and "/" not in level
+
+    return with_level(a, b) or with_level(b, a)
+
+
+def _model_override(tinput, session_model=""):
+    """An atlas:* dispatch whose per-call `model` is NOT the definition's pin.
+    Per-role tiers are set once per colony; a per-call override drifts them
+    silently. The pin has two representations that must both pass: the
+    Claude-format frontmatter `model:` (`sonnet`) and the omp-generated role
+    list (`@atlas-worker`, `@smol`). A selector equal to the parent's live
+    model (`session_model`, forwarded by the omp hook bridge) is the inherited
+    default, not an override. Returns (agent, declared, given), or None when
+    the definition accepts any model (frontmatter missing, `inherit`), when the
+    dispatch passes no `model`, when it matches a pin or the parent model, or
+    when the definition cannot be read (fail open)."""
     agent = str(tinput.get("subagent_type") or "")
     if not agent.startswith("atlas:"):
         return None
     given = str(tinput.get("model") or "").strip()
     if not given:
         return None
-    declared = _frontmatter_model(agent[len("atlas:"):])
+    declared = _frontmatter_model(agent[len("atlas:") :])
     if not declared or declared.lower() == "inherit":
         return None  # unpinned, inherit, or unreadable -> fail open
     if given.lower() == declared.lower():
         return None
+    if given.lower() in _omp_pinned_models(agent[len("atlas:") :]):
+        return None
+    if _inherited_selector(given, session_model):
+        return None
     return agent, declared, given
 
 
-def _pre_tool_use(conn, atlas_db, tool, session, path, tinput=None):
+# Read-only git subcommands: plain usage reads, never writes. `branch`, `tag`,
+# `config`, `stash` and friends are deliberately absent (a flag flips them to
+# writes), so they keep counting.
+_READ_ONLY_GIT = frozenset(
+    (
+        "status",
+        "log",
+        "diff",
+        "show",
+        "blame",
+        "rev-parse",
+        "ls-files",
+        "ls-remote",
+        "describe",
+        "shortlog",
+        "grep",
+        "cat-file",
+    )
+)
+_READ_ONLY_TOOLS = frozenset(("Read", "Grep", "Glob"))
+
+
+def _is_read_only_bash(command):
+    """True when a Bash command only reads: exploration-only (cat/ls/rg/find...,
+    the same classifier the native-tool deny uses) or a chain of read-only git
+    subcommands. Any redirect to a real file, any other binary -> False, so it
+    keeps counting."""
+    if not isinstance(command, str):
+        return False
+    if _is_exploration_shell(command):
+        return True
+    if _SHELL_SUBSTITUTION.search(command):
+        return False
+    stripped = _HARMLESS_REDIRECT.sub(" ", command)
+    if ">" in stripped:
+        return False
+    segments = [s.split() for s in _SEGMENT_SPLIT.split(stripped)]
+    segments = [s for s in segments if s]
+    while segments and segments[0][0] == "cd":
+        segments.pop(0)
+    if not segments:
+        return False
+    for tokens in segments:
+        if tokens[0].rsplit("/", 1)[-1] != "git" or len(tokens) < 2:
+            return False
+        if tokens[1] not in _READ_ONLY_GIT or any(t in _WRITE_TOKENS for t in tokens):
+            return False
+        if any(t.startswith(_GIT_WRITE_PREFIXES) for t in tokens[2:]):
+            return False
+    return True
+
+
+def _is_read_only_call(tool, tinput):
+    """True for read-only investigation: Read/Grep/Glob, or a read-only Bash
+    command. Such calls are not inline ops for the threshold; edits, writes and
+    mutating Bash still are."""
+    if tool in _READ_ONLY_TOOLS:
+        return True
+    return tool == "Bash" and _is_read_only_bash((tinput or {}).get("command"))
+
+
+def _pre_tool_use(conn, atlas_db, tool, session, path, tinput=None, session_model=""):
     """Deny tier: fires before the op lands, orchestration-flagged sessions only."""
     # The deny tier is independently kill-switchable; the advisory tier persists.
     if os.environ.get("ATLAS_TRIPWIRE_HARD", "on").lower() == "off":
@@ -498,7 +629,7 @@ def _pre_tool_use(conn, atlas_db, tool, session, path, tinput=None):
             )
             return
         # (c1) A per-call model override drifts the colony's cost/runtime tier.
-        override = _model_override(tinput or {})
+        override = _model_override(tinput or {}, session_model)
         if override:
             over_agent, declared, given = override
             _deny(
@@ -506,7 +637,8 @@ def _pre_tool_use(conn, atlas_db, tool, session, path, tinput=None):
                 "definition pins model: %s; per-role models are the colony's "
                 "cost/runtime contract and a per-call override drifts it quietly. "
                 "Drop the `model` param and re-dispatch. Wrong tier for the job? "
-                "Fix the definition, not the dispatch." % (tool, over_agent, given, declared)
+                "Fix the definition, not the dispatch."
+                % (tool, over_agent, given, declared)
             )
             return
         # (c) A dispatch that never names the toolset gets a subagent that greps.
@@ -549,7 +681,11 @@ def _pre_tool_use(conn, atlas_db, tool, session, path, tinput=None):
             "Route this %s of %s to atlas:implementer." % (tool, path)
         )
         return
-    # (a) Too many inline ops with no intervening dispatch.
+    # (a) Too many inline ops with no intervening dispatch. Read-only investigation
+    # (Read/Grep/Glob, exploration-only or read-only-git Bash) is neither counted
+    # (see _run) nor blocked here: the threshold polices drift into edits, not looking.
+    if _is_read_only_call(tool, tinput or {}):
+        return
     # Fail CLOSED on DB error: an unverified count must never let an inline
     # op past the hard limit mid-orchestration. The broad __main__ fail-open
     # covers garbage stdin / connect failures, not this trust decision.
@@ -683,7 +819,9 @@ def _lean_hits(servers):
                 key
                 for key, spec in servers.items()
                 if any(
-                    token in "%s %s" % (key, spec.get("command", "") if isinstance(spec, dict) else "")
+                    token
+                    in "%s %s"
+                    % (key, spec.get("command", "") if isinstance(spec, dict) else "")
                     for token in LEAN_CTX_TOKENS
                 )
             ]
@@ -691,7 +829,8 @@ def _lean_hits(servers):
             return [
                 name
                 for name in servers
-                if isinstance(name, str) and any(token in name for token in LEAN_CTX_TOKENS)
+                if isinstance(name, str)
+                and any(token in name for token in LEAN_CTX_TOKENS)
             ]
     except Exception:
         pass
@@ -780,14 +919,63 @@ def _native_tool_contract():
 # Twin of omp/contracts.ts explorationSegments/EXPLORATION_TOOL: same split
 # regex, same token rules, same ctx_* mapping. Both iterate
 # contracts/native-tools.json explorationShell.cases.
-_WRITE_TOKENS = frozenset(("tee", "-delete", "-exec", "-execdir"))
+#
+# Fail-closed rules (a miss only ever costs an inline-op count, never a free
+# pass): any token below makes a segment a write. `find` write/exec predicates
+# (`-delete -exec -execdir -ok -okdir -fprint -fprint0 -fprintf -fls`) and `tee`
+# are exact tokens; `rg --pre*` (runs an arbitrary preprocessor) and `tree -o`
+# (writes a file) are scoped per tool so `grep -o` / `ls -o` stay reads.
+_WRITE_TOKENS = frozenset(
+    (
+        "tee",
+        "-delete",
+        "-exec",
+        "-execdir",
+        "-ok",
+        "-okdir",
+        "-fprint",
+        "-fprint0",
+        "-fprintf",
+        "-fls",
+    )
+)
+_TOOL_WRITE_PREFIXES = {"rg": ("--pre",), "tree": ("-o",)}
+# git flags that write a file (`--output`), spawn a program (`--ext-diff`,
+# `--textconv`, `-O`/`--open-files-in-pager`). Prefix match covers `--output=f`,
+# `--output f` and `-Ocmd`. Checked on git segments only.
+_GIT_WRITE_PREFIXES = (
+    "--output",
+    "--ext-diff",
+    "--textconv",
+    "--open-files-in-pager",
+    "-O",
+)
+# Command/process substitution runs arbitrary commands: `$(..)`, backticks,
+# `<(..)`, `>(..)`. Matched on the raw text, so a quoted occurrence fails closed too.
+_SHELL_SUBSTITUTION = re.compile(r"\$\(|`|<\(|>\(")
+# sed program text that writes or executes: a standalone (or address-prefixed,
+# `2w f`) `w`/`W`/`e` command. Backslash-escaped letters (`\bw`) and letters
+# inside words (`error`) do not match. Over-matching only fails closed.
+_SED_WRITE_CMD = re.compile(r"(?<![\w\\])[wWe](?![\w])|(?<=\d)[wWe](?![\w])")
+# awk programs that can run commands or write: system(), getline, close(),
+# any pipe, any redirect, -f program file. A program carrying none of these is
+# a pure print/filter. Twin: omp/contracts.ts AWK_UNSAFE.
+_AWK_UNSAFE = re.compile(
+    r"system|getline|close\s*\(|[|>]|^-f|^--file|^--include|^--load"
+)
 _EXPLORATION_TOOL = {
-    "cat": "ctx_read", "head": "ctx_read", "tail": "ctx_read",
-    "grep": "ctx_search", "rg": "ctx_search", "ag": "ctx_search",
-    "ls": "ctx_tree", "tree": "ctx_tree",
-    "find": "ctx_glob", "fd": "ctx_glob",
+    "cat": "ctx_read",
+    "head": "ctx_read",
+    "tail": "ctx_read",
+    "grep": "ctx_search",
+    "rg": "ctx_search",
+    "ag": "ctx_search",
+    "ls": "ctx_tree",
+    "tree": "ctx_tree",
+    "find": "ctx_glob",
+    "fd": "ctx_glob",
 }
-_SEGMENT_SPLIT = re.compile(r"&&|\|\||[;|\n]")
+_SEGMENT_SPLIT = re.compile(r"&&|\|\||[;|\n&]")
 # Redirections that write nothing: fd duplications (`2>&1`, `1>&2`) and redirects
 # to exactly /dev/null (`>/dev/null`, `2>/dev/null`, `&>/dev/null`, `>>/dev/null`).
 # Stripped before the "any `>` is a write" check; whatever `>` is left
@@ -800,8 +988,12 @@ def _exploration_segments(command):
     """[[command-basename, *args], ...] when `command` is exploration-only, else
     None. Splits the RAW text, so quoted operators (`grep 'a && b'`) over-split
     and every such misparse lands on 'not exploration' - the allow direction.
+    Command/process substitution, `&` backgrounding, non-/dev/null redirects,
+    write predicates and per-tool escape flags all fail closed.
     Missing/malformed contract section -> None (fail open)."""
     if not isinstance(command, str):
+        return None
+    if _SHELL_SUBSTITUTION.search(command):
         return None
     command = _HARMLESS_REDIRECT.sub(" ", command)
     if ">" in command:
@@ -809,7 +1001,9 @@ def _exploration_segments(command):
     try:
         with open(NATIVE_TOOLS_PATH) as fh:
             commands = json.load(fh)["explorationShell"]["commands"]
-        if not isinstance(commands, list) or not all(isinstance(c, str) for c in commands):
+        if not isinstance(commands, list) or not all(
+            isinstance(c, str) for c in commands
+        ):
             return None
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return None
@@ -823,11 +1017,19 @@ def _exploration_segments(command):
         name = tokens[0].rsplit("/", 1)[-1]
         if any(t in _WRITE_TOKENS for t in tokens):
             return None
+        prefixes = _TOOL_WRITE_PREFIXES.get(name)
+        if prefixes and any(t.startswith(prefixes) for t in tokens[1:]):
+            return None
         in_place = any(t.startswith("-i") for t in tokens[1:])
         if name == "sed":
-            ok = len(tokens) > 1 and tokens[1].startswith("-n") and not in_place
+            ok = (
+                len(tokens) > 1
+                and tokens[1].startswith("-n")
+                and not in_place
+                and not any(_SED_WRITE_CMD.search(t) for t in tokens[1:])
+            )
         elif name == "awk":
-            ok = not in_place
+            ok = not in_place and not any(_AWK_UNSAFE.search(t) for t in tokens[1:])
         else:
             ok = name in commands
         if not ok:
@@ -900,7 +1102,10 @@ def _native_tool_policy(payload):
             # MCP server configured for this project (unreadable config counts as
             # not configured - fail open). Denying here would strand the caller,
             # so fall through to the one-time allow-nudge below.
-        if tool == "Bash" and os.environ.get("ATLAS_TRIPWIRE_HARD", "on").lower() != "off":
+        if (
+            tool == "Bash"
+            and os.environ.get("ATLAS_TRIPWIRE_HARD", "on").lower() != "off"
+        ):
             # A Claude PreToolUse hook cannot see the callable tool set, so
             # reachability is the same plausibility heuristic as Grep/Glob:
             # lean-ctx binary on PATH AND an MCP server configured here.
@@ -965,15 +1170,73 @@ def _emit_nudge(nudge):
                 pass
         except FileExistsError:
             return  # a concurrent call already showed it
-    print(json.dumps({"hookSpecificOutput": {
-        "hookEventName": "PreToolUse", "additionalContext": message,
-    }}))
+    print(
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "additionalContext": message,
+                }
+            }
+        )
+    )
+
+
+def _merge_context(out, extra):
+    """Prepend `extra` to the additionalContext of one hook-output document.
+
+    Hook stdout must stay ONE JSON document: Claude Code and omp's
+    parseHookOutput both drop a stream of two. `out` is what the tripwire body
+    printed ("" when it was silent); a deny or any other shape is left alone and
+    the extra text rides in its own document only when nothing else printed."""
+    if not extra:
+        return out
+    if not out.strip():
+        return extra + "\n"
+    try:
+        doc = json.loads(out)
+        spec = doc["hookSpecificOutput"]
+        if spec.get("permissionDecision") == "deny":
+            return out  # a deny wins, as everywhere in this hook
+        spec["additionalContext"] = (
+            json.loads(extra)["hookSpecificOutput"]["additionalContext"]
+            + "\n\n"
+            + str(spec.get("additionalContext") or "")
+        ).rstrip()
+        return json.dumps(doc) + "\n"
+    except (ValueError, KeyError, TypeError, AttributeError):
+        return out  # unrecognised shape: keep the tripwire's own output intact
 
 
 def main():
     raw = sys.stdin.read()
     payload = json.loads(raw)  # may raise -> caught below
 
+    # Worker inbox: an atlas_mux worker's headless pane never reads its tty, so
+    # dashboard messages queued for it on the board are delivered here, as
+    # PostToolUse additionalContext. Drained before every gate in _run (kill
+    # switch, native policy, DB) because delivery must not depend on them, and
+    # costs two env lookups for any session that is not a mux worker. Fail-open.
+    inbox = ""
+    if payload.get("hook_event_name", "PostToolUse") == "PostToolUse":
+        try:
+            import worker_inbox
+
+            inbox = worker_inbox.context_for_post_tool_use()
+        except Exception as exc:
+            sys.stderr.write(f"[atlas] worker inbox fail-open: {exc}\n")
+    if not inbox:
+        _run(payload)
+        return
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            _run(payload)
+    finally:
+        sys.stdout.write(_merge_context(buf.getvalue(), inbox))
+
+
+def _run(payload):
     # Nesting deny comes FIRST: before the drift kill-switch and before any DB
     # work. ATLAS_TRIPWIRE=off silences inline-drift coaching, which is a matter
     # of taste; subagent nesting is a structural invariant and is not opt-out.
@@ -1050,7 +1313,15 @@ def main():
             if not _in_subagent(payload):
                 buf = io.StringIO()
                 with contextlib.redirect_stdout(buf):
-                    _pre_tool_use(conn, atlas_db, tool, session, path, tinput)
+                    _pre_tool_use(
+                        conn,
+                        atlas_db,
+                        tool,
+                        session,
+                        path,
+                        tinput,
+                        str(payload.get("session_model") or ""),
+                    )
                 if buf.getvalue():
                     sys.stdout.write(buf.getvalue())  # a deny wins; drop the nudge
                     return
@@ -1089,6 +1360,12 @@ def main():
             return  # no active run for inline ops; boot hook will create one
 
         if tool not in INLINE_TOOLS and tool not in EDIT_TOOLS:
+            return
+
+        if _is_read_only_call(tool, tinput):
+            # Read-only investigation is never logged, so it never counts toward the
+            # threshold. Logging it with is_inline_op=0 would be worse: that value is
+            # the dispatch marker, so it would reset the count.
             return
 
         atlas_db.log_event(conn, run_id, tool, "main", 1, path)

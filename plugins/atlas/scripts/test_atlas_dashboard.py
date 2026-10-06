@@ -36,56 +36,42 @@ class TestAtlasDashboard(unittest.TestCase):
                     (s.get("recent_tool_calls") or 0) + (s.get("recent_events") or 0)
                     > 0
                 )
-        self.assertIn("Connector credentials", self.mod.UI_HTML)
-        self.assertIn("data-save-connector", self.mod.UI_HTML)
-        self.assertIn("connector-grid", self.mod.UI_HTML)
-        self.assertIn("repeat(3, minmax(0, 1fr))", self.mod.UI_HTML)
-        self.assertIn("min-height:320px", self.mod.UI_HTML)
-        self.assertIn("overflow-x:hidden", self.mod.UI_HTML)
-        self.assertIn("align-items:end", self.mod.UI_HTML)
-        self.assertIn("Command Center", self.mod.UI_HTML)
-        self.assertIn("/assets/mark.svg", self.mod.UI_HTML)
-        self.assertNotIn("_maybe_refresh_open_sessions", self.mod.UI_HTML)
+        self.assertFalse(hasattr(self.mod, "UI_HTML"))
         self.assertFalse(hasattr(self.mod, "_maybe_refresh_open_sessions"))
 
-    def test_ui_exposes_configuration_and_ecosystem(self):
-        ui = self.mod.UI_HTML
+    def test_legacy_api_surface_still_routed(self):
+        """The pages the old embedded UI drove are still served by the same paths."""
+        src = (SCRIPTS / "atlas_dashboard.py").read_text(encoding="utf-8")
         for marker in (
-            'data-tab="behavior"',
-            'data-tab="ecosystem"',
-            'id="behaviorGroups"',
-            'id="behaviorAdvanced"',
-            'id="pluginGrid"',
-            'id="mcpGrid"',
-            'id="capabilityGrid"',
-            'id="ecoBindings"',
-            "data-test-connector",
-            "data-toggle-connector",
-            "data-toggle-plugin",
-            "data-toggle-mcp",
-            'id="bulkImport"',
-            'id="mcpAdd"',
             "/api/behavior",
             "/api/ecosystem",
             "/api/mcp/toggle",
             "/api/plugins/toggle",
             "/api/connectors/test",
             "/api/connectors/import",
+            "/api/connectors/export",
+            "/api/todo",
+            "/api/agents",
+            "/api/memory",
+            "/api/status",
+            "/api/runs",
+            "/api/findings",
+            "/api/sessions",
+            "/api/projects",
         ):
-            self.assertIn(marker, ui, marker)
-        # Third-party manifest text is escaped before it reaches innerHTML.
-        self.assertIn("const esc =", ui)
-        # Every tab in the nav has a matching panel and title.
-        for tab in (
-            "overview",
-            "live",
-            "settings",
-            "behavior",
-            "ecosystem",
-            "findings",
+            self.assertIn(marker, src, marker)
+
+    def test_v2_modules_mounted(self):
+        self.assertTrue(self.mod.V2_ROUTES)
+        mounted = {rx.pattern for _m, rx, _f in self.mod.V2_ROUTES}
+        for path in (
+            "/api/v2/colony",
+            "/api/v2/irc",
+            "/api/v2/todos",
+            "/api/v2/colony/send",
         ):
-            self.assertIn(f'id="tab-{tab}"', ui)
-            self.assertIn(f"{tab}:'", ui)
+            self.assertIn(path, mounted, path)
+        self.assertNotIn("atlas_dash_colony", self.mod.V2_MOUNT_ERRORS)
 
     def test_api_routes_answer(self):
         """Boot the real handler and exercise every read endpoint."""
@@ -278,30 +264,31 @@ class WorkBoardApiTest(unittest.TestCase):
         req = urllib.request.Request(
             base + path,
             data=json.dumps(body).encode(),
-            headers={"Content-Type": "application/json"},
+            headers={
+                "Content-Type": "application/json",
+                "X-Atlas-Token": self.mod.DASH_TOKEN,
+            },
             method="POST",
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
             return json.loads(resp.read().decode())
 
-    def test_ui_has_work_and_agents_tabs(self):
-        ui = self.mod.UI_HTML
-        for marker in (
-            'id="tab-work"',
-            'id="tab-agents"',
-            'data-tab="work"',
-            'data-tab="agents"',
-            'id="todoRows"',
-            'id="workCounts"',
-            'id="agentPick"',
-            'id="agentBody"',
-            "/api/todo",
-            "/api/agents",
-            "/api/memory",
-        ):
-            self.assertIn(marker, ui, marker)
-        for tab in ("work", "agents"):
-            self.assertIn(f"{tab}:'", ui)
+    def test_work_board_routes_present(self):
+        src = (SCRIPTS / "atlas_dashboard.py").read_text(encoding="utf-8")
+        for marker in ("/api/todo", "/api/agents", "/api/memory"):
+            self.assertIn(marker, src, marker)
+
+    def test_health_url_reports_the_bound_port(self):
+        """/api/health must name the port actually served, not DEFAULT_PORT."""
+        base = self._server()
+        port = int(base.rsplit(":", 1)[1])
+        self.assertNotEqual(port, self.mod.DEFAULT_PORT)
+        for path in ("/api/health", "/health"):
+            d = self._get(base, path)
+            self.assertTrue(d["ok"], path)
+            self.assertEqual(
+                d["url"], "http://%s:%d/" % (self.mod.LOOPBACK, port), path
+            )
 
     def test_todo_roundtrip(self):
         import atlas_todo
@@ -439,6 +426,380 @@ class WorkBoardApiTest(unittest.TestCase):
             )
             self.assertFalse(r["ok"], bad)
             self.assertEqual(r["error"], "invalid_name", bad)
+
+
+class SecurityGuardTest(unittest.TestCase):
+    """Central guard: Host 403, non-JSON 415, Origin 403, token 401, traversal 404."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.mod = _load()
+
+    def setUp(self):
+        import threading
+        from http.server import ThreadingHTTPServer
+
+        self.static = tempfile.TemporaryDirectory()
+        self.addCleanup(self.static.cleanup)
+        root = Path(self.static.name)
+        (root / "css").mkdir()
+        (root / "index.html").write_text(
+            '<html><head><meta name="atlas-token" content="__ATLAS_TOKEN__"></head></html>'
+        )
+        (root / "css" / "a.css").write_text("body{}")
+        (root / ".secret").write_text("nope")
+        outside = root.parent / "outside.txt"
+        outside.write_text("outside")
+        self.addCleanup(lambda: outside.unlink(missing_ok=True))
+        patcher = mock.patch.object(self.mod, "STATIC_DIR", root)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.httpd = ThreadingHTTPServer((self.mod.LOOPBACK, 0), self.mod.Handler)
+        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+        self.addCleanup(self.httpd.server_close)
+        self.addCleanup(self.httpd.shutdown)
+        self.port = self.httpd.server_address[1]
+
+    def _req(self, method, path, body=None, headers=None, host=None):
+        import http.client
+
+        conn = http.client.HTTPConnection(self.mod.LOOPBACK, self.port, timeout=10)
+        hdrs = {"Host": host or "%s:%d" % (self.mod.LOOPBACK, self.port)}
+        hdrs.update(headers or {})
+        conn.putrequest(method, path, skip_host=True)
+        for k, v in hdrs.items():
+            conn.putheader(k, v)
+        data = json.dumps(body).encode() if body is not None else None
+        if data is not None:
+            conn.putheader("Content-Length", str(len(data)))
+        conn.endheaders(data)
+        resp = conn.getresponse()
+        raw = resp.read()
+        conn.close()
+        return resp.status, raw
+
+    def _tok(self, **extra):
+        return {
+            "Content-Type": "application/json",
+            "X-Atlas-Token": self.mod.DASH_TOKEN,
+            **extra,
+        }
+
+    def test_index_injects_token(self):
+        status, raw = self._req("GET", "/")
+        self.assertEqual(status, 200)
+        self.assertIn(self.mod.DASH_TOKEN.encode(), raw)
+        self.assertNotIn(b"__ATLAS_TOKEN__", raw)
+
+    def test_index_without_placeholder_still_gets_token(self):
+        (Path(self.static.name) / "index.html").write_text("<html><head></head></html>")
+        status, raw = self._req("GET", "/")
+        self.assertEqual(status, 200)
+        self.assertIn(self.mod.DASH_TOKEN.encode(), raw)
+
+    def test_static_asset_and_traversal(self):
+        self.assertEqual(self._req("GET", "/ui/css/a.css"), (200, b"body{}"))
+        for bad in (
+            "/ui/../outside.txt",
+            "/ui/%2e%2e/outside.txt",
+            "/ui/css/../../outside.txt",
+            "/ui/.secret",
+            "/ui/missing.js",
+            "/ui/..%5coutside.txt",
+        ):
+            self.assertEqual(self._req("GET", bad)[0], 404, bad)
+
+    def test_bad_host_is_403_on_every_route(self):
+        for path in ("/", "/api/health", "/api/behavior", "/api/v2/colony"):
+            self.assertEqual(self._req("GET", path, host="evil.example")[0], 403, path)
+        self.assertEqual(self._req("GET", "/api/health", host="127.0.0.1:1")[0], 403)
+
+    def test_localhost_host_is_accepted(self):
+        status, _ = self._req("GET", "/api/health", host="localhost:%d" % self.port)
+        self.assertEqual(status, 200)
+
+    def test_non_json_post_is_415(self):
+        for ctype in ("text/plain", "application/x-www-form-urlencoded", ""):
+            hdrs = {"X-Atlas-Token": self.mod.DASH_TOKEN}
+            if ctype:
+                hdrs["Content-Type"] = ctype
+            status, _ = self._req("POST", "/api/v2/todos", {}, hdrs)
+            self.assertEqual(status, 415, ctype)
+
+    def test_foreign_origin_is_403(self):
+        for origin in ("http://evil.example", "http://127.0.0.1:1", "null"):
+            status, _ = self._req("POST", "/api/v2/todos", {}, self._tok(Origin=origin))
+            self.assertEqual(status, 403, origin)
+
+    def test_same_origin_passes_the_guard(self):
+        origin = "http://%s:%d" % (self.mod.LOOPBACK, self.port)
+        status, _ = self._req("POST", "/api/v2/todos", {}, self._tok(Origin=origin))
+        self.assertNotIn(status, (401, 403, 415))
+
+    def test_missing_or_wrong_token_is_401_on_all_mutations(self):
+        json_only = {"Content-Type": "application/json"}
+        wrong = {**json_only, "X-Atlas-Token": "wrong"}
+        for path in (
+            "/api/v2/todos",
+            "/api/todo",
+            "/api/behavior",
+            "/api/connectors/env",
+        ):
+            self.assertEqual(self._req("POST", path, {}, json_only)[0], 401, path)
+            self.assertEqual(self._req("POST", path, {}, wrong)[0], 401, path)
+
+    def test_sensitive_gets_need_token_and_health_does_not(self):
+        for path in (
+            "/api/v2/colony/capture?run=r&name=n",
+            "/api/v2/colony/agent?run=r&name=n",
+            "/api/v2/irc",
+            "/api/v2/stream",
+        ):
+            self.assertEqual(self._req("GET", path)[0], 401, path)
+        self.assertEqual(self._req("GET", "/api/health")[0], 200)
+
+    def test_query_token_only_honoured_on_stream(self):
+        tok = self.mod.DASH_TOKEN
+        self.assertEqual(self._req("GET", "/api/v2/irc?token=" + tok)[0], 401)
+
+    def test_non_sensitive_gets_need_no_token(self):
+        self.assertEqual(self._req("GET", "/api/behavior")[0], 200)
+        self.assertEqual(self._req("GET", "/api/v2/colony")[0], 200)
+
+    def test_options_grants_no_cors(self):
+        import http.client
+
+        conn = http.client.HTTPConnection(self.mod.LOOPBACK, self.port, timeout=10)
+        conn.request("OPTIONS", "/api/v2/todos")
+        resp = conn.getresponse()
+        resp.read()
+        conn.close()
+        self.assertIsNone(resp.getheader("Access-Control-Allow-Origin"))
+
+    def test_invalid_json_and_non_object_bodies_are_400(self):
+        import http.client
+
+        for payload in (b"{not json", b"[1,2]"):
+            conn = http.client.HTTPConnection(self.mod.LOOPBACK, self.port, timeout=10)
+            conn.request("POST", "/api/v2/todos", payload, self._tok())
+            resp = conn.getresponse()
+            resp.read()
+            conn.close()
+            self.assertEqual(resp.status, 400, payload)
+
+
+class SettingsDataTest(unittest.TestCase):
+    """Connector usage/health, agent roster, fixture projects and omp roles."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.mod = _load()
+        cls.ctl = cls.mod.atlas_control
+
+    def _conn(self, with_denied=True):
+        import sqlite3
+
+        conn = sqlite3.connect(":memory:")
+        conn.execute(
+            "CREATE TABLE tool_calls (id INTEGER PRIMARY KEY, ts REAL, kind TEXT, server TEXT,"
+            " is_error INTEGER"
+            + (", denied INTEGER DEFAULT 0" if with_denied else "")
+            + ")"
+        )
+        return conn
+
+    def test_connector_usage_counts_errors_and_excludes_denied(self):
+        conn = self._conn()
+        now = 2_000_000.0
+        rows = [(now - 10, "mcp", "ninjaone", 0, 0)] * 8 + [
+            (now - 10, "mcp", "ninjaone", 1, 0),
+            (now - 10, "mcp", "ninjaone", 1, 0),
+            (now - 10, "mcp", "ninjaone", 1, 1),  # denied: policy, not a failure
+            (now - 40 * 86400, "mcp", "ninjaone", 1, 0),  # outside the window
+            (now - 5, "mcp", "falcon-mcp", 0, 0),  # legacy server name
+            (now - 5, "builtin", "ninjaone", 1, 0),  # not an MCP call
+        ]
+        conn.executemany(
+            "INSERT INTO tool_calls(ts,kind,server,is_error,denied) VALUES(?,?,?,?,?)",
+            rows,
+        )
+        usage = self.ctl.connector_usage(conn, now=now)
+        n = usage["ninjaone"]
+        self.assertEqual((n["calls"], n["errors"], n["calls_total"]), (10, 2, 11))
+        self.assertEqual(n["error_rate"], 0.2)
+        self.assertEqual(n["last_used"], now - 10)
+        self.assertIn("falcon", usage)  # alias merged
+        self.assertNotIn("falcon-mcp", usage)
+
+    def test_connector_usage_without_denied_column_or_table(self):
+        conn = self._conn(with_denied=False)
+        conn.execute(
+            "INSERT INTO tool_calls(ts,kind,server,is_error) VALUES(1,'mcp','x',1)"
+        )
+        self.assertEqual(self.ctl.connector_usage(conn, now=10.0)["x"]["errors"], 1)
+        import sqlite3
+
+        self.assertEqual(self.ctl.connector_usage(sqlite3.connect(":memory:")), {})
+        self.assertEqual(self.ctl.connector_usage(None), {})
+
+    def test_connector_health_definition(self):
+        h = self.ctl.connector_health
+        self.assertEqual(h(True, False, {}), "disabled")
+        self.assertEqual(
+            h(False, True, {"calls": 99, "error_rate": 1.0}), "unconfigured"
+        )
+        self.assertEqual(h(True, True, {"calls": 10, "error_rate": 0.25}), "degraded")
+        self.assertEqual(h(True, True, {"calls": 9, "error_rate": 1.0}), "ok")
+        self.assertEqual(h(True, True, {"calls": 12, "error_rate": 0.1}), "ok")
+        self.assertEqual(h(True, True, {}), "idle")
+
+    def test_connector_status_carries_usage_and_health(self):
+        for c in self.mod._connector_status():
+            self.assertIn(
+                c["health"], {"ok", "idle", "degraded", "unconfigured", "disabled"}
+            )
+            for k in (
+                "calls",
+                "calls_total",
+                "errors",
+                "error_rate",
+                "last_used",
+                "window_days",
+            ):
+                self.assertIn(k, c["usage"])
+
+    def test_health_connectors_uses_the_settings_definition(self):
+        import atlas_dash_insights as ins
+
+        rows = [
+            {
+                "name": "a",
+                "health": "unconfigured",
+                "usage": {"last_used": None, "errors": 0, "calls": 0},
+            },
+            {
+                "name": "b",
+                "health": "degraded",
+                "usage": {"last_used": 5.0, "errors": 6, "calls": 10},
+            },
+            {
+                "name": "c",
+                "health": "ok",
+                "usage": {"last_used": 9.0, "errors": 0, "calls": 3},
+            },
+        ]
+        with mock.patch.object(ins, "CONNECTOR_STATUS_PROVIDER", lambda: rows):
+            with (
+                tempfile.TemporaryDirectory() as tmp,
+                mock.patch.dict(os.environ, {"ATLAS_HOME": tmp}),
+            ):
+                ctx = type(
+                    "C",
+                    (),
+                    {
+                        "query": {},
+                        "db": lambda s: None,
+                        "project_root": lambda s, p: None,
+                    },
+                )()
+                _, body = ins.route_health(ctx)
+        sub = next(s for s in body["subsystems"] if s["id"] == "connectors")
+        self.assertEqual(sub["status"], "warn")
+        self.assertIn("2 of 3", sub["detail"])
+        self.assertIn("b: degraded (6/10 calls failed)", sub["evidence"])
+
+    def test_fixture_projects_are_filtered(self):
+        f = self.ctl.is_fixture_project
+        # The checkout itself is a real, non-scratch directory (the OS temp dir is scratch).
+        real = SCRIPTS.parent
+        with tempfile.TemporaryDirectory() as tmp:
+            wt = Path(tmp) / "proj" / ".claude" / "worktrees" / "x"
+            wt.mkdir(parents=True)
+            repo = Path(tmp) / "scratch" / "repo"
+            repo.mkdir(parents=True)
+            self.assertFalse(f(str(real)))
+            self.assertTrue(f(str(wt)))
+            self.assertTrue(f(str(repo)))
+        self.assertTrue(f("/"))
+        self.assertTrue(f("/tmp/atlas-demo/repo"))
+        self.assertTrue(f("/definitely/not/here"))
+        self.assertFalse(f("/definitely/not/here", must_exist=False))
+
+    def test_agents_payload_has_models_omp_chain_and_dispatch_stats(self):
+        import sqlite3
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "agents").mkdir()
+            (root / "omp" / "agents").mkdir(parents=True)
+            (root / "agents" / "implementer.md").write_text(
+                "---\nname: implementer\nmodel: sonnet\neffort: low\n---\nbody\n"
+            )
+            (root / "omp" / "agents" / "implementer.md").write_text(
+                '---\n# GENERATED\nname: "implementer"\nthinkingLevel: low\n'
+                'model: ["@atlas-worker","@smol"]\n---\n'
+            )
+            now = 3_000_000.0
+            conn = sqlite3.connect(":memory:")
+            conn.execute(
+                "CREATE TABLE dispatches (id INTEGER PRIMARY KEY, run_id INT, ts REAL, agent_type TEXT, model TEXT, wave_id INT)"
+            )
+            conn.executemany(
+                "INSERT INTO dispatches(run_id,ts,agent_type) VALUES(1,?,?)",
+                [
+                    (now - 60, "atlas:implementer"),
+                    (now - 60, "implementer"),
+                    (now - 30 * 86400, "atlas:implementer"),
+                ],
+            )
+            conn.row_factory = None
+            with (
+                mock.patch.object(self.mod, "PLUGIN_ROOT", root),
+                mock.patch.object(self.mod, "_db", lambda: (conn, ":memory:")),
+                mock.patch.object(self.mod.time, "time", lambda: now),
+            ):
+                payload = self.mod._agents_payload(None)
+        (agent,) = payload["agents"]
+        self.assertEqual((agent["model"], agent["effort"]), ("sonnet", "low"))
+        self.assertEqual(agent["omp"]["model_chain"], ["@atlas-worker", "@smol"])
+        self.assertEqual(agent["omp"]["tier"], "atlas-worker")
+        self.assertEqual(agent["omp"]["effort"], "low")
+        d = agent["dispatches"]
+        self.assertEqual((d["total"], d["last7d"]), (3, 2))
+        self.assertEqual(d["last_used"], now - 60)
+
+    def test_omp_model_roles_reports_what_resolves(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = Path(tmp) / "config.yml"
+            cfg.write_text(
+                "modelRoles:\n  smol: anthropic/sonnet:off\n  default: anthropic/opus:medium\n"
+                "  atlas-worker: ollama/x:cloud:low\n  tiny: a/b\nother:\n  k: v\n"
+            )
+            res = self.ctl.omp_model_roles(cfg)
+            by = {r["role"]: r for r in res["roles"]}
+            self.assertTrue(by["atlas-worker"]["resolves"])
+            self.assertEqual(by["atlas-worker"]["model"], "ollama/x:cloud:low")
+            self.assertFalse(by["atlas-verifier"]["resolves"])
+            self.assertEqual(by["atlas-verifier"]["falls_back_to"], "default")
+            self.assertEqual(by["atlas-mechanic"]["falls_back_to"], "smol")
+            self.assertEqual([o["role"] for o in res["other"]], ["tiny"])
+            missing = self.ctl.omp_model_roles(Path(tmp) / "nope.yml")
+            self.assertFalse(missing["exists"])
+
+    def test_behavior_lists_the_omp_env_flags_and_roles(self):
+        state = self.ctl.behavior_state()
+        keys = {k["key"] for g in state["groups"] for k in g["knobs"]}
+        for k in (
+            "ATLAS_BRIDGE_HOOK_TIMEOUT_S",
+            "ATLAS_WORKER_MAX_TOKENS",
+            "ATLAS_HOOK_BRIDGE",
+            "ATLAS_ADVISOR_GATE",
+        ):
+            self.assertIn(k, keys)
+        self.assertNotIn(
+            "ATLAS_WORKER_MAX_TOKENS_DEFAULT", keys
+        )  # a TS constant, not env
+        self.assertIn("roles", state["omp"])
 
 
 if __name__ == "__main__":

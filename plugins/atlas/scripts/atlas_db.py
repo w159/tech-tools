@@ -101,7 +101,8 @@ CREATE TABLE IF NOT EXISTS tool_calls (
   is_sidechain INTEGER DEFAULT 0, tool_use_id TEXT, tool_name TEXT,
   kind TEXT, target TEXT, server TEXT,
   input_summary TEXT, input_bytes INTEGER DEFAULT 0,
-  is_error INTEGER, result_bytes INTEGER DEFAULT 0, denied INTEGER DEFAULT 0);
+  is_error INTEGER, result_bytes INTEGER DEFAULT 0, denied INTEGER DEFAULT 0,
+  error_snippet TEXT);
 CREATE INDEX IF NOT EXISTS ix_tool_calls_session ON tool_calls(session_id);
 CREATE INDEX IF NOT EXISTS ix_tool_calls_kind ON tool_calls(kind, target);
 CREATE UNIQUE INDEX IF NOT EXISTS ix_tool_calls_tuid ON tool_calls(tool_use_id);
@@ -195,6 +196,14 @@ def init(conn):
     # blocked (they never ran). Fresh DBs have it from the SCHEMA.
     try:
         conn.execute("ALTER TABLE tool_calls ADD COLUMN denied INTEGER DEFAULT 0")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # column already present
+    # Idempotent migration: tool_calls.error_snippet keeps the head of a failed
+    # call's result text so an error finding can name the failure, not just
+    # count it. Pre-existing rows stay NULL (their text was never stored).
+    try:
+        conn.execute("ALTER TABLE tool_calls ADD COLUMN error_snippet TEXT")
         conn.commit()
     except sqlite3.OperationalError:
         pass  # column already present
@@ -1206,10 +1215,21 @@ def insert_tool_call(conn, session_id, t):
 
 # Result-text prefixes of a call that an atlas hook (Claude Code) or the omp
 # extension blocked before it ran: grep/glob + exploration-shell denies
-# ("Atlas enforcement:") and the recall gate ("[atlas gate]").
+# ("Atlas enforcement:"), the recall gate ("[atlas gate]"), and the omp
+# extension's dispatch/edit denies ("DENY - ...", which a Task dispatch surfaces
+# as "Task execution failed: DENY - ...").
 # Claude Code prefixes a hook denial with "PreToolUse:<Tool> hook error: ".
-DENY_MARKERS = ("Atlas enforcement:", "[atlas gate]")
+DENY_MARKERS = (
+    "Atlas enforcement:",
+    "[atlas gate]",
+    "DENY - ",
+    "Task execution failed: DENY",
+)
 _HOOK_ERROR_PREFIX = re.compile(r"^\s*PreToolUse:\S+ hook error:\s*")
+
+# error_snippet cap: long enough to carry a gate/exception reason, short enough
+# to keep one row per failed call bounded.
+ERROR_SNIPPET_CAP = 500
 
 
 def is_denied_result(text):
@@ -1219,20 +1239,34 @@ def is_denied_result(text):
     return _HOOK_ERROR_PREFIX.sub("", text, count=1).lstrip().startswith(DENY_MARKERS)
 
 
+def error_snippet_of(text, cap=ERROR_SNIPPET_CAP):
+    """Whitespace-collapsed, capped head of an error result's text, or None."""
+    if not text:
+        return None
+    clean = " ".join(text.split())
+    return clean[:cap] or None
+
+
 def update_tool_result(conn, tool_use_id, is_error, result_bytes, text=None):
     """Join a tool_result back onto its tool_use row (results arrive in the
     next message, sometimes a later ingest batch). Idempotent. `text` is the
-    result text, used only to flag a hook/extension denial; a pass without text
-    (codex results carry none) leaves an existing flag untouched."""
+    result text, used to flag a hook/extension denial and, for a real failure,
+    to keep an `error_snippet`; a pass without text (codex results carry none)
+    leaves an existing flag and snippet untouched."""
     if text is None:
         conn.execute(
             "UPDATE tool_calls SET is_error=?, result_bytes=? WHERE tool_use_id=?",
             (is_error, result_bytes, tool_use_id),
         )
         return
+    denied = is_denied_result(text)
+    # A denial keeps its text too: error_snippet on a denied row names the gate
+    # that fired, which is what makes a deny-heavy tool diagnosable.
+    snippet = error_snippet_of(text) if (is_error or denied) else None
     conn.execute(
-        "UPDATE tool_calls SET is_error=?, result_bytes=?, denied=? WHERE tool_use_id=?",
-        (is_error, result_bytes, 1 if is_denied_result(text) else 0, tool_use_id),
+        "UPDATE tool_calls SET is_error=?, result_bytes=?, denied=?, error_snippet=? "
+        "WHERE tool_use_id=?",
+        (is_error, result_bytes, 1 if denied else 0, snippet, tool_use_id),
     )
 
 
@@ -1352,10 +1386,19 @@ def _rows(cur):
 
 def tool_usage(conn, kind=None, project_id=None):
     """Per-target usage rollup: calls, errors, sessions touched, total input
-    bytes. Filter by kind (builtin|skill|mcp|agent|command) and/or project."""
+    bytes. Filter by kind (builtin|skill|mcp|agent|command) and/or project.
+
+    `errors` counts every is_error row (unchanged, other readers depend on it);
+    `denied` counts calls an atlas gate blocked before they ran, and
+    `real_errors` is the errors that were NOT gate denials -- the number a
+    reliability check should use, since a gate denial is a redirect, not a tool
+    failure."""
     q = (
         "SELECT t.kind, t.target, t.server, COUNT(*) AS calls,"
         " SUM(COALESCE(t.is_error,0)) AS errors,"
+        " SUM(COALESCE(t.denied,0)) AS denied,"
+        " SUM(CASE WHEN COALESCE(t.is_error,0)=1 AND COALESCE(t.denied,0)=0"
+        " THEN 1 ELSE 0 END) AS real_errors,"
         " COUNT(DISTINCT t.session_id) AS sessions,"
         " SUM(COALESCE(t.input_bytes,0)) AS input_bytes "
         "FROM tool_calls t "
@@ -1372,6 +1415,22 @@ def tool_usage(conn, kind=None, project_id=None):
         q += "WHERE " + " AND ".join(where) + " "
     q += "GROUP BY t.kind, t.target, t.server ORDER BY calls DESC"
     return _rows(conn.execute(q, args))
+
+
+def top_error_snippets(conn, kind, target, limit=3):
+    """Most frequent error texts for one tool target (gate denials excluded),
+    as [{"snippet", "count"}]. Rows ingested before error_snippet existed have
+    no text and are skipped, so an empty list means "no text captured", not
+    "no errors"."""
+    return _rows(
+        conn.execute(
+            "SELECT error_snippet AS snippet, COUNT(*) AS count FROM tool_calls "
+            "WHERE kind IS ? AND target IS ? AND COALESCE(is_error,0)=1 "
+            "AND COALESCE(denied,0)=0 AND error_snippet IS NOT NULL "
+            "GROUP BY error_snippet ORDER BY count DESC, error_snippet LIMIT ?",
+            (kind, target, limit),
+        )
+    )
 
 
 def context_tool_health(conn):

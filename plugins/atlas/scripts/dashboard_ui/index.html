@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en" data-theme="dark" data-density="comfortable">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <meta name="atlas-token" content="__ATLAS_TOKEN__">
+  <title>Atlas Workboard</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2l9 5v10l-9 5-9-5V7z' fill='none' stroke='%232fbd9f' stroke-width='2'/%3E%3C/svg%3E">
+  <script src="/ui/js/theme-boot.js"></script>
+  <link rel="stylesheet" href="/ui/css/tokens.css">
+  <link rel="stylesheet" href="/ui/css/base.css">
+  <link rel="stylesheet" href="/ui/css/components.css">
+  <link rel="stylesheet" href="/ui/css/pages.css">
+  <link rel="stylesheet" href="/ui/css/pages-insights.css">
+</head>
+<body>
+  <a class="skip-link" href="#page-root">Skip to content</a>
+  <div class="app" id="app">
+    <aside class="sidebar" id="sidebar" aria-label="Primary">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M12 12l9-5M12 12v10M12 12L3 7"/></svg>
+        <span>Atlas</span>
+      </div>
+      <div id="project-switcher"></div>
+      <nav id="nav" aria-label="Pages"></nav>
+    </aside>
+    <header class="topbar" id="topbar" role="banner">
+      <button class="btn" id="open-palette" type="button" aria-keyshortcuts="Control+K Meta+K">
+        <span id="palette-icon"></span>
+        <span>Search or jump to</span>
+        <kbd>/</kbd>
+      </button>
+      <span class="spacer"></span>
+      <span id="conn" class="dim" role="status" aria-live="polite"></span>
+      <span id="attention"></span>
+      <span id="toggles" class="row"></span>
+    </header>
+    <main class="main" id="main" tabindex="-1">
+      <div id="page-root"></div>
+    </main>
+  </div>
+  <div id="drawer-root"></div>
+  <div id="modal-root"></div>
+  <div id="palette-root"></div>
+  <div class="toasts" id="toast-root" role="status" aria-live="polite"></div>
+  <noscript><p style="padding:24px">Atlas Workboard needs JavaScript. Everything runs locally; nothing is loaded from the network.</p></noscript>
+  <script type="module" src="/ui/js/app.js"></script>
+</body>
+</html>

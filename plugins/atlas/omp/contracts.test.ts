@@ -89,6 +89,48 @@ test("exploration deny names the ctx_* equivalent and the reachable route", () =
 	expect(explorationDenyReason("npm test", tool)).toBeUndefined();
 });
 
+// Twin of test_dispatch_tripwire.ReadOnlyInvestigationTest.HARDENING_CASES (exploration column).
+// A mutation hidden inside an exploration-looking command must never be exploration.
+const HARDENING_CASES: [command: string, exploration: boolean][] = [
+	// read-only positives that stay exploration (git is never an exploration command)
+	["ls", true], ["cat a", true], ["rg x", true], ["grep -rn x .", true], ["find . -name x", true],
+	["ls 2>/dev/null", true], ["cat a|head -5", true], ["grep -o x f", true], ["ls -o", true],
+	["find . -O3 -name x", true], ["tree -L 2", true], ["sed -n 1p a", true], ["sed -n '1,50p' NOTES.md", true],
+	["sed -n '/error/p' f", true], ["awk '{print $1}' f", true], ["awk '{print}' a", true],
+	["git status", false], ["git log --oneline", false], ["cd x && git status", false],
+	["git status && git diff", false], ["git status & git log", false],
+	// git flags that write a file or spawn a program
+	["git log --output=f", false], ["git diff --output=p", false], ["git show --output=f HEAD", false],
+	["git log --output f", false], ["git grep -Ocmd x", false], ["git grep --open-files-in-pager=less x", false],
+	["git diff --ext-diff", false], ["git log --textconv", false],
+	// command / process substitution anywhere
+	["git status $(rm x)", false], ["ls $(rm x)", false], ["cat `rm x`", false], ["cat <(rm x)", false],
+	["cat a >(tee out)", false],
+	// output redirection (only /dev/null and fd dups are harmless) and tee
+	["ls > f", false], ["ls >> f", false], ["ls 2>err.log", false], ["ls > /dev/nullx", false],
+	["git status > out.txt", false], ["git status | tee f", false], ["ls | tee f", false],
+	// background separator splits like `;`
+	["git status & rm z", false], ["ls & rm z", false],
+	// find write / exec predicates
+	["find . -delete", false], ["find . -exec rm {} ;", false], ["find . -execdir rm {} ;", false],
+	["find . -fprint f", false], ["find . -fprint0 f", false], ["find . -fprintf f %p", false],
+	["find . -fls f", false], ["find . -ok rm {} ;", false], ["find . -okdir rm {} ;", false],
+	// per-tool escape flags
+	["rg --pre cmd x", false], ["rg --pre=cmd x", false], ["tree -o f", false],
+	// awk programs that run commands, write, or pipe
+	["awk 'BEGIN{system(\"rm x\")}' f", false], ["awk '{print > \"o\"}' f", false],
+	["awk '{print | \"sh\"}' f", false], ["awk '{\"date\" | getline d}' f", false],
+	["awk -f prog.awk f", false], ["awk -i inplace '{print}' f", false],
+	// sed: in-place or a w/W/e command
+	["sed -i s/a/b/ f", false], ["sed -n '2w f' a", false], ["sed -n 'w f' a", false], ["sed -n 'W f' a", false],
+	["sed -n '4e id' a", false], ["sed -n 's/a/b/w f' a", false], ["sed 's/a/b/' f", false],
+];
+
+test("exploration classifier fails closed on mutations hidden in read-looking commands", () => {
+	const c = loadNativeTools();
+	for (const [cmd, exploration] of HARDENING_CASES) expect([cmd, isExplorationShell(cmd, c)]).toEqual([cmd, exploration]);
+});
+
 test("toolStateDirs loads from ompToolStateDirs and defaults to [] when the key is missing", () => {
 	const c = loadNativeTools();
 	expect(c?.toolStateDirs).toEqual(contract.ompToolStateDirs);

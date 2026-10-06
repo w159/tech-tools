@@ -52,18 +52,30 @@ dashboard still shows it as **not set**.
 
 ## Operator flow (preferred)
 
-### A. Dashboard UI (http://127.0.0.1:7421/)
+### A. Dashboard (http://127.0.0.1:7421/)
+
+The v2 Workboard (static UI under `scripts/dashboard_ui/`) has a **Settings**
+page that lists every connector with its configured hint, an enable switch
+(`/api/mcp/toggle`), a **Test** button (`/api/connectors/test`) and a
+per-connector **credential form**. Secret fields are `type="password"` inputs
+that are never pre-filled and never echoed back (the page shows only `set` /
+`missing` plus the source); only the fields you change are sent, through
+`POST /api/connectors/env`, and an unsaved-draft guard asks before you reload,
+close the tab or leave Settings. The same API stays callable directly, and
+`/plugin config` or a `.env` still work.
 
 1. SessionStart runs `atlas_dashboard.py ensure` (or run it manually).
-2. Open the shared dashboard once.
-3. Click **Credentials** (header) or **Settings / credentials**.
-4. Expand a connector card. Fields show **set** / **not set** and source
-   (`pluginConfigs`, `env`, or `dashboard_mark`).
-5. Type values. Drafts are kept while you type; auto-refresh does **not** wipe
-   inputs.
-6. Click **Save &lt;connector&gt;**.
-7. UI marks fields **set** without echoing secrets.
-8. **Reload Claude Code / start a new session** so MCP child processes re-read
+2. Open the shared dashboard once; the page carries the per-daemon token.
+3. Settings -> Connectors shows `configured` or `needs credentials` per
+   connector and the settings file path.
+4. Enter the secrets in the connector's credential form and press **Save** (the
+   page sends the token for you). To script it instead, post the payload below:
+   every mutation must send `Content-Type: application/json` and the
+   `X-Atlas-Token` header (the value of `<meta name="atlas-token">` in the
+   served page); a stale token returns `401 bad_token`.
+5. `GET /api/connectors` reports set / not set and source (`pluginConfigs`,
+   `env`, or `dashboard_mark`) without echoing secrets.
+6. **Reload Claude Code / start a new session** so MCP child processes re-read
    env + userConfig.
 
 Save payload:
@@ -71,6 +83,7 @@ Save payload:
 ```http
 POST /api/connectors/env
 Content-Type: application/json
+X-Atlas-Token: <value of <meta name="atlas-token"> in the served page>
 
 {"updates":{"auvik_api_key":"…","auvik_username":"…"}}
 ```
@@ -88,8 +101,8 @@ Effects:
 `/plugin config` on **atlas@tech-tools** remains a first-class path. Use it when
 you prefer Claude's native form. After changing config there:
 
-1. Optionally re-save once in the dashboard (or write `.env`) if you want the
-   dashboard "set" badges and stdio `.env` path populated.
+1. Optionally re-save once via `POST /api/connectors/env` (or write `.env`) if you
+   want the dashboard "set" badges and stdio `.env` path populated.
 2. Reload the session.
 
 ### C. Manual `.env`
@@ -163,15 +176,19 @@ For each connector:
 Dashboard-side checks:
 
 - `GET /api/health` → canonical `~/.atlas/atlas.db`
-- `GET /api/connectors` or `/api/status` → **11** connectors, set/missing only
+- `GET /api/connectors` or `/api/status` → **12** connectors (one per `mcpServers`
+  entry in `.mcp.json`, including panos), set/missing only
 - `POST /api/connectors/env` rejects unknown keys
-- Settings UI contains draft guards (`settingsDirty`) and save buttons
+- `GET /api/v2/prefs` and `GET /api/v2/projects` answer, and `GET /` serves the
+  Workboard shell with `<meta name="atlas-token">` filled in
 
 ## End-to-end results (this workspace)
 
 Test harness: stdio MCP client with `CLAUDE_PLUGIN_ROOT=plugins/atlas`, env from
 plugin `.env` + CFG passthrough (no secret logging).
 Dates: 2026-08-28 (ten Node connectors) and **2026-09-02** (re-verify including Falcon).
+**Historical record:** the matrix below is the 2026-09-02 run (11 connectors,
+before panos was added); it is not the current count. Current count: twelve.
 
 Wiring unit tests (`plugins/atlas/scripts/test_connectors_wiring.py`): **9/9 OK**.
 
@@ -189,43 +206,50 @@ Wiring unit tests (`plugins/atlas/scripts/test_connectors_wiring.py`): **9/9 OK*
 | threatlocker | ok | 19 | `threatlocker_status` | status tool present |
 | vanta | ok | 28 | `vanta_status` | status tool present |
 
-Dashboard API (2026-09-02):
+Dashboard API (2026-09-02, historical, before panos was added):
 
-- `GET /api/connectors` → **11** connectors (includes falcon)
+- `GET /api/connectors` → **11** connectors (includes falcon) [historical; now 12 with panos]
 - health ok, DB `~/.atlas/atlas.db`
 - After `python3 plugins/atlas/scripts/atlas_dashboard.py ensure`, health `script`
   must be this repo's `plugins/atlas/scripts/atlas_dashboard.py` (not a cache path).
 
 ### Interpretation
 
-- **Transport + packaging are healthy** for all **eleven** connectors declared in
-  `.mcp.json` (init + tool list from repo source).
-- **Status standard met for all eleven:** each exposes `*_status` or `cw_status`.
+- **Transport + packaging are healthy** for all **twelve** connectors declared in
+  `.mcp.json` (auvik, blumira, cipp, connectwise, falcon, knowbe4, ninjaone,
+  panos, paylocity, spanning, threatlocker, vanta). The 2026-09-02 matrix above
+  exercised eleven of them (init + tool list from repo source); panos is
+  declared in `.mcp.json` and listed by `GET /api/connectors` but is not in
+  that dated matrix.
+- **Status standard met for all twelve:** each exposes `*_status` or `cw_status`.
   Falcon boots **inert** without credentials (4 diagnostic tools including
   `falcon_status` → `MISSING_CREDENTIALS`) and expands only after auth succeeds.
 - **Progressive disclosure works** for Blumira/ConnectWise; other Node connectors
   list broader catalogs while status reports missing creds.
 - **Dashboard:** run `python3 plugins/atlas/scripts/atlas_dashboard.py ensure` from
   this repo so health `script` points at source, not an install/cache copy.
-  Verified 2026-09-02: 11 connectors; source script path.
+  Verified 2026-09-02 (historical): 11 connectors; source script path.
 
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
-| Field clears while typing | old dashboard without draft guard | hard-refresh UI; ensure daemon script has `settingsDirty` |
-| Always "not set" but connector works in Claude | secret only in OS secure storage / Claude runtime | re-save once in dashboard or write `.env`; reload session |
+| Credential form Save fails or the connector shows no credential fields in the v2 UI | the page was opened before the daemon restarted (stale token, `401 bad_token`), or the connector declares no credential fields | reload the dashboard and retry the Settings credential form; otherwise `/plugin config`, a plugin `.env`, or `POST /api/connectors/env` / `/api/connectors/import` |
+| Always "not set" but connector works in Claude | secret only in OS secure storage / Claude runtime | re-save once via `POST /api/connectors/env` or write `.env`; reload session |
 | Status 401/403 with creds present | wrong key, wrong region/base URL, revoked token | rotate vendor credential; confirm region |
-| Status MISSING_CREDENTIALS | required userConfig empty in all layers | save via dashboard or `/plugin config` |
+| Status MISSING_CREDENTIALS | required userConfig empty in all layers | save via `POST /api/connectors/env`, `/plugin config`, or a plugin `.env` |
 | Tools still missing after save | MCP child started before save | fully reload Claude Code |
 | Dashboard shows wrong DB / empty metrics | stale daemon on temp `ATLAS_DB` | `atlas_dashboard.py stop && ensure` |
+| `401 bad_token` on a credential POST | page or client predates the daemon (the token is regenerated each daemon start) | reload the dashboard page; direct callers must send the `X-Atlas-Token` from the served `<meta name="atlas-token">` |
+| `415` / `403 bad_origin` / `403 bad_host` | missing `Content-Type: application/json`, foreign `Origin`, or a Host other than `127.0.0.1:<port>` / `localhost:<port>` | call the API from the dashboard page, with the JSON header, on the dashboard's own host |
 
 ## Security rules
 
 - Never log or render secret values in the dashboard JSON API.
 - Allowlist keys from plugin `userConfig` + `.env.example` only.
 - Prefer set-markers over reading secrets back from disk for UI badges.
-- Loopback bind only (`127.0.0.1:7421`).
+- Loopback bind only (`127.0.0.1:7421`). Every route also passes the Host,
+  Content-Type, Origin and `X-Atlas-Token` guard (see `dashboard-api.md`).
 
 ## Related files
 

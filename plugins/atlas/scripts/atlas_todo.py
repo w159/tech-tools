@@ -634,12 +634,15 @@ def note(
     text: str,
     to: str = "all",
     item: Optional[str] = None,
+    delivery: Optional[str] = None,
 ) -> dict:
     """Append one note to `<root>/.atlas/.run/board/<owner>.jsonl`.
 
     Only this owner ever writes its own file, so there is no cross-writer
     contention; the append is one os.write of a single JSON line on an
-    O_APPEND fd. Returns the record as written."""
+    O_APPEND fd. `delivery` ("delivered" | "refused") records the dashboard's
+    own send outcome on the line; it is omitted when unset. Returns the record
+    as written."""
     name = _sanitize_owner(owner)
     target = notes_dir(root)
     target.mkdir(parents=True, exist_ok=True)
@@ -650,6 +653,8 @@ def note(
         "item": item,
         "text": str(text or ""),
     }
+    if delivery:
+        record["delivery"] = delivery
     line = (json.dumps(record, separators=(",", ":")) + "\n").encode("utf-8")
     fd = os.open(
         str(target / f"{name}{NOTE_FILE_SUFFIX}"),

@@ -863,6 +863,46 @@ class AtlasDoctorMiningTest(unittest.TestCase):
         ).fetchone()
         self.assertEqual(row, ("closed the gate gap", "gaps"))
 
+    def test_enrich_facet_sets_enriched_at_so_the_row_leaves_pending(self):
+        """Without enriched_at the row stayed in --pending-facets forever."""
+        atlas_db.upsert_facet(self.conn, "sess-pend")
+        self.assertEqual(
+            [r["session_id"] for r in atlas_db.pending_facets(self.conn)],
+            ["sess-pend"],
+        )
+        before = time.time()
+        rc = atlas_doctor.main(
+            ["--enrich-facet", "sess-pend", json.dumps({"brief_summary": "done"})]
+        )
+        self.assertEqual(rc, 0)
+        stamped = self.conn.execute(
+            "SELECT enriched_at FROM facets WHERE session_id=?", ("sess-pend",)
+        ).fetchone()[0]
+        self.assertGreaterEqual(stamped, before)
+        self.assertEqual(atlas_db.pending_facets(self.conn), [])
+
+    def test_enrich_facet_keeps_a_caller_supplied_enriched_at(self):
+        atlas_db.upsert_facet(self.conn, "sess-own")
+        atlas_doctor.main(
+            [
+                "--enrich-facet",
+                "sess-own",
+                json.dumps({"brief_summary": "x", "enriched_at": 123.5}),
+            ]
+        )
+        self.assertEqual(
+            self.conn.execute(
+                "SELECT enriched_at FROM facets WHERE session_id=?", ("sess-own",)
+            ).fetchone()[0],
+            123.5,
+        )
+
+    def test_enrich_facet_help_documents_the_automatic_stamp(self):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf), self.assertRaises(SystemExit):
+            atlas_doctor.main(["--help"])
+        self.assertIn("enriched_at", " ".join(buf.getvalue().split()))
+
     def test_enrich_facet_rejects_unknown_columns_and_bad_json(self):
         """A typo must fail loudly, not write a column nobody reads."""
         self.assertEqual(
@@ -974,6 +1014,81 @@ class AtlasDoctorMiningTest(unittest.TestCase):
         found = atlas_doctor.mine_tool_error_rate(self.conn, self.root, min_calls=5)
         self.assertEqual(len(found), 1)
         self.assertAlmostEqual(found[0]["metric_value"], 0.5)
+
+    def _tool_call(self, tuid, target, is_error, text=None, kind="builtin"):
+        atlas_db.insert_tool_call(
+            self.conn,
+            "s1",
+            {
+                "tool_use_id": tuid,
+                "tool_name": target,
+                "kind": kind,
+                "target": target,
+            },
+        )
+        atlas_db.update_tool_result(self.conn, tuid, is_error, 10, text)
+
+    def test_tool_error_rate_ignores_gate_denials(self):
+        """127/128 Grep 'errors' were atlas's own lean-ctx redirect. A tool
+        that was only ever blocked executed nothing, so it is not a finding."""
+        for i in range(20):
+            self._tool_call(
+                f"g{i}", "Grep", 1, "Atlas enforcement: use lean-ctx ctx_search"
+            )
+        self.assertEqual(
+            atlas_doctor.mine_tool_error_rate(self.conn, self.root, min_calls=5), []
+        )
+
+    def test_tool_error_rate_excludes_denials_from_the_population_too(self):
+        """Denials leave both numerator and denominator: 2 real errors in 10
+        executed calls is 20%, whether or not 90 blocked calls surrounded it --
+        they must neither dilute a failing tool nor inflate a healthy one."""
+        for i in range(90):
+            self._tool_call(
+                f"d{i}", "Glob", 1, "Atlas enforcement: use lean-ctx ctx_glob"
+            )
+        for i in range(10):
+            self._tool_call(f"r{i}", "Glob", 1 if i < 6 else 0, "ENOENT: no such dir")
+        found = atlas_doctor.mine_tool_error_rate(self.conn, self.root, min_calls=5)
+        self.assertEqual(len(found), 1)
+        self.assertAlmostEqual(found[0]["metric_value"], 0.6)
+        ev = found[0]["evidence"]
+        self.assertEqual((ev["calls"], ev["errors"], ev["denied"]), (10, 6, 90))
+
+    def test_tool_error_rate_surfaces_top_error_snippets(self):
+        for i in range(6):
+            self._tool_call(f"a{i}", "Bash", 1, "Exit code 127\ncommand not found: foo")
+        for i in range(2):
+            self._tool_call(f"b{i}", "Bash", 1, "Exit code 2: usage")
+        for i in range(2):
+            self._tool_call(f"c{i}", "Bash", 0, "ok")
+        found = atlas_doctor.mine_tool_error_rate(self.conn, self.root, min_calls=5)
+        self.assertEqual(len(found), 1)
+        top = found[0]["evidence"]["top_errors"]
+        self.assertEqual(
+            top[0], {"snippet": "Exit code 127 command not found: foo", "count": 6}
+        )
+        self.assertEqual(top[1]["count"], 2)
+        self.assertIn("6x Exit code 127 command not found: foo", found[0]["detail"])
+
+    def test_tool_error_rate_without_snippets_still_fires(self):
+        """Rows ingested before error_snippet existed carry no text: the finding
+        still fires, with empty top_errors rather than a crash."""
+        for i in range(10):
+            atlas_db.insert_tool_call(
+                self.conn,
+                "s1",
+                {
+                    "tool_use_id": f"o{i}",
+                    "tool_name": "Bash",
+                    "kind": "builtin",
+                    "target": "Bash",
+                    "is_error": 1,
+                },
+            )
+        found = atlas_doctor.mine_tool_error_rate(self.conn, self.root, min_calls=5)
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0]["evidence"]["top_errors"], [])
 
     def test_low_cache_hit_miner(self):
         # Thin DB (below the token floor) must stay quiet.

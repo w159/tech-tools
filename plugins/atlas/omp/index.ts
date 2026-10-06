@@ -54,7 +54,7 @@ import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { readFileSync, statSync } from "node:fs";
 import * as nodePath from "node:path";
 import { registerAgentGuard } from "./agent-guard";
-import { ATLAS_AGENT_TARGETABLE, modelPatternsFor, roleFor } from "./atlas-agents";
+import { ATLAS_AGENT_TARGETABLE, frontmatterModelFor, isInheritedSelector, modelPatternsFor, roleFor } from "./atlas-agents";
 import { defaultAdvisorDeps, registerAdvisorGate } from "./advisor";
 import { type LeanKind, explorationDenyReason, explorationTool, kindOfOmpTool, loadNativeTools } from "./contracts";
 import { createShellEditTracker } from "./delegation";
@@ -598,22 +598,29 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 			const agent = typeof spawn.agent === "string" ? spawn.agent.trim() : "";
 			if (!agent || !ATLAS_AGENT_TARGETABLE[agent] || !Array.isArray(spawn.patterns)) return undefined;
 			const requested = spawn.patterns.filter((p): p is string => typeof p === "string" && p.trim() !== "").map(p => p.trim());
-			if (requested.length === 0) return undefined; // no override: the definition's tier applies
+			// before_subagent_spawn may return `{ model }`: omp replaces the spawn's model patterns with it (BeforeSubagentSpawnEventResult.model;
+			// aliases expand, and an expansion to nothing leaves the spawn unchanged).
+			// An omitted or purely inherited model would silently run the child on the parent's model, so it is rewritten to the pinned tier.
+			// For an omitted model omp's event `patterns` is normally the expanded parent selector (the inherited branch below);
+			// the empty-list branch is defensive. An unconfigured tier degrades via `@smol` expansion, then the parent fallback in createAgentSession.
+			// A later extension's before_subagent_spawn `model` can override this pin (omp: last defined model wins).
+			const tierRewrite = { model: modelPatternsFor(agent), note: `atlas: ${agent} pinned to ${roleFor(agent)}` };
+			if (requested.length === 0) return tierRewrite;
 			// omp hands EXPANDED patterns: an override is a token that is neither a pinned alias nor a selector explained by a pinned modelRole.
 			const pinned = modelPatternsFor(agent).map(p => p.toLowerCase());
 			const role = typeof spawn.modelRole === "string" ? spawn.modelRole.trim().replace(/^@+/, "").toLowerCase() : "";
 			const roleExplained = role !== "" && pinned.some(p => p.replace(/^@+/, "") === role);
 			// A marketplace install does not discover the pinned agents, so omp resolves the child to the parent's live model:
-			// a selector equal to it (optionally with one `:<thinking-level>` suffix) is the inherited default, not an override.
-			const liveModel = ctx?.model && typeof ctx.model.provider === "string" && typeof ctx.model.id === "string" ? `${ctx.model.provider}/${ctx.model.id}`.toLowerCase() : "";
-			const inherited = (p: string): boolean => {
-				if (liveModel === "") return false;
-				const lower = p.toLowerCase();
-				if (lower === liveModel) return true;
-				const level = lower.startsWith(`${liveModel}:`) ? lower.slice(liveModel.length + 1) : "";
-				return level !== "" && !level.includes(":") && !level.includes("/");
-			};
-			if (requested.every(p => pinned.includes(p.toLowerCase()) || (p.includes("/") && roleExplained) || inherited(p))) return undefined;
+			// a selector equal to it (either side may carry one `:<thinking-level>` suffix) is the inherited default, not an override.
+			const liveModel = ctx?.model && typeof ctx.model.provider === "string" && typeof ctx.model.id === "string" ? `${ctx.model.provider}/${ctx.model.id}` : "";
+			// The Claude-format definition pins the same tier under its own name (`model: sonnet`); dispatch_tripwire.py accepts it, so this gate must too.
+			const claudePin = frontmatterModelFor(agent).toLowerCase();
+			const carriesTier = (p: string): boolean => pinned.includes(p.toLowerCase()) || (claudePin !== "" && p.toLowerCase() === claudePin) || (p.includes("/") && roleExplained);
+			if (requested.every(p => carriesTier(p) || isInheritedSelector(p, liveModel))) {
+				// Accepted. When no token carries the tier the list is purely the inherited parent model (a marketplace install does not
+				// discover the pinned agents), so the tier is restored instead of running on the parent's model.
+				return requested.some(carriesTier) ? undefined : tierRewrite;
+			}
 			return { block: true, reason: modelOverrideReason("Task", agent, requested.join(", "), roleFor(agent)) };
 		} catch {
 			return undefined; // fail open

@@ -106,7 +106,7 @@ class TripwireTest(unittest.TestCase):
     def test_trips_at_threshold(self):
         r = None
         for _ in range(4):
-            r = run_hook(self._payload("Read", {"file_path": "a.py"}), self.env)
+            r = run_hook(self._payload("Bash", {"command": "touch a.txt"}), self.env)
         assert r is not None  # range(4) always runs at least once
         self.assertEqual(r.returncode, 0)
         self.assertIn("additionalContext", r.stdout)
@@ -164,9 +164,9 @@ class TripwireTest(unittest.TestCase):
 
     def test_threshold_override(self):
         env = dict(self.env, ATLAS_TRIPWIRE_THRESHOLD="2")
-        r = run_hook(self._payload("Read"), env)
+        r = run_hook(self._payload("Bash", {"command": "touch a.txt"}), env)
         self.assertEqual(r.stdout.strip(), "")  # 1 op: silent
-        r = run_hook(self._payload("Read"), env)
+        r = run_hook(self._payload("Bash", {"command": "touch a.txt"}), env)
         self.assertIn("STOP", r.stdout)  # 2nd op: trips at override
 
     def test_dispatch_logged_after_run_finalized(self):
@@ -289,9 +289,10 @@ class TripwireTest(unittest.TestCase):
 
     def test_pre_deny_at_ninth_inline_op(self):
         # Seed 8 logged inline ops on the orchestrating session (setUp marks it).
+        # Mutating Bash counts; Read does not (see ReadOnlyInvestigationTest).
         for _ in range(8):
-            run_hook(self._post_payload("Read", {"file_path": "a.py"}), self.env)
-        r = run_hook(self._pre_payload("Read", {"file_path": "b.py"}), self.env)
+            run_hook(self._post_payload("Bash", {"command": "touch a.txt"}), self.env)
+        r = run_hook(self._pre_payload("Bash", {"command": "touch b.txt"}), self.env)
         self.assertEqual(r.returncode, 0)
         self.assertIn('"permissionDecision": "deny"', r.stdout)
         self.assertIn("atlas:explorer", r.stdout)
@@ -650,9 +651,9 @@ class TripwireTest(unittest.TestCase):
     def test_inline_ops_db_error_fails_closed(self):
         # M4: if the inline-op count query raises mid-orchestration, the
         # tripwire must fail CLOSED (deny), not fail-open to a silent pass.
-        # Seed 8 inline ops so the count is over the deny threshold.
+        # Seed 8 counted inline ops so the count is over the deny threshold.
         for _ in range(8):
-            run_hook(self._post_payload("Read", {"file_path": "a.py"}), self.env)
+            run_hook(self._post_payload("Bash", {"command": "touch a.txt"}), self.env)
         # Corrupt the events table so inline_ops_since_last_dispatch raises:
         # rename the real table and leave a stub missing the is_inline_op
         # column. init()'s CREATE TABLE IF NOT EXISTS sees the stub and skips,
@@ -667,7 +668,7 @@ class TripwireTest(unittest.TestCase):
         )
         conn.commit()
         conn.close()
-        r = run_hook(self._pre_payload("Read", {"file_path": "b.py"}), self.env)
+        r = run_hook(self._pre_payload("Bash", {"command": "touch b.txt"}), self.env)
         self.assertEqual(r.returncode, 0)
         self.assertNotEqual(r.stdout.strip(), "")  # not a silent pass
         self.assertIn('"permissionDecision": "deny"', r.stdout)
@@ -829,7 +830,7 @@ class InProcessTest(unittest.TestCase):
     def test_ip_post_trips_at_threshold(self):
         out = ""
         for _ in range(4):
-            out = self._run_main(self._post("Read", {"file_path": "a.py"}))
+            out = self._run_main(self._post("Bash", {"command": "touch a.txt"}))
         self.assertIn("additionalContext", out)
         self.assertIn("STOP", out)
 
@@ -1021,8 +1022,8 @@ class InProcessTest(unittest.TestCase):
 
     def test_ip_pre_deny_at_threshold(self):
         for _ in range(8):
-            self._run_main(self._post("Read", {"file_path": "a.py"}))
-        out = self._run_main(self._pre("Read", {"file_path": "b.py"}))
+            self._run_main(self._post("Bash", {"command": "touch a.txt"}))
+        out = self._run_main(self._pre("Bash", {"command": "touch b.txt"}))
         self.assertIn('"permissionDecision": "deny"', out)
         self.assertIn("atlas:explorer", out)
         self.assertIn("atlas:implementer", out)
@@ -1105,13 +1106,13 @@ class InProcessTest(unittest.TestCase):
         # M4: if the inline-op count query raises mid-orchestration, the deny
         # tier fails CLOSED, not open to a silent pass.
         for _ in range(8):
-            self._run_main(self._post("Read", {"file_path": "a.py"}))
+            self._run_main(self._post("Bash", {"command": "touch a.txt"}))
         with patch.object(
             self.atlas_db,
             "unsanctioned_inline_ops_since_last_dispatch",
             side_effect=Exception("boom"),
         ):
-            out = self._run_main(self._pre("Read", {"file_path": "b.py"}))
+            out = self._run_main(self._pre("Bash", {"command": "touch b.txt"}))
         self.assertIn('"permissionDecision": "deny"', out)
         self.assertIn("Failing closed", out)
 
@@ -1162,11 +1163,10 @@ class InProcessTest(unittest.TestCase):
     def _docs_project(self):
         (Path(self.tmp) / "docs").mkdir()
 
-    def test_nudged_grep_is_allowed_and_counts_toward_threshold(self):
-        """An allowed (one-time-nudged) native Grep still RUNS, so its
-        PostToolUse event counts as an unsanctioned inline op toward the deny
-        threshold. The availability-aware deny may never erase that accounting
-        for a call that actually executed."""
+    def test_nudged_grep_is_allowed_but_not_counted(self):
+        """An allowed (one-time-nudged) native Grep still RUNS, but it is read-only
+        investigation, so it never adds to the inline-op count or trips the
+        advisory threshold. Only edits, writes and mutating Bash count."""
         self._docs_project()
         home = tempfile.mkdtemp()  # no lean-ctx MCP config anywhere
         with patch.object(self.dt.shutil, "which", return_value="/usr/bin/lean-ctx"):
@@ -1174,28 +1174,27 @@ class InProcessTest(unittest.TestCase):
             # nudge -> allowed: no deny decision, the nudge names ctx_search
             self.assertNotIn("DENY", out)
             self.assertIn("ctx_search", out)
-            for _ in range(4):  # env threshold is 4
+            for _ in range(8):  # well past the env threshold of 4
                 out = self._run_main(self._post("Grep"), env={"HOME": home})
-        # the 4th nudged Grep op tripped the advisory threshold: it counted
-        self.assertIn("STOP - 4 inline ops", out)
+        self.assertNotIn("STOP", out)
         conn = self.atlas_db.connect(self.db_path)
         rid = self.atlas_db.current_run_id(conn, "sess-1")
         self.assertEqual(
-            self.atlas_db.unsanctioned_inline_ops_since_last_dispatch(conn, rid), 4
+            self.atlas_db.unsanctioned_inline_ops_since_last_dispatch(conn, rid), 0
         )
         conn.close()
 
     def test_denied_grep_does_not_count_toward_threshold(self):
         """A DENIED native Grep never ran, so it must not add to the inline-op
-        count. With threshold-level ops already seeded, the availability-aware
-        policy deny wins over the threshold deny (lean-ctx reason, not the
-        threshold reason) and the count is unchanged."""
+        count. With threshold-level counted ops already seeded, the
+        availability-aware policy deny wins over the threshold deny (lean-ctx
+        reason, not the threshold reason) and the count is unchanged."""
         self._docs_project()
         (Path(self.tmp) / ".mcp.json").write_text(
             json.dumps({"mcpServers": {"lean-ctx": {"command": "lean-ctx"}}})
         )
         for _ in range(6):  # DENY_THRESHOLD inline ops, all counted
-            self._run_main(self._post("Grep"))
+            self._run_main(self._post("Bash", {"command": "touch a.txt"}))
         with patch.object(self.dt.shutil, "which", return_value="/usr/bin/lean-ctx"):
             out = self._run_main(self._pre("Grep"), env={"HOME": tempfile.mkdtemp()})
         self.assertIn("DENY", out)
@@ -1209,33 +1208,35 @@ class InProcessTest(unittest.TestCase):
         )
         conn.close()
 
-    def test_threshold_deny_still_applies_to_allowed_native_reads_in_docs_projects(
+    def test_threshold_deny_still_applies_to_allowed_native_bash_in_docs_projects(
         self,
     ):
         """Regression (8.3.0): the native policy returned early for every
         docs-project Read/Bash/Grep/Glob, so an armed orchestrator past the
-        inline-op limit was never denied for them. An allowed native call must
-        still reach the threshold deny tier, and the deny replaces the nudge."""
+        inline-op limit was never denied for them. An allowed native call that
+        counts (mutating Bash) must still reach the threshold deny tier, and the
+        deny replaces the nudge."""
         self._docs_project()
         for _ in range(8):
-            self._run_main(self._post("Read", {"file_path": "a.py"}))
-        out = self._run_main(self._pre("Read", {"file_path": "b.py"}))
+            self._run_main(self._post("Bash", {"command": "touch a.txt"}))
+        out = self._run_main(self._pre("Bash", {"command": "touch b.txt"}))
         self.assertIn('"permissionDecision": "deny"', out)
         self.assertNotIn("additionalContext", out)
         self.assertEqual(out.count("hookSpecificOutput"), 1)
 
-    def test_nudge_replaced_by_deny_is_shown_on_next_allowed_call(self):
-        """The once-per-session marker is claimed only when the nudge is
-        actually printed, so a deny that replaced it does not burn it."""
+    def test_read_nudge_survives_a_threshold_deny_on_another_tool(self):
+        """The once-per-session Read nudge is claimed only when it is actually
+        printed: a threshold deny on a counted Bash op does not burn it, and a
+        Read past the threshold is nudged (never denied) because reads are not
+        counted."""
         self._docs_project()
         for _ in range(8):
-            self._run_main(self._post("Read", {"file_path": "a.py"}))
-        denied = self._run_main(self._pre("Read", {"file_path": "b.py"}))
+            self._run_main(self._post("Bash", {"command": "touch a.txt"}))
+        denied = self._run_main(self._pre("Bash", {"command": "touch b.txt"}))
         self.assertIn('"permissionDecision": "deny"', denied)
-        self._run_main(self._post("Task", {"subagent_type": "atlas:explorer"}))
-        allowed = self._run_main(self._pre("Read", {"file_path": "b.py"}))
-        self.assertNotIn("deny", allowed)
-        self.assertIn("ctx_read", allowed)
+        first_read = self._run_main(self._pre("Read", {"file_path": "b.py"}))
+        self.assertNotIn("deny", first_read)
+        self.assertIn("ctx_read", first_read)
         self.assertEqual(self._run_main(self._pre("Read", {"file_path": "c.py"})), "")
 
 
@@ -2441,6 +2442,387 @@ class FootprintArmingTest(unittest.TestCase):
             self.assertFalse(self.atlas_db.is_orchestrating(conn, self.SESSION))
         finally:
             conn.close()
+
+
+class ModelPinRepresentationTest(unittest.TestCase):
+    """The omp gate pins `@atlas-worker`; agents/implementer.md pins `sonnet`.
+    Both are the SAME pin, so a dispatch naming either must pass; an omitted
+    model is never an override; a selector equal to the parent's live model
+    (what omp injects for a model-less dispatch) is inherited; anything else is
+    a real override and is denied."""
+
+    PARENT = "anthropic/claude-opus-5-5"
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.env = dict(os.environ, ATLAS_DB=os.path.join(self.tmp, "atlas.db"))
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db
+
+        conn = atlas_db.connect(self.env["ATLAS_DB"])
+        atlas_db.init(conn)
+        pid = atlas_db.register_project(conn, "/repo/x")
+        atlas_db.start_run(conn, pid, "sess-1")
+        atlas_db.mark_orchestrating(conn, "sess-1")
+        conn.close()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _dispatch(self, model=None, agent="atlas:implementer", session_model=None):
+        tinput = {
+            "subagent_type": agent,
+            "name": COLONY_NAME,
+            "prompt": TOOLS_BLOCK + SPEC_BLOCK,
+        }
+        if model is not None:
+            tinput["model"] = model
+        payload = {
+            "session_id": "sess-1",
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Task",
+            "tool_input": tinput,
+        }
+        if session_model is not None:
+            payload["session_model"] = session_model
+        return run_hook(payload, self.env)
+
+    def _denied(self, r):
+        self.assertEqual(r.returncode, 0)
+        self.assertEqual(
+            json.loads(r.stdout)["hookSpecificOutput"]["permissionDecision"], "deny"
+        )
+        self.assertIn("overrides model with", r.stdout)
+
+    def _allowed(self, r):
+        self.assertEqual(r.returncode, 0)
+        self.assertEqual(r.stdout.strip(), "")
+
+    def test_omitted_model_passes(self):
+        self._allowed(self._dispatch())
+        self._allowed(self._dispatch(session_model=self.PARENT))
+
+    def test_omp_role_pin_passes(self):
+        self._allowed(self._dispatch(model="@atlas-worker"))
+        self._allowed(self._dispatch(model="@smol"))
+        self._allowed(self._dispatch(model="@ATLAS-WORKER"))  # case-insensitive
+
+    def test_claude_format_pin_passes(self):
+        self._allowed(self._dispatch(model="sonnet"))
+
+    def test_parent_model_injection_passes_for_any_provider(self):
+        # Injection is detected by equality with the forwarded parent model, not
+        # by a hardcoded provider/model, so a non-Anthropic parent works too.
+        for parent in (self.PARENT, "ollama/glm-5.3-flash:cloud", "openai/gpt-5"):
+            self._allowed(self._dispatch(model=parent, session_model=parent))
+            self._allowed(
+                self._dispatch(model=parent + ":medium", session_model=parent)
+            )
+            self._allowed(
+                self._dispatch(model=parent, session_model=parent + ":medium")
+            )
+
+    def test_genuine_overrides_are_denied(self):
+        self._denied(self._dispatch(model="opus"))
+        self._denied(self._dispatch(model="opus", session_model=self.PARENT))
+        # Another provider/model that is not the parent.
+        self._denied(self._dispatch(model="openai/gpt-5", session_model=self.PARENT))
+        # Parent model unknown: an explicit provider selector is still an override.
+        self._denied(self._dispatch(model=self.PARENT + ":medium"))
+        # Same provider, different model; and a second suffix is not a level.
+        self._denied(
+            self._dispatch(
+                model="anthropic/claude-sonnet-5-5", session_model=self.PARENT
+            )
+        )
+        self._denied(
+            self._dispatch(model=self.PARENT + ":a:b", session_model=self.PARENT)
+        )
+
+    def test_other_tier_role_is_not_accepted_for_a_worker_agent(self):
+        # implementer is the @atlas-worker tier; the verifier role is a different pin.
+        self._denied(self._dispatch(model="@atlas-verifier"))
+
+    def test_verifier_accepts_its_own_role_pin(self):
+        self._allowed(self._dispatch(model="@atlas-verifier", agent="atlas:verifier"))
+        self._denied(self._dispatch(model="opus", agent="atlas:verifier"))
+
+    def test_omp_pin_helper_reads_the_generated_frontmatter(self):
+        sys.path.insert(0, os.path.dirname(__file__))
+        import dispatch_tripwire as dt
+
+        self.assertEqual(
+            dt._omp_pinned_models("implementer"), ["@atlas-worker", "@smol"]
+        )
+        self.assertEqual(dt._omp_pinned_models("not-an-agent"), [])
+        self.assertEqual(dt._omp_pinned_models("../etc/passwd"), [])
+
+
+class ReadOnlyInvestigationTest(unittest.TestCase):
+    """Read-only investigation is neither counted toward nor blocked by the
+    inline-op threshold. Edits, writes and mutating Bash still count."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.env = dict(os.environ, ATLAS_DB=os.path.join(self.tmp, "atlas.db"))
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db
+
+        self.atlas_db = atlas_db
+        conn = atlas_db.connect(self.env["ATLAS_DB"])
+        atlas_db.init(conn)
+        pid = atlas_db.register_project(conn, "/repo/x")
+        atlas_db.start_run(conn, pid, "sess-1")
+        atlas_db.mark_orchestrating(conn, "sess-1")
+        conn.close()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _call(self, event, tool, tinput):
+        return run_hook(
+            {
+                "session_id": "sess-1",
+                "cwd": self.tmp,
+                "hook_event_name": event,
+                "tool_name": tool,
+                "tool_input": tinput,
+            },
+            self.env,
+        )
+
+    def _count(self):
+        conn = self.atlas_db.connect(self.env["ATLAS_DB"])
+        try:
+            rid = self.atlas_db.current_run_id(conn, "sess-1")
+            return self.atlas_db.unsanctioned_inline_ops_since_last_dispatch(conn, rid)
+        finally:
+            conn.close()
+
+    READ_ONLY = (
+        ("Read", {"file_path": "a.py"}),
+        ("Grep", {"pattern": "x"}),
+        ("Glob", {"pattern": "*.py"}),
+        ("Bash", {"command": "git status"}),
+        ("Bash", {"command": "git status --short"}),
+        ("Bash", {"command": "git log --oneline -5"}),
+        ("Bash", {"command": "git diff HEAD~1"}),
+        ("Bash", {"command": "cd sub && git status"}),
+        ("Bash", {"command": "git status && git log --oneline"}),
+        ("Bash", {"command": "ls -la src"}),
+        ("Bash", {"command": "rg 'def main' ."}),
+        ("Bash", {"command": "cat a.txt | grep err | wc -l"}),
+        ("Bash", {"command": "find . -name '*.py' 2>/dev/null"}),
+    )
+    COUNTED = (
+        ("Bash", {"command": "touch a.txt"}),
+        ("Bash", {"command": "git commit -m x"}),
+        ("Bash", {"command": "git branch -D old"}),
+        ("Bash", {"command": "git status > out.txt"}),
+        ("Bash", {"command": "git status && touch a.txt"}),
+        ("Bash", {"command": "git log | tee out.txt"}),
+        ("Bash", {"command": "rm -rf build"}),
+        ("Bash", {"command": "npm test"}),
+        ("Write", {"file_path": "docs/x.md"}),
+        ("Edit", {"file_path": "docs/x.md"}),
+    )
+
+    def test_read_only_calls_are_never_logged(self):
+        for tool, tinput in self.READ_ONLY:
+            r = self._call("PostToolUse", tool, tinput)
+            self.assertEqual(r.returncode, 0)
+            self.assertEqual(r.stdout.strip(), "", (tool, tinput))
+        self.assertEqual(self._count(), 0)
+
+    def test_read_only_calls_are_never_blocked_past_the_threshold(self):
+        for _ in range(8):  # well past DENY_THRESHOLD, all counted
+            self._call("PostToolUse", "Bash", {"command": "touch a.txt"})
+        self.assertEqual(self._count(), 8)
+        for tool, tinput in self.READ_ONLY:
+            r = self._call("PreToolUse", tool, tinput)
+            self.assertEqual(r.returncode, 0)
+            self.assertEqual(r.stdout.strip(), "", (tool, tinput))
+        # ...while a counted op at the same point IS blocked.
+        r = self._call("PreToolUse", "Bash", {"command": "touch b.txt"})
+        self.assertIn('"permissionDecision": "deny"', r.stdout)
+
+    def test_read_only_calls_do_not_reset_the_count(self):
+        for _ in range(3):
+            self._call("PostToolUse", "Bash", {"command": "touch a.txt"})
+        for tool, tinput in self.READ_ONLY:
+            self._call("PostToolUse", tool, tinput)
+        self.assertEqual(self._count(), 3)
+
+    def test_many_reads_never_trip_the_advisory_or_the_deny(self):
+        for i in range(30):
+            r = self._call("PostToolUse", "Read", {"file_path": f"f{i}.py"})
+            self.assertEqual(r.stdout.strip(), "")
+            r = self._call("PreToolUse", "Grep", {"pattern": "x"})
+            self.assertEqual(r.stdout.strip(), "")
+        self.assertEqual(self._count(), 0)
+
+    def _raw_count(self):
+        conn = self.atlas_db.connect(self.env["ATLAS_DB"])
+        try:
+            rid = self.atlas_db.current_run_id(conn, "sess-1")
+            return self.atlas_db.inline_ops_since_last_dispatch(conn, rid)
+        finally:
+            conn.close()
+
+    def test_counted_calls_still_count(self):
+        # Every counted call is logged as an inline op. The orchestrator's own
+        # docs/ writes are logged too but sanctioned, so only the raw count moves
+        # for them (DENY_THRESHOLD polices the unsanctioned count).
+        for tool, tinput in self.COUNTED:
+            raw_before, unsanctioned_before = self._raw_count(), self._count()
+            self._call("PostToolUse", tool, tinput)
+            self.assertEqual(self._raw_count(), raw_before + 1, (tool, tinput))
+            sanctioned = tool in ("Edit", "Write")
+            self.assertEqual(
+                self._count(),
+                unsanctioned_before + (0 if sanctioned else 1),
+                (tool, tinput),
+            )
+
+    def test_edit_and_write_still_trip_the_deny(self):
+        # Sanctioned (docs/) writes are exempt from the count by design, so use
+        # mutating Bash to reach the threshold, then confirm an Edit/Write is denied.
+        for _ in range(8):
+            self._call("PostToolUse", "Bash", {"command": "touch a.txt"})
+        for tool in ("Edit", "Write"):
+            r = self._call("PreToolUse", tool, {"file_path": "docs/x.md"})
+            self.assertIn('"permissionDecision": "deny"', r.stdout, tool)
+        # Production target code is denied outright, independent of the count.
+        for tool in ("Edit", "Write"):
+            r = self._call("PreToolUse", tool, {"file_path": "src/app.py"})
+            self.assertIn("never edit target code inline", r.stdout, tool)
+
+    def test_classifier_unit_cases(self):
+        sys.path.insert(0, os.path.dirname(__file__))
+        import dispatch_tripwire as dt
+
+        for tool, tinput in self.READ_ONLY:
+            self.assertTrue(dt._is_read_only_call(tool, tinput), (tool, tinput))
+        for tool, tinput in self.COUNTED:
+            self.assertFalse(dt._is_read_only_call(tool, tinput), (tool, tinput))
+        for bad in (None, 7, "", "   ", "cd /tmp", "git", "git ", "env git status"):
+            self.assertFalse(dt._is_read_only_bash(bad), repr(bad))
+        self.assertFalse(dt._is_read_only_call("MultiEdit", {}))
+        self.assertFalse(dt._is_read_only_call("Bash", None))
+
+    # (command, read_only, exploration). `read_only` is the inline-op-threshold
+    # verdict (_is_read_only_bash); `exploration` is the native-tool nudge verdict
+    # (_is_exploration_shell). Every NOT-read-only row must also be non-exploration:
+    # a mutation hidden in an exploration command may never earn the nudge either.
+    HARDENING_CASES = (
+        # --- read-only positives that must stay read-only
+        ("ls", True, True),
+        ("cat a", True, True),
+        ("rg x", True, True),
+        ("grep -rn x .", True, True),
+        ("find . -name x", True, True),
+        ("ls 2>/dev/null", True, True),
+        ("cat a|head -5", True, True),
+        ("grep -o x f", True, True),  # tool-scoped: only `tree -o` writes
+        ("ls -o", True, True),
+        ("find . -O3 -name x", True, True),  # tool-scoped: only git `-O` spawns
+        ("tree -L 2", True, True),
+        ("sed -n 1p a", True, True),
+        ("sed -n '1,50p' NOTES.md", True, True),
+        ("sed -n '/error/p' f", True, True),
+        ("awk '{print $1}' f", True, True),
+        ("awk '{print}' a", True, True),
+        ("git status", True, False),
+        ("git status --short", True, False),
+        ("git log --oneline", True, False),
+        ("git diff HEAD~1", True, False),
+        ("git show HEAD", True, False),
+        ("git blame f", True, False),
+        ("git rev-parse HEAD", True, False),
+        ("git ls-files", True, False),
+        ("cd x && git status", True, False),
+        ("git status && git diff", True, False),
+        ("git status & git log", True, False),  # `&` splits like `;`
+        # --- git flags that write a file or spawn a program
+        ("git log --output=f", False, False),
+        ("git diff --output=p", False, False),
+        ("git show --output=f HEAD", False, False),
+        ("git log --output f", False, False),
+        ("git grep -Ocmd x", False, False),
+        ("git grep --open-files-in-pager=less x", False, False),
+        ("git grep --open-files-in-pager x", False, False),
+        ("git diff --ext-diff", False, False),
+        ("git log --textconv", False, False),
+        # --- command / process substitution anywhere
+        ("git status $(rm x)", False, False),
+        ("ls $(rm x)", False, False),
+        ("cat `rm x`", False, False),
+        ("cat <(rm x)", False, False),
+        ("cat a >(tee out)", False, False),
+        # --- output redirection (only /dev/null and fd dups are harmless) and tee
+        ("ls > f", False, False),
+        ("ls >> f", False, False),
+        ("ls 2>err.log", False, False),
+        ("ls > /dev/nullx", False, False),
+        ("git status > out.txt", False, False),
+        ("git status | tee f", False, False),
+        ("ls | tee f", False, False),
+        # --- background separator splits like `;`
+        ("git status & rm z", False, False),
+        ("ls & rm z", False, False),
+        # --- find write / exec predicates
+        ("find . -delete", False, False),
+        ("find . -exec rm {} ;", False, False),
+        ("find . -execdir rm {} ;", False, False),
+        ("find . -fprint f", False, False),
+        ("find . -fprint0 f", False, False),
+        ("find . -fprintf f %p", False, False),
+        ("find . -fls f", False, False),
+        ("find . -ok rm {} ;", False, False),
+        ("find . -okdir rm {} ;", False, False),
+        # --- per-tool escape flags
+        ("rg --pre cmd x", False, False),
+        ("rg --pre=cmd x", False, False),
+        ("tree -o f", False, False),
+        # --- awk programs that run commands, write, or pipe
+        ("awk 'BEGIN{system(\"rm x\")}' f", False, False),
+        ("awk '{print > \"o\"}' f", False, False),
+        ("awk '{print | \"sh\"}' f", False, False),
+        ("awk '{\"date\" | getline d}' f", False, False),
+        ("awk -f prog.awk f", False, False),
+        ("awk -i inplace '{print}' f", False, False),
+        # --- sed: in-place or a w/W/e command
+        ("sed -i s/a/b/ f", False, False),
+        ("sed -n '2w f' a", False, False),
+        ("sed -n 'w f' a", False, False),
+        ("sed -n 'W f' a", False, False),
+        ("sed -n '4e id' a", False, False),
+        ("sed -n 's/a/b/w f' a", False, False),
+        ("sed 's/a/b/' f", False, False),  # no -n: not a pure print
+    )
+
+    def test_read_only_classifier_fails_closed_on_hidden_mutations(self):
+        sys.path.insert(0, os.path.dirname(__file__))
+        import dispatch_tripwire as dt
+
+        for command, read_only, exploration in self.HARDENING_CASES:
+            self.assertIs(dt._is_read_only_bash(command), read_only, command)
+            self.assertIs(
+                dt._is_read_only_call("Bash", {"command": command}), read_only, command
+            )
+            self.assertIs(dt._is_exploration_shell(command), exploration, command)
+
+    def test_hidden_mutations_count_and_trip_the_inline_op_threshold(self):
+        # End to end: each hidden-mutation command is logged as an inline op, so
+        # a run of them reaches DENY_THRESHOLD and the next one is blocked.
+        hidden = [c for c, ro, _ in self.HARDENING_CASES if not ro]
+        sample = hidden[:: max(1, len(hidden) // 8)][:8]
+        self.assertGreaterEqual(len(sample), 8)
+        for command in sample:
+            self._call("PostToolUse", "Bash", {"command": command})
+        self.assertEqual(self._count(), len(sample))
+        r = self._call("PreToolUse", "Bash", {"command": sample[0]})
+        self.assertIn('"permissionDecision": "deny"', r.stdout)
 
 
 if __name__ == "__main__":

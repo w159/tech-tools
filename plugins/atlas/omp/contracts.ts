@@ -107,8 +107,26 @@ export function kindOfOmpTool(tool: string, contract: NativeToolContract | undef
 	return KINDS.find(k => contract.kinds[k].omp === tool);
 }
 
-/** Words that make a shell command a write regardless of the command that carries them. */
-const WRITE_TOKENS: Record<string, true> = { tee: true, "-delete": true, "-exec": true, "-execdir": true };
+/**
+ * Words that make a shell command a write regardless of the command that carries
+ * them: `tee` and the `find` write/exec predicates. Twin: dispatch_tripwire._WRITE_TOKENS.
+ */
+const WRITE_TOKENS: Record<string, true> = {
+	tee: true, "-delete": true, "-exec": true, "-execdir": true,
+	"-ok": true, "-okdir": true, "-fprint": true, "-fprint0": true, "-fprintf": true, "-fls": true,
+};
+
+/** Per-tool escape flags matched by prefix (`rg --pre=cmd`, `tree -o f`); scoped so `grep -o` / `ls -o` stay reads. */
+const TOOL_WRITE_PREFIXES: Record<string, string[]> = { rg: ["--pre"], tree: ["-o"] };
+
+/** Command/process substitution: `$(..)`, backticks, `<(..)`, `>(..)`. Raw-text match, so quoted forms fail closed too. */
+const SHELL_SUBSTITUTION = /\$\(|`|<\(|>\(/;
+
+/** sed program text that writes/executes: a standalone or address-prefixed `w`/`W`/`e` command. */
+const SED_WRITE_CMD = /(?<![\w\\])[wWe](?![\w])|(?<=\d)[wWe](?![\w])/;
+
+/** awk program text that can run commands or write: system(), getline, close(), any pipe/redirect, -f/--file/--include/--load. */
+const AWK_UNSAFE = /system|getline|close\s*\(|[|>]|^-f|^--file|^--include|^--load/;
 
 /** ctx_* equivalent per exploration command; anything unlisted (wc, stat, file, less, more, sed, awk) → ctx_shell. */
 const EXPLORATION_TOOL: Record<string, string> = {
@@ -131,23 +149,31 @@ const HARMLESS_REDIRECT = /\d*>&\d+|(?:\d*|&)>>?\s*\/dev\/null(?![\w./-])/g;
  * The exploration segments of a command as [command, ...args] token lists, or
  * undefined when it is not exploration-only. Splits the RAW text, so quoted
  * operators (`grep 'a && b'`) over-split and every such misparse lands on
- * "not exploration" — the allow direction. Twin: dispatch_tripwire._exploration_segments.
+ * "not exploration" — the allow direction. Command/process substitution, `&`
+ * backgrounding, non-/dev/null redirects, write predicates and per-tool escape
+ * flags all fail closed. Twin: dispatch_tripwire._exploration_segments.
  */
 function explorationSegments(command: string, contract: NativeToolContract | undefined): string[][] | undefined {
 	const spec = contract?.explorationShell;
 	if (!spec || typeof command !== "string") return undefined;
+	if (SHELL_SUBSTITUTION.test(command)) return undefined;
 	const text = command.replace(HARMLESS_REDIRECT, " ");
 	if (text.includes(">")) return undefined;
-	const segments = text.split(/&&|\|\||[;|\n]/).map(s => s.trim().split(/\s+/)).filter(t => t[0]);
+	const segments = text.split(/&&|\|\||[;|\n&]/).map(s => s.trim().split(/\s+/)).filter(t => t[0]);
 	while (segments[0]?.[0] === "cd") segments.shift();
 	if (segments.length === 0) return undefined;
 	for (const tokens of segments) {
 		const name = tokens[0].split("/").pop() ?? "";
 		if (tokens.some(t => Object.hasOwn(WRITE_TOKENS, t))) return undefined;
+		const prefixes = Object.hasOwn(TOOL_WRITE_PREFIXES, name) ? TOOL_WRITE_PREFIXES[name] : undefined;
+		if (prefixes && tokens.slice(1).some(t => prefixes.some(p => t.startsWith(p)))) return undefined;
 		const inPlaceFlag = tokens.slice(1).some(t => t.startsWith("-i"));
 		let ok = spec.commands.includes(name);
-		if (name === "sed") ok = !!tokens[1]?.startsWith("-n") && !inPlaceFlag;
-		else if (name === "awk") ok = !inPlaceFlag;
+		if (name === "sed") {
+			ok = !!tokens[1]?.startsWith("-n") && !inPlaceFlag && !tokens.slice(1).some(t => SED_WRITE_CMD.test(t));
+		} else if (name === "awk") {
+			ok = !inPlaceFlag && !tokens.slice(1).some(t => AWK_UNSAFE.test(t));
+		}
 		if (!ok) return undefined;
 		tokens[0] = name;
 	}

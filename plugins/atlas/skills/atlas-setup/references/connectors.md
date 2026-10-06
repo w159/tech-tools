@@ -1,10 +1,10 @@
 # Atlas connectors setup guide
 
-Atlas bundles **eleven** vendor MCP connectors inside the atlas plugin itself:
+Atlas bundles **twelve** vendor MCP connectors inside the atlas plugin itself:
 
 | Kind | Path | Connectors |
 | --- | --- | --- |
-| Node ESM bundles | `mcp/<name>/server.mjs` | auvik, blumira, cipp, connectwise, spanning, knowbe4, ninjaone, paylocity, threatlocker, vanta |
+| Node ESM bundles | `mcp/<name>/server.mjs` | auvik, blumira, cipp, connectwise, spanning, knowbe4, ninjaone, panos, paylocity, threatlocker, vanta |
 | Python (uv project) | `mcp/falcon/` | falcon |
 
 There is **no** department subdirectory layout (`mcp/hr/`, `mcp/security/`, …) in
@@ -25,22 +25,22 @@ After any of the above: **reload Claude Code**. Full verified flow + E2E matrix:
 `../../references/connector-config-flow.md`.
 
 **Elicitation:** when the user has not named a vendor, ask ONE multiSelect of the
-eleven connectors with enabled/disabled state (detected, not guessed). Never
+twelve connectors with enabled/disabled state (detected, not guessed). Never
 collect secrets in free-text chat.
 
 Per-vendor keys: `vendors.md` next to this file.
 
-## The eleven connectors
+## The twelve connectors
 
-auvik, blumira, cipp, connectwise, falcon, spanning, knowbe4, ninjaone,
+auvik, blumira, cipp, connectwise, falcon, spanning, knowbe4, ninjaone, panos,
 paylocity, threatlocker, vanta.
 
-Falcon needs `uv` on PATH; the other ten need Node.
+Falcon needs `uv` on PATH; the other eleven (including panos) need Node.
 
 ## No-args behavior: status scan
 
 1. Read effective atlas credentials (pluginConfigs / `.env` / dashboard marks).
-2. Mark each of the eleven ENABLED iff required keys in `vendors.md` are non-empty.
+2. Mark each of the twelve ENABLED iff required keys in `vendors.md` are non-empty.
 3. Prefer `*_status` tools for runtime confirmation (including `falcon_status`).
    Unconfigured Falcon stays inert with a 4-tool diagnostic surface.
 

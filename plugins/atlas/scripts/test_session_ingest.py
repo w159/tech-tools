@@ -2157,6 +2157,155 @@ class DeniedResultIngestTest(unittest.TestCase):
         )
 
 
+class ErrorSnippetIngestTest(unittest.TestCase):
+    """tool_calls kept no error text, so an error finding could only say "N of M
+    failed". Ingest now keeps a capped head of a failed result, and flags an omp
+    gate denial of a Task dispatch ("DENY - ...") as denied, not as an error."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.conn = atlas_db.connect(os.path.join(self.tmp, "atlas.db"))
+        atlas_db.init(self.conn)
+        self.addCleanup(self.conn.close)
+
+    def _rows(self):
+        return {
+            r[0]: (r[1], r[2])
+            for r in self.conn.execute(
+                "SELECT tool_use_id, denied, error_snippet FROM tool_calls"
+            )
+        }
+
+    def _omp_transcript(self, results):
+        sid = "omp-snip-1"
+        path = os.path.join(self.tmp, "2026_omp-snip-1.jsonl")
+
+        def rec(i, parent, role, content, **extra):
+            return json.dumps(
+                {
+                    "type": "message",
+                    "id": i,
+                    "parentId": parent,
+                    "timestamp": f"2026-09-29T05:00:0{int(i[-1])}Z",
+                    "message": {"role": role, "content": content, **extra},
+                }
+            )
+
+        calls = [
+            {"type": "toolCall", "id": cid, "name": name, "arguments": {}}
+            for cid, name, _ in results
+        ]
+        lines = [
+            json.dumps(
+                {
+                    "type": "session",
+                    "id": sid,
+                    "timestamp": "2026-09-29T05:00:00Z",
+                    "cwd": "/w/proj",
+                }
+            ),
+            rec("m1", None, "assistant", calls, model="m"),
+        ]
+        for n, (cid, name, text) in enumerate(results, start=2):
+            lines.append(
+                rec(
+                    f"m{n}",
+                    f"m{n - 1}",
+                    "toolResult",
+                    [{"type": "text", "text": text}],
+                    toolCallId=cid,
+                    toolName=name,
+                    isError=True,
+                )
+            )
+        with open(path, "w") as f:
+            f.write("\n".join(lines) + "\n")
+        session_ingest.backfill_agent("omp", root=self.tmp, conn=self.conn)
+        return sid
+
+    def test_omp_task_deny_is_denied_and_real_failure_keeps_its_text(self):
+        sid = self._omp_transcript(
+            [
+                ("t1", "task", "DENY - this Task dispatch overrides model with 'x'"),
+                ("t2", "task", "Task execution failed: DENY - 6 inline ops"),
+                ("t3", "bash", "Exit code 2\nboom: bad flag"),
+            ]
+        )
+        rows = self._rows()
+        self.assertEqual(rows[f"{sid}:t1"][0], 1)
+        self.assertEqual(rows[f"{sid}:t2"][0], 1)
+        self.assertEqual(rows[f"{sid}:t3"], (0, "Exit code 2 boom: bad flag"))
+        # a denied row keeps the gate text, which names which gate fired
+        self.assertIn("overrides model", rows[f"{sid}:t1"][1])
+
+    def test_omp_error_snippet_is_capped_at_500(self):
+        sid = self._omp_transcript([("t1", "bash", "e" * 3000)])
+        self.assertEqual(len(self._rows()[f"{sid}:t1"][1]), 500)
+
+    def test_claude_transcript_failure_stores_snippet_and_task_deny_is_denied(self):
+        path = os.path.join(self.tmp, f"{SID}.jsonl")
+        use = [
+            {"type": "tool_use", "id": "c-deny", "name": "Task", "input": {}},
+            {
+                "type": "tool_use",
+                "id": "c-fail",
+                "name": "Bash",
+                "input": {"command": "x"},
+            },
+            {
+                "type": "tool_use",
+                "id": "c-ok",
+                "name": "Bash",
+                "input": {"command": "y"},
+            },
+        ]
+        res = [
+            {
+                "type": "tool_result",
+                "tool_use_id": "c-deny",
+                "is_error": True,
+                "content": "Task execution failed: DENY - atlas orchestrators never edit",
+            },
+            {
+                "type": "tool_result",
+                "tool_use_id": "c-fail",
+                "is_error": True,
+                "content": [{"type": "text", "text": "Exit code 1"}],
+            },
+            {
+                "type": "tool_result",
+                "tool_use_id": "c-ok",
+                "is_error": False,
+                "content": "fine",
+            },
+        ]
+        with open(path, "w") as f:
+            f.write(
+                "\n".join(
+                    [
+                        _line(
+                            type="assistant",
+                            uuid="a1",
+                            timestamp="2026-06-26T12:00:01Z",
+                            message={"role": "assistant", "content": use},
+                        ),
+                        _line(
+                            type="user",
+                            uuid="u1",
+                            timestamp="2026-06-26T12:00:02Z",
+                            message={"role": "user", "content": res},
+                        ),
+                    ]
+                )
+                + "\n"
+            )
+        session_ingest.ingest_transcript(path, conn=self.conn)
+        rows = self._rows()
+        self.assertEqual(rows["c-deny"][0], 1)
+        self.assertEqual(rows["c-fail"], (0, "Exit code 1"))
+        self.assertEqual(rows["c-ok"], (0, None))
+
+
 class HarnessAgentLabelIngestTest(unittest.TestCase):
     """session_ingest.harness_agent(): ATLAS_HARNESS=omp labels hook-ingested
     rows 'omp' on BOTH session_logs upsert sites (main file, and the non-owner

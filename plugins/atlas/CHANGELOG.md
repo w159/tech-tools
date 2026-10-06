@@ -1,8 +1,133 @@
 # Changelog
 
-## [Unreleased]
+## [10.0.1] - 2026-10-06
+
+### Breaking
+- Dashboard request guard on every route and method (`Handler._guard` in
+  `atlas_dashboard.py`, evaluated in this order). `Host` must be exactly
+  `127.0.0.1:<port>` or `localhost:<port>` (else 403 `bad_host`, including
+  `/api/health` and static files). Every POST/PUT must send `Content-Type:
+  application/json` (else 415 `unsupported_media_type`). A present `Origin` must
+  be that same loopback origin (else 403 `bad_origin`; `null` and foreign origins
+  are rejected). Every mutation, `GET /api/v2/stream` and the sensitive GETs
+  (`/api/v2/irc`, `/api/v2/colony/capture`, `/api/v2/colony/agent`,
+  `.../transcript`) must send the per-daemon `X-Atlas-Token` (else 401
+  `bad_token`). The token is `secrets.token_urlsafe(32)`, regenerated on every
+  daemon start, and is delivered only inside `GET /` as
+  `<meta name="atlas-token">`. `?token=` is accepted on `/api/v2/stream` only
+  (`EventSource` cannot set headers) and ignored everywhere else. `/api/health`
+  and `/health` stay token-exempt (still Host-checked) so hooks and `ensure`
+  probes keep working. **Action for external callers** (scripts, curl, other
+  tools that POSTed to the dashboard): fetch `GET /` first, read the token from
+  the meta tag, then send `X-Atlas-Token` plus JSON `Content-Type` on every
+  mutation; a POST without them now fails. Bodies are capped at 4 MiB (413) and
+  must be a JSON object (400 `invalid_json`).
+- `Access-Control-Allow-Origin` is no longer sent on any response and `OPTIONS`
+  answers 204 with `Allow` only, so cross-origin pages can no longer call the
+  dashboard. The UI is same-origin.
+
+### Added
+- Atlas Workboard v2. The inline `UI_HTML` page is replaced by static assets
+  served from `scripts/dashboard_ui/` at `/` and `/ui/*` (traversal-safe, MIME
+  allowlist, `Cache-Control: no-store`): nine pages (Overview, Activity, Health,
+  Colony, Work, IRC, Self-improvement, Projects, Settings) on one design system
+  (`tokens.css`, dark-first with light theme and compact/comfortable density,
+  keyboard chords, command palette, status never by colour alone). No build step,
+  no npm, no CDN; stdlib-only server.
+- `GET /api/v2/stream` (SSE): every 5 s the server re-reads `colony`, `todos`,
+  `irc`, `health` and emits a topic only when its content hash changed, plus a
+  `tick`, a 15 s comment heartbeat and `retry: 3000`. The client falls back to
+  polling `/api/v2/*` every 8 s when the stream drops and says so in the topbar.
+- 21 `/api/v2` routes in two new modules mounted before the legacy routes:
+  `atlas_dash_colony.py` (colony and rig/agent snapshots, pane capture, send,
+  kill, attach/spawn-help, IRC read and post, todo list and mutations through
+  `atlas_todo.py` under its lock) and `atlas_dash_insights.py` (projects,
+  overview, health, activity, improve, finding status and remeasure, prefs in
+  `~/.atlas/dashboard-prefs.json`). The legacy `/api/*` routes are unchanged.
+- Send semantics for `POST /api/v2/colony/send`. The pane's foreground process
+  is probed first: an interactive `claude`/`omp` pane is typed into (`send-keys -l`
+  then Enter, with a From/To envelope) and refuses with 409 `typing_guard` while a
+  prompt is on screen unless `force:true`; a shell, python, node or any other
+  non-harness pane is refused with 409 `pane_not_steerable` (typed text would run
+  as a command) and `force:true` does not override it; a headless `-p` mux worker
+  never reads its terminal, so the message is queued as a board note
+  (`delivered:"queued"`). A probe failure refuses rather than types. Every send
+  is also recorded as an IRC message.
+- Health keeps real failures and policy enforcement apart. `gate_deny` and
+  `gate_block` events are returned in a separate enforcement stream (counts, top
+  rules, per-project totals, noted as "working as designed; not a failure") and
+  no longer count towards silent failures or turn the gate subsystem to
+  warn/fail.
+- Worker inbox delivery. A headless mux worker (`ATLAS_WORKER_NAME` and
+  `ATLAS_PROJECT_ROOT` exported by `atlas_mux.py run-worker`) drains unread board
+  notes addressed to it in the PostToolUse branch of `dispatch_tripwire.py`
+  (`hooks/worker_inbox.py`, fail-open) using a per-worker cursor file under
+  `.atlas/.run/`, and receives them as `additionalContext`. omp gets the same
+  delivery through the hook bridge (`dispatch_tripwire.py` is bridged; PostToolUse
+  maps to omp `tool_result`); there is no worker-inbox code in `omp/`. Colony and
+  IRC messages carry
+  `status: queued|read|delivered|refused`: `queued`/`read` derive from that
+  cursor (`-p` workers); `delivered` is a message typed into an interactive
+  `claude`/`omp` pane (`delivered:true`; nobody drains a cursor for it, so it
+  used to read `queued` forever) and `refused` is a shell/non-steerable pane
+  (`pane_not_steerable`; used to read `queued`). Both are recorded on the note
+  (optional `delivery` field of `atlas_todo.note`) and surface in `/api/v2/irc`,
+  the agent drawer notes and the IRC and Colony pages. A refusal is HTTP 409 on
+  `POST /api/v2/colony/send` but HTTP 200 with `ok:false, error:"pane_not_steerable"`
+  on `POST /api/v2/irc`.
+- Settings page connector credential form and Agents editor. Per-connector
+  password inputs save through `POST /api/connectors/env` with the token carried
+  by `api.post`; saved values are never echoed (the form shows set/missing
+  only), an unsaved-draft guard protects edits, and the connector test button
+  stays. The Agents editor picks a registered project and an agent and saves or
+  resets the per-project override through `POST /api/agents`.
+- Settings page shows the data the backend already had. Ecosystem is a tabbed,
+  searchable inventory (plugins, MCP servers, Atlas skills/agents/output styles,
+  hook wirings with a missing-script flag, user skills/agents/hook events, active
+  output style; 100 rows then "Show more"). Connectors carry per-server usage from
+  `tool_calls` (calls and errors in 30 days, error rate, last used; calls a hook
+  denied are excluded when `denied` exists) and one health word (`ok`, `idle`,
+  `degraded` at >=10 calls and >=25% errors, `unconfigured`, `disabled`) computed by
+  `atlas_control.connector_usage`/`connector_health`. The Health page's connectors
+  row now uses the same rows instead of the stale `connector_auth_warned.json`.
+  The Agents roster adds frontmatter model/effort, the omp model chain and tier from
+  `omp/agents/*.md`, and 7-day/total dispatches and last use from `dispatches`
+  (`dispatches.model` is NULL in every row, so the model shown is the definition's).
+  Behavior gains the omp extension's real env flags (`ATLAS_HOOK_BRIDGE`,
+  `ATLAS_BRIDGE_HOOK_TIMEOUT_S`, `ATLAS_WORKER_MAX_TOKENS`, `ATLAS_ADVISOR_GATE`) and
+  a read-only table of `~/.omp/agent/config.yml` `modelRoles` for atlas-worker,
+  atlas-verifier, atlas-mechanic, default and smol with whether each resolves.
+- Work status chips (open, in progress, blocked, done) with done hidden by default;
+  Colony header shows an `Unknown / stale` count so the badges add up to the agents
+  listed (`counts.unknown` is new in `GET /api/v2/colony`).
 
 ### Changed
+- The omp model-override guard (`before_subagent_spawn`) now restores the pinned
+  tier instead of letting an atlas agent run on the parent's model. An omitted
+  `model`, or a model list that is only the inherited parent model (what omp
+  hands over when the pinned generated agents are not discovered, e.g. a
+  marketplace install), is rewritten by returning
+  `{ model: modelPatternsFor(agent), note }` (`@atlas-worker`, `@smol` for the
+  worker tiers; `@atlas-verifier`, `@default`, `@smol` for verifier-tier agents;
+  `@atlas-mechanic`, `@smol` for `runner`). omp applies the return value
+  (`BeforeSubagentSpawnEventResult.model`, last defined value wins) and expands the
+  aliases itself; when none resolves the spawn is left unchanged, so the
+  inherited model remains the fallback instead of "No model selected". A list
+  that already carries the tier (pinned alias, Claude-format pin, or a selector
+  explained by a pinned `modelRole`) is left untouched, and a genuine override is
+  still denied, never rewritten. `ATLAS_TRIPWIRE_HARD=off` disables both.
+- Docs match Atlas Workboard v2. `skills/atlas-orchestrate/references/dashboard-api.md`
+  is rewritten from the code: the request guard, the static `/ui/*` routes, every
+  legacy v1 route, all 21 v2 routes (11 colony/IRC/todos, 9 insights/prefs,
+  `/api/v2/stream`), the SSE events with the 8 s polling fallback, the nine pages,
+  the `~/.atlas/dashboard-prefs.json` schema, keyboard shortcuts, design tokens
+  and the component list. `README.md` dashboard sections and
+  `references/connector-config-flow.md` no longer describe the inline page or
+  fixed-interval polling as current and state that credential POSTs need the
+  token and JSON `Content-Type`. New `docs/atlas-workboard.md` covers the
+  information architecture, the OpenRig-derived concepts (colony, rigs, agent
+  states, attention feed, typing guard, stuck diagnosis, onboarding) and an
+  OpenRig-to-atlas mapping table.
 - Prompt arming stays on the regex for stack traces, strong engineering verbs,
   and a common verb plus a file, path, or declaration. The remaining band can
   call a local System One model (`hooks/prompt_decision.py`, default
@@ -22,6 +147,145 @@
   `done_claim_unverified`, and `buried_decision` are folded in code back to
   the same stored ids the doctor mines. A repeated state glossary is no
   longer pasted onto every question.
+- Self-improvement page (`GET /api/v2/improve`, `improve.js`). Propose counts
+  doctor findings awaiting a fix (open plus accepted-but-unapplied); Apply counts
+  landed fixes. `wontfix` persists as its own finding status (no longer folded
+  into dismissed) and the doctor's re-mine never overwrites it. `improve` joins
+  `SSE_TOPICS` and the client stream event list, so the page refreshes on change.
+  Per-rule rows show baseline to now with a direction-aware trend, and a
+  Remeasured-improvements card shows improved / no change / regressed / pending.
+  Score trends are one chart per judgment on its own scale (no shared axis across
+  rates and `reply_chars`). Severities `critical`, `major`, `blocker`, `high` map to
+  `fail`. The last nudge is read from `hookstate` (`last_run.nudge`). Lessons
+  follow the project filter.
+- `POST /api/v2/improve/remeasure` persists an `improvements` row when the finding
+  had none (baseline from the miner's `metric_value`), so a first remeasure gets a
+  verdict instead of only returning a number.
+
+### Fixed
+- Dashboard Projects card and Overview "blocked todos" now count todos the way the
+  Work board does. `_todo_counts()` in `atlas_dash_insights.py` re-parsed
+  `todos.json` and counted archived items, so a project could show "todos done 206"
+  while its board showed 123; it now reuses `todos_state()` from
+  `atlas_dash_colony.py` (archived skipped, in-progress counted as open, the
+  `blocked` flag honoured). Regression tests in `test_atlas_dash_insights.py`.
+- Dashboard Work page on "All projects" no longer silently narrows to one project.
+  It shows the merged board from `GET /api/v2/todos?project=all`, grouped by status
+  (the status chips still filter), each task labelled with its project. Status,
+  claim, edit, assign and remove write to the task's own project; add, reorder and
+  phase moves need one concrete project, so the merged view does not offer them
+  (`dashboard_ui/js/pages/work.js`).
+- Dashboard Self-improvement "Verification ledger (N)" rendered only the latest 40
+  of N verdicts with no way to see the rest. It now has a "Show all N" / "Latest
+  40 only" toggle, like the by-rule card (`dashboard_ui/js/pages/improve.js`).
+- `GET /api/health` (and `/health`) reported `url` with the default port 7421
+  whatever `--port` the daemon was started with; it now reports the port the
+  server is actually bound to (`Handler._served_port()`). Regression test in
+  `test_atlas_dashboard.py`.
+- The read-only Bash classifier now fails closed, so a mutation hidden inside an
+  exploration command is counted toward the inline-op threshold instead of passing
+  as a free read (`_is_read_only_bash` / `_exploration_segments` in
+  `hooks/dispatch_tripwire.py`, twinned in `omp/contracts.ts`
+  `explorationSegments`). Newly not read-only: git `--output`, `-O`/
+  `--open-files-in-pager`, `--ext-diff`, `--textconv`; command and process
+  substitution (`$(..)`, backticks, `<(..)`, `>(..)`) anywhere in the command; the
+  background `&` separator (now splits like `;`, so `git status & rm z` counts);
+  `find -fprint/-fprint0/-fprintf/-fls/-ok/-okdir`; `rg --pre`; `tree -o`; `awk`
+  programs that call `system()`, `getline`, `close()`, pipe, redirect or load a
+  `-f` file; and `sed` with `-i` or a `w`/`W`/`e` command. Plain output redirects,
+  `| tee`, and `>`/`>>` to anything but `/dev/null` were already counted and now have
+  regression coverage. Tool-scoped, so `grep -o`, `ls -o`, `find -O3`,
+  `sed -n '1,5p'`, and inert `awk '{print $1}'` stay read-only and keep the native-tool
+  nudge contract in `contracts/native-tools.json` unchanged.
+- Improve verification-ledger rows rendered as `ledger:None` duplicates with no
+  title, no time and an implicit `open` status, and offered finding actions that
+  cannot apply to append-only verdicts. Rows now get a unique stable id (entry id,
+  else a hash of file and position), a title that falls back to the claim, a time
+  from `verifiedAt`/`verified_at` (undated rows are labelled, never shown with the
+  file mtime), an explicit status, and no action buttons. Doctor findings carry
+  the real project (resolved from the evidence's project name) instead of `''`.
+- `GET /api/v2/todos` without a project or with `all` returned 400
+  `unknown_project`; it now returns every known board merged (`project:"all"`,
+  `projects`, items tagged with `project`). An explicit unknown project is still 400.
+- The Agents editor defaulted to a fixture project (`/tmp/atlas-demo/repo`) and the
+  Projects page listed fixtures. `GET /api/projects?editable=1` and
+  `route_projects` now hide `/`, home, atlas demo/probe and tmp dirs, worktrees and
+  agent-mode output folders (shared `atlas_control.is_fixture_project`); the editor
+  also hides directories that no longer exist and opens on the most recently active
+  real project.
+- atlas-doctor `tool_error_rate_high` no longer counts atlas's own gate denials as
+  tool errors (127/128 Grep and 52/54 Glob "errors" were the lean-ctx redirect).
+  `denied=1` rows leave both the error numerator and the call population, so a
+  gate cannot inflate a healthy tool or dilute a failing one; a tool that was only
+  ever blocked is skipped. `atlas_db.tool_usage` gains additive `denied` and
+  `real_errors` columns (`errors` is unchanged for other readers).
+- `tool_calls.error_snippet` (new TEXT column, added to existing DBs by the
+  idempotent `ALTER TABLE` in `atlas_db.init`; old rows stay NULL). Ingest keeps
+  the whitespace-collapsed first 500 chars of a failed (or gate-denied) result,
+  and the error-rate finding surfaces the top snippets in its detail and
+  `evidence.top_errors`, so triage starts from the actual failure. The omp adapter
+  now forwards 500 chars of result text (was 400).
+- A Task dispatch denied by the omp extension (`DENY - ...`, surfaced as
+  `Task execution failed: DENY - ...`) is classified `denied=1` at ingest instead
+  of an error. `DENY_MARKERS` gained both prefixes; they must lead the text, so a
+  real failure that merely mentions DENY is still an error.
+- Gate-block friction snippets were unreadable bare letters (`conditions: m`,
+  `conditions: c,d,e`). They were not truncated; the writer only ever stored the
+  condition codes. `completion_gate._record_gate_block` now writes
+  `conditions: c,d,e (CHANGELOG missing, ROADMAP missing, README missing)`; the
+  `conditions: <letters>` lead is unchanged. The one test that pinned the old exact
+  text (`test_n_blocks_without_header_and_quotes_required_form`) was updated for
+  the new format. `dispatch_tripwire.py` was not touched.
+- `atlas_doctor.py --enrich-facet` now stamps `enriched_at` when the JSON omits it
+  (a caller-supplied value still wins). Before, enriched rows stayed in
+  `--pending-facets` forever. The CLI help and `skills/atlas-doctor/SKILL.md` no
+  longer claim there is no CLI for this step or tell the caller to pass
+  `enriched_at` by hand.
+- **atlas agents were not dispatchable from omp: two model-pin gates disagreed.**
+  `agents/implementer.md` pins `model: sonnet` (read by `dispatch_tripwire.py`) while
+  the omp-generated `omp/agents/implementer.md` pins `["@atlas-worker","@smol"]`
+  (read by the `before_subagent_spawn` gate in `omp/index.ts`), so every value was
+  denied by one of them: omitted (omp injects the parent model), `@atlas-worker`
+  (tripwire), `sonnet` (omp gate). Both gates now accept the pin in either
+  representation: `_model_override` also accepts the omp-generated `model:` list
+  (`_omp_pinned_models`), and the omp gate also accepts the Claude-format pin
+  (`frontmatterModelFor`). A selector equal to the parent's live model, with or
+  without ONE `:<level>` suffix on either side, is inherited rather than an override
+  (`isInheritedSelector` / `_inherited_selector`, twins; no provider or model is
+  hardcoded). `omp/hook-bridge.ts` now forwards the parent model as `session_model`
+  on the PreToolUse payload, only when the context has one, so the Python gate can
+  tell injection from a real override. Genuine overrides (`opus`, another provider's
+  model, another tier's role such as `@atlas-verifier` for a worker agent) are still
+  denied. Tests: `ModelPinRepresentationTest` and the new `index.test.ts` /
+  `hook-bridge.test.ts` cases.
+- **Read-only investigation no longer counts toward, or gets blocked by, the
+  inline-op threshold.** A plain `read` was denied with "6 inline ops since your last
+  dispatch" after six greps. `Read`/`Grep`/`Glob`, exploration-only Bash (the existing
+  `_is_exploration_shell` classifier: `ls`, `rg`, `cat`, `find`, ...), and chains of
+  read-only git (`status`, `log`, `diff`, `show`, `blame`, `rev-parse`, `ls-files`,
+  `ls-remote`, `describe`, `shortlog`, `grep`, `cat-file`) are now never logged by the
+  PostToolUse tier and never denied by the PreToolUse tier. They are not logged with
+  `is_inline_op=0` because that value is the dispatch marker and would reset the
+  count. Edit, Write and mutating Bash (any other binary, any redirect to a file,
+  `tee`, `git commit`, `git branch -D`) still count and are still denied; a
+  dispatch still resets the count. The tests that seeded the threshold with `Read`
+  or `Grep` (`test_trips_at_threshold`, `test_pre_deny_at_ninth_inline_op`,
+  `test_ip_pre_deny_at_threshold`, both DB-error tests, the native-policy tests,
+  and the real-tripwire-through-the-bridge scenario) now seed it with a mutating
+  `touch`; `test_nudged_grep_is_allowed_but_not_counted` inverts the old
+  "a nudged Grep counts" assertion. New: `ReadOnlyInvestigationTest`.
+
+### Docs
+- Corrected the colony-agent model-fallback prose (`omp/atlas-agents.ts`,
+  `omp/index.ts` spawn-pin comment, `omp/README.md`). In omp 18.6.1 an unresolved
+  custom role alias stays a literal token, `@smol` still expands, and if nothing
+  resolves `createAgentSession` falls back to the parent's active model; the old
+  claim that the subagent fails with "No model selected" with no parent fallback
+  was wrong for the spawn path. The fallback aliases stay so the cheap tier is
+  chosen rather than the parent. The index.ts comment also now notes that a later
+  extension's `before_subagent_spawn` `model` can override the pin (omp: last
+  defined model wins). The 9.x entry that recorded the earlier claim is history
+  and is unchanged.
 
 ## [9.6.0] - 2026-10-06
 
