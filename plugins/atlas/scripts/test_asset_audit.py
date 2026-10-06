@@ -369,8 +369,8 @@ class TestSummarize(unittest.TestCase):
 class TestDb(unittest.TestCase):
     def test_db_success_returns_module_and_conn(self):
         fake_conn = object()
-        # Other suites register atlas_db under a different sys.path spelling;
-        # pin the module _db() will import to the one patched here.
+        # Another suite replaces sys.modules['atlas_db']; pin the object
+        # _db() will import so the patches below hit the same module.
         with mock.patch.dict(sys.modules, {"atlas_db": atlas_db}), \
              mock.patch.object(atlas_db, "connect", return_value=fake_conn), \
              mock.patch.object(atlas_db, "init", return_value=None) as init_mock:

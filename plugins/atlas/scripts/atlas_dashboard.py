@@ -1311,14 +1311,36 @@ def stop_daemon() -> dict:
     return {"ok": True, "stopped": stopped, "pid": pid or None, "port": port}
 
 
+def _version_tuple(value) -> tuple[int, ...] | None:
+    """'10.1.2' -> (10, 1, 2); non-numeric parts count as 0; unparsable -> None."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    out = []
+    for part in value.strip().split("."):
+        digits = ""
+        for ch in part:
+            if not ch.isdigit():
+                break
+            digits += ch
+        out.append(int(digits) if digits else 0)
+    return tuple(out) if any(out) else None
+
+
 def ensure_daemon(port: int | None = None) -> dict:
     port = port or DEFAULT_PORT
     url = dashboard_url(port)
     want_db = dashboard_db_path()
 
     if _port_open(LOOPBACK, port):
-        if _daemon_db_ok(port):
-            h = _health_payload(port) or {}
+        h = _health_payload(port) or {}
+        # A daemon started by an older plugin version keeps serving its own UI
+        # on this port until it dies. Compare plugin versions, not script paths:
+        # harnesses install the plugin at different paths, so a path check would
+        # make each SessionStart kill the other harness's healthy daemon. A
+        # missing, older or unparsable version is replaced; a newer one is kept.
+        daemon_ver = _version_tuple(h.get("version"))
+        mine = _version_tuple(_plugin_manifest().get("version")) or ()
+        if _daemon_db_ok(port) and daemon_ver is not None and daemon_ver >= mine:
             return {
                 "ok": True,
                 "already_running": True,
@@ -2024,6 +2046,7 @@ class Handler(BaseHTTPRequestHandler):
                     "pid": os.getpid(),
                     "db_path": dashboard_db_path(),
                     "script": str(Path(__file__).resolve()),
+                    "version": _plugin_manifest().get("version"),
                     "time": time.time(),
                 },
             )

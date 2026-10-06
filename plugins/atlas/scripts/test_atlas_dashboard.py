@@ -201,15 +201,111 @@ class TestAtlasDashboard(unittest.TestCase):
         self.assertIn("gwh-firstrespondersapp", lab)
         self.assertIn("LIVE", lab)
 
-    def test_ensure_idempotent_when_ok(self):
+    def _plugin_version(self) -> str:
+        manifest = SCRIPTS.parent / ".claude-plugin" / "plugin.json"
+        return json.loads(manifest.read_text(encoding="utf-8"))["version"]
+
+    def _run_ensure(self, health: dict):
+        """Run ensure_daemon against a fake daemon; return (result, stop, popen).
+
+        The fake daemon answers until stop_daemon runs; nothing touches the real
+        ~/.atlas pidfile or log and no process is spawned.
+        """
+        state = {"stopped": False}
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+
+        def fake_stop():
+            state["stopped"] = True
+            return {"ok": True}
+
         with (
-            mock.patch.object(self.mod, "_port_open", return_value=True),
+            mock.patch.object(
+                self.mod, "_port_open", lambda *a, **k: not state["stopped"]
+            ),
             mock.patch.object(self.mod, "_daemon_db_ok", return_value=True),
-            mock.patch.object(self.mod, "_health_payload", return_value={"pid": 1}),
+            mock.patch.object(self.mod, "_health_payload", return_value=health),
+            mock.patch.object(self.mod, "stop_daemon", side_effect=fake_stop) as stop,
+            mock.patch.object(self.mod.subprocess, "Popen") as popen,
+            mock.patch.object(self.mod.time, "sleep"),
+            mock.patch.object(self.mod, "_write_pidfile"),
+            mock.patch.object(self.mod, "STATE_DIR", Path(tmp.name)),
+            mock.patch.object(self.mod, "LOG_PATH", Path(tmp.name) / "dashboard.log"),
         ):
+            popen.return_value.pid = 4242
             res = self.mod.ensure_daemon(17499)
+        return res, stop, popen
+
+    def test_ensure_idempotent_when_ok(self):
+        res, stop, popen = self._run_ensure(
+            {"pid": 1, "version": self._plugin_version()}
+        )
         self.assertTrue(res["ok"])
         self.assertTrue(res["already_running"])
+        stop.assert_not_called()
+        popen.assert_not_called()
+
+    def test_ensure_replaces_daemon_from_older_plugin_version(self):
+        """A daemon with no or an older version is restarted, not reused.
+
+        The script path is deliberately ignored: harnesses install the plugin at
+        different paths, so comparing it would make each one kill the other's
+        healthy daemon.
+        """
+        for health in (
+            {"pid": 1},
+            {"pid": 1, "version": None},
+            {"pid": 1, "version": ""},
+            {"pid": 1, "version": "not-a-version"},
+            {"pid": 1, "version": "0.0.1"},
+            {"pid": 1, "version": "9.7.0"},
+            {"pid": 1, "version": "9.7.0", "script": str(Path(__file__).resolve())},
+        ):
+            with self.subTest(health=health):
+                res, stop, popen = self._run_ensure(health)
+                stop.assert_called_once()
+                popen.assert_called_once()
+                self.assertFalse(res.get("already_running"))
+
+    def test_ensure_keeps_daemon_at_same_or_newer_version(self):
+        """Equal or newer versions are reused whatever script path they report."""
+        current = self._plugin_version()
+        major, *rest = current.split(".")
+        for version in (current, f"{int(major) + 1}.0.0", f"{current}.1"):
+            with self.subTest(version=version):
+                res, stop, popen = self._run_ensure(
+                    {
+                        "pid": 1,
+                        "version": version,
+                        "script": "/elsewhere/atlas_dashboard.py",
+                    }
+                )
+                self.assertTrue(res["already_running"])
+                stop.assert_not_called()
+                popen.assert_not_called()
+
+    def test_version_tuple_parsing(self):
+        vt = self.mod._version_tuple
+        self.assertEqual(vt("10.1.2"), (10, 1, 2))
+        self.assertEqual(vt("10.1.x"), (10, 1, 0))
+        self.assertEqual(vt("10.1.2-rc1"), (10, 1, 2))
+        self.assertGreater(vt("10.10.0"), vt("10.9.9"))
+        for bad in (None, "", "  ", "abc", "0.0.0", 10, ["10"]):
+            self.assertIsNone(vt(bad), bad)
+
+    def test_health_reports_plugin_version(self):
+        """The real handler's /api/health carries the plugin.json version."""
+        import threading
+        from http.server import ThreadingHTTPServer
+
+        httpd = ThreadingHTTPServer((self.mod.LOOPBACK, 0), self.mod.Handler)
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        self.addCleanup(httpd.server_close)
+        self.addCleanup(httpd.shutdown)
+        url = f"http://{self.mod.LOOPBACK}:{httpd.server_address[1]}/api/health"
+        with urllib.request.urlopen(url, timeout=10) as resp:
+            payload = json.loads(resp.read().decode())
+        self.assertEqual(payload["version"], self._plugin_version())
 
 
 class WorkBoardApiTest(unittest.TestCase):

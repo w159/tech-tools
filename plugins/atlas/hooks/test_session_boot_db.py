@@ -11,7 +11,7 @@ BOOT = os.path.join(os.path.dirname(__file__), "session_boot.py")
 class BootDbTest(unittest.TestCase):
     def test_boot_creates_db_and_registers_run(self):
         tmp = tempfile.mkdtemp()
-        env = dict(os.environ, ATLAS_DB=os.path.join(tmp, "atlas.db"))
+        env = dict(os.environ, ATLAS_DB=os.path.join(tmp, "atlas.db"), ATLAS_DASHBOARD="off")
         payload = json.dumps({"session_id": "sess-boot", "cwd": tmp})
         p = subprocess.run(
             [sys.executable, BOOT],
@@ -29,7 +29,7 @@ class BootDbTest(unittest.TestCase):
 
     def test_missing_session_id_creates_no_phantom_run(self):
         tmp = tempfile.mkdtemp()
-        env = dict(os.environ, ATLAS_DB=os.path.join(tmp, "atlas.db"))
+        env = dict(os.environ, ATLAS_DB=os.path.join(tmp, "atlas.db"), ATLAS_DASHBOARD="off")
         # No session_id key at all -- boot must not create a phantom run keyed by "".
         payload = json.dumps({"cwd": tmp})
         p = subprocess.run(
