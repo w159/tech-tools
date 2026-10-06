@@ -308,6 +308,106 @@ class TestAtlasDashboard(unittest.TestCase):
         self.assertEqual(payload["version"], self._plugin_version())
 
 
+class StopDaemonTest(unittest.TestCase):
+    """stop_daemon signals the old daemon and the LISTEN socket owner, nobody else.
+
+    Every process and clock primitive is mocked, so no signal is ever sent and
+    the real ~/.atlas/dashboard.pid is never read, cleared or written.
+    """
+
+    PORT = 17498
+    DAEMON = 777001
+
+    @classmethod
+    def setUpClass(cls):
+        cls.mod = _load()
+
+    def _stop(
+        self, alive, lsof_out="", port_open=True, lsof_exc=None, pidfile_pid=None
+    ):
+        """Run stop_daemon with a fake pidfile; return (result, kill, lsof, sleep)."""
+        alive_calls = iter(alive)
+        with (
+            mock.patch.object(
+                self.mod,
+                "_read_pidfile",
+                return_value={"pid": pidfile_pid or self.DAEMON, "port": self.PORT},
+            ),
+            mock.patch.object(self.mod, "_clear_pidfile") as clear,
+            mock.patch.object(
+                self.mod, "_pid_alive", side_effect=lambda pid: next(alive_calls)
+            ),
+            mock.patch.object(self.mod, "_port_open", return_value=port_open),
+            mock.patch.object(self.mod.os, "kill") as kill,
+            mock.patch.object(
+                self.mod.subprocess,
+                "check_output",
+                return_value=lsof_out,
+                side_effect=lsof_exc,
+            ) as lsof,
+            mock.patch.object(self.mod.time, "sleep") as sleep,
+        ):
+            res = self.mod.stop_daemon()
+        clear.assert_called_once_with()
+        return res, kill, lsof, sleep
+
+    def test_fallback_lists_listeners_only(self):
+        """The fallback asks lsof for LISTEN sockets, never plain tcp:<port>."""
+        _, _, lsof, _ = self._stop(alive=[True] * 40, lsof_out="")
+        lsof.assert_called_once()
+        self.assertEqual(
+            lsof.call_args.args[0],
+            ["lsof", "-ti", f"tcp:{self.PORT}", "-sTCP:LISTEN"],
+        )
+
+    def test_fallback_skipped_when_old_daemon_exits_in_window(self):
+        """The upgrade case: the pidfile daemon exits, so lsof is never run."""
+        res, kill, lsof, sleep = self._stop(
+            alive=[True, True, True, False], port_open=False
+        )
+        lsof.assert_not_called()
+        kill.assert_called_once_with(self.DAEMON, self.mod.signal.SIGTERM)
+        polls = [c.args[0] for c in sleep.call_args_list if c.args[0] != 0.15]
+        self.assertEqual(polls, [0.1, 0.1])
+        self.assertEqual(
+            res,
+            {"ok": True, "stopped": True, "pid": self.DAEMON, "port": self.PORT},
+        )
+
+    def test_wait_is_bounded_when_daemon_ignores_sigterm(self):
+        """A daemon that never exits is waited for ~2 s, then the fallback runs."""
+        _, _, lsof, sleep = self._stop(alive=[True] * 40, lsof_out="")
+        polls = [c.args[0] for c in sleep.call_args_list if c.args[0] != 0.15]
+        self.assertEqual(len(polls), 20)
+        self.assertAlmostEqual(sum(polls), 2.0)
+        lsof.assert_called_once()
+
+    def test_fallback_kills_only_listener_pids_never_self(self):
+        """Only the pids lsof returned are signaled, and never this process."""
+        me = os.getpid()
+        res, kill, _, _ = self._stop(
+            alive=[True] * 40, lsof_out=f"4101\n{me}\nnot-a-pid\n4102\n"
+        )
+        signaled = [c.args for c in kill.call_args_list]
+        sigterm = self.mod.signal.SIGTERM
+        self.assertEqual(
+            signaled,
+            [(self.DAEMON, sigterm), (4101, sigterm), (4102, sigterm)],
+        )
+        self.assertTrue(res["ok"] and res["stopped"])
+
+    def test_never_signals_real_pid(self):
+        """Even a pidfile or lsof entry naming this process is never signaled."""
+        me = os.getpid()
+        res, kill, lsof, _ = self._stop(
+            alive=[True] * 40, lsof_out=f"{me}\n", pidfile_pid=me
+        )
+        kill.assert_not_called()
+        lsof.assert_called_once()
+        self.assertEqual(res["stopped"], False)
+        self.assertTrue(res["ok"])
+
+
 class WorkBoardApiTest(unittest.TestCase):
     """The Work tab and Agents tab run on the durable board and agent overrides."""
 
