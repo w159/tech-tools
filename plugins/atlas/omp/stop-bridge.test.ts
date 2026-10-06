@@ -407,9 +407,10 @@ test("a hung python hook is killed at its timeout and the stop passes", async ()
 // ---- the REAL hooks.json -> runHook -> completion_gate.py path ----
 
 test("real completion_gate.py blocks an orchestrating run with no ROADMAP, through the real wiring", async () => {
-	const saved = { db: process.env.ATLAS_DB, gate: process.env.ATLAS_GATE };
+	const saved = { db: process.env.ATLAS_DB, gate: process.env.ATLAS_GATE, state: process.env.ATLAS_HOOKSTATE_DIR };
 	delete process.env.ATLAS_GATE;
 	process.env.ATLAS_DB = join(dir, "atlas.db");
+	process.env.ATLAS_HOOKSTATE_DIR = join(dir, "hookstate"); // per-session block-once / breaker state stays inside the test dir, never ~/.atlas/hookstate
 	try {
 		const sid = `s-real-${process.pid}-${Date.now()}`; // hook state (block-once, circuit breaker) is keyed by session id under ~/.atlas/hookstate: a fixed id leaks across runs
 		const repo = join(dir, "repo");
@@ -444,6 +445,8 @@ test("real completion_gate.py blocks an orchestrating run with no ROADMAP, throu
 		else process.env.ATLAS_DB = saved.db;
 		if (saved.gate === undefined) delete process.env.ATLAS_GATE;
 		else process.env.ATLAS_GATE = saved.gate;
+		if (saved.state === undefined) delete process.env.ATLAS_HOOKSTATE_DIR;
+		else process.env.ATLAS_HOOKSTATE_DIR = saved.state;
 	}
 });
 
