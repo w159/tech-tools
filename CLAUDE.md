@@ -97,3 +97,11 @@ to implement or "make it take effect."
 
 Project `.claude/settings.json` denies Read/Edit/Write under the home plugin
 cache paths. Do not ask to bypass those denials for "faster iteration."
+
+## Completion-gate friction (top blockers)
+
+Most recurring Stop-gate blocks are (g) unverified implementer, (i) open todos,
+(m) delegation mandate, (f) docs drift. Before declaring done: run a verifier on
+every implementer change set, flip or drop every open todo, delegate code
+changes to an atlas:* agent, and update CHANGELOG/`docs/` in the same turn as
+any non-docs change.
