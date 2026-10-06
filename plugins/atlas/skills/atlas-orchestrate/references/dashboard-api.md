@@ -17,7 +17,7 @@
 
 Atlas ships a **single shared loopback dashboard** ("Atlas Workboard") for all concurrent coding-agent terminals. One daemon serves one static single-page UI (`scripts/dashboard_ui/`) and one JSON API. Source of truth for every fact below: `scripts/atlas_dashboard.py` (HTTP layer, guard, SSE, legacy routes), `scripts/atlas_dash_colony.py` and `scripts/atlas_dash_insights.py` (v2 `ROUTES` tables), `scripts/dashboard_ui/js/` (client).
 
-The old single-file inline-HTML page (`UI_HTML`) no longer exists. The UI is the static bundle under `scripts/dashboard_ui/`, served from `/` and `/ui/*`. See [docs/atlas-workboard.md](../../../../../docs/atlas-workboard.md) for the product overview.
+The old single-file inline-HTML page (`UI_HTML`) no longer exists. The UI is the static bundle under `scripts/dashboard_ui/`, served from `/` and `/ui/*`. See `docs/atlas-workboard.md` in the repository for the product overview.
 
 ## Access
 
