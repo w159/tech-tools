@@ -1,5 +1,27 @@
 # Changelog
 
+## [10.1.2] - 2026-10-06
+
+### Fixed
+- Updating atlas left users on the old dashboard. `ensure_daemon` reused any
+  daemon already bound to the port when its database matched, so a daemon
+  started from an older plugin version (for example `.../atlas/9.7.0/scripts/`)
+  kept serving its own UI after the update. `/api/health` now reports the
+  plugin `version`, and `ensure_daemon` compares it with its own: a daemon that
+  reports no version or an older one is stopped and replaced, while a daemon at
+  the same or a newer version is kept. The comparison is by version, not by
+  script path, because Claude Code, omp and dev checkouts install the plugin at
+  different paths and a path check would have each SessionStart kill the other
+  harness's healthy daemon; keeping a newer daemon stops harnesses on different
+  versions from fighting over the port.
+  To pick this up, update the plugin and restart the session: SessionStart
+  already runs `atlas_dashboard.py ensure` (`ensure_dashboard` in
+  `hooks/session_boot.py`), which replaces the old daemon. Only with
+  `ATLAS_DASHBOARD=off`, where that hook step is skipped, run
+  `python3 <plugin>/scripts/atlas_dashboard.py stop` yourself.
+- `marketplace.json` listed atlas at 10.0.1 while `plugin.json` was 10.1.1;
+  both now say 10.1.2. 10.1.1 has no changelog entry of its own.
+
 ## [10.0.1] - 2026-10-06
 
 ### Breaking

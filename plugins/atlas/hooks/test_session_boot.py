@@ -55,7 +55,8 @@ class MainInProcessTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
         self.db = os.path.join(self.tmp, "atlas.db")
-        self.env = dict(os.environ, ATLAS_DB=self.db)
+        # Never let boot reach the real dashboard daemon (ensure would stop/respawn it).
+        self.env = dict(os.environ, ATLAS_DB=self.db, ATLAS_DASHBOARD="off")
         # Pre-inject mock curator/memory so main()'s import is a no-op and
         # apply_transitions / load_snapshot do not touch the real filesystem.
         self._curator = mock.MagicMock()
@@ -614,7 +615,7 @@ class SubprocessExitCodeTest(unittest.TestCase):
 
     def test_subprocess_valid_payload_exits_zero(self):
         tmp = tempfile.mkdtemp()
-        env = dict(os.environ, ATLAS_DB=os.path.join(tmp, "atlas.db"))
+        env = dict(os.environ, ATLAS_DB=os.path.join(tmp, "atlas.db"), ATLAS_DASHBOARD="off")
         p = subprocess.run(
             [sys.executable, BOOT],
             input=json.dumps({"session_id": "e2e", "cwd": tmp}),
@@ -628,7 +629,7 @@ class SubprocessExitCodeTest(unittest.TestCase):
     def test_subprocess_garbage_stdin_exits_zero(self):
         """Hook must never block boot, even on garbage stdin."""
         tmp = tempfile.mkdtemp()
-        env = dict(os.environ, ATLAS_DB=os.path.join(tmp, "atlas.db"))
+        env = dict(os.environ, ATLAS_DB=os.path.join(tmp, "atlas.db"), ATLAS_DASHBOARD="off")
         p = subprocess.run(
             [sys.executable, BOOT],
             input="<<<not json",

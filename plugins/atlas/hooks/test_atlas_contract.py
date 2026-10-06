@@ -79,7 +79,7 @@ def _run_hook(script: str, payload, cwd=None, db=None, hookstate=None):
     completion_gate.py for that session id in the developer's real
     ~/.atlas/hookstate/, not just in this process.
     """
-    env = dict(os.environ)
+    env = dict(os.environ, ATLAS_DASHBOARD="off")
     if db is not None:
         env["ATLAS_DB"] = str(db)
     state_ctx = (
@@ -1365,6 +1365,7 @@ class QuietTerminalContract(unittest.TestCase):
             ),
             capture_output=True,
             text=True,
+            env=dict(os.environ, ATLAS_DASHBOARD="off"),
         )
         self.assertLess(
             len(r.stdout),
