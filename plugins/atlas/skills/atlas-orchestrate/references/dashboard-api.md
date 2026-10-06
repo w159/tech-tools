@@ -79,7 +79,7 @@ These live in `Handler._legacy_get` / `Handler._legacy_post`, are dispatched **a
 
 | Path | Purpose | Response keys |
 |---|---|---|
-| `/api/health`, `/health` | liveness (no token) | `ok, service, url, pid, db_path, script, time` |
+| `/api/health`, `/health` | liveness (no token) | `ok, service, url, pid, db_path, script, version, time` |
 | `/api/status[?project_id=]` | full snapshot | `snapshot()` payload |
 | `/api/projects` | project list | `ok, projects` |
 | `/api/sessions[?project_id=&limit=]` | sessions across agents (default limit 40) | `ok, sessions` |

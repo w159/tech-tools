@@ -3197,5 +3197,79 @@
     "status": "verified",
     "verifier": "VerifyTierRewrite (fresh, adversarial; real register() harness + omp 18.6.1 dist reducer replay)",
     "evidence": "types.d.ts:888-897 shape matches; reducer: undefined/{} cannot clear model, block wins; omitted-model event carries expanded parent selector -> rewritten for 24 provider/level cases; genuine override blocked; tier lists, non-atlas agents, HARD=off untouched; bun 310 pass. Prose-only defects fixed by FixFallbackProse. Live omp spawn pending reinstall."
+  },
+  {
+    "id": "dashboard-stale-daemon",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "ensure_daemon replaces daemon with missing/older version; keeps newer",
+    "evidence": [
+      ".atlas/evidence/dashboard-health-10.1.2.json; .atlas/evidence/pytest-dashboard-10.1.2.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && python3 -m pytest -q hooks scripts; curl -s http://127.0.0.1:7421/api/health | grep version",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-06T20:19:19+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "dashboard-stale-daemon",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "ensure_daemon replaces daemon with missing/older version; keeps newer",
+    "evidence": [
+      "local://verify-daemon-fix.md (intended .atlas/evidence/verify-daemon-fix.md; verifier Write denied)",
+      "plugins/atlas/scripts/atlas_dashboard.py:1334-1353,2049",
+      "HEAD~1 script vs new tests: 9 failed, 3 passed (stop_daemon called 0 times; KeyError version; no _version_tuple)",
+      "pytest hooks scripts: 2230 passed, 3 skipped; pidfile sha 84192942..1f89 and live pid 82964 unchanged",
+      "real-machine 9.x/10.0.1->10.1.2 upgrade UNVERIFIED"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && python3 -m pytest -q hooks scripts",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-06T20:34:13+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "dashboard-test-ensure-leak",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "hooks tests still run real atlas_dashboard ensure against the live daemon (no ATLAS_DASHBOARD=off)",
+    "evidence": [
+      "hooks/test_session_boot_db.py: 2 ensure calls (+204B real dashboard.log)",
+      "hooks/test_atlas_contract.py incl. test_session_boot_emission_stays_small: 3 ensure calls (+306B)",
+      "local://verify-daemon-fix.md section 4"
+    ],
+    "doc_refs": [],
+    "reproduction": "stat -f %z ~/.atlas/dashboard.log before/after: cd plugins/atlas && python3 -m pytest -q hooks/test_session_boot_db.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "open",
+    "verified_at": "2026-10-06T20:34:13+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "dashboard-test-ensure-leak",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "hook tests ran real atlas_dashboard.py ensure against live port",
+    "evidence": [
+      "fixed in HEAD (ATLAS_DASHBOARD=off in test_session_boot*.py, test_atlas_contract.py); implementer measured 0-byte log growth, pidfile and pid unchanged; no independent verifier re-run"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && python3 -m pytest -q hooks; shasum -a 256 ~/.atlas/dashboard.pid before and after",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-10-06T20:39:33+00:00",
+    "verified_by": "atlas:verifier"
   }
 ]
