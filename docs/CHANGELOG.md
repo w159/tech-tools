@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-10-06 -- atlas 10.1.2: updates no longer leave an old dashboard running
+
+### Fixed
+
+- After updating atlas, a dashboard daemon started by an older plugin version
+  kept serving its old UI on port 7421, because `ensure_daemon` reused any
+  daemon whose database matched. `/api/health` now reports the plugin
+  `version`; `ensure` replaces a daemon whose version is missing or older than
+  its own script's, and keeps a newer one so harnesses on different versions do
+  not restart each other's daemon. Update, then restart the session (SessionStart
+  runs `ensure`). Verified by an independent verifier: `pytest hooks scripts`
+  2230 passed, 0 failed, and the new tests fail against the previous
+  `ensure_daemon`. Not yet observed: a real upgrade from an older install on a
+  user machine.
+
 ## 2026-10-06 -- atlas: Workboard v2 dashboard (static UI, SSE, /api/v2), BREAKING request guard
 
 ### Breaking

@@ -1,0 +1,10 @@
+{
+  "ok": true,
+  "service": "atlas-dashboard",
+  "url": "http://127.0.0.1:7421/",
+  "pid": 82964,
+  "db_path": "/Users/jerry/.atlas/atlas.db",
+  "script": "/Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/scripts/atlas_dashboard.py",
+  "version": "10.1.2",
+  "time": 1791317933.3425238
+}
