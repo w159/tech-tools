@@ -19,7 +19,7 @@ How to dispatch a subagent so it stays small, focused, and returns only what you
 
 Pass paths and goals, not file contents. The subagent's prompt is its entire system prompt; every extra sentence is context it spends before starting.
 
-This shape is enforced, not advised: the dispatch tripwire DENIES an `atlas:*` dispatch whose prompt omits `GOAL:`, `DELIVERABLE:`, `SUCCESS CRITERIA:`, `OUT OF SCOPE:`, or `STOP CONDITIONS:`, and denies one that carries more than a single `GOAL:`. A dispatch with no finish line is the one that runs for an hour; two GOALs in one prompt is a wave crammed into one context instead of delegated.
+This shape is enforced, not advised: the dispatch tripwire DENIES an `atlas:*` dispatch whose prompt omits `GOAL:`, `DELIVERABLE:`, `SUCCESS CRITERIA:`, `OUT OF SCOPE:`, `STOP CONDITIONS:` or `REPORT:`, and denies one that carries more than a single `GOAL:`. A dispatch with no finish line is the one that runs for an hour; two GOALs in one prompt is a wave crammed into one context instead of delegated. The mechanical agent `atlas:runner` additionally requires a numbered `STEPS:` block (see "Mechanical tier" below).
 
 ```
 ROLE: <one line, which specialist this is>
@@ -58,10 +58,18 @@ DELIVERABLE: <exact artifact: a report, a diff, a findings entry path>
 SUCCESS CRITERIA: <bullets, each independently checkable, each with required evidence>
 OUT OF SCOPE: <bullets, what NOT to touch>
 STOP CONDITIONS: <when to halt and report back rather than push through>
-REPORT BACK (final message only): what you did - evidence (file:line / cmd output / screenshot path) -
-  what you did NOT do - what you are uncertain about - proposed next step. Keep it tight, your
-  final message is the only thing the orchestrator reads.
+REPORT: (required, every atlas dispatch) the final message is the fixed container below and nothing else.
+  STATUS: DONE | FAILED | BLOCKED   (first non-empty line; pattern ^STATUS: (DONE|FAILED|BLOCKED)\s*$)
+  STEPS: <done>/<total>
+  FILES_CHANGED: <paths, or none>
+  EVIDENCE: <per step: command - real output>
+  DELIVERABLE: <the artifact named above, or none>
+  NEXT: <exact question for the lead if FAILED/BLOCKED; otherwise none>
 ```
+
+**REPORT: container.** Required in every `atlas:*` dispatch (the tripwire denies one without it; the dispatch must name the fields `STATUS`, `STEPS`, `FILES_CHANGED`, `EVIDENCE`, `DELIVERABLE`, `NEXT`). On Claude Code, `hooks/worker_report_gate.py` (SubagentStop) blocks an `atlas:*` subagent whose final message is not that container, once per agent id; on omp, `omp/worker-report.ts` injects the report `outputSchema` (strict) into atlas task items. Kill switch `ATLAS_GATE_REPORT=off` (also `ATLAS_GATE=off`) for the gate; `ATLAS_WORKER_SCHEMA` for the omp schema injection. Source of truth: `plugins/atlas/contracts/worker-protocol.json`.
+
+**Mechanical tier (`atlas:runner`).** For a task that is fully specified as exact steps, dispatch `atlas:runner` instead of `implementer`: Claude Code `model: haiku`, `effort: low`; on omp the roles `[@atlas-mechanic, @smol]` with thinking off. Limits: at most 7 steps on at most 5 named files. The dispatch carries a numbered `STEPS:` block (denied when missing, unnumbered, or over the cap) in addition to the six blocks above; the runner runs each step as written, records the command and real output, stops with `BLOCKED` on anything unexpected, and posts one board note to the lead when finished. It never dispatches. Source of truth: `plugins/atlas/agents/runner.md` and `plugins/atlas/contracts/worker-protocol.json`.
 
 The spec above is the full form. Its load-bearing core is the **4-part brief**, never dispatch without all four:
 
@@ -95,6 +103,7 @@ Use these by name as `subagent_type`. They already carry the orchestrator's disc
 | Agent | Use for | Model | Effort | Writes? |
 |---|---|---|---|---|
 | `atlas:explorer` | map a feature/module, find owners, trace a call path | sonnet | low | no |
+| `atlas:runner` | mechanical edits/commands from <=7 exact numbered STEPS on <=5 files; no decisions (`STEPS:` required) | haiku | low | yes (only the named files) |
 | `atlas:implementer` | make one bounded change correctly, run the local gate | sonnet | low | yes |
 | `atlas:verifier` | adversarially confirm a finding/fix in a fresh context | sonnet | medium | no |
 | `atlas:db-prober` | read-only schema / RLS / grants / indexes / EXPLAIN | sonnet | low | no |
@@ -127,7 +136,7 @@ Route by whether the dispatch's value comes from everything already said this se
 `effort: low` do NOT apply - a fork off an opus orchestrator runs on opus. Fork only when inheriting
 this session's history is the point; otherwise dispatch fresh and let the agent's own tier hold.
 
-**Caution:** a fork inherits the orchestrator's assumptions verbatim, unexamined. Anything that needs independent judgment - a verifier, a second opinion, any check that must not be contaminated by what the orchestrator already believes - must not fork.
+**Caution:** a fork inherits the orchestrator's assumptions verbatim, unexamined. Anything that needs independent judgment - a verifier, a second opinion, any check that must not be contaminated by what the orchestrator already believes - must not fork. "Never fork verifier or explorer" is guidance (convention only, not enforced: no hook denies `subagent_type: fork` for them).
 
 ## Structured output (define the shape, every time)
 
@@ -164,6 +173,10 @@ before starting, so two agents never build the same thing:
   different open item or stop and report.
 - `--force` steals a stale claim (30 min idle). Never force-steal a live agent's item.
 - Done: `complete --id <id> --evidence "<command + output, or file:line>"`.
+- Add an item from the CLI: `atlas_todo.py add [--unique] --session <session_id> "<text>"`.
+  `--unique` makes the add idempotent per (session, exact content) across every
+  status and archived items: a repeat returns `{"ok": true, "duplicate": true,
+  "item": <existing>}` and appends nothing (use it for imports that can replay).
 - Post a durable note instead of holding state in chat:
   `atlas_todo.py note --owner <agent-name> [--to <owner|all>] [--item <id>] "<text>"`,
   and read what others left with `atlas_todo.py notes`.
@@ -185,12 +198,13 @@ subagent, so atlas workers must stay nameless to keep their definition's
 effort/model tier and guardrails.
 
 - Siblings message each other, not just the lead. Before touching a file a
-  sibling may own, or when blocked on a sibling's output, `SendMessage` that
-  sibling by roster name - one exchange, then move on; never wait twice on the
+  sibling may own, or when blocked on a sibling's output, message that
+  sibling by roster name (Claude Code: `SendMessage`; on omp: `write` to
+  `agent://<name>`) - one exchange, then move on; never wait twice on the
   same sibling.
 - Quick coordination goes by `SendMessage`; durable state goes on the board:
     python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py" note --owner <name> [--to <name|all>] [--item <id>] "<text>"
-- The sibling roster is a snapshot taken when you start: a sibling spawned after
+- The sibling roster is a snapshot taken when you start [harness fact, unverified here]: a sibling spawned after
   you is not on it. Missing an expected sibling -> read `atlas_todo.py notes`
   and address it with `note --to <name>` instead.
 - Touch the board only through `atlas_todo.py`. Never edit `todos.json` or
@@ -200,9 +214,10 @@ effort/model tier and guardrails.
 
 ## Colony mux mode (opt-in, tmux)
 
-`ATLAS_MUX=tmux` runs each worker as its own headless process in a window of one
-tmux session `atlas-<run>`, instead of an in-process subagent. The default
-(in-process named dispatch + board) is unchanged. Use it when workers must run
+`ATLAS_MUX=tmux` only unlocks `atlas_mux.py spawn`: the lead must run that command
+per worker to get its own headless process in a window of one tmux session
+`atlas-<run>`. Dispatches via Agent/task are never rerouted to mux. The default
+(in-process named dispatch + board) is unchanged. Use mux when workers must run
 fully independently (separate processes, watchable panes) at their own tiers.
 
     python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_mux.py" spawn --run <id> --harness claude|omp \

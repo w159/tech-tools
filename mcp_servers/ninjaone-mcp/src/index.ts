@@ -47,7 +47,7 @@ import {
 } from "./utils/client.js";
 import { logger } from "./utils/logger.js";
 import { setServerRef } from "./utils/server-ref.js";
-import { missingCredsError } from "../../_shared/error-envelope.js";
+import { describeUnconfigured } from "./status.js";
 import { describeBaseUrl } from "../../_shared/base-url.js";
 import { registerPromptHandlers } from "./prompts.js";
 import { annotate } from "./annotate-tool.js";
@@ -218,13 +218,7 @@ async function navigate(args: ToolArgs): Promise<CallToolResult> {
 
 async function status(): Promise<CallToolResult> {
   const creds = getCredentials();
-  if (!creds) {
-    const missing = missingCredsError("NinjaOne", ["NINJAONE_CLIENT_ID", "NINJAONE_CLIENT_SECRET"]);
-    return {
-      ...missing,
-      content: [...missing.content, { type: "text", text: "Auth check: SKIPPED (no credentials)" }],
-    };
-  }
+  if (!creds) return describeUnconfigured(getAvailableDomains());
 
   const urlDesc = describeBaseUrl("ninjaone", process.env.NINJAONE_BASE_URL, "NINJAONE_BASE_URL");
   const credStatus = `Configured (region: ${creds.region}, base URL: ${urlDesc}, auth: ${creds.authMode})`;
@@ -331,15 +325,26 @@ function dispatchTool(name: string, args: ToolArgs): Promise<CallToolResult> {
   return handler ? handler(args) : routeDomainTool(name, args ?? {});
 }
 
+type HttpStatus = number | string;
+
 /** Operator hint for an API failure, keyed on the HTTP status. */
-function errorHint(status: unknown): string {
+function errorHint(status: HttpStatus): string {
   if (status === 401 || status === 403) return "Verify NINJAONE_CLIENT_ID, NINJAONE_CLIENT_SECRET, and NINJAONE_REGION are correct.";
   if (status === 429) return "NinjaOne API rate limit hit. Wait before retrying.";
   return "Check that NINJAONE_CLIENT_ID and NINJAONE_CLIENT_SECRET are set. Verify NINJAONE_REGION (us, eu, oc, ca, us2, fed).";
 }
 
-function errorStatus(error: any): unknown {
-  return [error?.status, error?.statusCode, error?.response?.status, ''].find((v) => v != null);
+/** HTTP status from `status`, `statusCode` or `response.status`; empty string when absent. */
+function errorStatus(error: unknown): HttpStatus {
+  const err = (typeof error === "object" && error !== null ? error : {}) as {
+    status?: unknown;
+    statusCode?: unknown;
+    response?: { status?: unknown } | null;
+  };
+  const found = [err.status, err.statusCode, err.response?.status].find(
+    (v): v is HttpStatus => typeof v === "number" || typeof v === "string",
+  );
+  return found ?? "";
 }
 
 function toolFailure(name: string, error: unknown): CallToolResult {
@@ -371,7 +376,7 @@ async function callTool(
 
   try {
     return await dispatchTool(name, args);
-  } catch (error: any) {
+  } catch (error) {
     return toolFailure(name, error);
   } finally {
     if (credentialOverrides) {

@@ -16,7 +16,14 @@ Item shape:
   {"id": "tab12cd34", "content": str, "status": pending|in_progress|completed,
    "owner": str|None, "claimed_at": float|None, "origin": session|carried|manual,
    "session_id": str|None, "created_at": float, "updated_at": float,
-   "evidence": str|None, "completed_at": float|None, "archived": bool}
+   "evidence": str|None, "completed_at": float|None, "archived": bool,
+   "phase": <one of contracts/operating-contract.json todoPhases>}
+
+`phase` is optional and present only when valid: an item whose phase is unknown
+or unset simply has no `phase` key (never null, never an error). It comes from
+an explicit `phase` field or, failing that, the content prefix `[<phase>] `
+(for example `[verify] run the suites`), which is how Claude TodoWrite items
+carry it.
 
 Origin semantics:
   session  -- written by (or mirrored from) the orchestrating session; a TodoWrite
@@ -47,6 +54,50 @@ ORIGINS = ("session", "carried", "manual")
 BOARD_DIR = ".atlas/.run"
 BOARD_NAME = "todos.json"
 _CLAIM_STALE_S = 30 * 60  # a claim older than this can be taken over
+CONTRACT_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "..",
+    "contracts",
+    "operating-contract.json",
+)
+_PHASE_PREFIX = re.compile(r"^\[([A-Za-z]+)\]\s")
+_todo_phases_cache: Optional[tuple] = None
+
+
+def todo_phases() -> tuple:
+    """The phase ids an item may carry: contracts/operating-contract.json
+    `todoPhases`, in contract order. An unreadable or malformed contract yields
+    () so no item gets a phase (fail open: phases are presentation)."""
+    global _todo_phases_cache
+    if _todo_phases_cache is None:
+        try:
+            with open(CONTRACT_PATH, "r", encoding="utf-8") as fh:
+                raw = json.load(fh).get("todoPhases")
+            ok = isinstance(raw, list) and all(isinstance(p, str) for p in raw)
+            _todo_phases_cache = tuple(raw) if ok else ()
+        except (OSError, ValueError, AttributeError):
+            _todo_phases_cache = ()
+    return _todo_phases_cache
+
+
+def _norm_phase(phase: Any) -> Optional[str]:
+    """`phase` as a contract phase id, else None (unknown is absent, not an error)."""
+    if not isinstance(phase, str):
+        return None
+    p = phase.strip().lower()
+    return p if p in todo_phases() else None
+
+
+def _entry_phase(entry: Any) -> Optional[str]:
+    """Phase of one imported todo entry: its explicit `phase` key when that is a
+    contract phase, else the `[<phase>] ` prefix of its content, else None."""
+    if not isinstance(entry, dict):
+        return None
+    explicit = _norm_phase(entry.get("phase"))
+    if explicit:
+        return explicit
+    m = _PHASE_PREFIX.match(str(entry.get("content") or "").strip())
+    return _norm_phase(m.group(1)) if m else None
 
 
 # --- root + path ---------------------------------------------------------------
@@ -69,7 +120,7 @@ def _worktree_main_root(worktree: str) -> Optional[str]:
     for line in content.splitlines():
         stripped = line.strip()
         if stripped.startswith("gitdir:"):
-            git_dir = stripped[len("gitdir:"):].strip()
+            git_dir = stripped[len("gitdir:") :].strip()
             break
     if not git_dir:
         return None
@@ -179,7 +230,12 @@ def _locked_load(root: Optional[str]) -> dict:
     moved = _quarantine_corrupt(root)
     if moved:
         try:
-            note(root, "board", f"todos.json was corrupt; preserved as {moved}; board reset", to="all")
+            note(
+                root,
+                "board",
+                f"todos.json was corrupt; preserved as {moved}; board reset",
+                to="all",
+            )
         except OSError:
             pass  # best-effort record; the archived file is the real safety
     return board
@@ -309,6 +365,9 @@ def mirror(
                 "completed_at": prior.get("completed_at") if prior else None,
                 "archived": False,
             }
+            phase = _entry_phase(entry)
+            if phase:
+                item["phase"] = phase
             fresh.append(item)
         board["items"] = manual + others + fresh
         board["last_session_id"] = session_id
@@ -322,12 +381,29 @@ def add(
     session_id: Optional[str] = None,
     origin: str = "manual",
     status: str = "pending",
+    unique: bool = False,
+    phase: Optional[str] = None,
 ) -> dict:
     content = (content or "").strip()
     if not content:
         return {"ok": False, "error": "content_required"}
     with _file_lock(board_path(root)):
         board = _locked_load(root)
+        if unique:
+            # Idempotent add: one item per (session, exact content) whatever its
+            # status or archived flag. Replayed advisor notes (omp re-sends the
+            # whole history after a restart) must not re-open a closed item.
+            for existing in board["items"]:
+                if (
+                    existing.get("session_id") == session_id
+                    and existing.get("content") == content
+                ):
+                    return {
+                        "ok": True,
+                        "duplicate": True,
+                        "item": existing,
+                        "counts": counts(board, session_id),
+                    }
         item = {
             "id": _new_id(),
             "content": content,
@@ -342,9 +418,59 @@ def add(
             "completed_at": None,
             "archived": False,
         }
+        norm = _norm_phase(phase)
+        if norm:
+            item["phase"] = norm
         board["items"].append(item)
         save(root, board)
         return {"ok": True, "item": item, "counts": counts(board, session_id)}
+
+
+def scaffold(
+    root: Optional[str],
+    task: str,
+    session_id: Optional[str] = None,
+    phases: Optional[List[str]] = None,
+    origin: str = "session",
+) -> dict:
+    """Add one `[<phase>] <task>` item per phase (default: every contract
+    todoPhase, in contract order) so a plan is phased from its first turn.
+
+    Idempotent per (session, content): each item goes through add(unique=True),
+    so a second run adds nothing and never reopens a closed item. Phase ids that
+    are not contract phases are skipped, not errors. Returns the items (new or
+    existing) in phase order plus how many were created."""
+    task = (task or "").strip()
+    if not task:
+        return {"ok": False, "error": "task_required"}
+    wanted = list(todo_phases()) if phases is None else phases
+    chosen: List[str] = []
+    for raw in wanted:
+        p = _norm_phase(raw)
+        if p and p not in chosen:
+            chosen.append(p)
+    items: List[dict] = []
+    created = 0
+    for p in chosen:
+        res = add(
+            root,
+            f"[{p}] {task}",
+            session_id=session_id,
+            origin=origin,
+            unique=True,
+            phase=p,
+        )
+        if not res.get("ok"):
+            return res
+        if not res.get("duplicate"):
+            created += 1
+        items.append(res["item"])
+    return {
+        "ok": True,
+        "created": created,
+        "items": items,
+        "counts": counts(load(root), session_id),
+    }
 
 
 def _find(board: dict, item_id: str) -> Optional[dict]:
@@ -503,7 +629,11 @@ def _sanitize_owner(owner: Any) -> str:
 
 
 def note(
-    root: Optional[str], owner: Any, text: str, to: str = "all", item: Optional[str] = None
+    root: Optional[str],
+    owner: Any,
+    text: str,
+    to: str = "all",
+    item: Optional[str] = None,
 ) -> dict:
     """Append one note to `<root>/.atlas/.run/board/<owner>.jsonl`.
 
@@ -513,7 +643,13 @@ def note(
     name = _sanitize_owner(owner)
     target = notes_dir(root)
     target.mkdir(parents=True, exist_ok=True)
-    record = {"ts": time.time(), "owner": name, "to": to, "item": item, "text": str(text or "")}
+    record = {
+        "ts": time.time(),
+        "owner": name,
+        "to": to,
+        "item": item,
+        "text": str(text or ""),
+    }
     line = (json.dumps(record, separators=(",", ":")) + "\n").encode("utf-8")
     fd = os.open(
         str(target / f"{name}{NOTE_FILE_SUFFIX}"),
@@ -550,7 +686,11 @@ def notes(
                         continue
                     if not isinstance(rec, dict):
                         continue
-                    if to is not None and rec.get("to") != to and rec.get("to") != "all":
+                    if (
+                        to is not None
+                        and rec.get("to") != to
+                        and rec.get("to") != "all"
+                    ):
                         continue
                     if since is not None and _note_ts_key(rec) < since:
                         continue
@@ -588,11 +728,14 @@ def _cli(argv: Optional[List[str]] = None) -> int:
             or a == "--to"
             or a == "--item"
             or a == "--since"
+            or a == "--phase"
+            or a == "--phases"
+            or a == "--task"
         ):
             flags[a[2:]] = args[i + 1] if i + 1 < len(args) else ""
             i += 2
-        elif a == "--force":
-            flags["force"] = "1"
+        elif a == "--force" or a == "--unique":
+            flags[a[2:]] = "1"
             i += 1
         else:
             positional.append(a)
@@ -620,6 +763,20 @@ def _cli(argv: Optional[List[str]] = None) -> int:
                 root,
                 positional[1] if len(positional) > 1 else "",
                 session_id=flags.get("session"),
+                unique=bool(flags.get("unique")),
+                phase=flags.get("phase"),
+            )
+        elif cmd == "scaffold":
+            phases_raw = flags.get("phases")
+            out = scaffold(
+                root,
+                flags.get("task", ""),
+                session_id=flags.get("session"),
+                phases=(
+                    [p for p in phases_raw.split(",") if p.strip()]
+                    if phases_raw is not None
+                    else None
+                ),
             )
         elif cmd == "claim":
             out = claim(

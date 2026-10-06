@@ -505,15 +505,16 @@ class TestToolNameHygiene(unittest.TestCase):
         )
 
     def test_read_only_agents_deny_write_edit(self):
-        writable = {"docs-curator.md", "implementer.md"}
+        writable = {"docs-curator.md", "implementer.md", "runner.md"}
         missing = []
         for path in sorted((PLUGIN_ROOT / "agents").glob("*.md")):
             if path.name in writable:
                 continue
             fm = _frontmatter_fields(path.read_text(encoding="utf-8"))
-            declared = fm.get("disallowedTools", "")
+            raw = fm.get("disallowedTools", "").strip().strip("[]")
+            denied = {n.strip() for n in raw.split(",") if n.strip()}
             for tool in ("Write", "Edit"):
-                if tool not in declared:
+                if tool not in denied:
                     missing.append(f"{path.name}->{tool}")
         self.assertEqual(
             [],

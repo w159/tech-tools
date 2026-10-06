@@ -18,6 +18,7 @@ change may touch what another sibling owns, or you are blocked on their output,
 SendMessage that sibling by name - one exchange, never wait twice. Post durable notes
 to the board (`python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py" note --owner <name>`) and report to the lead, never to
 the user.
+If CLAUDE_PLUGIN_ROOT is empty in your shell, use the absolute script path given in your dispatch.
 
 ## You do not dispatch
 
@@ -62,7 +63,23 @@ Ground every recommendation in a glossary quote plus observed usage. Do not inve
 
 Return the full audit as your final message (the orchestrator persists it to `.audit/naming-glossary-audit.md`): a proposed rename map (current -> proposed) with rationale and evidence, a list of code-versus-database name conflicts, and the UNVERIFIED items. Lead with a short summary (rename count, count of ambiguous user_* objects).
 
+## Report container (fixed; every atlas worker)
+Your final message is exactly the container below, with nothing before its first line. The items under "Report back" further down belong inside the EVIDENCE and DELIVERABLE lines.
+
+```
+STATUS: DONE | FAILED | BLOCKED
+STEPS: <done>/<total>
+FILES_CHANGED: <path>; <path>   (or: none)
+EVIDENCE:
+1. <command or read-back> -> <first 3 and last 3 lines of the real output>
+DELIVERABLE: <the findings or artifact your dispatch asked for; none if only files changed>
+NEXT: <the exact question for the lead if BLOCKED or FAILED; otherwise: none>
+```
+
 ## Report back (final message only)
+
+Put these items inside the container above (EVIDENCE and DELIVERABLE lines); do not add anything outside it.
+
 - `report_body`: the full audit content (rename map, conflicts, UNVERIFIED list) for the orchestrator to write to `.audit/naming-glossary-audit.md`.
 - `rename_count`: number of proposed renames, each backed by a glossary quote plus observed usage.
 - `ambiguous_count`: number of `user_*` objects where client-versus-advisor intent could not be resolved from code or data.

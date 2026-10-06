@@ -29,7 +29,7 @@
 //     driven through every domain its navigate tool advertises; `tools/list` is
 //     re-issued after each and the results are unioned. `blumira_navigate` swaps
 //     the listed surface rather than adding to it, so without the union a bare
-//     `tools/list` sees 2 of 32 tools.
+//     `tools/list` sees 2 of 31 tools.
 //   - A Python connector (falcon) is spawned exactly the way plugins/atlas/.mcp.json
 //     spawns it (`uv run --project ... python mcp/_env/load.py <module>`), not as
 //     `node server.mjs`. It registers its domain modules only after a successful
@@ -74,10 +74,12 @@ const CALL_TIMEOUT_MS = 10_000;
 const CONNECTORS = {
   auvik: { floor: 39 },
   blumira: {
-    // 2 navigation tools + blumira_back + the five domains' tools, unioned. A bare
-    // `tools/list` shows 2: blumira_navigate swaps the listed surface per domain,
-    // so the harness navigates all five and unions (see navigate expansion below).
-    floor: 32,
+    // blumira_navigate + blumira_status + the five domains' tools (29), unioned = 31.
+    // blumira_back is defined in src/domains/navigation.ts but never registered by
+    // server.ts, so it is not part of the shipped surface. A bare `tools/list` shows
+    // 2: blumira_navigate swaps the listed surface per domain, so the harness
+    // navigates all five and unions (see navigate expansion below).
+    floor: 31,
   },
   cipp: { floor: 43 },
   connectwise: { floor: 52 },

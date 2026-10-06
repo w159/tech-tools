@@ -58,6 +58,42 @@ test("subagent sessions and blank session ids never begin a run", async () => {
 	expect(calls.map(sub)).toEqual(["begin", "snapshot"]);
 });
 
+test("begin is invoked again on a later turn after a Stop finalized the run; session start stays once", async () => {
+	const { s, calls, flush } = sink();
+	const turn = { cwd: "/p", sessionId: "s-1", kind: "main" };
+	s.onSessionStart(turn);
+	await flush();
+	s.onTurnStart(turn); // turn 1
+	await flush();
+	expect(calls.map(sub)).toEqual(["begin", "snapshot", "begin"]);
+	// Stop finalizes the run (hooks/completion_gate.py finalize_run); the resumed session never fires session_start again,
+	// so the next turn's begin is what reopens the run. No snapshot rides along.
+	s.onSessionStart(turn);
+	s.onTurnStart(turn); // turn 2, after the stop
+	await flush();
+	expect(calls.map(sub)).toEqual(["begin", "snapshot", "begin", "begin"]);
+	expect(calls[3]).toEqual(["python3", script, "begin", "--session-id", "s-1", "--cwd", "/p"]);
+});
+
+test("a turn start begins even without a prior session start (resumed session)", async () => {
+	const { s, calls, flush } = sink();
+	s.onTurnStart({ cwd: "/p", sessionId: "s-r", kind: "main" });
+	await flush();
+	expect(calls.map(sub)).toEqual(["begin"]);
+});
+
+test("subagent turns, blank session ids and a missing CLI never begin on a turn", async () => {
+	const { s, calls, flush } = sink();
+	s.onTurnStart({ cwd: "/p", sessionId: "agent-1", kind: "sub" });
+	s.onTurnStart({ cwd: "/p", sessionId: "", kind: "main" });
+	await flush();
+	expect(calls).toEqual([]);
+	const missing = sink({ script: join(dir, "absent.py") });
+	missing.s.onTurnStart({ cwd: "/p", sessionId: "s-1", kind: "main" });
+	await missing.flush();
+	expect(missing.calls).toEqual([]);
+});
+
 test("an allowed task dispatch arms with the first agent and detects isolation", async () => {
 	const { s, calls, flush } = sink();
 	s.onToolAllowed(info({ input: { tasks: [{ agent: "implementer", name: "A", isolated: true }, { agent: "explorer" }] } }));
@@ -129,6 +165,45 @@ test("a throwing runner is swallowed and the chain stops without throwing into t
 	expect(() => s.onToolResult(info({ toolName: "edit", input: { path: "a.ts" } }))).not.toThrow();
 	await flush();
 	expect(seen).toEqual(["begin", "event"]); // begin failed so snapshot was skipped; the edit event still ran
+});
+
+// Race: session_start and the first before_agent_start both fire `begin`. Run as independent chains they became two
+// concurrent python processes and the check-then-insert in cmd_begin could open two runs for one session.
+test("two begins fired in the same tick run strictly one after the other, even if the first fails", async () => {
+	const events: string[] = [];
+	const gates: PromiseWithResolvers<void>[] = [];
+	const started: PromiseWithResolvers<void>[] = [Promise.withResolvers<void>(), Promise.withResolvers<void>()];
+	let active = 0;
+	let maxActive = 0;
+	const { s, flush } = sink({
+		run: async argv => {
+			const n = gates.length;
+			const gate = Promise.withResolvers<void>();
+			gates.push(gate);
+			events.push(`start ${argv[2]}#${n}`);
+			active++;
+			maxActive = Math.max(maxActive, active);
+			started[n]?.resolve();
+			try {
+				await gate.promise;
+			} finally {
+				active--;
+				events.push(`end ${argv[2]}#${n}`);
+			}
+		},
+	});
+	const ctx = { cwd: "/p", sessionId: "s-1", kind: "main" };
+	s.onSessionStart(ctx); // begin (then snapshot)
+	s.onTurnStart(ctx); // begin, same tick
+	await started[0].promise;
+	expect(events).toEqual(["start begin#0"]); // the second begin is queued behind the first, not spawned alongside it
+	gates[0].reject(new Error("first begin failed")); // its snapshot is skipped, but the tail must keep going
+	await started[1].promise;
+	expect(events).toEqual(["start begin#0", "end begin#0", "start begin#1"]);
+	gates[1].resolve();
+	await flush();
+	expect(events).toEqual(["start begin#0", "end begin#0", "start begin#1", "end begin#1"]);
+	expect(maxActive).toBe(1);
 });
 
 test("a really broken python CLI is fail-open and fast through the real runner", async () => {

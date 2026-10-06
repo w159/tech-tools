@@ -1,5 +1,39 @@
 # Changelog
 
+## 2026-10-06 -- atlas: minimal-task worker tier, deterministic reports, header/phase/colony gates
+
+- New `atlas:runner` agent and `contracts/worker-protocol.json`: singular,
+  step-driven tasks for cheap low-effort models; every dispatch requires a
+  `REPORT:` container; SubagentStop `worker_report_gate.py` and omp
+  `worker-report.ts` enforce it. `completion_gate` gains (n)(o)(p); omp gains
+  an agent tool guard; footprint arming; connector status tools work without
+  credentials. Docs audited claim-by-claim and corrected (see
+  `plugins/atlas/CHANGELOG.md` [Unreleased]).
+- omp now calls `omp_runstate.py begin` on every main-session turn
+  (`before_agent_start`), so a session that continues after a Stop gets a new
+  open run and the DB gates (`dispatch_tripwire` `current_run_id`) keep firing;
+  calls are serialized on one promise tail.
+
+## 2026-10-06 -- advisor board import is idempotent
+
+- omp replays the whole message history into the advisor gate's `context`
+  handler on restart/resume, and the in-memory dedupe was lost, so each replay
+  re-added every note as a new pending board item (126 items for ~60 notes).
+- `atlas_todo.py add --unique` returns the existing item (`duplicate: true`)
+  for the same session and exact content in any status; the gate now uses it.
+- The omp recall gate persisted nothing, so resuming a session re-armed it and
+  forced a second claude-mem recall. `omp/mandates.ts` now shares the Python
+  gate's per-session marker (same directory, filename scheme, `O_EXCL` create);
+  the same session id stays satisfied after `session_start`/`session_switch`,
+  a new id must still recall, and no session id or an fs error fails open to
+  the in-memory gate.
+- omp model-override guard: on a marketplace install the pinned colony agents
+  are not discovered, so omp resolves the child to the parent's live model and
+  the `before_subagent_spawn` handler denied every atlas dispatch as an
+  override (`overrides model with 'anthropic/claude-sonnet-5-5:low'`). A
+  selector equal to `ctx.model` (`provider/id`, optionally one thinking-level
+  suffix) is now no override; other concrete selectors still deny.
+
 ## 2026-10-05 -- atlas 9.5.1: IRC no longer denied by the delegation gates; IRC mirrored to the project board; stale plugin root
 
 - `write agent://<name>` (IRC) and `write xd://...` reach the hooks as a `Write`

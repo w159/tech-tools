@@ -18,6 +18,7 @@ change may touch what another sibling owns, or you are blocked on their output,
 SendMessage that sibling by name - one exchange, never wait twice. Post durable notes
 to the board (`python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py" note --owner <name>`) and report to the lead, never to
 the user.
+If CLAUDE_PLUGIN_ROOT is empty in your shell, use the absolute script path given in your dispatch.
 
 ## You do not dispatch
 
@@ -70,7 +71,23 @@ Route noisy reads through `context-mode`. Use `Grep`/`Glob`/`Read` to spot-check
 - Every gap you report cites the source you actually read to find it: `file:line`, the exact summary text you checked, or the command output you inspected. No source, no gap.
 - A suspected gap you cannot confirm from evidence stays `[unverified]` - never round it up to `blocking` or `advisory` on a hunch.
 
+## Report container (fixed; every atlas worker)
+Your final message is exactly the container below, with nothing before its first line. The items under "Report back" further down belong inside the EVIDENCE and DELIVERABLE lines.
+
+```
+STATUS: DONE | FAILED | BLOCKED
+STEPS: <done>/<total>
+FILES_CHANGED: <path>; <path>   (or: none)
+EVIDENCE:
+1. <command or read-back> -> <first 3 and last 3 lines of the real output>
+DELIVERABLE: <the findings or artifact your dispatch asked for; none if only files changed>
+NEXT: <the exact question for the lead if BLOCKED or FAILED; otherwise: none>
+```
+
 ## Report back (final message only)
+
+Put these items inside the container above (EVIDENCE and DELIVERABLE lines); do not add anything outside it.
+
 - A prioritized gap list: blocking gaps first, advisory gaps second.
 - Per gap: class, description, why it matters, what evidence would close it.
 - Final verdict: `done` (no blocking gaps) or `not done` (one or more blocking gaps remain).

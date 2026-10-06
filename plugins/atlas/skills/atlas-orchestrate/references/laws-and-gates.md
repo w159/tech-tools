@@ -7,7 +7,7 @@ Laws, decision gate, visible plan, steering
 ## The laws (procedural - each has a threshold and a counter)
 
 1. **Delegate all execution.** Discovery, every code edit, all bulk testing, and durable docs/ writes go to subagents. You write only ephemeral orchestration artifacts (see above). There is no "apply a quick fix yourself" path.
-2. **One message, many agents.** Independent stages MUST dispatch in a *single* message so they run concurrently (~4-6 in flight) - this is the default, not an optimization. Sequential, one-per-message dispatch is reserved for a *real* data/ordering dependency (a stage genuinely needs an earlier stage's output); manufacturing that dependency to avoid fan-out is a violation. **Writers never share a tree:** when a wave contains more than one agent that will WRITE (implementers, docs writers), every writer in that wave gets the dispatch-time `isolation: "worktree"` option, or the writers are serialized - no third option, and "they touch different files" is not an exemption (imports, generated files, and lockfiles collide anyway). Read-only agents fan out freely without isolation. As each returns, verify before spawning its dependents (see law 5 and the per-stage gate in step 3).
+2. **One message, many agents.** Independent stages MUST dispatch in a *single* message so they run concurrently (~4-6 in flight) - this is the default, not an optimization. Sequential, one-per-message dispatch is reserved for a *real* data/ordering dependency (a stage genuinely needs an earlier stage's output); manufacturing that dependency to avoid fan-out is a violation. **Writers never share a tree:** when a wave contains more than one agent that will WRITE (implementers, docs writers), every writer in that wave gets the dispatch-time `isolation: "worktree"` option, or the writers are serialized (lead discipline: atlas only records isolation and checks close-out via gate (j); nothing denies a multi-writer wave without it) - no third option, and "they touch different files" is not an exemption (imports, generated files, and lockfiles collide anyway). Read-only agents fan out freely without isolation. As each returns, verify before spawning its dependents (see law 5 and the per-stage gate in step 3).
 3. **Evidence is correct observed behavior on the failing case, not mere occurrence.** Reproduce the **red state first** (the actual failing input/customer/row - for a "some X fail" bug, more than one case), then show that *same* case green after. A `file:line`, a diff, "a command ran," or "a file downloaded" proves *occurrence*, not *correctness* - capture the before->after that proves the originally-failing case is now right. **For new behavior with no prior bug, the red state is the requirement unmet:** exercise the exact spec'd condition and show *both* the positive and the **negative** case (e.g. an active filter exports only matching rows *and* excludes the rest) - "it downloaded" is not proof of "the *filtered* view."
 4. **Docs before edits.** Before any subagent asserts how a library/framework/SDK behaves or edits against its API, it pulls version-correct docs via `context7` (Microsoft -> `microsoft-docs`; OpenAI/Anthropic SDKs -> their skills) and cites the snippet.
 5. **A different agent verifies with independent judgment.** Every change that will ship is confirmed by a *separate* `atlas:verifier` (or specialist) in a *fresh* context. Independence of *identity* is not enough - independence of *judgment* is required: give the verifier the **user's original symptom verbatim** (never your narrowed restatement - "some customers," not "customer #4012"), not the author's command or the expected answer, and have it **derive its own check** and **reproduce the original failing case**. A verifier you primed with "confirm it works," or handed the author's exact happy-path command, is a rubber stamp. The author never grades its own work, and *you* never grade it either. **A model that would skip verification will also pass its own introspection - so verification is never self-attested.** No "consequential enough" threshold - if it ships, it gets an independent verifier.
@@ -25,9 +25,14 @@ Answer three yes/no questions before any other action:
 If ANY is yes: your first move is to author a Workflow (see
 `references/workflow-template.md`) OR dispatch a parallel wave in ONE message.
 You may NOT proceed inline. This is a checklist, not a judgment call - the
-`dispatch_tripwire.py` hook advises at 4 inline ops and, in orchestration
-sessions, DENIES the call outright at 8 inline ops or on any `Edit`/`Write`/
-`Edit`/`Write`/`NotebookEdit` to non-docs paths (escape: `ATLAS_TRIPWIRE_HARD=off`), regardless.
+`dispatch_tripwire.py` hook advises at 4 inline ops (`ATLAS_TRIPWIRE_THRESHOLD`) and, in orchestration
+sessions, DENIES the 7th unsanctioned inline op since the last dispatch, or any `Edit`/`Write`/
+`NotebookEdit` to non-docs paths (escape: `ATLAS_TRIPWIRE_HARD=off`), regardless. `docs/` and `.atlas/`
+writes and URI writes (`agent://`, `xd://`) are not counted.
+
+An unflagged session is armed from its footprint: once the main thread has edited 3 distinct code
+files in a run (`ATLAS_FOOTPRINT_FILES`, 0 disables; docs, `.atlas/`, URI and temp writes exempt)
+the tripwires arm and the lead is told once.
 
 If ALL are no (a single trivial single-surface change): inline is allowed, but the
 first investigative read still goes to `atlas:explorer` if it would exceed a glance.
@@ -68,3 +73,16 @@ If the message is genuinely ambiguous between "correction" and "new scope", that
 a decision, and decisions go to `AskUserQuestion` - not to a guess.
 
 
+## Completion gate: contract-visibility conditions (n), (o), (p)
+
+The `completion_gate.py` Stop hook (full list in `references/hooks-automation.md`) also checks three conditions on how the run is presented. Each applies to orchestrating sessions only, fails open, and blocks at most once per session:
+
+- **(n) Status header.** The final reply starts, on its first non-empty line, with the header matching `headerFirstLinePattern` in `contracts/operating-contract.json` (`ATLAS | <glyph> <phase> | <state>`). Kill switch `ATLAS_GATE_HEADER=off`.
+- **(o) Phased todo.** When this run shipped non-docs code, the session's todo/board items cover every phase in `requiredTodoPhasesWhenCodeShipped` (`implement`, `verify`); an item's phase is its `phase` field or a `[<phase>] ` content prefix. Kill switch `ATLAS_GATE_PHASES=off`.
+- **(p) Colony channel.** When this run dispatched two or more atlas workers, the channel shows use: a board note by an owner other than `lead`, or IRC/SendMessage traffic. Kill switch `ATLAS_GATE_COLONY=off`.
+
+Related switches: `ATLAS_GATE=off` disables the whole gate; `ATLAS_GATE_REPORT=off` disables the `worker_report_gate.py` SubagentStop check that every `atlas:*` worker's final message is the `REPORT:` container.
+
+## omp agent guard
+
+On omp, `omp/agent-guard.ts` blocks a subagent's file-editing tools when the matching Claude tool is in that agent's `disallowedTools` (read from `agents/<name>.md`; mapping in `contracts/tool-names.json` -> `agentGuard`). `write` is blocked only for non-`scheme://` paths, so `xd://`, `agent://` and `local://` writes still work. **Writes made through the `bash` tool (`sed -i`, `tee`, `>` redirects) are NOT covered**: omp has no per-agent shell policy, so the guard narrows the file-editing tools and is not a sandbox. It never blocks the lead; `ATLAS_TRIPWIRE_HARD=off` disables it.

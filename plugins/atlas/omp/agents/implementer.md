@@ -21,6 +21,7 @@ change may touch what another sibling owns, or you are blocked on their output,
 SendMessage that sibling by name - one exchange, never wait twice. Post durable notes
 to the board (`python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py" note --owner <name>`) and report to the lead, never to
 the user.
+If CLAUDE_PLUGIN_ROOT is empty in your shell, use the absolute script path given in your dispatch.
 
 ## You do not dispatch
 
@@ -74,7 +75,23 @@ Serena is for **code symbols**. For prose, markdown, JSON, and config, `ctx_read
 - Make only the assigned change. If you discover a necessary adjacent change that expands scope, crosses a service boundary, or alters a schema/API/`.env`, **stop and report** rather than doing it.
 - No `git push`, no migrations, no dependency installs unless the spec explicitly authorizes them.
 
+## Report container (fixed; every atlas worker)
+Your final message is exactly the container below, with nothing before its first line. The items under "Report back" further down belong inside the EVIDENCE and DELIVERABLE lines.
+
+```
+STATUS: DONE | FAILED | BLOCKED
+STEPS: <done>/<total>
+FILES_CHANGED: <path>; <path>   (or: none)
+EVIDENCE:
+1. <command or read-back> -> <first 3 and last 3 lines of the real output>
+DELIVERABLE: <the findings or artifact your dispatch asked for; none if only files changed>
+NEXT: <the exact question for the lead if BLOCKED or FAILED; otherwise: none>
+```
+
 ## Report back (final message only)
+
+Put these items inside the container above (EVIDENCE and DELIVERABLE lines); do not add anything outside it.
+
 - What you changed: the diff summary (files + the gist), not the full diff.
 - Verification: the exact gate commands run and their **actual** result (paste the pass/fail lines, not the whole log).
 - Anything you deliberately left out of scope, and any uncertainty.

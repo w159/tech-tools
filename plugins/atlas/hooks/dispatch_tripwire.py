@@ -45,19 +45,21 @@ EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 # closeout) are excluded from the count, which is what makes a tighter limit safe.
 DENY_THRESHOLD = 6
 # The dispatch spec every atlas:* prompt must carry (subagent-kit.md, "The
-# dispatch spec (use this shape, nothing extra)"). These five blocks are what
+# dispatch spec (use this shape, nothing extra)"). These six blocks are what
 # bound a subagent's scope and runtime, and they are exactly what went missing
 # on the dispatches that sprawled into 30-60 minute sessions: without
 # DELIVERABLE/SUCCESS CRITERIA there is no finish line, without OUT OF SCOPE it
 # wanders into neighbouring code, without STOP CONDITIONS it pushes through a
-# blocker instead of reporting back. The skill has said this for versions; only
-# a deny makes it true.
+# blocker instead of reporting back. The sixth, REPORT, is the fixed result
+# container from contracts/worker-protocol.json. The skill has said this for
+# versions; only a deny makes it true.
 REQUIRED_SPEC_BLOCKS = (
     ("GOAL:",),
     ("DELIVERABLE:", "DELIVERABLES:"),
     ("SUCCESS CRITERIA:", "SUCCESS CRITERION:"),
     ("OUT OF SCOPE:",),
     ("STOP CONDITIONS:", "STOP CONDITION:"),
+    ("REPORT:",),
 )
 # Skills whose invocation means the session IS an atlas orchestration run.
 # Deliberately excludes advisory/config skills (atlas-setup, atlas-validate)
@@ -326,6 +328,67 @@ def _unbounded_dispatch(tinput):
     return agent, missing, goals
 
 
+_PROTOCOL_FILE = Path(__file__).resolve().parent.parent / "contracts" / "worker-protocol.json"
+_PROTOCOL_CACHE = {}
+
+
+def _mechanical_tier():
+    """(agent, maxSteps) from contracts/worker-protocol.json; defaults on any problem."""
+    if "tier" not in _PROTOCOL_CACHE:
+        agent, max_steps = "runner", 7
+        try:
+            tier = json.loads(_PROTOCOL_FILE.read_text(encoding="utf-8")).get("mechanicalTier", {})
+            agent = str(tier.get("agent") or agent)
+            max_steps = int(tier.get("maxSteps") or max_steps)
+        except Exception:
+            pass
+        _PROTOCOL_CACHE["tier"] = (agent, max_steps)
+    return _PROTOCOL_CACHE["tier"]
+
+
+_BLOCK_LABEL_RE = re.compile(r"^[ \t]*[A-Z][A-Z &/-]{2,}[ \t]*:")
+_NUMBERED_RE = re.compile(r"^[ \t]*\d+[.)][ \t]+\S")
+
+
+def _runner_steps_problem(tinput):
+    """Deny text when a mechanical-tier (runner) dispatch lacks a capped STEPS block."""
+    agent, max_steps = _mechanical_tier()
+    if str(tinput.get("subagent_type") or "") != "atlas:" + agent:
+        return None
+    prompt = str(tinput.get("prompt") or "")
+    m = re.search(r"(?im)^[ \t]*STEPS[ \t]*:", prompt)
+    if not m:
+        return (
+            "DENY - an atlas:%s dispatch must carry numbered STEPS: the runner is "
+            "the mechanical tier and follows exact steps, it makes no decisions. "
+            "Add a STEPS: block with numbered lines (1. ..., 2. ...), at most %d."
+            % (agent, max_steps)
+        )
+    count = 0
+    rest = prompt[m.end():].split("\n")[1:]  # lines after the STEPS: line
+    inline = prompt[m.end():].split("\n", 1)[0]
+    if _NUMBERED_RE.match(inline):
+        count += 1
+    for line in rest:
+        if _BLOCK_LABEL_RE.match(line):
+            break
+        if _NUMBERED_RE.match(line):
+            count += 1
+    if count == 0:
+        return (
+            "DENY - the STEPS: block of this atlas:%s dispatch has no numbered "
+            "lines. Write each step as a numbered line (1. ..., 2. ...), at most %d."
+            % (agent, max_steps)
+        )
+    if count > max_steps:
+        return (
+            "DENY - this atlas:%s dispatch has %d numbered STEPS but the cap is %d. "
+            "Split the work into several runner dispatches of at most %d steps each."
+            % (agent, count, max_steps, max_steps)
+        )
+    return None
+
+
 # Colony protocol guards. The per-call dispatch fields below are what turn a
 # one-off subagent into a colony member: `name` puts the sibling on the roster
 # (SendMessage, board notes), and the definition's frontmatter `model:` fixes
@@ -466,12 +529,18 @@ def _pre_tool_use(conn, atlas_db, tool, session, path, tinput=None):
                 _deny(
                     "DENY - this %s dispatch to %s is unbounded: missing %s. A subagent "
                     "with no finish line runs until it wanders. Paste the dispatch spec "
-                    "from subagent-kit.md: GOAL (one measurable sentence), DELIVERABLE "
-                    "(the exact artifact), SUCCESS CRITERIA (independently checkable, "
-                    "each with its evidence), OUT OF SCOPE (what not to touch), STOP "
-                    "CONDITIONS (when to halt and report back rather than push "
-                    "through)." % (tool, agent, ", ".join(missing))
+                    "from subagent-kit.md, six blocks: GOAL (one measurable sentence), "
+                    "DELIVERABLE (the exact artifact), SUCCESS CRITERIA (independently "
+                    "checkable, each with its evidence), OUT OF SCOPE (what not to "
+                    "touch), STOP CONDITIONS (when to halt and report back rather than "
+                    "push through), REPORT (the result container; REPORT: must name the "
+                    "fields STATUS, STEPS, FILES_CHANGED, EVIDENCE, DELIVERABLE, NEXT)."
+                    % (tool, agent, ", ".join(missing))
                 )
+            return
+        steps_problem = _runner_steps_problem(tinput or {})
+        if steps_problem:
+            _deny(steps_problem)
         return
     # (b) Editing production target code inline is the sharpest violation.
     if tool in EDIT_TOOLS and not _is_orchestration_path(path):
@@ -522,6 +591,73 @@ def _arm_orchestrating(conn, atlas_db, session, cwd):
             )
         except Exception:
             pass
+
+
+# Footprint arming. Prompt arming (prompt_optimizer.arm_orchestration) is a regex
+# heuristic, so a session it did not flag can still grow into multi-file code
+# work. Once the main thread has edited this many DISTINCT target-code files in a
+# run, the run is armed from that observed footprint. 0 disables.
+FOOTPRINT_FILES_DEFAULT = 3
+
+
+def _footprint_files():
+    """ATLAS_FOOTPRINT_FILES: distinct code files that arm an unflagged run.
+    Default 3; 0 disables; anything unparseable or negative falls back to 3."""
+    try:
+        value = int(os.environ.get("ATLAS_FOOTPRINT_FILES", FOOTPRINT_FILES_DEFAULT))
+    except ValueError:
+        return FOOTPRINT_FILES_DEFAULT
+    return value if value >= 0 else FOOTPRINT_FILES_DEFAULT
+
+
+def _footprint_paths(conn, atlas_db, session):
+    """Distinct target-code paths this run has written. Docs, .atlas/, URI writes
+    and system-temp scratch are exempt, exactly as _is_orchestration_path defines."""
+    run_id = atlas_db.current_run_id(conn, session)
+    if run_id is None:
+        return set()
+    return {
+        p
+        for p in atlas_db.run_changed_paths(conn, run_id)
+        if not _is_orchestration_path(p)
+    }
+
+
+def _footprint_arm(conn, atlas_db, session, cwd):
+    """Arm an unflagged run whose edit footprint reached FOOTPRINT_FILES distinct
+    code files and tell the lead once. Returns True when it emitted the advisory.
+
+    Once-per-run comes from the flag itself: arming flips runs.orchestrating, and
+    the first guard is that flag, so no later edit can reach the advisory. The
+    advisory says the tripwires are armed, so it is printed only when the flag
+    verifiably landed (_arm_orchestrating fails open and swallows DB errors)."""
+    limit = _footprint_files()
+    if limit <= 0 or atlas_db.is_orchestrating(conn, session):
+        return False
+    paths = _footprint_paths(conn, atlas_db, session)
+    if len(paths) < limit:
+        return False
+    _arm_orchestrating(conn, atlas_db, session, cwd)
+    if not atlas_db.is_orchestrating(conn, session):
+        return False
+    print(
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "PostToolUse",
+                    "additionalContext": (
+                        "[atlas] This session has now edited %d distinct code files "
+                        "inline: that is multi-file work, so the delegation tripwires "
+                        "are now armed for this run. Dispatch the remaining work to "
+                        "atlas:implementer as a named dispatch (name=<slice>, with the "
+                        "GOAL/DELIVERABLE/SUCCESS CRITERIA/OUT OF SCOPE/STOP CONDITIONS/"
+                        "REPORT spec) instead of editing further inline." % len(paths)
+                    ),
+                }
+            }
+        )
+    )
+    return True
 
 
 LEAN_CTX_TOKENS = ("lean-ctx", "lean_ctx")
@@ -952,10 +1088,17 @@ def main():
         if run_id is None:
             return  # no active run for inline ops; boot hook will create one
 
-        if tool not in INLINE_TOOLS:
+        if tool not in INLINE_TOOLS and tool not in EDIT_TOOLS:
             return
 
         atlas_db.log_event(conn, run_id, tool, "main", 1, path)
+        if tool in EDIT_TOOLS and not _in_subagent(payload):
+            # Prompt arming is a regex heuristic; an unflagged session that grows
+            # into multi-file code work is armed from the footprint it left.
+            if _footprint_arm(conn, atlas_db, session, payload.get("cwd")):
+                return
+        if tool not in INLINE_TOOLS:
+            return  # MultiEdit/NotebookEdit are logged for the footprint only
         count = atlas_db.inline_ops_since_last_dispatch(conn, run_id)
 
         edit_to_target = tool in EDIT_TOOLS and not _is_orchestration_path(path)

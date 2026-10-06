@@ -291,5 +291,67 @@ class SubprocessExitCodeTest(_HookTestCase):
         self.assertEqual(r.returncode, 0)
 
 
+class HarnessAgentLabelTest(_HookTestCase):
+    """session_logs.agent labeling from the harness environment.
+
+    omp's bridge spawns the same hook command with ATLAS_HARNESS=omp in the
+    child environment (omp/hook-bridge.ts hookEnv() for the synchronous
+    hooks; omp/stop-bridge.ts for the detached ingest it spawns at
+    session_shutdown/PreCompact, which merges opts.env over process.env).
+    Claude Code spawns the hook without that variable. The pytest process
+    itself may run under either harness, so each case pins ATLAS_HARNESS
+    explicitly: set to the value under test, or removed with clear=True so a
+    harness-exported ambient value cannot leak into the claude-default case.
+    """
+
+    def _agent_label(self):
+        c = atlas_db.connect(self.dbpath)
+        try:
+            atlas_db.init(c)
+            return c.execute(
+                "SELECT agent FROM session_logs WHERE session_id=?",
+                ("sess-ingest-test",),
+            ).fetchone()[0]
+        finally:
+            c.close()
+
+    def _run_main_without_atlas_harness(self, payload):
+        # clear=True restores exactly `env`, so the ambient ATLAS_HARNESS of
+        # the process running the tests is dropped rather than merged in.
+        env = {
+            k: v
+            for k, v in dict(os.environ, **self._base_env).items()
+            if k != "ATLAS_HARNESS"
+        }
+        stdin = io.StringIO(json.dumps(payload))
+        with (
+            mock.patch.dict(os.environ, env, clear=True),
+            mock.patch("sys.stdin", new=stdin),
+        ):
+            ingest_session.main()
+
+    def test_atlas_harness_omp_records_omp(self):
+        self._run_main(
+            {"transcript_path": self.tpath, "session_id": "sess-ingest-test"},
+            env=dict(self._base_env, ATLAS_HARNESS="omp"),
+        )
+        self.assertIsNotNone(self._session_log_row())
+        self.assertEqual(self._agent_label(), "omp")
+
+    def test_no_atlas_harness_defaults_claude(self):
+        self._run_main_without_atlas_harness(
+            {"transcript_path": self.tpath, "session_id": "sess-ingest-test"}
+        )
+        self.assertIsNotNone(self._session_log_row())
+        self.assertEqual(self._agent_label(), "claude")
+
+    def test_unknown_atlas_harness_defaults_claude(self):
+        self._run_main(
+            {"transcript_path": self.tpath, "session_id": "sess-ingest-test"},
+            env=dict(self._base_env, ATLAS_HARNESS="gemini"),
+        )
+        self.assertEqual(self._agent_label(), "claude")
+
+
 if __name__ == "__main__":
     unittest.main()

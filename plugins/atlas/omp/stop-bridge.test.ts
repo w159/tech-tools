@@ -453,6 +453,24 @@ test("claudeLifecyclePayload carries stop_hook_active only on Stop", () => {
 	expect(claudeLifecyclePayload("PreCompact", { sessionId: "s", cwd: "/p" })).toMatchObject({ transcript_path: "" });
 });
 
+test("session_stop's last_assistant_message reaches the Stop payload as the joined text of its text blocks", async () => {
+	const h = harness();
+	await h.stop({
+		last_assistant_message: { role: "assistant", content: [{ type: "text", text: "ATLAS | ✅ verify | green" }, { type: "thinking", thinking: "private reasoning" }, { type: "text", text: "second paragraph" }] },
+	});
+	expect(h.payloads[0].last_assistant_message).toBe("ATLAS | ✅ verify | green\nsecond paragraph");
+	expect(h.payloads[0]).toMatchObject({ hook_event_name: "Stop", session_id: "s-1", stop_hook_active: false });
+});
+
+test("a session_stop without usable last_assistant_message text leaves the Claude-shaped payload untouched", async () => {
+	const unusable = [{}, { last_assistant_message: undefined }, { last_assistant_message: { role: "assistant", content: [] } }, { last_assistant_message: { role: "assistant", content: [{ type: "thinking", thinking: "only thoughts" }] } }, { last_assistant_message: "not an AgentMessage" }, { last_assistant_message: { role: "assistant", content: "bare string" } }];
+	for (const extra of unusable) {
+		const h = harness();
+		await h.stop(extra);
+		expect(h.payloads[0]).toEqual({ hook_event_name: "Stop", session_id: "s-1", cwd: dir, transcript_path: h.converts[0].out, stop_hook_active: false });
+	}
+});
+
 // ---- converted transcripts are plaintext copies of whole sessions: none may outlive the hook that read it ----
 
 /** Every file or directory left anywhere under `root` (relative), so a leak shows up by name. */

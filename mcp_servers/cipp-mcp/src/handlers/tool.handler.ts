@@ -7,17 +7,15 @@ import { CippService } from '../services/cipp.service.js';
 import { Logger } from '../utils/logger.js';
 import { TOOL_DEFINITIONS } from '../mcp/tool.definitions.js';
 import {
-  shapeList,
-  shapeItem,
-  shapeRaw,
-  extractShapeArgs,
-  type SummaryFn,
-  type ToolResult,
+ shapeList,
+ shapeItem,
+ shapeRaw,
+ extractShapeArgs,
+ type SummaryFn,
+ type ToolResult,
 } from '@shared/response-shaper.js';
-import {
-  toolErrorFromCatch,
-  missingCredsError,
-} from '@shared/error-envelope.js';
+import { toolErrorFromCatch } from '@shared/error-envelope.js';
+import { TOOL_CATEGORIES } from '../mcp/tool.definitions.js';
 
 // ---------------------------------------------------------------------------
 // Per-resource compact summary functions
@@ -25,897 +23,929 @@ import {
 // ---------------------------------------------------------------------------
 
 const tenantSummary: SummaryFn = (t) => ({
-  id: t['id'] ?? t['customerId'],
-  displayName: t['displayName'] ?? t['name'],
-  defaultDomainName: t['defaultDomainName'],
-  status: t['status'] ?? t['tenantStatus'],
+ id: t['id'] ?? t['customerId'],
+ displayName: t['displayName'] ?? t['name'],
+ defaultDomainName: t['defaultDomainName'],
+ status: t['status'] ?? t['tenantStatus'],
 });
 
 const userSummary: SummaryFn = (u) => ({
-  id: u['id'],
-  userPrincipalName: u['userPrincipalName'],
-  displayName: u['displayName'],
-  accountEnabled: u['accountEnabled'],
+ id: u['id'],
+ userPrincipalName: u['userPrincipalName'],
+ displayName: u['displayName'],
+ accountEnabled: u['accountEnabled'],
 });
 
 const mfaUserSummary: SummaryFn = (u) => ({
-  id: u['id'],
-  userPrincipalName: u['userPrincipalName'],
-  displayName: u['displayName'],
-  isMFARegistered: u['isMFARegistered'] ?? u['MFARegistered'],
+ id: u['id'],
+ userPrincipalName: u['userPrincipalName'],
+ displayName: u['displayName'],
+ isMFARegistered: u['isMFARegistered'] ?? u['MFARegistered'],
 });
 
 const deviceSummary: SummaryFn = (d) => ({
-  id: d['id'],
-  displayName: d['displayName'],
-  operatingSystem: d['operatingSystem'],
-  complianceState: d['complianceState'],
+ id: d['id'],
+ displayName: d['displayName'],
+ operatingSystem: d['operatingSystem'],
+ complianceState: d['complianceState'],
 });
 
 const groupSummary: SummaryFn = (g) => ({
-  id: g['id'],
-  displayName: g['displayName'],
-  groupType: g['groupType'] ?? g['groupTypes'],
-  mailEnabled: g['mailEnabled'],
+ id: g['id'],
+ displayName: g['displayName'],
+ groupType: g['groupType'] ?? g['groupTypes'],
+ mailEnabled: g['mailEnabled'],
 });
 
 const mailboxSummary: SummaryFn = (m) => ({
-  id: m['id'],
-  displayName: m['displayName'],
-  primarySmtpAddress: m['primarySmtpAddress'],
-  recipientTypeDetails: m['recipientTypeDetails'],
+ id: m['id'],
+ displayName: m['displayName'],
+ primarySmtpAddress: m['primarySmtpAddress'],
+ recipientTypeDetails: m['recipientTypeDetails'],
 });
 
 const caPolicySummary: SummaryFn = (p) => ({
-  id: p['id'],
-  displayName: p['displayName'],
-  state: p['state'],
-  conditions: p['conditions'],
+ id: p['id'],
+ displayName: p['displayName'],
+ state: p['state'],
+ conditions: p['conditions'],
 });
 
 const namedLocationSummary: SummaryFn = (l) => ({
-  id: l['id'],
-  displayName: l['displayName'],
-  isTrusted: l['isTrusted'],
+ id: l['id'],
+ displayName: l['displayName'],
+ isTrusted: l['isTrusted'],
 });
 
 const standardSummary: SummaryFn = (s) => ({
-  displayName: s['displayName'] ?? s['standard'],
-  remediationAction: s['remediationAction'],
-  lastRunResult: s['lastRunResult'] ?? s['result'],
+ displayName: s['displayName'] ?? s['standard'],
+ remediationAction: s['remediationAction'],
+ lastRunResult: s['lastRunResult'] ?? s['result'],
 });
 
 const templateSummary: SummaryFn = (t) => ({
-  id: t['id'] ?? t['GUID'],
-  displayName: t['displayName'] ?? t['templateName'],
-  tenantFilter: t['tenantFilter'],
+ id: t['id'] ?? t['GUID'],
+ displayName: t['displayName'] ?? t['templateName'],
+ tenantFilter: t['tenantFilter'],
 });
 
 const driftSummary: SummaryFn = (d) => ({
-  tenantName: d['tenantName'] ?? d['tenant'],
-  standard: d['standard'],
-  currentValue: d['currentValue'],
-  expectedValue: d['expectedValue'],
+ tenantName: d['tenantName'] ?? d['tenant'],
+ standard: d['standard'],
+ currentValue: d['currentValue'],
+ expectedValue: d['expectedValue'],
 });
 
 const alignmentSummary: SummaryFn = (a) => ({
-  tenantName: a['tenantName'] ?? a['tenant'],
-  alignmentPercent: a['alignmentPercent'] ?? a['alignment'],
-  templateName: a['templateName'],
+ tenantName: a['tenantName'] ?? a['tenant'],
+ alignmentPercent: a['alignmentPercent'] ?? a['alignment'],
+ templateName: a['templateName'],
 });
 
 const bpaSummary: SummaryFn = (b) => ({
-  checkName: b['checkName'] ?? b['name'],
-  result: b['result'] ?? b['value'],
-  severity: b['severity'],
+ checkName: b['checkName'] ?? b['name'],
+ result: b['result'] ?? b['value'],
+ severity: b['severity'],
 });
 
 const domainHealthSummary: SummaryFn = (d) => ({
-  domain: d['domain'],
-  spf: (d['spf'] as Record<string, unknown> | undefined)?.['result'] ?? d['spf'],
-  dmarc: (d['dmarc'] as Record<string, unknown> | undefined)?.['result'] ?? d['dmarc'],
-  dkim: (d['dkim'] as Record<string, unknown> | undefined)?.['result'] ?? d['dkim'],
+ domain: d['domain'],
+ spf: (d['spf'] as Record<string, unknown> | undefined)?.['result'] ?? d['spf'],
+ dmarc: (d['dmarc'] as Record<string, unknown> | undefined)?.['result'] ?? d['dmarc'],
+ dkim: (d['dkim'] as Record<string, unknown> | undefined)?.['result'] ?? d['dkim'],
 });
 
 const licenseSummary: SummaryFn = (l) => ({
-  id: l['id'] ?? l['skuId'],
-  skuPartNumber: l['skuPartNumber'],
-  assignedUnits: l['assignedUnits'] ?? (l['consumedUnits']),
-  availableUnits: l['availableUnits'] ?? (
-    typeof l['prepaidUnits'] === 'object' && l['prepaidUnits'] !== null
-      ? (l['prepaidUnits'] as Record<string, unknown>)['enabled']
-      : undefined
-  ),
+ id: l['id'] ?? l['skuId'],
+ skuPartNumber: l['skuPartNumber'],
+ assignedUnits: l['assignedUnits'] ?? (l['consumedUnits']),
+ availableUnits: l['availableUnits'] ?? (
+  typeof l['prepaidUnits'] === 'object' && l['prepaidUnits'] !== null
+   ? (l['prepaidUnits'] as Record<string, unknown>)['enabled']
+   : undefined
+ ),
 });
 
 const cspLicenseSummary: SummaryFn = (l) => ({
-  tenantName: l['tenantName'] ?? l['tenant'],
-  skuPartNumber: l['skuPartNumber'] ?? l['sku'],
-  quantity: l['quantity'] ?? l['totalLicenses'],
+ tenantName: l['tenantName'] ?? l['tenant'],
+ skuPartNumber: l['skuPartNumber'] ?? l['sku'],
+ quantity: l['quantity'] ?? l['totalLicenses'],
 });
 
 const auditLogSummary: SummaryFn = (e) => ({
-  creationTime: e['creationTime'] ?? e['CreationTime'],
-  operation: e['operation'] ?? e['Operation'],
-  userId: e['userId'] ?? e['UserId'],
-  result: e['result'] ?? e['ResultStatus'],
+ creationTime: e['creationTime'] ?? e['CreationTime'],
+ operation: e['operation'] ?? e['Operation'],
+ userId: e['userId'] ?? e['UserId'],
+ result: e['result'] ?? e['ResultStatus'],
 });
 
 const alertSummary: SummaryFn = (a) => ({
-  id: a['id'],
-  tenantName: a['tenantName'] ?? a['tenant'],
-  alertType: a['alertType'] ?? a['type'],
-  severity: a['severity'],
-  createdAt: a['createdAt'] ?? a['timestamp'],
+ id: a['id'],
+ tenantName: a['tenantName'] ?? a['tenant'],
+ alertType: a['alertType'] ?? a['type'],
+ severity: a['severity'],
+ createdAt: a['createdAt'] ?? a['timestamp'],
 });
 
 const gdapRoleSummary: SummaryFn = (r) => ({
-  id: r['id'],
-  displayName: r['displayName'],
-  description: r['description'],
+ id: r['id'],
+ displayName: r['displayName'],
+ description: r['description'],
 });
 
 const gdapInviteSummary: SummaryFn = (i) => ({
-  id: i['id'],
-  tenantName: i['tenantName'] ?? i['tenant'],
-  status: i['status'],
-  createdAt: i['createdAt'] ?? i['inviteDate'],
+ id: i['id'],
+ tenantName: i['tenantName'] ?? i['tenant'],
+ status: i['status'],
+ createdAt: i['createdAt'] ?? i['inviteDate'],
 });
 
 const scheduledItemSummary: SummaryFn = (s) => ({
-  taskName: s['taskName'] ?? s['name'],
-  command: s['command'],
-  nextRunTime: s['nextRunTime'] ?? s['scheduledTime'],
-  tenantFilter: s['tenantFilter'],
+ taskName: s['taskName'] ?? s['name'],
+ command: s['command'],
+ nextRunTime: s['nextRunTime'] ?? s['scheduledTime'],
+ tenantFilter: s['tenantFilter'],
 });
 
 const logSummary: SummaryFn = (l) => ({
-  timestamp: l['timestamp'] ?? l['date'],
-  level: l['level'] ?? l['severity'],
-  message: l['message'],
+ timestamp: l['timestamp'] ?? l['date'],
+ level: l['level'] ?? l['severity'],
+ message: l['message'],
 });
 
 // ---------------------------------------------------------------------------
 
 export interface McpToolResult {
-  content: Array<{ type: string; text: string }>;
-  isError?: boolean;
+ content: Array<{ type: string; text: string }>;
+ isError?: boolean;
 }
 
 export class CippToolHandler {
-  private cippService: CippService;
-  private logger: Logger;
-  private mcpServer: Server | null = null;
+ private cippService: CippService;
+ private logger: Logger;
+ private mcpServer: Server | null = null;
 
-  constructor(cippService: CippService, logger: Logger) {
-    this.cippService = cippService;
-    this.logger = logger;
+ constructor(cippService: CippService, logger: Logger) {
+  this.cippService = cippService;
+  this.logger = logger;
+ }
+
+ setServer(server: Server): void {
+  this.mcpServer = server;
+ }
+
+ getServer(): Server | null {
+  return this.mcpServer;
+ }
+
+ getToolDefinitions() {
+  return TOOL_DEFINITIONS;
+ }
+
+ async handleToolCall(name: string, args: Record<string, unknown>): Promise<McpToolResult> {
+  this.logger.debug(`Dispatching tool call: ${name}`, { args });
+
+  // cipp_status never touches the network and must not throw even with missing creds.
+  if (name === 'cipp_status') {
+   return this.handleStatus();
   }
 
-  setServer(server: Server): void {
-    this.mcpServer = server;
-  }
+  try {
+   const shapeArgs = extractShapeArgs(args);
+   let result: ToolResult;
 
-  getServer(): Server | null {
-    return this.mcpServer;
-  }
-
-  getToolDefinitions() {
-    return TOOL_DEFINITIONS;
-  }
-
-  async handleToolCall(name: string, args: Record<string, unknown>): Promise<McpToolResult> {
-    this.logger.debug(`Dispatching tool call: ${name}`, { args });
-
-    // cipp_status never touches the network and must not throw even with missing creds.
-    if (name === 'cipp_status') {
-      return this.handleStatus();
+   switch (name) {
+    // -----------------------------------------------------------------------
+    // Tenants
+    // -----------------------------------------------------------------------
+    case 'cipp_list_tenants': {
+     const { allTenants } = args as { allTenants?: boolean };
+     const data = await this.cippService.listTenants({ allTenants });
+     result = shapeList(
+      Array.isArray(data) ? data as Record<string, unknown>[] : [],
+      tenantSummary,
+      shapeArgs
+     );
+     break;
     }
 
-    try {
-      const shapeArgs = extractShapeArgs(args);
-      let result: ToolResult;
-
-      switch (name) {
-        // -----------------------------------------------------------------------
-        // Tenants
-        // -----------------------------------------------------------------------
-        case 'cipp_list_tenants': {
-          const { allTenants } = args as { allTenants?: boolean };
-          const data = await this.cippService.listTenants({ allTenants });
-          result = shapeList(
-            Array.isArray(data) ? data as Record<string, unknown>[] : [],
-            tenantSummary,
-            shapeArgs
-          );
-          break;
-        }
-
-        case 'cipp_get_tenant_details': {
-          const { tenantFilter } = args as { tenantFilter: string };
-          const data = await this.cippService.getTenantDetails(tenantFilter);
-          result = shapeItem(
-            data as Record<string, unknown>,
-            tenantSummary,
-            shapeArgs
-          );
-          break;
-        }
-
-        // -----------------------------------------------------------------------
-        // Users
-        // -----------------------------------------------------------------------
-        case 'cipp_list_users': {
-          const { tenantFilter, searchField, searchValue } = args as {
-            tenantFilter: string;
-            searchField?: string;
-            searchValue?: string;
-          };
-          const data = await this.cippService.listUsers(tenantFilter, { searchField, searchValue });
-          result = shapeList(
-            Array.isArray(data) ? data as Record<string, unknown>[] : [],
-            userSummary,
-            shapeArgs
-          );
-          break;
-        }
-
-        case 'cipp_create_user': {
-          const {
-            tenantFilter,
-            displayName,
-            userPrincipalName,
-            password,
-            givenName,
-            surname,
-            jobTitle,
-            department,
-            country,
-          } = args as {
-            tenantFilter: string;
-            displayName: string;
-            userPrincipalName: string;
-            password: string;
-            givenName?: string;
-            surname?: string;
-            jobTitle?: string;
-            department?: string;
-            country?: string;
-          };
-          const userData: Record<string, unknown> = {
-            displayName,
-            userPrincipalName,
-            password,
-          };
-          if (givenName !== undefined) userData['givenName'] = givenName;
-          if (surname !== undefined) userData['surname'] = surname;
-          if (jobTitle !== undefined) userData['jobTitle'] = jobTitle;
-          if (department !== undefined) userData['department'] = department;
-          if (country !== undefined) userData['country'] = country;
-          const data = await this.cippService.createUser(tenantFilter, userData);
-          result = shapeRaw(data);
-          break;
-        }
-
-        case 'cipp_edit_user': {
-          const {
-            tenantFilter,
-            userId,
-            displayName,
-            jobTitle,
-            department,
-            usageLocation,
-          } = args as {
-            tenantFilter: string;
-            userId: string;
-            displayName?: string;
-            jobTitle?: string;
-            department?: string;
-            usageLocation?: string;
-          };
-          const editData: Record<string, unknown> = {};
-          if (displayName !== undefined) editData['displayName'] = displayName;
-          if (jobTitle !== undefined) editData['jobTitle'] = jobTitle;
-          if (department !== undefined) editData['department'] = department;
-          if (usageLocation !== undefined) editData['usageLocation'] = usageLocation;
-          const data = await this.cippService.editUser(tenantFilter, userId, editData);
-          result = shapeRaw(data);
-          break;
-        }
-
-        case 'cipp_disable_user': {
-          const { tenantFilter, userId } = args as { tenantFilter: string; userId: string };
-          const data = await this.cippService.disableUser(tenantFilter, userId);
-          result = shapeRaw(data);
-          break;
-        }
-
-        case 'cipp_reset_password': {
-          const { tenantFilter, userId, newPassword } = args as {
-            tenantFilter: string;
-            userId: string;
-            newPassword?: string;
-          };
-          const data = await this.cippService.resetPassword(tenantFilter, userId, newPassword);
-          result = shapeRaw(data);
-          break;
-        }
-
-        case 'cipp_reset_mfa': {
-          const { tenantFilter, userId } = args as { tenantFilter: string; userId: string };
-          const data = await this.cippService.resetMFA(tenantFilter, userId);
-          result = shapeRaw(data);
-          break;
-        }
-
-        case 'cipp_revoke_sessions': {
-          const { tenantFilter, userId } = args as { tenantFilter: string; userId: string };
-          const data = await this.cippService.revokeSessions(tenantFilter, userId);
-          result = shapeRaw(data);
-          break;
-        }
-
-        case 'cipp_offboard_user': {
-          const {
-            tenantFilter,
-            userId,
-            revokePermissions,
-            disableUser,
-            resetPassword,
-            transferMailbox,
-          } = args as {
-            tenantFilter: string;
-            userId: string;
-            revokePermissions?: boolean;
-            disableUser?: boolean;
-            resetPassword?: boolean;
-            transferMailbox?: string;
-          };
-          const offboardOptions: Record<string, unknown> = {};
-          if (revokePermissions !== undefined) offboardOptions['revokePermissions'] = revokePermissions;
-          if (disableUser !== undefined) offboardOptions['disableUser'] = disableUser;
-          if (resetPassword !== undefined) offboardOptions['resetPassword'] = resetPassword;
-          if (transferMailbox !== undefined) offboardOptions['transferMailbox'] = transferMailbox;
-          const data = await this.cippService.offboardUser(tenantFilter, userId, offboardOptions);
-          result = shapeRaw(data);
-          break;
-        }
-
-        case 'cipp_bec_check': {
-          const { tenantFilter, userId } = args as { tenantFilter: string; userId: string };
-          const data = await this.cippService.becCheck(tenantFilter, userId);
-          result = shapeItem(
-            data as Record<string, unknown>,
-            undefined,
-            shapeArgs
-          );
-          break;
-        }
-
-        case 'cipp_list_mfa_users': {
-          const { tenantFilter } = args as { tenantFilter: string };
-          const data = await this.cippService.listMfaUsers(tenantFilter);
-          result = shapeList(
-            Array.isArray(data) ? data as Record<string, unknown>[] : [],
-            mfaUserSummary,
-            shapeArgs
-          );
-          break;
-        }
-
-        case 'cipp_list_user_devices': {
-          const { tenantFilter, userId } = args as { tenantFilter: string; userId: string };
-          const data = await this.cippService.listUserDevices(tenantFilter, userId);
-          result = shapeList(
-            Array.isArray(data) ? data as Record<string, unknown>[] : [],
-            deviceSummary,
-            shapeArgs
-          );
-          break;
-        }
-
-        case 'cipp_list_user_groups': {
-          const { tenantFilter, userId } = args as { tenantFilter: string; userId: string };
-          const data = await this.cippService.listUserGroups(tenantFilter, userId);
-          result = shapeList(
-            Array.isArray(data) ? data as Record<string, unknown>[] : [],
-            groupSummary,
-            shapeArgs
-          );
-          break;
-        }
-
-        // -----------------------------------------------------------------------
-        // Groups
-        // -----------------------------------------------------------------------
-        case 'cipp_list_groups': {
-          const { tenantFilter, search } = args as { tenantFilter: string; search?: string };
-          const data = await this.cippService.listGroups(tenantFilter, { search });
-          result = shapeList(
-            Array.isArray(data) ? data as Record<string, unknown>[] : [],
-            groupSummary,
-            shapeArgs
-          );
-          break;
-        }
-
-        case 'cipp_create_group': {
-          const {
-            tenantFilter,
-            displayName,
-            description,
-            securityEnabled,
-            mailEnabled,
-            mailNickname,
-          } = args as {
-            tenantFilter: string;
-            displayName: string;
-            description?: string;
-            securityEnabled?: boolean;
-            mailEnabled?: boolean;
-            mailNickname?: string;
-          };
-          const groupData: Record<string, unknown> = { displayName };
-          if (description !== undefined) groupData['description'] = description;
-          if (securityEnabled !== undefined) groupData['securityEnabled'] = securityEnabled;
-          if (mailEnabled !== undefined) groupData['mailEnabled'] = mailEnabled;
-          if (mailNickname !== undefined) groupData['mailNickname'] = mailNickname;
-          const data = await this.cippService.createGroup(tenantFilter, groupData);
-          result = shapeRaw(data);
-          break;
-        }
-
-        // -----------------------------------------------------------------------
-        // Mailboxes
-        // -----------------------------------------------------------------------
-        case 'cipp_list_mailboxes': {
-          const { tenantFilter, type } = args as { tenantFilter: string; type?: string };
-          const data = await this.cippService.listMailboxes(tenantFilter, { type });
-          result = shapeList(
-            Array.isArray(data) ? data as Record<string, unknown>[] : [],
-            mailboxSummary,
-            shapeArgs
-          );
-          break;
-        }
-
-        case 'cipp_list_mailbox_permissions': {
-          const { tenantFilter, upn } = args as { tenantFilter: string; upn: string };
-          const data = await this.cippService.listMailboxPermissions(tenantFilter, upn);
-          result = shapeList(
-            Array.isArray(data) ? data as Record<string, unknown>[] : [],
-            undefined,
-            shapeArgs
-          );
-          break;
-        }
-
-        case 'cipp_set_out_of_office': {
-          const { tenantFilter, upn, enabled, internalMessage, externalMessage } = args as {
-            tenantFilter: string;
-            upn: string;
-            enabled: boolean;
-            internalMessage?: string;
-            externalMessage?: string;
-          };
-          const oooData: Record<string, unknown> = { enabled };
-          if (internalMessage !== undefined) oooData['internalMessage'] = internalMessage;
-          if (externalMessage !== undefined) oooData['externalMessage'] = externalMessage;
-          const data = await this.cippService.setOutOfOffice(tenantFilter, upn, oooData);
-          result = shapeRaw(data);
-          break;
-        }
-
-        case 'cipp_set_email_forwarding': {
-          const { tenantFilter, upn, forwardTo, keepCopy } = args as {
-            tenantFilter: string;
-            upn: string;
-            forwardTo?: string;
-            keepCopy?: boolean;
-          };
-          const forwardData: Record<string, unknown> = {};
-          if (forwardTo !== undefined) forwardData['forwardTo'] = forwardTo;
-          if (keepCopy !== undefined) forwardData['keepCopy'] = keepCopy;
-          const data = await this.cippService.setEmailForwarding(tenantFilter, upn, forwardData);
-          result = shapeRaw(data);
-          break;
-        }
-
-        // -----------------------------------------------------------------------
-        // Security
-        // -----------------------------------------------------------------------
-        case 'cipp_list_conditional_access_policies': {
-          const { tenantFilter } = args as { tenantFilter: string };
-          const data = await this.cippService.listConditionalAccessPolicies(tenantFilter);
-          result = shapeList(
-            Array.isArray(data) ? data as Record<string, unknown>[] : [],
-            caPolicySummary,
-            shapeArgs
-          );
-          break;
-        }
-
-        case 'cipp_list_named_locations': {
-          const { tenantFilter } = args as { tenantFilter: string };
-          const data = await this.cippService.listNamedLocations(tenantFilter);
-          result = shapeList(
-            Array.isArray(data) ? data as Record<string, unknown>[] : [],
-            namedLocationSummary,
-            shapeArgs
-          );
-          break;
-        }
-
-        // -----------------------------------------------------------------------
-        // Standards
-        // -----------------------------------------------------------------------
-        case 'cipp_list_standards': {
-          const { tenantFilter } = args as { tenantFilter: string };
-          const data = await this.cippService.listStandards(tenantFilter);
-          result = shapeList(
-            Array.isArray(data) ? data as Record<string, unknown>[] : [],
-            standardSummary,
-            shapeArgs
-          );
-          break;
-        }
-
-        case 'cipp_run_standards_check': {
-          const { tenantFilter } = args as { tenantFilter: string };
-          const data = await this.cippService.runStandardsCheck(tenantFilter);
-          result = shapeRaw(data);
-          break;
-        }
-
-        case 'cipp_list_standard_templates': {
-          const data = await this.cippService.listStandardTemplates();
-          result = shapeList(
-            Array.isArray(data) ? data as Record<string, unknown>[] : [],
-            templateSummary,
-            shapeArgs
-          );
-          break;
-        }
-
-        // `tenantFilter` is optional for these two tools: omit it to report
-        // across all tenants. This diverges intentionally from other Standards
-        // cases that require it.
-        case 'cipp_get_tenant_drift': {
-          const { tenantFilter } = args as { tenantFilter?: string };
-          const data = await this.cippService.getTenantDrift(tenantFilter);
-          result = shapeList(
-            Array.isArray(data) ? data as Record<string, unknown>[] : [],
-            driftSummary,
-            shapeArgs
-          );
-          break;
-        }
-
-        case 'cipp_get_tenant_alignment': {
-          const { tenantFilter } = args as { tenantFilter?: string };
-          const data = await this.cippService.getTenantAlignment(tenantFilter);
-          result = shapeList(
-            Array.isArray(data) ? data as Record<string, unknown>[] : [],
-            alignmentSummary,
-            shapeArgs
-          );
-          break;
-        }
-
-        case 'cipp_create_standard_template': {
-          const { template } = args as { template: Record<string, unknown> };
-          const data = await this.cippService.createStandardTemplate(template);
-          result = shapeRaw(data);
-          break;
-        }
-
-        case 'cipp_delete_standard_template': {
-          const { templateId } = args as { templateId: string };
-          const data = await this.cippService.deleteStandardTemplate(templateId);
-          result = shapeRaw(data);
-          break;
-        }
-
-        case 'cipp_list_bpa': {
-          const { tenantFilter } = args as { tenantFilter: string };
-          const data = await this.cippService.listBPA(tenantFilter);
-          result = shapeList(
-            Array.isArray(data) ? data as Record<string, unknown>[] : [],
-            bpaSummary,
-            shapeArgs
-          );
-          break;
-        }
-
-        case 'cipp_list_domain_health': {
-          const { tenantFilter } = args as { tenantFilter: string };
-          const data = await this.cippService.listDomainHealth(tenantFilter);
-          result = shapeList(
-            Array.isArray(data) ? data as unknown as Record<string, unknown>[] : [],
-            domainHealthSummary,
-            shapeArgs
-          );
-          break;
-        }
-
-        // -----------------------------------------------------------------------
-        // Licenses
-        // -----------------------------------------------------------------------
-        case 'cipp_list_licenses': {
-          const { tenantFilter } = args as { tenantFilter: string };
-          const data = await this.cippService.listLicenses(tenantFilter);
-          result = shapeList(
-            Array.isArray(data) ? data as Record<string, unknown>[] : [],
-            licenseSummary,
-            shapeArgs
-          );
-          break;
-        }
-
-        case 'cipp_list_csp_licenses': {
-          const data = await this.cippService.listCSPLicenses();
-          result = shapeList(
-            Array.isArray(data) ? data as Record<string, unknown>[] : [],
-            cspLicenseSummary,
-            shapeArgs
-          );
-          break;
-        }
-
-        // -----------------------------------------------------------------------
-        // Alerts
-        // -----------------------------------------------------------------------
-        case 'cipp_list_audit_logs': {
-          const { tenantFilter, days, type } = args as {
-            tenantFilter: string;
-            days?: number;
-            type?: string;
-          };
-          const data = await this.cippService.listAuditLogs(tenantFilter, {
-            Days: days,
-            Type: type,
-          });
-          result = shapeList(
-            Array.isArray(data) ? data as Record<string, unknown>[] : [],
-            auditLogSummary,
-            shapeArgs
-          );
-          break;
-        }
-
-        case 'cipp_list_alert_queue': {
-          const data = await this.cippService.listAlertQueue();
-          result = shapeList(
-            Array.isArray(data) ? data as Record<string, unknown>[] : [],
-            alertSummary,
-            shapeArgs
-          );
-          break;
-        }
-
-        // -----------------------------------------------------------------------
-        // GDAP
-        // -----------------------------------------------------------------------
-        case 'cipp_list_gdap_roles': {
-          const data = await this.cippService.listGDAPRoles();
-          result = shapeList(
-            Array.isArray(data) ? data as Record<string, unknown>[] : [],
-            gdapRoleSummary,
-            shapeArgs
-          );
-          break;
-        }
-
-        case 'cipp_list_gdap_invites': {
-          const data = await this.cippService.listGDAPInvites();
-          result = shapeList(
-            Array.isArray(data) ? data as Record<string, unknown>[] : [],
-            gdapInviteSummary,
-            shapeArgs
-          );
-          break;
-        }
-
-        // -----------------------------------------------------------------------
-        // Scheduler
-        // -----------------------------------------------------------------------
-        case 'cipp_list_scheduled_items': {
-          const data = await this.cippService.listScheduledItems();
-          result = shapeList(
-            Array.isArray(data) ? data as Record<string, unknown>[] : [],
-            scheduledItemSummary,
-            shapeArgs
-          );
-          break;
-        }
-
-        case 'cipp_add_scheduled_item': {
-          const { taskName, command, scheduledTime, recurrence, tenantFilter } = args as {
-            taskName: string;
-            command: string;
-            scheduledTime: string;
-            recurrence?: string;
-            tenantFilter?: string;
-          };
-          const itemData: Record<string, unknown> = {
-            taskName,
-            command,
-            scheduledTime,
-          };
-          if (recurrence !== undefined) itemData['recurrence'] = recurrence;
-          if (tenantFilter !== undefined) itemData['tenantFilter'] = tenantFilter;
-          const data = await this.cippService.addScheduledItem(itemData);
-          result = shapeRaw(data);
-          break;
-        }
-
-        // -----------------------------------------------------------------------
-        // Core
-        // -----------------------------------------------------------------------
-        case 'cipp_ping': {
-          const data = await this.cippService.ping();
-          result = shapeRaw(data);
-          break;
-        }
-
-        case 'cipp_get_version': {
-          const data = await this.cippService.getVersion();
-          result = shapeRaw(data);
-          break;
-        }
-
-        case 'cipp_list_logs': {
-          const { dateFilter } = args as { dateFilter?: string };
-          const data = await this.cippService.listLogs(
-            dateFilter !== undefined ? { DateFilter: dateFilter } : undefined
-          );
-          result = shapeList(
-            Array.isArray(data) ? data as Record<string, unknown>[] : [],
-            logSummary,
-            shapeArgs
-          );
-          break;
-        }
-
-        default:
-          throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
-      }
-
-      return result as McpToolResult;
-    } catch (error) {
-      if (error instanceof McpError && error.code === ErrorCode.MethodNotFound) {
-        // Unknown tool — propagate as protocol error so client knows the tool doesn't exist
-        throw error;
-      }
-      this.logger.error(`Tool call failed: ${name}`, { error });
-
-      // Use toolErrorFromCatch for structured, actionable error output.
-      // For CIPP-specific HTTP errors (statusCode on the thrown Error), we need
-      // to normalise to the .status shape that toolErrorFromCatch recognises.
-      const normalised = normaliseForEnvelope(error);
-      return toolErrorFromCatch(name, normalised, {
-        hint: buildCippHint(error),
-      }) as McpToolResult;
+    case 'cipp_get_tenant_details': {
+     const { tenantFilter } = args as { tenantFilter: string };
+     const data = await this.cippService.getTenantDetails(tenantFilter);
+     result = shapeItem(
+      data as Record<string, unknown>,
+      tenantSummary,
+      shapeArgs
+     );
+     break;
     }
-  }
 
-  // ---------------------------------------------------------------------------
-  // cipp_status — never throws; makes one cheap authenticated call when configured.
-  // ---------------------------------------------------------------------------
-
-  private async handleStatus(): Promise<McpToolResult> {
-    const result = this.describeConfiguration();
-    // "Configured" only proves values are present. One PublicPing shows whether
-    // CIPP accepts them. Response data is never printed.
-    const authCheck = result.isError ? 'SKIPPED (no credentials)' : await this.liveAuthCheck();
-    return {
-      content: [...result.content, { type: 'text', text: `Auth check: ${authCheck}` }],
-      isError: authCheck.startsWith('FAILED') ? true : result.isError,
-    } as McpToolResult;
-  }
-
-  private async liveAuthCheck(): Promise<string> {
-    const started = Date.now();
-    try {
-      await Promise.race([
-        this.cippService.ping(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('timed out after 10 s')), 10_000)),
-      ]);
-      return `OK (HTTP 200, ${Date.now() - started} ms)`;
-    } catch (err) {
-      const e = err as { statusCode?: number; message?: string };
-      return `FAILED${e.statusCode ? ` HTTP ${e.statusCode}` : ''}: ${(e.message ?? String(err)).slice(0, 200)}`;
+    // -----------------------------------------------------------------------
+    // Users
+    // -----------------------------------------------------------------------
+    case 'cipp_list_users': {
+     const { tenantFilter, searchField, searchValue } = args as {
+      tenantFilter: string;
+      searchField?: string;
+      searchValue?: string;
+     };
+     const data = await this.cippService.listUsers(tenantFilter, { searchField, searchValue });
+     result = shapeList(
+      Array.isArray(data) ? data as Record<string, unknown>[] : [],
+      userSummary,
+      shapeArgs
+     );
+     break;
     }
+
+    case 'cipp_create_user': {
+     const {
+      tenantFilter,
+      displayName,
+      userPrincipalName,
+      password,
+      givenName,
+      surname,
+      jobTitle,
+      department,
+      country,
+     } = args as {
+      tenantFilter: string;
+      displayName: string;
+      userPrincipalName: string;
+      password: string;
+      givenName?: string;
+      surname?: string;
+      jobTitle?: string;
+      department?: string;
+      country?: string;
+     };
+     const userData: Record<string, unknown> = {
+      displayName,
+      userPrincipalName,
+      password,
+     };
+     if (givenName !== undefined) userData['givenName'] = givenName;
+     if (surname !== undefined) userData['surname'] = surname;
+     if (jobTitle !== undefined) userData['jobTitle'] = jobTitle;
+     if (department !== undefined) userData['department'] = department;
+     if (country !== undefined) userData['country'] = country;
+     const data = await this.cippService.createUser(tenantFilter, userData);
+     result = shapeRaw(data);
+     break;
+    }
+
+    case 'cipp_edit_user': {
+     const {
+      tenantFilter,
+      userId,
+      displayName,
+      jobTitle,
+      department,
+      usageLocation,
+     } = args as {
+      tenantFilter: string;
+      userId: string;
+      displayName?: string;
+      jobTitle?: string;
+      department?: string;
+      usageLocation?: string;
+     };
+     const editData: Record<string, unknown> = {};
+     if (displayName !== undefined) editData['displayName'] = displayName;
+     if (jobTitle !== undefined) editData['jobTitle'] = jobTitle;
+     if (department !== undefined) editData['department'] = department;
+     if (usageLocation !== undefined) editData['usageLocation'] = usageLocation;
+     const data = await this.cippService.editUser(tenantFilter, userId, editData);
+     result = shapeRaw(data);
+     break;
+    }
+
+    case 'cipp_disable_user': {
+     const { tenantFilter, userId } = args as { tenantFilter: string; userId: string };
+     const data = await this.cippService.disableUser(tenantFilter, userId);
+     result = shapeRaw(data);
+     break;
+    }
+
+    case 'cipp_reset_password': {
+     const { tenantFilter, userId, newPassword } = args as {
+      tenantFilter: string;
+      userId: string;
+      newPassword?: string;
+     };
+     const data = await this.cippService.resetPassword(tenantFilter, userId, newPassword);
+     result = shapeRaw(data);
+     break;
+    }
+
+    case 'cipp_reset_mfa': {
+     const { tenantFilter, userId } = args as { tenantFilter: string; userId: string };
+     const data = await this.cippService.resetMFA(tenantFilter, userId);
+     result = shapeRaw(data);
+     break;
+    }
+
+    case 'cipp_revoke_sessions': {
+     const { tenantFilter, userId } = args as { tenantFilter: string; userId: string };
+     const data = await this.cippService.revokeSessions(tenantFilter, userId);
+     result = shapeRaw(data);
+     break;
+    }
+
+    case 'cipp_offboard_user': {
+     const {
+      tenantFilter,
+      userId,
+      revokePermissions,
+      disableUser,
+      resetPassword,
+      transferMailbox,
+     } = args as {
+      tenantFilter: string;
+      userId: string;
+      revokePermissions?: boolean;
+      disableUser?: boolean;
+      resetPassword?: boolean;
+      transferMailbox?: string;
+     };
+     const offboardOptions: Record<string, unknown> = {};
+     if (revokePermissions !== undefined) offboardOptions['revokePermissions'] = revokePermissions;
+     if (disableUser !== undefined) offboardOptions['disableUser'] = disableUser;
+     if (resetPassword !== undefined) offboardOptions['resetPassword'] = resetPassword;
+     if (transferMailbox !== undefined) offboardOptions['transferMailbox'] = transferMailbox;
+     const data = await this.cippService.offboardUser(tenantFilter, userId, offboardOptions);
+     result = shapeRaw(data);
+     break;
+    }
+
+    case 'cipp_bec_check': {
+     const { tenantFilter, userId } = args as { tenantFilter: string; userId: string };
+     const data = await this.cippService.becCheck(tenantFilter, userId);
+     result = shapeItem(
+      data as Record<string, unknown>,
+      undefined,
+      shapeArgs
+     );
+     break;
+    }
+
+    case 'cipp_list_mfa_users': {
+     const { tenantFilter } = args as { tenantFilter: string };
+     const data = await this.cippService.listMfaUsers(tenantFilter);
+     result = shapeList(
+      Array.isArray(data) ? data as Record<string, unknown>[] : [],
+      mfaUserSummary,
+      shapeArgs
+     );
+     break;
+    }
+
+    case 'cipp_list_user_devices': {
+     const { tenantFilter, userId } = args as { tenantFilter: string; userId: string };
+     const data = await this.cippService.listUserDevices(tenantFilter, userId);
+     result = shapeList(
+      Array.isArray(data) ? data as Record<string, unknown>[] : [],
+      deviceSummary,
+      shapeArgs
+     );
+     break;
+    }
+
+    case 'cipp_list_user_groups': {
+     const { tenantFilter, userId } = args as { tenantFilter: string; userId: string };
+     const data = await this.cippService.listUserGroups(tenantFilter, userId);
+     result = shapeList(
+      Array.isArray(data) ? data as Record<string, unknown>[] : [],
+      groupSummary,
+      shapeArgs
+     );
+     break;
+    }
+
+    // -----------------------------------------------------------------------
+    // Groups
+    // -----------------------------------------------------------------------
+    case 'cipp_list_groups': {
+     const { tenantFilter, search } = args as { tenantFilter: string; search?: string };
+     const data = await this.cippService.listGroups(tenantFilter, { search });
+     result = shapeList(
+      Array.isArray(data) ? data as Record<string, unknown>[] : [],
+      groupSummary,
+      shapeArgs
+     );
+     break;
+    }
+
+    case 'cipp_create_group': {
+     const {
+      tenantFilter,
+      displayName,
+      description,
+      securityEnabled,
+      mailEnabled,
+      mailNickname,
+     } = args as {
+      tenantFilter: string;
+      displayName: string;
+      description?: string;
+      securityEnabled?: boolean;
+      mailEnabled?: boolean;
+      mailNickname?: string;
+     };
+     const groupData: Record<string, unknown> = { displayName };
+     if (description !== undefined) groupData['description'] = description;
+     if (securityEnabled !== undefined) groupData['securityEnabled'] = securityEnabled;
+     if (mailEnabled !== undefined) groupData['mailEnabled'] = mailEnabled;
+     if (mailNickname !== undefined) groupData['mailNickname'] = mailNickname;
+     const data = await this.cippService.createGroup(tenantFilter, groupData);
+     result = shapeRaw(data);
+     break;
+    }
+
+    // -----------------------------------------------------------------------
+    // Mailboxes
+    // -----------------------------------------------------------------------
+    case 'cipp_list_mailboxes': {
+     const { tenantFilter, type } = args as { tenantFilter: string; type?: string };
+     const data = await this.cippService.listMailboxes(tenantFilter, { type });
+     result = shapeList(
+      Array.isArray(data) ? data as Record<string, unknown>[] : [],
+      mailboxSummary,
+      shapeArgs
+     );
+     break;
+    }
+
+    case 'cipp_list_mailbox_permissions': {
+     const { tenantFilter, upn } = args as { tenantFilter: string; upn: string };
+     const data = await this.cippService.listMailboxPermissions(tenantFilter, upn);
+     result = shapeList(
+      Array.isArray(data) ? data as Record<string, unknown>[] : [],
+      undefined,
+      shapeArgs
+     );
+     break;
+    }
+
+    case 'cipp_set_out_of_office': {
+     const { tenantFilter, upn, enabled, internalMessage, externalMessage } = args as {
+      tenantFilter: string;
+      upn: string;
+      enabled: boolean;
+      internalMessage?: string;
+      externalMessage?: string;
+     };
+     const oooData: Record<string, unknown> = { enabled };
+     if (internalMessage !== undefined) oooData['internalMessage'] = internalMessage;
+     if (externalMessage !== undefined) oooData['externalMessage'] = externalMessage;
+     const data = await this.cippService.setOutOfOffice(tenantFilter, upn, oooData);
+     result = shapeRaw(data);
+     break;
+    }
+
+    case 'cipp_set_email_forwarding': {
+     const { tenantFilter, upn, forwardTo, keepCopy } = args as {
+      tenantFilter: string;
+      upn: string;
+      forwardTo?: string;
+      keepCopy?: boolean;
+     };
+     const forwardData: Record<string, unknown> = {};
+     if (forwardTo !== undefined) forwardData['forwardTo'] = forwardTo;
+     if (keepCopy !== undefined) forwardData['keepCopy'] = keepCopy;
+     const data = await this.cippService.setEmailForwarding(tenantFilter, upn, forwardData);
+     result = shapeRaw(data);
+     break;
+    }
+
+    // -----------------------------------------------------------------------
+    // Security
+    // -----------------------------------------------------------------------
+    case 'cipp_list_conditional_access_policies': {
+     const { tenantFilter } = args as { tenantFilter: string };
+     const data = await this.cippService.listConditionalAccessPolicies(tenantFilter);
+     result = shapeList(
+      Array.isArray(data) ? data as Record<string, unknown>[] : [],
+      caPolicySummary,
+      shapeArgs
+     );
+     break;
+    }
+
+    case 'cipp_list_named_locations': {
+     const { tenantFilter } = args as { tenantFilter: string };
+     const data = await this.cippService.listNamedLocations(tenantFilter);
+     result = shapeList(
+      Array.isArray(data) ? data as Record<string, unknown>[] : [],
+      namedLocationSummary,
+      shapeArgs
+     );
+     break;
+    }
+
+    // -----------------------------------------------------------------------
+    // Standards
+    // -----------------------------------------------------------------------
+    case 'cipp_list_standards': {
+     const { tenantFilter } = args as { tenantFilter: string };
+     const data = await this.cippService.listStandards(tenantFilter);
+     result = shapeList(
+      Array.isArray(data) ? data as Record<string, unknown>[] : [],
+      standardSummary,
+      shapeArgs
+     );
+     break;
+    }
+
+    case 'cipp_run_standards_check': {
+     const { tenantFilter } = args as { tenantFilter: string };
+     const data = await this.cippService.runStandardsCheck(tenantFilter);
+     result = shapeRaw(data);
+     break;
+    }
+
+    case 'cipp_list_standard_templates': {
+     const data = await this.cippService.listStandardTemplates();
+     result = shapeList(
+      Array.isArray(data) ? data as Record<string, unknown>[] : [],
+      templateSummary,
+      shapeArgs
+     );
+     break;
+    }
+
+    // `tenantFilter` is optional for these two tools: omit it to report
+    // across all tenants. This diverges intentionally from other Standards
+    // cases that require it.
+    case 'cipp_get_tenant_drift': {
+     const { tenantFilter } = args as { tenantFilter?: string };
+     const data = await this.cippService.getTenantDrift(tenantFilter);
+     result = shapeList(
+      Array.isArray(data) ? data as Record<string, unknown>[] : [],
+      driftSummary,
+      shapeArgs
+     );
+     break;
+    }
+
+    case 'cipp_get_tenant_alignment': {
+     const { tenantFilter } = args as { tenantFilter?: string };
+     const data = await this.cippService.getTenantAlignment(tenantFilter);
+     result = shapeList(
+      Array.isArray(data) ? data as Record<string, unknown>[] : [],
+      alignmentSummary,
+      shapeArgs
+     );
+     break;
+    }
+
+    case 'cipp_create_standard_template': {
+     const { template } = args as { template: Record<string, unknown> };
+     const data = await this.cippService.createStandardTemplate(template);
+     result = shapeRaw(data);
+     break;
+    }
+
+    case 'cipp_delete_standard_template': {
+     const { templateId } = args as { templateId: string };
+     const data = await this.cippService.deleteStandardTemplate(templateId);
+     result = shapeRaw(data);
+     break;
+    }
+
+    case 'cipp_list_bpa': {
+     const { tenantFilter } = args as { tenantFilter: string };
+     const data = await this.cippService.listBPA(tenantFilter);
+     result = shapeList(
+      Array.isArray(data) ? data as Record<string, unknown>[] : [],
+      bpaSummary,
+      shapeArgs
+     );
+     break;
+    }
+
+    case 'cipp_list_domain_health': {
+     const { tenantFilter } = args as { tenantFilter: string };
+     const data = await this.cippService.listDomainHealth(tenantFilter);
+     result = shapeList(
+      toRecordList(data),
+      domainHealthSummary,
+      shapeArgs
+     );
+     break;
+    }
+
+    // -----------------------------------------------------------------------
+    // Licenses
+    // -----------------------------------------------------------------------
+    case 'cipp_list_licenses': {
+     const { tenantFilter } = args as { tenantFilter: string };
+     const data = await this.cippService.listLicenses(tenantFilter);
+     result = shapeList(
+      Array.isArray(data) ? data as Record<string, unknown>[] : [],
+      licenseSummary,
+      shapeArgs
+     );
+     break;
+    }
+
+    case 'cipp_list_csp_licenses': {
+     const data = await this.cippService.listCSPLicenses();
+     result = shapeList(
+      Array.isArray(data) ? data as Record<string, unknown>[] : [],
+      cspLicenseSummary,
+      shapeArgs
+     );
+     break;
+    }
+
+    // -----------------------------------------------------------------------
+    // Alerts
+    // -----------------------------------------------------------------------
+    case 'cipp_list_audit_logs': {
+     const { tenantFilter, days, type } = args as {
+      tenantFilter: string;
+      days?: number;
+      type?: string;
+     };
+     const data = await this.cippService.listAuditLogs(tenantFilter, {
+      Days: days,
+      Type: type,
+     });
+     result = shapeList(
+      Array.isArray(data) ? data as Record<string, unknown>[] : [],
+      auditLogSummary,
+      shapeArgs
+     );
+     break;
+    }
+
+    case 'cipp_list_alert_queue': {
+     const data = await this.cippService.listAlertQueue();
+     result = shapeList(
+      Array.isArray(data) ? data as Record<string, unknown>[] : [],
+      alertSummary,
+      shapeArgs
+     );
+     break;
+    }
+
+    // -----------------------------------------------------------------------
+    // GDAP
+    // -----------------------------------------------------------------------
+    case 'cipp_list_gdap_roles': {
+     const data = await this.cippService.listGDAPRoles();
+     result = shapeList(
+      Array.isArray(data) ? data as Record<string, unknown>[] : [],
+      gdapRoleSummary,
+      shapeArgs
+     );
+     break;
+    }
+
+    case 'cipp_list_gdap_invites': {
+     const data = await this.cippService.listGDAPInvites();
+     result = shapeList(
+      Array.isArray(data) ? data as Record<string, unknown>[] : [],
+      gdapInviteSummary,
+      shapeArgs
+     );
+     break;
+    }
+
+    // -----------------------------------------------------------------------
+    // Scheduler
+    // -----------------------------------------------------------------------
+    case 'cipp_list_scheduled_items': {
+     const data = await this.cippService.listScheduledItems();
+     result = shapeList(
+      Array.isArray(data) ? data as Record<string, unknown>[] : [],
+      scheduledItemSummary,
+      shapeArgs
+     );
+     break;
+    }
+
+    case 'cipp_add_scheduled_item': {
+     const { taskName, command, scheduledTime, recurrence, tenantFilter } = args as {
+      taskName: string;
+      command: string;
+      scheduledTime: string;
+      recurrence?: string;
+      tenantFilter?: string;
+     };
+     const itemData: Record<string, unknown> = {
+      taskName,
+      command,
+      scheduledTime,
+     };
+     if (recurrence !== undefined) itemData['recurrence'] = recurrence;
+     if (tenantFilter !== undefined) itemData['tenantFilter'] = tenantFilter;
+     const data = await this.cippService.addScheduledItem(itemData);
+     result = shapeRaw(data);
+     break;
+    }
+
+    // -----------------------------------------------------------------------
+    // Core
+    // -----------------------------------------------------------------------
+    case 'cipp_ping': {
+     const data = await this.cippService.ping();
+     result = shapeRaw(data);
+     break;
+    }
+
+    case 'cipp_get_version': {
+     const data = await this.cippService.getVersion();
+     result = shapeRaw(data);
+     break;
+    }
+
+    case 'cipp_list_logs': {
+     const { dateFilter } = args as { dateFilter?: string };
+     const data = await this.cippService.listLogs(
+      dateFilter !== undefined ? { DateFilter: dateFilter } : undefined
+     );
+     result = shapeList(
+      Array.isArray(data) ? data as Record<string, unknown>[] : [],
+      logSummary,
+      shapeArgs
+     );
+     break;
+    }
+
+    default:
+     throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
+   }
+
+   return result as McpToolResult;
+  } catch (error) {
+   if (error instanceof McpError && error.code === ErrorCode.MethodNotFound) {
+    // Unknown tool — propagate as protocol error so client knows the tool doesn't exist
+    throw error;
+   }
+   this.logger.error(`Tool call failed: ${name}`, { error });
+
+   // Use toolErrorFromCatch for structured, actionable error output.
+   // For CIPP-specific HTTP errors (statusCode on the thrown Error), we need
+   // to normalise to the .status shape that toolErrorFromCatch recognises.
+   const normalised = normaliseForEnvelope(error);
+   return toolErrorFromCatch(name, normalised, {
+    hint: buildCippHint(error),
+   }) as McpToolResult;
   }
+ }
 
-  private describeConfiguration(): McpToolResult {
-    const baseUrl = resolveCippBaseUrl();
-    const hasApiKey = isEnvSet('CIPP_API_KEY');
-    const missing = findMissingCredentials(baseUrl, hasApiKey);
-    if (missing) return missing;
+ // ---------------------------------------------------------------------------
+ // cipp_status — never throws; makes one cheap authenticated call when configured.
+ // ---------------------------------------------------------------------------
 
-    const status = {
-      configured: true,
-      cippBaseUrl: baseUrl,
-      authMode: hasApiKey ? 'api_key' : 'oauth_client_credentials',
-      hint: 'Credentials appear configured. Call cipp_ping to verify live connectivity.',
-      credentials: {
-        CIPP_BASE_URL: 'set — your CIPP instance URL',
-        CIPP_API_KEY: envLabel('CIPP_API_KEY', 'not set (using OAuth)'),
-        CIPP_CLIENT_ID: envLabel('CIPP_CLIENT_ID'),
-        CIPP_CLIENT_SECRET: envLabel('CIPP_CLIENT_SECRET'),
-        CIPP_TENANT_ID: envLabel('CIPP_TENANT_ID'),
-        CIPP_TOKEN_SCOPE: envLabel('CIPP_TOKEN_SCOPE', 'not set (optional)'),
-      },
-    };
+ private async handleStatus(): Promise<McpToolResult> {
+  const baseUrl = resolveCippBaseUrl();
+  const missing = describeMissingConfiguration(baseUrl, isEnvSet('CIPP_API_KEY'));
+  // No credentials: report what is missing and skip the live check. A status
+  // tool that errors here cannot tell the operator what to set.
+  if (missing) return { content: [{ type: 'text', text: missing }] };
 
-    return shapeRaw(status) as McpToolResult;
+  const result = this.describeConfiguration();
+  // "Configured" only proves values are present. One PublicPing shows whether
+  // CIPP accepts them. Response data is never printed.
+  const authCheck = await this.liveAuthCheck();
+  return {
+   content: [...result.content, { type: 'text', text: `Auth check: ${authCheck}` }],
+   isError: authCheck.startsWith('FAILED'),
+  } as McpToolResult;
+ }
+
+ private async liveAuthCheck(): Promise<string> {
+  const started = Date.now();
+  try {
+   await Promise.race([
+    this.cippService.ping(),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timed out after 10 s')), 10_000)),
+   ]);
+   return `OK (HTTP 200, ${Date.now() - started} ms)`;
+  } catch (err) {
+   const e = err as { statusCode?: number; message?: string };
+   return `FAILED${e.statusCode ? ` HTTP ${e.statusCode}` : ''}: ${(e.message ?? String(err)).slice(0, 200)}`;
   }
+ }
+
+ /** Config summary when configured; the credential-less prose report is handled by handleStatus. */
+ private describeConfiguration(): McpToolResult {
+  const baseUrl = resolveCippBaseUrl();
+  const hasApiKey = isEnvSet('CIPP_API_KEY');
+
+  const status = {
+   configured: true,
+   cippBaseUrl: baseUrl,
+   authMode: hasApiKey ? 'api_key' : 'oauth_client_credentials',
+   hint: 'Credentials appear configured. Call cipp_ping to verify live connectivity.',
+   credentials: {
+    CIPP_BASE_URL: 'set — your CIPP instance URL',
+    CIPP_API_KEY: envLabel('CIPP_API_KEY', 'not set (using OAuth)'),
+    CIPP_CLIENT_ID: envLabel('CIPP_CLIENT_ID'),
+    CIPP_CLIENT_SECRET: envLabel('CIPP_CLIENT_SECRET'),
+    CIPP_TENANT_ID: envLabel('CIPP_TENANT_ID'),
+    CIPP_TOKEN_SCOPE: envLabel('CIPP_TOKEN_SCOPE', 'not set (optional)'),
+   },
+  };
+
+  return shapeRaw(status) as McpToolResult;
+ }
 }
 
-const resolveCippBaseUrl = (): string | undefined =>
-  process.env['CIPP_BASE_URL'] ?? process.env['CIPP_URL'] ?? process.env['CIPP_API_URL'];
+/** First usable base-URL variable, trimmed; placeholders and blanks are skipped (mirrors utils/config.ts). */
+const resolveCippBaseUrl = (): string | undefined => {
+ const name = ['CIPP_BASE_URL', 'CIPP_URL', 'CIPP_API_URL'].find(isEnvSet);
+ return name ? process.env[name]?.trim() : undefined;
+};
 
-/** Error result naming what to set, or undefined when a base URL and one auth mode are present. */
-function findMissingCredentials(baseUrl: string | undefined, hasApiKey: boolean): McpToolResult | undefined {
-  if (!baseUrl) return missingCredsError('CIPP', ['CIPP_BASE_URL']) as McpToolResult;
-  const hasOAuth = ['CIPP_CLIENT_ID', 'CIPP_CLIENT_SECRET', 'CIPP_TENANT_ID'].every(isEnvSet);
-  if (hasApiKey || hasOAuth) return undefined;
-  return missingCredsError('CIPP', [
-    'CIPP_API_KEY (static Bearer token)',
-    'OR: CIPP_TENANT_ID + CIPP_CLIENT_ID + CIPP_CLIENT_SECRET (OAuth client-credentials)',
-  ]) as McpToolResult;
+/** Names and states of the CIPP environment, never values. Prose, not an error envelope. */
+function describeMissingConfiguration(baseUrl: string | undefined, hasApiKey: boolean): string | undefined {
+ const hasOAuth = ['CIPP_CLIENT_ID', 'CIPP_CLIENT_SECRET', 'CIPP_TENANT_ID'].every(isEnvSet);
+ const hasAuth = hasApiKey || hasOAuth;
+ if (baseUrl && hasAuth) return undefined;
+
+ const state = (name: string): string => (isEnvSet(name) ? 'set' : 'MISSING');
+ return [
+  'CIPP MCP Server Status',
+  '',
+  'Credentials: NOT CONFIGURED',
+  `  CIPP_BASE_URL: ${baseUrl ? 'set' : 'MISSING (required)'}`,
+  '    CIPP is customer-hosted, so there is no default base URL; set CIPP_BASE_URL to your own instance.',
+  `  Auth, one of the following is required${hasAuth ? ' (satisfied)' : ''}:`,
+  `    CIPP_API_KEY (static Bearer token): ${state('CIPP_API_KEY')}`,
+  `    OR the OAuth client-credentials trio: CIPP_TENANT_ID ${state('CIPP_TENANT_ID')}, CIPP_CLIENT_ID ${state('CIPP_CLIENT_ID')}, CIPP_CLIENT_SECRET ${state('CIPP_CLIENT_SECRET')}`,
+  `  CIPP_TOKEN_SCOPE: ${envLabel('CIPP_TOKEN_SCOPE', 'not set (optional)')}`,
+  'Auth check: SKIPPED (no credentials)',
+  `Available domains: ${Object.keys(TOOL_CATEGORIES).join(', ')}`,
+  '',
+  'Only cipp_status is listed until the variables above are set and the session is restarted.',
+ ].join('\n');
 }
 
-const isEnvSet = (name: string): boolean => !!process.env[name];
+/** An unresolved `${user_config.*}` placeholder or blank counts as unset (mirrors utils/config.ts cleanEnv). */
+const isEnvSet = (name: string): boolean => {
+ const v = process.env[name]?.trim();
+ return !!v && !/^\$\{[^}]+\}$/.test(v);
+};
 const envLabel = (name: string, notSetLabel = 'not set'): string => (isEnvSet(name) ? 'set' : notSetLabel);
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
+/** Keep only the plain-object items of an unknown list (replaces `as unknown as Record<string, unknown>[]`); a bad item never empties the whole result. */
+function toRecordList(value: unknown): Record<string, unknown>[] {
+ return Array.isArray(value)
+  ? value.filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null)
+  : [];
+}
+
 /**
  * CIPP's service throws errors with .statusCode rather than .status.
  * toolErrorFromCatch checks for .status (number), so normalise the shape.
  */
-function normaliseForEnvelope(err: unknown): unknown {
-  if (
-    err !== null &&
-    typeof err === 'object' &&
-    'statusCode' in err &&
-    typeof (err as Record<string, unknown>)['statusCode'] === 'number' &&
-    !('status' in err)
-  ) {
-    // Shallow-clone and alias statusCode -> status so classifyError picks it up.
-    return Object.assign(
-      Object.create(Object.getPrototypeOf(err)),
-      err,
-      { status: (err as Record<string, unknown>)['statusCode'] }
-    );
-  }
-  return err;
+function normaliseForEnvelope<E>(err: E): E {
+ if (
+  err !== null &&
+  typeof err === 'object' &&
+  'statusCode' in err &&
+  typeof (err as Record<string, unknown>)['statusCode'] === 'number' &&
+  !('status' in err)
+ ) {
+  // Shallow-clone and alias statusCode -> status so classifyError picks it up.
+  return Object.assign(
+   Object.create(Object.getPrototypeOf(err)),
+   err,
+   { status: (err as Record<string, unknown>)['statusCode'] }
+  );
+ }
+ return err;
 }
 
 /**
  * Build a CIPP-specific remediation hint based on the HTTP status code.
  */
 function buildCippHint(err: unknown): string {
-  const statusCode =
-    (err as any)?.statusCode ??
-    (err as any)?.status ??
-    (err as any)?.response?.status;
+ const statusCode =
+  (err as any)?.statusCode ??
+  (err as any)?.status ??
+  (err as any)?.response?.status;
 
-  if (statusCode === 401 || statusCode === 403) {
-    return (
-      'Verify CIPP_BASE_URL is correct and authentication is valid: ' +
-      'either CIPP_API_KEY, or OAuth values ' +
-      'CIPP_TENANT_ID + CIPP_CLIENT_ID + CIPP_CLIENT_SECRET ' +
-      '(optionally CIPP_TOKEN_SCOPE). ' +
-      'The caller account may also lack the required GDAP/RBAC role in CIPP.'
-    );
-  }
-  if (statusCode === 404) {
-    return 'The requested resource was not found. Verify the tenantFilter and resource IDs are correct.';
-  }
-  return 'Check that CIPP is reachable at CIPP_BASE_URL and your credentials are valid. Call cipp_status for a config summary.';
+ if (statusCode === 401 || statusCode === 403) {
+  return (
+   'Verify CIPP_BASE_URL is correct and authentication is valid: ' +
+   'either CIPP_API_KEY, or OAuth values ' +
+   'CIPP_TENANT_ID + CIPP_CLIENT_ID + CIPP_CLIENT_SECRET ' +
+   '(optionally CIPP_TOKEN_SCOPE). ' +
+   'The caller account may also lack the required GDAP/RBAC role in CIPP.'
+  );
+ }
+ if (statusCode === 404) {
+  return 'The requested resource was not found. Verify the tenantFilter and resource IDs are correct.';
+ }
+ return 'Check that CIPP is reachable at CIPP_BASE_URL and your credentials are valid. Call cipp_status for a config summary.';
 }

@@ -18,6 +18,7 @@ change may touch what another sibling owns, or you are blocked on their output,
 SendMessage that sibling by name - one exchange, never wait twice. Post durable notes
 to the board (`python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py" note --owner <name>`) and report to the lead, never to
 the user.
+If CLAUDE_PLUGIN_ROOT is empty in your shell, use the absolute script path given in your dispatch.
 
 ## You do not dispatch
 
@@ -63,7 +64,23 @@ Report only what a query returns. Do not infer a column's purpose or a table's u
 
 Return the full inventory as your final message (the orchestrator persists it to `.audit/schema-inventory.md`): one section per table, then a flat machine-readable list at the end in the form `schema.table: col1, col2, ...` for downstream diffing. Lead with a 10 to 20 line summary (table count, total columns, tables with RLS disabled).
 
+## Report container (fixed; every atlas worker)
+Your final message is exactly the container below, with nothing before its first line. The items under "Report back" further down belong inside the EVIDENCE and DELIVERABLE lines.
+
+```
+STATUS: DONE | FAILED | BLOCKED
+STEPS: <done>/<total>
+FILES_CHANGED: <path>; <path>   (or: none)
+EVIDENCE:
+1. <command or read-back> -> <first 3 and last 3 lines of the real output>
+DELIVERABLE: <the findings or artifact your dispatch asked for; none if only files changed>
+NEXT: <the exact question for the lead if BLOCKED or FAILED; otherwise: none>
+```
+
 ## Report back (final message only)
+
+Put these items inside the container above (EVIDENCE and DELIVERABLE lines); do not add anything outside it.
+
 - `report_body`: the full inventory content (per-table sections, flat list) for the orchestrator to write to `.audit/schema-inventory.md`.
 - `table_count` and `total_columns`: totals from the catalog query.
 - `tables_rls_disabled`: count and list of tables with RLS off.

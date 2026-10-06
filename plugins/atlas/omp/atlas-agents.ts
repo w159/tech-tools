@@ -4,11 +4,13 @@
  * Imported by `gen-agents.ts` (which bakes per-agent `thinkingLevel`/`model`
  * frontmatter into the generated omp-native agent files under `agents/`) and
  * by `index.ts` (which detects atlas-bound task dispatches for the naming
- * notice). User-approved map (atlas 8.4.0 colony):
+ * notice). Tier map (atlas colony):
  *
- * - off:    explorer, docs-auditor, docs-curator, schema-inventory, naming-glossary-audit
+ * - off:    explorer, docs-auditor, docs-curator, schema-inventory, naming-glossary-audit, runner
  * - low:    implementer, planner, db-prober, ui-runtime-tester
  * - medium: verifier, completeness-critic, rls-privilege-audit
+ *
+ * Runner (mechanical tier) uses `@atlas-mechanic` with `@smol` as the guaranteed fallback.
  *
  * Roles: off/low agents run on the `@atlas-worker` role alias, medium agents
  * on `@atlas-verifier`. Role values resolve through `modelRoles.<role>` in the
@@ -19,6 +21,7 @@
  */
 export const ATLAS_WORKER_ROLE = "@atlas-worker";
 export const ATLAS_VERIFIER_ROLE = "@atlas-verifier";
+export const ATLAS_MECHANIC_ROLE = "@atlas-mechanic";
 
 export const ATLAS_THINKING_LEVELS: Record<string, "off" | "low" | "medium"> = {
 	explorer: "off",
@@ -26,6 +29,7 @@ export const ATLAS_THINKING_LEVELS: Record<string, "off" | "low" | "medium"> = {
 	"docs-curator": "off",
 	"schema-inventory": "off",
 	"naming-glossary-audit": "off",
+	runner: "off",
 	implementer: "low",
 	planner: "low",
 	"db-prober": "low",
@@ -36,7 +40,10 @@ export const ATLAS_THINKING_LEVELS: Record<string, "off" | "low" | "medium"> = {
 };
 
 /** Role alias for one atlas agent, derived from its thinking tier. */
-export function roleFor(agentName: string): typeof ATLAS_WORKER_ROLE | typeof ATLAS_VERIFIER_ROLE {
+export function roleFor(
+	agentName: string,
+): typeof ATLAS_WORKER_ROLE | typeof ATLAS_VERIFIER_ROLE | typeof ATLAS_MECHANIC_ROLE {
+	if (agentName === "runner") return ATLAS_MECHANIC_ROLE;
 	return ATLAS_THINKING_LEVELS[agentName] === "medium" ? ATLAS_VERIFIER_ROLE : ATLAS_WORKER_ROLE;
 }
 
@@ -66,6 +73,7 @@ export const ATLAS_DEFAULT_FALLBACK_ROLE = "@default";
 
 /** Prioritized `model` list for one atlas agent (frontmatter accepts arrays). */
 export function modelPatternsFor(agentName: string): string[] {
+	if (agentName === "runner") return [ATLAS_MECHANIC_ROLE, SMOL_FALLBACK_ROLE];
 	return ATLAS_THINKING_LEVELS[agentName] === "medium"
 		? [roleFor(agentName), ATLAS_DEFAULT_FALLBACK_ROLE, SMOL_FALLBACK_ROLE]
 		: [roleFor(agentName), SMOL_FALLBACK_ROLE];

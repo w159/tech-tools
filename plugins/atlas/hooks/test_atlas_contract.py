@@ -197,9 +197,14 @@ class WiringContract(unittest.TestCase):
         """A hook that speaks on SubagentStop hijacks the agent's final reply.
 
         Measured: four of six dispatches answered the nudge instead of their
-        task. Only silent capture hooks may bind here.
+        task. Only silent capture hooks may bind here, with one exception:
+        worker_report_gate.py is the sole exception. It speaks only when an
+        atlas worker's final message is not the fixed report container, at
+        most once per agent, and its reason is a one-line format correction
+        asking for that same report (it injects no new instruction). The
+        guarantees are pinned in test_worker_report_gate.py.
         """
-        allowed = {"ingest_session.py", "memory_capture.py"}
+        allowed = {"ingest_session.py", "memory_capture.py", "worker_report_gate.py"}
         bound = {
             Path(c.split()[-1].strip('"')).name for c in _commands_for("SubagentStop")
         }
@@ -1204,7 +1209,11 @@ class NoNestedSubagentsContract(unittest.TestCase):
         missing = []
         for path in sorted((PLUGIN_ROOT / "agents").glob("*.md")):
             fm = _frontmatter(path)
-            declared = fm.get("disallowedTools", "")
+            declared = {
+                t.strip().strip("\"'")
+                for t in fm.get("disallowedTools", "").strip("[]").split(",")
+                if t.strip()
+            }
             for tool in required:
                 if tool not in declared:
                     missing.append("%s -> %s" % (path.name, tool))
@@ -1232,7 +1241,8 @@ class NoNestedSubagentsContract(unittest.TestCase):
         self.assertEqual(
             missing,
             [],
-            "agents lacking the fresh-dispatch (never forked) instruction: %s" % missing,
+            "agents lacking the fresh-dispatch (never forked) instruction: %s"
+            % missing,
         )
 
     def test_hook_denies_a_dispatch_from_a_subagent_transcript(self):
@@ -1509,6 +1519,10 @@ class SkillPathsContract(unittest.TestCase):
                 owners.setdefault(glob, []).append(skill)
         self.assertEqual(
             [],
-            ["%s: %s" % (glob, skills) for glob, skills in owners.items() if len(skills) > 1],
+            [
+                "%s: %s" % (glob, skills)
+                for glob, skills in owners.items()
+                if len(skills) > 1
+            ],
             "skills share identical literal paths globs (co-activate together)",
         )

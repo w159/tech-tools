@@ -47,9 +47,11 @@ decisive for critic/curator/planner-type roles that would otherwise need a long
 re-briefing. The hard boundary: verifiers and anything requiring independent
 judgment must stay fresh-context - a fork inherits the orchestrator's
 assumptions, which is precisely what a verifier exists to escape (Law 5,
-`plugins/atlas/skills/atlas-orchestrate/references/subagent-kit.md:96-113` -
+`plugins/atlas/skills/atlas-orchestrate/references/subagent-kit.md:115-122` -
 moved from `skills/atlas-engine/` on 2026-09-24; the fork table's
-`atlas:verifier | never` row at line 108 carries the independence rule). The same
+`atlas:verifier | never` row at line 121 carries the independence rule). The same
 run also showed why the boundary matters: fresh verifiers refuted or refined
 author claims three times (classifier false positives, codex token mechanism,
 trigger regressions) - a fork would likely have inherited those blind spots.
+
+**Correction (2026-10-06):** the line cites above (`subagent-kit.md:115-122`, "row at line 121") were not re-verified in the latest audit and drift as that file changes. Locate the rule by the section name instead: the "fork" table in `plugins/atlas/skills/atlas-orchestrate/references/subagent-kit.md`, row `atlas:verifier | never`.

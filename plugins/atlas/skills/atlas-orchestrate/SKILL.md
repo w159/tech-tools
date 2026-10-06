@@ -19,7 +19,7 @@ You have the whole codebase. Never ask the user to point at the problem - discov
 
 ## Standing-consent orchestration mode
 
-While this skill is active you have **standing consent to fan out**. Go solo only on trivial conversational turns. User can say "mode off" to revert. Details: `references/multi-stage-planning.md`.
+While this skill is active you have **standing consent to fan out**. Go solo only on trivial conversational turns. User can say "mode off" to revert (conversational convention; no switch in code). Details: `references/multi-stage-planning.md`.
 
 ## What you may and may not touch
 
@@ -46,7 +46,7 @@ If it feels too small to delegate, delegate anyway.
 
 **One-line laws:** (1) delegate all execution (2) one message, many agents; writers get worktree isolation (3) evidence = correct observed behavior on the failing case (4) docs before edits (5) different agent verifies with independent judgment (6) gate writes and completion (7) scaffold per-root.
 
-**Before any other action, run the decision gate:** multi-stage OR multi-surface OR whole-repo/audit? → Workflow or parallel wave first; no inline. Tripwire advises at 4 inline ops and denies at 8 / non-docs Edit|Write|NotebookEdit in orchestration sessions (`ATLAS_TRIPWIRE*`).
+**Before any other action, run the decision gate:** multi-stage OR multi-surface OR whole-repo/audit? → Workflow or parallel wave first; no inline. Tripwire advises at 4 inline ops (`ATLAS_TRIPWIRE_THRESHOLD`) and denies the 7th unsanctioned inline op since the last dispatch, and non-docs Edit|Write|NotebookEdit in orchestration sessions (`ATLAS_TRIPWIRE*`); `docs/` and `.atlas/` writes and URI writes (`agent://`, `xd://`) are not counted.
 
 Full laws, decision gate, TodoWrite rules, and mid-run steering: **load `references/laws-and-gates.md`**.
 
@@ -70,7 +70,7 @@ Orchestrator stays Opus-tier; subagents default Sonnet, drop to Haiku for read-a
 
 ## Automation (hooks)
 
-14 unique hook programs / 18 bindings auto-load via `hooks/hooks.json` (including the fallow agent gate). Fail-open on missing deps. Key enforcers: `session_boot`, `prompt_optimizer` (+ arm-early), `bash_advisor`, `fallow_gate`, `dispatch_tripwire`, `completion_gate`, `format_after_edit`, `docs_drift_watch`, `connector_credential_watch`, `ingest_session`, `memory_capture`, `chronicle_facet`, `nudge`, `atlas_doctor`. Full contract/env: **load `references/hooks-automation.md`**. JS/TS fallow usage: **load `references/fallow-tools.md`**.
+17 hook programs / 21 bindings auto-load via `hooks/hooks.json` (including the fallow agent gate and the `worker_report_gate` SubagentStop check). Fail-open on missing deps. Key enforcers: `session_boot`, `prompt_optimizer` (+ arm-early), `bash_advisor`, `fallow_gate`, `dispatch_tripwire`, `completion_gate`, `recall_gate`, `todo_capture`, `worker_report_gate`, `format_after_edit`, `docs_drift_watch`, `connector_credential_watch`, `ingest_session`, `memory_capture`, `chronicle_facet`, `nudge`, `atlas_doctor`. Full contract/env: **load `references/hooks-automation.md`**. JS/TS fallow usage: **load `references/fallow-tools.md`**.
 
 ## Reference index - load only when triggered
 

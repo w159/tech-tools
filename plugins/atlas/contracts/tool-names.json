@@ -26,5 +26,16 @@
 		"prefix": "xd://mcp__",
 		"separator": "_",
 		"note": "model-emitted mcp__<server>__<tool>; parts sanitized like omp's mint in mcp/tool-bridge.ts mintMCPToolName: lowercased, [^a-z0-9_] runs -> _, underscore-collapsed and trimmed; a tool name prefixed '<server>_' loses that prefix; no 64-char cap applied here. bareTools: bare lean-ctx/context-mode names used in output-styles/atlas-orchestrator.md -> device names a real omp session mints (verified with `omp --print --no-session` listing ctx_ devices). Keys in claudeToOmp must contain no whitespace (phrase keys break on .md reflow); omp/hook-bridge.ts claudeNamesFor only reverse-maps keys matching /^[A-Z]\\w*$/."
+	},
+	"agentGuard": {
+		"note": "Read by omp/agent-guard.ts. omp does not parse `disallowedTools` from agent frontmatter (omp 18.6.1: 0 hits for disallowedTools/permissionMode under pi-coding-agent/src), so the guard enforces agents/<name>.md `disallowedTools` on omp via a tool_call handler. Each key under `ompTools` is an omp tool name; `blockedByClaude` lists the Claude tool names whose presence in the agent's `disallowedTools` blocks that omp tool. `write` is blocked only when its `path` is NOT a URI-scheme target (uriSchemeRegex), because omp's `write` also carries `xd://` MCP device calls, outbound IRC (`agent://`) and shared artifacts (`local://`, `proc://`); removing `write` from the child would break all of those. Shell writes through `bash` are NOT covered. `notApplicable` Claude names have no omp equivalent and are recorded here so the omission is explicit.",
+		"uriSchemeRegex": "^[A-Za-z][A-Za-z0-9+.-]*://",
+		"ompTools": {
+			"write": { "blockedByClaude": ["Write"], "onlyWhenPath": "notUri" },
+			"edit": { "blockedByClaude": ["Edit", "MultiEdit"] },
+			"ast_edit": { "blockedByClaude": ["Edit", "Write"] },
+			"task": { "blockedByClaude": ["Task", "Agent"] }
+		},
+		"notApplicable": ["NotebookEdit", "TaskCreate", "TaskGet", "TaskList", "TaskUpdate"]
 	}
 }

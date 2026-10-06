@@ -13,7 +13,7 @@ job, the real defect is an underspecified prompt - fix the prompt, not the model
 
 | Tier | Use for | Set via |
 |---|---|---|
-| **haiku** | read-only discovery, symbol sweeps, catalog dumps, drift and naming audits, running lint/format, mechanical edits | `atlas:schema-inventory`, `atlas:docs-auditor`, `atlas:naming-glossary-audit`, `Agent(model:"haiku")` |
+| **haiku** | read-only discovery, symbol sweeps, catalog dumps, drift and naming audits, running lint/format, mechanical edits | `atlas:runner` (mechanical edits from exact steps), `atlas:schema-inventory`, `atlas:docs-auditor`, `atlas:naming-glossary-audit`, `Agent(model:"haiku")` |
 | **sonnet** | implementation, verification, planning, DB probing, docs curation - every other subagent | default and ceiling for `atlas:*`; drop a role to haiku the moment its job is read-and-report |
 | **opus** | you, the orchestrator: hard architecture, cross-cutting judgment, final synthesis | the main thread only |
 
@@ -23,7 +23,7 @@ frontmatter key).
 
 | Effort | Use for | Agents |
 |---|---|---|
-| **low** | executing a clear spec: mapping, implementing, cataloguing, curating, running a gate | `explorer`, `planner`, `implementer`, `docs-auditor`, `docs-curator`, `db-prober`, `ui-runtime-tester`, `schema-inventory`, `naming-glossary-audit` |
+| **low** | executing a clear spec: mapping, implementing, cataloguing, curating, running a gate, running exact steps | `runner`, `explorer`, `planner`, `implementer`, `docs-auditor`, `docs-curator`, `db-prober`, `ui-runtime-tester`, `schema-inventory`, `naming-glossary-audit` |
 | **medium** | rendering an independent verdict against evidence you did not hand them | `verifier`, `completeness-critic`, `rls-privilege-audit` |
 
 Raising a subagent's effort is a last resort after the prompt has been tightened and still fails.
@@ -40,6 +40,17 @@ frontmatter value is a key into the CLI's own color map, so anything else misses
 the map and renders uncolored. `test_atlas_contract.py` fails on a missing or
 off-palette value.
 
+## Mechanical tier: `atlas:runner`
+
+`atlas:runner` is the cheap mechanical executor (13 `atlas:*` agents ship in total). It does not design, investigate or decide: it runs numbered steps exactly as written, records each command and its real output, and stops on anything unexpected.
+
+- **Model/effort:** Claude Code `model: haiku`, `effort: low`. On omp the roles are `[@atlas-mechanic, @smol]` with thinking off.
+- **Fit:** at most 7 steps on at most 5 named files. Anything larger or needing a judgment call goes to `implementer` (standard tier) or `verifier`/audit agents (judgment tier).
+- **Dispatch:** besides the five required spec blocks, a runner dispatch MUST carry a `STEPS:` block (required and capped by `dispatch_tripwire.py`).
+- **Report:** like every atlas worker it returns the `REPORT:` container (`STATUS`, `STEPS`, `FILES_CHANGED`, `EVIDENCE`, `DELIVERABLE`, `NEXT`; `STATUS` is DONE, FAILED or BLOCKED). See `references/subagent-kit.md`.
+- **Source of truth:** `plugins/atlas/contracts/worker-protocol.json` and `plugins/atlas/agents/runner.md`.
+
+
 
 
 ## Your squad
@@ -54,6 +65,6 @@ Dispatch constantly. Three complementary sets:
 
 `references/capability-routing.md` maps task signals -> the right agent + skill + MCP + model.
 
-This skill ships as part of the **atlas plugin**: the `atlas:*` companions live in the plugin's top-level `agents/` directory (`plugins/atlas/agents/`) and are auto-discovered by Claude Code; 13 hook programs ship under `hooks/` (one of them, `atlas_doctor.py`, physically lives under `scripts/`) and all auto-load via `hooks/hooks.json` on install (no manual step).
+This skill ships as part of the **atlas plugin**: the `atlas:*` companions live in the plugin's top-level `agents/` directory (`plugins/atlas/agents/`) and are auto-discovered by Claude Code; 17 hook programs / 21 bindings ship (16 under `hooks/`, plus `atlas_doctor.py` physically under `scripts/`) and all auto-load via `hooks/hooks.json` on install (no manual step).
 
 

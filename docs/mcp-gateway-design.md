@@ -144,7 +144,8 @@ narrow access further; they cannot widen it past what the gateway allows.
    (vault `gwh-mcp-gateway-kv`). Supplying the client ID skips dynamic client
    registration, which Entra does not support.
 2. Claude calls `/mcp` unauthenticated, gets `401` with
-   `WWW-Authenticate: Bearer resource_metadata=...`.
+   `WWW-Authenticate: Bearer resource_metadata="https://<host>/.well-known/oauth-protected-resource/mcp", scope="<MCP_RESOURCE_URL>/<scope>"`
+   (`mcp_servers/mcp-gateway/src/http.ts:35`; exact scope text is built on that line).
 3. Claude reads `/.well-known/oauth-protected-resource/mcp`, which names
    `https://login.microsoftonline.com/<tenant>/v2.0` as the authorization server,
    and uses Entra's OpenID discovery.
@@ -192,6 +193,8 @@ another vendor's secrets. The audit log records which Entra user invoked which
 tool, which is the per-user accountability the upstream API cannot provide.
 
 ## Network
+
+Live-state sentences in this section and in Status / Remaining setup (Key Vault, Container App revision, `maxReplicas`, IP allowlist, ingress rule) describe Azure state that cannot be checked from the repo; each is as of the date it states (observed via `az` / Container Apps), not re-verified in the 2026-10-06 docs audit. Code-side claims (12 vendor roles in `backends.ts`, Write-implies-Read and unannotated-needs-Write in `policy.ts`, audience list in `auth.ts`) were verified against source.
 
 - Ingress: Container Apps, custom domain `mcp.henssler.com` (not yet bound -
   see Remaining setup), IP allowlist `160.79.104.0/21` (Anthropic outbound,

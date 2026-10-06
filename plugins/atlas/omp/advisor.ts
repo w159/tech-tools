@@ -44,7 +44,9 @@ export function defaultAdvisorDeps(): AdvisorDeps {
 	};
 	return {
 		addBoardItem(text, sessionId, root) {
-			run(["add", text, "--session", sessionId, "--root", root]);
+			// --unique: omp replays the whole message history into `context` after a restart, so the
+			// in-memory `seen` set is not enough; the board must refuse a second copy of the same note.
+			run(["add", "--unique", text, "--session", sessionId, "--root", root]);
 		},
 		openAdvisorItems(sessionId, root) {
 			let parsed: unknown;

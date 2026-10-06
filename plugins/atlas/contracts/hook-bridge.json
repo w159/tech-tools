@@ -5,7 +5,7 @@
     "UserPromptSubmit": "every main before_agent_start",
     "PreToolUse": "tool_call (main and subagent sessions); an omp task batch is run once per item as a Claude Task dispatch",
     "PostToolUse": "tool_result (payload carries tool_response = stringified result content, transcript_path and is_error; omp-minted mcp__<server>_<tool> names of the hooks.json connector servers are re-split to mcp__<server>__<tool>)",
-    "Stop": "session_stop (main only): omp_transcript.py converts the omp session file BEFORE any hook runs, then the five Stop hooks all run in hooks.json order (capture hooks must run even when the gate blocks); the first {decision: block, reason} becomes the omp session_stop result {decision: block, reason}, not plain context",
+    "Stop": "session_stop (main only): omp_transcript.py converts the omp session file BEFORE any hook runs, then the five Stop hooks all run in hooks.json order (capture hooks must run even when the gate blocks); the first {decision: block, reason} becomes the omp session_stop result {decision: block, reason}, not plain context. The payload mirrors Claude Code's Stop payload, including last_assistant_message: the text blocks of session_stop.last_assistant_message joined by newlines (omitted when the event carries no text), which completion_gate.py condition (n) reads",
     "SessionEnd": "session_shutdown on a main session: ingest_session.py spawned detached (never awaited) after transcript conversion",
     "SubagentStop": "session_shutdown on a subagent session: ingest_session.py spawned detached after transcript conversion",
     "PreCompact": "auto_compaction_start: ingest_session.py spawned detached (session_before_compact is deliberately NOT used: registering a handler for it disables omp async compaction)"
@@ -30,6 +30,7 @@
   "notBridged": {
     "todo_capture.py": "omp/index.ts mirrors the omp todo tool to the board natively (the board-mirror spawn writes .atlas/.run/todos.json on every todo tool result)",
     "atlas_doctor.py": "mines atlas_db telemetry written by Claude Code hooks; the omp bridge writes the same run/event/dispatch rows, but the doctor surface is only exercised by the Claude path today",
+    "worker_report_gate.py": "omp subagent sessions never fire session_stop; the report contract is enforced on omp by omp/worker-report.ts (strict outputSchema injected into atlas task items)",
     "recall_gate.py": "omp/mandates.ts implements the recall gate natively"
   }
 }

@@ -1,7 +1,7 @@
 // Gate logic runs against recording deps; the one real end-to-end test drives
 // defaultAdvisorDeps through python3 atlas_todo.py inside a /tmp project.
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { defaultAdvisorDeps, registerAdvisorGate } from "./advisor";
@@ -182,4 +182,44 @@ test("defaultAdvisorDeps adds a real board item and lists it open for the sessio
 
 	expect(deps.openAdvisorItems("e2e-session", dir)).toEqual([mine?.id]);
 	expect(deps.openAdvisorItems("nobody", dir)).toEqual([]);
+});
+
+test("defaultAdvisorDeps.addBoardItem passes --unique to atlas_todo.py add (real argv)", () => {
+	const realPython = Bun.which("python3");
+	expect(realPython).toBeTruthy();
+	const shimDir = mkdtempSync(join(tmpdir(), "atlas-advisor-shim-"));
+	const argvLog = join(shimDir, "argv.log");
+	writeFileSync(join(shimDir, "python3"), `#!/bin/sh\nprintf '%s\\n' "$*" >> '${argvLog}'\nexec '${realPython}' "$@"\n`, { mode: 0o755 });
+	const prevPath = process.env.PATH;
+	process.env.PATH = `${shimDir}:${prevPath ?? ""}`;
+	try {
+		defaultAdvisorDeps().addBoardItem("advisor[concern]: argv probe", "argv-session", dir);
+	} finally {
+		process.env.PATH = prevPath;
+		const logged = existsSync(argvLog) ? readFileSync(argvLog, "utf8") : "";
+		rmSync(shimDir, { recursive: true, force: true });
+		expect(logged).toContain("atlas_todo.py add --unique advisor[concern]: argv probe --session argv-session --root");
+	}
+});
+
+test("replaying the same advisor note through real atlas_todo.py add --unique keeps one item, even after it is completed", () => {
+	const deps = defaultAdvisorDeps();
+	const text = "advisor[blocker]: replayed after restart";
+	deps.addBoardItem(text, "replay-session", dir);
+	deps.addBoardItem(text, "replay-session", dir);
+
+	const boardFile = join(dir, ".atlas", ".run", "todos.json");
+	const read = () => JSON.parse(readFileSync(boardFile, "utf8")) as { items: { id: string; content: string; status: string; session_id: string }[] };
+	const matching = () => read().items.filter(item => item.content === text && item.session_id === "replay-session");
+	expect(matching()).toHaveLength(1);
+	expect(deps.openAdvisorItems("replay-session", dir)).toEqual([matching()[0].id]);
+
+	const todo = join(import.meta.dir, "..", "scripts", "atlas_todo.py");
+	const done = Bun.spawnSync(["python3", todo, "complete", "--id", matching()[0].id, "--evidence", "fixed", "--root", dir]);
+	expect(done.exitCode).toBe(0);
+
+	deps.addBoardItem(text, "replay-session", dir); // a restart replays the closed note again
+	expect(matching()).toHaveLength(1);
+	expect(matching()[0].status).toBe("completed");
+	expect(deps.openAdvisorItems("replay-session", dir)).toEqual([]);
 });

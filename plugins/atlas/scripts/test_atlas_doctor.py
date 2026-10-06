@@ -335,6 +335,44 @@ class AtlasDoctorTest(unittest.TestCase):
         ok, detail = atlas_doctor.check_context_tooling(root_path=root)
         self.assertTrue(ok)
 
+    def _omp_cfg(self, body):
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "config.yml")
+        with open(p, "w") as f:
+            f.write(body)
+        return p
+
+    def test_omp_model_roles_missing_is_flagged_with_fix(self):
+        p = self._omp_cfg("modelRoles:\n  smol: a/b:off\n  plan: a/c\nother: 1\n")
+        ok, detail = atlas_doctor.check_omp_model_roles(config_path=p)
+        self.assertFalse(ok)
+        self.assertIn("atlas-mechanic", detail)
+
+    def test_omp_model_roles_ignores_keys_outside_block(self):
+        p = self._omp_cfg(
+            "modelRoles:\n  smol: a/b\natlas-mechanic: x\natlas-worker: y\n"
+        )
+        ok, _ = atlas_doctor.check_omp_model_roles(config_path=p)
+        self.assertFalse(ok)
+
+    def test_omp_model_roles_detail_names_the_real_smol_value(self):
+        p = self._omp_cfg("modelRoles:\n  smol: anthropic/claude-haiku-4-5:off\n")
+        ok, detail = atlas_doctor.check_omp_model_roles(config_path=p)
+        self.assertFalse(ok)
+        self.assertIn("@smol (anthropic/claude-haiku-4-5:off)", detail)
+        q = self._omp_cfg("modelRoles:\n  plan: a/b\n")
+        self.assertIn(
+            "@smol (unset)", atlas_doctor.check_omp_model_roles(config_path=q)[1]
+        )
+
+    def test_omp_model_roles_set_passes_and_absent_config_skips(self):
+        p = self._omp_cfg(
+            "modelRoles:\n  atlas-mechanic: anthropic/claude-haiku-4-5:off\n"
+            "  atlas-worker: anthropic/claude-haiku-4-5:off\n"
+        )
+        self.assertTrue(atlas_doctor.check_omp_model_roles(config_path=p)[0])
+        self.assertTrue(atlas_doctor.check_omp_model_roles(config_path=p + ".none")[0])
+
     def test_context_tooling_is_warn_severity_not_hook_blocking(self):
         # An unscaffolded repo (the common case for any project a user
         # opens that predates atlas-tooling) must not turn every
@@ -1180,6 +1218,71 @@ class AtlasDoctorMiningTest(unittest.TestCase):
         self.assertEqual(
             self.conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0], 1
         )
+
+
+class MineTurnQualityHarnessTest(unittest.TestCase):
+    """header_present / banned_punct are scored for the harnesses that receive
+    the atlas output style: Claude Code (output style) and omp (omp/style.ts
+    appends the status block to the main session's system prompt). Codex has no
+    injection path, so its replies would read as 100% non-compliant and stay
+    skipped; so does any harness not proven to receive the style."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.conn = atlas_db.connect(os.path.join(self.tmp, "atlas.db"))
+        atlas_db.init(self.conn)
+        self.pid = atlas_db.register_project(self.conn, "/proj/harness", "harness")
+
+    def tearDown(self):
+        self.conn.close()
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _bad_session(self, sid, agent):
+        """One session whose two replies both miss the header and carry a
+        banned glyph: the worst case for both deterministic metrics."""
+        atlas_db.upsert_session_log(self.conn, sid, agent=agent, project_id=self.pid)
+        now = time.time()
+        for i in range(2):
+            for judgment, value in (("header_present", 0.0), ("banned_punct", 1.0)):
+                atlas_db.upsert_turn_score(
+                    self.conn,
+                    sid,
+                    f"{sid}-{judgment}-{i}",
+                    judgment,
+                    ts=now,
+                    kind="metric",
+                    value=value,
+                )
+
+    def _mine(self):
+        out = atlas_doctor.mine_turn_quality(
+            self.conn, self.tmp, window_days=14, min_turns=1
+        )
+        return {f["key"] for f in out}, set(out.evaluated)
+
+    def test_omp_session_scored_for_header_and_punctuation(self):
+        self._bad_session("s-omp", "omp")
+        keys, evaluated = self._mine()
+        self.assertEqual(keys, {"metric:header_present", "metric:banned_punct"})
+        self.assertEqual(evaluated, {"metric:header_present", "metric:banned_punct"})
+
+    def test_claude_session_still_scored(self):
+        self._bad_session("s-claude", "claude")
+        keys, evaluated = self._mine()
+        self.assertEqual(keys, {"metric:header_present", "metric:banned_punct"})
+        self.assertEqual(evaluated, {"metric:header_present", "metric:banned_punct"})
+
+    def test_codex_session_stays_skipped(self):
+        self._bad_session("s-codex", "codex")
+        keys, evaluated = self._mine()
+        self.assertEqual(keys, set())
+        self.assertEqual(evaluated, set())
+
+    def test_unrecognised_agent_stays_skipped(self):
+        self._bad_session("s-other", "gemini")
+        keys, evaluated = self._mine()
+        self.assertEqual(keys, set())
+        self.assertEqual(evaluated, set())
 
 
 if __name__ == "__main__":

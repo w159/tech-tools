@@ -269,7 +269,9 @@ function httpStatusToCode(status: number): ErrorCode {
 
 /**
  * Convenience: build a MISSING_CREDENTIALS error with a standard hint.
- * Use in the `<vendor>_status` tool when credentials are absent.
+ * Do NOT use this in the `<vendor>_status` tool: status tools return a prose
+ * report with `isError: false` when credentials are missing, so they stay
+ * callable for diagnosis. Use this in tools that need credentials to proceed.
  *
  * @param vendorName  Display name of the vendor (e.g. "NinjaOne").
  * @param envVars     Names of the required environment variables.

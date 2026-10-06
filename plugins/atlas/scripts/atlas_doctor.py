@@ -248,7 +248,10 @@ def check_output_style(settings_path=None):
     try:
         data = _load_json(path) if os.path.isfile(path) else {}
     except Exception as e:
-        return True, f"settings unreadable ({e}); boot will still inject header contract"
+        return (
+            True,
+            f"settings unreadable ({e}); boot will still inject header contract",
+        )
     style = ""
     if isinstance(data, dict):
         style = data.get("outputStyle") or ""
@@ -263,9 +266,57 @@ def check_output_style(settings_path=None):
         False,
         f"outputStyle={style!r} differs from {ATLAS_OUTPUT_STYLE!r}; docs say "
         f"force-for-plugin should still apply, but atlas 5.25.0 saw headers vanish "
-        f"here. Set outputStyle to \"{ATLAS_OUTPUT_STYLE}\" to remove the risk "
+        f'here. Set outputStyle to "{ATLAS_OUTPUT_STYLE}" to remove the risk '
         f"(SessionStart still injects the contract)",
     )
+
+
+OMP_MECHANIC_ROLES = ("atlas-mechanic", "atlas-worker")
+
+
+def check_omp_model_roles(config_path=None):
+    """(ok, detail): are the omp roles atlas:runner/colony workers prefer set?
+
+    Without `modelRoles.atlas-mechanic` the runner silently falls back to
+    the configured @smol model, so the "cheap mechanical tier" is only thinking-off,
+    not cheap. Skipped (ok) when no omp config exists. Stdlib only: scans the
+    indented `modelRoles:` block, never loads YAML.
+    """
+    path = config_path or os.path.join(
+        os.path.expanduser("~"), ".omp", "agent", "config.yml"
+    )
+    if not os.path.isfile(path):
+        return True, "no omp config; skipped"
+    try:
+        with open(path, encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
+    except OSError as e:
+        return True, f"omp config unreadable ({e}); skipped"
+    roles = {}
+    in_block = False
+    for line in lines:
+        if re.match(r"^modelRoles:\s*$", line):
+            in_block = True
+            continue
+        if in_block:
+            if line and not line[0].isspace():
+                break
+            m = re.match(r"^\s+([A-Za-z0-9_-]+):\s*(\S.*?)\s*$", line)
+            if m:
+                roles[m.group(1)] = m.group(2)
+    missing = [r for r in OMP_MECHANIC_ROLES if r not in roles]
+    if not missing:
+        return True, "omp modelRoles set for " + ", ".join(OMP_MECHANIC_ROLES)
+    smol = roles.get("smol")
+    fallback = f"@smol ({smol})" if smol else "@smol (unset)"
+    return (
+        False,
+        "omp modelRoles missing " + ", ".join(missing) + ": atlas:runner and "
+        f"colony workers fall back to {fallback}, which may not be a cheap model. "
+        "Set modelRoles.atlas-mechanic (and atlas-worker) to a haiku/flash-class "
+        "model in ~/.omp/agent/config.yml",
+    )
+
 
 ATLAS_TOOLING_MARKER = "<!-- atlas-tooling -->"
 
@@ -308,7 +359,9 @@ def check_typesafe_scoring(now=None):
         f"{rows or 0} turn_scores row(s) in last 7d; last scored {last_s}"
     )
     if errs:
-        detail += f"; {errs} scoring error(s) in last 7d, latest: {(last_err or '')[:200]}"
+        detail += (
+            f"; {errs} scoring error(s) in last 7d, latest: {(last_err or '')[:200]}"
+        )
     return (has_key and not off and bool(rows) and not errs), detail
 
 
@@ -502,6 +555,10 @@ def run_checks(plugin_name="atlas"):
     # on every unscaffolded repo a user opens.
     tooling_ok, tooling_detail = check_context_tooling()
     add("context-tooling", tooling_ok, tooling_detail, severity="warn")
+
+    # C11b: omp cheap-tier roles; WARN-severity (omp-only, user config).
+    mr_ok, mr_detail = check_omp_model_roles()
+    add("omp-model-roles", mr_ok, mr_detail, severity="warn")
 
     # C12: TypeSafe turn scoring is optional; WARN-severity, never a failure.
     ts_ok, ts_detail = check_typesafe_scoring()
@@ -1447,9 +1504,7 @@ def mine_colony_adherence(conn, root, window_days=None, min_sessions=None):
         delegation_rate = (delegated / denom) if denom else None
         reader_denom = agg["native"] + agg["ctx"]
         native_share = (agg["native"] / reader_denom) if reader_denom else None
-        named_rate, named_text = _colony_named_dispatch_stats(
-            agg["dispatch_summaries"]
-        )
+        named_rate, named_text = _colony_named_dispatch_stats(agg["dispatch_summaries"])
         out.evaluated.add(harness)
         excess = 0.0
         if native_share is not None and native_share > COLONY_NATIVE_SHARE_MAX:
@@ -1502,7 +1557,9 @@ def mine_colony_adherence(conn, root, window_days=None, min_sessions=None):
                 metric_value=excess,
                 native_reader_share=native_share,
                 delegation_rate=delegation_rate,
-                named_dispatch_rate=named_rate if named_rate is not None else named_text,
+                named_dispatch_rate=named_rate
+                if named_rate is not None
+                else named_text,
                 native_calls=agg["native"],
                 ctx_calls=agg["ctx"],
                 sessions=n,
@@ -1523,6 +1580,9 @@ NOUL_HIGH = 0.7  # noul probability counted as "yes" (hit=high judgments)
 NOUL_LOW = 0.35  # noul probability counted as "no" (hit=low judgments)
 HEADER_RATE_MIN = 0.8  # header_present rate below this -> finding
 BANNED_PUNCT_RATE_MAX = 0.10  # share of replies with banned glyphs
+# Agents whose sessions are shown the atlas output style, i.e. the ones the
+# deterministic header_present / banned_punct metrics can fairly be held to.
+HEADER_SCORED_AGENTS = frozenset({"claude", "omp"})
 
 
 def _turn_hit(spec, row):
@@ -1563,19 +1623,46 @@ def mine_turn_quality(conn, root, window_days=None, min_turns=20):
         ("-%d days" % window_days,),
     )
     rows = [
-        dict(zip(("sid", "uuid", "j", "kind", "value", "label", "project", "agent", "ts"), r))
+        dict(
+            zip(
+                (
+                    "sid",
+                    "uuid",
+                    "j",
+                    "kind",
+                    "value",
+                    "label",
+                    "project",
+                    "agent",
+                    "ts",
+                ),
+                r,
+            )
+        )
         for r in cur.fetchall()
     ]
     by_j = {}
     for r in rows:
-        # The output style (header, characters) only reaches Claude Code
-        # sessions; omp/codex replies would read as 100% non-compliant.
-        if r["j"] in ("header_present", "banned_punct") and r["agent"] != "claude":
+        # header_present / banned_punct measure compliance with the atlas
+        # output style, so they are only meaningful for a harness that
+        # delivers it: Claude Code (force-for-plugin output style) and omp
+        # (omp/style.ts renders the same output-styles/atlas-orchestrator.md
+        # into the main session's system prompt). Codex sessions are mirrored
+        # by the codex adapter but this plugin has no codex surface, so no
+        # style ever reaches them and every codex reply would read as 100%
+        # non-compliant. Any harness not listed in HEADER_SCORED_AGENTS is
+        # skipped for the same reason: no proof the style reaches it.
+        if (
+            r["j"] in ("header_present", "banned_punct")
+            and r["agent"] not in HEADER_SCORED_AGENTS
+        ):
             continue
         by_j.setdefault(r["j"], []).append(r)
 
     ntc = {
-        (r["sid"], r["uuid"]): _turn_hit(turn_scoring.JUDGMENTS["next_turn_correction"], r)
+        (r["sid"], r["uuid"]): _turn_hit(
+            turn_scoring.JUDGMENTS["next_turn_correction"], r
+        )
         for r in by_j.get("next_turn_correction", [])
         if "next_turn_correction" in turn_scoring.JUDGMENTS
     }
@@ -1592,7 +1679,8 @@ def mine_turn_quality(conn, root, window_days=None, min_turns=20):
             (sid,),
         ).fetchall()
         corrected = {
-            u for (u,) in conn.execute(
+            u
+            for (u,) in conn.execute(
                 "SELECT message_uuid FROM signals WHERE session_id=? "
                 "AND signal_type='user_correction'",
                 (sid,),
@@ -1825,11 +1913,7 @@ def mine(conn, root=None):
         # `evaluated` are never swept; a user's accepted/rejected/applied/
         # verified verdict is never touched (status must be 'open').
         evaluated = getattr(found, "evaluated", None) or set()
-        stale = [
-            f"{name}:{k}"
-            for k in evaluated
-            if f"{name}:{k}" not in emitted
-        ]
+        stale = [f"{name}:{k}" for k in evaluated if f"{name}:{k}" not in emitted]
         for fp in stale:
             conn.execute(
                 "UPDATE findings SET status='resolved', decided_at=? "
@@ -2151,7 +2235,9 @@ def main(argv=None):
         return 0
 
     for r in results:
-        status = "PASS" if r["ok"] else ("WARN" if r.get("severity") == "warn" else "FAIL")
+        status = (
+            "PASS" if r["ok"] else ("WARN" if r.get("severity") == "warn" else "FAIL")
+        )
         print(f"{status}  {r['check']:20} {r['detail']}")
     print(
         ("HEALTHY" if not failed else f"{len(failed)} PROBLEM(S)") + f" - {args.plugin}"

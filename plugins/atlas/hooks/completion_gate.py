@@ -18,7 +18,7 @@ still lists an in-flight subagent, workflow, or teammate dispatch (see
 work is still running, so the gate does not fire once per wave-Stop. A
 long-running `shell` or `monitor` task does not suppress it.
 
-Thirteen conditions must ALL hold before the gate passes (else block ONCE):
+Sixteen conditions must ALL hold before the gate passes (else block ONCE):
   (a) At least one file exists under `.atlas/evidence/` with an mtime at or
       after THIS RUN's start (via `_run_started_at`). Scoped like (f)/(g):
       only checked when THIS RUN shipped non-docs code (_nondocs_changed on
@@ -84,6 +84,34 @@ Thirteen conditions must ALL hold before the gate passes (else block ONCE):
       at least one Task/Agent dispatch. Checked even when orchestration was
       never armed; sidechains are exempt. DB and current-turn transcript
       evidence are combined, and internal errors fail open.
+  (n) Status header: for an orchestrating, non-sidechain session, the final
+      reply (`last_assistant_message` in the Stop payload; omp's stop bridge
+      fills it from session_stop) must start, on its first non-empty line, with
+      the header matching `headerFirstLinePattern` in
+      contracts/operating-contract.json (`ATLAS | <glyph> <phase> | <state>`).
+      Kill switch ATLAS_GATE_HEADER=off. Fails open on missing/empty text and
+      on stop_hook_active.
+  (o) Phased todo: when THIS RUN shipped non-docs code, this session's board
+      items (every status, non-manual) must cover each phase in the contract's
+      `requiredTodoPhasesWhenCodeShipped`. An item's phase is its `phase`
+      field, else a `[<phase>] ` content prefix. Kill switch
+      ATLAS_GATE_PHASES=off. Fails open on a missing contract or an
+      unreadable board.
+  (p) Colony channel: when THIS RUN dispatched two or more atlas workers
+      (`dispatches` rows whose agent_type starts `atlas:` or `atlas-`), the
+      channel must show use: a board note under .atlas/.run/board/ authored by
+      an owner other than `lead` inside the run window, or IRC/SendMessage
+      traffic (`agent://` event paths, SendMessage tool calls) recorded for the
+      run -- the exact sources are listed in `_colony_channel_used`. Kill switch
+      ATLAS_GATE_COLONY=off. Fails open on any read error.
+
+(n), (o), and (p) ask the model to repair presentation, not to produce work, so
+each blocks AT MOST ONCE per session: an O_EXCL marker `<cond>-<session>` under
+CONTRACT_GATE_MARKER_DIR (tmp dir `atlas-contract-gate`, overridable with
+ATLAS_CONTRACT_GATE_DIR) records the block, and a marked condition counts as
+satisfied. They are evaluated only for orchestrating sessions, never for a
+sidechain, and not while a dispatch is in flight. Conditions (a)-(m) re-block
+on every Stop until they hold.
 
 (a), (b), (f), and (g) all share one signal: whether THIS RUN shipped
 non-docs code (_nondocs_changed on the run-write signal from atlas_db). A
@@ -110,6 +138,7 @@ import json
 import os
 import re
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -277,9 +306,13 @@ def _delegation_exempt():
     """(dirs, extensions) exempt from the (m) delegation mandate, from the shared
     contracts/native-tools.json (also read by omp/contracts.ts); None if unreadable."""
     try:
-        path = Path(__file__).resolve().parent.parent / "contracts" / "native-tools.json"
+        path = (
+            Path(__file__).resolve().parent.parent / "contracts" / "native-tools.json"
+        )
         spec = json.loads(path.read_text())["delegationExempt"]
-        return tuple(str(d) for d in spec["dirs"]), tuple(str(e) for e in spec["extensions"])
+        return tuple(str(d) for d in spec["dirs"]), tuple(
+            str(e) for e in spec["extensions"]
+        )
     except (OSError, ValueError, KeyError, TypeError):
         return None
 
@@ -614,17 +647,22 @@ def _missing_delegation(session_id: str, transcript_path: str = "", root=None) -
         import atlas_db
 
         conn = atlas_db.connect()
-        rid = atlas_db.current_run_id(conn, session_id) or atlas_db.latest_run_id(conn, session_id)
+        rid = atlas_db.current_run_id(conn, session_id) or atlas_db.latest_run_id(
+            conn, session_id
+        )
         if rid is None:
             return False
         started = atlas_db.run_started_at(conn, rid)
         if started is None:
             return False
-        paths = [row[0] for row in conn.execute(
-            "SELECT path FROM events WHERE run_id=? AND context='main' "
-            "AND tool IN ('Write','Edit','MultiEdit','NotebookEdit') AND path IS NOT NULL",
-            (rid,),
-        )]
+        paths = [
+            row[0]
+            for row in conn.execute(
+                "SELECT path FROM events WHERE run_id=? AND context='main' "
+                "AND tool IN ('Write','Edit','MultiEdit','NotebookEdit') AND path IS NOT NULL",
+                (rid,),
+            )
+        ]
         for (summary,) in conn.execute(
             "SELECT input_summary FROM tool_calls WHERE session_id=? AND ts>=? "
             "AND is_sidechain=0 AND tool_name IN ('Write','Edit','MultiEdit','NotebookEdit')",
@@ -635,17 +673,26 @@ def _missing_delegation(session_id: str, transcript_path: str = "", root=None) -
         if exempt is None:
             return False  # contract unreadable: fail open, never block
         dirs, exts = exempt
-        code_paths = [p for p in paths if p and not (
-            p.endswith(exts) or any(p.startswith(d + "/") or f"/{d}/" in p for d in dirs)
-        )]
+        code_paths = [
+            p
+            for p in paths
+            if p
+            and not (
+                p.endswith(exts)
+                or any(p.startswith(d + "/") or f"/{d}/" in p for d in dirs)
+            )
+        ]
         code_paths += _shell_dirty_edits(root, session_id)
         if not _nondocs_changed(code_paths):
             return False
-        if conn.execute("SELECT 1 FROM dispatches WHERE run_id=? LIMIT 1", (rid,)).fetchone():
+        if conn.execute(
+            "SELECT 1 FROM dispatches WHERE run_id=? LIMIT 1", (rid,)
+        ).fetchone():
             return False
         if conn.execute(
             "SELECT 1 FROM events WHERE run_id=? AND context='main' "
-            "AND tool IN ('Task','Agent') LIMIT 1", (rid,),
+            "AND tool IN ('Task','Agent') LIMIT 1",
+            (rid,),
         ).fetchone():
             return False
         if conn.execute(
@@ -665,8 +712,10 @@ def _missing_delegation(session_id: str, transcript_path: str = "", root=None) -
                         continue
                     content = (rec.get("message") or {}).get("content") or []
                     if isinstance(content, list) and any(
-                        isinstance(b, dict) and b.get("type") == "tool_use"
-                        and b.get("name") in {"Task", "Agent"} for b in content
+                        isinstance(b, dict)
+                        and b.get("type") == "tool_use"
+                        and b.get("name") in {"Task", "Agent"}
+                        for b in content
                     ):
                         return False
         return True
@@ -692,6 +741,11 @@ def _reason(
     missing_plan: bool = False,
     name_violations: list | None = None,
     missing_delegation: bool = False,
+    missing_header: bool = False,
+    missing_phases: list | None = None,
+    colony_missing: bool = False,
+    session_id: str = "",
+    colony_workers: int | None = None,
 ) -> str:
     parts = []
     if missing_a:
@@ -809,8 +863,11 @@ def _reason(
             "trailing date or a leading sequence number sorts by subject instead. "
             "-> Rename with `git mv` (keep the history), then re-check with "
             'python3 "%s".'
-            % (len(name_violations), "; ".join(p for p, _ in name_violations[:5]),
-               SCRIPTS_DIR / "lint_docs_names.py")
+            % (
+                len(name_violations),
+                "; ".join(p for p, _ in name_violations[:5]),
+                SCRIPTS_DIR / "lint_docs_names.py",
+            )
         )
     if missing_delegation:
         parts.append(
@@ -818,6 +875,12 @@ def _reason(
             "thread with zero Task/Agent dispatches. -> Dispatch atlas:implementer "
             "(or another atlas:* agent) for the code change, then verify and retry Stop."
         )
+    if missing_header:
+        parts.append(_header_reason_part(_contract_doc()))
+    if missing_phases:
+        parts.append(_phases_reason_part(missing_phases, _contract_doc(), session_id))
+    if colony_missing:
+        parts.append(_colony_reason_part(colony_workers))
     failed = "\n".join(parts)
     return (
         "[atlas] Definition-of-done gate: the following condition(s) are not met:\n"
@@ -872,9 +935,16 @@ def main() -> int:
         if not _session_is_orchestrating(session):
             if missing_delegation and not _has_in_flight_dispatch(data):
                 _record_gate_block(session, ["m"])
-                print(json.dumps({"decision": "block", "reason": _reason(
-                    False, False, False, missing_delegation=True
-                )}))
+                print(
+                    json.dumps(
+                        {
+                            "decision": "block",
+                            "reason": _reason(
+                                False, False, False, missing_delegation=True
+                            ),
+                        }
+                    )
+                )
             return 0  # only (m) applies to unflagged runs
         if _has_in_flight_dispatch(data):
             return 0  # dispatched subagent/workflow/teammate still running -- not a completion claim yet
@@ -959,6 +1029,38 @@ def main() -> int:
                     root, session, str(data.get("transcript_path") or "")
                 ),
             )
+        # (n)/(o)/(p): the contract-visibility conditions. Each is evaluated for
+        # orchestrating, non-sidechain sessions only (this point is past the
+        # unflagged early return), is skipped while a dispatch is in flight
+        # (past the in-flight return above), honors its own kill switch, fails
+        # open on any error, and blocks AT MOST ONCE per session: a letter whose
+        # marker already exists counts as satisfied, and the marker is created
+        # when the block that names it is emitted (below).
+        sidechain = _payload_is_sidechain(data)
+        contract = None if sidechain else _contract_doc()
+        header_failing = (
+            not sidechain
+            and _status_header_would_block(data, contract)
+            and not _contract_block_used("n", session)
+        )
+        phases_missing = (
+            []
+            if sidechain or not code_changed or _contract_block_used("o", session)
+            else _missing_required_phases(root, session, contract)
+        )
+        colony_workers = None
+        colony_failing = False
+        if (
+            not sidechain
+            and not _switch_off(_SWITCH_COLONY)
+            and not _contract_block_used("p", session)
+        ):
+            colony_workers = _colony_workers_dispatched(session)
+            colony_failing = (
+                colony_workers is not None
+                and colony_workers >= 2
+                and not _colony_channel_used(root, session, started)
+            )
         if (
             ok_a
             and ok_b
@@ -973,6 +1075,9 @@ def main() -> int:
             and not missing_plan
             and not name_violations
             and not missing_delegation
+            and not header_failing
+            and not phases_missing
+            and not colony_failing
         ):
             # Silence on pass is the contract: the gate speaks only when it
             # blocks. No advisory, no "not evaluated" narration -- any output
@@ -994,10 +1099,22 @@ def main() -> int:
                 ("k", missing_plan),
                 ("l", bool(name_violations)),
                 ("m", missing_delegation),
+                ("n", header_failing),
+                ("o", bool(phases_missing)),
+                ("p", colony_failing),
             )
             if failing
         ]
         _record_gate_block(data.get("session_id", ""), failed)
+        for letter, needs_marker in (
+            ("n", header_failing),
+            ("o", bool(phases_missing)),
+            ("p", colony_failing),
+        ):
+            if needs_marker:
+                _mark_contract_block(
+                    letter, session
+                )  # one-shot: never block on this letter again
         block_reason = _reason(
             not ok_a,
             not ok_b,
@@ -1013,6 +1130,11 @@ def main() -> int:
             missing_plan=missing_plan,
             name_violations=name_violations,
             missing_delegation=missing_delegation,
+            missing_header=header_failing,
+            missing_phases=phases_missing,
+            colony_missing=colony_failing,
+            session_id=session,
+            colony_workers=colony_workers,
         )
         print(json.dumps({"decision": "block", "reason": block_reason}))
     except Exception as exc:  # noqa: BLE001 -- a Stop hook must never wedge the session
@@ -1345,6 +1467,330 @@ def _unpaired_implementer_dispatches(session_id: str) -> int:
     finally:
         if conn is not None:
             conn.close()
+
+
+# --------------------------------------------------------------------------
+# (n) status header, (o) phased todo, (p) colony channel -- the contract-
+# visibility conditions. contracts/operating-contract.json is the single source
+# for the phase ids/glyphs, the header pattern, the required phases and the
+# kill-switch names. Each condition is one-shot per session (marker file,
+# O_EXCL), switchable off, and fails open on any error or missing input.
+# --------------------------------------------------------------------------
+
+# Per-session "already blocked once" markers. Tests point this at a temp dir in
+# process (like recall_gate.GATE_MARKER_DIR) or via ATLAS_CONTRACT_GATE_DIR for
+# the subprocess-level tests.
+CONTRACT_GATE_MARKER_DIR = os.environ.get("ATLAS_CONTRACT_GATE_DIR") or os.path.join(
+    tempfile.gettempdir(), "atlas-contract-gate"
+)
+
+_CONTRACT_PATH = (
+    Path(__file__).resolve().parent.parent / "contracts" / "operating-contract.json"
+)
+
+# Kill-switch env var names. The contract's `switches` is authoritative; these
+# are the built-in fallbacks for an unreadable contract (which also disables
+# (n)/(o), but (p) needs no contract data and must still be switchable).
+_SWITCH_HEADER = "ATLAS_GATE_HEADER"
+_SWITCH_PHASES = "ATLAS_GATE_PHASES"
+_SWITCH_COLONY = "ATLAS_GATE_COLONY"
+
+
+def _contract_doc() -> dict | None:
+    """The parsed operating contract, or None when unreadable/malformed
+    (fail-open: (n) and (o) then stand down)."""
+    try:
+        doc = json.loads(_CONTRACT_PATH.read_text(encoding="utf-8"))
+        return doc if isinstance(doc, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
+def _switch_off(name: str) -> bool:
+    """True when the kill-switch env var `name` is explicitly off/0/false.
+    Unset or empty leaves the condition enabled (ATLAS_GATE=off, handled in
+    main(), disables every condition at once)."""
+    return os.environ.get(name, "").strip().lower() in {"off", "0", "false"}
+
+
+def _contract_marker(cond: str, session_id: str) -> str:
+    return os.path.join(
+        CONTRACT_GATE_MARKER_DIR,
+        "%s-%s" % (cond, re.sub(r"[^A-Za-z0-9_.-]", "_", session_id)),
+    )
+
+
+def _contract_block_used(cond: str, session_id: str) -> bool:
+    """True when condition `cond` already blocked once for this session.
+    Fail-open to True on an unusable session id: with no way to remember a
+    block, the condition must not fire (it could never be satisfied once)."""
+    if not session_id:
+        return True
+    try:
+        return os.path.exists(_contract_marker(cond, session_id))
+    except OSError:
+        return True
+
+
+def _mark_contract_block(cond: str, session_id: str) -> bool:
+    """Record that `cond` has blocked for this session. O_EXCL, so two racing
+    Stops cannot both claim the first block. Returns True when this call
+    created the marker. Never raises: a marker that cannot be written means
+    the condition may repeat, which is the lesser failure."""
+    if not session_id:
+        return False
+    try:
+        os.makedirs(CONTRACT_GATE_MARKER_DIR, exist_ok=True)
+        os.close(
+            os.open(
+                _contract_marker(cond, session_id),
+                os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+            )
+        )
+        return True
+    except OSError:
+        return False
+
+
+def _payload_is_sidechain(data: dict) -> bool:
+    """True for a subagent's Stop: SubagentStop-shaped payloads carry
+    `agent_id`, and a converted subagent transcript lives under /subagents/
+    (the same signal (m) uses)."""
+    if data.get("agent_id"):
+        return True
+    return "/subagents/" in str(data.get("transcript_path") or "").replace("\\", "/")
+
+
+def _switch_name(contract: dict | None, key: str, default: str) -> str:
+    try:
+        name = (contract or {})["switches"][key]
+        return name if isinstance(name, str) and name else default
+    except (KeyError, TypeError):
+        return default
+
+
+def _status_header_would_block(data: dict, contract: dict | None) -> bool:
+    """(n) True when the session's FINAL REPLY does not start with the atlas
+    status header. The text is `last_assistant_message` in the Stop payload
+    (Claude Code supplies it; omp's stop bridge fills it from session_stop).
+    Fails open (False) on: kill switch, unreadable contract, missing/empty
+    text, `stop_hook_active`, or any error."""
+    try:
+        if contract is None or _switch_off(
+            _switch_name(contract, "header", _SWITCH_HEADER)
+        ):
+            return False
+        if data.get("stop_hook_active"):
+            return False
+        text = data.get("last_assistant_message")
+        if not isinstance(text, str):
+            return False
+        first = next((ln for ln in text.splitlines() if ln.strip()), "")
+        if not first:
+            return False
+        return re.match(contract["headerFirstLinePattern"], first.strip()) is None
+    except Exception:
+        return False
+
+
+def _header_reason_part(contract: dict | None) -> str:
+    phases = ", ".join(
+        "%s %s" % (p.get("id"), p.get("glyph"))
+        for p in ((contract or {}).get("phases") or [])
+        if isinstance(p, dict)
+    )
+    return (
+        "  (n) Status header: your final reply does not start with the atlas status "
+        "header, so the user's terminal shows no phase or state line. The first "
+        "non-empty line must be `ATLAS | <glyph> <phase> | <one-line state>`. "
+        "Phases and glyphs: %s. -> Re-send your final reply with that header as its "
+        "first line and nothing else changed, then retry Stop. (This check blocks "
+        "once per session.)" % (phases or "see contracts/operating-contract.json")
+    )
+
+
+def _item_phase(item: dict, phases) -> str | None:
+    """The todo phase one board item carries: its `phase` field when that is a
+    known phase id, else the `[<phase>] ` content prefix (Claude TodoWrite has
+    no phase field). None when it carries neither."""
+    phase = item.get("phase")
+    if isinstance(phase, str) and phase in phases:
+        return phase
+    m = re.match(r"\[([^\]\s]{1,32})\]\s", str(item.get("content") or ""))
+    if m and m.group(1) in phases:
+        return m.group(1)
+    return None
+
+
+def _missing_required_phases(
+    root: Path, session_id: str, contract: dict | None
+) -> list:
+    """(o) The `requiredTodoPhasesWhenCodeShipped` phases that none of this
+    session's board items carry. Items of every status count; manual and
+    archived items are not the orchestrator's plan. The caller only asks when
+    this run shipped non-docs code. Fails open ([]) on a kill switch, an
+    unreadable contract, or a missing/corrupt board file: an unreadable
+    surface never manufactures a block."""
+    try:
+        if contract is None or _switch_off(
+            _switch_name(contract, "phasedTodo", _SWITCH_PHASES)
+        ):
+            return []
+        required = [str(p) for p in contract["requiredTodoPhasesWhenCodeShipped"]]
+        known = [str(p) for p in contract["todoPhases"]]
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_todo
+
+        board_file = atlas_todo.board_path(str(root))
+        if not board_file.is_file():
+            items: list = []  # no board at all: nothing carries a phase
+        else:
+            board = json.loads(board_file.read_text(encoding="utf-8"))
+            items = board["items"]
+            if not isinstance(items, list):
+                return []
+        covered = {
+            _item_phase(item, known)
+            for item in items
+            if isinstance(item, dict)
+            and not item.get("archived")
+            and item.get("origin") != "manual"
+            and item.get("session_id") == session_id
+        }
+        return [p for p in required if p not in covered]
+    except Exception:
+        return []
+
+
+def _phases_reason_part(missing: list, contract: dict | None, session_id: str) -> str:
+    prefix = str((contract or {}).get("itemPhasePrefix") or "[<phase>] ")
+    return (
+        "  (o) Phased todo: this run shipped code, but this session's todo items do "
+        "not cover the required phase(s): %s. A phase rides on an item either as its "
+        "`phase` field (omp todo phases) or as a `%s` content prefix (Claude "
+        "TodoWrite), for example `[%s] <step>`. Two ways to fix it: (1) re-tag "
+        "your items with that prefix in TodoWrite, or (2) run "
+        'python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py" scaffold '
+        '--task "<title>" --session %s '
+        "and then retry Stop. (This check blocks once per session.)"
+        % (", ".join(missing), prefix, missing[0], session_id or "<id>")
+    )
+
+
+def _colony_workers_dispatched(session_id: str) -> int | None:
+    """(p) How many atlas workers THIS RUN dispatched, or None when unknown.
+
+    Source: the `dispatches` table (atlas_db.log_dispatch), one row per Task/
+    Agent dispatch with `agent_type` = the dispatch's `subagent_type`
+    (dispatch_tripwire.py PostToolUse). An atlas worker is a row whose
+    agent_type starts with `atlas:` or `atlas-` -- the same prefix test
+    dispatch_tripwire uses to arm orchestration. Run = current-or-latest run
+    of the session. None (fail-open) on any DB error or when no run exists."""
+    conn = None
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db
+
+        conn = atlas_db.connect()
+        rid = atlas_db.current_run_id(conn, session_id) or atlas_db.latest_run_id(
+            conn, session_id
+        )
+        if rid is None:
+            return None
+        return conn.execute(
+            "SELECT COUNT(*) FROM dispatches WHERE run_id=? "
+            "AND (agent_type LIKE 'atlas:%' OR agent_type LIKE 'atlas-%')",
+            (rid,),
+        ).fetchone()[0]
+    except Exception:
+        return None
+    finally:
+        if conn is not None:
+            conn.close()
+
+
+def _colony_channel_used(root: Path, session_id: str, started: float | None) -> bool:
+    """(p) Did the colony channel carry anything during THIS RUN? Reads exactly
+    these evidence sources, any one of which is enough:
+
+      1. Board notes: every `<root>/.atlas/.run/board/*.jsonl` line (the file
+         format atlas_todo.note writes: {"ts","owner","to","item","text"}) whose
+         `owner` is not `lead` and whose `ts` is at or after the run start.
+      2. IRC traffic recorded in `events`: a row of the current-or-latest run
+         whose `path` is an `agent://` URI (omp routes SendMessage as a Write to
+         `agent://<peer>`; dispatch_tripwire logs it with that path).
+      3. IRC / SendMessage recorded in `tool_calls` (ingested transcripts,
+         including workers' sidechains): a row of this session at or after the
+         run start whose tool_name is `SendMessage`, or whose input_summary
+         carries an `agent://` URI.
+
+    Nothing else counts (the dispatch report itself is not the channel). When
+    the run start is unknown the window is open-ended (any note counts), the
+    same fail-open rule (a)/(b) use. Any read error returns True: an
+    unreadable surface never manufactures a block."""
+    try:
+        since = started if started is not None else 0.0
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_todo
+
+        notes_dir = atlas_todo.notes_dir(str(root))
+        if notes_dir.is_dir():
+            for path in sorted(notes_dir.glob("*" + atlas_todo.NOTE_FILE_SUFFIX)):
+                try:
+                    lines = path.read_text(encoding="utf-8").splitlines()
+                except OSError:
+                    continue
+                for line in lines:
+                    try:
+                        rec = json.loads(line)
+                        if (
+                            isinstance(rec, dict)
+                            and rec.get("owner") != "lead"
+                            and float(rec.get("ts") or "nan") >= since
+                        ):
+                            return True
+                    except (ValueError, TypeError):
+                        continue
+        import atlas_db
+
+        conn = atlas_db.connect()
+        try:
+            rid = atlas_db.current_run_id(conn, session_id) or atlas_db.latest_run_id(
+                conn, session_id
+            )
+            if (
+                rid is not None
+                and conn.execute(
+                    "SELECT 1 FROM events WHERE run_id=? AND path LIKE 'agent://%' LIMIT 1",
+                    (rid,),
+                ).fetchone()
+            ):
+                return True
+            return bool(
+                conn.execute(
+                    "SELECT 1 FROM tool_calls WHERE session_id=? AND ts>=? AND "
+                    "(tool_name='SendMessage' OR input_summary LIKE '%agent://%') LIMIT 1",
+                    (session_id, since),
+                ).fetchone()
+            )
+        finally:
+            conn.close()
+    except Exception:
+        return True
+
+
+def _colony_reason_part(workers: int | None) -> str:
+    return (
+        "  (p) Colony channel: this run dispatched %s atlas workers but the colony "
+        "channel carried nothing -- no worker board note under .atlas/.run/board/ "
+        "and no IRC/SendMessage traffic was recorded for the run. Workers that "
+        "never report on the channel leave the lead synthesizing from nothing. "
+        "-> Have each worker post its handoff note "
+        '(`atlas_todo.py note --owner <worker> --to lead "<summary>"`), or state '
+        "in your final reply why the work was independent and needed no handoff, "
+        "then retry Stop. (This check blocks once per session.)"
+        % (workers if workers is not None else "two or more")
+    )
 
 
 if __name__ == "__main__":
