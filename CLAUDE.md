@@ -98,10 +98,11 @@ to implement or "make it take effect."
 Project `.claude/settings.json` denies Read/Edit/Write under the home plugin
 cache paths. Do not ask to bypass those denials for "faster iteration."
 
-## Completion-gate friction (top blockers)
+## Completion-gate friction (top blockers, last 14d)
 
-Most recurring Stop-gate blocks are (g) unverified implementer, (i) open todos,
-(m) delegation mandate, (f) docs drift. Before declaring done: run a verifier on
-every implementer change set, flip or drop every open todo, delegate code
-changes to an atlas:* agent, and update CHANGELOG/`docs/` in the same turn as
-any non-docs change.
+Recurring Stop-gate blocks: (m) delegation mandate, (c,d,e) CHANGELOG/ROADMAP/README
+missing, (g) implementer dispatches not covered, (i) open todos. Before done:
+delegate code changes to an atlas:* agent; keep CHANGELOG, ROADMAP and README
+present and updated with any non-docs change; for each implementer dispatch run an
+atlas:verifier or a real test-runner command (pytest, vitest) and stamp a
+`verified` finding via scripts/atlas_finding.py; flip or drop every open todo.
