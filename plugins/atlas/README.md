@@ -148,7 +148,14 @@ fail open. The flag is set by two independent writers -
 `dispatch_tripwire.py`, when a `Skill` dispatch names an orchestration skill
 (gated by `ATLAS_TRIPWIRE`), and `prompt_optimizer.py`'s `arm_orchestration`,
 when a prompt reads as substantive engineering work (gated by
-`ATLAS_ENGINE_ARM`). Either write arms conditions (a)-(l); disabling both
+`ATLAS_ENGINE_ARM`). Ambiguous prompts, a common verb plus a generic noun
+such as "table", or a longer prompt the regex does not arm, can be
+reclassified by a local System One model (`hooks/prompt_decision.py`,
+default `http://127.0.0.1:11434`, model `nimble`). A confident conversation
+label vetoes a regex arm. A confident `code_change` or `investigation`
+label can arm a regex miss. Timeout, low confidence, a bare defect label,
+and `ATLAS_DECISION=off` leave the regex answer in place. File and sqlite
+gates are not model calls. Either write arms conditions (a)-(l); disabling both
 writers prevents new flags but does not disable (m) or clear existing flags.
 `ATLAS_GATE=off` disables the whole completion gate.
 
@@ -156,7 +163,7 @@ writers prevents new flags but does not disable (m) or clear existing flags.
 | --- | --- | --- |
 | `session_boot.py` | `SessionStart` | Activate the runtime, report dependency state, surface relevant lessons, carry the todo board over, and repair the durable `docs/` tree (creates any missing scaffolder-owned subfolder; only when `docs/` already exists, so a project that never asked for one is never scaffolded behind the user's back -- it gets a one-line notice instead; `ATLAS_DOCS_REPAIR=off`); when the claude-mem plugin is enabled, adds a "Recall first" line telling the session to run one claude-mem search before planning (`ATLAS_MANDATES=off`) |
 | `atlas_doctor.py --hook` | `SessionStart` | Rollback guard: warn loudly if the installed plugin was downgraded, the marketplace points at a fork, or hooks/assets are missing (warn-only, always exits 0) |
-| `prompt_optimizer.py` | `UserPromptSubmit` | Optional trigger-gated prompt rewrite; also arm-early classifier that flags substantive engineering prompts as orchestration runs (`ATLAS_ENGINE_ARM=off`) |
+| `prompt_optimizer.py` | `UserPromptSubmit` | Optional trigger-gated prompt rewrite; also arm-early classifier that flags substantive engineering prompts as orchestration runs (`ATLAS_ENGINE_ARM=off`). The ambiguous band may call a local System One model (`ATLAS_DECISION=off` keeps the regex) |
 | `bash_advisor.py` | `PreToolUse` (Bash) | Advisory only: warns on catastrophic patterns (`rm -rf /`, `mkfs`, `dd` to a disk, fork bomb), and once per session nudges a ponytail-review of the staged diff before `git commit` when the ponytail plugin is enabled (`ATLAS_MANDATES=off`). Never denies |
 | `fallow_gate.py` | `PreToolUse` (Bash) | Fallow agent gate: on `git commit`/`git push`, runs `fallow audit --format json --quiet --explain --gate-marker agent` and denies when `verdict` is `fail`. Fail-open if the fallow CLI is missing (`ATLAS_FALLOW=off`, `FALLOW_GATE_MIN_VERSION`). Docs: `skills/atlas-orchestrate/references/fallow-tools.md` |
 | `recall_gate.py` | `PreToolUse` (all tools) | claude-mem recall gate: the first main-thread tool call that is neither a claude-mem call nor `TodoWrite` is denied on every attempt until a real claude-mem call happens, naming the claude-mem search tool and an example argument (only a claude-mem call satisfies it). Armed only when the claude-mem plugin is enabled (hooks cannot see the callable tool set, so this is the proxy); skips subagent transcripts; fail-open (`ATLAS_MANDATES=off`). The omp twin is `omp/mandates.ts`; shared cases in `contracts/mandates.json` |

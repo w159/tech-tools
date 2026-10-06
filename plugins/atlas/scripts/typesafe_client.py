@@ -9,12 +9,18 @@ disable scoring entirely.
 
 Env: TYPESAFE_API_KEY, ATLAS_TYPESAFE_URL (default https://api.typesafe.ai),
 ATLAS_TYPESAFE_MODEL (default jev-latest), ATLAS_TYPESAFE_SCORING.
+
+A loopback ATLAS_TYPESAFE_URL (127.0.0.1, localhost, ::1) is allowed with no
+API key, so a local Ollama nimble/tev1 model can score without sending
+excerpts to api.typesafe.ai. Set ATLAS_TYPESAFE_MODEL to that local tag.
+The hosted default still requires TYPESAFE_API_KEY.
 """
 
 import json
 import os
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 DEFAULT_URL = "https://api.typesafe.ai"
@@ -35,8 +41,23 @@ def _key():
     return os.environ.get("TYPESAFE_API_KEY", "").strip()
 
 
+def _base():
+    return os.environ.get("ATLAS_TYPESAFE_URL", DEFAULT_URL).rstrip("/")
+
+
+def _loopback(url):
+    host = (urllib.parse.urlparse(url).hostname or "").lower()
+    return host in {"127.0.0.1", "localhost", "::1"}
+
+
 def available():
-    return bool(_key()) and os.environ.get("ATLAS_TYPESAFE_SCORING", "on").lower() != "off"
+    if os.environ.get("ATLAS_TYPESAFE_SCORING", "on").lower() == "off":
+        return False
+    if _key():
+        return True
+    # Opt-in only. An unset URL stays on the hosted default and does not score.
+    explicit = os.environ.get("ATLAS_TYPESAFE_URL", "").strip()
+    return bool(explicit) and _loopback(explicit)
 
 
 def _redact(text):
@@ -54,9 +75,10 @@ def _retry_after(headers, attempt):
 
 def evaluate(state, questions, *, model=None, timeout=30.0):
     key = _key()
-    base = os.environ.get("ATLAS_TYPESAFE_URL", DEFAULT_URL).rstrip("/")
+    base = _base()
     url = base + "/v1/systemone"
-    if not key:
+    local = _loopback(base)
+    if not key and not local:
         raise TypeSafeError(401, "TYPESAFE_API_KEY is not set in the environment")
     body = json.dumps(
         {
@@ -65,15 +87,15 @@ def evaluate(state, questions, *, model=None, timeout=30.0):
             "questions": questions,
         }
     ).encode("utf-8")
+    headers = {"Content-Type": "application/json"}
+    if key:
+        headers["Authorization"] = f"Bearer {key}"
     for attempt in range(MAX_RETRIES + 1):
         req = urllib.request.Request(
             url,
             data=body,
             method="POST",
-            headers={
-                "Authorization": f"Bearer {key}",
-                "Content-Type": "application/json",
-            },
+            headers=headers,
         )
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -97,4 +119,6 @@ def evaluate(state, questions, *, model=None, timeout=30.0):
             ) from None
         except ValueError:
             raise TypeSafeError(0, f"POST {url} returned non-JSON body") from None
-    raise TypeSafeError(429, f"POST {url} still rate limited after {MAX_RETRIES} retries")
+    raise TypeSafeError(
+        429, f"POST {url} still rate limited after {MAX_RETRIES} retries"
+    )

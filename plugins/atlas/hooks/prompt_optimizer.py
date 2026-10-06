@@ -61,6 +61,8 @@ import time
 import urllib.error
 import urllib.request
 
+import prompt_decision
+
 # The ollama CLI renderer rewrites partial words at the wrap boundary using cursor-back +
 # erase sequences (e.g. "data c\x1b[1D\x1b[K\nconsistency"). Stripping those codes naively
 # leaves the dangling "c"; we must INTERPRET them like a terminal to get clean text. The HTTP
@@ -353,6 +355,18 @@ _CODE_REFERENCE = re.compile(
     re.IGNORECASE | re.MULTILINE,
 )
 
+# File, path, or declaration. Generic nouns (table, service, column) are not
+# an anchor: "add a bow to the table" matches _CODE_REFERENCE and is the case
+# a local choice model is allowed to veto.
+_CODE_ANCHOR = re.compile(
+    r"(\b[\w./-]+\.(?:py|ts|tsx|js|jsx|go|rs|java|rb|php|sql|json|ya?ml|toml|sh|"
+    r"c|cc|cpp|h|hpp|css|scss|html|vue|svelte)\b"
+    r"|(?:^|[\s(])(?:src|lib|app|components?|hooks?|scripts?|services?|routes?|"
+    r"models?|pages?|api|backend|frontend|tests?|migrations?)/[\w./-]+"
+    r"|\b(?:class|def|function|interface|struct|enum)\s+\w+)",
+    re.IGNORECASE | re.MULTILINE,
+)
+
 
 def looks_substantive(prompt: str) -> bool:
     """Conservative classifier: True only for real engineering work. Defaults to
@@ -383,6 +397,47 @@ def looks_substantive(prompt: str) -> bool:
     return has_common and has_code
 
 
+def _regex_band(prompt: str) -> str:
+    """arm, skip, or ask. Only ask may call the local decision model."""
+    text = prompt.strip()
+    if len(text) < 20 or text.lower().strip(" .!?,") in _TRIVIAL_ACKS:
+        return "skip"
+    if _ERROR_SIGNAL.search(text) or _STRONG_ENGINEERING_VERBS.search(text):
+        return "arm"
+    if _COMMON_VERBS.search(text) and _CODE_ANCHOR.search(text):
+        return "arm"
+    return "ask"
+
+
+def resolve_substantive(prompt: str, decide=None) -> bool:
+    """Regex first. The local model may only override the ask band.
+
+    Stack traces, strong engineering verbs, and a common verb plus a file,
+    path, or declaration arm with no model call. A confident conversation
+    label vetoes a generic-noun arm ("add a bow to the table"). A confident
+    code_change or investigation label can arm a regex miss ("explain how
+    the completion gate decides"). Timeout, low confidence, ATLAS_DECISION=off,
+    and a bare defect label keep the regex answer.
+    """
+    band = _regex_band(prompt)
+    if band == "skip":
+        return False
+    if band == "arm":
+        return True
+    regex_yes = looks_substantive(prompt)
+    if (
+        decide is None
+        and os.environ.get("ATLAS_DECISION", "on").strip().lower() == "off"
+    ):
+        return regex_yes
+    decider = decide if decide is not None else prompt_decision.local_decision
+    try:
+        verdict = decider(prompt)
+    except Exception:
+        return regex_yes
+    return prompt_decision.apply_verdict(regex_yes, verdict, prompt)
+
+
 def _is_harness_event(prompt: str) -> bool:
     """True when `prompt` is a harness-generated event, not a user request.
 
@@ -408,13 +463,14 @@ def arm_orchestration(data: dict, prompt: str) -> str | None:
     """Flag this session's run as an atlas orchestration run when the prompt is
     substantive engineering work, and return the engine nudge. Trivial or
     conversational prompts return None and touch nothing. Fully self-guarded: any
-    failure (unreadable DB, missing module) returns None so the prompt is never
-    blocked. Disable entirely with ATLAS_ENGINE_ARM=off."""
+    failure (unreadable DB, missing module, decision-model error) returns None
+    so the prompt is never blocked. Disable entirely with ATLAS_ENGINE_ARM=off.
+    ATLAS_DECISION=off keeps the regex and skips the local model."""
     if os.environ.get("ATLAS_ENGINE_ARM", "on").strip().lower() == "off":
         return None
     if prompt.lstrip().startswith("/"):
         return None  # slash commands expand downstream and self-orchestrate
-    if not looks_substantive(prompt):
+    if not resolve_substantive(prompt):
         return None
     session = (data.get("session_id") or "").strip()
     if not session:

@@ -75,7 +75,8 @@ a strong engineering verb (`refactor`/`audit`/`debug`/...) on its own, or a comm
 orchestrating via `atlas_db.mark_orchestrating` *before* any dispatch happens, injecting a nudge
 to invoke atlas-orchestrate. Deliberately conservative (defaults to "trivial") since a false positive
 costs more than a false negative - a wrongly-armed session gets denied by the dispatch tripwire.
-Disable with `ATLAS_ENGINE_ARM=off`.
+Disable with `ATLAS_ENGINE_ARM=off`. The arm path also consults a local decision model unless
+`ATLAS_DECISION=off`, which keeps regex only.
 
 Config (env vars, all optional):
 
