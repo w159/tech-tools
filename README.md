@@ -221,6 +221,7 @@ change clears the drift.
 | `ATLAS_CONNECTOR_WATCH=off` | stale connector credential detection |
 | `ATLAS_TODO=off` | TodoWrite-to-board mirror |
 | `ATLAS_ENGINE_ARM=off` | prompt-triggered orchestration arming |
+| `ATLAS_DECISION=off` | model-based prompt-arm decision (regex answer stays) |
 | `ATLAS_MUX` | unset = in-process colony (default); `ATLAS_MUX=tmux` = tmux workers |
 | omp only: `ATLAS_HOOK_BRIDGE`, `ATLAS_STOP_BRIDGE`, `ATLAS_LEAN_SHELL`, `ATLAS_ADVISOR_GATE`, `ATLAS_STYLE`, `ATLAS_NATIVE_POLICY` | see [omp parity](#omp-parity) |
 
@@ -313,7 +314,7 @@ stdlib Python. Most fail open on internal errors; `dispatch_tripwire.py`,
 |---|---|---|---|
 | `session_boot.py` | SessionStart | Loads contract, memory, board carry-over, tool routing; claude-mem "Recall first" line. Repairs a missing `docs/` subfolder only if `docs/` exists. | — |
 | `scripts/atlas_doctor.py --hook` | SessionStart | Rollback guard: warns on downgrade, forked marketplace, or missing hooks/assets. | — |
-| `prompt_optimizer.py` | UserPromptSubmit | Optional model-rewritten prompt; arms orchestration on engineering prompts. | `ATLAS_ENGINE_ARM=off` |
+| `prompt_optimizer.py` | UserPromptSubmit | Optional model-rewritten prompt; arms orchestration on engineering prompts. | `ATLAS_ENGINE_ARM=off`, decision part `ATLAS_DECISION=off` |
 | `recall_gate.py` | PreToolUse (all) | claude-mem recall gate (see message above). | `ATLAS_MANDATES=off` |
 | `bash_advisor.py` | PreToolUse (Bash) | Warns on catastrophic commands; one ponytail-before-commit nudge per session. Advisory only, never denies. | — |
 | `fallow_gate.py` | PreToolUse (Bash) | On `git commit`/`git push`, runs `fallow audit`; denies on `verdict: fail`. Fail-open when the CLI is absent. | `ATLAS_FALLOW=off` |
@@ -330,7 +331,8 @@ stdlib Python. Most fail open on internal errors; `dispatch_tripwire.py`,
 | `nudge.py` | Stop | Throttled self-improvement nudge; silent when memory capture already wrote. | — |
 
 Also in `hooks/` but unbound: `docs_drift.py` (library for the gate's drift
-condition), `validate-readonly-query.sh` (helper).
+condition), `prompt_decision.py` (the model-answer band for the prompt
+rewriter), `validate-readonly-query.sh` (helper).
 
 ## Scripts
 
@@ -567,7 +569,12 @@ tech-tools/
 - **claude-mem** and **context-mode** companion plugins: `atlas-setup` detects
   them and offers to install. The recall gate is armed only when claude-mem is
   enabled; without it the gate stays silent instead of denying.
-- **TypeSafe scoring is optional**: off unless `TYPESAFE_API_KEY` is set.
+- **Prompt model decision is optional and local.** The ambiguous band of
+  engineering-prompt arming can call a local System One model at
+  `http://127.0.0.1:11434`, tag `nimble`, 4 s timeout (`hooks/prompt_decision.py`).
+  Timeout, low confidence, or `ATLAS_DECISION=off` keep the regex answer.
+- **TypeSafe scoring is optional**: off unless `TYPESAFE_API_KEY` is set, or an
+  explicit loopback `ATLAS_TYPESAFE_URL` (+ `ATLAS_TYPESAFE_MODEL`).
 - **Connector credentials are optional per server** (table above). Set them
   as the plugin's `userConfig` values (51 keys); each server receives them as
   `CFG_*` env vars (mapped in `plugins/atlas/.mcp.json`) and also reads a

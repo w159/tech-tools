@@ -380,6 +380,69 @@ class LooksSubstantiveTest(unittest.TestCase):
         )
 
 
+class ResolveSubstantiveTest(unittest.TestCase):
+    def test_strong_verb_does_not_call_model(self):
+        called = []
+
+        def decide(prompt):
+            called.append(prompt)
+            return ("conversation", 0.99)
+
+        self.assertTrue(
+            po.resolve_substantive(
+                "please refactor the authentication module thoroughly", decide=decide
+            )
+        )
+        self.assertEqual(called, [])
+
+    def test_generic_noun_veto(self):
+        text = "add a bow to the table centerpiece before the guests arrive"
+        self.assertTrue(po.looks_substantive(text))
+        self.assertFalse(
+            po.resolve_substantive(text, decide=lambda _p: ("conversation", 0.837))
+        )
+
+    def test_low_confidence_keeps_regex_arm(self):
+        text = "add a bow to the table centerpiece before the guests arrive"
+        self.assertTrue(
+            po.resolve_substantive(text, decide=lambda _p: ("conversation", 0.4))
+        )
+
+    def test_model_error_keeps_regex_arm(self):
+        text = "add a bow to the table centerpiece before the guests arrive"
+
+        def boom(_prompt):
+            raise OSError("down")
+
+        self.assertTrue(po.resolve_substantive(text, decide=boom))
+
+    def test_explain_promoted(self):
+        text = "explain how the completion gate decides to block a turn"
+        self.assertFalse(po.looks_substantive(text))
+        self.assertTrue(
+            po.resolve_substantive(text, decide=lambda _p: ("investigation", 0.978))
+        )
+
+    def test_bare_question_is_not_promoted(self):
+        text = "what does this acronym mean"
+        self.assertFalse(po.looks_substantive(text))
+        self.assertFalse(
+            po.resolve_substantive(text, decide=lambda _p: ("investigation", 0.99))
+        )
+
+    def test_bare_defect_does_not_promote(self):
+        text = "the service is down right now"
+        self.assertFalse(po.looks_substantive(text))
+        self.assertFalse(
+            po.resolve_substantive(text, decide=lambda _p: ("defect", 0.863))
+        )
+
+    def test_decision_off_keeps_regex(self):
+        text = "explain how the completion gate decides to block a turn"
+        with mock.patch.dict(os.environ, {"ATLAS_DECISION": "off"}):
+            self.assertFalse(po.resolve_substantive(text))
+
+
 class IsHarnessEventTest(unittest.TestCase):
     def test_tag_prefixed_event(self):
         self.assertTrue(
@@ -421,6 +484,7 @@ class ArmOrchestrationTest(unittest.TestCase):
         self.env.start()
         self.tmp = tempfile.mkdtemp()
         os.environ["ATLAS_DB"] = os.path.join(self.tmp, "atlas.db")
+        os.environ["ATLAS_DECISION"] = "off"
 
     def tearDown(self):
         self.env.stop()
@@ -470,15 +534,14 @@ class ArmOrchestrationTest(unittest.TestCase):
                 )
             )
 
-
     def test_mark_orchestrating_failure_records_friction(self):
         fake_conn = mock.MagicMock()
         fake = mock.MagicMock()
         fake.connect.return_value = fake_conn
         fake.mark_orchestrating.side_effect = Exception("db down")
         calls = []
-        fake.record_friction.side_effect = (
-            lambda conn, s, cat, **kw: calls.append((conn, s, cat)) or 1
+        fake.record_friction.side_effect = lambda conn, s, cat, **kw: (
+            calls.append((conn, s, cat)) or 1
         )
         with (
             mock.patch.dict(sys.modules, {"atlas_db": fake}),
@@ -489,9 +552,7 @@ class ArmOrchestrationTest(unittest.TestCase):
                     "refactor the db module now please",
                 )
             )
-        self.assertEqual(
-            calls, [(fake_conn, "s1", "orchestration_flag_arm_failed")]
-        )
+        self.assertEqual(calls, [(fake_conn, "s1", "orchestration_flag_arm_failed")])
 
     def test_friction_write_failure_still_fail_open(self):
         fake_conn = mock.MagicMock()

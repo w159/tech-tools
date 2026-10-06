@@ -28,7 +28,11 @@ class _Resp:
 
 def _http_error(code, headers=None):
     return urllib.error.HTTPError(
-        "https://x/v1/systemone", code, "err", headers or {}, io.BytesIO(b'{"detail":"nope"}')
+        "https://x/v1/systemone",
+        code,
+        "err",
+        headers or {},
+        io.BytesIO(b'{"detail":"nope"}'),
     )
 
 
@@ -38,6 +42,7 @@ class ClientTests(unittest.TestCase):
         p.start()
         self.addCleanup(p.stop)
         os.environ.pop("ATLAS_TYPESAFE_SCORING", None)
+        os.environ.pop("ATLAS_TYPESAFE_URL", None)
         sl = mock.patch.object(typesafe_client.time, "sleep")
         self.sleep = sl.start()
         self.addCleanup(sl.stop)
@@ -47,7 +52,30 @@ class ClientTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"ATLAS_TYPESAFE_SCORING": "off"}):
             self.assertFalse(typesafe_client.available())
         with mock.patch.dict(os.environ, {"TYPESAFE_API_KEY": ""}):
+            os.environ.pop("ATLAS_TYPESAFE_URL", None)
             self.assertFalse(typesafe_client.available())
+
+    def test_loopback_available_without_key_and_sends_no_auth(self):
+        calls = []
+
+        def fake(req, timeout=None):
+            calls.append(req)
+            return _Resp({"answers": {}})
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "TYPESAFE_API_KEY": "",
+                "ATLAS_TYPESAFE_URL": "http://127.0.0.1:11434",
+                "ATLAS_TYPESAFE_MODEL": "nimble",
+            },
+        ):
+            self.assertTrue(typesafe_client.available())
+            with mock.patch.object(typesafe_client.urllib.request, "urlopen", fake):
+                typesafe_client.evaluate({"reply": "done"}, {"q": {"type": "noul"}})
+        self.assertIsNone(calls[0].get_header("Authorization"))
+        self.assertEqual(json.loads(calls[0].data)["model"], "nimble")
+        self.assertTrue(calls[0].full_url.startswith("http://127.0.0.1:11434/"))
 
     def test_retries_429_then_succeeds(self):
         calls = []

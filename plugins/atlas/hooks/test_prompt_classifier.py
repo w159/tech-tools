@@ -24,7 +24,15 @@ class PromptClassifierTest(unittest.TestCase):
         self.db = os.path.join(self.tmp, "atlas.db")
         # Force trigger mode (default) so no non-prefixed prompt ever calls ollama;
         # the classifier path is what we exercise here.
-        self.env = dict(os.environ, ATLAS_DB=self.db, ATLAS_OPTIMIZE="trigger")
+        # ATLAS_DECISION=off keeps this file on the regex. A live local model
+        # would make "what does this acronym mean" timing and labels depend
+        # on whichever model is loaded.
+        self.env = dict(
+            os.environ,
+            ATLAS_DB=self.db,
+            ATLAS_OPTIMIZE="trigger",
+            ATLAS_DECISION="off",
+        )
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
     def _atlas_db(self):
@@ -171,7 +179,9 @@ class PromptClassifierTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0)
         self.assertEqual(self._orchestrating_flag("sess-audit"), 1)
         out = json.loads(r.stdout)
-        self.assertIn("atlas-orchestrate", out["hookSpecificOutput"]["additionalContext"])
+        self.assertIn(
+            "atlas-orchestrate", out["hookSpecificOutput"]["additionalContext"]
+        )
 
     def test_endpoint_investigation_arms(self):
         payload = {

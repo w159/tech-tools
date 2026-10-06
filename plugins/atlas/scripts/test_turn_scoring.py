@@ -40,7 +40,11 @@ class FakeClient:
                     "probabilities": {pick: 0.8},
                     "confidence": 0.6,
                 }
-        return {"model": "jev-1.13.0", "answers": answers, "usage": {"input_tokens": 100}}
+        return {
+            "model": "jev-1.13.0",
+            "answers": answers,
+            "usage": {"input_tokens": 100},
+        }
 
 
 class Base(unittest.TestCase):
@@ -111,7 +115,9 @@ class ExchangeTests(Base):
 
 class MetricTests(unittest.TestCase):
     def test_metrics(self):
-        m = turn_scoring._metrics("intro\nATLAS | verify | ok\na\u2014b \u201cq\u201d\u2026")
+        m = turn_scoring._metrics(
+            "intro\nATLAS | verify | ok\na\u2014b \u201cq\u201d\u2026"
+        )
         self.assertEqual(m["header_present"], 1.0)
         self.assertEqual(m["banned_punct"], 4.0)
         m = turn_scoring._metrics("no ATLAS | header mid-line")
@@ -177,9 +183,56 @@ class ScoreTests(Base):
         self.assertEqual(len(c.calls), 1)
         self.assertEqual(s["stopped"], "max_calls")
 
+    def test_atomic_questions_fold_into_stored_ids(self):
+        state = {"request": "fix it", "reply": "done", "next_user_message": "no"}
+        qs = turn_scoring._questions_for(state)
+        self.assertNotIn("done_claim_unverified", qs)
+        self.assertIn("done_claim_unverified__asserts_success", qs)
+        self.assertIn("literal_ask_delivered__covers_named_deliverable", qs)
+        self.assertIn("buried_decision__decided_without_asking", qs)
+        self.assertIn("scope_drift", qs)
+        for spec in qs.values():
+            self.assertNotIn("The state holds", spec["instructions"])
+        self.assertIn("done_claim_unverified", turn_scoring._stored_ids(state))
+        folded = turn_scoring._fold_answers(
+            {
+                "done_claim_unverified__asserts_success": {
+                    "type": "noul",
+                    "noul": 0.999,
+                },
+                "done_claim_unverified__names_observed_result": {
+                    "type": "noul",
+                    "noul": 0.141,
+                },
+                "buried_decision__decided_without_asking": {
+                    "type": "noul",
+                    "noul": 0.987,
+                },
+                "scope_drift": {"type": "noul", "noul": 0.994},
+            }
+        )
+        self.assertGreaterEqual(folded["done_claim_unverified"]["noul"], 0.7)
+        self.assertAlmostEqual(folded["buried_decision"]["noul"], 0.987)
+        self.assertEqual(folded["scope_drift"]["noul"], 0.994)
+        verified = turn_scoring._fold_answers(
+            {
+                "done_claim_unverified__asserts_success": {
+                    "type": "noul",
+                    "noul": 0.998,
+                },
+                "done_claim_unverified__names_observed_result": {
+                    "type": "noul",
+                    "noul": 0.996,
+                },
+            }
+        )
+        self.assertLessEqual(verified["done_claim_unverified"]["noul"], 0.35)
+
     def test_dry_run_makes_no_calls_or_writes(self):
         self.seed()
-        s = turn_scoring.score_session(self.conn, SID, client=None, dry_run=True, max_calls=10)
+        s = turn_scoring.score_session(
+            self.conn, SID, client=None, dry_run=True, max_calls=10
+        )
         self.assertEqual(s["calls"], 2)
         self.assertGreater(s["state_chars"], 0)
         n = self.conn.execute("SELECT COUNT(*) FROM turn_scores").fetchone()[0]

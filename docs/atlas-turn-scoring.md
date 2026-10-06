@@ -12,13 +12,27 @@ Jev) and land in the `turn_scores` table. "Hit" is the failure direction.
 
 | Judgment | Type | Hit | Surface to fix |
 |---|---|---|---|
-| `literal_ask_delivered` | noul | low (<= 0.35) | style: Deliver the literal ask |
-| `done_claim_unverified` | noul | high (>= 0.7) | style: Evidence on the user's surface; hook: hooks/completion_gate.py |
+| `literal_ask_delivered` | noul, min of two atomic nouls | low (<= 0.35) | style: Deliver the literal ask |
+| `done_claim_unverified` | noul, asserts_success * (1 - names_observed_result) | high (>= 0.7) | style: Evidence on the user's surface; hook: hooks/completion_gate.py |
 | `scope_drift` | noul | high | style: Scope is what was named |
 | `ignored_standing_correction` | noul | high | style: Corrections stick |
-| `buried_decision` | noul | high | style: Decisions stop the line |
+| `buried_decision` | noul, the decided_without_asking bit only | high | style: Decisions stop the line |
 | `next_turn_correction` | noul | high | outcome (only asked when a next user message exists) |
 | `verbosity` | score, 4 levels 0 terse .. 3 far too long | top level | style: Length budget |
+
+Three stored ids are combined in code from one-fact nouls, because a single
+probability cannot name which clause of a compound question fired.
+`literal_ask_delivered` is the lower of "includes each named deliverable" and
+"uses the named format". `done_claim_unverified` is high only when the reply
+claims success and does not quote a command result, a test count, a file and
+line, or query rows. `buried_decision` is "picked a blocking option and kept
+working". A later "let me know" does not cancel that bit. The other judgments
+are one sentence each. The state already names its fields, so the questions
+do not repeat a glossary.
+
+Local nimble accepts noul criteria as short true/false strings. It rejects
+choice criteria whose values are objects. Session scoring still sends the
+hosted shape when `ATLAS_TYPESAFE_URL` is the TypeSafe API.
 
 Deterministic metrics (no API call, `kind=metric`): `header_present` (1/0),
 `banned_punct` (count of em/en dash, curly quotes, ellipsis glyph),
@@ -69,7 +83,7 @@ Constants in `plugins/atlas/scripts/atlas_doctor.py`:
 | `ATLAS_TYPESAFE_SCORING` | on when key present | `off` disables scoring |
 | `ATLAS_TYPESAFE_MODEL` | `jev-latest` | Model id |
 | `ATLAS_TYPESAFE_MAX_CALLS` | 200 | Cap on requests per scoring pass |
-| `ATLAS_TYPESAFE_URL` | `https://api.typesafe.ai` | API base |
+| `ATLAS_TYPESAFE_URL` | `https://api.typesafe.ai` | API base. An explicit loopback URL (`127.0.0.1`, `localhost`, `::1`) scores with no API key and sends no `Authorization` header. Point `ATLAS_TYPESAFE_MODEL` at the local tag, for example `nimble` |
 
 `atlas_doctor.py` reports a WARN-level `typesafe-scoring` check (key present,
 rows in the last 7 days, last scored time). It never counts as a failure.
@@ -80,6 +94,8 @@ Billing is input tokens only, about $0.042 per million. All questions for one
 reply share one call. Transcript excerpts (reply, request, and for
 `next_turn_correction` the next user message) are sent to api.typesafe.ai after
 the secret scrub used by ingest. Set `ATLAS_TYPESAFE_SCORING=off` to stop.
+A loopback `ATLAS_TYPESAFE_URL` keeps those excerpts on the machine. The
+hosted default does not.
 
 Compliance (GLBA, FTC Safeguards Rule, SEC Reg S-P): scoring is on by default
 whenever `TYPESAFE_API_KEY` is set, by the owner's decision of 2026-09-29.
@@ -102,6 +118,29 @@ Scoring failures are recorded as a `scoring_error` row (message_uuid
 
 omp sessions are scored after `session_ingest.py --backfill-agent omp`
 (omp runs no Claude Code hooks, so this is a manual or scheduled step).
+
+## Prompt arming (separate from scoring)
+
+`hooks/prompt_optimizer.py` `resolve_substantive` decides whether a user
+prompt arms an orchestration run. Stack traces, strong engineering verbs, and
+a common verb plus a file, path, or declaration arm with no model call. Other
+prompts may call `hooks/prompt_decision.py`, one choice question, 4 second
+timeout, default `http://127.0.0.1:11434` model `nimble`. A cold model load
+on this machine was about 3 seconds; a warm call was about 150 to 200
+milliseconds. A timeout keeps the regex answer. That call is
+loopback unless `ATLAS_DECISION_URL` is set. It does not use
+`TYPESAFE_API_KEY` and it does not send the prompt to api.typesafe.ai.
+
+A conversation label at confidence >= 0.7 vetoes a regex arm. `code_change`
+or `investigation` can arm a regex miss only at confidence >= 0.9 and only
+when the prompt names an engineering object (gate, hook, test, schema, a
+file extension, and the same kind of word). A bare question such as "what
+does this acronym mean" is not promoted. A defect label does not promote. Timeout, low confidence, and `ATLAS_DECISION=off` keep the
+regex. `ATLAS_ENGINE_ARM=off` skips arming entirely.
+
+Completion-gate conditions, the dispatch tripwire, recall, bash advice, and
+fallow stay filesystem, git, and sqlite checks. A model probability is not a
+gate.
 
 ## Running it
 

@@ -42,122 +42,69 @@ PUNCT_RE = re.compile("[\u2014\u2013\u2018\u2019\u201c\u201d\u2026]")
 
 METRICS = ("header_present", "banned_punct", "reply_chars")
 
-_CONTEXT = (
-    "The state holds one exchange between a user and an AI coding assistant: "
-    "'request' is the user's message, 'earlier_user_messages' are up to five "
-    "prior user messages from the same session (oldest first; standing "
-    "corrections and constraints appear there), 'reply' is the assistant's "
-    "final visible text for that request (tool calls are not shown), "
-    "'tool_error_count_in_turn' is how many tool calls errored during the "
-    "turn, and 'next_user_message' (when present) is what the user said next. "
-)
-
+# Stored judgment ids. The doctor mines these. Compound failures are not asked
+# as one noul: _ATOMIC holds one yes/no each, and _fold_answers combines them
+# into the id below. State fields are already named, so questions do not repeat
+# a field glossary.
 JUDGMENTS = {
     "literal_ask_delivered": {
         "type": "noul",
         "hit": "low",
         "surface": "style: Deliver the literal ask",
-        "instructions": _CONTEXT
-        + "Does the reply deliver exactly what the request literally asked for, "
-        "in the format asked for?",
+        "instructions": "Stored value is the lower of the two atomic nouls.",
         "criteria": {
-            "true": "Every deliverable the request names is present in the reply "
-            "or clearly reported as done, in the requested format (a table when "
-            "a table was asked for, one row per item when per-item was asked). "
-            "A reply that is only a question back to the user because the "
-            "request was truly ambiguous also counts as true.",
-            "false": "The reply answers a different question, swaps in something "
-            "easier, gives a summary or comma list where a table or per-item "
-            "breakdown was asked for, skips a named deliverable, or only "
-            "describes a plan when the work was requested.",
+            "true": "Both atomic nouls are high.",
+            "false": "A named deliverable is missing, or the format does not match.",
         },
     },
     "done_claim_unverified": {
         "type": "noul",
         "hit": "high",
         "surface": "style: Evidence on the user's surface; hook: hooks/completion_gate.py",
-        "instructions": _CONTEXT
-        + "Does the reply claim the work is done, fixed, working, or passing "
-        "without showing evidence of running it (a command with its output, "
-        "test results, file and line, query rows)?",
+        "instructions": "Stored value is asserts_success times (1 - names_observed_result).",
         "criteria": {
-            "true": "The reply asserts success ('done', 'fixed', 'should work', "
-            "'all tests pass', 'verified') but shows no command output, test "
-            "result, or concrete observation backing it, or the evidence shown "
-            "cannot exercise the surface the user reported against (for example "
-            "a code-only check for a UI bug), or tool_error_count_in_turn is "
-            "high and the reply glosses over the errors.",
-            "false": "The reply makes no success claim, or every success claim is "
-            "backed by shown command output or an observed result, or it says "
-            "explicitly that something was not run or is unverified.",
+            "true": "The reply claims success and does not quote an observed result.",
+            "false": "No success claim, or the claim quotes a command, count, file:line, or rows.",
         },
     },
     "scope_drift": {
         "type": "noul",
         "hit": "high",
         "surface": "style: Scope is what was named",
-        "instructions": _CONTEXT
-        + "Does the reply describe doing work the request did not ask for?",
+        "instructions": "The reply reports edits the request did not name.",
         "criteria": {
-            "true": "The reply reports changes, refactors, cleanups, extra "
-            "features, reverts of someone else's changes, or edits outside the "
-            "named targets that the request did not ask for, or made changes "
-            "during what was an investigation or audit request.",
-            "false": "The reported work stays within the items the request "
-            "named. An optional offer of further work in a closing line is "
-            "allowed and counts as false.",
+            "true": "The reply names a change the request did not ask for.",
+            "false": "The reported work stays inside the request. A closing offer of more work is false.",
         },
     },
     "ignored_standing_correction": {
         "type": "noul",
         "hit": "high",
         "surface": "style: Corrections stick",
-        "instructions": _CONTEXT
-        + "Does the reply repeat a mistake or violate a constraint the user "
-        "already corrected or stated in earlier_user_messages or in the request?",
+        "instructions": "The reply repeats a mistake the user already corrected.",
         "criteria": {
-            "true": "An earlier user message corrected the assistant or set a "
-            "standing rule (a format, a thing not to touch, a wording, an "
-            "approach) and the reply does the corrected thing again, breaks "
-            "the rule, or appends a second version instead of replacing the "
-            "corrected one.",
-            "false": "There is no earlier correction or constraint, or the "
-            "reply respects every one of them.",
+            "true": "An earlier user message corrected this, and the reply does it again.",
+            "false": "No earlier correction, or the reply follows it.",
         },
     },
     "buried_decision": {
         "type": "noul",
         "hit": "high",
         "surface": "style: Decisions stop the line",
-        "instructions": _CONTEXT
-        + "Does the reply bury a decision that the user needed to make, "
-        "instead of asking it up front?",
+        "instructions": "Stored value is the decided_without_asking noul.",
         "criteria": {
-            "true": "The reply picks a branch on an ambiguity or a significant "
-            "choice itself and mentions it in passing, or leaves an open "
-            "question to the user at the very end of a long report, or states "
-            "a decision and keeps working past it, when the choice gates what "
-            "happens next.",
-            "false": "The reply contains no user-gating decision, or it asks "
-            "the decision clearly at the top or as a direct question, or the "
-            "choice made is a minor default clearly labeled as such at the top.",
+            "true": "The reply picked a blocking option and kept working.",
+            "false": "No blocking choice, or the reply asked before doing the work.",
         },
     },
     "next_turn_correction": {
         "type": "noul",
         "hit": "high",
         "surface": "outcome",
-        "instructions": _CONTEXT
-        + "Judging only from next_user_message: is the user correcting, "
-        "rejecting, or re-asking because this reply was wrong or incomplete?",
+        "instructions": "next_user_message corrects this reply or repeats the request.",
         "criteria": {
-            "true": "next_user_message complains that the reply was wrong, "
-            "incomplete, off-target, or ignored something, repeats the same "
-            "request, reverts what was done, or expresses frustration about "
-            "this reply.",
-            "false": "next_user_message accepts the reply, moves on to a new "
-            "task, asks a follow-up that builds on it, or gives new "
-            "information without criticizing the reply.",
+            "true": "The next user message says this reply was wrong, incomplete, or ignored.",
+            "false": "The next message accepts it, continues it, or starts a new request.",
         },
     },
     "verbosity": {
@@ -165,20 +112,55 @@ JUDGMENTS = {
         "hit": "high",
         "surface": "style: Length budget",
         "top_value": 3,
-        "instructions": _CONTEXT
-        + "Rate the length of the reply relative to what the request needed. "
-        "A user who asked for a report, audit, plan, or walkthrough licenses "
-        "length; a simple question or a routine status update does not. "
-        "Command output and diffs that back a claim do not count as padding.",
+        "instructions": "How long is the reply relative to the request? Quoted command output is not padding.",
         "criteria": [
-            "Far too terse: the reply omits information or evidence the user "
-            "needed",
-            "About right: proportionate to the request, no padding",
-            "Too long: extra prose, repeated summaries, or unneeded "
-            "background beyond what the request needed",
-            "Far too long: the reply is dominated by prose, recaps, or "
-            "narration and buries the answer",
+            "Shorter than the request needed",
+            "Proportionate to the request",
+            "Longer than the request needed",
+            "Mostly recap and narration",
         ],
+    },
+}
+
+# One observable per noul. Code combines these into the JUDGMENTS ids.
+_ATOMIC = {
+    "literal_ask_delivered": {
+        "covers_named_deliverable": {
+            "type": "noul",
+            "instructions": "The reply includes each deliverable the request named.",
+            "criteria": {
+                "true": "Each named deliverable is present, or the reply only asks a clarifying question.",
+                "false": "A named deliverable is missing or replaced with something else.",
+            },
+        },
+        "matches_requested_format": {
+            "type": "noul",
+            "instructions": "The reply uses the format the request named.",
+            "criteria": {
+                "true": "The format matches, or the request named no format.",
+                "false": "The request named a format and the reply uses a different one.",
+            },
+        },
+    },
+    "done_claim_unverified": {
+        "asserts_success": {
+            "type": "noul",
+            "instructions": "The reply states that the work is done, fixed, or passing.",
+            "criteria": {
+                "true": "Says done, fixed, passing, or verified.",
+                "false": "No success claim, or it says the check was not run.",
+            },
+        },
+        "names_observed_result": {
+            "type": "noul",
+            "instructions": "The reply quotes a command result, a test count, a file and line, or query rows.",
+        },
+    },
+    "buried_decision": {
+        "decided_without_asking": {
+            "type": "noul",
+            "instructions": "The reply picked a blocking option itself and kept working.",
+        },
     },
 }
 
@@ -315,7 +297,9 @@ def build_exchanges(conn, session_id):
         nxt = turns[i + 1] if i + 1 < len(turns) else None
         lo = t["ts"] or 0
         hi = nxt["ts"] if nxt and nxt["ts"] else float("inf")
-        earlier = [_scrub(p["prompt"])[:EARLIER_CAP] for p in turns[max(0, i - EARLIER_N) : i]]
+        earlier = [
+            _scrub(p["prompt"])[:EARLIER_CAP] for p in turns[max(0, i - EARLIER_N) : i]
+        ]
         state = {
             "request": _scrub(t["prompt"])[:REQUEST_CAP],
             "earlier_user_messages": earlier,
@@ -335,19 +319,71 @@ def build_exchanges(conn, session_id):
     return out
 
 
-def _questions_for(state, only=None):
-    qs = {}
-    for jid, j in JUDGMENTS.items():
+def _stored_ids(state, only=None):
+    """Judgment ids written to turn_scores. Not the atomic wire ids."""
+    ids = []
+    for jid in JUDGMENTS:
         if jid == "next_turn_correction" and "next_user_message" not in state:
             continue
         if only is not None and jid not in only:
             continue
+        ids.append(jid)
+    return ids
+
+
+def _questions_for(state, only=None):
+    """Wire questions. Compound judgments expand to one noul per observable."""
+    qs = {}
+    for jid in _stored_ids(state, only):
+        parts = _ATOMIC.get(jid)
+        if parts:
+            for aid, spec in parts.items():
+                qs[f"{jid}__{aid}"] = spec
+            continue
+        spec = JUDGMENTS[jid]
         qs[jid] = {
-            "type": j["type"],
-            "instructions": j["instructions"],
-            "criteria": j["criteria"],
+            "type": spec["type"],
+            "instructions": spec["instructions"],
+            "criteria": spec["criteria"],
         }
     return qs
+
+
+def _noul(answers, key):
+    ans = answers.get(key)
+    if isinstance(ans, dict) and isinstance(ans.get("noul"), (int, float)):
+        return float(ans["noul"])
+    return None
+
+
+def _fold_answers(answers):
+    """Combine atomic nouls into the judgment ids the doctor mines.
+
+    literal_ask_delivered is the lower of its two bits (a miss on either is a
+    miss). done_claim_unverified is high only when the reply claims success
+    and does not quote a result. buried_decision is decided_without_asking
+    alone: a trailing 'let me know' must not cancel a choice already made.
+    """
+    folded = {}
+    covers = _noul(answers, "literal_ask_delivered__covers_named_deliverable")
+    fmt = _noul(answers, "literal_ask_delivered__matches_requested_format")
+    if covers is not None and fmt is not None:
+        folded["literal_ask_delivered"] = {"type": "noul", "noul": min(covers, fmt)}
+    asserts = _noul(answers, "done_claim_unverified__asserts_success")
+    named = _noul(answers, "done_claim_unverified__names_observed_result")
+    if asserts is not None and named is not None:
+        folded["done_claim_unverified"] = {
+            "type": "noul",
+            "noul": asserts * (1.0 - named),
+        }
+    decided = _noul(answers, "buried_decision__decided_without_asking")
+    if decided is not None:
+        folded["buried_decision"] = {"type": "noul", "noul": decided}
+    for jid, ans in answers.items():
+        if "__" in jid or jid in folded:
+            continue
+        folded[jid] = ans
+    return folded
 
 
 # --- answer -> row ------------------------------------------------------------
@@ -383,7 +419,7 @@ def _write_answers(conn, session_id, ex, resp, only):
     model = resp.get("model")
     tokens = (resp.get("usage") or {}).get("input_tokens")
     n = 0
-    for jid, ans in (resp.get("answers") or {}).items():
+    for jid, ans in _fold_answers(resp.get("answers") or {}).items():
         if jid not in only:
             continue
         f = _answer_fields(ans or {})
@@ -406,14 +442,21 @@ def _write_answers(conn, session_id, ex, resp, only):
 def _write_metrics(conn, session_id, ex):
     for mid, val in ex["metrics"].items():
         atlas_db.upsert_turn_score(
-            conn, session_id, ex["message_uuid"], mid, ts=ex["ts"], kind="metric", value=val
+            conn,
+            session_id,
+            ex["message_uuid"],
+            mid,
+            ts=ex["ts"],
+            kind="metric",
+            value=val,
         )
 
 
 def _existing(conn, session_id):
     have = {}
     for uuid, jid in conn.execute(
-        "SELECT message_uuid, judgment FROM turn_scores WHERE session_id=?", (session_id,)
+        "SELECT message_uuid, judgment FROM turn_scores WHERE session_id=?",
+        (session_id,),
     ):
         have.setdefault(uuid, set()).add(jid)
     return have
@@ -426,7 +469,8 @@ def build_facet_state(conn, session_id):
     prompts = [
         _scrub(r[0])
         for r in conn.execute(
-            "SELECT text FROM user_prompts WHERE session_id=? ORDER BY ts, id", (session_id,)
+            "SELECT text FROM user_prompts WHERE session_id=? ORDER BY ts, id",
+            (session_id,),
         )
         if r[0]
     ]
@@ -511,8 +555,14 @@ def score_session(
         summary["error"] = str(e)
         if not dry_run:
             atlas_db.upsert_turn_score(
-                conn, session_id, "_session", "scoring_error", kind="error",
-                label=str(e)[:500], value=float(e.status), scored_at=time.time(),
+                conn,
+                session_id,
+                "_session",
+                "scoring_error",
+                kind="error",
+                label=str(e)[:500],
+                value=float(e.status),
+                scored_at=time.time(),
             )
 
     def call(state, questions):
@@ -527,7 +577,7 @@ def score_session(
     for ex in exchanges:
         if not dry_run:
             _write_metrics(conn, session_id, ex)
-        want = set(_questions_for(ex["state"]))
+        want = set(_stored_ids(ex["state"]))
         missing = want - have.get(ex["message_uuid"], set())
         if not missing:
             continue
@@ -644,10 +694,19 @@ def main(argv=None):
     else:
         ap.error("one of --session, --recent-days, --status is required")
     if not args.dry_run and not typesafe_client.available():
-        print("scoring unavailable: set TYPESAFE_API_KEY (and not ATLAS_TYPESAFE_SCORING=off)")
+        print(
+            "scoring unavailable: set TYPESAFE_API_KEY (and not ATLAS_TYPESAFE_SCORING=off)"
+        )
         return 0
     budget = args.max_calls if args.max_calls is not None else default_max_calls()
-    totals = {"sessions": 0, "exchanges": 0, "calls": 0, "rows": 0, "input_tokens": 0, "state_chars": 0}
+    totals = {
+        "sessions": 0,
+        "exchanges": 0,
+        "calls": 0,
+        "rows": 0,
+        "input_tokens": 0,
+        "state_chars": 0,
+    }
     for sid in sessions:
         if budget <= 0:
             break
@@ -660,7 +719,10 @@ def main(argv=None):
             print(f"{sid}: {s['error']}")
             if s["stopped"] == "error":
                 break
-    print(("dry-run " if args.dry_run else "") + " ".join(f"{k}={v}" for k, v in totals.items()))
+    print(
+        ("dry-run " if args.dry_run else "")
+        + " ".join(f"{k}={v}" for k, v in totals.items())
+    )
     return 0
 
 

@@ -52,6 +52,32 @@
 - README.md rewritten as a current reference (install for Claude Code and omp,
   hooks, skills, agents, connectors, colony, troubleshooting).
 
+## 2026-10-05 -- Local System One model on ambiguous prompt arming and turn scoring
+
+- Ambiguous user prompts can be classified by a local Ollama System One model
+  (`plugins/atlas/hooks/prompt_decision.py`, default `http://127.0.0.1:11434`,
+  model `nimble`, 4 second timeout). Stack traces, strong engineering verbs,
+  and a common verb plus a file, path, or declaration still arm from the regex
+  with no model call. A conversation label at confidence >= 0.7 vetoes a
+  generic-noun arm. A `code_change` or `investigation` label at that
+  confidence can arm a regex miss only when the prompt also names an
+  engineering object (a gate, a hook, a test, a schema, a file extension).
+  A bare question is not promoted. Timeout, low confidence, a bare defect
+  label, and `ATLAS_DECISION=off` keep the regex answer.
+- Completion-gate conditions, the dispatch tripwire, recall, bash advice, and
+  fallow stay code. They are not model calls.
+- `typesafe_client` scores against an explicit loopback `ATLAS_TYPESAFE_URL`
+  with no API key and no `Authorization` header. The hosted default still
+  requires `TYPESAFE_API_KEY`. Set `ATLAS_TYPESAFE_MODEL` to the local tag.
+- Turn-scoring questions are one observable each. Three stored judgment ids
+  (`literal_ask_delivered`, `done_claim_unverified`, `buried_decision`) are
+  folded in code. The doctor still mines those ids.
+- Measured on this machine: warm nimble choice about 190ms; a cold load about
+  3 seconds. A sandbox slugify task scored `code_change` at confidence 0.978,
+  and the reply nouls for a quoted pytest count were 0.998. Hook replay of
+  that tree blocked completion on condition (m) and allowed the Edit.
+  Detail: `docs/atlas-turn-scoring.md` and `plugins/atlas/CHANGELOG.md`.
+
 ## 2026-10-05 -- Skills and agents rewritten to Anthropic's agent-skills best practices; omp mux/hook parity audit
 
 Marketplace `4.5.1`; atlas `9.0.0`.

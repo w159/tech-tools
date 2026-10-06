@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+### Changed
+- Prompt arming stays on the regex for stack traces, strong engineering verbs,
+  and a common verb plus a file, path, or declaration. The remaining band can
+  call a local System One model (`hooks/prompt_decision.py`, default
+  `http://127.0.0.1:11434`, model `nimble`, 4s timeout). A confident
+  conversation label vetoes a generic-noun arm such as "add a bow to the
+  table". A code_change or investigation label arms a regex miss only at
+  confidence >= 0.9 and only when the prompt names an engineering object.
+  A bare question is not promoted.
+  Timeout, low confidence, a bare defect label, and `ATLAS_DECISION=off` keep
+  the regex answer. Completion-gate predicates, the tripwire, recall, bash
+  advice, and fallow stay code.
+- `typesafe_client.available()` is true without `TYPESAFE_API_KEY` when
+  `ATLAS_TYPESAFE_URL` is an explicit loopback URL. Those requests omit
+  `Authorization`. The hosted default still requires the key. Set
+  `ATLAS_TYPESAFE_MODEL` to the local tag (for example `nimble`).
+- Turn-scoring questions are one observable each. `literal_ask_delivered`,
+  `done_claim_unverified`, and `buried_decision` are folded in code back to
+  the same stored ids the doctor mines. A repeated state glossary is no
+  longer pasted onto every question.
+
 ## [9.6.0] - 2026-10-06
 
 ### Added
