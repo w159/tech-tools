@@ -6,24 +6,11 @@ Developer documentation, vendor SDKs, and framework references for every MCP ser
 
 ```
 docs/
-├── vendors/          # one folder per upstream vendor (matches mcp_servers/ and mcp_node/)
-│   ├── auvik/        # Auvik API (network monitoring)
-│   ├── blumira/      # Blumira Public API (SIEM/XDR) + OpenAPI spec
-│   ├── cipp/         # CIPP (M365 MSP) — CIPP, CIPP-API, docs-site repos cloned
-│   ├── connectwise-manage/  # ConnectWise Manage REST
-│   ├── knowbe4/      # KnowBe4 Reporting + User Event + GraphQL APIs (OpenAPI YAML)
-│   ├── ninjaone/     # NinjaOne / NinjaRMM Public API v2
-│   ├── panos/        # PAN-OS XML + REST API (Panorama and firewall)
-│   ├── paylocity/    # Paylocity API Hub
-│   ├── spanning/     # Spanning Backup (M365/GWS/SF)
-│   ├── threatlocker/ # ThreatLocker Portal API
-│   └── vanta/        # Vanta — 5 official repos cloned (incl. MCP server + Claude Code plugin)
-└── frameworks/       # SDK + protocol references
-    ├── anthropic-sdk/        # anthropic-sdk-python + anthropic-sdk-typescript
-    ├── mcp-sdk-typescript/   # @modelcontextprotocol/sdk source
-    ├── mcp-sdk-python/       # mcp Python SDK (FastMCP + low-level Server)
-    ├── mcp-protocol/         # spec repo (2024-11-05 → 2025-11-25 + draft)
-    └── claude-code/          # public mirror + plugins/skills/hooks/mcp/settings docs
+├── AGENTS.md  CHANGELOG.md  ROADMAP.md  README.md
+├── atlas-harness-parity.md  atlas-turn-scoring.md
+├── mcp-gateway-design.md  panos-connector-design.md  plugin-development-scope.md
+├── architecture/  audits/  decisions/  features/  lessons/
+└── plans/  specs/  standards/  superpowers/  wiki/
 ```
 
 ## How to use
@@ -34,7 +21,7 @@ docs/
 
 ## MCP connector boot gate (2026-09-17)
 
-`node test-mcp-tools.mjs` at the repo root is the boot and tool-count gate `AGENTS.md:95`
+`node test-mcp-tools.mjs` at the repo root is the boot and tool-count gate the "2. Propagation checklist" section of the root `AGENTS.md`
 requires for any connector change; `node test-mcp-tools.mjs <svc>` probes one connector and
 `--list` prints the known names. It launches each connector exactly as
 `plugins/atlas/.mcp.json` declares it - the eleven Node connectors as
@@ -45,7 +32,7 @@ appliance. Four checks per connector: BOOT, FLOOR (no tool-count regression), AG
 (`DESTRUCTIVE:` / `VISIBLE-TO-OTHERS:` prose must carry `readOnlyHint: false`), SHAPE. The
 contract it enforces is `standards/connector-safety-signals.md`.
 
-Last run: exit 0, PASS - 523 tools across 12 connectors, 0 safety-signal mismatches, and every
+Last run: exit 0, PASS - 534 tools across 12 connectors (re-run `node test-mcp-tools.mjs` and quote the printed total), 0 safety-signal mismatches, and every
 connector fully enumerated (0 gated, 0 skipped). "Fully enumerated" is the point: a tool the
 harness never lists is a tool whose safety signals were never checked, so connectors that hide
 tools behind a `<vendor>_navigate` step are walked domain by domain and unioned, and falcon -
@@ -64,7 +51,7 @@ stub that answers `POST /oauth2/token` and nothing else.
 | panos | PASS | 60 (60) | 32 marked mutating, 34 annotated mutating |
 | paylocity | PASS | 16 (16) | no prose effect markers, so AGREEMENT is vacuous here |
 | spanning | PASS | 14 (14) | 1 marked, 1 annotated |
-| threatlocker | PASS | 19 (19) | 1 marked, 1 annotated |
+| threatlocker | PASS | 30 (30) | 1 marked, 1 annotated |
 | vanta | PASS | 28 (28) | no prose effect markers, so AGREEMENT is vacuous here |
 
 A vacuous AGREEMENT row is a known limitation, not a clean bill of health: the check compares

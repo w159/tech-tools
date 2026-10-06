@@ -13,6 +13,21 @@ import session_ingest
 SID = "test-sess-0001"
 
 
+def setUpModule():
+    # harness_agent() reads ATLAS_HARNESS, which omp exports into every hook
+    # process (and so into a pytest run launched from an omp session). Without
+    # this, every claude-path test below would see the ambient value and land
+    # agent='omp'. Tests that need the variable set it themselves.
+    patcher = mock.patch.dict(os.environ)
+    patcher.start()
+    os.environ.pop("ATLAS_HARNESS", None)
+    globals()["_env_patcher"] = patcher
+
+
+def tearDownModule():
+    globals().pop("_env_patcher").stop()
+
+
 def _line(**kw):
     kw.setdefault("sessionId", SID)
     kw.setdefault("cwd", "/repo/demo")
@@ -464,22 +479,73 @@ def _codex_session(sid, prompt, reply, tool_kind="function_call"):
 
 def _omp_lines(sid, cwd="/w/proj"):
     def rec(i, parent, role, content, **extra):
-        return json.dumps({
-            "type": "message", "id": i, "parentId": parent,
-            "timestamp": f"2026-09-29T05:00:0{int(i[-1])}Z",
-            "message": {"role": role, "content": content, **extra},
-        })
+        return json.dumps(
+            {
+                "type": "message",
+                "id": i,
+                "parentId": parent,
+                "timestamp": f"2026-09-29T05:00:0{int(i[-1])}Z",
+                "message": {"role": role, "content": content, **extra},
+            }
+        )
+
     return [
-        json.dumps({"type": "session", "id": sid, "timestamp": "2026-09-29T05:00:00Z", "cwd": cwd}),
-        json.dumps({"type": "custom_message", "customType": "advisory", "content": "you didn't verify", "id": "c1"}),
-        rec("m1", None, "user", [{"type": "text", "text": "Add a per-day table."}], attribution="user"),
-        rec("m2", "m1", "user", [{"type": "text", "text": "Subagent handoff text"}], attribution="agent"),
-        rec("m3", "m2", "assistant", [
-            {"type": "thinking", "thinking": "plan"},
-            {"type": "text", "text": "Done, table added."},
-            {"type": "toolCall", "id": "t1", "name": "bash", "arguments": {"command": "ls"}},
-        ], model="claude-x", usage={"input": 10, "output": 5, "cacheRead": 3, "cacheWrite": 1}),
-        rec("m4", "m3", "toolResult", [{"type": "text", "text": "boom"}], toolCallId="t1", toolName="bash", isError=True),
+        json.dumps(
+            {
+                "type": "session",
+                "id": sid,
+                "timestamp": "2026-09-29T05:00:00Z",
+                "cwd": cwd,
+            }
+        ),
+        json.dumps(
+            {
+                "type": "custom_message",
+                "customType": "advisory",
+                "content": "you didn't verify",
+                "id": "c1",
+            }
+        ),
+        rec(
+            "m1",
+            None,
+            "user",
+            [{"type": "text", "text": "Add a per-day table."}],
+            attribution="user",
+        ),
+        rec(
+            "m2",
+            "m1",
+            "user",
+            [{"type": "text", "text": "Subagent handoff text"}],
+            attribution="agent",
+        ),
+        rec(
+            "m3",
+            "m2",
+            "assistant",
+            [
+                {"type": "thinking", "thinking": "plan"},
+                {"type": "text", "text": "Done, table added."},
+                {
+                    "type": "toolCall",
+                    "id": "t1",
+                    "name": "bash",
+                    "arguments": {"command": "ls"},
+                },
+            ],
+            model="claude-x",
+            usage={"input": 10, "output": 5, "cacheRead": 3, "cacheWrite": 1},
+        ),
+        rec(
+            "m4",
+            "m3",
+            "toolResult",
+            [{"type": "text", "text": "boom"}],
+            toolCallId="t1",
+            toolName="bash",
+            isError=True,
+        ),
     ]
 
 
@@ -496,20 +562,27 @@ class OmpAdapterTest(unittest.TestCase):
         self.root = os.path.join(self.tmp, "sessions")
         proj = os.path.join(self.root, "-w-proj")
         os.makedirs(os.path.join(proj, "2026_sess-a"))
-        for path, sid in ((os.path.join(proj, "2026_sess-a.jsonl"), "sess-a"),
-                          (os.path.join(proj, "2026_sess-b.jsonl"), "sess-b"),
-                          (os.path.join(proj, "2026_sess-a", "Sub.jsonl"), "sess-sub")):
+        for path, sid in (
+            (os.path.join(proj, "2026_sess-a.jsonl"), "sess-a"),
+            (os.path.join(proj, "2026_sess-b.jsonl"), "sess-b"),
+            (os.path.join(proj, "2026_sess-a", "Sub.jsonl"), "sess-sub"),
+        ):
             with open(path, "w") as f:
                 f.write("\n".join(_omp_lines(sid)) + "\n")
 
     def test_backfill_maps_prompts_tools_errors_and_sidechains_subagents(self):
         totals = session_ingest.backfill_agent("omp", root=self.root, conn=self.conn)
         self.assertEqual(totals["files"], 3)  # mains + nested colony member Sub
-        prompts = [r[0] for r in self.conn.execute(
-            "SELECT text FROM user_prompts WHERE session_id='sess-a'")]
+        prompts = [
+            r[0]
+            for r in self.conn.execute(
+                "SELECT text FROM user_prompts WHERE session_id='sess-a'"
+            )
+        ]
         self.assertEqual(prompts, ["Add a per-day table."])
         role = self.conn.execute(
-            "SELECT role FROM messages WHERE uuid='sess-a:m2'").fetchone()[0]
+            "SELECT role FROM messages WHERE uuid='sess-a:m2'"
+        ).fetchone()[0]
         self.assertEqual(role, "system")
         row = self.conn.execute(
             "SELECT tool_name, is_error FROM tool_calls WHERE tool_use_id='sess-a:t1'"
@@ -518,14 +591,20 @@ class OmpAdapterTest(unittest.TestCase):
         # Nested Sub.jsonl is a colony member of sess-a (sibling main file): its
         # rows land is_sidechain=1 under sess-a, never as a session of its own;
         # the is_sidechain=0 colony miner must not count it as a lead.
-        self.assertEqual(self.conn.execute(
-            "SELECT COUNT(*) FROM messages WHERE session_id='sess-a' AND is_sidechain=1"
-        ).fetchone()[0], 3)
-        self.assertIsNone(self.conn.execute(
-            "SELECT 1 FROM messages WHERE session_id='sess-sub' LIMIT 1"
-        ).fetchone())
+        self.assertEqual(
+            self.conn.execute(
+                "SELECT COUNT(*) FROM messages WHERE session_id='sess-a' AND is_sidechain=1"
+            ).fetchone()[0],
+            3,
+        )
+        self.assertIsNone(
+            self.conn.execute(
+                "SELECT 1 FROM messages WHERE session_id='sess-sub' LIMIT 1"
+            ).fetchone()
+        )
         agent = self.conn.execute(
-            "SELECT agent FROM session_logs WHERE session_id='sess-a'").fetchone()[0]
+            "SELECT agent FROM session_logs WHERE session_id='sess-a'"
+        ).fetchone()[0]
         self.assertEqual(agent, "omp")
         a = self.conn.execute(
             "SELECT text, input_tokens, cache_read_tokens FROM messages WHERE uuid='sess-a:m3'"
@@ -544,7 +623,8 @@ class OmpAdapterTest(unittest.TestCase):
         first = self.conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
         session_ingest.backfill_agent("omp", root=self.root, conn=self.conn)
         self.assertEqual(
-            self.conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0], first)
+            self.conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0], first
+        )
 
 
 class OmpColonySidechainTest(unittest.TestCase):
@@ -584,24 +664,44 @@ class OmpColonySidechainTest(unittest.TestCase):
         totals = session_ingest.backfill_agent("omp", root=self.root, conn=self.conn)
         self.assertEqual(totals["files"], 3)  # lead + advisor + worker; stray skipped
         self.assertEqual(
-            [r[0] for r in self.conn.execute(
-                "SELECT DISTINCT session_id FROM messages WHERE is_sidechain=0")],
+            [
+                r[0]
+                for r in self.conn.execute(
+                    "SELECT DISTINCT session_id FROM messages WHERE is_sidechain=0"
+                )
+            ],
             ["lead-1"],
         )
         # advisor + worker rows share the lead session id, flagged sidechain
-        self.assertEqual(self.conn.execute(
-            "SELECT COUNT(*) FROM messages WHERE session_id='lead-1' "
-            "AND is_sidechain=1").fetchone()[0], 6)
-        self.assertEqual(self.conn.execute(
-            "SELECT COUNT(*) FROM tool_calls WHERE session_id='lead-1' "
-            "AND is_sidechain=1").fetchone()[0], 2)
-        self.assertEqual(self.conn.execute(
-            "SELECT COUNT(*) FROM tool_calls WHERE session_id='lead-1' "
-            "AND is_sidechain=0").fetchone()[0], 1)
+        self.assertEqual(
+            self.conn.execute(
+                "SELECT COUNT(*) FROM messages WHERE session_id='lead-1' "
+                "AND is_sidechain=1"
+            ).fetchone()[0],
+            6,
+        )
+        self.assertEqual(
+            self.conn.execute(
+                "SELECT COUNT(*) FROM tool_calls WHERE session_id='lead-1' "
+                "AND is_sidechain=1"
+            ).fetchone()[0],
+            2,
+        )
+        self.assertEqual(
+            self.conn.execute(
+                "SELECT COUNT(*) FROM tool_calls WHERE session_id='lead-1' "
+                "AND is_sidechain=0"
+            ).fetchone()[0],
+            1,
+        )
         # member ids never exist as their own sessions
-        self.assertEqual(self.conn.execute(
-            "SELECT COUNT(*) FROM messages WHERE "
-            "session_id IN ('adv-1','wrk-1','lone-1')").fetchone()[0], 0)
+        self.assertEqual(
+            self.conn.execute(
+                "SELECT COUNT(*) FROM messages WHERE "
+                "session_id IN ('adv-1','wrk-1','lone-1')"
+            ).fetchone()[0],
+            0,
+        )
         # the lead's scored exchange surface stays main-thread only
         import turn_scoring
 
@@ -609,28 +709,45 @@ class OmpColonySidechainTest(unittest.TestCase):
         self.assertEqual([e["message_uuid"] for e in ex], ["lead-1:m3"])
         # user_prompts has no sidechain column: member text must not read as
         # the lead's own requests (only the lead's single prompt survives)
-        self.assertEqual(self.conn.execute(
-            "SELECT COUNT(*) FROM user_prompts WHERE session_id='lead-1'"
-        ).fetchone()[0], 1)
+        self.assertEqual(
+            self.conn.execute(
+                "SELECT COUNT(*) FROM user_prompts WHERE session_id='lead-1'"
+            ).fetchone()[0],
+            1,
+        )
 
     def test_member_files_ingested_before_the_lead_still_land_sidechain(self):
         proj = os.path.join(self.root, "-w-proj")
         stem = "2026-10-02T05-00-00Z_lead-1"
-        members = [os.path.join(proj, stem, "__advisor.jsonl"),
-                   os.path.join(proj, stem, "WorkerOne.jsonl")]
+        members = [
+            os.path.join(proj, stem, "__advisor.jsonl"),
+            os.path.join(proj, stem, "WorkerOne.jsonl"),
+        ]
         for m in members:  # members first, lead last: order must not matter
             session_ingest.ingest_agent_session(
-                m, session_ingest.omp_adapter, conn=self.conn,
-                session_id="lead-1", sidechain=True)
+                m,
+                session_ingest.omp_adapter,
+                conn=self.conn,
+                session_id="lead-1",
+                sidechain=True,
+            )
         session_ingest.ingest_agent_session(
-            os.path.join(proj, f"{stem}.jsonl"), session_ingest.omp_adapter,
-            conn=self.conn)
-        self.assertEqual(self.conn.execute(
-            "SELECT COUNT(*) FROM messages WHERE session_id='lead-1' AND is_sidechain=1"
-        ).fetchone()[0], 6)
-        self.assertEqual(self.conn.execute(
-            "SELECT COUNT(*) FROM messages WHERE session_id='lead-1' AND is_sidechain=0"
-        ).fetchone()[0], 3)
+            os.path.join(proj, f"{stem}.jsonl"),
+            session_ingest.omp_adapter,
+            conn=self.conn,
+        )
+        self.assertEqual(
+            self.conn.execute(
+                "SELECT COUNT(*) FROM messages WHERE session_id='lead-1' AND is_sidechain=1"
+            ).fetchone()[0],
+            6,
+        )
+        self.assertEqual(
+            self.conn.execute(
+                "SELECT COUNT(*) FROM messages WHERE session_id='lead-1' AND is_sidechain=0"
+            ).fetchone()[0],
+            3,
+        )
         # the lead's file owns the session row even though members came first
         row = self.conn.execute(
             "SELECT transcript_path, agent FROM session_logs WHERE session_id='lead-1'"
@@ -640,22 +757,30 @@ class OmpColonySidechainTest(unittest.TestCase):
 
     def test_advisor_transcript_is_sidechain_never_a_main_session(self):
         session_ingest.backfill_agent("omp", root=self.root, conn=self.conn)
-        self.assertEqual(self.conn.execute(
-            "SELECT COUNT(*) FROM session_logs").fetchone()[0], 1)
-        self.assertEqual(self.conn.execute(
-            "SELECT COUNT(*) FROM session_logs WHERE session_id IN ('adv-1','wrk-1')"
-        ).fetchone()[0], 0)
+        self.assertEqual(
+            self.conn.execute("SELECT COUNT(*) FROM session_logs").fetchone()[0], 1
+        )
+        self.assertEqual(
+            self.conn.execute(
+                "SELECT COUNT(*) FROM session_logs WHERE session_id IN ('adv-1','wrk-1')"
+            ).fetchone()[0],
+            0,
+        )
         # the colony miner (is_sidechain=0) sees exactly one lead session
-        self.assertEqual(self.conn.execute(
-            "SELECT COUNT(DISTINCT session_id) FROM tool_calls WHERE is_sidechain=0"
-        ).fetchone()[0], 1)
+        self.assertEqual(
+            self.conn.execute(
+                "SELECT COUNT(DISTINCT session_id) FROM tool_calls WHERE is_sidechain=0"
+            ).fetchone()[0],
+            1,
+        )
 
     def test_omp_colony_backfill_is_idempotent(self):
         session_ingest.backfill_agent("omp", root=self.root, conn=self.conn)
         first = self.conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
         session_ingest.backfill_agent("omp", root=self.root, conn=self.conn)
         self.assertEqual(
-            self.conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0], first)
+            self.conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0], first
+        )
 
 
 class ClaudeSubagentTwoFileTest(unittest.TestCase):
@@ -673,24 +798,64 @@ class ClaudeSubagentTwoFileTest(unittest.TestCase):
         self.addCleanup(self.conn.close)
         self.main = os.path.join(self.tmp, f"{SID}.jsonl")
         self.sub = os.path.join(self.tmp, SID, "subagents", "agent-x.jsonl")
-        self._write(self.main, [
-            _msg("u-main", "user", [{"type": "text", "text": "Fix the flaky test."}]),
-            _line(type="assistant", uuid="a-main", timestamp="2026-06-26T12:00:01Z",
-                  message={"role": "assistant", "content": [
-                      {"type": "tool_use", "id": "t-main", "name": "Bash",
-                       "input": {"command": "pytest -q"}}]}),
-        ])
-        self._write(self.sub, [
-            _line(type="user", uuid="u-sub", timestamp="2026-06-26T12:00:02Z",
-                  isSidechain=True,
-                  message={"role": "user",
-                           "content": [{"type": "text", "text": "Run the verifier round."}]}),
-            _line(type="assistant", uuid="a-sub", timestamp="2026-06-26T12:00:03Z",
-                  isSidechain=True,
-                  message={"role": "assistant", "content": [
-                      {"type": "tool_use", "id": "t-sub", "name": "Bash",
-                       "input": {"command": "pytest -q"}}]}),
-        ])
+        self._write(
+            self.main,
+            [
+                _msg(
+                    "u-main", "user", [{"type": "text", "text": "Fix the flaky test."}]
+                ),
+                _line(
+                    type="assistant",
+                    uuid="a-main",
+                    timestamp="2026-06-26T12:00:01Z",
+                    message={
+                        "role": "assistant",
+                        "content": [
+                            {
+                                "type": "tool_use",
+                                "id": "t-main",
+                                "name": "Bash",
+                                "input": {"command": "pytest -q"},
+                            }
+                        ],
+                    },
+                ),
+            ],
+        )
+        self._write(
+            self.sub,
+            [
+                _line(
+                    type="user",
+                    uuid="u-sub",
+                    timestamp="2026-06-26T12:00:02Z",
+                    isSidechain=True,
+                    message={
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "Run the verifier round."}
+                        ],
+                    },
+                ),
+                _line(
+                    type="assistant",
+                    uuid="a-sub",
+                    timestamp="2026-06-26T12:00:03Z",
+                    isSidechain=True,
+                    message={
+                        "role": "assistant",
+                        "content": [
+                            {
+                                "type": "tool_use",
+                                "id": "t-sub",
+                                "name": "Bash",
+                                "input": {"command": "pytest -q"},
+                            }
+                        ],
+                    },
+                ),
+            ],
+        )
 
     def _write(self, path, lines):
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -700,12 +865,16 @@ class ClaudeSubagentTwoFileTest(unittest.TestCase):
     def _mcounts(self):
         return self.conn.execute(
             "SELECT is_sidechain, COUNT(*) FROM messages WHERE session_id=? "
-            "GROUP BY is_sidechain ORDER BY is_sidechain", (SID,)).fetchall()
+            "GROUP BY is_sidechain ORDER BY is_sidechain",
+            (SID,),
+        ).fetchall()
 
     def _tcounts(self):
         return self.conn.execute(
             "SELECT is_sidechain, COUNT(*) FROM tool_calls WHERE session_id=? "
-            "GROUP BY is_sidechain ORDER BY is_sidechain", (SID,)).fetchall()
+            "GROUP BY is_sidechain ORDER BY is_sidechain",
+            (SID,),
+        ).fetchall()
 
     def test_subagent_ingest_after_main_keeps_main_rows(self):
         session_ingest.ingest_transcript(self.main, conn=self.conn)
@@ -714,8 +883,12 @@ class ClaudeSubagentTwoFileTest(unittest.TestCase):
         self.assertEqual(self._mcounts(), [(0, 2), (1, 2)])
         self.assertEqual(self._tcounts(), [(0, 1), (1, 1)])
         # one session: the subagent's rows belong to the main session
-        self.assertEqual(self.conn.execute(
-            "SELECT COUNT(DISTINCT session_id) FROM messages").fetchone()[0], 1)
+        self.assertEqual(
+            self.conn.execute(
+                "SELECT COUNT(DISTINCT session_id) FROM messages"
+            ).fetchone()[0],
+            1,
+        )
 
     def test_reingesting_main_after_subagent_wipes_nothing(self):
         session_ingest.ingest_transcript(self.main, conn=self.conn)
@@ -736,17 +909,28 @@ class ClaudeSubagentTwoFileTest(unittest.TestCase):
         ).fetchone()[0]
         self.assertIn(owner, (self.main, self.sub))
         # aggregates cover both files; the session id never forks
-        self.assertEqual(self.conn.execute(
-            "SELECT message_count FROM session_logs WHERE session_id=?", (SID,)
-        ).fetchone()[0], 4)
-        self.assertEqual(self.conn.execute(
-            "SELECT COUNT(DISTINCT session_id) FROM session_logs").fetchone()[0], 1)
+        self.assertEqual(
+            self.conn.execute(
+                "SELECT message_count FROM session_logs WHERE session_id=?", (SID,)
+            ).fetchone()[0],
+            4,
+        )
+        self.assertEqual(
+            self.conn.execute(
+                "SELECT COUNT(DISTINCT session_id) FROM session_logs"
+            ).fetchone()[0],
+            1,
+        )
 
     def test_main_and_subagent_rows_order_by_timestamp(self):
         session_ingest.ingest_transcript(self.sub, conn=self.conn)
         session_ingest.ingest_transcript(self.main, conn=self.conn)
-        uuids = [r[0] for r in self.conn.execute(
-            "SELECT uuid FROM messages WHERE session_id=? ORDER BY ts, id", (SID,))]
+        uuids = [
+            r[0]
+            for r in self.conn.execute(
+                "SELECT uuid FROM messages WHERE session_id=? ORDER BY ts, id", (SID,)
+            )
+        ]
         self.assertEqual(uuids, ["u-main", "a-main", "u-sub", "a-sub"])
 
     def test_force_reingest_of_subagent_leaves_main_rows(self):
@@ -759,25 +943,45 @@ class ClaudeSubagentTwoFileTest(unittest.TestCase):
     def test_truncated_main_is_reset_scoped_to_that_file(self):
         session_ingest.ingest_transcript(self.main, conn=self.conn)
         session_ingest.ingest_transcript(self.sub, conn=self.conn)
-        self._write(self.main, [
-            _msg("u-main2", "user", [{"type": "text", "text": "New prompt after rewrite."}])])
+        self._write(
+            self.main,
+            [
+                _msg(
+                    "u-main2",
+                    "user",
+                    [{"type": "text", "text": "New prompt after rewrite."}],
+                )
+            ],
+        )
         session_ingest.ingest_transcript(self.main, conn=self.conn)
         # old main rows replaced (scoped by key); sidechain rows untouched
         self.assertEqual(self._mcounts(), [(0, 1), (1, 2)])
         self.assertEqual(self._tcounts(), [(1, 1)])
-        self.assertEqual(self.conn.execute(
-            "SELECT COUNT(*) FROM user_prompts WHERE session_id=? AND uuid='u-main'",
-            (SID,)).fetchone()[0], 0)
+        self.assertEqual(
+            self.conn.execute(
+                "SELECT COUNT(*) FROM user_prompts WHERE session_id=? AND uuid='u-main'",
+                (SID,),
+            ).fetchone()[0],
+            0,
+        )
 
     def test_legacy_session_cursor_adopted_for_owning_file(self):
         session_ingest.ingest_transcript(self.main, conn=self.conn)
         # pre-upgrade DB: the cursor lived only in session_logs
         self.conn.execute("DROP TABLE IF EXISTS ingest_files")
         with open(self.main, "a") as f:
-            f.write(_line(type="user", uuid="u-main3", timestamp="2026-06-26T12:00:05Z",
-                          message={"role": "user",
-                                   "content": [{"type": "text", "text": "Later prompt."}]})
-                    + "\n")
+            f.write(
+                _line(
+                    type="user",
+                    uuid="u-main3",
+                    timestamp="2026-06-26T12:00:05Z",
+                    message={
+                        "role": "user",
+                        "content": [{"type": "text", "text": "Later prompt."}],
+                    },
+                )
+                + "\n"
+            )
         s = session_ingest.ingest_transcript(self.main, conn=self.conn)
         # incremental from the adopted cursor: exactly the appended line parsed
         self.assertEqual(s["messages"], 1)
@@ -1794,26 +1998,66 @@ class DeniedResultIngestTest(unittest.TestCase):
         self.addCleanup(self.conn.close)
 
     def _denied(self):
-        return dict(self.conn.execute(
-            "SELECT tool_use_id, denied FROM tool_calls").fetchall())
+        return dict(
+            self.conn.execute("SELECT tool_use_id, denied FROM tool_calls").fetchall()
+        )
 
     def test_claude_hook_denial_is_flagged_and_real_error_is_not(self):
         path = os.path.join(self.tmp, f"{SID}.jsonl")
         with open(path, "w") as f:
-            f.write("\n".join([
-                _line(type="assistant", uuid="a1", timestamp="2026-06-26T12:00:01Z",
-                      message={"role": "assistant", "content": [
-                          {"type": "tool_use", "id": "t-deny", "name": "Grep",
-                           "input": {"pattern": "x"}},
-                          {"type": "tool_use", "id": "t-fail", "name": "Bash",
-                           "input": {"command": "false"}}]}),
-                _line(type="user", uuid="u1", timestamp="2026-06-26T12:00:02Z",
-                      message={"role": "user", "content": [
-                          {"type": "tool_result", "tool_use_id": "t-deny", "is_error": True,
-                           "content": "PreToolUse:Grep hook error: Atlas enforcement: use ctx_search"},
-                          {"type": "tool_result", "tool_use_id": "t-fail", "is_error": True,
-                           "content": [{"type": "text", "text": "Exit code 1"}]}]}),
-            ]) + "\n")
+            f.write(
+                "\n".join(
+                    [
+                        _line(
+                            type="assistant",
+                            uuid="a1",
+                            timestamp="2026-06-26T12:00:01Z",
+                            message={
+                                "role": "assistant",
+                                "content": [
+                                    {
+                                        "type": "tool_use",
+                                        "id": "t-deny",
+                                        "name": "Grep",
+                                        "input": {"pattern": "x"},
+                                    },
+                                    {
+                                        "type": "tool_use",
+                                        "id": "t-fail",
+                                        "name": "Bash",
+                                        "input": {"command": "false"},
+                                    },
+                                ],
+                            },
+                        ),
+                        _line(
+                            type="user",
+                            uuid="u1",
+                            timestamp="2026-06-26T12:00:02Z",
+                            message={
+                                "role": "user",
+                                "content": [
+                                    {
+                                        "type": "tool_result",
+                                        "tool_use_id": "t-deny",
+                                        "is_error": True,
+                                        "content": "PreToolUse:Grep hook error: Atlas enforcement: use ctx_search",
+                                    },
+                                    {
+                                        "type": "tool_result",
+                                        "tool_use_id": "t-fail",
+                                        "is_error": True,
+                                        "content": [
+                                            {"type": "text", "text": "Exit code 1"}
+                                        ],
+                                    },
+                                ],
+                            },
+                        ),
+                    ]
+                )
+                + "\n"
+            )
         session_ingest.ingest_transcript(path, conn=self.conn)
         self.assertEqual(self._denied(), {"t-deny": 1, "t-fail": 0})
 
@@ -1822,33 +2066,177 @@ class DeniedResultIngestTest(unittest.TestCase):
         path = os.path.join(self.tmp, "2026_omp-deny-1.jsonl")
 
         def rec(i, parent, role, content, **extra):
-            return json.dumps({
-                "type": "message", "id": i, "parentId": parent,
-                "timestamp": f"2026-09-29T05:00:0{int(i[-1])}Z",
-                "message": {"role": role, "content": content, **extra}})
+            return json.dumps(
+                {
+                    "type": "message",
+                    "id": i,
+                    "parentId": parent,
+                    "timestamp": f"2026-09-29T05:00:0{int(i[-1])}Z",
+                    "message": {"role": role, "content": content, **extra},
+                }
+            )
 
         lines = [
-            json.dumps({"type": "session", "id": sid,
-                        "timestamp": "2026-09-29T05:00:00Z", "cwd": "/w/proj"}),
-            rec("m1", None, "assistant", [
-                {"type": "toolCall", "id": "g1", "name": "bash", "arguments": {"command": "ls"}},
-                {"type": "toolCall", "id": "g2", "name": "grep", "arguments": {"pattern": "x"}},
-                {"type": "toolCall", "id": "g3", "name": "bash", "arguments": {"command": "false"}},
-            ], model="m"),
-            rec("m2", "m1", "toolResult",
-                [{"type": "text", "text": "[atlas gate] REQUIRED once per session: recall"}],
-                toolCallId="g1", toolName="bash", isError=True),
-            rec("m3", "m2", "toolResult",
-                [{"type": "text", "text": "Atlas enforcement: use lean-ctx ctx_search instead of grep"}],
-                toolCallId="g2", toolName="grep", isError=True),
-            rec("m4", "m3", "toolResult", [{"type": "text", "text": "exit 1"}],
-                toolCallId="g3", toolName="bash", isError=True),
+            json.dumps(
+                {
+                    "type": "session",
+                    "id": sid,
+                    "timestamp": "2026-09-29T05:00:00Z",
+                    "cwd": "/w/proj",
+                }
+            ),
+            rec(
+                "m1",
+                None,
+                "assistant",
+                [
+                    {
+                        "type": "toolCall",
+                        "id": "g1",
+                        "name": "bash",
+                        "arguments": {"command": "ls"},
+                    },
+                    {
+                        "type": "toolCall",
+                        "id": "g2",
+                        "name": "grep",
+                        "arguments": {"pattern": "x"},
+                    },
+                    {
+                        "type": "toolCall",
+                        "id": "g3",
+                        "name": "bash",
+                        "arguments": {"command": "false"},
+                    },
+                ],
+                model="m",
+            ),
+            rec(
+                "m2",
+                "m1",
+                "toolResult",
+                [
+                    {
+                        "type": "text",
+                        "text": "[atlas gate] REQUIRED once per session: recall",
+                    }
+                ],
+                toolCallId="g1",
+                toolName="bash",
+                isError=True,
+            ),
+            rec(
+                "m3",
+                "m2",
+                "toolResult",
+                [
+                    {
+                        "type": "text",
+                        "text": "Atlas enforcement: use lean-ctx ctx_search instead of grep",
+                    }
+                ],
+                toolCallId="g2",
+                toolName="grep",
+                isError=True,
+            ),
+            rec(
+                "m4",
+                "m3",
+                "toolResult",
+                [{"type": "text", "text": "exit 1"}],
+                toolCallId="g3",
+                toolName="bash",
+                isError=True,
+            ),
         ]
         with open(path, "w") as f:
             f.write("\n".join(lines) + "\n")
         session_ingest.backfill_agent("omp", root=self.tmp, conn=self.conn)
         self.assertEqual(
-            self._denied(), {f"{sid}:g1": 1, f"{sid}:g2": 1, f"{sid}:g3": 0})
+            self._denied(), {f"{sid}:g1": 1, f"{sid}:g2": 1, f"{sid}:g3": 0}
+        )
+
+
+class HarnessAgentLabelIngestTest(unittest.TestCase):
+    """session_ingest.harness_agent(): ATLAS_HARNESS=omp labels hook-ingested
+    rows 'omp' on BOTH session_logs upsert sites (main file, and the non-owner
+    subagent file that omp ingests at SubagentStop); anything else keeps the
+    schema default 'claude'."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.conn = atlas_db.connect(os.path.join(self.tmp, "atlas.db"))
+        atlas_db.init(self.conn)
+        self.addCleanup(self.conn.close)
+        self.main = os.path.join(self.tmp, f"{SID}.jsonl")
+        self.sub = os.path.join(self.tmp, SID, "subagents", "agent-x.jsonl")
+        for path, uuid, role in (
+            (self.main, "u-main", "user"),
+            (self.sub, "u-sub", "user"),
+        ):
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w") as f:
+                f.write(
+                    _msg(uuid, role, [{"type": "text", "text": "Run the check."}])
+                    + "\n"
+                )
+
+    def _agent(self):
+        return self.conn.execute(
+            "SELECT agent FROM session_logs WHERE session_id=?", (SID,)
+        ).fetchone()[0]
+
+    def _ingest(self, path, harness):
+        env = {"ATLAS_HARNESS": harness} if harness is not None else {}
+        with mock.patch.dict(os.environ, env):
+            if harness is None:
+                os.environ.pop("ATLAS_HARNESS", None)
+            session_ingest.ingest_transcript(path, conn=self.conn, session_id=SID)
+
+    def test_rule(self):
+        for value, expected in (
+            ("omp", "omp"),
+            (" OMP ", "omp"),
+            ("claude", None),
+            ("codex", None),
+            ("gemini", None),
+            ("", None),
+            (None, None),
+        ):
+            with self.subTest(value=value):
+                env = {} if value is None else {"ATLAS_HARNESS": value}
+                with mock.patch.dict(os.environ, env):
+                    if value is None:
+                        os.environ.pop("ATLAS_HARNESS", None)
+                    self.assertEqual(session_ingest.harness_agent(), expected)
+
+    def test_main_file_under_omp_records_omp(self):
+        self._ingest(self.main, "omp")
+        self.assertEqual(self._agent(), "omp")
+
+    def test_subagent_file_first_under_omp_records_omp(self):
+        # omp ingests a subagent's file under the SAME sessionId; when it is the
+        # first file seen, the non-owner-style upsert creates the row.
+        self._ingest(self.sub, "omp")
+        self.assertEqual(self._agent(), "omp")
+
+    def test_subagent_file_after_main_keeps_omp(self):
+        self._ingest(self.main, "omp")
+        self._ingest(self.sub, "omp")
+        self.assertEqual(self._agent(), "omp")
+
+    def test_subagent_file_relabels_a_row_created_without_the_harness(self):
+        # Non-owner site specifically: the row exists (owner = main file, stored
+        # 'claude'), then the omp subagent ingest arrives and sets the label.
+        self._ingest(self.main, None)
+        self.assertEqual(self._agent(), "claude")
+        self._ingest(self.sub, "omp")
+        self.assertEqual(self._agent(), "omp")
+
+    def test_claude_path_untouched_without_harness(self):
+        self._ingest(self.main, None)
+        self._ingest(self.sub, None)
+        self.assertEqual(self._agent(), "claude")
 
 
 if __name__ == "__main__":

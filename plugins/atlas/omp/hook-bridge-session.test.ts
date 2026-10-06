@@ -333,7 +333,7 @@ async function thresholdScenario(leanCtx: boolean) {
 		const firstDeny = verdicts.findIndex(v => v.blocked);
 
 		const TOOLS = "TOOLS: first load them with ToolSearch, then use serena and lean-ctx for code navigation.\n";
-		const SPEC = "GOAL: g\nDELIVERABLE: d\nSUCCESS CRITERIA: s\nOUT OF SCOPE: o\nSTOP CONDITIONS: c\n";
+		const SPEC = "GOAL: g\nDELIVERABLE: d\nSUCCESS CRITERIA: s\nOUT OF SCOPE: o\nSTOP CONDITIONS: c\nREPORT: r\n";
 		const dispatch = await call("task", { tasks: [{ name: "W", agent: "implementer", task: TOOLS + SPEC }] });
 		const afterReset = await inline(1);
 		// native Grep with lean-ctx configured: the tripwire's own native-policy deny must NOT reach the model (index.ts owns that text)
@@ -376,7 +376,7 @@ test("REAL dispatch_tripwire through the bridge: spec-less, bundled and producti
 			return undefined;
 		};
 		const TOOLS = "TOOLS: first load them with ToolSearch, then use serena and lean-ctx for code navigation.\n";
-		const SPEC = "GOAL: fix add\nDELIVERABLE: patched src/calc.py\nSUCCESS CRITERIA: pytest passes\nOUT OF SCOPE: docs\nSTOP CONDITIONS: tests green\n";
+		const SPEC = "GOAL: fix add\nDELIVERABLE: patched src/calc.py\nSUCCESS CRITERIA: pytest passes\nOUT OF SCOPE: docs\nSTOP CONDITIONS: tests green\nREPORT: structured result\n";
 		const task = (prompt: string) => ({ tasks: [{ name: "W", agent: "implementer", task: prompt }] });
 
 		expect(await fire("task", task(TOOLS + SPEC))).toBeUndefined();
@@ -406,7 +406,7 @@ test("REAL dispatch_tripwire through the bridge: an omp-shaped TOOLS block passe
 			}
 			return undefined;
 		};
-		const SPEC = "GOAL: fix add\nDELIVERABLE: patched src/calc.py\nSUCCESS CRITERIA: pytest passes\nOUT OF SCOPE: docs\nSTOP CONDITIONS: tests green\n";
+		const SPEC = "GOAL: fix add\nDELIVERABLE: patched src/calc.py\nSUCCESS CRITERIA: pytest passes\nOUT OF SCOPE: docs\nSTOP CONDITIONS: tests green\nREPORT: structured result\n";
 		const OMP_TOOLS = "TOOLS: use lean-ctx via its xd:// devices (xd://mcp__lean_ctx_ctx_search); do not activate serena.\n";
 		const task = (prompt: string) => ({ tasks: [{ name: "W", agent: "implementer", task: prompt }] });
 		expect(await fire(task(OMP_TOOLS + SPEC))).toBeUndefined();
@@ -496,7 +496,7 @@ test("REAL dispatch_tripwire through the bridge: spec and TOOLS carried by the b
 			}
 			return undefined;
 		};
-		const SHARED = "TOOLS: use lean-ctx via xd://mcp__lean_ctx_ctx_search; do not activate serena.\nGOAL: implement the slice named below\nDELIVERABLE: the file\nSUCCESS CRITERIA: its tests pass\nOUT OF SCOPE: other files\nSTOP CONDITIONS: tests green\n";
+		const SHARED = "TOOLS: use lean-ctx via xd://mcp__lean_ctx_ctx_search; do not activate serena.\nGOAL: implement the slice named below\nDELIVERABLE: the file\nSUCCESS CRITERIA: its tests pass\nOUT OF SCOPE: other files\nSTOP CONDITIONS: tests green\nREPORT: structured result\n";
 		const items = [{ name: "A", agent: "implementer", task: "# Target\nsrc/a.py" }, { name: "B", agent: "implementer", task: "# Target\nsrc/b.py" }];
 		expect(await fire({ context: SHARED.replace("GOAL: implement the slice named below\n", "").concat("GOAL: g\n"), tasks: items })).toBeUndefined(); // spec only in context: bounded
 		expect(String((await fire({ tasks: items }))?.reason)).toContain("missing the code-nav TOOLS block"); // same items, no context: still denied

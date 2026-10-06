@@ -237,6 +237,33 @@ class AtlasDbTest(unittest.TestCase):
             atlas_db.latest_run_id(self.conn, "sess-l"), rid
         )  # still found
 
+    def test_start_run_twice_for_one_session_yields_one_open_run(self):
+        # Race: omp fires `begin` from session_start and before_agent_start as
+        # separate python processes. start_run must be conditional in SQL so the
+        # loser returns the winner's run instead of inserting a second open run.
+        pid = atlas_db.register_project(self.conn, "/repo/x")
+        first = atlas_db.start_run(self.conn, pid, "sess-race")
+        second = atlas_db.start_run(self.conn, pid, "sess-race")
+        self.assertEqual(first, second)  # the existing open run's id is returned
+        # A second connection is the real cross-process shape (its own handle on the file).
+        other = atlas_db.connect(self.path)
+        try:
+            third = atlas_db.start_run(other, pid, "sess-race")
+        finally:
+            other.close()
+        self.assertEqual(first, third)
+        open_rows = self.conn.execute(
+            "SELECT COUNT(*) FROM runs WHERE session_id=? AND ended_at IS NULL",
+            ("sess-race",),
+        ).fetchone()[0]
+        self.assertEqual(open_rows, 1)
+        # Other sessions are unaffected, and a finalized run does not block a new one.
+        self.assertNotEqual(atlas_db.start_run(self.conn, pid, "sess-other"), first)
+        atlas_db.finalize_run(self.conn, first)
+        reopened = atlas_db.start_run(self.conn, pid, "sess-race")
+        self.assertNotEqual(reopened, first)
+        self.assertEqual(atlas_db.current_run_id(self.conn, "sess-race"), reopened)
+
     def test_derive_does_not_clobber_finalized_wall_clock(self):
         # Regression: finalize_run sets the authoritative wall clock; a later
         # derive_run_metrics (transcript-span based, often 0) must NOT overwrite it.
@@ -1168,7 +1195,10 @@ class ChronicleInsightsTest(unittest.TestCase):
         )
         atlas_db.set_finding_status(self.conn, fid, "accepted", decided_at=42.0)
         atlas_db.upsert_finding(
-            self.conn, "fp-decide", dimension="perf", title="t2"  # re-mine
+            self.conn,
+            "fp-decide",
+            dimension="perf",
+            title="t2",  # re-mine
         )
         row = self.conn.execute(
             "SELECT status, decided_at, title, created_at FROM findings WHERE id=?",
@@ -1445,21 +1475,30 @@ class ToolCallDeniedTest(unittest.TestCase):
 
     def test_omp_enforcement_deny_text_is_flagged(self):
         atlas_db.update_tool_result(
-            self.conn, "tu-1", 1, 90,
+            self.conn,
+            "tu-1",
+            1,
+            90,
             "Atlas enforcement: use lean-ctx ctx_search instead of grep",
         )
         self.assertEqual(self._denied(), 1)
 
     def test_recall_gate_text_is_flagged(self):
         atlas_db.update_tool_result(
-            self.conn, "tu-1", 1, 90,
+            self.conn,
+            "tu-1",
+            1,
+            90,
             "[atlas gate] REQUIRED once per session: your first tool call",
         )
         self.assertEqual(self._denied(), 1)
 
     def test_claude_hook_error_prefix_is_flagged(self):
         atlas_db.update_tool_result(
-            self.conn, "tu-1", 1, 90,
+            self.conn,
+            "tu-1",
+            1,
+            90,
             "PreToolUse:Grep hook error: Atlas enforcement: use ctx_search",
         )
         self.assertEqual(self._denied(), 1)
@@ -1506,13 +1545,22 @@ class ToolCallDeniedTest(unittest.TestCase):
             contracts_src = f.read()
         # grep/glob deny and exploration-shell deny both open with this prefix
         self.assertIn("`Atlas enforcement: use ", index_src)
-        self.assertIn("`Atlas enforcement: this bash command only reads files", contracts_src)
-        self.assertTrue(atlas_db.is_denied_result("Atlas enforcement: use lean-ctx ctx_search"))
-        self.assertTrue(atlas_db.is_denied_result(
-            "Atlas enforcement: this bash command only reads files, so use lean-ctx ctx_read"))
+        self.assertIn(
+            "`Atlas enforcement: this bash command only reads files", contracts_src
+        )
+        self.assertTrue(
+            atlas_db.is_denied_result("Atlas enforcement: use lean-ctx ctx_search")
+        )
+        self.assertTrue(
+            atlas_db.is_denied_result(
+                "Atlas enforcement: this bash command only reads files, so use lean-ctx ctx_read"
+            )
+        )
         # the advisory recall line and the unreachable nudge are not denials
         self.assertFalse(atlas_db.is_denied_result("Recall first: before planning"))
-        self.assertFalse(atlas_db.is_denied_result("Atlas nudge: for exploration, prefer"))
+        self.assertFalse(
+            atlas_db.is_denied_result("Atlas nudge: for exploration, prefer")
+        )
 
 
 if __name__ == "__main__":
@@ -1611,7 +1659,13 @@ class UriPathTest(unittest.TestCase):
     and the completion gate."""
 
     def test_is_uri_path(self):
-        for p in ("agent://Foo", "xd://x", "proc://j/kill", "git+ssh://h/p", "a1.b-c://z"):
+        for p in (
+            "agent://Foo",
+            "xd://x",
+            "proc://j/kill",
+            "git+ssh://h/p",
+            "a1.b-c://z",
+        ):
             self.assertTrue(atlas_db.is_uri_path(p), p)
         for p in (
             "",
@@ -1646,12 +1700,24 @@ class RunChangedPathsUriTest(unittest.TestCase):
         self.conn.execute(
             "INSERT INTO tool_calls(session_id,ts,tool_name,is_sidechain,input_summary) "
             "VALUES(?,?,?,?,?)",
-            ("s-uri", time.time(), "Write", 1, json.dumps({"file_path": "agent://Bar"})),
+            (
+                "s-uri",
+                time.time(),
+                "Write",
+                1,
+                json.dumps({"file_path": "agent://Bar"}),
+            ),
         )
         self.conn.execute(
             "INSERT INTO tool_calls(session_id,ts,tool_name,is_sidechain,input_summary) "
             "VALUES(?,?,?,?,?)",
-            ("s-uri", time.time(), "Write", 1, json.dumps({"file_path": "src/other.py"})),
+            (
+                "s-uri",
+                time.time(),
+                "Write",
+                1,
+                json.dumps({"file_path": "src/other.py"}),
+            ),
         )
         self.conn.commit()
         self.assertEqual(

@@ -1,5 +1,67 @@
 # Changelog
 
+## [Unreleased]
+
+## [9.6.0] - 2026-10-06
+
+### Added
+- `atlas:runner` (13th agent): mechanical tier for ONE task given as at most 7
+  exact STEPS on at most 5 files. Claude `haiku`/`low`; omp roles
+  `[@atlas-mechanic, @smol]`, thinking off. Contract in
+  `contracts/worker-protocol.json`.
+- `atlas_doctor.py` check `omp-model-roles` (warn): flags a missing
+  `modelRoles.atlas-mechanic` / `atlas-worker` in `~/.omp/agent/config.yml`;
+  without them `atlas:runner` and colony workers fall back to the configured
+  `@smol` model (named in the warning), which may not be cheap.
+- Deterministic worker report: every atlas dispatch must carry `REPORT:`
+  (STATUS, STEPS, FILES_CHANGED, EVIDENCE, DELIVERABLE, NEXT). Enforced by
+  `dispatch_tripwire.py` (dispatch side), `hooks/worker_report_gate.py`
+  (SubagentStop, blocks once per agent) and `omp/worker-report.ts` (injects a
+  strict outputSchema). Every agent body carries the report container.
+- `completion_gate` conditions (n) status header, (o) phased todo coverage
+  (implement + verify) when code shipped, (p) colony channel when >=2 workers;
+  switches `ATLAS_GATE_HEADER`, `ATLAS_GATE_PHASES`, `ATLAS_GATE_COLONY`,
+  `ATLAS_GATE_REPORT`. `atlas_todo.py` gains a `phase` field and `scaffold`.
+- Footprint arming: 3 distinct code files (`ATLAS_FOOTPRINT_FILES`) arm the
+  dispatch tripwire without a keyword.
+- `omp/agent-guard.ts` enforces each agent's `disallowedTools` on omp (bash
+  writes are NOT covered).
+- Doctor scores `header_present`/`banned_punct` for omp sessions
+  (`ATLAS_HARNESS=omp`).
+
+### Changed
+- `cipp_status` and `ninjaone_status` report without credentials (cipp 0.2.4,
+  ninjaone 1.8.2); blumira tool-count floor 31.
+- Docs corrected against source: hook counts 17 programs / 21 bindings, 13
+  agents, parity matrix, connector and gateway pages.
+
+### Fixed
+- Advisor notes no longer re-import onto the board after an omp restart or
+  resume. `atlas_todo.py add --unique` is idempotent per (session, exact
+  content) across all statuses, so a closed advisor item stays closed; the
+  advisor gate's default `addBoardItem` passes `--unique`.
+- The omp recall gate (`omp/mandates.ts`) no longer re-arms when a session is
+  resumed under the same session id. The recall writes the same per-session
+  marker as `hooks/recall_gate.py` (`atlas-recall-gate/recall-<sanitized id>`,
+  `O_CREAT|O_EXCL`), and a later `session_start`/`session_switch` with that id
+  reads it before denying. A different id still has to recall; with no session
+  id, or on any filesystem error, the gate behaves as before.
+- The omp model-override guard (`before_subagent_spawn`) no longer denies every
+  atlas agent dispatch on a marketplace install. There the pinned generated
+  agents are not discovered, so omp resolves the child to the parent's live
+  model and the handler saw that inherited selector as an override. A selector
+  equal to `ctx.model` (`provider/id`, optionally one `:<thinking-level>`
+  suffix, case-insensitive) is now treated as no override; any other concrete
+  selector still denies, and a missing `ctx.model` behaves as before.
+- The omp extension now re-runs `scripts/omp_runstate.py begin` on every
+  main-session turn (`onTurnStart` in `omp/run-state.ts`, wired through
+  `before_agent_start` in `omp/index.ts`; subagents are skipped, no
+  `snapshot`). A Stop finalizes the run and omp does not fire `session_start`
+  again for a continued or resumed session, so that session had no open run
+  and the DB gates keyed on `current_run_id` (`dispatch_tripwire`) stopped
+  firing. `begin` is create-if-absent, so it only opens a run when none is
+  open. Run-state calls share one promise tail, so they run in call order.
+
 ## [9.5.1] - 2026-10-05
 
 ### Added

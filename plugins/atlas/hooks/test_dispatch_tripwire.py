@@ -35,6 +35,7 @@ SPEC_BLOCK = (
     "SUCCESS CRITERIA: every auth entrypoint listed with file:line\n"
     "OUT OF SCOPE: no edits, no migrations, no dependency changes\n"
     "STOP CONDITIONS: halt and report if the router cannot be located\n"
+    "REPORT: return the structured result\n"
 )
 # Every atlas:* dispatch fixture carries a sibling name: the colony contract
 # (dispatch_tripwire.py) denies unnamed atlas:* dispatches, so tests exercise
@@ -46,7 +47,9 @@ def _named(tinput):
     """Inject the fixture name into an atlas:* dispatch payload unless the test
     set one deliberately (an empty/whitespace name exercises the deny)."""
     tinput = dict(tinput or {})
-    if "name" not in tinput and str(tinput.get("subagent_type") or "").startswith("atlas:"):
+    if "name" not in tinput and str(tinput.get("subagent_type") or "").startswith(
+        "atlas:"
+    ):
         tinput["name"] = COLONY_NAME
     return tinput
 
@@ -353,6 +356,7 @@ class TripwireTest(unittest.TestCase):
             "SUCCESS CRITERIA: every auth entrypoint listed with file:line\n"
             "OUT OF SCOPE: no edits, no migrations, no dependency changes\n"
             "STOP CONDITIONS: halt and report if the router cannot be located\n"
+            "REPORT: return the structured result\n"
         )
         r = run_hook(
             self._pre_payload(
@@ -391,8 +395,84 @@ class TripwireTest(unittest.TestCase):
             "STOP CONDITIONS:",
         ):
             self.assertIn(block, r.stdout)
-        # GOAL was supplied, so it must not be reported among the missing.
         self.assertNotIn("GOAL:,", r.stdout)
+        # GOAL was supplied, so it must not be reported among the missing.
+
+    def test_pre_deny_atlas_dispatch_without_report_block(self):
+        no_report = SPEC_BLOCK.replace("REPORT: return the structured result\n", "")
+        self.assertNotIn("REPORT:", no_report)
+        r = run_hook(
+            self._pre_payload(
+                "Agent",
+                {"subagent_type": "atlas:explorer", "prompt": TOOLS_BLOCK + no_report},
+            ),
+            self.env,
+        )
+        self.assertEqual(r.returncode, 0)
+        self.assertIn('"permissionDecision": "deny"', r.stdout)
+        self.assertIn("REPORT:", r.stdout)
+        self.assertIn("NEXT", r.stdout)
+
+    def _runner(self, body, env=None):
+        return run_hook(
+            self._pre_payload(
+                "Agent",
+                {
+                    "subagent_type": "atlas:runner",
+                    "prompt": TOOLS_BLOCK + SPEC_BLOCK + body,
+                },
+            ),
+            env or self.env,
+        )
+
+    @staticmethod
+    def _steps(n):
+        return "STEPS:\n" + "".join(
+            "%d. do step %d\n" % (i, i) for i in range(1, n + 1)
+        )
+
+    def test_pre_deny_runner_without_steps(self):
+        r = self._runner("")
+        self.assertIn('"permissionDecision": "deny"', r.stdout)
+        self.assertIn("STEPS", r.stdout)
+
+    def test_pre_deny_runner_with_eight_steps(self):
+        r = self._runner(self._steps(8))
+        self.assertIn('"permissionDecision": "deny"', r.stdout)
+        self.assertIn("8", r.stdout)
+        self.assertIn("7", r.stdout)
+
+    def test_pre_allows_runner_with_seven_steps(self):
+        r = self._runner(self._steps(7))
+        self.assertEqual(r.returncode, 0)
+        self.assertEqual(r.stdout.strip(), "")
+
+    def test_pre_allows_non_runner_without_steps(self):
+        r = run_hook(
+            self._pre_payload(
+                "Agent",
+                {
+                    "subagent_type": "atlas:implementer",
+                    "prompt": TOOLS_BLOCK + SPEC_BLOCK,
+                },
+            ),
+            self.env,
+        )
+        self.assertEqual(r.stdout.strip(), "")
+
+    def test_pre_runner_steps_ignore_numbered_lines_in_other_blocks(self):
+        body = (
+            self._steps(3)
+            + "SUCCESS CRITERIA:\n"
+            + "".join("%d. check %d\n" % (i, i) for i in range(1, 11))
+        )
+        r = self._runner(body)
+        self.assertEqual(r.stdout.strip(), "")
+
+    def test_pre_runner_checks_off_when_hard_tripwire_off(self):
+        env = dict(self.env, ATLAS_TRIPWIRE_HARD="off")
+        self.assertEqual(self._runner("", env).stdout.strip(), "")
+        self.assertEqual(self._runner(self._steps(9), env).stdout.strip(), "")
 
     def test_pre_allows_edit_to_the_session_scratchpad(self):
         """The scratchpad lives under the system temp dir, outside the project
@@ -856,9 +936,7 @@ class InProcessTest(unittest.TestCase):
             "SELECT session_id, category FROM friction_events"
         ).fetchone()
         conn.close()
-        self.assertEqual(
-            row, ("sess-skill-fail", "orchestration_flag_arm_failed")
-        )
+        self.assertEqual(row, ("sess-skill-fail", "orchestration_flag_arm_failed"))
 
     def test_ip_dispatch_arm_failure_records_friction(self):
         with (
@@ -881,9 +959,7 @@ class InProcessTest(unittest.TestCase):
             "SELECT session_id, category FROM friction_events"
         ).fetchone()
         conn.close()
-        self.assertEqual(
-            row, ("sess-atlas-fail", "orchestration_flag_arm_failed")
-        )
+        self.assertEqual(row, ("sess-atlas-fail", "orchestration_flag_arm_failed"))
 
     def test_ip_friction_write_failure_still_fail_open(self):
         # Doubly failing DB: the friction write itself must not raise out of
@@ -1133,7 +1209,9 @@ class InProcessTest(unittest.TestCase):
         )
         conn.close()
 
-    def test_threshold_deny_still_applies_to_allowed_native_reads_in_docs_projects(self):
+    def test_threshold_deny_still_applies_to_allowed_native_reads_in_docs_projects(
+        self,
+    ):
         """Regression (8.3.0): the native policy returned early for every
         docs-project Read/Bash/Grep/Glob, so an armed orchestrator past the
         inline-op limit was never denied for them. An allowed native call must
@@ -1296,7 +1374,6 @@ class SubagentDenyTierSkipTest(unittest.TestCase):
         assert last is not None  # range(5) always runs at least once
         self.assertEqual(last.returncode, 0)
         self.assertIsNone(self._decision(last.stdout))
-
 
 
 class VerifierVerdictBracketTest(unittest.TestCase):
@@ -1505,12 +1582,23 @@ class NativeToolPolicyTest(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.home, ignore_errors=True)
 
     def call(self, tool, *, available=True, **extra):
-        payload = dict(hook_event_name="PreToolUse", tool_name=tool,
-                       session_id="native-policy", cwd=str(self.root), **extra)
+        payload = dict(
+            hook_event_name="PreToolUse",
+            tool_name=tool,
+            session_id="native-policy",
+            cwd=str(self.root),
+            **extra,
+        )
         output = io.StringIO()
-        with patch.object(self.dt.shutil, "which", return_value="/bin/lean-ctx" if available else None), \
-                patch.dict(os.environ, {"HOME": str(self.home)}), \
-                contextlib.redirect_stdout(output):
+        with (
+            patch.object(
+                self.dt.shutil,
+                "which",
+                return_value="/bin/lean-ctx" if available else None,
+            ),
+            patch.dict(os.environ, {"HOME": str(self.home)}),
+            contextlib.redirect_stdout(output),
+        ):
             handled, nudge = self.dt._native_tool_policy(payload)
             # main() prints the nudge only when no later deny tier fires.
             self.dt._emit_nudge(nudge)
@@ -1616,11 +1704,15 @@ class NativeToolPolicyTest(unittest.TestCase):
         self.assertIn("mcp__lean_ctx__ctx_search", result["permissionDecisionReason"])
         # (3b) ~/.claude.json projects[<root>].mcpServers
         (self.home / ".claude.json").write_text(
-            json.dumps({
-                "projects": {
-                    str(self.root): {"mcpServers": {"lean-ctx": {"command": "lean-ctx"}}}
+            json.dumps(
+                {
+                    "projects": {
+                        str(self.root): {
+                            "mcpServers": {"lean-ctx": {"command": "lean-ctx"}}
+                        }
+                    }
                 }
-            })
+            )
         )
         self.assertEqual(self._deny_output("Grep")["permissionDecision"], "deny")
         (self.home / ".claude.json").unlink()
@@ -1680,7 +1772,9 @@ class NativeToolPolicyTest(unittest.TestCase):
                 self.assertEqual(self.call(tool), (False, ""))
 
     def test_internal_policy_error_is_silent_and_allowed(self):
-        with patch.object(self.dt, "find_root", side_effect=RuntimeError("bad filesystem")):
+        with patch.object(
+            self.dt, "find_root", side_effect=RuntimeError("bad filesystem")
+        ):
             self.assertEqual(self.call("Grep"), (False, ""))
 
 
@@ -1701,19 +1795,33 @@ class ExplorationShellDenyTest(unittest.TestCase):
         (self.root / "docs").mkdir()
         self.home = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.home, ignore_errors=True)
-        self.cases = json.loads(Path(self.dt.NATIVE_TOOLS_PATH).read_text())["explorationShell"]["cases"]
+        self.cases = json.loads(Path(self.dt.NATIVE_TOOLS_PATH).read_text())[
+            "explorationShell"
+        ]["cases"]
 
     def call(self, command, *, available=True, configured=True, session="explore"):
         if configured:
             (self.root / ".mcp.json").write_text(
-                json.dumps({"mcpServers": {"lean-ctx": {"command": "lean-ctx"}}}), encoding="utf-8"
+                json.dumps({"mcpServers": {"lean-ctx": {"command": "lean-ctx"}}}),
+                encoding="utf-8",
             )
-        payload = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": session,
-                   "cwd": str(self.root), "tool_input": {"command": command}}
+        payload = {
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Bash",
+            "session_id": session,
+            "cwd": str(self.root),
+            "tool_input": {"command": command},
+        }
         output = io.StringIO()
-        with patch.object(self.dt.shutil, "which", return_value="/bin/lean-ctx" if available else None), \
-                patch.dict(os.environ, {"HOME": str(self.home)}), \
-                contextlib.redirect_stdout(output):
+        with (
+            patch.object(
+                self.dt.shutil,
+                "which",
+                return_value="/bin/lean-ctx" if available else None,
+            ),
+            patch.dict(os.environ, {"HOME": str(self.home)}),
+            contextlib.redirect_stdout(output),
+        ):
             handled, nudge = self.dt._native_tool_policy(payload)
             self.dt._emit_nudge(nudge)
         return handled, output.getvalue()
@@ -1728,12 +1836,21 @@ class ExplorationShellDenyTest(unittest.TestCase):
 
     def test_exploration_denied_naming_ctx_tool_and_toolsearch_load_step(self):
         expected = {
-            "cat README.md": "ctx_read", "head -5 a": "ctx_read", "tail -3 a": "ctx_read",
-            "grep -rn x .": "ctx_search", "rg x": "ctx_search", "ag x": "ctx_search",
-            "ls -la": "ctx_tree", "tree -L 2": "ctx_tree",
-            "find . -name '*.py'": "ctx_glob", "fd x": "ctx_glob",
-            "wc -l a": "ctx_shell", "stat a": "ctx_shell", "sed -n 1p a": "ctx_shell",
-            "cat a | grep b | wc -l": "ctx_shell", "cd src && cat a": "ctx_read",
+            "cat README.md": "ctx_read",
+            "head -5 a": "ctx_read",
+            "tail -3 a": "ctx_read",
+            "grep -rn x .": "ctx_search",
+            "rg x": "ctx_search",
+            "ag x": "ctx_search",
+            "ls -la": "ctx_tree",
+            "tree -L 2": "ctx_tree",
+            "find . -name '*.py'": "ctx_glob",
+            "fd x": "ctx_glob",
+            "wc -l a": "ctx_shell",
+            "stat a": "ctx_shell",
+            "sed -n 1p a": "ctx_shell",
+            "cat a | grep b | wc -l": "ctx_shell",
+            "cd src && cat a": "ctx_read",
         }
         for command, tool in expected.items():
             handled, output = self.call(command, session=command)
@@ -1742,26 +1859,40 @@ class ExplorationShellDenyTest(unittest.TestCase):
             self.assertEqual(result["permissionDecision"], "deny", command)
             reason = result["permissionDecisionReason"]
             self.assertIn(tool, reason, command)
-            self.assertIn(f'ToolSearch("select:mcp__lean-ctx__{tool}")', reason, command)
+            self.assertIn(
+                f'ToolSearch("select:mcp__lean-ctx__{tool}")', reason, command
+            )
 
     def test_every_shared_deny_case_is_denied_end_to_end(self):
         for command in self.cases["deny"]:
             handled, output = self.call(command, session=command)
             self.assertTrue(handled, command)
-            self.assertEqual(json.loads(output)["hookSpecificOutput"]["permissionDecision"], "deny", command)
+            self.assertEqual(
+                json.loads(output)["hookSpecificOutput"]["permissionDecision"],
+                "deny",
+                command,
+            )
 
     def test_every_shared_allow_case_is_allowed_with_at_most_a_nudge(self):
         for command in self.cases["allow"]:
             handled, output = self.call(command, session=command)
             self.assertFalse(handled, command)
             if output:
-                self.assertNotIn("permissionDecision", json.loads(output)["hookSpecificOutput"], command)
+                self.assertNotIn(
+                    "permissionDecision",
+                    json.loads(output)["hookSpecificOutput"],
+                    command,
+                )
 
     def test_not_plausibly_reachable_keeps_the_nudge(self):
         for available, configured in ((False, True), (True, False)):
-            handled, output = self.call("cat README.md", available=available, configured=configured)
+            handled, output = self.call(
+                "cat README.md", available=available, configured=configured
+            )
             self.assertFalse(handled)
-            self.assertNotIn("permissionDecision", json.loads(output)["hookSpecificOutput"])
+            self.assertNotIn(
+                "permissionDecision", json.loads(output)["hookSpecificOutput"]
+            )
             (self.root / ".mcp.json").unlink(missing_ok=True)
             shutil.rmtree(self.root / ".atlas", ignore_errors=True)
 
@@ -1783,7 +1914,9 @@ class ExplorationShellDenyTest(unittest.TestCase):
             handled, output = self.call("cat README.md")
         self.assertFalse(handled)
         self.assertNotIn("permissionDecision", output)
-        path.write_text(json.dumps({**spec, "explorationShell": {"commands": "cat", "cases": {}}}))
+        path.write_text(
+            json.dumps({**spec, "explorationShell": {"commands": "cat", "cases": {}}})
+        )
         with patch.object(self.dt, "NATIVE_TOOLS_PATH", str(path)):
             self.assertFalse(self.dt._is_exploration_shell("cat README.md"))
 
@@ -1906,7 +2039,11 @@ class ColonyDenyTest(unittest.TestCase):
             "name": "",
             "model": "opus",
         }
-        unnamed = {"subagent_type": "atlas:implementer", "prompt": self.SPEC, "name": ""}
+        unnamed = {
+            "subagent_type": "atlas:implementer",
+            "prompt": self.SPEC,
+            "name": "",
+        }
         for tinput in (unnamed_override, unnamed):
             p = run_hook(
                 {
@@ -1931,7 +2068,10 @@ class ColonyDenyTest(unittest.TestCase):
                 "session_id": "sess-1",
                 "hook_event_name": "PreToolUse",
                 "tool_name": "Agent",
-                "tool_input": {"subagent_type": "atlas:implementer", "prompt": self.SPEC},
+                "tool_input": {
+                    "subagent_type": "atlas:implementer",
+                    "prompt": self.SPEC,
+                },
             },
             env,
         )
@@ -2014,9 +2154,7 @@ class ColonyGuardUnitTest(unittest.TestCase):
             "atlas:verifier",
         )
         self.assertIsNone(
-            self.dt._name_missing(
-                {"subagent_type": "atlas:verifier", "name": "auth-v"}
-            )
+            self.dt._name_missing({"subagent_type": "atlas:verifier", "name": "auth-v"})
         )
 
 
@@ -2044,7 +2182,9 @@ class ToolkitGapOmpTest(unittest.TestCase):
         self.assertEqual(self.gap(self.OMP_TOOLS), "atlas:implementer")
         with patch.dict(os.environ, {"ATLAS_TOOLKIT_LOAD": "claude"}):
             self.assertEqual(self.gap(self.OMP_TOOLS), "atlas:implementer")
-        self.assertIsNone(self.gap('ToolSearch("select:mcp__lean-ctx__ctx_read") and lean-ctx'))
+        self.assertIsNone(
+            self.gap('ToolSearch("select:mcp__lean-ctx__ctx_read") and lean-ctx')
+        )
 
     def test_omp_mode_accepts_a_navigation_tool_without_toolsearch(self):
         with patch.dict(os.environ, {"ATLAS_TOOLKIT_LOAD": "omp"}):
@@ -2052,7 +2192,10 @@ class ToolkitGapOmpTest(unittest.TestCase):
 
     def test_omp_mode_still_denies_a_prompt_that_names_no_navigation_tool(self):
         with patch.dict(os.environ, {"ATLAS_TOOLKIT_LOAD": "omp"}):
-            self.assertEqual(self.gap("implement the money module, read the files you need"), "atlas:implementer")
+            self.assertEqual(
+                self.gap("implement the money module, read the files you need"),
+                "atlas:implementer",
+            )
             self.assertEqual(self.gap("", "atlas:verifier"), "atlas:verifier")
 
     def test_non_atlas_agents_are_exempt_in_both_modes(self):
@@ -2065,7 +2208,9 @@ class ToolkitGapOmpTest(unittest.TestCase):
         self.assertIn("ToolSearch", claude)
         self.assertIn("Without it atlas:implementer greps the tree.", claude)
         with patch.dict(os.environ, {"ATLAS_TOOLKIT_LOAD": "claude"}):
-            self.assertEqual(self.dt._toolkit_gap_reason("Task", "atlas:implementer"), claude)
+            self.assertEqual(
+                self.dt._toolkit_gap_reason("Task", "atlas:implementer"), claude
+            )
 
     # Captured by running the released 8.7.0 hook (a7ba0e8) end to end on a no-TOOLS atlas dispatch. The substring checks
     # above would still pass if the Claude wording drifted; this one pins every byte of what Claude Code users see.
@@ -2078,18 +2223,224 @@ class ToolkitGapOmpTest(unittest.TestCase):
     )
 
     def test_claude_deny_text_is_byte_identical_to_the_released_wording(self):
-        self.assertEqual(self.dt._toolkit_gap_reason("Task", "atlas:implementer"), self.CLAUDE_870_DENY)
+        self.assertEqual(
+            self.dt._toolkit_gap_reason("Task", "atlas:implementer"),
+            self.CLAUDE_870_DENY,
+        )
         with patch.dict(os.environ, {"ATLAS_TOOLKIT_LOAD": "claude"}):
-            self.assertEqual(self.dt._toolkit_gap_reason("Task", "atlas:implementer"), self.CLAUDE_870_DENY)
+            self.assertEqual(
+                self.dt._toolkit_gap_reason("Task", "atlas:implementer"),
+                self.CLAUDE_870_DENY,
+            )
 
     def test_omp_deny_text_names_what_an_omp_lead_can_actually_do(self):
         with patch.dict(os.environ, {"ATLAS_TOOLKIT_LOAD": "omp"}):
             text = self.dt._toolkit_gap_reason("Task", "atlas:implementer")
-        self.assertNotIn("ToolSearch", text)  # omp has no such tool; asking for it is an instruction nobody can follow
+        self.assertNotIn(
+            "ToolSearch", text
+        )  # omp has no such tool; asking for it is an instruction nobody can follow
         self.assertIn("xd://mcp__lean_ctx_ctx_search", text)
         self.assertIn("TOOLS:", text)  # a one-line block the lead can paste as is
         self.assertIn("atlas:implementer", text)
-        self.assertTrue(text.startswith("DENY - this Task dispatch is missing the code-nav TOOLS block."))
+        self.assertTrue(
+            text.startswith(
+                "DENY - this Task dispatch is missing the code-nav TOOLS block."
+            )
+        )
+
+
+class FootprintArmingTest(unittest.TestCase):
+    """An UNFLAGGED run whose main thread edits FOOTPRINT_FILES distinct target-code
+    files is multi-file code work that prompt arming missed: the PostToolUse hook
+    arms the run through the existing arming function and says so exactly once."""
+
+    SESSION = "sess-fp"
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.env = dict(os.environ, ATLAS_DB=os.path.join(self.tmp, "atlas.db"))
+        self.env.pop("ATLAS_FOOTPRINT_FILES", None)
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db
+
+        self.atlas_db = atlas_db
+        conn = atlas_db.connect(self.env["ATLAS_DB"])
+        atlas_db.init(conn)
+        pid = atlas_db.register_project(conn, "/repo/x")
+        atlas_db.start_run(conn, pid, self.SESSION)  # boot-created run, NOT flagged
+        conn.close()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _orchestrating(self):
+        conn = self.atlas_db.connect(self.env["ATLAS_DB"])
+        try:
+            return self.atlas_db.is_orchestrating(conn, self.SESSION)
+        finally:
+            conn.close()
+
+    def _edit(self, path, tool="Write", transcript=None, env=None):
+        key = "notebook_path" if tool == "NotebookEdit" else "file_path"
+        payload = {
+            "session_id": self.SESSION,
+            "hook_event_name": "PostToolUse",
+            "tool_name": tool,
+            "tool_input": {key: path},
+            "cwd": self.tmp,
+        }
+        if transcript:
+            payload["transcript_path"] = transcript
+        r = run_hook(payload, env or self.env)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return r
+
+    def _advisories(self, stdout):
+        return [
+            json.loads(line)["hookSpecificOutput"]["additionalContext"]
+            for line in stdout.splitlines()
+            if line.strip().startswith("{")
+        ]
+
+    def test_arms_at_third_distinct_code_file_and_advises_once(self):
+        self.assertEqual(self._edit("/repo/x/a.py").stdout.strip(), "")
+        self.assertEqual(self._edit("/repo/x/b.py", tool="Edit").stdout.strip(), "")
+        self.assertFalse(self._orchestrating())
+        third = self._edit("/repo/x/c.py", tool="MultiEdit")
+        self.assertTrue(self._orchestrating())
+        notes = self._advisories(third.stdout)
+        self.assertEqual(len(notes), 1, third.stdout)
+        self.assertIn("multi-file", notes[0])
+        self.assertIn("tripwires are now armed", notes[0])
+        self.assertIn("atlas:implementer", notes[0])
+        self.assertIn("name", notes[0])
+        self.assertIn("PostToolUse", third.stdout)
+
+    def test_notebook_edit_counts_toward_the_footprint(self):
+        self._edit("/repo/x/a.py")
+        self._edit("/repo/x/b.py")
+        self._edit("/repo/x/n.ipynb", tool="NotebookEdit")
+        self.assertTrue(self._orchestrating())
+
+    def test_does_not_arm_at_two_distinct_files(self):
+        self._edit("/repo/x/a.py")
+        r = self._edit("/repo/x/b.py")
+        self.assertEqual(r.stdout.strip(), "")
+        self.assertFalse(self._orchestrating())
+
+    def test_repeated_edits_to_one_file_do_not_arm(self):
+        for _ in range(6):
+            r = self._edit("/repo/x/a.py", tool="Edit")
+            self.assertEqual(r.stdout.strip(), "")
+        self.assertFalse(self._orchestrating())
+
+    def test_docs_and_atlas_paths_do_not_count(self):
+        for p in (
+            "docs/a.md",
+            "/repo/x/docs/b.md",
+            ".atlas/findings.json",
+            "/repo/x/.atlas/.run/todos.json",
+            "docs/c.md",
+        ):
+            r = self._edit(p)
+            self.assertEqual(r.stdout.strip(), "")
+        self.assertFalse(self._orchestrating())
+
+    def test_docs_do_not_pad_the_count_of_real_code_files(self):
+        self._edit("/repo/x/a.py")
+        self._edit("docs/a.md")
+        self._edit("/repo/x/b.py")
+        self._edit(".atlas/notes.md")
+        self.assertFalse(self._orchestrating())
+        self._edit("/repo/x/c.py")
+        self.assertTrue(self._orchestrating())
+
+    def test_uri_writes_do_not_count(self):
+        for p in ("agent://Peer", "xd://mcp__x", "local://plan.md", "proc://job/kill"):
+            r = self._edit(p)
+            self.assertEqual(r.stdout.strip(), "")
+        self.assertFalse(self._orchestrating())
+
+    def test_system_temp_scratch_does_not_count(self):
+        scratch = os.path.join(tempfile.gettempdir(), "atlas-fp-scratch")
+        for name in ("a.py", "b.py", "c.py"):
+            r = self._edit(os.path.join(scratch, name))
+            self.assertEqual(r.stdout.strip(), "")
+        self.assertFalse(self._orchestrating())
+
+    def test_sidechain_edits_never_arm(self):
+        sub = os.path.join(self.tmp, "proj", self.SESSION, "subagents", "agent-1.jsonl")
+        for name in ("a.py", "b.py", "c.py", "d.py"):
+            r = self._edit("/repo/x/" + name, transcript=sub)
+            self.assertEqual(r.stdout.strip(), "")
+        self.assertFalse(self._orchestrating())
+
+    def test_env_zero_disables(self):
+        env = dict(self.env, ATLAS_FOOTPRINT_FILES="0")
+        for name in ("a.py", "b.py", "c.py", "d.py"):
+            r = self._edit("/repo/x/" + name, env=env)
+            self.assertEqual(r.stdout.strip(), "")
+        self.assertFalse(self._orchestrating())
+
+    def test_env_overrides_the_threshold(self):
+        env = dict(self.env, ATLAS_FOOTPRINT_FILES="2")
+        self._edit("/repo/x/a.py", env=env)
+        self.assertFalse(self._orchestrating())
+        r = self._edit("/repo/x/b.py", env=env)
+        self.assertTrue(self._orchestrating())
+        self.assertEqual(len(self._advisories(r.stdout)), 1)
+
+    def test_invalid_env_falls_back_to_default_three(self):
+        env = dict(self.env, ATLAS_FOOTPRINT_FILES="lots")
+        self._edit("/repo/x/a.py", env=env)
+        self._edit("/repo/x/b.py", env=env)
+        self.assertFalse(self._orchestrating())
+        self._edit("/repo/x/c.py", env=env)
+        self.assertTrue(self._orchestrating())
+
+    def test_already_flagged_run_gets_no_footprint_advisory(self):
+        conn = self.atlas_db.connect(self.env["ATLAS_DB"])
+        self.atlas_db.mark_orchestrating(conn, self.SESSION)
+        conn.close()
+        for name in ("a.py", "b.py", "c.py"):
+            r = self._edit("/repo/x/" + name)
+            self.assertNotIn("multi-file", r.stdout)
+
+    def test_advisory_is_not_repeated_after_arming(self):
+        for name in ("a.py", "b.py"):
+            self._edit("/repo/x/" + name)
+        arming = self._edit("/repo/x/c.py")
+        self.assertEqual(len(self._advisories(arming.stdout)), 1)
+        later = self._edit("/repo/x/d.py")
+        self.assertNotIn("multi-file", later.stdout)
+        self.assertNotIn("tripwires are now armed", later.stdout)
+
+    def test_arming_failure_emits_no_advisory(self):
+        """The advisory claims tripwires are armed: if the arm write fails it must not be said."""
+        sys.path.insert(0, os.path.dirname(__file__))
+        import dispatch_tripwire as dt
+
+        conn = self.atlas_db.connect(self.env["ATLAS_DB"])
+        try:
+            for name in ("a.py", "b.py", "c.py"):
+                self.atlas_db.log_event(
+                    conn,
+                    self.atlas_db.current_run_id(conn, self.SESSION),
+                    "Write",
+                    "main",
+                    1,
+                    "/repo/x/" + name,
+                )
+            with patch.object(
+                self.atlas_db, "mark_orchestrating", side_effect=RuntimeError("db")
+            ):
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    dt._footprint_arm(conn, self.atlas_db, self.SESSION, self.tmp)
+            self.assertEqual(buf.getvalue(), "")
+            self.assertFalse(self.atlas_db.is_orchestrating(conn, self.SESSION))
+        finally:
+            conn.close()
 
 
 if __name__ == "__main__":

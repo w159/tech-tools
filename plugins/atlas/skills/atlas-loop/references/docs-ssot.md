@@ -50,7 +50,7 @@ finishing work; it is not a manual afterthought. Layout and root detection live 
 `specs/`, `features/`) or a `docs/` subdirectory. A leftover `.atlas/docs/` from
 before this SSOT split is a defect: move its unique content into `docs/` or the
 appropriate `.atlas/` subfolder, delete the directory, and re-run
-`scripts/scaffold_docs.py`, which refuses (exit 1) to scaffold over a non-empty
+`skills/atlas-setup/scripts/scaffold_docs.py`, which refuses (exit 1) to scaffold over a non-empty
 legacy `.atlas/docs/` holding durable content or over `.atlas/` with project wiki
 subdirs present.
 

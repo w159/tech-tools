@@ -51,8 +51,9 @@
  * or an explicit `extensions:` path in ~/.omp/agent/config.yml — see README.md.
  */
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
-import { statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import * as nodePath from "node:path";
+import { registerAgentGuard } from "./agent-guard";
 import { ATLAS_AGENT_TARGETABLE, modelPatternsFor, roleFor } from "./atlas-agents";
 import { defaultAdvisorDeps, registerAdvisorGate } from "./advisor";
 import { type LeanKind, explorationDenyReason, explorationTool, kindOfOmpTool, loadNativeTools } from "./contracts";
@@ -64,6 +65,7 @@ import { registerMandates } from "./mandates";
 import { defaultLeanCtxBin, registerShellRoute } from "./shell-route";
 import { registerStyle } from "./style";
 import { registerWorkerBudget } from "./workers";
+import { registerWorkerReport } from "./worker-report";
 
 /** Absolute atlas plugin root: the directory containing scripts/atlas_todo.py. */
 const PLUGIN_ROOT = nodePath.resolve(import.meta.dir, "..");
@@ -73,6 +75,33 @@ const TODO_SCRIPT = nodePath.join(PLUGIN_ROOT, "scripts", "atlas_todo.py");
 
 /** The only item statuses the atlas board vocabulary accepts. */
 const BOARD_STATUSES: Record<string, true> = { pending: true, in_progress: true, completed: true };
+
+/** A board item as mirrored to `atlas_todo.py set`; `phase` is present only for a contract phase. */
+export interface BoardItem {
+	content: string;
+	status: string;
+	phase?: string;
+}
+
+/** contracts/operating-contract.json: the single source of the phase ids a board item may carry. */
+const OPERATING_CONTRACT_PATH = nodePath.join(PLUGIN_ROOT, "contracts", "operating-contract.json");
+
+let cachedTodoPhases: string[] | undefined;
+
+/** The contract's `todoPhases`; unreadable or malformed → [] so no item gets a phase (fail open). */
+function todoPhases(): string[] {
+	if (cachedTodoPhases) return cachedTodoPhases;
+	let phases: string[] = [];
+	try {
+		const raw: unknown = JSON.parse(readFileSync(OPERATING_CONTRACT_PATH, "utf8"));
+		const list = (raw as { todoPhases?: unknown } | null)?.todoPhases;
+		if (Array.isArray(list) && list.every(p => typeof p === "string")) phases = list as string[];
+	} catch {
+		phases = [];
+	}
+	cachedTodoPhases = phases;
+	return phases;
+}
 
 /**
  * Point `CLAUDE_PLUGIN_ROOT` at the atlas plugin root so omp workers can run
@@ -112,21 +141,30 @@ export function ensureClaudePluginRoot(
  * items. `details.phases` is the full current plan ({ name, tasks:
  * [{content, status}] }) after every state-changing op, so the board mirror is
  * a whole-plan replacement, exactly like a TodoWrite mirror. Statuses outside
- * the board vocabulary (blocked, abandoned) normalize to pending.
+ * the board vocabulary (blocked, abandoned) normalize to pending. The omp phase
+ * name, lowercased, becomes the item's `phase` when it is one of the contract's
+ * `todoPhases` (contracts/operating-contract.json); any other name (`Tasks`,
+ * `Phase 2`) leaves `phase` absent.
  */
-export function boardItemsFromTodoDetails(details: unknown): { content: string; status: string }[] {
+export function boardItemsFromTodoDetails(details: unknown): BoardItem[] {
 	if (!details || typeof details !== "object" || !Array.isArray((details as Record<string, unknown>).phases)) return [];
-	const items: { content: string; status: string }[] = [];
+	const known = todoPhases();
+	const items: BoardItem[] = [];
 	for (const phase of (details as Record<string, unknown>).phases) {
 		if (!phase || typeof phase !== "object" || !Array.isArray((phase as Record<string, unknown>).tasks)) continue;
+		const rawName = (phase as Record<string, unknown>).name;
+		const lowered = typeof rawName === "string" ? rawName.trim().toLowerCase() : "";
+		const boardPhase = known.includes(lowered) ? lowered : undefined;
 		for (const task of (phase as Record<string, unknown>).tasks) {
 			const content = (task as Record<string, unknown> | null)?.content;
 			if (typeof content !== "string" || content.trim() === "") continue;
 			const rawStatus = (task as Record<string, unknown>).status;
-			items.push({
+			const item: BoardItem = {
 				content: content.trim(),
 				status: typeof rawStatus === "string" && BOARD_STATUSES[rawStatus] ? rawStatus : "pending",
-			});
+			};
+			if (boardPhase) item.phase = boardPhase;
+			items.push(item);
 		}
 	}
 	return items;
@@ -140,11 +178,11 @@ function sessionIdOf(ctx: { sessionManager?: { getSessionId?: () => unknown } })
 
 /**
  * CLI for `atlas_todo.py set`, which mirrors a JSON array of {content,status}
- * into the board for one session. Passing the list as a single argv element
- * avoids any shell interpolation.
+ * (plus `phase` when the item has one) into the board for one session. Passing
+ * the list as a single argv element avoids any shell interpolation.
  */
 export function boardMirrorArgv(
-	items: { content: string; status: string }[],
+	items: BoardItem[],
 	sessionId: string | undefined,
 	root: string,
 ): string[] {
@@ -445,6 +483,17 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 		}
 	});
 	pi.on("session_switch", reset);
+	// Per main turn: a Stop finalizes the run, and a continued/resumed session never fires session_start again, so
+	// re-run the create-if-absent `begin` here or the DB gates (current_run_id) see no open run.
+	pi.on("before_agent_start", (_event, ctx) => {
+		try {
+			if (ctx.agent.kind === "sub") return undefined;
+			deps.runState?.onTurnStart({ cwd: docsRoot(ctx.cwd) ?? ctx.cwd, sessionId: sessionIdOf(ctx) ?? "", kind: ctx.agent.kind });
+		} catch {
+			// fail open: run-state is telemetry
+		}
+		return undefined;
+	});
 
 
 	pi.on("tool_call", (event, ctx) => {
@@ -542,7 +591,7 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 	// Model-override deny, twin of dispatch_tripwire._model_override. before_subagent_spawn fires in the
 	// PARENT once per spawn with the caller's requested model patterns; an atlas colony agent's generated
 	// definition pins its tier (atlas-agents.ts), and a per-call override drifts it quietly.
-	pi.on("before_subagent_spawn", event => {
+	pi.on("before_subagent_spawn", (event, ctx) => {
 		try {
 			if (process.env.ATLAS_TRIPWIRE_HARD === "off") return undefined;
 			const spawn = event as { agent?: unknown; patterns?: unknown; modelRole?: unknown };
@@ -554,7 +603,17 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 			const pinned = modelPatternsFor(agent).map(p => p.toLowerCase());
 			const role = typeof spawn.modelRole === "string" ? spawn.modelRole.trim().replace(/^@+/, "").toLowerCase() : "";
 			const roleExplained = role !== "" && pinned.some(p => p.replace(/^@+/, "") === role);
-			if (requested.every(p => pinned.includes(p.toLowerCase()) || (p.includes("/") && roleExplained))) return undefined;
+			// A marketplace install does not discover the pinned agents, so omp resolves the child to the parent's live model:
+			// a selector equal to it (optionally with one `:<thinking-level>` suffix) is the inherited default, not an override.
+			const liveModel = ctx?.model && typeof ctx.model.provider === "string" && typeof ctx.model.id === "string" ? `${ctx.model.provider}/${ctx.model.id}`.toLowerCase() : "";
+			const inherited = (p: string): boolean => {
+				if (liveModel === "") return false;
+				const lower = p.toLowerCase();
+				if (lower === liveModel) return true;
+				const level = lower.startsWith(`${liveModel}:`) ? lower.slice(liveModel.length + 1) : "";
+				return level !== "" && !level.includes(":") && !level.includes("/");
+			};
+			if (requested.every(p => pinned.includes(p.toLowerCase()) || (p.includes("/") && roleExplained) || inherited(p))) return undefined;
 			return { block: true, reason: modelOverrideReason("Task", agent, requested.join(", "), roleFor(agent)) };
 		} catch {
 			return undefined; // fail open
@@ -642,6 +701,9 @@ export default function atlasOmpExtension(pi: ExtensionAPI): void {
 	// Registered before the advisor and delegation gates: omp takes the first `block` across handlers.
 	registerStopBridge(pi, { cache: transcripts });
 	registerWorkerBudget(pi);
+	// disallowedTools of atlas agents, which omp does not enforce itself (omp/agent-guard.ts).
+	registerAgentGuard(pi);
+	registerWorkerReport(pi);
 	registerAdvisorGate(pi, defaultAdvisorDeps());
 	register(pi, {
 		runState,

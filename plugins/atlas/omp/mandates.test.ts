@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "bun:test";
@@ -221,3 +221,103 @@ test("recall gate fails open on a contract without the recallGate fields", () =>
 	}
 });
 
+
+// --- recall gate persistence: a resumed session id stays satisfied; a new id must recall ---
+
+const PY_SANITIZE = (id: string) => id.replace(/[^A-Za-z0-9_.-]/g, "_"); // hooks/recall_gate.py `_marker`
+
+function persistentHarness(gateMarkerDir: string) {
+	const handlers: Record<string, Handler> = {};
+	const api = { on: (name: string, h: Handler) => { handlers[name] = h; } };
+	registerMandates(api as unknown as Pick<ExtensionAPI, "on">, { activeTools: () => MEM_TOOLS, env: {}, gateMarkerDir });
+	const ctx = (sessionId?: string) => ({ agent: { kind: "main" as const }, ...(sessionId === undefined ? {} : { sessionManager: { getSessionId: () => sessionId } }) });
+	return {
+		call: (toolName: string, input: Record<string, unknown>, sessionId?: string) => handlers.tool_call({ toolName, input }, ctx(sessionId)),
+		resume: (event: "session_start" | "session_switch", sessionId?: string) => handlers[event]({}, ctx(sessionId)),
+	};
+}
+
+function withMarkerDir(run: (dir: string) => void): void {
+	const dir = mkdtempSync(join(tmpdir(), "atlas-recall-marker-"));
+	try {
+		run(dir);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+}
+
+test("recall gate persistence: same session id stays satisfied across session_start and session_switch", () => {
+	for (const event of ["session_start", "session_switch"] as const) {
+		withMarkerDir(dir => {
+			const h = persistentHarness(dir);
+			expect(h.call("read", { path: "a.ts" }, "sess-A")?.block).toBe(true);
+			expect(h.call("mcp__claude_mem_mcp_search_search", { query: "x" }, "sess-A")).toBeUndefined();
+			h.resume(event, "sess-A"); // resume: in-memory flag resets, the marker for the same id remains
+			expect(h.call("read", { path: "a.ts" }, "sess-A")).toBeUndefined();
+			expect(h.call("bash", { command: "ls" }, "sess-A")).toBeUndefined();
+		});
+	}
+});
+
+test("recall gate persistence: a different session id has no marker and is still blocked", () => {
+	for (const event of ["session_start", "session_switch"] as const) {
+		withMarkerDir(dir => {
+			const h = persistentHarness(dir);
+			h.call("mcp__claude_mem_mcp_search_search", { query: "x" }, "sess-A");
+			h.resume(event, "sess-B");
+			expect(h.call("read", { path: "a.ts" }, "sess-B")).toEqual({ block: true, reason: GATE_REASON });
+			h.call("mcp__claude_mem_mcp_search_search", { query: "y" }, "sess-B"); // B recalls on its own
+			h.resume(event, "sess-B");
+			expect(h.call("read", { path: "a.ts" }, "sess-B")).toBeUndefined();
+		});
+	}
+});
+
+test("recall gate persistence: without a session id nothing is persisted and the gate behaves as before", () => {
+	withMarkerDir(dir => {
+		const h = persistentHarness(dir);
+		expect(h.call("read", { path: "a.ts" })).toEqual({ block: true, reason: GATE_REASON });
+		expect(h.call("mcp__claude_mem_mcp_search_search", { query: "x" })).toBeUndefined();
+		expect(h.call("read", { path: "a.ts" })).toBeUndefined(); // in-memory satisfaction still works
+		expect(readdirSync(dir)).toEqual([]); // no id, no marker
+		h.resume("session_start");
+		expect(h.call("read", { path: "a.ts" })).toEqual({ block: true, reason: GATE_REASON }); // reset re-arms
+		expect(h.call("read", { path: "a.ts" }, "   ")).toEqual({ block: true, reason: GATE_REASON }); // blank id is no id
+	});
+});
+
+test("recall gate persistence: honors a marker written by hand with the Python filename scheme", () => {
+	withMarkerDir(dir => {
+		const id = "sess/ID with:odd chars-1.2_3";
+		writeFileSync(join(dir, `recall-${PY_SANITIZE(id)}`), "");
+		expect(PY_SANITIZE(id)).toBe("sess_ID_with_odd_chars-1.2_3");
+		const h = persistentHarness(dir);
+		expect(h.call("read", { path: "a.ts" }, id)).toBeUndefined(); // satisfied by the Python-side marker
+		// a fresh process (own in-memory flag) for a different id: no marker, so denied
+		expect(persistentHarness(dir).call("read", { path: "a.ts" }, "sess/ID with:odd chars-1.2_4")).toEqual({ block: true, reason: GATE_REASON });
+	});
+});
+
+test("recall gate persistence: the recall writes the marker the Python twin reads, and re-recalling is idempotent", () => {
+	withMarkerDir(dir => {
+		const id = "sess/ID:1";
+		const h = persistentHarness(dir);
+		h.call("mcp__claude_mem_mcp_search_search", { query: "x" }, id);
+		h.resume("session_start", id);
+		h.call("mcp__claude_mem_mcp_search_search", { query: "x" }, id); // EEXIST is ignored
+		expect(readdirSync(dir)).toEqual([`recall-${PY_SANITIZE(id)}`]);
+	});
+});
+
+test("recall gate persistence: an unusable marker dir fails open to the in-memory gate", () => {
+	withMarkerDir(dir => {
+		const blocker = join(dir, "file");
+		writeFileSync(blocker, "");
+		const h = persistentHarness(join(blocker, "sub")); // mkdir under a regular file throws
+		expect(h.call("read", { path: "a.ts" }, "sess-A")?.block).toBe(true);
+		expect(h.call("mcp__claude_mem_mcp_search_search", { query: "x" }, "sess-A")).toBeUndefined();
+		expect(h.call("read", { path: "a.ts" }, "sess-A")).toBeUndefined();
+		h.resume("session_start", "sess-A");
+		expect(h.call("read", { path: "a.ts" }, "sess-A")?.block).toBe(true); // nothing persisted
+	});
+});

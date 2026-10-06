@@ -21,6 +21,7 @@ change may touch what another sibling owns, or you are blocked on their output,
 SendMessage that sibling by name - one exchange, never wait twice. Post durable notes
 to the board (`python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py" note --owner <name>`) and report to the lead, never to
 the user.
+If CLAUDE_PLUGIN_ROOT is empty in your shell, use the absolute script path given in your dispatch.
 
 ## You do not dispatch
 
@@ -71,7 +72,23 @@ Serena is for **code symbols**. For prose, markdown, JSON, and config, `ctx_read
 - **"I don't know" is a valid verdict.** If the evidence available does not settle whether an area is current, stale, or missing, say so explicitly and mark it `[unverified]` rather than forcing one of the three verdicts.
 - Route noisy reads through `context-mode`.
 
+## Report container (fixed; every atlas worker)
+Your final message is exactly the container below, with nothing before its first line. The items under "Report back" further down belong inside the EVIDENCE and DELIVERABLE lines.
+
+```
+STATUS: DONE | FAILED | BLOCKED
+STEPS: <done>/<total>
+FILES_CHANGED: <path>; <path>   (or: none)
+EVIDENCE:
+1. <command or read-back> -> <first 3 and last 3 lines of the real output>
+DELIVERABLE: <the findings or artifact your dispatch asked for; none if only files changed>
+NEXT: <the exact question for the lead if BLOCKED or FAILED; otherwise: none>
+```
+
 ## Report back (final message only)
+
+Put these items inside the container above (EVIDENCE and DELIVERABLE lines); do not add anything outside it.
+
 - A verdict per area: `docs/CHANGELOG.md`, `docs/ROADMAP.md`, `docs/AGENTS.md` / root `AGENTS.md`, each in-scope `docs/` subfolder, root entry files (`README.md`, `CLAUDE.md`), `.atlas/` structure completeness, and `.gitignore` - each as `current`, `stale`, or `missing`.
 - For each `stale` or `missing` finding: the exact claim in the docs or expected structure, the contradicting evidence from code/filesystem/history with `file:line`, and the specific correction needed.
 - Overall assessment: safe to ship as-is, or one or more gaps must be closed first.

@@ -55,6 +55,37 @@ class TodoCapture(unittest.TestCase):
         statuses = {i["content"]: i["status"] for i in board["items"]}
         self.assertEqual(statuses, {"one": "completed", "two": "pending"})
 
+    def test_todo_write_prefix_becomes_board_phase(self):
+        rc = run_hook(
+            {
+                "session_id": "sess1",
+                "cwd": self.root,
+                "tool_name": "TodoWrite",
+                "tool_input": {
+                    "todos": [
+                        {"content": "[implement] build it", "status": "in_progress"},
+                        {"content": "[verify] run the suites", "status": "pending"},
+                        {"content": "[bogus] not a phase", "status": "pending"},
+                        {"content": "plain item", "status": "pending"},
+                    ]
+                },
+            }
+        )
+        self.assertEqual(rc, 0)
+        items = atlas_todo.load(self.root)["items"]
+        self.assertEqual(
+            {i["content"]: i.get("phase") for i in items},
+            {
+                "[implement] build it": "implement",
+                "[verify] run the suites": "verify",
+                "[bogus] not a phase": None,
+                "plain item": None,
+            },
+        )
+        for item in items:
+            if item["content"] in ("[bogus] not a phase", "plain item"):
+                self.assertNotIn("phase", item)
+
     def test_non_todowrite_events_are_ignored(self):
         rc = run_hook(
             {

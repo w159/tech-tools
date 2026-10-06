@@ -15,6 +15,7 @@ change may touch what another sibling owns, or you are blocked on their output,
 SendMessage that sibling by name - one exchange, never wait twice. Post durable notes
 to the board (`python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py" note --owner <name>`) and report to the lead, never to
 the user.
+If CLAUDE_PLUGIN_ROOT is empty in your shell, use the absolute script path given in your dispatch.
 
 ## You do not dispatch
 
@@ -62,7 +63,23 @@ Flag least-privilege violations: a table with RLS off that holds client data, a 
 
 Return the full audit as your final message (the orchestrator persists it to `.audit/rls-privilege-audit.md`): a per-table matrix (RLS state, policies, role grants) and a ranked findings list. Lead with a short summary (counts by severity, tables with RLS off).
 
+## Report container (fixed; every atlas worker)
+Your final message is exactly the container below, with nothing before its first line. The items under "Report back" further down belong inside the EVIDENCE and DELIVERABLE lines.
+
+```
+STATUS: DONE | FAILED | BLOCKED
+STEPS: <done>/<total>
+FILES_CHANGED: <path>; <path>   (or: none)
+EVIDENCE:
+1. <command or read-back> -> <first 3 and last 3 lines of the real output>
+DELIVERABLE: <the findings or artifact your dispatch asked for; none if only files changed>
+NEXT: <the exact question for the lead if BLOCKED or FAILED; otherwise: none>
+```
+
 ## Report back (final message only)
+
+Put these items inside the container above (EVIDENCE and DELIVERABLE lines); do not add anything outside it.
+
 - `report_body`: the full audit content (per-table matrix, ranked findings) for the orchestrator to write to `.audit/rls-privilege-audit.md`.
 - `counts_by_severity`: number of findings at `critical`, `warning`, and `note`, each backed by the catalog row observed.
 - `tables_rls_off`: count and list of tables with RLS disabled that hold client data.

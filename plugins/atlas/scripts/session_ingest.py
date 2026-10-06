@@ -429,6 +429,44 @@ def _reset_file_rows(conn, session_id, path, row_keys, owner_path):
     )
 
 
+# --- harness labeling ---------------------------------------------------------
+
+# Harnesses whose hook processes announce themselves through ATLAS_HARNESS.
+# Extend this set (one place) only after verifying the new harness's bridge sets
+# the variable; an unlisted value is ignored rather than trusted.
+RECOGNIZED_HARNESSES = frozenset({"omp"})
+
+
+def harness_agent():
+    """session_logs.agent for a hook-driven ingest, or None to leave the schema
+    DEFAULT ('claude') in force.
+
+    Rule: ATLAS_HARNESS, when it names a RECOGNIZED_HARNESSES entry, is the
+    agent. omp's bridge sets ATLAS_HARNESS=omp on every atlas hook process it
+    starts: the synchronous hooks (omp/hook-bridge.ts hookEnv()) and the
+    detached ingest spawned at session_shutdown / auto_compaction_start for
+    main AND subagent sessions (omp/stop-bridge.ts, whose startDetached merges
+    opts.env over process.env). Claude Code starts the same hook scripts
+    without it, so an absent, empty or unrecognized value stays 'claude'.
+
+    Why the environment and not the transcript path: the bridge converts the
+    omp session into a Claude-shaped file under an atlas-ingest-* temp dir
+    before spawning the hook, so neither the path nor the content identifies
+    omp at this boundary.
+
+    Failure modes: (1) running this module by hand over an omp transcript
+    without ATLAS_HARNESS labels the row 'claude' - backfill omp history with
+    --backfill-agent omp, which stamps agent itself; (2) ATLAS_HARNESS=omp
+    exported into a Claude Code user shell would mislabel that shell's rows
+    'omp' - the bridges set it per child process, never in user shells, so this
+    needs a manual export; (3) a future harness is labeled 'claude' until it is
+    added to RECOGNIZED_HARNESSES. Rows already stored as 'claude' are not
+    rewritten here.
+    """
+    value = (os.environ.get("ATLAS_HARNESS") or "").strip().lower()
+    return value if value in RECOGNIZED_HARNESSES else None
+
+
 def ingest_transcript(path, conn=None, session_id=None, force=False):
     """Ingest new lines of one transcript. Returns a small stats dict.
     Incremental via byte cursor; resets cleanly if the file was truncated."""
@@ -533,12 +571,13 @@ def ingest_transcript(path, conn=None, session_id=None, force=False):
             # file) must not move the session row's ownership columns: the
             # transcript_path/cursor stay with the file that created the row.
             atlas_db.upsert_session_log(
-                conn, session_id, last_ingest_at=time.time()
+                conn, session_id, agent=harness_agent(), last_ingest_at=time.time()
             )
         else:
             atlas_db.upsert_session_log(
                 conn,
                 session_id,
+                agent=harness_agent(),
                 project_id=meta["project_id"],
                 transcript_path=path,
                 cwd=meta["cwd"],
@@ -705,9 +744,7 @@ def _result_text(content):
     if isinstance(content, str):
         return content
     if isinstance(content, list):
-        return "\n".join(
-            b.get("text", "") for b in content if isinstance(b, dict)
-        )
+        return "\n".join(b.get("text", "") for b in content if isinstance(b, dict))
     return ""
 
 
@@ -1214,8 +1251,9 @@ AGENT_FILE_FILTERS = {
     "codex": lambda root, d, fn: fn.startswith("rollout-") and fn.endswith(".jsonl"),
     # Main sessions sit directly under <root>/<project>/; colony member
     # transcripts one level deeper are routed by AGENT_COLONY_* below.
-    "omp": lambda root, d, fn: fn.endswith(".jsonl")
-    and os.path.dirname(os.path.relpath(d, root)) == "",
+    "omp": lambda root, d, fn: (
+        fn.endswith(".jsonl") and os.path.dirname(os.path.relpath(d, root)) == ""
+    ),
 }
 
 

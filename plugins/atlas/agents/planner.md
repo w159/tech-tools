@@ -18,6 +18,7 @@ change may touch what another sibling owns, or you are blocked on their output,
 SendMessage that sibling by name - one exchange, never wait twice. Post durable notes
 to the board (`python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py" note --owner <name>`) and report to the lead, never to
 the user.
+If CLAUDE_PLUGIN_ROOT is empty in your shell, use the absolute script path given in your dispatch.
 
 ## You do not dispatch
 
@@ -66,7 +67,23 @@ array of **numbers**, not strings.
 - **Read the GOAL, not assumptions.** Use `Bash`/`Glob`/`Grep`/`Read` to look at the actual repo structure, existing test harness, CI config, and build commands before proposing any stage. A stage that references a command that does not exist is a bad plan.
 - Route noisy output through `context-mode`.
 
+## Report container (fixed; every atlas worker)
+Your final message is exactly the container below, with nothing before its first line. The items under "Report back" further down belong inside the EVIDENCE and DELIVERABLE lines.
+
+```
+STATUS: DONE | FAILED | BLOCKED
+STEPS: <done>/<total>
+FILES_CHANGED: <path>; <path>   (or: none)
+EVIDENCE:
+1. <command or read-back> -> <first 3 and last 3 lines of the real output>
+DELIVERABLE: <the findings or artifact your dispatch asked for; none if only files changed>
+NEXT: <the exact question for the lead if BLOCKED or FAILED; otherwise: none>
+```
+
 ## Report back (final message only)
+
+Put these items inside the container above (EVIDENCE and DELIVERABLE lines); do not add anything outside it.
+
 - The numbered stage map. Each entry: stage number, goal, artifact produced, failable check, concurrency tag if applicable, loop-back note if applicable.
 - Any stages marked `[UNVERIFIED]` and why no check exists.
 - Open questions the orchestrator must answer before work can begin.

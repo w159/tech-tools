@@ -3,11 +3,14 @@
  * Code's hooks would, by calling scripts/omp_runstate.py (which reuses
  * atlas_db / session_boot; no SQL lives here).
  *
- *   begin + snapshot  once per main session, from session_start: the runs row
- *                     and the dirty-tree baseline .atlas/.run/dirty-snapshot-<sid>.json.
- *                     The bridged session_boot.py already creates the row on the
- *                     first prompt; `begin` is create-if-absent, `snapshot`
- *                     rewrites the same file with the same content.
+ *   begin             once from session_start and again on every main-session turn
+ *                     (before_agent_start): the runs row. `begin` is create-if-absent,
+ *                     so a session that continues after a Stop (which finalizes the
+ *                     run) gets a new open run. All calls run one at a time on a
+ *                     single promise tail, so concurrent begins cannot double-insert.
+ *   snapshot          once per main session, from session_start: the dirty-tree
+ *                     baseline .atlas/.run/dirty-snapshot-<sid>.json (rewrites the
+ *                     same file with the same content).
  *   arm               a `task` dispatch no hook denied: the orchestration flag
  *                     (dispatch_tripwire's _arm_orchestrating), with --worktree
  *                     when the dispatch is isolated.
@@ -64,6 +67,8 @@ export function runStateArgv(command: RunStateCommand, args: RunStateArgs, scrip
 export interface RunStateSink {
 	/** First main session start: begin + snapshot, once. */
 	onSessionStart(ctx: { cwd: string; sessionId: string; kind: string }): void;
+	/** Each main turn (before_agent_start): begin again; the CLI is create-if-absent, so only a finalized run reopens. */
+	onTurnStart(ctx: { cwd: string; sessionId: string; kind: string }): void;
 	/** A `task` call no hook denied: arm orchestration (skipped when dispatch_tripwire ran). */
 	onToolAllowed(info: ToolEventInfo): void;
 	/** A successful tool result: dispatch / edit event rows (skipped when dispatch_tripwire ran). */
@@ -105,6 +110,10 @@ export function createRunStateSink(deps: RunStateDeps = {}): RunStateSink & { id
 	let available: boolean | undefined;
 	let began = false;
 	const inflight = new Set<Promise<void>>();
+	// Every call() is appended to this one tail so the CLI processes never overlap: `begin` from session start and from
+	// the first turn would otherwise run as concurrent python processes (check-then-insert race on the runs table), and
+	// arm/event could land before the begin that creates their run. The tail never rejects, so one failure cannot wedge it.
+	let tail: Promise<void> = Promise.resolve();
 
 	const cliPresent = (): boolean => {
 		available ??= (() => {
@@ -119,13 +128,15 @@ export function createRunStateSink(deps: RunStateDeps = {}): RunStateSink & { id
 	/** Fire and forget: never throws, never awaited by the caller. `inflight` lets tests await completion. */
 	const call = (...invocations: [RunStateCommand, RunStateArgs][]): void => {
 		if (!cliPresent()) return;
-		const chain = (async () => {
+		const step = async (): Promise<void> => {
 			try {
 				for (const [command, args] of invocations) await run(runStateArgv(command, args, script));
 			} catch {
 				// fail open: run-state is telemetry
 			}
-		})();
+		};
+		const chain = tail.then(step);
+		tail = chain;
 		inflight.add(chain);
 		void chain.finally(() => inflight.delete(chain));
 	};
@@ -138,6 +149,12 @@ export function createRunStateSink(deps: RunStateDeps = {}): RunStateSink & { id
 			if (kind === "sub" || began || !sessionId) return;
 			began = true;
 			call(["begin", { sessionId, cwd }], ["snapshot", { sessionId, cwd }]);
+		},
+		onTurnStart({ cwd, sessionId, kind }) {
+			// Every main turn: `begin` only opens a run when current_run_id is None, so a session continued after a Stop
+			// finalized its run gets a fresh open run. No snapshot (the baseline belongs to session start) and no `began` gate.
+			if (kind === "sub" || !sessionId) return;
+			call(["begin", { sessionId, cwd }]);
 		},
 		onToolAllowed(info) {
 			if (info.tripwireRan || !info.sessionId || trackedTool(info.toolName, info.input) !== "Task") return;

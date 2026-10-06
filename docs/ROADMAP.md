@@ -6,11 +6,10 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 
 ## In Progress
 
-- [in-progress] atlas 5.27.1 (sentinel root resolution) is verified in source, but
-  source/installed parity is only enforced opportunistically:
-  `InstalledParityContract` in `plugins/atlas/hooks/test_atlas_contract.py` skips
-  while the installed plugin cache version differs from source and re-arms after a
-  reinstall.
+- [in-progress] atlas 9.5.1 is verified in source, but source/installed parity is
+  only enforced opportunistically: `InstalledParityContract`
+  (`hooks/test_atlas_contract.py:579`) skips while the installed plugin cache is not
+  at the manifest version and re-arms after a reinstall.
 - [in-progress] Gate conditions (i) and (j) are verified against fixtures and
   mutation-checked, but never against a live payload: this session's toolset has
   no `TodoWrite`, so no real TodoWrite tool_use has passed through `_open_todos`,
@@ -20,7 +19,7 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
   "(i) Todo list not drained" until the list is completed, and with "(j) N git
   worktree(s) from this run are still on disk" until the trees are merged and
   removed. The durable-board/LEDGER drain fallback is fixture-verified as of
-  5.26.0 (`TodoBoardDrainTest`, 8 cases); a live TodoWrite payload through
+  5.26.0 (`TodoBoardDrainTest`, 7 cases, `hooks/test_completion_gate.py:1999`); a live TodoWrite payload through
   `_open_todos` is still pending.
 - [in-progress] `atlas_doctor` has no check that verifies claude-mem,
   context-mode, ponytail, lean-ctx, or serena are actually *registered as MCP
@@ -73,10 +72,9 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
   plugin-enablement detection via `omp-plugins.lock.json`, the
   `outputStyle`/`TodoWrite`-gating fixes in `omp/style.ts` and
   `hooks/session_boot.py`) were verified by `bun test` (245 pass, 0 fail) and
-  pytest only. Live-omp verification is still needed: the user's omp
-  currently has atlas 8.6.0 installed from the plugin cache, so the fixes
-  reach a live session only after `omp plugin upgrade` / reinstall from the
-  marketplace once 9.0.0 is published. Re-run the paired Claude Code / omp
+  pytest only. Live-omp verification of the 9.0.0 fixes is still needed; omp now
+  has atlas 9.5.1 installed (lock + node_modules), so the fixes can be checked in a
+  live session. Re-run the paired Claude Code / omp
   benchmark in `docs/atlas-harness-parity.md` against a live 9.0.0 omp
   install once upgraded.
 - Evaluate the 47 rewritten SKILL.md descriptions for trigger accuracy against
@@ -146,7 +144,7 @@ gap remains; the other two closed in 5.6.0 (2026-08-06):
 
 ### Extract MCP connector servers into standalone repos (approved 2026-07-31)
 
-Goal: deliver each of the 10 MCP connector servers via
+Goal: deliver each of the MCP connector servers (10 when approved; `mcp_servers/` now also holds `panos-mcp`) via
 `npx -y git+https://github.com/w159/<vendor>-mcp.git` instead of as folders inside this
 monorepo. Approved as a follow-on target; not started. Four independent blockers confirmed
 this session:
@@ -156,10 +154,10 @@ this session:
    `https://github.com/w159/tech-tools.git`; no `.gitmodules`, no nested `.git`. npm git URLs
    have no subdirectory form, so a git+ URL today would install the whole monorepo, not one
    server.
-2. 6 of 10 depend on local `file:../../mcp_node/node-*` paths and cannot install standalone:
+2. 6 of 10 (as counted at approval; re-count with `grep -l 'file:../../mcp_node' mcp_servers/*/package.json` before restating) depend on local `file:../../mcp_node/node-*` paths and cannot install standalone:
    blumira-mcp, kaseya-spanning-backup-mcp, ninjaone-mcp, paylocity-mcp, threatlocker-mcp,
    vanta-mcp.
-3. `dist/` is gitignored for all 10, and only 3 of 10 (blumira, cipp, threatlocker) have a
+3. `dist/` is gitignored for all 10, and only 3 of 10 (blumira, cipp, threatlocker; re-count with `grep -L prepare mcp_servers/*/package.json`) have a
    `prepare` script. npm runs `prepare` (not `build`) on git installs, so the other 7 would
    install as empty packages.
 4. None of the 10 are published to npm. All names are unscoped (auvik-mcp, blumira-mcp,
@@ -211,16 +209,9 @@ Surface autocompact and thinking-token budgets plus model routing as recommend-t
 ### Tech debt: error-envelope DRY divergence (re-scoped again 2026-07-17, commit adace06)
 
 Commit `adace06` restored a top-level `mcp_servers/_shared/` (see CHANGELOG), but this is a
-restore, not the per-server consolidation this item originally asked for: `blumira-mcp`,
-`threatlocker-mcp`, and `vanta-mcp` now import the top-level copy via their `@shared/*`
-alias, while `auvik-mcp/src/_shared/error-envelope.ts`,
-`connectwise-manage-mcp/src/_shared/error-envelope.ts`, and
-`cipp-mcp/src/_shared/error-envelope.ts` still carry their own private per-server copies
-(confirmed on disk 2026-07-17 - none of the three re-point at `mcp_servers/_shared/`). The
-repo now has four independent copies of `error-envelope.ts`/`response-shaper.ts` (one
-top-level, three per-server), not one. Still left in Backlog, unplanned: either repoint
-`auvik-mcp`/`connectwise-manage-mcp`/`cipp-mcp` at the now-restored top-level `_shared/`, or
-accept four copies as the pattern and drop the consolidation goal.
+restore, not the per-server consolidation this item originally asked for.
+Resolved: all six servers import `mcp_servers/_shared/` through the `@shared/*` alias
+(`<svc>-mcp/tsconfig.json`); no per-server error-envelope copies remain. Close this item.
 
 ### Bug: vitest 4 globs into node_modules.nosync.noindex symlink target during npm test (found 2026-07-17)
 
@@ -233,7 +224,7 @@ optional peer deps `recheck`, `@web-std/file`, `@seriousme/openapi-schema-valida
 and `node_modules.nosync.noindex/node-threatlocker/tests/unit/computers.test.ts` (a
 different project's tests reached through the symlink). Real test count for the
 project itself: 1882 passed, 3 failed on an unrelated live-HTTP-440 issue.
-`mcp_servers/threatlocker-mcp/vitest.config.ts` has no `exclude` override. Fix needs
+Fixed: `mcp_servers/threatlocker-mcp/vitest.config.ts:12` excludes `node_modules.nosync.noindex`. Check the other projects' `vitest.config.ts` and close the item for those that match. The fix needed
 an explicit `test.exclude` (or `test.dir` scoping to `tests/` and `src/`) added to
 each project's `vitest.config.ts` bumped to vitest 4 in the 2026-07-17 dependency
 remediation. Out of scope for that remediation (package.json/lockfile only).

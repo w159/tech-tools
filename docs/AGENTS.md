@@ -1,17 +1,17 @@
 # Atlas Subagent Roster
 
-Authoritative list of subagents shipped in `plugins/atlas/agents/`. 12 agents total as of the
-2026-07-07 UX-swarm and api-usage-map removal (formerly 18 as of v2.2.1).
+Authoritative list of subagents shipped in `plugins/atlas/agents/`. 13 agents total (the
+2026-07-07 UX-swarm and api-usage-map removal left 12, formerly 18 as of v2.2.1; `atlas:runner` is the thirteenth).
 Source: `plugins/atlas/agents/*.md` (each file's `name:` and `description:` frontmatter fields).
 
-The atlas plugin ships 12 core agents (listed below). The v5.0.0 split moved 11 additional
+The atlas plugin ships 13 core agents (listed below). The v5.0.0 split moved 11 additional
 `atlas:armada-*` department agents out of atlas and into a separate `armada` plugin
 (`plugins/armada/agents/`), which is part of the Claude Code marketplace but is installed
 alongside `atlas` only for org deployment. The 11 armada department agents are:
 `atlas:armada-data`, `atlas:armada-design`, `atlas:armada-engineering`,
 `atlas:armada-finance`, `atlas:armada-hr`, `atlas:armada-it-ops`, `atlas:armada-m365`,
 `atlas:armada-product`, `atlas:armada-productivity`, `atlas:armada-security`, and
-`atlas:armada-support`. They are NOT in `plugins/atlas/agents/` and are not part of the
+`atlas:armada-support`. They are NOT in `plugins/atlas/agents/` and are not part of the atlas plugin.
 
 ---
 
@@ -39,10 +39,9 @@ Every session is one of two kinds:
   may open dozens of worker sessions.
 
 The observability DB (`~/.atlas/atlas.db`) records every session's transcript in the `session_logs`,
-`messages`, and `tool_calls` mirror tables (added in v2.2.1). v2.2.3 added a `run_kind` (orchestrator/worker) tag to the `runs` table, so atlas-audit Trends
+`messages`, and `tool_calls` mirror tables (added in v2.2.1). v2.2.3 added a `kind` (orchestrator/worker) column to the `runs` table, so atlas-audit Trends
 run-health aggregates now exclude leaf worker sessions, preventing short worker sessions from
-skewing wall-clock or context averages (`plugins/atlas/scripts/atlas_db.py:128,131`;
-`docs/ROADMAP.md:143`).
+skewing wall-clock or context averages (`plugins/atlas/scripts/atlas_db.py:20`, migration `:167`, `backfill_run_kinds` `:224`).
 
 ---
 
@@ -108,6 +107,14 @@ retained as a general-purpose browser validation agent used outside the swarm.
 
 Source: `plugins/atlas/agents/ui-runtime-tester.md`.
 
+## Mechanical Tier
+
+| Agent | One-line role |
+|---|---|
+| **atlas:runner** | Mechanical executor (haiku, effort low): runs ONE tiny task given as at most 7 numbered STEPS on at most 5 named files exactly as written, records each command and real output, stops on anything unexpected, and returns a fixed `STEPS:` report. Does not design, investigate, or decide. |
+
+Source: `plugins/atlas/agents/runner.md`. The `worker_report_gate.py` SubagentStop hook checks worker reports.
+
 ---
 
 ## Stack
@@ -123,12 +130,13 @@ Verified 2026-07-13 against the shipped tree.
 ## Architecture
 
 - Entry points: `plugins/atlas/{hooks,scripts,skills,agents,mcp}` (hook handlers, CLI scripts,
-  21 skills, 12 agents, 4 MCP servers)
-- Boundaries: `atlas` plugin (codebase-facing, 12 agents in `plugins/atlas/agents/`) versus
+  47 skills, 13 agents, 12 MCP connector bundles)
+- Boundaries: `atlas` plugin (codebase-facing, 13 agents in `plugins/atlas/agents/`) versus
   `armada` plugin (11 department agents in `plugins/armada/agents/`); the split landed in v5.0.0
-- Key modules: 21 skills under `plugins/atlas/skills/`, 12 agents under `plugins/atlas/agents/`,
-  hook handlers under `plugins/atlas/hooks/`, CLI scripts under `plugins/atlas/scripts/`, MCP
-  servers under `plugins/atlas/mcp/`
+- Key modules: 47 skills under `plugins/atlas/skills/`, 13 agents under `plugins/atlas/agents/`,
+  hook handlers under `plugins/atlas/hooks/` (17 programs, 21 bindings in `hooks/hooks.json`, including
+  `worker_report_gate.py` on SubagentStop), CLI scripts under `plugins/atlas/scripts/`, 12 MCP
+  connector bundles under `plugins/atlas/mcp/` (listed in `plugins/atlas/.mcp.json`)
 
 ## Conventions
 
@@ -144,8 +152,8 @@ Verified 2026-07-13 against the shipped tree.
 Verified 2026-07-13. Run from repo root.
 
 - Build: none (no compile step; Python is interpreted)
-- Test: `python3 -m unittest discover -s plugins/atlas/hooks` (423 tests, OK as of 2026-07-13)
-  and `python3 -m unittest discover -s plugins/atlas/scripts` (510 tests, OK)
+- Test: `python3 -m unittest discover -s plugins/atlas/hooks`
+  and `python3 -m unittest discover -s plugins/atlas/scripts` (test counts omitted: they drift; re-run to quote them)
 - Lint: `ruff check plugins/atlas/hooks plugins/atlas/scripts` (All checks passed)
 - Typecheck: `npx pyright plugins/atlas/hooks plugins/atlas/scripts` (0 errors, 0 warnings,
   0 informations)
@@ -154,7 +162,7 @@ Verified 2026-07-13. Run from repo root.
 
 ## Agent Constraints
 
-All 12 agents share three standing constraints regardless of the task:
+All 13 agents share three standing constraints regardless of the task:
 
 1. **Never fix what you are auditing.** Auditor, verifier, critic, oracle, and prober agents
    return findings only. They do not carry Write, Edit, or MultiEdit permissions.

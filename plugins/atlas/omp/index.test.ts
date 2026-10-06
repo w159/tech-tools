@@ -3,12 +3,20 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
-import extension, { ensureClaudePluginRoot, ircNoteArgv, modelOverrideReason, register } from "./index";
+import extension, {
+	boardItemsFromTodoDetails,
+	boardMirrorArgv,
+	ensureClaudePluginRoot,
+	ircNoteArgv,
+	modelOverrideReason,
+	register,
+} from "./index";
 
 type Context = {
 	cwd: string;
 	agent: { kind: "main" | "sub"; id?: string };
 	sessionManager?: { getSessionId(): string };
+	model?: { provider: string; id: string };
 };
 type Result = { block?: boolean; reason?: string; additionalContext?: string; decision?: string } | undefined;
 type Handler = (
@@ -441,6 +449,64 @@ test("board mirror argv runs the real python CLI and writes the board", () => {
 	expect(inProgress?.origin).toBe("session");
 });
 
+const PHASED_TODO = {
+	op: "init",
+	phases: [
+		{ name: "Research", tasks: [{ content: "map the flow", status: "completed" }] },
+		{ name: "implement", tasks: [{ content: "wire the board", status: "in_progress" }] },
+		{ name: " VERIFY ", tasks: [{ content: "run the suites", status: "blocked" }] },
+		{ name: "Tasks", tasks: [{ content: "ship it", status: "pending" }] },
+		{ name: "Phase 2", tasks: [{ content: "later", status: "pending" }] },
+	],
+};
+
+test("omp phase names that are contract phases become the board item phase, lowercased", () => {
+	expect(boardItemsFromTodoDetails(PHASED_TODO)).toEqual([
+		{ content: "map the flow", status: "completed", phase: "research" },
+		{ content: "wire the board", status: "in_progress", phase: "implement" },
+		{ content: "run the suites", status: "pending", phase: "verify" },
+		{ content: "ship it", status: "pending" },
+		{ content: "later", status: "pending" },
+	]);
+});
+
+test("unknown omp phase names leave phase absent (no key at all) and legacy items are unchanged", () => {
+	const items = boardItemsFromTodoDetails(TODO_PHASES);
+	expect(items).toEqual([
+		{ content: "map the flow", status: "in_progress" },
+		{ content: "verify the fix", status: "pending" },
+		{ content: "ship it", status: "completed" },
+	]);
+	for (const item of items) expect("phase" in item).toBe(false);
+	// "done" and "blocked" are visible-contract phases but NOT todoPhases, so they stay absent
+	const closing = boardItemsFromTodoDetails({
+		phases: [{ name: "done", tasks: [{ content: "a", status: "pending" }] }, { name: "blocked", tasks: [{ content: "b", status: "pending" }] }],
+	});
+	expect(closing.map(i => "phase" in i)).toEqual([false, false]);
+});
+
+test("the mirrored JSON given to atlas_todo.py set carries the phase, and the real CLI stores it", () => {
+	const h = harness();
+	h.ctx.sessionManager = { getSessionId: () => "sess-omp-42" };
+	h.result({ toolName: "todo", details: PHASED_TODO });
+	expect(h.spawns).toHaveLength(1);
+	expect(JSON.parse(h.spawns[0].argv[7])).toEqual(boardItemsFromTodoDetails(PHASED_TODO));
+	expect(boardMirrorArgv([{ content: "x", status: "pending", phase: "test" }], undefined, "/r").at(-1)).toBe(
+		JSON.stringify([{ content: "x", status: "pending", phase: "test" }]),
+	);
+	const run = Bun.spawnSync(h.spawns[0].argv, { cwd: h.spawns[0].opts.cwd, stdout: "pipe", stderr: "pipe" });
+	expect(run.exitCode).toBe(0);
+	const board = JSON.parse(readFileSync(join(root, "project", ".atlas", ".run", "todos.json"), "utf8")) as {
+		items: { content: string; phase?: string }[];
+	};
+	const phaseOf = (content: string) => board.items.find(item => item.content === content);
+	expect(phaseOf("map the flow")?.phase).toBe("research");
+	expect(phaseOf("wire the board")?.phase).toBe("implement");
+	expect(phaseOf("run the suites")?.phase).toBe("verify");
+	expect(phaseOf("ship it") && "phase" in (phaseOf("ship it") as object)).toBe(false);
+	expect(phaseOf("later") && "phase" in (phaseOf("later") as object)).toBe(false);
+});
+
 test("todo mirror is main-thread, docs-scoped, and error-tolerant", () => {
 	const sub = harness();
 	sub.ctx.agent.kind = "sub";
@@ -541,6 +607,40 @@ test("a concrete selector with modelRole undefined denies", () => {
 	expect(result?.block).toBe(true);
 });
 
+// A marketplace install does not discover the pinned generated agents, so omp resolves the child to the parent's live model.
+// A selector equal to that model (optionally with one thinking-level suffix) is the inherited default, not a per-call override.
+const LIVE_MODEL = { provider: "anthropic", id: "claude-sonnet-5-5" };
+const inheritedSpawn = (patterns: string[]) => ({ type: "before_subagent_spawn", agent: "implementer", invocationKind: "task", patterns, spawnKey: "Inherited" });
+
+test("a selector equal to the parent's live model plus a thinking level is inherited, not an override", () => {
+	const h = harness();
+	h.ctx.model = LIVE_MODEL;
+	expect(spawnHandler(h)(inheritedSpawn(["anthropic/claude-sonnet-5-5:low"]), h.ctx)).toBeUndefined();
+	expect(spawnHandler(h)(inheritedSpawn(["Anthropic/Claude-Sonnet-5-5:HIGH"]), h.ctx)).toBeUndefined(); // case does not matter
+});
+
+test("the same inherited selector denies when the context carries no model", () => {
+	const h = harness();
+	const result = spawnHandler(h)(inheritedSpawn(["anthropic/claude-sonnet-5-5:low"]), h.ctx);
+	expect(result?.block).toBe(true);
+	expect(result?.reason).toBe(modelOverrideReason("Task", "implementer", "anthropic/claude-sonnet-5-5:low", "@atlas-worker"));
+});
+
+test("a different concrete selector still denies when the parent's live model is known", () => {
+	const h = harness();
+	h.ctx.model = LIVE_MODEL;
+	expect(spawnHandler(h)(inheritedSpawn(["ollama/glm-5.3-flash:cloud:medium"]), h.ctx)?.block).toBe(true);
+	expect(spawnHandler(h)(inheritedSpawn(["anthropic/claude-opus-5-5:low"]), h.ctx)?.block).toBe(true); // same provider, other model
+	expect(spawnHandler(h)(inheritedSpawn(["anthropic/claude-sonnet-5-5:low:high"]), h.ctx)?.block).toBe(true); // one suffix only
+	expect(spawnHandler(h)(inheritedSpawn(["anthropic/claude-sonnet-5-5:low", "ollama/glm-5.3-flash:cloud:medium"]), h.ctx)?.block).toBe(true); // every token must be inherited
+});
+
+test("the bare live model selector with no thinking suffix is inherited", () => {
+	const h = harness();
+	h.ctx.model = LIVE_MODEL;
+	expect(spawnHandler(h)(inheritedSpawn(["anthropic/claude-sonnet-5-5"]), h.ctx)).toBeUndefined();
+});
+
 test("a hostile spawn event fails open", () => {
 	const h = harness();
 	const hostile = { get agent(): string { throw new Error("boom"); }, patterns: ["x"] };
@@ -555,7 +655,7 @@ test("session_start hands the run-state sink the project root and session id, ma
 	register({ on: (name: string, handler: Handler) => { handlers[name] = handler; } } as unknown as Pick<ExtensionAPI, "on">, {
 		activeTools: () => [],
 		spawnBoardMirror: () => { },
-		runState: { onSessionStart: info => void started.push(info), onToolAllowed: () => { }, onToolResult: () => { } },
+		runState: { onSessionStart: info => void started.push(info), onTurnStart: () => { }, onToolAllowed: () => { }, onToolResult: () => { } },
 	});
 	const project = join(root, "project", "src", "nested");
 	const ctx: Context = { cwd: project, agent: { kind: "main" }, sessionManager: { getSessionId: () => "s-9" } };
@@ -570,8 +670,63 @@ test("a throwing run-state sink does not break session start or the shell-edit b
 	register({ on: (name: string, handler: Handler) => { handlers[name] = handler; } } as unknown as Pick<ExtensionAPI, "on">, {
 		activeTools: () => [],
 		spawnBoardMirror: () => { },
-		runState: { onSessionStart: () => { throw new Error("sink exploded"); }, onToolAllowed: () => { }, onToolResult: () => { } },
+		runState: { onSessionStart: () => { throw new Error("sink exploded"); }, onTurnStart: () => { }, onToolAllowed: () => { }, onToolResult: () => { } },
 	});
 	const ctx: Context = { cwd: join(root, "project"), agent: { kind: "main" } };
 	expect(() => (handlers.session_start as unknown as (e: unknown, c: Context) => void)({}, ctx)).not.toThrow();
+});
+
+test("before_agent_start hands the run-state sink each main turn, never a sub turn, and survives a throwing sink", () => {
+	const turns: { cwd: string; sessionId: string; kind: string }[] = [];
+	const handlers: Record<string, Handler> = {};
+	register({ on: (name: string, handler: Handler) => { handlers[name] = handler; } } as unknown as Pick<ExtensionAPI, "on">, {
+		activeTools: () => [],
+		spawnBoardMirror: () => { },
+		runState: { onSessionStart: () => { }, onTurnStart: info => void turns.push(info), onToolAllowed: () => { }, onToolResult: () => { } },
+	});
+	const fire = (ctx: Context) => (handlers.before_agent_start as unknown as (e: unknown, c: Context) => unknown)({}, ctx);
+	const ctx: Context = { cwd: join(root, "project", "src"), agent: { kind: "main" }, sessionManager: { getSessionId: () => "s-9" } };
+	fire(ctx);
+	fire(ctx); // second turn: begin is handed over again
+	fire({ ...ctx, agent: { kind: "sub" } });
+	expect(turns).toEqual([
+		{ cwd: join(root, "project"), sessionId: "s-9", kind: "main" },
+		{ cwd: join(root, "project"), sessionId: "s-9", kind: "main" },
+	]);
+	const boom: Record<string, Handler> = {};
+	register({ on: (name: string, handler: Handler) => { boom[name] = handler; } } as unknown as Pick<ExtensionAPI, "on">, {
+		activeTools: () => [],
+		spawnBoardMirror: () => { },
+		runState: { onSessionStart: () => { }, onTurnStart: () => { throw new Error("sink exploded"); }, onToolAllowed: () => { }, onToolResult: () => { } },
+	});
+	expect(() => (boom.before_agent_start as unknown as (e: unknown, c: Context) => unknown)({}, ctx)).not.toThrow();
+});
+
+// ── Agent guard: disallowedTools of atlas agents enforced on omp (omp/agent-guard.ts) ──
+
+test("the default export wires the agent guard: an explorer edit is blocked through the registered tool_call chain", () => {
+	type Chain = (event: { toolName: string; toolCallId: string; input: Record<string, unknown> }, ctx: unknown) => Result;
+	const chain: Chain[] = [];
+	const api = {
+		on: (name: string, handler: Chain) => { if (name === "tool_call") chain.push(handler); },
+		getActiveTools: () => ACTIVE_NONE,
+	};
+	extension(api as unknown as ExtensionAPI);
+	// omp's emitToolCall: handlers run in registration order and the first `block` wins.
+	const emit = (agent: Context["agent"] & { name: string }, toolName: string, input: Record<string, unknown>): Result => {
+		for (const handler of chain) {
+			const out = handler({ toolName, toolCallId: "t1", input }, { cwd: join(root, "project"), agent });
+			if (out?.block) return out;
+		}
+		return undefined;
+	};
+	const explorer = { kind: "sub" as const, id: "0-explorer", name: "explorer" };
+	const blocked = emit(explorer, "edit", { path: "src/a.ts" });
+	expect(blocked?.block).toBe(true);
+	expect(blocked?.reason).toContain("agents/explorer.md");
+	expect(emit(explorer, "write", { path: "agent://Main", content: "report" })?.block).toBeUndefined();
+	expect(emit({ kind: "sub", id: "0-implementer", name: "implementer" }, "edit", { path: "src/a.ts" })?.block).toBeUndefined();
+	expect(emit({ kind: "main", id: "Main", name: "main" }, "edit", { path: "src/a.ts" })?.block).toBeUndefined();
+	process.env.ATLAS_TRIPWIRE_HARD = "off";
+	expect(emit(explorer, "edit", { path: "src/a.ts" })?.block).toBeUndefined();
 });

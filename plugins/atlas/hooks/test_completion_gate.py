@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from datetime import datetime, timezone
+import time
 from pathlib import Path
 from unittest import mock
 
@@ -54,9 +55,13 @@ def _seed_plan(root, session_id="sess-orch"):
 
 def _seed_dispatch(db_path, session_id="sess-orch"):
     with atlas_db.connect(db_path) as conn:
-        rid = atlas_db.current_run_id(conn, session_id) or atlas_db.latest_run_id(conn, session_id)
-        conn.execute("INSERT INTO dispatches(run_id,ts,agent_type) VALUES(?,?,?)",
-                     (rid, datetime.now(timezone.utc).timestamp(), "atlas:explorer"))
+        rid = atlas_db.current_run_id(conn, session_id) or atlas_db.latest_run_id(
+            conn, session_id
+        )
+        conn.execute(
+            "INSERT INTO dispatches(run_id,ts,agent_type) VALUES(?,?,?)",
+            (rid, datetime.now(timezone.utc).timestamp(), "atlas:explorer"),
+        )
 
 
 class DocsDriftTest(unittest.TestCase):
@@ -459,6 +464,9 @@ class GateOrchestrationTest(unittest.TestCase):
         never evaluated -- it must not be conflated with 'unverified'."""
         self._satisfy_all_conditions()  # (a)-(e)/(h) satisfied, no writes logged
         self._log_dispatches(implementers=1, verifiers=0)
+        # Two atlas workers (the fixture's explorer + this implementer): the (p)
+        # colony channel needs one worker handoff note to count as used.
+        atlas_todo.note(self.tmp, "worker-a", "handoff", to="lead")
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertEqual(r.returncode, 0)
         self.assertNotIn('"decision": "block"', r.stdout)
@@ -1491,8 +1499,11 @@ class ShellEditDelegationTest(unittest.TestCase):
         self.state = tempfile.TemporaryDirectory()
         self.addCleanup(self.state.cleanup)
         state = Path(self.state.name)
-        self.env = dict(os.environ, ATLAS_DB=str(state / "atlas.db"),
-                        ATLAS_HOOKSTATE_DIR=str(state / "hookstate"))
+        self.env = dict(
+            os.environ,
+            ATLAS_DB=str(state / "atlas.db"),
+            ATLAS_HOOKSTATE_DIR=str(state / "hookstate"),
+        )
         self.conn = atlas_db.connect(self.env["ATLAS_DB"])
         self.addCleanup(self.conn.close)
         atlas_db.init(self.conn)
@@ -1509,14 +1520,20 @@ class ShellEditDelegationTest(unittest.TestCase):
 
     def snapshot(self):
         import session_boot
+
         return session_boot.write_dirty_snapshot(str(self.root), self.SESSION)
 
     def gate(self, **extra):
-        return _run_gate(dict(session_id=self.SESSION, cwd=str(self.root), **extra), self.env).stdout
+        return _run_gate(
+            dict(session_id=self.SESSION, cwd=str(self.root), **extra), self.env
+        ).stdout
 
     def test_shell_edit_after_snapshot_blocks_and_dispatch_clears_it(self):
         self.snapshot()
-        subprocess.run(["sed", "-i.bak", "s/a - b/a + b/", str(self.root / "src/calc.py")], check=True)
+        subprocess.run(
+            ["sed", "-i.bak", "s/a - b/a + b/", str(self.root / "src/calc.py")],
+            check=True,
+        )
         (self.root / "src/calc.py.bak").unlink()
         self.assertIn("(m) Delegation mandate", self.gate())
         atlas_db.log_event(self.conn, self.rid, "Task", "main", 0)
@@ -1569,17 +1586,23 @@ class ShellEditDelegationTest(unittest.TestCase):
             (plain / "docs").mkdir()
             run = plain / ".atlas" / ".run"
             run.mkdir(parents=True)
-            (run / ("dirty-snapshot-%s.json" % self.SESSION)).write_text(json.dumps({"paths": {}}))
+            (run / ("dirty-snapshot-%s.json" % self.SESSION)).write_text(
+                json.dumps({"paths": {}})
+            )
             (plain / "app.py").write_text("x = 1\n")
             pid = atlas_db.register_project(self.conn, str(plain))
             atlas_db.start_run(self.conn, pid, "plain-sess")
-            out = _run_gate(dict(session_id=self.SESSION, cwd=str(plain)), self.env).stdout
+            out = _run_gate(
+                dict(session_id=self.SESSION, cwd=str(plain)), self.env
+            ).stdout
             self.assertEqual(out, "")
 
     def test_subagent_transcript_stays_exempt(self):
         self.snapshot()
         self.put("src/extra.py", "x = 1\n")
-        self.assertEqual(self.gate(transcript_path="/session/subagents/agent-a.jsonl"), "")
+        self.assertEqual(
+            self.gate(transcript_path="/session/subagents/agent-a.jsonl"), ""
+        )
 
 
 if __name__ == "__main__":
@@ -2438,8 +2461,11 @@ class DelegationMandateTest(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
         (self.root / "docs").mkdir()
-        self.env = dict(os.environ, ATLAS_DB=str(self.root / "atlas.db"),
-                        ATLAS_HOOKSTATE_DIR=str(self.root / "hookstate"))
+        self.env = dict(
+            os.environ,
+            ATLAS_DB=str(self.root / "atlas.db"),
+            ATLAS_HOOKSTATE_DIR=str(self.root / "hookstate"),
+        )
         self.conn = atlas_db.connect(self.env["ATLAS_DB"])
         self.addCleanup(self.conn.close)
         atlas_db.init(self.conn)
@@ -2450,7 +2476,9 @@ class DelegationMandateTest(unittest.TestCase):
         atlas_db.log_event(self.conn, self.rid, "Write", context, 1, path)
 
     def gate(self, **extra):
-        return _run_gate(dict(session_id="mandate", cwd=str(self.root), **extra), self.env).stdout
+        return _run_gate(
+            dict(session_id="mandate", cwd=str(self.root), **extra), self.env
+        ).stdout
 
     def test_unarmed_code_write_blocks_and_dispatch_clears_m(self):
         self.write()
@@ -2464,23 +2492,36 @@ class DelegationMandateTest(unittest.TestCase):
         self.assertEqual(self.gate(), "")
         self.conn.execute("DELETE FROM dispatches")
         self.conn.execute("DELETE FROM events WHERE is_inline_op=0")
-        self.conn.execute("INSERT INTO tool_calls(session_id,ts,tool_name,is_sidechain) VALUES(?,?,?,0)",
-                          ("mandate", datetime.now(timezone.utc).timestamp(), "Agent"))
+        self.conn.execute(
+            "INSERT INTO tool_calls(session_id,ts,tool_name,is_sidechain) VALUES(?,?,?,0)",
+            ("mandate", datetime.now(timezone.utc).timestamp(), "Agent"),
+        )
         self.conn.commit()
         self.assertEqual(self.gate(), "")
 
     def test_transcript_current_dispatch_clears_m(self):
         self.write()
         transcript = self.root / "session.jsonl"
-        transcript.write_text(json.dumps({"timestamp": datetime.now(timezone.utc).isoformat(),
-            "message": {"content": [{"type": "tool_use", "name": "Task"}]}}) + "\n")
+        transcript.write_text(
+            json.dumps(
+                {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "message": {"content": [{"type": "tool_use", "name": "Task"}]},
+                }
+            )
+            + "\n"
+        )
         self.assertEqual(self.gate(transcript_path=str(transcript)), "")
 
     def test_shared_exemption_cases_match_contract(self):
         """contracts/native-tools.json delegationExemptCases are asserted by both
         harnesses (omp/contracts.test.ts runs the same list through isNonDocsPath)."""
         cases = json.loads(
-            (Path(completion_gate.__file__).resolve().parent.parent / "contracts" / "native-tools.json").read_text()
+            (
+                Path(completion_gate.__file__).resolve().parent.parent
+                / "contracts"
+                / "native-tools.json"
+            ).read_text()
         )["delegationExemptCases"]
         for path in cases["exempt"]:
             with self.subTest(exempt=path):
@@ -2502,14 +2543,23 @@ class DelegationMandateTest(unittest.TestCase):
 
     def test_sidechain_only_writes_are_silent(self):
         self.write(context="sidechain")
-        self.conn.execute("INSERT INTO tool_calls(session_id,ts,tool_name,is_sidechain,input_summary) VALUES(?,?,?,1,?)",
-                          ("mandate", datetime.now(timezone.utc).timestamp(), "Write", json.dumps({"file_path": "src/app.py"})))
+        self.conn.execute(
+            "INSERT INTO tool_calls(session_id,ts,tool_name,is_sidechain,input_summary) VALUES(?,?,?,1,?)",
+            (
+                "mandate",
+                datetime.now(timezone.utc).timestamp(),
+                "Write",
+                json.dumps({"file_path": "src/app.py"}),
+            ),
+        )
         self.conn.commit()
         self.assertEqual(self.gate(), "")
 
     def test_background_dispatch_and_kill_switch_suppress_m(self):
         self.write()
-        self.assertEqual(self.gate(background_tasks=[{"type": "subagent", "status": "running"}]), "")
+        self.assertEqual(
+            self.gate(background_tasks=[{"type": "subagent", "status": "running"}]), ""
+        )
         self.env["ATLAS_GATE"] = "off"
         self.assertEqual(self.gate(), "")
 
@@ -2520,7 +2570,9 @@ class DelegationMandateTest(unittest.TestCase):
 
     def test_subagent_transcript_is_exempt(self):
         self.write()
-        self.assertEqual(self.gate(transcript_path="/session/subagents/agent-a.jsonl"), "")
+        self.assertEqual(
+            self.gate(transcript_path="/session/subagents/agent-a.jsonl"), ""
+        )
 
     def test_uri_scheme_writes_are_not_main_thread_code(self):
         """An IRC message (agent://) or xd:// device call is logged as a Write
@@ -2530,8 +2582,12 @@ class DelegationMandateTest(unittest.TestCase):
             self.write(path)
         self.conn.execute(
             "INSERT INTO tool_calls(session_id,ts,tool_name,is_sidechain,input_summary) VALUES(?,?,?,0,?)",
-            ("mandate", datetime.now(timezone.utc).timestamp(), "Write",
-             json.dumps({"file_path": "agent://Bar"})),
+            (
+                "mandate",
+                datetime.now(timezone.utc).timestamp(),
+                "Write",
+                json.dumps({"file_path": "agent://Bar"}),
+            ),
         )
         self.conn.commit()
         self.assertEqual(self.gate(), "")
@@ -2540,3 +2596,417 @@ class DelegationMandateTest(unittest.TestCase):
         self.write("agent://Foo")
         self.write("src/app.py")
         self.assertIn("(m) Delegation mandate", self.gate())
+
+
+class ContractVisibilityTest(unittest.TestCase):
+    """Conditions (n)/(o)/(p) -- the contract-visibility conditions.
+
+    Each blocks AT MOST ONCE per session (an O_EXCL marker file under the
+    contract-gate marker dir, isolated from the real one via
+    ATLAS_CONTRACT_GATE_DIR) and each is switchable off individually.
+
+    The base fixture models a run that satisfies (a)-(m): code shipped as a
+    mixed diff (code change + CHANGELOG touch, both logged as this run's own
+    writes, so drift is cleared), fresh evidence, a verified findings entry,
+    a phased drained board plan ("[implement] ..." / "[verify] ..." prefixes),
+    and exactly one atlas:explorer dispatch (below the (p) two-worker
+    threshold). Each test perturbs exactly one surface.
+    """
+
+    SID_A = "sess-cv-a"
+    SID_B = "sess-cv-b"
+    OK = "ATLAS | ✅ verify | ok"
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        os.makedirs(os.path.join(self.tmp, "docs"), exist_ok=True)
+        self.env = dict(
+            os.environ,
+            ATLAS_DB=os.path.join(self.tmp, "atlas.db"),
+            ATLAS_HOOKSTATE_DIR=os.path.join(self.tmp, "hookstate"),
+            ATLAS_CONTRACT_GATE_DIR=os.path.join(self.tmp, "markers"),
+        )
+        c = atlas_db.connect(self.env["ATLAS_DB"])
+        atlas_db.init(c)
+        pid = atlas_db.register_project(c, self.tmp)
+        for sid in (self.SID_A, self.SID_B):
+            atlas_db.start_run(c, pid, sid)
+            atlas_db.mark_orchestrating(c, sid)
+        c.close()
+        atlas_dir = os.path.join(self.tmp, ".atlas")
+        os.makedirs(os.path.join(atlas_dir, "evidence"), exist_ok=True)
+        os.makedirs(os.path.join(atlas_dir, ".run"), exist_ok=True)
+        with open(os.path.join(atlas_dir, "evidence", "run.txt"), "w") as f:
+            f.write("observed output")
+        with open(os.path.join(atlas_dir, ".run", "findings.json"), "w") as f:
+            json.dump(
+                [
+                    {
+                        "claim": "x works",
+                        "status": "verified",
+                        "verified_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                ],
+                f,
+            )
+        for rel in ("docs/CHANGELOG.md", "docs/ROADMAP.md", "README.md"):
+            with open(os.path.join(self.tmp, rel), "w") as f:
+                f.write("# %s\n" % rel)
+        self.prepare_run(self.SID_A)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    # -- fixture helpers -----------------------------------------------------
+
+    def prepare_run(self, sid, plan_items=None, log_code=True, dispatch=True):
+        """Make `sid`'s run a compliant code-shipping run (a)-(m), minus
+        whatever the caller perturbs: a phased drained plan, one
+        atlas:explorer dispatch (telemetry, below the (p) threshold), and a
+        mixed code+docs run-write log so (f) drift is cleared."""
+        atlas_todo.mirror(
+            self.tmp,
+            plan_items
+            if plan_items is not None
+            else [
+                {"content": "[implement] fixture step", "status": "completed"},
+                {"content": "[verify] fixture check", "status": "completed"},
+            ],
+            sid,
+        )
+        c = atlas_db.connect(self.env["ATLAS_DB"])
+        rid = atlas_db.current_run_id(c, sid) or atlas_db.latest_run_id(c, sid)
+        if dispatch:
+            atlas_db.log_dispatch(c, rid, "atlas:explorer")
+        if log_code:
+            for path in (
+                os.path.join(self.tmp, "app.py"),
+                os.path.join(self.tmp, "docs", "CHANGELOG.md"),
+            ):
+                with open(path, "a") as f:
+                    f.write("x\n")
+                atlas_db.log_event(c, rid, "Write", "main", 1, path)
+        c.commit()
+        c.close()
+
+    def _run_start(self, sid):
+        c = atlas_db.connect(self.env["ATLAS_DB"])
+        rid = atlas_db.current_run_id(c, sid) or atlas_db.latest_run_id(c, sid)
+        started = atlas_db.run_started_at(c, rid)
+        c.close()
+        assert started is not None
+        return started
+
+    def _dispatch(self, agent_type):
+        c = atlas_db.connect(self.env["ATLAS_DB"])
+        rid = atlas_db.current_run_id(c, self.SID_A) or atlas_db.latest_run_id(
+            c, self.SID_A
+        )
+        atlas_db.log_dispatch(c, rid, agent_type)
+        c.commit()
+        c.close()
+
+    def _two_workers(self):
+        # atlas:explorer ships nothing, so (g) stays out of the picture; the
+        # setUp dispatch plus this one make two atlas workers.
+        self._dispatch("atlas:explorer")
+
+    def _irc_event(self, peer="agent://worker-a"):
+        """IRC (SendMessage) traffic: the harness routes peer messages
+        through a Write whose path is an `agent://` URI."""
+        c = atlas_db.connect(self.env["ATLAS_DB"])
+        rid = atlas_db.current_run_id(c, self.SID_A) or atlas_db.latest_run_id(
+            c, self.SID_A
+        )
+        atlas_db.log_event(c, rid, "Write", "main", 1, peer)
+        c.commit()
+        c.close()
+
+    def _worker_note(self, owner="worker-a", to="lead", ts=None, text="handoff"):
+        """One board note in atlas_todo.note's exact on-disk shape."""
+        record = {
+            "ts": time.time() if ts is None else ts,
+            "owner": owner,
+            "to": to,
+            "item": None,
+            "text": text,
+        }
+        notes_dir = os.path.join(self.tmp, ".atlas", ".run", "board")
+        os.makedirs(notes_dir, exist_ok=True)
+        with open(os.path.join(notes_dir, "%s.jsonl" % owner), "a") as f:
+            f.write(json.dumps(record) + "\n")
+
+    def gate(self, payload=None, sid=None):
+        p = dict({"session_id": sid or self.SID_A, "cwd": self.tmp}, **(payload or {}))
+        return _run_gate(p, self.env)
+
+    def say(self, text=None, **extra):
+        """Run the gate for SID_A with a final reply; stdout only."""
+        payload = dict(extra)
+        payload["last_assistant_message"] = self.OK if text is None else text
+        return self.gate(payload).stdout
+
+    # -- (n) status header ----------------------------------------------------
+
+    def test_n_blocks_without_header_and_quotes_required_form(self):
+        out = self.say("All done.")
+        self.assertIn('"decision": "block"', out)
+        reason = json.loads(out)["reason"]  # the model sees the decoded text
+        self.assertIn("(n)", reason)
+        self.assertIn("ATLAS | <glyph> <phase> | <one-line state>", reason)
+        self.assertIn("research 🔍", reason)
+        self.assertIn("done 🏁", reason)
+        self.assertIn("blocked ⛔", reason)
+        self.assertIn("re-send", reason.lower())
+        self.assertIn("nothing else changed", reason)
+        import sqlite3
+
+        conn = sqlite3.connect(self.env["ATLAS_DB"])
+        rows = conn.execute(
+            "SELECT snippet FROM friction_events WHERE session_id=?", (self.SID_A,)
+        ).fetchall()
+        conn.close()
+        self.assertEqual(
+            [r[0] for r in rows if r[0].startswith("conditions:")], ["conditions: n"]
+        )
+
+    def test_n_passes_when_header_is_the_first_non_empty_line(self):
+        self.assertEqual(self.say("ATLAS | ✅ verify | suites green"), "")
+
+    def test_n_ignores_leading_blank_lines(self):
+        self.assertEqual(self.say("\n\n\nATLAS | 🔍 research | digging"), "")
+
+    def test_n_blocks_when_header_is_not_the_first_non_empty_line(self):
+        self.assertIn("(n)", self.say("Sure!\nATLAS | ✅ verify | suites green"))
+
+    def test_n_fails_open_without_last_assistant_message(self):
+        self.assertEqual(self.gate().stdout, "")
+
+    def test_n_fails_open_on_empty_text(self):
+        self.assertEqual(self.say(""), "")
+
+    def test_n_fails_open_on_stop_hook_active(self):
+        self.assertEqual(self.say("All done.", stop_hook_active=True), "")
+
+    def test_n_sidechain_exempt(self):
+        self.assertEqual(
+            self.say("All done.", transcript_path="/session/subagents/agent-1.jsonl"),
+            "",
+        )
+
+    def test_n_is_one_shot_per_session(self):
+        self.assertIn("(n)", self.say("All done."))
+        self.assertEqual(
+            self.say("All done."), ""
+        )  # same session: already blocked once
+        self.prepare_run(self.SID_B)  # a different session is on its first block
+        out = self.gate({"last_assistant_message": "All done."}, sid=self.SID_B).stdout
+        self.assertIn("(n)", out)
+
+    def test_n_kill_switch_and_global_off(self):
+        self.env["ATLAS_GATE_HEADER"] = "off"
+        self.assertEqual(self.say("All done."), "")
+        del self.env["ATLAS_GATE_HEADER"]
+        self.env["ATLAS_GATE"] = "off"
+        self.assertEqual(self.say("All done."), "")
+
+    # -- (o) phased todo ------------------------------------------------------
+
+    def _research_only_plan(self):
+        """Replace the plan with one that lacks implement/verify. The run
+        already shipped code and logged its dispatch in setUp, so neither is
+        repeated here."""
+        self.prepare_run(
+            self.SID_A,
+            plan_items=[{"content": "[research] dig", "status": "completed"}],
+            log_code=False,
+            dispatch=False,
+        )
+
+    def test_o_names_missing_phases_and_both_fixes(self):
+        self._research_only_plan()
+        out = self.say()
+        self.assertIn('"decision": "block"', out)
+        self.assertIn("(o)", out)
+        self.assertIn("implement", out)
+        self.assertIn("verify", out)
+        self.assertIn("TodoWrite", out)
+        self.assertIn("[<phase>] ", out)
+        self.assertIn("scaffold --task", out)
+        self.assertIn("--session", out)
+        self.assertIn("${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py", out)
+
+    def test_o_passes_when_prefixes_cover_required_phases(self):
+        self.assertEqual(self.say(), "")
+
+    def test_o_passes_when_phase_fields_cover_required_phases(self):
+        """The `phase` field (omp's todo phase) is the other carrier."""
+        board = Path(self.tmp, ".atlas", ".run", "todos.json")
+        data = json.loads(board.read_text(encoding="utf-8"))
+        template = data["items"][0]
+        data["items"] = [
+            {
+                **template,
+                "id": "cv-%s" % phase,
+                "content": "step",
+                "phase": phase,
+                "status": "completed",
+            }
+            for phase in ("implement", "verify")
+        ]
+        board.write_text(json.dumps(data), encoding="utf-8")
+        self.assertEqual(self.say(), "")
+
+    def test_o_counts_items_of_every_status(self):
+        """All statuses cover a phase; a pending [verify] item is still a
+        verify phase item (the drain check (i) is a separate condition)."""
+        self.assertEqual(
+            completion_gate._item_phase(
+                {"content": "[verify] later", "status": "pending"}, ["verify"]
+            ),
+            "verify",
+        )
+
+    def test_o_fails_open_on_corrupt_board(self):
+        """An unreadable board never manufactures an (o) block. (k) is kept
+        quiet by a LEDGER line (another plan surface) so (o) is what is under
+        test."""
+        Path(self.tmp, ".atlas", ".run", "todos.json").write_text(
+            "{not json", encoding="utf-8"
+        )
+        transcript = Path(self.tmp, "session.jsonl")
+        transcript.write_text("LEDGER | 3/3 | done\n", encoding="utf-8")
+        out = self.say(transcript_path=str(transcript))
+        self.assertNotIn("(o)", out)
+
+    def test_o_skipped_when_no_code_shipped(self):
+        """A run with telemetry but zero writes shipped nothing: (o) must not
+        demand phases (same scoping as (a)/(b)/(f)/(g))."""
+        c = atlas_db.connect(self.env["ATLAS_DB"])
+        c.execute(
+            "DELETE FROM events WHERE run_id IN (SELECT id FROM runs WHERE session_id=?) AND tool='Write'",
+            (self.SID_A,),
+        )
+        c.commit()
+        c.close()
+        atlas_todo.mirror(
+            self.tmp, [{"content": "[research] dig", "status": "completed"}], self.SID_A
+        )
+        self.assertEqual(self.say(), "")
+
+    def test_o_is_one_shot_per_session(self):
+        self._research_only_plan()
+        self.assertIn("(o)", self.say())
+        self.assertEqual(self.say(), "")
+
+    def test_o_kill_switch_and_sidechain_exempt(self):
+        self._research_only_plan()
+        self.env["ATLAS_GATE_PHASES"] = "off"
+        self.assertEqual(self.say(), "")
+        del self.env["ATLAS_GATE_PHASES"]
+        self.assertEqual(
+            self.say(transcript_path="/session/subagents/agent-1.jsonl"), ""
+        )
+
+    # -- (p) colony channel ---------------------------------------------------
+
+    def test_p_names_colony_fix_when_two_workers_silence_channel(self):
+        self._two_workers()
+        out = self.say()
+        self.assertIn('"decision": "block"', out)
+        self.assertIn("(p)", out)
+        self.assertIn("note --owner", out)
+        self.assertIn("--to lead", out)
+        self.assertIn("independent", out)
+
+    def test_p_below_two_workers_is_silent(self):
+        self.assertEqual(self.say(), "")
+
+    def test_p_passes_with_worker_board_note(self):
+        self._two_workers()
+        self._worker_note(owner="worker-a")
+        self.assertEqual(self.say(), "")
+
+    def test_p_passes_with_irc_traffic(self):
+        self._two_workers()
+        self._irc_event()
+        self.assertEqual(self.say(), "")
+
+    def test_p_passes_with_sendmessage_tool_call(self):
+        self._two_workers()
+        import sqlite3
+
+        conn = sqlite3.connect(self.env["ATLAS_DB"])
+        conn.execute(
+            "INSERT INTO tool_calls(session_id,ts,tool_name,is_sidechain,input_summary)"
+            " VALUES(?,?,?,?,?)",
+            (self.SID_A, time.time(), "SendMessage", 0, json.dumps({"to": "worker-a"})),
+        )
+        conn.commit()
+        conn.close()
+        self.assertEqual(self.say(), "")
+
+    def test_p_note_outside_run_window_does_not_count(self):
+        self._two_workers()
+        self._worker_note(owner="worker-a", ts=self._run_start(self.SID_A) - 100)
+        self.assertIn("(p)", self.say())
+
+    def test_p_lead_note_does_not_count(self):
+        self._two_workers()
+        self._worker_note(owner="lead")
+        self.assertIn("(p)", self.say())
+
+    def test_p_ignores_non_atlas_dispatches(self):
+        self._dispatch("Explore")
+        self._dispatch("Explore")
+        self.assertEqual(self.say(), "")
+
+    def test_p_is_one_shot_per_session(self):
+        self._two_workers()
+        self.assertIn("(p)", self.say())
+        self.assertEqual(self.say(), "")
+
+    def test_p_kill_switch_and_sidechain_exempt(self):
+        self._two_workers()
+        self.env["ATLAS_GATE_COLONY"] = "off"
+        self.assertEqual(self.say(), "")
+        del self.env["ATLAS_GATE_COLONY"]
+        self.assertEqual(
+            self.say(transcript_path="/session/subagents/agent-1.jsonl"), ""
+        )
+
+    def test_p_fails_open_when_the_dispatch_count_cannot_be_read(self):
+        self._two_workers()
+        with mock.patch("atlas_db.connect", side_effect=RuntimeError("DB down")):
+            self.assertIsNone(completion_gate._colony_workers_dispatched(self.SID_A))
+
+
+class ItemPhaseExtractionTest(unittest.TestCase):
+    """The (o) phase carriers: the item's `phase` field wins, else the
+    `[<phase>] ` content prefix; anything else carries no phase."""
+
+    PHASES = ["research", "implement", "verify"]
+
+    def test_phase_field_wins(self):
+        item = {"content": "[verify] x", "phase": "implement"}
+        self.assertEqual(completion_gate._item_phase(item, self.PHASES), "implement")
+
+    def test_content_prefix_when_no_phase_field(self):
+        item = {"content": "[verify] run suites"}
+        self.assertEqual(completion_gate._item_phase(item, self.PHASES), "verify")
+
+    def test_unknown_phase_tokens_are_ignored(self):
+        self.assertIsNone(
+            completion_gate._item_phase({"content": "[urgent] ship"}, self.PHASES)
+        )
+        self.assertIsNone(
+            completion_gate._item_phase(
+                {"content": "plain", "phase": "urgent"}, self.PHASES
+            )
+        )
+
+    def test_no_phase_at_all(self):
+        self.assertIsNone(
+            completion_gate._item_phase({"content": "plain item"}, self.PHASES)
+        )
+        self.assertIsNone(completion_gate._item_phase({}, self.PHASES))

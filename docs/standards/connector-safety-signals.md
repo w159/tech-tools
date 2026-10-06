@@ -33,10 +33,11 @@ failure mode this contract exists to prevent.
    apart because nothing sets them independently. In `panos-mcp` this is the
    four-wrapper set in `src/domains/_helpers.ts`
    (`readOnlyTool` / `destructiveTool` / `credentialIssuingTool` /
-   `unknownEffectTool`). The other nine connectors each carry their own copy of
-   the classifier at `<svc>-mcp/src/annotate-tool.ts`; those copies are not
-   imports of `mcp_servers/_shared/annotate-tool.ts` but duplicates of it, so a
-   change to this contract lands in all ten files or in none.
+   `unknownEffectTool`). The non-shared connectors each carry their own copy of
+   the classifier at `<svc>-mcp/src/annotate-tool.ts` (verified 2026-10-06: ten
+   per-connector copies exist, panos included, and they differ from
+   `mcp_servers/_shared/annotate-tool.ts`); those copies are not imports of the
+   shared file, so a change to this contract must land in every copy or none.
 3. **Never infer effect from the tool's name.** A name-pattern classifier that
    defaults to "read" for unmatched names fails toward unattended execution. It
    is exactly how `ninjaone_devices_service_control` shipped `readOnlyHint: true`:
@@ -139,7 +140,7 @@ credential-less `tools/list` is not the end of the probe:
 - `GATED` and `SKIP` verdicts still exist for a surface that genuinely cannot be
   enumerated (a missing `uv` or venv for falcon reports a named SKIP with the
   command that fixes it), but nothing currently uses them: the run reports
-  `12/12 connector(s), 523 tools` fully enumerated, 0 gated, 0 skipped. A new
+  `12/12 connector(s), 534 tools` (harness floors sum to 534; re-run the harness and quote its total) fully enumerated, 0 gated, 0 skipped. A new
   connector that cannot be fully enumerated must say why in its COVERAGE line
   rather than pass quietly on a partial surface.
 
@@ -149,7 +150,7 @@ AGREEMENT compares prose against annotations. A connector that marks **nothing**
 as mutating agrees with itself and passes vacuously, no matter how many of its
 tools write. The harness refuses to hide this: such a row reads
 `ok (no prose effect markers - agreement check vacuous here)` rather than a bare
-`ok` (`test-mcp-tools.mjs:553`). As of 2026-09-17 that applies to auvik,
+`ok` (`test-mcp-tools.mjs:562`). As of 2026-09-17 that applies to auvik,
 connectwise, falcon (145 tools, 45 annotated `readOnlyHint: false`, zero prose
 markers), knowbe4, paylocity and vanta. It no longer applies to blumira, which
 reports 6 marked against 6 annotated-mutating once its domains are walked.

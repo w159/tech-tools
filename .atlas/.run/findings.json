@@ -2836,5 +2836,124 @@
     "status": "verified",
     "verified_at": "2026-10-05T20:26:22+00:00",
     "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "RUNNER-1",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "completion_gate header gate (n), worker_report_gate, dispatch_tripwire REPORT/STEPS, atlas_todo scaffold: hand-fed hooks",
+    "evidence": [
+      "agent ValHooks 5/5 PASS; hooks suite 1025 pass"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/hooks && python3 -m pytest -q",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-06T08:03:59+00:00",
+    "verified_by": "orchestrator"
+  },
+  {
+    "id": "RUNNER-2",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "omp agent-guard denies explorer write; worker-report injects outputSchema (live headless)",
+    "evidence": [
+      "~/.cache/atlas-work/e2e/omp/runs; omp 296 pass"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd ~/.cache/atlas-work/e2e/omp && ./run-dir.sh guard-write ...",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-06T08:03:59+00:00",
+    "verified_by": "orchestrator"
+  },
+  {
+    "id": "RUNNER-3",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "live atlas:runner: resolvedModel claude-sonnet-5-5:off, 3/3 steps, x.txt=a\\nb",
+    "evidence": [
+      "runs/runner-e2e-dir-20261006T075832Z-74600/events.jsonl"
+    ],
+    "doc_refs": [],
+    "reproduction": "./run-dir.sh runner-e2e ...",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-06T08:03:59+00:00",
+    "verified_by": "orchestrator"
+  },
+  {
+    "id": "CONN-1",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "cipp 0.2.4/ninjaone 1.8.2 rebuilt+packed; test-mcp-tools cipp 43, ninjaone 45, blumira 31, 0 mismatch",
+    "evidence": [
+      "mcp_servers/*/*.mcpb"
+    ],
+    "doc_refs": [],
+    "reproduction": "node test-mcp-tools.mjs cipp|ninjaone|blumira",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-06T08:03:59+00:00",
+    "verified_by": "orchestrator"
+  },
+  {
+    "id": "RUNSTATE-1",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "omp per-turn begin serialized on one tail; start_run single INSERT WHERE NOT EXISTS; unit tests only",
+    "evidence": [
+      "omp/run-state.test.ts; scripts/test_atlas_db.py; scripts 993 pass"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/omp && bun test run-state",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-06T08:03:59+00:00",
+    "verified_by": "orchestrator"
+  },
+  {
+    "id": "RUNSTATE-2",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "real omp_runstate.py + DB path under a live omp resume not exercised",
+    "evidence": [
+      "none"
+    ],
+    "doc_refs": [],
+    "reproduction": "run omp session, stop, continue, select from runs",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-10-06T08:03:59+00:00",
+    "verified_by": "orchestrator"
+  },
+  {
+    "id": "CLAUDE-LIVE",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "live Claude Code run (header block, SubagentStop gate) not done: auth missing",
+    "evidence": [
+      "none"
+    ],
+    "doc_refs": [],
+    "reproduction": "set CLAUDE_CODE_OAUTH_TOKEN then e2e/claude/run.sh",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-10-06T08:03:59+00:00",
+    "verified_by": "orchestrator"
   }
 ]

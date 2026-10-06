@@ -262,13 +262,23 @@ def register_project(conn, root_path, name=None, stack=None):
 
 
 def start_run(conn, project_id, session_id, task_summary=None, model=None):
+    """Open a run for the session, or return the id of the one already open.
+
+    The existence check and the insert are ONE statement, so concurrent callers
+    (omp fires `begin` from session_start and before_agent_start as separate
+    processes) cannot both insert: SQLite serializes writers, and the loser's
+    NOT EXISTS sees the winner's row. A finalized run (ended_at set) does not
+    block a new one."""
     cur = conn.execute(
         "INSERT INTO runs(project_id,session_id,started_at,task_summary,model) "
-        "VALUES(?,?,?,?,?)",
-        (project_id, session_id, time.time(), task_summary, model),
+        "SELECT ?,?,?,?,? WHERE NOT EXISTS "
+        "(SELECT 1 FROM runs WHERE session_id=? AND ended_at IS NULL)",
+        (project_id, session_id, time.time(), task_summary, model, session_id),
     )
     conn.commit()
-    return cur.lastrowid
+    if cur.rowcount == 1:
+        return cur.lastrowid
+    return current_run_id(conn, session_id)
 
 
 def current_run_id(conn, session_id):
@@ -1106,11 +1116,13 @@ def upsert_session_log(conn, session_id, agent=None, **fields):
     `fields` are written; absent keys keep their stored value (COALESCE).
 
     `agent` is handled separately from the COALESCE columns: it is written into
-    the row only when a caller passes it explicitly. That is deliberate - the
-    claude ingest path never passes it, so on a fresh insert the column is
-    omitted and its SCHEMA DEFAULT 'claude' governs, rather than an inserted NULL
-    clobbering the default. The codex (and any future) adapter passes agent so
-    its rows land the correct value."""
+    the row only when a caller passes a non-None value. That is deliberate - a
+    caller with nothing to say (the claude hook path, via
+    session_ingest.harness_agent() returning None) omits it, so on a fresh
+    insert the column is omitted and its SCHEMA DEFAULT 'claude' governs,
+    rather than an inserted NULL clobbering the default. The omp hook path
+    passes 'omp' (read from ATLAS_HARNESS), and the codex/omp backfill adapters
+    pass their own name, so those rows land the correct value."""
     cols = (
         "project_id",
         "transcript_path",
@@ -1321,9 +1333,7 @@ def purge_observer_sessions(conn):
             f"DELETE FROM {tbl} WHERE session_id IN ({placeholders})", sids
         )
         counts[tbl] = cur.rowcount
-    conn.execute(
-        f"DELETE FROM ingest_files WHERE session_id IN ({placeholders})", sids
-    )
+    conn.execute(f"DELETE FROM ingest_files WHERE session_id IN ({placeholders})", sids)
     cur = conn.execute(
         f"DELETE FROM session_logs WHERE session_id IN ({placeholders})", sids
     )

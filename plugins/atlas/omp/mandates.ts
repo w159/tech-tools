@@ -18,6 +18,7 @@
  */
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import * as fs from "node:fs";
+import { tmpdir } from "node:os";
 import * as nodePath from "node:path";
 
 export const MANDATES_PATH = nodePath.resolve(import.meta.dir, "..", "contracts", "mandates.json");
@@ -106,10 +107,47 @@ export function matchGitCommit(command: string): boolean {
 	return false;
 }
 
+/** Python's `re.sub(r"[^A-Za-z0-9_.-]", "_", id)`: the marker filename scheme shared with hooks/recall_gate.py. */
+function markerPath(sessionId: string, dir: string = defaultMarkerDir()): string {
+	return nodePath.join(dir, `recall-${sessionId.replace(/[^A-Za-z0-9_.-]/g, "_")}`);
+}
+
+/** Same directory as hooks/recall_gate.py GATE_MARKER_DIR, so both gates share one source of truth. */
+function defaultMarkerDir(): string {
+	return nodePath.join(tmpdir(), "atlas-recall-gate");
+}
+
+/** The handler context's session id, or undefined (then the gate behaves as without persistence). */
+function sessionIdOf(ctx: unknown): string | undefined {
+	const id = (ctx as { sessionManager?: { getSessionId?: () => unknown } } | undefined)?.sessionManager?.getSessionId?.();
+	return typeof id === "string" && id.trim() !== "" ? id : undefined;
+}
+
+/** True when this session id already made its claude-mem call; any fs error reads as "no marker". */
+function markerExists(sessionId: string, dir?: string): boolean {
+	try {
+		return fs.existsSync(markerPath(sessionId, dir));
+	} catch {
+		return false;
+	}
+}
+
+/** Record the recall (idempotent, O_CREAT|O_EXCL like the Python twin); fails open on any fs error. */
+function markRecalled(sessionId: string, dir: string = defaultMarkerDir()): void {
+	try {
+		fs.mkdirSync(dir, { recursive: true });
+		fs.closeSync(fs.openSync(markerPath(sessionId, dir), "wx"));
+	} catch {
+		// EEXIST means already recorded; any other fs error must not break the turn
+	}
+}
+
 export interface MandateDeps {
 	activeTools(): string[] | undefined;
 	env?: Record<string, string | undefined>;
 	mandatesPath?: string;
+	/** Per-session recall markers directory; tests point it at a temp dir (Python: GATE_MARKER_DIR). */
+	gateMarkerDir?: string;
 }
 
 export function registerMandates(pi: Pick<ExtensionAPI, "on">, deps: MandateDeps): void {
@@ -157,8 +195,14 @@ export function registerMandates(pi: Pick<ExtensionAPI, "on">, deps: MandateDeps
 			if (ctx.agent.kind !== "main" || off()) return undefined;
 			const toolName = event.toolName ?? "";
 			if (!recalled && !Object.hasOwn(RECALL_EXEMPT, toolName.toLowerCase())) {
+				const sessionId = sessionIdOf(ctx);
 				if (satisfiesRecall(toolName, event.input)) {
 					recalled = true; // the recall happened; nothing to block from here on
+					if (sessionId) markRecalled(sessionId, deps.gateMarkerDir);
+					return undefined;
+				}
+				if (sessionId && markerExists(sessionId, deps.gateMarkerDir)) {
+					recalled = true; // same session id recalled before a resume: stay satisfied
 					return undefined;
 				}
 				let active: string[] | undefined;

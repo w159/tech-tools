@@ -194,6 +194,81 @@ class BoardBasics(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertEqual(data["error"], "unknown_command")
 
+    def test_unique_add_twice_yields_one_item(self):
+        rc, first = cli(
+            "add",
+            "--unique",
+            "--session",
+            "s1",
+            "--root",
+            self.root,
+            "advisor[concern]: x",
+        )
+        self.assertEqual(rc, 0)
+        self.assertNotIn("duplicate", first)
+        rc, second = cli(
+            "add",
+            "--unique",
+            "--session",
+            "s1",
+            "--root",
+            self.root,
+            "advisor[concern]: x",
+        )
+        self.assertEqual(rc, 0)
+        self.assertTrue(second["ok"])
+        self.assertTrue(second["duplicate"])
+        self.assertEqual(second["item"]["id"], first["item"]["id"])
+        self.assertEqual(len(atlas_todo.load(self.root)["items"]), 1)
+
+    def test_unique_add_after_completion_stays_completed_and_single(self):
+        _, first = cli(
+            "add", "--unique", "--session", "s1", "--root", self.root, "note"
+        )
+        atlas_todo.set_status(
+            self.root, first["item"]["id"], "completed", evidence="fixed"
+        )
+        rc, again = cli(
+            "add", "--unique", "--session", "s1", "--root", self.root, "note"
+        )
+        self.assertEqual(rc, 0)
+        self.assertTrue(again["duplicate"])
+        items = atlas_todo.load(self.root)["items"]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["status"], "completed")
+        self.assertEqual(
+            atlas_todo.counts(atlas_todo.load(self.root), "s1")["remaining"], 0
+        )
+
+    def test_unique_add_matches_archived_item(self):
+        first = atlas_todo.add(
+            self.root, "note", session_id="s1", origin="session"
+        )
+        atlas_todo.set_status(self.root, first["item"]["id"], "completed")
+        atlas_todo.carry_over(self.root, "s2")  # archives the completed s1 item
+        self.assertTrue(atlas_todo.load(self.root)["items"][0]["archived"])
+        _, again = cli(
+            "add", "--unique", "--session", "s1", "--root", self.root, "note"
+        )
+        self.assertTrue(again["duplicate"])
+        self.assertEqual(len(atlas_todo.load(self.root)["items"]), 1)
+
+    def test_add_without_unique_still_appends_duplicates(self):
+        cli("add", "--session", "s1", "--root", self.root, "note")
+        rc, second = cli("add", "--session", "s1", "--root", self.root, "note")
+        self.assertEqual(rc, 0)
+        self.assertNotIn("duplicate", second)
+        self.assertEqual(len(atlas_todo.load(self.root)["items"]), 2)
+
+    def test_unique_add_same_content_other_session_still_adds(self):
+        cli("add", "--unique", "--session", "s1", "--root", self.root, "note")
+        rc, other = cli(
+            "add", "--unique", "--session", "s2", "--root", self.root, "note"
+        )
+        self.assertEqual(rc, 0)
+        self.assertNotIn("duplicate", other)
+        self.assertEqual(len(atlas_todo.load(self.root)["items"]), 2)
+
 
 def _run_git(*args, cwd=None):
     return subprocess.run(("git",) + args, cwd=cwd, capture_output=True, text=True)
@@ -214,7 +289,18 @@ class WorktreeBoard(unittest.TestCase):
         r = _run_git("init", "-q", main)
         if r.returncode != 0:
             self.skipTest(f"git init failed: {r.stderr.strip()}")
-        r = _run_git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "--allow-empty", "-q", "-m", "seed", cwd=main)
+        r = _run_git(
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "user.name=t",
+            "commit",
+            "--allow-empty",
+            "-q",
+            "-m",
+            "seed",
+            cwd=main,
+        )
         if r.returncode != 0:
             self.skipTest(f"git commit failed: {r.stderr.strip()}")
         r = _run_git("worktree", "add", "-q", wt, "HEAD", cwd=main)
@@ -237,7 +323,9 @@ class WorktreeBoard(unittest.TestCase):
         try:
             with mock.patch.dict(os.environ):
                 os.environ.pop("ATLAS_PROJECT_ROOT", None)
-                self.assertEqual(os.path.realpath(atlas_todo.find_root()), os.path.realpath(main))
+                self.assertEqual(
+                    os.path.realpath(atlas_todo.find_root()), os.path.realpath(main)
+                )
                 self.assertEqual(
                     os.path.realpath(str(atlas_todo.board_path())),
                     os.path.realpath(str(atlas_todo.board_path(main))),
@@ -245,20 +333,30 @@ class WorktreeBoard(unittest.TestCase):
                 atlas_todo.add(main, "written by lead")
                 atlas_todo.note(None, "worker", "seen from worktree")
                 # default resolution from inside the worktree reads the lead's board
-                self.assertEqual(atlas_todo.load()["items"][0]["content"], "written by lead")
+                self.assertEqual(
+                    atlas_todo.load()["items"][0]["content"], "written by lead"
+                )
         finally:
             os.chdir(prev)
         # the note written from the worktree cwd landed on the MAIN board
-        self.assertEqual(atlas_todo.load(main)["items"][0]["content"], "written by lead")
-        self.assertEqual([n["text"] for n in atlas_todo.notes(main)], ["seen from worktree"])
+        self.assertEqual(
+            atlas_todo.load(main)["items"][0]["content"], "written by lead"
+        )
+        self.assertEqual(
+            [n["text"] for n in atlas_todo.notes(main)], ["seen from worktree"]
+        )
 
     def test_plain_repo_and_env_resolution_unchanged(self):
         main, wt = self._make_worktree()
         # main repo itself still resolves to its own dir
-        self.assertEqual(os.path.realpath(atlas_todo.find_root(main)), os.path.realpath(main))
+        self.assertEqual(
+            os.path.realpath(atlas_todo.find_root(main)), os.path.realpath(main)
+        )
         with mock.patch.dict(os.environ):
             os.environ.pop("ATLAS_PROJECT_ROOT", None)
-            self.assertEqual(os.path.realpath(atlas_todo.find_root(main)), os.path.realpath(main))
+            self.assertEqual(
+                os.path.realpath(atlas_todo.find_root(main)), os.path.realpath(main)
+            )
             env_root = os.path.join(self.root, "envroot")
             os.makedirs(env_root, exist_ok=True)
             os.environ["ATLAS_PROJECT_ROOT"] = env_root
@@ -279,16 +377,22 @@ class MirrorMonotonicCompletion(unittest.TestCase):
         return atlas_todo.load(self.root)["items"][0]
 
     def test_completed_with_evidence_survives_mirror_revert(self):
-        atlas_todo.mirror(self.root, [{"content": "task", "status": "in_progress"}], "s1")
+        atlas_todo.mirror(
+            self.root, [{"content": "task", "status": "in_progress"}], "s1"
+        )
         item_id = self._item()["id"]
         self.assertTrue(atlas_todo.claim(self.root, item_id, "agent-a")["ok"])
         self.assertTrue(
-            atlas_todo.set_status(self.root, item_id, "completed", owner="agent-a", evidence="tests pass")["ok"]
+            atlas_todo.set_status(
+                self.root, item_id, "completed", owner="agent-a", evidence="tests pass"
+            )["ok"]
         )
         before = self._item()
         self.assertEqual(before["status"], "completed")
         # the lead re-mirrors the whole plan with the item still in progress
-        atlas_todo.mirror(self.root, [{"content": "task", "status": "in_progress"}], "s1")
+        atlas_todo.mirror(
+            self.root, [{"content": "task", "status": "in_progress"}], "s1"
+        )
         after = self._item()
         self.assertEqual(after["status"], "completed")
         self.assertEqual(after["evidence"], "tests pass")
@@ -308,7 +412,9 @@ class MirrorMonotonicCompletion(unittest.TestCase):
         self.assertEqual(item["owner"], "agent-a")
 
     def test_completed_without_evidence_still_reverts(self):
-        atlas_todo.mirror(self.root, [{"content": "task", "status": "in_progress"}], "s1")
+        atlas_todo.mirror(
+            self.root, [{"content": "task", "status": "in_progress"}], "s1"
+        )
         item_id = self._item()["id"]
         self.assertTrue(atlas_todo.claim(self.root, item_id, "agent-a")["ok"])
         self.assertTrue(atlas_todo.set_status(self.root, item_id, "completed")["ok"])
@@ -328,7 +434,9 @@ class CorruptBoard(unittest.TestCase):
         p.write_text(text, encoding="utf-8")
 
     def _corrupt_files(self):
-        return sorted(atlas_todo.board_path(self.root).parent.glob("todos.json.corrupt-*"))
+        return sorted(
+            atlas_todo.board_path(self.root).parent.glob("todos.json.corrupt-*")
+        )
 
     def test_writer_quarantines_unparseable_board(self):
         self._write_garbage("{not json")
@@ -337,7 +445,9 @@ class CorruptBoard(unittest.TestCase):
         corrupt = self._corrupt_files()
         self.assertEqual(len(corrupt), 1)
         self.assertEqual(corrupt[0].read_text(encoding="utf-8"), "{not json")
-        self.assertEqual(atlas_todo.load(self.root)["items"][0]["content"], "fresh start")
+        self.assertEqual(
+            atlas_todo.load(self.root)["items"][0]["content"], "fresh start"
+        )
 
     def test_writer_quarantines_wrong_shaped_board(self):
         self._write_garbage('{"whatever": true}')
@@ -346,13 +456,17 @@ class CorruptBoard(unittest.TestCase):
         corrupt = self._corrupt_files()
         self.assertEqual(len(corrupt), 1)
         self.assertEqual(corrupt[0].read_text(encoding="utf-8"), '{"whatever": true}')
-        self.assertEqual(atlas_todo.load(self.root)["items"][0]["content"], "after shape fix")
+        self.assertEqual(
+            atlas_todo.load(self.root)["items"][0]["content"], "after shape fix"
+        )
 
     def test_readonly_load_leaves_corrupt_file_alone(self):
         self._write_garbage("{nope")
         self.assertEqual(atlas_todo.load(self.root)["items"], [])
         self.assertEqual(self._corrupt_files(), [])
-        self.assertEqual(atlas_todo.board_path(self.root).read_text(encoding="utf-8"), "{nope")
+        self.assertEqual(
+            atlas_todo.board_path(self.root).read_text(encoding="utf-8"), "{nope"
+        )
 
     def test_quarantine_is_recorded_as_note(self):
         self._write_garbage("{broken")
@@ -368,7 +482,9 @@ class NotesChannel(unittest.TestCase):
         self.addCleanup(self._tmp.cleanup)
 
     def test_note_appends_and_owner_sanitized(self):
-        rec = atlas_todo.note(self.root, "atlas:fixer", "hello", to="agent-b", item="t1")
+        rec = atlas_todo.note(
+            self.root, "atlas:fixer", "hello", to="agent-b", item="t1"
+        )
         self.assertEqual(rec["owner"], "atlas_fixer")
         atlas_todo.note(self.root, "bad/name here", "x")
         f1 = atlas_todo.notes_dir(self.root) / "atlas_fixer.jsonl"
@@ -378,7 +494,9 @@ class NotesChannel(unittest.TestCase):
         self.assertEqual(line["to"], "agent-b")
         self.assertEqual(line["item"], "t1")
         self.assertEqual(line["text"], "hello")
-        self.assertTrue((atlas_todo.notes_dir(self.root) / "bad_name_here.jsonl").exists())
+        self.assertTrue(
+            (atlas_todo.notes_dir(self.root) / "bad_name_here.jsonl").exists()
+        )
 
     def test_notes_filtering_ordering_and_malformed_skip(self):
         atlas_todo.note(self.root, "agent-a", "first", to="agent-b")
@@ -388,7 +506,9 @@ class NotesChannel(unittest.TestCase):
         t_cut = time.time()
         time.sleep(0.002)
         atlas_todo.note(self.root, "agent-a", "third", to="all")
-        with open(atlas_todo.notes_dir(self.root) / "agent-a.jsonl", "a", encoding="utf-8") as fh:
+        with open(
+            atlas_todo.notes_dir(self.root) / "agent-a.jsonl", "a", encoding="utf-8"
+        ) as fh:
             fh.write("this is not json\n")
             fh.write('{"owner": "ghost", "text": "no ts here"}\n')
         all_notes = atlas_todo.notes(self.root)
@@ -403,7 +523,9 @@ class NotesChannel(unittest.TestCase):
             [n["text"] for n in atlas_todo.notes(self.root, to="agent-a")],
             ["second", "third"],
         )
-        self.assertEqual([n["text"] for n in atlas_todo.notes(self.root, since=t_cut)], ["third"])
+        self.assertEqual(
+            [n["text"] for n in atlas_todo.notes(self.root, since=t_cut)], ["third"]
+        )
 
     def test_notes_missing_dir_returns_empty(self):
         self.assertEqual(atlas_todo.notes(self.root), [])
@@ -444,7 +566,16 @@ class BoardConcurrency(unittest.TestCase):
             owner = f"worker-{w}"
             procs.append(
                 subprocess.Popen(
-                    [sys.executable, "-I", "-c", worker_src, self.root, owner, str(self.NOTES_PER_WORKER), *item_ids],
+                    [
+                        sys.executable,
+                        "-I",
+                        "-c",
+                        worker_src,
+                        self.root,
+                        owner,
+                        str(self.NOTES_PER_WORKER),
+                        *item_ids,
+                    ],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                 )
@@ -477,8 +608,172 @@ class BoardConcurrency(unittest.TestCase):
         self.assertEqual(claimed, self.ITEMS)
 
 
-if __name__ == "__main__":
-    unittest.main()
+class ItemPhase(unittest.TestCase):
+    """Board items carry an optional contract phase (operating-contract.json
+    todoPhases): explicit `phase` key or the `[<phase>] ` content prefix."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = self._tmp.name
+        self.addCleanup(self._tmp.cleanup)
+
+    def _items(self):
+        return atlas_todo.load(self.root)["items"]
+
+    def test_contract_phases_are_loaded(self):
+        self.assertEqual(
+            atlas_todo.todo_phases(),
+            ("research", "theory", "test", "validate", "implement", "verify"),
+        )
+
+    def test_add_with_phase_stores_it_and_list_shows_it(self):
+        rc, data = cli(
+            "add", "--phase", "verify", "--session", "s1", "--root", self.root, "run it"
+        )
+        self.assertEqual(rc, 0)
+        self.assertEqual(data["item"]["phase"], "verify")
+        rc, listed = cli("list", "--root", self.root)
+        self.assertEqual(rc, 0)
+        self.assertEqual([i.get("phase") for i in listed["items"]], ["verify"])
+
+    def test_add_unknown_phase_is_absent_not_an_error(self):
+        rc, data = cli(
+            "add", "--phase", "bogus", "--session", "s1", "--root", self.root, "x"
+        )
+        self.assertEqual(rc, 0)
+        self.assertTrue(data["ok"])
+        self.assertNotIn("phase", data["item"])
+        self.assertNotIn("phase", self._items()[0])
+
+    def test_add_without_phase_is_byte_identical_to_legacy_shape(self):
+        atlas_todo.add(self.root, "plain", session_id="s1")
+        self.assertEqual(
+            sorted(self._items()[0]),
+            sorted(
+                [
+                    "id",
+                    "content",
+                    "status",
+                    "owner",
+                    "claimed_at",
+                    "origin",
+                    "session_id",
+                    "created_at",
+                    "updated_at",
+                    "evidence",
+                    "completed_at",
+                    "archived",
+                ]
+            ),
+        )
+
+    def test_set_derives_phase_from_explicit_key_then_prefix(self):
+        payload = json.dumps(
+            [
+                {"content": "explicit", "status": "pending", "phase": "Research"},
+                {"content": "[verify] prefixed", "status": "pending"},
+                {"content": "[test] loses", "status": "pending", "phase": "theory"},
+                {"content": "[bogus] unknown prefix", "status": "pending"},
+                {"content": "no phase at all", "status": "pending"},
+                {"content": "bad key", "status": "pending", "phase": "nope"},
+            ]
+        )
+        rc, _ = cli("set", "--root", self.root, "--session", "s1", payload)
+        self.assertEqual(rc, 0)
+        phases = {i["content"]: i.get("phase") for i in self._items()}
+        self.assertEqual(
+            phases,
+            {
+                "explicit": "research",
+                "[verify] prefixed": "verify",
+                "[test] loses": "theory",
+                "[bogus] unknown prefix": None,
+                "no phase at all": None,
+                "bad key": None,
+            },
+        )
+        for item in self._items():
+            if item["content"] in ("no phase at all", "bad key"):
+                self.assertNotIn("phase", item)
+
+    def test_mirror_prefix_derivation_drops_phase_when_content_loses_prefix(self):
+        atlas_todo.mirror(
+            self.root, [{"content": "[implement] build", "status": "pending"}], "s1"
+        )
+        self.assertEqual(self._items()[0]["phase"], "implement")
+        atlas_todo.mirror(self.root, [{"content": "build", "status": "pending"}], "s1")
+        self.assertNotIn("phase", self._items()[0])
+
+    def test_scaffold_adds_one_item_per_phase_in_contract_order(self):
+        rc, data = cli(
+            "scaffold", "--task", "ship it", "--session", "s1", "--root", self.root
+        )
+        self.assertEqual(rc, 0)
+        self.assertEqual(data["created"], 6)
+        self.assertEqual(
+            [(i["phase"], i["content"]) for i in data["items"]],
+            [(p, f"[{p}] ship it") for p in atlas_todo.todo_phases()],
+        )
+        self.assertEqual(len(self._items()), 6)
+        self.assertEqual({i["session_id"] for i in self._items()}, {"s1"})
+
+    def test_scaffold_twice_adds_once(self):
+        args = ("scaffold", "--task", "ship it", "--session", "s1", "--root", self.root)
+        _, first = cli(*args)
+        _, second = cli(*args)
+        self.assertEqual(first["created"], 6)
+        self.assertEqual(second["created"], 0)
+        self.assertEqual(len(self._items()), 6)
+        self.assertEqual(
+            [i["id"] for i in first["items"]], [i["id"] for i in second["items"]]
+        )
+
+    def test_scaffold_does_not_reopen_a_completed_item(self):
+        _, first = cli("scaffold", "--task", "t", "--session", "s1", "--root", self.root)
+        atlas_todo.set_status(
+            self.root, first["items"][0]["id"], "completed", evidence="done"
+        )
+        cli("scaffold", "--task", "t", "--session", "s1", "--root", self.root)
+        by_phase = {i["phase"]: i["status"] for i in self._items()}
+        self.assertEqual(by_phase["research"], "completed")
+        self.assertEqual(len(self._items()), 6)
+
+    def test_scaffold_phases_flag_selects_and_skips_unknown(self):
+        rc, data = cli(
+            "scaffold",
+            "--task",
+            "t",
+            "--session",
+            "s1",
+            "--root",
+            self.root,
+            "--phases",
+            "verify,bogus,implement,verify",
+        )
+        self.assertEqual(rc, 0)
+        self.assertEqual([i["phase"] for i in data["items"]], ["verify", "implement"])
+        self.assertEqual(len(self._items()), 2)
+
+    def test_scaffold_same_task_other_session_adds_again(self):
+        cli("scaffold", "--task", "t", "--session", "s1", "--root", self.root)
+        _, other = cli("scaffold", "--task", "t", "--session", "s2", "--root", self.root)
+        self.assertEqual(other["created"], 6)
+        self.assertEqual(len(self._items()), 12)
+
+    def test_scaffold_requires_a_task(self):
+        rc, data = cli("scaffold", "--session", "s1", "--root", self.root)
+        self.assertEqual(rc, 1)
+        self.assertEqual(data["error"], "task_required")
+        self.assertEqual(self._items(), [])
+
+    def test_unreadable_contract_means_no_phases_and_no_error(self):
+        with (
+            mock.patch.object(atlas_todo, "CONTRACT_PATH", "/nonexistent/c.json"),
+            mock.patch.object(atlas_todo, "_todo_phases_cache", None),
+        ):
+            r = atlas_todo.add(self.root, "x", phase="verify")
+            self.assertTrue(r["ok"])
+            self.assertNotIn("phase", r["item"])
 
 
 if __name__ == "__main__":
