@@ -3173,8 +3173,14 @@
       }
     },
     "plugins/atlas/scripts/dashboard_ui/js/chan-names.js": {
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_high": {
+        "count": 3
+      },
       "crap_moderate": {
-        "count": 4
+        "count": 2
       }
     },
     "plugins/atlas/scripts/dashboard_ui/js/dom.js": {
@@ -3268,11 +3274,17 @@
       }
     },
     "plugins/atlas/scripts/dashboard_ui/js/pages/channel-lens.js": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 2
+      },
       "crap_high": {
         "count": 5
       },
       "crap_moderate": {
-        "count": 3
+        "count": 2
       }
     },
     "plugins/atlas/scripts/dashboard_ui/js/pages/health.js": {
@@ -3342,6 +3354,11 @@
       },
       "crap_moderate": {
         "count": 10
+      }
+    },
+    "plugins/atlas/scripts/dashboard_ui/js/pages/supervision-lens.js": {
+      "crap_moderate": {
+        "count": 3
       }
     },
     "plugins/atlas/scripts/dashboard_ui/js/pages/work.js": {
@@ -3426,7 +3443,6 @@
     "plugins/atlas/colony/herdr-web-ui/server/machine-security.ts:dead code",
     "plugins/atlas/colony/herdr-web-ui/src/components/UpdateControls.tsx:dead code",
     "plugins/atlas/colony/herdr-web-ui/server/machine-api.ts:high impact",
-    "plugins/atlas/scripts/dashboard_ui/js/chan-names.js:dead code",
     "plugins/atlas/colony/herdr-web-ui/src/lib/shortcuts.ts:high impact",
     "plugins/atlas/colony/herdr-web-ui/server/skill-activity.ts:high impact",
     "plugins/atlas/colony/herdr-web-ui/server/conversation-metadata.ts:high impact",
@@ -3531,9 +3547,11 @@
     "plugins/atlas/colony/herdr-web-ui/src/components/Droplet.tsx:complexity",
     "plugins/atlas/colony/herdr-web-ui/src/lib/filePaths.ts:dead code",
     "plugins/atlas/colony/herdr-web-ui/src/lib/fontFamily.ts:dead code",
+    "plugins/atlas/scripts/dashboard_ui/js/chan-names.js:high impact",
     "plugins/atlas/colony/herdr-web-ui/server/collector.ts:dead code",
     "plugins/atlas/colony/herdr-web-ui/src/components/Sidebar.tsx:high impact",
     "plugins/atlas/colony/herdr-web-ui/src/lib/api.ts:dead code",
+    "plugins/atlas/scripts/dashboard_ui/js/pages/agents.js:coupling",
     "plugins/atlas/scripts/dashboard_ui/js/ui-core.js:high impact",
     "plugins/atlas/colony/herdr-web-ui/src/lib/greeting.ts:dead code",
     "plugins/atlas/colony/herdr-web-ui/src/lib/notifications.ts:dead code",
@@ -3541,7 +3559,6 @@
     "plugins/atlas/colony/herdr-web-ui/src/lib/fontFaces.ts:dead code",
     "plugins/atlas/colony/herdr-web-ui/server/omo.ts:high impact",
     "plugins/atlas/colony/herdr-web-ui/src/components/AgentPicker.tsx:dead code",
-    "plugins/atlas/scripts/dashboard_ui/js/pages/agents.js:coupling",
     "plugins/atlas/colony/herdr-web-ui/scripts/film/footage.ts:dead code",
     "plugins/atlas/colony/herdr-web-ui/src/lib/terminalBoxGlyphs.ts:dead code",
     "plugins/atlas/colony/herdr-web-ui/src/lib/directoryGroups.ts:untested risk",
@@ -3554,19 +3571,20 @@
     "plugins/atlas/colony/herdr-web-ui/server/secret.contract.test.ts:untested risk",
     "plugins/atlas/colony/herdr-web-ui/server/gjc-runtime.ts:high impact",
     "plugins/atlas/colony/herdr-web-ui/scripts/plugin-port.ts:dead code",
+    "plugins/atlas/omp/hook-bridge.ts:high impact",
     "plugins/atlas/colony/herdr-web-ui/server/mirror.ts:dead code",
     "plugins/atlas/colony/herdr-web-ui/server/pty/sidecar.ts:dead code",
     "plugins/atlas/scripts/dashboard_ui/js/app.js:dead code",
-    "plugins/atlas/omp/hook-bridge.ts:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/agents-store.js:high impact",
     "plugins/atlas/colony/herdr-web-ui/server/herdr-marker.ts:dead code",
     "plugins/atlas/colony/herdr-web-ui/src/components/KeyBar.tsx:dead code",
     "plugins/atlas/colony/herdr-web-ui/src/lib/terminalGlyphs.ts:dead code",
     "plugins/atlas/scripts/dashboard_ui/js/ui-data.js:high impact",
     "plugins/atlas/colony/herdr-web-ui/src/components/ChatView.tsx:complexity",
-    "plugins/atlas/colony/herdr-web-ui/server/pi-tree.ts:dead code",
-    "plugins/atlas/colony/herdr-web-ui/src/components/DirectoryBrowser.tsx:high impact",
     "plugins/atlas/omp/contracts.ts:high impact",
+    "plugins/atlas/colony/herdr-web-ui/server/pi-tree.ts:dead code",
+    "plugins/atlas/scripts/dashboard_ui/js/pages/channel-lens.js:high impact",
+    "plugins/atlas/colony/herdr-web-ui/src/components/DirectoryBrowser.tsx:high impact",
     "mcp_servers/auvik-mcp/scripts/probe-all-tools.mjs:coupling",
     "plugins/atlas/colony/herdr-web-ui/server/usage.ts:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/dom.js:high impact",
@@ -3589,14 +3607,14 @@
     "plugins/atlas/colony/herdr-web-ui/scripts/film/timeline.ts:dead code",
     "plugins/atlas/colony/herdr-web-ui/scripts/readme-media/compose.ts:dead code",
     "plugins/atlas/colony/herdr-web-ui/src/lib/terminalWidths.ts:dead code",
-    "mcp_servers/knowbe4-mcp/src/utils/elicitation.ts:dead code",
-    "plugins/atlas/scripts/dashboard_ui/js/pages/channel-lens.js:untested risk",
     "plugins/atlas/omp/mandates.ts:untested risk",
+    "mcp_servers/knowbe4-mcp/src/utils/elicitation.ts:dead code",
+    "plugins/atlas/scripts/dashboard_ui/js/pages/supervision-lens.js:untested risk",
     "plugins/atlas/colony/herdr-web-ui/scripts/test-herdr.ts:dead code",
+    "plugins/atlas/omp/stop-bridge.ts:untested risk",
     "plugins/atlas/colony/herdr-web-ui/src/lib/draft.ts:dead code",
     "plugins/atlas/scripts/dashboard_ui/js/pages/settings.js:untested risk",
     "plugins/atlas/scripts/dashboard_ui/js/pages/health.js:untested risk",
-    "plugins/atlas/omp/stop-bridge.ts:untested risk",
     "plugins/atlas/scripts/dashboard_ui/js/pages/overview.js:untested risk",
     "plugins/atlas/colony/herdr-web-ui/server/omo-tasks.ts:complexity",
     "plugins/atlas/colony/herdr-web-ui/src/components/Composer.tsx:complexity",
@@ -3605,9 +3623,9 @@
     "plugins/atlas/scripts/dashboard_ui/js/pages/improve.js:untested risk",
     "plugins/atlas/colony/herdr-web-ui/src/components/AgentMark.tsx:complexity",
     "plugins/atlas/scripts/dashboard_ui/js/pages/activity.js:untested risk",
-    "plugins/atlas/omp/style.ts:high impact",
-    "plugins/atlas/scripts/dashboard_ui/js/pages/work.js:complexity",
     "plugins/atlas/omp/run-state.ts:high impact",
+    "plugins/atlas/scripts/dashboard_ui/js/pages/work.js:complexity",
+    "plugins/atlas/omp/style.ts:high impact",
     "plugins/atlas/colony/herdr-web-ui/shared/machines.ts:dead code",
     "mcp_servers/blumira-mcp/src/utils/logger.ts:high impact",
     "mcp_servers/kaseya-spanning-backup-mcp/src/utils/logger.ts:high impact",
@@ -3617,18 +3635,18 @@
     "skills/webapp-testing/assets/test-helper.js:dead code",
     "mcp_servers/threatlocker-mcp/src/utils/resolve.ts:high impact",
     "mcp_servers/ninjaone-mcp/src/utils/elicitation.ts:dead code",
+    "plugins/atlas/omp/advisor.ts:high impact",
     "mcp_servers/paylocity-mcp/src/domains/_helpers.ts:dead code",
     "mcp_servers/paylocity-mcp/src/utils/client.ts:high impact",
     "mcp_servers/panos-mcp/src/utils/panos-error.ts:dead code",
     "plugins/atlas/omp/gen-agents.ts:dead code",
     "plugins/atlas/colony/herdr-web-ui/scripts/film/capture.ts:complexity",
-    "mcp_servers/cipp-mcp/src/mcp/server.ts:complexity",
     "mcp_node/node-blumira/src/http.ts:complexity",
+    "mcp_servers/cipp-mcp/src/mcp/server.ts:complexity",
     "plugins/atlas/omp/worker-report.ts:high impact",
     "mcp_servers/kaseya-spanning-backup-mcp/src/annotate-tool.ts:dead code",
     "mcp_servers/paylocity-mcp/src/annotate-tool.ts:dead code",
     "mcp_node/node-vanta/src/pagination.ts:high impact",
-    "plugins/atlas/omp/advisor.ts:high impact",
     "mcp_servers/ninjaone-mcp/src/annotate-tool.ts:dead code",
     "mcp_servers/threatlocker-mcp/src/utils/logger.ts:high impact",
     "mcp_servers/panos-mcp/src/utils/logger.ts:high impact",
@@ -3640,30 +3658,30 @@
     "mcp_node/node-auvik/src/http.ts:complexity",
     "mcp_servers/_shared/zod-shape.ts:high impact",
     "plugins/atlas/omp/workers.ts:high impact",
-    "mcp_servers/knowbe4-mcp/src/domains/training.ts:complexity",
     "mcp_servers/ninjaone-mcp/src/domains/alerts.ts:complexity",
+    "mcp_servers/knowbe4-mcp/src/domains/training.ts:complexity",
     "mcp_servers/knowbe4-mcp/src/domains/phishing.ts:complexity",
     "mcp_node/node-threatlocker/src/http.ts:complexity",
     "mcp_servers/auvik-mcp/src/annotate-tool.ts:dead code",
     "mcp_servers/blumira-mcp/src/annotate-tool.ts:dead code",
     "mcp_servers/knowbe4-mcp/src/annotate-tool.ts:dead code",
-    "mcp_servers/knowbe4-mcp/src/domains/reporting.ts:complexity",
     "mcp_servers/threatlocker-mcp/src/annotate-tool.ts:dead code",
     "mcp_servers/vanta-mcp/src/annotate-tool.ts:dead code",
     "plugins/atlas/omp/channels.ts:untested risk",
+    "mcp_servers/knowbe4-mcp/src/domains/reporting.ts:complexity",
     "mcp_servers/auvik-mcp/src/client-factory.ts:complexity",
     "mcp_servers/knowbe4-mcp/src/domains/users.ts:complexity",
     "plugins/atlas/omp/scope.ts:high impact",
-    "mcp_servers/blumira-mcp/src/domains/msp.ts:complexity",
     "plugins/atlas/omp/index.test.ts:untested risk",
+    "mcp_servers/blumira-mcp/src/domains/msp.ts:complexity",
     "plugins/atlas/omp/shell-route.ts:untested risk",
     "mcp_servers/knowbe4-mcp/src/domains/groups.ts:complexity",
     "plugins/atlas/omp/stop-bridge.test.ts:untested risk",
     "mcp_node/node-paylocity/src/http.ts:complexity",
     "mcp_servers/blumira-mcp/src/http.ts:complexity",
     "mcp_servers/ninjaone-mcp/src/domains/automation.ts:complexity",
-    "mcp_servers/cipp-mcp/src/handlers/tool.handler.ts:complexity",
     "mcp_servers/blumira-mcp/src/domains/findings.ts:complexity",
+    "mcp_servers/cipp-mcp/src/handlers/tool.handler.ts:complexity",
     "test-mcp-tools.mjs:complexity",
     "mcp_servers/ninjaone-mcp/src/domains/devices.ts:complexity"
   ]
