@@ -2,6 +2,7 @@
 """Tests for scripts/tool_routing.py."""
 from __future__ import annotations
 
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import os
 import sys
 import tempfile

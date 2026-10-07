@@ -30,7 +30,9 @@
  */
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as nodePath from "node:path";
+import { resolveTarget } from "./contracts";
 import { ATLAS_AGENT_TARGETABLE } from "./atlas-agents";
 import { runCapture } from "./proc";
 
@@ -42,8 +44,18 @@ export const MCP_SERVERS = nodePath.join(PLUGIN_ROOT, "contracts", "mcp-servers.
 const DEFAULT_TIMEOUT_S = 60;
 /** Default per-hook hard cap (s); ATLAS_BRIDGE_HOOK_TIMEOUT_S overrides. omp cuts a handler at 30 s. */
 export const DEFAULT_HOOK_CAP_S = 25;
-/** omp's EXTENSION_HANDLER_TIMEOUT_MS (extensions/runner.ts): all hooks of one before_agent_start share it. */
-export const HANDLER_BUDGET_MS = 30_000;
+/**
+ * Budget shared by every hook of one before_agent_start or session_stop handler. omp cuts those handlers at 30 s
+ * (extensions/runner.ts EXTENSION_HANDLER_TIMEOUT_MS) and then delivers NOTHING, so the bridge stays 5 s under it.
+ */
+export const HANDLER_BUDGET_MS = 25_000;
+/**
+ * Budget for ALL hooks of one tool_call / tool_result, across every task batch item. omp's tool_call timeout is also
+ * 30 s but a timeout there BLOCKS the call (`block: true, "Extension ... timed out"`), so this sits 10 s under it.
+ */
+export const TOOL_CALL_BUDGET_MS = 20_000;
+/** A runner that ignores its timeoutMs is abandoned this long after the slot ends. */
+export const HOOK_KILL_GRACE_MS = 250;
 export const SESSION_MARKER = "<!-- atlas-session-start -->";
 
 export type ClaudeEvent =
@@ -131,7 +143,7 @@ export function loadBridgedHooksFor(
 	}
 }
 
-/** omp tool name → every Claude tool name mapping to it (contracts/tool-names.json); itself when unmapped. */
+/** omp tool name → every Claude tool name mapping to it (contracts/tool-names.json `claudeToOmp`, then `ompAliases`); itself when unmapped. */
 export function claudeNamesFor(ompTool: string, namesPath: string = TOOL_NAMES): string[] {
 	try {
 		const parsed = readJson(namesPath);
@@ -139,6 +151,8 @@ export function claudeNamesFor(ompTool: string, namesPath: string = TOOL_NAMES):
 		const names = Object.entries(parsed.claudeToOmp as Record<string, unknown>)
 			.filter(([claude, omp]) => omp === ompTool && /^[A-Z]\w*$/.test(claude))
 			.map(([claude]) => claude);
+		const alias = "ompAliases" in parsed && parsed.ompAliases && typeof parsed.ompAliases === "object" ? (parsed.ompAliases as Record<string, unknown>)[ompTool] : undefined;
+		if (typeof alias === "string" && /^[A-Z]\w*$/.test(alias)) names.push(alias);
 		return names.length ? names : [ompTool];
 	} catch {
 		return [ompTool];
@@ -159,7 +173,9 @@ export function parseHookOutput(stdout: string): HookOutput {
 	const out: HookOutput = {};
 	const spec = "hookSpecificOutput" in parsed ? parsed.hookSpecificOutput : undefined;
 	if (spec && typeof spec === "object") {
-		if ("permissionDecision" in spec && spec.permissionDecision === "deny") {
+		// omp has no interactive permission prompt for a hook, so `ask` fails closed as a deny (a hook that wanted a
+		// human in the loop must not silently become an allow). Exit code 2 never reaches here: the runner returns stdout only.
+		if ("permissionDecision" in spec && (spec.permissionDecision === "deny" || spec.permissionDecision === "ask")) {
 			out.deny = "permissionDecisionReason" in spec && typeof spec.permissionDecisionReason === "string" ? spec.permissionDecisionReason : "denied by atlas hook";
 		}
 		if ("additionalContext" in spec && typeof spec.additionalContext === "string" && spec.additionalContext.trim()) out.context = spec.additionalContext;
@@ -174,13 +190,16 @@ export interface StopHookOutput {
 	/** True when the hook printed `{decision: "block"}`. */
 	block?: true;
 	reason?: string;
+	/** `hookSpecificOutput.additionalContext` (non-blank), which a non-blocking Stop hook uses to speak to the model. */
+	context?: string;
 }
 
 /**
  * Parse a Stop-family hook's stdout. Unlike parseHookOutput (turn hooks, where a
  * block reason is advisory context), a Stop hook's `{decision: "block", reason}` is
- * a real refusal and maps to the omp session_stop result `{decision, reason}`.
- * Anything else (silence, context, garbage, other decisions) is ignored.
+ * a real refusal and maps to the omp session_stop result `{decision, reason}`; a
+ * non-blank `hookSpecificOutput.additionalContext` is returned as `context`.
+ * Anything else (silence, garbage, other decisions) is ignored.
  */
 export function parseStopHookOutput(stdout: string): StopHookOutput {
 	const text = stdout.trim();
@@ -191,9 +210,15 @@ export function parseStopHookOutput(stdout: string): StopHookOutput {
 	} catch {
 		return {};
 	}
-	if (!parsed || typeof parsed !== "object" || !("decision" in parsed) || parsed.decision !== "block") return {};
-	const reason = "reason" in parsed && typeof parsed.reason === "string" && parsed.reason.trim() ? parsed.reason : "blocked by an atlas Stop hook";
-	return { block: true, reason };
+	if (!parsed || typeof parsed !== "object") return {};
+	const out: StopHookOutput = {};
+	const spec = "hookSpecificOutput" in parsed ? parsed.hookSpecificOutput : undefined;
+	if (spec && typeof spec === "object" && "additionalContext" in spec && typeof spec.additionalContext === "string" && spec.additionalContext.trim()) out.context = spec.additionalContext;
+	if ("decision" in parsed && parsed.decision === "block") {
+		out.block = true;
+		out.reason = "reason" in parsed && typeof parsed.reason === "string" && parsed.reason.trim() ? parsed.reason : "blocked by an atlas Stop hook";
+	}
+	return out;
 }
 
 /** Claude lifecycle payload for the session-end family (Stop, SessionEnd, SubagentStop, PreCompact). */
@@ -253,6 +278,7 @@ export function claudeMcpName(name: string): string {
 /** Built-in underscoredServers list: the fail-open fallback when contracts/mcp-servers.json is unreadable (twin of omp_transcript._KNOWN_MCP_SERVERS_FALLBACK). */
 const UNDERSCORED_SERVERS_FALLBACK: readonly string[] = [
 	"lean_ctx", "context_mode_context_mode", "context_mode", "claude_mem", "browser_use", "azure", "serena", "context7", "microsoft_docs", "plaid", "mobbin", "clippy",
+	"atlas_connectwise", "mcp_search", "cmux_browser",
 ];
 
 /** `underscoredServers` from the MCP server contract, longest first; the built-in list when the file is unreadable or malformed. */
@@ -294,15 +320,32 @@ export function splitMcpDevice(path: string): string | undefined {
 }
 
 /**
+ * Claude name for one MCP device/tool `mcp__<server>_<tool>`: the split name (contract server list, doubled token),
+ * else `mcp__<rest>` unchanged (fail closed: never a file Write).
+ */
+function mcpClaudeName(bare: string): string {
+	return splitMcpDevice(`xd://${bare}`) ?? claudeMcpName(bare); // claudeMcpName only on an UNSPLIT name: re-splitting `mcp__plaid__x` gave `mcp__plaid___x`
+}
+
+/**
+ * Names a hooks.json matcher is tested against. omp mints atlas connectors as `mcp__atlas_<srv>_<tool>` (split:
+ * `mcp__atlas_<srv>__<tool>`); Claude Code names them `mcp__plugin_atlas_<srv>__<tool>`, which is what the
+ * connector_credential_watch matcher (`mcp__plugin_atlas_.*`) names. Without the alias that watcher never fires on omp.
+ */
+export function matcherNames(names: string[]): string[] {
+	return names.flatMap(n => (n.startsWith("mcp__atlas_") ? [n, n.replace("mcp__atlas_", "mcp__plugin_atlas_")] : [n]));
+}
+
+/**
  * The Claude tool names for one omp call. An omp `write` whose `path` is an `xd://mcp__…` URI is an MCP device CALL, not a
- * file edit, so it is that MCP tool (the production-edit deny and the Edit/Write matchers must not see it); every other
- * call maps by tool name exactly as before.
+ * file edit, so it is that MCP tool, whatever its name shape (the production-edit deny and the Edit/Write matchers must
+ * not see it: an unrecognised device is still `mcp__<rest>`, never a file Write); every other call maps by tool name.
  */
 export function claudeNamesForCall(tool: string, input: unknown, namesPath?: string): string[] {
-	if (tool === "write" && input && typeof input === "object" && "path" in input && typeof input.path === "string") {
-		const device = splitMcpDevice(input.path);
-		if (device) return [claudeMcpName(device)];
+	if (tool === "write" && input && typeof input === "object" && "path" in input && typeof input.path === "string" && input.path.startsWith("xd://mcp__")) {
+		return [mcpClaudeName(input.path.slice("xd://".length))];
 	}
+	if (/^mcp__[A-Za-z0-9_]+$/.test(tool) && !tool.slice("mcp__".length).includes("__")) return [mcpClaudeName(tool)];
 	return claudeNamesFor(tool, namesPath).map(claudeMcpName);
 }
 
@@ -398,12 +441,53 @@ export const runHook: HookRunner = async (command, payload, timeoutMs) => {
 	}
 };
 
-/** Claude-shaped tool_input: omp `path` becomes an absolute `file_path` too. */
-function claudeToolInput(input: unknown, cwd: string): Record<string, unknown> {
+/**
+ * Claude-shaped tool_input(s): omp `path` becomes an absolute `file_path` too. omp's multi-file hashline `edit`
+ * (`{paths}`) and `ast_edit` (`{paths}`) name several targets; hooks read ONE `file_path`, so each path gets its own
+ * payload (the production-edit deny, the formatter and the drift watch must see every file, not the first).
+ */
+function claudeToolInputs(input: unknown, cwd: string): Record<string, unknown>[] {
 	const base: Record<string, unknown> = input && typeof input === "object" ? { ...(input as Record<string, unknown>) } : {};
-	const first = typeof base.path === "string" ? base.path : Array.isArray(base.paths) && typeof base.paths[0] === "string" ? base.paths[0] : undefined;
-	if (first && !first.includes("://") && base.file_path === undefined) base.file_path = nodePath.resolve(cwd, first);
-	return base;
+	const listed = Array.isArray(base.paths) ? base.paths.filter((p): p is string => typeof p === "string") : [];
+	const targets = typeof base.path === "string" ? [base.path] : listed;
+	const withFile = (target: string | undefined): Record<string, unknown> => {
+		const one = { ...base };
+		if (target !== undefined && one.file_path === undefined) {
+			if (typeof one.path !== "string") one.path = target;
+			if (!target.includes("://")) one.file_path = resolveTarget(cwd, target);
+		}
+		return one;
+	};
+	return targets.length > 1 ? targets.map(withFile) : [withFile(targets[0])];
+}
+
+/** Resolves to `promise`'s value, or undefined once `ms` has passed (a rejection also yields undefined). The loser keeps running; callers bound it with their own timeout. */
+async function withDeadline<T>(promise: Promise<T>, ms: number): Promise<T | undefined> {
+	const expired = Promise.withResolvers<undefined>();
+	const timer = setTimeout(expired.resolve, Math.max(0, ms));
+	try {
+		return await Promise.race([promise.catch(() => undefined), expired.promise]);
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
+const FAULT_LOG_MAX_BYTES = 1 << 20;
+
+/**
+ * One row in `<ATLAS_HOME or ~/.atlas>/hook-faults.jsonl`, the same file and row shape scripts/atlas_faults.py writes,
+ * so the doctor sees bridge fail-opens beside python hook crashes. Best effort, never throws.
+ * ponytail: skipped once the file passes 1 MiB (atlas_faults.py owns truncation), so a flood cannot grow it.
+ */
+export function recordFault(hook: string, error: string, type: string, cwd: string | undefined): void {
+	try {
+		const file = nodePath.join(process.env.ATLAS_HOME || nodePath.join(os.homedir(), ".atlas"), "hook-faults.jsonl");
+		fs.mkdirSync(nodePath.dirname(file), { recursive: true });
+		if (fs.existsSync(file) && fs.statSync(file).size > FAULT_LOG_MAX_BYTES) return;
+		fs.appendFileSync(file, `${JSON.stringify({ ts: Date.now() / 1000, hook, error: error.slice(0, 500), type, cwd: cwd ?? process.cwd() })}\n`);
+	} catch {
+		// the fault log must never be the thing that fails
+	}
 }
 
 /** One executed hook: its script name and parsed output. */
@@ -480,6 +564,8 @@ export interface BridgeDeps {
 	onToolAllowed?(info: ToolEventInfo): void;
 	/** A successful tool_result (run-state event rows). */
 	onToolResult?(info: ToolEventInfo): void;
+	/** Whole-call hook budget in ms for tool_call / tool_result; default TOOL_CALL_BUDGET_MS. Tests shrink it. */
+	budgetMs?: number;
 }
 
 export function registerHookBridge(pi: Pick<ExtensionAPI, "on">, deps: BridgeDeps = {}): void {
@@ -495,25 +581,33 @@ export function registerHookBridge(pi: Pick<ExtensionAPI, "on">, deps: BridgeDep
 	pi.on("session_switch", reset);
 
 	/**
-	 * Runs matching hooks in order; each gets min(its capped timeout, what is left before `deadline`).
-	 * dispatch_tripwire.py runs for every matched tool, including Read/Grep/Glob/Bash: its inline-op
-	 * threshold deny lives in PreToolUse and counts exactly those tools, so skipping it removed the deny tier.
-	 * The native-tool deny/nudge text index.ts already produces is suppressed at the source instead, by
+	 * Runs the matching hooks CONCURRENTLY (Claude Code runs a matcher group's hooks in parallel too), each with
+	 * min(its capped timeout, what is left before the shared `deadline`); results keep hooks.json order, so the
+	 * first deny in that order wins. dispatch_tripwire.py runs for every matched tool, including Read/Grep/Glob/Bash:
+	 * its inline-op threshold deny lives in PreToolUse and counts exactly those tools, so skipping it removed the
+	 * deny tier. The native-tool deny/nudge text index.ts already produces is suppressed at the source instead, by
 	 * ATLAS_NATIVE_POLICY=off in runHook, so one native-tool message reaches the model, not two.
+	 * A hook that outlives its slot is abandoned even if the runner ignores its timeout, and every skip or abandon
+	 * leaves a hook-faults.jsonl row: fail open, never silently.
 	 */
 	const runAllRuns = async (event: ClaudeEvent, toolNames: string[] | undefined, payload: Record<string, unknown>, deadline: number = Date.now() + HANDLER_BUDGET_MS): Promise<HookRun[]> => {
-		const selected = all().filter(h => h.event === event && (!h.matcher || !toolNames || toolNames.some(n => h.matcher?.test(n))));
-		const runs: HookRun[] = [];
-		for (const hook of selected) {
+		const matchNames = toolNames && matcherNames(toolNames);
+		const selected = all().filter(h => h.event === event && (!h.matcher || !matchNames || matchNames.some(n => h.matcher?.test(n))));
+		const cwd = typeof payload.cwd === "string" ? payload.cwd : undefined;
+		const runOne = async (hook: BridgedHook): Promise<HookRun | undefined> => {
 			const script = scriptOf(hook.command);
 			const remaining = deadline - Date.now();
-			if (remaining <= 0) break; // out of handler budget: skip the rest (fail open)
+			if (remaining <= 0) {
+				recordFault(script || hook.command, `${event} skipped: bridge budget exhausted`, "BridgeBudget", cwd);
+				return undefined; // out of budget: fail open
+			}
 			const timeoutMs = Math.min(hookTimeoutMs(hook.timeoutMs, deps.env ?? process.env), remaining);
-			const out = parseHookOutput(await run(hook.command, payload, timeoutMs));
-			runs.push({ script, out });
-			if (out.deny) break; // first deny wins, as in Claude Code
-		}
-		return runs;
+			const started = Date.now();
+			const stdout = await withDeadline(run(hook.command, payload, timeoutMs), timeoutMs + HOOK_KILL_GRACE_MS);
+			if (stdout === undefined || Date.now() - started >= timeoutMs) recordFault(script || hook.command, `${event} hook hit its ${timeoutMs} ms slot`, "BridgeTimeout", cwd);
+			return { script, out: parseHookOutput(stdout ?? "") };
+		};
+		return (await Promise.all(selected.map(runOne))).filter((r): r is HookRun => r !== undefined);
 	};
 	const runAll = async (event: ClaudeEvent, toolNames: string[] | undefined, payload: Record<string, unknown>, deadline?: number): Promise<HookOutput[]> =>
 		(await runAllRuns(event, toolNames, payload, deadline)).map(r => r.out);
@@ -526,6 +620,7 @@ export function registerHookBridge(pi: Pick<ExtensionAPI, "on">, deps: BridgeDep
 			return "";
 		}
 	};
+	const toolBudgetMs = () => deps.budgetMs ?? TOOL_CALL_BUDGET_MS;
 
 	pi.on("before_agent_start", async (event, ctx) => {
 		try {
@@ -548,14 +643,17 @@ export function registerHookBridge(pi: Pick<ExtensionAPI, "on">, deps: BridgeDep
 	pi.on("tool_call", async (event, ctx) => {
 		try {
 			if (off()) return undefined;
+			// ONE budget for the whole call (hooks of every batch item and the transcript lookup): omp blocks the
+			// call when its handler passes its own 30 s tool_call timeout, so the bridge must give up first.
+			const deadline = Date.now() + toolBudgetMs();
 			const tool = event.toolName ?? "";
 			// omp mints `mcp__<server>_<tool>` and a `write` to an xd:// device is an MCP call; hooks.json matchers expect Claude's names.
 			const names = claudeNamesForCall(tool, event.input, deps.namesPath);
 			const cwd = ctx.cwd;
 			const sessionId = sessionIdOf(ctx);
-			const transcriptPath = await transcriptPathOf(deps, ctx as BridgeCtx);
+			const transcriptPath = (await withDeadline(transcriptPathOf(deps, ctx as BridgeCtx), Math.max(0, deadline - Date.now()))) ?? "";
 			// omp `task` carries a batch; each item is one Claude Task dispatch and any deny blocks the batch.
-			const inputs = names[0] === "Task" ? claudeTaskInputs(event.input) : [claudeToolInput(event.input, cwd)];
+			const inputs = names[0] === "Task" ? claudeTaskInputs(event.input) : claudeToolInputs(event.input, cwd);
 			const runs: HookRun[] = [];
 			for (const toolInput of inputs.length ? inputs : [{}]) {
 				const sessionModel = sessionModelOf(ctx as BridgeCtx);
@@ -567,7 +665,7 @@ export function registerHookBridge(pi: Pick<ExtensionAPI, "on">, deps: BridgeDep
 					tool_input: toolInput,
 					transcript_path: transcriptPath,
 					...(sessionModel ? { session_model: sessionModel } : {}),
-				});
+				}, deadline);
 				const deny = batch.find(r => r.out.deny)?.out.deny;
 				if (deny) return { block: true, reason: deny };
 				runs.push(...batch);
@@ -575,7 +673,8 @@ export function registerHookBridge(pi: Pick<ExtensionAPI, "on">, deps: BridgeDep
 			notifySink(deps.onToolAllowed, { toolName: tool, input: event.input, cwd, sessionId, tripwireRan: tripwireRan(runs), isError: false });
 			const context = join(runs.map(r => r.out));
 			return context ? { additionalContext: context } : undefined;
-		} catch {
+		} catch (error) {
+			recordFault("hook-bridge", String(error), "BridgeError", undefined);
 			return undefined;
 		}
 	});
@@ -583,14 +682,15 @@ export function registerHookBridge(pi: Pick<ExtensionAPI, "on">, deps: BridgeDep
 	pi.on("tool_result", async (event, ctx) => {
 		try {
 			if (off() || event.isError) return undefined;
+			const deadline = Date.now() + toolBudgetMs();
 			const tool = event.toolName ?? "";
 			// omp mints `mcp__<server>_<tool>` and a `write` to an xd:// device is an MCP call; hooks.json matchers expect Claude's names.
 			const names = claudeNamesForCall(tool, event.input, deps.namesPath);
 			const cwd = ctx.cwd;
 			const sessionId = sessionIdOf(ctx);
-			const transcriptPath = await transcriptPathOf(deps, ctx as BridgeCtx);
+			const transcriptPath = (await withDeadline(transcriptPathOf(deps, ctx as BridgeCtx), Math.max(0, deadline - Date.now()))) ?? "";
 			const toolResponse = toolResponseText(event.content);
-			const inputs = names[0] === "Task" ? claudeTaskInputs(event.input) : [claudeToolInput(event.input, cwd)];
+			const inputs = names[0] === "Task" ? claudeTaskInputs(event.input) : claudeToolInputs(event.input, cwd);
 			const runs: HookRun[] = [];
 			for (const toolInput of inputs.length ? inputs : [{}]) {
 				runs.push(
@@ -603,13 +703,16 @@ export function registerHookBridge(pi: Pick<ExtensionAPI, "on">, deps: BridgeDep
 						tool_response: toolResponse,
 						is_error: false,
 						transcript_path: transcriptPath,
-					})),
+						// omp subagents carry no env: their agent id lets worker_inbox.py resolve the channel member
+						...(ctx.agent?.kind === "sub" && (ctx.agent as { id?: string }).id ? { agent_name: (ctx.agent as { id?: string }).id } : {}),
+					}, deadline)),
 				);
 			}
 			notifySink(deps.onToolResult, { toolName: tool, input: event.input, cwd, sessionId, tripwireRan: tripwireRan(runs), isError: false });
 			const context = join(runs.map(r => r.out));
 			return context ? { additionalContext: context } : undefined;
-		} catch {
+		} catch (error) {
+			recordFault("hook-bridge", String(error), "BridgeError", undefined);
 			return undefined;
 		}
 	});

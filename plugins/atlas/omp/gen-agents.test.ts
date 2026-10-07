@@ -12,7 +12,7 @@ import {
 	roleFor,
 	SMOL_FALLBACK_ROLE,
 } from "./atlas-agents";
-import { generateAgents, renderGeneratedAgent } from "./gen-agents";
+import { generateAgents, ompBody, renderGeneratedAgent } from "./gen-agents";
 
 const agentsDir = path.resolve(import.meta.dir, "..", "agents");
 const outDir = path.resolve(import.meta.dir, "agents");
@@ -39,9 +39,11 @@ function frontmatterOf(content: string): Record<string, unknown> {
 	return YAML.parse(content.slice(content.indexOf("---") + 3, content.indexOf("\n---", 4))) as Record<string, unknown>;
 }
 
-function expectedModelChain(name: string): string[] {
-	if (name === "runner") return [ATLAS_MECHANIC_ROLE, SMOL_FALLBACK_ROLE];
-	if (ATLAS_THINKING_LEVELS[name] === "medium") return [roleFor(name), ATLAS_DEFAULT_FALLBACK_ROLE, SMOL_FALLBACK_ROLE];
+function expectedModelChain(name: string, source: string): string[] {
+	if (parseSource(source).frontmatter.model === "haiku") return [ATLAS_MECHANIC_ROLE, SMOL_FALLBACK_ROLE];
+	if (["verifier", "completeness-critic", "rls-privilege-audit"].includes(name)) {
+		return [roleFor(name), ATLAS_DEFAULT_FALLBACK_ROLE, SMOL_FALLBACK_ROLE];
+	}
 	return [roleFor(name), SMOL_FALLBACK_ROLE];
 }
 
@@ -54,9 +56,9 @@ function expectAgentMatches(name: string, source: string, generatedContent: stri
 	const model = fm.model as string[];
 	expect(model[0]).toBe(roleFor(name));
 	expect(model).toEqual(modelPatternsFor(name));
-	expect(model).toEqual(expectedModelChain(name));
+	expect(model).toEqual(expectedModelChain(name, source));
 	expect(fm.spawns).toBe("none");
-	expect(generatedContent.endsWith(body) || generatedContent.endsWith(body + "\n")).toBe(true);
+	expect(generatedContent.endsWith(ompBody(body)) || generatedContent.endsWith(ompBody(body) + "\n")).toBe(true);
 }
 
 test("every Claude agent has an omp counterpart with the mapped thinkingLevel, role, and body", () => {
@@ -126,5 +128,48 @@ test("runner is registered on the mechanical tier: off thinking, @atlas-mechanic
 	const fm = frontmatterOf(generatedAgents().runner);
 	expect(fm.thinkingLevel).toBe("off");
 	expect(fm.model).toEqual(["@atlas-mechanic", "@smol"]);
-	expect(readFileSync(path.join(outDir, "runner.md"), "utf8")).toContain("thinkingLevel: off");
+	expect(readFileSync(path.join(outDir, "runner.md"), "utf8")).toContain('thinkingLevel: "off"');
+});
+
+test("omp worker bodies carry no Claude-only tool vocabulary and instruct xd:// devices with real device names", () => {
+	for (const [name, content] of Object.entries(generatedAgents())) {
+		expect(content, name).not.toContain("ToolSearch");
+		expect(content, name).not.toContain("SendMessage");
+		expect(content, name).not.toMatch(/(?<!xd:\/\/)\bmcp__/);
+		expect(content, name).toContain("xd://");
+	}
+	const explorer = generatedAgents().explorer;
+	for (const device of [
+		"xd://mcp__lean_ctx_ctx_compose",
+		"xd://mcp__serena_find_symbol",
+		"xd://mcp__context_mode_context_mode_ctx_batch_execute",
+		"xd://mcp__claude_mem_mcp_search_search",
+	]) {
+		expect(explorer).toContain(device);
+	}
+	expect(explorer).not.toContain("mcp__plugin_");
+});
+
+test("ompBody refuses a body that would still carry a Claude-only token", () => {
+	expect(() => ompBody("Call ToolSearch(\"x\") first.")).toThrow("ToolSearch");
+	expect(() => ompBody("Use mcp__serena__find_symbol.")).toThrow("mcp__");
+	expect(ompBody("Plain body.")).toBe("Plain body.");
+});
+
+test("read-only agents' omp definitions list no edit device; the writers still may", () => {
+	const generated = generatedAgents();
+	const editDevice = /xd:\/\/mcp__(serena_(replace_|insert_|rename_symbol|safe_delete)|lean_ctx_ctx_patch)/;
+	for (const [name, content] of Object.entries(generated)) {
+		if (["docs-curator", "implementer", "runner"].includes(name)) continue;
+		expect(content, name).not.toMatch(editDevice);
+	}
+});
+
+test("haiku-pinned agents run on the cheap mechanic role; implementer keeps the worker role at medium thinking", () => {
+	for (const name of ["docs-auditor", "naming-glossary-audit", "schema-inventory", "runner"]) {
+		expect(modelPatternsFor(name)).toEqual([ATLAS_MECHANIC_ROLE, SMOL_FALLBACK_ROLE]);
+	}
+	expect(modelPatternsFor("explorer")).toEqual(["@atlas-worker", SMOL_FALLBACK_ROLE]);
+	expect(ATLAS_THINKING_LEVELS.implementer).toBe("medium");
+	expect(roleFor("implementer")).toBe("@atlas-worker");
 });

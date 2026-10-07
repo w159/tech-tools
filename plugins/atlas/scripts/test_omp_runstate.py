@@ -2,6 +2,7 @@
 Claude hooks (session_boot, dispatch_tripwire) would, so completion_gate sees an
 omp session the same way it sees a Claude one."""
 
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import json
 import os
 import shutil

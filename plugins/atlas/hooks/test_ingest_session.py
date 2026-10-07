@@ -1,3 +1,13 @@
+import os as _iso_os
+import sys as _iso_sys
+
+_iso_sys.path.insert(
+    0,
+    _iso_os.path.join(
+        _iso_os.path.dirname(_iso_os.path.abspath(__file__)), "..", "scripts"
+    ),
+)
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import io
 import json
 import os
@@ -140,6 +150,97 @@ class IngestDisabledTest(_HookTestCase):
         env = dict(self._base_env, ATLAS_INGEST="OFF")
         self._run_main({"transcript_path": self.tpath}, env=env)
         self.assertIsNone(self._session_log_row())
+
+
+class TmpLeakGuardTest(_HookTestCase):
+    """A temp-dir transcript must not reach the default ~/.atlas DB (252 test
+    sessions polluted the real one); explicit isolation or opt-in still ingests."""
+
+    def _env(self, **extra):
+        home = os.path.join(self.tmp, "fakehome")
+        os.makedirs(home, exist_ok=True)
+        env = {
+            k: v
+            for k, v in self._base_env.items()
+            if k not in ("ATLAS_DB", "ATLAS_HOME", "ATLAS_ALLOW_TMP_INGEST")
+        }
+        env.update(HOME=home, **extra)
+        return env, os.path.join(home, ".atlas", "atlas.db")
+
+    def _run_clear(self, env):
+        payload = {"transcript_path": self.tpath, "session_id": "sess-ingest-test"}
+        with (
+            mock.patch.dict(os.environ, env, clear=True),
+            mock.patch("sys.stdin", new=io.StringIO(json.dumps(payload))),
+        ):
+            ingest_session.main()
+
+    def test_tmp_transcript_is_not_ingested_into_the_default_db(self):
+        env, default_db = self._env()
+        self._run_clear(env)
+        self.assertFalse(os.path.exists(os.path.dirname(default_db)))
+
+    def test_opt_in_and_explicit_isolation_still_ingest(self):
+        env, default_db = self._env(ATLAS_ALLOW_TMP_INGEST="1")
+        self._run_clear(env)
+        self.assertTrue(os.path.exists(default_db))
+        env, _ = self._env(ATLAS_HOME=os.path.join(self.tmp, "ah"))
+        self._run_clear(env)
+        self.assertTrue(os.path.exists(os.path.join(self.tmp, "ah", "atlas.db")))
+
+    def test_is_tmp_path(self):
+        self.assertTrue(atlas_db.is_tmp_path(self.tpath))
+        self.assertFalse(atlas_db.is_tmp_path("/home/u/.claude/projects/x/s.jsonl"))
+
+
+class FacetFreshnessTest(_HookTestCase):
+    """The facet row follows session_logs after EVERY ingest, not just Stop."""
+
+    def _counters(self):
+        c = atlas_db.connect(self.dbpath)
+        try:
+            logs = c.execute(
+                "SELECT message_count, tool_call_count, user_prompt_count "
+                "FROM session_logs WHERE session_id='sess-ingest-test'"
+            ).fetchone()
+            facet = c.execute(
+                "SELECT message_count, tool_call_count, user_prompt_count "
+                "FROM facets WHERE session_id='sess-ingest-test'"
+            ).fetchone()
+            return logs, facet
+        finally:
+            c.close()
+
+    def test_facet_counters_equal_session_logs_after_each_ingest(self):
+        payload = {"transcript_path": self.tpath, "session_id": "sess-ingest-test"}
+        self._run_main(payload)
+        logs, facet = self._counters()
+        self.assertEqual(logs, facet)
+        self.assertEqual(logs[0], 2)
+        self._write_transcript(
+            FIXTURE_LINES
+            + [
+                _msg("u2", "user", [{"type": "text", "text": "Again."}]),
+                _msg("a2", "assistant", [{"type": "text", "text": "Done again."}]),
+            ]
+        )
+        self._run_main(
+            payload
+        )  # a SubagentStop/SessionEnd-style ingest: no chronicle hook
+        logs, facet = self._counters()
+        self.assertEqual(logs[0], 4)
+        self.assertEqual(logs, facet)
+
+    def test_facet_refresh_failure_never_breaks_ingest(self):
+        import chronicle_facet
+
+        with mock.patch.object(
+            chronicle_facet, "refresh", side_effect=RuntimeError("x")
+        ):
+            self._run_main(
+                {"transcript_path": self.tpath, "session_id": "sess-ingest-test"}
+            )
+        self.assertEqual(self._message_count(), 2)
 
 
 class NoTranscriptTest(_HookTestCase):

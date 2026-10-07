@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests for atlas_memory.py — persistent memory store."""
 
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import io
 import os
 import runpy
@@ -18,13 +19,14 @@ import atlas_memory
 class TestAtlasMemory(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
-        os.environ["ATLAS_HOME"] = self.tmpdir
+        patcher = mock.patch.dict(os.environ, {"ATLAS_HOME": self.tmpdir})
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def tearDown(self):
         import shutil
 
         shutil.rmtree(self.tmpdir, ignore_errors=True)
-        del os.environ["ATLAS_HOME"]
 
     def test_add_and_read(self):
         result = atlas_memory.add("memory", "Test fact about the project")
@@ -456,7 +458,8 @@ class RecallFilterTest(unittest.TestCase):
         """Near-dup collapse is what actually shrank the block: the copies differ
         only in the (project) qualifier."""
         entries = [
-            "User correction (%s): the rule the previous version failed to enforce" % scope
+            "User correction (%s): the rule the previous version failed to enforce"
+            % scope
             for scope in ("alpha", "beta", "gamma", "delta", "epsilon", "zeta")
         ]
         self.assertEqual(len(atlas_memory.filter_for_recall(entries)), 1)

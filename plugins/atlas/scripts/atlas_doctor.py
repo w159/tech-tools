@@ -28,8 +28,8 @@ import atlas_db
 PLUGINS_DIR = os.environ.get("ATLAS_PLUGINS_DIR") or os.path.expanduser(
     "~/.claude/plugins"
 )
-STATE_PATH = os.environ.get("ATLAS_DOCTOR_STATE") or os.path.expanduser(
-    "~/.atlas/doctor-state.json"
+STATE_PATH = os.environ.get("ATLAS_DOCTOR_STATE") or os.path.join(
+    atlas_db.atlas_home(), "doctor-state.json"
 )
 
 # --- maintenance caps (keep the plugin's own footprint bounded across runs) ---
@@ -394,7 +394,274 @@ def check_context_tooling(root_path=None):
     )
 
 
+def _omp_plugins_dir():
+    """omp's plugin registry. Overridable; otherwise the sibling of the claude
+    plugins dir's home (~/.claude/plugins -> ~/.omp/plugins) so a test that
+    relocates PLUGINS_DIR relocates this too."""
+    return os.environ.get("ATLAS_OMP_PLUGINS_DIR") or os.path.join(
+        os.path.dirname(os.path.dirname(PLUGINS_DIR)), ".omp", "plugins"
+    )
+
+
+def check_omp_bridge(plugin_name, version):
+    """(ok, detail): can omp actually reach this plugin's bridge, and is it the
+    same version? n/a (ok) when omp does not carry the plugin at all."""
+    reg_path = os.path.join(_omp_plugins_dir(), "installed_plugins.json")
+    if not os.path.exists(reg_path):
+        return True, "omp not installed (n/a)"
+    try:
+        _, reg = find_registration(_load_json(reg_path), plugin_name)
+    except Exception as e:
+        return False, f"cannot read {reg_path}: {e}"
+    if not reg:
+        return True, f"{plugin_name} not registered with omp (n/a)"
+    ip = reg.get("installPath", "")
+    missing = [
+        rel
+        for rel in ("omp/index.ts", "omp/hook-bridge.ts", "hooks/hooks.json")
+        if not os.path.exists(os.path.join(ip, rel))
+    ]
+    if missing:
+        return False, f"omp install {ip or '?'} unreachable: missing {missing}"
+    if version and reg.get("version") != version:
+        return False, (
+            f"omp runs {reg.get('version')} but this plugin is {version}: "
+            "omp enforcement is stale"
+        )
+    return True, f"omp bridge {reg.get('version')} at {ip}"
+
+
+CMUX_DEFAULT_BIN = "/Applications/cmux.app/Contents/Resources/bin/cmux"
+CMUX_INSTALL = (
+    "git clone https://github.com/jasonraz/cmux-browser-mcp && cd cmux-browser-mcp "
+    "&& ./install.sh; then register it: claude mcp add cmux-browser --scope user -- "
+    "node ~/.claude/mcp-servers/cmux-browser/server.mjs (omp: same command under "
+    "mcpServers in ~/.omp/agent/mcp.json). Atlas never installs it."
+)
+
+
+def _cmux_bin():
+    """The cmux CLI (CMUX_CLI_PATH like the MCP server, then PATH, then the app
+    bundle), or None when this machine has no cmux."""
+    for cand in (
+        os.environ.get("CMUX_CLI_PATH"),
+        shutil.which("cmux"),
+        CMUX_DEFAULT_BIN,
+    ):
+        if cand and os.access(cand, os.X_OK):
+            return cand
+    return None
+
+
+def check_cmux_socket():
+    """(ok, detail): cmux's control socket answers `cmux capabilities`
+    (read-only, 3 s). n/a (ok) off macOS or without cmux: it is optional."""
+    if sys.platform != "darwin":
+        return True, "cmux browser is macOS-only (n/a)"
+    binary = _cmux_bin()
+    if not binary:
+        return True, "cmux not installed (n/a)"
+    try:
+        r = subprocess.run(
+            [binary, "capabilities"], capture_output=True, text=True, timeout=3
+        )
+    except (OSError, subprocess.SubprocessError) as e:
+        return False, f"{binary} capabilities failed: {type(e).__name__}"
+    if r.returncode != 0:
+        return (
+            False,
+            f"cmux socket not reachable (exit {r.returncode}); is cmux running?",
+        )
+    return True, f"cmux socket reachable via {binary}"
+
+
+def check_cmux_browser_mcp(home=None):
+    """(ok, detail): is the cmux-browser MCP server registered in
+    ~/.omp/agent/mcp.json or ~/.claude.json? Read-only; reports only the file
+    path, never the entry (its env/args may hold paths or tokens). n/a (ok)
+    when cmux itself is absent."""
+    if sys.platform != "darwin" or not _cmux_bin():
+        return True, "cmux browser not applicable (n/a)"
+    home = home or os.path.expanduser("~")
+    for path in (
+        os.path.join(home, ".omp", "agent", "mcp.json"),
+        os.path.join(home, ".claude.json"),
+    ):
+        try:
+            doc = _load_json(path)
+        except Exception:
+            continue
+        if not isinstance(doc, dict):
+            continue
+        scopes = [doc] + [
+            p for p in (doc.get("projects") or {}).values() if isinstance(p, dict)
+        ]
+        if any(
+            isinstance(s.get("mcpServers"), dict) and "cmux-browser" in s["mcpServers"]
+            for s in scopes
+        ):
+            return True, f"cmux-browser MCP registered in {path}"
+    return False, f"cmux-browser MCP not registered. Install: {CMUX_INSTALL}"
+
+
+def _ro_conn(path):
+    """Read-only sqlite connection that works on a read-only copy too (mode=ro
+    needs the -shm; immutable=1 does not), or None."""
+    import sqlite3
+    from urllib.parse import quote
+
+    for q in ("mode=ro", "immutable=1"):
+        try:
+            c = sqlite3.connect(f"file:{quote(path)}?{q}", uri=True, timeout=1)
+            c.execute("SELECT 1 FROM sqlite_master LIMIT 1")
+            return c
+        except sqlite3.Error:
+            continue
+    return None
+
+
+FAULT_FAIL_24H = 5  # hook faults in 24h at/above which the install is unhealthy
+INGEST_STALE_DAYS = 7
+RATE_WINDOW_DAYS = 7
+INERT_MIN_NATIVE = 20  # executed native grep/glob in armed cwds with 0 denies
+_GREP_GLOB = ("Grep", "Glob", "grep", "glob")
+_DISPATCH_TOOLS = ("Task", "task", "Agent")
+
+
+def _armed_cwd(cwd):
+    """atlas_scope.gates_armed(cwd) against THIS doctor's DB, not ~/.atlas."""
+    import atlas_scope
+
+    old = os.environ.get("ATLAS_DB")
+    os.environ["ATLAS_DB"] = atlas_db.db_path()
+    try:
+        return atlas_scope.gates_armed(cwd)
+    finally:
+        if old is None:
+            os.environ.pop("ATLAS_DB", None)
+        else:
+            os.environ["ATLAS_DB"] = old
+
+
+def behaviour_checks(add, plugin_name, version, now=None):
+    """Runtime checks: is enforcement actually live, not merely installed?
+    Each is read-only and bounded (one DB open, two indexed-ish scans)."""
+    import atlas_faults
+
+    now = now or time.time()
+    # B1: swallowed hook crashes (fail-open hooks leave a trace here)
+    faults = atlas_faults.load(now - 86400)
+    n = len(faults)
+    last = faults[-1] if faults else {}
+    add(
+        "hook-faults",
+        n == 0,
+        f"{n} hook fault(s) in 24h"
+        + (f"; last {last.get('hook')}: {last.get('error', '')[:80]}" if n else ""),
+        severity="fail" if n >= FAULT_FAIL_24H else "warn",
+    )
+    # B2: env kill switches / scope make the gates inert
+    off = [
+        f"{k}=off"
+        for k in ("ATLAS_GATES", "ATLAS_MANDATES")
+        if os.environ.get(k, "").strip().lower() == "off"
+    ]
+    if off:
+        add("gates-armed", False, "enforcement disabled by env: " + ", ".join(off))
+    else:
+        armed = _armed_cwd(os.getcwd())
+        add(
+            "gates-armed",
+            armed,
+            "gates armed in " + os.getcwd()
+            if armed
+            else f"gates not armed in {os.getcwd()} (scratch dir or no project marker)",
+            severity="warn",
+        )
+    # B3: omp bridge
+    ok, detail = check_omp_bridge(plugin_name, version)
+    add("omp-bridge", ok, detail)
+    # B4/B5/B6: the DB the hooks write to
+    path = atlas_db.db_path()
+    if not os.path.isfile(path):
+        add("db-writable", True, f"no atlas.db yet at {path}")
+        return
+    writable = os.access(path, os.W_OK) and os.access(os.path.dirname(path), os.W_OK)
+    add(
+        "db-writable",
+        writable,
+        f"{path} writable" if writable else f"{path} (or its dir) is not writable",
+    )
+    conn = _ro_conn(path)
+    if conn is None:
+        add("db-recent-writes", False, f"cannot open {path} read-only")
+        return
+    try:
+        last_ingest = conn.execute(
+            "SELECT MAX(last_ingest_at) FROM session_logs"
+        ).fetchone()[0]
+        age = (now - last_ingest) / 86400 if last_ingest else None
+        add(
+            "db-recent-writes",
+            age is not None and age <= INGEST_STALE_DAYS,
+            "no ingest ever recorded"
+            if age is None
+            else f"last ingest {age:.1f}d ago (limit {INGEST_STALE_DAYS}d)",
+            severity="warn",
+        )
+        since = now - RATE_WINDOW_DAYS * 86400
+        rows = conn.execute(
+            "SELECT s.cwd, SUM(COALESCE(t.denied,0)=0), SUM(COALESCE(t.denied,0)=1) "
+            "FROM tool_calls t JOIN session_logs s ON s.session_id=t.session_id "
+            "WHERE t.ts>? AND COALESCE(t.is_sidechain,0)=0 AND t.tool_name IN (?,?,?,?) "
+            "GROUP BY s.cwd",
+            (since, *_GREP_GLOB),
+        ).fetchall()
+        ran = denied = 0
+        for cwd, r, d in rows:
+            if cwd and _armed_cwd(cwd):
+                ran += r or 0
+                denied += d or 0
+        disp = conn.execute(
+            "SELECT COUNT(*), SUM(COALESCE(denied,0)) FROM tool_calls "
+            "WHERE ts>? AND tool_name IN (?,?,?)",
+            (since, *_DISPATCH_TOOLS),
+        ).fetchone()
+    except Exception as e:  # old/partial schema: report, never crash the doctor
+        add("enforcement-rates", False, f"cannot read deny rates: {e}", severity="warn")
+        return
+    finally:
+        conn.close()
+    total = ran + denied
+    inert = ran >= INERT_MIN_NATIVE and denied == 0
+    add(
+        "enforcement-rates",
+        not inert,
+        f"{RATE_WINDOW_DAYS}d armed projects: native grep/glob {ran} ran, "
+        f"{denied} denied ({(denied / total if total else 0):.0%})"
+        + (" -- gates are INERT" if inert else "")
+        + f"; dispatch calls {disp[0]}, denied {disp[1] or 0}",
+    )
+
+
 def run_checks(plugin_name="atlas"):
+    """Install checks plus behavioural (runtime) checks."""
+    results, ctx = install_checks(plugin_name)
+    try:
+        version = self_manifest()[1].get("version")
+    except Exception:  # self-manifest failure is already an install-check FAIL
+        version = None
+    behaviour_checks(
+        lambda c, ok, d, severity="fail": results.append(
+            {"check": c, "ok": ok, "detail": d, "severity": severity}
+        ),
+        plugin_name,
+        version,
+    )
+    return results, ctx
+
+
+def install_checks(plugin_name="atlas"):
     results = []
     ctx = {}
 
@@ -469,8 +736,18 @@ def run_checks(plugin_name="atlas"):
     else:
         add("version-sync", False, "marketplace copy has no readable plugin.json")
 
-    # C4: rollback tripwire - never accept a version below the high-water mark
-    state = _load_json(STATE_PATH) if os.path.exists(STATE_PATH) else {}
+    # C4: rollback tripwire - never accept a version below the high-water mark.
+    # Read-only: the new floor is handed to main() via ctx and persisted only
+    # by --fix / --hook, so a plain check never mutates state.
+    try:
+        state = _load_json(STATE_PATH) if os.path.exists(STATE_PATH) else {}
+        if not isinstance(state, dict):
+            raise ValueError("doctor state is not a JSON object")
+    except Exception as e:  # corrupt state must not crash the check or the hook
+        import atlas_faults
+
+        atlas_faults.record("atlas_doctor", e)
+        state = {}
     floor = state.get(key, "0")
     if ver_tuple(reg["version"]) < ver_tuple(floor):
         add(
@@ -482,7 +759,7 @@ def run_checks(plugin_name="atlas"):
     else:
         add("rollback", True, f"{reg['version']} >= floor {floor}")
         state[key] = max(reg["version"], floor, key=ver_tuple)
-        _save_json(STATE_PATH, state)
+        ctx["new_state"] = state
 
     # C5: install path is intact and not marked for garbage collection
     ip = reg.get("installPath", "")
@@ -564,6 +841,12 @@ def run_checks(plugin_name="atlas"):
     ts_ok, ts_detail = check_typesafe_scoring()
     add("typesafe-scoring", ts_ok, ts_detail, severity="warn")
 
+    # C13: cmux browser toolkit is optional (macOS + cmux); WARN-severity.
+    cs_ok, cs_detail = check_cmux_socket()
+    add("cmux-socket", cs_ok, cs_detail, severity="warn")
+    cb_ok, cb_detail = check_cmux_browser_mcp()
+    add("cmux-browser", cb_ok, cb_detail, severity="warn")
+
     return results, ctx
 
 
@@ -605,9 +888,7 @@ def purge_telemetry(db_path=None, row_cap=TELEMETRY_ROW_CAP):
     against a fresh or partially-migrated schema."""
     import sqlite3
 
-    path = (
-        db_path or os.environ.get("ATLAS_DB") or os.path.expanduser("~/.atlas/atlas.db")
-    )
+    path = db_path or atlas_db.db_path()
     if not os.path.exists(path):
         return {}
     # metrics has no id column; its PK run_id is the ordering key.
@@ -984,12 +1265,15 @@ def mine_inline_dispatch_ratio(conn, root, threshold=5.0, limit=50):
         "ORDER BY r.id DESC LIMIT ?",
         (limit,),
     ).fetchall()
-    ratios = [io / d for io, d in rows if d]
+    # NULL inline_ops (rows written before the column was derived) are not zero
+    ratios = [io / d for io, d in rows if d and io is not None]
     if not ratios:
         return []
     avg_ratio = sum(ratios) / len(ratios)
     if avg_ratio <= threshold:
-        return []
+        out = MinerResult()
+        out.values["inline_dispatch_ratio"] = avg_ratio
+        return out
     return [
         _finding(
             dimension="orchestration discipline",
@@ -1026,7 +1310,9 @@ def mine_low_verifier_coverage(conn, root, threshold=0.7, limit=50):
         return []
     avg = sum(vals) / len(vals)
     if avg >= threshold:
-        return []
+        out = MinerResult()
+        out.values["verifier_coverage_low"] = avg
+        return out
     return [
         _finding(
             dimension="verification discipline",
@@ -1049,7 +1335,30 @@ def mine_low_verifier_coverage(conn, root, threshold=0.7, limit=50):
     ]
 
 
-def mine_tool_error_rate(conn, root, threshold=0.2, min_calls=5):
+_UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+
+
+class _FindingList(list):
+    """A miner's findings plus `evaluated`: keys it judged with enough data.
+    mine() auto-resolves open findings whose key was evaluated but no longer fires."""
+
+    def __init__(self, *a):
+        super().__init__(*a)
+        self.evaluated = set()
+        self.values = {}
+        # True: the miner judged its whole population, so any untriaged
+        # finding of this miner it no longer emits (renamed/dropped keys) is stale.
+        self.complete = False
+
+
+def _norm_tool_target(target):
+    """'lean_ctx.ctx_patch' -> 'lean-ctx.ctx_patch': the server part of an MCP
+    target is spelled both ways depending on harness; they are one tool."""
+    server, dot, tool = (target or "?").partition(".")
+    return server.lower().replace("_", "-") + dot + tool
+
+
+def mine_tool_error_rate(conn, root, threshold=0.2, min_calls=5, window_days=None):
     """Behavioral check: per-tool error rate from the tool_calls mirror. One
     finding per tool crossing the threshold, so each can be triaged (and
     remeasured) independently.
@@ -1066,25 +1375,48 @@ def mine_tool_error_rate(conn, root, threshold=0.2, min_calls=5):
         "lean-ctx.ctx_patch": 0.55,
         "WebFetch": 0.60,
     }
-    out = []
-    for r in atlas_db.tool_usage(conn):
+    out = _FindingList()
+    out.complete = True
+    # Collapse spelling variants (lean_ctx vs lean-ctx) and drop connector
+    # tools named by a bare UUID: the id carries no readable name to act on.
+    agg = {}
+    # Recent window, test sessions excluded: an all-time rate barely moves when a
+    # tool is fixed, so improvement was unmeasurable (and tmp sessions skewed it).
+    since = time.time() - (window_days or RECENT_WINDOW_DAYS) * 86400
+    for r in atlas_db.tool_usage(conn, since=since, exclude_tmp=True):
+        target = _norm_tool_target(r.get("target"))
+        if r.get("kind") == "mcp" and _UUID_RE.match(target.split(".", 1)[0]):
+            continue
+        a = agg.setdefault(
+            (r.get("kind"), target),
+            {"calls": 0, "denied": 0, "errors": 0, "raw": []},
+        )
+        a["calls"] += r.get("calls") or 0
+        a["denied"] += r.get("denied") or 0
+        a["errors"] += r.get("real_errors") or 0
+        a["raw"].append(r.get("target"))
+    for (kind, target), a in agg.items():
         # Gate denials (denied=1) are atlas's own redirects (e.g. the lean-ctx
         # Grep/Glob block), not tool failures: the call never ran. They are
         # removed from BOTH the error numerator and the call population, so the
-        # gate's own volume can neither inflate the rate (127/128 Grep "errors"
-        # were the redirect) nor dilute a genuinely failing tool's rate. A tool
-        # that was only ever blocked has no executed calls and is skipped.
-        denied = r.get("denied") or 0
-        calls = (r.get("calls") or 0) - denied
+        # gate's own volume can neither inflate the rate nor dilute a genuinely
+        # failing tool's rate. A tool that was only ever blocked is skipped.
+        denied, errors = a["denied"], a["errors"]
+        calls = a["calls"] - denied
         if calls < min_calls:
             continue
-        errors = r.get("real_errors") or 0
         rate = errors / calls
-        tool_threshold = overrides.get(r.get("target") or "", threshold)
+        out.values[f"{kind}:{target}"] = rate
+        tool_threshold = overrides.get(target, threshold)
+        # Evaluated with enough data: mine() resolves an open finding for this
+        # key when the rate is back under threshold.
+        out.evaluated.add(f"{kind}:{target}")
         if rate <= tool_threshold:
             continue
-        target = r.get("target") or "?"
-        snippets = atlas_db.top_error_snippets(conn, r.get("kind"), r.get("target"))
+        snippets = []
+        for raw in a["raw"]:
+            snippets += atlas_db.top_error_snippets(conn, kind, raw, since=since)
+        snippets = sorted(snippets, key=lambda s: -s["count"])[:3]
         detail = (
             f"{errors}/{calls} executed calls to {target} errored "
             f"({rate:.0%}, threshold {tool_threshold:.0%}; {denied} gate-denied "
@@ -1098,7 +1430,7 @@ def mine_tool_error_rate(conn, root, threshold=0.2, min_calls=5):
             _finding(
                 dimension="tool reliability",
                 severity="MED",
-                title=f"high error rate on {r.get('kind')}:{target}",
+                title=f"high error rate on {kind}:{target}",
                 detail=detail,
                 proposed_action=(
                     f"Investigate recurring failures calling {target}; check "
@@ -1106,7 +1438,7 @@ def mine_tool_error_rate(conn, root, threshold=0.2, min_calls=5):
                     "or a wrapper that should retry/back off."
                 ),
                 target_path=target,
-                key=f"{r.get('kind')}:{target}",
+                key=f"{kind}:{target}",
                 metric_value=rate,
                 calls=calls,
                 errors=errors,
@@ -1137,7 +1469,9 @@ def mine_low_cache_hit(conn, root):
         return []
     ratio = health["cache_hit_ratio"]
     if ratio >= CACHE_HIT_MIN:
-        return []
+        out = MinerResult()
+        out.values["cache_hit_ratio_low"] = ratio
+        return out
     return [
         _finding(
             dimension="context efficiency",
@@ -1178,11 +1512,15 @@ def mine_recurring_friction(conn, root, min_count=3):
     rows = conn.execute(
         "SELECT category, COUNT(*) AS n FROM friction_events "
         "WHERE ts > strftime('%s','now', ?) "
-        "GROUP BY category HAVING n >= ? ORDER BY n DESC",
-        ("-%d days" % RECENT_WINDOW_DAYS, min_count),
+        "GROUP BY category ORDER BY n DESC",
+        ("-%d days" % RECENT_WINDOW_DAYS,),
     ).fetchall()
-    out = []
+    out = MinerResult()
+    out.absent_is_zero = True  # a category with no rows in the window IS 0
+    out.values = dict(rows)
     for category, n in rows:
+        if n < min_count:
+            continue
         out.append(
             _finding(
                 dimension="behavioral friction",
@@ -1744,6 +2082,9 @@ def mine_turn_quality(conn, root, window_days=None, min_turns=20):
             out.evaluated.add(f"{j}:{proj}" if proj else j)
             hit_rows = [r for r in sub if hits[(r["sid"], r["uuid"])]]
             rate = len(hit_rows) / n
+            out.values[f"{j}:{proj}" if proj else j] = rate
+            if not spec.get("validated", True):
+                continue  # scored and stored, but shown not to measure what it names
             threshold = TURN_QUALITY_THRESHOLDS.get(j, TURN_QUALITY_DEFAULT_THRESHOLD)
             if rate <= threshold:
                 continue
@@ -1806,6 +2147,7 @@ def mine_turn_quality(conn, root, window_days=None, min_turns=20):
         out.evaluated.add("metric:header_present")
         missing = [r for r in hdr if not r["value"]]
         miss_rate = len(missing) / len(hdr)
+        out.values["metric:header_present"] = miss_rate
         if 1 - miss_rate < HEADER_RATE_MIN:
             out.append(
                 _finding(
@@ -1834,6 +2176,7 @@ def mine_turn_quality(conn, root, window_days=None, min_turns=20):
         out.evaluated.add("metric:banned_punct")
         bad = [r for r in bp if (r["value"] or 0) > 0]
         rate = len(bad) / len(bp)
+        out.values["metric:banned_punct"] = rate
         if rate > BANNED_PUNCT_RATE_MAX:
             out.append(
                 _finding(
@@ -1872,6 +2215,8 @@ class MinerResult(list):
     def __init__(self, *a):
         super().__init__(*a)
         self.evaluated = set()
+        self.values = {}  # key -> current metric even when below threshold
+        self.absent_is_zero = False  # a key with no value means a true count of 0
 
 
 MINERS = {
@@ -1899,7 +2244,9 @@ def mine(conn, root=None):
         try:
             found = fn(conn, root)
         except Exception as e:
-            found = []
+            import atlas_faults
+
+            atlas_faults.record(f"miner:{name}", e)
             counts[name] = f"error: {e}"
             continue
         emitted = set()
@@ -1931,10 +2278,22 @@ def mine(conn, root=None):
         # verified verdict is never touched (status must be 'open').
         evaluated = getattr(found, "evaluated", None) or set()
         stale = [f"{name}:{k}" for k in evaluated if f"{name}:{k}" not in emitted]
-        for fp in stale:
+        if getattr(found, "complete", False):
+            stale += [
+                r[0]
+                for r in conn.execute(
+                    "SELECT fingerprint FROM findings WHERE fingerprint LIKE ?",
+                    (f"{name}:%",),
+                )
+                if r[0] not in emitted
+            ]
+        # 'accepted' counts as untriaged-by-fix too, but never while a fix is live.
+        for fp in dict.fromkeys(stale):
             conn.execute(
                 "UPDATE findings SET status='resolved', decided_at=? "
-                "WHERE fingerprint=? AND status='open'",
+                "WHERE fingerprint=? AND status IN ('open','accepted') "
+                "AND COALESCE(fix_state,'none') NOT IN "
+                "('queued','running','verifying','ready')",
                 (time.time(), fp),
             )
         conn.commit()
@@ -1942,44 +2301,71 @@ def mine(conn, root=None):
     return counts
 
 
-def measure_finding_metric(conn, finding, root=None):
-    """Recompute a finding's headline metric_value by re-running the miner
-    that produced it (recorded in evidence_json) and matching on its key.
-    Returns: the fresh value if the miner still reproduces this instance;
-    0.0 if the miner ran clean but no longer reproduces it (resolved); None
-    if the miner is unknown or errors (caller should skip, not guess)."""
+NOT_REPRODUCED = "not_reproduced"
+
+
+def _measure(conn, finding, root=None):
+    """(state, value). state: 'measured' (value is the miner's current number,
+    whether or not it still fires), 'not_reproduced' (the miner ran clean but
+    exposes no current value for this key -- below its min-data/threshold gate),
+    or 'unknown' (miner unknown/errored: skip, never guess)."""
     try:
         evidence = json.loads(finding.get("evidence_json") or "{}")
     except (TypeError, ValueError):
-        return None
-    miner_name = evidence.get("miner")
-    fn = MINERS.get(miner_name)
+        return "unknown", None
+    fn = MINERS.get(evidence.get("miner"))
     fingerprint = finding.get("fingerprint") or ""
     if not fn or ":" not in fingerprint:
-        return None
+        return "unknown", None
     key = fingerprint.split(":", 1)[1]
-    root = root or self_manifest()[0]
     try:
-        found = fn(conn, root)
-    except Exception:
-        return None
+        found = fn(conn, root or self_manifest()[0])
+    except Exception as e:
+        import atlas_faults
+
+        atlas_faults.record(f"miner:{evidence.get('miner')}", e)
+        return "unknown", None
     for f in found:
         if f["key"] == key:
-            return f["metric_value"]
-    return 0.0
+            return "measured", f["metric_value"]
+    value = (getattr(found, "values", None) or {}).get(key)
+    if value is None and getattr(found, "absent_is_zero", False):
+        value = 0.0
+    if value is not None:
+        return "measured", value
+    return NOT_REPRODUCED, None
 
 
-# Metrics whose improvement direction is upward. Everything else a miner
-# emits is a problem count/rate where lower is better.
-HIGHER_IS_BETTER_METRICS = {"verifier_coverage"}
+def measure_finding_metric(conn, finding, root=None):
+    """Current headline metric of a finding, or None when it cannot be measured
+    now (unknown/errored miner, or the miner no longer reports the key). A
+    non-reproduction is NEVER scored 0.0: that read as 'improved'."""
+    state, value = _measure(conn, finding, root)
+    return value if state == "measured" else None
+
+
+# Metrics / miner keys whose improvement direction is upward. Everything else a
+# miner emits is a problem count/rate where lower is better.
+HIGHER_IS_BETTER_METRICS = {"verifier_coverage", "cache_hit_ratio"}
+HIGHER_IS_BETTER_KEYS = {"verifier_coverage_low", "cache_hit_ratio_low"}
+
+
+def remeasure_verdict(baseline, value, higher=False):
+    """improved|no_change|regressed|no_baseline. Changes inside a noise band
+    (max 0.01, 2% of baseline) are no_change, not float-equality artifacts."""
+    if baseline is None:
+        return "no_baseline"
+    if abs(value - baseline) <= max(0.01, 0.02 * abs(baseline)):
+        return "no_change"
+    return "improved" if (value > baseline) == bool(higher) else "regressed"
 
 
 def remeasure(conn, root=None):
     """For every improvement due for remeasurement (measure_after_runs runs
     have elapsed since baseline), recompute its metric and record
-    improved|no_change|regressed. Direction is per metric: most miners emit
-    problem counts/rates (lower is better), while metrics listed in
-    HIGHER_IS_BETTER_METRICS improve by increasing."""
+    improved|no_change|regressed|not_reproduced|no_baseline. A finding the
+    miner can no longer measure is 'not_reproduced' with a NULL value (never a
+    fabricated 0.0). Direction: HIGHER_IS_BETTER_* improve by increasing."""
     updated = []
     for imp in atlas_db.pending_remeasures(conn):
         runs_since = conn.execute(
@@ -1992,19 +2378,17 @@ def remeasure(conn, root=None):
         )
         if finding is None:
             continue  # nothing to remeasure against
-        value = measure_finding_metric(conn, finding, root=root)
-        if value is None:
-            continue  # unknown/errored miner -- leave pending rather than guess
-        baseline = imp.get("baseline_value")
-        higher = (imp.get("metric") or "") in HIGHER_IS_BETTER_METRICS
-        if baseline is None:
-            verdict = "no_change"
-        elif value == baseline:
-            verdict = "no_change"
-        elif (value > baseline) if higher else (value < baseline):
-            verdict = "improved"
+        state, value = _measure(conn, finding, root=root)
+        if state == "unknown":
+            continue  # leave pending rather than guess
+        if state == NOT_REPRODUCED:
+            verdict = NOT_REPRODUCED
         else:
-            verdict = "regressed"
+            key = (finding.get("fingerprint") or "").split(":", 1)[-1]
+            higher = (imp.get("metric") or "") in HIGHER_IS_BETTER_METRICS or (
+                key in HIGHER_IS_BETTER_KEYS
+            )
+            verdict = remeasure_verdict(imp.get("baseline_value"), value, higher)
         remeasured_at = time.time()
         atlas_db.set_improvement_remeasure(
             conn, imp["id"], value, verdict, remeasured_at
@@ -2034,6 +2418,15 @@ def main(argv=None):
         type=int,
         default=None,
         help=f"row cap for --purge (default: {TELEMETRY_ROW_CAP})",
+    )
+    ap.add_argument(
+        "--purge-tmp-sessions",
+        action="store_true",
+        help="remove test/benchmark sessions whose transcript is under the OS "
+        "temp dir (dry run unless --apply)",
+    )
+    ap.add_argument(
+        "--apply", action="store_true", help="make --purge-tmp-sessions delete"
     )
     ap.add_argument("--plugin", default="atlas")
 
@@ -2180,7 +2573,11 @@ def main(argv=None):
             return 2
         baseline_value = measure_finding_metric(conn, finding, self_manifest()[0])
         if baseline_value is None:
-            baseline_value = 0.0
+            print(
+                f"finding {args.baseline}: metric not reproducible now; no baseline recorded"
+            )
+            conn.close()
+            return 2
         imp_id = atlas_db.record_improvement(
             conn,
             args.run_id,
@@ -2227,6 +2624,15 @@ def main(argv=None):
         print(json.dumps(rows, indent=2))
         return 0
 
+    if args.purge_tmp_sessions:
+        conn = atlas_db.connect()
+        atlas_db.init(conn)
+        counts = atlas_db.purge_tmp_sessions(conn, apply=args.apply)
+        conn.close()
+        verb = "DELETED" if args.apply else "WOULD DELETE (dry run; pass --apply)"
+        print(f"{verb}: {json.dumps(counts)}")
+        return 0
+
     if args.purge:
         # M21/M22: trim telemetry oldest-first to the cap and record the run.
         summary = purge_telemetry(row_cap=args.purge_cap or TELEMETRY_ROW_CAP)
@@ -2237,7 +2643,15 @@ def main(argv=None):
             )
         return 0
 
-    results, ctx = run_checks(args.plugin)
+    try:
+        results, ctx = run_checks(args.plugin)
+    except Exception as e:
+        if not args.hook:
+            raise
+        import atlas_faults
+
+        atlas_faults.record("atlas_doctor", e)
+        return 0
     failed = [r for r in results if not r["ok"] and r.get("severity") != "warn"]
 
     if args.fix and failed:
@@ -2245,6 +2659,14 @@ def main(argv=None):
             print(f"FIX: {a}")
         results, ctx = run_checks(args.plugin)  # VERIFY
         failed = [r for r in results if not r["ok"] and r.get("severity") != "warn"]
+
+    if (args.hook or args.fix) and ctx.get("new_state"):
+        try:
+            _save_json(STATE_PATH, ctx["new_state"])
+        except OSError as e:
+            import atlas_faults
+
+            atlas_faults.record("atlas_doctor", e)
 
     if args.hook:
         record_hook_verdict(args.plugin, failed)
@@ -2270,6 +2692,11 @@ def main(argv=None):
 if __name__ == "__main__":
     try:
         sys.exit(main())
-    except Exception as e:  # never crash a hook chain; report and signal error
+    except Exception as e:
+        if "--hook" in sys.argv:  # never crash a hook chain; leave a trace
+            import atlas_faults
+
+            atlas_faults.record("atlas_doctor", e)
+            sys.exit(0)
         print(f"atlas_doctor internal error: {e}")
         sys.exit(2)

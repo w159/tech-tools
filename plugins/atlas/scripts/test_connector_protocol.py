@@ -11,6 +11,7 @@ initialize -> tools/list -> <vendor>_status. Checks what a Claude client sees:
 - status output never claims tools are listed when they are not.
 """
 
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import json
 import os
 import subprocess

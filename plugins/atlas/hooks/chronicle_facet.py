@@ -19,6 +19,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+import atlas_faults  # noqa: E402
 import atlas_hook_guard  # noqa: E402
 
 # Maps a `signals.signal_type` to a friction_events.category. Extend here as
@@ -164,11 +165,29 @@ def _sync_friction_events(conn, session_id):
         )
 
 
+def refresh(session_id, db_path=None):
+    """Recompute this session's facet row from the mirror tables and re-mirror
+    its friction events. Called from main() at Stop AND from ingest_session after
+    every ingest (SubagentStop/SessionEnd/PreCompact, omp shutdown), so the facet
+    counters never lag the session_logs counters. Raises on error; the callers
+    own the fail-open policy."""
+    import atlas_db
+
+    conn = atlas_db.connect(db_path or atlas_db.db_path())
+    try:
+        fields = _compute_facet_fields(conn, session_id)
+        atlas_db.upsert_facet(conn, session_id, **fields)
+        _sync_friction_events(conn, session_id)
+    finally:
+        conn.close()
+
+
 def main():
     if os.environ.get("ATLAS_CHRONICLE", "on").lower() == "off":
         sys.exit(0)
 
     payload = atlas_hook_guard.read_payload()
+    payload = payload if isinstance(payload, dict) else {}
     session_id = payload.get("session_id", "")
     if not session_id:
         sys.exit(0)
@@ -178,29 +197,17 @@ def main():
     if not atlas_hook_guard.should_run(payload, "chronicle_facet", kind="capture"):
         sys.exit(0)
 
-    db_path = os.environ.get("ATLAS_DB", os.path.expanduser("~/.atlas/atlas.db"))
-    if not os.path.exists(db_path):
-        sys.exit(0)  # no DB yet -- nothing to chronicle
-
     try:
         import atlas_db
 
-        conn = atlas_db.connect(db_path)
-    except Exception:
-        sys.exit(0)
-
-    try:
-        fields = _compute_facet_fields(conn, session_id)
-        atlas_db.upsert_facet(conn, session_id, **fields)
-        _sync_friction_events(conn, session_id)
+        db_path = atlas_db.db_path()
+        if not os.path.exists(db_path):
+            sys.exit(0)  # no DB yet -- nothing to chronicle
+        refresh(session_id, db_path)
     except Exception as exc:
+        atlas_faults.record("chronicle_facet", exc)
         try:
             sys.stderr.write(f"[atlas] chronicle_facet fail-open: {exc}\n")
-        except Exception:
-            pass
-    finally:
-        try:
-            conn.close()
         except Exception:
             pass
 
@@ -210,5 +217,6 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except Exception:
+    except Exception as exc:
+        atlas_faults.record("chronicle_facet", exc)
         sys.exit(0)

@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
+// Fixtures use temp dirs as cwd, where the scope check (omp/scope.ts) leaves gates unarmed.
+process.env.ATLAS_GATES = "always";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

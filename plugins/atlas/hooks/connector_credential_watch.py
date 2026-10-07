@@ -27,18 +27,35 @@ import re
 import sys
 from pathlib import Path
 
-STATE_RELPATH = Path.home() / ".atlas" / "connector_auth_warned.json"
 
-# 401/403 are unambiguous. A bare 400 is not (it is also a bad-argument error),
-# so it only counts when the body names the token or the credential.
-_STATUS = re.compile(r"\b(?:status(?:_code)?|http)\W{0,3}(401|403|400)\b", re.I)
+def _state_path() -> Path:
+    base = os.environ.get("ATLAS_HOME") or str(Path.home() / ".atlas")
+    return Path(base) / "connector_auth_warned.json"
+
+
+# A 401/403 only counts as a status (not as a number inside data): it must follow a
+# status-ish word or precede the standard reason phrase. A bare 400 is also a plain
+# bad-argument error, so it only counts when the body names the token or credential.
 _HARD_AUTH = re.compile(
-    r"\b(401|403)\b|\bunauthorized\b|\bforbidden\b|"
+    r"\b(?:status(?:_?code)?|http|code|error)\W{0,3}(?:401|403)\b|"
+    r"\b(?:401|403)\s+(?:unauthorized|forbidden)|\bunauthorized\b|\bforbidden\b|"
     r"invalid[ _-]?token|expired[ _-]?token|token[ _-]?expired|"
     r"invalid[ _-]?(?:client|credential|api[ _-]?key)|"
     r"authentication[ _-]?failed|invalid_grant",
     re.I,
 )
+_STATUS_400 = re.compile(r"\b(?:status(?:_?code)?|http|code)\W{0,3}400\b", re.I)
+_NAMES_CREDENTIAL = re.compile(
+    r"invalid[ _-]?token|expired|invalid[ _-]?(?:client|credential|api[ _-]?key)|"
+    r"invalid_grant|unauthorized",
+    re.I,
+)
+# A plain-text (non-isError) response counts as an error only when it OPENS with an
+# error banner; a data payload that merely mentions 401/forbidden further in never does.
+_BANNER = re.compile(
+    r"\s*(?:error\b|http\W{0,3}\d{3}|status\W{0,3}\d{3}|\d{3}\b)", re.I
+)
+_STATUS_KEYS = ("status", "status_code", "statusCode", "http_status")
 
 
 # Servers whose tool_response is file content or command output, not an API
@@ -59,57 +76,110 @@ CONTENT_SERVERS = (
 
 
 def _is_content_server(tool_name: str) -> bool:
-    return any(name in tool_name for name in CONTENT_SERVERS)
+    # omp device names use underscores (mcp__lean_ctx_...), Claude Code hyphens.
+    norm = tool_name.replace("_", "-")
+    return any(name in norm for name in CONTENT_SERVERS)
+
+
+_ATLAS_SERVER = re.compile(r"^mcp__(?:plugin_)?atlas_([a-z0-9]+)", re.I)
 
 
 def _server_of(tool_name: str) -> str:
-    """`mcp__plugin_atlas_connectwise__cw_search_tickets` -> the server segment."""
+    """`mcp__plugin_atlas_connectwise__cw_x` and omp `mcp__atlas_connectwise_cw_x` -> `connectwise`."""
+    m = _ATLAS_SERVER.match(tool_name)
+    if m:
+        return m.group(1).lower()
     parts = tool_name.split("__")
     return parts[1] if len(parts) >= 3 else tool_name
 
 
-def _response_text(payload: dict) -> str:
-    """Flatten tool_response to searchable text without assuming its shape."""
-    resp = payload.get("tool_response")
-    if resp is None:
+def _block_text(content) -> str:
+    """Join the text blocks of an MCP `content` list."""
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
         return ""
+    return "\n".join(
+        b["text"]
+        for b in content
+        if isinstance(b, dict) and isinstance(b.get("text"), str)
+    )
+
+
+def _status_of(resp: dict):
+    for key in _STATUS_KEYS:
+        v = resp.get(key)
+        if isinstance(v, int) and not isinstance(v, bool):
+            return v
+        if isinstance(v, str) and v.strip().isdigit():
+            return int(v)
+    return None
+
+
+def error_text(resp) -> str:
+    """The text to inspect for an auth failure, or "" when `resp` carries no error signal.
+
+    An error signal is: MCP isError, a top-level 4xx status / non-empty `error` field, or
+    (plain text only) an opening error banner. Payload words such as "Unauthorized login"
+    or a count of 403 inside a successful result are data, never an error."""
+    if isinstance(resp, list):
+        return error_text({"content": resp})
     if isinstance(resp, str):
-        return resp
-    try:
-        return json.dumps(resp)
-    except (TypeError, ValueError):
-        return str(resp)
+        s = resp.strip()
+        if s.startswith("{"):
+            try:
+                obj = json.loads(s)
+            except ValueError:
+                obj = None
+            if isinstance(obj, dict):
+                return error_text(obj)
+        return s[:2000] if _BANNER.match(s) else ""
+    if not isinstance(resp, dict):
+        return ""
+    text = _block_text(resp.get("content"))
+    if resp.get("isError") is True or resp.get("is_error") is True:
+        return (text or json.dumps(resp, default=str))[:2000]
+    status = _status_of(resp)
+    if status in (400, 401, 403) or resp.get("error"):
+        return json.dumps(resp, default=str)[:2000]
+    if text:
+        return error_text(text)  # content blocks without isError: plain-text rules
+    return ""
 
 
 def looks_like_auth_failure(text: str) -> bool:
     """True only for a credential failure, not for a generic bad request."""
     if not text:
         return False
-    head = text[:4000]  # a long payload's tail is data, not the error banner
+    head = text[:2000]
     if not _HARD_AUTH.search(head):
         return False
-    m = _STATUS.search(head)
-    if m and m.group(1) == "400":
-        # A 400 counts only when the body actually names the credential.
-        return bool(
-            re.search(
-                r"invalid[ _-]?token|expired|invalid[ _-]?(?:client|credential|"
-                r"api[ _-]?key)|invalid_grant|unauthorized",
-                head,
-                re.I,
-            )
-        )
+    if _STATUS_400.search(head) and not re.search(r"\b(?:401|403)\b", head):
+        return bool(_NAMES_CREDENTIAL.search(head))
     return True
+
+
+def _record(exc: BaseException) -> None:
+    try:
+        sys.path.insert(
+            0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
+        )
+        import atlas_faults
+
+        atlas_faults.record("connector_credential_watch", exc)
+    except Exception:  # noqa: BLE001 -- the recorder must never become the fault
+        pass
 
 
 def _already_warned(session: str, server: str) -> bool:
     """One warning per server per session. Fail-open to 'not warned'."""
     key = "%s|%s" % (session, server)
+    path = _state_path()
     try:
-        state = json.loads(STATE_RELPATH.read_text(encoding="utf-8"))
+        state = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(state, dict):
             state = {}
-    except (OSError, json.JSONDecodeError, ValueError):
+    except (OSError, ValueError):
         state = {}
     if key in state:
         return True
@@ -118,12 +188,12 @@ def _already_warned(session: str, server: str) -> bool:
     if len(state) > 200:
         state = dict(list(state.items())[-200:])
     try:
-        STATE_RELPATH.parent.mkdir(parents=True, exist_ok=True)
-        tmp = STATE_RELPATH.parent / (".%s.tmp%d" % (STATE_RELPATH.name, os.getpid()))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.parent / (".%s.tmp%d" % (path.name, os.getpid()))
         tmp.write_text(json.dumps(state), encoding="utf-8")
-        os.replace(tmp, STATE_RELPATH)
-    except OSError:
-        pass  # a lost write costs one duplicate warning
+        os.replace(tmp, path)
+    except OSError as exc:
+        _record(exc)  # a lost write costs one duplicate warning
     return False
 
 
@@ -133,7 +203,8 @@ def main() -> int:
     try:
         raw = sys.stdin.read()
         payload = json.loads(raw) if raw.strip() else {}
-    except (json.JSONDecodeError, ValueError):
+    except ValueError as exc:
+        _record(exc)
         return 0
     if not isinstance(payload, dict):
         return 0
@@ -141,7 +212,7 @@ def main() -> int:
         tool = str(payload.get("tool_name", ""))
         if not tool.startswith("mcp__") or _is_content_server(tool):
             return 0
-        if not looks_like_auth_failure(_response_text(payload)):
+        if not looks_like_auth_failure(error_text(payload.get("tool_response"))):
             return 0
         server = _server_of(tool)
         if _already_warned(str(payload.get("session_id", "")), server):
@@ -166,7 +237,8 @@ def main() -> int:
                 }
             )
         )
-    except Exception:  # noqa: BLE001 -- advisory hook, never break a tool call
+    except Exception as exc:  # noqa: BLE001 -- advisory hook, never break a tool call
+        _record(exc)
         return 0
     return 0
 

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import contract from "../contracts/native-tools.json";
-import { explorationDenyReason, isExplorationShell, kindOfOmpTool, loadNativeTools } from "./contracts";
+import { resolveTarget, explorationDenyReason, isExplorationShell, kindOfOmpTool, loadNativeTools } from "./contracts";
 import { isNonDocsPath, resolveLeanReplacement } from "./index";
 
 test("shared delegation-exemption cases (also asserted by test_completion_gate.py)", () => {
@@ -150,4 +150,14 @@ test("toolStateDirs loads from ompToolStateDirs and defaults to [] when the key 
 	} finally {
 		rmSync(dir, { recursive: true, force: true });
 	}
+});
+
+test("resolveTarget expands ~ and $HOME instead of joining them onto cwd", () => {
+	const home = require("node:os").homedir();
+	expect(resolveTarget("/repo", "~/.omp/agent/mcp.json")).toBe(join(home, ".omp/agent/mcp.json"));
+	expect(resolveTarget("/repo", "~")).toBe(home);
+	expect(resolveTarget("/repo", "$HOME/x.json")).toBe(join(home, "x.json"));
+	expect(resolveTarget("/repo", "${HOME}/x.json")).toBe(join(home, "x.json"));
+	expect(resolveTarget("/repo", "src/a.ts")).toBe("/repo/src/a.ts");
+	expect(resolveTarget("/repo", "~other/a.ts")).toBe("/repo/~other/a.ts");
 });

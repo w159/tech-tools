@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for the tmux colony mode (atlas_mux.py).
+"""Tests for the colony mux (atlas_mux.py): the tmux fallback suite, plus HerdrTransportTests for the default transport.
 
 Every tmux/claude/omp call is served by tiny fake binaries on a private PATH:
 the fake `tmux` logs argv, models session/window existence as marker files,
@@ -11,6 +11,7 @@ run-worker is not allowed to write the board itself.
 # Real-tmux smoke lives in docs (subagent-kit.md "Colony mux mode"); these
 # tests never touch a real tmux server.
 
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import contextlib
 import json
 import os
@@ -142,9 +143,13 @@ def _atlas_todo():
     if _TODO_MOD is None:
         import importlib.util
 
-        spec = importlib.util.spec_from_file_location("atlas_todo_for_mux_tests", str(SCRIPT.parent / "atlas_todo.py"))
+        spec = importlib.util.spec_from_file_location(
+            "atlas_todo_for_mux_tests", str(SCRIPT.parent / "atlas_todo.py")
+        )
         if spec is None or spec.loader is None:
-            raise AssertionError(f"cannot load {SCRIPT.parent / 'atlas_todo.py'} as a module")
+            raise AssertionError(
+                f"cannot load {SCRIPT.parent / 'atlas_todo.py'} as a module"
+            )
         _TODO_MOD = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(_TODO_MOD)
     return _TODO_MOD
@@ -215,6 +220,8 @@ class Base(unittest.TestCase):
         self.omp_config = pathlib.Path(self.root) / "omp-config.yml"
         self.omp_config.write_text("modelRoles:\n")
         self.env["ATLAS_MUX_OMP_CONFIG"] = str(self.omp_config)
+        # the whole suite below drives the fake tmux: pin the explicit fallback (the default transport is herdr)
+        self.env["ATLAS_COLONY_TRANSPORT"] = "tmux"
         # isolated tmux log namespace per test
         with open(os.path.join(self.state, "log"), "w", encoding="utf-8"):
             pass
@@ -250,11 +257,16 @@ class SpawnGateTests(Base):
             pass
         rc, data, _, _ = _run(
             "spawn",
-            "--run", "r1",
-            "--harness", "claude",
-            "--name", "Alpha",
-            "--agent", "explorer",
-            "--prompt-file", self.make_prompt("p", "hello"),
+            "--run",
+            "r1",
+            "--harness",
+            "claude",
+            "--name",
+            "Alpha",
+            "--agent",
+            "explorer",
+            "--prompt-file",
+            self.make_prompt("p", "hello"),
             env=self.spawn_env(mux=0),
             cwd=self.root,
         )
@@ -265,11 +277,16 @@ class SpawnGateTests(Base):
     def test_spawn_rejects_bad_name(self):
         rc, data, _, _ = _run(
             "spawn",
-            "--run", "r1",
-            "--harness", "claude",
-            "--name", "Bad Name!",
-            "--agent", "explorer",
-            "--prompt-file", self.make_prompt("p", "hello"),
+            "--run",
+            "r1",
+            "--harness",
+            "claude",
+            "--name",
+            "Bad Name!",
+            "--agent",
+            "explorer",
+            "--prompt-file",
+            self.make_prompt("p", "hello"),
             env=self.spawn_env(),
             cwd=self.root,
         )
@@ -279,11 +296,16 @@ class SpawnGateTests(Base):
     def test_spawn_missing_prompt_file(self):
         rc, data, _, _ = _run(
             "spawn",
-            "--run", "r1",
-            "--harness", "claude",
-            "--name", "Alpha",
-            "--agent", "explorer",
-            "--prompt-file", os.path.join(self.root, "nope.txt"),
+            "--run",
+            "r1",
+            "--harness",
+            "claude",
+            "--name",
+            "Alpha",
+            "--agent",
+            "explorer",
+            "--prompt-file",
+            os.path.join(self.root, "nope.txt"),
             env=self.spawn_env(),
             cwd=self.root,
         )
@@ -296,12 +318,18 @@ class SpawnClaudeTests(Base):
     def spawn(self, model=None, effort=None, name="Alpha"):
         argv = [
             "spawn",
-            "--run", "r1",
-            "--harness", "claude",
-            "--name", name,
-            "--agent", "explorer",
-            "--prompt-file", self.make_prompt("p", "colonize the pane"),
-            "--agents-dir", os.path.join(self.root, "agents"),
+            "--run",
+            "r1",
+            "--harness",
+            "claude",
+            "--name",
+            name,
+            "--agent",
+            "explorer",
+            "--prompt-file",
+            self.make_prompt("p", "colonize the pane"),
+            "--agents-dir",
+            os.path.join(self.root, "agents"),
         ]
         if model:
             argv += ["--model", model]
@@ -309,15 +337,35 @@ class SpawnClaudeTests(Base):
             argv += ["--effort", effort]
         return _run(*argv, env=self.spawn_env(), cwd=self.root)
 
-    def test_claude_worker_gets_lead_db_and_gate_in_the_pane_but_its_argv_is_unchanged(self):
+    def test_claude_worker_gets_lead_db_and_gate_in_the_pane_but_its_argv_is_unchanged(
+        self,
+    ):
         # The forwarding cause (a tmux pane inherits the tmux SERVER env) is the same for both harnesses. It changes the
         # pane environment only: the harness argv a Claude user sees is the same one every other claude test pins.
-        self.make_agent("claude", "explorer", "---\nname: explorer\nmodel: haiku\neffort: low\n---\nbody\n")
+        self.make_agent(
+            "claude",
+            "explorer",
+            "---\nname: explorer\nmodel: haiku\neffort: low\n---\nbody\n",
+        )
         lead_db = os.path.join(self.root, "lead", "atlas.db")
         env = dict(self.spawn_env(), ATLAS_DB=lead_db, ATLAS_GATE="off")
-        rc, data, _, err = _run("spawn", "--run", "r1", "--harness", "claude", "--name", "Alpha", "--agent", "explorer",
-                                "--prompt-file", self.make_prompt("p", "go"),
-                                "--agents-dir", os.path.join(self.root, "agents"), env=env, cwd=self.root)
+        rc, data, _, err = _run(
+            "spawn",
+            "--run",
+            "r1",
+            "--harness",
+            "claude",
+            "--name",
+            "Alpha",
+            "--agent",
+            "explorer",
+            "--prompt-file",
+            self.make_prompt("p", "go"),
+            "--agents-dir",
+            os.path.join(self.root, "agents"),
+            env=env,
+            cwd=self.root,
+        )
         self.assertEqual(0, rc, (data, err))
         pane = next(c for c in _tmux_log_calls(self.state) if "new-window" in c)
         self.assertIn(f"ATLAS_DB={lead_db}", pane)
@@ -325,8 +373,13 @@ class SpawnClaudeTests(Base):
         _wait_exit(self.root, "Alpha")
         base, cargv = _fake_harness_argv(self.state)
         self.assertEqual("claude", base)
-        self.assertEqual(["-p", "--agent", "atlas:explorer", "--model", "haiku", "--effort", "low"], cargv[:7])
-        self.assertNotIn("env", cargv)  # the forwarding prefix belongs to the pane command, not the harness argv
+        self.assertEqual(
+            ["-p", "--agent", "atlas:explorer", "--model", "haiku", "--effort", "low"],
+            cargv[:7],
+        )
+        self.assertNotIn(
+            "env", cargv
+        )  # the forwarding prefix belongs to the pane command, not the harness argv
 
     def test_claude_argv_and_tier_from_frontmatter(self):
         self.make_agent(
@@ -351,8 +404,18 @@ class SpawnClaudeTests(Base):
         base, argv = _fake_harness_argv(self.state)
         self.assertEqual("claude", base)
         self.assertEqual(
-            ["-p", "--agent", "atlas:explorer", "--model", "opus", "--effort", "high",
-             "--permission-mode", "acceptEdits", "colonize the pane"],
+            [
+                "-p",
+                "--agent",
+                "atlas:explorer",
+                "--model",
+                "opus",
+                "--effort",
+                "high",
+                "--permission-mode",
+                "acceptEdits",
+                "colonize the pane",
+            ],
             argv,
         )
         texts = _texts(recs)
@@ -371,9 +434,7 @@ class SpawnClaudeTests(Base):
         self.assertEqual(0, rc, (data, err))
         _wait_exit(self.root, "Alpha")
         with open(os.path.join(self.state, "log"), encoding="utf-8") as fh:
-            env_line = next(
-                (line for line in fh if line.startswith("env:")), ""
-            )
+            env_line = next((line for line in fh if line.startswith("env:")), "")
         self.assertIn(f"ATLAS_PROJECT_ROOT=[{self.root}]", env_line)
         self.assertIn("ATLAS_WORKER_NAME=[Alpha]", env_line)
 
@@ -410,11 +471,17 @@ class SpawnClaudeTests(Base):
         self.assertFalse(data.get("ok"), data)
         msg = str(data.get("error", ""))
         self.assertIn("explorer", msg)  # the role
-        self.assertIn(str(pathlib.Path(self.root) / "agents" / "claude"), msg)  # the path searched
-        self.assertEqual([], _tmux_log_calls(self.state))  # refused before any tmux side effect
+        self.assertIn(
+            str(pathlib.Path(self.root) / "agents" / "claude"), msg
+        )  # the path searched
+        self.assertEqual(
+            [], _tmux_log_calls(self.state)
+        )  # refused before any tmux side effect
 
     def test_agent_def_without_model_refused(self):
-        self.make_agent("claude", "explorer", "---\nname: explorer\neffort: high\n---\nbody\n")
+        self.make_agent(
+            "claude", "explorer", "---\nname: explorer\neffort: high\n---\nbody\n"
+        )
         rc, data, _, err = self.spawn()
         self.assertEqual(2, rc, (data, err))
         self.assertFalse(data.get("ok"), data)
@@ -443,14 +510,27 @@ class SpawnClaudeTests(Base):
         self.make_agent("claude", "explorer", "---\nmodel: opus\n---\nbody\n")
         prompt = "review the plan; then   report; echo $HOME 'quoted' \"dq\""
         rc, data, _, err = _run(
-            "spawn", "--run", "r1", "--harness", "claude", "--name", "Alpha", "--agent", "explorer",
-            "--prompt-file", self.make_prompt("p", prompt),
-            "--agents-dir", os.path.join(self.root, "agents"),
-            env=self.spawn_env(), cwd=self.root,
+            "spawn",
+            "--run",
+            "r1",
+            "--harness",
+            "claude",
+            "--name",
+            "Alpha",
+            "--agent",
+            "explorer",
+            "--prompt-file",
+            self.make_prompt("p", prompt),
+            "--agents-dir",
+            os.path.join(self.root, "agents"),
+            env=self.spawn_env(),
+            cwd=self.root,
         )
         self.assertEqual(0, rc, (data, err))
         recs = _wait_exit(self.root, "Alpha")
-        _, argv = _fake_harness_argv(self.state)  # NUL-separated: spaces/; survive verbatim
+        _, argv = _fake_harness_argv(
+            self.state
+        )  # NUL-separated: spaces/; survive verbatim
         self.assertEqual(prompt, argv[-1])
         first = _texts(recs)[0]
         self.assertEqual(["claude", *argv], shlex.split(first))  # quoting is lossless
@@ -461,12 +541,18 @@ class SpawnOmpTests(Base):
     def spawn(self, model=None, thinking=None, name="Beta"):
         argv = [
             "spawn",
-            "--run", "r1",
-            "--harness", "omp",
-            "--name", name,
-            "--agent", "explorer",
-            "--prompt-file", self.make_prompt("p", "colonize the pane"),
-            "--agents-dir", os.path.join(self.root, "agents"),
+            "--run",
+            "r1",
+            "--harness",
+            "omp",
+            "--name",
+            name,
+            "--agent",
+            "explorer",
+            "--prompt-file",
+            self.make_prompt("p", "colonize the pane"),
+            "--agents-dir",
+            os.path.join(self.root, "agents"),
         ]
         if model:
             argv += ["--model", model]
@@ -478,9 +564,11 @@ class SpawnOmpTests(Base):
         self.make_agent(
             "omp",
             "explorer",
-            "---\n# GENERATED line\nname: \"explorer\"\nthinkingLevel: medium\nmodel: [\"@atlas-worker\",\"@smol\"]\n---\nexplorer body\n",
+            '---\n# GENERATED line\nname: "explorer"\nthinkingLevel: medium\nmodel: ["@atlas-worker","@smol"]\n---\nexplorer body\n',
         )
-        self.omp_config.write_text("theme: x\nmodelRoles:\n  smol: openrouter/some-model:off\nother: 1\n")
+        self.omp_config.write_text(
+            "theme: x\nmodelRoles:\n  smol: openrouter/some-model:off\nother: 1\n"
+        )
         rc, data, _, err = self.spawn()
         self.assertEqual(0, rc, (data, err))
         # @atlas-worker is not a configured role; @smol resolves to its CONCRETE selector
@@ -489,30 +577,82 @@ class SpawnOmpTests(Base):
         _wait_exit(self.root, "Beta")
         base, hargv = _fake_harness_argv(self.state)
         self.assertEqual("omp", base)
-        self.assertEqual(["-p", "--model=openrouter/some-model:off", "--thinking=medium"], hargv[:3])
+        self.assertEqual(
+            ["-p", "--model=openrouter/some-model:off", "--thinking=medium"], hargv[:3]
+        )
         self.assertIn("You are the atlas:explorer worker.", hargv[3])
         self.assertIn("explorer body", hargv[3])
         self.assertTrue(hargv[3].endswith("# Task\ncolonize the pane"))
         first = _texts(_notes(self.root, "Beta"))[0]
-        self.assertEqual(["omp", *hargv], shlex.split(first))  # tier auditable from the first note
+        self.assertEqual(
+            ["omp", *hargv], shlex.split(first)
+        )  # tier auditable from the first note
+
+    def test_omp_quoted_thinking_level_is_unquoted_in_argv_and_pane_tail(self):
+        """gen-agents.ts writes `thinkingLevel: "medium"`; omp rejects a --thinking value that carries the quotes."""
+        self.make_agent(
+            "omp",
+            "explorer",
+            '---\nname: "explorer"\nthinkingLevel: "medium"\nmodel: ["@smol"]\n---\nexplorer body\n',
+        )
+        self.omp_config.write_text("modelRoles:\n  smol: openrouter/some-model:off\n")
+        rc, data, _, err = self.spawn()
+        self.assertEqual(0, rc, (data, err))
+        self.assertEqual("medium", data.get("level"))
+        pane = next(c for c in _tmux_log_calls(self.state) if "new-window" in c)
+        tail = shlex.split(pane.split(" exec ", 1)[1])
+        self.assertEqual("medium", tail[tail.index("--thinking") + 1])
+        self.assertNotIn('"', pane.split("--thinking", 1)[1].split()[0])
+        _wait_exit(self.root, "Beta")
+        _, hargv = _fake_harness_argv(self.state)
+        self.assertIn("--thinking=medium", hargv)
+        self.assertFalse([a for a in hargv[:4] if '"' in a or "'" in a], hargv[:4])
 
     def _omp_ready(self):
-        self.make_agent("omp", "explorer", '---\nthinkingLevel: low\nmodel: ["@smol"]\n---\nexplorer body\n')
+        self.make_agent(
+            "omp",
+            "explorer",
+            '---\nthinkingLevel: low\nmodel: ["@smol"]\n---\nexplorer body\n',
+        )
         self.omp_config.write_text("modelRoles:\n  smol: openrouter/some-model:off\n")
 
     def test_omp_extension_pin_via_flag_adds_no_extensions_and_the_path(self):
         self._omp_ready()
         ext = os.path.join(self.root, "tree", "plugins", "atlas", "omp")
-        argv = ["spawn", "--run", "r1", "--harness", "omp", "--name", "Beta", "--agent", "explorer",
-                "--prompt-file", self.make_prompt("p", "go"), "--agents-dir", os.path.join(self.root, "agents"),
-                "--omp-extension", ext]
+        argv = [
+            "spawn",
+            "--run",
+            "r1",
+            "--harness",
+            "omp",
+            "--name",
+            "Beta",
+            "--agent",
+            "explorer",
+            "--prompt-file",
+            self.make_prompt("p", "go"),
+            "--agents-dir",
+            os.path.join(self.root, "agents"),
+            "--omp-extension",
+            ext,
+        ]
         rc, data, _, err = _run(*argv, env=self.spawn_env(), cwd=self.root)
         self.assertEqual(0, rc, (data, err))
         _wait_exit(self.root, "Beta")
         _, hargv = _fake_harness_argv(self.state)
-        self.assertEqual(["-p", "--model=openrouter/some-model:off", "--thinking=low",
-                          "--no-extensions", f"--extension={ext}"], hargv[:5])
-        self.assertIn("You are the atlas:explorer worker.", hargv[5])  # the brief is still the last argument
+        self.assertEqual(
+            [
+                "-p",
+                "--model=openrouter/some-model:off",
+                "--thinking=low",
+                "--no-extensions",
+                f"--extension={ext}",
+            ],
+            hargv[:5],
+        )
+        self.assertIn(
+            "You are the atlas:explorer worker.", hargv[5]
+        )  # the brief is still the last argument
 
     def test_omp_extension_pin_from_lead_env_reaches_the_pane_as_a_flag(self):
         # A tmux pane inherits the tmux SERVER env, so an env var set for the spawning client alone would be lost
@@ -520,9 +660,23 @@ class SpawnOmpTests(Base):
         self._omp_ready()
         ext = os.path.join(self.root, "tree", "plugins", "atlas", "omp")
         env = dict(self.spawn_env(), ATLAS_MUX_OMP_EXTENSION=ext)
-        rc, data, _, err = _run("spawn", "--run", "r1", "--harness", "omp", "--name", "Beta", "--agent", "explorer",
-                                "--prompt-file", self.make_prompt("p", "go"),
-                                "--agents-dir", os.path.join(self.root, "agents"), env=env, cwd=self.root)
+        rc, data, _, err = _run(
+            "spawn",
+            "--run",
+            "r1",
+            "--harness",
+            "omp",
+            "--name",
+            "Beta",
+            "--agent",
+            "explorer",
+            "--prompt-file",
+            self.make_prompt("p", "go"),
+            "--agents-dir",
+            os.path.join(self.root, "agents"),
+            env=env,
+            cwd=self.root,
+        )
         self.assertEqual(0, rc, (data, err))
         pane = next(c for c in _tmux_log_calls(self.state) if "new-window" in c)
         self.assertIn("--omp-extension", pane)
@@ -533,23 +687,57 @@ class SpawnOmpTests(Base):
 
     def test_omp_without_a_pin_keeps_the_original_argv(self):
         self._omp_ready()
-        env = {k: v for k, v in self.spawn_env().items() if k != "ATLAS_MUX_OMP_EXTENSION"}
-        rc, data, _, err = _run("spawn", "--run", "r1", "--harness", "omp", "--name", "Beta", "--agent", "explorer",
-                                "--prompt-file", self.make_prompt("p", "go"),
-                                "--agents-dir", os.path.join(self.root, "agents"), env=env, cwd=self.root)
+        env = {
+            k: v for k, v in self.spawn_env().items() if k != "ATLAS_MUX_OMP_EXTENSION"
+        }
+        rc, data, _, err = _run(
+            "spawn",
+            "--run",
+            "r1",
+            "--harness",
+            "omp",
+            "--name",
+            "Beta",
+            "--agent",
+            "explorer",
+            "--prompt-file",
+            self.make_prompt("p", "go"),
+            "--agents-dir",
+            os.path.join(self.root, "agents"),
+            env=env,
+            cwd=self.root,
+        )
         self.assertEqual(0, rc, (data, err))
         _wait_exit(self.root, "Beta")
         _, hargv = _fake_harness_argv(self.state)
         self.assertNotIn("--no-extensions", hargv)
         self.assertFalse([a for a in hargv if a.startswith("--extension")])
-        self.assertEqual(["-p", "--model=openrouter/some-model:off", "--thinking=low"], hargv[:3])
+        self.assertEqual(
+            ["-p", "--model=openrouter/some-model:off", "--thinking=low"], hargv[:3]
+        )
 
     def test_claude_workers_ignore_the_omp_extension_pin(self):
-        self.make_agent("claude", "explorer", "---\nmodel: haiku\neffort: low\n---\nbody\n")
+        self.make_agent(
+            "claude", "explorer", "---\nmodel: haiku\neffort: low\n---\nbody\n"
+        )
         env = dict(self.spawn_env(), ATLAS_MUX_OMP_EXTENSION="/some/tree/omp")
-        rc, data, _, err = _run("spawn", "--run", "r1", "--harness", "claude", "--name", "Alpha",
-                                "--agent", "explorer", "--prompt-file", self.make_prompt("p", "go"),
-                                "--agents-dir", os.path.join(self.root, "agents"), env=env, cwd=self.root)
+        rc, data, _, err = _run(
+            "spawn",
+            "--run",
+            "r1",
+            "--harness",
+            "claude",
+            "--name",
+            "Alpha",
+            "--agent",
+            "explorer",
+            "--prompt-file",
+            self.make_prompt("p", "go"),
+            "--agents-dir",
+            os.path.join(self.root, "agents"),
+            env=env,
+            cwd=self.root,
+        )
         self.assertEqual(0, rc, (data, err))
         _wait_exit(self.root, "Alpha")
         _, cargv = _fake_harness_argv(self.state)
@@ -561,46 +749,114 @@ class SpawnOmpTests(Base):
         # turned ATLAS_GATE off) has its workers silently write to the default DB and run with the gate on.
         self._omp_ready()
         lead_db = os.path.join(self.root, "lead", "atlas.db")
-        env = dict(self.spawn_env(), ATLAS_DB=lead_db, ATLAS_GATE="off", ATLAS_NOT_ALLOWLISTED="sentinel-value")
-        rc, data, _, err = _run("spawn", "--run", "r1", "--harness", "omp", "--name", "Beta", "--agent", "explorer",
-                                "--prompt-file", self.make_prompt("p", "go"),
-                                "--agents-dir", os.path.join(self.root, "agents"), env=env, cwd=self.root)
+        env = dict(
+            self.spawn_env(),
+            ATLAS_DB=lead_db,
+            ATLAS_GATE="off",
+            ATLAS_NOT_ALLOWLISTED="sentinel-value",
+        )
+        rc, data, _, err = _run(
+            "spawn",
+            "--run",
+            "r1",
+            "--harness",
+            "omp",
+            "--name",
+            "Beta",
+            "--agent",
+            "explorer",
+            "--prompt-file",
+            self.make_prompt("p", "go"),
+            "--agents-dir",
+            os.path.join(self.root, "agents"),
+            env=env,
+            cwd=self.root,
+        )
         self.assertEqual(0, rc, (data, err))
         pane = next(c for c in _tmux_log_calls(self.state) if "new-window" in c)
         self.assertIn(f"ATLAS_DB={lead_db}", pane)
         self.assertIn("ATLAS_GATE=off", pane)
-        self.assertNotIn("sentinel-value", pane)  # an allowlist, not a copy of the lead's environment
+        self.assertNotIn(
+            "sentinel-value", pane
+        )  # an allowlist, not a copy of the lead's environment
         self.assertNotIn("ATLAS_NOT_ALLOWLISTED", pane)
 
     def test_lead_kill_switches_and_omp_profile_reach_the_worker_pane(self):
         # ATLAS_MANDATES=off in the lead was lost in the pane: the worker came up with the recall gate armed.
         self._omp_ready()
-        env = dict(self.spawn_env(), ATLAS_MANDATES="off", ATLAS_HOOK_BRIDGE="off", ATLAS_LEAN_SHELL="off",
-                   PI_CODING_AGENT_DIR="/tmp/lead-agent-dir", ATLAS_TOOLKIT_LOAD="lead-value", ATLAS_WORKER_NAME="lead")
-        rc, data, _, err = _run("spawn", "--run", "r1", "--harness", "omp", "--name", "Beta", "--agent", "explorer",
-                                "--prompt-file", self.make_prompt("p", "go"),
-                                "--agents-dir", os.path.join(self.root, "agents"), env=env, cwd=self.root)
+        env = dict(
+            self.spawn_env(),
+            ATLAS_MANDATES="off",
+            ATLAS_HOOK_BRIDGE="off",
+            ATLAS_LEAN_SHELL="off",
+            PI_CODING_AGENT_DIR="/tmp/lead-agent-dir",
+            ATLAS_TOOLKIT_LOAD="lead-value",
+            ATLAS_WORKER_NAME="lead",
+        )
+        rc, data, _, err = _run(
+            "spawn",
+            "--run",
+            "r1",
+            "--harness",
+            "omp",
+            "--name",
+            "Beta",
+            "--agent",
+            "explorer",
+            "--prompt-file",
+            self.make_prompt("p", "go"),
+            "--agents-dir",
+            os.path.join(self.root, "agents"),
+            env=env,
+            cwd=self.root,
+        )
         self.assertEqual(0, rc, (data, err))
         pane = next(c for c in _tmux_log_calls(self.state) if "new-window" in c)
-        for pair in ("ATLAS_MANDATES=off", "ATLAS_HOOK_BRIDGE=off", "ATLAS_LEAN_SHELL=off",
-                     "PI_CODING_AGENT_DIR=/tmp/lead-agent-dir"):
+        for pair in (
+            "ATLAS_MANDATES=off",
+            "ATLAS_HOOK_BRIDGE=off",
+            "ATLAS_LEAN_SHELL=off",
+            "PI_CODING_AGENT_DIR=/tmp/lead-agent-dir",
+        ):
             self.assertIn(pair, pane)
         self.assertNotIn("ATLAS_TOOLKIT_LOAD", pane)  # bridge-pinned, never forwarded
         self.assertNotIn("lead-value", pane)
 
     def test_worker_pane_gets_no_forwarded_vars_when_the_lead_set_none(self):
         self._omp_ready()
-        env = {k: v for k, v in self.spawn_env().items() if k not in ("ATLAS_DB", "ATLAS_GATE")}
-        rc, data, _, err = _run("spawn", "--run", "r1", "--harness", "omp", "--name", "Beta", "--agent", "explorer",
-                                "--prompt-file", self.make_prompt("p", "go"),
-                                "--agents-dir", os.path.join(self.root, "agents"), env=env, cwd=self.root)
+        env = {
+            k: v
+            for k, v in self.spawn_env().items()
+            if k not in ("ATLAS_DB", "ATLAS_GATE")
+        }
+        rc, data, _, err = _run(
+            "spawn",
+            "--run",
+            "r1",
+            "--harness",
+            "omp",
+            "--name",
+            "Beta",
+            "--agent",
+            "explorer",
+            "--prompt-file",
+            self.make_prompt("p", "go"),
+            "--agents-dir",
+            os.path.join(self.root, "agents"),
+            env=env,
+            cwd=self.root,
+        )
         self.assertEqual(0, rc, (data, err))
         pane = next(c for c in _tmux_log_calls(self.state) if "new-window" in c)
         self.assertNotIn("ATLAS_DB", pane)
         self.assertNotIn("ATLAS_GATE", pane)
 
     def test_omp_unresolvable_alias_refused(self):
-        self.make_agent("omp", "explorer", '---\nthinkingLevel: low\nmodel: ["@atlas-worker"]\n---\nbody\n')
+        self.make_agent(
+            "omp",
+            "explorer",
+            '---\nthinkingLevel: low\nmodel: ["@atlas-worker"]\n---\nbody\n',
+        )
         rc, data, _, err = self.spawn()  # config has no atlas-worker role
         self.assertEqual(2, rc, (data, err))
         self.assertFalse(data.get("ok"), data)
@@ -612,16 +868,22 @@ class SpawnOmpTests(Base):
     def test_omp_missing_definition_refused(self):
         rc, data, _, err = self.spawn()
         self.assertEqual(2, rc, (data, err))
-        self.assertIn(str(pathlib.Path(self.root) / "agents" / "omp"), str(data.get("error", "")))
+        self.assertIn(
+            str(pathlib.Path(self.root) / "agents" / "omp"), str(data.get("error", ""))
+        )
         self.assertEqual([], _tmux_log_calls(self.state))
 
     def test_omp_explicit_alias_plus_thinking_resolves_concrete(self):
         self.omp_config.write_text("modelRoles:\n  smol: openrouter/some-model:off\n")
-        rc, data, _, err = self.spawn(model="@smol", thinking="low")  # no definition file at all
+        rc, data, _, err = self.spawn(
+            model="@smol", thinking="low"
+        )  # no definition file at all
         self.assertEqual(0, rc, (data, err))
         _wait_exit(self.root, "Beta")
         _, hargv = _fake_harness_argv(self.state)
-        self.assertEqual(["-p", "--model=openrouter/some-model:off", "--thinking=low"], hargv[:3])
+        self.assertEqual(
+            ["-p", "--model=openrouter/some-model:off", "--thinking=low"], hargv[:3]
+        )
 
     def test_omp_explicit_concrete_model_plus_thinking_passes_through(self):
         rc, data, _, err = self.spawn(model="openai/gpt-x", thinking="high")
@@ -645,13 +907,20 @@ class SpawnOmpTests(Base):
     def test_omp_rejects_effort_flag(self):
         rc, data, _, _ = _run(
             "spawn",
-            "--run", "r1",
-            "--harness", "omp",
-            "--name", "Beta",
-            "--agent", "explorer",
-            "--prompt-file", self.make_prompt("p", "hi"),
-            "--effort", "high",
-            "--agents-dir", os.path.join(self.root, "agents"),
+            "--run",
+            "r1",
+            "--harness",
+            "omp",
+            "--name",
+            "Beta",
+            "--agent",
+            "explorer",
+            "--prompt-file",
+            self.make_prompt("p", "hi"),
+            "--effort",
+            "high",
+            "--agents-dir",
+            os.path.join(self.root, "agents"),
             env=self.spawn_env(),
             cwd=self.root,
         )
@@ -661,32 +930,130 @@ class SpawnOmpTests(Base):
     def test_spawn_rejects_thinking_for_claude(self):
         rc, data, _, _ = _run(
             "spawn",
-            "--run", "r1",
-            "--harness", "claude",
-            "--name", "Alpha",
-            "--agent", "explorer",
-            "--prompt-file", self.make_prompt("p", "hi"),
-            "--thinking", "medium",
-            "--agents-dir", os.path.join(self.root, "agents"),
+            "--run",
+            "r1",
+            "--harness",
+            "claude",
+            "--name",
+            "Alpha",
+            "--agent",
+            "explorer",
+            "--prompt-file",
+            self.make_prompt("p", "hi"),
+            "--thinking",
+            "medium",
+            "--agents-dir",
+            os.path.join(self.root, "agents"),
             env=self.spawn_env(),
             cwd=self.root,
         )
         self.assertFalse(data.get("ok"), data)
 
 
+OMP_THINKING_LEVELS = {
+    "off",
+    "minimal",
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+    "max",
+    "auto",
+}
+SHIPPED_OMP_AGENTS = sorted((SCRIPT.parent.parent / "omp" / "agents").glob("*.md"))
+
+
+class ShippedOmpAgentsThinkingTests(Base):
+    """Every omp agent file we ship must yield a --thinking value omp accepts, via the real spawn path.
+    atlas_launch has no --thinking builder of its own: interactive launches pass none, headless shells out to
+    `atlas_mux spawn`, which is what the second test exercises."""
+
+    def setUp(self):
+        super().setUp()
+        self.omp_config.write_text(
+            "modelRoles:\n  smol: openrouter/some-model:off\n  default: openrouter/some-model:off\n"
+        )
+
+    def test_shipped_agents_exist(self):
+        self.assertGreaterEqual(len(SHIPPED_OMP_AGENTS), 13)
+
+    def test_every_shipped_agent_yields_valid_thinking_in_builder_argv_and_pane_tail(
+        self,
+    ):
+        import unittest.mock as mock
+
+        import atlas_mux
+
+        for path in SHIPPED_OMP_AGENTS:
+            role = path.stem
+            with self.subTest(role=role):
+                with mock.patch.dict(
+                    os.environ, {"ATLAS_MUX_OMP_CONFIG": str(self.omp_config)}
+                ):
+                    model, level, body, err = atlas_mux._tier(
+                        "omp", role, None, None, None
+                    )
+                self.assertIsNone(err, err)
+                argv = atlas_mux.harness_argv(
+                    "omp", role, "task", model, level, body, "acceptEdits"
+                )
+                values = [
+                    a.split("=", 1)[1] for a in argv if a.startswith("--thinking=")
+                ]
+                self.assertEqual(1, len(values), argv[:4])
+                self.assertIn(values[0], OMP_THINKING_LEVELS)
+                self.assertFalse(set(values[0]) & set("\"'"), values[0])
+                # the run-worker tail cmd_spawn puts in the pane carries the same level
+                pane = atlas_mux.pane_command(
+                    {"ATLAS_PROJECT_ROOT": "/r"},
+                    ["run-worker", "--harness", "omp", "--thinking", level],
+                )
+                tail = shlex.split(pane)
+                self.assertEqual(values[0], tail[tail.index("--thinking") + 1])
+
+    def test_spawn_cli_emits_valid_level_for_every_shipped_agent(self):
+        env = self.spawn_env()
+        for i, path in enumerate(SHIPPED_OMP_AGENTS):
+            role = path.stem
+            with self.subTest(role=role):
+                rc, data, _, err = _run(
+                    "spawn", "--run", "r1", "--harness", "omp", "--name", f"W{i}",
+                    "--agent", role,
+                    "--prompt-file", self.make_prompt(f"p{i}", "x"),
+                    env=env, cwd=self.root,
+                )  # fmt: skip
+                self.assertEqual(0, rc, (data, err))
+                self.assertIn(data.get("level"), OMP_THINKING_LEVELS)
+                pane = [c for c in _tmux_log_calls(self.state) if f"-n W{i} " in c][0]
+                tail = shlex.split(pane.split(" exec ", 1)[1])
+                value = tail[tail.index("--thinking") + 1]
+                self.assertEqual(data["level"], value)
+                self.assertFalse(set(value) & set("\"'"), value)
+        for i in range(len(SHIPPED_OMP_AGENTS)):
+            _wait_exit(self.root, f"W{i}")
+
+
 class SpawnLifecycleTests(Base):
     def _spawn(self, name="Alpha", harness="claude"):
-        self.make_agent("claude", "explorer", "---\nmodel: opus\neffort: high\n---\nbody\n")
+        self.make_agent(
+            "claude", "explorer", "---\nmodel: opus\neffort: high\n---\nbody\n"
+        )
         self.make_agent("omp", "explorer", '---\nmodel: ["@smol"]\n---\nbody\n')
         self.omp_config.write_text("modelRoles:\n  smol: openrouter/some-model:off\n")
         return _run(
             "spawn",
-            "--run", "r1",
-            "--harness", harness,
-            "--name", name,
-            "--agent", "explorer",
-            "--prompt-file", self.make_prompt("p", "hi"),
-            "--agents-dir", os.path.join(self.root, "agents"),
+            "--run",
+            "r1",
+            "--harness",
+            harness,
+            "--name",
+            name,
+            "--agent",
+            "explorer",
+            "--prompt-file",
+            self.make_prompt("p", "hi"),
+            "--agents-dir",
+            os.path.join(self.root, "agents"),
             env=self.spawn_env(),
             cwd=self.root,
         )
@@ -705,22 +1072,140 @@ class SpawnLifecycleTests(Base):
         rc, data, _, err = self._spawn(name="Beta", harness="omp")
         self.assertEqual(0, rc, (data, err))
         calls_after = _tmux_log_calls(self.state)
-        self.assertEqual(calls_before + 3, len(calls_after))  # has-session, list-windows, new-window
+        self.assertEqual(
+            calls_before + 3, len(calls_after)
+        )  # has-session, list-windows, new-window
         self.assertNotIn("new-session", "\n".join(calls_after[calls_before:]))
-        self.assertIn("new-window -d -t atlas-r1 -n Beta", "\n".join(calls_after[calls_before:]))
+        self.assertIn(
+            "new-window -d -t atlas-r1 -n Beta", "\n".join(calls_after[calls_before:])
+        )
+
+    def test_parallel_spawns_create_the_session_once(self):
+        """Audit F5: 8 parallel spawns raced has-session/new-session and 7 failed."""
+        self.make_agent(
+            "claude", "explorer", "---\nmodel: opus\neffort: high\n---\nbody\n"
+        )
+        prompt = self.make_prompt("p", "hi")
+        procs = [
+            subprocess.Popen(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "spawn",
+                    "--run",
+                    "r1",
+                    "--harness",
+                    "claude",
+                    "--name",
+                    f"P{i}",
+                    "--agent",
+                    "explorer",
+                    "--prompt-file",
+                    prompt,
+                    "--agents-dir",
+                    os.path.join(self.root, "agents"),
+                ],
+                env=self.spawn_env(),
+                cwd=self.root,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            for i in range(8)
+        ]
+        results = [(p.communicate()[0], p.returncode) for p in procs]
+        self.assertEqual([0] * 8, [rc for _, rc in results], results)
+        calls = "\n".join(_tmux_log_calls(self.state))
+        self.assertEqual(1, calls.count("new-session"), calls)
+        self.assertEqual(8, calls.count("new-window"), calls)
+        for i in range(8):
+            _wait_exit(self.root, f"P{i}")
+
+    @unittest.skipUnless(shutil.which("tmux"), "tmux not installed")
+    def test_parallel_spawns_on_a_real_tmux_server(self):
+        real_tmux = shutil.which("tmux")
+        assert real_tmux is not None
+        sock = os.path.join(self.root, "t.sock")
+        shim = pathlib.Path(self.bin_dir) / "tmux"
+        shim.write_text(f'#!/bin/sh\nexec {real_tmux} -S {sock} -f /dev/null "$@"\n')
+        shim.chmod(0o755)
+        self.addCleanup(
+            lambda: subprocess.run(
+                [real_tmux, "-S", sock, "kill-server"], capture_output=True
+            )
+        )
+        self.make_agent(
+            "claude", "explorer", "---\nmodel: opus\neffort: high\n---\nbody\n"
+        )
+        prompt = self.make_prompt("p", "hi")
+        env = self.spawn_env(extra={"ATLAS_MUX_WORKER_CMD": "sleep 5"})
+        procs = [
+            subprocess.Popen(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "spawn",
+                    "--run",
+                    "rr",
+                    "--harness",
+                    "claude",
+                    "--name",
+                    f"R{i}",
+                    "--agent",
+                    "explorer",
+                    "--prompt-file",
+                    prompt,
+                    "--agents-dir",
+                    os.path.join(self.root, "agents"),
+                ],
+                env=env,
+                cwd=self.root,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            for i in range(8)
+        ]
+        results = [(p.communicate()[0], p.returncode) for p in procs]
+        self.assertEqual([0] * 8, [rc for _, rc in results], results)
+        windows = subprocess.run(
+            [
+                real_tmux,
+                "-S",
+                sock,
+                "list-windows",
+                "-t",
+                "atlas-rr",
+                "-F",
+                "#{window_name}",
+            ],
+            capture_output=True,
+            text=True,
+        ).stdout.split()
+        self.assertEqual(
+            sorted(["lead", *[f"R{i}" for i in range(8)]]), sorted(windows)
+        )
 
 
 class StatusKillTests(Base):
     def _spawn(self, name="Alpha"):
-        self.make_agent("claude", "explorer", "---\nmodel: opus\neffort: high\n---\nbody\n")
+        self.make_agent(
+            "claude", "explorer", "---\nmodel: opus\neffort: high\n---\nbody\n"
+        )
         return _run(
             "spawn",
-            "--run", "r1",
-            "--harness", "claude",
-            "--name", name,
-            "--agent", "explorer",
-            "--prompt-file", self.make_prompt("p", "hi"),
-            "--agents-dir", os.path.join(self.root, "agents"),
+            "--run",
+            "r1",
+            "--harness",
+            "claude",
+            "--name",
+            name,
+            "--agent",
+            "explorer",
+            "--prompt-file",
+            self.make_prompt("p", "hi"),
+            "--agents-dir",
+            os.path.join(self.root, "agents"),
             env=self.spawn_env(),
             cwd=self.root,
         )
@@ -729,7 +1214,9 @@ class StatusKillTests(Base):
         rc, data, _, err = self._spawn("Alpha")
         self.assertEqual(0, rc, (data, err))
         _wait_exit(self.root, "Alpha")
-        rc, data, _, err = _run("status", "--run", "r1", env=self.spawn_env(), cwd=self.root)
+        rc, data, _, err = _run(
+            "status", "--run", "r1", env=self.spawn_env(), cwd=self.root
+        )
         self.assertEqual(0, rc, (data, err))
         self.assertTrue(data.get("ok"), data)
         self.assertTrue(data.get("tmux"), data)
@@ -740,7 +1227,9 @@ class StatusKillTests(Base):
         self.assertEqual(0, board["Alpha"].get("exit"))
 
     def test_status_without_session(self):
-        rc, data, _, err = _run("status", "--run", "zz", env=self.spawn_env(), cwd=self.root)
+        rc, data, _, err = _run(
+            "status", "--run", "zz", env=self.spawn_env(), cwd=self.root
+        )
         self.assertEqual(0, rc, (data, err))
         self.assertFalse(data.get("tmux"), data)
         self.assertIn("zz", data.get("session_name", "") + str(data.get("run", "")))
@@ -748,16 +1237,73 @@ class StatusKillTests(Base):
     def test_kill_idempotent(self):
         rc, data, _, err = self._spawn()
         self.assertEqual(0, rc, (data, err))
-        rc, data, _, err = _run("kill", "--run", "r1", env=self.spawn_env(), cwd=self.root)
+        rc, data, _, err = _run(
+            "kill", "--run", "r1", env=self.spawn_env(), cwd=self.root
+        )
         self.assertEqual(0, rc, (data, err))
         self.assertTrue(data.get("killed"), data)
-        rc, data, _, err = _run("kill", "--run", "r1", env=self.spawn_env(), cwd=self.root)
+        rc, data, _, err = _run(
+            "kill", "--run", "r1", env=self.spawn_env(), cwd=self.root
+        )
         self.assertEqual(0, rc, (data, err))
         self.assertFalse(data.get("killed"), data)
-        self.assertEqual(1, sum(1 for c in _tmux_log_calls(self.state) if "kill-session" in c))
-        rc, data, _, err = _run("status", "--run", "r1", env=self.spawn_env(), cwd=self.root)
+        self.assertEqual(
+            1, sum(1 for c in _tmux_log_calls(self.state) if "kill-session" in c)
+        )
+        rc, data, _, err = _run(
+            "status", "--run", "r1", env=self.spawn_env(), cwd=self.root
+        )
         self.assertEqual(0, rc, (data, err))
         self.assertFalse(data.get("tmux"), data)
+
+    def test_kill_gives_every_running_worker_a_failed_exit_note(self):
+        """A killed worker writes no exit of its own; kill must, or it reads as working forever."""
+        self.make_agent(
+            "claude", "explorer", "---\nmodel: opus\neffort: high\n---\nbody\n"
+        )
+        env = self.spawn_env(extra={"ATLAS_MUX_WORKER_CMD": "sleep 4"})
+        for name in ("Alpha", "Beta"):
+            rc, data, _, err = _run(
+                "spawn",
+                "--run",
+                "r1",
+                "--harness",
+                "claude",
+                "--name",
+                name,
+                "--agent",
+                "explorer",
+                "--prompt-file",
+                self.make_prompt("p", "hi"),
+                "--agents-dir",
+                os.path.join(self.root, "agents"),
+                env=env,
+                cwd=self.root,
+            )
+            self.assertEqual(0, rc, (data, err))
+        deadline = time.time() + 15
+        while time.time() < deadline and not all(
+            _notes(self.root, n) for n in ("Alpha", "Beta")
+        ):
+            time.sleep(0.05)
+        rc, data, _, err = _run("kill", "--run", "r1", env=env, cwd=self.root)
+        self.assertTrue(data.get("killed"), (data, err))
+        for name in ("Alpha", "Beta"):
+            self.assertEqual(
+                "exit 137 [failed: killed by atlas_mux kill]",
+                _texts(_notes(self.root, name))[-1],
+            )
+        for name in (
+            "Alpha",
+            "Beta",
+        ):  # the orphaned fake worker finishes on its own: let it
+            _wait_exit(self.root, name)
+            deadline = time.time() + 15
+            while (
+                time.time() < deadline
+                and _texts(_notes(self.root, name))[-1] != "exit 0"
+            ):
+                time.sleep(0.05)
 
 
 class RunWorkerTests(Base):
@@ -767,13 +1313,20 @@ class RunWorkerTests(Base):
         env.update(env_mut or {})
         argv = [
             "run-worker",
-            "--run", "r1",
-            "--name", name,
-            "--harness", "claude",
-            "--agent", "explorer",
-            "--prompt-file", self.make_prompt("p", "hello worker"),
-            "--root", self.root,
-            "--agents-dir", os.path.join(self.root, "agents"),
+            "--run",
+            "r1",
+            "--name",
+            name,
+            "--harness",
+            "claude",
+            "--agent",
+            "explorer",
+            "--prompt-file",
+            self.make_prompt("p", "hello worker"),
+            "--root",
+            self.root,
+            "--agents-dir",
+            os.path.join(self.root, "agents"),
             *extra,
         ]
         p = subprocess.run(
@@ -809,7 +1362,10 @@ class RunWorkerTests(Base):
         lines = _read_board(self.board_file("Zeta"))
         self.assertEqual(3, len(lines))  # argv, one, exit 0
         for rec in lines:
-            self.assertEqual({"ts", "owner", "to", "item", "text"}, set(rec))
+            # atlas_todo.note records: base keys plus the channel stamp (channel work)
+            self.assertEqual(
+                {"ts", "seq", "owner", "to", "item", "text", "channel"}, set(rec)
+            )
             self.assertEqual("Zeta", rec["owner"])
             self.assertEqual("lead", rec["to"])
         self.assertEqual("exit 0", lines[-1]["text"])
@@ -825,16 +1381,26 @@ class RunWorkerTests(Base):
         for i, (output, reason) in enumerate(cases):
             name = f"Fail{i}"
             with self.subTest(reason=reason):
-                rc, _, err = self.run_worker("--command-override", f"echo {shlex.quote(output)}; exit 0", name=name)
+                rc, _, err = self.run_worker(
+                    "--command-override",
+                    f"echo {shlex.quote(output)}; exit 0",
+                    name=name,
+                )
                 self.assertEqual(1, rc, err)
                 recs = _notes(self.root, name)
                 self.assertEqual(f"exit 1 [failed: {reason}]", _texts(recs)[-1])
-                self.assertIn(output, _texts(recs))  # the evidence line is still on the board
+                self.assertIn(
+                    output, _texts(recs)
+                )  # the evidence line is still on the board
 
     def test_stderr_is_captured_for_classification(self):
-        rc, _, err = self.run_worker("--command-override", "echo 'Model \"x\" not found' >&2; exit 0")
+        rc, _, err = self.run_worker(
+            "--command-override", "echo 'Model \"x\" not found' >&2; exit 0"
+        )
         self.assertEqual(1, rc, err)
-        self.assertEqual("exit 1 [failed: model not found]", _texts(_notes(self.root, "Zeta"))[-1])
+        self.assertEqual(
+            "exit 1 [failed: model not found]", _texts(_notes(self.root, "Zeta"))[-1]
+        )
 
     def test_mcp_connection_warnings_do_not_fail_a_successful_run(self):
         """Observed in the real omp run: unrelated MCP-server warnings carry 401/404/auth
@@ -844,7 +1410,9 @@ class RunWorkerTests(Base):
             'Warning: MCP server "magic" failed to connect: MCP error -32001: Not authenticated - your API key is missing; its tools are unavailable for this run.',
             'Warning: MCP server "fiddler" failed to connect: HTTP 402: x; its tools are unavailable for this run.',
         )
-        script = "".join(f"echo {shlex.quote(line)} >&2; " for line in noise) + "echo READY"
+        script = (
+            "".join(f"echo {shlex.quote(line)} >&2; " for line in noise) + "echo READY"
+        )
         rc, _, err = self.run_worker("--command-override", script)
         self.assertEqual(0, rc, err)
         texts = _texts(_notes(self.root, "Zeta"))
@@ -853,7 +1421,9 @@ class RunWorkerTests(Base):
         self.assertTrue(all(line in texts for line in noise))  # still on the board
 
     def test_clean_run_is_not_flagged(self):
-        rc, _, err = self.run_worker("--command-override", "echo READY; echo 'port 14020 ok'")
+        rc, _, err = self.run_worker(
+            "--command-override", "echo READY; echo 'port 14020 ok'"
+        )
         self.assertEqual(0, rc, err)
         self.assertEqual("exit 0", _texts(_notes(self.root, "Zeta"))[-1])
 
@@ -863,7 +1433,9 @@ class RunWorkerTests(Base):
         rc, _, err = self.run_worker(env_mut={"PATH": "/nonexistent"})
         self.assertEqual(127, rc, err)
         texts = _texts(_notes(self.root, "Zeta"))
-        self.assertTrue(texts[0].startswith("claude -p --agent atlas:explorer --model opus"), texts)
+        self.assertTrue(
+            texts[0].startswith("claude -p --agent atlas:explorer --model opus"), texts
+        )
         self.assertTrue(texts[1].startswith("spawn failed:"), texts)
         self.assertEqual("exit 127 [failed: spawn error]", texts[-1])
 
@@ -875,21 +1447,82 @@ class RunWorkerTests(Base):
         self.assertEqual(0, rc, err)
         self.assertIn(f"Zeta|{self.root}", _texts(_notes(self.root, "Zeta")))
 
+    def test_sigterm_and_sighup_leave_a_failed_exit_note(self):
+        """tmux kill-window sends SIGHUP; without a handler the worker died silently and its
+        board never showed an exit (audit F4: 1/3 killed agents reached a terminal state)."""
+        import signal as _signal
+
+        for sig, num in ((_signal.SIGTERM, 15), (_signal.SIGHUP, 1)):
+            name = f"Sig{num}"
+            env = dict(self.env, ATLAS_PROJECT_ROOT=self.root)
+            p = subprocess.Popen(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "run-worker",
+                    "--run",
+                    "r1",
+                    "--name",
+                    name,
+                    "--harness",
+                    "claude",
+                    "--agent",
+                    "explorer",
+                    "--prompt-file",
+                    self.make_prompt("p", "hello"),
+                    "--root",
+                    self.root,
+                    "--command-override",
+                    "echo up; sleep 30",
+                ],
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            deadline = time.time() + 15
+            while time.time() < deadline and "up" not in _texts(
+                _notes(self.root, name)
+            ):
+                time.sleep(0.05)
+            p.send_signal(sig)
+            rc = p.wait(timeout=15)
+            self.assertEqual(128 + num, rc)
+            self.assertEqual(
+                f"exit {128 + num} [failed: killed by signal {num}]",
+                _texts(_notes(self.root, name))[-1],
+            )
+
 
 class OverrideEnvForwardingTests(Base):
     def test_worker_cmd_env_is_forwarded_as_flag(self):
         """tmux panes inherit the server env, so spawn must forward the override."""
         self.make_agent("claude", "explorer", "---\nmodel: opus\n---\n")
         rc, data, _, err = _run(
-            "spawn", "--run", "r1", "--harness", "claude", "--name", "Stub", "--agent", "explorer",
-            "--prompt-file", self.make_prompt("p", "hi"), "--agents-dir", os.path.join(self.root, "agents"),
-            env=self.spawn_env(extra={"ATLAS_MUX_WORKER_CMD": "echo stubbed"}), cwd=self.root,
+            "spawn",
+            "--run",
+            "r1",
+            "--harness",
+            "claude",
+            "--name",
+            "Stub",
+            "--agent",
+            "explorer",
+            "--prompt-file",
+            self.make_prompt("p", "hi"),
+            "--agents-dir",
+            os.path.join(self.root, "agents"),
+            env=self.spawn_env(extra={"ATLAS_MUX_WORKER_CMD": "echo stubbed"}),
+            cwd=self.root,
         )
         self.assertEqual(0, rc, (data, err))
-        self.assertIn("--command-override 'echo stubbed'", "\n".join(_tmux_log_calls(self.state)))
+        self.assertIn(
+            "--command-override 'echo stubbed'", "\n".join(_tmux_log_calls(self.state))
+        )
         recs = _wait_exit(self.root, "Stub")
         self.assertEqual(
-            [shlex.join(["/bin/sh", "-c", "echo stubbed"]), "stubbed", "exit 0"], _texts(recs)
+            [shlex.join(["/bin/sh", "-c", "echo stubbed"]), "stubbed", "exit 0"],
+            _texts(recs),
         )
 
 
@@ -897,21 +1530,49 @@ class NotesInteropTests(Base):
     def test_mux_lines_coexist_with_atlas_todo_notes(self):
         rc = subprocess.run(
             [
-                sys.executable, str(SCRIPT), "run-worker",
-                "--run", "r1", "--name", "Alpha", "--harness", "claude", "--agent", "explorer",
-                "--prompt-file", self.make_prompt("p", "hi"), "--root", self.root,
-                "--agents-dir", os.path.join(self.root, "agents"),
-                "--command-override", "echo raw-worker-stream",
+                sys.executable,
+                str(SCRIPT),
+                "run-worker",
+                "--run",
+                "r1",
+                "--name",
+                "Alpha",
+                "--harness",
+                "claude",
+                "--agent",
+                "explorer",
+                "--prompt-file",
+                self.make_prompt("p", "hi"),
+                "--root",
+                self.root,
+                "--agents-dir",
+                os.path.join(self.root, "agents"),
+                "--command-override",
+                "echo raw-worker-stream",
             ],
-            capture_output=True, text=True,
-            env={**self.env, "ATLAS_PROJECT_ROOT": self.root}, timeout=120,
+            capture_output=True,
+            text=True,
+            env={**self.env, "ATLAS_PROJECT_ROOT": self.root},
+            timeout=120,
         ).returncode
         self.assertEqual(0, rc)
         todo = SCRIPT.parent / "atlas_todo.py"
         p = subprocess.run(
-            [sys.executable, str(todo), "note", "--owner", "Alpha", "--to", "all", "--root", self.root,
-             "alpha done, note to lead"],
-            capture_output=True, text=True, timeout=60,
+            [
+                sys.executable,
+                str(todo),
+                "note",
+                "--owner",
+                "Alpha",
+                "--to",
+                "all",
+                "--root",
+                self.root,
+                "alpha done, note to lead",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
         self.assertEqual(0, p.returncode, p.stderr + p.stdout)
         # --to all: only broadcast notes, never the lead-addressed worker stream
@@ -921,12 +1582,142 @@ class NotesInteropTests(Base):
         # --to lead (CLI, as the lead runs it): stream + argv + exit + the broadcast note
         p = subprocess.run(
             [sys.executable, str(todo), "notes", "--to", "lead", "--root", self.root],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
         texts = [n.get("text") for n in json.loads(p.stdout).get("notes", [])]
         self.assertIn("raw-worker-stream", texts)
         self.assertIn("alpha done, note to lead", texts)
         self.assertIn("exit 0", texts)
+
+
+class HerdrTransportTests(Base):
+    """Default transport: workers are panes created over the herdr socket. The fake tmux on PATH logs any call,
+    and every test asserts it stayed silent."""
+
+    def setUp(self):
+        super().setUp()
+        import test_atlas_herdr as th
+
+        self.handler = th.PaneHandler()
+        self.fake = th.FakeHerdr(self.handler)
+        self.addCleanup(self.fake.close)
+        self.env.pop("ATLAS_COLONY_TRANSPORT")  # the default: herdr
+        self.env["HERDR_SOCKET_PATH"] = self.fake.path
+
+    def pane_texts(self):
+        return [p["text"] for m, p in self.fake.calls if m == "pane.send_input"]
+
+    def spawn(self, name="Alpha", extra=None, env_extra=None):
+        prompt = self.make_prompt("p-" + name, "do the thing")
+        return _run(
+            "spawn", "--run", "r1", "--name", name, "--harness", "omp",
+            "--agent", "implementer", "--prompt-file", prompt, "--model", "x/y",
+            "--thinking", "low", "--root", self.root, *(extra or []),
+            env=self.spawn_env(extra=env_extra),
+        )  # fmt: skip
+
+    def test_spawn_creates_a_pane_whose_command_pins_the_board_contract(self):
+        rc, data, _, err = self.spawn(env_extra={"ATLAS_DB": "/lead/db"})
+        self.assertEqual(0, rc, (data, err))
+        self.assertTrue(data["ok"], data)
+        self.assertEqual(data["session"], "atlas-r1")
+        self.assertEqual(
+            [], _tmux_log_calls(self.state)
+        )  # no tmux call on the default path
+        words = shlex.split(self.pane_texts()[0])
+        self.assertEqual(words[:2], ["exec", "env"])
+        self.assertIn("ATLAS_WORKER_NAME=Alpha", words)
+        self.assertIn(f"ATLAS_PROJECT_ROOT={self.root}", words)
+        self.assertIn("ATLAS_DB=/lead/db", words)  # FORWARDED_ENV
+        i = words.index("run-worker")
+        self.assertEqual(words[i + 1 : i + 3], ["--run", "r1"])
+        self.assertIn("--thinking", words)  # tier travels to the worker
+        ws = next(p for m, p in self.fake.calls if m == "workspace.create")
+        self.assertEqual(ws["label"], "atlas-r1")
+        self.assertEqual(ws["env"]["ATLAS_WORKER_NAME"], "Alpha")
+
+    def test_tier_enforcement_refuses_before_any_pane(self):
+        prompt = self.make_prompt("p", "x")
+        rc, data, _, _ = _run(
+            "spawn", "--run", "r1", "--name", "Alpha", "--harness", "omp",
+            "--agent", "ghost", "--prompt-file", prompt, "--root", self.root,
+            env=self.spawn_env(),
+        )  # fmt: skip
+        self.assertEqual(rc, 2)
+        self.assertIn("tier enforcement", data["error"])
+        self.assertEqual([], [m for m, _ in self.fake.calls if m.endswith(".create")])
+        self.assertEqual([], _tmux_log_calls(self.state))
+
+    def test_name_taken_and_status_and_kill_round_trip(self):
+        self.assertEqual(0, self.spawn()[0])
+        rc, data, _, _ = self.spawn()
+        self.assertEqual(rc, 1)
+        self.assertIn("name_taken", data["error"])
+        rc, st, _, _ = _run(
+            "status", "--run", "r1", "--root", self.root, env=self.spawn_env()
+        )
+        self.assertEqual(
+            (st["transport"], [w["name"] for w in st["workers"]]), ("herdr", ["Alpha"])
+        )
+        self.assertFalse(st["tmux"])
+        rc, k, _, _ = _run(
+            "kill", "--run", "r1", "--root", self.root, env=self.spawn_env()
+        )
+        self.assertEqual((rc, k["killed"], k["transport"]), (0, True, "herdr"))
+        # a killed worker never writes its own exit: kill posts one so it does not read as working forever
+        self.assertIn(
+            "exit 137 [failed: killed by atlas_mux kill]",
+            _texts(_notes(self.root, "Alpha")),
+        )
+        self.assertEqual([], _tmux_log_calls(self.state))
+        rc, st, _, _ = _run(
+            "status", "--run", "r1", "--root", self.root, env=self.spawn_env()
+        )
+        self.assertEqual(st["workers"], [])
+        rc, k2, _, _ = _run(
+            "kill", "--run", "r1", "--root", self.root, env=self.spawn_env()
+        )
+        self.assertEqual((rc, k2["killed"]), (0, False))  # idempotent
+
+    def test_herdr_not_running_falls_back_to_tmux(self):
+        env = self.spawn_env(extra={"HERDR_SOCKET_PATH": "/nonexistent/h.sock"})
+        prompt = self.make_prompt("p", "x")
+        rc, data, _, err = _run(
+            "spawn", "--run", "r1", "--name", "Alpha", "--harness", "omp",
+            "--agent", "implementer", "--prompt-file", prompt, "--model", "x/y",
+            "--thinking", "low", "--root", self.root, env=env,
+        )  # fmt: skip
+        self.assertEqual(0, rc, (data, err))
+        self.assertIn("new-window", "\n".join(_tmux_log_calls(self.state)))
+
+    def test_run_worker_protocol_is_transport_independent(self):
+        """The pane command is the same run-worker invocation: argv note, output lines, then `exit <code>`."""
+        self.assertEqual(0, self.spawn(extra=["--command-override", "echo hi"])[0])
+        argv = shlex.split(self.pane_texts()[0])
+        i = argv.index("run-worker")
+        env = dict(self.env, ATLAS_PROJECT_ROOT=self.root)
+        out = subprocess.run(
+            [sys.executable, str(SCRIPT), *argv[i:]],
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=self.root,
+        )
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        texts = _texts(_wait_exit(self.root, "Alpha"))
+        self.assertEqual(texts[-2:], ["hi", "exit 0"])
+
+
+class DeadFlagTests(unittest.TestCase):
+    def test_only_plain_ascii_digits_parse_else_zero(self):
+        import atlas_mux
+
+        self.assertEqual(atlas_mux._dead_flag("1"), 1)
+        self.assertEqual(atlas_mux._dead_flag("0"), 0)
+        for bad in ("", "x", "-1", "1.0", "\u00b2", "\u0663"):
+            self.assertEqual(atlas_mux._dead_flag(bad), 0, repr(bad))
 
 
 if __name__ == "__main__":

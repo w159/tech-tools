@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""atlas_mux -- opt-in tmux colony mode (ATLAS_MUX=tmux).
+"""atlas_mux -- opt-in colony mode (ATLAS_MUX=tmux); workers run as panes of a herdr workspace.
 
-Each worker runs as its own headless harness process in a window of one tmux
-session `atlas-<run>`, at the cost tier its agent definition declares:
+Transport: herdr by default (workspace `atlas-<run>`, one tab/pane per worker, created over the herdr socket by
+atlas_herdr.create_pane). tmux is the explicit fallback: ATLAS_COLONY_TRANSPORT=tmux, or herdr is not running
+(session `atlas-<run>`, one window per worker). Each worker runs as its own headless harness process,
+at the cost tier its agent definition declares:
 
   claude: claude -p --agent atlas:<role> --model <m> --effort <e> --permission-mode <p> <prompt>
           (tier from plugins/atlas/agents/<role>.md `model:` / `effort:`)
@@ -13,7 +15,7 @@ session `atlas-<run>`, at the cost tier its agent definition declares:
           CONCRETE selector under modelRoles in ~/.omp/agent/config.yml
           (ATLAS_MUX_OMP_CONFIG overrides the path) and that selector is what omp gets)
 
-Tier enforcement: spawn refuses (ok:false, exit 2, before any tmux call) when the
+Tier enforcement: spawn refuses (ok:false, exit 2, before any pane/tmux call) when the
 role's definition is missing or yields no model, unless the caller passes an explicit
 --model AND the harness tier flag (--effort claude | --thinking omp). An omp --model
 (or definition pattern list) that resolves to nothing is always refused.
@@ -45,8 +47,10 @@ import json
 import os
 import re
 import shlex
+import signal
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import atlas_todo
@@ -118,8 +122,52 @@ def _session(run: str) -> str:
     return f"atlas-{run}"
 
 
+def clean_env(env: dict | None = None) -> dict:
+    """Env for tmux and its panes with every cmux hook removed (CMUX_*, TERM_PROGRAM=cmux) and cmux CLI shims off
+    PATH, so nothing in a pane can reach the cmux socket or surface a UI."""
+    out = {
+        k: v
+        for k, v in (os.environ if env is None else env).items()
+        if not k.startswith("CMUX_")
+    }
+    if out.get("TERM_PROGRAM", "").lower() == "cmux":
+        del out["TERM_PROGRAM"]
+    if out.get("PATH"):
+        out["PATH"] = os.pathsep.join(
+            p
+            for p in out["PATH"].split(os.pathsep)
+            if ".cmuxterm" not in p
+            and "cmux-cli-shims" not in p
+            and "cmux.app" not in p.lower()
+        )
+    return out
+
+
 def _tmux(*args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["tmux", *args], capture_output=True, text=True)
+    return subprocess.run(
+        ["tmux", *args], capture_output=True, text=True, env=clean_env()
+    )
+
+
+def transport() -> str:
+    """'herdr' (default) or 'tmux'. tmux only when ATLAS_COLONY_TRANSPORT=tmux, or herdr is not running."""
+    if os.environ.get("ATLAS_COLONY_TRANSPORT", "").lower() == "tmux":
+        return "tmux"
+    import atlas_herdr
+
+    return "herdr" if atlas_herdr._server_up() else "tmux"
+
+
+def pane_env(root: str, name: str) -> dict:
+    """Env pinned on every worker pane, whatever the transport: the board contract plus the forwarded lead env."""
+    env = {"ATLAS_PROJECT_ROOT": root, "ATLAS_WORKER_NAME": name}
+    env.update({k: os.environ[k] for k in FORWARDED_ENV if os.environ.get(k)})
+    return env
+
+
+def pane_command(env: dict, argv: list) -> str:
+    """`exec env K=V ... argv`: the pins travel in the command itself, so a shell that resets its env cannot drop them."""
+    return "exec " + shlex.join(["env", *[f"{k}={v}" for k, v in env.items()], *argv])
 
 
 def _agents_dir(harness: str, override: str | None) -> Path:
@@ -141,7 +189,10 @@ def _frontmatter(path: Path) -> tuple[dict, str]:
     for line in text[3:end].splitlines():
         m = re.match(r"^([A-Za-z_][\w-]*):\s*(.*)$", line)
         if m:
-            fields[m.group(1)] = m.group(2).strip()
+            v = m.group(2).strip()
+            if len(v) > 1 and v[0] == v[-1] and v[0] in "\"'":
+                v = v[1:-1]  # gen-agents.ts quotes scalars: thinkingLevel: "medium"
+            fields[m.group(1)] = v
     return fields, text[text.find("\n", end + 1) + 1 :]
 
 
@@ -302,7 +353,7 @@ def _validate(args) -> str | None:
 
 def _dead_flag(raw: str) -> int:
     """tmux #{window_dead} as 0/1; anything that is not a plain digit string is 0."""
-    return int(raw) if raw.isdigit() else 0
+    return int(raw) if raw.isascii() and raw.isdigit() else 0
 
 
 def _windows(session: str) -> list | None:
@@ -329,6 +380,26 @@ def _windows(session: str) -> list | None:
     return out
 
 
+def _open_window(session: str, name: str, pane: str) -> str | None:
+    """Create the session when missing and open window `name` in it; an error string or None.
+
+    Serialised per session by a lock file; a "duplicate session" from tmux (another process
+    created it first) just means the session exists."""
+    lock = Path(tempfile.gettempdir()) / f"atlas-mux-{session}"
+    with atlas_todo._file_lock(lock):
+        if _tmux("has-session", "-t", session).returncode != 0:
+            created = _tmux("new-session", "-d", "-s", session, "-n", "lead")
+            if created.returncode != 0 and "duplicate session" not in created.stderr:
+                return f"tmux new-session failed: {created.stderr.strip()}"
+            _tmux("set-option", "-t", session, "remain-on-exit", "off")
+        elif any(w["name"] == name for w in _windows(session) or []):
+            return f"name_taken: {name} already runs in {session}"
+        res = _tmux("new-window", "-d", "-t", session, "-n", name, pane)
+        if res.returncode != 0:
+            return f"tmux new-window failed: {res.stderr.strip()}"
+    return None
+
+
 def cmd_spawn(args) -> int:
     error = _validate(args)
     if error:
@@ -346,27 +417,8 @@ def cmd_spawn(args) -> int:
     )
     if tier_error:
         return _emit({"ok": False, "error": tier_error}, 2)
-    if _tmux("has-session", "-t", session).returncode != 0:
-        created = _tmux("new-session", "-d", "-s", session, "-n", "lead")
-        if created.returncode != 0:
-            return _emit(
-                {
-                    "ok": False,
-                    "error": f"tmux new-session failed: {created.stderr.strip()}",
-                },
-                1,
-            )
-        _tmux("set-option", "-t", session, "remain-on-exit", "off")
-    else:
-        live = _windows(session) or []
-        if any(w["name"] == args.name for w in live):
-            return _emit(
-                {
-                    "ok": False,
-                    "error": f"name_taken: {args.name} already runs in {session}",
-                },
-                1,
-            )
+    # Session creation, the name check and new-window run under one lock (_open_window):
+    # parallel spawns of one run raced check-then-create and 7 of 8 failed.
     worker = [
         sys.executable,
         str(Path(__file__).resolve()),
@@ -383,6 +435,8 @@ def cmd_spawn(args) -> int:
         os.path.abspath(args.prompt_file),
         "--root",
         root,
+        "--cwd",
+        os.path.abspath(args.cwd) if args.cwd else root,
         "--permission-mode",
         args.permission_mode,
     ]
@@ -409,11 +463,25 @@ def cmd_spawn(args) -> int:
         + (shlex.join(["env", *forwarded]) + " " if forwarded else "")
         + shlex.join(worker)
     )
-    res = _tmux("new-window", "-d", "-t", session, "-n", args.name, pane)
-    if res.returncode != 0:
-        return _emit(
-            {"ok": False, "error": f"tmux new-window failed: {res.stderr.strip()}"}, 1
+    use = transport()
+    if use == "herdr":
+        # herdr panes get the board pins as well: run-worker re-pins them for the harness, the pane shell needs them
+        # for anything the lead runs there (and for the hooks of a manually started harness).
+        import atlas_herdr
+
+        pins = pane_env(root, args.name)
+        made = atlas_herdr.create_pane(
+            args.name,
+            pane_command(pins, worker),
+            cwd=os.path.abspath(args.cwd) if args.cwd else root,
+            run=args.run,
+            env=pins,
         )
+        failure = None if made["ok"] else made["reason"]
+    else:
+        failure = _open_window(session, args.name, pane)
+    if failure:
+        return _emit({"ok": False, "error": failure}, 1)
     return _emit(
         {
             "ok": True,
@@ -464,7 +532,7 @@ def cmd_run_worker(args) -> int:
             args.permission_mode,
             args.omp_extension,
         )
-    env = dict(os.environ, ATLAS_PROJECT_ROOT=root, ATLAS_WORKER_NAME=args.name)
+    env = dict(clean_env(), ATLAS_PROJECT_ROOT=root, ATLAS_WORKER_NAME=args.name)
 
     def post(text: str) -> None:
         atlas_todo.note(root, args.name, text, to="lead")
@@ -473,7 +541,7 @@ def cmd_run_worker(args) -> int:
     try:
         proc = subprocess.Popen(
             argv,
-            cwd=root,
+            cwd=args.cwd or root,
             env=env,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -485,31 +553,38 @@ def cmd_run_worker(args) -> int:
         post("exit 127 [failed: spawn error]")
         return 127
     assert proc.stdout is not None
+
+    def _killed(signum, _frame):
+        raise SystemExit(128 + signum)
+
+    # tmux kill-window sends SIGHUP; kill/stop send SIGTERM. Without a handler the
+    # worker dies silently and its board never shows an exit.
+    for sig in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(sig, _killed)
     seen = []
-    for raw in proc.stdout:
-        text = raw.rstrip("\n")
-        print(text, flush=True)
-        if text.strip():
-            if not NOISE_RE.match(text):
-                seen.append(text)
-            post(text)
-    code, reason = _classify("\n".join(seen), proc.wait())
+    try:
+        for raw in proc.stdout:
+            text = raw.rstrip("\n")
+            print(text, flush=True)
+            if text.strip():
+                if not NOISE_RE.match(text):
+                    seen.append(text)
+                post(text)
+        code, reason = _classify("\n".join(seen), proc.wait())
+    except (SystemExit, KeyboardInterrupt) as exc:
+        code = (
+            exc.code
+            if isinstance(exc, SystemExit) and isinstance(exc.code, int)
+            else 130
+        )
+        proc.terminate()
+        post(f"exit {code} [failed: killed by signal {code - 128}]")
+        return code
     post(f"exit {code}" + (f" [failed: {reason}]" if reason else ""))
     return code
 
 
-def cmd_status(args) -> int:
-    session = _session(args.run)
-    root = Path(
-        os.path.abspath(
-            args.root or os.environ.get("ATLAS_PROJECT_ROOT") or os.getcwd()
-        )
-    )
-    windows = (
-        _windows(session)
-        if _tmux("has-session", "-t", session).returncode == 0
-        else None
-    )
+def _board_exits(root: Path) -> list:
     board = []
     for path in sorted((root / BOARD_REL).glob("*.jsonl")):
         exit_code = None
@@ -529,24 +604,97 @@ def cmd_status(args) -> int:
         except OSError:
             continue
         board.append({"name": path.stem, "path": str(path), "exit": exit_code})
+    return board
+
+
+def cmd_status(args) -> int:
+    session = _session(args.run)
+    root = Path(
+        os.path.abspath(
+            args.root or os.environ.get("ATLAS_PROJECT_ROOT") or os.getcwd()
+        )
+    )
+    use = transport()
+    if use == "herdr":
+        import atlas_herdr
+
+        try:
+            windows = [
+                {"name": p["label"], "dead": 0, "pid": p["pane_id"]}
+                for p in atlas_herdr.list_panes(args.run)
+            ]
+        except atlas_herdr.HerdrSockError:
+            windows = None
+    else:
+        windows = (
+            _windows(session)
+            if _tmux("has-session", "-t", session).returncode == 0
+            else None
+        )
     workers = [w for w in (windows or []) if w["name"] != "lead"]
     return _emit(
         {
             "ok": True,
             "run": args.run,
             "session_name": session,
-            "tmux": windows is not None,
+            "transport": use,
+            "tmux": use == "tmux" and windows is not None,
             "workers": workers,
-            "board": board,
+            "board": _board_exits(root),
         }
     )
 
 
+def _exited(root: str, name: str) -> bool:
+    """True when the worker's own last board note is an exit note."""
+    mine = [r for r in atlas_todo.notes(root) if str(r.get("owner")) == name]
+    return bool(mine) and bool(EXIT_NOTE_RE.match(str(mine[-1].get("text") or "")))
+
+
 def cmd_kill(args) -> int:
     session = _session(args.run)
+    root = os.path.abspath(
+        args.root or os.environ.get("ATLAS_PROJECT_ROOT") or os.getcwd()
+    )
+    if transport() == "herdr":
+        import atlas_herdr
+
+        res = atlas_herdr.close_run(args.run)
+        if not res["ok"]:
+            return _emit(
+                {
+                    "ok": False,
+                    "session_name": session,
+                    "killed": False,
+                    "error": res["reason"],
+                },
+                1,
+            )
+        # a killed worker never writes its own exit: without one it reads as working forever
+        for name in res["closed"]:
+            if not _exited(root, name):
+                atlas_todo.note(
+                    root, name, "exit 137 [failed: killed by atlas_mux kill]", to="lead"
+                )
+        return _emit(
+            {
+                "ok": True,
+                "session_name": session,
+                "transport": "herdr",
+                "killed": bool(res["closed"]),
+            }
+        )
     if _tmux("has-session", "-t", session).returncode != 0:
         return _emit({"ok": True, "session_name": session, "killed": False})
+    victims = [w["name"] for w in _windows(session) or [] if w["name"] != "lead"]
     res = _tmux("kill-session", "-t", session)
+    if res.returncode == 0:
+        # a killed worker never writes its own exit: without one it reads as working forever
+        for name in victims:
+            if not _exited(root, name):
+                atlas_todo.note(
+                    root, name, "exit 137 [failed: killed by atlas_mux kill]", to="lead"
+                )
     return _emit(
         {
             "ok": res.returncode == 0,
@@ -602,6 +750,7 @@ def _parser() -> argparse.ArgumentParser:
             required=internal,
             help="project root (default ATLAS_PROJECT_ROOT or cwd)",
         )
+        sp.add_argument("--cwd", help="harness working directory (default: --root)")
 
     worker_opts(sub.add_parser("spawn", help="start one worker window"))
     worker_opts(

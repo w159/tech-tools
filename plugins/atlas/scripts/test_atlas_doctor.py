@@ -1,3 +1,4 @@
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import contextlib
 import io
 import json
@@ -96,6 +97,15 @@ class AtlasDoctorTest(unittest.TestCase):
         atlas_doctor.PLUGINS_DIR = self.plugins
         atlas_doctor.STATE_PATH = self.state
         os.environ["CLAUDE_PLUGIN_ROOT"] = self.self_root
+        omp_patch = mock.patch.dict(
+            os.environ,
+            {"ATLAS_OMP_PLUGINS_DIR": os.path.join(self.tmp, ".omp", "plugins")},
+        )
+        omp_patch.start()
+        self.addCleanup(omp_patch.stop)
+        cmux_patch = mock.patch.object(atlas_doctor, "_cmux_bin", return_value=None)
+        cmux_patch.start()
+        self.addCleanup(cmux_patch.stop)
 
     def tearDown(self):
         (
@@ -797,6 +807,222 @@ class AtlasDoctorTest(unittest.TestCase):
             self.assertEqual(cm.exception.code, 2)
             self.assertIn("internal error", buf.getvalue())
 
+    # --- behavioural checks / hook safety / isolation -------------------------
+
+    def test_plain_check_never_writes_state_but_hook_does(self):
+        with contextlib.redirect_stdout(io.StringIO()):
+            atlas_doctor.main([])
+        self.assertFalse(os.path.exists(self.state))
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(atlas_doctor.main(["--hook"]), 0)
+        self.assertEqual(json.load(open(self.state)), {"atlas@tech-tools": "1.0.1"})
+
+    def test_hook_with_corrupt_state_exits_zero_and_leaves_a_fault(self):
+        import atlas_faults
+
+        with open(self.state, "w") as f:
+            f.write("{not json")
+        t0 = time.time() - 1
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(atlas_doctor.main(["--hook"]), 0)
+        self.assertTrue(
+            [f for f in atlas_faults.load(t0) if f["hook"] == "atlas_doctor"]
+        )
+
+    def test_hook_swallows_internal_error_but_cli_does_not(self):
+        import atlas_faults
+
+        t0 = time.time() - 1
+        with mock.patch.object(atlas_doctor, "run_checks", side_effect=OSError("disk")):
+            self.assertEqual(atlas_doctor.main(["--hook"]), 0)
+            with self.assertRaises(OSError):
+                atlas_doctor.main([])
+        self.assertTrue([f for f in atlas_faults.load(t0) if "disk" in f["error"]])
+
+    def test_atlas_home_alone_isolates_state_and_db(self):
+        home = os.path.join(self.tmp, "fakehome")
+        ah = os.path.join(self.tmp, "ah")
+        os.makedirs(home)
+        env = {
+            k: v
+            for k, v in os.environ.items()
+            if k not in ("ATLAS_DB", "ATLAS_DOCTOR_STATE", "ATLAS_HOME", "HOME")
+        }
+        env.update(
+            HOME=home,
+            ATLAS_HOME=ah,
+            ATLAS_PLUGINS_DIR=self.plugins,
+            CLAUDE_PLUGIN_ROOT=self.self_root,
+        )
+        script = os.path.join(os.path.dirname(atlas_doctor.__file__), "atlas_doctor.py")
+        r = subprocess.run(
+            [sys.executable, script, "--hook"], env=env, capture_output=True, text=True
+        )
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(os.path.exists(os.path.join(ah, "doctor-state.json")))
+        self.assertFalse(os.path.exists(os.path.join(home, ".atlas")))
+
+    def _checks(self):
+        return self.by_check(atlas_doctor.run_checks("atlas")[0])
+
+    def _omp_registry(self, version, with_files=True):
+        omp = os.path.join(self.tmp, ".omp", "plugins")
+        ip = os.path.join(omp, "cache", "atlas")
+        write_json(
+            os.path.join(omp, "installed_plugins.json"),
+            {
+                "plugins": {
+                    "atlas@tech-tools": [{"installPath": ip, "version": version}]
+                }
+            },
+        )
+        if with_files:
+            for rel in ("omp/index.ts", "omp/hook-bridge.ts", "hooks/hooks.json"):
+                p = os.path.join(ip, rel)
+                os.makedirs(os.path.dirname(p), exist_ok=True)
+                open(p, "w").close()
+
+    def test_omp_bridge_na_without_omp(self):
+        self.assertTrue(self._checks()["omp-bridge"]["ok"])
+
+    def test_omp_bridge_fails_on_version_skew_and_missing_files(self):
+        self._omp_registry("2.3.0", with_files=False)
+        self.assertIn("unreachable", self._checks()["omp-bridge"]["detail"])
+        shutil.rmtree(os.path.join(self.tmp, ".omp"))
+        self._omp_registry("1.0.0")
+        c = self._checks()["omp-bridge"]
+        self.assertFalse(c["ok"])
+        self.assertIn("stale", c["detail"])
+        shutil.rmtree(os.path.join(self.tmp, ".omp"))
+        self._omp_registry("2.3.0")
+        self.assertTrue(self._checks()["omp-bridge"]["ok"])
+
+    def _fake_cmux(self, exit_code):
+        p = os.path.join(self.tmp, f"cmux{exit_code}")
+        with open(p, "w") as f:
+            f.write(f'#!/bin/sh\n[ "$1" = capabilities ] || exit 9\nexit {exit_code}\n')
+        os.chmod(p, 0o755)
+        return p
+
+    def test_cmux_absent_is_na_never_a_failure(self):
+        c = self._checks()
+        self.assertTrue(c["cmux-socket"]["ok"])
+        self.assertTrue(c["cmux-browser"]["ok"])
+        self.assertIn("n/a", c["cmux-browser"]["detail"])
+
+    def test_cmux_socket_and_unregistered_mcp_warn_with_install_steps(self):
+        home = os.path.join(self.tmp, "home")
+        os.makedirs(home)
+        with (
+            mock.patch.object(
+                atlas_doctor, "_cmux_bin", return_value=self._fake_cmux(0)
+            ),
+            mock.patch.dict(os.environ, {"HOME": home}),
+            mock.patch.object(atlas_doctor.sys, "platform", "darwin"),
+        ):
+            c = self._checks()
+        self.assertTrue(c["cmux-socket"]["ok"])
+        self.assertEqual(c["cmux-socket"]["severity"], "warn")
+        b = c["cmux-browser"]
+        self.assertFalse(b["ok"])
+        self.assertEqual(b["severity"], "warn")
+        self.assertIn("cmux-browser MCP not registered", b["detail"])
+        self.assertIn("cmux-browser-mcp", b["detail"])
+        self.assertIn("install.sh", b["detail"])
+
+    def test_cmux_socket_down_and_mcp_registered_redacted(self):
+        home = os.path.join(self.tmp, "home")
+        write_json(
+            os.path.join(home, ".omp", "agent", "mcp.json"),
+            {"mcpServers": {"cmux-browser": {"env": {"TOKEN": "s3cret"}}}},
+        )
+        with (
+            mock.patch.object(
+                atlas_doctor, "_cmux_bin", return_value=self._fake_cmux(1)
+            ),
+            mock.patch.dict(os.environ, {"HOME": home}),
+            mock.patch.object(atlas_doctor.sys, "platform", "darwin"),
+        ):
+            c = self._checks()
+        self.assertFalse(c["cmux-socket"]["ok"])
+        self.assertTrue(c["cmux-browser"]["ok"])
+        self.assertIn("mcp.json", c["cmux-browser"]["detail"])
+        self.assertNotIn("s3cret", c["cmux-browser"]["detail"])
+        write_json(
+            os.path.join(home, ".claude.json"),
+            {"projects": {"/x": {"mcpServers": {"cmux-browser": {}}}}},
+        )
+        os.remove(os.path.join(home, ".omp", "agent", "mcp.json"))
+        with (
+            mock.patch.object(
+                atlas_doctor, "_cmux_bin", return_value=self._fake_cmux(0)
+            ),
+            mock.patch.dict(os.environ, {"HOME": home}),
+            mock.patch.object(atlas_doctor.sys, "platform", "darwin"),
+        ):
+            self.assertIn(".claude.json", self._checks()["cmux-browser"]["detail"])
+
+    def test_hook_faults_gate_the_verdict(self):
+        import atlas_faults
+
+        self.assertTrue(self._checks()["hook-faults"]["ok"])
+        for i in range(atlas_doctor.FAULT_FAIL_24H):
+            atlas_faults.record("recall_gate", RuntimeError(f"x{i}"))
+        c = self._checks()["hook-faults"]
+        self.assertFalse(c["ok"])
+        self.assertEqual(c["severity"], "fail")
+        self.assertIn("recall_gate", c["detail"])
+
+    def test_env_kill_switch_makes_gates_inert_and_unhealthy(self):
+        with mock.patch.dict(os.environ, {"ATLAS_GATES": "off"}):
+            c = self._checks()["gates-armed"]
+        self.assertFalse(c["ok"])
+        self.assertEqual(c["severity"], "fail")
+
+    def test_inert_enforcement_is_reported_from_the_db(self):
+        proj = os.path.join(self.tmp, "proj")
+        os.makedirs(os.path.join(proj, ".git"))
+        db = os.path.join(self.tmp, "beh.db")
+        conn = atlas_db.connect(db)
+        atlas_db.init(conn)
+        now = time.time()
+        atlas_db.upsert_session_log(conn, "s1", cwd=proj, last_ingest_at=now)
+        for i in range(atlas_doctor.INERT_MIN_NATIVE):
+            atlas_db.insert_tool_call(
+                conn,
+                "s1",
+                {
+                    "tool_use_id": f"g{i}",
+                    "ts": now,
+                    "tool_name": "Grep",
+                    "kind": "builtin",
+                    "target": "Grep",
+                },
+            )
+        conn.commit()
+        conn.close()
+        with mock.patch.dict(os.environ, {"ATLAS_DB": db, "ATLAS_GATES": "always"}):
+            c = self._checks()
+        self.assertFalse(c["enforcement-rates"]["ok"])
+        self.assertIn("INERT", c["enforcement-rates"]["detail"])
+        self.assertTrue(c["db-recent-writes"]["ok"])
+        conn = atlas_db.connect(db)  # same traffic, but every grep was denied
+        conn.execute("UPDATE tool_calls SET denied=1")
+        conn.commit()
+        conn.close()
+        with mock.patch.dict(os.environ, {"ATLAS_DB": db, "ATLAS_GATES": "always"}):
+            self.assertTrue(self._checks()["enforcement-rates"]["ok"])
+
+    def test_unwritable_db_fails_the_doctor(self):
+        db = os.path.join(self.tmp, "ro.db")
+        atlas_db.connect(db).close()
+        os.chmod(db, 0o444)
+        with mock.patch.dict(os.environ, {"ATLAS_DB": db}):
+            c = self._checks()["db-writable"]
+        os.chmod(db, 0o644)
+        if os.geteuid() != 0:
+            self.assertFalse(c["ok"])
+
 
 class AtlasDoctorMiningTest(unittest.TestCase):
     """Self-improvement loop: miners -> findings -> baseline -> remeasure."""
@@ -1004,7 +1230,7 @@ class AtlasDoctorMiningTest(unittest.TestCase):
                 "s1",
                 {
                     "message_uuid": f"m{i}",
-                    "ts": float(i),
+                    "ts": time.time() - 100 + i,
                     "tool_name": "Bash",
                     "kind": "builtin",
                     "target": "Bash",
@@ -1024,6 +1250,7 @@ class AtlasDoctorMiningTest(unittest.TestCase):
                 "tool_name": target,
                 "kind": kind,
                 "target": target,
+                "ts": time.time() - 60,
             },
         )
         atlas_db.update_tool_result(self.conn, tuid, is_error, 10, text)
@@ -1080,6 +1307,7 @@ class AtlasDoctorMiningTest(unittest.TestCase):
                 "s1",
                 {
                     "tool_use_id": f"o{i}",
+                    "ts": time.time() - 60,
                     "tool_name": "Bash",
                     "kind": "builtin",
                     "target": "Bash",
@@ -1249,9 +1477,9 @@ class AtlasDoctorMiningTest(unittest.TestCase):
         updated = atlas_doctor.remeasure(self.conn, self.root)
         self.assertEqual(len(updated), 1)
         self.assertEqual(updated[0]["verdict"], "improved")
-        # min_count=3 in the miner: a count of 1 no longer reproduces this
-        # finding at all, so measure_finding_metric reports it resolved (0.0).
-        self.assertEqual(updated[0]["remeasured_value"], 0.0)
+        # min_count=3: a count of 1 no longer fires, but the miner still reports
+        # the real current count (1), never a fabricated 0.0.
+        self.assertEqual(updated[0]["remeasured_value"], 1)
 
     def test_remeasure_no_change_verdict(self):
         finding = self._seed_friction_finding(5)
@@ -1333,6 +1561,171 @@ class AtlasDoctorMiningTest(unittest.TestCase):
         self.assertEqual(
             self.conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0], 1
         )
+
+
+class RemeasureVerdictTest(unittest.TestCase):
+    """Verdicts must reflect a real measurement, never an artifact."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.db = os.path.join(self.tmp, "atlas.db")
+        self._orig_db = os.environ.get("ATLAS_DB")
+        os.environ["ATLAS_DB"] = self.db
+        self.conn = atlas_db.connect(self.db)
+        atlas_db.init(self.conn)
+        self.pid = atlas_db.register_project(self.conn, "/repo/proj")
+        self.root = self.tmp
+
+    def tearDown(self):
+        self.conn.close()
+        if self._orig_db is None:
+            os.environ.pop("ATLAS_DB", None)
+        else:
+            os.environ["ATLAS_DB"] = self._orig_db
+        shutil.rmtree(self.tmp)
+
+    def test_verdict_table(self):
+        v = atlas_doctor.remeasure_verdict
+        rows = [
+            # baseline, value, higher, expected
+            (0.5, 0.2, False, "improved"),
+            (0.2, 0.5, False, "regressed"),
+            (0.5, 0.5, False, "no_change"),
+            (0.5, 0.505, False, "no_change"),  # inside the noise band
+            (0.5, 0.9, True, "improved"),  # higher-is-better
+            (0.9, 0.5, True, "regressed"),
+            (5.0, 5.05, False, "no_change"),
+            (None, 0.3, False, "no_baseline"),
+        ]
+        for base, val, higher, want in rows:
+            self.assertEqual(v(base, val, higher), want, (base, val, higher))
+
+    def _tool_calls(self, n_ok, n_err):
+        for i in range(n_ok + n_err):
+            atlas_db.insert_tool_call(
+                self.conn,
+                "s1",
+                {
+                    "message_uuid": f"m{i}",
+                    "ts": time.time() - 100 + i,
+                    "tool_use_id": f"t{self._seq}-{i}",
+                    "tool_name": "Bash",
+                    "kind": "builtin",
+                    "target": "Bash",
+                },
+            )
+            if i < n_err:
+                atlas_db.update_tool_result(
+                    self.conn, f"t{self._seq}-{i}", 1, 10, "boom"
+                )
+            else:
+                atlas_db.update_tool_result(self.conn, f"t{self._seq}-{i}", 0, 10)
+        self._seq += 1
+
+    _seq = 0
+
+    def _due(self, finding, baseline, metric):
+        atlas_db.record_improvement(
+            self.conn,
+            0,
+            finding["dimension"],
+            str(baseline),
+            "0",
+            None,
+            finding_id=finding["id"],
+            metric=metric,
+            baseline_value=baseline,
+            target_value=0.0,
+            measure_after_runs=1,
+        )
+        atlas_db.finalize_run(
+            self.conn, atlas_db.start_run(self.conn, self.pid, "later")
+        )
+
+    def _finding(self, fingerprint):
+        return atlas_db.get_finding(
+            self.conn,
+            self.conn.execute(
+                "SELECT id FROM findings WHERE fingerprint=?", (fingerprint,)
+            ).fetchone()[0],
+        )
+
+    def test_rate_below_threshold_is_measured_not_zeroed(self):
+        # 5 of 10 errored -> finding; then 8 more clean calls -> 5/18 = 0.28 (still
+        # above 0.2) -- push further so it drops under the 0.2 threshold: 5/30.
+        self._tool_calls(5, 5)
+        atlas_doctor.mine(self.conn, self.root)
+        fp = "tool_error_rate_high:builtin:bash"
+        finding = self._finding(fp)
+        self._due(finding, 0.5, "tool_error_rate")
+        self._tool_calls(20, 0)  # 5/30 = 0.1667 < 0.2: no longer fires
+        updated = atlas_doctor.remeasure(self.conn, self.root)
+        self.assertEqual(updated[0]["verdict"], "improved")
+        self.assertAlmostEqual(updated[0]["remeasured_value"], 5 / 30, places=3)
+
+    def test_under_min_calls_is_not_reproduced_with_null_value(self):
+        self._tool_calls(5, 5)
+        atlas_doctor.mine(self.conn, self.root)
+        finding = self._finding("tool_error_rate_high:builtin:bash")
+        self._due(finding, 0.5, "tool_error_rate")
+        self.conn.execute("DELETE FROM tool_calls")  # miner now has <min_calls data
+        self.conn.commit()
+        updated = atlas_doctor.remeasure(self.conn, self.root)
+        self.assertEqual(updated[0]["verdict"], "not_reproduced")
+        self.assertIsNone(updated[0]["remeasured_value"])
+        row = self.conn.execute(
+            "SELECT verdict, remeasured_value FROM improvements"
+        ).fetchone()
+        self.assertEqual(row, ("not_reproduced", None))
+        self.assertIsNone(
+            atlas_doctor.measure_finding_metric(self.conn, finding, self.root)
+        )
+
+    def _coverage_run(self, sid, cov):
+        rid = atlas_db.start_run(self.conn, self.pid, sid)
+        atlas_db.finalize_run(self.conn, rid)
+        self.conn.execute(
+            "UPDATE metrics SET verifier_coverage=? WHERE run_id=?", (cov, rid)
+        )
+        self.conn.commit()
+
+    def test_verifier_coverage_recovery_is_improved_not_regressed(self):
+        self._coverage_run("a", 0.1)
+        atlas_doctor.mine(self.conn, self.root)
+        finding = self._finding("verifier_coverage_low:verifier_coverage_low")
+        self._due(finding, 0.1, "label-without-direction")  # direction from the key
+        for i in range(60):  # recovered: average >= 0.7, miner stops emitting
+            self._coverage_run(f"b{i}", 1.0)
+        updated = atlas_doctor.remeasure(self.conn, self.root)
+        self.assertEqual(updated[0]["verdict"], "improved")
+        self.assertGreater(updated[0]["remeasured_value"], 0.7)
+
+    def test_inline_dispatch_ratio_survives_null_inline_ops(self):
+        for sid, io in (("n", None), ("v", 30)):
+            rid = atlas_db.start_run(self.conn, self.pid, sid)
+            atlas_db.finalize_run(self.conn, rid)
+            self.conn.execute(
+                "UPDATE metrics SET inline_ops=?, dispatches=1 WHERE run_id=?",
+                (io, rid),
+            )
+        self.conn.commit()
+        found = atlas_doctor.mine_inline_dispatch_ratio(self.conn, self.root)
+        self.assertEqual(len(found), 1)
+        self.assertAlmostEqual(found[0]["metric_value"], 30.0)
+
+    def test_miner_error_is_persisted_not_just_returned(self):
+        import atlas_faults
+
+        def boom(conn, root):
+            raise RuntimeError("miner exploded")
+
+        with mock.patch.dict(atlas_doctor.MINERS, {"boom_miner": boom}):
+            t0 = time.time() - 1
+            counts = atlas_doctor.mine(self.conn, self.root)
+        self.assertTrue(counts["boom_miner"].startswith("error:"))
+        faults = [f for f in atlas_faults.load(t0) if f["hook"] == "miner:boom_miner"]
+        self.assertEqual(len(faults), 1)
+        self.assertIn("miner exploded", faults[0]["error"])
 
 
 class MineTurnQualityHarnessTest(unittest.TestCase):

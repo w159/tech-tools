@@ -11,6 +11,7 @@ The real skills directory currently contains non-`atlas-` subdirs
 We therefore import it for the first time inside the mock harness.
 """
 
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import importlib
 import io
 import os

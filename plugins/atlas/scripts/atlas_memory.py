@@ -25,10 +25,11 @@ import json
 import os
 import re
 import tempfile
+import time
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 # fcntl is Unix-only; on Windows use msvcrt for file locking
 fcntl = None
@@ -52,6 +53,60 @@ ENTRY_DELIMITER = "\n§\n"
 # reaching it. When this cap is hit, oldest entries are rotated into a dated
 # archive file rather than dropped (see _rotate_to_fit).
 WORKING_CAP_CHARS = 20_000
+
+
+# Secrets never reach long-term memory: MEMORY.md is re-injected at every SessionStart and
+# captured text comes from raw user messages. ponytail: pattern list, not entropy detection;
+# add a shape here when a new secret format leaks.
+_REDACTED = "[REDACTED]"
+_SECRET_PATTERNS = [
+    (
+        re.compile(
+            r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|\Z)"
+        ),
+        _REDACTED,
+    ),
+    (
+        re.compile(r"\beyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]*"),
+        _REDACTED,
+    ),  # JWT
+    (re.compile(r"(?i)\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}"), r"\1 " + _REDACTED),
+    (
+        re.compile(r"\b([A-Za-z][\w+.-]*://)[^\s:/@]+:[^\s@/]+@"),
+        r"\1" + _REDACTED + "@",
+    ),  # URL userinfo
+    (
+        re.compile(
+            r"\b(?:(?:sk|pk|rk)[-_][A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}"
+            r"|xox[abprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}"
+            r"|glpat-[A-Za-z0-9_-]{16,}|npm_[A-Za-z0-9]{30,}|SG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,})"
+        ),
+        _REDACTED,
+    ),
+    (  # key=value / key: value, quoted values may hold spaces
+        re.compile(
+            r"(?i)\b([\w.-]*(?:password|passwd|pwd|passphrase|secret|token|api[_-]?key|apikey|access[_-]?key"
+            r"|private[_-]?key|credentials?|authorization)[\w-]*[\"']?\s*[:=]\s*)"
+            r"(?:\"[^\"\n]*\"|'[^'\n]*'|[^\s,;\"']+)"
+        ),
+        r"\1" + _REDACTED,
+    ),
+    (  # "password hunter2" / "api key is abc123": whitespace form, value must look non-prose
+        re.compile(
+            r"(?i)\b((?:password|passwd|passphrase|pwd|secret|token|api[ _-]?key)\s+(?:is\s+)?)"
+            r"(?=\S*[\d!@#$%^&*_=+-])(?!\[REDACTED\])\S{6,}"
+        ),
+        r"\1" + _REDACTED,
+    ),
+]
+
+
+def redact_secrets(text: str) -> str:
+    """Replace credential-shaped substrings (keys, bearer tokens, JWTs, passwords,
+    key=value secrets, private key blocks, URL credentials) with [REDACTED]."""
+    for pattern, repl in _SECRET_PATTERNS:
+        text = pattern.sub(repl, text)
+    return text
 
 
 def _memory_dir() -> Path:
@@ -84,9 +139,15 @@ def _archive_path(target: str) -> Path:
     return _archive_dir() / f"{name}-{stamp}.md"
 
 
+class LockTimeout(OSError):
+    """`_file_lock(timeout=...)` could not take the lock in time."""
+
+
 @contextmanager
-def _file_lock(path: Path):
-    """Exclusive file lock for read-modify-write safety."""
+def _file_lock(path: Path, timeout: Optional[float] = None):
+    """Exclusive file lock for read-modify-write safety. `timeout=None` blocks
+    until acquired (the default, unchanged); a number of seconds polls a
+    non-blocking flock and raises LockTimeout when it runs out (POSIX only)."""
     lock_path = path.with_suffix(path.suffix + ".lock")
     lock_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -96,7 +157,17 @@ def _file_lock(path: Path):
 
     fd = open(lock_path, "a+", encoding="utf-8")
     try:
-        if fcntl:
+        if fcntl and timeout is not None:
+            deadline = time.monotonic() + timeout
+            while True:
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    if time.monotonic() >= deadline:
+                        raise LockTimeout(f"lock busy: {lock_path}")
+                    time.sleep(0.02)
+        elif fcntl:
             fcntl.flock(fd, fcntl.LOCK_EX)
         else:
             fd.seek(0)
@@ -271,8 +342,14 @@ def load_snapshot() -> Dict[str, str]:
 
     # Exact dedupe first, then the recall filter (junk scopes, telemetry lines,
     # near-duplicates, hard cap). The files on disk are untouched.
-    memory_entries = filter_for_recall(list(dict.fromkeys(memory_entries)))
-    project_entries = filter_for_recall(list(dict.fromkeys(project_entries)))
+    memory_entries = [
+        redact_secrets(e)
+        for e in filter_for_recall(list(dict.fromkeys(memory_entries)))
+    ]
+    project_entries = [
+        redact_secrets(e)
+        for e in filter_for_recall(list(dict.fromkeys(project_entries)))
+    ]
 
     return {
         "memory": _render_block("MEMORY", memory_entries),
@@ -292,7 +369,7 @@ def add(target: str, content: str) -> Dict[str, Any]:
     """Append a new entry. Rotates oldest entries to the archive rather than
     rejecting when the working cap would be exceeded (see _rotate_to_fit).
     Only fails if this single entry alone cannot fit even in an empty file."""
-    content = content.strip()
+    content = redact_secrets(content.strip())
     if not content:
         return {"success": False, "error": "Content cannot be empty."}
 
@@ -328,7 +405,7 @@ def add(target: str, content: str) -> Dict[str, Any]:
 def replace(target: str, old_text: str, new_content: str) -> Dict[str, Any]:
     """Find entry containing old_text substring, replace it with new_content."""
     old_text = old_text.strip()
-    new_content = new_content.strip()
+    new_content = redact_secrets(new_content.strip())
     if not old_text:
         return {"success": False, "error": "old_text cannot be empty."}
     if not new_content:
@@ -425,12 +502,12 @@ def apply_batch(target: str, operations: List[Dict[str, Any]]) -> Dict[str, Any]
         for op in operations:
             action = op.get("action", "")
             if action == "add":
-                content = op.get("content", "").strip()
+                content = redact_secrets(op.get("content", "").strip())
                 if content and content not in entries:
                     entries.append(content)
             elif action == "replace":
                 old_text = op.get("old_text", "").strip()
-                new_content = op.get("content", "").strip()
+                new_content = redact_secrets(op.get("content", "").strip())
                 if old_text and new_content:
                     for i, e in enumerate(entries):
                         if old_text in e:

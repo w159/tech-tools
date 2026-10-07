@@ -1,5 +1,6 @@
 """turn_quality miner: findings from seeded turn_scores rows."""
 
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import os
 import shutil
 import sys
@@ -14,7 +15,7 @@ import atlas_doctor
 import turn_scoring
 
 LIT = "literal_ask_delivered"  # noul, hit=low
-DONE = "done_claim_unverified"  # noul, hit=high
+DONE = "scope_drift"  # noul, hit=high, validated
 NTC = "next_turn_correction"  # noul, hit=high
 
 
@@ -100,10 +101,20 @@ class TurnQualityMinerTest(unittest.TestCase):
         self.assertNotIn(f"{DONE}:beta", keys)
         self.assertIn(DONE, keys)  # overall 20/40 = 50% also exceeds 25%
 
-    def test_verbosity_top_level(self):
+    def test_unvalidated_judgments_are_scored_but_never_mined(self):
         for i in range(20):
-            self._turn("s", self.pid, {"verbosity": 3.0 if i < 8 else 1.0})
-        self.assertIn("verbosity", self._keys(self._mine(min_turns=20)))
+            self._turn(
+                "s",
+                self.pid,
+                {"verbosity": 3.0 if i < 8 else 1.0, "done_claim_unverified": 0.95},
+            )
+        found = self._mine(min_turns=20)
+        self.assertNotIn("verbosity", self._keys(found))
+        self.assertNotIn("done_claim_unverified", self._keys(found))
+        self.assertIn(
+            "verbosity", found.evaluated
+        )  # still evaluated, so stale findings sweep
+        self.assertAlmostEqual(found.values["verbosity"], 0.4)
 
     def test_predictive_value_numbers(self):
         # 10 hit turns: 8 corrected; 10 not-hit turns: 1 corrected
@@ -113,9 +124,7 @@ class TurnQualityMinerTest(unittest.TestCase):
             self._turn("s", self.pid, {DONE: 0.1, NTC: 0.9 if i < 1 else 0.1})
         f = next(x for x in self._mine(min_turns=20) if x["key"] == DONE)
         p = f["evidence"]["predictive"]
-        self.assertEqual(
-            (p["p_corr_given_hit"], p["n_hit"]), (0.8, 10)
-        )
+        self.assertEqual((p["p_corr_given_hit"], p["n_hit"]), (0.8, 10))
         self.assertEqual((p["p_corr_given_not_hit"], p["n_not_hit"]), (0.1, 10))
         self.assertIn("80%", f["detail"])
         self.assertIn("10%", f["detail"])
@@ -126,12 +135,17 @@ class TurnQualityMinerTest(unittest.TestCase):
                 "s",
                 self.pid,
                 None,
-                {"header_present": 1 if i < 10 else 0, "banned_punct": 2 if i < 5 else 0},
+                {
+                    "header_present": 1 if i < 10 else 0,
+                    "banned_punct": 2 if i < 5 else 0,
+                },
             )
         found = {f["key"]: f for f in self._mine(min_turns=20)}
         hdr = found["metric:header_present"]
         self.assertAlmostEqual(hdr["metric_value"], 0.5)
-        self.assertEqual(hdr["target_path"], "style: Status header / hooks/session_boot.py")
+        self.assertEqual(
+            hdr["target_path"], "style: Status header / hooks/session_boot.py"
+        )
         bp = found["metric:banned_punct"]
         self.assertAlmostEqual(bp["metric_value"], 0.25)
         self.assertEqual(bp["target_path"], "style: Characters")
@@ -201,7 +215,9 @@ class TurnQualityMinerTest(unittest.TestCase):
             atlas_doctor.mine(self.conn, "/x")
             self.assertEqual(status(), "open")
             # A user's verdict is never overwritten by auto-resolve.
-            self.conn.execute("UPDATE findings SET status='rejected' WHERE fingerprint=?", (fp,))
+            self.conn.execute(
+                "UPDATE findings SET status='rejected' WHERE fingerprint=?", (fp,)
+            )
             self.conn.execute("UPDATE turn_scores SET value = 0.05")
             self.conn.commit()
             atlas_doctor.mine(self.conn, "/x")
@@ -218,7 +234,12 @@ class TurnQualityMinerTest(unittest.TestCase):
             hit = i < 10
             reply_ts = base + i * 10
             atlas_db.upsert_turn_score(
-                self.conn, "g", f"r{i}", DONE, ts=reply_ts, kind="noul",
+                self.conn,
+                "g",
+                f"r{i}",
+                DONE,
+                ts=reply_ts,
+                kind="noul",
                 value=0.95 if hit else 0.05,
             )
             puuid = f"p{i}"

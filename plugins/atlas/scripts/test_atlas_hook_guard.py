@@ -6,6 +6,7 @@ never touches the real ~/.atlas, mirroring the pattern already used in
 test_memory_capture.py (mock.patch.object on the module's own path function).
 """
 
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import io
 import json
 import multiprocessing

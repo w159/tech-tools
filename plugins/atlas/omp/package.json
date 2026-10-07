@@ -1,6 +1,9 @@
 {
   "name": "atlas-omp-extension",
   "private": true,
+  "scripts": {
+    "typecheck": "bunx --package typescript tsc -p . --noEmit"
+  },
   "omp": {
     "extensions": ["./index.ts"]
   }

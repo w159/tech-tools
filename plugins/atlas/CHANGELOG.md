@@ -1,5 +1,329 @@
 # Changelog
 
+## [Unreleased]
+
+## [10.3.0] - 2026-10-07
+
+### Changed
+- **Channel lens is one simple column.** `#/agents?lens=channel` now fills the canvas with a header (channel name, a select only when there is more than one channel, one dim `main · lead X · branch` line, one row of member chips: click = set `To`, the small icon opens the agent), the message log (last 100; the only scrolling region) and a composer that is always in view at 1440x900 and 390x844 (`To`, one textarea, Send). `To = Everyone` posts to the channel, `To = <member>` prompts that agent when its pane is idle and otherwise posts addressed to it, the same two backend calls as before. Removed: the channel tree column, the Members side column and its duplicate `<details>`, the Messages | Board tab pair and the channel Board panel, the `Prompt agent | Post to channel` toggle, the `Load earlier messages` button, per-message linkified file paths (plain monospace; only pane ids link), the per-message tick (a delivery glyph shows only for `refused`/`undeliverable`, with a tooltip) and the main/subchannel/lead/branch/full-name tags. Under 600px the author and recipient sit above the body, so it keeps the full width (it was a 1-character column). The rail's Fleet, Board and Channel items collapse into one **Agents** item; the Fleet | Board | Channel lens bar on the Agents page is the only navigation between them (`g a`, `g w`, `g n` and the `#/work`, `#/irc` aliases are unchanged). `ChannelMessage`, `ChannelList` and `Composer` (`js/ui-data.js`) gain opt-in `plain` / `simple` options; the Fleet inspector keeps its linkified paths and two-mode composer. New `js/channel-lens.test.js` (bun test).
+- **Colony shows one chrome layer, on an agent.** Inside the Atlas frame (`?chrome=full`) herdr-web-ui no longer opens its own `Sidebar` (file explorer/git) panes: the first paint is the working agent's chat or terminal instead of the file tree of `~/.config/herdr`, or "No agents running. Start one from Agents." when there is none. The leaked `Sidebar` title, the second tab row and the toolbar duplicates are gone: one slim strip carries the workspace tabs (or the pane title), the connection dot and the Chat/Terminal switch. On a phone the terminal key bar shows only while the soft keyboard is up, so it no longer stacks on the Atlas bottom tab bar. Patches: `colony/herdr-web-ui` `src/lib/dagPane.ts`, `src/App.tsx`, `src/styles.css`, the three `i18n.*.ts` dictionaries.
+- **"Tool error unclassified" no longer dominates Needs attention and Health.** `classify_error` (`scripts/atlas_db.py`) now maps the recurring causes that fell through to `unknown` onto the existing classes: OMP edit/tool rejections (`PUT N.=M rejected`, `EISDIR`, `No such tool: xd://`, `Unknown agent|skill|daemon`, bad JSON-query/SQLite/selector arguments, cmux-unsupported calls, consent/elicitation refusals) are `model_misuse`; an exited OMP process, cancelled prompts, closed/detached browser sessions, missing modules and failed auth checks are `environment`; a shell result that fills the 500-char snippet cap with no failure marker is a non-zero exit whose marker was cut, so `environment`. Over 14 days the unknown-with-snippet events drop 272 to 26 and the Overview Silent failures KPI 231 to 63 (7d). User-script tracebacks and short unmarked output stay `unknown`. The Overview KPI "Open findings" is now "Doctor findings" (open doctor-ledger rows) and the top-bar pill reads "attention items", the same list as Needs attention, so the three counts name their scope.
+- **The dashboard is now the Atlas Command Center** (it was the Atlas Workboard). One shell: a collapsible rail with Observe, Operate, Improve and Configure groups and a live tree of herdr workspaces, tabs and agents under Operate; a top bar; a canvas; one inspector (docked, overlay or bottom sheet by width). Operate holds one **Agents** page with three lenses (Fleet, Board, Channel, `#/agents?lens=`) and the **Colony** page (`#/colony[?pane=<id>]`, chord `g c`, also `g x`). `#/herd`, `#/herdr`, `#/console` and `#/agents?lens=colony` redirect to `#/colony`; `#/work` and `#/irc` redirect to the Board and Channel lenses. Chords: `g a` Agents, `g l` Activity, `g i` Improve (was IRC), `g w` Board, `g c` Colony, `g n` Channel.
+- **Fleet** shows every agent with a state (`working`, `input`, `idle`, `done`, `unknown`, derived `fail`), age in state, tab label, parent pane and subagents, and a "New workspace" button. Workspace, tab and pane create, rename, close and send-keys are native through the host's same-origin `/api/workspace|tab|pane/*` routes (only when served under `/atlas/`; standalone they explain why they cannot run). The inspector's Terminal tab frames `/?pane=<id>&machine=local&chrome=pane&theme=<t>`.
+- **Colony** is a single page that is only the herdr-web-ui app framed edge to edge (see Added). The old Colony page iframe (`js/pages/herd.js`, which framed `/?embed=1`), the IRC page (`js/pages/irc.js`), the Herdr console page and rail entry, the Colony lens (`js/pages/colony-lens.js`) with its Console | Map control, the `view` URL parameter and the `atlas.colony.view` sessionStorage key are deleted; there are no herd or irc page files (`#/herd`, `#/herdr`, `#/console` redirect to `#/colony`, `#/work` and `#/irc` to lenses, via `ALIASES` in `js/app.js`).
+- **Colony page** (`pages/herdr.js`) hosts the herdr UI as `?chrome=full&theme=<t>` (the patched host drops its header and sidebar when framed) edge to edge, with no header, lens bar or toggle of its own, iframe sandbox `allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads` and `allow="clipboard-read; clipboard-write; microphone; fullscreen"`. Under `/atlas/` both frames use `location.origin`.
+- **Colony iframe stays put.** `pages/herdr.js` exports `noteFramePane(pane)`; the `herdr:selected-pane` handler in `js/app.js` calls it, so the frame node and `src` are not rebuilt (no reload) when the frame reports its own pane, nor on store or SSE ticks. A pane that arrives from outside (deep link, Fleet "Open in Colony", route change) still navigates it.
+- **"Herdr console" labels and the `g x` chord are gone.** `g c` opens Colony; the settings navigation editor lists `Colony` (`js/pages/settings.js`, `js/nav-order.js`). Superseded design: `dashboard_ui/design/DECISIONS.md` entry 21.
+- **Health is measured or says why not.** Each subsystem has `measured`, `reason`, a real `last_ok` and `last_fail` (never invented), `evidence[]` and a 10-bucket `history[]` (or `history_reason`); the UI shows `Not measured: <reason>` and a sparkline.
+- **Framed mode** (`data-shell="framed"`): the dashboard inside a frame has no rail, posts `atlas:attention` and `atlas:title` to the parent and accepts `atlas:theme` only from `window.parent`.
+
+### Added
+- **Colony page embeds the herdr UI.** `js/pages/herdr.js` renders one `div.page.colony-page` holding only the iframe (`consoleUrl` in `js/fleet.js`: `<origin>/?chrome=full&theme=<t>`, plus `pane=<id>&machine=local` for `#/colony?pane=<id>`). `css/fleet.css` lets the frame fill the canvas. The Fleet inspector button is "Open in Colony".
+- **Console frame states.** `pages/herdr.js` exports `mountConsoleFrame(ctx, body)`: loading, "herdr isn't running" (**Recheck**), "The terminal service isn't running. The agent list is live; terminals need it." with **Start terminal service** (`POST herd/ensure`) and **Recheck**, and a "Colony is slow to load" card after 12 s; the frame is never built when the dashboard is itself framed ("Colony cannot open inside itself"). The Fleet inspector Terminal tab still frames one pane as `?chrome=pane`.
+- **Mobile entry.** `MOBILE_TABS` moved from `js/app.js` to `js/nav-order.js`; the mobile bar and More popover carry one `Colony` entry (`#/colony`) in the saved nav order; saved nav orders containing `herd`, `herdr` or `console` map to `colony` (`NAV_ALIASES`). `js/colony-embed.test.js` and `js/nav-order.test.js` (bun test) cover the console frame (URL, sandbox, pane deep link, no recreation on redraw), the web-UI-down recovery card, the recursion guard and the mobile nav model.
+- **Channel registration is automatic.** An omp `task` dispatch (`omp/channels.ts`), a Claude Code `Task`/`Agent` dispatch (`hooks/dispatch_tripwire.py` `_channel_dispatch`) and a mux/launch worker (`atlas_todo._register_worker`, on its first channel-less board note; it joins the newest lead subchannel or opens `<main>/lead`) register the worker under `<folder>@<branch>/<lead>` (`@<short-sha>` on a detached HEAD, the folder name outside git). `channel-open --root` canonicalizes a subdirectory to the project root, `default_channel` routes notes from owner `lead` to the newest lead subchannel, and `channel_board` groups the lead's own plan items under the lead. A `channel-open` or dispatch-hook failure is recorded in `hook-faults.jsonl` instead of printing to stderr. `ATLAS_CHANNELS=off` disables the wiring. Tests: `scripts/test_atlas_channels.py`, `omp/channels.test.ts`, `hooks/test_channel_dispatch.py`.
+- **Channels.** Notes carry a `channel`: the main channel `<folder>@<branch>` (`@<short-sha>` on a detached HEAD, the basename outside git) and a subchannel `<main>/<lead>` per lead, registered in `.atlas/.run/channels.json`. `atlas_todo.py` gains `channels`, `channel-open`, `channel-board`, `inbox` and `--channel` on `note` and `notes`. Delivery is scoped: a worker gets notes addressed to it (or `to=all`) only in channels it belongs to; another lead's subchannel and another branch's main channel never reach it. A lead's first dispatch opens its subchannel and appends a `CHANNEL:` block to each subagent's brief: Claude Code in `hooks/dispatch_tripwire.py` (`_channel_dispatch`), omp in `omp/channels.ts` (called from `omp/worker-report.ts`; the hook bridge now sends the omp agent id as `agent_name`). `ATLAS_CHANNELS=off` disables it. Contract text in `contracts/worker-protocol.json` and `references/operating-contract.md`. Model and limits: `docs/atlas-channels.md`.
+- **Dashboard routes.** `GET /api/v2/channels`, `GET /api/v2/channels/<name>?since=&limit=` (channel, messages, board in one response), token-guarded `POST /api/v2/channels`; `GET /api/v2/agents` (unified `AgentRecord` list with `layers`, `state_changed_at`, `tab_label`, `children`, `parent_pane`; SSE topic `agents`), `GET /api/v2/agents/<id>/peek` (bounded, redacted, token-guarded), token-guarded `POST /api/v2/agents/<id>/prompt`, `GET /api/v2/herd/console`. Every route the UI calls is documented with real responses in `scripts/dashboard_ui/design/API.md`.
+- **herdr host (`colony/herdr-web-ui`).** The vendored app is patched, not unmodified: besides `server/atlas-gateway.ts`, `server/atlas-landing.ts` and `server/index.ts`, the app sources `src/App.tsx`, `src/lib/atlasBridge.ts` (new), `src/lib/settings.ts`, `src/components/DevicesPanel.tsx`, `src/styles.css` and `public/sw.js` carry atlas changes, all listed under `ATLAS-PATCHES` in `UPSTREAM.md`. `?chrome=pane` (title strip plus terminal/chat, honours `?theme=`) is what the Fleet inspector frames; `?chrome=full` counts only when framed and then drops the header, sidebar toggle and workspace drawer (a top-level visit keeps the normal UI); legacy `?embed=1` is retired and rewritten in place (`chrome=pane` with `pane=`, else `chrome=full`); the root landing redirect is bypassed by `?chrome`. In a framed non-pane host the header and palette Sign out and the current device's Revoke are hidden (the cookie is shared with the Atlas shell). A same-origin `postMessage` bridge posts `herdr:selected-pane` and `herdr:attention` and accepts `atlas:theme` and `atlas:select-pane` from the parent window only. The gateway answers a navigation to an unreachable dashboard with an HTML page (502) instead of JSON.
+- **Integrations** (`scripts/atlas_integrations.py`, routes in `scripts/atlas_dash_integrations.py`): `GET /api/v2/integrations`, `GET /api/v2/projects/hp`, `GET /api/v2/deck`, and token-guarded `POST /api/v2/projects/hp/threads`, `/open-file`, `/open-editor` for herdr-projects (`thread start ... --task-file -`), herdr-file-viewer (`herdr plugin pane open --plugin herdr-file-viewer --entrypoint file-viewer` with `HERDR_FILE_VIEWER_ROOT` / `HERDR_FILE_VIEWER_OPEN`), tode (`--goto <path>:<line>:1`, detached; its `--auth none` code-server is never embedded) and Captain's Deck (needs Firstmate). Errors: 403 `unknown_root` / `path_outside_root`, 424 `plugin_not_installed` / `tool_not_installed` with `install_cmd`, 429 `duplicate_viewer`. Atlas never installs or configures any of them. UI: `js/integrations.js` (Settings Integrations panel, path:line links, Files panel), `js/hp.js` (Projects "Herdr projects" section, New thread dialog), palette actions "Open in editor" and "New herdr project thread".
+- **cmux browser contract.** `contracts/mcp-servers.json` `browserServers["cmux-browser"]` classifies all 45 `browser_*` tools (11 read-only, 23 state-changing, 11 sensitive; 24 allowed to subagents); `ui-runtime-tester` drives it (screenshots under `/tmp/atlas-shots/`); `atlas_doctor.py` gains WARN-severity checks `cmux-socket` and `cmux-browser` (n/a without cmux, WARN when the MCP server is not registered).
+- **`atlas_scorecard.py run|diff`** measures every Atlas surface hermetically and diffs two runs (exit 1 on regression); durable evidence of the last wave is under `.atlas/.run/evidence/scorecard/`.
+
+### Fixed
+- `atlas_herdr.py ensure` no longer reuses a running vendored server on a stale mirror: the `.atlas-build` stamp hashes the whole vendored tree, and a stale stamp now builds first, then stops and restarts only the vendored instance (`action: restarted`, `reason: stale_mirror`); a failed build leaves the running server untouched and returns `ok: false`.
+- The herdr-web-ui service worker no longer caches the Atlas shell as `/` (the poisoned `herdr-web-ui-v4-ram` cache is deleted; the cache is keyed by path and never handles `/atlas` navigations). A notification click prefers a top-level herdr page and otherwise opens `/atlas/#/colony?pane=<id>` (the router redirects the older `#/herdr?pane=<id>` there).
+- `public/sw.js` bumped to `v6`: top-level navigations to `/` are not handled by the service worker, so the landing redirect to `/atlas/#/herd` keeps working after the first visit; every older cache is deleted on activation.
+- `?chrome=full` hides the herdr rail and header when framed by the dashboard (Colony page). Upstream takeover order: stop -> disable -> `rm` colony/port -> ensure.
+- **omp workers no longer fail with `--thinking="medium"`.** `scripts/atlas_mux.py` `_frontmatter` strips one matched pair of surrounding quotes from agent frontmatter scalars; `omp/gen-agents.ts` quotes them (`thinkingLevel: "medium"` in all 13 `omp/agents/*.md`) and omp rejected the quoted value (exit 2). The generator is unchanged; `scripts/test_atlas_mux.py` runs every shipped agent file through the argv builder and the pane command.
+- The delegation gate expands a leading `~` and `$HOME` / `${HOME}` in edit targets (`omp/contracts.ts` `resolveTarget`, `hooks/dispatch_tripwire.py` `_is_orchestration_path`); before, `~/x` was treated as cwd-relative. Out-of-repo user config still counts as a non-docs edit.
+- `hooks/session_boot.py`: with a cold colony status cache the probe now runs detached and boot prints `colony: checking` instead of waiting; an unhealthy status is cached for 60 s.
+- Colony docs now match the code: the install flow (`atlas_herdr.py ensure` mirrors to `$ATLAS_HOME/colony`, builds, binds 7317 when free, otherwise a fallback port with the `takeover` hint), the env vars (`ATLAS_COLONY`, `ATLAS_COLONY_TRANSPORT`, `ATLAS_LANDING`, `ATLAS_DASHBOARD_URL`, `ATLAS_REMOTE_PORT`, `HERDR_WEB_TOKEN`, `HERDR_WEB_URL`) and the takeover order. To take 7317 from an upstream herdr-web-ui, stop it first (`herdr plugin action invoke stop --plugin devswha.herdr-web-ui`), then `herdr plugin disable devswha.herdr-web-ui`, `rm -f $ATLAS_HOME/colony/port`, `atlas_herdr.py ensure`; disabling first makes `stop` fail (`plugin_disabled`). Verified 2026-10-07 after that sequence: the vendored build was the sole 7317 listener, `/atlas/api/health` returned the dashboard JSON locally and over the tailnet `:8443` URL, `/` redirected to `/atlas/#/herd` and a forwarded unauthenticated request got `pairing_required`.
+
+- **Health hooks row no longer reads `fail` forever after one breaker trip.** `atlas_dash_insights.py` (hooks subsystem) is `fail` only while the newest `hook_burst_tripped` is newer than or equal to the newest successful hook run; an older trip with a later hook run is `warn` and the detail names it (`last trip <ISO timestamp> (session <12-char id>)`); no trip is `ok`; swallowed hook crashes still `warn`, and hook fault entries keep their severity. The dashboard daemon imports its Python at start, so the live row changes only after that daemon restarts.
+- **Channel registration cannot hang a note or a dispatch.** `atlas_memory._file_lock(path, timeout=None)` gained an optional bounded wait (`LockTimeout`; default still blocks). `atlas_todo.CHANNEL_LOCK_TIMEOUT_S = 2.0` bounds `_register_worker` and `open_lead_channel`, and `hooks/dispatch_tripwire.py` `_channel_dispatch` passes it too. A timeout is recorded in `hook-faults.jsonl` as `atlas_todo.register_worker.lock_timeout` or `dispatch_tripwire.channel_lock_timeout` (never stderr) and the note or dispatch proceeds.
+- **Deny detection parses the hook JSON.** `dispatch_tripwire._is_deny(out)` reads `hookSpecificOutput.permissionDecision` from the emitted JSON instead of matching literal text, so spacing or key order cannot hide a denial; a denied dispatch never opens a channel.
+- **omp `--thinking` regression:** the generator (`omp/gen-agents.ts`) quotes scalars (`thinkingLevel: "medium"`) while the reader (`atlas_mux._frontmatter`) did not unquote, so omp got `--thinking="medium"` and exited 2. The reader now strips one quote pair; `scripts/test_atlas_mux.py` `ShippedOmpAgentsThinkingTests` checks every shipped `omp/agents/*.md` through the argv builder, the pane command and the `spawn` CLI.
+- **Hook-fault fixtures are isolated.** `omp/hook-bridge.test.ts`, `omp/stop-bridge.test.ts` and `omp/index.test.ts` point `ATLAS_HOME` (and `ATLAS_DB` in the last) at a temp directory, so the bridge tests no longer write the real `~/.atlas/hook-faults.jsonl`.
+
+**Updating the plugin.** The running omp and Claude Code runtimes load the **installed plugin cache**, so the dispatch fix, the channel registration and the Colony page reach a live session only after this tree is committed, released and the plugin is reinstalled or updated from this marketplace repo. The dashboard daemon on `127.0.0.1:7421` serves `dashboard_ui/` from the repo directly, so only the UI part is live without an update. This is plugin version 10.3.0.
+
+Docs: `docs/atlas-workboard.md` (product overview), `docs/atlas-colony.md`, new `docs/atlas-channels.md`, new `docs/atlas-integrations.md`, `docs/atlas-harness-parity.md`.
+
+### Breaking
+- The colony runs on **herdr**, not tmux. `atlas_mux.transport()` returns
+  `herdr` by default; `tmux` only when `ATLAS_COLONY_TRANSPORT=tmux` is set or
+  the herdr socket does not answer. `atlas_launch.launch()` keeps its
+  signature. Workers still need `ATLAS_MUX=tmux` to unlock `atlas_mux.py spawn`
+  (the name is historical and unchanged).
+- `scripts/atlas_dash_colony.py` and the tmux **Colony** dashboard page
+  (`dashboard_ui/js/pages/colony.js`) are deleted. Removed routes:
+  `GET /api/v2/colony`, `/colony/agent`, `/colony/capture` and
+  `POST /api/v2/colony/send`, `/colony/kill`, `/colony/spawn-help`,
+  `/colony/attach-command`. `/api/v2/stream` no longer emits a `colony` event
+  (the topics are `herd`, `agents`, `todos`, `irc`, `health`, `improve`), and
+  `_SENSITIVE_GET` no longer lists the colony capture/agent routes. The
+  dashboard has no `herd`, `colony` or `irc` page files: Operate holds the
+  Fleet, Board and Channel lenses of `pages/agents.js` plus the
+  Colony page `pages/herdr.js` (aliases `#/herd`, `#/herdr`, `#/console`,
+  `#/work`, `#/irc` in `js/app.js`).
+
+### Added
+- **The Atlas dashboard is the shell; herdr-web-ui is framed by the Herdr
+  console and the Fleet inspector.** herdr-web-ui is vendored at
+  `colony/herdr-web-ui` (MIT; every atlas patch, server and app source, is
+  listed under `ATLAS-PATCHES` in its `UPSTREAM.md`) and runs as the one colony
+  web UI: `atlas_herdr.py ensure` mirrors it to `$ATLAS_HOME/colony`, builds it
+  and binds `127.0.0.1:7317` when that port is free, otherwise a fallback port
+  (a user-run upstream instance on 7317 is never touched; `status` prints the
+  `takeover` hint). The dashboard's own nav (Observe, Operate, Improve,
+  Configure) is the only Atlas navigation; framed inside it the herdr-web-ui app
+  shows no Atlas navigation, header chip or nested dashboard. The herdr core
+  stays an installed binary checked against `colony/herdr/PIN.json`.
+- Front door: the Bun root `/` redirects browsers to `/atlas/#/herd` (the
+  Command Center router redirects `#/herd` to `#/colony`). Flow: browser ->
+  `tailscale serve :8443` -> herdr-web-ui Bun server; after its own auth a
+  plain browser navigation of `/` gets `302 /atlas/#/herd`
+  (`server/atlas-landing.ts`; any `embed`, `pane`, `machine` or `chrome` query
+  serves the SPA) and `/atlas/**` is proxied to the loopback dashboard
+  (`server/atlas-gateway.ts`). The Colony page frames `/?chrome=full`, the
+  Fleet inspector frames `/?pane=<id>&machine=local&chrome=pane&theme=<t>`; the
+  legacy `?embed=1` is rewritten by the host. `ATLAS_LANDING=off` disables the
+  redirect; `ATLAS_DASHBOARD_URL` (loopback only, default
+  `http://127.0.0.1:7421`) points the gateway at the dashboard.
+- `atlas_dash_colony.py` is split into `atlas_dash_work.py` (`/api/v2/todos`)
+  and `atlas_dash_irc.py` (`GET/POST /api/v2/irc`). IRC delivery to a named
+  agent goes through `atlas_herdr.send_prompt` (idle interactive `claude`/`omp`
+  panes only) and stamps `delivery=delivered|refused` on the board note so the
+  worker's hook never injects it twice; otherwise the note stays `queued`.
+- `atlas_dash_herd.py` routes: `GET /api/v2/herd`, `/herd/status`,
+  `/herd/agents`, `/herd/colony` (pinned-binary check, web UI state, live
+  colony panes) and `POST /api/v2/herd/agents/<pane>/prompt`, `/herd/ensure`,
+  `/herd/panes` (opens a worker through `atlas_launch.launch`),
+  `/herd/panes/<pane>/kill` (colony panes only).
+- `atlas_herdr.py` manages the one **vendored** colony web UI (healthy ->
+  reused; a `managed.ts` process -> wait; else mirror to
+  `$ATLAS_HOME/colony/herdr-web-ui`, `bun install --frozen-lockfile` +
+  `bun run build`, then `bun scripts/plugin.ts start` under the flock; herdr
+  itself is never started). `status` reports `duplicates` for extra
+  `managed.ts` processes and `upstream_plugin_on_port` + `takeover` commands
+  when a user-run upstream herdr-web-ui holds the port. New verbs
+  `install-check` and
+  `create-pane --name N [--cwd D] [--run R] [--env K=V ...] -- <command...>`.
+- Worker panes carry `ATLAS_PROJECT_ROOT`, `ATLAS_WORKER_NAME` and the
+  `FORWARDED_ENV` lead env as pins in the pane command itself, whatever the
+  transport (`atlas_mux.pane_env`).
+- `hooks/session_boot.py` `ensure_colony()`: reads a cached `atlas_herdr.py status`
+  (`$ATLAS_HOME/herdr-status-cache.json`), reports a healthy web UI, or starts
+  `atlas_herdr.py ensure` detached (log `$ATLAS_HOME/herdr-ensure.log`) when
+  herdr runs but the web UI does not; the ensure takes the shared flock, so a
+  second instance is never started. Fail-open; `ATLAS_COLONY=off` disables it.
+- `scripts/atlas_remote.py status|plan|apply --yes [--replace]|disable --yes|url`:
+  tailnet-only access to the colony through `tailscale serve`
+  (`ATLAS_REMOTE_PORT`, default 8443, clamped 1024-65535, never 443; funnel is
+  never enabled and `status` warns on any funnel entry). `apply` refuses when an
+  anonymous tailnet request would be let in (no `HERDR_WEB_TOKEN`, owner
+  login or paired device). See
+  `skills/atlas-orchestrate/references/remote-access.md`.
+- Tests: `test_atlas_remote.py`, `test_atlas_dash_work.py`,
+  `test_atlas_dash_irc.py`, `test_atlas_herdr.py` (extended);
+  `test_atlas_mux.py` and `test_atlas_launch.py` cover the transport choice and
+  env pins.
+
+### Changed
+- The plugin version is 10.2.0 in `plugin.json` and `marketplace.json`, so
+  `ensure_daemon` replaces a running 10.1.x dashboard daemon at the next
+  SessionStart.
+- The `Colony / mux` health card (id `mux`) still reports worker runs that never
+  closed; it no longer reads tmux rigs.
+
+The entries below were written before the colony rebuild and ship in 10.2.0
+too. Where one mentions the Herd iframe, the tmux Colony page or
+`atlas_dash_colony`, the sections above supersede it.
+
+### Added (pre-rebuild)
+- Dashboard **Herd** page (Operate group, chord `g c`): embeds herdr-web-ui
+  (`http://127.0.0.1:7317`) in an iframe to watch agent terminals side by
+  side. Routes: `GET /api/v2/herd` (state) and `POST /api/v2/herd/ensure`
+  (start if absent).
+- Single-instance herdr guard (`scripts/atlas_herdr.py`): herdr-web-ui is
+  launched only when no instance answers `/api/health` and no `managed.ts`
+  process exists. A `flock` serialises the check-and-spawn, so concurrent
+  sessions never start duplicates. CLI:
+  `python3 plugins/atlas/scripts/atlas_herdr.py status|ensure|reap`.
+- Herd is a native agent table, not only an iframe. `atlas_herdr.py` talks to
+  the herdr unix socket (one request per connection) and normalises agents
+  (pane, workspace, kind, status, cwd, title, deep link
+  `/?pane=<id>&machine=local`; session paths are never exposed). New dashboard
+  routes: `GET /api/v2/herd/status`, `GET /api/v2/herd/agents` (always HTTP
+  200), `POST /api/v2/herd/agents/<pane>/prompt` (idle panes only, 8000 chars,
+  token-guarded; 404/409/400/503/502 mapped) and `POST /api/v2/herd/ensure`.
+  `status` reports `ok | server_down | web_ui_down`: with the herdr server
+  down `ensure` refuses ("Atlas cannot start herdr itself") and the page shows
+  no Start button. `herd.js` adds status dots, an Open pane link, a prompt
+  composer and `#/herd?pane=` deep links; Colony shows a herdr chip when one
+  pane matches the rig's project and harness.
+- `atlas_doctor.py --purge-tmp-sessions [--apply]`: removes sessions whose
+  transcript sits under the OS temp dir, with their child rows. Dry run unless
+  `--apply`. `ingest_session` now skips temp-dir transcripts unless
+  `ATLAS_DB`/`ATLAS_HOME` isolates them or `ATLAS_ALLOW_TMP_INGEST=1`.
+- Doctor behavioural checks beside the install checks: `hook-faults` (24 h;
+  5+ FAIL, 1-4 WARN), `gates-armed`, `omp-bridge` (registry, files, version
+  match), `db-writable`, `db-recent-writes` and `enforcement-rates` (7 d;
+  20+ native grep/glob executed with none denied = FAIL "gates are INERT").
+  The verdict counts FAILs only, so inert enforcement is never HEALTHY.
+  `atlas_db.atlas_home()` is the single `ATLAS_HOME` resolver for the doctor.
+- `python3 plugins/atlas/scripts/atlas_scorecard.py run|diff`: deterministic
+  measurement of every atlas surface. `run --root <plugins/atlas dir> --out
+  file.json` measures a tree in a hermetic sandbox; `diff a.json b.json` prints
+  per-metric verdicts and exits 1 on a regression (see `--help`).
+- `omp/package.json` `typecheck` script (`bun run typecheck`) with a strict
+  `tsconfig.json`.
+- `node test-mcp-tools.mjs` runs both a `--placeholders` and a `--no-creds`
+  mode (the default runs both) under an empty `HOME`, so a configured
+  `~/.config/atlas/atlas.env` cannot leak into probes.
+- Dashboard `improve` and `todos` are paged by default; `?full=1`,
+  `?limit=N|all&offset=N` and `?done=N|all` return the rest and a `page` field
+  says what was cut.
+- `skills/atlas-orchestrate/references/tool-routing.md` documents ponytail's
+  injected rule block and the Azure best-practices `intent` requirement.
+
+### Changed
+- omp bridge: `tool_call`/`tool_result` share one 20 s budget
+  (`TOOL_CALL_BUDGET_MS`, under omp's 30 s block) across the transcript lookup,
+  all hooks and every `task` batch item. Hooks of one call run concurrently
+  (results folded in `hooks.json` order, first deny wins); a hung hook is
+  abandoned and recorded in `hook-faults.jsonl` (`recordFault`). Bash
+  PreToolUse p50 188 -> 57 ms. Stop hooks also run concurrently inside the
+  remaining budget (conversion capped at 8 s).
+- omp bridge device classification: every `xd://mcp__` write is an MCP name
+  (fail closed, never Write); `atlas_connectwise` and `mcp_search` are split
+  correctly (33/33 devices in the table test); `matcherNames()` adds the
+  `mcp__plugin_atlas_<srv>__` alias so `connector_credential_watch` fires for
+  atlas connectors. `ctx_batch_execute`, `ctx_execute_file` and
+  `ctx_fetch_and_index` map to `xd://` devices.
+- omp bridge: non-blocking Stop `additionalContext` is delivered once per
+  distinct text (never with a block, never while `stop_hook_active`);
+  `permissionDecision: ask` fails closed as a deny; `edit`/`ast_edit` with
+  `paths` yield one hook payload per path.
+- Hooks share payload normalisation and fail-open-with-trace
+  (`atlas_hook_guard.load_payload` / `run_hook`): empty stdin is a quiet no-op;
+  malformed or wrong-typed payloads and hook crashes leave one
+  `hook-faults.jsonl` row and exit 0. All 19 hooks.json entries without a
+  timeout now have one (10-60 s); `fallow_gate` budgets 275 s.
+- `bash_advisor` parses git commands once with bounded work
+  (`_git_subcommands`: first 2048 chars, at most 4096 segments); `fallow_gate`
+  imports that parser instead of its own regex. `rm -rf` on `~/`, `$HOME`,
+  `find / -delete` and `mkfs` as a command word are flagged; `echo mkfs` is not.
+- omp worker agents list `xd://` devices (`SendMessage` becomes `write
+  agent://`), the ten read-only agents lose the serena/lean-ctx edit tools
+  (`disallowedTools`; `omp/agent-guard.ts` blocks the matching `write`), every
+  haiku-pinned agent maps to `@atlas-mechanic`, and there is one
+  `references/operating-contract.md` (the skill copy was deleted). `atlas-audit`
+  and `atlas-review` no longer fork `general-purpose`.
+- Stricter dispatch and report gates: dispatch spec blocks must be
+  clause-anchored with a non-empty body and tool names inside a `TOOLS:` block;
+  every deny logs a `dispatch_denied:<code>` friction row and `dispatches.model`
+  is filled. `worker_report_gate` also checks `STEPS` (`N/M`, N<=M), that a
+  DONE report has a numbered `command -> output` EVIDENCE item, and that
+  DONE `FILES_CHANGED` paths exist or are in git status.
+- Mailbox: board notes carry a board-wide monotonic `seq` (stamped under the
+  notes lock); the hook cursor is `{ts, seq}`. A note already delivered or
+  refused is not injected again. Any message to a named agent is tracked
+  (`queued`, `read`, `delivered`, `refused`, `undeliverable` after 900 s);
+  `POST /api/v2/irc` returns the guard status (409) instead of 200 `ok:false`.
+  `GET /api/v2/irc` pages with `more` and a `since` cursor.
+- Pane delivery takes a per-pane flock and refuses typed text left of the
+  cursor with `409 input_pending` (`force:true` overrides); text and Enter go
+  in one tmux call. Prompt detection reads only the live pane tail.
+- Killing a worker (dashboard, `atlas_mux kill`, SIGTERM/SIGHUP/SIGINT) writes
+  an `exit 137` note; the colony snapshot reconciles a window that vanished
+  without an exit note. `atlas_mux` session create, name check and new-window
+  run under one per-session flock.
+- Dashboard: single-flight 2 s cache on the hot v2 GETs, one shared SSE sampler
+  per project filter, `Last-Event-ID` resume, route failures sent as
+  `route_error`, compact JSON, listen backlog 128, `preview`/`last_ts` out of
+  the change hash (colony refreshes every 30 s).
+- Connectors: `CONNECTOR_AUTH` lists per-connector credential alternatives so
+  "configured" means required secrets are present (9 of 12 read unconfigured
+  with only sensitive fields set); `atlas_control.test_connector` launches the
+  real `.mcp.json` command and calls `<vendor>_status`. Settings, the plugin
+  `.env` and JSON writes are atomic at 0600 (`write_private`), and an
+  unparseable `settings.json` is no longer overwritten. Credential precedence:
+  shell export, `ATLAS_ENV_FILE`, `~/.config/atlas/atlas.env`, `CFG_*`.
+- Herd: the herdr web UI port is pinned with `PORT=7317` in the herdr plugin's
+  config `.env` (`~/.config/herdr/plugins/config/devswha.herdr-web-ui/.env`).
+  herdr's own `[[startup]]` hook is vendor code and is guarded only by its
+  `supervisor.lock` and that pinned port; the atlas guard
+  (`atlas_herdr.py status|ensure|reap`) covers atlas-initiated starts.
+- Self-fix `remeasure` verdicts are `improved | no_change | regressed |
+  not_reproduced | no_baseline` (noise band max(0.01, 2% of baseline)) instead
+  of reporting 0.0 for a miner that stopped firing. Unvalidated judgments
+  (`done_claim_unverified`, `verbosity`) are scored but never mined into
+  findings.
+
+
+### Fixed
+- The recall gate denies every call until a claude-mem recall happens (the
+  contract in `mandates.json` wins; the old deny-once-per-session path is
+  gone). `TodoWrite`/`todo` and `ToolSearch` are exempt, subagents are never
+  gated, a recall call counts at PreToolUse time, and an unwritable marker
+  dir or an enabled-but-unmounted claude-mem fails open with an
+  `atlas_faults` row.
+- Circuit-breaker bypasses are visible: `completion_gate` bypassed by the Stop
+  breaker writes a `hook-faults` row and a stderr line `completion_gate
+  BYPASSED` on every bypassed Stop; other hooks write one fault row on the trip.
+- `completion_gate` no longer swallows an unusable atlas DB (fault row plus
+  stderr "orchestration gates inert"); `format_after_edit` and
+  `prompt_optimizer` record failures.
+- `connector_credential_watch` requires an error signal (`isError`, a
+  401/403/400 status key, an `error` field or an opening error banner) before
+  matching, so benign data containing "401" or "Forbidden" no longer fires.
+- `memory_capture` redacts secrets (PEM keys, JWTs, Bearer/Basic, URL
+  userinfo, common API key shapes, `key=value`) before clipping and on load,
+  so stored secrets are also scrubbed from the SessionStart injection.
+- omp advisor: a note is marked `seen` only after a successful board write
+  (a failed note is retried); `seen` and the stop-block counter reset on
+  `session_start`/`session_switch`. Run state begins on `session_switch`; a
+  failed git probe in the shell-edit tracker is cached 60 s; `ast_edit` counts
+  toward the delegation gate; the `CLAUDE_PLUGIN_ROOT` rewrite and lean-ctx
+  wrap run in one handler so a rewritten command is also wrapped.
+- `atlas_doctor.py --hook` returns 0 on any internal error and leaves a fault
+  line; corrupt state no longer crashes it. The tool-error miner uses a
+  14-day window and excludes temp-dir sessions. `ingest_session` refreshes
+  chronicle facets after every ingest and tops up omp dispatches from `task`
+  calls.
+- Herd status no longer reports "herdr is not running" with a Start button
+  when only the herdr server is down (`server_down` vs `web_ui_down`).
+- Dashboard "silent failures" (~1000/week) were mostly not atlas faults:
+  enforcement denies and external tool errors were counted as failures; 4925
+  old error rows lacked `error_snippet`; gates were armed in `/tmp`, mux bench
+  and markerless directories; hooks failed open with no record; dispatches
+  were logged with an empty `agent_type`.
+- `atlas_db.classify_error` classes errors as `deny`, `model_misuse`,
+  `environment`, `tool_fault` or `unknown`. The KPI counts only
+  atlas-attributable classes; a new "Tool errors by cause" card shows the rest.
+  Pre-capture rows fold into `tool_error_legacy` (uncounted).
+- `session_ingest.py --backfill-errors` fills missing error data from surviving
+  claude/omp transcripts (idempotent).
+- `scripts/atlas_scope.py` and `omp/scope.ts` `gates_armed` share the same
+  marker lists (contract-tested). `ATLAS_GATES=always|off` overrides.
+  Unarmed directories still log dispatches and keep the nested-dispatch deny;
+  only soft policy denies are skipped there.
+- The claude-mem recall gate fails open when claude-mem is enabled in plugin
+  settings but no claude-mem MCP server is configured for the cwd (project
+  `.mcp.json`, `~/.claude.json`, plugin `.mcp.json`, settings). (The
+  "fails open after the first deny" half was removed: the gate now denies on
+  every attempt until a recall; see above.)
+- `atlas_db.error_snippet_of` keeps a long Python traceback's head plus its
+  tail (last frame and exception line) within the same 500-char cap.
+- The completion gate's phased-todo hint names `atlas_todo.py` by absolute
+  path instead of `${CLAUDE_PLUGIN_ROOT}`, which omp does not set.
+- `scripts/atlas_faults.py` records hook crashes to
+  `~/.atlas/hook-faults.jsonl`; the dashboard shows them as kind `hook_crash`.
+- `log_dispatch` and `dispatch_tripwire` resolve the real agent type.
+- All test modules import `scripts/_test_isolation.py`, so tests never write
+  the real `~/.atlas`.
+
 ## [10.1.2] - 2026-10-06
 
 ### Fixed
@@ -23,6 +347,9 @@
   both now say 10.1.2. 10.1.1 has no changelog entry of its own.
 - `stop_daemon` now stops only the listening process and waits for the old
   daemon to exit; it no longer signals browser or other client processes.
+- Workboard: fixed a phantom page-level scrollbar and large empty space below
+  content on every page; visually-hidden (.sr-only) labels escaped the scroll
+  container and stretched the document height.
 
 ## [10.0.1] - 2026-10-06
 

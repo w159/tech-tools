@@ -3,8 +3,8 @@
 
 Matches Edit / Write / MultiEdit / NotebookEdit. Picks a formatter by file extension, runs it in place
 using the project's own config, and is a no-op when the formatter is not installed. Meant
-to run ASYNC so it never blocks the agentic loop. Any failure is swallowed - formatting
-must never break a tool call.
+to run ASYNC (hooks.json sets "async": true) so it never blocks the agentic loop. It
+never blocks a tool call; a formatter that fails is recorded via atlas_faults.
 
 Why this matters for an orchestrator: a uniform, formatter-clean tree means diffs stay
 minimal and reviewers (and verifier subagents) see only real changes, not whitespace noise.
@@ -30,11 +30,15 @@ Stdlib only.
 
 from __future__ import annotations
 
-import json
 import os
 import shutil
 import subprocess
 import sys
+
+sys.path.insert(
+    0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
+)
+import atlas_hook_guard  # noqa: E402
 
 # extension -> ordered list of candidate commands; the file path is appended as the last arg.
 PRETTIER_EXTS = {
@@ -107,17 +111,12 @@ def file_path_from(data: dict) -> str | None:
 
 
 def main() -> int:
-    try:
-        raw = sys.stdin.read()
-        data = json.loads(raw) if raw.strip() else {}
-        if not isinstance(data, dict):
-            data = {}  # non-dict JSON (null, list) is not a payload
-    except (json.JSONDecodeError, ValueError):
-        return 0
+    data = atlas_hook_guard.load_payload("format_after_edit")
     fp = file_path_from(data)
     if not fp or not os.path.isfile(fp):
         return 0
     cwd = data.get("cwd") or os.getcwd()
+    failures = []
     for base in candidates_for(fp, cwd):
         try:
             proc = subprocess.run(
@@ -127,15 +126,27 @@ def main() -> int:
                 text=True,
                 timeout=55,
             )
-        except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as exc:
+            failures.append("%s: %s" % (base[0], type(exc).__name__))
             continue
         if proc.returncode == 0:
             # Silent on success. A formatter that ran is not news; announcing it on
             # every edit is the highest-frequency noise source in the plugin.
             return 0
-        # non-zero (e.g. syntax error mid-edit): try the next candidate, else give up quietly
+        # non-zero (e.g. syntax error mid-edit): try the next candidate
+        err = (getattr(proc, "stderr", "") or "").strip().splitlines()
+        failures.append(
+            "%s exited %s%s"
+            % (base[0], proc.returncode, (": " + err[0][:200]) if err else "")
+        )
+    if failures:
+        # Never blocks the edit, but a formatter that always fails must be visible.
+        atlas_hook_guard.fault(
+            "format_after_edit",
+            "no formatter succeeded for %s (%s)" % (fp, "; ".join(failures)),
+        )
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(atlas_hook_guard.run_hook("format_after_edit", main))

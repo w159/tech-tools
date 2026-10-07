@@ -9,6 +9,7 @@ dangling directive sends the model to a file that does not exist relative to
 either base, which silently breaks the skill's operating contract.
 """
 
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import pathlib
 import re
 import shutil
@@ -487,6 +488,35 @@ class TestToolNameHygiene(unittest.TestCase):
             "skills still listing MultiEdit in allowed-tools (use Edit/Write): "
             + ", ".join(bad),
         )
+
+    def test_no_skill_forks_into_a_non_atlas_agent(self):
+        """A forked general-purpose worker sits outside every atlas dispatch/report gate."""
+        bad = []
+        for skill_md in sorted((PLUGIN_ROOT / "skills").glob("*/SKILL.md")):
+            fm = _frontmatter_fields(skill_md.read_text(encoding="utf-8"))
+            agent = fm.get("agent", "").strip().strip("'\"")
+            if agent and not agent.startswith("atlas:"):
+                bad.append(f"{skill_md.parent.name}:{agent}")
+        self.assertEqual(
+            [], bad, "skills fork into non-atlas agents: " + ", ".join(bad)
+        )
+
+    def test_operating_contract_has_one_source_and_no_worker_blocked_format(self):
+        copies = sorted(
+            str(p.relative_to(PLUGIN_ROOT))
+            for p in PLUGIN_ROOT.rglob("operating-contract.md")
+            if "node_modules" not in p.parts
+        )
+        self.assertEqual(["references/operating-contract.md"], copies)
+        # Workers answer in the report container (STATUS: BLOCKED + NEXT), never a `Tried:` block.
+        for agent_md in sorted((PLUGIN_ROOT / "agents").glob("*.md")):
+            self.assertNotIn(
+                "Tried:", agent_md.read_text(encoding="utf-8"), agent_md.name
+            )
+        contract = (PLUGIN_ROOT / "references" / "operating-contract.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("STATUS: BLOCKED", contract)
 
     def test_skill_allowed_tools_are_known_or_namespaced(self):
         bad = []

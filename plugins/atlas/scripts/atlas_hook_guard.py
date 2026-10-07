@@ -218,6 +218,125 @@ def read_payload():
         return {}
 
 
+# Hooks that GATE (block the turn) rather than emit advice: a breaker bypass of
+# one of these is a real enforcement hole, so every bypass is recorded, not
+# just the first trip. The breaker still must trip (it is what ends an
+# infinite Stop loop); the cap is STOP_BURST_LIMIT Stops per STOP_BURST_WINDOW.
+GATE_HOOKS = ("completion_gate",)
+
+
+def fault(hook, message, cwd=None):
+    """Record a durable fail-open trace via atlas_faults. Never raises."""
+    try:
+        try:
+            import atlas_faults
+        except ImportError:
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            import atlas_faults
+        exc = message if isinstance(message, BaseException) else ValueError(message)
+        atlas_faults.record(hook, exc, cwd)
+    except Exception:
+        pass
+
+
+def _note_bypass(hook_name, session_id, first_trip):
+    """Make a breaker bypass visible: always a fault row for gate hooks (once
+    per trip for the rest), and a one-line stderr note every time a gate is
+    skipped. Never raises."""
+    try:
+        gate = hook_name in GATE_HOOKS
+        if first_trip or gate:
+            fault(
+                hook_name,
+                "circuit breaker open for session %s: %s bypassed this Stop "
+                "(more than %d Stops within %ds)"
+                % (session_id, hook_name, STOP_BURST_LIMIT, STOP_BURST_WINDOW),
+            )
+        if first_trip or gate:
+            sys.stderr.write(
+                "[atlas] hook_guard: circuit breaker %s for session %s -- "
+                "Stop fired more than %d times within %ds; %s\n"
+                % (
+                    "tripped" if first_trip else "open",
+                    session_id,
+                    STOP_BURST_LIMIT,
+                    STOP_BURST_WINDOW,
+                    (
+                        "%s BYPASSED (gate not enforced this Stop)" % hook_name
+                        if gate
+                        else "silencing all atlas Stop hooks for the rest of this session"
+                    ),
+                )
+            )
+    except Exception:
+        pass
+
+
+_STR_FIELDS = (
+    "session_id",
+    "cwd",
+    "transcript_path",
+    "tool_name",
+    "hook_event_name",
+    "prompt",
+    "last_assistant_message",
+    "agent_type",
+    "agent_id",
+)
+
+
+def load_payload(hook_name, raw=None):
+    """One payload policy for every hook: always returns a dict with typed
+    fields, never raises.
+
+      empty stdin          -> {} quietly (a harness that sends nothing)
+      malformed / non-dict -> {} plus a fault row
+      tool_input not dict  -> {} plus a fault row
+      known string fields of another type -> "" plus a fault row
+    Callers then exit 0 as usual (fail-open); the fault row is the trace.
+    """
+    try:
+        if raw is None:
+            raw = sys.stdin.read()
+        if not raw.strip():
+            return {}
+        data = json.loads(raw)
+    except Exception as exc:
+        fault(hook_name, "unreadable payload: %s: %s" % (type(exc).__name__, exc))
+        return {}
+    if not isinstance(data, dict):
+        fault(hook_name, "payload is %s, not an object" % type(data).__name__)
+        return {}
+    bad = []
+    if "tool_input" in data and not isinstance(data["tool_input"], dict):
+        if data["tool_input"] is not None:
+            bad.append("tool_input=%s" % type(data["tool_input"]).__name__)
+        data["tool_input"] = {}
+    for key in _STR_FIELDS:
+        val = data.get(key)
+        if val is not None and not isinstance(val, str):
+            bad.append("%s=%s" % (key, type(val).__name__))
+            data[key] = ""
+    if bad:
+        fault(hook_name, "wrong-typed payload fields: " + ", ".join(bad))
+    return data
+
+
+def run_hook(hook_name, main):
+    """Run a hook main(); any uncaught crash becomes a fault row and exit 0."""
+    try:
+        return main()
+    except SystemExit:
+        raise
+    except BaseException as exc:  # noqa: BLE001 -- fail-open is absolute
+        fault(hook_name, exc)
+        try:
+            sys.stderr.write("[atlas] %s fail-open: %s\n" % (hook_name, exc))
+        except Exception:
+            pass
+        return 0
+
+
 def should_run(payload, hook_name, window_seconds=None, kind="emit"):
     """False if this Stop hook must not act right now: a continuation it (or
     a sibling hook) forced, its own throttle window, or the session circuit
@@ -259,19 +378,10 @@ def should_run(payload, hook_name, window_seconds=None, kind="emit"):
                 state.get("breaker_tripped")
                 or len(state["stop_events"]) > STOP_BURST_LIMIT
             ):
-                if not state.get("breaker_tripped"):
-                    state["breaker_tripped"] = True
-                    try:
-                        sys.stderr.write(
-                            "[atlas] hook_guard: circuit breaker tripped for "
-                            "session %s -- Stop fired more than %d times within "
-                            "%ds; silencing all atlas Stop hooks for the rest of "
-                            "this session\n"
-                            % (session_id, STOP_BURST_LIMIT, STOP_BURST_WINDOW)
-                        )
-                    except Exception:
-                        pass
+                first_trip = not state.get("breaker_tripped")
+                state["breaker_tripped"] = True
                 _save_state(session_id, state)
+                _note_bypass(hook_name, session_id, first_trip)
                 return False
 
             if window_seconds:

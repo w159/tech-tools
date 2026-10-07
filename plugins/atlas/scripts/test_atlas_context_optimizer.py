@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests for atlas_context_optimizer.py — disable unused skills/agents."""
 
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import contextlib
 import io
 import json

@@ -207,6 +207,12 @@ def _is_orchestration_path(path):
     # URI. That is a message, not a file: never target code, never an inline edit.
     if _is_uri_path(path):
         return True
+    # A leading ~ / $HOME is the home dir, never a cwd-relative directory.
+    path = re.sub(
+        r"^\$\{?HOME\}?(?=$|[\\/])",
+        lambda _m: os.path.expanduser("~"),
+        os.path.expanduser(path),
+    )
     norm = path.replace("\\", "/")
     if (
         norm.startswith("docs/")
@@ -240,6 +246,32 @@ def _deny(reason):
     print(json.dumps(out))
 
 
+# A block label starts a clause: at the beginning of a line (tolerating markdown decoration: `- `, `> `, `# `,
+# `**GOAL:**`) or right after a sentence break (`. `, `; `) - leads write whole specs on one line. Mentions inside
+# prose or parentheses ("(goal: ...)", "fix it, goal: x") and SUBGOAL: are not blocks.
+_CLAUSE_START = r"(?:^[ \t]*(?:[>#*_-]+[ \t]*)*|(?<=[.;!?])[ \t]+)"
+_LABEL_SUFFIX = r"[ \t]*[*_]*[ \t]*:[*_]*"
+_NEXT_LABEL_RE = re.compile(_CLAUSE_START + r"[A-Z][A-Z &/-]{2,}" + _LABEL_SUFFIX, re.M)
+
+
+def _block_body(prompt, labels):
+    """Text of the first block labelled with any of `labels` (case-insensitive,
+    clause-anchored): everything after its label up to the next ALL-CAPS label.
+    None when no such block exists."""
+    for label in labels:
+        m = re.search(
+            _CLAUSE_START + re.escape(label.rstrip(":")) + _LABEL_SUFFIX,
+            prompt,
+            re.I | re.M,
+        )
+        if not m:
+            continue
+        rest = prompt[m.end() :]
+        nxt = _NEXT_LABEL_RE.search(rest)
+        return rest[: nxt.start()] if nxt else rest
+    return None
+
+
 def _toolkit_gap(tinput):
     """An atlas:* dispatch whose prompt never orders real code-nav tools.
 
@@ -252,7 +284,9 @@ def _toolkit_gap(tinput):
     if not agent.startswith("atlas:"):
         return None  # forks inherit the parent's loaded tools; non-atlas agents opt out
     # Docs-only roles still benefit from lean-ctx; keep the bar for all atlas:*.
-    prompt = str(tinput.get("prompt") or "")
+    # The tools must be named inside a line-anchored TOOLS: block: the words "ToolSearch" and "serena" in prose
+    # (or in a decoy sentence) are not an instruction the subagent can follow.
+    prompt = _block_body(str(tinput.get("prompt") or ""), ("TOOLS:",)) or ""
     low = prompt.lower()
     # ATLAS_TOOLKIT_LOAD=omp is set only by the omp hook bridge: omp has no ToolSearch (tools are xd:// devices),
     # so the load step cannot be asked of it. The named-navigation-tool requirement below still applies.
@@ -319,13 +353,15 @@ def _unbounded_dispatch(tinput):
     if not agent.startswith("atlas:"):
         return None  # forks inherit the parent's brief; non-atlas agents opt out
     prompt = str(tinput.get("prompt") or "")
-    low = prompt.lower()
-    missing = [
-        variants[0]
-        for variants in REQUIRED_SPEC_BLOCKS
-        if not any(v.lower() in low for v in variants)
-    ]
-    # Line-anchored so a mention inside prose ("the goal:") is not a block, and
+    # Each block must be a clause-anchored label with a non-empty body: a keyword mentioned in prose, or a label
+    # left empty, is not a finish line.
+    missing = []
+    for variants in REQUIRED_SPEC_BLOCKS:
+        body = _block_body(prompt, variants)
+        if body is None:
+            missing.append(variants[0])
+        elif not re.search(r"\w", body):
+            missing.append(variants[0] + " (empty)")
     # SUBGOAL:/STRETCH GOAL: never inflate the count.
     goals = len(re.findall(r"(?im)^[ \t]*GOAL[ \t]*:", prompt))
     if not missing and goals <= 1:
@@ -604,6 +640,35 @@ def _is_read_only_call(tool, tinput):
     return tool == "Bash" and _is_read_only_bash((tinput or {}).get("command"))
 
 
+def _dispatch_attribution(tinput, session_model=""):
+    """Who a dispatch is for: agent, sibling name and the model it would run on
+    (an explicit per-call `model`, else the definition's pin, else the parent's)."""
+    agent = str(tinput.get("subagent_type") or "")
+    given = str(tinput.get("model") or "").strip()
+    pinned = (
+        _frontmatter_model(agent[len("atlas:") :]) if agent.startswith("atlas:") else ""
+    )
+    return {
+        "agent": agent,
+        "name": str(tinput.get("name") or "").strip(),
+        "model": given or pinned or str(session_model or ""),
+    }
+
+
+def _record_dispatch_deny(
+    conn, atlas_db, session, tool, tinput, code, session_model=""
+):
+    """One friction row per dispatch deny (`dispatch_denied:<code>`) carrying the agent, sibling name
+    and model, so a deny rate can be broken down per worker and per tier. Fail-open with a fault row."""
+    try:
+        who = dict(_dispatch_attribution(tinput or {}, session_model), tool=tool)
+        atlas_db.record_friction(
+            conn, session, "dispatch_denied:" + code, snippet=json.dumps(who)
+        )
+    except Exception as exc:
+        _record_fault(exc)
+
+
 def _pre_tool_use(conn, atlas_db, tool, session, path, tinput=None, session_model=""):
     """Deny tier: fires before the op lands, orchestration-flagged sessions only."""
     # The deny tier is independently kill-switchable; the advisory tier persists.
@@ -615,50 +680,61 @@ def _pre_tool_use(conn, atlas_db, tool, session, path, tinput=None, session_mode
     if not atlas_db.is_orchestrating(conn, session):
         return  # non-orchestration sessions are NEVER denied anything
     if tool in DISPATCH_TOOLS:
+
+        def deny(code, reason):
+            _deny(reason)
+            _record_dispatch_deny(
+                conn, atlas_db, session, tool, tinput, code, session_model
+            )
+
         # (c0) A dispatch with no sibling name never joins the colony: without
         # a name it is absent from the sibling roster (no SendMessage in, no
         # addressed board notes) and its report is unattributable.
         unnamed = _name_missing(tinput or {})
         if unnamed:
-            _deny(
+            deny(
+                "name",
                 "DENY - this %s dispatch to %s carries no `name`. Named dispatches "
                 "are the colony: only a named sibling appears on the sibling roster "
                 "and can SendMessage the others, its report stays attributable, and "
                 "board notes can be addressed to it. Re-dispatch with "
-                "name: <role>-<slice> (e.g. auth-explorer)." % (tool, unnamed)
+                "name: <role>-<slice> (e.g. auth-explorer)." % (tool, unnamed),
             )
             return
         # (c1) A per-call model override drifts the colony's cost/runtime tier.
         override = _model_override(tinput or {}, session_model)
         if override:
             over_agent, declared, given = override
-            _deny(
+            deny(
+                "model_override",
                 "DENY - this %s dispatch to %s overrides model with '%s'. The agent "
                 "definition pins model: %s; per-role models are the colony's "
                 "cost/runtime contract and a per-call override drifts it quietly. "
                 "Drop the `model` param and re-dispatch. Wrong tier for the job? "
                 "Fix the definition, not the dispatch."
-                % (tool, over_agent, given, declared)
+                % (tool, over_agent, given, declared),
             )
             return
         # (c) A dispatch that never names the toolset gets a subagent that greps.
         gap = _toolkit_gap(tinput or {})
         if gap:
-            _deny(_toolkit_gap_reason(tool, gap))
+            deny("toolkit", _toolkit_gap_reason(tool, gap))
             return
         unbounded = _unbounded_dispatch(tinput or {})
         if unbounded:
             agent, missing, goals = unbounded
             if goals > 1:
-                _deny(
+                deny(
+                    "multi_goal",
                     "DENY - this %s dispatch carries %d GOAL: blocks. One dispatch is "
                     "ONE bounded task - that is what keeps a subagent's context small "
                     "and its runtime short. Split it into %d dispatches, each with its "
                     "own GOAL, DELIVERABLE, and SUCCESS CRITERIA; independent ones can "
-                    "run in the same parallel wave." % (tool, goals, goals)
+                    "run in the same parallel wave." % (tool, goals, goals),
                 )
             else:
-                _deny(
+                deny(
+                    "spec",
                     "DENY - this %s dispatch to %s is unbounded: missing %s. A subagent "
                     "with no finish line runs until it wanders. Paste the dispatch spec "
                     "from subagent-kit.md, six blocks: GOAL (one measurable sentence), "
@@ -667,12 +743,12 @@ def _pre_tool_use(conn, atlas_db, tool, session, path, tinput=None, session_mode
                     "touch), STOP CONDITIONS (when to halt and report back rather than "
                     "push through), REPORT (the result container; REPORT: must name the "
                     "fields STATUS, STEPS, FILES_CHANGED, EVIDENCE, DELIVERABLE, NEXT)."
-                    % (tool, agent, ", ".join(missing))
+                    % (tool, agent, ", ".join(missing)),
                 )
             return
         steps_problem = _runner_steps_problem(tinput or {})
         if steps_problem:
-            _deny(steps_problem)
+            deny("steps", steps_problem)
         return
     # (b) Editing production target code inline is the sharpest violation.
     if tool in EDIT_TOOLS and not _is_orchestration_path(path):
@@ -1208,24 +1284,93 @@ def _merge_context(out, extra):
         return out  # unrecognised shape: keep the tripwire's own output intact
 
 
+def _channel_dispatch(payload):
+    """Claude Code lead dispatch (PreToolUse Task/Agent): open the lead's
+    subchannel, register the subagent as a member and return the tool_input with
+    the CHANNEL block appended to its prompt. None when not applicable. omp has no
+    hook-side input rewrite; omp/channels.ts does the same there."""
+    if payload.get("hook_event_name") != "PreToolUse":
+        return None
+    if (
+        os.environ.get("ATLAS_HARNESS") == "omp"
+        or os.environ.get("ATLAS_CHANNELS") == "off"
+    ):
+        return None
+    if payload.get("tool_name") not in DISPATCH_TOOLS or _in_subagent(payload):
+        return None
+    tinput = payload.get("tool_input") or {}
+    prompt = tinput.get("prompt")
+    if not isinstance(prompt, str) or not prompt.strip() or "CHANNEL:" in prompt:
+        return None
+    sys.path.insert(0, str(SCRIPTS_DIR))
+    import atlas_todo
+
+    cwd = payload.get("cwd")
+    root = atlas_todo.find_root(cwd if isinstance(cwd, str) and cwd else None)
+    lead = atlas_todo.lead_name(payload.get("session_id"))
+    name = atlas_todo._sanitize_owner(tinput.get("name") or "")
+    if name == "anon":
+        tail = str(tinput.get("subagent_type") or "worker").split(":")[-1]
+        name = f"{atlas_todo._sanitize_owner(tail)}-{os.urandom(2).hex()}"
+    chan = atlas_todo.open_lead_channel(
+        root, lead, [name], timeout=atlas_todo.CHANNEL_LOCK_TIMEOUT_S
+    )
+    brief = atlas_todo.channel_brief(root, chan["name"], lead, name)
+    return {**tinput, "prompt": f"{prompt}\n\n{brief}"}
+
+
+def _merge_updated_input(out, updated):
+    """Add `updatedInput` (and the `allow` decision Claude Code requires with it)
+    to the one hook-output document `out`; a deny is left alone."""
+    if not out.strip():
+        spec = {"hookEventName": "PreToolUse"}
+        doc = {"hookSpecificOutput": spec}
+    else:
+        try:
+            doc = json.loads(out)
+            spec = doc["hookSpecificOutput"]
+            if spec.get("permissionDecision") == "deny":
+                return out
+        except (ValueError, KeyError, TypeError, AttributeError):
+            return out
+    spec.setdefault("permissionDecision", "allow")
+    spec["updatedInput"] = updated
+    return json.dumps(doc) + "\n"
+
+
+def _is_deny(out):
+    """True when hook output `out` carries a deny decision. Parsed, so spacing, key
+    order or extra keys cannot hide it; a denied dispatch never opens a channel."""
+    try:
+        return json.loads(out)["hookSpecificOutput"].get("permissionDecision") == "deny"
+    except (ValueError, KeyError, TypeError, AttributeError):
+        return False
+
+
 def main():
     raw = sys.stdin.read()
     payload = json.loads(raw)  # may raise -> caught below
+    payload = payload if isinstance(payload, dict) else {}
+    if isinstance(payload, dict) and isinstance(payload.get("cwd"), str):
+        _PAYLOAD_CWD[0] = payload["cwd"]
 
     # Worker inbox: an atlas_mux worker's headless pane never reads its tty, so
     # dashboard messages queued for it on the board are delivered here, as
-    # PostToolUse additionalContext. Drained before every gate in _run (kill
-    # switch, native policy, DB) because delivery must not depend on them, and
-    # costs two env lookups for any session that is not a mux worker. Fail-open.
+    # PostToolUse additionalContext. The same drain serves channel members (omp
+    # subagents identified by payload agent_name, a lead that opened a subchannel).
+    # Drained before every gate in _run (kill switch, native policy, DB) because
+    # delivery must not depend on them. Fail-open.
     inbox = ""
-    if payload.get("hook_event_name", "PostToolUse") == "PostToolUse":
+    event = payload.get("hook_event_name", "PostToolUse")
+    if event == "PostToolUse":
         try:
             import worker_inbox
 
-            inbox = worker_inbox.context_for_post_tool_use()
+            inbox = worker_inbox.context_for_post_tool_use(payload=payload)
         except Exception as exc:
             sys.stderr.write(f"[atlas] worker inbox fail-open: {exc}\n")
-    if not inbox:
+    dispatch = event == "PreToolUse" and payload.get("tool_name") in DISPATCH_TOOLS
+    if not inbox and not dispatch:
         _run(payload)
         return
     buf = io.StringIO()
@@ -1233,10 +1378,48 @@ def main():
         with contextlib.redirect_stdout(buf):
             _run(payload)
     finally:
-        sys.stdout.write(_merge_context(buf.getvalue(), inbox))
+        out = _merge_context(buf.getvalue(), inbox)
+        if dispatch and not _is_deny(out):
+            # An allowed dispatch opens the lead's subchannel; a denied one never ran.
+            try:
+                updated = _channel_dispatch(payload)
+                if updated is not None:
+                    out = _merge_updated_input(out, updated)
+            except Exception as exc:
+                _record_fault(
+                    exc,
+                    "dispatch_tripwire.channel_lock_timeout"
+                    if type(exc).__name__ == "LockTimeout"
+                    else "dispatch_tripwire",
+                )  # fail open, recorded; a dispatch is never blocked
+        sys.stdout.write(out)
+
+
+_PAYLOAD_CWD = [None]
+
+
+def _gates_armed(payload):
+    """False in throwaway / non-project directories: no gate arms there."""
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+    import atlas_scope
+
+    cwd = payload.get("cwd")
+    return atlas_scope.gates_armed(cwd if isinstance(cwd, str) and cwd else os.getcwd())
+
+
+def _record_fault(exc, hook="dispatch_tripwire"):
+    """Persist a fail-open crash (never raises)."""
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_faults
+
+        atlas_faults.record(hook, exc, _PAYLOAD_CWD[0] or os.getcwd())
+    except Exception:
+        pass
 
 
 def _run(payload):
+    armed = _gates_armed(payload)
     # Nesting deny comes FIRST: before the drift kill-switch and before any DB
     # work. ATLAS_TRIPWIRE=off silences inline-drift coaching, which is a matter
     # of taste; subagent nesting is a structural invariant and is not opt-out.
@@ -1249,9 +1432,11 @@ def _run(payload):
     ):
         _deny_nested_dispatch(payload.get("tool_name"))
         return
-    handled, nudge = _native_tool_policy(payload)
-    if handled:
-        return
+    nudge = None
+    if armed:
+        handled, nudge = _native_tool_policy(payload)
+        if handled:
+            return
 
     if os.environ.get("ATLAS_TRIPWIRE", "on").lower() == "off":
         _emit_nudge(nudge)
@@ -1310,7 +1495,7 @@ def _run(payload):
             # is_orchestrating() alone cannot tell them apart -- transcript_path
             # (checked by _in_subagent) is the reliable marker. Nested
             # dispatches are already denied above, before this point.
-            if not _in_subagent(payload):
+            if armed and not _in_subagent(payload):
                 buf = io.StringIO()
                 with contextlib.redirect_stdout(buf):
                     _pre_tool_use(
@@ -1342,7 +1527,13 @@ def _run(payload):
             dispatch_run_id = atlas_db.current_or_last_run_id(conn, session)
             if dispatch_run_id is not None:
                 atlas_db.log_dispatch(
-                    conn, dispatch_run_id, tinput.get("subagent_type", tool)
+                    conn,
+                    dispatch_run_id,
+                    atlas_db.resolve_agent_type(tinput, tool),
+                    model=_dispatch_attribution(
+                        tinput, payload.get("session_model") or ""
+                    )["model"]
+                    or None,
                 )
             agent_type = str(tinput.get("subagent_type", ""))
             if agent_type.startswith(("atlas:", "atlas-")):
@@ -1379,7 +1570,7 @@ def _run(payload):
         count = atlas_db.inline_ops_since_last_dispatch(conn, run_id)
 
         edit_to_target = tool in EDIT_TOOLS and not _is_orchestration_path(path)
-        if count >= _threshold() or edit_to_target:
+        if armed and (count >= _threshold() or edit_to_target):
             if not atlas_db.is_orchestrating(conn, session):
                 return  # WS1: non-orchestration sessions are logged but never nagged
             if edit_to_target:
@@ -1407,9 +1598,10 @@ if __name__ == "__main__":
     except Exception as exc:
         # fail-open: never block a session. But surface the failure on stderr
         # so a silent misfire is observable instead of invisible, matching
-        # auto_skill/memory_capture.
+        # auto_skill/memory_capture, and persist it for the dashboard.
         try:
             sys.stderr.write(f"[atlas] dispatch_tripwire fail-open: {exc}\n")
         except Exception:
             pass
+        _record_fault(exc)
     sys.exit(0)

@@ -21,6 +21,8 @@ import * as fs from "node:fs";
 import { tmpdir } from "node:os";
 import * as nodePath from "node:path";
 
+import { gatesArmed } from "./scope";
+
 export const MANDATES_PATH = nodePath.resolve(import.meta.dir, "..", "contracts", "mandates.json");
 
 /** The shared mandate contract (also read by the Python hooks). */
@@ -168,7 +170,7 @@ export function registerMandates(pi: Pick<ExtensionAPI, "on">, deps: MandateDeps
 
 	pi.on("before_agent_start", (event, ctx) => {
 		try {
-			if (ctx.agent.kind !== "main" || off()) return undefined;
+			if (ctx.agent.kind !== "main" || off() || !gatesArmed(ctx.cwd, deps.env)) return undefined;
 			const base = Array.isArray(event.systemPrompt) ? event.systemPrompt : [];
 			ponytailListed = base.some(entry => typeof entry === "string" && entry.includes("ponytail-review"));
 			if (base.some(entry => typeof entry === "string" && entry.includes(RECALL_MARKER))) return undefined;
@@ -192,7 +194,7 @@ export function registerMandates(pi: Pick<ExtensionAPI, "on">, deps: MandateDeps
 
 	pi.on("tool_call", (event, ctx) => {
 		try {
-			if (ctx.agent.kind !== "main" || off()) return undefined;
+			if (ctx.agent.kind !== "main" || off() || !gatesArmed(ctx.cwd, deps.env)) return undefined;
 			const toolName = event.toolName ?? "";
 			if (!recalled && !Object.hasOwn(RECALL_EXEMPT, toolName.toLowerCase())) {
 				const sessionId = sessionIdOf(ctx);

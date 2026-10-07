@@ -5,6 +5,7 @@ This test is intentionally data-driven from the filesystem so it stays current
 as connectors are added or removed inside plugins/atlas/mcp/.
 """
 
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import json
 import re
 import unittest
@@ -163,6 +164,38 @@ class TestConnectorsWiring(unittest.TestCase):
                     config_keys.issubset(set(self.user_config)),
                     f"{name}: env {env_key} references undeclared userConfig key(s) {sorted(config_keys - set(self.user_config))}",
                 )
+
+
+class TestDisclosureDocMatchesHarness(unittest.TestCase):
+    """references/connector-tool-disclosure.md must state what test-mcp-tools.mjs asserts."""
+
+    HARNESS = PLUGINS_ATLAS.parent.parent / "test-mcp-tools.mjs"
+    DOC = PLUGINS_ATLAS / "references" / "connector-tool-disclosure.md"
+
+    def _harness(self) -> dict[str, tuple[int, int]]:
+        text = self.HARNESS.read_text(encoding="utf-8")
+        start = text.index("const CONNECTORS = {")
+        end = text.index("\n};", start)
+        out: dict[str, tuple[int, int]] = {}
+        for block in re.split(r"\n  (?=\w+: \{)", text[start:end])[1:]:
+            name = block.split(":", 1)[0]
+            floor = int(re.search(r"floor: (\d+)", block).group(1))
+            bare = re.search(r"bare: \[([^\]]*)\]", block).group(1)
+            out[name] = (len(re.findall(r"'[^']+'", bare)), floor)
+        return out
+
+    def _doc(self) -> dict[str, tuple[int, int]]:
+        text = self.DOC.read_text(encoding="utf-8")
+        table = text.split("<!-- connector-table:start -->")[1].split(
+            "<!-- connector-table:end -->"
+        )[0]
+        rows = re.findall(r"^\| (\w+) \| (\d+) \| (\d+) \|", table, re.M)
+        return {n: (int(a), int(b)) for n, a, b in rows}
+
+    def test_table_matches_harness_for_every_connector(self) -> None:
+        harness = self._harness()
+        self.assertEqual(len(harness), 12)
+        self.assertEqual(self._doc(), harness)
 
 
 if __name__ == "__main__":

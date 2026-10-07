@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "typeRoots": ["../../../../../../../.bun/install/global/node_modules/@types", "../../../../../../../.bun/install/cache"],
+    "types": ["node", "bun-types@1.4.2@@@1"],
+    "paths": {
+      "@oh-my-pi/pi-coding-agent": ["../../../../../../../.bun/install/global/node_modules/@oh-my-pi/pi-coding-agent/dist/types/index.d.ts"],
+      "bun:sqlite": ["../../../../../../../.bun/install/cache/bun-types@1.4.2@@@1/sqlite.d.ts"],
+      "bun:test": ["../../../../../../../.bun/install/cache/bun-types@1.4.2@@@1/test.d.ts"],
+      "bun": ["../../../../../../../.bun/install/cache/bun-types@1.4.2@@@1/index.d.ts"]
+    }
+  },
+  "include": ["*.ts"],
+  "exclude": ["*.test.ts"]
+}

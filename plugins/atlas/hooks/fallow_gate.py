@@ -31,10 +31,20 @@ from typing import Any
 # Default matches fallow's gate floor (gate-marker agent landed in v2.85.0).
 _DEFAULT_MIN_VERSION = "2.85.0"
 
-# git commit / git push as a whole token, not as a substring of something else.
-_GIT_GATE_RE = re.compile(
-    r"(^|[\s;|&()])git\s+(commit|push)([\s;|&()]|$)"
-)
+_HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, _HERE)
+sys.path.insert(0, os.path.join(_HERE, "..", "scripts"))
+import atlas_hook_guard  # noqa: E402
+from bash_advisor import _git_subcommands  # noqa: E402  (one git parser for both hooks)
+
+# Worst case in-hook time: npx probe + version probe + audit must stay under the
+# hooks.json timeout for this hook (300s), or the harness kills us before the
+# fail-open path returns.
+_NPX_PROBE_TIMEOUT = 20
+_VERSION_TIMEOUT = 15
+_AUDIT_TIMEOUT = 240
+
+_GATED_SUBCOMMANDS = ("commit", "push")
 
 
 def _env_off(name: str) -> bool:
@@ -47,14 +57,6 @@ def _env_off(name: str) -> bool:
     )
 
 
-def _parse_payload(raw: str) -> dict[str, Any]:
-    try:
-        data = json.loads(raw) if raw.strip() else {}
-    except (json.JSONDecodeError, ValueError):
-        return {}
-    return data if isinstance(data, dict) else {}
-
-
 def _command_from(payload: dict[str, Any]) -> str:
     if payload.get("tool_name") not in (None, "Bash"):
         return ""
@@ -63,7 +65,7 @@ def _command_from(payload: dict[str, Any]) -> str:
 
 
 def _is_git_commit_or_push(command: str) -> bool:
-    return bool(_GIT_GATE_RE.search(command))
+    return any(sub in _GATED_SUBCOMMANDS for sub in _git_subcommands(command))
 
 
 def _version_tuple(text: str) -> tuple[int, ...] | None:
@@ -99,7 +101,7 @@ def _resolve_runner() -> tuple[list[str], str] | None:
             [npx, "--no-install", "fallow", "--version"],
             capture_output=True,
             text=True,
-            timeout=20,
+            timeout=_NPX_PROBE_TIMEOUT,
         )
     except (OSError, subprocess.TimeoutExpired):
         return None
@@ -115,7 +117,7 @@ def _fallow_version(runner: list[str]) -> str:
             runner + ["--version"],
             capture_output=True,
             text=True,
-            timeout=15,
+            timeout=_VERSION_TIMEOUT,
         )
     except (OSError, subprocess.TimeoutExpired):
         return ""
@@ -142,7 +144,7 @@ def _run_audit(runner: list[str], cwd: str | None) -> tuple[int, dict[str, Any],
             ],
             capture_output=True,
             text=True,
-            timeout=300,
+            timeout=_AUDIT_TIMEOUT,
             cwd=cwd or None,
         )
     except subprocess.TimeoutExpired:
@@ -188,7 +190,7 @@ def main() -> int:
     if _env_off("ATLAS_FALLOW"):
         return 0
 
-    payload = _parse_payload(sys.stdin.read())
+    payload = atlas_hook_guard.load_payload("fallow_gate")
     command = _command_from(payload)
     if not command or not _is_git_commit_or_push(command):
         return 0
@@ -254,14 +256,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    try:
-        raise SystemExit(main())
-    except SystemExit:
-        raise
-    except Exception as exc:
-        # fail-open: never wedge a commit/push on hook internals
-        try:
-            sys.stderr.write("[atlas] fallow_gate fail-open: %s\n" % exc)
-        except Exception:
-            pass
-        raise SystemExit(0)
+    raise SystemExit(atlas_hook_guard.run_hook("fallow_gate", main))

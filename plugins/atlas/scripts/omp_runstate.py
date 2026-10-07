@@ -62,7 +62,9 @@ def cmd_begin(args) -> dict:
         return {"ok": False, "error": "empty session id"}
     atlas_db, conn = _connect()
     try:
-        pid = atlas_db.register_project(conn, args.cwd, os.path.basename(os.path.abspath(args.cwd)))
+        pid = atlas_db.register_project(
+            conn, args.cwd, os.path.basename(os.path.abspath(args.cwd))
+        )
         rid = atlas_db.current_run_id(conn, args.session_id)
         created = False
         if rid is None:
@@ -109,7 +111,7 @@ def cmd_event(args) -> dict:
             rid = atlas_db.current_or_last_run_id(conn, args.session_id)
             if rid is None:
                 return {"ok": True, "logged": False, "reason": "no run"}
-            atlas_db.log_dispatch(conn, rid, args.dispatch or tool, args.model)
+            atlas_db.log_dispatch(conn, rid, args.dispatch, args.model)
             return {"ok": True, "logged": True, "kind": "dispatch", "run_id": rid}
         if tool not in INLINE_TOOLS:
             return {"ok": True, "logged": False, "reason": "untracked tool"}
@@ -157,7 +159,11 @@ def cmd_rebaseline(args) -> dict:
                 snap = json.load(fh)
             held = snap["paths"]
             now = session_boot.dirty_map(root) or {}
-            absorbed = sorted(p for p, h in now.items() if held.get(p) != h and any(seg in dirs for seg in p.split("/")))
+            absorbed = sorted(
+                p
+                for p, h in now.items()
+                if held.get(p) != h and any(seg in dirs for seg in p.split("/"))
+            )
             if absorbed:
                 held.update({p: now[p] for p in absorbed})
                 with open(path, "w", encoding="utf-8") as fh:
@@ -167,7 +173,13 @@ def cmd_rebaseline(args) -> dict:
     return {"ok": True, "absorbed": absorbed}
 
 
-COMMANDS = {"begin": cmd_begin, "arm": cmd_arm, "event": cmd_event, "snapshot": cmd_snapshot, "rebaseline": cmd_rebaseline}
+COMMANDS = {
+    "begin": cmd_begin,
+    "arm": cmd_arm,
+    "event": cmd_event,
+    "snapshot": cmd_snapshot,
+    "rebaseline": cmd_rebaseline,
+}
 
 
 def main(argv=None) -> int:

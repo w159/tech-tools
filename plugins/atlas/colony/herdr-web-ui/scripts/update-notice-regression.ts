@@ -1,0 +1,130 @@
+import assert from "node:assert/strict";
+import { join } from "node:path";
+import type { Browser } from "playwright-core";
+import type { Machine } from "../shared/machines.ts";
+import type { UpdateStatus } from "../shared/update.ts";
+
+/**
+ * The lines under the header, on a phone: a release is installed from its line with one button
+ * and shows its steps, and the line for a PC that needs a bridge update can be closed for good.
+ * The update status and the waiting PC are answered here; nothing is installed.
+ */
+export async function checkUpdateNotice(browser: Browser, origin: string, shots?: string): Promise<void> {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, locale: "en-US" });
+  try {
+    await context.addInitScript(() => {
+      if (localStorage.getItem("herdr-web-ui:settings") === null) localStorage.setItem("herdr-web-ui:settings", JSON.stringify({ language: "en" }));
+    });
+    const page = await context.newPage();
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    const shot = async (name: string) => { if (shots) await page.screenshot({ path: join(shots, `${name}.png`) }); };
+
+    let status: UpdateStatus = {
+      managed: true, auto_update: false, phase: "idle", current_revision: null, latest_revision: "b".repeat(40),
+      current_version: "0.0.1", latest_version: "9.9.9", available: true, checked_at: new Date().toISOString(), blocked_reason: null, error: null, step: null,
+    };
+    let installs = 0;
+    let checks = 0;
+    await page.route("**/api/updates", (route) => route.fulfill({ json: status }));
+    await page.route("**/api/updates/install", async (route) => {
+      installs += 1;
+      // as the updater does: an install starts with a check, which reports nothing available yet
+      status = { ...status, phase: "checking", available: false };
+      await route.fulfill({ status: 202, json: { accepted: true } });
+    });
+    await page.route("**/api/updates/check", async (route) => {
+      checks += 1;
+      status = { ...status, phase: "idle", available: true, error: null };
+      await route.fulfill({ status: 202, json: { accepted: true } });
+    });
+    const pc: Machine = { id: "qa-pc", name: "QA PC", kind: "ssh", target: { destination: "qa@example.invalid" }, enabled: true, state: "error", error: null, action_required: "update_bridge", snapshot: null };
+    let remote: Machine | null = null;
+    // The real SSE roster would remove the synthetic PC between these polled snapshots.
+    await context.route("**/api/machines/events", (route) => route.abort());
+    await page.route("**/api/machines", async (route) => {
+      const body = await (await route.fetch()).json() as { machines: Machine[] };
+      await route.fulfill({ json: { ...body, machines: remote ? [...body.machines, remote] : body.machines } });
+    });
+
+    await page.goto(origin);
+    const notice = page.locator(".update-notice").filter({ hasText: /herdr web ui|update|Step|Starting/i }).first();
+    const fits = async (label: string) => assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, `${label}: nothing overflows sideways`);
+
+    // one button, and no detour through Settings
+    await page.getByText("herdr web ui v9.9.9 is available.", { exact: true }).waitFor();
+    assert.equal(await page.getByRole("button", { name: "View update", exact: true }).count(), 0, "the line has no View update button");
+    // the line is the pane column's, never a bar across the window between the header and the sidebar
+    assert.ok(await page.locator(".pane-column > .update-notice").count() > 0, "the notice is drawn in the pane column");
+    assert.equal(await page.locator(":not(.pane-column) > .update-notice").count(), 0, "and nowhere else");
+    await fits("available");
+    await shot("1-available");
+    await page.getByRole("button", { name: "Update", exact: true }).click();
+    await page.getByText("Starting the update…", { exact: true }).waitFor();
+    assert.equal(installs, 1, "one tap asks for the install");
+    assert.equal(await page.getByRole("dialog", { name: "Settings" }).count(), 0, "Settings stays closed");
+
+    status = { ...status, phase: "building", step: "build" };
+    await page.getByText("Building the app", { exact: true }).waitFor();
+    await page.getByText("Step 4 of 5", { exact: true }).waitFor();
+    assert.equal(await notice.getByRole("progressbar").getAttribute("aria-valuenow"), "70");
+    await fits("installing");
+    await shot("2-installing");
+    status = { ...status, phase: "restarting", step: "restart" };
+    await page.getByText("Step 5 of 5", { exact: true }).waitFor();
+
+    // a failed install says so on the line, and the whole error is one tap away
+    status = { ...status, phase: "error", step: null, available: true, error: "bun run build failed: fixture" };
+    await page.getByText("The update could not be installed.", { exact: true }).waitFor();
+    await fits("failed");
+    await shot("3-failed");
+    await page.getByRole("button", { name: "Details", exact: true }).click();
+    await page.getByRole("dialog", { name: "Settings" }).getByText("bun run build failed: fixture").waitFor();
+    await page.getByRole("button", { name: "Close settings", exact: true }).click();
+    await page.getByRole("button", { name: "Try again", exact: true }).click();
+    await page.getByText("Starting the update…", { exact: true }).waitFor();
+    assert.equal(installs, 2, "Try again asks for the install again");
+    // the check an install starts with fails: nothing is available any more, and the line still says so
+    status = { ...status, phase: "error", available: false, error: "git fetch failed: fixture" };
+    await page.getByText("The update could not be installed.", { exact: true }).waitFor();
+    await page.getByRole("button", { name: "Details", exact: true }).waitFor();
+    // the server refuses an install with nothing available: Try again looks for the release again
+    await page.getByRole("button", { name: "Try again", exact: true }).click();
+    await page.getByText("herdr web ui v9.9.9 is available.", { exact: true }).waitFor();
+    assert.deepEqual([checks, installs], [1, 2], "Try again after a failed check asks for a check, not an install");
+    status = { ...status, phase: "idle", available: false, error: null };
+    await page.getByText("herdr web ui v9.9.9 is available.", { exact: true }).waitFor({ state: "hidden" });
+    assert.equal(await page.locator(".update-notice").count(), 0, "an installed update leaves no line");
+    console.log("PASS a release installs from its line with one button and shows its steps");
+
+    // a PC whose bridge cannot be updated: its line closes, and stays closed
+    const line = page.getByText("QA PC needs a bridge update to reconnect.", { exact: true });
+    const dismissed = () => page.evaluate(() => localStorage.getItem("herdr-web-ui:pc-notice-dismissed"));
+    remote = pc;
+    await line.waitFor();
+    await fits("bridge update needed");
+    await shot("4-bridge-update-needed");
+    await page.locator(".update-notice").getByRole("button", { name: "Dismiss", exact: true }).click();
+    await line.waitFor({ state: "hidden" });
+    assert.equal(await dismissed(), JSON.stringify(["qa-pc:update_bridge"]));
+    // a retry that fails brings the PC back to the same state: still closed, also after a reload
+    remote = { ...pc, state: "reconnecting", action_required: null };
+    await page.reload();
+    await page.locator(".conn-live").waitFor();
+    remote = pc;
+    await page.reload();
+    await page.locator(".conn-live").waitFor();
+    assert.equal(await line.count(), 0, "the closed line stays closed through a failed retry and a reload");
+    assert.equal(await dismissed(), JSON.stringify(["qa-pc:update_bridge"]));
+    await shot("5-bridge-line-closed");
+    // once the PC has connected, the next time it waits is news again
+    remote = { ...pc, state: "connected", action_required: null };
+    await page.waitForFunction(() => localStorage.getItem("herdr-web-ui:pc-notice-dismissed") === null);
+    remote = pc;
+    await line.waitFor();
+    assert.deepEqual(errors, []);
+    console.log("PASS the line for a PC that needs a bridge update closes and stays closed until the PC connects");
+  } finally {
+    await context.close();
+  }
+}

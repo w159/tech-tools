@@ -1,7 +1,7 @@
 ---
 name: naming-glossary-audit
 description: "Read-only audit of PostgreSQL table and column names against a project glossary, focused on a user_* to client_* transition. Use when running the nomenclature half of a database audit."
-disallowedTools: [Agent, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, Write, Edit, MultiEdit, NotebookEdit]
+disallowedTools: [Agent, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, Write, Edit, MultiEdit, NotebookEdit, mcp__serena__replace_symbol_body, mcp__serena__insert_after_symbol, mcp__serena__insert_before_symbol, mcp__serena__replace_content, mcp__serena__replace_in_files, mcp__serena__rename_symbol, mcp__serena__safe_delete_symbol, mcp__lean-ctx__ctx_patch]
 model: haiku
 effort: low
 color: orange
@@ -30,7 +30,7 @@ exact task, and let the orchestrator dispatch it.
 
 Deferred MCP tools are absent until their schemas are fetched. **First action:** one `ToolSearch` select (unmatched names are skipped, so missing servers cost nothing):
 
-    ToolSearch("select:mcp__lean-ctx__ctx_compose,mcp__lean-ctx__ctx_search,mcp__lean-ctx__ctx_read,mcp__lean-ctx__ctx_glob,mcp__lean-ctx__ctx_tree,mcp__lean-ctx__ctx_callgraph,mcp__serena__activate_project,mcp__serena__get_symbols_overview,mcp__serena__find_symbol,mcp__serena__find_referencing_symbols,mcp__serena__find_declaration,mcp__serena__find_implementations,mcp__serena__replace_symbol_body,mcp__serena__insert_after_symbol,mcp__serena__get_diagnostics_for_file,mcp__plugin_context-mode_context-mode__ctx_batch_execute,mcp__plugin_context-mode_context-mode__ctx_execute,mcp__plugin_claude-mem_mcp-search__search,mcp__plugin_claude-mem_mcp-search__timeline,mcp__plugin_claude-mem_mcp-search__get_observations")
+    ToolSearch("select:mcp__lean-ctx__ctx_compose,mcp__lean-ctx__ctx_search,mcp__lean-ctx__ctx_read,mcp__lean-ctx__ctx_glob,mcp__lean-ctx__ctx_tree,mcp__lean-ctx__ctx_callgraph,mcp__serena__activate_project,mcp__serena__get_symbols_overview,mcp__serena__find_symbol,mcp__serena__find_referencing_symbols,mcp__serena__find_declaration,mcp__serena__find_implementations,mcp__serena__get_diagnostics_for_file,mcp__plugin_context-mode_context-mode__ctx_batch_execute,mcp__plugin_context-mode_context-mode__ctx_execute,mcp__plugin_claude-mem_mcp-search__search,mcp__plugin_claude-mem_mcp-search__timeline,mcp__plugin_claude-mem_mcp-search__get_observations")
 
 If a tool never appears, re-search by keyword (`ToolSearch("ctx compose")`). Do not fetch schemas one-by-one mid-task — that is how runs fall back to noisy `Grep`/`Bash`.
 

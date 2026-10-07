@@ -25,7 +25,7 @@ const pi = {
 	getActiveTools: () => [] as string[],
 } as unknown as ExtensionAPI;
 
-const ENV_KEYS = ["HOME", "ATLAS_DB", "ATLAS_DASHBOARD", "ATLAS_STYLE"] as const;
+const ENV_KEYS = ["HOME", "ATLAS_DB", "ATLAS_DASHBOARD", "ATLAS_COLONY", "ATLAS_DASHBOARD_PORT", "ATLAS_STYLE"] as const;
 const saved: Record<string, string | undefined> = {};
 let originalCwd = "";
 let proj = "";
@@ -39,6 +39,8 @@ beforeAll(() => {
 	process.env.HOME = proj;
 	process.env.ATLAS_DB = join(proj, "atlas.db");
 	process.env.ATLAS_DASHBOARD = "off";
+	process.env.ATLAS_COLONY = "off"; // the REAL session_boot runs here: it must never start or adopt a colony or dashboard
+	process.env.ATLAS_DASHBOARD_PORT = "17969"; // a daemon started anyway gets a spare port, never the user's 7421
 	delete process.env.ATLAS_STYLE; // a developer's kill switch must not disable the style under test
 	process.chdir(proj);
 	atlasOmpExtension(pi);

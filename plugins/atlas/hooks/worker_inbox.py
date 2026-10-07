@@ -13,18 +13,22 @@ cursor. The same hook is bridged to omp (omp/hook-bridge.ts returns its
 additionalContext from tool_result), so Claude Code and omp share this code.
 
 Cursor: `<root>/.atlas/.run/inbox/<worker>.json` = {"ts": <epoch of the newest
-delivered note>}. A note is READ once its ts <= the cursor of the worker it is
-addressed to; the dashboard derives queued/read from the same file through
-`is_read`. A note and a cursor both carry atlas_todo's float `ts`, so there is
-no second id space to keep in step.
+delivered note>, "seq": <its board seq>}. atlas_todo.note stamps every note with a
+board-wide `seq` assigned under the board lock together with the append, so seq order
+is landing order and a note that lands late (older ts, newer seq) is never skipped, which
+a ts cursor did. A note is READ once its seq <= the cursor seq (legacy notes without a
+seq: ts <= cursor ts); the dashboard derives queued/read from the same file through
+`is_read`. Notes the dashboard already typed into an interactive pane (`delivery`
+delivered/refused) are never drained: injecting them again made every typed message
+arrive twice.
 
 Stdlib only. Everything fails open: a hook must never block a worker's tool call.
 """
 
 import json
 import os
+import re
 import sys
-import time
 from pathlib import Path
 
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "scripts"
@@ -61,13 +65,22 @@ def cursor_path(root, worker):
     )
 
 
-def read_cursor(root, worker):
-    """Epoch of the newest note delivered to `worker`; 0.0 when none has been."""
+def _read_state(root, worker):
+    """(ts, seq) of the newest note delivered to `worker`; (0.0, 0) when none has been.
+
+    Notes carry a board-wide `seq` assigned under the board lock (atlas_todo.note), so a
+    note stamped with an older ts that lands after a drain still has a higher seq and is
+    delivered. Legacy notes without a seq fall back to the ts cursor."""
     try:
         data = json.loads(cursor_path(root, worker).read_text(encoding="utf-8"))
-        return float(data.get("ts") or 0.0)
+        return float(data.get("ts") or 0.0), int(data.get("seq") or 0)
     except (OSError, ValueError, TypeError, AttributeError):
-        return 0.0
+        return 0.0, 0
+
+
+def read_cursor(root, worker):
+    """Epoch of the newest note delivered to `worker`; 0.0 when none has been."""
+    return _read_state(root, worker)[0]
 
 
 def _ts(value):
@@ -77,22 +90,37 @@ def _ts(value):
         return 0.0
 
 
-def is_read(root, worker, ts, cursors=None):
-    """True when a note to `worker` stamped `ts` was already delivered.
+def _seq(rec):
+    try:
+        return int(rec.get("seq") or 0)
+    except (TypeError, ValueError):
+        return 0
 
-    `cursors` is an optional {worker: epoch} memo so a caller classifying many
+
+def _seen(rec, state):
+    ts, seq = state
+    return _seq(rec) <= seq if _seq(rec) else _ts(rec.get("ts")) <= ts
+
+
+def is_read(root, worker, rec, cursors=None):
+    """True when the note `rec` to `worker` was already delivered by the hook.
+
+    `cursors` is an optional {worker: (ts, seq)} memo so a caller classifying many
     messages reads each cursor file once."""
     if cursors is None:
-        return _ts(ts) <= read_cursor(root, worker)
+        return _seen(rec, _read_state(root, worker))
     if worker not in cursors:
-        cursors[worker] = read_cursor(root, worker)
-    return _ts(ts) <= cursors[worker]
+        cursors[worker] = _read_state(root, worker)
+    return _seen(rec, cursors[worker])
 
 
-def _write_cursor(path, ts):
+def _write_cursor(path, rec):
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps({"ts": ts}) + "\n", encoding="utf-8")
+    tmp.write_text(
+        json.dumps({"ts": _ts(rec.get("ts")), "seq": _seq(rec)}) + "\n",
+        encoding="utf-8",
+    )
     os.replace(tmp, path)
 
 
@@ -110,42 +138,122 @@ def _format(notes):
     return "\n".join(lines)
 
 
-def drain(root, worker, now=None):
-    """Notes addressed to `worker` newer than its cursor, as additionalContext text.
+def drain(root, worker, member_of=None, aliases=()):
+    """Notes for `worker` not yet delivered, as additionalContext text.
 
-    Returns "" when nothing is pending. The cursor moves to the newest note
-    returned, under the same lock the board's writers use, so two hooks racing
-    for one worker cannot deliver a note twice."""
+    Wanted: a note `to` the worker (or an alias such as the lead's `lead`) in a
+    channel the worker belongs to, in the project's current main channel, or with
+    no channel (legacy); or a `to=all` broadcast in a channel the worker is a member
+    of (registry membership + ATLAS_CHANNEL). Notes of any other channel (another
+    lead's subchannel, another branch's main) are never delivered. Returns "" when
+    nothing is pending. Notes the dashboard already typed into the pane (`delivery`
+    delivered/refused) and the worker's own notes are skipped. The cursor (board
+    seq) moves to the last note returned under the same lock the board's writers
+    use, so two hooks racing for one worker cannot deliver a note twice."""
     todo = _todo()
     path = cursor_path(root, worker)
     # The lock file would otherwise appear next to the cursor even when idle;
     # only take it when the board has notes at all.
     if not todo.notes_dir(root).is_dir():
         return ""
+    chans = set(member_of if member_of is not None else todo.channels_of(root, worker))
+    env_chan = (os.environ.get("ATLAS_CHANNEL") or "").strip()
+    if env_chan:
+        chans.add(env_chan)
+    main = todo.main_channel(todo._resolve_base(root))
+    names = {worker, *aliases}
+
+    def wanted(rec):
+        ch = rec.get("channel")
+        if rec.get("to") in names:
+            return not ch or ch in chans or ch == main
+        return rec.get("to") == "all" and bool(ch) and ch in chans
+
     with todo._file_lock(path):
-        cursor = read_cursor(root, worker)
-        horizon = (now if now is not None else time.time()) + 1.0
+        state = _read_state(root, worker)
+        me = todo._sanitize_owner(worker)
         pending = [
             rec
-            for rec in todo.notes(root, to=worker, since=cursor)
-            if rec.get("to") == worker
-            and todo._note_ts_key(rec) > cursor
-            and todo._note_ts_key(rec) <= horizon
-            and str(rec.get("owner")) != todo._sanitize_owner(worker)
+            for rec in todo.notes(root, consistent=True)
+            if wanted(rec)
+            and not _seen(rec, state)
+            and rec.get("delivery") not in ("delivered", "refused")
+            and str(rec.get("owner")) != me
         ]
         if not pending:
             return ""
+        pending.sort(key=lambda r: (_seq(r), todo._note_ts_key(r)))
         batch = pending[:MAX_NOTES]
-        _write_cursor(path, todo._note_ts_key(batch[-1]))
+        _write_cursor(path, batch[-1])
         return _format(batch)
 
 
-def context_for_post_tool_use(env=None):
-    """hookSpecificOutput JSON string for the current worker's pending notes, or ""."""
+def _member_for(todo, root, agent):
+    """Registered channel member an omp agent id/name denotes: exact (case-blind), else
+    the id with omp's `<n>-` prefix / trailing digits stripped; a unique match only."""
+    agent = agent.strip()
+    if not agent:
+        return None
+    names = {
+        m["name"]
+        for c in todo._reg_read(root)["channels"].values()
+        for m in c["members"]
+    }
+    for cand in (
+        agent,
+        re.sub(r"^\d+-", "", agent),
+        re.sub(r"\d+$", "", re.sub(r"^\d+-", "", agent)),
+    ):
+        hits = {n for n in names if n.lower() == todo._sanitize_owner(cand).lower()}
+        if len(hits) == 1:
+            return hits.pop()
+    return None
+
+
+def identity(payload=None, env=None):
+    """(name, root, aliases) of whoever this hook fires for, or None.
+
+    1. atlas_mux worker env (ATLAS_WORKER_NAME + ATLAS_PROJECT_ROOT).
+    2. payload `agent_name`: omp subagents carry no env of their own, so the omp
+       hook bridge puts the task name in the payload.
+    3. the lead: a main-session payload whose lead name (atlas_todo.lead_name) has
+       opened a subchannel; it also answers to `to=lead`."""
+    payload = payload if isinstance(payload, dict) else {}
     marker = worker_env(env)
-    if not marker:
+    if marker:
+        return marker[0], marker[1], ()
+    todo = _todo()
+    cwd = payload.get("cwd")
+    root = todo.find_root(cwd if isinstance(cwd, str) and cwd else None)
+    name = _member_for(todo, root, str(payload.get("agent_name") or ""))
+    if name:
+        return name, root, ()
+    sid = str(payload.get("session_id") or "")
+    if sid and "/subagents/" not in str(payload.get("transcript_path") or ""):
+        lead = todo.lead_name(sid)
+        if any(
+            c.get("lead") == lead for c in todo._reg_read(root)["channels"].values()
+        ):
+            return lead, root, ("lead",)
+    return None
+
+
+def context_for_post_tool_use(env=None, payload=None):
+    """hookSpecificOutput JSON string for the current worker's pending notes, or ""."""
+    who = identity(payload, env)
+    if not who:
         return ""
-    text = drain(marker[1], marker[0])
+    worker, root, aliases = who
+    try:
+        text = drain(root, worker, aliases=aliases)
+    except (
+        Exception
+    ) as exc:  # fail open: a tool call never waits on the inbox, but leave a trace
+        _todo()  # puts the scripts dir on sys.path
+        import atlas_faults
+
+        atlas_faults.record("worker_inbox", exc, root)
+        return ""
     if not text:
         return ""
     return json.dumps(

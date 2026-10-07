@@ -14,6 +14,16 @@ Stdlib only, no network, no fixtures.
 
 from __future__ import annotations
 
+import os as _iso_os
+import sys as _iso_sys
+
+_iso_sys.path.insert(
+    0,
+    _iso_os.path.join(
+        _iso_os.path.dirname(_iso_os.path.abspath(__file__)), "..", "scripts"
+    ),
+)
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import contextlib
 import json
 import os
@@ -79,7 +89,7 @@ def _run_hook(script: str, payload, cwd=None, db=None, hookstate=None):
     completion_gate.py for that session id in the developer's real
     ~/.atlas/hookstate/, not just in this process.
     """
-    env = dict(os.environ, ATLAS_DASHBOARD="off")
+    env = dict(os.environ, ATLAS_DASHBOARD="off", ATLAS_COLONY="off")
     if db is not None:
         env["ATLAS_DB"] = str(db)
     state_ctx = (
@@ -1365,7 +1375,7 @@ class QuietTerminalContract(unittest.TestCase):
             ),
             capture_output=True,
             text=True,
-            env=dict(os.environ, ATLAS_DASHBOARD="off"),
+            env=dict(os.environ, ATLAS_DASHBOARD="off", ATLAS_COLONY="off"),
         )
         self.assertLess(
             len(r.stdout),
@@ -1489,7 +1499,9 @@ class TodoBoardContract(unittest.TestCase):
             "dashboard_ui",
             "/ui/",
             "/api/v2/stream",
-            "atlas_dash_colony",
+            "atlas_dash_work",
+            "atlas_dash_irc",
+            "atlas_dash_herd",
             "X-Atlas-Token",
             "compare_digest",
         ):
@@ -1499,9 +1511,15 @@ class TodoBoardContract(unittest.TestCase):
         ui_dir = SCRIPTS_DIR / "dashboard_ui"
         self.assertTrue((ui_dir / "index.html").is_file())
         self.assertTrue((ui_dir / "js" / "pages" / "work.js").is_file())
-        colony = (SCRIPTS_DIR / "atlas_dash_colony.py").read_text(encoding="utf-8")
-        for route in ("/api/v2/todos", "/api/v2/colony", "/api/v2/irc"):
-            self.assertIn(route, colony, route)
+        self.assertFalse((SCRIPTS_DIR / "atlas_dash_colony.py").exists())
+        for module, routes in (
+            ("atlas_dash_work.py", ("/api/v2/todos",)),
+            ("atlas_dash_irc.py", ("/api/v2/irc",)),
+            ("atlas_dash_herd.py", ("/api/v2/herd/agents",)),
+        ):
+            src = (SCRIPTS_DIR / module).read_text(encoding="utf-8")
+            for route in routes:
+                self.assertIn(route, src, route)
 
 
 class SkillPathsContract(unittest.TestCase):
@@ -1537,3 +1555,62 @@ class SkillPathsContract(unittest.TestCase):
             ],
             "skills share identical literal paths globs (co-activate together)",
         )
+
+
+class GateScopeContract(unittest.TestCase):
+    """Python and omp gate-scope helpers must share one rule (same markers/roots)."""
+
+    def _ts_list(self, name: str) -> list:
+        import re
+
+        text = (PLUGIN_ROOT / "omp" / "scope.ts").read_text(encoding="utf-8")
+        m = re.search(r"export const %s = \[(.*?)\];" % name, text, re.S)
+        self.assertIsNotNone(m, name)
+        return re.findall(r'"([^"]+)"', m.group(1))
+
+    def test_scope_markers_match_between_python_and_omp(self):
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        import atlas_scope
+
+        self.assertEqual(
+            list(atlas_scope.PROJECT_MARKERS), self._ts_list("PROJECT_MARKERS")
+        )
+        self.assertEqual(
+            list(atlas_scope.SCRATCH_ROOTS), self._ts_list("SCRATCH_ROOTS")
+        )
+
+
+class TestIsolationContract(unittest.TestCase):
+    """No atlas test may write to the real ~/.atlas."""
+
+    def test_every_test_module_imports_isolation_helper(self):
+        missing = [
+            str(p.relative_to(PLUGIN_ROOT))
+            for d in (HOOKS_DIR, SCRIPTS_DIR)
+            for p in sorted(d.glob("test_*.py"))
+            if "import _test_isolation" not in p.read_text(encoding="utf-8")
+        ]
+        self.assertEqual(missing, [], "test modules missing `import _test_isolation`")
+
+    def test_helper_redirects_state_away_from_real_home(self):
+        import _test_isolation
+
+        real = os.path.join(_test_isolation.REAL_HOME, ".atlas")
+        for var, value in _test_isolation.ISOLATED_ENV.items():
+            self.assertTrue(value.startswith(_test_isolation.ROOT), var)
+            self.assertFalse(value.startswith(real), var)
+
+    def test_fault_record_honours_atlas_home(self):
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        import atlas_faults
+
+        with tempfile.TemporaryDirectory() as home:
+            old = os.environ.get("ATLAS_HOME")
+            os.environ["ATLAS_HOME"] = home
+            try:
+                atlas_faults.record("contract-test", RuntimeError("boom"))
+            finally:
+                os.environ["ATLAS_HOME"] = old
+            lines = Path(home, "hook-faults.jsonl").read_text().splitlines()
+            self.assertEqual(len(lines), 1)
+            self.assertEqual(json.loads(lines[0])["hook"], "contract-test")

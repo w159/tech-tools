@@ -12,7 +12,20 @@
 		"microsoft_docs",
 		"plaid",
 		"mobbin",
-		"clippy"
+		"clippy",
+		"atlas_connectwise",
+		"mcp_search",
+		"cmux_browser"
 	],
-	"note": "Two lists with different purposes; do not merge. connectorWatch = servers named by hooks/hooks.json's connector_credential_watch.py matcher, longest prefix first (read by omp/hook-bridge.ts CONNECTOR_SERVERS). underscoredServers = servers whose underscored names break xd://mcp__<server>_<tool> boundary guessing, longest match wins (read by scripts/omp_transcript.py). Both readers fall back to their built-in literal if this file is unreadable; parity tests pin them."
+	"browserServers": {
+		"cmux-browser": {
+			"doc": "cmux-browser-mcp (github.com/jasonraz/cmux-browser-mcp): server.mjs v1.3.0, 45 tools, macOS + cmux only. The server shares one defaultSurface, so every call passes an explicit `surface`. omp device = xd://mcp__cmux_browser_<tool> (needs the cmux_browser underscoredServers entry: the doubled-token rule would otherwise split browser_open at browser_ / open). Claude name = mcp__cmux-browser__<tool>. subagentAllow is the only set a subagent may call; sensitive tools expose cookies, storage, page JS, request bodies or files and are lead-only.",
+			"install": "git clone https://github.com/jasonraz/cmux-browser-mcp && cd cmux-browser-mcp && ./install.sh  (then: claude mcp add cmux-browser --scope user -- node ~/.claude/mcp-servers/cmux-browser/server.mjs; omp: add the same stdio command under mcpServers in ~/.omp/agent/mcp.json)",
+			"readOnly": ["browser_snapshot", "browser_screenshot", "browser_get_url", "browser_get", "browser_find", "browser_is", "browser_wait", "browser_console", "browser_errors", "browser_identify", "browser_is_webview_focused"],
+			"stateChanging": ["browser_open", "browser_open_split", "browser_navigate", "browser_back", "browser_forward", "browser_reload", "browser_click", "browser_fill", "browser_type", "browser_press", "browser_hover", "browser_select", "browser_scroll", "browser_check", "browser_uncheck", "browser_highlight", "browser_frame", "browser_tab", "browser_dialog", "browser_viewport", "browser_geolocation", "browser_offline", "browser_focus_webview"],
+			"sensitive": ["browser_eval", "browser_cookies", "browser_storage", "browser_state", "browser_network", "browser_add_script", "browser_add_init_script", "browser_add_style", "browser_download", "browser_trace", "browser_screencast"],
+			"subagentAllow": ["browser_open", "browser_navigate", "browser_snapshot", "browser_screenshot", "browser_get", "browser_get_url", "browser_click", "browser_fill", "browser_type", "browser_press", "browser_wait", "browser_scroll", "browser_hover", "browser_select", "browser_check", "browser_uncheck", "browser_back", "browser_forward", "browser_reload", "browser_find", "browser_is", "browser_console", "browser_errors", "browser_identify"]
+		}
+	},
+	"note": "Two lists with different purposes; do not merge. connectorWatch = servers named by hooks/hooks.json's connector_credential_watch.py matcher, longest prefix first (read by omp/hook-bridge.ts CONNECTOR_SERVERS). underscoredServers = servers whose underscored names break xd://mcp__<server>_<tool> boundary guessing, longest match wins (read by scripts/omp_transcript.py). atlas_connectwise is listed explicitly because its tools are cw_* (mcp__atlas_connectwise_cw_status), so the doubled-token rule cannot find the boundary; every other atlas connector repeats its server token (atlas_falcon_falcon_*) and is found by that rule; mcp_search is the claude-mem plugin's server. Both readers fall back to their built-in literal if this file is unreadable; parity tests pin them."
 }

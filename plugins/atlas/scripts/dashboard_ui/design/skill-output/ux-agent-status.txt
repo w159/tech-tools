@@ -1,0 +1,70 @@
+## UI Pro Max Search Results
+**Domain:** ux | **Query:** real-time status indicators loading states keyboard focus accessibility dashboard
+**Source:** ux-guidelines.csv | **Found:** 6 results
+
+### Result 1
+- **Category:** Interaction
+- **Issue:** Focus States
+- **Platform:** All
+- **Description:** Keyboard focus, including controls inside a modal, needs a visible indicator
+- **Do:** Use a visible focus ring on every interactive control, including modal controls
+- **Don't:** Remove focus outline without replacement
+- **Code Example Good:** focus:ring-2 focus:ring-blue-500
+- **Code Example Bad:** outline-none without alternative
+- **Severity:** High
+
+### Result 2
+- **Category:** Accessibility
+- **Issue:** Focus Appearance
+- **Platform:** Web
+- **Description:** WCAG 2.2 AAA defines minimum area and contrast for focus indicators
+- **Do:** Use an indicator at least as large as a 2 CSS px perimeter with 3:1 state contrast
+- **Don't:** Present this enhanced AAA criterion as an AA requirement or use a thin low-contrast outline
+- **Code Example Good:** outline: 2px solid currentColor; outline-offset: 2px
+- **Code Example Bad:** box-shadow: 0 0 1px low-contrast
+- **Severity:** Medium
+
+### Result 3
+- **Category:** Accessibility
+- **Issue:** Focus Not Obscured (Enhanced)
+- **Platform:** Web
+- **Description:** WCAG 2.2 AAA requires keyboard focus to remain fully visible
+- **Do:** Keep the entire focused component unobscured by author-created content
+- **Don't:** Present this enhanced AAA criterion as an AA requirement or allow persistent UI to hide any part of focus
+- **Code Example Good:** close persistent overlay before focus moves behind it
+- **Code Example Bad:** sticky footer covers half the focused button
+- **Severity:** Medium
+
+### Result 4
+- **Category:** Accessibility
+- **Issue:** Focus Not Obscured (Minimum)
+- **Platform:** Web
+- **Description:** WCAG 2.2 AA requires keyboard focus to remain at least partially visible
+- **Do:** Offset sticky UI with scroll-padding and dismiss or move persistent overlays
+- **Don't:** Let headers footers banners or chat widgets fully cover focus
+- **Code Example Good:** scroll-padding-top: var(--header-height)
+- **Code Example Bad:** fixed overlay covers :focus
+- **Severity:** High
+
+### Result 5
+- **Category:** Accessibility
+- **Issue:** Keyboard Navigation
+- **Platform:** Web
+- **Description:** Web users need complete keyboard navigation with visible focus on every operable control
+- **Do:** Keep tab order aligned with visual order and test every action without a pointer
+- **Don't:** Keyboard traps or illogical tab order
+- **Code Example Good:** tabIndex for custom order
+- **Code Example Bad:** Unreachable elements
+- **Severity:** High
+
+### Result 6
+- **Category:** Feedback
+- **Issue:** Loading Indicators
+- **Platform:** All
+- **Description:** Loading feedback should match the expected wait and avoid flashing for near-instant work
+- **Do:** Follow platform and component guidance; preserve layout focus and accessible busy status
+- **Don't:** Apply one timing threshold to every operation or leave long waits unexplained
+- **Code Example Good:** Stable skeleton or progress with aria-busy
+- **Code Example Bad:** Flickering spinner or frozen UI
+- **Severity:** High
+

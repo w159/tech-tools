@@ -2,13 +2,12 @@
 // live tail, duplicate-collapse counts and saved views.
 // Consumes only the documented component API (see dashboard-contract.md).
 // No innerHTML: every datum reaches the DOM through h() text children.
-import { h } from '../dom.js';
+import { h, replace } from '../dom.js';
 import {
   Badge, Card, Table, EmptyState, StatusDot, Drawer,
   openDrawer, openModal, closeModal, confirm, Modal, toast as toastFn,
 } from '../components.js';
 
-const CSS_HREF = '/ui/css/pages-insights.css';
 const LIVE_MS = 8000;
 const SEARCH_DEBOUNCE_MS = 400;
 const GROUPS = [
@@ -17,16 +16,6 @@ const GROUPS = [
   { id: 'agent', label: 'Agent' },
 ];
 const SEVERITY_RANK = { info: 0, ok: 0, warn: 1, fail: 2 };
-
-function ensureCss() {
-  if (typeof document === 'undefined') return;
-  if (document.querySelector('link[data-atlas-css="insights"]')) return;
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
-  link.href = CSS_HREF;
-  link.setAttribute('data-atlas-css', 'insights');
-  document.head.appendChild(link);
-}
 
 function normStatus(s) {
   return s === 'ok' || s === 'warn' || s === 'fail' ? s : 'info';
@@ -287,11 +276,12 @@ function openDetail(item) {
   const body = h('div', { class: 'pg-detail' },
     h('div', { class: 'pg-detail-head' },
       Badge({ status: normStatus(item.status), text: item.status || 'info' }),
+      item.class ? Badge({ status: 'info', text: item.class }) : null,
       item.count > 1 ? Badge({ status: 'info', text: `×${item.count} duplicates collapsed` }) : null),
     h('p', { class: 'pg-detail-title' }, item.title || '(no title)'),
     item.detail ? h('pre', { class: 'pg-mono-block' }, item.detail) : null,
     h('dl', { class: 'pg-kvs' },
-      kv('When', item.ts), kv('Kind', item.kind), kv('Project', item.project), kv('Agent', item.agent),
+      kv('When', item.ts), kv('Kind', item.kind), item.class ? kv('Class', item.class) : null, kv('Project', item.project), kv('Agent', item.agent),
       ...refRows));
   openDrawer(Drawer({ title: item.title || 'Activity detail', children: [body] }));
 }
@@ -408,7 +398,7 @@ function draw() {
   const keepFocusId = active && S.mount.contains(active) ? active.id : '';
   const caret = active && active.id === 'pg-act-q' ? active.selectionStart : null;
   const total = S.data ? visibleGroups(S.data).reduce((n, g) => n + g.items.length, 0) : 0;
-  S.mount.replaceChildren(...[
+  replace(S.mount, ...[
     h('header', { class: 'pg-head' },
       h('h1', { class: 'pg-title' }, 'Activity'),
       h('p', { class: 'pg-sub' }, S.data ? `${total} events shown, grouped by ${S.group}. Identical events are collapsed with a count.` : 'Everything Atlas observed, grouped and de-duplicated.'),
@@ -427,7 +417,6 @@ export default {
   icon: 'activity',
   group: 'Observe',
   async load(ctx) {
-    ensureCss();
     if (S) this.destroy();
     S = freshState(ctx);
     try {

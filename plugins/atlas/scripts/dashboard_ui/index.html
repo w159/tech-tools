@@ -1,50 +1,79 @@
 <!doctype html>
-<html lang="en" data-theme="dark" data-density="comfortable">
+<html lang="en" data-theme="dark" data-density="comfortable" data-shell="app">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark light">
   <meta name="atlas-token" content="__ATLAS_TOKEN__">
-  <title>Atlas Workboard</title>
+  <meta name="atlas-base" content="">
+  <title>Atlas Command Center</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2l9 5v10l-9 5-9-5V7z' fill='none' stroke='%232fbd9f' stroke-width='2'/%3E%3C/svg%3E">
-  <script src="/ui/js/theme-boot.js"></script>
-  <link rel="stylesheet" href="/ui/css/tokens.css">
-  <link rel="stylesheet" href="/ui/css/base.css">
-  <link rel="stylesheet" href="/ui/css/components.css">
-  <link rel="stylesheet" href="/ui/css/pages.css">
-  <link rel="stylesheet" href="/ui/css/pages-insights.css">
+  <script>
+    // Same-origin gateway support: <meta name="atlas-base" content="/atlas"> prefixes every /ui asset.
+    // Empty (the default) leaves the standalone dashboard at 127.0.0.1:7421 unchanged.
+    (function () {
+      var m = document.querySelector('meta[name="atlas-base"]');
+      var base = (m && m.getAttribute("content") || "").replace(/\/+$/, "");
+      window.__ATLAS_BASE__ = base;
+      document.write('<script src="' + base + '/ui/js/theme-boot.js"><\/script>');
+      ["tokens", "fonts", "base", "components", "shell", "fleet", "pages", "pages-insights", "integrations"].forEach(function (n) {
+        document.write('<link rel="stylesheet" href="' + base + '/ui/css/' + n + '.css">');
+      });
+    })();
+  </script>
 </head>
 <body>
   <a class="skip-link" href="#page-root">Skip to content</a>
   <div class="app" id="app">
-    <aside class="sidebar" id="sidebar" aria-label="Primary">
-      <div class="brand">
-        <svg class="brand-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M12 12l9-5M12 12v10M12 12L3 7"/></svg>
-        <span>Atlas</span>
+    <nav class="rail" id="rail" aria-label="Primary">
+      <div class="rail-head">
+        <a class="brand" href="#/overview" aria-label="Atlas Command Center, overview">
+          <svg class="brand-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M12 12l9-5M12 12v10M12 12L3 7"/></svg>
+          <span class="brand-text"><span class="brand-name">Atlas</span><span class="brand-sub">Command Center</span></span>
+        </a>
+        <span id="rail-toggle-host"></span>
       </div>
-      <div id="project-switcher"></div>
-      <nav id="nav" aria-label="Pages"></nav>
-    </aside>
+      <div class="rail-switch" id="project-switcher"></div>
+      <div class="rail-scroll">
+        <div id="nav"></div>
+        <div class="rail-tree-host" id="rail-tree-host"></div>
+      </div>
+    </nav>
     <header class="topbar" id="topbar" role="banner">
-      <button class="btn" id="open-palette" type="button" aria-keyshortcuts="Control+K Meta+K">
-        <span id="palette-icon"></span>
-        <span>Search or jump to</span>
-        <kbd>/</kbd>
-      </button>
+      <a class="brand mobile-brand" href="#/overview" aria-label="Atlas Command Center, overview">
+        <svg class="brand-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M12 12l9-5M12 12v10M12 12L3 7"/></svg>
+      </a>
+      <span class="ctx-title" id="ctx-title"></span>
+      <div class="mobile-project" id="mobile-project"></div>
+      <span id="palette-host"></span>
+      <div class="strip-host" id="strip-host"></div>
       <span class="spacer"></span>
-      <span id="conn" class="dim" role="status" aria-live="polite"></span>
-      <span id="attention"></span>
-      <span id="toggles" class="row"></span>
+      <div class="top-end">
+        <span class="version-chip" id="version-chip"></span>
+        <span id="live" role="status" aria-live="polite"></span>
+        <span id="attention"></span>
+        <span id="toggles" class="row"></span>
+      </div>
     </header>
+    <div class="strip-band" id="strip-band"></div>
     <main class="main" id="main" tabindex="-1">
       <div id="page-root"></div>
     </main>
+    <aside class="inspector" id="inspector" aria-label="Inspector" hidden></aside>
+    <nav class="tabbar" id="tabbar" aria-label="Primary"></nav>
   </div>
-  <div id="drawer-root"></div>
+  <div id="popover-root"></div>
   <div id="modal-root"></div>
   <div id="palette-root"></div>
   <div class="toasts" id="toast-root" role="status" aria-live="polite"></div>
-  <noscript><p style="padding:24px">Atlas Workboard needs JavaScript. Everything runs locally; nothing is loaded from the network.</p></noscript>
-  <script type="module" src="/ui/js/app.js"></script>
+  <noscript><p style="padding:24px">Atlas Command Center needs JavaScript. Everything runs locally; nothing is loaded from the network.</p></noscript>
+  <script>
+    (function () {
+      var s = document.createElement("script");
+      s.type = "module";
+      s.src = (window.__ATLAS_BASE__ || "") + "/ui/js/app.js";
+      document.body.appendChild(s);
+    })();
+  </script>
 </body>
 </html>

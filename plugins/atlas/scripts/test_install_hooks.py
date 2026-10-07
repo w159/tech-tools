@@ -7,6 +7,7 @@ validation, empty/missing inputs, and edge cases. File IO uses small temp
 dirs so no real installed paths are touched.
 """
 
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import datetime as _dt
 import io
 import json

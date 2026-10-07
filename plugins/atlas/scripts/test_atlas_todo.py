@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests for the durable todo board (atlas_todo.py)."""
 
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import contextlib
 import io
 import json
@@ -241,9 +242,7 @@ class BoardBasics(unittest.TestCase):
         )
 
     def test_unique_add_matches_archived_item(self):
-        first = atlas_todo.add(
-            self.root, "note", session_id="s1", origin="session"
-        )
+        first = atlas_todo.add(self.root, "note", session_id="s1", origin="session")
         atlas_todo.set_status(self.root, first["item"]["id"], "completed")
         atlas_todo.carry_over(self.root, "s2")  # archives the completed s1 item
         self.assertTrue(atlas_todo.load(self.root)["items"][0]["archived"])
@@ -607,6 +606,54 @@ class BoardConcurrency(unittest.TestCase):
             claimed += 1
         self.assertEqual(claimed, self.ITEMS)
 
+    def test_note_seq_is_gap_free_and_follows_landing_order_across_writers(self):
+        """Audit F2/T05: ts is stamped by each writer, so ts order is not landing order. The seq is
+        assigned under the board lock with the append, so it is: 1..N, no gap, no duplicate."""
+        scripts = os.path.dirname(os.path.abspath(atlas_todo.__file__))
+        src = (
+            "import sys\n"
+            f"sys.path.insert(0, {scripts!r})\n"
+            "import atlas_todo\n"
+            "for i in range(int(sys.argv[3])):\n"
+            "    atlas_todo.note(sys.argv[1], sys.argv[2], 'n%d' % i, to='wx')\n"
+        )
+        procs = [
+            subprocess.Popen(
+                [sys.executable, "-I", "-c", src, self.root, f"s{w}", "60"],
+                stderr=subprocess.PIPE,
+            )
+            for w in range(8)
+        ]
+        for p in procs:
+            _, err = p.communicate(timeout=120)
+            self.assertEqual(p.returncode, 0, err.decode())
+        recs = atlas_todo.notes(self.root)
+        self.assertEqual(sorted(r["seq"] for r in recs), list(range(1, 481)))
+        by_seq = sorted(recs, key=lambda r: r["seq"])
+        self.assertEqual([r["ts"] for r in by_seq], sorted(r["ts"] for r in by_seq))
+        for w in range(8):  # one writer's own notes keep their order
+            mine = [r["text"] for r in by_seq if r["owner"] == f"s{w}"]
+            self.assertEqual(mine, [f"n{i}" for i in range(60)])
+
+    def test_seq_counter_survives_a_missing_file_and_legacy_notes(self):
+        d = atlas_todo.notes_dir(self.root)
+        d.mkdir(parents=True)
+        (d / "old.jsonl").write_text(
+            json.dumps(
+                {"ts": 5.0, "owner": "old", "to": "x", "item": None, "text": "legacy"}
+            )
+            + "\n"
+        )
+        first = atlas_todo.note(self.root, "a", "one", to="x")
+        self.assertEqual(
+            first["seq"], 1
+        )  # legacy notes carry no seq and sort before it
+        (d / ".seq").write_text("garbage")
+        self.assertEqual(atlas_todo.note(self.root, "a", "two", to="x")["seq"], 2)
+        self.assertEqual(
+            [r["text"] for r in atlas_todo.notes(self.root)], ["legacy", "one", "two"]
+        )
+
 
 class ItemPhase(unittest.TestCase):
     """Board items carry an optional contract phase (operating-contract.json
@@ -729,7 +776,9 @@ class ItemPhase(unittest.TestCase):
         )
 
     def test_scaffold_does_not_reopen_a_completed_item(self):
-        _, first = cli("scaffold", "--task", "t", "--session", "s1", "--root", self.root)
+        _, first = cli(
+            "scaffold", "--task", "t", "--session", "s1", "--root", self.root
+        )
         atlas_todo.set_status(
             self.root, first["items"][0]["id"], "completed", evidence="done"
         )
@@ -756,7 +805,9 @@ class ItemPhase(unittest.TestCase):
 
     def test_scaffold_same_task_other_session_adds_again(self):
         cli("scaffold", "--task", "t", "--session", "s1", "--root", self.root)
-        _, other = cli("scaffold", "--task", "t", "--session", "s2", "--root", self.root)
+        _, other = cli(
+            "scaffold", "--task", "t", "--session", "s2", "--root", self.root
+        )
         self.assertEqual(other["created"], 6)
         self.assertEqual(len(self._items()), 12)
 

@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import importlib.util
+import shutil
 import json
 import sqlite3
 import sys
@@ -75,6 +77,9 @@ class InsightsBase(unittest.TestCase):
             self.addCleanup(setattr, ins, attr, old)
         (home / "hookstate").mkdir()
         self.home = home
+        env = mock.patch.dict("os.environ", {"ATLAS_HOME": str(home)})
+        env.start()  # atlas_faults reads <ATLAS_HOME>/hook-faults.jsonl, not the real one
+        self.addCleanup(env.stop)
         self._seed()
 
     def _seed(self):
@@ -134,6 +139,36 @@ class InsightsBase(unittest.TestCase):
             },
         )
         atlas_db.update_tool_result(c, "ok1", 0, 10, text="fine")
+        # one failing call per remaining class: model misuse x2, environment x3
+        # (two distinct causes), tool fault x1 (an atlas script traceback)
+        for i, (tool, text) in enumerate(
+            [
+                ("Edit", "File has not been read yet. Read it first before writing."),
+                ("Edit", "File has not been read yet. Read it first before writing."),
+                ("Bash", "Exit code 1\nnpm ERR! missing script: test"),
+                ("Bash", "Exit code 1\nnpm ERR! missing script: test"),
+                ("Read", "ENOENT: no such file or directory, open '/x/y'"),
+                (
+                    "Bash",
+                    'Traceback (most recent call last):\n  File "/r/plugins/atlas/scripts/atlas_x.py", line 1, in m',
+                ),
+            ]
+        ):
+            atlas_db.insert_tool_call(
+                c,
+                "sess-a",
+                {
+                    "uuid": f"x{i}",
+                    "ts": NOW - 450 - i,
+                    "tool_use_id": f"x{i}",
+                    "tool_name": tool,
+                    "kind": "builtin",
+                    "target": tool,
+                    "input_summary": f"{tool} call {i}",
+                    "input_bytes": 5,
+                },
+            )
+            atlas_db.update_tool_result(c, f"x{i}", 1, 10, text=text)
         atlas_db.record_friction(
             c, "sess-a", "gate_block", 1.0, "gate said no", ts=NOW - 300
         )
@@ -152,6 +187,11 @@ class InsightsBase(unittest.TestCase):
             proposed_action="fix",
             target_path="",
         )
+        # log_dispatch now stores DEFAULT_AGENT_TYPE for a blank type; a legacy
+        # row recorded before that is blank in the DB
+        c.execute(
+            "UPDATE dispatches SET agent_type='' WHERE id=(SELECT MIN(id) FROM dispatches)"
+        )
         c.execute("UPDATE dispatches SET ts=?", (NOW - 200,))
         c.execute("UPDATE runs SET started_at=?", (NOW - 3000,))
         c.commit()
@@ -166,17 +206,20 @@ class TestHealth(InsightsBase):
         self.assertEqual(st, 200)
         by_kind = {s["kind"]: s for s in body["silent_failures"]}
         # five identical failing calls collapse to ONE entry with count 5
-        self.assertEqual(by_kind["tool_error"]["count"], 5)
-        self.assertEqual(by_kind["tool_error"]["source"], "tool_calls.is_error")
-        self.assertEqual(by_kind["tool_error"]["project"], ROOT_A)
+        self.assertEqual(by_kind["tool_error_unclassified"]["count"], 5)
+        self.assertEqual(
+            by_kind["tool_error_unclassified"]["source"], "tool_calls.is_error"
+        )
+        self.assertEqual(by_kind["tool_error_unclassified"]["project"], ROOT_A)
         # enforcement is policy working as designed: never in silent_failures
         self.assertNotIn("gate_deny", by_kind)
         self.assertNotIn("gate_block", by_kind)
         self.assertEqual(by_kind["dispatch_unclassified"]["count"], 1)
         self.assertEqual(
             {s["kind"] for s in body["silent_failures"]},
-            {"tool_error", "dispatch_unclassified"},
+            {"tool_error_unclassified", "tool_error", "dispatch_unclassified"},
         )
+        self.assertEqual(by_kind["tool_error"]["count"], 1)
         enf = body["enforcement"]
         self.assertEqual(enf["counts"], {"gate_deny": 1, "gate_block": 1})
         self.assertEqual(enf["total"], 2)
@@ -227,8 +270,63 @@ class TestHealth(InsightsBase):
     def test_project_filter_scopes_failures(self):
         _, body = self.get(ins.route_health, project=ROOT_B)
         self.assertEqual(
-            [s for s in body["silent_failures"] if s["kind"] == "tool_error"], []
+            [s for s in body["silent_failures"] if s["kind"].startswith("tool_error")],
+            [],
         )
+        self.assertEqual(body["tool_errors"]["total"], 0)
+
+    def test_tool_errors_by_cause(self):
+        _, body = self.get(ins.route_health)
+        te = body["tool_errors"]
+        self.assertEqual(te["total"], 5)
+        self.assertEqual(te["counts"], {"model_misuse": 2, "environment": 3})
+        top = {(c["class"], c["tool"]): c for c in te["top_causes"]}
+        self.assertEqual(top[("model_misuse", "Edit")]["count"], 2)
+        self.assertIn("has not been read", top[("model_misuse", "Edit")]["snippet"])
+        self.assertEqual(top[("environment", "Bash")]["count"], 2)
+        self.assertIn("Exit code 1", top[("environment", "Bash")]["snippet"])
+        self.assertIn("ENOENT", top[("environment", "Read")]["snippet"])
+
+    def test_legacy_unknown_without_snippet_is_not_a_silent_failure(self):
+        for i in range(3):
+            atlas_db.insert_tool_call(
+                self.conn,
+                "sess-a",
+                {
+                    "uuid": f"lg{i}",
+                    "ts": NOW - 700 - i,
+                    "tool_use_id": f"lg{i}",
+                    "tool_name": "Glob",
+                    "kind": "builtin",
+                    "target": "Glob",
+                    "input_summary": f"glob {i}",
+                    "input_bytes": 5,
+                },
+            )
+            atlas_db.update_tool_result(self.conn, f"lg{i}", 1, 10, text=None)
+        self.conn.commit()
+        _, body = self.get(ins.route_health)
+        kinds = {s["kind"] for s in body["silent_failures"]}
+        self.assertNotIn("tool_error_legacy", kinds)
+        by_kind = {s["kind"]: s for s in body["silent_failures"]}
+        self.assertEqual(by_kind["tool_error_unclassified"]["count"], 5)
+        te = body["tool_errors"]
+        self.assertEqual(te["legacy"], 3)
+        self.assertEqual(te["total"], 5)
+        self.assertIn("not attributable", te["legacy_hint"])
+
+    def test_hook_crash_counts_as_silent_failure(self):
+        import atlas_faults
+
+        for _ in range(2):
+            atlas_faults.record("pretool", ValueError("boom"), cwd=ROOT_A)
+        _, body = self.get(ins.route_health)
+        crash = {s["kind"]: s for s in body["silent_failures"]}["hook_crash"]
+        self.assertEqual(crash["count"], 2)
+        self.assertIn("pretool", crash["sample"])
+        self.assertIn("ValueError", crash["sample"])
+        hooks = next(s for s in body["subsystems"] if s["id"] == "hooks")
+        self.assertEqual(hooks["status"], "warn")
 
     def test_dashboard_log_errors_and_hook_burst(self):
         (self.home / "dashboard.log").write_text(
@@ -251,6 +349,43 @@ class TestHealth(InsightsBase):
         self.assertEqual(kinds["hook_burst_tripped"]["source"], "hookstate.stop_events")
         hooks = next(s for s in body["subsystems"] if s["id"] == "hooks")
         self.assertEqual(hooks["status"], "fail")
+
+    def _hooks_row(self, stop_events=None, last_run=None):
+        if stop_events is not None or last_run is not None:
+            (self.home / "hookstate" / "s1abcdef123456.json").write_text(
+                json.dumps(
+                    {"stop_events": stop_events or [], "last_run": last_run or {}}
+                )
+            )
+        _, body = self.get(ins.route_health)
+        return next(s for s in body["subsystems"] if s["id"] == "hooks")
+
+    def test_old_breaker_trip_with_newer_hook_run_is_warn_naming_the_trip(self):
+        trip = NOW - 3600
+        row = self._hooks_row([trip - 10 * i for i in range(6)], {"nudge": NOW - 60})
+        self.assertEqual(row["status"], "warn")
+        self.assertIn("1 circuit-breaker trips", row["detail"])
+        self.assertIn(f"last trip {ins._iso(trip)}", row["detail"])
+        self.assertIn("session s1abcdef1234", row["detail"])
+        self.assertEqual(row["last_ok"], ins._iso(NOW - 60))
+
+    def test_breaker_trip_newer_than_last_hook_run_is_fail(self):
+        row = self._hooks_row([NOW - 10 * i for i in range(6)], {"nudge": NOW - 3600})
+        self.assertEqual(row["status"], "fail")
+        self.assertIn(f"last trip {ins._iso(NOW)}", row["detail"])
+
+    def test_no_breaker_trip_is_ok(self):
+        row = self._hooks_row([NOW - 900, NOW - 800], {"nudge": NOW - 60})
+        self.assertEqual(row["status"], "ok")
+        self.assertNotIn("last trip", row["detail"])
+
+    def test_hook_fault_keeps_warn_even_with_newer_hook_run(self):
+        import atlas_faults
+
+        atlas_faults.record("pretool", ValueError("boom"), cwd=ROOT_A)
+        row = self._hooks_row([], {"nudge": NOW + 60})
+        self.assertEqual(row["status"], "warn")
+        self.assertIn("1 swallowed hook crashes", row["detail"])
 
     def test_access_log_lines_are_not_failures(self):
         (self.home / "dashboard.log").write_text(
@@ -281,11 +416,12 @@ class TestProjectsOverviewActivity(InsightsBase):
         self.assertEqual(set(by_root), {ROOT_A, ROOT_B})
         self.assertEqual(by_root[ROOT_A]["runs_7d"], 1)
         self.assertEqual(
-            by_root[ROOT_A]["failures_7d"], 5 + 1
+            by_root[ROOT_A]["failures_7d"], 5 + 1 + 1
         )  # err+dispatch; enforcement is NOT a failure
         self.assertEqual(by_root[ROOT_A]["enforcement_7d"], 1 + 1)  # deny+gate_block
         self.assertEqual(by_root[ROOT_B]["enforcement_7d"], 0)
         self.assertEqual(by_root[ROOT_A]["health"], "warn")
+        self.assertEqual(by_root[ROOT_A]["tool_errors_7d"], 5)
         self.assertEqual(by_root[ROOT_B]["failures_7d"], 0)
         self.assertEqual(by_root[ROOT_B]["health"], "ok")
 
@@ -353,7 +489,12 @@ class TestProjectsOverviewActivity(InsightsBase):
         _, body = self.get(ins.route_overview, window="7d")
         kpis = {k["id"]: k for k in body["kpis"]}
         self.assertEqual(kpis["runs"]["value"], 2)
-        self.assertEqual(kpis["silent_failures"]["value"], 5 + 1)  # err + dispatch only
+        # unclassified 5 + tool fault 1 + dispatch 1; misuse/env are NOT silent
+        self.assertEqual(kpis["silent_failures"]["value"], 5 + 1 + 1)
+        self.assertEqual(kpis["tool_errors"]["value"], 5)  # misuse 2 + env 3
+        self.assertEqual(
+            body["tool_errors"]["counts"], {"model_misuse": 2, "environment": 3}
+        )
         self.assertEqual(body["enforcement"]["total"], 2)  # deny + gate_block
         self.assertNotIn(
             "gate",
@@ -368,7 +509,7 @@ class TestProjectsOverviewActivity(InsightsBase):
     def test_activity_dedupes_and_groups(self):
         _, body = self.get(ins.route_activity, group="project")
         items = [i for g in body["groups"] for i in g["items"]]
-        errs = [i for i in items if i["kind"] == "tool_error"]
+        errs = [i for i in items if i["kind"] == "tool_error_unclassified"]
         self.assertEqual(
             len(errs), 1
         )  # five failures with digit-different titles collapse
@@ -376,7 +517,7 @@ class TestProjectsOverviewActivity(InsightsBase):
         labels = {g["label"] for g in body["groups"]}
         self.assertIn("alpha", labels)
         _, by_kind = self.get(ins.route_activity, group="kind")
-        self.assertIn("tool_error", {g["key"] for g in by_kind["groups"]})
+        self.assertIn("tool_error_unclassified", {g["key"] for g in by_kind["groups"]})
         _, filt = self.get(ins.route_activity, group="kind", kind="deny")
         self.assertEqual({g["key"] for g in filt["groups"]}, {"deny"})
         _, q = self.get(ins.route_activity, q="grep")
@@ -390,8 +531,23 @@ class TestProjectsOverviewActivity(InsightsBase):
 
     def test_activity_keeps_duplicates_when_collapse_off(self):
         ins.PREFS_PATH.write_text(json.dumps({"noise": {"collapse_duplicates": False}}))
-        _, body = self.get(ins.route_activity, group="kind", kind="tool_error")
+        _, body = self.get(
+            ins.route_activity, group="kind", kind="tool_error_unclassified"
+        )
         self.assertEqual(sum(len(g["items"]) for g in body["groups"]), 5)
+
+    def test_activity_failed_rows_carry_class_and_snippet(self):
+        _, body = self.get(ins.route_activity, group="kind")
+        by_key = {g["key"]: g["items"] for g in body["groups"]}
+        self.assertIn("tool_misuse", by_key)
+        self.assertIn("tool_env", by_key)
+        self.assertIn("tool_error", by_key)
+        mis = by_key["tool_misuse"][0]
+        self.assertEqual(mis["class"], "model_misuse")
+        self.assertIn("has not been read", mis["detail"])
+        self.assertEqual(mis["count"], 2)
+        self.assertEqual(by_key["tool_error"][0]["class"], "tool_fault")
+        self.assertEqual(by_key["tool_error_unclassified"][0]["class"], "unknown")
 
     def test_activity_rejects_bad_group(self):
         st, body = self.get(ins.route_activity, group="nope")
@@ -907,6 +1063,7 @@ class TestRoutes(unittest.TestCase):
                 ("GET", "^/api/v2/improve$"),
                 ("POST", "^/api/v2/improve/finding$"),
                 ("POST", "^/api/v2/improve/remeasure$"),
+                ("POST", "^/api/v2/improve/selffix$"),
                 ("GET", "^/api/v2/prefs$"),
                 ("PUT", "^/api/v2/prefs$"),
             },
@@ -919,6 +1076,183 @@ class TestRoutes(unittest.TestCase):
         self.assertEqual(ins._window_seconds("7d"), 7 * 86400)
         self.assertEqual(ins._window_seconds("24h"), 86400)
         self.assertEqual(ins._window_seconds("garbage"), 7 * 86400)
+
+
+class TestHealthHonesty(InsightsBase):
+    """Health says what it measured: real last_ok, measured:false + reason, history buckets."""
+
+    def subs(self, conn=None, **q):
+        with mock.patch.object(
+            ins, "CONNECTOR_STATUS_PROVIDER", None
+        ):  # dashboard import sets a real one
+            _, body = ins.route_health(Ctx(conn or self.conn, q))
+        return {s["id"]: s for s in body["subsystems"]}, body
+
+    def test_empty_home_is_not_measured_with_a_reason_never_a_fake_ok(self):
+        empty = sqlite3.connect(":memory:")
+        atlas_db.init(empty)  # tables exist, no rows
+        shutil.rmtree(self.home / "hookstate")
+        subs, body = self.subs(empty)
+        want = {
+            "hooks": "No hook state recorded yet. Hooks write it after the first session.",
+            "gate": "No tool calls recorded yet. Gates are measured from tool_calls.",
+            "dispatch": "No dispatches recorded in the database.",
+            "mux": "No colony worker runs recorded yet.",
+            "memory": "No MEMORY.md in the state directory.",
+            "nudge": "No nudge has fired yet.",
+            "doctor": "The doctor has not recorded any finding yet.",
+            "chronicle": "No transcript ingest has run yet.",
+            "connectors": "Connector status is not available from this process.",
+        }
+        for sid, reason in want.items():
+            s = subs[sid]
+            self.assertFalse(s["measured"], sid)
+            self.assertEqual(s["reason"], reason, sid)
+            self.assertEqual(s["status"], "unknown", sid)
+            self.assertEqual(s["detail"], reason, sid)
+            self.assertIsNone(s["last_ok"], sid)
+            self.assertIsNone(s["history"], sid)
+        for sid in ("db", "dashboard"):  # these ran live: checked now, never "never"
+            self.assertTrue(subs[sid]["measured"], sid)
+            self.assertIsNotNone(subs[sid]["last_ok"], sid)
+            self.assertIsNone(subs[sid]["reason"], sid)
+        self.assertEqual(subs["dashboard"]["last_ok"], body["checked_at"])
+        for s in subs.values():  # the contract: measured is explicit on every row
+            self.assertIn(s["measured"], (True, False))
+            if s["measured"]:
+                self.assertNotEqual(s["status"], "unknown", s["id"])
+
+    def test_measured_subsystems_carry_real_last_ok_and_last_fail(self):
+        c = self.conn
+        pid = atlas_db.register_project(c, ROOT_A, "alpha")
+        c.execute(
+            "INSERT INTO runs(project_id, session_id, started_at, ended_at, task_summary, kind) "
+            "VALUES (?, 'w1', ?, ?, 'worker run', 'worker')",
+            (pid, NOW - 5000, NOW - 4000),
+        )
+        c.execute(
+            "INSERT INTO ingest_files(session_id, path, cursor_bytes, size, row_keys, updated_at) "
+            "VALUES ('s', '/t/s.jsonl', 10, 10, '', ?)",
+            (NOW - 100,),
+        )
+        c.commit()
+        (self.home / "memory").mkdir()
+        (self.home / "memory" / "MEMORY.md").write_text("m")
+        (self.home / ".atlas_nudge").write_text(str(NOW - 50))
+        (self.home / "hookstate" / "s1.json").write_text(
+            json.dumps(
+                {"stop_events": [NOW - 900, NOW - 800], "last_run": {"nudge": NOW - 60}}
+            )
+        )
+        subs, body = self.subs()
+        for sid in (
+            "hooks",
+            "gate",
+            "dispatch",
+            "mux",
+            "db",
+            "memory",
+            "nudge",
+            "doctor",
+            "chronicle",
+        ):
+            self.assertTrue(subs[sid]["measured"], sid)
+            self.assertIsNotNone(subs[sid]["last_ok"], sid)
+        newest_ok_call = c.execute(
+            "SELECT MAX(ts) FROM tool_calls WHERE COALESCE(denied,0)=0"
+        ).fetchone()[0]
+        self.assertEqual(subs["gate"]["last_ok"], ins._iso(newest_ok_call))
+        self.assertEqual(subs["mux"]["last_ok"], ins._iso(NOW - 4000))
+        self.assertEqual(subs["chronicle"]["last_ok"], ins._iso(NOW - 100))
+        self.assertEqual(subs["hooks"]["last_ok"], ins._iso(NOW - 60))
+        self.assertEqual(subs["nudge"]["last_ok"], ins._iso(NOW - 50))
+        dispatch_fail = [
+            s["last"]
+            for s in body["silent_failures"]
+            if s["kind"] == "dispatch_unclassified"
+        ]
+        self.assertEqual(subs["dispatch"]["last_fail"], dispatch_fail[0])
+        self.assertIn("open findings", subs["doctor"]["detail"])
+        self.assertEqual(subs["dispatch"]["status"], "warn")
+        self.assertIn("unclassified of 2 dispatches", subs["dispatch"]["detail"])
+
+    def test_history_is_ten_aligned_buckets_that_add_up(self):
+        (self.home / "hookstate" / "s1.json").write_text(
+            json.dumps(
+                {"stop_events": [NOW - 900, NOW - 800, NOW - 10], "last_run": {}}
+            )
+        )
+        subs, _ = self.subs(window="24h")
+        for sid in ("hooks", "gate", "dispatch", "db", "doctor"):
+            hist = subs[sid]["history"]
+            self.assertEqual(len(hist), ins.HISTORY_BUCKETS, sid)
+            stamps = [b["t"] for b in hist]
+            self.assertEqual(stamps, sorted(stamps), sid)
+            self.assertTrue(subs[sid]["history_source"], sid)
+        self.assertEqual(sum(b["ok"] for b in subs["hooks"]["history"]), 3)
+        total_calls = self.conn.execute("SELECT COUNT(*) FROM tool_calls").fetchone()[0]
+        gate = subs["gate"]["history"]
+        self.assertEqual(sum(b["ok"] + b["fail"] for b in gate), total_calls)
+        disp = subs["dispatch"]["history"]
+        self.assertEqual(
+            (sum(b["ok"] for b in disp), sum(b["fail"] for b in disp)), (1, 1)
+        )
+        self.assertIsNone(subs["dashboard"]["history"])
+        self.assertTrue(subs["dashboard"]["history_reason"])
+
+    def test_unsourced_history_says_why(self):
+        (self.home / "memory").mkdir()
+        (self.home / "memory" / "MEMORY.md").write_text("m")
+        (self.home / ".atlas_nudge").write_text(str(NOW - 50))
+        subs, _ = self.subs()
+        for sid in ("memory", "nudge"):
+            self.assertIsNone(subs[sid]["history"])
+            self.assertTrue(subs[sid]["history_reason"])
+
+    def test_overview_kpis_carry_aligned_series(self):
+        _, body = ins.route_overview(Ctx(self.conn, {"window": "7d"}))
+        n = len(body["trend"]["labels"])
+        by_id = {k["id"]: k for k in body["kpis"]}
+        for kid in (
+            "runs",
+            "dispatches",
+            "silent_failures",
+            "tool_errors",
+            "findings_open",
+        ):
+            self.assertEqual(len(by_id[kid]["series"]), n, kid)
+            self.assertTrue(by_id[kid]["series_kind"], kid)
+        self.assertEqual(sum(by_id["runs"]["series"]), by_id["runs"]["value"])
+        self.assertEqual(
+            sum(by_id["dispatches"]["series"]), by_id["dispatches"]["value"]
+        )
+        self.assertEqual(
+            sum(by_id["tool_errors"]["series"]), by_id["tool_errors"]["value"]
+        )
+        self.assertEqual(by_id["runs"]["series"], body["trend"]["series"][0]["values"])
+        _, scoped = ins.route_overview(Ctx(self.conn, {"project": ROOT_A}))
+        blocked = {k["id"]: k for k in scoped["kpis"]}["todos_blocked"]
+        self.assertIsNone(
+            blocked["series"]
+        )  # the board keeps no history of blocked counts
+
+    def test_findings_counts_name_their_scope(self):
+        """Needs-attention (and the top-bar pill, which renders the same list) counts
+        grouped failures; the KPI counts open doctor-ledger rows. Different scopes,
+        so the KPI must say 'Doctor findings' and attention items must not."""
+        _, body = ins.route_overview(Ctx(self.conn, {"window": "7d"}))
+        kpi = {k["id"]: k for k in body["kpis"]}["findings_open"]
+        open_rows = self.conn.execute(
+            "SELECT COUNT(*) FROM findings WHERE status='open'"
+        ).fetchone()[0]
+        self.assertEqual(kpi["value"], open_rows)
+        self.assertEqual(kpi["label"], "Doctor findings")
+        self.assertIn("not the Needs-attention list", kpi["hint"])
+        for a in body["attention"]:
+            self.assertNotIn("doctor", a["title"].lower())
+        self.assertTrue(
+            all(a["severity"] in ("fail", "warn") for a in body["attention"])
+        )
 
 
 if __name__ == "__main__":

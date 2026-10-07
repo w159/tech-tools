@@ -1,21 +1,11 @@
 // Atlas Workboard v2 — Projects page: per-project cards with health, drill-in,
 // pin, hide and mute. Prefs are persisted via PUT /api/v2/prefs (minimal keys).
 // No innerHTML; all data via h() text children.
-import { h } from '../dom.js';
+import { h, replace } from '../dom.js';
+import { HerdrProjectsSection } from '../hp.js';
 import { Badge, Card, EmptyState, StatusDot } from '../components.js';
 
-const CSS_HREF = '/ui/css/pages-insights.css';
 const HEALTH_TONE = { ok: 'ok', warn: 'warn', fail: 'fail', idle: 'info' };
-
-function ensureCss() {
-  if (typeof document === 'undefined') return;
-  if (document.querySelector('link[data-atlas-css="insights"]')) return;
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
-  link.href = CSS_HREF;
-  link.setAttribute('data-atlas-css', 'insights');
-  document.head.appendChild(link);
-}
 
 function fmtWhen(iso) {
   if (!iso) return 'never';
@@ -92,8 +82,8 @@ async function toggleIn(key, root, label, onMsg, offMsg) {
 }
 
 function drillIn(p) {
-  if (S.ctx.store) S.ctx.store.set('project', p.root);
-  S.ctx.navigate('overview', { project: p.root });
+  S.ctx.navigate('overview');
+  S.ctx.setProject(p.root, true);
 }
 
 function stat(label, value, tone) {
@@ -190,12 +180,13 @@ function draw() {
   if (!S || !S.mount || S.destroyed) return;
   const active = document.activeElement;
   const label = active && S.mount.contains(active) ? active.getAttribute('aria-label') : null;
-  S.mount.replaceChildren(
+  replace(S.mount, 
     h('header', { class: 'pg-head' },
       h('h1', { class: 'pg-title' }, 'Projects'),
       h('p', { class: 'pg-sub' }, 'Pin the ones you watch, mute noisy ones, hide the rest. Muting hides a project’s events from Activity; hiding removes it from this list.'),
       h('div', { class: 'pg-head-actions' },
         h('button', { type: 'button', class: 'btn', onclick: refresh }, 'Refresh'))),
+    S.hp,
     body());
   if (label) {
     for (const el of S.mount.querySelectorAll('[aria-label]')) {
@@ -210,7 +201,6 @@ export default {
   icon: 'folder',
   group: 'Configure',
   async load(ctx) {
-    ensureCss();
     if (S) this.destroy();
     S = freshState(ctx);
     try {
@@ -224,6 +214,7 @@ export default {
     if (!S) S = freshState(ctx);
     S.ctx = ctx;
     S.mount = h('div', { class: 'pg-page pg-projects' });
+    S.hp = HerdrProjectsSection();
     draw();
     return S.mount;
   },

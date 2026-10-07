@@ -2,12 +2,14 @@
 // composition with the native gates, detached SessionEnd/SubagentStop/PreCompact
 // ingest, and fail-open behavior. Handler logic runs against recording fakes; one
 // test drives the REAL completion_gate.py end to end through the real runner.
+// Fixtures use temp dirs as cwd, where the scope check (omp/scope.ts) leaves gates unarmed.
+process.env.ATLAS_GATES = "always";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
-import { type BridgedHook, type HookRunner, claudeLifecyclePayload, loadBridgedHooksFor, parseStopHookOutput, runHook } from "./hook-bridge";
+import { type BridgedHook, type HookRunner, HANDLER_BUDGET_MS, claudeLifecyclePayload, loadBridgedHooksFor, parseStopHookOutput, runHook } from "./hook-bridge";
 import { register } from "./index";
 import { type TranscriptCache, MAX_INGEST_PER_EVENT, MAX_STOP_BLOCKS, convertTranscript, createTranscriptCache, registerStopBridge, startDetached } from "./stop-bridge";
 
@@ -26,23 +28,26 @@ const scriptOf = (command: string) => /([\w.-]+\.py)/.exec(command)?.[1] ?? "";
 const block = (reason: string) => JSON.stringify({ decision: "block", reason });
 
 /** Event log shared by the fakes so cross-component ORDER is assertable. */
-function harness(opts: { stdout?: Record<string, string>; hooks?: BridgedHook[]; convertOk?: boolean; env?: Record<string, string | undefined>; rebaseline?: (cwd: string, sessionId: string) => Promise<void> } = {}) {
+function harness(opts: { stdout?: Record<string, string>; hooks?: BridgedHook[]; convertOk?: boolean; env?: Record<string, string | undefined>; rebaseline?: (cwd: string, sessionId: string) => Promise<void>; run?: HookRunner; now?: () => number; convertTakes?: (timeoutMs: number) => Promise<void> } = {}) {
 	const log: string[] = [];
 	const payloads: Record<string, unknown>[] = [];
 	const spawns: Spawn[] = [];
 	const converts: { sessionFile: string; out: string }[] = [];
 	const handlers: Record<string, Handler[]> = {};
 	const api = { on: (name: string, h: Handler) => (handlers[name] ??= []).push(h) };
-	const run: HookRunner = async (command, payload) => {
-		const name = scriptOf(command);
-		log.push(`hook:${name}`);
-		payloads.push(payload);
-		return opts.stdout?.[name] ?? "";
-	};
-	const convert = async (sessionFile: string, out: string) => {
+	const run: HookRunner =
+		opts.run ??
+		(async (command, payload) => {
+			const name = scriptOf(command);
+			log.push(`hook:${name}`);
+			payloads.push(payload);
+			return opts.stdout?.[name] ?? "";
+		});
+	const convert = async (sessionFile: string, out: string, timeoutMs: number) => {
 		log.push("convert");
 		converts.push({ sessionFile, out });
 		if (opts.convertOk === false) return false;
+		await opts.convertTakes?.(timeoutMs);
 		writeFileSync(out, "{}\n");
 		return true;
 	};
@@ -58,6 +63,7 @@ function harness(opts: { stdout?: Record<string, string>; hooks?: BridgedHook[];
 		cache,
 		convert,
 		env: opts.env ?? {},
+		now: opts.now,
 		tmpDir: dir,
 		spawnDetached: (argv, o) => {
 			log.push("spawn");
@@ -127,9 +133,89 @@ test("rebaseline is main-only and stands down with the bridge", async () => {
 test("a Stop block is a decision:block refusal, never plain context", async () => {
 	const h = harness({ stdout: { "nudge.py": block("late nudge block") } });
 	expect(await h.stop()).toEqual({ decision: "block", reason: "late nudge block" });
-	expect(parseStopHookOutput(JSON.stringify({ hookSpecificOutput: { additionalContext: "ctx only" } }))).toEqual({});
+	expect(parseStopHookOutput(JSON.stringify({ hookSpecificOutput: { additionalContext: "ctx only" } }))).toEqual({ context: "ctx only" }); // context is reported, but only a decision:block refuses
+	expect(parseStopHookOutput(JSON.stringify({ hookSpecificOutput: { additionalContext: "  " } }))).toEqual({});
 	expect(parseStopHookOutput(JSON.stringify({ decision: "block" }))).toMatchObject({ block: true });
 	expect(parseStopHookOutput("garbage")).toEqual({});
+});
+
+test("a Stop hook's additionalContext is delivered as a continuation, once per distinct text, never beside a block or during stop_hook_active", async () => {
+	const note = (text: string) => JSON.stringify({ hookSpecificOutput: { hookEventName: "Stop", additionalContext: text } });
+	const h = harness({ stdout: { "nudge.py": note("capture the lesson") } });
+	expect(await h.stop()).toEqual({ continue: true, additionalContext: "capture the lesson" });
+	expect(await h.stop()).toBeUndefined(); // the same text again is not repeated
+	expect(await h.stop({ stop_hook_active: true })).toBeUndefined(); // omp is already continuing: no second turn
+	const blocked = harness({ stdout: { "completion_gate.py": block("gate"), "nudge.py": note("ignored beside a block") } });
+	expect(await blocked.stop()).toEqual({ decision: "block", reason: "gate" });
+});
+
+test("Stop context continuations are capped at MAX_STOP_BLOCKS per session, and a new session starts fresh", async () => {
+	let n = 0;
+	const h = harness({ run: async command => (scriptOf(command) === "nudge.py" ? JSON.stringify({ hookSpecificOutput: { additionalContext: `note ${++n}` } }) : "") });
+	const results: unknown[] = [];
+	for (let i = 0; i < MAX_STOP_BLOCKS + 2; i++) results.push(await h.stop());
+	expect(results.filter(r => r !== undefined).length).toBe(MAX_STOP_BLOCKS);
+	await h.emit("session_switch", {}, h.ctx());
+	expect(await h.stop()).toMatchObject({ continue: true });
+});
+
+test("all Stop hooks run at once: the gate is never queued behind a capture hook", async () => {
+	const nudgeStarted = Promise.withResolvers<void>();
+	const h = harness({
+		run: async command => {
+			const name = scriptOf(command);
+			if (name === "nudge.py") nudgeStarted.resolve();
+			if (name === "completion_gate.py") {
+				await nudgeStarted.promise; // a sequential chain would wait here forever: nudge.py runs AFTER the gate
+				return block("gate");
+			}
+			return "";
+		},
+	});
+	expect(await h.stop()).toEqual({ decision: "block", reason: "gate" });
+});
+
+test("the Stop deadline starts at handler entry: slow conversion and rebaseline shrink the hooks' slots, the block still lands", async () => {
+	let t = 1_000_000;
+	const slots: Record<string, number> = {};
+	let convertSlot = 0;
+	const h = harness({
+		now: () => t,
+		convertTakes: async timeoutMs => {
+			convertSlot = timeoutMs;
+			t += 14_000;
+		},
+		rebaseline: async () => {
+			t += 2_000;
+		},
+		run: async (command, _payload, timeoutMs) => {
+			const name = scriptOf(command);
+			slots[name] = timeoutMs;
+			return name === "completion_gate.py" ? block("gate says no") : "";
+		},
+	});
+	expect(await h.stop()).toEqual({ decision: "block", reason: "gate says no" });
+	expect(convertSlot).toBeLessThan(15_000); // the old 15 s conversion slot alone left the hooks no room
+	expect(Object.keys(slots).length).toBe(5);
+	for (const slot of Object.values(slots)) expect(slot).toBe(HANDLER_BUDGET_MS - 16_000); // 25 s - 14 s convert - 2 s rebaseline
+	expect(HANDLER_BUDGET_MS - 16_000 + 16_000).toBeLessThan(30_000); // whole handler stays under omp's session_stop timeout
+});
+
+test("a handler already out of budget skips its hooks (fail open) and says so in hook-faults.jsonl", async () => {
+	const previous = process.env.ATLAS_HOME;
+	const home = join(dir, "atlas-home");
+	process.env.ATLAS_HOME = home;
+	try {
+		let t = 0;
+		const h = harness({ now: () => t, convertTakes: async () => void (t += HANDLER_BUDGET_MS + 1_000) });
+		expect(await h.stop()).toBeUndefined();
+		expect(h.log.filter(l => l.startsWith("hook:"))).toEqual([]);
+		const rows = readFileSync(join(home, "hook-faults.jsonl"), "utf8").split("\n").filter(Boolean).map(l => JSON.parse(l));
+		expect(rows.map(r => r.type)).toEqual(["BridgeBudget", "BridgeBudget", "BridgeBudget", "BridgeBudget", "BridgeBudget"]);
+	} finally {
+		if (previous === undefined) delete process.env.ATLAS_HOME;
+		else process.env.ATLAS_HOME = previous;
+	}
 });
 
 test("the first blocking hook's reason wins", async () => {

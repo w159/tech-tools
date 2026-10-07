@@ -1,0 +1,84 @@
+## UI Pro Max Search Results
+**Domain:** chart | **Query:** sparkline trend timeline status distribution
+**Source:** charts.csv | **Found:** 5 results
+
+### Result 1
+- **Data Type:** Trend Over Time
+- **Keywords:** trend, time-series, line, growth, timeline, progress, accessible chart, keyboard accessible chart
+- **Best Chart Type:** Line Chart
+- **Secondary Options:** Area Chart, Smooth Area
+- **When to Use:** Data has a time axis; user needs to observe rise/fall trends or rate of change over a continuous period
+- **When NOT to Use:** Fewer than 4 data points (use stat card); more than 6 series (visual noise); no time dimension exists
+- **Data Volume Threshold:** <1000 pts: SVG; ≥1000 pts: Canvas + downsampling; >10000: aggregate to intervals
+- **Color Guidance:** Primary: #0080FF. Multiple series: distinct colors + distinct line styles. Fill: 20% opacity
+- **Accessibility Grade:** deprecated: use Accessibility Risk
+- **Accessibility Risk:** risk:low
+- **Accessibility Notes:** Use solid, dashed, and dotted line styles plus direct series labels; never distinguish series by hue alone.
+- **A11y Fallback:** Visible data table plus concise trend summary. Keyboard: focus reveals hover values; +/- buttons zoom; Reset restores the full range.
+- **Library Recommendation:** Chart.js, Recharts, ApexCharts
+- **Interactive Level:** Hover + Zoom
+
+### Result 2
+- **Data Type:** Distribution / Statistical
+- **Keywords:** distribution, statistical, spread, median, outlier, quartile, boxplot, accessible chart, keyboard accessible chart
+- **Best Chart Type:** Box Plot
+- **Secondary Options:** Violin Plot, Beeswarm
+- **When to Use:** Showing spread, median, and outliers of a dataset; comparing distributions across multiple groups
+- **When NOT to Use:** Fewer than 20 data points per group (distribution is not meaningful); audience unfamiliar with statistical charts
+- **Data Volume Threshold:** Any sample size; aggregated representation so rendering is ⚡ Excellent at any volume
+- **Color Guidance:** Box fill: #BBDEFB. Border: #1976D2. Median line: #D32F2F bold. Outlier dots: #F44336
+- **Accessibility Grade:** deprecated: use Accessibility Risk
+- **Accessibility Risk:** risk:low
+- **Accessibility Notes:** Label median, quartiles, whiskers, and outliers directly; do not use color alone for statistical roles.
+- **A11y Fallback:** Statistics table plus distribution summary. Keyboard: focus reveals the same statistics as hover.
+- **Library Recommendation:** Plotly, D3.js, Chart.js (plugin)
+- **Interactive Level:** Hover
+
+### Result 3
+- **Data Type:** Real-Time Streaming
+- **Keywords:** streaming, real-time, ticker, live, velocity, pulse, monitoring, accessible chart, keyboard accessible chart
+- **Best Chart Type:** Streaming Area Chart
+- **Secondary Options:** Ticker Tape, Moving Gauge
+- **When to Use:** Live monitoring dashboards; IoT/ops data updating at ≥1 Hz; user needs current value at a glance
+- **When NOT to Use:** Update frequency < 1/min (use periodic-refresh line chart); flashing content without reduced-motion support
+- **Data Volume Threshold:** Canvas/WebGL required. Buffer last 60–300s of data. Downsample older data on scroll
+- **Color Guidance:** Current pulse: #00FF00 (dark theme) or #0080FF (light theme). History: fading opacity. Grid: dark background
+- **Accessibility Grade:** deprecated: use Accessibility Risk
+- **Accessibility Risk:** risk:conditional
+- **Accessibility Notes:** Show the current value and status text and use line styles or markers in addition to color. Do not rely on color alone.
+- **A11y Fallback:** Streaming data table plus current-value/trend summary. Keyboard: Pause/Resume button controls updates; focus reveals values; +/- buttons zoom; Reset restores range.
+- **Library Recommendation:** Smoothed D3.js, CanvasJS
+- **Interactive Level:** Real-time + Pause + Zoom
+
+### Result 4
+- **Data Type:** Correlation / Distribution
+- **Keywords:** correlation, distribution, scatter, relationship, pattern, cluster, accessible chart, keyboard accessible chart
+- **Best Chart Type:** Scatter Plot or Bubble Chart
+- **Secondary Options:** Heat Map, Matrix
+- **When to Use:** Exploring relationship between two continuous variables; identifying clusters or outliers in a dataset
+- **When NOT to Use:** Variables are categorical (use grouped bar); fewer than 20 points (patterns aren't meaningful); mobile-primary context
+- **Data Volume Threshold:** <500 pts: SVG; 500–5000: Canvas at 0.6–0.8 opacity; >5000: hexbin or aggregate first
+- **Color Guidance:** Color axis: gradient (blue → red). Bubble size: relative to 3rd variable. Opacity: 0.6–0.8 to show density
+- **Accessibility Grade:** deprecated: use Accessibility Risk
+- **Accessibility Risk:** risk:conditional
+- **Accessibility Notes:** Combine marker shapes with direct group labels; color may reinforce but must not be the only distinction.
+- **A11y Fallback:** Visible data table plus correlation summary. Keyboard: focus reveals point values; labeled start/end range inputs replace brush dragging.
+- **Library Recommendation:** D3.js, Plotly, Recharts
+- **Interactive Level:** Hover + Brush
+
+### Result 5
+- **Data Type:** Flow / Process Data
+- **Keywords:** flow, process, sankey, distribution, source, target, transfer, accessible chart, keyboard accessible chart
+- **Best Chart Type:** Sankey Diagram
+- **Secondary Options:** Alluvial, Chord Diagram
+- **When to Use:** Showing how quantities flow between nodes; multi-source multi-target distribution
+- **When NOT to Use:** Flow directions form loops (use network graph); fewer than 3 source-target pairs; mobile-primary context
+- **Data Volume Threshold:** <50 flows: SVG; ≥50: Canvas; >200 flows: aggregate minor flows into 'Other' node
+- **Color Guidance:** Gradient from source to target color. Flow opacity: 0.4–0.6. Node labels always visible
+- **Accessibility Grade:** deprecated: use Accessibility Risk
+- **Accessibility Risk:** risk:conditional
+- **Accessibility Notes:** Label source, target, and value; use line style or node symbols in addition to gradient color. Do not rely on color alone.
+- **A11y Fallback:** Source-to-target flow table plus flow summary. Keyboard: focus reveals hover values; Enter/Space drills into a node; Back returns.
+- **Library Recommendation:** D3.js (d3-sankey), Plotly
+- **Interactive Level:** Hover + Drilldown
+

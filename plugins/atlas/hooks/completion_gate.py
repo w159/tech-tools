@@ -905,23 +905,20 @@ def _reason(
 
 
 def main() -> int:
-    try:
-        raw = sys.stdin.read()
-        data = json.loads(raw) if raw.strip() else {}
-    except (json.JSONDecodeError, ValueError):
-        return 0
-    if not isinstance(data, dict):
-        data = {}
+    data = atlas_hook_guard.load_payload("completion_gate")
     # Finalize the observability run regardless of gate outcome.
     _finalize_db(data.get("session_id", ""))
     try:
         if os.environ.get("ATLAS_GATE", "").lower() == "off":
             return 0
-        # stop_hook_active and the session circuit breaker (a thrashing Stop
-        # chain silences the gate too, same as the other four hooks). No
-        # throttle window: the gate is meant to re-block every Stop until the
-        # conditions are actually met, so window_seconds is left at its
-        # default of None.
+        # stop_hook_active and the session circuit breaker. The breaker is a
+        # deliberate cap that ends a runaway Stop loop: more than
+        # atlas_hook_guard.STOP_BURST_LIMIT Stops within STOP_BURST_WINDOW
+        # seconds makes should_run() False for the rest of the session, i.e.
+        # THIS GATE STOPS ENFORCING. Every such bypass is therefore traced:
+        # atlas_hook_guard writes a hook-faults.jsonl row and a one-line stderr
+        # note each time (GATE_HOOKS). No throttle window: the gate is meant to
+        # re-block every Stop until the conditions are actually met.
         if not atlas_hook_guard.should_run(data, "completion_gate"):
             return 0
         cwd = Path(data.get("cwd") or os.getcwd())
@@ -1141,23 +1138,48 @@ def main() -> int:
         # Fail-open, but surface the swallowed crash on stderr so a silent
         # allow-through is at least observable in hook logs.
         print(json.dumps({"decision": "fail-open", "error": str(exc)}), file=sys.stderr)
+        _record_fault(exc)
         return 0
     return 0
 
 
+def _record_fault(exc: BaseException) -> None:
+    """Persist a swallowed top-level crash (atlas_faults never raises)."""
+    try:
+        import atlas_faults
+
+        atlas_faults.record("completion_gate", exc)
+    except Exception:  # noqa: BLE001 -- recording must not change fail-open behavior
+        pass
+
+
 def _finalize_db(session_id: str) -> None:
     """Finalize the observability run for this session. Fail-open."""
+    if not session_id:
+        return  # nothing to finalize: no run can exist
     _conn = None
     try:
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         import atlas_db
 
         _conn = atlas_db.connect()
+        atlas_db.init(_conn)  # fresh DB: create the schema instead of faulting on it
         _rid = atlas_db.current_run_id(_conn, session_id)
         if _rid is not None:
             atlas_db.finalize_run(_conn, _rid)
-    except Exception:
-        pass  # observability is best-effort; never block stop
+    except Exception as exc:
+        # Best-effort for the Stop itself, but an unusable DB means no run row,
+        # so is_orchestrating is false and every gate below is inert: trace it.
+        atlas_hook_guard.fault(
+            "completion_gate", "atlas DB unusable, gates inert: %s" % exc
+        )
+        try:
+            sys.stderr.write(
+                "[atlas] completion_gate: atlas DB unusable (%s); run not tracked, "
+                "orchestration gates inert\n" % exc
+            )
+        except Exception:
+            pass
     finally:
         if _conn is not None:
             _conn.close()
@@ -1703,10 +1725,16 @@ def _phases_reason_part(missing: list, contract: dict | None, session_id: str) -
         "`phase` field (omp todo phases) or as a `%s` content prefix (Claude "
         "TodoWrite), for example `[%s] <step>`. Two ways to fix it: (1) re-tag "
         "your items with that prefix in TodoWrite, or (2) run "
-        'python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py" scaffold '
+        'python3 "%s" scaffold '
         '--task "<title>" --session %s '
         "and then retry Stop. (This check blocks once per session.)"
-        % (", ".join(missing), prefix, missing[0], session_id or "<id>")
+        % (
+            ", ".join(missing),
+            prefix,
+            missing[0],
+            SCRIPTS_DIR / "atlas_todo.py",
+            session_id or "<id>",
+        )
     )
 
 
@@ -1827,4 +1855,4 @@ def _colony_reason_part(workers: int | None) -> str:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(atlas_hook_guard.run_hook("completion_gate", main))

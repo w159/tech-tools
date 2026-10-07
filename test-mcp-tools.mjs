@@ -37,23 +37,34 @@
 //     answers `POST /oauth2/token` and nothing else. That is a local socket on
 //     127.0.0.1 owned by this harness - no vendor endpoint, no tenant, no data.
 //
-// No real credentials are used or needed: annotations are fully observable from
-// `tools/list`. The child env is built from scratch (PATH/HOME only) so no
-// configured vendor secret in the parent environment can reach a server, and no
-// probe can touch a live appliance.
+// Two passes, both run by default (see usage):
+//   placeholders - declared placeholder credentials; opens the full surface. No real
+//                  credentials are used or needed: annotations are fully observable
+//                  from `tools/list`.
+//   --no-creds   - no credentials at all; what a new user gets. Each server must boot,
+//                  list exactly its meta tools, and answer <vendor>_status with an
+//                  actionable error naming the env vars to set.
+// The child env is built from scratch (PATH + an empty HOME) so no configured vendor
+// secret in the parent environment or in ~/.config/atlas/atlas.env can reach a
+// server, and no probe can touch a live appliance.
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { basename, delimiter, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const PLUGIN_DIR = resolve(ROOT, 'plugins/atlas');
+const PLUGIN_DIR = process.env.ATLAS_PLUGIN_DIR ? resolve(process.env.ATLAS_PLUGIN_DIR) : resolve(ROOT, 'plugins/atlas');
 const MCP_DIR = resolve(PLUGIN_DIR, 'mcp');
 const MCP_CONFIG_FILE = resolve(PLUGIN_DIR, '.mcp.json');
 const PROBE_TIMEOUT_MS = 30_000;
 // A single navigate/tools-list round trip inside an already-booted session.
 const CALL_TIMEOUT_MS = 10_000;
+// Every probed child runs with an empty HOME: the per-user ~/.config/atlas/atlas.env
+// that mcp/_env/load.* read must never hand a real credential to a probed server.
+const PROBE_HOME = mkdtempSync(resolve(tmpdir(), 'atlas-probe-home-'));
+process.on('exit', () => rmSync(PROBE_HOME, { recursive: true, force: true }));
 
 // ---------------------------------------------------------------------------
 // Baseline tool-count floors.
@@ -72,7 +83,10 @@ const CALL_TIMEOUT_MS = 10_000;
 // then update the number here in the same commit as the tool change.
 // ---------------------------------------------------------------------------
 const CONNECTORS = {
-  auvik: { floor: 39 },
+  auvik: {
+    floor: 39,
+    nocreds: { status: 'auvik_status', bare: ['auvik_navigate', 'auvik_status'], needs: ['AUVIK_USERNAME', 'AUVIK_API_KEY'] },
+  },
   blumira: {
     // blumira_navigate + blumira_status + the five domains' tools (29), unioned = 31.
     // blumira_back is defined in src/domains/navigation.ts but never registered by
@@ -80,9 +94,24 @@ const CONNECTORS = {
     // 2: blumira_navigate swaps the listed surface per domain, so the harness
     // navigates all five and unions (see navigate expansion below).
     floor: 31,
+    nocreds: {
+      status: 'blumira_status',
+      bare: ['blumira_navigate', 'blumira_status'],
+      needs: ['BLUMIRA_JWT_TOKEN', 'BLUMIRA_CLIENT_ID', 'BLUMIRA_CLIENT_SECRET'],
+    },
   },
-  cipp: { floor: 43 },
-  connectwise: { floor: 52 },
+  cipp: {
+    floor: 43,
+    nocreds: { status: 'cipp_status', bare: ['cipp_status'], needs: ['CIPP_BASE_URL', 'CIPP_API_KEY'] },
+  },
+  connectwise: {
+    floor: 52,
+    nocreds: {
+      status: 'cw_status',
+      bare: ['cw_status', 'cw_test_connection'],
+      needs: ['CW_MANAGE_COMPANY_ID', 'CW_MANAGE_PUBLIC_KEY', 'CW_MANAGE_PRIVATE_KEY', 'CW_MANAGE_CLIENT_ID'],
+    },
+  },
   falcon: {
     // Python connector: no server.mjs bundle. Spawned exactly as
     // plugins/atlas/.mcp.json spawns it (uv run --project ... python
@@ -96,14 +125,60 @@ const CONNECTORS = {
     floor: 145,
     launch: 'mcp-config',
     authStub: { env: 'FALCON_BASE_URL' },
+    nocreds: {
+      status: 'falcon_status',
+      bare: ['falcon_check_connectivity', 'falcon_list_enabled_modules', 'falcon_list_enabled_tools', 'falcon_status'],
+      needs: ['FALCON_CLIENT_ID', 'FALCON_CLIENT_SECRET'],
+    },
   },
-  knowbe4: { floor: 30 },
-  ninjaone: { floor: 45 },
-  panos: { floor: 60 },
-  paylocity: { floor: 16 },
-  spanning: { floor: 14 },
-  threatlocker: { floor: 30 },
-  vanta: { floor: 28 },
+  knowbe4: {
+    floor: 30,
+    nocreds: { status: 'knowbe4_status', bare: ['knowbe4_navigate', 'knowbe4_status'], needs: ['KNOWBE4_API_KEY'] },
+  },
+  ninjaone: {
+    floor: 45,
+    nocreds: {
+      status: 'ninjaone_status',
+      bare: ['ninjaone_auth_status', 'ninjaone_navigate', 'ninjaone_sign_in', 'ninjaone_sign_out', 'ninjaone_status'],
+      needs: ['NINJAONE_CLIENT_ID', 'NINJAONE_CLIENT_SECRET'],
+    },
+  },
+  panos: {
+    floor: 60,
+    nocreds: { status: 'panos_status', bare: ['panos_navigate', 'panos_status'], needs: ['PANOS_HOST', 'PANOS_API_KEY'] },
+  },
+  paylocity: {
+    floor: 16,
+    nocreds: {
+      status: 'paylocity_status',
+      bare: ['paylocity_navigate', 'paylocity_status'],
+      needs: ['PAYLOCITY_CLIENT_ID', 'PAYLOCITY_CLIENT_SECRET'],
+    },
+  },
+  spanning: {
+    floor: 14,
+    nocreds: {
+      status: 'spanning_status',
+      bare: ['spanning_navigate', 'spanning_status'],
+      needs: ['SPANNING_ADMIN_EMAIL', 'SPANNING_API_TOKEN'],
+    },
+  },
+  threatlocker: {
+    floor: 30,
+    nocreds: {
+      status: 'threatlocker_status',
+      bare: ['threatlocker_navigate', 'threatlocker_status'],
+      needs: ['THREATLOCKER_API_KEY'],
+    },
+  },
+  vanta: {
+    floor: 28,
+    nocreds: {
+      status: 'vanta_status',
+      bare: ['vanta_navigate', 'vanta_status'],
+      needs: ['VANTA_CLIENT_ID', 'VANTA_CLIENT_SECRET'],
+    },
+  },
 };
 
 // Prose effect markers the connectors use in tool descriptions.
@@ -149,7 +224,7 @@ function envFor(connector, strategy, extra) {
   // never reach a probed server, or the harness could hit a live appliance.
   const env = {
     PATH: process.env.PATH ?? '/usr/bin:/bin',
-    HOME: process.env.HOME ?? '/tmp',
+    HOME: PROBE_HOME,
     TMPDIR: process.env.TMPDIR ?? '/tmp',
     LANG: process.env.LANG ?? 'C',
     MCP_TRANSPORT: 'stdio',
@@ -163,7 +238,7 @@ function envFor(connector, strategy, extra) {
       env[key] = value;
       env[bare] = value;
     }
-  } else {
+  } else if (strategy === 'blanket') {
     const prefix = connector.toUpperCase().replace(/-/g, '_');
     for (const suffix of BLANKET_SUFFIXES) {
       const key = `${prefix}_${suffix}`;
@@ -311,7 +386,7 @@ function navigateSteps(tool) {
   return [];
 }
 
-async function listTools(connector, strategy, launch, stub) {
+async function listTools(connector, strategy, launch, stub, statusTool) {
   if (launch.command === process.execPath && !existsSync(launch.args[0])) {
     return { connector, strategy, error: `no server.mjs bundle at ${relative(launch.args[0])}` };
   }
@@ -373,6 +448,19 @@ async function listTools(connector, strategy, launch, stub) {
     }, PROBE_TIMEOUT_MS);
     child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`);
     const base = (await request('tools/list', undefined, PROBE_TIMEOUT_MS)).tools ?? [];
+
+    if (strategy === 'nocreds') {
+      // Meta tools only: no navigate walk. Ask the status tool what it needs.
+      let status = null;
+      if (base.some((t) => t.name === statusTool)) {
+        const call = await request('tools/call', { name: statusTool, arguments: {} }, CALL_TIMEOUT_MS);
+        status = {
+          isError: Boolean(call.isError),
+          text: (call.content ?? []).map((c) => c.text).filter(Boolean).join('\n'),
+        };
+      }
+      return { connector, strategy, tools: base, baseCount: base.length, navigated: [], navErrors: [], stderr: stderrText, status };
+    }
 
     const union = new Map(base.map((t) => [t.name, t]));
     const navigated = [];
@@ -584,6 +672,69 @@ async function evaluate(connector, spec) {
 }
 
 // ---------------------------------------------------------------------------
+// No-credentials pass: the surface a user gets before configuring anything.
+//
+// Launched exactly as .mcp.json declares (node --import mcp/_env/load.mjs ...), with
+// no vendor variable at all and an empty HOME so neither the shell nor a per-user
+// atlas.env can supply one. Each server must boot, list exactly its meta tools,
+// answer <vendor>_status without isError, say it is unconfigured, and name the
+// env vars to set. A regression here (crash, silent empty status, a vendor tool
+// leaking out unauthenticated) is the first thing a new user hits.
+// ---------------------------------------------------------------------------
+const UNCONFIGURED = /NOT CONFIGURED|"configured":\s*false|"hasCredentials":\s*false|MISSING_CREDENTIALS/;
+
+async function evaluateNoCreds(connector, spec) {
+  const nc = spec.nocreds;
+  const launch = launchFor(connector, { ...spec, launch: 'mcp-config' });
+  if (launch.skip) {
+    return { connector, verdict: 'SKIP', detail: launch.skip, failures: [] };
+  }
+  const probe = await listTools(connector, 'nocreds', launch, null, nc.status);
+  if (!probe.tools) {
+    return {
+      connector,
+      verdict: 'FAIL',
+      detail: 'BOOT FAILED',
+      failures: [`[${connector}] boot without credentials failed: ${probe.error}`],
+    };
+  }
+  const failures = [];
+  const got = probe.tools.map((t) => t.name).sort();
+  const want = [...nc.bare].sort();
+  if (JSON.stringify(got) !== JSON.stringify(want)) {
+    failures.push(
+      `[${connector}] tool set without credentials changed: got [${got.join(', ')}], expected [${want.join(', ')}].` +
+      ` A vendor tool listed before auth means the credential gate regressed; a missing meta tool leaves the user` +
+      ` with no way to learn what to configure. If intentional, update \`nocreds.bare\` in test-mcp-tools.mjs.`,
+    );
+  }
+  const st = probe.status;
+  if (!st) {
+    failures.push(`[${connector}] ${nc.status} is not listed without credentials`);
+  } else {
+    if (st.isError) failures.push(`[${connector}] ${nc.status} returned isError without credentials: ${st.text.slice(0, 160)}`);
+    if (!UNCONFIGURED.test(st.text)) {
+      failures.push(`[${connector}] ${nc.status} does not say it is unconfigured: ${st.text.replace(/\s+/g, ' ').slice(0, 200)}`);
+    }
+    const missing = nc.needs.filter((v) => !st.text.includes(v));
+    if (missing.length) {
+      failures.push(
+        `[${connector}] ${nc.status} is not actionable: it never names ${missing.join(', ')}` +
+        ` (got: ${st.text.replace(/\s+/g, ' ').slice(0, 200)})`,
+      );
+    }
+  }
+  return {
+    connector,
+    verdict: failures.length ? 'FAIL' : 'PASS',
+    tools: probe.tools.length,
+    statusTool: nc.status,
+    detail: failures.length ? 'see failures below' : `names ${nc.needs.join(', ')}`,
+    failures,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // CLI
 // ---------------------------------------------------------------------------
 const names = Object.keys(CONNECTORS).sort();
@@ -592,8 +743,11 @@ function usage(message) {
   const lines = [];
   if (message) lines.push(`error: ${message}`, '');
   lines.push(
-    `usage: node ${basename(fileURLToPath(import.meta.url))} [<svc>]`,
+    `usage: node ${basename(fileURLToPath(import.meta.url))} [--no-creds | --placeholders] [<svc>]`,
     '',
+    '  (no flag)       run both modes: declared placeholders, then no credentials',
+    '  --placeholders  only the placeholder-credential pass (full surface, annotations)',
+    '  --no-creds      only the credential-less pass (boot, <vendor>_status, actionable error)',
     '  <svc> omitted   probe every connector below',
     '  <svc> given     probe just that connector',
     '',
@@ -603,7 +757,16 @@ function usage(message) {
   return lines.join('\n');
 }
 
-const argv = process.argv.slice(2).filter((a) => a !== '--');
+const MODE_FLAGS = ['--no-creds', '--placeholders'];
+const rawArgs = process.argv.slice(2).filter((a) => a !== '--');
+const modes = rawArgs.filter((a) => MODE_FLAGS.includes(a));
+const argv = rawArgs.filter((a) => !MODE_FLAGS.includes(a));
+if (modes.length > 1) {
+  console.error(usage('--no-creds and --placeholders are mutually exclusive (the default runs both)'));
+  process.exit(2);
+}
+const runPlaceholders = modes[0] !== '--no-creds';
+const runNoCreds = modes[0] !== '--placeholders';
 if (argv.length > 1) {
   console.error(usage(`expected at most one connector name, got ${argv.length}`));
   process.exit(2);
@@ -632,73 +795,123 @@ if (arg !== undefined && !Object.hasOwn(CONNECTORS, arg)) {
 }
 
 const selected = arg ? [arg] : names;
-const results = [];
-for (const name of selected) results.push(await evaluate(name, CONNECTORS[name]));
 
-const head = ['connector', 'tools (floor)', 'strategy', 'marked-mutating', 'annotated-mutating', 'mismatch', 'verdict', 'detail'];
-const cell = (v) => (v === undefined ? '-' : String(v));
-const rows = results.map((r) => [
-  r.connector,
-  r.tools === undefined ? '-' : `${r.tools} (${r.floor})`,
-  r.strategy ?? '-',
-  cell(r.marked),
-  cell(r.annotatedMutating),
-  cell(r.mismatches),
-  r.verdict,
-  r.detail,
-]);
-const widths = head.map((h, i) => Math.max(h.length, ...rows.map((row) => String(row[i] ?? '').length)));
-const render = (row) => row.map((cell, i) => String(cell ?? '').padEnd(widths[i])).join('  ').trimEnd();
-console.log(render(head));
-console.log(widths.map((n) => '-'.repeat(n)).join('  '));
-for (const row of rows) console.log(render(row));
+function reportPlaceholders(results) {
+  const head = ['connector', 'tools (floor)', 'strategy', 'marked-mutating', 'annotated-mutating', 'mismatch', 'verdict', 'detail'];
+  const cell = (v) => (v === undefined ? '-' : String(v));
+  const rows = results.map((r) => [
+    r.connector,
+    r.tools === undefined ? '-' : `${r.tools} (${r.floor})`,
+    r.strategy ?? '-',
+    cell(r.marked),
+    cell(r.annotatedMutating),
+    cell(r.mismatches),
+    r.verdict,
+    r.detail,
+  ]);
+  const widths = head.map((h, i) => Math.max(h.length, ...rows.map((row) => String(row[i] ?? '').length)));
+  const render = (row) => row.map((c, i) => String(c ?? '').padEnd(widths[i])).join('  ').trimEnd();
+  console.log('MODE: declared placeholder credentials (full surface, annotations)');
+  console.log(render(head));
+  console.log(widths.map((n) => '-'.repeat(n)).join('  '));
+  for (const row of rows) console.log(render(row));
 
-const probed = results.filter((r) => r.verdict !== 'SKIP');
-const failed = results.filter((r) => r.verdict === 'FAIL');
-const gatedList = results.filter((r) => r.gated);
-const skippedList = results.filter((r) => r.verdict === 'SKIP');
-const enumerated = probed.filter((r) => !r.gated);
-const totalTools = probed.reduce((n, r) => n + (r.tools ?? 0), 0);
-const totalMismatch = probed.reduce((n, r) => n + (r.mismatches ?? 0), 0);
+  const probed = results.filter((r) => r.verdict !== 'SKIP');
+  const failed = results.filter((r) => r.verdict === 'FAIL');
+  const gatedList = results.filter((r) => r.gated);
+  const skippedList = results.filter((r) => r.verdict === 'SKIP');
+  const enumerated = probed.filter((r) => !r.gated);
+  const totalTools = probed.reduce((n, r) => n + (r.tools ?? 0), 0);
+  const totalMismatch = probed.reduce((n, r) => n + (r.mismatches ?? 0), 0);
 
-console.log('');
-console.log('COVERAGE');
-console.log(
-  `  fully enumerated : ${enumerated.length}/${results.length} connector(s), ${totalTools} tools` +
-  `${enumerated.length ? ' - every tool these connectors can register was listed and checked' : ''}`,
-);
-for (const r of enumerated.filter((r) => r.navigated?.length)) {
-  console.log(`      ${r.connector}: ${r.enumeration}`);
-}
-console.log(`  gated            : ${gatedList.length}${gatedList.length ? '' : ' - none'}`);
-for (const r of gatedList) {
-  console.log(`      ${r.connector}: only ${r.tools} tool(s) observable - ${r.detail}`);
-}
-console.log(`  skipped          : ${skippedList.length}${skippedList.length ? '' : ' - none'}`);
-for (const r of skippedList) {
-  console.log(`      ${r.connector}: ${r.detail}`);
-}
-console.log(
-  gatedList.length || skippedList.length
-    ? '  NOTE: gated and skipped connectors are NOT covered by the checks below.'
-    : '  no connector escaped the checks below.',
-);
-console.log('');
-console.log(`safety-signal mismatches (prose says mutating, annotation says read-only): ${totalMismatch}`);
-
-if (failed.length) {
   console.log('');
-  console.log('FAILURES');
-  for (const r of failed) for (const f of r.failures) console.log(`  ${f}`);
+  console.log('COVERAGE');
+  console.log(
+    `  fully enumerated : ${enumerated.length}/${results.length} connector(s), ${totalTools} tools` +
+    `${enumerated.length ? ' - every tool these connectors can register was listed and checked' : ''}`,
+  );
+  for (const r of enumerated.filter((r) => r.navigated?.length)) {
+    console.log(`      ${r.connector}: ${r.enumeration}`);
+  }
+  console.log(`  gated            : ${gatedList.length}${gatedList.length ? '' : ' - none'}`);
+  for (const r of gatedList) {
+    console.log(`      ${r.connector}: only ${r.tools} tool(s) observable - ${r.detail}`);
+  }
+  console.log(`  skipped          : ${skippedList.length}${skippedList.length ? '' : ' - none'}`);
+  for (const r of skippedList) {
+    console.log(`      ${r.connector}: ${r.detail}`);
+  }
+  console.log(
+    gatedList.length || skippedList.length
+      ? '  NOTE: gated and skipped connectors are NOT covered by the checks below.'
+      : '  no connector escaped the checks below.',
+  );
   console.log('');
-  console.log(`FAIL: ${failed.length}/${probed.length} probed connector(s) failed: ${failed.map((r) => r.connector).join(', ')}`);
-  process.exit(1);
+  console.log(`safety-signal mismatches (prose says mutating, annotation says read-only): ${totalMismatch}`);
+
+  if (failed.length) {
+    console.log('');
+    console.log('FAILURES');
+    for (const r of failed) for (const f of r.failures) console.log(`  ${f}`);
+    console.log('');
+    console.log(`FAIL (placeholders): ${failed.length}/${probed.length} probed connector(s) failed: ${failed.map((r) => r.connector).join(', ')}`);
+    return 1;
+  }
+  console.log('');
+  console.log(
+    probed.length === 0
+      ? 'PASS (placeholders, nothing probed): every selected connector was skipped'
+      : `PASS (placeholders): ${probed.length} connector(s) booted and passed boot, tool-count floor, prose/annotation agreement,` +
+        ` and tool-shape checks - ${enumerated.length} fully enumerated (${totalTools} tools),` +
+        ` ${gatedList.length} gated, ${skippedList.length} skipped`,
+  );
+  return 0;
 }
-console.log('');
-console.log(
-  probed.length === 0
-    ? 'PASS (nothing probed): every selected connector was skipped'
-    : `PASS: ${probed.length} connector(s) booted and passed boot, tool-count floor, prose/annotation agreement,` +
-      ` and tool-shape checks - ${enumerated.length} fully enumerated (${totalTools} tools),` +
-      ` ${gatedList.length} gated, ${skippedList.length} skipped`,
-);
+
+function reportNoCreds(results) {
+  const head = ['connector', 'tools', 'status tool', 'verdict', 'detail'];
+  const rows = results.map((r) => [r.connector, r.tools ?? '-', r.statusTool ?? '-', r.verdict, r.detail]);
+  const widths = head.map((h, i) => Math.max(h.length, ...rows.map((row) => String(row[i] ?? '').length)));
+  const render = (row) => row.map((c, i) => String(c ?? '').padEnd(widths[i])).join('  ').trimEnd();
+  console.log('MODE: no credentials (what a new user gets: boot, <vendor>_status, actionable error)');
+  console.log(render(head));
+  console.log(widths.map((n) => '-'.repeat(n)).join('  '));
+  for (const row of rows) console.log(render(row));
+
+  const probed = results.filter((r) => r.verdict !== 'SKIP');
+  const failed = results.filter((r) => r.verdict === 'FAIL');
+  const skipped = results.filter((r) => r.verdict === 'SKIP');
+  console.log('');
+  console.log(`  skipped          : ${skipped.length}${skipped.length ? '' : ' - none'}`);
+  for (const r of skipped) console.log(`      ${r.connector}: ${r.detail}`);
+  if (failed.length) {
+    console.log('');
+    console.log('FAILURES');
+    for (const r of failed) for (const f of r.failures) console.log(`  ${f}`);
+    console.log('');
+    console.log(`FAIL (no-creds): ${failed.length}/${probed.length} probed connector(s) failed: ${failed.map((r) => r.connector).join(', ')}`);
+    return 1;
+  }
+  console.log('');
+  console.log(
+    probed.length === 0
+      ? 'PASS (no-creds, nothing probed): every selected connector was skipped'
+      : `PASS (no-creds): ${probed.length} connector(s) booted unconfigured, listed exactly their meta tools,` +
+        ' and answered <vendor>_status with an actionable error naming the missing env vars',
+  );
+  return 0;
+}
+
+let exitCode = 0;
+if (runPlaceholders) {
+  const results = [];
+  for (const name of selected) results.push(await evaluate(name, CONNECTORS[name]));
+  exitCode |= reportPlaceholders(results);
+}
+if (runNoCreds) {
+  if (runPlaceholders) console.log('\n' + '='.repeat(72) + '\n');
+  const results = [];
+  for (const name of selected) results.push(await evaluateNoCreds(name, CONNECTORS[name]));
+  exitCode |= reportNoCreds(results);
+}
+process.exit(exitCode);

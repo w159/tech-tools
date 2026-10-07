@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import importlib.util
 import json
 import tempfile
@@ -213,6 +214,116 @@ class TestConnectorTest(ControlTestCase):
         res = self.mod.test_connector("nosuchconnector")
         self.assertFalse(res["ok"])
         self.assertEqual(res["error"], "bundle_missing")
+
+    def _fake_plugin(self):
+        """A plugin root whose 'fake' connector is a node stub honouring the real preloader."""
+        import shutil
+
+        root = Path(self.tmp.name) / "plugin"
+        (root / "mcp" / "_env").mkdir(parents=True)
+        (root / "mcp" / "fake").mkdir()
+        shutil.copy(SCRIPTS.parent / "mcp" / "_env" / "load.mjs", root / "mcp" / "_env")
+        (root / "mcp" / "fake" / "server.mjs").write_text(
+            """
+import readline from 'node:readline';
+const rl = readline.createInterface({ input: process.stdin });
+const send = (id, result) => console.log(JSON.stringify({ jsonrpc: '2.0', id, result }));
+rl.on('line', (l) => {
+  const m = JSON.parse(l);
+  if (m.method === 'initialize') send(m.id, { serverInfo: { name: 'fake', version: '1' } });
+  if (m.method === 'tools/list') send(m.id, { tools: [{ name: 'fake_status' }] });
+  if (m.method === 'tools/call') {
+    const ok = Boolean(process.env.FAKE_KEY);
+    const text = (ok ? 'Credentials: set' : 'Credentials: NOT CONFIGURED - set FAKE_KEY') + ' transport=' + process.env.MCP_TRANSPORT;
+    setTimeout(() => send(m.id, { content: [{ type: 'text', text }] }), 150);
+  }
+});
+""",
+            encoding="utf-8",
+        )
+        (root / ".mcp.json").write_text(
+            json.dumps(
+                {
+                    "mcpServers": {
+                        "fake": {
+                            "command": "node",
+                            "args": [
+                                "--import",
+                                "${CLAUDE_PLUGIN_ROOT}/mcp/_env/load.mjs",
+                                "${CLAUDE_PLUGIN_ROOT}/mcp/fake/server.mjs",
+                            ],
+                            "env": {
+                                "MCP_TRANSPORT": "stdio",
+                                "CFG_FAKE_KEY": "${user_config.fake_key}",
+                            },
+                        }
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        return root
+
+    def test_unconfigured_and_configured_connectors_are_told_apart(self):
+        root = self._fake_plugin()
+        with mock.patch.object(self.mod, "PLUGIN_ROOT", root):
+            home = Path(self.tmp.name) / "home"
+            home.mkdir()
+            env = {"HOME": str(home), "ATLAS_ENV_FILE": str(root / "none.env")}
+            bare = self.mod.test_connector("fake", env=env)
+            self.assertFalse(bare["ok"])
+            self.assertFalse(bare["configured"])
+            self.assertEqual(bare["error"], "not_configured")
+            self.assertIn("FAKE_KEY", bare["status"])
+            self.assertIn(
+                "transport=stdio", bare["status"]
+            )  # started as .mcp.json does
+            saved = self.mod.test_connector("fake", env={**env, "CFG_FAKE_KEY": "k"})
+            self.assertTrue(saved["ok"], saved)
+            self.assertTrue(saved["configured"])  # CFG_* promoted by the preloader
+            self.assertEqual(saved["tool_count"], 1)
+
+    def test_status_tool_that_never_answers_is_not_reported_configured(self):
+        root = self._fake_plugin()
+        (root / "mcp" / "fake" / "server.mjs").write_text(
+            "import readline from 'node:readline';"
+            "readline.createInterface({input:process.stdin}).on('line',(l)=>{const m=JSON.parse(l);"
+            "if(m.method==='initialize')console.log(JSON.stringify({jsonrpc:'2.0',id:m.id,result:{serverInfo:{name:'f'}}}));"
+            "if(m.method==='tools/list')console.log(JSON.stringify({jsonrpc:'2.0',id:m.id,result:{tools:[]}}));});",
+            encoding="utf-8",
+        )
+        with mock.patch.object(self.mod, "PLUGIN_ROOT", root):
+            res = self.mod.test_connector("fake", timeout=3)
+        self.assertIsNone(res["configured"])
+        self.assertEqual(res["tool_count"], 0)
+
+
+class TestWritePrivate(ControlTestCase):
+    def test_new_and_existing_files_end_up_0600_and_no_temp_left(self):
+        import os
+        import stat
+
+        target = Path(self.tmp.name) / "sub" / "settings.json"
+        old = os.umask(0o022)
+        try:
+            self.mod.write_private(target, "a")
+            self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o600)
+            target.chmod(0o644)
+            self.mod.write_private(target, "b")
+        finally:
+            os.umask(old)
+        self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o600)
+        self.assertEqual(target.read_text(), "b")
+        self.assertEqual([p.name for p in target.parent.iterdir()], ["settings.json"])
+
+    def test_failed_write_keeps_the_old_file(self):
+        target = Path(self.tmp.name) / "s.json"
+        target.write_text("old")
+        with mock.patch.object(self.mod.os, "replace", side_effect=OSError("boom")):
+            with self.assertRaises(OSError):
+                self.mod.write_private(target, "new")
+        self.assertEqual(target.read_text(), "old")
+        self.assertEqual([p.name for p in target.parent.glob("*atlas-tmp")], [])
 
 
 if __name__ == "__main__":

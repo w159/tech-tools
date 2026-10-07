@@ -137,8 +137,15 @@ CREATE INDEX IF NOT EXISTS ix_turn_scores_ts ON turn_scores(ts);
 """
 
 
+def atlas_home():
+    """The one resolver for atlas state: ATLAS_HOME, else ~/.atlas."""
+    return os.environ.get("ATLAS_HOME") or os.path.join(
+        os.path.expanduser("~"), ".atlas"
+    )
+
+
 def db_path():
-    return os.environ.get("ATLAS_DB") or os.path.expanduser("~/.atlas/atlas.db")
+    return os.environ.get("ATLAS_DB") or os.path.join(atlas_home(), "atlas.db")
 
 
 def connect(path=None):
@@ -224,6 +231,21 @@ def init(conn):
     ):
         try:
             conn.execute(f"ALTER TABLE improvements ADD COLUMN {_col} {_decl}")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # column already present
+    # Idempotent migration: self-fix state per finding (atlas_selffix.py).
+    for _col, _decl in (
+        ("fix_state", "TEXT DEFAULT 'none'"),
+        ("fix_branch", "TEXT"),
+        ("fix_worktree", "TEXT"),
+        ("fix_target", "TEXT"),
+        ("fix_log", "TEXT"),
+        ("fix_attempts", "INTEGER DEFAULT 0"),
+        ("fix_updated_at", "REAL"),
+    ):
+        try:
+            conn.execute(f"ALTER TABLE findings ADD COLUMN {_col} {_decl}")
             conn.commit()
         except sqlite3.OperationalError:
             pass  # column already present
@@ -417,7 +439,31 @@ def log_event(conn, run_id, tool, context, is_inline_op, path=None):
     return cur.lastrowid
 
 
+DEFAULT_AGENT_TYPE = "general-purpose"
+_AGENT_KEYS = ("subagent_type", "agent", "agent_type", "type")
+
+
+def resolve_agent_type(tinput, default=DEFAULT_AGENT_TYPE):
+    """Real agent name of a Task/Agent dispatch input. Claude uses
+    `subagent_type`; omp/other shapes use `agent`/`agent_type`/`type`, at the top
+    level or on the first batched `tasks[]` item that names one. A blank value
+    is skipped, never recorded; `default` only when the dispatch names none (a
+    genuine default Task)."""
+    if not isinstance(tinput, dict):
+        return default
+    items = [tinput] + [i for i in (tinput.get("tasks") or []) if isinstance(i, dict)]
+    for item in items:
+        for k in _AGENT_KEYS:
+            v = item.get(k)
+            if isinstance(v, str) and v.strip():
+                return v.strip()
+    return default
+
+
 def log_dispatch(conn, run_id, agent_type, model=None, wave_id=None):
+    """Record one dispatch. A blank agent_type (an unnamed default Task) is
+    stored as DEFAULT_AGENT_TYPE, never ''."""
+    agent_type = (agent_type or "").strip() or DEFAULT_AGENT_TYPE
     conn.execute(
         "INSERT INTO dispatches(run_id,ts,agent_type,model,wave_id) VALUES(?,?,?,?,?)",
         (run_id, time.time(), agent_type, model, wave_id),
@@ -1240,10 +1286,18 @@ def is_denied_result(text):
 
 
 def error_snippet_of(text, cap=ERROR_SNIPPET_CAP):
-    """Whitespace-collapsed, capped head of an error result's text, or None."""
+    """Whitespace-collapsed, capped head of an error result's text, or None.
+
+    A Python traceback over the cap keeps its head (first 200 chars) plus its tail
+    (the last File frame and exception line, up to 300 chars, trimmed so the pair
+    fits the cap) joined by ' ... ': the head alone would cut off the exception."""
     if not text:
         return None
     clean = " ".join(text.split())
+    if clean.startswith("Traceback") and len(clean) > cap:
+        head, sep = clean[:200], " ... "
+        tail = clean[-min(300, cap - len(head) - len(sep)) :]
+        return head + sep + tail
     return clean[:cap] or None
 
 
@@ -1268,6 +1322,95 @@ def update_tool_result(conn, tool_use_id, is_error, result_bytes, text=None):
         "WHERE tool_use_id=?",
         (is_error, result_bytes, 1 if denied else 0, snippet, tool_use_id),
     )
+
+
+ERROR_CLASSES = ("deny", "model_misuse", "environment", "tool_fault", "unknown")
+
+_MODEL_MISUSE = re.compile(
+    r"(without (first )?read|has not been read|must (first )?read|read (it|the file) first"
+    r"|file has been modified|modified since (it was )?read|stale|hash mismatch"
+    r"|hashline|anchor|no (such )?(line|match)|(old_string|old_text).*(not found|unique|multiple)"
+    r"|found \d+ matches|invalid (arguments?|input|params?|parameters?)|validation (error|failed)"
+    r"|inputvalidationerror|missing (a )?required|required (parameter|argument|field)"
+    r"|is required|unexpected (keyword|parameter|argument)|schema"
+    r"|nothing to wait for|fact-forcing gate|edit rejected for|input header must be|retryable"
+    r"|invalid args for|content is required"
+    r"|no preceding hunk header|close enough match|found \d+ occurrences"
+    r"|did not answer|path escapes project root|refusing to scan|none of the requested paths"
+    r"|unknown key|queries array limited|invalid (regex|glob|read mode)"
+    r"|prior computer\{|no read_page tree|missing phase name|invalid todo"
+    r"|expects an? (options|json args) object|no such tool available|selector only supports"
+    r"|is writable only|while in plan mode|detected a file-write command"
+    r"|string to replace not found|not found in (the )?file"
+    r"|use the write tool|write tool to create"
+    r"|`put [^`]*` (?:rejected|resolved|could not resolve|promises)|`-` rows are not valid"
+    r"|a register `put`|edit appeared successful|eisdir|is a directory|is not a directory"
+    r"|invalid range|no such tool: xd://|unknown (?:agent|skill|daemon)\b|requires an output id"
+    r"|failed to execute json query|is not valid json|sqlite (?:limit|query parameters)"
+    r"|must be a json object|refuses the redirect|selector must be a string"
+    r"|not supported on the \w+ backend|takes \(key, options\)|cannot load xd://"
+    r"|requires user consent|missing items for|no active project|is not a function"
+    r"|added as a read-only root|rule=\"[\w-]+\" path=)",
+    re.I,
+)
+_ENVIRONMENT = re.compile(
+    r"(exit code|exited with|non-?zero|command failed|enoent|no such file|not found"
+    r"|does not exist|permission|eacces|denied by user|timed? ?out|timeout|etimedout"
+    r"|econnr|connection (refused|reset|closed)|network|dns|unreachable|mcp error"
+    r"|not connected|transport|aborted|interrupted|user rejected|doesn't want to proceed"
+    r"|rate limit|(?:http|status(?: code)?|error)[ :]+(?:40[0-9]|50[0-9])\b"
+    r"|\b(?:40[0-9]|50[0-9]) (?:bad gateway|not found|forbidden|unauthorized|service unavailable|gateway time-?out|internal server error)"
+    r"|skipped due to|tool execution failed|lock contention|worker api"
+    r"|missing_credentials|\[exit:[1-9]|blocked by security policy|is busy"
+    r"|tmux pane|temporarily unavailable|no verdict|was denied or failed"
+    r"|previous omp process exited|(?:was|were|input was) cancelled|cancelled by the user"
+    r"|session closed|detached frame|cannot find module|auth check: failed"
+    r"|unknown tool from js runtime|multiple windows match|is not alive)",
+    re.I,
+)
+_ATLAS_FRAME = r'File "[^"\n]*(?:plugins/atlas/|/\.(?:claude|omp)/[^"\n]*atlas[^"\n/]*/)[^"\n]*\.py"'
+_TOOL_FAULT = re.compile(
+    r"(?:Traceback \(most recent call last\)[\s\S]*?" + _ATLAS_FRAME + r"|hook error:)",
+    re.I,
+)
+_TOOL_FAULT_SCRIPT = re.compile(r"can't open file '[^']*scripts/atlas_[^']*\.py'", re.I)
+
+
+# error_snippet_of keeps only the head, so a shell result that fills the whole cap
+# with plain output and no failure marker is a command that printed a lot and then
+# exited non-zero: the marker sat in the cut tail.
+_SHELL_TOOL = re.compile(r"(?:^|__|_)(?:bash|shell)$", re.I)
+
+
+def classify_error(tool_name, snippet, denied):
+    """Bucket a failed tool call into ERROR_CLASSES. Precedence: deny (flag or
+    DENY_MARKERS text) > tool_fault (atlas script crash) > model_misuse >
+    environment > unknown (empty or unmatched)."""
+    if denied or is_denied_result(snippet):
+        return "deny"
+    if not snippet or not snippet.strip():
+        return "unknown"
+    if _TOOL_FAULT.search(snippet) or _TOOL_FAULT_SCRIPT.search(snippet):
+        return "tool_fault"
+    # error_snippet_of caps at 500 chars, so the atlas frame may be cut off a
+    # Bash traceback; a leading Traceback naming atlas is still an atlas crash.
+    if (
+        (tool_name or "").lower() == "bash"
+        and snippet.lstrip().startswith("Traceback")
+        and ("atlas_" in snippet or "plugins/atlas" in snippet)
+    ):
+        return "tool_fault"
+    if _MODEL_MISUSE.search(snippet):
+        return "model_misuse"
+    if _ENVIRONMENT.search(snippet):
+        return "environment"
+    if (
+        _SHELL_TOOL.search(tool_name or "")
+        and len(snippet) >= ERROR_SNIPPET_CAP
+        and not snippet.lstrip().startswith("Traceback")
+    ):
+        return "environment"
+    return "unknown"
 
 
 def insert_user_prompt(conn, session_id, p):
@@ -1376,6 +1519,105 @@ def purge_observer_sessions(conn):
     return counts
 
 
+_SESSION_CHILD_TABLES = (
+    "messages",
+    "tool_calls",
+    "user_prompts",
+    "signals",
+    "turn_scores",
+    "facets",
+    "friction_events",
+    "ingest_files",
+)
+_RUN_CHILD_TABLES = ("events", "dispatches", "metrics")
+
+
+def os_tmp_roots():
+    import tempfile
+
+    return {tempfile.gettempdir(), os.path.realpath(tempfile.gettempdir())}
+
+
+def _under_any(path, roots):
+    return any(path == r or path.startswith(r.rstrip("/") + "/") for r in roots)
+
+
+def is_tmp_path(path):
+    """True when `path` (as given or resolved) lies under the OS temp dir."""
+    roots = os_tmp_roots()
+    return _under_any(str(path), roots) or _under_any(
+        os.path.realpath(str(path)), roots
+    )
+
+
+def purge_tmp_sessions(conn, apply=False, tmp_roots=None):
+    """One-off cleanup of test/benchmark leakage: remove every session whose
+    transcript_path lies under the OS temp dir (default tempfile.gettempdir()
+    and its realpath), with its child rows and its runs (+ their events,
+    dispatches, metrics). Dry-run by default: nothing is deleted unless
+    apply=True. Returns {table: rows} (rows that WOULD be / WERE deleted)."""
+    roots = tmp_roots or os_tmp_roots()
+    sids = [
+        sid
+        for sid, p in conn.execute(
+            "SELECT session_id, transcript_path FROM session_logs "
+            "WHERE transcript_path IS NOT NULL"
+        ).fetchall()
+        if _under_any(p, roots)
+    ]
+    counts = {"session_logs": len(sids)}
+    if not sids:
+        return counts
+    have = {
+        r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    }
+    # one temp table of ids keeps every statement well under SQLite's variable cap
+    conn.execute("CREATE TEMP TABLE IF NOT EXISTS _purge_sids(sid TEXT PRIMARY KEY)")
+    conn.execute("DELETE FROM _purge_sids")
+    conn.executemany("INSERT INTO _purge_sids VALUES(?)", [(s,) for s in sids])
+    if "runs" in have:
+        conn.execute(
+            "CREATE TEMP TABLE IF NOT EXISTS _purge_runs(rid INTEGER PRIMARY KEY)"
+        )
+        conn.execute("DELETE FROM _purge_runs")
+        conn.execute(
+            "INSERT INTO _purge_runs SELECT id FROM runs WHERE session_id IN "
+            "(SELECT sid FROM _purge_sids)"
+        )
+        for t in _RUN_CHILD_TABLES:
+            if t in have:
+                col = "run_id"
+                counts[t] = conn.execute(
+                    f"SELECT COUNT(*) FROM {t} WHERE {col} IN (SELECT rid FROM _purge_runs)"
+                ).fetchone()[0]
+        counts["runs"] = conn.execute("SELECT COUNT(*) FROM _purge_runs").fetchone()[0]
+    for t in _SESSION_CHILD_TABLES:
+        if t in have:
+            counts[t] = conn.execute(
+                f"SELECT COUNT(*) FROM {t} WHERE session_id IN (SELECT sid FROM _purge_sids)"
+            ).fetchone()[0]
+    if apply:
+        if "runs" in have:
+            for t in _RUN_CHILD_TABLES:
+                if t in have:
+                    conn.execute(
+                        f"DELETE FROM {t} WHERE run_id IN (SELECT rid FROM _purge_runs)"
+                    )
+            conn.execute("DELETE FROM runs WHERE id IN (SELECT rid FROM _purge_runs)")
+        for t in _SESSION_CHILD_TABLES:
+            if t in have:
+                conn.execute(
+                    f"DELETE FROM {t} WHERE session_id IN (SELECT sid FROM _purge_sids)"
+                )
+        conn.execute(
+            "DELETE FROM session_logs WHERE session_id IN (SELECT sid FROM _purge_sids)"
+        )
+        conn.commit()
+    conn.execute("DROP TABLE IF EXISTS _purge_sids")
+    conn.execute("DROP TABLE IF EXISTS _purge_runs")
+    return counts
+
+
 # --- session-log mirror: read path (the sextant session-forensics lens) -------
 
 
@@ -1384,7 +1626,7 @@ def _rows(cur):
     return [dict(zip(cols, r)) for r in cur.fetchall()]
 
 
-def tool_usage(conn, kind=None, project_id=None):
+def tool_usage(conn, kind=None, project_id=None, since=None, exclude_tmp=False):
     """Per-target usage rollup: calls, errors, sessions touched, total input
     bytes. Filter by kind (builtin|skill|mcp|agent|command) and/or project.
 
@@ -1411,24 +1653,41 @@ def tool_usage(conn, kind=None, project_id=None):
     if kind:
         where.append("t.kind=?")
         args.append(kind)
+    if since is not None:
+        where.append("t.ts >= ?")
+        args.append(since)
+    if exclude_tmp:
+        # test/benchmark sessions (transcript under the OS temp dir) are not usage
+        likes = [
+            r.rstrip("/").replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            + "/%"
+            for r in sorted(os_tmp_roots())
+        ]
+        where.append(
+            "t.session_id NOT IN (SELECT session_id FROM session_logs WHERE "
+            + " OR ".join("transcript_path LIKE ? ESCAPE '\\'" for _ in likes)
+            + ")"
+        )
+        args.extend(likes)
     if where:
         q += "WHERE " + " AND ".join(where) + " "
     q += "GROUP BY t.kind, t.target, t.server ORDER BY calls DESC"
     return _rows(conn.execute(q, args))
 
 
-def top_error_snippets(conn, kind, target, limit=3):
+def top_error_snippets(conn, kind, target, limit=3, since=None):
     """Most frequent error texts for one tool target (gate denials excluded),
     as [{"snippet", "count"}]. Rows ingested before error_snippet existed have
     no text and are skipped, so an empty list means "no text captured", not
-    "no errors"."""
+    "no errors". `since` (epoch) restricts to recent calls."""
     return _rows(
         conn.execute(
             "SELECT error_snippet AS snippet, COUNT(*) AS count FROM tool_calls "
             "WHERE kind IS ? AND target IS ? AND COALESCE(is_error,0)=1 "
             "AND COALESCE(denied,0)=0 AND error_snippet IS NOT NULL "
+            "AND (? IS NULL OR ts >= ?) "
             "GROUP BY error_snippet ORDER BY count DESC, error_snippet LIMIT ?",
-            (kind, target, limit),
+            (kind, target, since, since, limit),
         )
     )
 

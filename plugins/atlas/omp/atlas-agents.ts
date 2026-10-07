@@ -10,13 +10,14 @@ import * as nodePath from "node:path";
  * notice). Tier map (atlas colony):
  *
  * - off:    explorer, docs-auditor, docs-curator, schema-inventory, naming-glossary-audit, runner
- * - low:    implementer, planner, db-prober, ui-runtime-tester
- * - medium: verifier, completeness-critic, rls-privilege-audit
+ * - low:    planner, db-prober, ui-runtime-tester
+ * - medium: implementer, verifier, completeness-critic, rls-privilege-audit
  *
- * Runner (mechanical tier) uses `@atlas-mechanic` with `@smol` as the guaranteed fallback.
+ * Mechanical tier (Claude `model: haiku`: runner, docs-auditor, schema-inventory, naming-glossary-audit) uses
+ * `@atlas-mechanic` with `@smol` as the guaranteed fallback.
  *
- * Roles: off/low agents run on the `@atlas-worker` role alias, medium agents
- * on `@atlas-verifier`. Role values resolve through `modelRoles.<role>` in the
+ * Roles: judgment agents (verifier, completeness-critic, rls-privilege-audit) run on the `@atlas-verifier` role
+ * alias, haiku-pinned agents on `@atlas-mechanic`, the rest on `@atlas-worker`. Role values resolve through `modelRoles.<role>` in the
  * omp config; in omp 18.6.1 an unresolved custom role alias stays a literal
  * token that matches no model while `@smol` still expands, and if nothing
  * resolves `createAgentSession` falls back to the parent's active model. The
@@ -34,7 +35,7 @@ export const ATLAS_THINKING_LEVELS: Record<string, "off" | "low" | "medium"> = {
 	"schema-inventory": "off",
 	"naming-glossary-audit": "off",
 	runner: "off",
-	implementer: "low",
+	implementer: "medium", // writes code: low effort was the only code-writing agent below medium
 	planner: "low",
 	"db-prober": "low",
 	"ui-runtime-tester": "low",
@@ -43,12 +44,15 @@ export const ATLAS_THINKING_LEVELS: Record<string, "off" | "low" | "medium"> = {
 	"rls-privilege-audit": "medium",
 };
 
-/** Role alias for one atlas agent, derived from its thinking tier. */
+/** Agents whose omp tier is the judgment tier (`@atlas-verifier`); every other non-haiku agent is a worker. */
+const VERIFIER_AGENTS: Record<string, true> = { verifier: true, "completeness-critic": true, "rls-privilege-audit": true };
+
+/** Role alias for one atlas agent. Claude pins `model: haiku` for the cheap mechanical tier; omp realises it as `@atlas-mechanic`, not only for `runner`. */
 export function roleFor(
 	agentName: string,
 ): typeof ATLAS_WORKER_ROLE | typeof ATLAS_VERIFIER_ROLE | typeof ATLAS_MECHANIC_ROLE {
-	if (agentName === "runner") return ATLAS_MECHANIC_ROLE;
-	return ATLAS_THINKING_LEVELS[agentName] === "medium" ? ATLAS_VERIFIER_ROLE : ATLAS_WORKER_ROLE;
+	if (agentName === "runner" || frontmatterModelFor(agentName) === "haiku") return ATLAS_MECHANIC_ROLE;
+	return Object.hasOwn(VERIFIER_AGENTS, agentName) ? ATLAS_VERIFIER_ROLE : ATLAS_WORKER_ROLE;
 }
 
 /**
@@ -78,10 +82,11 @@ export const ATLAS_DEFAULT_FALLBACK_ROLE = "@default";
 
 /** Prioritized `model` list for one atlas agent (frontmatter accepts arrays). */
 export function modelPatternsFor(agentName: string): string[] {
-	if (agentName === "runner") return [ATLAS_MECHANIC_ROLE, SMOL_FALLBACK_ROLE];
-	return ATLAS_THINKING_LEVELS[agentName] === "medium"
-		? [roleFor(agentName), ATLAS_DEFAULT_FALLBACK_ROLE, SMOL_FALLBACK_ROLE]
-		: [roleFor(agentName), SMOL_FALLBACK_ROLE];
+	const role = roleFor(agentName);
+	if (role === ATLAS_MECHANIC_ROLE) return [ATLAS_MECHANIC_ROLE, SMOL_FALLBACK_ROLE];
+	return role === ATLAS_VERIFIER_ROLE
+		? [role, ATLAS_DEFAULT_FALLBACK_ROLE, SMOL_FALLBACK_ROLE]
+		: [role, SMOL_FALLBACK_ROLE];
 }
 
 /**

@@ -1,3 +1,4 @@
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import io
 import json
 import os

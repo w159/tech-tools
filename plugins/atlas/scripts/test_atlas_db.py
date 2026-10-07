@@ -1,3 +1,4 @@
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import contextlib
 import io
 import json
@@ -489,6 +490,49 @@ class AtlasDbTest(unittest.TestCase):
             self.conn.execute("SELECT COUNT(*) FROM dispatches").fetchone()[0], 1
         )
 
+    def test_purge_tmp_sessions_dry_run_default_then_apply(self):
+        pid = atlas_db.register_project(self.conn, "/repo/x")
+        tmp_t = os.path.join(tempfile.gettempdir(), "atlas-omp-abc", "t.jsonl")
+        for sid, path in (
+            ("t1", tmp_t),
+            ("real", "/home/u/.claude/projects/x/real.jsonl"),
+            # shares the temp dir's name as a prefix only: must NOT match
+            ("sib", tempfile.gettempdir() + "-sibling/s.jsonl"),
+        ):
+            atlas_db.upsert_session_log(
+                self.conn, sid, project_id=pid, transcript_path=path, cwd="/repo/x"
+            )
+            self._seed_session_children(sid)
+            rid = atlas_db.start_run(self.conn, pid, sid)
+            atlas_db.log_dispatch(self.conn, rid, "atlas:worker")
+            atlas_db.finalize_run(self.conn, rid)
+        tables = (
+            "session_logs",
+            "messages",
+            "tool_calls",
+            "runs",
+            "dispatches",
+            "metrics",
+        )
+        count = lambda t: self.conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
+        before = {t: count(t) for t in tables}
+        counts = atlas_db.purge_tmp_sessions(self.conn)  # dry run is the default
+        self.assertEqual(
+            (counts["session_logs"], counts["runs"], counts["dispatches"]), (1, 1, 1)
+        )
+        self.assertEqual(before, {t: count(t) for t in tables})
+        atlas_db.purge_tmp_sessions(self.conn, apply=True)
+        left = {r[0] for r in self.conn.execute("SELECT session_id FROM session_logs")}
+        self.assertEqual(left, {"real", "sib"})
+        for t in ("messages", "tool_calls", "runs"):
+            self.assertEqual(
+                self.conn.execute(
+                    f"SELECT COUNT(*) FROM {t} WHERE session_id='t1'"
+                ).fetchone()[0],
+                0,
+            )
+        self.assertEqual(count("dispatches"), 2)
+
     def test_purge_observer_sessions_noop_when_none(self):
         pid = atlas_db.register_project(self.conn, "/repo/x")
         atlas_db.upsert_session_log(
@@ -568,12 +612,22 @@ class UncoveredPathsTest(unittest.TestCase):
         # The ATLAS_DB branch of db_path() (line 90).
         with patch.dict(os.environ, {"ATLAS_DB": "/custom/path/atlas.db"}):
             self.assertEqual(atlas_db.db_path(), "/custom/path/atlas.db")
-        env_copy = dict(os.environ)
-        env_copy.pop("ATLAS_DB", None)
+        env_copy = {
+            k: v for k, v in os.environ.items() if k not in ("ATLAS_DB", "ATLAS_HOME")
+        }
         with patch.dict(os.environ, env_copy, clear=True):
             self.assertEqual(
                 atlas_db.db_path(), os.path.expanduser("~/.atlas/atlas.db")
             )
+        # ATLAS_HOME alone relocates the DB; ATLAS_DB still wins over it
+        with patch.dict(os.environ, {**env_copy, "ATLAS_HOME": "/h/x"}, clear=True):
+            self.assertEqual(atlas_db.db_path(), "/h/x/atlas.db")
+        with patch.dict(
+            os.environ,
+            {**env_copy, "ATLAS_HOME": "/h/x", "ATLAS_DB": "/e/a.db"},
+            clear=True,
+        ):
+            self.assertEqual(atlas_db.db_path(), "/e/a.db")
 
     def test_init_migrates_pre_kind_pre_orchestrating_runs(self):
         # A DB whose `runs` table predates the kind/orchestrating columns: the
@@ -1306,8 +1360,13 @@ class MainCliTest(unittest.TestCase):
         c.close()
 
     def test_main_mark_orchestrating_defaults_cwd(self):
-        # No cwd arg -> os.getcwd() default branch.
-        out = self._run_cli(["atlas_db.py", "mark-orchestrating", "sess-cwd"])
+        # No cwd arg -> os.getcwd() default branch (run from tmp so the sentinel stays out of the repo).
+        old = os.getcwd()
+        os.chdir(self.tmp)
+        try:
+            out = self._run_cli(["atlas_db.py", "mark-orchestrating", "sess-cwd"])
+        finally:
+            os.chdir(old)
         self.assertIn("orchestrating run", out)
 
     def test_main_purge_observer_sessions(self):
@@ -1449,6 +1508,31 @@ class IngestFilesSchemaTest(unittest.TestCase):
         atlas_db.purge_observer_sessions(self.conn)
         left = [r[0] for r in self.conn.execute("SELECT session_id FROM ingest_files")]
         self.assertEqual(left, ["keep"])
+
+
+class ErrorSnippetTest(unittest.TestCase):
+    def test_plain_text_is_head_capped(self):
+        self.assertEqual(atlas_db.error_snippet_of("a  b\nc"), "a b c")
+        self.assertEqual(atlas_db.error_snippet_of("x" * 900), "x" * 500)
+        self.assertIsNone(atlas_db.error_snippet_of(""))
+
+    def test_short_traceback_is_unchanged(self):
+        text = (
+            'Traceback (most recent call last):\n  File "a.py", line 1\nValueError: x'
+        )
+        self.assertEqual(atlas_db.error_snippet_of(text), " ".join(text.split()))
+
+    def test_long_traceback_keeps_head_and_tail(self):
+        frames = "".join(
+            '  File "m%d.py", line %d, in f\n    g()\n' % (i, i) for i in range(40)
+        )
+        text = "Traceback (most recent call last):\n" + frames + "KeyError: 'boom'"
+        snip = atlas_db.error_snippet_of(text)
+        self.assertLessEqual(len(snip), 500)
+        self.assertTrue(snip.startswith("Traceback (most recent call last):"))
+        self.assertIn(" ... ", snip)
+        self.assertTrue(snip.endswith("KeyError: 'boom'"))
+        self.assertIn('File "m39.py"', snip)
 
 
 class ToolCallDeniedTest(unittest.TestCase):

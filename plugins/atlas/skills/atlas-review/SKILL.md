@@ -4,8 +4,6 @@ description: "Runs a risk-selected multi-persona review of a diff, branch or PR:
 when_to_use: "review this PR, code review, pre-merge review, review my diff, is this ready to merge"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Agent, Task
 argument-hint: '[base-ref | PR-number | diff spec] [depth:full|auto] [apply:local]'
-context: fork
-agent: general-purpose
 ---
 
 # atlas-review

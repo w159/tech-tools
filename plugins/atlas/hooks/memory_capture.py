@@ -30,11 +30,21 @@ CAPTURE_WINDOW_SECONDS = 900  # blast-radius cap: at most once per 15 minutes
 SEEN_MAX_LINES = 500  # cap the seen-hash file so it cannot grow unbounded
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+import atlas_faults  # noqa: E402
 import atlas_hook_guard  # noqa: E402
+import atlas_memory  # noqa: E402
+
+
+def _trace(exc, cwd=None):
+    """Leave a durable trace for a swallowed failure (never raises)."""
+    atlas_faults.record("memory_capture", exc, cwd or None)
 
 
 def _seen_hashes_path():
-    return os.path.join(os.path.expanduser("~"), ".atlas", ".memory_capture_seen")
+    base = os.environ.get("ATLAS_HOME") or os.path.join(
+        os.path.expanduser("~"), ".atlas"
+    )
+    return os.path.join(base, ".memory_capture_seen")
 
 
 def _hash_key(raw_text):
@@ -212,11 +222,11 @@ def _extract_facts(conn, session_id, cwd):
             snippet = row[0]
             if snippet and snippet.strip():
                 # Keep it concise — truncate to 200 chars
-                clean = snippet.strip()
+                clean = atlas_memory.redact_secrets(snippet.strip())
                 fact = _Fact(f"User correction ({project_name}): {_clip(clean)}", clean)
                 memory_facts.append(fact)
-    except sqlite3.Error:
-        pass
+    except sqlite3.Error as exc:
+        _trace(exc, cwd)
 
     # 2. Assumption admissions → memory (agent-level lessons)
     try:
@@ -228,13 +238,13 @@ def _extract_facts(conn, session_id, cwd):
         ).fetchall():
             snippet = row[0]
             if snippet and snippet.strip():
-                clean = snippet.strip()
+                clean = atlas_memory.redact_secrets(snippet.strip())
                 fact = _Fact(
                     f"Assumption to avoid ({project_name}): {_clip(clean)}", clean
                 )
                 memory_facts.append(fact)
-    except sqlite3.Error:
-        pass
+    except sqlite3.Error as exc:
+        _trace(exc, cwd)
 
     # 3. Improvements → project memory (project-specific decisions)
     try:
@@ -247,15 +257,15 @@ def _extract_facts(conn, session_id, cwd):
             ).fetchall():
                 dim, baseline, target, note = row
                 if note and note.strip():
-                    clean = note.strip()
+                    clean = atlas_memory.redact_secrets(note.strip())
                     dim_label = dim or "Improvement"
                     fact = _Fact(
                         f"[{project_name}] {dim_label}: {_clip(clean)}",
                         f"{dim_label}:{clean}",
                     )
                     project_facts.append(fact)
-    except sqlite3.Error:
-        pass
+    except sqlite3.Error as exc:
+        _trace(exc, cwd)
 
     # 4. Tool error patterns → memory (agent-level tool quirks)
     # Tool-error tallies are NOT captured as memory. They live in atlas_db
@@ -303,8 +313,8 @@ def _record_drop(session_id, kind, result):
             conn.commit()
         finally:
             conn.close()
-    except Exception:
-        pass
+    except Exception as exc:
+        _trace(exc)
     # Surface it too -- a drop that is only in the DB is still invisible today.
     try:
         sys.stderr.write(
@@ -320,6 +330,7 @@ def main():
         sys.exit(0)
 
     payload = atlas_hook_guard.read_payload()
+    payload = payload if isinstance(payload, dict) else {}
 
     session_id = payload.get("session_id", "")
     cwd = payload.get("cwd", "")
@@ -339,7 +350,8 @@ def main():
 
     try:
         conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
-    except sqlite3.Error:
+    except sqlite3.Error as exc:
+        _trace(exc, cwd)
         sys.exit(0)
 
     captured = {"memory": 0, "project": 0, "facts": []}
@@ -402,6 +414,7 @@ def main():
     except Exception as exc:
         # fail-open: never block the hook. But surface the failure on stderr so
         # a silent capture miss is observable instead of invisible.
+        atlas_faults.record("memory_capture", exc, cwd or None)
         try:
             sys.stderr.write(f"[atlas] memory_capture fail-open: {exc}\n")
         except Exception:
@@ -423,5 +436,6 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except Exception:
+    except Exception as exc:
+        atlas_faults.record("memory_capture", exc)
         sys.exit(0)

@@ -1,6 +1,6 @@
 // Shared env preloader for atlas MCP servers, loaded via `node --import`.
 // stdout is reserved for JSON-RPC; all diagnostics go to stderr only.
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -27,43 +27,55 @@ function parseEnvLine(line) {
   return [trimmed.slice(0, eq).trim(), raw.replace(QUOTED, "$2")];
 }
 
-// Never let a blank `KEY=` line (the `.env.example` convention - a
-// commented-out template uncommented but never filled in) or a literal
-// unexpanded `${...}` placeholder stomp an already-set value (e.g. one
-// exported by the launching shell) - both only fill a gap.
+// Precedence (highest first): variables exported by the launching shell, then
+// ATLAS_ENV_FILE, then the per-user default file, then CFG_<NAME> (userConfig)
+// filling any remaining gap. Blank `KEY=` lines (the `.env.example` convention)
+// and literal unexpanded `${...}` placeholders never count as a value.
 const isUsable = (value) => Boolean(value) && !UNEXPANDED.test(value);
 
-function readEnvLines(path) {
-  if (!path || !existsSync(path)) return [];
-  try {
-    return readFileSync(path, "utf8").split("\n");
-  } catch (err) {
-    console.error(`[atlas env] failed to load ${path}: ${err.message}`);
-    return [];
+// Names only, never values: stderr is the one place a diagnostic may go.
+const note = (msg) => console.error(`[atlas env] ${msg}`);
+
+const shellKeys = new Set(Object.keys(process.env).filter((k) => isUsable(process.env[k])));
+
+function loadEnvFile(path, label) {
+  if (!path) return;
+  if (!existsSync(path)) {
+    note(`${label} not found: ${path} (skipped)`);
+    return;
   }
-}
-
-const isUsableEntry = (entry) => entry !== null && Boolean(entry[0]) && isUsable(entry[1]);
-
-function loadEnvFile(path) {
-  for (const [key, value] of readEnvLines(path).map(parseEnvLine).filter(isUsableEntry)) {
+  let text;
+  try {
+    if (statSync(path).mode & 0o077) note(`${path} is group/world-readable; run chmod 600`);
+    text = readFileSync(path, "utf8");
+  } catch (err) {
+    note(`failed to load ${path}: ${err.message}`);
+    return;
+  }
+  for (const entry of text.split("\n").map(parseEnvLine)) {
+    if (entry === null || !entry[0] || !isUsable(entry[1])) continue;
+    const [key, value] = entry;
+    if (shellKeys.has(key)) {
+      if (process.env[key] !== value) note(`${key}: shell export wins over ${path}`);
+      continue;
+    }
     process.env[key] = value;
   }
 }
 
-// 1. Load the per-user default file first as a harness-agnostic baseline.
-loadEnvFile(DEFAULT_ATLAS_ENV_FILE);
-// 2. Load ATLAS_ENV_FILE when explicitly set, overriding the baseline above -
-// this stays the documented, higher-precedence path (e.g. a repo checkout's
-// `plugins/atlas/.env`).
-if (process.env.ATLAS_ENV_FILE) loadEnvFile(process.env.ATLAS_ENV_FILE);
+// 1. Per-user default file: harness-agnostic baseline.
+loadEnvFile(DEFAULT_ATLAS_ENV_FILE, "default env file");
+// 2. ATLAS_ENV_FILE when explicitly set overrides the baseline file (never the shell).
+if (process.env.ATLAS_ENV_FILE) loadEnvFile(process.env.ATLAS_ENV_FILE, "ATLAS_ENV_FILE");
 
 // 3. Fall back to CFG_<NAME> (from ${user_config.*}) when <NAME> is unset.
 for (const key of Object.keys(process.env)) {
   if (!key.startsWith("CFG_")) continue;
   const name = key.slice(4);
   const value = process.env[key];
-  if (process.env[name] === undefined && isUsable(value)) {
-    process.env[name] = value;
+  if (!isUsable(value)) continue;
+  if (process.env[name] === undefined) process.env[name] = value;
+  else if (process.env[name] !== value && !shellKeys.has(name)) {
+    note(`${name}: env file value wins over saved userConfig (${key}); update or remove the file entry`);
   }
 }

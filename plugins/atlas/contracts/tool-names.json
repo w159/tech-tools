@@ -15,17 +15,23 @@
 		"Agent": "task",
 		"SendMessage": "write agent://<name>"
 	},
+	"ompAliases": {
+		"ast_edit": "Edit"
+	},
 	"bareTools": {
 		"ctx_search": "xd://mcp__lean_ctx_ctx_search",
 		"ctx_glob": "xd://mcp__lean_ctx_ctx_glob",
 		"ctx_read": "xd://mcp__lean_ctx_ctx_read",
 		"ctx_shell": "xd://mcp__lean_ctx_ctx_shell",
-		"ctx_execute": "xd://mcp__context_mode_context_mode_ctx_execute"
+		"ctx_execute": "xd://mcp__context_mode_context_mode_ctx_execute",
+		"ctx_batch_execute": "xd://mcp__context_mode_context_mode_ctx_batch_execute",
+		"ctx_execute_file": "xd://mcp__context_mode_context_mode_ctx_execute_file",
+		"ctx_fetch_and_index": "xd://mcp__context_mode_context_mode_ctx_fetch_and_index"
 	},
 	"mcp": {
 		"prefix": "xd://mcp__",
 		"separator": "_",
-		"note": "model-emitted mcp__<server>__<tool>; parts sanitized like omp's mint in mcp/tool-bridge.ts mintMCPToolName: lowercased, [^a-z0-9_] runs -> _, underscore-collapsed and trimmed; a tool name prefixed '<server>_' loses that prefix; no 64-char cap applied here. bareTools: bare lean-ctx/context-mode names used in output-styles/atlas-orchestrator.md -> device names a real omp session mints (verified with `omp --print --no-session` listing ctx_ devices). Keys in claudeToOmp must contain no whitespace (phrase keys break on .md reflow); omp/hook-bridge.ts claudeNamesFor only reverse-maps keys matching /^[A-Z]\\w*$/."
+		"note": "model-emitted mcp__<server>__<tool>; parts sanitized like omp's mint in mcp/tool-bridge.ts mintMCPToolName: lowercased, [^a-z0-9_] runs -> _, underscore-collapsed and trimmed; a tool name prefixed '<server>_' loses that prefix; no 64-char cap applied here. bareTools: bare lean-ctx/context-mode names used in output-styles/atlas-orchestrator.md -> device names a real omp session mints (verified with `omp --print --no-session` listing ctx_ devices). Keys in claudeToOmp must contain no whitespace (phrase keys break on .md reflow); omp/hook-bridge.ts claudeNamesFor only reverse-maps keys matching /^[A-Z]\\w*$/. cmux-browser (45 browser_* tools, devices xd://mcp__cmux_browser_<tool>): server list, read-only/state-changing/sensitive classes and the subagentAllow set live in mcp-servers.json browserServers; the server needs its underscoredServers entry because browser_<tool> would otherwise split at the doubled token."
 	},
 	"agentGuard": {
 		"note": "Read by omp/agent-guard.ts. omp does not parse `disallowedTools` from agent frontmatter (omp 18.6.1: 0 hits for disallowedTools/permissionMode under pi-coding-agent/src), so the guard enforces agents/<name>.md `disallowedTools` on omp via a tool_call handler. Each key under `ompTools` is an omp tool name; `blockedByClaude` lists the Claude tool names whose presence in the agent's `disallowedTools` blocks that omp tool. `write` is blocked only when its `path` is NOT a URI-scheme target (uriSchemeRegex), because omp's `write` also carries `xd://` MCP device calls, outbound IRC (`agent://`) and shared artifacts (`local://`, `proc://`); removing `write` from the child would break all of those. Shell writes through `bash` are NOT covered. `notApplicable` Claude names have no omp equivalent and are recorded here so the omission is explicit.",

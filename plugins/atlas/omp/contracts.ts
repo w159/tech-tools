@@ -4,7 +4,17 @@
  * malformed → undefined, and every consumer then allows (fail open).
  */
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as nodePath from "node:path";
+
+/** Resolve an edit/write target against cwd, expanding a leading `~`, `~/` and `$HOME`/`${HOME}` first (the shell never did). */
+export function resolveTarget(cwd: string, p: string): string {
+	const home = os.homedir();
+	const expanded = /^~(?=$|[\\/])/.test(p)
+		? home + p.slice(1)
+		: p.replace(/^\$\{?HOME\}?(?=$|[\\/])/, home);
+	return nodePath.resolve(cwd, expanded);
+}
 
 export const NATIVE_TOOLS_PATH = nodePath.resolve(import.meta.dir, "..", "contracts", "native-tools.json");
 
@@ -186,8 +196,8 @@ function explorationSegments(command: string, contract: NativeToolContract | und
  * `awk`) and nothing writes. The contract argument defaults to the shared file
  * only when OMITTED; an explicit undefined (unreadable contract) → false, fail open.
  */
-export function isExplorationShell(command: string, ...contract: [NativeToolContract | undefined?]): boolean {
-	return explorationSegments(command, contract.length ? contract[0] : loadNativeTools()) !== undefined;
+export function isExplorationShell(command: string, ...contract: [contract?: NativeToolContract | undefined]): boolean {
+	return explorationSegments(command, contract.length ? contract[0] : (loadNativeTools() ?? undefined)) !== undefined;
 }
 
 /** The lean-ctx replacement a session can reach right now (structurally index.ts LeanReplacement). */
@@ -199,8 +209,8 @@ export type ExplorationRoute = { via: "tool"; name: string } | { via: "device"; 
  * (find/fd), else ctx_shell; a mixed pipeline → ctx_shell. undefined when the
  * command is not exploration-only. Twin: dispatch_tripwire._exploration_deny.
  */
-export function explorationTool(command: string, ...contract: [NativeToolContract | undefined?]): string | undefined {
-	const segments = explorationSegments(command, contract.length ? contract[0] : loadNativeTools());
+export function explorationTool(command: string, ...contract: [contract?: NativeToolContract | undefined]): string | undefined {
+	const segments = explorationSegments(command, contract.length ? contract[0] : (loadNativeTools() ?? undefined));
 	if (!segments) return undefined;
 	const tools = new Set(segments.map(t => EXPLORATION_TOOL[t[0]] ?? "ctx_shell"));
 	return tools.size === 1 ? [...tools][0] : "ctx_shell";
@@ -215,7 +225,7 @@ export function explorationTool(command: string, ...contract: [NativeToolContrac
 export function explorationDenyReason(
 	command: string,
 	route: ExplorationRoute,
-	...contract: [NativeToolContract | undefined?]
+	...contract: [contract?: NativeToolContract | undefined]
 ): string | undefined {
 	const tool = explorationTool(command, ...contract);
 	if (!tool) return undefined;
