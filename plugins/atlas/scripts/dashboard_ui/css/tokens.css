@@ -1,74 +1,95 @@
-/* Atlas Workboard v2 design tokens. Dark-first; light via [data-theme="light"];
-   density via [data-density]. Binding for every page module. */
+/* Atlas Command Center design tokens (MASTER sections 5.1-5.7). Dark-first; light via [data-theme="light"];
+   system via prefers-color-scheme; density via [data-density]. Run design/contrast.py after any palette change. */
 :root,
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #0e1213;
-  --surface-1: #151b1e;
-  --surface-2: #1b2226;
-  --surface-3: #232b30;
-  --border: #2b3539;
-  --border-strong: #3a474c;
-  --text: #e8edef;
-  --text-dim: #98a5aa;
+  --bg: #0c1215;
+  --chrome: #090e11;
+  --surface-1: #121a1e;
+  --surface-2: #19232a;
+  --surface-3: #212e36;
+  --border: #263540;
+  --border-strong: #62798a;
+  --text: #e6edf0;
+  --text-dim: #9fb0b8;
+  --text-faint: #8394a0;
   --accent: #2fbd9f;
-  --accent-ink: #06201a;
-  --ok: #3fb950;
-  --warn: #e0823c;
-  --fail: #f8514f;
-  --info: #a690f7;
-  --working: #f2c14e;
-  --idle: #7d8c94;
-  --overlay: rgba(4, 7, 8, 0.62);
-  --shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
-  --focus: #6fd6bf;
+  --accent-hover: #4fd1b5;
+  --accent-ink: #05211b;
+  --accent-text: #3fcfb0;
+  --focus: #7fe0cb;
+  --st-ok: #52c872;
+  --st-working: #62b8e6;
+  --st-input: #f2aa40;
+  --st-fail: #ff7570;
+  --st-idle: #93a4ac;
+  --st-sub: #b5a3fa;
+  --fail-ink: #1a0605;
+  --overlay: rgba(3, 7, 9, 0.62);
+  --elev-1: 0 6px 18px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--border-strong);
+  --elev-2: -14px 0 36px rgba(0, 0, 0, 0.45);
+  --elev-3: 0 24px 64px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--border-strong);
 }
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --bg: #f4f7f7;
+  --bg: #f2f6f7;
+  --chrome: #e8eef0;
   --surface-1: #ffffff;
-  --surface-2: #eef2f3;
-  --surface-3: #e3e9eb;
-  --border: #d3dcdf;
-  --border-strong: #b4c1c6;
-  --text: #14222a;
-  --text-dim: #4d5f67;
+  --surface-2: #edf2f4;
+  --surface-3: #e0e8eb;
+  --border: #d0dbdf;
+  --border-strong: #73868f;
+  --text: #12222a;
+  --text-dim: #465962;
+  --text-faint: #566a74;
   --accent: #0c7d6c;
+  --accent-hover: #096354;
   --accent-ink: #ffffff;
-  --ok: #1a7f37;
-  --warn: #a84d0c;
-  --fail: #c4292d;
-  --info: #6a45c9;
-  --working: #8a5a00;
-  --idle: #566670;
-  --overlay: rgba(20, 34, 42, 0.42);
-  --shadow: 0 8px 28px rgba(20, 34, 42, 0.18);
-  --focus: #0c7d6c;
+  --accent-text: #0a6e5f;
+  --focus: #0a6e5f;
+  --st-ok: #17692f;
+  --st-working: #0a6396;
+  --st-input: #8a4b00;
+  --st-fail: #ac211a;
+  --st-idle: #4f616a;
+  --st-sub: #5b3bb8;
+  --fail-ink: #ffffff;
+  --overlay: rgba(18, 34, 42, 0.38);
+  --elev-1: 0 6px 18px rgba(18, 34, 42, 0.14), 0 0 0 1px var(--border);
+  --elev-2: -14px 0 36px rgba(18, 34, 42, 0.16);
+  --elev-3: 0 24px 64px rgba(18, 34, 42, 0.2), 0 0 0 1px var(--border);
 }
 
 @media (prefers-color-scheme: light) {
   :root[data-theme="system"] {
     color-scheme: light;
-    --bg: #f4f7f7;
+    --bg: #f2f6f7;
+    --chrome: #e8eef0;
     --surface-1: #ffffff;
-    --surface-2: #eef2f3;
-    --surface-3: #e3e9eb;
-    --border: #d3dcdf;
-    --border-strong: #b4c1c6;
-    --text: #14222a;
-    --text-dim: #4d5f67;
+    --surface-2: #edf2f4;
+    --surface-3: #e0e8eb;
+    --border: #d0dbdf;
+    --border-strong: #73868f;
+    --text: #12222a;
+    --text-dim: #465962;
+    --text-faint: #566a74;
     --accent: #0c7d6c;
+    --accent-hover: #096354;
     --accent-ink: #ffffff;
-    --ok: #1a7f37;
-    --warn: #a84d0c;
-    --fail: #c4292d;
-    --info: #6a45c9;
-    --working: #8a5a00;
-    --idle: #566670;
-    --overlay: rgba(20, 34, 42, 0.42);
-    --shadow: 0 8px 28px rgba(20, 34, 42, 0.18);
-    --focus: #0c7d6c;
+    --accent-text: #0a6e5f;
+    --focus: #0a6e5f;
+    --st-ok: #17692f;
+    --st-working: #0a6396;
+    --st-input: #8a4b00;
+    --st-fail: #ac211a;
+    --st-idle: #4f616a;
+    --st-sub: #5b3bb8;
+    --fail-ink: #ffffff;
+    --overlay: rgba(18, 34, 42, 0.38);
+    --elev-1: 0 6px 18px rgba(18, 34, 42, 0.14), 0 0 0 1px var(--border);
+    --elev-2: -14px 0 36px rgba(18, 34, 42, 0.16);
+    --elev-3: 0 24px 64px rgba(18, 34, 42, 0.2), 0 0 0 1px var(--border);
   }
 }
 
@@ -82,47 +103,86 @@
   --s-6: 24px;
   --s-8: 32px;
   --s-10: 40px;
+  --s-12: 48px;
 
-  --r-1: 6px;
-  --r-2: 10px;
-  --r-3: 14px;
+  /* radius tiers */
+  --r-1: 4px;
+  --r-2: 8px;
+  --r-3: 12px;
+  --r-pill: 999px;
 
-  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-  --fs-base: 13px;
-  --fs-sm: 12px;
-  --fs-xs: 11.5px;
-  --fs-lg: 15px;
+  --font-sans: "Pretendard Variable", Pretendard, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono Web", ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --fs-2xs: 11px;
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-md: 14px;
+  --fs-lg: 16px;
   --fs-xl: 20px;
-  --fs-kpi: 26px;
-  --lh: 1.5;
+  --fs-2xl: 28px;
 
-  --sidebar-w: 224px;
-  --topbar-h: 48px;
+  /* layout */
+  --rail-w: 232px;
+  --topbar-h: 52px;
+  --inspector-w: 420px;
   --content-max: 1320px;
+  --page-pad: 24px;
 
-  /* density-controlled */
-  --pad-card: var(--s-4);
-  --pad-row: var(--s-3);
-  --gap: var(--s-4);
+  /* density: comfortable */
+  --fs-body: 14px;
   --ctl-h: 32px;
+  --row-h: 40px;
+  --tree-row-h: 36px;
+  --pad-card: 16px;
+  --pad-row: 12px;
+  --gap: 16px;
+  --cell-w: 56px;
+  --cell-h: 64px;
 
-  --dur-fast: 120ms;
-  --dur: 180ms;
+  /* motion */
+  --dur-instant: 0ms;
+  --dur-fast: 100ms;
+  --dur: 160ms;
+  --dur-slow: 240ms;
+  --dur-live: 600ms;
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-linear: linear;
+
+  /* z-index */
+  --z-sticky: 10;
+  --z-chrome: 20;
+  --z-popover: 40;
+  --z-drawer: 50;
+  --z-modal: 60;
+  --z-toast: 70;
 }
 
 :root[data-density="compact"] {
-  --pad-card: var(--s-3);
-  --pad-row: var(--s-2);
-  --gap: var(--s-3);
+  --fs-body: 13px;
   --ctl-h: 28px;
+  --row-h: 30px;
+  --tree-row-h: 28px;
+  --pad-card: 12px;
+  --pad-row: 8px;
+  --gap: 12px;
+  --cell-w: 44px;
+  --cell-h: 50px;
+}
+
+@media (min-width: 1920px) {
+  :root { --inspector-w: 480px; }
+}
+
+@media (max-width: 767px) {
+  :root { --page-pad: 16px; --topbar-h: 48px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   :root {
     --dur-fast: 0ms;
     --dur: 0ms;
+    --dur-slow: 0ms;
   }
   *,
   *::before,

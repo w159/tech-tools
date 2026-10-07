@@ -1,3 +1,13 @@
+import os as _iso_os
+import sys as _iso_sys
+
+_iso_sys.path.insert(
+    0,
+    _iso_os.path.join(
+        _iso_os.path.dirname(_iso_os.path.abspath(__file__)), "..", "scripts"
+    ),
+)
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import io
 import json
 import os
@@ -6,6 +16,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import re
 from datetime import datetime, timezone
 import time
 from pathlib import Path
@@ -2889,7 +2900,10 @@ class ContractVisibilityTest(unittest.TestCase):
         self.assertIn("[<phase>] ", out)
         self.assertIn("scaffold --task", out)
         self.assertIn("--session", out)
-        self.assertIn("${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py", out)
+        self.assertNotIn("CLAUDE_PLUGIN_ROOT", out)
+        m = re.search(r'python3 \\"([^"\\]*atlas_todo\.py)\\" scaffold', out)
+        self.assertIsNotNone(m, out)
+        self.assertTrue(os.path.isabs(m.group(1)) and os.path.exists(m.group(1)))
 
     def test_o_passes_when_prefixes_cover_required_phases(self):
         self.assertEqual(self.say(), "")

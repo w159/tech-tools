@@ -29,6 +29,7 @@
  */
 import { statSync } from "node:fs";
 import * as nodePath from "node:path";
+import { resolveTarget } from "./contracts";
 import { type ToolEventInfo, claudeNamesForCall, taskItems } from "./hook-bridge";
 import { runCapture } from "./proc";
 
@@ -101,14 +102,14 @@ function editedPath(input: unknown, cwd: string): string | undefined {
 	if (!input || typeof input !== "object") return undefined;
 	const { path, paths } = input as { path?: unknown; paths?: unknown };
 	const first = typeof path === "string" ? path : Array.isArray(paths) && typeof paths[0] === "string" ? paths[0] : undefined;
-	return first && !first.includes("://") ? nodePath.resolve(cwd, first) : undefined;
+	return first && !first.includes("://") ? resolveTarget(cwd, first) : undefined;
 }
 
 export function createRunStateSink(deps: RunStateDeps = {}): RunStateSink & { idle(): Promise<void> } {
 	const script = deps.script ?? RUNSTATE_SCRIPT;
 	const run = deps.run ?? defaultRun;
 	let available: boolean | undefined;
-	let began = false;
+	let beganFor: string | undefined;
 	const inflight = new Set<Promise<void>>();
 	// Every call() is appended to this one tail so the CLI processes never overlap: `begin` from session start and from
 	// the first turn would otherwise run as concurrent python processes (check-then-insert race on the runs table), and
@@ -146,8 +147,8 @@ export function createRunStateSink(deps: RunStateDeps = {}): RunStateSink & { id
 			await Promise.all([...inflight]);
 		},
 		onSessionStart({ cwd, sessionId, kind }) {
-			if (kind === "sub" || began || !sessionId) return;
-			began = true;
+			if (kind === "sub" || beganFor === sessionId || !sessionId) return;
+			beganFor = sessionId;
 			call(["begin", { sessionId, cwd }], ["snapshot", { sessionId, cwd }]);
 		},
 		onTurnStart({ cwd, sessionId, kind }) {

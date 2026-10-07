@@ -1,7 +1,9 @@
 // Overview: KPIs, attention feed (actionable only), trend, recent runs.
 
 import { h, debounce, fmtRelative } from "../dom.js";
+import { stableJson } from "../api.js";
 import { Kpi, Card, Badge, StatusDot, Table, LineChart, EmptyState, toastError } from "../components.js";
+import { IntegrationsRow } from "../integrations.js";
 
 function attentionItem(item, ctx) {
   const sev = item.severity === "fail" || item.severity === "warn" ? item.severity : "info";
@@ -41,6 +43,7 @@ function runsTable(rows) {
 }
 
 let refresher = null;
+let lastKey = "";
 
 export default {
   id: "overview",
@@ -54,6 +57,7 @@ export default {
 
   render(ctx, data) {
     const d = data || {};
+    lastKey = stableJson(d);
     const kpis = d.kpis || [];
     const attention = d.attention || [];
     ctx.store.set("attention", attention);
@@ -68,8 +72,9 @@ export default {
         h("div", null, h("h1", null, "Overview"), h("p", { class: "sub" }, ctx.project === "all" ? "Everything Atlas touched across your projects in the last 7 days." : "Last 7 days in " + (ctx.project.split("/").filter(Boolean).pop() || ctx.project) + "."))
       )
     );
+    root.appendChild(IntegrationsRow());
 
-    root.appendChild(kpis.length ? h("div", { class: "kpi-grid" }, kpis.map((k) => Kpi({ label: k.label, value: k.value, delta: k.delta, status: k.status, hint: k.hint, onClick: k.id === "agents" ? () => ctx.navigate("colony") : k.id === "todos" ? () => ctx.navigate("work") : null }))) : null);
+    root.appendChild(kpis.length ? h("div", { class: "kpi-grid" }, kpis.map((k) => Kpi({ label: k.label, value: k.value, delta: k.delta, status: k.status, hint: k.hint, onClick: k.id === "agents" ? () => ctx.navigate("herd") : k.id === "todos" ? () => ctx.navigate("work") : null }))) : null);
 
     const attn = Card({
       id: "attention",
@@ -97,12 +102,15 @@ export default {
   },
 
   onEvent(evt, ctx) {
-    if (evt !== "health" && evt !== "colony" && evt !== "todos") return;
+    if (evt !== "health" && evt !== "herd" && evt !== "todos" && !(evt === "tick" && ctx.api.mode === "poll")) return;
     if (!refresher) {
       refresher = debounce(async () => {
         try {
           const data = await ctx.api.get("overview", { project: ctx.project, window: "7d" });
           ctx.store.set("attention", data.attention || []);
+          const key = stableJson(data);
+          if (key === lastKey) return;
+          lastKey = key;
           const host = document.getElementById("page-root");
           const old = document.getElementById("overview-root");
           if (host && old) host.replaceChild(this.render(ctx, data), old);

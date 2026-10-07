@@ -6,6 +6,15 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 
 ## In Progress
 
+- [in-progress] Colony rebuild on herdr (2026-10-07, atlas 10.1.2): vendored
+  herdr-web-ui + pinned herdr 0.9.3, `/atlas/**` gateway, herdr transport,
+  `atlas_remote.py`, `session_boot.ensure_colony` are documented in
+  `docs/atlas-colony.md` and covered by unit and fixture tests (fake herdr
+  socket, fake tailscale). Not yet observed end to end here: a full
+  lead -> `atlas_launch` -> real herdr pane -> dashboard IRC prompt delivery
+  round trip on a clean machine, a first-run `bun install` + build via
+  `session_boot`, and a phone reaching the `tailscale serve` URL. To close:
+  run those three on a fresh install and record the result.
 - [in-progress] atlas 9.5.1 is verified in source, but source/installed parity is
   only enforced opportunistically: `InstalledParityContract`
   (`hooks/test_atlas_contract.py:579`) skips while the installed plugin cache is not
@@ -68,7 +77,9 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
   `graphify-wiring.md` x2 (identical), `self-telemetry.md` x2 (differ by 3
   lines), `docs-ssot.md` x2 (differ by 61 lines). Decide whether to merge to
   one canonical copy per pair or keep both with a documented reason.
-- The 9.0.0 omp fixes (`atlas_mux.py` `FORWARDED_ENV` widening, omp
+- The 9.0.0 omp fixes (`atlas_mux.py` `FORWARDED_ENV` widening (tmux-era;
+  as of 2026-10-07 workers are herdr panes by default and `FORWARDED_ENV` is
+  applied by `pane_env`/`pane_command`, see `docs/atlas-colony.md`), omp
   plugin-enablement detection via `omp-plugins.lock.json`, the
   `outputStyle`/`TodoWrite`-gating fixes in `omp/style.ts` and
   `hooks/session_boot.py`) were verified by `bun test` (245 pass, 0 fail) and

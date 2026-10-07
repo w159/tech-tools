@@ -6,6 +6,7 @@ omp session (entry types, toolCall/toolResult shapes, colony + advisor files)
 with every piece of text and every tool argument replaced by synthetic content.
 """
 
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import collections
 import json
 import os
@@ -493,7 +494,8 @@ class GateEndToEndTest(_TmpCase):
         with open(os.path.join(self.proj, "README.md"), "w") as fh:
             fh.write("# readme\n")
         _git(self.proj, "init", "-q")
-        self.env = dict(os.environ, ATLAS_DB=self.db, ATLAS_HOOKSTATE_DIR=os.path.join(self.tmp, "hs"))
+        self.env = dict(os.environ, ATLAS_DB=self.db, ATLAS_HOOKSTATE_DIR=os.path.join(self.tmp, "hs"),
+                        ATLAS_CONTRACT_GATE_DIR=os.path.join(self.tmp, "markers"))
         self.env.pop("ATLAS_GATE", None)
 
     def runstate(self, *argv):
@@ -638,6 +640,7 @@ class GateConditionMatrixTest(GateEndToEndTest):
         self.runstate("event", "--tool", "Task", "--dispatch", "atlas:verifier")
         time.sleep(1.1)  # evidence/findings must be NEWER than the run start
         self._evidence_and_verified_finding()
+        self._visibility_ok()
         with open(os.path.join(self.proj, "docs", "CHANGELOG.md"), "a") as fh:
             fh.write(f"entry {time.time()}\n")
         os.makedirs(os.path.join(self.proj, "src"), exist_ok=True)
@@ -668,6 +671,40 @@ class GateConditionMatrixTest(GateEndToEndTest):
         os.makedirs(os.path.dirname(p), exist_ok=True)
         with open(p, "w") as fh:
             fh.write(text)
+
+    def _visibility_ok(self):
+        """(o) the plan carries the required phases; (p) a worker posted a handoff."""
+        self._plan_phases()
+        self._worker_note()
+
+    def _plan_phases(self):
+        import atlas_todo
+        atlas_todo.mirror(self.proj, [{"content": "[implement] do it", "status": "completed"},
+                                      {"content": "[verify] check it", "status": "completed"}], self.SID)
+
+    def _worker_note(self, owner="W", channel=None):
+        """A worker handoff on the colony channel, as `atlas_todo.py note` writes it
+        (board/<owner>.jsonl; `channel` is the main channel or a `<main>/<lead>` subchannel)."""
+        import atlas_todo
+        atlas_todo.note(self.proj, owner, "handoff", to="lead", channel=channel)
+
+    def _no_channel_traffic(self):
+        shutil.rmtree(os.path.join(self.proj, ".atlas", ".run", "board", "notes"), ignore_errors=True)
+        import atlas_todo
+        for f in atlas_todo.notes_dir(self.proj).glob("*.jsonl"):
+            f.unlink()
+
+    def test_condition_p_blocks_when_workers_dispatched_and_channel_silent(self):
+        out = self._satisfied()
+        self._no_channel_traffic()
+        self.assertEqual(self._letters(self.gate(out)), ["p"])
+
+    def test_condition_p_passes_when_worker_posted_to_lead_subchannel(self):
+        import atlas_todo
+        out = self._satisfied()
+        self._no_channel_traffic()
+        self._worker_note(channel=atlas_todo.main_channel(self.proj) + "/lead")
+        self.assertIsNone(self.gate(out))
 
     def test_baseline_with_every_condition_satisfied_passes(self):
         self.assertIsNone(self.gate(self._satisfied()))
@@ -709,6 +746,7 @@ class GateConditionMatrixTest(GateEndToEndTest):
         self.runstate("event", "--tool", "Edit", "--path", "src/app.py")
         time.sleep(1.1)
         self._evidence_and_verified_finding()
+        self._plan_phases()
         with open(os.path.join(self.proj, "docs", "CHANGELOG.md"), "a") as fh:
             fh.write("entry\n")
         t = _iso(datetime.now(timezone.utc) + timedelta(seconds=5))
@@ -745,6 +783,7 @@ class GateConditionMatrixTest(GateEndToEndTest):
         self.runstate("event", "--tool", "Task", "--dispatch", "atlas:verifier")
         time.sleep(1.1)
         self._evidence_and_verified_finding()
+        self._worker_note()  # (p) satisfied; (o)/(p) are once-per-session, so (o) shows on the first Stop only
         with open(os.path.join(self.proj, "docs", "CHANGELOG.md"), "a") as fh:
             fh.write("entry\n")
 
@@ -765,7 +804,7 @@ class GateConditionMatrixTest(GateEndToEndTest):
             _write_jsonl(path, rows)
             return self.convert(path)[0]
 
-        self.assertEqual(self._letters(self.gate(session(None))), ["k"])
+        self.assertEqual(self._letters(self.gate(session(None))), ["k", "o"])
         self.assertEqual(self._letters(self.gate(session("in_progress"))), ["i"])
         self.assertIsNone(self.gate(session("completed")))
 

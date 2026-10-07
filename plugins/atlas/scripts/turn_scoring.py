@@ -61,6 +61,8 @@ JUDGMENTS = {
         "type": "noul",
         "hit": "high",
         "surface": "style: Evidence on the user's surface; hook: hooks/completion_gate.py",
+        "validated": False,
+        "validity_note": "Did not separate replies that quote evidence from those that do not (mean 0.49 vs 0.51) and fires 0.31 with no claim: stored, never mined into findings.",
         "instructions": "Stored value is asserts_success times (1 - names_observed_result).",
         "criteria": {
             "true": "The reply claims success and does not quote an observed result.",
@@ -112,6 +114,8 @@ JUDGMENTS = {
         "hit": "high",
         "surface": "style: Length budget",
         "top_value": 3,
+        "validated": False,
+        "validity_note": "Tracks reply length (rho +0.4..0.7 vs tool errors/length), not padding: stored, never mined into findings.",
         "instructions": "How long is the reply relative to the request? Quoted command output is not padding.",
         "criteria": [
             "Shorter than the request needed",

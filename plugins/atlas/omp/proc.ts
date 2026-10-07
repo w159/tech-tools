@@ -9,7 +9,7 @@
  * command string — and the child leads its own process group so a timeout
  * kills the whole command tree.
  */
-import { spawn, spawnSync } from "node:child_process";
+import { type SpawnSyncOptions, spawn, spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as nodePath from "node:path";
@@ -125,7 +125,8 @@ export function runCapture(argv: string[], opts: CaptureOpts = {}): Promise<Capt
 export function runCaptureSync(argv: string[], opts: CaptureOpts = {}): CaptureResult {
 	const dir = prepare(opts);
 	try {
-		const result = spawnSync("/bin/sh", ["-c", SCRIPT, "sh", ...argv], {
+		// `detached` is honoured by node/bun spawnSync but missing from its option typings.
+		const result = spawnSync("/bin/sh", ["-c", SCRIPT, "sh", ...argv], <SpawnSyncOptions>{
 			detached: true,
 			stdio: "ignore",
 			cwd: opts.cwd,

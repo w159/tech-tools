@@ -77,7 +77,7 @@ atlas/
 |   `-- validate-readonly-query.sh #   not auto-loaded; DB-audit subagents wire it during read-only audits
 |-- scripts/                       # 25 non-test tools, each with a test_*.py beside it: atlas_doctor.py (repair + --mine miners; also wired via hooks.json --hook, SessionStart),
 |                                  # atlas_db.py (observability), atlas_todo.py (durable todo board + notes), atlas_finding.py (verifier's findings.json write path),
-|                                  # atlas_dashboard.py + atlas_control.py (local dashboard and its control plane), atlas_mux.py (tmux colony mode), atlas_packs.py,
+|                                  # atlas_dashboard.py + atlas_control.py (local dashboard and its control plane), atlas_mux.py (colony workers: herdr panes, tmux fallback), atlas_herdr.py + atlas_launch.py + atlas_remote.py (herdr colony, pinned binary, tailnet access), atlas_packs.py,
 |                                  # atlas_memory.py, atlas_curator.py, atlas_context_optimizer.py, atlas_hook_guard.py, session_ingest.py, sweep_state.py,
 |                                  # tool_routing.py, turn_scoring.py, typesafe_client.py, lint_docs_names.py (gate condition (l)), lint_skill_names.py,
 |                                  # asset_audit.py, discover_capabilities.py, build_hub.py, install_hooks.py
@@ -231,7 +231,7 @@ omp inline-op, production-edit and dispatch-spec denies are tested against the
 real hook but not observed in a live omp session; and the delegation-policy
 decision (the lead may still edit inline and then dispatch a verifier).
 Row-by-row status and how each surface is created, read, updated, and deleted:
-[docs/atlas-harness-parity.md](docs/atlas-harness-parity.md).
+[docs/atlas-harness-parity.md](../../docs/atlas-harness-parity.md).
 
 ## Colony work (shared board + notes)
 
@@ -260,9 +260,9 @@ thinking setting -- subagents inherit the session's thinking (per
 code.claude.com/docs/en/sub-agents) -- so worker cost there is controlled by
 each agent's existing `model:`/`effort:` frontmatter.
 
-## Local dashboard (Atlas Workboard)
+## Local dashboard (Atlas Command Center)
 
-Open `http://127.0.0.1:7421/` once. All concurrent terminals share it; switch scope with the project switcher. The Workboard is a static single-page UI (`scripts/dashboard_ui/`) with nine pages in four groups: **Observe** (Overview with an attention feed, Activity, Health), **Operate** (Colony: tmux rigs and agents with live state, stuck diagnosis and a typing guard before text is sent into a pane; Work: the durable todo board `<project>/.atlas/.run/todos.json`; IRC: board notes and messages, each with a delivery status of `queued`, `read`, `delivered` or `refused`), **Improve** (doctor findings, ledger, remeasure), and **Configure** (Projects; Settings for Behavior knobs, Ecosystem toggles, a per-connector credential form with password inputs that never echo saved values plus connector test/enable, and an Agents editor for per-project agent overrides). It updates over Server-Sent Events (`/api/v2/stream`, a 5 s tick with hash-gated `colony`/`todos`/`irc`/`health` events and a 15 s heartbeat) and only falls back to polling every 8 s if the stream drops. Preferences persist in `~/.atlas/dashboard-prefs.json`. Keyboard: `Ctrl/Cmd+K` palette, `/` search, `g` then a letter to jump, `?` for the list. Manual todos never block the completion gate. Product overview: `docs/atlas-workboard.md`.
+Open `http://127.0.0.1:7421/` once. All concurrent terminals share it; switch scope with the project switcher. The Command Center is a static single-page UI (`scripts/dashboard_ui/`) with a rail of four groups: **Observe** (Overview with an attention feed, Activity, Health with measured/not-measured subsystems), **Operate** (Agents with three lenses: Fleet, the live herdr agents with state, a prompt box that only reaches idle agents and an inspector; Board, the durable todo board `<project>/.atlas/.run/todos.json`; Channel, per-branch and per-lead message channels, see `docs/atlas-channels.md`, each message with a delivery status of `queued`, `read`, `delivered`, `refused` or `undeliverable`; plus Colony, its own page that frames the full herdr web UI edge to edge, and a live workspace/tab/agent tree), **Improve** (doctor findings, ledger, remeasure), and **Configure** (Projects; Settings for Behavior knobs, Ecosystem toggles, a per-connector credential form with password inputs that never echo saved values plus connector test/enable, and an Agents editor for per-project agent overrides). It updates over Server-Sent Events (`/api/v2/stream`, a 5 s tick with hash-gated `herd`/`agents`/`todos`/`irc`/`health`/`improve` events and a 15 s heartbeat) and only falls back to polling every 8 s if the stream drops. Preferences persist in `~/.atlas/dashboard-prefs.json`. Keyboard: `Ctrl/Cmd+K` palette, `/` search, `g` then a letter to jump, `?` for the list. Manual todos never block the completion gate. Product overview: `docs/atlas-workboard.md`.
 
 ## Local dashboard API
 
@@ -272,7 +272,7 @@ For a browser UI (or any local client) that needs live visibility into runs, the
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_dashboard.py" serve --port 7421
 ```
 
-Loopback-only JSON API: `serve` refuses a non-loopback `--host` (anything besides `127.0.0.1`, `::1`, or `localhost`) unless `--allow-remote` is also passed. Every request passes a central guard: the `Host` must be this dashboard (`403 bad_host`), mutations must send `Content-Type: application/json` (`415`), a present `Origin` must be this dashboard (`403 bad_origin`), and mutations plus the live stream and transcript-like GETs need the per-daemon `X-Atlas-Token` (`401 bad_token`; the page carries it in `<meta name="atlas-token">`, and `EventSource` passes `?token=` on `/api/v2/stream`). `/api/health` needs only the Host check. The v1 routes (`/api/status`, `/api/sessions`, `/api/connectors`, `/api/todo`, `/api/agents`, `/api/memory`, ...) remain beside the `/api/v2/*` colony, todos, IRC, overview, health, activity, improve, projects and prefs routes. See `skills/atlas-orchestrate/references/dashboard-api.md`.
+Loopback-only JSON API: `serve` refuses a non-loopback `--host` (anything besides `127.0.0.1`, `::1`, or `localhost`) unless `--allow-remote` is also passed. Every request passes a central guard: the `Host` must be this dashboard (`403 bad_host`), mutations must send `Content-Type: application/json` (`415`), a present `Origin` must be this dashboard (`403 bad_origin`), and mutations plus the live stream and transcript-like GETs need the per-daemon `X-Atlas-Token` (`401 bad_token`; the page carries it in `<meta name="atlas-token">`, and `EventSource` passes `?token=` on `/api/v2/stream`). `/api/health` needs only the Host check. The v1 routes (`/api/status`, `/api/sessions`, `/api/connectors`, `/api/todo`, `/api/agents`, `/api/memory`, ...) remain beside the `/api/v2/*` herd, todos, IRC, overview, health, activity, improve, projects and prefs routes. Remote access never opens this port: the vendored herdr web UI (`colony/herdr-web-ui`, `127.0.0.1:7317`) runs its own auth and proxies the dashboard same-origin at `/atlas/**`. See `skills/atlas-orchestrate/references/dashboard-api.md`.
 
 ## Self-improvement
 

@@ -2,9 +2,7 @@
 name: atlas-audit
 description: "Audits a codebase in three modes: CODE (default) for quality, security, risk hotspots, dead code and docs drift with adversarially verified findings; ARCHITECTURE for feature flowcharts, duplication and a simpler unified design; SELF for atlas run health and context waste. Use when asked to audit a repo, map its architecture before a refactor, or check atlas's own health."
 when_to_use: "full-codebase quality or security audit, OWASP review, architecture map, find duplication, dead code, coverage gaps, atlas run health, session transcript forensics"
-allowed-tools: Read, Glob, Grep, Bash
-context: fork
-agent: general-purpose
+allowed-tools: Read, Glob, Grep, Bash, Agent, Task
 ---
 
 

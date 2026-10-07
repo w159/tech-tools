@@ -1,3 +1,4 @@
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import contextlib
 import io
 import json
@@ -2386,6 +2387,76 @@ class HarnessAgentLabelIngestTest(unittest.TestCase):
         self._ingest(self.main, None)
         self._ingest(self.sub, None)
         self.assertEqual(self._agent(), "claude")
+
+
+class OmpDispatchAccountingTest(unittest.TestCase):
+    """omp logs no PreToolUse dispatch rows; ingest tops them up from the
+    session's own task tool_calls so dispatch metrics see omp, idempotently."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.conn = atlas_db.connect(os.path.join(self.tmp, "atlas.db"))
+        atlas_db.init(self.conn)
+        self.addCleanup(self.conn.close)
+        self.path = os.path.join(self.tmp, f"{SID}.jsonl")
+
+    def _transcript(self, n_tasks):
+        lines = [_msg("u1", "user", [{"type": "text", "text": "Fan the work out."}])]
+        for i in range(n_tasks):
+            lines.append(
+                _msg(
+                    f"a{i}",
+                    "assistant",
+                    [
+                        {
+                            "type": "tool_use",
+                            "id": f"tk{i}",
+                            "name": "Task",
+                            "input": {"agent": "implementer", "task": f"slice {i}"},
+                        }
+                    ],
+                )
+            )
+        with open(self.path, "w") as f:
+            f.write("\n".join(lines) + "\n")
+
+    def _ingest(self, harness):
+        env = {"ATLAS_HARNESS": harness} if harness else {}
+        with mock.patch.dict(os.environ, env):
+            if not harness:
+                os.environ.pop("ATLAS_HARNESS", None)
+            session_ingest.ingest_transcript(self.path, conn=self.conn, session_id=SID)
+
+    def _dispatches(self):
+        return self.conn.execute(
+            "SELECT agent_type FROM dispatches d JOIN runs r ON r.id=d.run_id "
+            "WHERE r.session_id=?",
+            (SID,),
+        ).fetchall()
+
+    def test_omp_task_calls_become_dispatch_rows_once(self):
+        self._transcript(3)
+        self._ingest("omp")
+        self.assertEqual(self._dispatches(), [("implementer",)] * 3)
+        self._ingest("omp")  # re-ingest, nothing new: no duplicates
+        self.assertEqual(len(self._dispatches()), 3)
+        self._transcript(5)
+        self._ingest("omp")  # incremental growth tops up by exactly the delta
+        self.assertEqual(len(self._dispatches()), 5)
+
+    def test_rows_the_harness_already_logged_are_kept_not_doubled(self):
+        self._transcript(3)
+        pid = atlas_db.register_project(self.conn, "/repo/demo")
+        rid = atlas_db.start_run(self.conn, pid, SID)
+        atlas_db.log_dispatch(self.conn, rid, "atlas:worker")  # the harness's own row
+        self.conn.commit()
+        self._ingest("omp")
+        self.assertEqual(len(self._dispatches()), 3)
+
+    def test_claude_sessions_are_untouched(self):
+        self._transcript(3)
+        self._ingest(None)
+        self.assertEqual(self._dispatches(), [])
 
 
 if __name__ == "__main__":

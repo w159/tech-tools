@@ -41,16 +41,22 @@ import json
 import os
 import re
 import sys
+import subprocess
 import time
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from atlas_memory import _file_lock  # noqa: E402
+from atlas_memory import LockTimeout, _file_lock  # noqa: E402
 
 STATUSES = ("pending", "in_progress", "completed")
-ORIGINS = ("session", "carried", "manual")
+ORIGINS = ("session", "carried", "manual", "advisor")
+_KEEP_ORIGINS = (
+    "manual",
+    "advisor",
+)  # never mirrored away or carried over; sweep() ages advisor notes out
+_ADVISOR_TTL_S = 2 * 3600
 BOARD_DIR = ".atlas/.run"
 BOARD_NAME = "todos.json"
 _CLAIM_STALE_S = 30 * 60  # a claim older than this can be taken over
@@ -318,13 +324,15 @@ def mirror(
         old = [
             i
             for i in board["items"]
-            if i.get("session_id") == session_id and i.get("origin") != "manual"
+            if i.get("session_id") == session_id
+            and i.get("origin") not in _KEEP_ORIGINS
         ]
-        manual = [i for i in board["items"] if i.get("origin") == "manual"]
+        manual = [i for i in board["items"] if i.get("origin") in _KEEP_ORIGINS]
         others = [
             i
             for i in board["items"]
-            if i.get("origin") != "manual" and i.get("session_id") != session_id
+            if i.get("origin") not in _KEEP_ORIGINS
+            and i.get("session_id") != session_id
         ]
         by_content = {i.get("content"): i for i in old}
 
@@ -404,6 +412,8 @@ def add(
                         "item": existing,
                         "counts": counts(board, session_id),
                     }
+        if content.startswith("advisor[") and origin == "manual":
+            origin = "advisor"
         item = {
             "id": _new_id(),
             "content": content,
@@ -589,7 +599,7 @@ def carry_over(root: Optional[str], session_id: str) -> dict:
         for item in board.get("items", []):
             if (
                 item.get("archived")
-                or item.get("origin") == "manual"
+                or item.get("origin") in _KEEP_ORIGINS
                 or item.get("session_id") == session_id
             ):
                 continue
@@ -599,8 +609,10 @@ def carry_over(root: Optional[str], session_id: str) -> dict:
             else:
                 item["origin"] = "carried"
                 item["session_id"] = session_id
-                item["owner"] = None
-                item["claimed_at"] = None
+                if not item.get("launch"):  # a dashboard-launched agent keeps its claim
+                    item["owner"] = None
+                    item["claimed_at"] = None
+                    item["status"] = "pending"
                 _touch(item)
                 carried += 1
         if carried or archived:
@@ -611,6 +623,93 @@ def carry_over(root: Optional[str], session_id: str) -> dict:
             "archived": archived,
             "counts": counts(board, session_id),
         }
+
+
+def restore(root: Optional[str], item_id: str) -> dict:
+    """Unarchive one item (any prior status) back to pending."""
+    with _file_lock(board_path(root)):
+        board = _locked_load(root)
+        item = _find(board, item_id)
+        if item is None:
+            return {"ok": False, "error": "not_found", "id": item_id}
+        item["archived"] = False
+        item.pop("archived_reason", None)
+        item.pop("archived_at", None)
+        item["status"] = "pending"
+        item["completed_at"] = None
+        item["owner"] = None
+        item["claimed_at"] = None
+        item.pop("launch", None)
+        _touch(item)
+        save(root, board)
+        return {"ok": True, "item": item, "counts": counts(board)}
+
+
+def _launch_live(item: dict) -> bool:
+    target = (item.get("launch") or {}).get("target")
+    if not target:
+        return False
+    import atlas_launch  # lazy: atlas_launch -> atlas_mux -> atlas_todo
+
+    return atlas_launch.is_live(target)
+
+
+def sweep(root: Optional[str], ttl_s: int = 86400) -> int:
+    """Archive (recoverable via restore) unfinished items that are stale, advisor notes of an ended session,
+    and duplicate content. An item with a live launch is never swept. Returns how many were archived."""
+    with _file_lock(board_path(root)):
+        board = _locked_load(root)
+        now = _now()
+        newest = board.get("last_session_id")
+        live: Dict[str, bool] = {}
+
+        def alive(item: dict) -> bool:
+            if item["id"] not in live:
+                live[item["id"]] = bool(item.get("launch")) and _launch_live(item)
+            return live[item["id"]]
+
+        def archive(item: dict, reason: str) -> None:
+            item["archived"] = True
+            item["archived_reason"] = reason
+            item["archived_at"] = now
+
+        def is_advisor(i: dict) -> bool:
+            return i.get("origin") == "advisor" or str(i.get("content", "")).startswith(
+                "advisor["
+            )
+
+        open_items = [
+            i
+            for i in _active(board["items"])
+            if i.get("status") != "completed"
+            and (i.get("origin") != "manual" or is_advisor(i))
+        ]
+        n = 0
+        keep = []
+        for i in open_items:
+            age = now - float(i.get("updated_at") or 0)
+            if alive(i):
+                continue
+            if age > ttl_s:
+                archive(i, "stale")
+            elif (
+                is_advisor(i) and i.get("session_id") != newest and age > _ADVISOR_TTL_S
+            ):
+                archive(i, "advisor_session_ended")
+            else:
+                keep.append(i)
+                continue
+            n += 1
+        newest_by_content: Dict[str, dict] = {}
+        for i in sorted(keep, key=lambda x: float(x.get("updated_at") or 0)):
+            newest_by_content[i.get("content", "")] = i
+        for i in keep:
+            if newest_by_content[i.get("content", "")] is not i:
+                archive(i, "duplicate")
+                n += 1
+        if n:
+            save(root, board)
+        return n
 
 
 # --- notes channel (append-only sibling messaging) -------------------------------
@@ -628,6 +727,21 @@ def _sanitize_owner(owner: Any) -> str:
     return _NOTE_NAME_BAD.sub("_", str(owner or "").strip()) or "anon"
 
 
+def _next_seq(root: Optional[str], target: Path) -> int:
+    """Next board-wide note sequence; the caller holds the notes lock. A missing or
+    corrupt counter is rebuilt from the highest seq already on the board, so notes
+    written before the counter existed (no seq) are simply older than seq 1."""
+    counter = target / ".seq"
+    try:
+        last = int(counter.read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        last = max((_note_seq(r) for r in notes(root)), default=0)
+    tmp = target / ".seq.tmp"
+    tmp.write_text(str(last + 1), encoding="utf-8")
+    os.replace(tmp, counter)
+    return last + 1
+
+
 def note(
     root: Optional[str],
     owner: Any,
@@ -635,48 +749,79 @@ def note(
     to: str = "all",
     item: Optional[str] = None,
     delivery: Optional[str] = None,
+    channel: Optional[str] = None,
 ) -> dict:
     """Append one note to `<root>/.atlas/.run/board/<owner>.jsonl`.
 
-    Only this owner ever writes its own file, so there is no cross-writer
-    contention; the append is one os.write of a single JSON line on an
-    O_APPEND fd. `delivery` ("delivered" | "refused") records the dashboard's
-    own send outcome on the line; it is omitted when unset. Returns the record
-    as written."""
+    Each note gets a board-wide monotonic `seq` and its `ts` under one lock, so the
+    seq order is exactly the append order and a reader cursor on seq cannot skip a
+    note that lands late (a cursor on ts could). The append is one os.write of a
+    single JSON line on an O_APPEND fd. `delivery` ("delivered" | "refused")
+    records the dashboard's own send outcome on the line; it is omitted when unset.
+    Returns the record as written."""
     name = _sanitize_owner(owner)
+    if not (channel or "").strip():
+        _register_worker(root, name)
     target = notes_dir(root)
     target.mkdir(parents=True, exist_ok=True)
     record = {
-        "ts": time.time(),
+        "ts": 0.0,
+        "seq": 0,
         "owner": name,
         "to": to,
         "item": item,
         "text": str(text or ""),
+        "channel": (channel or "").strip() or default_channel(root, name),
     }
     if delivery:
         record["delivery"] = delivery
-    line = (json.dumps(record, separators=(",", ":")) + "\n").encode("utf-8")
-    fd = os.open(
-        str(target / f"{name}{NOTE_FILE_SUFFIX}"),
-        os.O_WRONLY | os.O_APPEND | os.O_CREAT,
-        0o644,
-    )
-    try:
-        os.write(fd, line)
-    finally:
-        os.close(fd)
+    with _file_lock(target / ".seq"):
+        record["seq"] = _next_seq(root, target)
+        record["ts"] = time.time()
+        line = (json.dumps(record, separators=(",", ":")) + "\n").encode("utf-8")
+        fd = os.open(
+            str(target / f"{name}{NOTE_FILE_SUFFIX}"),
+            os.O_WRONLY | os.O_APPEND | os.O_CREAT,
+            0o644,
+        )
+        try:
+            os.write(fd, line)
+        finally:
+            os.close(fd)
     return record
 
 
 def notes(
-    root: Optional[str], to: Optional[str] = None, since: Optional[float] = None
+    root: Optional[str],
+    to: Optional[str] = None,
+    since: Optional[float] = None,
+    consistent: bool = False,
+    channel: Optional[str] = None,
 ) -> List[dict]:
     """Merge every worker's note file: malformed lines are skipped (never
     losing the rest), `to` filters as (to == name or to == 'all'), `since`
-    drops older ts, and the result is sorted by ts."""
+    drops older ts, and the result is sorted by ts.
+
+    The files are scanned one after another, so a plain read can see seq 100 in a
+    later file while seq 99, which landed in an already-scanned file a moment
+    earlier, is missing. A reader that advances a cursor on seq (the worker inbox)
+    passes `consistent=True` to scan under the note lock: every note up to the
+    highest seq it sees is then present."""
     target = notes_dir(root)
     if not target.is_dir():
         return []
+    if consistent:
+        with _file_lock(target / ".seq"):
+            return _scan_notes(target, to, since, channel)
+    return _scan_notes(target, to, since, channel)
+
+
+def _scan_notes(
+    target: Path,
+    to: Optional[str],
+    since: Optional[float],
+    channel: Optional[str] = None,
+) -> List[dict]:
     out: List[dict] = []
     for path in sorted(target.glob(f"*{NOTE_FILE_SUFFIX}")):
         try:
@@ -697,12 +842,14 @@ def notes(
                         and rec.get("to") != "all"
                     ):
                         continue
+                    if channel is not None and rec.get("channel") != channel:
+                        continue
                     if since is not None and _note_ts_key(rec) < since:
                         continue
                     out.append(rec)
         except OSError:
             continue  # unreadable file: skip it, never lose the rest
-    out.sort(key=_note_ts_key)
+    out.sort(key=lambda r: (_note_ts_key(r), _note_seq(r)))
     return out
 
 
@@ -711,6 +858,384 @@ def _note_ts_key(rec: dict) -> float:
         return float(rec.get("ts") or 0)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _note_seq(rec: dict) -> int:
+    """Board-wide sequence of a note; 0 for legacy notes written before seq existed."""
+    try:
+        return int(rec.get("seq") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+# --- channels (IRC model: main per project@branch, one subchannel per lead) ------
+#
+# Registry: <root>/.atlas/.run/channels.json = {"version":1,"channels":{name: chan}}
+# chan = {name, kind: main|lead, parent, lead, members:[{name, role: lead|subagent,
+# parent, joined}], project_root, branch, created, last_activity}. Notes carry a
+# `channel` field and keep the board-wide monotonic `seq` (so a per-channel cursor on
+# seq loses and duplicates nothing). Subchannel name = `<main>/<lead>`.
+
+CHANNELS_NAME = "channels.json"
+
+
+def _git(cwd: str, *args: str) -> Optional[str]:
+    try:
+        r = subprocess.run(
+            ["git", "-C", cwd, *args], capture_output=True, text=True, timeout=5
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    out = r.stdout.strip()
+    return out if r.returncode == 0 and out else None
+
+
+def _main_parts(cwd: Optional[str]) -> tuple:
+    d = os.path.abspath(cwd or os.getcwd())
+    base = os.path.basename(d.rstrip(os.sep)) or d
+    # symbolic-ref also works on an unborn branch; detached/non-repo fall through
+    ref = _git(d, "symbolic-ref", "--short", "-q", "HEAD") or _git(
+        d, "rev-parse", "--short", "HEAD"
+    )
+    return (f"{base}@{ref}" if ref else base), ref
+
+
+def main_channel(cwd: Optional[str] = None) -> str:
+    """`<cwd-basename>@<branch>`; detached HEAD -> `@<short-sha>`; non-git -> basename."""
+    return _main_parts(cwd)[0]
+
+
+def _channels_path(root: Optional[str]) -> Path:
+    return Path(_resolve_base(root)) / BOARD_DIR / CHANNELS_NAME
+
+
+def _reg_read(root: Optional[str]) -> dict:
+    try:
+        data = json.loads(_channels_path(root).read_text(encoding="utf-8"))
+        if isinstance(data, dict) and isinstance(data.get("channels"), dict):
+            return data
+    except (OSError, ValueError):
+        pass
+    return {"version": 1, "channels": {}}
+
+
+CHANNEL_LOCK_TIMEOUT_S = 2.0  # hook/note paths must never hang on a stuck registry lock
+
+
+def _reg_update(root: Optional[str], fn, timeout: Optional[float] = None) -> Any:
+    """Read-modify-write the registry under its lock; returns fn(registry).
+    `timeout` (seconds) bounds the lock wait, raising atlas_memory.LockTimeout."""
+    path = _channels_path(root)
+    with _file_lock(path, timeout):
+        reg = _reg_read(root)
+        out = fn(reg)
+        tmp = path.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(reg, indent=2) + "\n", encoding="utf-8")
+        os.replace(tmp, path)
+        return out
+
+
+def _add_member(chan: dict, name: str, role: str, parent: Optional[str]) -> None:
+    for m in chan["members"]:
+        if m["name"] == name:
+            if role == "lead":
+                m["role"] = "lead"
+            if parent and not m.get("parent"):
+                m["parent"] = parent
+            return
+    chan["members"].append(
+        {"name": name, "role": role, "parent": parent, "joined": time.time()}
+    )
+
+
+def _upsert(
+    reg: dict,
+    name: str,
+    kind: str,
+    parent: Optional[str],
+    lead: Optional[str],
+    base: str,
+    branch: Optional[str],
+) -> dict:
+    chans = reg["channels"]
+    if name not in chans:
+        now = time.time()
+        chans[name] = {
+            "name": name,
+            "kind": kind,
+            "parent": parent,
+            "lead": lead,
+            "members": [],
+            "project_root": base,
+            "branch": branch,
+            "created": now,
+            "last_activity": now,
+        }
+    return chans[name]
+
+
+def ensure_main(root: Optional[str] = None) -> dict:
+    """Create (idempotent) the main channel of this project@branch; returns it."""
+    base = _resolve_base(root)
+    name, branch = _main_parts(base)
+    return _reg_update(
+        root, lambda reg: dict(_upsert(reg, name, "main", None, None, base, branch))
+    )
+
+
+def open_lead_channel(
+    root: Optional[str],
+    lead_name: str,
+    subagents: Any = (),
+    timeout: Optional[float] = None,
+) -> dict:
+    """Open (idempotent) `<main>/<lead>`; the lead joins it and main, each subagent
+    joins it with parent=lead. Returns the subchannel record. `timeout` bounds the
+    registry lock wait (LockTimeout)."""
+    base = _resolve_base(root)
+    main, branch = _main_parts(base)
+    lead = _sanitize_owner(lead_name)
+
+    def fn(reg: dict) -> dict:
+        mchan = _upsert(reg, main, "main", None, None, base, branch)
+        _add_member(mchan, lead, "lead", None)
+        sub = _upsert(reg, f"{main}/{lead}", "lead", main, lead, base, branch)
+        _add_member(sub, lead, "lead", None)
+        for s in subagents or ():
+            s = _sanitize_owner(s)
+            if s != lead:
+                _add_member(sub, s, "subagent", lead)
+        sub["last_activity"] = time.time()
+        return dict(sub)
+
+    return _reg_update(root, fn, timeout)
+
+
+def join(
+    root: Optional[str],
+    channel: str,
+    name: str,
+    role: str = "subagent",
+    parent: Optional[str] = None,
+) -> dict:
+    """Add `name` to an existing channel (idempotent). KeyError if it does not exist."""
+
+    def fn(reg: dict) -> dict:
+        chan = reg["channels"][channel]
+        _add_member(chan, _sanitize_owner(name), role, parent or chan.get("lead"))
+        return dict(chan)
+
+    return _reg_update(root, fn)
+
+
+def leave(root: Optional[str], channel: str, name: str) -> Optional[dict]:
+    """Remove `name` from a channel; None when the channel does not exist."""
+
+    def fn(reg: dict) -> Optional[dict]:
+        chan = reg["channels"].get(channel)
+        if chan is None:
+            return None
+        n = _sanitize_owner(name)
+        chan["members"] = [m for m in chan["members"] if m["name"] != n]
+        return dict(chan)
+
+    return _reg_update(root, fn)
+
+
+def _with_activity(root: Optional[str], chans: List[dict]) -> List[dict]:
+    last: Dict[str, float] = {}
+    for r in notes(root):
+        c = r.get("channel")
+        if c:
+            last[c] = max(last.get(c, 0.0), _note_ts_key(r))
+    for c in chans:
+        c["last_activity"] = max(
+            float(c.get("last_activity") or 0), last.get(c["name"], 0.0)
+        )
+    return chans
+
+
+def get_channel(root: Optional[str], name: str) -> Optional[dict]:
+    chan = _reg_read(root)["channels"].get(name)
+    return _with_activity(root, [json.loads(json.dumps(chan))])[0] if chan else None
+
+
+def channels(root: Optional[str] = None) -> List[dict]:
+    """The tree: every main channel (oldest first) with its lead subchannels in
+    `children`."""
+    chans = _with_activity(
+        root, [json.loads(json.dumps(c)) for c in _reg_read(root)["channels"].values()]
+    )
+    for c in chans:
+        c["children"] = []
+    by_name = {c["name"]: c for c in chans}
+    mains = []
+    for c in sorted(chans, key=lambda c: c.get("created") or 0):
+        parent = by_name.get(c.get("parent") or "")
+        (parent["children"] if parent else mains).append(c)
+    return mains
+
+
+def channels_of(root: Optional[str], name: str) -> List[str]:
+    """Names of every channel `name` is a member of."""
+    n = _sanitize_owner(name)
+    return [
+        c["name"]
+        for c in _reg_read(root)["channels"].values()
+        if any(m["name"] == n for m in c["members"])
+    ]
+
+
+def default_channel(root: Optional[str], owner: Any = None) -> str:
+    """Channel a note lands in when none is given: ATLAS_CHANNEL, else the newest
+    lead subchannel `owner` belongs to (how an omp subagent, which has no env of
+    its own, posts into its lead's subchannel), else the project's main channel."""
+    env = (os.environ.get("ATLAS_CHANNEL") or "").strip()
+    if env:
+        return env
+    n = _sanitize_owner(owner)
+    mine = [
+        c
+        for c in _reg_read(root)["channels"].values()
+        if c.get("kind") == "lead" and any(m["name"] == n for m in c["members"])
+    ]
+    if mine:
+        return max(mine, key=lambda c: c.get("created") or 0)["name"]
+    main = main_channel(_resolve_base(root))
+    if (
+        n == "lead"
+    ):  # omp's main thread posts as `lead`; its real name is lead-<session>
+        subs = [
+            c
+            for c in _reg_read(root)["channels"].values()
+            if c.get("kind") == "lead" and c.get("parent") == main
+        ]
+        if subs:
+            return max(subs, key=lambda c: c.get("created") or 0)["name"]
+    return main
+
+
+def _register_worker(root: Optional[str], name: str) -> None:
+    """A mux/launch worker (env ATLAS_WORKER_NAME == its note owner) that no lead
+    registered joins the newest lead subchannel of this project@branch (parent=that
+    lead), or `<main>/lead` when none is open, so its board notes group under the
+    lead instead of the bare main channel. Idempotent; fail-open (fault recorded)."""
+    if os.environ.get("ATLAS_CHANNELS") == "off" or name != _sanitize_owner(
+        os.environ.get("ATLAS_WORKER_NAME")
+    ):
+        return
+    try:
+        if any(
+            c.get("kind") == "lead" and any(m["name"] == name for m in c["members"])
+            for c in _reg_read(root)["channels"].values()
+        ):
+            return
+        main = main_channel(_resolve_base(root))
+        leads = [
+            c
+            for c in _reg_read(root)["channels"].values()
+            if c.get("kind") == "lead"
+            and c.get("parent") == main
+            and c.get("lead") != name
+        ]
+        lead = (
+            max(leads, key=lambda c: c.get("created") or 0)["lead"] if leads else "lead"
+        )
+        open_lead_channel(root, lead, [name], timeout=CHANNEL_LOCK_TIMEOUT_S)
+    except Exception as exc:  # never block a note
+        try:
+            import atlas_faults
+
+            hook = (
+                "atlas_todo.register_worker.lock_timeout"
+                if isinstance(exc, LockTimeout)
+                else "atlas_todo.register_worker"
+            )
+            atlas_faults.record(hook, exc, str(root or ""))
+        except Exception:
+            pass
+
+
+def _item_counts(items: List[dict]) -> dict:
+    out = {s: 0 for s in STATUSES}
+    for i in items:
+        out[_norm_status(i.get("status"))] += 1
+    return out
+
+
+def channel_brief(root: Optional[str], channel: str, lead: str, name: str) -> str:
+    """The CHANNEL block appended to a subagent's brief: where it posts, how it
+    reads its inbox, who its siblings are. Short on purpose."""
+    script = os.path.abspath(__file__)
+    chan = get_channel(root, channel) or {"members": []}
+    sibs = [m["name"] for m in chan["members"] if m["name"] not in (name, lead)]
+    base = f'python3 "{script}"'
+    rt = _resolve_base(root)
+    return (
+        f"CHANNEL: {channel} (you are {name}; lead {lead}; siblings: "
+        f"{', '.join(sibs) or 'none yet'}).\n"
+        f'Post: {base} note --root "{rt}" --channel "{channel}" --owner {name} '
+        f'--to <sibling|{lead}|all> "<text>" (to=all reaches the whole channel).\n'
+        f'Inbox (run between steps): {base} inbox --root "{rt}" --owner {name}\n'
+        f'Your todos: {base} claim --root "{rt}" --id <id> --owner {name}; the lead '
+        f"watches this channel's board."
+    )
+
+
+def lead_name(session_id: Any = None) -> str:
+    """Name of the orchestrating lead: ATLAS_LEAD_NAME, else the mux worker name,
+    else `lead-<first 6 of the session id>` (`lead` when there is no session)."""
+    for key in ("ATLAS_LEAD_NAME", "ATLAS_WORKER_NAME"):
+        v = (os.environ.get(key) or "").strip()
+        if v:
+            return _sanitize_owner(v)
+    sid = _sanitize_owner(session_id)[:6] if session_id else ""
+    return f"lead-{sid}" if sid else "lead"
+
+
+def channel_board(root: Optional[str], channel: str) -> dict:
+    """Todo items grouped by channel member: {channel, members:[{name, role, parent,
+    counts, items, last_note}], counts}. KeyError if the channel is unknown."""
+    chan = get_channel(root, channel)
+    if chan is None:
+        raise KeyError(channel)
+    live = [i for i in load(root).get("items", []) if not i.get("archived")]
+    posted = notes(root, channel=channel)
+    members = []
+    for m in chan["members"]:
+        # the lead's own plan (todo mirror) carries no owner: it is the lead's, matched by
+        # session (lead-<first 6 of the session id>) or, for a named lead, any unowned item
+        lead_plan = chan.get("kind") == "lead" and m["name"] == chan.get("lead")
+        sid6 = m["name"][5:] if m["name"].startswith("lead-") else ""
+        mine = [
+            i
+            for i in live
+            if i.get("owner") == m["name"]
+            or (
+                lead_plan
+                and not i.get("owner")
+                and (not sid6 or _sanitize_owner(i.get("session_id"))[:6] == sid6)
+            )
+        ]
+        theirs = [r for r in posted if r.get("owner") == m["name"]]
+        members.append(
+            {
+                "name": m["name"],
+                "role": m.get("role"),
+                "parent": m.get("parent"),
+                "counts": _item_counts(mine),
+                "items": mine,
+                "last_note": (theirs[-1] if theirs else None),
+            }
+        )
+    owned = [i for mm in members for i in mm["items"]]
+    return {
+        "channel": chan["name"],
+        "kind": chan["kind"],
+        "lead": chan.get("lead"),
+        "members": members,
+        "counts": _item_counts(owned),
+    }
 
 
 # --- CLI -----------------------------------------------------------------------
@@ -736,6 +1261,9 @@ def _cli(argv: Optional[List[str]] = None) -> int:
             or a == "--phase"
             or a == "--phases"
             or a == "--task"
+            or a == "--channel"
+            or a == "--lead"
+            or a == "--members"
         ):
             flags[a[2:]] = args[i + 1] if i + 1 < len(args) else ""
             i += 2
@@ -822,6 +1350,7 @@ def _cli(argv: Optional[List[str]] = None) -> int:
                         positional[1] if len(positional) > 1 else "",
                         to=flags.get("to") or "all",
                         item=flags.get("item") or None,
+                        channel=flags.get("channel") or None,
                     ),
                 }
         elif cmd == "notes":
@@ -832,6 +1361,7 @@ def _cli(argv: Optional[List[str]] = None) -> int:
                     root,
                     to=flags.get("to"),
                     since=float(since_raw) if since_raw else None,
+                    channel=flags.get("channel") or None,
                 ),
             }
         elif cmd == "counts":
@@ -841,6 +1371,50 @@ def _cli(argv: Optional[List[str]] = None) -> int:
                 **counts(board, flags.get("session")),
                 "session_id": flags.get("session"),
             }
+        elif cmd == "channels":
+            out = {
+                "ok": True,
+                "main": main_channel(_resolve_base(root)),
+                "channels": channels(root),
+            }
+        elif cmd == "channel-open":
+            lead = flags.get("lead", "").strip()
+            if not lead:
+                out = {"ok": False, "error": "lead_required"}
+            else:
+                members = [m for m in flags.get("members", "").split(",") if m.strip()]
+                # a dispatcher passes its cwd, which may be a subdirectory of the project
+                root = find_root(root) if root else root
+                chan = open_lead_channel(root, lead, members)
+                out = {
+                    "ok": True,
+                    "channel": chan,
+                    "briefs": {
+                        _sanitize_owner(m): channel_brief(
+                            root, chan["name"], chan["lead"], _sanitize_owner(m)
+                        )
+                        for m in members
+                    },
+                }
+        elif cmd == "channel-board":
+            out = {
+                "ok": True,
+                **channel_board(root, positional[1] if len(positional) > 1 else ""),
+            }
+        elif cmd == "inbox":
+            owner = flags.get("owner", "").strip()
+            if not owner:
+                out = {"ok": False, "error": "owner_required"}
+            else:
+                sys.path.insert(
+                    0, str(Path(__file__).resolve().parent.parent / "hooks")
+                )
+                import worker_inbox
+
+                out = {
+                    "ok": True,
+                    "text": worker_inbox.drain(root or _resolve_base(None), owner),
+                }
         else:
             out = {"ok": False, "error": "unknown_command", "command": cmd}
     except Exception as exc:  # fail-open for hooks: report, never traceback

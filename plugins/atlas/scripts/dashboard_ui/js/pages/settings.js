@@ -17,29 +17,20 @@
 // No innerHTML; all data via h() text children. Secret inputs are type=password
 // and stay empty; a dirty-draft guard warns before reload/close and before
 // navigating away from Settings while credential drafts are unsaved.
-import { h } from '../dom.js';
+import { h, replace } from '../dom.js';
 import { Badge, Card, EmptyState, StatusDot } from '../components.js';
+import { IntegrationsPanel } from '../integrations.js';
 
-const CSS_HREF = '/ui/css/pages-insights.css';
-const DEFAULT_NAV = ['overview', 'activity', 'health', 'colony', 'work', 'irc', 'improve', 'projects', 'settings'];
+import { DEFAULT_NAV, normalizeNav } from '../nav-order.js';
+
 const NAV_LABELS = {
-  overview: 'Overview', activity: 'Activity', health: 'Health', colony: 'Colony', work: 'Work',
-  irc: 'IRC', improve: 'Self-improvement', projects: 'Projects', settings: 'Settings',
+  overview: 'Overview', activity: 'Activity', health: 'Health', agents: 'Agents', colony: 'Colony',
+  improve: 'Self-improvement', projects: 'Projects', settings: 'Settings',
 };
 const DEFAULT_PREFS = {
   theme: 'dark', density: 'comfortable', default_project: 'all', refresh_seconds: 8,
   nav_order: DEFAULT_NAV, noise: { collapse_duplicates: true, min_severity: 'info' },
 };
-
-function ensureCss() {
-  if (typeof document === 'undefined') return;
-  if (document.querySelector('link[data-atlas-css="insights"]')) return;
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
-  link.href = CSS_HREF;
-  link.setAttribute('data-atlas-css', 'insights');
-  document.head.appendChild(link);
-}
 
 function describeError(err) {
   if (!err) return { title: 'Request failed', body: '' };
@@ -73,12 +64,21 @@ async function legacyPost(path, body) {
   return res;
 }
 
+const SECTION_TIMEOUT_MS = 15000;
+
+// A section that never answers becomes an honest error (with Retry), never an endless skeleton.
 async function loadSection(name, fn) {
+  let timer;
   try {
-    S[name] = await fn();
+    const slow = new Promise((_, reject) => {
+      timer = setTimeout(() => reject({ error: 'timed_out', why: `${name} did not answer within ${SECTION_TIMEOUT_MS / 1000}s.` }), SECTION_TIMEOUT_MS);
+    });
+    S[name] = await Promise.race([fn(), slow]);
     delete S.errors[name];
   } catch (err) {
     S.errors[name] = err;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -180,7 +180,7 @@ function prefs() {
   return {
     ...DEFAULT_PREFS, ...base,
     noise: { ...DEFAULT_PREFS.noise, ...(base.noise || {}) },
-    nav_order: Array.isArray(base.nav_order) && base.nav_order.length ? base.nav_order : DEFAULT_NAV,
+    nav_order: normalizeNav(base.nav_order),
   };
 }
 
@@ -807,7 +807,6 @@ function moveNav(order, i, d) {
 
 function navEditor(p) {
   const order = [...p.nav_order];
-  for (const id of DEFAULT_NAV) if (!order.includes(id)) order.push(id);
   return h('ol', { class: 'pg-nav-edit', 'aria-label': 'Navigation order' },
     ...order.map((id, i) => h('li', { class: 'pg-nav-item' },
       h('span', {}, NAV_LABELS[id] || id),
@@ -838,6 +837,15 @@ function refreshField(p) {
     input,
     h('p', { class: 'pg-hint', id: 'pg-pref-refresh-hint' }, 'Used only when the live stream is unavailable.'),
     err);
+}
+
+function integrationsSection() {
+  return Card({
+    id: 'integrations',
+    title: 'Integrations',
+    actions: [h('span', { class: 'pg-hint' }, 'herdr tooling, read-only')],
+    children: [S.integrations || (S.integrations = IntegrationsPanel())],
+  });
 }
 
 function prefsSection() {
@@ -888,12 +896,12 @@ function draw() {
   const keepId = active && S.mount.contains(active) ? active.id : '';
   const caret = keepId && typeof active.selectionStart === 'number' ? [active.selectionStart, active.selectionEnd] : null;
   const scroll = S.mount.scrollTop;
-  S.mount.replaceChildren(
+  replace(S.mount, 
     h('header', { class: 'pg-head' },
       h('h1', { class: 'pg-title' }, 'Settings'),
       h('p', { class: 'pg-sub' }, 'Behavior and ecosystem changes are written to Claude settings and apply after you reload Claude Code. Preferences apply to this dashboard immediately.')),
     h('div', { class: 'pg-settings' },
-      prefsSection(), behaviorSection(), ecosystemSection(), connectorsSection(), agentsSection()));
+      prefsSection(), integrationsSection(), behaviorSection(), ecosystemSection(), connectorsSection(), agentsSection()));
   S.mount.scrollTop = scroll;
   if (keepId) {
     const el = S.mount.querySelector(`#${CSS.escape ? CSS.escape(keepId) : keepId}`);
@@ -910,10 +918,11 @@ export default {
   icon: 'settings',
   group: 'Configure',
   async load(ctx) {
-    ensureCss();
     if (S) this.destroy();
-    S = freshState(ctx);
-    await loadAll();
+    const mine = S = freshState(ctx);
+    // Do not block the route on the slowest endpoint: render the page now (each section shows
+    // its own "Loading…" or error state) and redraw as data lands.
+    loadAll().then(() => { if (S === mine) draw(); });
     return { ok: true };
   },
   render(ctx) {

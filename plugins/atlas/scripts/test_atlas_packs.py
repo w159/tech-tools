@@ -19,6 +19,7 @@ Stdlib only.
 
 from __future__ import annotations
 
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import json
 import os
 import shutil

@@ -196,7 +196,14 @@ def main() -> int:
                 )
             )
         return 0
-    except Exception:
+    except Exception as exc:
+        try:
+            sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+            import atlas_faults
+
+            atlas_faults.record("docs_drift_watch", exc)
+        except Exception:
+            pass
         return 0  # fail-open: a broken watcher must never block an edit
 
 

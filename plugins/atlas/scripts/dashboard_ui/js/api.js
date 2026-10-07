@@ -20,10 +20,12 @@ function readToken() {
 }
 
 const TOKEN = readToken();
-const BASE = "/api/v2/";
+// Same-origin gateway prefix (<meta name="atlas-base" content="/atlas">); empty when served standalone.
+const PREFIX = ((document.querySelector('meta[name="atlas-base"]') || {}).content || "").replace(/\/+$/, "");
+const BASE = PREFIX + "/api/v2/";
 
 function normalizePath(path) {
-  if (path.startsWith("/api/")) return path;
+  if (path.startsWith("/api/")) return PREFIX + path;
   return BASE + path.replace(/^\/+/, "");
 }
 
@@ -37,6 +39,32 @@ function buildUrl(path, params) {
   }
   const text = qs.toString();
   return text ? url + (url.includes("?") ? "&" : "?") + text : url;
+}
+
+// JSON of `value` without per-tick volatile keys (mirrors the server's SSE hash), so pages can skip
+// a rebuild when a refetch changed nothing real.
+const VOLATILE = new Set(["idle_seconds", "updated", "last_ok", "generated_at", "now", "age_seconds"]);
+export function stableJson(value) {
+  return JSON.stringify(value, (k, v) => (VOLATILE.has(k) ? undefined : v));
+}
+
+// hidden_projects pref: merged ("all") views of overview and work drop rows that belong
+// to a hidden project root. Rows carry the root as `project` or `root`.
+let hiddenRoots = new Set();
+export function setHiddenRoots(list) {
+  hiddenRoots = new Set(list || []);
+}
+
+function dropHidden(node) {
+  if (Array.isArray(node)) {
+    return node
+      .filter((x) => !(x && typeof x === "object" && (hiddenRoots.has(x.project) || hiddenRoots.has(x.root))))
+      .map(dropHidden);
+  }
+  if (node && typeof node === "object") {
+    for (const k of Object.keys(node)) node[k] = dropHidden(node[k]);
+  }
+  return node;
 }
 
 async function request(method, path, params, body) {
@@ -64,7 +92,12 @@ async function request(method, path, params, body) {
   }
   if (!res.ok || (data && data.ok === false)) {
     const d = data || {};
-    throw new ApiError(res.status, d.error || res.statusText || "Request failed", d.why || "", d.do || d.hint || "");
+    const err = new ApiError(res.status, d.error || res.statusText || "Request failed", d.why || "", d.do || d.hint || "");
+    err.data = d;
+    throw err;
+  }
+  if (method === "GET" && hiddenRoots.size && (!params || !params.project || params.project === "all") && /^\/?(api\/v2\/)?(overview|todos)(\?|$)/.test(path)) {
+    data = dropHidden(data);
   }
   return data === null ? {} : data;
 }
@@ -72,16 +105,27 @@ async function request(method, path, params, body) {
 export const api = {
   hasToken: Boolean(TOKEN),
   mode: "idle",
+  lastEventId: "",
+  // Layer 1 probe (MASTER 9.14): GET /api/health needs no token. Resolves {up:true,data} or {up:false,error}.
+  async probe() {
+    try {
+      const res = await fetch(PREFIX + "/api/health", { headers: { Accept: "application/json" }, credentials: "same-origin" });
+      const data = await res.json().catch(() => ({}));
+      return { up: res.ok, data, status: res.status };
+    } catch (err) {
+      return { up: false, error: String((err && err.message) || err) };
+    }
+  },
   get: (path, params) => request("GET", path, params),
   post: (path, body) => request("POST", path, null, body),
   put: (path, body) => request("PUT", path, null, body),
 
-  // stream({ project, onEvent(name, data), onMode(mode), poll() , pollMs })
-  // Opens SSE and falls back to polling poll() every 8s if the stream drops.
+  // stream({ project, onEvent(name, data), onMode(mode), poll(), pollMs })
+  // Opens SSE and falls back to polling poll() every pollMs (default 8s) if the stream drops.
   stream(opts) {
     const options = opts || {};
-    const names = ["colony", "todos", "irc", "health", "improve", "tick"];
-    const pollMs = options.pollMs || 8000;
+    const names = ["herd", "todos", "irc", "health", "improve", "route_error", "tick"];
+    const pollMs = options.pollMs || 8000; // default only; app.js passes prefs.refresh_seconds
     let source = null;
     let pollTimer = null;
     let closed = false;
@@ -130,6 +174,8 @@ export const api = {
           } catch (_err) {
             data = {};
           }
+          // The browser re-sends this as Last-Event-ID on its own reconnects, so the server only replays what changed.
+          if (evt.lastEventId) api.lastEventId = evt.lastEventId;
           if (options.onEvent) options.onEvent(name, data);
         });
       }
@@ -137,6 +183,7 @@ export const api = {
         failures += 1;
         // EventSource retries itself (server sends retry: 3000). After repeated failures,
         // poll so the UI keeps updating while it keeps trying to reconnect.
+        if (failures === 1) setMode("reconnecting");
         if (failures >= 2) startPolling();
         if (source && source.readyState === 2) {
           source.close();

@@ -15,15 +15,15 @@ It enforces a research-to-verify contract with hooks, runs work through a colony
 of named role subagents that share one durable board, keeps persistent memory
 across sessions, and mines its own telemetry for self-improvement. Onboard a
 project once with `/atlas`, then drive everything by typing a skill name or
-describing the work in plain language. Current release: **10.0.1**.
+describing the work in plain language. Current release: **10.3.0**.
 
 | Surface | What you get | Source |
 |---|---|---|
 | Skills | 47 (2 manual: `atlas`, `atlas-setup`; 45 auto-trigger from their description) | `plugins/atlas/skills/` |
 | Agents | 13 role agents (`atlas:*`) | `plugins/atlas/agents/` |
 | Hooks | 17 programs, 21 command bindings, 8 lifecycle events | `plugins/atlas/hooks/hooks.json` |
-| Scripts | 27 non-test Python scripts (plus unit tests beside them) | `plugins/atlas/scripts/` |
-| Workboard v2 | Loopback web dashboard: 9 pages, live SSE updates, token-guarded API | `plugins/atlas/scripts/dashboard_ui/`, [docs](docs/atlas-workboard.md) |
+| Scripts | 37 non-test Python scripts (plus unit tests beside them) | `plugins/atlas/scripts/` |
+| Workboard v2 | Loopback web dashboard (the shell of the colony UI): 8 pages, live SSE updates, token-guarded API; Colony is one page that frames the herdr web UI edge to edge; reached remotely at `/atlas/**` through the herdr web UI front door | `plugins/atlas/scripts/dashboard_ui/`, [docs](docs/atlas-workboard.md) |
 | Browser automation | 3 skills (`atlas-test-browser`, `atlas-dogfood`, `atlas-ux-test`) driving a real browser through `atlas:ui-runtime-tester` | [section](#browser-automation-and-testing) |
 | MCP connectors | 12, optional, each disabled until credentials exist | `plugins/atlas/.mcp.json` |
 | Output style | 1 (`atlas-orchestrator`, force-applied) | `plugins/atlas/output-styles/` |
@@ -48,15 +48,16 @@ installs. Version history: [docs/CHANGELOG.md](docs/CHANGELOG.md) and
 9. [Scripts](#scripts)
 10. [Connectors](#connectors)
 11. [Colony and orchestration](#colony-and-orchestration)
-12. [Tmux colony mode (mux)](#tmux-colony-mode-mux)
-13. [Browser dashboard (Atlas Workboard)](#browser-dashboard-atlas-workboard)
-14. [Browser automation and testing](#browser-automation-and-testing)
-15. [omp parity](#omp-parity)
-16. [Docs as the single source of truth](#docs-as-the-single-source-of-truth)
-17. [Repository layout](#repository-layout)
-18. [Prerequisites and configuration](#prerequisites-and-configuration)
-19. [Troubleshooting](#troubleshooting)
-20. [License](#license)
+12. [Herdr colony mode (mux)](#herdr-colony-mode-mux)
+13. [Colony, herdr and Tailscale](#colony-herdr-and-tailscale)
+14. [Browser dashboard (Atlas Workboard)](#browser-dashboard-atlas-workboard)
+15. [Browser automation and testing](#browser-automation-and-testing)
+16. [omp parity](#omp-parity)
+17. [Docs as the single source of truth](#docs-as-the-single-source-of-truth)
+18. [Repository layout](#repository-layout)
+19. [Prerequisites and configuration](#prerequisites-and-configuration)
+20. [Troubleshooting](#troubleshooting)
+21. [License](#license)
 
 ## What Atlas does
 
@@ -178,7 +179,8 @@ atlas-orchestrate ship the rate limiter across API and cache
 
 The lead splits the work into named workers that share one board. Watch it in
 the [Workboard](#browser-dashboard-atlas-workboard); add `ATLAS_MUX=tmux` to
-run workers as tmux panes ([mux mode](#tmux-colony-mode-mux)).
+run workers as herdr panes ([mux mode](#herdr-colony-mode-mux), remote viewing
+in [Colony, herdr and Tailscale](#colony-herdr-and-tailscale)).
 
 **Check the changes in a real browser.**
 
@@ -337,7 +339,12 @@ edit warns, then every 5th, until a `docs/` change clears it.
 | `ATLAS_TODO=off` | TodoWrite-to-board mirror |
 | `ATLAS_ENGINE_ARM=off` | prompt-triggered orchestration arming |
 | `ATLAS_DECISION=off` | model-based prompt-arm decision (regex answer stays) |
-| `ATLAS_MUX` | unset = in-process colony (default); `ATLAS_MUX=tmux` = tmux workers |
+| `ATLAS_MUX` | unset = in-process colony (default); `ATLAS_MUX=tmux` unlocks `atlas_mux.py spawn` (workers in herdr panes) |
+| `ATLAS_COLONY_TRANSPORT` | `tmux` forces tmux windows for workers; unset = herdr, with tmux only when the herdr socket does not answer |
+| `ATLAS_COLONY=off` | SessionStart start of the herdr web UI (`0`, `off`, `false`, `no`) |
+| `ATLAS_REMOTE_PORT` | HTTPS port `atlas_remote.py` maps with `tailscale serve` (default 8443, never 443) |
+| `ATLAS_DASHBOARD_URL` | where the herdr web UI's `/atlas/**` gateway proxies the dashboard (loopback only; default `http://127.0.0.1:7421`) |
+| `ATLAS_LANDING=off` | the herdr web UI's redirect of a browser visit of `/` to the dashboard (`/atlas/#/herd`); the herdr app is then served at `/` |
 | omp only: `ATLAS_HOOK_BRIDGE`, `ATLAS_STOP_BRIDGE`, `ATLAS_LEAN_SHELL`, `ATLAS_ADVISOR_GATE`, `ATLAS_STYLE`, `ATLAS_NATIVE_POLICY` | see [omp parity](#omp-parity) |
 
 ## Skills
@@ -454,7 +461,7 @@ messages to a worker), and `validate-readonly-query.sh` (helper).
 
 ## Scripts
 
-Source: `plugins/atlas/scripts/`: 27 non-test Python scripts (counted as `*.py`
+Source: `plugins/atlas/scripts/`: 37 non-test Python scripts (counted as `*.py`
 excluding `test_*.py`); unit tests sit beside them.
 
 | Script | Purpose |
@@ -468,10 +475,15 @@ excluding `test_*.py`); unit tests sit beside them.
 | `atlas_todo.py` | The board and per-worker notes: `list`, `set`, `add`, `scaffold`, `claim`, `complete`, `status`, `remove`, `carry`, `counts`, `note`, `notes`. |
 | `atlas_finding.py` | Appends verdict rows to `.atlas/.run/findings.json` (the verifier's write path). |
 | `atlas_dashboard.py` | Local dashboard daemon: `status`, `serve`, `ensure`, `stop`, `url`; UI at `http://127.0.0.1:7421/`. |
-| `atlas_dash_colony.py` | Dashboard v2 routes: colony, IRC, todos, send-to-agent. |
+| `atlas_dash_work.py` | Dashboard v2 routes: the todo board (`/api/v2/todos`). |
+| `atlas_dash_irc.py` | Dashboard v2 routes: IRC board notes, delivery through herdr (`/api/v2/irc`). |
+| `atlas_dash_herd.py` | Dashboard v2 routes: herdr agents, prompts, panes, ensure (`/api/v2/herd/*`). |
 | `atlas_dash_insights.py` | Dashboard v2 routes: overview, health, activity, improve, prefs. |
 | `atlas_control.py` | Dashboard control plane: behavior knobs, ecosystem inventory, connector writes (allowlisted keys only). |
-| `atlas_mux.py` | Opt-in tmux colony (see [below](#tmux-colony-mode-mux)). |
+| `atlas_mux.py` | Opt-in colony workers (`ATLAS_MUX=tmux` unlocks `spawn`); herdr transport by default, tmux fallback (see [below](#herdr-colony-mode-mux)). |
+| `atlas_launch.py` | Starts one agent session as a detached herdr pane (tmux window only as the fallback); used by the dashboard and `atlas_mux`. |
+| `atlas_herdr.py` | Colony control: `status`, `ensure`, `reap`, `install-check`, `create-pane`; manages the one vendored herdr-web-ui. |
+| `atlas_remote.py` | Tailnet-only colony access through `tailscale serve`: `status`, `plan`, `apply --yes`, `disable --yes`, `url`. |
 | `atlas_curator.py` | Skill-asset lifecycle: `run`/`status`/`pin`/`unpin`/`restore`. |
 | `atlas_context_optimizer.py` | Disables unused skills/agents to cut token cost. |
 | `atlas_packs.py` | Resolves Compound Packs declared in `.claude/atlas.local.md`. |
@@ -573,14 +585,19 @@ dispatches (`atlas:planner`, `atlas:completeness-critic`, `atlas:docs-curator`)
 inherit session history; fresh dispatches (`atlas:verifier`, `atlas:explorer`)
 start empty so verification stays independent.
 
-## Tmux colony mode (mux)
+## Herdr colony mode (mux)
 
-Opt-in: `export ATLAS_MUX=tmux` in the lead's environment, then ask the lead in
-chat to run the colony. Each worker runs as its own detached headless process
-(`claude -p` or `omp -p`) in a window of one tmux session named `atlas-<run>`;
-the in-process colony stays the default otherwise. The lead forwards its 18
-`ATLAS_*`/profile env switches (`FORWARDED_ENV` in `scripts/atlas_mux.py`) so a
-worker honors the lead's kill switches. Spawn manually only to debug:
+Opt-in: `export ATLAS_MUX=tmux` in the lead's environment (the name is
+historical; it only unlocks `atlas_mux.py spawn`), then ask the lead in chat to
+run the colony. Each worker runs as its own detached headless process
+(`claude -p` or `omp -p`) in a pane of the herdr workspace `atlas-<run>`, one
+tab per worker. herdr is the default transport; tmux (session `atlas-<run>`,
+one window per worker) is used only when `ATLAS_COLONY_TRANSPORT=tmux` is set
+or the herdr socket does not answer. The in-process colony stays the default
+otherwise. Every worker pane carries `ATLAS_PROJECT_ROOT`, `ATLAS_WORKER_NAME`
+and the lead's 18 `ATLAS_*`/profile env switches (`FORWARDED_ENV` in
+`scripts/atlas_mux.py`) as `env K=V` pins in the pane command, so a worker
+honors the lead's kill switches. Spawn manually only to debug:
 
 ```bash
 export ATLAS_MUX=tmux
@@ -588,19 +605,83 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_mux.py" spawn \
   --run fix-500 --harness omp --name AlphaFix --agent implementer \
   --prompt-file .atlas/.run/alpha-fix.md --root "$PWD"
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_mux.py" status --run fix-500
-tmux attach -t atlas-fix-500            # observe the detached workers
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_mux.py" kill --run fix-500    # idempotent
 ```
 
-`--harness {claude,omp}`; `--agent` is the atlas role; `--prompt-file` is the
-worker's brief; `--root` defaults to `ATLAS_PROJECT_ROOT` or cwd. Tier
-enforcement: `spawn` refuses (ok:false, exit 2, before any tmux call) when the
-role's definition yields no usable model; the only override is `--model M`
-paired with `--effort E` (claude) or `--thinking T` (omp). Optional env:
-`ATLAS_MUX_OMP_CONFIG` (config.yml path for `@role` alias resolution) and
-`ATLAS_MUX_OMP_EXTENSION` (pin the worker's extension). Each worker is
-identified by `ATLAS_WORKER_NAME`; its output and the exact harness argv are
-posted to the board notes (`atlas_todo.py notes --to lead`).
+Watch the panes on the dashboard's Fleet lens (the inspector's Terminal tab) or its Colony page (the
+herdr web UI as `/?chrome=full`; `http://127.0.0.1:7317/?chrome=full` is that app on its own); with `ATLAS_COLONY_TRANSPORT=tmux`, `tmux attach -t
+atlas-fix-500`. `--harness {claude,omp}`; `--agent` is the atlas role;
+`--prompt-file` is the worker's brief; `--root` defaults to
+`ATLAS_PROJECT_ROOT` or cwd. Tier enforcement: `spawn` refuses (ok:false, exit
+2, before any pane call) when the role's definition yields no usable model; the
+only override is `--model M` paired with `--effort E` (claude) or `--thinking
+T` (omp). Optional env: `ATLAS_MUX_OMP_CONFIG` (config.yml path for `@role`
+alias resolution) and `ATLAS_MUX_OMP_EXTENSION` (pin the worker's extension).
+Each worker is identified by `ATLAS_WORKER_NAME`; its output and the exact
+harness argv are posted to the board notes (`atlas_todo.py notes --to lead`).
+
+## Colony, herdr and Tailscale
+
+The colony is **herdr** (an installed terminal-multiplexer binary, checked
+against `plugins/atlas/colony/herdr/PIN.json`) plus the **herdr-web-ui** app
+vendored at `plugins/atlas/colony/herdr-web-ui` (MIT; patched, every change is
+listed under `ATLAS-PATCHES` in its `UPSTREAM.md`), exactly one instance reused
+by every caller. `atlas_herdr.py ensure` mirrors it to `$ATLAS_HOME/colony/`,
+builds it and binds `127.0.0.1:7317` when that port is free; when a user-run
+upstream herdr-web-ui holds 7317 it starts on a fallback port instead (recorded
+in `$ATLAS_HOME/colony/port`) and reports the `takeover` hint. **The Atlas
+dashboard is the shell**: its nav (Observe, Operate, Improve, Configure) is the
+only Atlas navigation. Operate holds the Fleet, Board and Channel lenses
+of the Agents page and **Colony**, a page of its own that is only the
+herdr-web-ui app framed edge to edge as `/?chrome=full` (no header, lens bar or
+second view; one `Colony` entry on mobile); the old `#/herd`, `#/herdr`,
+`#/console` and `#/agents?lens=colony` routes redirect to `#/colony`. The Fleet
+inspector's Terminal tab frames one pane as `?chrome=pane`. The legacy
+`?embed=1` is retired (rewritten to those modes). The browser reaches the herdr-web-ui Bun server
+(directly, or through `tailscale serve`); after its own auth, a plain browser
+visit of `/` redirects to `/atlas/#/herd` (which the router sends to `#/colony`) and `/atlas/**` is
+proxied to the loopback dashboard on `127.0.0.1:7421`. Env: `ATLAS_LANDING=off`
+disables the redirect; `ATLAS_DASHBOARD_URL` points the proxy at the dashboard;
+`HERDR_WEB_TOKEN` is the web UI's shared token; `HERDR_WEB_URL` overrides the
+colony URL (loopback only); `ATLAS_COLONY=off` skips the SessionStart start;
+`ATLAS_COLONY_TRANSPORT=tmux` forces tmux workers; `ATLAS_REMOTE_PORT` sets the
+tailnet port (default 8443). Install herdr from https://herdr.dev and run
+`herdr` once; Atlas never starts herdr itself. `atlas_herdr.py ensure` reuses a
+healthy web UI, waits for an existing `managed.ts`, and otherwise builds the
+vendored tree under a lock; `status` reports `duplicates` for a second
+instance. To take 7317 from an upstream instance, stop it first, then disable
+it: `herdr plugin action invoke stop --plugin devswha.herdr-web-ui`, then
+`herdr plugin disable devswha.herdr-web-ui`, `rm -f $ATLAS_HOME/colony/port`,
+`atlas_herdr.py ensure` (disable first makes `stop` fail). SessionStart
+(`ensure_colony`) reports a healthy web UI or starts `ensure` detached (log:
+`$ATLAS_HOME/herdr-ensure.log`).
+
+> **Updating the plugin.** The running omp and Claude Code sessions load the
+> **installed plugin cache**, not this repository. The omp worker `--thinking`
+> fix, the automatic channel registration for dispatches and workers, and the
+> single Colony page reach a live session only after the plugin is committed,
+> released and reinstalled or updated from this marketplace repo. Only the
+> dashboard daemon on `127.0.0.1:7421` serves this repo's `dashboard_ui/` files
+> directly, so the UI part is live there after a browser reload. Until then a
+> session on an older cache keeps the old behavior (for example an empty channel
+> list).
+
+Remote access is tailnet-only, through `tailscale serve` (never funnel):
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_remote.py" status
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_remote.py" plan              # prints the commands, runs nothing
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_remote.py" apply --yes       # https://<node>.<tailnet>.ts.net:8443 -> 127.0.0.1:7317
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_remote.py" disable --yes
+```
+
+`ATLAS_REMOTE_PORT` (default 8443, never 443) picks the HTTPS port; the
+tailnet URL it prints opens the Atlas dashboard (via the `/` redirect). `apply`
+refuses while an anonymous tailnet request would be let in, so set
+`HERDR_WEB_TOKEN` or pair a device first: the colony exposes live terminals, so
+reaching it is code execution as your user. Details and the auth order:
+[docs/atlas-colony.md](docs/atlas-colony.md) and
+[remote-access.md](plugins/atlas/skills/atlas-orchestrate/references/remote-access.md).
 
 ## Browser dashboard (Atlas Workboard)
 
@@ -609,10 +690,14 @@ posted to the board notes (`atlas_todo.py notes --to lead`).
 One shared, loopback-only web dashboard serves every concurrent coding-agent
 terminal: a stdlib Python daemon with a static single-page UI (no build step,
 no CDN) and a JSON API. It reads the shared `~/.atlas/atlas.db`, each project's
-`.atlas/.run/` (todo board, board notes, findings) and live tmux panes. It
-never spawns agents; starting a colony is a command it prints for you to run.
-Workboard v2 (the nine-page UI, `/api/v2`, SSE, the token guard) ships in atlas
-10.0.1; older installs answer 404 on `/api/v2/*`.
+`.atlas/.run/` (todo board, board notes, findings) and, for Fleet and Colony, the
+herdr socket. It never spawns agents; starting a colony is a command it prints
+for you to run. For remote or multi-terminal viewing of the terminals, open it
+through the herdr web UI front door (`http://127.0.0.1:7317`, redirects to
+`/atlas/#/herd`; see
+[Colony, herdr and Tailscale](#colony-herdr-and-tailscale)). Workboard v2 (the
+single-page UI, `/api/v2`, SSE, the token guard) ships in atlas 10.0.1; older
+installs answer 404 on `/api/v2/*`.
 
 **Start.** The SessionStart hook runs `atlas_dashboard.py ensure` and adds one
 line to the boot context, then you open the URL once:
@@ -636,35 +721,32 @@ Environment: `ATLAS_DASHBOARD_PORT` (default `7421`), `ATLAS_DASHBOARD=off`
 (skip auto-start), `ATLAS_DASHBOARD_DB` (default `~/.atlas/atlas.db`),
 `ATLAS_HOME` (state directory; point it elsewhere for an isolated instance).
 
-**Nine pages**, hash-routed (`#/<page>`), with a project switcher that scopes
-every page:
+**Eight pages**, hash-routed (`#/<page>`), with a project switcher that scopes
+every page (Agents is one page with three lenses):
 
 | Group | Page | What you do there |
 |---|---|---|
 | Observe | Overview | KPIs, the "Needs attention" inbox, activity trend, recent runs |
 | Observe | Activity | Group, filter and search events; live tail; saved views |
 | Observe | Health | Subsystem cards (hooks, gates, dispatch, colony, daemon, telemetry DB, connectors, memory, doctor), silent-failure table |
-| Operate | Colony | Every tmux rig and agent with state, agent drawer, send a message, copy the attach command, stop a rig |
-| Operate | Work | The durable todo board: add, claim, edit, change status, reorder, remove |
-| Operate | IRC | What agents and you said to each other; filter; send to one agent |
+| Operate | Agents | Three lenses. **Fleet**: the live herdr agents with state, a prompt box that only reaches idle agents, an inspector with a Terminal tab. **Board**: the durable todo board (add, claim, edit, change status, reorder, remove). **Channel** (the IRC): what agents and you said to each other, per `<folder>@<branch>` channel and per-lead subchannel; send to the channel or one member |
+| Operate | Colony | The herdr web UI framed full height, edge to edge (its own pane list, Chat/Terminal and prompting), nothing around it. When herdr runs but its web UI does not, a **Start terminal service** button (and **Recheck**) replaces the frame |
 | Improve | Self-improvement | Observe, mine, propose, apply, remeasure; doctor findings with Mark fixed, Dismiss, Won't fix, Remeasure |
 | Configure | Projects | Pin, mute or hide projects |
 | Configure | Settings | Theme, density, default project, polling interval, noise filters, behavior knobs, ecosystem toggles, connector credentials |
-
-![Colony page](img/readme-workboard-colony.png)
 
 ![Health page](img/readme-workboard-health.png)
 
 ![Self-improvement page](img/readme-workboard-improve.png)
 
-Keyboard: `Ctrl/Cmd+K` command palette, `/` focus search, `g` then `o a h c w i
-s p ,` jumps to a page, `?` lists shortcuts. Theme (dark, light, system) and
+Keyboard: `Ctrl/Cmd+K` command palette, `/` focus search, `g` then `o a l h c n w i
+p s ,` jumps to a page (`c` Colony, `n` Channel, `w` Board), `?` lists shortcuts. Theme (dark, light, system) and
 density persist in `~/.atlas/dashboard-prefs.json`.
 
 ![Command palette](img/readme-workboard-palette.png)
 
 **Live updates.** The topbar shows `Live` while `GET /api/v2/stream` (Server-Sent
-Events) is connected. Every 5 seconds the server re-reads five topics, `colony`,
+Events) is connected. Every 5 seconds the server re-reads five topics, `herd`,
 `todos`, `irc`, `health` and `improve`, and emits a topic only when its content
 hash changed, plus a `tick` and a 15 second heartbeat. If the stream drops the
 client polls every 8 seconds and the topbar says `Polling every 8s`.
@@ -676,7 +758,7 @@ client polls every 8 seconds and the topbar says `Polling every 8s`.
 | 1 | `Host` must be `127.0.0.1:<port>` or `localhost:<port>` | `403 bad_host` |
 | 2 | POST and PUT need `Content-Type: application/json` | `415 unsupported_media_type` |
 | 3 | A present `Origin` must be the same loopback origin | `403 bad_origin` |
-| 4 | Mutations, `/api/v2/stream` and sensitive GETs (IRC, colony capture, colony agent, transcripts) need `X-Atlas-Token` | `401 bad_token` |
+| 4 | Mutations, `/api/v2/stream` and sensitive GETs (IRC, transcripts) need `X-Atlas-Token` | `401 bad_token` |
 
 The token is `secrets.token_urlsafe(32)`, regenerated at every daemon start and
 delivered only inside `GET /` as `<meta name="atlas-token">`; `?token=` is
@@ -685,11 +767,12 @@ MiB, and other read-only GETs are unauthenticated, so keep the loopback
 default. External scripts must fetch `GET /` first, read the token, then send
 `X-Atlas-Token` and the JSON content type on every mutation.
 
-Sending to an agent from Colony or IRC probes the pane first: an idle
-interactive `claude`/`omp` pane is typed into; a pane that needs input is
-refused with `409 typing_guard` unless forced; a shell or other process is
-refused with `409 pane_not_steerable`; a headless worker or an agent with no
-live pane gets a queued board note it reads on its next tool call.
+Sending to an agent from IRC (or from the embedded herdr web UI) goes through
+herdr: an idle interactive `claude`/`omp` pane is typed into (IRC stamps the
+note `delivered`); a pane that is busy is refused (`409`, IRC keeps the note
+`queued`); a shell or other process is refused with `409 pane_not_steerable`;
+a headless worker or an agent with no live pane gets a queued board note it
+reads on its next tool call.
 
 Full references: [docs/atlas-workboard.md](docs/atlas-workboard.md) (product
 overview, agent states, typing guard, onboarding) and
@@ -787,7 +870,7 @@ Atlas runs on both harnesses through `plugins/atlas/omp/` (load instructions in
 | Item | Detail |
 |---|---|
 | Marketplace install is Claude-dialect | Generated `omp/agents/` (model tiers) are used only when the `omp/` directory is loaded as an extension; otherwise `agents/*.md` run model-less. |
-| Tmux mux workers | omp reports each as a main session; `ATLAS_WORKER_NAME` is the leaf marker. |
+| Mux workers (herdr or tmux panes) | omp reports each as a main session; `ATLAS_WORKER_NAME` is the leaf marker. |
 | Memory capture | Runs in omp; its durable-write path has not been observed live. |
 | Inline-op, production-edit, and dispatch-spec denies | Tested against the real hook through the bridge; not yet observed in a live omp session. |
 | Mixed `task` batches | The run-state fallback logs one row per batch (first agent only), so it undercounts. |
@@ -854,7 +937,9 @@ tech-tools/
 - **Python 3** for the hook programs and the `scripts/` tooling; stdlib only,
   no third-party imports. **Bun** only to run the omp tests or regenerate omp
   agents. **uv** only for the Falcon connector. **tmux** only for [mux
-  mode](#tmux-colony-mode-mux).
+  mode](#herdr-colony-mode-mux)) when you pick `ATLAS_COLONY_TRANSPORT=tmux`
+  or herdr is not running. **herdr** and the vendored **herdr-web-ui**
+  with **Bun** (to build and start it) for the [colony](#herdr-colony-mode-mux).
 - **claude-mem** and **context-mode** companion plugins: `atlas-setup` detects
   them and offers to install. The recall gate is armed only when claude-mem is
   enabled; without it the gate stays silent instead of denying.
@@ -886,6 +971,7 @@ tech-tools/
 | Atlas workers still run old paths (`atlas_todo.py` unresolved) after `omp plugin upgrade` | Long-lived omp process kept the pre-upgrade `CLAUDE_PLUGIN_ROOT`. | Restart omp; the extension re-resolves the plugin root at load. |
 | Doctor warns on downgrade or forked marketplace | Installed plugin version is lower than the marketplace, or the marketplace points at a fork. | `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_doctor.py" --fix`, then `claude plugin marketplace update tech-tools`. |
 | `atlas_mux.py spawn` exits 2 with `ok:false`, "tier enforcement: no model for role '<role>' ..." | Role definition yields no model tier. | Pass `--model M` together with `--effort E` (claude) or `--thinking T` (omp); check the agent file exists in the right dir. |
+| Dashboard **Colony** page or `atlas_herdr.py status` reports `server_down` | Atlas cannot start herdr itself. | Install herdr from https://herdr.dev, run `herdr` in a terminal, then `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_herdr.py" ensure`. `ATLAS_COLONY=off` skips the SessionStart start. |
 | Hooks never fire | `hooks.json` not loaded (bare-skill install rather than a plugin install). | Install as a plugin, or run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/install_hooks.py"`. |
 | `fallow audit` blocks `git commit`/`git push` | Fallow gate returned `verdict: fail` for findings newer than the saved baselines in `fallow-baselines/`. | Fix the finding, or skip once with `ATLAS_FALLOW=off`. |
 | `atlas-test-browser` reports a preflight blocker | The dev server is down, or the harness exposes no browser surface. | Start the dev server (manual mode prints the command), or configure a browser tool; see the browser troubleshooting list above. |

@@ -114,17 +114,36 @@ export function registerAdvisorGate(pi: Pick<ExtensionAPI, "on">, deps: AdvisorD
 		return typeof sessionId === "string" && sessionId.trim() !== "" && root ? { sessionId, root } : undefined;
 	};
 
+	const reset = () => {
+		seen.clear();
+		blocks = 0;
+	};
+	pi.on("session_start", () => {
+		reset();
+		return undefined;
+	});
+	pi.on("session_switch", () => {
+		reset();
+		return undefined;
+	});
+
 	pi.on("context", (event, ctx) => {
+		const where = scope(ctx);
+		if (!where) return undefined;
+		let notes: { text: string; severity: string }[];
 		try {
-			const where = scope(ctx);
-			if (!where) return undefined;
-			for (const { text, severity } of gatedNotes(event.messages)) {
-				if (seen.has(text)) continue;
-				seen.add(text);
-				deps.addBoardItem(`advisor[${severity}]: ${text.slice(0, NOTE_PREFIX_LIMIT)}`, where.sessionId, where.root);
-			}
+			notes = gatedNotes(event.messages);
 		} catch {
-			// fail open: a broken board must never break the turn
+			return undefined; // fail open
+		}
+		for (const { text, severity } of notes) {
+			if (seen.has(text)) continue;
+			try {
+				deps.addBoardItem(`advisor[${severity}]: ${text.slice(0, NOTE_PREFIX_LIMIT)}`, where.sessionId, where.root);
+				seen.add(text); // only after the write landed: a failed note is retried on the next context event
+			} catch {
+				// fail open: a broken board must never break the turn
+			}
 		}
 		return undefined;
 	});

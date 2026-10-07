@@ -2,16 +2,15 @@
 // remeasure strip, findings table with status actions + remeasure, by-rule
 // rollup across projects, ledger, nudges, lessons and score trends.
 // No innerHTML; all data via h() text children.
-import { h } from '../dom.js';
+import { h, replace } from '../dom.js';
 import {
   Badge, Card, Table, EmptyState, StatusDot, Timeline, LineChart, Drawer, openDrawer,
 } from '../components.js';
 
-const CSS_HREF = '/ui/css/pages-insights.css';
 const STAGES = ['observe', 'mine', 'propose', 'apply', 'remeasure'];
 const STATUS_ACTIONS = [
   { to: 'accepted', label: 'Accept', from: ['open'] },
-  { to: 'fixed', label: 'Mark fixed', from: ['open', 'accepted'] },
+  { to: 'fixed', label: 'Mark resolved (manual)', from: ['open', 'accepted'], hint: 'Records that you fixed this yourself; nothing is verified until Remeasure.' },
   { to: 'dismissed', label: 'Dismiss', from: ['open', 'accepted'] },
   { to: 'wontfix', label: "Won't fix", from: ['open', 'accepted'] },
   { to: 'open', label: 'Reopen', from: ['fixed', 'dismissed', 'wontfix'] },
@@ -30,16 +29,6 @@ const SEVERITY_TONE = {
 // improved/regressed are direction-aware verdicts computed server-side.
 const TREND_TONE = { improved: 'ok', regressed: 'fail', flat: 'info', no_change: 'info', pending: 'info' };
 const TREND_GLYPH = { improved: '▲ better', regressed: '▼ worse', flat: '■ unchanged', no_change: '■ unchanged', pending: '… pending' };
-
-function ensureCss() {
-  if (typeof document === 'undefined') return;
-  if (document.querySelector('link[data-atlas-css="insights"]')) return;
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
-  link.href = CSS_HREF;
-  link.setAttribute('data-atlas-css', 'insights');
-  document.head.appendChild(link);
-}
 
 function normStatus(s) {
   return s === 'ok' || s === 'warn' || s === 'fail' ? s : 'info';
@@ -198,7 +187,7 @@ function findingActions(f) {
   const status = f.status || 'open';
   const btns = STATUS_ACTIONS.filter((a) => a.from.includes(status)).map((a) => h('button', {
     type: 'button', class: 'btn btn-ghost', disabled: S.busy.has(`${f.id}:/api/v2/improve/finding`),
-    'aria-label': `${a.label}: ${f.title || f.id}`,
+    'aria-label': `${a.label}: ${f.title || f.id}`, title: a.hint || '',
     onclick: (e) => { e.stopPropagation(); setStatus(f, a.to); },
   }, a.label));
   btns.push(h('button', {
@@ -211,7 +200,10 @@ function findingActions(f) {
 
 function findingColumns() {
   return [
-    { key: 'status', label: 'Status', width: '112px', render: (r) => Badge({ status: STATUS_TONE[r.status] || 'info', text: statusText(r.status) }) },
+    { key: 'status', label: 'Status', width: '112px', render: (r) => h('div', { class: 'pg-statuscell' },
+      Badge({ status: STATUS_TONE[r.status] || 'info', text: statusText(r.status) }),
+      r.fix_state && r.fix_state !== 'none'
+        ? Badge({ status: FIX_TONE[r.fix_state] || 'info', text: `fix: ${r.fix_state}` }) : null) },
     { key: 'title', label: 'Finding', render: (r) => {
       const has = (v) => v !== null && v !== undefined;
       const delta = has(r.baseline) && has(r.current)
@@ -454,6 +446,104 @@ function enforcementCard() {
   });
 }
 
+// ---- self-fix ---------------------------------------------------------------
+
+const FIX_TONE = { queued: 'info', running: 'info', verifying: 'info', ready: 'ok', merged: 'ok', failed: 'fail', regressed: 'fail', skipped: 'info' };
+
+async function selffixOp(op, id, okMsg) {
+  const key = `selffix:${op}:${id || ''}`;
+  if (S.busy.has(key)) return;
+  S.busy.add(key);
+  draw();
+  try {
+    const res = await S.ctx.api.post('/api/v2/improve/selffix', { op, id });
+    if (res && res.ok === false) throw Object.assign(new Error(res.error), res);
+    notify(okMsg, 'ok');
+  } catch (err) {
+    const d = describeError(err);
+    notify([d.title, d.body].filter(Boolean).join(': '), 'fail');
+  }
+  S.busy.delete(key);
+  S.inFlight = false;
+  await refresh();
+}
+
+async function setSelffixPref(patch) {
+  try {
+    await S.ctx.api.put('/api/v2/prefs', { selffix: patch });
+    notify('Self-fix settings saved', 'ok');
+  } catch (err) {
+    const d = describeError(err);
+    notify([d.title, d.body].filter(Boolean).join(': '), 'fail');
+  }
+  S.inFlight = false;
+  await refresh();
+}
+
+function fixBtn(label, op, it, okMsg, cls = 'btn btn-ghost') {
+  const key = `selffix:${op}:${it.id}`;
+  return h('button', {
+    type: 'button', class: cls, disabled: S.busy.has(key), 'aria-label': `${label}: ${it.title}`,
+    onclick: () => selffixOp(op, it.id, okMsg),
+  }, S.busy.has(key) ? `${label}…` : label);
+}
+
+function fixRow(it, ...extra) {
+  return h('li', { class: 'pg-selffix-row' },
+    h('div', { class: 'pg-evt' },
+      Badge({ status: FIX_TONE[it.fix_state] || 'info', text: it.fix_state }),
+      h('span', { class: 'pg-evt-title' }, it.title || it.id),
+      it.attempts ? h('span', { class: 'pg-hint' }, `attempt ${it.attempts}`) : null),
+    ...extra);
+}
+
+function selffixCard() {
+  const sf = S.data.selffix || {};
+  const running = sf.running || [];
+  const ready = sf.ready || [];
+  const failed = sf.failed || [];
+  const runKey = 'selffix:run_now:';
+  const controls = h('div', { class: 'pg-selffix-controls' },
+    h('label', { class: 'pg-selffix-toggle' },
+      h('input', {
+        type: 'checkbox', checked: !!sf.enabled, 'aria-label': 'Enable autonomous self-fix',
+        onchange: (e) => setSelffixPref({ enabled: e.target.checked }),
+      }), ' Autonomous'),
+    h('label', { class: 'pg-hint' }, 'every ',
+      h('select', {
+        'aria-label': 'Self-fix interval in minutes',
+        onchange: (e) => setSelffixPref({ interval_min: Number(e.target.value) }),
+      }, ...[15, 30, 60, 120, 360].map((m) => h('option', { value: String(m), selected: m === sf.interval_min }, `${m} min`)))),
+    h('button', {
+      type: 'button', class: 'btn btn-primary', disabled: S.busy.has(runKey), 'aria-label': 'Run self-fix now',
+      onclick: () => selffixOp('run_now', '', 'Self-fix pass started in the background'),
+    }, S.busy.has(runKey) ? 'Starting…' : 'Run now'));
+  const lastTick = sf.last_tick ? `last pass ${fmtWhen(new Date(sf.last_tick * 1000).toISOString())}` : 'no pass yet';
+  const empty = !running.length && !ready.length && !failed.length;
+  return Card({
+    title: 'Self-fix (git worktrees, merge is local only)',
+    actions: [controls],
+    children: [
+      h('p', { class: 'pg-hint' }, sf.error ? `Unavailable: ${sf.error}` : `${lastTick}. Fixes run as detached tmux sessions; nothing is pushed.`),
+      empty ? h('p', { class: 'pg-hint' }, 'No fixes in flight. Findings that point at source files in a git repo are picked up on the next pass.') : null,
+      running.length ? h('div', {}, h('h3', { class: 'pg-sub' }, `Running (${running.length})`),
+        h('ul', { class: 'pg-selffix-list' }, ...running.map((it) => fixRow(it,
+          it.target ? h('div', { class: 'pg-mono pg-wrap' }, `${it.target} — `, h('code', {}, it.attach)) : null,
+          it.branch ? h('div', { class: 'pg-hint pg-mono pg-wrap' }, `branch ${it.branch}`) : null)))) : null,
+      ready.length ? h('div', {}, h('h3', { class: 'pg-sub' }, `Ready to merge (${ready.length})`),
+        h('ul', { class: 'pg-selffix-list' }, ...ready.map((it) => fixRow(it,
+          h('pre', { class: 'pg-mono pg-selffix-diff' }, it.diffstat || '(no diff stat)'),
+          h('div', { class: 'pg-actions' },
+            fixBtn('Merge', 'merge', it, `Merged ${it.branch} locally`, 'btn btn-primary'),
+            fixBtn('Discard', 'discard', it, 'Fix discarded')))))) : null,
+      failed.length ? h('div', {}, h('h3', { class: 'pg-sub' }, `Failed (${failed.length})`),
+        h('ul', { class: 'pg-selffix-list' }, ...failed.map((it) => fixRow(it,
+          h('pre', { class: 'pg-mono pg-selffix-diff' }, it.log || '(no log)'),
+          h('div', { class: 'pg-actions' }, fixBtn('Retry', 'retry', it, 'Queued for another attempt')))))) : null,
+    ],
+  });
+}
+
 function body() {
   if (S.error && !S.data) {
     const d = describeError(S.error);
@@ -464,7 +554,7 @@ function body() {
   }
   if (!S.data) return h('p', { class: 'pg-hint', role: 'status' }, 'Loading findings…');
   return h('div', { class: 'pg-stack' },
-    stageStrip(), findingsCard(),
+    stageStrip(), selffixCard(), findingsCard(),
     byRuleCard(), improvementsCard(),
     scoresCard(),
     h('div', { class: 'pg-two' }, assetVerdictsCard(), enforcementCard()),
@@ -476,7 +566,7 @@ function draw() {
   if (!S || !S.mount || S.destroyed) return;
   const active = document.activeElement;
   const label = active && S.mount.contains(active) ? active.getAttribute('aria-label') : null;
-  S.mount.replaceChildren(
+  replace(S.mount, 
     h('header', { class: 'pg-head' },
       h('h1', { class: 'pg-title' }, 'Self-improvement'),
       h('p', { class: 'pg-sub' }, 'Observe, mine, propose, apply, then remeasure — every change is checked against its baseline.'),
@@ -496,7 +586,6 @@ export default {
   icon: 'trending-up',
   group: 'Improve',
   async load(ctx) {
-    ensureCss();
     if (S) this.destroy();
     S = freshState(ctx);
     try {

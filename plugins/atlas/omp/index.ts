@@ -56,12 +56,13 @@ import * as nodePath from "node:path";
 import { registerAgentGuard } from "./agent-guard";
 import { ATLAS_AGENT_TARGETABLE, frontmatterModelFor, isInheritedSelector, modelPatternsFor, roleFor } from "./atlas-agents";
 import { defaultAdvisorDeps, registerAdvisorGate } from "./advisor";
-import { type LeanKind, explorationDenyReason, explorationTool, kindOfOmpTool, loadNativeTools } from "./contracts";
+import { type LeanKind, explorationDenyReason, explorationTool, kindOfOmpTool, loadNativeTools, resolveTarget } from "./contracts";
 import { createShellEditTracker } from "./delegation";
 import { registerHookBridge } from "./hook-bridge";
 import { type RunStateSink, createRunStateSink } from "./run-state";
 import { createTranscriptCache, registerStopBridge, sessionFileOf } from "./stop-bridge";
 import { registerMandates } from "./mandates";
+import { gatesArmed } from "./scope";
 import { defaultLeanCtxBin, registerShellRoute } from "./shell-route";
 import { registerStyle } from "./style";
 import { registerWorkerBudget } from "./workers";
@@ -147,15 +148,17 @@ export function ensureClaudePluginRoot(
  * `Phase 2`) leaves `phase` absent.
  */
 export function boardItemsFromTodoDetails(details: unknown): BoardItem[] {
-	if (!details || typeof details !== "object" || !Array.isArray((details as Record<string, unknown>).phases)) return [];
+	const phases = details && typeof details === "object" ? (details as Record<string, unknown>).phases : undefined;
+	if (!Array.isArray(phases)) return [];
 	const known = todoPhases();
 	const items: BoardItem[] = [];
-	for (const phase of (details as Record<string, unknown>).phases) {
-		if (!phase || typeof phase !== "object" || !Array.isArray((phase as Record<string, unknown>).tasks)) continue;
+	for (const phase of phases) {
+		const tasks = phase && typeof phase === "object" ? (phase as Record<string, unknown>).tasks : undefined;
+		if (!Array.isArray(tasks)) continue;
 		const rawName = (phase as Record<string, unknown>).name;
 		const lowered = typeof rawName === "string" ? rawName.trim().toLowerCase() : "";
 		const boardPhase = known.includes(lowered) ? lowered : undefined;
-		for (const task of (phase as Record<string, unknown>).tasks) {
+		for (const task of tasks) {
 			const content = (task as Record<string, unknown> | null)?.content;
 			if (typeof content !== "string" || content.trim() === "") continue;
 			const rawStatus = (task as Record<string, unknown>).status;
@@ -342,7 +345,7 @@ function bashNudge(replacement: LeanReplacement, active: string[]): string {
 			? `the lean-ctx ${replacement.name} tool`
 			: `lean-ctx ctx_shell (write JSON args to ${replacement.device})`;
 	const contextMode = deviceRoute(active, CONTEXT_MODE_SERVER, "ctx_execute");
-	const alt = contextMode && contextMode !== replacement.device ? ` or context-mode ctx_execute (${contextMode})` : "";
+	const alt = contextMode && !(replacement.via === "device" && contextMode === replacement.device) ? ` or context-mode ctx_execute (${contextMode})` : "";
 	return `Atlas nudge: for anything producing output (~20+ lines, logs, data), prefer ${via}${alt}. Native Bash remains fine for mutations and short fixed output.`;
 }
 
@@ -470,7 +473,9 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 			shellTracker.reset();
 		} catch { return undefined; }
 	};
-	pi.on("session_start", (_event, ctx) => {
+	// A session switch (/new, fork, resume) is a new session in the same process: it needs its own shell baseline and
+	// its own begin+snapshot, exactly like session_start.
+	const start = (_event: unknown, ctx: { cwd: string; agent: { kind: string }; sessionManager?: { getSessionId?: () => unknown } }) => {
 		reset();
 		try {
 			if (ctx.agent.kind !== "sub") {
@@ -481,8 +486,9 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 		} catch {
 			// fail open: no snapshot means shell edits are not counted
 		}
-	});
-	pi.on("session_switch", reset);
+	};
+	pi.on("session_start", start);
+	pi.on("session_switch", start);
 	// Per main turn: a Stop finalizes the run, and a continued/resumed session never fires session_start again, so
 	// re-run the create-if-absent `begin` here or the DB gates (current_run_id) see no open run.
 	pi.on("before_agent_start", (_event, ctx) => {
@@ -500,7 +506,8 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 		try {
 			const tool = (event.toolName ?? "").toLowerCase();
 			const cwd = ctx.cwd;
-			if (!docsRoot(cwd)) return undefined;
+			const input = event.input as Record<string, unknown>;
+			if (!docsRoot(cwd) || !gatesArmed(cwd)) return undefined;
 			const isSub = ctx.agent.kind === "sub";
 
 			// 1) Native-tool tripwire: grep/glob -> the replacement reachable NOW,
@@ -528,7 +535,7 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 				// Exploration-only shell (cat/grep/find/...) is denied toward lean-ctx when a
 				// replacement is reachable now (contracts/native-tools.json explorationShell).
 				if (tool === "bash" && process.env.ATLAS_TRIPWIRE_HARD !== "off") {
-					const command = typeof event.input.command === "string" ? event.input.command : "";
+					const command = typeof input.command === "string" ? input.command : "";
 					const picked = explorationTool(command, contract);
 					const route = picked ? resolveLeanToolRoute(picked, activeToolsOf(deps)) : undefined;
 					const reason = route ? explorationDenyReason(command, route, contract) : undefined;
@@ -545,11 +552,13 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 			// 3) Delegation tracking — main thread only.
 			if (!isSub) {
 				shellTracker.capture(docsRoot(cwd));
-				if (tool === "edit" || tool === "write") {
-					if (inputPaths(event.input).some(p => !p.includes("://") && isNonDocsPath(nodePath.resolve(cwd, p)))) nondocsEdits++;
+				if (tool === "edit" || tool === "write" || tool === "ast_edit") {
+					const paths = inputPaths(input);
+					// ast_edit without a path rewrites under cwd: that is a code edit, not nothing.
+					if (tool === "ast_edit" && paths.length === 0 ? true : paths.some(p => !p.includes("://") && isNonDocsPath(resolveTarget(cwd, p)))) nondocsEdits++;
 				} else if (tool === "task") {
 					taskCalls++;
-					const hint = taskNamingHint(event.input);
+					const hint = taskNamingHint(input);
 					if (hint && !namingNoticeGiven) {
 						namingNoticeGiven = true;
 						return { additionalContext: TASK_NAMING_HINT(hint.count, hint.agents) };
@@ -594,6 +603,7 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 	pi.on("before_subagent_spawn", (event, ctx) => {
 		try {
 			if (process.env.ATLAS_TRIPWIRE_HARD === "off") return undefined;
+			const armed = gatesArmed(ctx?.cwd);
 			const spawn = event as { agent?: unknown; patterns?: unknown; modelRole?: unknown };
 			const agent = typeof spawn.agent === "string" ? spawn.agent.trim() : "";
 			if (!agent || !ATLAS_AGENT_TARGETABLE[agent] || !Array.isArray(spawn.patterns)) return undefined;
@@ -621,6 +631,8 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 				// discover the pinned agents), so the tier is restored instead of running on the parent's model.
 				return requested.some(carriesTier) ? undefined : tierRewrite;
 			}
+			// The override deny is a soft policy deny: scoped to armed dirs. The tier pin above is not.
+			if (!armed) return undefined;
 			return { block: true, reason: modelOverrideReason("Task", agent, requested.join(", "), roleFor(agent)) };
 		} catch {
 			return undefined; // fail open
@@ -629,7 +641,7 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 
 	pi.on("session_stop", (_event, ctx) => {
 		try {
-			if (stopBlocked || ctx.agent.kind === "sub" || !docsRoot(ctx.cwd)) return undefined;
+			if (stopBlocked || ctx.agent.kind === "sub" || !docsRoot(ctx.cwd) || !gatesArmed(ctx.cwd)) return undefined;
 			if (process.env.ATLAS_GATE === "off") return undefined;
 			// A standalone `omp -p` worker launched by atlas_mux is reported as a main session (kind is never "sub"), but its
 			// lead owns delegation. atlas_mux pins ATLAS_WORKER_NAME in the worker env, and nothing else sets it.
@@ -665,9 +677,12 @@ function rewritePluginRoot(input: Record<string, unknown> | undefined): string |
 
 export default function atlasOmpExtension(pi: ExtensionAPI): void {
 	ensureClaudePluginRoot();
-	// Route bash through `lean-ctx -c` like lean-ctx's Claude Code hook does. Registered first:
-	// omp applies only the LAST tool_call input revision, so any later bash rewrite wins.
-	registerShellRoute(pi, {
+	// omp applies only the LAST tool_call input revision and handlers never see each other's revisions, so the
+	// CLAUDE_PLUGIN_ROOT rewrite and the `lean-ctx -c` wrap (shell-route.ts, lean-ctx's Claude Code hook parity) must be
+	// ONE handler: the wrap runs over the already-rewritten command instead of the original.
+	type BashCall = { toolName: string; input: unknown };
+	let leanRoute: ((event: BashCall) => unknown) | undefined;
+	registerShellRoute({ on: ((_name: string, handler: (event: BashCall) => unknown) => void (leanRoute = handler)) as ExtensionAPI["on"] }, {
 		leanCtxBin: defaultLeanCtxBin,
 		activeTools: () => {
 			try {
@@ -680,9 +695,12 @@ export default function atlasOmpExtension(pi: ExtensionAPI): void {
 	pi.on("tool_call", event => {
 		if (event.toolName !== "bash") return undefined;
 		try {
-			const rewritten = rewritePluginRoot(event.input as Record<string, unknown> | undefined);
-			if (rewritten === undefined) return undefined;
-			return { input: { ...(event.input as Record<string, unknown>), command: rewritten } };
+			const input = event.input as Record<string, unknown> | undefined;
+			const rewritten = rewritePluginRoot(input);
+			const call: BashCall = rewritten === undefined ? event : { toolName: event.toolName, input: { ...input, command: rewritten } };
+			const routed = leanRoute?.(call) as { input: Record<string, unknown> } | undefined;
+			if (routed) return routed;
+			return rewritten === undefined ? undefined : { input: { ...input, command: rewritten } };
 		} catch {
 			return undefined; // fail open
 		}

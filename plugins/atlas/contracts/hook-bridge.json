@@ -10,6 +10,11 @@
     "SubagentStop": "session_shutdown on a subagent session: ingest_session.py spawned detached after transcript conversion",
     "PreCompact": "auto_compaction_start: ingest_session.py spawned detached (session_before_compact is deliberately NOT used: registering a handler for it disables omp async compaction)"
   },
+  "decisions": {
+    "PreToolUse": "hookSpecificOutput.permissionDecision deny AND ask block the omp call (omp has no per-hook permission prompt, so ask fails closed); allow/absent passes; additionalContext is appended. A legacy top-level decision:block on a turn hook is advisory context only. Exit code 2 is not honoured: the runner captures stdout only, so a hook must print its decision.",
+    "Stop": "decision:block -> session_stop block; a non-blocking hookSpecificOutput.additionalContext -> session_stop {continue:true, additionalContext}, delivered once per distinct text per session, never while stop_hook_active, at most MAX_STOP_BLOCKS times",
+    "budgets": "tool_call/tool_result hooks of one call (all task batch items together) share TOOL_CALL_BUDGET_MS=20000 (omp blocks a call at 30 s); before_agent_start and session_stop share HANDLER_BUDGET_MS=25000 measured from handler entry (omp drops a result at 30 s). Every skipped or timed-out hook leaves a row in hook-faults.jsonl."
+  },
   "bridged": [
     "session_boot.py",
     "prompt_optimizer.py",

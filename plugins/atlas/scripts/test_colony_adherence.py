@@ -1,6 +1,7 @@
 """colony_adherence miner: harness classification, reader routing, dispatch
 discipline, and named-dispatch measurement from seeded tool_calls rows."""
 
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import os
 import shutil
 import sys

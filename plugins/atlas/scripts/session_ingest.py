@@ -467,6 +467,56 @@ def harness_agent():
     return value if value in RECOGNIZED_HARNESSES else None
 
 
+_TASK_TOOLS = ("Task", "task", "Agent")
+
+
+def reconcile_task_dispatches(conn, session_id):
+    """omp has no PreToolUse hook writing `dispatches` (79 rows for 604 omp task
+    calls), so dispatch discipline was computed almost entirely from claude
+    data. For an omp session, top up the run's dispatch rows from the ingested
+    main-thread task tool_calls: idempotent by count (rows the harness already
+    logged are kept), each missing row carries the call's own ts and agent
+    type. Returns the number of rows added. Never raises into ingest."""
+    try:
+        row = conn.execute(
+            "SELECT agent, project_id FROM session_logs WHERE session_id=?",
+            (session_id,),
+        ).fetchone()
+        if not row or row[0] != "omp":
+            return 0
+        calls = conn.execute(
+            "SELECT ts, input_summary FROM tool_calls WHERE session_id=? "
+            "AND COALESCE(is_sidechain,0)=0 AND tool_name IN (?,?,?) ORDER BY ts, id",
+            (session_id, *_TASK_TOOLS),
+        ).fetchall()
+        if not calls:
+            return 0
+        rid = atlas_db.latest_run_id(conn, session_id)
+        if rid is None:
+            if row[1] is None:
+                return 0
+            rid = atlas_db.start_run(conn, row[1], session_id)
+        have = conn.execute(
+            "SELECT COUNT(*) FROM dispatches WHERE run_id=?", (rid,)
+        ).fetchone()[0]
+        missing = len(calls) - have
+        for ts, summary in calls[len(calls) - missing :] if missing > 0 else ():
+            try:
+                agent_type = atlas_db.resolve_agent_type(json.loads(summary or "{}"))
+            except (TypeError, ValueError):
+                agent_type = atlas_db.DEFAULT_AGENT_TYPE
+            conn.execute(
+                "INSERT INTO dispatches(run_id,ts,agent_type) VALUES(?,?,?)",
+                (rid, ts, agent_type),
+            )
+        return max(missing, 0)
+    except Exception as exc:  # derived accounting must never break ingest
+        import atlas_faults
+
+        atlas_faults.record("session_ingest.dispatches", exc)
+        return 0
+
+
 def ingest_transcript(path, conn=None, session_id=None, force=False):
     """Ingest new lines of one transcript. Returns a small stats dict.
     Incremental via byte cursor; resets cleanly if the file was truncated."""
@@ -596,6 +646,7 @@ def ingest_transcript(path, conn=None, session_id=None, force=False):
             "VALUES(?,?,?,?,?,?)",
             (session_id, path, new_cursor, size, _key_json(keys), time.time()),
         )
+        reconcile_task_dispatches(conn, session_id)
         atlas_db.refresh_session_aggregates(conn, session_id)
         # The mirror is now current for this session, so the run-health columns
         # that no live hook can fill (est_context_tokens, verifier_coverage,
@@ -987,6 +1038,7 @@ def ingest_agent_session(path, adapter, conn=None, session_id=None, sidechain=Fa
                 file_mtime=os.path.getmtime(path),
                 last_ingest_at=time.time(),
             )
+        reconcile_task_dispatches(conn, sid)
         atlas_db.refresh_session_aggregates(conn, sid)
         conn.commit()
     finally:
@@ -1372,9 +1424,130 @@ def backfill(root=None, conn=None):
     return totals
 
 
+# --- error-snippet backfill ---------------------------------------------------
+
+
+def _error_results(path):
+    """Yield (tool_use_id, result_bytes, text) for every failed tool result in a
+    claude or omp transcript. An omp result yields its raw toolCallId; the
+    caller maps it onto whichever stored form a row has ('<session>:<callId>'
+    from omp_adapter, or the bare/agent-prefixed id from omp_transcript). Cheap
+    byte prefilter: lines without an error flag are never JSON-parsed."""
+    with open(path, "rb") as f:
+        for raw in f:
+            if b"is_error" not in raw and b"isError" not in raw:
+                continue
+            try:
+                obj = json.loads(raw)
+            except Exception:
+                continue
+            typ = obj.get("type")
+            if typ == "message":
+                msg = obj.get("message") or {}
+                if msg.get("role") == "toolResult" and msg.get("isError"):
+                    tuid = msg.get("toolCallId")
+                    if tuid:
+                        text = _omp_text(msg.get("content"))
+                        yield tuid, len(text), text
+            elif typ in ("user", "assistant"):
+                for b in _blocks(obj.get("message") or {}):
+                    if (
+                        isinstance(b, dict)
+                        and b.get("type") == "tool_result"
+                        and b.get("is_error") in (True, "true", "True")
+                        and b.get("tool_use_id")
+                    ):
+                        content = b.get("content")
+                        rbytes = (
+                            len(content)
+                            if isinstance(content, str)
+                            else len(json.dumps(content, default=str))
+                        )
+                        yield b["tool_use_id"], rbytes, _result_text(content)
+
+
+_EMPTY_ERRORS = (
+    "FROM tool_calls WHERE is_error=1 AND (error_snippet IS NULL OR error_snippet='')"
+)
+
+
+def backfill_errors(roots=None, conn=None, batch=500):
+    """Re-read claude and omp transcripts and fill `error_snippet` + `denied` on
+    tool_calls rows that failed (is_error=1) but carry no snippet, keyed by
+    tool_use_id, through atlas_db.update_tool_result (the live-ingest path).
+    Idempotent: a filled row leaves the target set, so a rerun changes nothing.
+    Rows whose transcript no longer exists (or whose result text is empty) stay
+    empty and show up in `empty_after`. `roots` overrides the default
+    (~/.claude/projects, ~/.omp/agent/sessions)."""
+    roots = roots or [
+        os.path.expanduser("~/.claude/projects"),
+        os.path.expanduser(AGENT_DEFAULT_ROOTS["omp"]),
+    ]
+    own = conn is None
+    if own:
+        conn = atlas_db.connect()
+        atlas_db.init(conn)
+    try:
+        targets = {r[0] for r in conn.execute("SELECT tool_use_id " + _EMPTY_ERRORS)}
+        # omp rows reach the DB two ways: omp_adapter ('<session>:<callId>') and
+        # omp_transcript's claude-shaped mirror (raw callId, optionally
+        # '<agent>:' prefixed, '.N' per batched task item, '#N' on repeats).
+        # Index every such variant back to the stored id.
+        index = {}
+        for full in targets:
+            base = re.sub(r"#\d+$", "", full)
+            for v in {full, base, base.partition(":")[2] or base}:
+                index.setdefault(v, set()).add(full)
+                index.setdefault(re.sub(r"\.\d+$", "", v), set()).add(full)
+        out = {"empty_before": len(targets), "files": 0, "updated": 0, "denied": 0}
+        pending = 0
+        for root in roots:
+            for dirpath, _dirs, files in os.walk(root):
+                for fn in files:
+                    if not targets:
+                        break
+                    if not fn.endswith(".jsonl"):
+                        continue
+                    out["files"] += 1
+                    try:
+                        for tuid, rbytes, text in _error_results(
+                            os.path.join(dirpath, fn)
+                        ):
+                            hits = index.get(tuid, set()) & targets
+                            if not hits:
+                                continue
+                            for full in hits:
+                                targets.discard(full)
+                                atlas_db.update_tool_result(conn, full, 1, rbytes, text)
+                                out["updated"] += 1
+                                out["denied"] += atlas_db.is_denied_result(text)
+                            pending += 1
+                            if pending >= batch:
+                                conn.commit()
+                                pending = 0
+                    except OSError:
+                        continue
+                    if out["files"] % 500 == 0:
+                        print(f"  ...{out['files']} transcripts", file=sys.stderr)
+        conn.commit()
+        out["empty_after"] = conn.execute(
+            "SELECT COUNT(*) " + _EMPTY_ERRORS
+        ).fetchone()[0]
+        return out
+    finally:
+        if own:
+            conn.close()
+
+
 def main(argv):
     if not argv or argv[0] in ("-h", "--help"):
         print(__doc__)
+        return 0
+    if argv[0] == "--backfill-errors":
+        t0 = time.time()
+        print("Backfilling error snippets from claude + omp transcripts ...")
+        out = backfill_errors(argv[1:] or None)
+        print(json.dumps({**out, "seconds": round(time.time() - t0, 1)}, indent=2))
         return 0
     if argv[0] == "--backfill":
         root = argv[1] if len(argv) > 1 else None

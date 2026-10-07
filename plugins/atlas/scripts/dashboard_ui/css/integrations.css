@@ -1,0 +1,63 @@
+/* herdr tooling: path links, Files panel, Integrations panel/row, Herdr projects section. Tokens only. */
+
+.path-link { display: inline; padding: 0; margin: 0; border: 0; background: none; color: var(--accent-text); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; overflow-wrap: anywhere; text-align: left; }
+.path-link:hover { color: var(--accent-hover); }
+.path-link:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--r-1); }
+
+.files-panel { display: flex; flex-direction: column; gap: var(--s-3); min-width: 0; }
+.files-actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.files-open { display: flex; align-items: flex-end; gap: var(--s-2); }
+.files-open .field { flex: 1; min-width: 0; }
+.files-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-1); font-size: var(--fs-sm); }
+.files-list li { overflow-wrap: anywhere; }
+
+.hp-chip { max-width: 100%; }
+.hp-chip-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+
+/* integrations */
+.int-panel { display: flex; flex-direction: column; gap: var(--s-3); }
+.int-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; }
+.int-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: var(--s-3); }
+.int-tool { display: flex; flex-direction: column; gap: var(--s-2); min-width: 0; padding: var(--s-3); border: 1px solid var(--border); border-radius: var(--r-2); background: var(--surface-1); }
+.int-tool[data-installed="false"] { background: var(--surface-2); }
+.int-head { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+.int-head h3 { margin: 0; font-size: var(--fs-md); }
+.int-docs { margin-left: auto; display: inline-flex; align-items: center; gap: var(--s-1); font-size: var(--fs-xs); color: var(--accent-text); }
+.int-docs .icon { width: 12px; height: 12px; }
+.int-role, .int-notes { margin: 0; font-size: var(--fs-sm); }
+.int-facts { margin: 0; }
+.int-install .cmd { max-width: 100%; }
+.int-deck { padding: var(--s-3); border: 1px dashed var(--border-strong); border-radius: var(--r-2); }
+.int-deck h3 { margin: 0 0 var(--s-1); font-size: var(--fs-md); }
+.int-deck p { margin: var(--s-1) 0 0; }
+
+.int-row { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; margin-bottom: var(--s-3); font-size: var(--fs-xs); }
+.int-row-label { font-weight: 600; margin-right: var(--s-1); }
+.int-chip { text-decoration: none; color: var(--text); }
+.int-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--st-ok); flex: none; }
+.int-chip[data-installed="false"] .int-dot { background: transparent; border: 1.5px solid var(--st-idle); }
+
+/* herdr projects section */
+.hp-section { display: flex; flex-direction: column; gap: var(--s-3); margin-bottom: var(--s-4); }
+.hp-head { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+.hp-head .pg-h2 { margin: 0; }
+.hp-root { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hp-projects { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: var(--gap); }
+.hp-project { display: flex; flex-direction: column; gap: var(--s-2); min-width: 0; padding: var(--s-3); border: 1px solid var(--border); border-radius: var(--r-2); background: var(--surface-1); }
+.hp-project-head { display: flex; align-items: flex-start; gap: var(--s-2); flex-wrap: wrap; }
+.hp-project-head h3 { margin: 0; font-size: var(--fs-md); }
+.hp-project-head p { margin: 2px 0 0; }
+.hp-repos { display: flex; flex-wrap: wrap; gap: var(--s-1); }
+.hp-threads { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-2); }
+.hp-thread { display: flex; align-items: flex-start; gap: var(--s-2); padding: var(--s-2); border: 1px solid var(--border); border-radius: var(--r-2); background: var(--surface-2); flex-wrap: wrap; }
+.hp-thread-main { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: var(--s-1); }
+.hp-thread-top, .hp-thread-sub { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; min-width: 0; font-size: var(--fs-sm); }
+.hp-thread-sub .mono { max-width: 100%; }
+.hp-thread-files { min-width: 0; font-size: var(--fs-xs); }
+.hp-thread-files span { display: block; }
+.hp-thread-actions { display: flex; gap: var(--s-1); }
+.hp-configure { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3); border: 1px dashed var(--border-strong); border-radius: var(--r-2); }
+.hp-configure p { margin: 0; }
+.hp-warn { color: var(--st-input); }
+.hp-task { max-height: 200px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; margin: var(--s-1) 0 0; padding: var(--s-2); background: var(--surface-2); border-radius: var(--r-1); font-size: var(--fs-xs); }
+.modal .textarea { min-height: 96px; }

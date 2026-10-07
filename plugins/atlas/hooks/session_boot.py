@@ -56,6 +56,154 @@ def ensure_dashboard():
         return None
 
 
+_COLONY_FRESH_S = 30  # healthy status younger than this is used as-is
+_COLONY_DOWN_TTL_S = 60  # unhealthy status reused this long
+_COLONY_TRUST_S = 600  # healthy status up to this old is used, with a detached refresh
+
+
+_COLONY_PORTS = (7317, 17317, 27317, 37317, 47317)
+_COLONY_PS_RE = r"server/(managed|supervisor)\.ts|bun\s+(\S*/)?server/index\.ts|herdr-web-ui\S*/server/index\.ts"
+
+
+def _colony_stack_url(data):
+    """Existing herdr-web-ui stack: the URL that answers /api/health (status `url` first, then the five ports,
+    300 ms each), "" when the ps match / `upstream_plugin_on_port` says a stack runs but no port answers, else
+    None. Read-only. Any non-None result means NEVER spawn another; a URL is only returned if it answered."""
+    import re
+    import subprocess
+    import urllib.request
+
+    first = data.get("url")
+    urls = ([first] if first else []) + [
+        "http://127.0.0.1:%d" % p
+        for p in _COLONY_PORTS
+        if "http://127.0.0.1:%d" % p != first
+    ]
+    for url in urls:
+        try:
+            with urllib.request.urlopen(url + "/api/health", timeout=0.3) as r:
+                if r.status == 200:
+                    return url
+        except Exception:
+            continue
+    if data.get("upstream_plugin_on_port"):
+        return ""
+    try:
+        ps = subprocess.run(
+            ["ps", "-axo", "command"], capture_output=True, text=True, timeout=2
+        )
+        if re.search(_COLONY_PS_RE, ps.stdout or ""):
+            return ""
+    except Exception:
+        pass
+    return None
+
+
+def ensure_colony():
+    """Probe the one upstream herdr-web-ui (cached) and, if it is down while herdr runs, start
+    `atlas_herdr.py ensure` DETACHED (it takes the shared flock, so concurrent boots never start a second
+    instance). Fail-open, never blocks boot. ATLAS_COLONY=off skips it. Output goes to $ATLAS_HOME/herdr-ensure.log.
+    Returns a one-line status, or None."""
+    if os.environ.get("ATLAS_COLONY", "on").lower() in ("0", "off", "false", "no"):
+        return None
+    try:
+        import subprocess
+
+        script = os.path.abspath(
+            os.path.join(
+                os.path.dirname(os.path.abspath(__file__)),
+                "..",
+                "scripts",
+                "atlas_herdr.py",
+            )
+        )
+        if not os.path.isfile(script):
+            return None
+        home = os.environ.get("ATLAS_HOME") or os.path.join(
+            os.path.expanduser("~"), ".atlas"
+        )
+        cache = os.path.join(home, "herdr-status-cache.json")
+        data = None
+
+        def refresh_detached():
+            subprocess.Popen(
+                [
+                    "sh",
+                    "-c",
+                    '"$0" "$1" status >"$2.tmp" && mv "$2.tmp" "$2"',
+                    sys.executable,
+                    script,
+                    cache,
+                ],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+                env=os.environ.copy(),
+            )
+
+        try:
+            age = time.time() - os.path.getmtime(cache)
+            with open(cache) as f:
+                cached = json.load(f)
+            if cached.get("healthy") and age < _COLONY_TRUST_S:
+                data = cached
+                if age >= _COLONY_FRESH_S:
+                    refresh_detached()  # stale-while-revalidate, never on the boot path
+            elif age < _COLONY_DOWN_TTL_S:
+                if not cached.get("herdr_server"):
+                    return None  # herdr not running (negative cache): skip the probe
+                data = cached  # web UI down: reuse briefly; the detached ensure below is flock-guarded
+        except (OSError, ValueError):
+            # Cold cache: never pay the status probe on the boot path; probe detached, use it next boot.
+            try:
+                os.makedirs(home, exist_ok=True)
+                refresh_detached()
+            except OSError:
+                pass
+            return "colony: checking"
+        if data is None:
+            res = subprocess.run(
+                [sys.executable, script, "status"],
+                capture_output=True,
+                text=True,
+                timeout=4,
+                env=os.environ.copy(),
+            )
+            data = json.loads(res.stdout or "{}")
+            os.makedirs(home, exist_ok=True)
+            with open(cache + ".tmp", "w") as f:
+                json.dump(data, f)
+            os.replace(cache + ".tmp", cache)
+        url = data.get("url")
+        if data.get("healthy"):
+            return "colony ready at %s" % url
+        if not data.get("herdr_server"):
+            return None  # herdr itself is not running; Atlas cannot start it
+        existing = _colony_stack_url(data)
+        if existing is not None:
+            # a stack exists: never spawn a second one; only name a URL that answered
+            return (
+                "colony: %s (ready)" % existing
+                if existing
+                else "colony: herdr web UI running (port unknown)"
+            )
+        os.makedirs(home, exist_ok=True)
+        log_path = os.path.join(home, "herdr-ensure.log")
+        with open(log_path, "ab") as log:
+            subprocess.Popen(
+                [sys.executable, script, "ensure"],
+                stdin=subprocess.DEVNULL,
+                stdout=log,
+                stderr=log,
+                start_new_session=True,
+                env=os.environ.copy(),
+            )
+        return "colony: starting the herdr web UI at %s (log: %s)" % (url, log_path)
+    except Exception:
+        return None
+
+
 def has_cmd(name):
     return shutil.which(name) is not None
 
@@ -143,7 +291,12 @@ def plugin_enabled(name, root=None):
 def recall_mandate():
     """claude-mem recall line from the shared contract (contracts/mandates.json); None if unreadable."""
     try:
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "contracts", "mandates.json")
+        path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "..",
+            "contracts",
+            "mandates.json",
+        )
         with open(path) as fh:
             template = json.load(fh)["recall"]
         return template.replace("{route}", "mcp__plugin_claude-mem_mcp-search__search")
@@ -165,10 +318,17 @@ _DELETED = "deleted"
 def _delegation_exempt_spec():
     """(dirs, extensions) from contracts/native-tools.json, or None if unreadable."""
     try:
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "contracts", "native-tools.json")
+        path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "..",
+            "contracts",
+            "native-tools.json",
+        )
         with open(path) as fh:
             spec = json.load(fh)["delegationExempt"]
-        return tuple(str(d) for d in spec["dirs"]), tuple(str(e) for e in spec["extensions"])
+        return tuple(str(d) for d in spec["dirs"]), tuple(
+            str(e) for e in spec["extensions"]
+        )
     except (OSError, ValueError, KeyError, TypeError):
         return None
 
@@ -187,7 +347,10 @@ def dirty_map(root):
     try:
         res = subprocess.run(
             ["git", "status", "--porcelain", "-z", "--untracked-files=all"],
-            cwd=str(root), capture_output=True, timeout=10, check=True,
+            cwd=str(root),
+            capture_output=True,
+            timeout=10,
+            check=True,
         )
     except (OSError, subprocess.SubprocessError):
         return None
@@ -208,7 +371,9 @@ def dirty_map(root):
 
 
 def snapshot_path(root, session_id):
-    return os.path.join(str(root), ".atlas", ".run", "dirty-snapshot-%s.json" % session_id)
+    return os.path.join(
+        str(root), ".atlas", ".run", "dirty-snapshot-%s.json" % session_id
+    )
 
 
 def write_dirty_snapshot(cwd, session_id):
@@ -624,6 +789,7 @@ def main():
         payload = json.loads(raw) if raw.strip() else {}
     except Exception:
         pass
+    payload = payload if isinstance(payload, dict) else {}
 
     # Observability DB lifecycle -- fail-open; must not block boot.
     _conn = None
@@ -761,14 +927,37 @@ def main():
         pass  # memory is best-effort
 
     # Hash already-dirty non-docs paths so the Stop gate's delegation mandate can
-    # tell shell-written code from inherited dirt. Best-effort, never blocks boot.
-    if os.environ.get("ATLAS_GATE", "").lower() != "off":
-        write_dirty_snapshot(payload.get("cwd") or os.getcwd(), payload.get("session_id", ""))
+    # tell shell-written code from inherited dirt. `git status` + hashing costs 60-90 ms on a big dirty tree,
+    # so it runs DETACHED (`session_boot.py --snapshot`), never on the boot path. The gate fails open on a
+    # missing snapshot. Best-effort, never blocks boot.
+    if os.environ.get("ATLAS_GATE", "").lower() != "off" and payload.get("session_id"):
+        try:
+            import subprocess
+
+            subprocess.Popen(
+                [
+                    sys.executable,
+                    os.path.abspath(__file__),
+                    "--snapshot",
+                    payload.get("cwd") or os.getcwd(),
+                    payload["session_id"],
+                ],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+        except Exception:
+            pass
 
     boot_root = payload.get("cwd") or os.getcwd()
     mem_plugin = plugin_enabled("claude-mem", boot_root)
     mem = detect_dep("claude_mem") or has_cmd("claude-mem") or mem_plugin
-    ctx = detect_dep("context_mode") or has_cmd("context-mode") or plugin_enabled("context-mode", boot_root)
+    ctx = (
+        detect_dep("context_mode")
+        or has_cmd("context-mode")
+        or plugin_enabled("context-mode", boot_root)
+    )
     fallow = has_cmd("fallow")
 
     pony = has_cmd("ponytail") or plugin_enabled("ponytail", boot_root)
@@ -782,7 +971,11 @@ def main():
     # fact the model cannot infer (posture + squad) plus setup gaps that are
     # actually actionable; the rest lives in the skill, not in every boot.
     # omp renders its own output style (omp/style.ts); ~/.claude/settings.json outputStyle does not apply there.
-    active_style = ATLAS_OUTPUT_STYLE if os.environ.get("ATLAS_HARNESS") == "omp" else read_output_style()
+    active_style = (
+        ATLAS_OUTPUT_STYLE
+        if os.environ.get("ATLAS_HARNESS") == "omp"
+        else read_output_style()
+    )
     lines = [
         "Atlas: orchestrator posture. research -> theory -> test -> validate -> implement -> verify; "
         "evidence before any done claim. Route execution to atlas:<role> subagents; "
@@ -791,7 +984,11 @@ def main():
     lines.extend(status_contract_lines(active_style))
     # claude-mem recall mandate: armed only when the claude-mem plugin (its MCP
     # search server) is enabled; a bare CLI/module cannot be called as a tool.
-    recall = recall_mandate() if mem_plugin and os.environ.get("ATLAS_MANDATES") != "off" else None
+    recall = (
+        recall_mandate()
+        if mem_plugin and os.environ.get("ATLAS_MANDATES") != "off"
+        else None
+    )
     if recall:
         lines.append(recall)
     absent = [
@@ -893,6 +1090,12 @@ def main():
             lines.append(dash)
     except Exception:
         pass  # dashboard is best-effort; never block boot
+    try:
+        colony = ensure_colony()
+        if colony:
+            lines.append(colony)
+    except Exception:
+        pass  # colony is best-effort; never block boot
     sys_msg = "Atlas ready"
     if not (mem and ctx):
         sys_msg += " (run the `atlas` skill to complete setup)"
@@ -918,6 +1121,16 @@ def main():
 
 if __name__ == "__main__":
     try:
+        if sys.argv[1:2] == ["--snapshot"]:
+            write_dirty_snapshot(sys.argv[2], sys.argv[3])
+            sys.exit(0)
         main()
-    except Exception:
+    except Exception as exc:
+        try:
+            sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+            import atlas_faults
+
+            atlas_faults.record("session_boot", exc)
+        except Exception:
+            pass
         sys.exit(0)

@@ -1,0 +1,74 @@
+## UI Pro Max Stack Guidelines
+**Stack:** html-tailwind | **Query:** custom properties css variables vanilla dark mode theme
+**Source:** stacks/html-tailwind.csv | **Found:** 5 results
+
+### Result 1
+- **Category:** Colors
+- **Guideline:** Dark mode
+- **Description:** Support dark mode with dark: prefix
+- **Do:** dark:bg-gray-900 dark:text-white
+- **Don't:** No dark mode support
+- **Code Good:** dark:bg-gray-900
+- **Code Bad:** Only light theme
+- **Severity:** Medium
+- **Docs URL:** https://tailwindcss.com/docs/dark-mode
+- **Applies To:** html-tailwind 4.3
+- **Status:** active
+- **Verified At:** 2026-08-13
+
+### Result 2
+- **Category:** Colors
+- **Guideline:** Theme color variables
+- **Description:** Declare color namespaces in @theme so Tailwind generates semantic utilities
+- **Do:** @theme { --color-primary: oklch(...); }
+- **Don't:** Use arbitrary CSS-variable utilities for registered tokens
+- **Code Good:** bg-primary
+- **Code Bad:** bg-[var(--color-primary)]
+- **Severity:** Medium
+- **Docs URL:** https://tailwindcss.com/docs/colors#customizing-your-colors
+- **Applies To:** html-tailwind 4.3
+- **Status:** active
+- **Verified At:** 2026-08-13
+
+### Result 3
+- **Category:** Colors
+- **Guideline:** Semantic colors
+- **Description:** Define semantic design tokens with CSS-first @theme
+- **Do:** Declare --color-primary and related tokens in @theme
+- **Don't:** Repeat palette utilities in components
+- **Code Good:** bg-primary
+- **Code Bad:** bg-blue-500 everywhere
+- **Severity:** Medium
+- **Docs URL:** https://tailwindcss.com/docs/theme
+- **Applies To:** html-tailwind 4.3
+- **Status:** active
+- **Verified At:** 2026-08-13
+
+### Result 4
+- **Category:** Forms
+- **Guideline:** Placeholder styling
+- **Description:** Style placeholder text appropriately
+- **Do:** placeholder:text-gray-400
+- **Don't:** Dark placeholder text
+- **Code Good:** placeholder:text-gray-400
+- **Code Bad:** Default dark placeholder
+- **Severity:** Low
+- **Docs URL:** 
+- **Applies To:** html-tailwind 4.3
+- **Status:** active
+- **Verified At:** 2026-08-13
+
+### Result 5
+- **Category:** Typography
+- **Guideline:** Prose plugin
+- **Description:** Use @tailwindcss/typography for rich text
+- **Do:** prose prose-lg for article content
+- **Don't:** Custom styles for markdown
+- **Code Good:** prose prose-lg max-w-none
+- **Code Bad:** Custom text styling
+- **Severity:** Medium
+- **Docs URL:** https://tailwindcss.com/docs/typography-plugin
+- **Applies To:** html-tailwind 4.3
+- **Status:** active
+- **Verified At:** 2026-08-13
+

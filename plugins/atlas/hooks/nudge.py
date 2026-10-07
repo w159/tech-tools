@@ -19,6 +19,7 @@ import time
 WINDOW_SECONDS = 900  # at most once per 15 minutes
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+import atlas_faults  # noqa: E402
 import atlas_hook_guard  # noqa: E402
 
 
@@ -38,6 +39,7 @@ def _check_memory_captured():
 
 def main():
     payload = atlas_hook_guard.read_payload()
+    payload = payload if isinstance(payload, dict) else {}
 
     # stop_hook_active, the throttle window, and the circuit breaker are all
     # checked here before we even touch the DB.
@@ -81,5 +83,6 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except Exception:
+    except Exception as exc:
+        atlas_faults.record("nudge", exc)
         sys.exit(0)

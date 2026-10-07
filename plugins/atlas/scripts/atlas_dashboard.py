@@ -23,6 +23,7 @@ import signal
 import socket
 import subprocess
 import sys
+import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -225,15 +226,17 @@ def _env_example_keys():
 
 
 def _env_candidate_paths() -> list:
-    """Plugin .env path for this plugin root only.
+    """The env files the connector preloaders read, lowest precedence first.
 
     PLUGIN_ROOT is derived from this script's location. In the marketplace
     source tree that is `plugins/atlas/`. In a consumer install Claude sets
     CLAUDE_PLUGIN_ROOT to the installed copy — still one root, never a
     hardcoded ~/.claude/plugins/cache path list. Agents developing this
-    marketplace must not write install caches.
+    marketplace must not write install caches. The per-user default file is
+    read-only here: mcp/_env/load.* load it first, so a key set only there is
+    configured even though the dashboard never writes it.
     """
-    return [PLUGIN_ROOT / ".env"]
+    return [Path.home() / ".config" / "atlas" / "atlas.env", PLUGIN_ROOT / ".env"]
 
 
 def _parse_env_keys(path: Path) -> set:
@@ -378,6 +381,67 @@ def _connector_usage_map() -> dict:
         conn.close()
 
 
+# What each connector needs before its server authenticates: a list of alternatives,
+# each a list of env keys that must ALL be set (``KEY=value`` = field must equal value).
+# Mirrors what each <vendor>_status tool names as required when unconfigured; the
+# dashboard test asserts every .mcp.json server has an entry and every key exists.
+CONNECTOR_AUTH = {
+    "auvik": [["AUVIK_USERNAME", "AUVIK_API_KEY"]],
+    "blumira": [
+        ["BLUMIRA_JWT_TOKEN"],
+        ["BLUMIRA_CLIENT_ID", "BLUMIRA_CLIENT_SECRET"],
+    ],
+    "cipp": [
+        ["CIPP_BASE_URL", "CIPP_API_KEY"],
+        ["CIPP_BASE_URL", "CIPP_TENANT_ID", "CIPP_CLIENT_ID", "CIPP_CLIENT_SECRET"],
+    ],
+    "connectwise": [
+        [
+            "CW_MANAGE_COMPANY_ID",
+            "CW_MANAGE_PUBLIC_KEY",
+            "CW_MANAGE_PRIVATE_KEY",
+            "CW_MANAGE_CLIENT_ID",
+        ]
+    ],
+    "spanning": [["SPANNING_ADMIN_EMAIL", "SPANNING_API_TOKEN"]],
+    "falcon": [["FALCON_CLIENT_ID", "FALCON_CLIENT_SECRET"]],
+    "knowbe4": [["KNOWBE4_API_KEY"]],
+    "ninjaone": [
+        ["NINJAONE_CLIENT_ID", "NINJAONE_CLIENT_SECRET"],
+        ["NINJAONE_CLIENT_ID", "NINJAONE_AUTH_MODE=user"],
+    ],
+    "paylocity": [["PAYLOCITY_CLIENT_ID", "PAYLOCITY_CLIENT_SECRET"]],
+    "threatlocker": [["THREATLOCKER_API_KEY"]],
+    "vanta": [["VANTA_CLIENT_ID", "VANTA_CLIENT_SECRET"]],
+    "panos": [["PANOS_HOST", "PANOS_API_KEY"]],
+}
+
+
+def _connector_auth_state(name: str, fields: list) -> tuple[bool, list]:
+    """(configured, missing) for one connector from its CONNECTOR_AUTH alternatives.
+
+    Unknown connector: not configured, nothing to name. ``missing`` is taken from
+    the alternative closest to complete so the UI names the shortest fix.
+    """
+    by_key = {f["env_key"]: f for f in fields}
+
+    def satisfied(req: str) -> bool:
+        key, _, want = req.partition("=")
+        f = by_key.get(key)
+        if not f or not f.get("is_set"):
+            return False
+        return not want or (f.get("value") or "").strip().lower() == want
+
+    best: list | None = None
+    for alt in CONNECTOR_AUTH.get(name, []):
+        gaps = [r for r in alt if not satisfied(r)]
+        if not gaps:
+            return True, []
+        if best is None or len(gaps) < len(best):
+            best = gaps
+    return False, best or []
+
+
 def _connector_status():
     """Group userConfig fields by MCP connector for the Settings UI."""
     manifest = _plugin_manifest()
@@ -464,47 +528,7 @@ def _connector_status():
                 }
             )
 
-        def _optional_key(key: str | None) -> bool:
-            if not key:
-                return True
-            k = key.lower()
-            return (
-                any(
-                    s in k
-                    for s in (
-                        "base_url",
-                        "region",
-                        "platform",
-                        "auth_mode",
-                        "sandbox",
-                        "organization_id",
-                        "tenant_id",  # sometimes optional depending on vendor; still not the secret
-                    )
-                )
-                and not k.endswith("_api_key")
-                and "secret" not in k
-                and "token" not in k
-                and "password" not in k
-                and "private" not in k
-            )
-
-        # Auth is "configured" when every non-optional credential field is set.
-        # Optional URL/region/platform fields do not block readiness.
-        must = [
-            f
-            for f in fields
-            if (f.get("user_config_key") or f.get("env_key"))
-            and not _optional_key(f.get("user_config_key") or f.get("env_key"))
-        ]
-        # Prefer sensitive/required fields when present
-        sensitive_must = [
-            f
-            for f in must
-            if f.get("sensitive")
-            or (user_config.get(f.get("user_config_key") or "") or {}).get("required")
-        ]
-        check = sensitive_must or must
-        configured = bool(check) and all(f.get("is_set") for f in check)
+        configured, missing = _connector_auth_state(name, fields)
         server_name = f"plugin:atlas:{name}"
         enabled = server_name not in disabled
         u = usage.get(name) or {}
@@ -518,11 +542,7 @@ def _connector_status():
                 "user_config_fields": uc_refs,
                 "fields": fields,
                 "configured_hint": configured,
-                "missing_required": [
-                    (f.get("user_config_key") or f.get("env_key"))
-                    for f in check
-                    if not f.get("is_set")
-                ],
+                "missing_required": missing,
                 "usage": {
                     "calls": u.get("calls", 0),
                     "calls_total": u.get("calls_total", 0),
@@ -1092,8 +1112,13 @@ def write_settings_updates(updates: dict):
             if settings_path.is_file()
             else {}
         )
-    except Exception:
-        data = {}
+    except Exception as exc:
+        # Never overwrite a file we could not parse: that is the user's global Claude config.
+        return {
+            "ok": False,
+            "error": "settings_unreadable",
+            "why": f"{settings_path} is not valid JSON ({exc.__class__.__name__}); fix or remove it first",
+        }
     if not isinstance(data, dict):
         data = {}
     pc = data.setdefault("pluginConfigs", {})
@@ -1110,7 +1135,7 @@ def write_settings_updates(updates: dict):
             opts.pop(k, None)
         else:
             opts[k] = v
-    settings_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    atlas_control.write_private(settings_path, json.dumps(data, indent=2) + "\n")
 
     # Dual-write allowlisted env keys for local stdio servers that read .env
     env_result = None
@@ -1161,8 +1186,8 @@ def _merge_env_file(path: Path, updates: dict) -> None:
                 continue
             seen.add(key)
             lines.append(f"{key}={existing.get(key, '')}")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    # A .env that predates this code may be world-readable; write_private tightens it.
+    atlas_control.write_private(path, "\n".join(lines) + "\n")
 
 
 def _write_env_file(updates: dict):
@@ -1647,7 +1672,8 @@ STATIC_DIR = SCRIPTS_DIR / "dashboard_ui"
 TOKEN_PLACEHOLDER = "__ATLAS_TOKEN__"
 # GETs that expose transcripts/agent output or live streams: token required.
 _SENSITIVE_GET = re.compile(
-    r"^/api/v2/(stream|irc|colony/(capture|agent)|[^/]+/transcript)$|^/api/sessions/[^/]+/transcript$"
+    r"^/api/v2/(stream|irc|channels(/[^/]+)?|[^/]+/transcript)$|^/api/sessions/[^/]+/transcript$"
+    r"|^/api/v2/(herd/)?agents/[^/]+/peek$"
 )
 _TOKEN_EXEMPT = ("/api/health", "/health")
 _MIME = {
@@ -1676,7 +1702,13 @@ def _mount_v2_routes() -> None:
 
     V2_ROUTES.clear()
     V2_MOUNT_ERRORS.clear()
-    for name in ("atlas_dash_colony", "atlas_dash_insights"):
+    for name in (
+        "atlas_dash_work",
+        "atlas_dash_irc",
+        "atlas_dash_insights",
+        "atlas_dash_herd",
+        "atlas_dash_integrations",
+    ):
         try:
             mod = importlib.import_module(name)
             for method, pattern, fn in getattr(mod, "ROUTES", []):
@@ -1740,42 +1772,271 @@ def _static_file(rel: str):
     return target if target.is_file() else None
 
 
+# Keys that change every tick without meaning anything changed. They are ignored for change
+# detection only; the emitted payload is untouched. ``preview``/``last_ts`` are live output
+# and activity stamps, ``fetched_ms`` is the herd sampler's own latency: each would re-emit
+# a topic on every tick.
+_VOLATILE_KEYS = frozenset(
+    {
+        "idle_seconds",
+        "updated",
+        "last_ok",
+        "generated_at",
+        "now",
+        "age_seconds",
+        "preview",
+        "last_ts",
+        "fetched_ms",
+    }
+)
+
+
+def _strip_volatile(obj):
+    if isinstance(obj, dict):
+        return {
+            k: _strip_volatile(v) for k, v in obj.items() if k not in _VOLATILE_KEYS
+        }
+    if isinstance(obj, list):
+        return [_strip_volatile(v) for v in obj]
+    return obj
+
+
 def _snapshot_hash(obj) -> str:
     import hashlib
 
     return hashlib.sha256(
-        json.dumps(obj, sort_keys=True, default=str).encode("utf-8")
+        json.dumps(_strip_volatile(obj), sort_keys=True, default=str).encode("utf-8")
     ).hexdigest()
 
 
-def _v2_get(path: str, query: dict):
-    """Run a mounted GET route directly (used by SSE). Returns body or None."""
-    for method, rx, fn in V2_ROUTES:
-        if method == "GET" and rx.fullmatch(path):
-            try:
-                status, body = fn(_Ctx(query, {}, ()))
-            except Exception:
-                return None
-            return body if status == 200 else None
+# Default page sizes for the heavy v2 reads (a full /improve was 571 KB, /todos 299 KB).
+# ``?full=1`` returns everything; ``?limit=N|all&offset=N`` pages /improve findings and
+# ``?done=N|all`` sizes the done tail of /todos. ``page`` in the reply says what was cut.
+IMPROVE_PAGE = {"findings": 40, "ledger": 20, "lessons": 10}
+TODOS_DONE_KEEP = 20
+
+
+def _page_arg(query: dict, key: str, default):
+    """int, None for 'all', else default."""
+    raw = query.get(key)
+    if raw in (None, ""):
+        return default
+    if raw == "all":
+        return None
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return default
+
+
+def _shape_payload(path: str, query: dict, body):
+    """Trim a heavy v2 GET body to its default page (never mutates ``body``)."""
+    if not isinstance(body, dict) or query.get("full") in ("1", "true"):
+        return body
+    if path == "/api/v2/improve":
+        out, page = dict(body), {}
+        offset = _page_arg(query, "offset", 0) or 0
+        for key, cap in IMPROVE_PAGE.items():
+            rows = body.get(key)
+            if not isinstance(rows, list):
+                continue
+            limit = _page_arg(query, "limit", cap) if key == "findings" else cap
+            start = offset if key == "findings" else 0
+            end = len(rows) if limit is None else start + limit
+            out[key] = rows[start:end]
+            page[key] = {
+                "total": len(rows),
+                "offset": start,
+                "returned": len(out[key]),
+                "limit": limit,
+            }
+        out["page"] = page
+        return out
+    if path == "/api/v2/todos":
+        keep = _page_arg(query, "done", TODOS_DONE_KEEP)
+        hidden, phases = 0, []
+        for phase in body.get("phases") or []:
+            items = phase.get("items") or []
+            done = [i for i in items if i.get("status") == "done"]
+            if keep is not None and len(done) > keep:
+                newest = sorted(
+                    done, key=lambda i: i.get("updated") or "", reverse=True
+                )
+                drop = {id(i) for i in newest[keep:]}
+                items = [i for i in items if id(i) not in drop]
+                hidden += len(drop)
+            phases.append({**phase, "items": items})
+        return {
+            **body,
+            "phases": phases,
+            "page": {"done_hidden": hidden, "done_keep": keep},
+        }
+    return body
+
+
+def _v2_route(method: str, path: str):
+    for m, rx, fn in V2_ROUTES:
+        if m == method and rx.fullmatch(path):
+            return fn
     return None
+
+
+def _v2_get(path: str, query: dict):
+    """Run a mounted GET route uncached (the SSE sampler). Raises on any failure."""
+    fn = _v2_route("GET", path)
+    if fn is None:
+        raise LookupError(f"no GET route {path}")
+    status, body = fn(_Ctx(query, {}, ()))
+    if status != 200:
+        raise RuntimeError(f"{path} answered {status}")
+    return _shape_payload(path, query, body)
+
+
+# Reads the SSE topics also serve share one computation across concurrent identical
+# GETs for V2_CACHE_TTL_S; any v2 mutation drops the cache so a write is never read stale.
+V2_CACHE_TTL_S = 2.0
+_V2_CACHE: dict = {}
+_V2_LOCKS: dict = {}
+_V2_GUARD = threading.Lock()
+
+
+def _v2_cache_clear() -> None:
+    with _V2_GUARD:
+        _V2_CACHE.clear()
+
+
+def _v2_call(method: str, path: str, query: dict, body: dict, fn, groups: tuple):
+    """(status, payload) for one v2 route call, cached and paged for heavy GETs."""
+    if method != "GET":
+        _v2_cache_clear()
+        return fn(_Ctx(query, body, groups))
+
+    def run():
+        status, payload = fn(_Ctx(query, {}, groups))
+        return status, (
+            _shape_payload(path, query, payload) if status == 200 else payload
+        )
+
+    if path not in _V2_CACHED_PATHS:
+        return run()
+    key = (path, tuple(sorted(query.items())))
+    with _V2_GUARD:
+        lock = _V2_LOCKS.setdefault(key, threading.Lock())
+    with lock:  # single flight: the first caller computes, the rest read its result
+        with _V2_GUARD:
+            hit = _V2_CACHE.get(key)
+        if hit and hit[0] > time.monotonic():
+            return hit[1], hit[2]
+        status, payload = run()
+        if status == 200:
+            with _V2_GUARD:
+                _V2_CACHE[key] = (time.monotonic() + V2_CACHE_TTL_S, status, payload)
+                if len(_V2_CACHE) > 64:  # bound the distinct-project key space
+                    now = time.monotonic()
+                    for k in [k for k, v in _V2_CACHE.items() if v[0] <= now]:
+                        _V2_CACHE.pop(k, None)
+                        _V2_LOCKS.pop(k, None)
+        return status, payload
 
 
 SSE_TICK_S = 5
 SSE_HEARTBEAT_S = 15
 SSE_TOPICS = (
-    ("colony", "/api/v2/colony"),
+    ("herd", "/api/v2/herd/agents"),
+    ("agents", "/api/v2/agents"),
     ("todos", "/api/v2/todos"),
     ("irc", "/api/v2/irc"),
     ("health", "/api/v2/health"),
     ("improve", "/api/v2/improve"),
 )
+_V2_CACHED_PATHS = frozenset(route for _event, route in SSE_TOPICS)
+# Topics whose hash ignores live fields still re-emit this often (none needed today).
+SSE_FORCE_REFRESH_S: dict = {}
+
+
+class _Sampler:
+    """Computes every SSE topic once per tick for all clients of one project filter."""
+
+    def __init__(self, project: str):
+        self.project = project
+        self.cond = threading.Condition()
+        self.epoch = secrets.token_hex(3)
+        self.gen = 0  # 0 = nothing sampled yet
+        self.topics: dict = {}  # event -> {digest, body, gen (when it last changed), at}
+        self.errors: dict = {}  # event -> {error, gen} while the route is failing
+        self.subscribers = 0
+
+    def sample(self) -> None:
+        query = {"project": self.project} if self.project else {}
+        results = {}
+        for event, route in SSE_TOPICS:
+            try:
+                results[event] = (_v2_get(route, dict(query)), None)
+            except (
+                Exception
+            ) as e:  # surfaced to clients as route_error, never swallowed
+                sys.stderr.write(f"[atlas-dashboard] sse {event} {route}: {e!r}\n")
+                results[event] = (None, f"{type(e).__name__}: {e}")
+        now = time.monotonic()
+        with self.cond:
+            nxt = self.gen + 1
+            for event, (body, err) in results.items():
+                if err is not None:
+                    if self.errors.get(event, {}).get("error") != err:
+                        self.errors[event] = {"error": err, "gen": nxt}
+                    continue
+                recovered = self.errors.pop(event, None) is not None
+                digest = _snapshot_hash(body)
+                cur = self.topics.get(event)
+                stale = cur is not None and now - cur["at"] >= SSE_FORCE_REFRESH_S.get(
+                    event, float("inf")
+                )
+                if cur is None or cur["digest"] != digest or recovered or stale:
+                    self.topics[event] = {
+                        "digest": digest,
+                        "body": body,
+                        "gen": nxt,
+                        "at": now,
+                    }
+            self.gen = nxt
+            self.cond.notify_all()
+
+    def run(self) -> None:
+        while True:
+            with _SAMPLERS_LOCK:
+                if self.subscribers == 0:
+                    _SAMPLERS.pop(self.project, None)
+                    return
+            self.sample()
+            time.sleep(SSE_TICK_S)
+
+
+_SAMPLERS: dict = {}
+_SAMPLERS_LOCK = threading.Lock()
+
+
+def _sampler_acquire(project: str) -> _Sampler:
+    with _SAMPLERS_LOCK:
+        s = _SAMPLERS.get(project)
+        if s is None:
+            s = _SAMPLERS[project] = _Sampler(project)
+            threading.Thread(
+                target=s.run, daemon=True, name="atlas-sse-sampler"
+            ).start()
+        s.subscribers += 1
+        return s
+
+
+def _sampler_release(s: _Sampler) -> None:
+    with _SAMPLERS_LOCK:
+        s.subscribers -= 1
 
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "AtlasDashboard/1.2"
 
     def _json(self, code: int, payload):
-        body = json.dumps(payload, indent=2, default=str).encode("utf-8")
+        body = json.dumps(payload, default=str, separators=(",", ":")).encode("utf-8")
         self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
@@ -1945,7 +2206,13 @@ class Handler(BaseHTTPRequestHandler):
     # -- SSE -----------------------------------------------------------------------
 
     def _sse(self, query: dict):
-        """Hash-gated colony/todos/irc/health/improve events; tick every 5s; heartbeat every 15s."""
+        """colony/todos/irc/health/improve events from the shared sampler.
+
+        One sampler per project filter computes every topic once per tick for all
+        clients; a client only gets topics that changed since its ``Last-Event-ID``
+        (``<epoch>-<generation>``, carried by the ``tick`` event). A topic whose
+        route raised arrives as ``route_error`` instead of going silent.
+        """
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
         self.send_header("Cache-Control", "no-store")
@@ -1953,38 +2220,51 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Accel-Buffering", "no")
         self.end_headers()
         self.close_connection = True
-        project = {k: v for k, v in query.items() if k == "project"}
-        last: dict = {}
+        sampler = _sampler_acquire(str(query.get("project") or ""))
+        epoch, _, gen_text = (
+            (self.headers.get("Last-Event-ID") or "").strip().partition("-")
+        )
+        seen = int(gen_text) if epoch == sampler.epoch and gen_text.isdigit() else 0
 
-        def emit(event: str, data) -> None:
+        def emit(event: str, data, event_id: str | None = None) -> None:
             payload = json.dumps(data, default=str, separators=(",", ":"))
-            self.wfile.write(f"event: {event}\ndata: {payload}\n\n".encode())
+            ident = f"id: {event_id}\n" if event_id else ""
+            self.wfile.write(f"{ident}event: {event}\ndata: {payload}\n\n".encode())
             self.wfile.flush()
 
         try:
             self.wfile.write(b"retry: 3000\n\n")
             self.wfile.flush()
-            last_beat = time.time()
             while True:
-                for event, route in SSE_TOPICS:
-                    body = _v2_get(route, dict(project))
-                    if body is None:
-                        continue
-                    digest = _snapshot_hash(body)
-                    if last.get(event) != digest:
-                        last[event] = digest
-                        emit(event, body)
-                emit("tick", {"ts": time.time()})
-                slept = 0.0
-                while slept < SSE_TICK_S:
-                    time.sleep(1.0)
-                    slept += 1.0
-                    if time.time() - last_beat >= SSE_HEARTBEAT_S:
-                        self.wfile.write(b": heartbeat\n\n")
-                        self.wfile.flush()
-                        last_beat = time.time()
+                with sampler.cond:
+                    fresh = sampler.cond.wait_for(
+                        lambda: sampler.gen > seen, timeout=SSE_HEARTBEAT_S
+                    )
+                    gen = sampler.gen
+                    events = [
+                        (e, t["body"])
+                        for e, t in sampler.topics.items()
+                        if t["gen"] > seen
+                    ]
+                    errors = [
+                        (e, x["error"])
+                        for e, x in sampler.errors.items()
+                        if x["gen"] > seen
+                    ]
+                if not fresh:
+                    self.wfile.write(b": heartbeat\n\n")
+                    self.wfile.flush()
+                    continue
+                for event, body in events:
+                    emit(event, body)
+                for topic, message in errors:
+                    emit("route_error", {"topic": topic, "error": message})
+                emit("tick", {"ts": time.time()}, f"{sampler.epoch}-{gen}")
+                seen = gen
         except (BrokenPipeError, ConnectionResetError, OSError):
             return  # client went away; the thread ends with the connection
+        finally:
+            _sampler_release(sampler)
 
     # -- v2 dispatch ---------------------------------------------------------------
 
@@ -1997,7 +2277,9 @@ class Handler(BaseHTTPRequestHandler):
             if not match:
                 continue
             try:
-                status, payload = fn(_Ctx(query, body, match.groups()))
+                status, payload = _v2_call(
+                    method, path, query, body, fn, match.groups()
+                )
             except Exception as e:  # one module's bug never kills the server
                 sys.stderr.write(f"[atlas-dashboard] v2 {method} {path}: {e!r}\n")
                 self._json(
@@ -2344,10 +2626,15 @@ def _is_loopback_host(host: str) -> bool:
         return False
 
 
+class _Server(ThreadingHTTPServer):
+    # The stdlib backlog of 5 resets connections under a burst of tabs/clients.
+    request_queue_size = 128
+
+
 def serve(host: str, port: int):
     os.environ["ATLAS_DB"] = dashboard_db_path()
     os.environ["ATLAS_DASHBOARD_DB"] = dashboard_db_path()
-    httpd = ThreadingHTTPServer((host, port), Handler)
+    httpd = _Server((host, port), Handler)
     _write_pidfile(os.getpid(), port, dashboard_db_path())
     atexit.register(_clear_pidfile)
 
@@ -2360,6 +2647,9 @@ def serve(host: str, port: int):
     sys.stderr.write(
         f"[atlas-dashboard] {dashboard_url(port)} db={dashboard_db_path()} script={Path(__file__).resolve()}\n"
     )
+    __import__(
+        "atlas_selffix"
+    ).start_scheduler()  # daemon thread; serve() is not run by tests/imports
     httpd.serve_forever()
 
 

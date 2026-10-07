@@ -63,6 +63,11 @@ import urllib.request
 
 import prompt_decision
 
+sys.path.insert(
+    0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
+)
+import atlas_hook_guard  # noqa: E402
+
 # The ollama CLI renderer rewrites partial words at the wrap boundary using cursor-back +
 # erase sequences (e.g. "data c\x1b[1D\x1b[K\nconsistency"). Stripping those codes naively
 # leaves the dangling "c"; we must INTERPRET them like a terminal to get clean text. The HTTP
@@ -502,8 +507,13 @@ def arm_orchestration(data: dict, prompt: str) -> str | None:
             # (no nudge), re-raise into the outer fail-open handler.
             raise
         conn.close()
-    except Exception:
-        return None  # fail-open: never block a prompt over a DB hiccup
+    except Exception as exc:
+        # fail-open: never block a prompt over a DB hiccup, but leave a trace --
+        # an unarmed run means the dispatch/completion gates stay inert.
+        atlas_hook_guard.fault(
+            "prompt_optimizer", "orchestration arm failed (gates inert): %s" % exc
+        )
+        return None
     return ENGINE_NUDGE
 
 
@@ -594,14 +604,8 @@ def audit(original: str, optimized: str | None) -> None:
 
 
 def main() -> int:
-    try:
-        raw = sys.stdin.read()
-        data = json.loads(raw) if raw.strip() else {}
-        if not isinstance(data, dict):
-            data = {}  # non-dict JSON (null, list) is not a payload
-    except (json.JSONDecodeError, ValueError):
-        return 0  # malformed input -> passthrough
-    prompt = (data.get("prompt") or "").strip()
+    data = atlas_hook_guard.load_payload("prompt_optimizer")
+    prompt = data.get("prompt", "").strip()
     if not prompt:
         return 0
     if _is_harness_event(prompt):
@@ -637,4 +641,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(atlas_hook_guard.run_hook("prompt_optimizer", main))

@@ -49,7 +49,9 @@ from datetime import datetime, timezone
 # (task -> Task, todo -> TodoWrite). Keys whose omp side is a phrase
 # (ToolSearch, AskUserQuestion, SendMessage) or that are not plain names
 # (ToolSearch-load) never become a rename.
-_CONTRACTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "contracts")
+_CONTRACTS_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "contracts"
+)
 _TOOL_NAMES_JSON = os.path.join(_CONTRACTS_DIR, "tool-names.json")
 _CLAUDE_PLAIN_NAME = re.compile(r"^[A-Z]\w*$")
 _OMP_PLAIN_NAME = re.compile(r"^[a-z]\w*$")
@@ -107,6 +109,7 @@ _XD_MCP = re.compile(r"^xd://mcp__(?P<rest>[A-Za-z0-9_]+)$")
 # small helpers
 # --------------------------------------------------------------------------
 
+
 def _iso_from_epoch_ms(value) -> str | None:
     try:
         return (
@@ -153,6 +156,9 @@ _KNOWN_MCP_SERVERS_FALLBACK = (
     "plaid",
     "mobbin",
     "clippy",
+    "atlas_connectwise",
+    "mcp_search",
+    "cmux_browser",
 )
 
 
@@ -160,7 +166,11 @@ def _load_mcp_servers(path: str | None = None) -> tuple[str, ...]:
     try:
         with open(path or _MCP_SERVERS_JSON, encoding="utf-8") as fh:
             servers = json.load(fh)["underscoredServers"]
-        if isinstance(servers, list) and servers and all(isinstance(s, str) and s for s in servers):
+        if (
+            isinstance(servers, list)
+            and servers
+            and all(isinstance(s, str) and s for s in servers)
+        ):
             return tuple(servers)
     except (OSError, ValueError, KeyError, TypeError):
         pass
@@ -184,7 +194,7 @@ def _split_mcp_xd(path: str) -> str | None:
     rest = m.group("rest")
     for server in sorted(_KNOWN_MCP_SERVERS, key=len, reverse=True):
         if rest.startswith(server + "_") and len(rest) > len(server) + 1:
-            return f"mcp__{server}__{rest[len(server) + 1:]}"
+            return f"mcp__{server}__{rest[len(server) + 1 :]}"
     tokens = rest.split("_")
     for i in range(len(tokens) - 1):
         if tokens[i] and tokens[i] == tokens[i + 1]:
@@ -248,6 +258,7 @@ def _todos_from_result(result_msg: dict | None) -> list[dict]:
 # entry loading
 # --------------------------------------------------------------------------
 
+
 def _warn(message: str) -> None:
     """Diagnostics go to stderr only: stdout is the one-JSON-line contract."""
     print(f"omp_transcript: {message}", file=sys.stderr)
@@ -305,8 +316,11 @@ def _load_entries(path: str) -> list[dict]:
 # conversion
 # --------------------------------------------------------------------------
 
+
 class _Converter:
-    def __init__(self, session_id: str, agent: str | None, sidechain: bool, cwd: str | None):
+    def __init__(
+        self, session_id: str, agent: str | None, sidechain: bool, cwd: str | None
+    ):
         self.sid = session_id
         self.agent = agent
         self.sidechain = sidechain
@@ -335,7 +349,9 @@ class _Converter:
         return candidate
 
     # ---- tool mapping --------------------------------------------------
-    def _map_tool_calls(self, block: dict, result_msg: dict | None, entry_id) -> list[dict]:
+    def _map_tool_calls(
+        self, block: dict, result_msg: dict | None, entry_id
+    ) -> list[dict]:
         """One omp toolCall -> one or more Claude tool_use blocks."""
         name = str(block.get("name") or "")
         args = block.get("arguments")
@@ -347,22 +363,26 @@ class _Converter:
             return self._map_task(args, raw_id, fallback)
 
         if name == "todo":
-            return [{
-                "type": "tool_use",
-                "id": self._tool_id(raw_id, fallback),
-                "name": "TodoWrite",
-                "input": {"todos": _todos_from_result(result_msg)},
-            }]
+            return [
+                {
+                    "type": "tool_use",
+                    "id": self._tool_id(raw_id, fallback),
+                    "name": "TodoWrite",
+                    "input": {"todos": _todos_from_result(result_msg)},
+                }
+            ]
 
         if name == "write":
             mcp = _split_mcp_xd(str(args.get("path") or ""))
             if mcp:
-                return [{
-                    "type": "tool_use",
-                    "id": self._tool_id(raw_id, fallback),
-                    "name": mcp,
-                    "input": _mcp_input(args),
-                }]
+                return [
+                    {
+                        "type": "tool_use",
+                        "id": self._tool_id(raw_id, fallback),
+                        "name": mcp,
+                        "input": _mcp_input(args),
+                    }
+                ]
 
         claude_name = TOOL_MAP.get(name) or name or "unknown"
         inp = dict(args)
@@ -387,12 +407,14 @@ class _Converter:
         if lead:
             inp = {**lead, **{k: v for k, v in args.items() if k not in lead}}
 
-        return [{
-            "type": "tool_use",
-            "id": self._tool_id(raw_id, fallback),
-            "name": claude_name,
-            "input": inp,
-        }]
+        return [
+            {
+                "type": "tool_use",
+                "id": self._tool_id(raw_id, fallback),
+                "name": claude_name,
+                "input": inp,
+            }
+        ]
 
     def _map_task(self, args: dict, raw_id, fallback: str) -> list[dict]:
         items = args.get("tasks")
@@ -403,20 +425,28 @@ class _Converter:
             if not isinstance(item, dict):
                 continue
             prompt = item.get("task") or item.get("prompt") or ""
-            out.append({
-                "type": "tool_use",
-                "id": self._tool_id(f"{raw_id}.{idx}" if raw_id else None, f"{fallback}.{idx}"),
-                "name": "Task",
-                "input": {
-                    "subagent_type": item.get("agent") or args.get("agent") or "task",
-                    "prompt": prompt,
-                    "description": item.get("name") or args.get("i") or "",
-                },
-            })
+            out.append(
+                {
+                    "type": "tool_use",
+                    "id": self._tool_id(
+                        f"{raw_id}.{idx}" if raw_id else None, f"{fallback}.{idx}"
+                    ),
+                    "name": "Task",
+                    "input": {
+                        "subagent_type": item.get("agent")
+                        or args.get("agent")
+                        or "task",
+                        "prompt": prompt,
+                        "description": item.get("name") or args.get("i") or "",
+                    },
+                }
+            )
         return out
 
     # ---- records -------------------------------------------------------
-    def _base(self, entry: dict, rtype: str, role: str, content: list, model=None, usage=None) -> dict:
+    def _base(
+        self, entry: dict, rtype: str, role: str, content: list, model=None, usage=None
+    ) -> dict:
         eid = entry.get("id")
         msg: dict = {"role": role, "content": content}
         if model:
@@ -448,7 +478,11 @@ class _Converter:
                 v = raw.get(k)
                 # bool is an int subclass; nan/inf would raise in int() and the
                 # per-entry guard would then drop the whole assistant record.
-                if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v):
+                if (
+                    isinstance(v, (int, float))
+                    and not isinstance(v, bool)
+                    and math.isfinite(v)
+                ):
                     try:
                         return int(v)
                     except (OverflowError, ValueError):
@@ -468,7 +502,11 @@ class _Converter:
         results: dict[str, dict] = {}
         for e in entries:
             m = e.get("message")
-            if e.get("type") == "message" and isinstance(m, dict) and m.get("role") == "toolResult":
+            if (
+                e.get("type") == "message"
+                and isinstance(m, dict)
+                and m.get("role") == "toolResult"
+            ):
                 tcid = m.get("toolCallId")
                 if tcid:
                     results[str(tcid)] = m
@@ -505,9 +543,13 @@ class _Converter:
         # excludes from user_prompts via NOISE_PREFIXES.
         if m.get("attribution", "user") != "user":
             text = "<system-reminder>\n" + text + "\n</system-reminder>"
-        self.records.append(self._base(entry, "user", "user", [{"type": "text", "text": text}]))
+        self.records.append(
+            self._base(entry, "user", "user", [{"type": "text", "text": text}])
+        )
 
-    def _emit_assistant(self, entry: dict, m: dict, results: dict, id_map: dict) -> None:
+    def _emit_assistant(
+        self, entry: dict, m: dict, results: dict, id_map: dict
+    ) -> None:
         blocks: list[dict] = []
         content = m.get("content")
         if isinstance(content, str):
@@ -519,7 +561,9 @@ class _Converter:
             if bt == "text":
                 blocks.append({"type": "text", "text": str(b.get("text", ""))})
             elif bt == "thinking":
-                blocks.append({"type": "thinking", "thinking": str(b.get("thinking", ""))})
+                blocks.append(
+                    {"type": "thinking", "thinking": str(b.get("thinking", ""))}
+                )
             elif bt == "toolCall":
                 tcid = str(b.get("id") or "")
                 mapped = self._map_tool_calls(b, results.get(tcid), entry.get("id"))
@@ -529,7 +573,14 @@ class _Converter:
         if not blocks:
             return
         self.records.append(
-            self._base(entry, "assistant", "assistant", blocks, m.get("model"), self._usage(m.get("usage")))
+            self._base(
+                entry,
+                "assistant",
+                "assistant",
+                blocks,
+                m.get("model"),
+                self._usage(m.get("usage")),
+            )
         )
 
     def _emit_tool_result(self, entry: dict, m: dict, id_map: dict) -> None:
@@ -539,10 +590,19 @@ class _Converter:
         if not targets:
             # Orphan result (call truncated away / compacted): keep it, but
             # under an id nothing else owns so it cannot clobber a real row.
-            targets = [self._tool_id(f"orphan-{tcid}" if tcid else None, f"{entry.get('id')}:orphan")]
+            targets = [
+                self._tool_id(
+                    f"orphan-{tcid}" if tcid else None, f"{entry.get('id')}:orphan"
+                )
+            ]
         is_error = bool(m.get("isError"))
         blocks = [
-            {"type": "tool_result", "tool_use_id": t, "content": text, "is_error": is_error}
+            {
+                "type": "tool_result",
+                "tool_use_id": t,
+                "content": text,
+                "is_error": is_error,
+            }
             for t in targets
         ]
         self.records.append(self._base(entry, "user", "user", blocks))
@@ -551,6 +611,7 @@ class _Converter:
 # --------------------------------------------------------------------------
 # file level
 # --------------------------------------------------------------------------
+
 
 def _session_meta(entries: list[dict]) -> tuple[str | None, str | None]:
     for e in entries:
@@ -619,7 +680,11 @@ def convert_file(session_file: str, out: str, session_id: str | None = None) -> 
     # A re-run is a full rewrite: drop sub-agent outputs this run did not
     # produce, or a stale file would keep being mirrored into the DB.
     for stale in _list_dir(out_sub):
-        if stale.startswith("agent-") and stale.endswith(".jsonl") and stale not in written:
+        if (
+            stale.startswith("agent-")
+            and stale.endswith(".jsonl")
+            and stale not in written
+        ):
             try:
                 os.unlink(os.path.join(out_sub, stale))
             except OSError as exc:
@@ -637,7 +702,9 @@ def main(argv=None) -> int:
     try:
         args = parser.parse_args(argv)
         if args.cmd != "convert":
-            raise ValueError("usage: omp_transcript.py convert --session-file F --out O")
+            raise ValueError(
+                "usage: omp_transcript.py convert --session-file F --out O"
+            )
         result = convert_file(args.session_file, args.out, args.session_id)
     except SystemExit:
         result = {"ok": False, "error": "bad arguments"}

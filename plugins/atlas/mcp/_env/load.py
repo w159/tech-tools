@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Shared env preloader for atlas's Python MCP connectors.
 
-The Python twin of load.mjs: same precedence (ATLAS_ENV_FILE beats CFG_*,
-empty or unexpanded CFG_* values are never promoted), then it runs the
-connector module as __main__.
+The Python twin of load.mjs: same precedence (shell exports beat ATLAS_ENV_FILE,
+which beats the default file, which beats CFG_*; empty or unexpanded values are
+never used), then it runs the connector module as __main__.
 
 Empty-string promotion matters here: a vendored server that reads
 os.environ.get("X", default) would take "" over its own default, so an
@@ -23,12 +23,27 @@ def _is_unexpanded(value: str) -> bool:
     return value.startswith("${") and value.endswith("}")
 
 
-def _load_env_file(path: str) -> None:
+def _is_usable(value: str) -> bool:
+    return bool(value) and not _is_unexpanded(value)
+
+
+def _note(msg: str) -> None:
+    # Names only, never values: stderr is the one place a diagnostic may go.
+    print(f"[atlas env] {msg}", file=sys.stderr)
+
+
+def _load_env_file(path: str, label: str, shell_keys: set) -> None:
+    """Fill os.environ from a KEY=VALUE file; variables the shell exported win."""
+    if not os.path.isfile(path):
+        _note(f"{label} not found: {path} (skipped)")
+        return
     try:
+        if os.stat(path).st_mode & 0o077:
+            _note(f"{path} is group/world-readable; run chmod 600")
         with open(path, encoding="utf-8") as handle:
             lines = handle.read().split("\n")
     except OSError as err:
-        print(f"[atlas env] failed to load {path}: {err}", file=sys.stderr)
+        _note(f"failed to load {path}: {err}")
         return
     for line in lines:
         trimmed = line.strip()
@@ -41,43 +56,50 @@ def _load_env_file(path: str) -> None:
         value = value.strip()
         if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
             value = value[1:-1]
-        # Never let a blank `KEY=` line (the `.env.example` convention - a
-        # commented-out template uncommented but never filled in) or a
-        # literal unexpanded `${...}` placeholder stomp an already-set value
-        # (e.g. one exported by the launching shell) - both only fill a gap.
-        if key and value != "" and not _is_unexpanded(value):
-            os.environ[key] = value
+        # A blank `KEY=` line (the `.env.example` convention) or an unexpanded
+        # `${...}` placeholder is never a value.
+        if not key or not _is_usable(value):
+            continue
+        if key in shell_keys:
+            if os.environ.get(key) != value:
+                _note(f"{key}: shell export wins over {path}")
+            continue
+        os.environ[key] = value
 
 
-def _promote_cfg() -> None:
+def _promote_cfg(shell_keys: set) -> None:
     for key in list(os.environ):
         if not key.startswith("CFG_"):
             continue
         name = key[4:]
         value = os.environ[key]
-        unexpanded = _is_unexpanded(value)
-        if name not in os.environ and value and not unexpanded:
+        if not _is_usable(value):
+            continue
+        if name not in os.environ:
             os.environ[name] = value
+        elif os.environ[name] != value and name not in shell_keys:
+            _note(
+                f"{name}: env file value wins over saved userConfig ({key}); "
+                "update or remove the file entry"
+            )
 
 
 def main() -> None:
     if len(sys.argv) < 2:
         print("[atlas env] usage: load.py <module.to.run>", file=sys.stderr)
         sys.exit(2)
-    # Default path is a convention, not a secret: a per-user KEY=VALUE file
-    # the operator creates (recommended `chmod 600`) so every vendor MCP
-    # server picks up credentials even when the launching harness doesn't
-    # resolve plugin userConfig / ${user_config.*} substitution, or when
-    # ATLAS_ENV_FILE points at a plugin-root .env that doesn't exist for a
-    # cache-installed plugin. Loaded first as a baseline; ATLAS_ENV_FILE,
-    # when explicitly set, loads second and overrides it.
-    default_env_file = os.path.join(os.path.expanduser("~"), ".config", "atlas", "atlas.env")
-    if os.path.isfile(default_env_file):
-        _load_env_file(default_env_file)
+    # Precedence (highest first): variables exported by the launching shell,
+    # ATLAS_ENV_FILE, the per-user default file, then CFG_<NAME> (userConfig)
+    # filling any remaining gap.
+    shell_keys = {k for k, v in os.environ.items() if _is_usable(v)}
+    default_env_file = os.path.join(
+        os.path.expanduser("~"), ".config", "atlas", "atlas.env"
+    )
+    _load_env_file(default_env_file, "default env file", shell_keys)
     env_file = os.environ.get("ATLAS_ENV_FILE")
-    if env_file and os.path.isfile(env_file):
-        _load_env_file(env_file)
-    _promote_cfg()
+    if env_file:
+        _load_env_file(env_file, "ATLAS_ENV_FILE", shell_keys)
+    _promote_cfg(shell_keys)
     module = sys.argv[1]
     # The connector parses sys.argv itself; hand it a clean argv.
     sys.argv = [module] + sys.argv[2:]

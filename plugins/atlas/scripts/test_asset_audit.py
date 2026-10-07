@@ -5,6 +5,7 @@ Run in-process so the source module is traced by coverage:
     python3 -m coverage run --source=asset_audit -m unittest test_asset_audit
 """
 
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import io
 import json
 import os

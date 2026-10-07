@@ -102,6 +102,7 @@ Orchestrator stays Opus-tier; subagents default Sonnet, drop to Haiku for read-a
 | `references/workflow-template.md` | Workflow scripts |
 | `references/session-lifecycle.md` | start/end docs reconcile |
 | `references/dashboard-api.md` | local atlas status/dashboard API |
+| `references/remote-access.md` | reaching the colony UI from another device (tailnet-only `tailscale serve`, `atlas_remote.py`) |
 
 ## Flag the run
 
@@ -120,4 +121,4 @@ Run **Orient** (recall + roots + manifests + capabilities). Present orientation 
 
 ## Additional references
 
-- [Operating contract](references/operating-contract.md): the skill-local copy of the operating contract. Read when you need the verify-before-done loop in full.
+- [Operating contract](references/operating-contract.md): the plugin-level operating contract (single copy). Read when you need the verify-before-done loop in full.

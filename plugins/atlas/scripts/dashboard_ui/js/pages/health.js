@@ -1,26 +1,16 @@
 // Atlas Workboard v2 — Health page: subsystem grid, silent-failure list with
 // fix hints, and what is working. No innerHTML; all data via h() text children.
-import { h } from '../dom.js';
+import { h, replace } from '../dom.js';
+import { stableJson } from '../api.js';
 import {
-  Badge, Card, Table, Tabs, EmptyState, StatusDot, Drawer, openDrawer,
+  Badge, Card, Table, Tabs, EmptyState, StatusDot, Drawer, openDrawer, Sparkline,
 } from '../components.js';
 
-const CSS_HREF = '/ui/css/pages-insights.css';
 const WINDOWS = [
   { id: '24h', label: 'Last 24h' },
   { id: '7d', label: 'Last 7 days' },
   { id: '30d', label: 'Last 30 days' },
 ];
-
-function ensureCss() {
-  if (typeof document === 'undefined') return;
-  if (document.querySelector('link[data-atlas-css="insights"]')) return;
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
-  link.href = CSS_HREF;
-  link.setAttribute('data-atlas-css', 'insights');
-  document.head.appendChild(link);
-}
 
 function normStatus(s) {
   return s === 'ok' || s === 'warn' || s === 'fail' ? s : 'info';
@@ -71,16 +61,26 @@ async function fetchHealth() {
   return S.ctx.api.get('/api/v2/health', p);
 }
 
-async function refresh() {
+async function refresh(force) {
   if (!S || S.inFlight || S.destroyed) return;
   S.inFlight = true;
+  const hadError = Boolean(S.error);
+  let fresh = null;
   try {
-    S.data = await fetchHealth();
+    fresh = await fetchHealth();
     S.error = null;
   } catch (err) {
     S.error = err;
   } finally {
     S.inFlight = false;
+  }
+  if (!S || S.destroyed) return;
+  if (fresh) {
+    const key = stableJson(fresh);
+    const same = key === S.key;
+    S.data = fresh;
+    S.key = key;
+    if (same && !hadError && !force) return; // nothing real changed: keep the DOM (and scroll, open drawers)
   }
   draw();
 }
@@ -92,15 +92,25 @@ function kv(label, value) {
 function subsystemCard(s) {
   const status = normStatus(s.status === 'unknown' ? 'info' : s.status);
   const evidence = Array.isArray(s.evidence) ? s.evidence : [];
+  const hist = Array.isArray(s.history) ? s.history : null;
+  const spark = hist && hist.some((b) => b.ok || b.fail)
+    ? h('div', { class: 'pg-spark', title: s.history_source || '' }, Sparkline({ values: hist.map((b) => (b.ok || 0) + (b.fail || 0)), status }), h('span', { class: 'pg-hint' }, s.history_source || 'activity per bucket'))
+    : h('p', { class: 'pg-hint', title: hist ? '' : (s.history_reason || '') }, hist ? 'No activity in this window' : 'No history for this subsystem');
+  const notMeasured = s.measured === false ? 'Not measured' : null;
+  const reason = s.measured === false ? (s.reason || 'no data source yet') : null;
   return h('article', { class: `pg-subsys is-${status}`, 'aria-label': `${s.label || s.id}: ${s.status || 'unknown'}` },
     h('header', { class: 'pg-subsys-head' },
       StatusDot({ status }),
       h('h3', { class: 'pg-subsys-name' }, s.label || s.id),
       Badge({ status, text: s.status || 'unknown' })),
-    h('p', { class: 'pg-subsys-detail' }, s.detail || 'No detail reported.'),
+    h('p', { class: 'pg-subsys-detail', title: s.detail || '' }, s.detail || 'No detail reported.'),
     h('dl', { class: 'pg-kvs pg-kvs-inline' },
-      kv('Last OK', fmtWhen(s.last_ok)),
-      kv('Last failure', fmtWhen(s.last_fail))),
+      kv('Last OK', s.last_ok ? whenNode(s.last_ok) : (notMeasured || 'No success recorded in this window')),
+      kv('Last failure', s.last_fail ? whenNode(s.last_fail) : (notMeasured || 'None recorded in this window'))),
+    reason && !(s.last_ok && s.last_fail)
+      ? h('details', { class: 'pg-reason' }, h('summary', {}, 'Why not measured'), h('p', {}, reason))
+      : null,
+    spark,
     evidence.length
       ? h('details', { class: 'pg-evidence' },
         h('summary', {}, `Evidence (${evidence.length})`),
@@ -133,7 +143,7 @@ function failureColumns() {
     { key: 'open', label: '', width: '72px', render: (r) => h('button', {
       type: 'button', class: 'btn btn-ghost', 'aria-label': `Open failure ${r.kind}`,
       onclick: (e) => { e.stopPropagation(); openFailure(r); },
-    }, 'Fix it') },
+    }, 'How to fix') },
   ];
 }
 
@@ -162,6 +172,38 @@ function enforcementCard(e) {
           ? h('p', { class: 'pg-hint' }, `By project: ${projects.map((p) => `${projName(p.project)} ×${p.count}`).join(', ')}`)
           : null)
       : h('p', { class: 'pg-hint' }, 'No denies or gate blocks in this window.')],
+  });
+}
+
+function toolErrorsCard(t) {
+  const te = t || {};
+  const causes = te.top_causes || [];
+  const c = te.counts || {};
+  const legacy = te.legacy || 0;
+  const legacyLine = legacy > 0
+    ? h('p', { class: 'pg-hint' }, `${legacy} legacy tool errors — ${te.legacy_hint || 'pre-capture history, no error text; not attributable'}`)
+    : null;
+  return Card({
+    title: `Tool errors by cause (${te.total || 0})`,
+    actions: [h('span', { class: 'pg-group-meta' }, 'External causes — not atlas faults')],
+    children: [(te.total || 0) > 0
+      ? h('div', { class: 'pg-stack' },
+        h('p', { class: 'pg-hint' },
+          `${c.model_misuse || 0} model misuse (edit without read, bad arguments), ${c.environment || 0} environment (nonzero exit, missing path, timeout, MCP) in this window.`),
+        Table({
+          dense: true, rows: causes,
+          columns: [
+            { key: 'class', label: 'Cause', width: '110px', render: (r) => Badge({ status: 'info', text: r.class || '—' }) },
+            { key: 'tool', label: 'Tool', width: '110px', render: (r) => h('span', { class: 'pg-mono' }, r.tool || '—') },
+            { key: 'snippet', label: 'Error', render: (r) => h('span', { class: 'pg-clip', title: r.snippet || '' }, r.snippet || '—') },
+            { key: 'count', label: 'Count', width: '72px', sortable: true, render: (r) => h('span', { class: 'pg-count' }, `×${r.count || 0}`) },
+            { key: 'last', label: 'Last', width: '96px', render: (r) => whenNode(r.last) },
+          ],
+        }),
+        legacyLine)
+      : h('div', { class: 'pg-stack' },
+        h('p', { class: 'pg-hint' }, 'No model-misuse or environment tool errors in this window.'),
+        legacyLine)],
   });
 }
 
@@ -203,6 +245,7 @@ function body() {
         ? Table({ columns: failureColumns(), rows: fails, dense: true, onRow: openFailure })
         : EmptyState({ icon: 'check', title: 'No silent failures', body: 'Nothing errored quietly in this window.' })],
     }),
+    toolErrorsCard(S.data.tool_errors),
     enforcementCard(S.data.enforcement),
     Card({
       title: `Working (${wins.length})`,
@@ -214,16 +257,16 @@ function body() {
 
 function draw() {
   if (!S || !S.mount || S.destroyed) return;
-  S.mount.replaceChildren(
+  replace(S.mount, 
     h('header', { class: 'pg-head' },
       h('h1', { class: 'pg-title' }, 'Health'),
       h('div', { class: 'pg-head-actions' },
         Tabs({
           tabs: WINDOWS.map((w) => ({ id: w.id, label: w.label })),
           active: S.window,
-          onChange: (id) => { S.window = id; refresh(); },
+          onChange: (id) => { S.window = id; refresh(true); },
         }),
-        h('button', { type: 'button', class: 'btn', onclick: refresh }, 'Refresh'))),
+        h('button', { type: 'button', class: 'btn', onclick: () => refresh(true) }, 'Refresh'))),
     body());
 }
 
@@ -233,7 +276,6 @@ export default {
   icon: 'heart',
   group: 'Observe',
   async load(ctx) {
-    ensureCss();
     if (S) this.destroy();
     S = freshState(ctx);
     try {
@@ -250,9 +292,9 @@ export default {
     draw();
     return S.mount;
   },
-  onEvent(evt) {
+  onEvent(evt, ctx) {
     if (!S || !evt) return;
-    if (evt.type === 'health' || evt === 'health') refresh();
+    if (evt === 'health' || (evt === 'tick' && ctx && ctx.api.mode === 'poll')) refresh();
   },
   destroy() {
     if (!S) return;

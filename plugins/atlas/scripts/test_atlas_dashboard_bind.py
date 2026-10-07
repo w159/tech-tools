@@ -6,6 +6,7 @@ refusal to bind a non-loopback --host without --allow-remote.
 
 from __future__ import annotations
 
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import sys
 import unittest
 from pathlib import Path

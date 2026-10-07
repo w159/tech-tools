@@ -5,6 +5,11 @@ mocked sys.stdin / subprocess / shutil.which. A few subprocess end-to-end exit
 code tests round things out; the coverage comes from the in-process calls.
 """
 
+import os as _iso_os
+import sys as _iso_sys
+
+_iso_sys.path.insert(0, _iso_os.path.join(_iso_os.path.dirname(_iso_os.path.abspath(__file__)), "..", "scripts"))
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import io
 import json
 import os

@@ -15,6 +15,8 @@
  * `xd://` MCP device calls, outbound IRC (`write agent://<id>`) and shared artifacts
  * (`local://`, `proc://`), so removing `write` from a child would cut all of those. The
  * handler therefore blocks `write` only when its `path` is not a `scheme://` target.
+ * `mcp__<server>__<tool>` entries in `disallowedTools` are enforced on their `xd://` device path (deviceReason), so a
+ * read-only agent cannot reach serena's replace/insert tools or lean-ctx's ctx_patch through `write xd://...`.
  *
  * NOT COVERED: writes made through the `bash` tool (`sed -i`, `tee`, `>` redirects, ...).
  * `disallowedTools` names no shell restriction and omp has no per-agent shell policy, so a
@@ -31,6 +33,7 @@ import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { readFileSync } from "node:fs";
 import * as nodePath from "node:path";
 
+import { loadToolNames, mcpDevice } from "./style";
 import { isRecord } from "./workers";
 
 const PLUGIN_ROOT = nodePath.resolve(import.meta.dir, "..");
@@ -261,11 +264,28 @@ function restrictedAgent(ctx: GuardCtx, deps: AgentGuardDeps): { agent: string; 
 	return disallowed.length > 0 ? { agent, disallowed } : undefined;
 }
 
+/** The `xd://` device an `mcp__<server>__<tool>` disallowed entry resolves to on omp (same mint as translateToolNames). */
+function deviceOf(claudeName: string, deps: AgentGuardDeps): string | undefined {
+	const m = /^mcp__(.+?)__(.+)$/.exec(claudeName);
+	const map = m ? loadToolNames(deps.contractPath ?? DEFAULT_CONTRACT) : undefined;
+	return m && map ? mcpDevice(m[1], m[2], map) : undefined;
+}
+
+/** omp's `write` also carries `xd://` MCP device calls: a disallowed `mcp__*` tool is blocked on its device path (serena replace/insert, lean-ctx ctx_patch, ...). */
+function deviceReason(event: GuardEvent, who: { agent: string; disallowed: string[] }, deps: AgentGuardDeps): string | undefined {
+	if (toolKey(event) !== "write") return undefined;
+	const target = (event.input as Record<string, unknown> | undefined)?.path;
+	if (typeof target !== "string") return undefined;
+	const device = target.trim().toLowerCase();
+	const claudeTool = who.disallowed.find(name => name.startsWith("mcp__") && deviceOf(name, deps) === device);
+	return claudeTool ? blockReason(who.agent, device, claudeTool, "") : undefined;
+}
+
 function decide(event: GuardEvent, ctx: GuardCtx, deps: AgentGuardDeps): { block: true; reason: string } | undefined {
 	const who = restrictedAgent(ctx, deps);
 	if (!who) return undefined;
 	const hit = findHit(event, who.disallowed, deps);
-	const reason = hit ? denyReason(who.agent, hit, event.input) : undefined;
+	const reason = (hit ? denyReason(who.agent, hit, event.input) : undefined) ?? deviceReason(event, who, deps);
 	return reason === undefined ? undefined : { block: true, reason };
 }
 

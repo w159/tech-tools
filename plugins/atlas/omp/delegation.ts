@@ -92,12 +92,18 @@ export interface ShellEditTracker {
 	reset(): void;
 }
 
-export function createShellEditTracker(): ShellEditTracker {
+/** A non-git (or git-less) dir is re-probed at most this often, so every main tool call does not spawn git. */
+const NEGATIVE_TTL_MS = 60_000;
+
+export function createShellEditTracker(now: () => number = Date.now): ShellEditTracker {
 	let baseline: Record<string, string> | undefined;
+	let failed: { root: string; at: number } | undefined;
 	return {
 		capture(root) {
 			if (baseline !== undefined || root === undefined) return;
+			if (failed && failed.root === root && now() - failed.at < NEGATIVE_TTL_MS) return;
 			baseline = snapshotDirty(root);
+			failed = baseline === undefined ? { root, at: now() } : undefined;
 		},
 		stop(root) {
 			if (baseline === undefined || root === undefined) return [];
@@ -105,6 +111,7 @@ export function createShellEditTracker(): ShellEditTracker {
 		},
 		reset() {
 			baseline = undefined;
+			failed = undefined;
 		},
 	};
 }

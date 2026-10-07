@@ -35,8 +35,26 @@ afterEach(() => {
 
 // ── the real agent files: parsed lists equal what the files say ──
 
-const FULL_READONLY = ["Agent", "Task", "TaskCreate", "TaskGet", "TaskList", "TaskUpdate", "Write", "Edit", "MultiEdit", "NotebookEdit"];
+const MCP_EDIT_TOOLS = [
+	"mcp__serena__replace_symbol_body",
+	"mcp__serena__insert_after_symbol",
+	"mcp__serena__insert_before_symbol",
+	"mcp__serena__replace_content",
+	"mcp__serena__replace_in_files",
+	"mcp__serena__rename_symbol",
+	"mcp__serena__safe_delete_symbol",
+	"mcp__lean-ctx__ctx_patch",
+];
+const FULL_READONLY = [
+	"Agent", "Task", "TaskCreate", "TaskGet", "TaskList", "TaskUpdate", "Write", "Edit", "MultiEdit", "NotebookEdit",
+	...MCP_EDIT_TOOLS,
+];
 const NO_EDIT_RESTRICTION = ["Agent", "Task", "TaskCreate", "TaskGet", "TaskList", "TaskUpdate", "NotebookEdit"];
+// cmux-browser tools a subagent may NOT call: every contract tool outside subagentAllow (agents/ui-runtime-tester.md lists them).
+const CMUX = JSON.parse(readFileSync(join(PLUGIN_ROOT, "contracts", "mcp-servers.json"), "utf8")).browserServers["cmux-browser"];
+const CMUX_LEAD_ONLY: string[] = [...CMUX.readOnly, ...CMUX.stateChanging, ...CMUX.sensitive]
+	.filter((t: string) => !CMUX.subagentAllow.includes(t))
+	.map((t: string) => `mcp__cmux-browser__${t}`);
 const EXPECTED: Record<string, string[]> = {
 	"completeness-critic": FULL_READONLY,
 	"db-prober": FULL_READONLY,
@@ -49,7 +67,7 @@ const EXPECTED: Record<string, string[]> = {
 	"rls-privilege-audit": FULL_READONLY,
 	runner: NO_EDIT_RESTRICTION,
 	"schema-inventory": FULL_READONLY,
-	"ui-runtime-tester": FULL_READONLY,
+	"ui-runtime-tester": [...FULL_READONLY, ...CMUX_LEAD_ONLY],
 	verifier: FULL_READONLY,
 };
 
@@ -203,4 +221,34 @@ test("the shipped contract carries the guard mapping as data, including the not-
 	expect(contract?.ompTools.task.blockedByClaude).toEqual(["Task", "Agent"]);
 	expect(contract?.ompTools.edit.blockedByClaude).toEqual(["Edit", "MultiEdit"]);
 	expect(contract?.ompTools.ast_edit.blockedByClaude).toEqual(["Edit", "Write"]);
+});
+
+test("read-only agents are blocked from serena/lean-ctx edit devices; reads and writable agents are not", () => {
+	const h = harness();
+	for (const device of [
+		"xd://mcp__serena_replace_symbol_body",
+		"xd://mcp__serena_insert_after_symbol",
+		"xd://mcp__serena_replace_content",
+		"xd://mcp__lean_ctx_ctx_patch",
+	]) {
+		const denied = h.call(sub("verifier"), "write", { path: device, content: "{}" });
+		expect(denied?.block).toBe(true);
+		expect(denied?.reason).toContain("agents/verifier.md");
+		expect(h.call(sub("implementer"), "write", { path: device, content: "{}" })).toBeUndefined();
+	}
+	for (const device of ["xd://mcp__serena_find_symbol", "xd://mcp__lean_ctx_ctx_read", "agent://Main", "local://x.md"]) {
+		expect(h.call(sub("verifier"), "write", { path: device, content: "{}" })).toBeUndefined();
+	}
+});
+
+test("every real read-only agent definition lists no edit tool in its load list and denies every MCP edit tool", () => {
+	for (const [name, list] of Object.entries(EXPECTED)) {
+		const text = readFileSync(join(AGENTS_DIR, `${name}.md`), "utf8");
+		const body = text.slice(text.indexOf("\n---", 3));
+		const readOnly = list.includes("Write");
+		for (const tool of MCP_EDIT_TOOLS) {
+			expect(list.includes(tool)).toBe(readOnly);
+			if (readOnly) expect(body.includes(tool)).toBe(false);
+		}
+	}
 });

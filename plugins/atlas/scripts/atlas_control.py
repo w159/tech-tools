@@ -20,8 +20,10 @@ from __future__ import annotations
 import json
 import os
 import re
+import queue
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -50,12 +52,26 @@ def _read_json(path: Path) -> dict:
     return data if isinstance(data, dict) else {}
 
 
-def _write_json(path: Path, data: dict) -> None:
-    """Write via a temp file in the same directory so a crash cannot truncate."""
+def write_private(path: Path, text: str) -> None:
+    """Atomic, owner-only (0600) write: temp file in the same dir, then rename.
+
+    A crash leaves the old file intact, and the credentials never exist at a
+    wider mode even briefly. An existing wider-mode file is tightened.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".atlas-tmp")
-    tmp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-    os.replace(tmp, path)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.atlas-tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        os.replace(tmp, path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def _write_json(path: Path, data: dict) -> None:
+    write_private(path, json.dumps(data, indent=2) + "\n")
 
 
 def read_settings() -> dict:
@@ -877,39 +893,68 @@ def _rpc_line(obj) -> bytes:
     return (json.dumps(obj) + "\n").encode("utf-8")
 
 
-def connector_entry(name: str) -> tuple[Path, list[str] | None]:
-    """Resolve a connector's vendored entry point and how to start it.
+def _mcp_server_spec(name: str) -> dict:
+    servers = _read_json(PLUGIN_ROOT / ".mcp.json").get("mcpServers") or {}
+    spec = servers.get(name)
+    return spec if isinstance(spec, dict) else {}
 
-    Node connectors are a single ESM bundle. Python connectors are a vendored
-    source tree that uv runs against its own pinned lockfile, through the
-    Python env preloader so CFG_* values are promoted the same way.
+
+def _subst_root(value: str) -> str:
+    return value.replace("${CLAUDE_PLUGIN_ROOT}", str(PLUGIN_ROOT))
+
+
+def connector_entry(name: str) -> tuple[Path, list[str] | None]:
+    """Resolve a connector's entry point and the exact argv .mcp.json launches.
+
+    The argv comes from .mcp.json (with ${CLAUDE_PLUGIN_ROOT} substituted), so a
+    test can never drift from how the plugin really starts the server: node
+    bundles go through ``--import mcp/_env/load.mjs`` and python connectors
+    through uv + load.py, which is what promotes CFG_* values.
     """
     node_bundle = PLUGIN_ROOT / "mcp" / name / "server.mjs"
+    spec = _mcp_server_spec(name)
     if node_bundle.is_file():
-        return node_bundle, ["node", str(node_bundle)]
-    project = PLUGIN_ROOT / "mcp" / name / "pyproject.toml"
-    if project.is_file():
-        servers = _read_json(PLUGIN_ROOT / ".mcp.json").get("mcpServers") or {}
-        args = (servers.get(name) or {}).get("args") or []
-        module = args[-1] if args else ""
-        return project, [
-            "uv",
-            "run",
-            "--project",
-            str(project.parent),
-            "python",
-            str(PLUGIN_ROOT / "mcp" / "_env" / "load.py"),
-            module,
-        ]
-    return node_bundle, None
+        entry = node_bundle
+    elif (PLUGIN_ROOT / "mcp" / name / "pyproject.toml").is_file():
+        entry = PLUGIN_ROOT / "mcp" / name / "pyproject.toml"
+    else:
+        return node_bundle, None
+    if not spec.get("command"):
+        return entry, None
+    argv = [spec["command"]] + [_subst_root(str(a)) for a in spec.get("args") or []]
+    return entry, argv
+
+
+def _connector_launch_env(name: str, env: dict | None) -> dict:
+    """Process env for a connector test: .mcp.json's literal env, then the caller's."""
+    proc_env = dict(os.environ)
+    for k, v in (_mcp_server_spec(name).get("env") or {}).items():
+        if isinstance(v, str) and "${user_config." not in v:
+            proc_env[k] = _subst_root(v)
+    proc_env["MCP_TRANSPORT"] = "stdio"
+    proc_env.update({str(k): str(v) for k, v in (env or {}).items()})
+    project = PLUGIN_ROOT / "mcp" / name
+    # An already-synced uv project must not trigger a network sync from a button click.
+    if (project / ".venv").is_dir() or os.environ.get("UV_PROJECT_ENVIRONMENT"):
+        proc_env.setdefault("UV_NO_SYNC", "1")
+    return proc_env
+
+
+# What each vendor's <vendor>_status tool prints when it has no usable credentials.
+_UNCONFIGURED = re.compile(
+    r"NOT CONFIGURED|\"configured\":\s*false|\"hasCredentials\":\s*false|MISSING_CREDENTIALS"
+)
+_STATUS_TOOL = {"connectwise": "cw_status"}
 
 
 def test_connector(name: str, env: dict | None = None, timeout: float = 20.0) -> dict:
-    """Start the connector's stdio bundle and complete an MCP handshake.
+    """Start the connector exactly as .mcp.json does, handshake, then ask it for its status.
 
-    Proves the bundle runs and lists tools. It does not prove the vendor
-    credentials are accepted -- that needs a live call the caller can make with
-    the connector's own *_status tool.
+    ``ok`` means the server booted AND reports credentials present. Unconfigured
+    returns ``ok: False, error: "not_configured"`` with the status text naming the
+    missing variables. Whether the vendor accepts the credentials is whatever the
+    connector's own status tool says (shown in ``status``); this does not
+    pretend to prove more than that.
     """
     name = str(name or "").strip()
     if not re.match(r"^[a-z0-9_-]+$", name):
@@ -918,8 +963,6 @@ def test_connector(name: str, env: dict | None = None, timeout: float = 20.0) ->
     if argv is None:
         return {"ok": False, "error": "bundle_missing", "path": str(entry)}
 
-    proc_env = dict(os.environ)
-    proc_env.update({str(k): str(v) for k, v in (env or {}).items()})
     started = time.time()
     try:
         proc = subprocess.Popen(
@@ -927,7 +970,7 @@ def test_connector(name: str, env: dict | None = None, timeout: float = 20.0) ->
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            env=proc_env,
+            env=_connector_launch_env(name, env),
             cwd=str(PLUGIN_ROOT),
         )
     except FileNotFoundError:
@@ -937,6 +980,7 @@ def test_connector(name: str, env: dict | None = None, timeout: float = 20.0) ->
             "hint": f"Install {argv[0]} to run this connector.",
         }
 
+    status_tool = _STATUS_TOOL.get(name, f"{name}_status")
     payload = b"".join(
         [
             _rpc_line(
@@ -955,53 +999,118 @@ def test_connector(name: str, env: dict | None = None, timeout: float = 20.0) ->
             _rpc_line(
                 {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}
             ),
+            _rpc_line(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 3,
+                    "method": "tools/call",
+                    "params": {"name": status_tool, "arguments": {}},
+                }
+            ),
         ]
     )
+    # communicate() would close stdin right after the writes and some servers exit
+    # on EOF before answering the status call, so read until id 3 arrives instead.
+    lines: queue.Queue = queue.Queue()
+
+    def _pump():
+        for raw in proc.stdout:
+            lines.put(raw)
+        lines.put(None)
+
+    threading.Thread(target=_pump, daemon=True).start()
+    err_chunks: list = []
+    threading.Thread(
+        target=lambda: err_chunks.append(proc.stderr.read()), daemon=True
+    ).start()
+    server_info: dict = {}
+    tools: list = []
+    status_text = None
+    deadline = time.time() + timeout
+    timed_out = False
     try:
-        out, err = proc.communicate(payload, timeout=timeout)
-    except subprocess.TimeoutExpired:
+        proc.stdin.write(payload)
+        proc.stdin.flush()
+        while status_text is None:
+            try:
+                raw = lines.get(timeout=max(0.05, deadline - time.time()))
+            except queue.Empty:
+                timed_out = True
+                break
+            if raw is None:
+                break
+            line = raw.decode("utf-8", "replace").strip()
+            if not line.startswith("{"):
+                continue
+            try:
+                msg = json.loads(line)
+            except ValueError:
+                continue
+            result = msg.get("result") or {}
+            if msg.get("id") == 1:
+                server_info = result.get("serverInfo") or {}
+            elif msg.get("id") == 2:
+                tools = result.get("tools") or []
+            elif msg.get("id") == 3:
+                parts = [
+                    c.get("text", "")
+                    for c in result.get("content") or []
+                    if isinstance(c, dict)
+                ]
+                status_text = "\n".join(parts) or (msg.get("error") or {}).get(
+                    "message", ""
+                )
+            if deadline <= time.time():
+                timed_out = True
+                break
+    except BrokenPipeError:
+        pass
+    finally:
         proc.kill()
-        out, err = proc.communicate()
+        proc.wait()
+    stderr_tail = (b"".join(err_chunks)).decode("utf-8", "replace")[-600:]
+
+    if timed_out and not server_info and not tools:
         return {
             "ok": False,
             "error": "timeout",
             "seconds": timeout,
-            "stderr": (err or b"").decode("utf-8", "replace")[-600:],
+            "stderr": stderr_tail,
         }
-
-    server_info = {}
-    tools: list = []
-    for line in (out or b"").decode("utf-8", "replace").splitlines():
-        line = line.strip()
-        if not line.startswith("{"):
-            continue
-        try:
-            msg = json.loads(line)
-        except ValueError:
-            continue
-        result = msg.get("result") or {}
-        if msg.get("id") == 1:
-            server_info = result.get("serverInfo") or {}
-        elif msg.get("id") == 2:
-            tools = result.get("tools") or []
-
     if not server_info and not tools:
         return {
             "ok": False,
             "error": "no_handshake",
             "exit_code": proc.returncode,
-            "stderr": (err or b"").decode("utf-8", "replace")[-600:],
+            "stderr": stderr_tail,
         }
-    return {
-        "ok": True,
+    configured = None if status_text is None else not _UNCONFIGURED.search(status_text)
+    res = {
+        "ok": configured is not False,
         "name": name,
         "server": server_info.get("name") or name,
         "version": server_info.get("version") or "",
         "tool_count": len(tools),
         "tools": [t.get("name") for t in tools[:12] if isinstance(t, dict)],
+        "configured": configured,
+        "status": (status_text or "")[:800],
         "elapsed_ms": int((time.time() - started) * 1000),
-        "note": "The bundle started and listed its tools. Vendor credentials are only proven by a live call.",
     }
+    if configured is False:
+        res["error"] = "not_configured"
+        res["note"] = (
+            "The server started but reports no usable credentials; "
+            "the status text names the missing variables."
+        )
+    elif configured is None:
+        res["note"] = (
+            "The server started and listed its tools but did not answer its status tool."
+        )
+    else:
+        res["note"] = (
+            "The server started with these credentials and reports them present."
+        )
+    return res
 
 
 # --- project fixtures (shared by the Agents editor and the Projects page) -----

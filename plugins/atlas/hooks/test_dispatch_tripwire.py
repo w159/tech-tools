@@ -1,3 +1,15 @@
+import os as _iso_os
+import sys as _iso_sys
+
+_iso_sys.path.insert(
+    0,
+    _iso_os.path.join(
+        _iso_os.path.dirname(_iso_os.path.abspath(__file__)), "..", "scripts"
+    ),
+)
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
+import os as _o
+_o.environ.setdefault("ATLAS_CHANNELS", "off")  # channel dispatch is tested in test_atlas_channels
 import contextlib
 import io
 import json
@@ -11,6 +23,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 HOOK = os.path.join(os.path.dirname(__file__), "dispatch_tripwire.py")
+# Fixtures use throwaway temp dirs as cwd, where the scope check leaves gates unarmed.
+os.environ.setdefault("ATLAS_GATES", "always")
 
 
 def run_hook(payload, env):
@@ -398,6 +412,117 @@ class TripwireTest(unittest.TestCase):
             self.assertIn(block, r.stdout)
         self.assertNotIn("GOAL:,", r.stdout)
         # GOAL was supplied, so it must not be reported among the missing.
+
+    def _denied_reason(self, prompt, agent="atlas:implementer"):
+        r = run_hook(
+            self._pre_payload("Agent", {"subagent_type": agent, "prompt": prompt}),
+            self.env,
+        )
+        self.assertEqual(r.returncode, 0)
+        return r.stdout
+
+    def test_pre_deny_decoy_dispatch_with_every_keyword_but_no_blocks(self):
+        """The audit's decoy: all six labels mentioned in prose, none a block."""
+        decoy = (
+            TOOLS_BLOCK
+            + "fix it. (goal: deliverable: success criteria: out of scope: stop conditions: report:)"
+        )
+        out = self._denied_reason(decoy)
+        self.assertIn('"permissionDecision": "deny"', out)
+        self.assertIn("unbounded", out)
+
+    def test_pre_deny_dispatch_whose_blocks_are_all_empty(self):
+        empty = (
+            TOOLS_BLOCK + "SUBGOAL: a\nDELIVERABLE:\nSUCCESS CRITERIA:\nOUT OF SCOPE:\n"
+            "STOP CONDITIONS:\nREPORT:\n"
+        )
+        out = self._denied_reason(empty)
+        self.assertIn('"permissionDecision": "deny"', out)
+        self.assertIn("DELIVERABLE: (empty)", out)
+        self.assertIn("GOAL:", out)  # SUBGOAL: is not a GOAL block
+
+    def test_pre_deny_single_empty_block_names_only_that_block(self):
+        prompt = SPEC_BLOCK.replace(
+            "OUT OF SCOPE: no edits, no migrations, no dependency changes",
+            "OUT OF SCOPE:",
+        )
+        out = self._denied_reason(TOOLS_BLOCK + prompt)
+        self.assertIn("OUT OF SCOPE: (empty)", out)
+        self.assertNotIn("DELIVERABLE: (empty)", out)
+
+    def test_pre_allows_markdown_decorated_labels_and_multiline_bodies(self):
+        spec = (
+            "- **GOAL:** map the auth path.\n"
+            "**DELIVERABLE:**\n  a report at .atlas/evidence/auth-map.md\n"
+            "> SUCCESS CRITERIA: every entrypoint listed\n"
+            "OUT OF SCOPE:\n- no edits\n"
+            "STOP CONDITIONS: halt if the router is missing\n"
+            "REPORT:\n  the structured container\n"
+        )
+        self.assertEqual(self._denied_reason(TOOLS_BLOCK + spec).strip(), "")
+
+    def test_pre_allows_a_whole_spec_written_on_one_line(self):
+        """Real leads write the six blocks as one paragraph; a label after a sentence break is a block."""
+        spec = (
+            "GOAL: map the auth path. DELIVERABLE: a map in the report. "
+            "SUCCESS CRITERIA: every entrypoint has file:line. OUT OF SCOPE: no edits; "
+            "STOP CONDITIONS: halt if the router is missing. REPORT: the container. "
+            "TOOLS: ToolSearch select lean-ctx ctx_read."
+        )
+        self.assertEqual(self._denied_reason(spec).strip(), "")
+
+    def test_pre_deny_leaves_an_attributable_friction_row(self):
+        r = run_hook(
+            self._pre_payload(
+                "Agent",
+                {
+                    "subagent_type": "atlas:implementer",
+                    "name": "auth-impl",
+                    "prompt": TOOLS_BLOCK + "GOAL: fix it.\n",
+                },
+            ),
+            self.env,
+        )
+        self.assertIn("unbounded", r.stdout)
+        import atlas_db
+
+        conn = atlas_db.connect(self.env["ATLAS_DB"])
+        row = conn.execute(
+            "SELECT category, snippet FROM friction_events WHERE category LIKE 'dispatch_denied:%'"
+        ).fetchone()
+        conn.close()
+        self.assertEqual(row[0], "dispatch_denied:spec")
+        who = json.loads(row[1])
+        self.assertEqual(
+            (who["agent"], who["name"], who["model"], who["tool"]),
+            ("atlas:implementer", "auth-impl", "sonnet", "Agent"),
+        )
+
+    def test_post_logs_the_dispatch_model(self):
+        run_hook(
+            self._post_payload(
+                "Agent",
+                {"subagent_type": "atlas:explorer", "prompt": "x", "model": "haiku"},
+            ),
+            self.env,
+        )
+        run_hook(
+            self._post_payload(
+                "Agent", {"subagent_type": "atlas:verifier", "prompt": "x"}
+            ),
+            self.env,
+        )
+        import atlas_db
+
+        conn = atlas_db.connect(self.env["ATLAS_DB"])
+        rows = conn.execute(
+            "SELECT agent_type, model FROM dispatches ORDER BY id"
+        ).fetchall()
+        conn.close()
+        self.assertEqual(
+            [tuple(r) for r in rows],
+            [("atlas:explorer", "haiku"), ("atlas:verifier", "sonnet")],
+        )
 
     def test_pre_deny_atlas_dispatch_without_report_block(self):
         no_report = SPEC_BLOCK.replace("REPORT: return the structured result\n", "")
@@ -812,6 +937,24 @@ class InProcessTest(unittest.TestCase):
         conn.close()
         return row[0]
 
+    def test_ip_alt_shaped_dispatch_records_real_agent_name(self):
+        self._fresh_run("sess-alt")
+        self._run_main(
+            self._post(
+                "Task", {"tasks": [{"agent": "explorer", "task": "x"}]}, "sess-alt"
+            )
+        )
+        conn = self.atlas_db.connect(self.db_path)
+        rid = self.atlas_db.current_or_last_run_id(conn, "sess-alt")
+        types = [
+            r[0]
+            for r in conn.execute(
+                "SELECT agent_type FROM dispatches WHERE run_id=?", (rid,)
+            )
+        ]
+        conn.close()
+        self.assertEqual(types, ["explorer"])
+
     # ---- main() off switch ----
 
     def test_ip_off_switch_returns_before_db(self):
@@ -1140,6 +1283,19 @@ class InProcessTest(unittest.TestCase):
         self.assertFalse(f("C:\\repo\\src\\app.py"))
         self.assertFalse(f("src/a:b.py"))
         self.assertFalse(f("1bad://x"))  # scheme must start with a letter
+
+    def test_ip_orchestration_path_expands_home(self):
+        # `~/x` is under HOME, not a cwd-relative dir: with HOME in system temp
+        # it is scratch (exempt); before the fix realpath("~/x") hit cwd -> target code.
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as home:
+            with patch.dict(os.environ, {"HOME": home}):
+                f = self.dt._is_orchestration_path
+                self.assertTrue(f("~/.omp/agent/mcp.json"))
+                self.assertTrue(f("$HOME/.omp/agent/mcp.json"))
+                self.assertTrue(f("${HOME}/x.json"))
+        self.assertFalse(self.dt._is_orchestration_path("~user_not_home/src/a.py"))
 
     def test_ip_threshold_value_error_branch(self):
         with patch.dict(os.environ, {"ATLAS_TRIPWIRE_THRESHOLD": "garbage"}):
@@ -2174,7 +2330,9 @@ class ToolkitGapOmpTest(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
-    OMP_TOOLS = "use lean-ctx via its xd:// devices (xd://mcp__lean_ctx_ctx_search)"
+    OMP_TOOLS = (
+        "TOOLS: use lean-ctx via its xd:// devices (xd://mcp__lean_ctx_ctx_search)"
+    )
 
     def gap(self, prompt, agent="atlas:implementer"):
         return self.dt._toolkit_gap({"subagent_type": agent, "prompt": prompt})
@@ -2184,8 +2342,22 @@ class ToolkitGapOmpTest(unittest.TestCase):
         with patch.dict(os.environ, {"ATLAS_TOOLKIT_LOAD": "claude"}):
             self.assertEqual(self.gap(self.OMP_TOOLS), "atlas:implementer")
         self.assertIsNone(
-            self.gap('ToolSearch("select:mcp__lean-ctx__ctx_read") and lean-ctx')
+            self.gap('TOOLS: ToolSearch("select:mcp__lean-ctx__ctx_read") and lean-ctx')
         )
+
+    def test_tools_named_only_in_prose_or_a_decoy_sentence_do_not_count(self):
+        decoy = (
+            "fix it, ToolSearch for serena and lean-ctx if you feel like it\nGOAL: x"
+        )
+        self.assertEqual(self.gap(decoy), "atlas:implementer")
+        with patch.dict(os.environ, {"ATLAS_TOOLKIT_LOAD": "omp"}):
+            self.assertEqual(
+                self.gap("use lean-ctx via xd:// devices"), "atlas:implementer"
+            )
+            self.assertEqual(
+                self.gap("TOOLS:\nGOAL: use lean-ctx"), "atlas:implementer"
+            )
+            self.assertIsNone(self.gap("TOOLS:\n  use lean-ctx\nGOAL: x"))
 
     def test_omp_mode_accepts_a_navigation_tool_without_toolsearch(self):
         with patch.dict(os.environ, {"ATLAS_TOOLKIT_LOAD": "omp"}):
@@ -2823,6 +2995,83 @@ class ReadOnlyInvestigationTest(unittest.TestCase):
         self.assertEqual(self._count(), len(sample))
         r = self._call("PreToolUse", "Bash", {"command": sample[0]})
         self.assertIn('"permissionDecision": "deny"', r.stdout)
+
+
+class ScopeTest(unittest.TestCase):
+    """Scope skips only soft policy denies; bookkeeping and hard denies still run."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.db = os.path.join(self.tmp, "atlas.db")
+        self.env = dict(os.environ, ATLAS_GATES="", ATLAS_DB=self.db)
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db
+
+        conn = atlas_db.connect(self.db)
+        atlas_db.init(conn)
+        pid = atlas_db.register_project(conn, "/repo/x")
+        atlas_db.start_run(conn, pid, "s")
+        conn.close()
+
+    def test_scratch_cwd_does_not_deny_native_grep(self):
+        p = run_hook(
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Grep",
+                "session_id": "s",
+                "cwd": "/tmp/x",
+            },
+            self.env,
+        )
+        self.assertEqual((p.returncode, p.stdout), (0, ""))
+
+    def test_scratch_cwd_still_denies_nested_dispatch(self):
+        p = run_hook(
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Task",
+                "session_id": "s",
+                "cwd": "/tmp/x",
+                "transcript_path": "/p/subagents/agent-1.jsonl",
+            },
+            self.env,
+        )
+        self.assertEqual(p.returncode, 0)
+        self.assertIn('"permissionDecision": "deny"', p.stdout)
+
+    def test_scratch_cwd_still_logs_dispatch(self):
+        p = run_hook(
+            {
+                "hook_event_name": "PostToolUse",
+                "tool_name": "Task",
+                "session_id": "s",
+                "cwd": "/tmp/x",
+                "tool_input": {"subagent_type": "general-purpose"},
+            },
+            self.env,
+        )
+        self.assertEqual(p.returncode, 0)
+        import sqlite3
+
+        conn = sqlite3.connect(self.db)
+        try:
+            n = conn.execute("SELECT COUNT(*) FROM events").fetchone()[0]
+        finally:
+            conn.close()
+        self.assertGreaterEqual(n, 1)
+
+    def test_non_dict_payloads_exit_clean_without_fault(self):
+        for raw in ("[]", "null", "5"):
+            p = subprocess.run(
+                [sys.executable, HOOK],
+                input=raw,
+                capture_output=True,
+                text=True,
+                env=self.env,
+            )
+            self.assertEqual((p.returncode, p.stdout), (0, ""))
+            self.assertNotIn("fail-open", p.stderr)
 
 
 if __name__ == "__main__":

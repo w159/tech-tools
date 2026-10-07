@@ -35,6 +35,8 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
+import atlas_faults  # noqa: E402 (needs SCRIPTS_DIR on sys.path)
+
 try:  # optional collaborators; every use is guarded
     import atlas_db  # type: ignore
 except Exception:  # pragma: no cover
@@ -47,6 +49,11 @@ try:
     import atlas_finding  # type: ignore
 except Exception:  # pragma: no cover
     atlas_finding = None
+
+
+def _classify(tool, snippet, denied: bool) -> str:
+    """atlas_db.classify_error, or 'unknown' when atlas_db is unavailable."""
+    return atlas_db.classify_error(tool, snippet, denied) if atlas_db else "unknown"
 
 
 def _state_dir() -> Path:
@@ -135,7 +142,7 @@ class _Db:
                 self._cols[table] = {
                     r[1] for r in self.conn.execute(f"PRAGMA table_info({table})")
                 }
-            except sqlite3.Error:
+            except (sqlite3.Error, AttributeError):
                 self._cols[table] = set()
         return self._cols[table]
 
@@ -192,26 +199,54 @@ def _project_names(db: _Db) -> dict[str, dict]:
 
 
 def _is_noise_root(root: str) -> bool:
-    """Throwaway roots (tmp dirs, filesystem root) are not projects to show."""
-    r = (root or "").rstrip("/")
-    if r in ("", "/tmp", "/private/tmp", "/var/folders"):
-        return True
-    return r.startswith(
-        ("/tmp/", "/private/tmp/", "/private/var/folders/", "/var/folders/")
-    )
+    """Throwaway roots (tmp dirs, self-fix worktrees, tool caches) are not projects to show."""
+    from atlas_dash_work import _junk_root
+
+    return _junk_root(root)
 
 
 # ----------------------------------------------------- silent-failure mining
 
 
+# classify_error class -> fold kind. Only tool_fault and unknown are atlas-attributable
+# silent failures; deny is enforcement; model_misuse/environment are external causes
+# shown in their own "tool errors by cause" stream.
+TOOL_CLASS_KIND = {
+    "deny": "gate_deny",
+    "model_misuse": "tool_misuse",
+    "environment": "tool_env",
+    "tool_fault": "tool_error",
+    "unknown": "tool_error_unclassified",
+}
+SILENT_TOOL_KINDS = ("tool_error", "tool_error_unclassified")
+TOOL_CAUSE_KINDS = ("tool_misuse", "tool_env", "tool_error_legacy")
+_TOOL_KIND_HINT = {
+    "gate_deny": "An atlas hook blocked this call before it ran; check the deny "
+    "rule matches intent.",
+    "tool_misuse": "The model called the tool wrongly (edit without read, stale "
+    "hash, bad arguments); not an atlas fault.",
+    "tool_env": "The environment refused the call (nonzero exit, missing path, "
+    "permission, timeout, MCP transport); not an atlas fault.",
+    "tool_error": "An atlas script failed internally; repeated errors mean the "
+    "tool is broken.",
+    "tool_error_unclassified": "The tool call errored and no error text was "
+    "recorded, so the cause is unknown (rows ingested before snippet capture).",
+    "tool_error_legacy": "pre-capture history, no error text; not attributable",
+}
+
+
 def _fold_tool_calls(
     db: _Db, since: float, root: str | None, until: float | None = None
 ) -> list[dict]:
-    """tool_calls errors and hook denies, one GROUP BY across projects."""
+    """tool_calls errors and hook denies, grouped per (project, tool, class).
+
+    SQL collapses identical (project, tool, denied, error_snippet) rows so Python
+    classifies each distinct snippet once, then aggregates into class items."""
     if not db.has("tool_calls"):
         return []
     joined = db.has("session_logs", "projects")
     sel_proj = "COALESCE(p.root_path,'')" if joined else "''"
+    sel_snip = "t.error_snippet" if "error_snippet" in db.cols("tool_calls") else "NULL"
     join = (
         "LEFT JOIN session_logs s ON s.session_id=t.session_id "
         "LEFT JOIN projects p ON p.id=s.project_id"
@@ -228,35 +263,94 @@ def _fold_tool_calls(
         params.append(root)
     sql = (
         f"SELECT {sel_proj} AS proj, COALESCE(t.tool_name,'?') AS tool, "
-        "CASE WHEN COALESCE(t.denied,0)=1 THEN 'deny' ELSE 'error' END AS what, "
+        f"COALESCE(t.denied,0) AS denied, {sel_snip} AS snip, "
         "COUNT(*) AS n, MIN(t.ts) AS first, MAX(t.ts) AS last, "
         "MAX(t.input_summary) AS sample "
         f"FROM tool_calls t {join} WHERE {where} "
-        "GROUP BY proj, tool, what ORDER BY n DESC LIMIT 400"
+        "GROUP BY proj, tool, denied, snip ORDER BY n DESC LIMIT 5000"
     )
-    out = []
+    agg: dict[tuple, dict] = {}
     for r in db.dicts(sql, params):
-        deny = r["what"] == "deny"
-        out.append(
+        cls = _classify(r["tool"], r["snip"], bool(r["denied"]))
+        kind = TOOL_CLASS_KIND.get(cls, "tool_error_unclassified")
+        if kind == "tool_error_unclassified" and not (r["snip"] or "").strip():
+            kind = "tool_error_legacy"
+        a = agg.setdefault(
+            (r["proj"], r["tool"], kind),
             {
-                "kind": "gate_deny" if deny else "tool_error",
-                "project": r["proj"],
-                "count": r["n"],
+                "class": cls,
+                "count": 0,
                 "first": r["first"],
                 "last": r["last"],
-                "sample": _clip(f"{r['tool']}: {r['sample'] or ''}"),
-                "hint": (
-                    "An atlas hook blocked this call before it ran; check the deny "
-                    "rule matches intent."
-                    if deny
-                    else "The tool call errored; repeated errors mean the tool or "
-                    "its inputs are broken."
-                ),
-                "source": "tool_calls.denied" if deny else "tool_calls.is_error",
-                "tool": r["tool"],
+                "sample": r["sample"],
+                "snippets": {},
+            },
+        )
+        a["count"] += r["n"]
+        if r["first"] is not None and (a["first"] is None or r["first"] < a["first"]):
+            a["first"] = r["first"]
+        if r["last"] is not None and (a["last"] is None or r["last"] >= a["last"]):
+            a["last"] = r["last"]
+            a["sample"] = r["sample"] or a["sample"]
+        snip = _clip((r["snip"] or "").strip(), 160)
+        if snip:
+            a["snippets"][snip] = a["snippets"].get(snip, 0) + r["n"]
+    out = []
+    for (proj, tool, kind), a in agg.items():
+        top = sorted(a["snippets"].items(), key=lambda kv: (-kv[1], kv[0]))[:3]
+        text = top[0][0] if top else (a["sample"] or "")
+        out.append(
+            {
+                "kind": kind,
+                "class": a["class"],
+                "project": proj,
+                "count": a["count"],
+                "first": a["first"],
+                "last": a["last"],
+                "sample": _clip(f"{tool}: {text}"),
+                "snippets": [{"snippet": s, "count": c} for s, c in top],
+                "hint": _TOOL_KIND_HINT[kind],
+                "source": "tool_calls.denied"
+                if kind == "gate_deny"
+                else "tool_calls.is_error",
+                "tool": tool,
             }
         )
-    return out
+    out.sort(key=lambda x: -x["count"])
+    return out[:400]
+
+
+def _fold_hook_faults(since: float, root: str | None) -> list[dict]:
+    """Swallowed hook crashes recorded by atlas_faults, grouped per hook."""
+    groups: dict[str, dict] = {}
+    for rec in atlas_faults.load(since):
+        cwd = str(rec.get("cwd") or "")
+        if root and cwd != root and not cwd.startswith(root.rstrip("/") + "/"):
+            continue
+        hook = str(rec.get("hook") or "?")
+        ts = rec.get("ts")
+        g = groups.setdefault(hook, {"count": 0, "first": ts, "last": ts, "sample": ""})
+        g["count"] += 1
+        if ts is not None:
+            if g["first"] is None or ts < g["first"]:
+                g["first"] = ts
+            if g["last"] is None or ts >= g["last"]:
+                g["last"] = ts
+                g["sample"] = f"{rec.get('type') or 'Error'}: {rec.get('error') or ''}"
+    return [
+        {
+            "kind": "hook_crash",
+            "project": root or "",
+            "count": g["count"],
+            "first": g["first"],
+            "last": g["last"],
+            "sample": _clip(f"{hook}: {g['sample']}"),
+            "hint": "A hook crashed and failed open; see ~/.atlas/hook-faults.jsonl.",
+            "source": "hook-faults.jsonl",
+            "tool": hook,
+        }
+        for hook, g in groups.items()
+    ]
 
 
 def _fold_friction(
@@ -421,7 +515,7 @@ def _fold_dashboard_log(since: float, tail_bytes: int = 262144) -> list[dict]:
 def _hookstate_scan(now: float) -> dict:
     """One pass over hookstate/*.json: per-hook last_run and burst-tripped
     sessions (>= STOP_BURST_LIMIT Stop events inside STOP_BURST_WINDOW)."""
-    out = {"sessions": 0, "last_run": {}, "bursts": [], "newest": None}
+    out = {"sessions": 0, "last_run": {}, "bursts": [], "newest": None, "stops": []}
     try:
         files = glob.glob(str(HOOKSTATE_DIR / "*.json"))
     except OSError:
@@ -442,6 +536,7 @@ def _hookstate_scan(now: float) -> dict:
         ev = sorted(
             t for t in (st.get("stop_events") or []) if isinstance(t, (int, float))
         )
+        out["stops"].extend(ev)
         if (
             len(ev) >= STOP_BURST_LIMIT
             and ev[-1] - ev[-STOP_BURST_LIMIT] <= STOP_BURST_WINDOW
@@ -541,14 +636,17 @@ ENFORCEMENT_KINDS = ("gate_deny", "gate_block")
 
 def _collect_events(
     db: _Db, since: float, root: str | None, now: float
-) -> tuple[list[dict], list[dict], dict]:
-    """One pass over every source, partitioned into (failures, enforcement, scan)."""
+) -> tuple[list[dict], list[dict], dict, list[dict]]:
+    """One pass over every source, partitioned into (failures, enforcement, scan,
+    tool_errors). tool_errors are external causes (model misuse / environment):
+    shown by cause, never counted as silent failures."""
     scan = _hookstate_scan(now)
     items: list[dict] = []
     items += _fold_tool_calls(db, since, root)
     items += _fold_friction(db, since, root)
     items += _fold_dispatch_stale(db, since, root)
     items += _fold_agents_failed(db, since, root)
+    items += _fold_hook_faults(since, root)
     if root is None:  # machine-wide sources only in the cross-project view
         items += _fold_ingest(db, since)
         items += _fold_doctor_regressions(db)
@@ -556,16 +654,24 @@ def _collect_events(
         items += _fold_hook_burst(scan, since)
     failures: list[dict] = []
     enforcement: list[dict] = []
+    tool_errors: list[dict] = []
     for it in items:
         key = f"{it['kind']}|{it['project']}|{it.get('tool', '')}|{it['source']}"
         it["id"] = hashlib.sha1(key.encode()).hexdigest()[:12]
         it["first"] = _iso(it["first"])
         it["last"] = _iso(it["last"])
-        (enforcement if it["kind"] in ENFORCEMENT_KINDS else failures).append(it)
+        if it["kind"] in ENFORCEMENT_KINDS:
+            enforcement.append(it)
+        elif it["kind"] in TOOL_CAUSE_KINDS:
+            tool_errors.append(it)
+        else:
+            failures.append(it)
     for it in failures:
         it.pop("tool", None)
+        it.pop("snippets", None)
+        it.pop("class", None)
     failures.sort(key=lambda x: (-x["count"], x["kind"]))
-    return failures, enforcement, scan
+    return failures, enforcement, scan, tool_errors
 
 
 def _enforcement_summary(items: list[dict]) -> dict:
@@ -606,8 +712,57 @@ def _enforcement_summary(items: list[dict]) -> dict:
 
 
 def _collect_enforcement(db: _Db, since: float, root: str | None, now: float) -> dict:
-    _, enforcement, _ = _collect_events(db, since, root, now)
+    _, enforcement, _, _ = _collect_events(db, since, root, now)
     return _enforcement_summary(enforcement)
+
+
+def _tool_error_summary(items: list[dict]) -> dict:
+    """External tool errors (model misuse, environment) by cause: counts per
+    classify_error class, per-project totals and the top causes with the real
+    error text. Not atlas faults, so never part of the silent-failures total."""
+    counts = {"model_misuse": 0, "environment": 0}
+    causes: dict[tuple, dict] = {}
+    projects: dict[str, int] = {}
+    legacy = 0
+    for it in items:
+        if it["kind"] == "tool_error_legacy":
+            legacy += it["count"]
+            continue
+        counts[it["class"]] = counts.get(it["class"], 0) + it["count"]
+        projects[it["project"]] = projects.get(it["project"], 0) + it["count"]
+        listed = it.get("snippets") or []
+        rest = it["count"] - sum(s["count"] for s in listed)
+        rows = [(s["snippet"], s["count"]) for s in listed]
+        if rest > 0:
+            rows.append((it["sample"].split(": ", 1)[-1] or "(no error text)", rest))
+        for text, n in rows:
+            c = causes.setdefault(
+                (it["class"], it["tool"], text),
+                {
+                    "class": it["class"],
+                    "kind": it["kind"],
+                    "tool": it["tool"],
+                    "snippet": text,
+                    "count": 0,
+                    "last": None,
+                },
+            )
+            c["count"] += n
+            if it["last"] and (c["last"] is None or it["last"] > c["last"]):
+                c["last"] = it["last"]
+    top = sorted(causes.values(), key=lambda c: (-c["count"], c["tool"], c["snippet"]))
+    return {
+        "total": sum(counts.values()),
+        "legacy": legacy,
+        "legacy_hint": _TOOL_KIND_HINT["tool_error_legacy"],
+        "counts": counts,
+        "top_causes": top[:10],
+        "projects": [
+            {"project": p, "count": n}
+            for p, n in sorted(projects.items(), key=lambda kv: (-kv[1], kv[0]))
+        ][:MAX_ITEMS],
+        "note": "Model misuse and environment errors; not atlas faults.",
+    }
 
 
 # ----------------------------------------------------------------- health
@@ -617,13 +772,77 @@ def _status_from(count: int, fail_at: int, warn_at: int = 1) -> str:
     return "fail" if count >= fail_at else "warn" if count >= warn_at else "ok"
 
 
+HISTORY_BUCKETS = (
+    10  # sparkline resolution: this many {t, ok, fail} buckets across the window
+)
+
+
+def _scalar(db: _Db, sql: str, params=()):
+    r = db.rows(sql, params)
+    return r[0][0] if r and r[0] else None
+
+
+def _hist_sql(db: _Db, frm, ts, ok, fail, since, win, where="", params=()):
+    """HISTORY_BUCKETS {t, ok, fail} buckets from one grouped query over `frm`.
+
+    `ts` is the SQL timestamp expression; `ok`/`fail` are SQL 0/1 expressions."""
+    step = win / HISTORY_BUCKETS
+    got = {
+        b: (o or 0, f or 0)
+        for b, o, f in db.rows(
+            f"SELECT MIN(CAST(({ts}-?)/? AS INTEGER),{HISTORY_BUCKETS - 1}), "
+            f"SUM({ok}), SUM({fail}) FROM {frm} WHERE {ts}>=? {where} GROUP BY 1",
+            (since, step, since, *params),
+        )
+    }
+    return [
+        {
+            "t": _iso(since + i * step),
+            "ok": got.get(i, (0, 0))[0],
+            "fail": got.get(i, (0, 0))[1],
+        }
+        for i in range(HISTORY_BUCKETS)
+    ]
+
+
+def _hist_py(ok_ts, fail_ts, since, win):
+    """Same buckets from timestamp lists (file-backed sources)."""
+    step = win / HISTORY_BUCKETS
+    rows = [
+        {"t": _iso(since + i * step), "ok": 0, "fail": 0}
+        for i in range(HISTORY_BUCKETS)
+    ]
+    for key, stamps in (("ok", ok_ts), ("fail", fail_ts)):
+        for t in stamps:
+            if t >= since:
+                rows[min(int((t - since) / step), HISTORY_BUCKETS - 1)][key] += 1
+    return rows
+
+
+def _newest(*isos):
+    vals = [i for i in isos if i]
+    return max(vals) if vals else None
+
+
+def _connector_aliases() -> dict:
+    try:
+        import atlas_control
+
+        return dict(atlas_control.CONNECTOR_ALIASES)
+    except Exception:
+        return {}
+
+
 def _health_payload(ctx):
     db = _open(ctx)
     now = time.time()
     win = _window_seconds(_q(ctx, "window", "7d"))
     since = now - win
     root = _project_filter(ctx, db)
-    silent, enforcement_items, scan = _collect_events(db, since, root, now)
+    silent, enforcement_items, scan, tool_error_items = _collect_events(
+        db, since, root, now
+    )
+    tool_errors = _tool_error_summary(tool_error_items)
     enforcement = _enforcement_summary(enforcement_items)
     by_kind: dict[str, int] = {}
     for s in silent:
@@ -633,100 +852,278 @@ def _health_payload(ctx):
         ls = [s["last"] for s in silent if s["kind"] == kind and s["last"]]
         return max(ls) if ls else None
 
-    def sub(id_, label, status, detail, last_ok=None, last_fail=None, evidence=()):
+    def sub(
+        id_,
+        label,
+        status,
+        detail,
+        last_ok=None,
+        last_fail=None,
+        evidence=(),
+        *,
+        reason=None,
+        history=None,
+        history_reason=None,
+        history_source=None,
+    ):
+        """`reason` set = the source does not exist yet: status unknown, measured false.
+        `last_ok` is an ISO time the subsystem was last seen working (never invented);
+        `history` is None when no timestamped source exists, with `history_reason` saying why."""
+        measured = reason is None
         return {
             "id": id_,
             "label": label,
-            "status": status,
-            "detail": detail,
-            "last_ok": last_ok,
-            "last_fail": last_fail,
+            "status": status if measured else "unknown",
+            "measured": measured,
+            "reason": reason,
+            "detail": detail if measured else reason,
+            "last_ok": last_ok if measured else None,
+            "last_fail": last_fail if measured else None,
             "evidence": [e for e in evidence if e],
+            "history": history if measured else None,
+            "history_source": history_source if measured and history else None,
+            "history_reason": None
+            if history is not None or not measured
+            else (history_reason or "no timestamped source"),
         }
 
     subs = []
-    # hooks: hookstate last_run + burst breaker
+    # hooks: hookstate last_run + stop events, hook-faults.jsonl, burst breaker
     bursts = by_kind.get("hook_burst_tripped", 0)
+    crashes = by_kind.get("hook_crash", 0)
     newest_hook = max(scan["last_run"].values()) if scan["last_run"] else None
+    faults = atlas_faults.load(since)
+    fault_rows = sorted(
+        (r for r in faults if isinstance(r.get("ts"), (int, float))),
+        key=lambda r: -r["ts"],
+    )
+    hooks_reason = (
+        None
+        if scan["sessions"] or faults
+        else "No hook state recorded yet. Hooks write it after the first session."
+    )
+    # A breaker trip is "failing now" only while no hook has run since; an older
+    # trip stays visible as a warn naming it, never silently ok.
+    trips = sorted(((t, sid) for sid, t in scan["bursts"] if t >= since), reverse=True)
+    trip_active = bool(trips) and (newest_hook is None or trips[0][0] >= newest_hook)
+    trip_note = (
+        f"; last trip {_iso(trips[0][0])} (session {trips[0][1][:12]})" if trips else ""
+    )
+    hooks_status = "fail" if trip_active else "warn" if bursts or crashes else "ok"
     subs.append(
         sub(
             "hooks",
             "Hooks",
-            "fail" if bursts else ("ok" if newest_hook else "unknown"),
-            f"{scan['sessions']} sessions tracked; {bursts} circuit-breaker trips"
-            if scan["sessions"]
-            else "no hookstate recorded",
+            hooks_status,
+            (
+                f"{scan['sessions']} sessions tracked; {bursts} circuit-breaker trips{trip_note}"
+                if scan["sessions"]
+                else "no hookstate recorded"
+            )
+            + (f"; {crashes} swallowed hook crashes" if crashes else "")
+            + (f"; last hook run {_iso(newest_hook)}" if newest_hook else ""),
             _iso(newest_hook),
-            last_of("hook_burst_tripped"),
-            [
+            _newest(last_of("hook_burst_tripped"), last_of("hook_crash")),
+            [s["sample"] for s in silent if s["kind"] == "hook_crash"][:3]
+            + [
+                f"{_iso(r['ts'])} "
+                + _clip(f"{r.get('hook')}: {r.get('type')}: {r.get('error')}", 200)
+                for r in fault_rows[:3]
+            ]
+            + [
                 f"{h}: last run {_iso(t)}"
                 for h, t in sorted(scan["last_run"].items())[:6]
             ],
+            reason=hooks_reason,
+            history=_hist_py(
+                scan["stops"],
+                [r["ts"] for r in fault_rows] + [t for _, t in scan["bursts"]],
+                since,
+                win,
+            ),
+            history_source="hookstate.stop_events (ok) vs hook-faults.jsonl + breaker trips (fail)",
         )
     )
     # gate: enforcement is the system working, so this is informational ("ok"),
     # never warn/fail; the counts live in the separate enforcement stream.
     gate_deny_n = enforcement["counts"].get("gate_deny", 0)
     gate_block_n = enforcement["counts"].get("gate_block", 0)
+    has_denied = "denied" in db.cols("tool_calls")
+    allowed = "COALESCE(denied,0)=0" if has_denied else "1"
+    gate_reason = gate_ok = gate_hist = None
+    allowed_n = 0
+    if not db.has("tool_calls"):
+        gate_reason = "No tool_calls table in the database."
+    elif not _scalar(db, "SELECT COUNT(*) FROM tool_calls"):
+        gate_reason = "No tool calls recorded yet. Gates are measured from tool_calls."
+    else:
+        gate_ok = _iso(_scalar(db, f"SELECT MAX(ts) FROM tool_calls WHERE {allowed}"))
+        allowed_n = (
+            _scalar(
+                db,
+                f"SELECT COUNT(*) FROM tool_calls WHERE ts>=? AND {allowed}",
+                (since,),
+            )
+            or 0
+        )
+        gate_hist = _hist_sql(
+            db,
+            "tool_calls",
+            "ts",
+            allowed,
+            "COALESCE(denied,0)=1" if has_denied else "0",
+            since,
+            win,
+        )
     subs.append(
         sub(
             "gate",
             "Gates & denies",
-            "ok" if db.has("tool_calls") else "unknown",
-            f"{gate_deny_n} denied calls, {gate_block_n} gate blocks enforced in window",
-            None,
+            "ok",
+            f"{allowed_n} tool calls allowed; {gate_deny_n} denied, "
+            f"{gate_block_n} gate blocks enforced in window",
+            gate_ok,
             None,
             [
                 f"{r['rule']} x{r['count']}: {r['sample']}"
                 for r in enforcement["top_rules"]
             ][:4],
+            reason=gate_reason,
+            history=gate_hist,
+            history_source="tool_calls: allowed (ok) vs denied by a gate (fail = enforcement, not a fault)",
         )
     )
     # dispatch
     disp_n = by_kind.get("dispatch_unclassified", 0)
-    last_disp = None
-    if db.has("dispatches"):
-        r = db.rows("SELECT MAX(ts) FROM dispatches")
-        last_disp = r[0][0] if r and r[0] else None
+    disp_reason = disp_ok = disp_hist = None
+    disp_win = 0
+    disp_ev: list = []
+    if not db.has("dispatches") or not _scalar(db, "SELECT COUNT(*) FROM dispatches"):
+        disp_reason = "No dispatches recorded in the database."
+    else:
+        disp_ok = _iso(
+            _scalar(
+                db,
+                "SELECT MAX(ts) FROM dispatches WHERE COALESCE(agent_type,'')<>''",
+            )
+        )
+        disp_win = _scalar(db, "SELECT COUNT(*) FROM dispatches WHERE ts>=?", (since,))
+        disp_hist = _hist_sql(
+            db,
+            "dispatches",
+            "ts",
+            "COALESCE(agent_type,'')<>''",
+            "COALESCE(agent_type,'')=''",
+            since,
+            win,
+        )
+        disp_ev = [
+            f"{t or '(untyped)'} x{n}"
+            for t, n in db.rows(
+                "SELECT agent_type, COUNT(*) FROM dispatches WHERE ts>=? "
+                "GROUP BY 1 ORDER BY 2 DESC LIMIT 4",
+                (since,),
+            )
+        ]
     subs.append(
         sub(
             "dispatch",
             "Dispatch",
-            "warn" if disp_n else ("ok" if last_disp else "unknown"),
-            f"{disp_n} unclassified dispatches" if disp_n else "dispatches recorded",
-            _iso(last_disp),
+            "warn" if disp_n else "ok",
+            f"{disp_n} unclassified of {disp_win} dispatches in window"
+            if disp_n
+            else (
+                f"{disp_win} dispatches in window, all typed"
+                if disp_win
+                else f"No dispatches in this window; last typed dispatch {disp_ok}"
+            ),
+            disp_ok,
             last_of("dispatch_unclassified"),
-            [],
+            disp_ev,
+            reason=disp_reason,
+            history=disp_hist,
+            history_source="dispatches: typed (ok) vs empty agent_type (fail)",
         )
     )
-    # mux: stuck workers
+    # mux: worker runs (colony); stuck = started over an hour ago and never ended
     stuck = by_kind.get("agent_stuck", 0)
+    mux_reason = mux_ok = mux_hist = None
+    mux_win = 0
+    mux_ev: list = []
+    if not db.has("runs") or "kind" not in db.cols("runs"):
+        mux_reason = "No runs table with run kinds in the database."
+    elif not _scalar(db, "SELECT COUNT(*) FROM runs WHERE kind='worker'"):
+        mux_reason = "No colony worker runs recorded yet."
+    else:
+        mux_ok = _iso(_scalar(db, "SELECT MAX(ended_at) FROM runs WHERE kind='worker'"))
+        mux_win = _scalar(
+            db,
+            "SELECT COUNT(*) FROM runs WHERE kind='worker' AND started_at>=?",
+            (since,),
+        )
+        mux_hist = _hist_sql(
+            db,
+            "runs",
+            "started_at",
+            "(ended_at IS NOT NULL)",
+            f"(ended_at IS NULL AND started_at<{now - 3600})",
+            since,
+            win,
+            "AND kind='worker'",
+        )
+        mux_ev = [
+            f"{_iso(s)} -> {_iso(e) or 'never closed'}: {_clip(t or '', 80)}"
+            for s, e, t in db.rows(
+                "SELECT started_at, ended_at, task_summary FROM runs "
+                "WHERE kind='worker' ORDER BY started_at DESC LIMIT 3"
+            )
+        ]
     subs.append(
         sub(
             "mux",
             "Colony / mux",
-            "warn" if stuck else ("ok" if db.has("runs") else "unknown"),
-            f"{stuck} worker runs never closed" if stuck else "no stuck worker runs",
-            None,
+            "warn" if stuck else "ok",
+            f"{stuck} worker runs never closed"
+            if stuck
+            else (
+                f"{mux_win} worker runs in window, none stuck"
+                if mux_win
+                else f"No worker runs in this window; last one ended {mux_ok}"
+            ),
+            mux_ok,
             last_of("agent_stuck"),
-            [s["sample"] for s in silent if s["kind"] == "agent_stuck"][:3],
+            [s["sample"] for s in silent if s["kind"] == "agent_stuck"][:3] + mux_ev,
+            reason=mux_reason,
+            history=mux_hist,
+            history_source="runs kind=worker: closed (ok) vs never closed after 1h (fail)",
         )
     )
-    # dashboard
+    # dashboard: this response is the live check, so the daemon is OK now. The log
+    # only feeds the error count (and has no per-line timestamps, hence no history).
     dash_n = by_kind.get("dashboard_error", 0)
     try:
-        dash_mtime = DASHBOARD_LOG.stat().st_mtime
+        dash_st = DASHBOARD_LOG.stat()
     except OSError:
-        dash_mtime = None
+        dash_st = None
     subs.append(
         sub(
             "dashboard",
             "Dashboard daemon",
-            "warn" if dash_n else ("ok" if dash_mtime else "unknown"),
-            f"{dash_n} logged errors" if dash_n else "log clean",
-            _iso(dash_mtime),
+            "warn" if dash_n else "ok",
+            (f"{dash_n} logged errors" if dash_n else "serving; log clean")
+            if dash_st
+            else "serving; no dashboard.log yet, so logged errors are not counted",
+            _iso(now),
             last_of("dashboard_error"),
-            [s["sample"] for s in silent if s["kind"] == "dashboard_error"][:3],
+            [s["sample"] for s in silent if s["kind"] == "dashboard_error"][:3]
+            + (
+                [
+                    f"{DASHBOARD_LOG.name}: {dash_st.st_size} bytes, modified {_iso(dash_st.st_mtime)}"
+                ]
+                if dash_st
+                else []
+            ),
+            history_reason="dashboard.log lines carry no timestamps",
         )
     )
     # db
@@ -735,15 +1132,34 @@ def _health_payload(ctx):
         size = db.rows("PRAGMA page_count")[0][0] * db.rows("PRAGMA page_size")[0][0]
     except (IndexError, TypeError):
         pass
+    db_ev = [
+        f"{t}: {_scalar(db, f'SELECT COUNT(*) FROM {t}')} rows"
+        for t in (
+            "tool_calls",
+            "runs",
+            "dispatches",
+            "findings",
+            "ingest_files",
+            "messages",
+        )
+        if db.has(t)
+    ]
     subs.append(
         sub(
             "db",
             "Telemetry DB",
             "ok" if db.tables else "fail",
-            f"{len(db.tables)} tables" + (f", {size // 1048576} MiB" if size else ""),
-            None,
-            None,
-            [],
+            f"{len(db.tables)} tables" + (f", {size // 1048576} MiB" if size else "")
+            if db.tables
+            else "database has no tables or could not be opened",
+            _iso(now) if db.tables else None,
+            None if db.tables else _iso(now),
+            db_ev,
+            history=_hist_sql(db, "tool_calls", "ts", "1", "0", since, win)
+            if db.has("tool_calls")
+            else None,
+            history_source="tool_calls rows written per bucket (write activity)",
+            history_reason="no tool_calls table",
         )
     )
     # connectors: same definition Settings shows (credentials on file + tool_calls
@@ -759,22 +1175,45 @@ def _health_payload(ctx):
     used = [
         r["usage"]["last_used"] for r in rows if (r.get("usage") or {}).get("last_used")
     ]
+    conn_fail = conn_hist = None
+    if rows and db.has("tool_calls") and {"server", "kind"} <= db.cols("tool_calls"):
+        names = {r["name"] for r in rows}
+        servers = sorted(
+            names | {k for k, v in _connector_aliases().items() if v in names}
+        )
+        scope = f"AND kind='mcp' AND server IN ({','.join('?' * len(servers))})" + (
+            " AND COALESCE(denied,0)=0" if has_denied else ""
+        )
+        conn_fail = _iso(
+            _scalar(
+                db,
+                f"SELECT MAX(ts) FROM tool_calls WHERE COALESCE(is_error,0)=1 {scope}",
+                servers,
+            )
+        )
+        conn_hist = _hist_sql(
+            db,
+            "tool_calls",
+            "ts",
+            "COALESCE(is_error,0)=0",
+            "COALESCE(is_error,0)=1",
+            since,
+            win,
+            scope,
+            servers,
+        )
     subs.append(
         sub(
             "connectors",
             "Connectors",
-            "warn" if flagged else ("ok" if live else "unknown"),
+            "warn" if flagged else "ok",
             f"{len(flagged)} of {len(rows)} connectors need attention "
             f"({sum(1 for r in flagged if r['health'] == 'unconfigured')} unconfigured, "
             f"{sum(1 for r in flagged if r['health'] == 'degraded')} degraded)"
             if flagged
-            else (
-                f"{len(live)} of {len(rows)} connectors configured"
-                if rows
-                else "connector status unavailable"
-            ),
+            else f"{len(live)} of {len(rows)} connectors configured",
             _iso(max(used)) if used else None,
-            None,
+            conn_fail,
             [
                 f"{r['name']}: {r['health']}"
                 + (
@@ -784,83 +1223,172 @@ def _health_payload(ctx):
                 )
                 for r in flagged[:6]
             ],
+            reason=None
+            if rows
+            else "Connector status is not available from this process.",
+            history=conn_hist,
+            history_source="tool_calls kind=mcp on configured connectors: ok vs is_error",
+            history_reason="no tool_calls with server names",
         )
     )
-    # memory
+    # memory: MEMORY.md plus the memory_capture hook's own last run
     mem = _state_dir() / "memory" / "MEMORY.md"
     try:
-        mm = mem.stat().st_mtime
+        mem_st = mem.stat()
     except OSError:
-        mm = None
+        mem_st = None
+    cap = scan["last_run"].get("memory_capture")
     subs.append(
         sub(
             "memory",
             "Memory capture",
-            "ok" if mm else "unknown",
-            "MEMORY.md present" if mm else "no MEMORY.md yet",
-            _iso(mm),
+            "ok" if mem_st else "warn",
+            (
+                f"MEMORY.md present ({mem_st.st_size} bytes)"
+                if mem_st
+                else "memory_capture ran but wrote no MEMORY.md"
+            ),
+            _newest(_iso(mem_st.st_mtime) if mem_st else None, _iso(cap)),
             None,
-            [],
+            [
+                f"{mem}: {mem_st.st_size} bytes, modified {_iso(mem_st.st_mtime)}"
+                if mem_st
+                else None,
+                f"memory_capture hook last ran {_iso(cap)}" if cap else None,
+            ],
+            reason=None if (mem_st or cap) else "No MEMORY.md in the state directory.",
+            history_reason="MEMORY.md keeps only its latest modification time",
         )
     )
-    # nudge
+    # nudge: stamp file plus the nudge hook's own last run
     nudge_ts = None
     try:
         nudge_ts = float(NUDGE_STAMP.read_text().strip())
     except (OSError, ValueError):
         pass
+    nudge_run = scan["last_run"].get("nudge")
+    nudge_last = _newest(_iso(nudge_ts), _iso(nudge_run))
     subs.append(
         sub(
             "nudge",
             "Nudge",
-            "ok" if nudge_ts else "unknown",
-            f"throttle {NUDGE_THROTTLE_MIN} min",
-            _iso(nudge_ts),
+            "ok",
+            f"last nudge {nudge_last}; throttle {NUDGE_THROTTLE_MIN} min",
+            nudge_last,
             None,
-            [],
+            [
+                f"nudge stamp {_iso(nudge_ts)}" if nudge_ts else None,
+                f"nudge hook last ran {_iso(nudge_run)}" if nudge_run else None,
+            ],
+            reason=None if nudge_last else "No nudge has fired yet.",
+            history_reason="the nudge stamp keeps only the latest time",
         )
     )
-    # doctor
+    # doctor: findings activity (the miner persists findings, not runs)
     open_f = 0
-    if db.has("findings"):
-        r = db.rows("SELECT COUNT(*) FROM findings WHERE status='open'")
-        open_f = r[0][0] if r else 0
     miner_err = by_kind.get("doctor_miner_error", 0)
+    doc_reason = doc_ok = doc_hist = None
+    doc_ev: list = []
+    act = "COALESCE(decided_at,applied_at,created_at)"
+    if not db.has("findings"):
+        doc_reason = "No findings table in the database."
+    elif not _scalar(db, "SELECT COUNT(*) FROM findings"):
+        doc_reason = "The doctor has not recorded any finding yet."
+    else:
+        open_f = _scalar(db, "SELECT COUNT(*) FROM findings WHERE status='open'") or 0
+        doc_ok = _iso(_scalar(db, f"SELECT MAX({act}) FROM findings"))
+        doc_hist = _hist_sql(
+            db,
+            "findings",
+            act,
+            "(status<>'regressed')",
+            "(status='regressed')",
+            since,
+            win,
+        )
+        doc_ev = [
+            f"[{sev}] {_clip(title, 100)}"
+            for sev, title in db.rows(
+                "SELECT severity, title FROM findings WHERE status='open' "
+                f"ORDER BY {act} DESC LIMIT 3"
+            )
+        ]
     subs.append(
         sub(
             "doctor",
             "Doctor",
-            "warn" if miner_err else ("ok" if db.has("findings") else "unknown"),
-            f"{open_f} open findings; {miner_err} miner errors",
-            None,
-            last_of("doctor_miner_error"),
-            [],
+            "warn" if miner_err else "ok",
+            f"{open_f} open findings; {miner_err} miner errors; last finding activity {doc_ok}",
+            doc_ok,
+            last_of("doctor_miner_error") or last_of("doctor_regression"),
+            doc_ev,
+            reason=doc_reason,
+            history=doc_hist,
+            history_source="findings activity per bucket (fail = regressed)",
         )
     )
-    # chronicle: ingest
+    # chronicle: transcript ingest cursors
     ing = by_kind.get("ingest_stalled", 0)
-    last_ing = None
-    if db.has("ingest_files"):
-        r = db.rows("SELECT MAX(updated_at) FROM ingest_files")
-        last_ing = r[0][0] if r and r[0] else None
+    chr_reason = chr_ok = chr_hist = None
+    ing_n = behind = 0
+    chr_ev: list = []
+    if not db.has("ingest_files") or not _scalar(
+        db, "SELECT COUNT(*) FROM ingest_files"
+    ):
+        chr_reason = "No transcript ingest has run yet."
+    else:
+        ing_n = _scalar(db, "SELECT COUNT(*) FROM ingest_files")
+        behind_sql = "(size IS NOT NULL AND cursor_bytes<size)"
+        behind = (
+            _scalar(db, f"SELECT COUNT(*) FROM ingest_files WHERE {behind_sql}") or 0
+        )
+        chr_ok = _iso(_scalar(db, "SELECT MAX(updated_at) FROM ingest_files"))
+        chr_hist = _hist_sql(
+            db,
+            "ingest_files",
+            "updated_at",
+            f"(NOT {behind_sql})",
+            behind_sql,
+            since,
+            win,
+        )
+        chr_ev = [
+            f"{_iso(u)} {os.path.basename(p or '')}: {c}/{s} bytes"
+            for p, c, s, u in db.rows(
+                "SELECT path, cursor_bytes, size, updated_at FROM ingest_files "
+                "ORDER BY updated_at DESC LIMIT 3"
+            )
+        ]
     subs.append(
         sub(
             "chronicle",
             "Chronicle ingest",
-            "warn" if ing else ("ok" if last_ing else "unknown"),
-            f"{ing} transcript files behind" if ing else "ingest caught up",
-            _iso(last_ing),
+            "warn" if ing else "ok",
+            f"{ing} transcript files behind"
+            if ing
+            else (
+                f"{ing_n} transcript files tracked, all caught up"
+                if not behind
+                else f"{behind} older transcript files behind (outside the window); {ing_n} tracked"
+            ),
+            chr_ok,
             last_of("ingest_stalled"),
-            [],
+            chr_ev,
+            reason=chr_reason,
+            history=chr_hist,
+            history_source="ingest_files.updated_at: caught up (ok) vs cursor behind size (fail)",
         )
     )
 
     successes = _successes(db, since, root)
     return {
+        "checked_at": _iso(now),
+        "window_seconds": int(win),
         "subsystems": subs,
         "silent_failures": silent,
         "successes": successes,
         "enforcement": enforcement,
+        "tool_errors": tool_errors,
     }
 
 
@@ -927,7 +1455,7 @@ def _todo_counts(root: str) -> dict:
     same way and the Projects card always agrees with the board. In-progress counts
     as open here (this card has no separate bucket for it).
     """
-    from atlas_dash_colony import todos_state
+    from atlas_dash_work import todos_state
 
     c = todos_state(root)["counts"]
     return {
@@ -977,7 +1505,12 @@ def route_projects(ctx):
             active[root] = n
     fails: dict[str, int] = {}
     enforced: dict[str, int] = {}
-    silent, enforcement_items, _ = _collect_events(db, since, None, now)
+    ext_errs: dict[str, int] = {}
+    silent, enforcement_items, _, tool_error_items = _collect_events(
+        db, since, None, now
+    )
+    for s in tool_error_items:
+        ext_errs[s["project"]] = ext_errs.get(s["project"], 0) + s["count"]
     for s in silent:
         fails[s["project"]] = fails.get(s["project"], 0) + s["count"]
     for s in enforcement_items:
@@ -1008,6 +1541,7 @@ def route_projects(ctx):
                 "health": health,
                 "failures_7d": f,
                 "enforcement_7d": enforced.get(root, 0),
+                "tool_errors_7d": ext_errs.get(root, 0),
                 "findings_open": ledger_open.get(root, 0),
             }
         )
@@ -1025,15 +1559,19 @@ def route_overview(ctx):
     win = _window_seconds(_q(ctx, "window", "7d"))
     since = now - win
     root = _project_filter(ctx, db)
-    silent, enforcement_items, scan = _collect_events(db, since, root, now)
+    silent, enforcement_items, scan, tool_error_items = _collect_events(
+        db, since, root, now
+    )
+    tool_errors = _tool_error_summary(tool_error_items)
     cur_total = sum(s["count"] for s in silent)
     # previous window [since-win, since): only the DB-bounded tool_error fold, so
     # the delta compares like with like (log/ingest/hookstate sources are not
-    # windowed) and, like the current window, excludes enforcement.
+    # windowed) and counts only atlas-attributable tool errors, as the current
+    # window does.
     prev_total = sum(
         s["count"]
         for s in _fold_tool_calls(db, since - win, root, until=since)
-        if s["kind"] not in ENFORCEMENT_KINDS
+        if s["kind"] in SILENT_TOOL_KINDS
     )
     cur_bounded = sum(
         s["count"] for s in silent if s["source"] == "tool_calls.is_error"
@@ -1099,15 +1637,27 @@ def route_overview(ctx):
             "value": cur_total,
             "delta": delta(cur_bounded, prev_silent_n),
             "status": "fail" if cur_total >= 100 else "warn" if cur_total else "ok",
-            "hint": "errors, denies and stalls that did not surface",
+            "hint": "atlas-attributable: internal tool faults, unclassified errors, "
+            "hook crashes, stalls and regressions",
+        },
+        {
+            "id": "tool_errors",
+            "label": "Tool errors by cause",
+            "value": tool_errors["total"],
+            "delta": None,
+            "status": "ok",
+            "hint": f"external, not atlas faults: "
+            f"{tool_errors['counts'].get('model_misuse', 0)} model misuse, "
+            f"{tool_errors['counts'].get('environment', 0)} environment",
         },
         {
             "id": "findings_open",
-            "label": "Open findings",
+            "label": "Doctor findings",
             "value": open_f,
             "delta": None,
             "status": "warn" if open_f else "ok",
-            "hint": "doctor findings awaiting a decision",
+            "hint": "open doctor-ledger findings awaiting a decision; "
+            "not the Needs-attention list, which counts grouped failures",
         },
     ]
     if root:
@@ -1127,7 +1677,12 @@ def route_overview(ctx):
         sev = (
             "fail"
             if s["kind"]
-            in ("hook_burst_tripped", "dashboard_error", "doctor_miner_error")
+            in (
+                "hook_burst_tripped",
+                "hook_crash",
+                "dashboard_error",
+                "doctor_miner_error",
+            )
             or s["count"] >= 50
             else "warn"
         )
@@ -1181,24 +1736,35 @@ def route_overview(ctx):
                 ([root] if root else []),
             )
         ]
+    trend = _trend(db, since, root, win)
+    kinds = {
+        "findings_open": "findings raised per bucket (open-count has no history)",
+        "silent_failures": "atlas tool faults per bucket (other sources are not time-bucketed)",
+    }
+    for k in kpis:
+        k["series"] = trend["kpi_series"].get(k["id"])
+        k["series_kind"] = kinds.get(k["id"], "count per bucket")
     return 200, {
         "kpis": kpis,
         "attention": attention,
         "recent_runs": recent,
-        "trend": _trend(db, since, root, win),
+        "trend": trend,
         "enforcement": _enforcement_summary(enforcement_items),
+        "tool_errors": tool_errors,
     }
 
 
 def _trend(db: _Db, since: float, root: str | None, win: float) -> dict:
     bucket = 86400 if win >= 2 * 86400 else 3600
     labels, runs_series, fail_series = [], {}, {}
+    ext_series, disp_series, find_series = {}, {}, {}
     end = int(time.time() // bucket) * bucket
     start = int(since // bucket) * bucket
     for b in range(start, end + bucket, bucket):
         labels.append(_iso(b))
         runs_series[b] = 0
         fail_series[b] = 0
+        ext_series[b] = disp_series[b] = find_series[b] = 0
     if db.has("runs", "projects"):
         where = "AND p.root_path=?" if root else ""
         pa = [since] + ([root] if root else [])
@@ -1224,19 +1790,58 @@ def _trend(db: _Db, since: float, root: str | None, win: float) -> dict:
         if root and joined:
             where += " AND p.root_path=?"
             pa.append(root)
-        for b, n in db.rows(
-            f"SELECT CAST(t.ts/{bucket} AS INTEGER)*{bucket}, COUNT(*) FROM tool_calls t {join} WHERE {where} GROUP BY 1",
+        snip = "t.error_snippet" if "error_snippet" in db.cols("tool_calls") else "NULL"
+        for b, tool, text, n in db.rows(
+            f"SELECT CAST(t.ts/{bucket} AS INTEGER)*{bucket}, COALESCE(t.tool_name,'?'), "
+            f"{snip}, COUNT(*) FROM tool_calls t {join} WHERE {where} GROUP BY 1, 2, 3",
             pa,
         ):
-            if b in fail_series:
-                fail_series[b] = n
+            cls = _classify(tool, text, False)
+            if b in fail_series and cls in ("tool_fault", "unknown"):
+                fail_series[b] += n  # same attribution as the silent-failures KPI
+            elif b in ext_series and cls in ("model_misuse", "environment"):
+                ext_series[b] += n  # the tool-errors-by-cause KPI
+    if db.has("dispatches", "runs", "projects"):
+        where = "AND p.root_path=?" if root else ""
+        pa = [since] + ([root] if root else [])
+        for b, n in db.rows(
+            f"SELECT CAST(d.ts/{bucket} AS INTEGER)*{bucket}, COUNT(*) FROM dispatches d "
+            "JOIN runs r ON r.id=d.run_id JOIN projects p ON p.id=r.project_id "
+            f"WHERE d.ts>=? {where} GROUP BY 1",
+            pa,
+        ):
+            if b in disp_series:
+                disp_series[b] = n
+    if db.has(
+        "findings"
+    ):  # findings are machine-wide; the series is "raised per bucket"
+        for b, n in db.rows(
+            f"SELECT CAST(created_at/{bucket} AS INTEGER)*{bucket}, COUNT(*) FROM findings "
+            "WHERE created_at>=? GROUP BY 1",
+            (since,),
+        ):
+            if b in find_series:
+                find_series[b] = n
     keys = sorted(runs_series)
+
+    def vals(d):
+        return [d[k] for k in keys]
+
     return {
         "labels": labels,
         "series": [
-            {"name": "runs", "values": [runs_series[k] for k in keys]},
-            {"name": "failures", "values": [fail_series[k] for k in keys]},
+            {"name": "runs", "values": vals(runs_series)},
+            {"name": "failures", "values": vals(fail_series)},
         ],
+        # per-KPI sparkline values aligned with `labels` (overview.kpis[].series).
+        # todos_blocked has no history (the board stores only the current state).
+        "kpi_series": {
+            "runs": vals(runs_series),
+            "dispatches": vals(disp_series),
+            "silent_failures": vals(fail_series),
+            "tool_errors": vals(ext_series),
+            "findings_open": vals(find_series),
+        },
     }
 
 
@@ -1257,7 +1862,7 @@ def _activity_rows(db: _Db, since: float, root: str | None, limit: int) -> list[
         parts.append(
             "SELECT 'run' AS kind, r.started_at AS ts, COALESCE(p.root_path,'') AS project, "
             "COALESCE(r.kind,'run') AS agent, COALESCE(NULLIF(r.task_summary,''),'(run)') AS title, "
-            "COALESCE(r.model,'') AS detail, 'ok' AS status, r.id AS ref "
+            "COALESCE(r.model,'') AS detail, 'ok' AS status, r.id AS ref, '' AS snippet "
             f"FROM runs r LEFT JOIN projects p ON p.id=r.project_id WHERE r.started_at>=? {wroot}"
         )
         params += [since] + ([root] if root else [])
@@ -1265,7 +1870,7 @@ def _activity_rows(db: _Db, since: float, root: str | None, limit: int) -> list[
         parts.append(
             "SELECT 'dispatch', d.ts, COALESCE(p.root_path,''), COALESCE(NULLIF(d.agent_type,''),'unknown'), "
             "'dispatch ' || COALESCE(NULLIF(d.agent_type,''),'unknown'), COALESCE(d.model,''), "
-            "CASE WHEN COALESCE(d.agent_type,'')='' THEN 'warn' ELSE 'ok' END, d.id "
+            "CASE WHEN COALESCE(d.agent_type,'')='' THEN 'warn' ELSE 'ok' END, d.id, '' "
             f"FROM dispatches d JOIN runs r ON r.id=d.run_id LEFT JOIN projects p ON p.id=r.project_id WHERE d.ts>=? {wroot}"
         )
         params += [since] + ([root] if root else [])
@@ -1284,7 +1889,13 @@ def _activity_rows(db: _Db, since: float, root: str | None, limit: int) -> list[
             f"SELECT CASE WHEN COALESCE(t.denied,0)=1 THEN 'deny' ELSE 'tool_error' END, t.ts, {proj}, "
             "COALESCE(t.tool_name,'?'), COALESCE(t.tool_name,'?') || ' ' || "
             "CASE WHEN COALESCE(t.denied,0)=1 THEN 'denied' ELSE 'failed' END, "
-            "COALESCE(t.input_summary,''), CASE WHEN COALESCE(t.denied,0)=1 THEN 'warn' ELSE 'fail' END, t.id "
+            "COALESCE(t.input_summary,''), CASE WHEN COALESCE(t.denied,0)=1 THEN 'warn' ELSE 'fail' END, t.id, "
+            + (
+                "COALESCE(t.error_snippet,'')"
+                if "error_snippet" in db.cols("tool_calls")
+                else "''"
+            )
+            + " "
             f"FROM tool_calls t {join} WHERE t.ts>=? AND (COALESCE(t.is_error,0)=1 OR COALESCE(t.denied,0)=1) "
             + ("AND p.root_path=?" if root and joined else "")
         )
@@ -1302,7 +1913,7 @@ def _activity_rows(db: _Db, since: float, root: str | None, limit: int) -> list[
         proj = "COALESCE(p.root_path,'')" if joined else "''"
         parts.append(
             f"SELECT 'friction', f.ts, {proj}, 'friction', COALESCE(f.category,'friction'), "
-            "COALESCE(f.snippet,''), 'warn', f.id "
+            "COALESCE(f.snippet,''), 'warn', f.id, '' "
             f"FROM friction_events f {join} WHERE f.ts>=? "
             + ("AND p.root_path=?" if root and joined else "")
         )
@@ -1310,7 +1921,7 @@ def _activity_rows(db: _Db, since: float, root: str | None, limit: int) -> list[
     if db.has("findings"):
         parts.append(
             "SELECT 'finding', created_at, '', COALESCE(dimension,'doctor'), COALESCE(title,''), "
-            "COALESCE(detail,''), CASE WHEN severity IN ('HIGH','high') THEN 'fail' ELSE 'warn' END, id "
+            "COALESCE(detail,''), CASE WHEN severity IN ('HIGH','high') THEN 'fail' ELSE 'warn' END, id, '' "
             "FROM findings WHERE created_at>=?"
         )
         params += [since]
@@ -1318,7 +1929,24 @@ def _activity_rows(db: _Db, since: float, root: str | None, limit: int) -> list[
         return []
     sql = " UNION ALL ".join(parts) + " ORDER BY ts DESC LIMIT ?"
     params.append(limit * 5)  # over-fetch: duplicates collapse away
-    return db.dicts(sql, params)
+    rows = db.dicts(sql, params)
+    for r in rows:
+        r["class"] = None
+        if r["kind"] not in ("deny", "tool_error"):
+            continue
+        denied = r["kind"] == "deny"
+        cls = _classify(r["agent"], r["snippet"], denied)
+        r["class"] = cls
+        # denies keep the activity stream's historic 'deny' kind
+        r["kind"] = (
+            "deny"
+            if cls == "deny"
+            else TOOL_CLASS_KIND.get(cls, "tool_error_unclassified")
+        )
+        r["status"] = "fail" if cls in ("tool_fault", "unknown") else "warn"
+        if r["snippet"]:  # real cause text instead of only the input summary
+            r["detail"] = r["snippet"]
+    return rows
 
 
 def route_activity(ctx):
@@ -1381,6 +2009,7 @@ def route_activity(ctx):
             "title": _clip(r["title"], 160),
             "detail": _clip(r["detail"], 240),
             "status": r["status"],
+            "class": r.get("class"),
             "count": 1,
             "ref": {"table": r["kind"], "id": r["ref"]},
         }
@@ -1932,7 +2561,9 @@ def route_improve(ctx):
     if db.has("findings"):
         for r in db.dicts(
             "SELECT id, created_at, dimension, severity, title, detail, evidence_json, "
-            "proposed_action, target_path, status, decided_at, applied_at, fingerprint "
+            "proposed_action, target_path, status, decided_at, applied_at, fingerprint"
+            + (", fix_state, fix_target" if "fix_state" in db.cols("findings") else "")
+            + " "
             "FROM findings ORDER BY id DESC LIMIT 400"
         ):
             status = _DB_STATUS_TO_CONTRACT.get(r["status"], "open")
@@ -1975,6 +2606,8 @@ def route_improve(ctx):
                     "verdict": im.get("verdict") if im else None,
                     "trend": _direction_trend(baseline, current, higher),
                     "rule": rule,
+                    "fix_state": r.get("fix_state") or "none",
+                    "fix_target": r.get("fix_target"),
                 }
             )
             b = bucket_for(rule)
@@ -2070,6 +2703,7 @@ def route_improve(ctx):
         "improvements": {"verdicts": verdict_counts, "items": improvements[:40]},
         "asset_verdicts": _asset_verdict_summary(db, root),
         "enforcement": _collect_enforcement(db, now - 7 * 86400, root, now),
+        "selffix": _selffix_payload(ctx),
     }
 
 
@@ -2233,6 +2867,69 @@ def route_improve_remeasure(ctx):
     }
 
 
+# --------------------------------------------------------------- self-fix
+
+
+def _selffix_payload(ctx) -> dict:
+    """Improve-page self-fix panel; degrades to a disabled stub if the module or
+    the fix_* columns are unavailable (route reads never run migrations)."""
+    try:
+        import atlas_selffix
+
+        conn = ctx.db()
+        if "fix_state" not in _Db(conn).cols("findings"):
+            raise RuntimeError("fix_* columns not migrated")
+        return atlas_selffix.snapshot(conn)
+    except Exception as e:
+        return {
+            "enabled": False,
+            "error": str(e),
+            "running": [],
+            "ready": [],
+            "failed": [],
+            "interval_min": 30,
+            "last_tick": None,
+        }
+
+
+def route_improve_selffix(ctx):
+    body = ctx.json() or {}
+    op, fid = str(body.get("op") or ""), str(body.get("id") or "")
+    if op not in ("run_now", "merge", "discard", "retry"):
+        return _err(
+            400,
+            "bad request",
+            "op must be run_now|merge|discard|retry",
+            'POST {"op":"merge","id":"doctor:12"}',
+        )
+    try:
+        import atlas_selffix
+    except Exception as e:
+        return _err(503, "selffix unavailable", str(e), "check atlas_selffix.py")
+    if op == "run_now":
+        import threading
+
+        threading.Thread(
+            target=atlas_selffix.tick, name="selffix-run-now", daemon=True
+        ).start()
+        return 200, {"ok": True, "started": True}
+    src, _, raw = fid.partition(":")
+    if src != "doctor" or not raw.isdigit():
+        return _err(
+            400,
+            "bad request",
+            "id must be a doctor finding id like doctor:12",
+            'POST {"op":"merge","id":"doctor:12"}',
+        )
+    conn = ctx.db()
+    res = getattr(atlas_selffix, op)(conn, int(raw))
+    if not res.get("ok"):
+        return _err(
+            409, res.get("error", "failed"), res.get("reason", ""), "refresh Improve"
+        )
+    return 200, res
+
+
 # ------------------------------------------------------------------- prefs
 
 _ENUMS = {"theme": {"dark", "light", "system"}, "density": {"comfortable", "compact"}}
@@ -2260,6 +2957,7 @@ def _defaults() -> dict:
         "nav_order": [],
         "refresh_seconds": 8,
         "noise": {"collapse_duplicates": True, "min_severity": "info"},
+        "selffix": {"enabled": True, "interval_min": 30, "max_concurrent": 2},
     }
 
 
@@ -2340,6 +3038,30 @@ def _validate_prefs(update: dict, base: dict) -> tuple[dict, list[str]]:
                     )
                 n["min_severity"] = v["min_severity"]
             out[k] = n
+        elif k == "selffix":
+            allowed_sf = {"enabled", "interval_min", "max_concurrent"}
+            if not isinstance(v, dict) or set(v) - allowed_sf:
+                raise ValueError(
+                    "selffix accepts only enabled, interval_min, max_concurrent"
+                )
+            sf = dict(out["selffix"])
+            if "enabled" in v:
+                if not isinstance(v["enabled"], bool):
+                    raise ValueError("selffix.enabled must be a boolean")
+                sf["enabled"] = v["enabled"]
+            for key, lo, hi in (("interval_min", 5, 1440), ("max_concurrent", 1, 4)):
+                if key in v:
+                    n = v[key]
+                    if (
+                        isinstance(n, bool)
+                        or not isinstance(n, int)
+                        or not lo <= n <= hi
+                    ):
+                        raise ValueError(
+                            f"selffix.{key} must be an integer between {lo} and {hi}"
+                        )
+                    sf[key] = n
+            out[k] = sf
         elif k == "saved_views":
             if not isinstance(v, list) or len(v) > 50:
                 raise ValueError("saved_views must be a list of up to 50 views")
@@ -2421,6 +3143,7 @@ ROUTES = [
     ("GET", r"^/api/v2/improve$", route_improve),
     ("POST", r"^/api/v2/improve/finding$", route_improve_finding),
     ("POST", r"^/api/v2/improve/remeasure$", route_improve_remeasure),
+    ("POST", r"^/api/v2/improve/selffix$", route_improve_selffix),
     ("GET", r"^/api/v2/prefs$", route_prefs_get),
     ("PUT", r"^/api/v2/prefs$", route_prefs_put),
 ]

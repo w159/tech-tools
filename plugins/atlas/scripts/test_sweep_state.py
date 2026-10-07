@@ -4,6 +4,7 @@ refusal, closed-item evidence downgrade, sensitive redaction, and corrupt
 state refusal. The state engine is the only writer of sweep state, so its
 status-word contract is observable behavior worth pinning."""
 
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import json
 import subprocess
 import sys

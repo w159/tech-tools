@@ -212,13 +212,20 @@ effort/model tier and guardrails.
 - The lead alone dispatches and declares done. Siblings report to the lead,
   never to the user, and never dispatch other subagents.
 
-## Colony mux mode (opt-in, tmux)
+## Colony mux mode (opt-in, herdr transport)
 
-`ATLAS_MUX=tmux` only unlocks `atlas_mux.py spawn`: the lead must run that command
-per worker to get its own headless process in a window of one tmux session
-`atlas-<run>`. Dispatches via Agent/task are never rerouted to mux. The default
-(in-process named dispatch + board) is unchanged. Use mux when workers must run
-fully independently (separate processes, watchable panes) at their own tiers.
+`ATLAS_MUX=tmux` only unlocks `atlas_mux.py spawn` (the variable keeps its
+historical name): the lead must run that command per worker to get its own
+headless process in a pane of the herdr workspace `atlas-<run>` (one tab per
+worker, opened over the herdr socket by `atlas_herdr.create_pane`). The
+transport is herdr by default; tmux (session `atlas-<run>`, one window per
+worker) is used only with `ATLAS_COLONY_TRANSPORT=tmux` or when the herdr
+socket does not answer. Dispatches via Agent/task are never rerouted to mux.
+The default (in-process named dispatch + board) is unchanged. Use mux when
+workers must run fully independently (separate processes, watchable panes) at
+their own tiers. Watch the panes in the herdr web UI (`http://127.0.0.1:7317`,
+the dashboard's Colony page); `ATLAS_COLONY=off` skips starting it at
+SessionStart.
 
     python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_mux.py" spawn --run <id> --harness claude|omp \
         --name <Name> --agent <role> --prompt-file <brief.md> [--model M] [--effort E | --thinking T]
@@ -229,7 +236,7 @@ fully independently (separate processes, watchable panes) at their own tiers.
   `claude -p --agent atlas:<role> --model <model> --effort <effort> --permission-mode acceptEdits`;
   omp `omp -p --model=<concrete> --thinking=<thinkingLevel>` (omp has no `--agent` flag, so
   the role's body is prepended to the brief).
-- Tier enforcement: `spawn` refuses (`ok:false`, exit 2, before any tmux call; the error
+- Tier enforcement: `spawn` refuses (`ok:false`, exit 2, before any pane call; the error
   names the role and the agents path searched) when the definition is missing or yields no
   model. The only override is an explicit `--model` AND the harness tier flag (`--effort`
   for claude, `--thinking` for omp); `--model` alone is still refused.
@@ -237,7 +244,7 @@ fully independently (separate processes, watchable panes) at their own tiers.
   `--model`) is replaced by the CONCRETE selector under `modelRoles` in
   `~/.omp/agent/config.yml` (`ATLAS_MUX_OMP_CONFIG` overrides the path); the first pattern
   that resolves wins and omp receives that concrete selector. Nothing resolving = refused.
-- Each worker gets `ATLAS_PROJECT_ROOT` and `ATLAS_WORKER_NAME`. `atlas_todo.note` is the
+- Each worker pane gets `ATLAS_PROJECT_ROOT`, `ATLAS_WORKER_NAME` and the lead's `FORWARDED_ENV` switches as `env K=V` pins inside the pane command itself (so a shell that resets its environment cannot drop them), whatever the transport. `atlas_todo.note` is the
   single writer of `.atlas/.run/board/<Name>.jsonl`: run-worker posts, all addressed to
   `lead`, the exact harness argv (shlex-quoted, so model and effort are auditable) first,
   then every output line (stderr merged), then `exit <code>`, plus ` [failed: <reason>]`

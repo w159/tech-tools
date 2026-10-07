@@ -1,0 +1,76 @@
+## UI Pro Max Search Results
+**Domain:** icons | **Query:** status terminal agent activity navigation
+**Source:** icons.csv | **Found:** 6 results
+
+### Result 1
+- **Category:** Development
+- **Icon Name:** terminal
+- **Keywords:** console cli command shell
+- **Library:** Phosphor
+- **Import Code:** import { Terminal } from '@phosphor-icons/react'
+- **Usage:** <Terminal size={20} weight="regular" />; Context is chosen by use: if decorative beside visible text, set aria-hidden="true"; if meaningful without equivalent visible text, provide a text alternative; if inside an interactive control, give the control an accessible name and expose applicable state (...
+- **Best For:** Terminal console
+- **Style:** Outline
+- **Semantic Role:** meaningful
+- **Allowed Contexts:** decorative|meaningful|interactive
+
+### Result 2
+- **Category:** Data
+- **Icon Name:** pulse
+- **Keywords:** activity heartbeat monitor live
+- **Library:** Phosphor
+- **Import Code:** import { Pulse } from '@phosphor-icons/react'
+- **Usage:** <Pulse size={20} weight="regular" />; Context is chosen by use: if decorative beside visible text, set aria-hidden="true"; if meaningful without equivalent visible text, provide a text alternative; if inside an interactive control, give the control an accessible name and expose applicable state (for...
+- **Best For:** Activity monitor pulse
+- **Style:** Outline
+- **Semantic Role:** meaningful
+- **Allowed Contexts:** decorative|meaningful|interactive
+
+### Result 3
+- **Category:** Navigation
+- **Icon Name:** list
+- **Keywords:** hamburger menu navigation toggle bars
+- **Library:** Phosphor
+- **Import Code:** import { List } from '@phosphor-icons/react'
+- **Usage:** <List size={20} weight="regular" />; Context is chosen by use: if decorative beside visible text, set aria-hidden="true"; if meaningful without equivalent visible text, provide a text alternative; if inside an interactive control, give the control an accessible name and expose applicable state (for ...
+- **Best For:** Mobile navigation drawer toggle sidebar
+- **Style:** Outline
+- **Semantic Role:** interactive
+- **Allowed Contexts:** decorative|meaningful|interactive
+
+### Result 4
+- **Category:** Navigation
+- **Icon Name:** house
+- **Keywords:** homepage main dashboard start
+- **Library:** Phosphor
+- **Import Code:** import { House } from '@phosphor-icons/react'
+- **Usage:** <House size={20} weight="regular" />; Context is chosen by use: if decorative beside visible text, set aria-hidden="true"; if meaningful without equivalent visible text, provide a text alternative; if inside an interactive control, give the control an accessible name and expose applicable state (for...
+- **Best For:** Home navigation main page
+- **Style:** Outline
+- **Semantic Role:** meaningful
+- **Allowed Contexts:** decorative|meaningful|interactive
+
+### Result 5
+- **Category:** Navigation
+- **Icon Name:** arrow-left
+- **Keywords:** back previous return navigate
+- **Library:** Phosphor
+- **Import Code:** import { ArrowLeft } from '@phosphor-icons/react'
+- **Usage:** <ArrowLeft size={20} weight="regular" />; Context is chosen by use: if decorative beside visible text, set aria-hidden="true"; if meaningful without equivalent visible text, provide a text alternative; if inside an interactive control, give the control an accessible name and expose applicable state ...
+- **Best For:** Back button breadcrumb navigation
+- **Style:** Outline
+- **Semantic Role:** interactive
+- **Allowed Contexts:** decorative|meaningful|interactive
+
+### Result 6
+- **Category:** Status
+- **Icon Name:** check
+- **Keywords:** success done complete verified
+- **Library:** Phosphor
+- **Import Code:** import { Check } from '@phosphor-icons/react'
+- **Usage:** <Check size={20} weight="regular" />; Context is chosen by use: if decorative beside visible text, set aria-hidden="true"; if meaningful without equivalent visible text, provide a text alternative; if inside an interactive control, give the control an accessible name and expose applicable state (for...
+- **Best For:** Success state checkmark
+- **Style:** Outline
+- **Semantic Role:** meaningful
+- **Allowed Contexts:** decorative|meaningful|interactive
+

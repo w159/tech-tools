@@ -45,6 +45,8 @@ import {
 	type BridgeCtx,
 	type BridgedHook,
 	HANDLER_BUDGET_MS,
+	type StopHookOutput,
+	recordFault,
 	type HookRunner,
 	claudeLifecyclePayload,
 	hookTimeoutMs,
@@ -67,6 +69,8 @@ export const REBASELINE_BUDGET_MS = 3_000;
 const COMPACT_THROTTLE_MS = 60_000;
 /** Conversion budget for tool-hook and Stop payloads. */
 const CONVERT_TIMEOUT_MS = 15_000;
+/** Stop-path conversion: a real one takes under 0.5 s (17 MB: 175 ms), so a slow one must not eat the handler budget the gate needs. */
+const STOP_CONVERT_TIMEOUT_MS = 8_000;
 /** omp cuts a session_shutdown handler at 2 s: convert fast or not at all. */
 const SHUTDOWN_CONVERT_TIMEOUT_MS = 1_200;
 /** Tool-hook payloads reuse a conversion this fresh instead of respawning python per call. */
@@ -213,6 +217,9 @@ export interface StopBridgeDeps {
 interface StopState {
 	streak: number;
 	lastReason?: string;
+	/** Last non-blocking Stop-hook context delivered, and how many were: a nudge speaks once per distinct text, a bounded number of times. */
+	lastContext?: string;
+	contextCount: number;
 }
 
 const str = (value: unknown): string => (typeof value === "string" ? value : "");
@@ -355,11 +362,14 @@ export function registerStopBridge(pi: Pick<ExtensionAPI, "on">, deps: StopBridg
 		try {
 			const bridgeCtx = ctx as BridgeCtx;
 			if (bridgeCtx.agent?.kind !== "main" || off()) return undefined;
+			// The budget starts HERE, before conversion and rebaseline: omp cuts a session_stop handler at 30 s and
+			// then delivers nothing, so everything below (convert + rebaseline + hooks) has to fit inside it.
+			const deadline = now() + HANDLER_BUDGET_MS;
 			// Typed off omp's SessionStopEvent so tsc checks these names against the host; the coercion stays because
 			// the event comes from a runtime we do not control and tests hand-build partial events.
 			const sessionId = sessionIdOf(bridgeCtx) || str(event.session_id);
 			// Ordering hazard: convert BEFORE any hook runs. The gate and ingest re-read this file.
-			const transcriptPath = await cache.convertFresh(str(event.session_file) || sessionFileOf(bridgeCtx), sessionId, "main");
+			const transcriptPath = await cache.convertFresh(str(event.session_file) || sessionFileOf(bridgeCtx), sessionId, "main", STOP_CONVERT_TIMEOUT_MS);
 			if (sessionId) await rebaselineBounded(bridgeCtx.cwd, sessionId); // tool state written since SessionStart must be in the snapshot BEFORE the gate compares
 			const stopHookActive = event.stop_hook_active === true;
 			const payload = claudeLifecyclePayload("Stop", { sessionId, cwd: bridgeCtx.cwd, transcriptPath, stopHookActive });
@@ -368,33 +378,52 @@ export function registerStopBridge(pi: Pick<ExtensionAPI, "on">, deps: StopBridg
 			// is needed. Absent or text-less means the key is left off and the gate fails open.
 			const lastText = lastAssistantMessageText(event.last_assistant_message);
 			if (lastText) payload.last_assistant_message = lastText;
-			const deadline = now() + HANDLER_BUDGET_MS;
 			let blockReason: string | undefined;
+			const contexts: string[] = [];
 			try {
-				for (const hook of hooksFor("Stop")) {
-					const remaining = deadline - now();
-					if (remaining <= 0) break; // out of handler budget: skip the rest (fail open)
-					const out = parseStopHookOutput(await run(hook.command, payload, Math.min(hookTimeoutMs(hook.timeoutMs, env()), remaining)));
+				// All Stop hooks run at once (as Claude Code does), so the gate is never queued behind the capture hooks and
+				// the chain costs its slowest hook, not the sum. Each gets what is left of the handler budget; results are
+				// folded in hooks.json order, so the first blocking hook's reason still wins.
+				const outs = await Promise.all(
+					hooksFor("Stop").map(async (hook): Promise<StopHookOutput> => {
+						const remaining = deadline - now();
+						if (remaining <= 0) {
+							recordFault(hook.command, "Stop skipped: bridge budget exhausted", "BridgeBudget", bridgeCtx.cwd);
+							return {};
+						}
+						return parseStopHookOutput(await run(hook.command, payload, Math.min(hookTimeoutMs(hook.timeoutMs, env()), remaining)));
+					}),
+				);
+				for (const out of outs) {
 					if (out.block && blockReason === undefined) blockReason = out.reason;
+					if (out.context) contexts.push(out.context);
 				}
 			} finally {
 				// Every Stop hook has been awaited, so nothing is reading the converted copy any more. It is a plaintext
 				// copy of the whole session; do not leave it in the OS temp dir.
 				discardQuietly(cache, transcriptPath);
 			}
-			const state = stops.get(sessionId) ?? { streak: 0 };
+			const state: StopState = stops.get(sessionId) ?? { streak: 0, contextCount: 0 };
 			stops.set(sessionId, state);
 			if (blockReason === undefined) {
 				state.streak = 0; // a passing Stop ends the streak
 				state.lastReason = undefined;
-				return undefined;
+				// A non-blocking hook that spoke (nudge.py) is delivered as a continuation with its context, which costs the
+				// session one more turn: so only once per distinct text, never while omp is already continuing a block
+				// (stop_hook_active), and never past the same MAX_STOP_BLOCKS cap.
+				const context = contexts.join("\n\n");
+				if (!context || stopHookActive || context === state.lastContext || state.contextCount >= MAX_STOP_BLOCKS) return undefined;
+				state.lastContext = context;
+				state.contextCount += 1;
+				return { continue: true as const, additionalContext: context };
 			}
 			const repeated = stopHookActive && state.lastReason === blockReason;
 			state.lastReason = blockReason;
 			if (repeated || state.streak >= MAX_STOP_BLOCKS) return undefined; // never wedge the session
 			state.streak += 1;
 			return { decision: "block" as const, reason: blockReason };
-		} catch {
+		} catch (error) {
+			recordFault("stop-bridge", String(error), "BridgeError", undefined);
 			return undefined; // fail open
 		}
 	});

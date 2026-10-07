@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
+// Fixtures use temp dirs as cwd, where the scope check (omp/scope.ts) leaves gates unarmed.
+process.env.ATLAS_GATES = "always";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -29,6 +31,8 @@ let root: string;
 let oldGate: string | undefined;
 let oldHard: string | undefined;
 let oldPluginRoot: string | undefined;
+let oldHome: string | undefined;
+let oldDb: string | undefined;
 beforeEach(() => {
 	root = mkdtempSync(join(tmpdir(), "atlas-omp-"));
 	mkdirSync(join(root, "project", "docs"), { recursive: true });
@@ -37,12 +41,19 @@ beforeEach(() => {
 	oldPluginRoot = process.env.CLAUDE_PLUGIN_ROOT;
 	delete process.env.ATLAS_GATE;
 	delete process.env.ATLAS_TRIPWIRE_HARD;
+	// Hooks the extension spawns write atlas.db: keep them out of the real ~/.atlas.
+	oldHome = process.env.ATLAS_HOME;
+	oldDb = process.env.ATLAS_DB;
+	process.env.ATLAS_HOME = join(root, ".atlas-home");
+	process.env.ATLAS_DB = join(root, ".atlas-home", "atlas.db");
 });
 afterEach(() => {
 	rmSync(root, { recursive: true, force: true });
 	if (oldGate === undefined) delete process.env.ATLAS_GATE; else process.env.ATLAS_GATE = oldGate;
 	if (oldHard === undefined) delete process.env.ATLAS_TRIPWIRE_HARD; else process.env.ATLAS_TRIPWIRE_HARD = oldHard;
 	if (oldPluginRoot === undefined) delete process.env.CLAUDE_PLUGIN_ROOT; else process.env.CLAUDE_PLUGIN_ROOT = oldPluginRoot;
+	if (oldHome === undefined) delete process.env.ATLAS_HOME; else process.env.ATLAS_HOME = oldHome;
+	if (oldDb === undefined) delete process.env.ATLAS_DB; else process.env.ATLAS_DB = oldDb;
 });
 // omp tool surfaces. A connected lean-ctx MCP server presents its tools as
 // xd:// devices under minted names (mcp__lean_ctx_ctx_search); a first-class
@@ -579,6 +590,19 @@ test("the expanded pinned tier, no override, other agents and the kill switch al
 	expect(spawn({ agent: 7, patterns: ["x"] }, h.ctx)).toBeUndefined();
 	process.env.ATLAS_TRIPWIRE_HARD = "off";
 	expect(spawn({ agent: "implementer", modelRole: "task", patterns: ["ollama/glm-5.3-flash:cloud:medium"] }, h.ctx)).toBeUndefined();
+});
+
+test("unarmed dirs keep the tier pin but never deny a model override", () => {
+	const h = harness();
+	const spawn = spawnHandler(h);
+	const prev = process.env.ATLAS_GATES;
+	process.env.ATLAS_GATES = "off";
+	try {
+		expect(spawn({ agent: "implementer", modelRole: "smol", patterns: [] }, h.ctx)?.model).toEqual(["@atlas-worker", "@smol"]);
+		expect(spawn({ agent: "implementer", modelRole: "task", patterns: ["ollama/glm-5.3-flash:cloud:medium"] }, h.ctx)).toBeUndefined();
+	} finally {
+		process.env.ATLAS_GATES = prev;
+	}
 });
 
 test("pinned-alias-only lists pass even when partial, unpinned bare tokens deny", () => {

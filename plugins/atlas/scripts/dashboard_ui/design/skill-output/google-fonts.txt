@@ -1,0 +1,76 @@
+## UI Pro Max Search Results
+**Domain:** google-fonts | **Query:** monospace technical sans
+**Source:** google-fonts.csv | **Found:** 6 results
+
+### Result 1
+- **Family:** Share Tech Mono
+- **Category:** Monospace
+- **Stroke:** 
+- **Classifications:** Monospace
+- **Styles:** 400
+- **Variable Axes:** 
+- **Subsets:** latin
+- **Designers:** Carrois Apostrophe
+- **Popularity Rank:** 265
+- **Google Fonts URL:** https://fonts.google.com/specimen/Share+Tech+Mono
+
+### Result 2
+- **Family:** Monofett
+- **Category:** Monospace
+- **Stroke:** 
+- **Classifications:** Monospace
+- **Styles:** 400
+- **Variable Axes:** 
+- **Subsets:** latin | latin-ext
+- **Designers:** Vernon Adams
+- **Popularity Rank:** 307
+- **Google Fonts URL:** https://fonts.google.com/specimen/Monofett
+
+### Result 3
+- **Family:** Lekton
+- **Category:** Monospace
+- **Stroke:** 
+- **Classifications:** Monospace
+- **Styles:** 400 | 400i | 700
+- **Variable Axes:** 
+- **Subsets:** latin | latin-ext
+- **Designers:** ISIA Urbino
+- **Popularity Rank:** 274
+- **Google Fonts URL:** https://fonts.google.com/specimen/Lekton
+
+### Result 4
+- **Family:** Libertinus Mono
+- **Category:** Monospace
+- **Stroke:** 
+- **Classifications:** Monospace
+- **Styles:** 400
+- **Variable Axes:** 
+- **Subsets:** latin | latin-ext
+- **Designers:** Philipp H. Poll
+- **Popularity Rank:** 1713
+- **Google Fonts URL:** https://fonts.google.com/specimen/Libertinus+Mono
+
+### Result 5
+- **Family:** Oxygen Mono
+- **Category:** Monospace
+- **Stroke:** 
+- **Classifications:** Monospace
+- **Styles:** 400
+- **Variable Axes:** 
+- **Subsets:** latin | latin-ext
+- **Designers:** Vernon Adams
+- **Popularity Rank:** 454
+- **Google Fonts URL:** https://fonts.google.com/specimen/Oxygen+Mono
+
+### Result 6
+- **Family:** VT323
+- **Category:** Monospace
+- **Stroke:** 
+- **Classifications:** Monospace
+- **Styles:** 400
+- **Variable Axes:** 
+- **Subsets:** latin | latin-ext | vietnamese
+- **Designers:** Peter Hull
+- **Popularity Rank:** 75
+- **Google Fonts URL:** https://fonts.google.com/specimen/VT323
+

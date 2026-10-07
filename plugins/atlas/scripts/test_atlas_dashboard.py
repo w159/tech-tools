@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import importlib.util, json, os, tempfile, unittest
 import urllib.error
 import urllib.request
@@ -26,7 +27,7 @@ class TestAtlasDashboard(unittest.TestCase):
         snap = self.mod.snapshot()
         self.assertTrue(snap["ok"])
         self.assertTrue(str(snap["db_path"]).endswith("atlas.db"))
-        self.assertNotIn("/var/folders/", snap["db_path"])
+        self.assertEqual(snap["db_path"], os.environ["ATLAS_DASHBOARD_DB"])
         self.assertLessEqual(len(snap.get("projects") or []), self.mod.MAX_PROJECTS)
         self.assertLessEqual(len(snap.get("sessions") or []), self.mod.MAX_SESSIONS)
         for s in snap.get("sessions") or []:
@@ -63,15 +64,15 @@ class TestAtlasDashboard(unittest.TestCase):
 
     def test_v2_modules_mounted(self):
         self.assertTrue(self.mod.V2_ROUTES)
-        mounted = {rx.pattern for _m, rx, _f in self.mod.V2_ROUTES}
-        for path in (
-            "/api/v2/colony",
-            "/api/v2/irc",
-            "/api/v2/todos",
-            "/api/v2/colony/send",
-        ):
-            self.assertIn(path, mounted, path)
-        self.assertNotIn("atlas_dash_colony", self.mod.V2_MOUNT_ERRORS)
+        routes = [(m, rx) for m, rx, _f in self.mod.V2_ROUTES]
+        for path in ("/api/v2/irc", "/api/v2/todos", "/api/v2/herd/agents"):
+            self.assertTrue(
+                any(m == "GET" and rx.fullmatch(path) for m, rx in routes), path
+            )
+        for gone in ("/api/v2/colony", "/api/v2/colony/send"):
+            self.assertFalse(any(rx.fullmatch(gone) for _m, rx in routes), gone)
+        for name in ("atlas_dash_work", "atlas_dash_irc", "atlas_dash_herd"):
+            self.assertNotIn(name, self.mod.V2_MOUNT_ERRORS)
 
     def test_api_routes_answer(self):
         """Boot the real handler and exercise every read endpoint."""
@@ -706,7 +707,7 @@ class SecurityGuardTest(unittest.TestCase):
             self.assertEqual(self._req("GET", bad)[0], 404, bad)
 
     def test_bad_host_is_403_on_every_route(self):
-        for path in ("/", "/api/health", "/api/behavior", "/api/v2/colony"):
+        for path in ("/", "/api/health", "/api/behavior", "/api/v2/herd/agents"):
             self.assertEqual(self._req("GET", path, host="evil.example")[0], 403, path)
         self.assertEqual(self._req("GET", "/api/health", host="127.0.0.1:1")[0], 403)
 
@@ -746,8 +747,6 @@ class SecurityGuardTest(unittest.TestCase):
 
     def test_sensitive_gets_need_token_and_health_does_not(self):
         for path in (
-            "/api/v2/colony/capture?run=r&name=n",
-            "/api/v2/colony/agent?run=r&name=n",
             "/api/v2/irc",
             "/api/v2/stream",
         ):
@@ -760,7 +759,7 @@ class SecurityGuardTest(unittest.TestCase):
 
     def test_non_sensitive_gets_need_no_token(self):
         self.assertEqual(self._req("GET", "/api/behavior")[0], 200)
-        self.assertEqual(self._req("GET", "/api/v2/colony")[0], 200)
+        self.assertEqual(self._req("GET", "/api/v2/herd/agents")[0], 200)
 
     def test_options_grants_no_cors(self):
         import http.client
