@@ -3828,5 +3828,73 @@
     "status": "verified",
     "verified_at": "2026-10-07T13:17:03+00:00",
     "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "command-center-postcommit-verified",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Committed tree (5a21283a): earlier native Colony lens and 60/60 sweep claims do not hold; Colony is the herdr iframe only, no lead->subagent view, Channel lens lacks per-member todo board",
+    "evidence": [
+      "app.js:44 Operate=[Agents,Colony]; app.js:61 colony->pages/herdr.js; colony-lens.js never committed (git log --all empty); sweep /Users/jerry/atlas-progress/postcommit-sweep/SUMMARY.md 44/64 raw (20 colony/alias cells fail textLen>20 on iframe-only page, 0 errors/overflow), deep 25/26 (c2 per-member board FAIL; API /api/v2/channels/<lead> carries it); dead exports chan-names.js:42,47 fleet.js:43,196 dom.js:129,232"
+    ],
+    "doc_refs": [],
+    "reproduction": "bun /Users/jerry/atlas-progress/postcommit-sweep/run-postcommit.mjs",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-07T14:12:03+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "supervision-lens-verify-2026-10-07",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Supervision lens + Channel Board tab: builds/tests/contrast/pytest/lint pass, sweep 64/64 cells, deep 25/26 (presence check fails: harness single pollHerd, no retry)",
+    "evidence": [
+      ".atlas/.run/evidence/sweep/index.json when=2026-10-07T15:01:47Z; SUMMARY.md; shots/deep-supervision.png; chan-names.js memberBoard blocked double-count vs atlas_dash_work._op_status"
+    ],
+    "doc_refs": [],
+    "reproduction": "bun .atlas/.run/evidence/sweep/run.mjs; bun test plugins/atlas/scripts/dashboard_ui/js/*.test.js; cd plugins/atlas && ATLAS_HOME=$(mktemp -d) python3 -m pytest -q scripts/test_atlas_dashboard.py scripts/test_atlas_dashboard_live.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-10-07T15:02:40+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "supervision-lens-postfix",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Supervision lens: sweep 64/64 + deep 26/26 + bun 19/19 pass, but memberBoard double-counts blocked todos (5 items -> sum 7)",
+    "evidence": [
+      "plugins/atlas/scripts/dashboard_ui/js/chan-names.js:72 vs atlas_todo.py:1159 _item_counts / atlas_dash_work.py:321 _op_status; fixture /tmp/sv2/api.json: server counts {pending:2,in_progress:2,completed:1}, memberBoard {active:2,open:2,blocked:2,done:1}, todos_state {open:1,in_progress:1,done:1,blocked:2}; notes /Users/jerry/atlas-progress/SupervisionVerify2.md; .atlas/.run/evidence/sweep/index.json when=2026-10-07T15:42:18Z"
+    ],
+    "doc_refs": [],
+    "reproduction": "fixture via atlas_dash_work._op_add/_op_status + atlas_dash_irc.h_channel_get (herdr patched out) -> /tmp/sv2/api.json; bun -e memberBoard(api.channel_meta, api.board); bun .atlas/.run/evidence/sweep/run.mjs; bun test plugins/atlas/scripts/dashboard_ui/js/*.test.js",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-07T15:42:41+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "supervision-lens-counts-fixed",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "memberBoard counts each item once; blocked no longer double counted",
+    "evidence": [
+      "/tmp/sv3.log; fixture rows s1{active1,open1,blocked1} s2{blocked1,done1} SUM5 blocked2; bun test 19 pass; sweep 64/64 26/26"
+    ],
+    "doc_refs": [],
+    "reproduction": "fixture via open_lead_channel+_op_add/_op_status+h_channel_get -> bun memberBoard; bun test dashboard_ui/js/*.test.js; bun .atlas/.run/evidence/sweep/run.mjs",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-07T15:50:03+00:00",
+    "verified_by": "atlas:verifier"
   }
 ]

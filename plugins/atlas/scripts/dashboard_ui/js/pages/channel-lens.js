@@ -1,31 +1,59 @@
 // Channel lens: one column. Header (channel name, a select only when there is more than one channel, one dim info line,
-// one row of member chips), the message log (last 100, the only scroller) and a composer (To, one textarea, Send).
-// To = Everyone posts to the channel; To = a member prompts that agent when its pane is idle, else posts addressed to it.
+// one row of member chips, Messages/Board tabs), the message log or the per-member board (the only scroller) and a composer
+// (To, one textarea, Send). To = Everyone posts to the channel; To = a member prompts that agent when its pane is idle,
+// else posts addressed to it. Board = GET /api/v2/channels/<name> board.owners joined to members (chan-names memberBoard).
 // Data: GET /api/v2/channels, GET /api/v2/channels/<name>?limit=, POST /api/v2/channels. Mounted by agents.js.
 
-import { h, replace, icon } from "../dom.js";
+import { h, replace, icon, fmtRelative } from "../dom.js";
 import { agentsStore } from "../agents-store.js";
-import { chanInfo, presenceWord } from "../chan-names.js";
+import { chanInfo, presenceWord, memberState, memberBoard, todoSummary } from "../chan-names.js";
 import { Button, State, ChannelList, Composer, HexGlyph, toast } from "../components.js";
 
 const LIMIT = 100;
+const ITEM_MAX = 8;
+const ITEM_WORD = { open: "open", in_progress: "active", blocked: "blocked", done: "done" };
 
-function memberState(m, rec) {
-  return rec ? rec.state : m.state === "blocked" ? "input" : ["working", "idle", "done"].includes(m.state) ? m.state : "unknown";
+// The live agent record for a channel member (by name, else pane id).
+export const recOfMember = (m) => agentsStore.getState().agents.find((a) => a.name === m.name || (m.pane_id && a.key === m.pane_id));
+
+// MemberBoard({ rows, to, onTo(name), onOpen(rec), nested }) -> ul of one row per member: role, presence, todo counts, the
+// in-progress item, every item, the last note with its age. nested indents non-lead rows under the lead (supervision tree).
+export function MemberBoard({ rows, to, onTo, onOpen, nested } = {}) {
+  if (!rows.length) return h("p", { class: "dim chan-empty" }, "No members yet. Subagents join when a lead dispatches them.");
+  return h("ul", { class: "mb-list", "aria-label": "Member boards" }, rows.map((r) => {
+    const rec = recOfMember(r);
+    const state = memberState(r, rec);
+    const on = to === r.name;
+    const shown = r.items.slice(0, ITEM_MAX);
+    return h("li", { class: "mb-row", "data-role": r.role, "data-state": state, "data-nested": nested && r.role !== "lead" ? "true" : null, "data-on": on ? "true" : null },
+      h("div", { class: "mb-top" },
+        HexGlyph(state, { size: "mini" }),
+        h("strong", { class: "mb-name truncate", title: r.name }, r.name),
+        h("span", { class: "chip-lite" }, r.role),
+        h("span", { class: "dim mb-presence" }, presenceWord(state)),
+        h("span", { class: "dim mb-counts", title: "Todos" }, todoSummary(r.counts)),
+        h("span", { class: "grow" }),
+        onTo ? Button({ label: on ? "Clear" : "Message", size: "sm", ariaLabel: (on ? "Stop messaging " : "Message ") + r.name, onClick: () => onTo(r.name) }) : null,
+        rec && onOpen ? Button({ label: "Open", size: "sm", ariaLabel: "Open " + r.name, onClick: () => onOpen(rec) }) : null),
+      h("div", { class: "mb-now" }, h("span", { class: "agent-now-label" }, "Now"), h("span", { class: r.current ? "" : "dim" }, r.current || "No item in progress")),
+      shown.length ? h("ul", { class: "mb-items", "aria-label": r.name + " todos" }, shown.map((i) => h("li", { "data-status": i.status }, h("span", { class: "mb-item-st" }, ITEM_WORD[i.status] || i.status), h("span", { class: "truncate", title: i.content }, i.content))), r.items.length > shown.length ? h("li", { class: "dim" }, "+" + (r.items.length - shown.length) + " more") : null) : null,
+      r.note ? h("div", { class: "mb-note", title: r.note.text }, h("span", { class: "agent-now-label" }, "Note"), h("span", { class: "truncate" }, r.note.text), r.note.ts ? h("span", { class: "dim num" }, fmtRelative(r.note.ts * 1000)) : null) : h("div", { class: "mb-note dim" }, "No notes yet"));
+  }));
 }
 
 export function mountChannelLens(ctx, body) {
-  const S = { data: null, error: null, active: ctx.params.channel || null, detail: null, to: "all", dead: false, busy: false };
+  const S = { data: null, error: null, active: ctx.params.channel || null, detail: null, to: "all", dead: false, busy: false, tab: ctx.params.tab === "board" ? "board" : "messages" };
+  const tabs = h("div", { class: "seg chan-tabs", role: "radiogroup", "aria-label": "Channel view" });
   const head = h("header", { class: "chan-head" });
   const log = h("div", { class: "chan-log" });
   const composerHost = h("div", { class: "chan-composer" });
-  const layout = h("section", { class: "chan-page" }, head, log, composerHost);
+  const layout = h("section", { class: "chan-page" }, head, tabs, log, composerHost);
   let list = null;
   let composerKey = "";
   let comp = null;
   const chans = () => (S.data && S.data.channels) || [];
   const metaNow = () => chans().find((c) => c.name === S.active);
-  const recOf = (m) => agentsStore.getState().agents.find((a) => a.name === m.name || (m.pane_id && a.key === m.pane_id));
+  const recOf = recOfMember;
 
   async function loadChannels() {
     try {
@@ -69,6 +97,7 @@ export function mountChannelLens(ctx, body) {
   function pickTo(name) {
     S.to = S.to === name ? "all" : name;
     paintHead();
+    paintLog();
     paintComposer();
   }
 
@@ -86,6 +115,10 @@ export function mountChannelLens(ctx, body) {
     }));
   }
 
+  function paintTabs() {
+    replace(tabs, [["messages", "Messages"], ["board", "Board"]].map(([id, label]) => h("button", { class: "seg-btn", type: "button", role: "radio", "aria-checked": id === S.tab ? "true" : "false", onClick: () => { S.tab = id; paintTabs(); paintLog(); } }, label)));
+  }
+
   function paintHead() {
     const all = chans();
     const meta = metaNow();
@@ -95,7 +128,8 @@ export function mountChannelLens(ctx, body) {
     const picker = all.length > 1
       ? h("select", { class: "select chan-pick", "aria-label": "Channel", onChange: (e) => select(e.target.value) }, all.map((c) => h("option", { value: c.name, selected: c.name === S.active }, (c.parent ? "\u00A0\u00A0" : "") + c.name)))
       : null;
-    replace(head, h("div", { class: "chan-title" }, h("h2", { class: ["truncate", picker ? "sr-only" : ""], title: meta.name }, meta.name), picker, h("span", { class: "dim chan-line truncate", title: line }, line)), chips(meta));
+    replace(head, h("div", { class: "chan-title" }, h("h2", { class: ["truncate", picker ? "sr-only" : ""], title: meta.name }, meta.name), picker, h("span", { class: "dim chan-line truncate", title: line }, line), info.sub ? h("span", { class: "grow" }) : null, info.sub ? Button({ label: "Supervise", size: "sm", icon: "agents", title: "Lead to subagents tree with every member's todo board", onClick: () => ctx.navigate("agents", { lens: "supervision", channel: meta.name }) }) : null), chips(meta));
+    paintTabs();
   }
 
   function paintComposer() {
@@ -133,6 +167,12 @@ export function mountChannelLens(ctx, body) {
 
   function paintLog() {
     const d = S.detail;
+    if (S.tab === "board" && !(d && d.error)) {
+      if (!d) return replace(log, State({ variant: "loading", label: "board", shape: "rows" }));
+      const rows = memberBoard(metaNow(), d.board);
+      const empty = rows.length && rows.every((r) => !r.items.length);
+      return replace(log, h("div", { class: "chan-board" }, empty ? h("p", { class: "dim chan-empty" }, "No todos on this channel's board yet. Members claim items with atlas_todo.py claim.") : null, MemberBoard({ rows, to: S.to, onTo: pickTo, onOpen: (rec) => ctx.openAgent(rec) })));
+    }
     if (d && d.error) return replace(log, State({ variant: "error", error: d.error, inline: true, onRetry: refresh }));
     const msgs = ((d && d.messages) || []).slice(-LIMIT);
     if (!list) list = ChannelList({ messages: msgs, empty: "No messages in this channel yet.", onPane: (id) => ctx.openAgent(id), plain: true });

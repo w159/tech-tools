@@ -32,8 +32,10 @@ import tempfile
 import shutil
 
 sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 from pathlib import Path  # noqa: E402
 
+import atlas_hook_guard  # noqa: E402
 from docs_drift import find_root  # noqa: E402
 
 INLINE_TOOLS = {"Read", "Grep", "Glob", "Edit", "Write", "Bash"}
@@ -192,9 +194,6 @@ def _system_temp_roots():
 def _is_uri_path(path):
     """URI-scheme path (`agent://`, `xd://`, ...): one shared definition lives in
     atlas_db.is_uri_path, which the inline-op counter and completion gate also use."""
-    scripts = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
-    if scripts not in sys.path:
-        sys.path.insert(0, scripts)
     from atlas_db import is_uri_path
 
     return is_uri_path(path)
@@ -1302,7 +1301,6 @@ def _channel_dispatch(payload):
     prompt = tinput.get("prompt")
     if not isinstance(prompt, str) or not prompt.strip() or "CHANNEL:" in prompt:
         return None
-    sys.path.insert(0, str(SCRIPTS_DIR))
     import atlas_todo
 
     cwd = payload.get("cwd")
@@ -1400,7 +1398,6 @@ _PAYLOAD_CWD = [None]
 
 def _gates_armed(payload):
     """False in throwaway / non-project directories: no gate arms there."""
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
     import atlas_scope
 
     cwd = payload.get("cwd")
@@ -1409,13 +1406,7 @@ def _gates_armed(payload):
 
 def _record_fault(exc, hook="dispatch_tripwire"):
     """Persist a fail-open crash (never raises)."""
-    try:
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
-        import atlas_faults
-
-        atlas_faults.record(hook, exc, _PAYLOAD_CWD[0] or os.getcwd())
-    except Exception:
-        pass
+    atlas_hook_guard.fault(hook, exc, _PAYLOAD_CWD[0] or os.getcwd())
 
 
 def _run(payload):
@@ -1442,7 +1433,6 @@ def _run(payload):
         _emit_nudge(nudge)
         return
 
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
     import atlas_db
 
     # Default missing event to PostToolUse so legacy payloads keep advisory behavior.

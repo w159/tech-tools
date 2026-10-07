@@ -47,7 +47,7 @@ const GROUPS = [
 ];
 const LABELS = { overview: "Overview", agents: "Agents", activity: "Activity", health: "Health", improve: "Improve", projects: "Projects", settings: "Settings", colony: "Colony" };
 const ICON_FOR = { overview: "overview", agents: "agents", activity: "activity", health: "heart-pulse", improve: "sparkles", projects: "folder", settings: "settings", colony: "herd" };
-const CHORDS = { o: "overview", a: "agents", l: "activity", h: "health", i: "improve", p: "projects", ",": "settings", d: "agents", s: "improve", w: "agents?lens=board", c: "colony", n: "agents?lens=channel" };
+const CHORDS = { o: "overview", a: "agents", l: "activity", h: "health", i: "improve", p: "projects", ",": "settings", d: "agents", s: "improve", w: "agents?lens=board", c: "colony", n: "agents?lens=channel", u: "agents?lens=supervision" };
 // Old ids keep working: redirect to the canonical page with a lens, keeping the query.
 const ALIASES = { herd: "colony", work: "agents?lens=board", irc: "agents?lens=channel", console: "colony", herdr: "colony" };
 
@@ -653,6 +653,7 @@ function paletteEntries() {
   go("agents", "Agents: Fleet", "agents?lens=fleet", "g a", "agents");
   go("board", "Agents: Board", "agents?lens=board", "g w", "work");
   go("channel", "Agents: Channel", "agents?lens=channel", "g n", "irc");
+  go("supervision", "Go to Supervision", "agents?lens=supervision", "g u", "agents");
   go("colony", "Colony", "colony", "g c", "herd");
   go("activity", "Activity", "activity", "g l", "activity");
   go("health", "Health", "health", "g h", "heart-pulse");
@@ -691,7 +692,7 @@ function showShortcuts() {
   const rows = [
     ["/ or Ctrl/Cmd K", "Command palette"],
     ["g then o a l h i p ,", "Overview, Agents, Activity, Health, Improve, Projects, Settings"],
-    ["g then w c n", "Agents: Board, Colony, Channel"],
+    ["g then w c n u", "Agents: Board, Colony, Channel, Supervision"],
     ["p", "Focus project switcher"],
     ["[ and ]", "Collapse or expand the rail"],
     ["j and k", "Next or previous row in a list"],

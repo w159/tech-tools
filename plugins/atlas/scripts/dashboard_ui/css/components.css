@@ -51,15 +51,6 @@
 .field-hint { color: var(--text-dim); font-size: var(--fs-xs); }
 .check { display: inline-flex; align-items: center; gap: var(--s-2); }
 .check input, input[type="checkbox"], input[type="radio"] { width: 16px; height: 16px; accent-color: var(--accent); }
-.field-error {
-  padding: var(--s-2) var(--s-3);
-  border: 1px solid var(--st-fail);
-  border-left-width: 3px;
-  border-radius: var(--r-2);
-  background: color-mix(in srgb, var(--st-fail) 9%, transparent);
-}
-.field-error .why, .field-error .do { color: var(--text-dim); font-size: var(--fs-sm); }
-
 .chip {
   display: inline-flex;
   align-items: center;
@@ -330,7 +321,6 @@ button.feed-item:hover { background: var(--surface-2); }
 .logview { display: flex; flex-direction: column; white-space: normal; }
 .log-line { display: grid; grid-template-columns: auto 1fr; gap: var(--s-3); }
 .log-line .ts { color: var(--text-dim); }
-.follow-chip { align-self: flex-end; }
 .filterbar { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; }
 .filterbar .search { min-width: min(220px, 100%); }
 

@@ -15,7 +15,7 @@ It enforces a research-to-verify contract with hooks, runs work through a colony
 of named role subagents that share one durable board, keeps persistent memory
 across sessions, and mines its own telemetry for self-improvement. Onboard a
 project once with `/atlas`, then drive everything by typing a skill name or
-describing the work in plain language. Current release: **10.3.0**.
+describing the work in plain language. Current release: **10.3.1**.
 
 | Surface | What you get | Source |
 |---|---|---|

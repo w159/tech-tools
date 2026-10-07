@@ -123,3 +123,32 @@ When the user asks for a multi-step or wide-blast-radius change, prefer to spawn
 ## 6. Memory / continuity
 
 The `memory/` directory at the user's `~/.claude/projects/.../memory/` is for cross-session facts. This repo's own facts live here in `CLAUDE.md` and `AGENTS.md`. Both files are authoritative; keep them in sync.
+
+<!-- atlas-tooling -->
+## Tool Routing
+
+Minimum tooling bar for this project, wired by atlas-setup. Do not read/grep
+source or shell out for things these tools already do:
+
+- **claude-mem** -- cross-session memory. Search it before re-discovering
+  something a prior session already worked out.
+- **context-mode** -- context-window protection for noisy output (build/test
+  logs, large command output, web fetches). Route anything over ~20 lines
+  through it instead of raw shell into context.
+- **serena** + **lean-ctx** -- the code-nav pair for this tree. serena for
+  code symbols (definitions, references, call graphs); lean-ctx for shaped
+  file/tree access, search, and edits on everything else (prose, config,
+  markdown). Native Read/Grep on source is a fallback only when both are
+  unreachable, never a first choice.
+- **ponytail** -- simplicity discipline; keep changes minimal and avoid
+  speculative abstraction.
+
+Run `atlas-doctor` to check whether this project's tooling is actually
+wired (`context-tooling` check) and whether it is doing its job (session
+cache-hit ratio, per-tool error rate).
+<!-- /atlas-tooling -->
+
+## Session gates
+
+- Session gates (atlas hooks): the first tool call each session must be one claude-mem search (write JSON args to xd://mcp__claude_mem_mcp_search_search). The inline-op gate prints a STOP nudge after about 4-6 inline ops and DENIES the 7th; separately, an inline Edit of target code is denied outright. Route edits and investigation to atlas:implementer / atlas:explorer. Task dispatches must NOT pass a `model` param (agents pin @atlas-worker; the gate denies the override).
+- Advisor gate: close each item with `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py complete --id <id> --evidence "<proof>"` (syntax at plugins/atlas/scripts/atlas_todo.py ~891-898), then re-run `list` and confirm status=completed; a batch close once failed silently.

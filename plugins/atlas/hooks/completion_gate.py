@@ -247,7 +247,6 @@ def _run_started_at(session_id: str) -> float | None:
     reason to block."""
     conn = None
     try:
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         import atlas_db
 
         conn = atlas_db.connect()
@@ -427,7 +426,6 @@ def _board_open_todos(root: Path, session_id: str) -> int:
     Fail-open: any error counts as 0 open items.
     """
     try:
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         import atlas_todo
 
         board = atlas_todo.load(str(root))
@@ -501,7 +499,6 @@ def _has_todo_plan(transcript_path: str, root: Path, session_id: str) -> bool:
     if _latest_transcript_todos(transcript_path):
         return True
     try:
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         import atlas_todo
 
         board = atlas_todo.load(str(root))
@@ -526,7 +523,6 @@ def _docs_name_violations(root: Path) -> list:
     [] on any error -- a linter that cannot load must not stop a stop.
     """
     try:
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         import lint_docs_names
 
         return lint_docs_names.violations(lint_docs_names.changed_paths(root))
@@ -564,7 +560,6 @@ def _run_used_worktrees(session_id: str) -> bool:
     """Did this run dispatch an agent with isolation="worktree"? Fail-open False."""
     conn = None
     try:
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         import atlas_db
 
         conn = atlas_db.connect()
@@ -1138,19 +1133,9 @@ def main() -> int:
         # Fail-open, but surface the swallowed crash on stderr so a silent
         # allow-through is at least observable in hook logs.
         print(json.dumps({"decision": "fail-open", "error": str(exc)}), file=sys.stderr)
-        _record_fault(exc)
+        atlas_hook_guard.fault("completion_gate", exc)
         return 0
     return 0
-
-
-def _record_fault(exc: BaseException) -> None:
-    """Persist a swallowed top-level crash (atlas_faults never raises)."""
-    try:
-        import atlas_faults
-
-        atlas_faults.record("completion_gate", exc)
-    except Exception:  # noqa: BLE001 -- recording must not change fail-open behavior
-        pass
 
 
 def _finalize_db(session_id: str) -> None:
@@ -1159,7 +1144,6 @@ def _finalize_db(session_id: str) -> None:
         return  # nothing to finalize: no run can exist
     _conn = None
     try:
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         import atlas_db
 
         _conn = atlas_db.connect()
@@ -1245,7 +1229,6 @@ def _record_gate_block(session_id: str, failed: list) -> None:
         return
     conn = None
     try:
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         import atlas_db
 
         conn = atlas_db.connect()
@@ -1268,7 +1251,6 @@ def _session_is_orchestrating(session_id: str) -> bool:
     False: if the DB is unreadable we do NOT gate (never block on uncertainty)."""
     conn = None
     try:
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         import atlas_db
 
         conn = atlas_db.connect()
@@ -1298,7 +1280,6 @@ def _run_written_paths(session_id: str, root: Path | None = None) -> list:
     _unpaired_implementer_dispatches."""
     conn = None
     try:
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         import atlas_db
 
         conn = atlas_db.connect()
@@ -1465,7 +1446,6 @@ def _test_verified_this_run(
     findings = root / ".atlas" / ".run" / "findings.json"
     conn = None
     try:
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         import atlas_db
 
         conn = atlas_db.connect()
@@ -1507,7 +1487,6 @@ def _unpaired_implementer_dispatches(session_id: str) -> int:
     passes -- the gate must never crash a session over observability I/O."""
     conn = None
     try:
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         import atlas_db
 
         conn = atlas_db.connect()
@@ -1693,7 +1672,6 @@ def _missing_required_phases(
             return []
         required = [str(p) for p in contract["requiredTodoPhasesWhenCodeShipped"]]
         known = [str(p) for p in contract["todoPhases"]]
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         import atlas_todo
 
         board_file = atlas_todo.board_path(str(root))
@@ -1749,7 +1727,6 @@ def _colony_workers_dispatched(session_id: str) -> int | None:
     of the session. None (fail-open) on any DB error or when no run exists."""
     conn = None
     try:
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         import atlas_db
 
         conn = atlas_db.connect()
@@ -1791,7 +1768,6 @@ def _colony_channel_used(root: Path, session_id: str, started: float | None) -> 
     unreadable surface never manufactures a block."""
     try:
         since = started if started is not None else 0.0
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         import atlas_todo
 
         notes_dir = atlas_todo.notes_dir(str(root))
