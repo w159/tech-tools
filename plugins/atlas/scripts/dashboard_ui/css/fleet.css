@@ -43,7 +43,6 @@
 @media (max-width: 767px) { .fleet-cell { min-width: 28px; min-height: 40px; justify-content: center; } }
 
 /* ---- 9.2 agent row ---- */
-.agent-list { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--r-2); background: var(--surface-1); overflow: hidden; }
 .agent-row {
   position: relative;
   display: grid;
@@ -83,12 +82,8 @@
 .agent-card[data-selected="true"] { background: var(--surface-3); box-shadow: inset 2px 0 0 var(--accent); }
 .agent-card header { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
 .agent-card h3 { flex: 1; font-size: var(--fs-lg); font-weight: 650; min-width: 0; }
-.agent-meta { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-xs); }
-.agent-meta > * + *::before { content: ""; display: inline-block; width: 3px; height: 3px; margin-right: var(--s-2); border-radius: 50%; background: var(--text-faint); vertical-align: middle; }
-.agent-meta > .kind-icon + *::before { display: none; }
 .agent-now { flex: 1; padding: var(--s-2) var(--s-3); background: var(--surface-2); border-radius: var(--r-1); font-size: var(--fs-sm); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .agent-card footer { display: flex; align-items: center; gap: var(--s-3); font-size: var(--fs-xs); }
-.agent-counts { text-align: right; }
 .kind-icon { color: var(--text-dim); }
 
 /* ---- rail tree ---- */
@@ -153,6 +148,34 @@
 .chan-composer { flex: none; }
 .chan-to { width: auto; flex: none; max-width: 40%; }
 @media (max-width: 767px) { .chan-to { max-width: 36%; } }
+.chan-tabs { align-self: flex-start; margin: var(--s-2) var(--s-4) 0; }
+.chan-board { flex: 1; min-height: 0; overflow: auto; padding: var(--s-3) var(--s-4); display: flex; flex-direction: column; gap: var(--s-3); }
+.chan-board > .chan-empty { padding: var(--s-2) var(--s-3); border: 1px dashed var(--border); border-radius: var(--r-2); }
+/* member board (Channel Board tab, Supervision lens): one row per member, lead first */
+.mb-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-2); min-width: 0; }
+.mb-row { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-2); min-width: 0; border-left: 3px solid var(--border-strong); }
+.mb-row[data-on="true"] { border-color: var(--accent); }
+.mb-row[data-state="input"] { border-left-color: var(--st-input); }
+.mb-row[data-state="fail"] { border-left-color: var(--st-fail); }
+.mb-row[data-state="working"] { border-left-color: var(--st-working); }
+.mb-row[data-nested="true"] { margin-left: var(--s-5); }
+.mb-top { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; min-width: 0; }
+.mb-name { max-width: 14em; }
+.mb-presence, .mb-counts { font-size: var(--fs-xs); }
+.mb-now, .mb-note { display: flex; align-items: baseline; gap: var(--s-2); font-size: var(--fs-sm); min-width: 0; }
+.mb-note { font-size: var(--fs-xs); }
+.mb-note .truncate { flex: 1; }
+.mb-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-xs); min-width: 0; }
+.mb-items li { display: flex; gap: var(--s-2); min-width: 0; }
+.mb-item-st { flex: none; width: 4.5em; color: var(--text-dim); }
+.mb-items li[data-status="in_progress"] .mb-item-st { color: var(--st-working); }
+.mb-items li[data-status="blocked"] .mb-item-st { color: var(--st-input); }
+/* supervision lens: one lead -> subagents tree per lead subchannel */
+.sup-lead { display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-4); background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-2); min-width: 0; }
+.sup-lead[data-on="true"] { border-color: var(--accent); }
+.sup-head { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; min-width: 0; }
+.sup-head h2 { font-size: var(--fs-lg); min-width: 0; }
+.sup-sub { display: flex; flex-direction: column; gap: var(--s-2); margin: 0; padding: 0 0 0 var(--s-4); border-left: 1px solid var(--border-strong); }
 
 /* ---- polish: fleet cards, groups, table, channel presence ---- */
 .fleet-group + .fleet-group { margin-top: var(--s-4); }

@@ -48,7 +48,6 @@
 
 /* irc */
 .irc { display: flex; flex-direction: column; gap: var(--s-3); }
-.irc-log { height: min(56vh, 560px); max-height: none; padding: var(--s-2); }
 .msg { display: grid; grid-template-columns: 64px 14px minmax(88px, 160px) 1fr; gap: var(--s-2); padding: 2px var(--s-2); border-radius: var(--r-1); align-items: baseline; }
 .msg:hover { background: var(--surface-2); }
 .msg .ts { color: var(--text-dim); font-size: var(--fs-xs); }

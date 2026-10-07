@@ -98,7 +98,6 @@ code, kbd, pre, samp, .mono { font-family: var(--font-mono); font-weight: 400; }
 .page-actions { display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; }
 
 .dim { color: var(--text-dim); }
-.faint { color: var(--text-faint); }
 .row { display: flex; align-items: center; gap: var(--s-2); }
 .stack { display: flex; flex-direction: column; gap: var(--s-3); }
 .grow { flex: 1; min-width: 0; }

@@ -1,5 +1,5 @@
-// Agents canvas: one entity, three lenses (fleet, board, channel). Fleet and Channel are native here; Board mounts the work
-// page. Colony (the full herdr UI) is its own route (#/colony, pages/herdr.js).
+// Agents canvas: one entity, four lenses (fleet, board, channel, supervision). Fleet, Channel and Supervision are native here;
+// Board mounts the work page. Colony (the full herdr UI) is its own route (#/colony, pages/herdr.js).
 
 import { h, replace } from "../dom.js";
 import { agentsStore, STATES, STATE_WORD } from "../agents-store.js";
@@ -7,9 +7,10 @@ import { AgentCard, AgentTable, nowLine } from "../fleet.js";
 import { Chip, Button, State, DegradedState, toast, toastError } from "../components.js";
 import { channelOf, projectLabel } from "../chan-names.js";
 import { mountChannelLens } from "./channel-lens.js";
+import { mountSupervisionLens } from "./supervision-lens.js";
 import { newWorkspace, focusPane } from "../herdr-actions.js";
 import { warmHp } from "../integrations.js";
-const LENS = [["fleet", "Fleet"], ["board", "Board"], ["channel", "Channel"]];
+const LENS = [["fleet", "Fleet"], ["board", "Board"], ["channel", "Channel"], ["supervision", "Supervision"]];
 
 const S = { ctx: null, lens: "fleet", view: "cards", filter: new Set(), q: "", unsub: null, body: null, legacy: null, chan: null, mount: null, tick: null, sort: { key: "state", dir: 1 }, chans: [], chansAt: 0 };
 
@@ -112,7 +113,7 @@ function drawFleet() {
     }
     replace(listHost, [...groups].map(([root, rs]) => h("section", { class: "fleet-group", "aria-label": projectLabel(root, S.chans) },
       h("h2", { class: "fleet-group-head", title: root }, h("span", { class: "truncate" }, projectLabel(root, S.chans) || "No project"), h("span", { class: "num dim" }, String(rs.length))),
-      h("div", { class: "fleet-grid" }, rs.map((r) => AgentCard({ agent: r, selected: r.key === sel, channel: channelOf(r, S.chans), parent: r.parent ? cur.byKey.get(r.parent) : null, onParent: (p) => ctx.openAgent(p), onOpen: open, onTerminal: (rec) => focusPane(rec.pane_id || rec.key), actions: a }))))));
+      h("div", { class: "fleet-grid" }, rs.map((r) => AgentCard({ agent: r, selected: r.key === sel, channel: channelOf(r, S.chans), parent: r.parent ? cur.byKey.get(r.parent) : null, onParent: (p) => ctx.openAgent(p), onOpen: open, onTerminal: (rec) => focusPane(rec.pane_id || rec.key), onSupervise: (_rec, ch) => ctx.navigate("agents", { lens: "supervision", channel: ch && ch.sub ? ch.full : undefined }), actions: a }))))));
   };
   const web = st.layers.webui.state === "down" ? h("p", { class: "dim" }, "The terminal service isn't running. The agent list is live; terminals need it.") : null;
   replace(body, tools, web, listHost);
@@ -145,6 +146,7 @@ function draw() {
   const lens = S.lens;
   if (lens === "fleet") drawFleet();
   else if (lens === "board") mountLegacy("work");
+  else if (lens === "supervision") S.chan = mountSupervisionLens(S.ctx, S.body);
   else S.chan = mountChannelLens(S.ctx, S.body);
 }
 

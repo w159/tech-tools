@@ -44,14 +44,29 @@ All under the dashboard daemon (`http://127.0.0.1:7421`). Failures are `{ok: fal
 |---|---|---|
 | 400 | `bad_project`, `bad_title`, `bad_kind`, `bad_task`, `repo_required`, `bad_repo` | thread start validation: project slug, title (non-empty, at most 200 chars, no control characters), kind, task (non-empty, at most 100 000 chars), repo (existing absolute directory; may be omitted only for `kind: tab`) |
 | 400 | `bad_path`, `root_must_be_absolute`, `bad_root`, `not_a_file`, `unsupported_path`, `line_or_range`, `bad_line`, `bad_range`, `bad_placement` | open-file / open-editor validation (`unsupported_path`: a `:` in the relative path would clash with the `:line` suffix) |
-| 403 | `unknown_root` | `root` (open-file) or `path` (open-editor) is not inside an Atlas project root (`projects.root_path`) or the cwd of a live herdr agent |
+| 403 | `unknown_root` | `root` (open-file) or `path` (open-editor) is not inside a **valid** registered root: an Atlas project root (`projects.root_path`) or the cwd of a live herdr agent that passes the checks under "Root validation" below |
 | 403 | `path_outside_root` | `realpath(path)` is not inside `realpath(root)`; symlink escapes fail here |
+| 403 | `forbidden_path` | the root or target, relative to the validated root, has a dot component outside a small allowlist or a secret-looking name (see "Root validation") |
 | 404 | `unknown_project`, `not_found` | project directory missing under the herdr-projects root; path does not exist |
 | 424 | `plugin_not_installed` + `install_cmd` | open-file and `herdr-file-viewer` absent or disabled (checked uncached, so an install a second ago counts) |
 | 424 | `tool_not_installed` + `install_cmd` | thread start without `herdr-projects`, open-editor without `tode` |
 | 424 | `herdr_not_found` | open-file and herdr cannot be asked at all (`install_cmd` is `https://herdr.dev`) |
 | 429 | `duplicate_viewer` | a viewer for the same real root opened less than 10 s ago |
 | 502 | `thread_start_failed`, `open_failed`, `spawn_failed`, `hp_list_failed` | the subprocess failed or timed out (`detail` carries up to 500 chars) |
+
+## Root validation (open-file, open-editor)
+
+`atlas_dash_integrations.py` builds the known roots from `projects.root_path` plus the cwd of every live herdr agent; `atlas_integrations._known_root` then accepts a candidate only through `_valid_root`, so a poisoned `projects` row or an agent cwd cannot turn the routes into an arbitrary-file opener. Each candidate root is `realpath`ed (symlinks resolved, must be an existing directory) and containment is a prefix check with a trailing separator (`_under`), so `/a/b` never contains `/a/bc`. A root is **rejected** (403 `unknown_root`, no subprocess spawned) when it is:
+
+- `/`, `/tmp`, `/var`, `/private`, `tempfile.gettempdir()`, the home directory itself, or **any ancestor of home** (`_bad_root`);
+- equal to or inside `/etc`, `/usr`, `/bin`, `/sbin`, `/System`, `/Library` or `/Applications`;
+- not an existing directory;
+- inside home but through any dot component (`~/.agents`, `~/.config/...`), inside `~/Library`, or bare `~/Downloads|Desktop|Documents|Library|Public`;
+- without a project marker: a root must contain `.git`, `.atlas` or `.claude-plugin` (`_ROOT_MARKERS`).
+
+Below a valid root, `_forbidden_target` refuses (403 `forbidden_path`) any path component starting with `.` unless it is one of `.github .gitignore .gitattributes .editorconfig .dockerignore .gitlab-ci.yml .prettierrc .eslintrc .nvmrc .python-version .tool-versions`, and secret-looking names (`.env*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa*`, `id_ed25519*`, `id_ecdsa*`, `auth.json`, `credentials*`, `.npmrc`, `.netrc`, `.pgpass`). Order in `_resolve` (open-file): absolute root, existing directory (400 `bad_root`), known valid root, `path_outside_root`, `forbidden_path`, existence (404). `open_editor` takes only a path and runs the same known-root and forbidden-target checks on its `realpath`.
+
+Checked by the 10.2.0 re-verification (findings entry `command-center-integrations-10.2.0-reverified`, run against an isolated dashboard and a copy of the real DB whose `projects` still contained `/` and `/Users/jerry`): open-file `{/etc,/etc/hosts}`, `{/,/etc/hosts}` and `{/Users/jerry,~/.zshrc}` and open-editor `/etc/hosts` and `~/.zshrc` all 403 with zero argv spawned; a repo-root `README.md` line 3 gave 200 with the expected viewer and `tode --goto` argv.
 
 ## argv per tool
 
@@ -88,3 +103,4 @@ Taken from `atlas_integrations.py`; the flags follow each tool's own documentati
 - Another session owns `scripts/atlas_herdr.py` and `scripts/atlas_remote.py` and two environment-dependent tests there; they are outside this doc pass.
 - herdr-file-viewer and cmux-browser-mcp were not installed on the author machine, so their real argv/behaviour was not exercised end to end.
 - `open-file` needs a file, not a folder. The viewer has no pane-focus route on the host.
+- The root check is structural, not a trust decision: a non-dot directory under home (or any directory outside home and the system trees) that carries `.git`, `.atlas` or `.claude-plugin` is accepted, and every file in it except dot components and secret-looking names is openable.

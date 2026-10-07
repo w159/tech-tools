@@ -1,8 +1,8 @@
 # Atlas Command Center: design system (MASTER)
 
 Status: design direction, ready to implement. Vanilla CSS + ES modules, no build step, no network at runtime.
-Companions: `PAGES.md` (per-page wireframes and data contracts), `REFERENCES.md` (Mobbin evidence and skill-output decisions),
-`contrast.py` (the palette source of truth; every ratio below is its output), `skill-output/` (raw ui-ux-pro-max runs).
+Companions: `PAGES.md` (per-page wireframes and data contracts), `REFERENCES.md` (Mobbin evidence and skill decisions),
+`contrast.py` (the palette source of truth; every ratio below is its output).
 
 Direction changes that supersede earlier drafts (from the user, 2026-10-07):
 1. ONE shell. The product is the Atlas Command Center. The herdr-web-ui host rail (workspace list, a second ATLAS nav, Install app) is removed; nothing in this design assumes it exists.
@@ -278,7 +278,7 @@ Clean cutover: rename in one change across `css/*.css` and `js/**` (usage counts
 
 ```
 ┌──────────────┬───────────────────────────────────────────────────────────┬─────────────────┐
-│ ⬡ Atlas       │ Search or jump to  /     ⬡⬡⬡⬡⬡ ⬡⬡ +3   v10.3.0  ● Live 8s  [All clear] ☀ │                 │
+│ ⬡ Atlas       │ Search or jump to  /     ⬡⬡⬡⬡⬡ ⬡⬡ +3   v10.3.1  ● Live 8s  [All clear] ☀ │                 │
 │  Command Ctr │───────────────────────────────────────────────────────────┤  INSPECTOR      │
 │ Project [All▾]│  Page title                          page filters  actions │  (drawer 420)   │
 │ Observe       │                                                           │  tabs: Now │    │
@@ -302,7 +302,7 @@ Clean cutover: rename in one change across `css/*.css` and `js/**` (usage counts
 
 - **Rail** (`nav`, `--chrome` background, `--rail-w`): header (mark, "Atlas", "Command Center"), project switcher (native `<select>` styled; keyboard `p`), groups with sentence-case titles weight 550 `--text-dim`: Observe (Overview, Activity, Health), Agents (Fleet, Board, Channel, Colony, then the live tree), Improve, Configure (Projects, Settings). Selected item: 2px `--accent` bar at the left edge, `--surface-3` background, text `--text`. A collapse button reduces it to 56px icons; collapsed state persists in `localStorage` key `atlas.rail`.
 - **Live tree** (inside the Agents group; replaces the herdr host rail): host row (machine label, `Host` word, reachability dot), under it each herdr workspace (label, pane count, roll-up mini hex), under each workspace its agents: mini hex + kind icon + title (ellipsis) + age; subagents indented one level, 12 x 14 hex. Rows are `role="treeitem"`; Up/Down move, Right/Left expand/collapse, Enter selects the agent (opens inspector, sets `#/agents?agent=<pane_id>`), `Shift+Enter` opens the Terminal tab. Roll-up order matches the Fleet Strip. Max height: fills remaining rail space and scrolls; the tree is the only scrolling region of the rail. If more than 40 agents: workspace rows collapse by default except the one with the selected agent.
-- **Top bar** (`--topbar-h`, `--chrome`): left: command palette trigger (`/` or Mod+K). Center-left: Fleet Strip. Right: version chip (`Atlas 10.3.0`, from `GET /api/health` `version`), live pill, attention pill, theme toggle, density toggle. All five are tab stops in that order.
+- **Top bar** (`--topbar-h`, `--chrome`): left: command palette trigger (`/` or Mod+K). Center-left: Fleet Strip. Right: version chip (`Atlas 10.3.1`, from `GET /api/health` `version`), live pill, attention pill, theme toggle, density toggle. All five are tab stops in that order.
 - **Live pill:** `● Live` (SSE connected, `--st-ok`) or `◌ Polling 8s` (fallback, `--st-idle`) or `● Reconnecting` (`--st-input`) or `● Offline` (`--st-fail`, with Retry). Text always visible at >=768; glyph only below. `role="status"`.
 - **Attention pill:** `All clear` (`--st-ok` outline, check glyph) or `N need you` (`--st-input` fill-tint, count) where N = agents in `input` + overview `attention[]` of severity fail/warn. Click opens a popover list of those items (agent rows first, then attention items with their `action.target`).
 - **Inspector** (right drawer, not modal at >=1280): pushes the canvas if the canvas would stay >= 720px wide, else overlays with scrim. Esc closes, focus returns to the invoker. It holds the agent detail (see 9.6) and any record detail from tables (finding, run, todo).
@@ -507,7 +507,7 @@ SSE `/api/v2/stream` events: `herd`, `agents`, `todos`, `irc`, `health`, `improv
 
 ## Appendix A. Contrast tables (computed)
 
-Produced by `python3 design/contrast.py`; the full raw output is `skill-output/contrast.txt`. Result: ALL PAIRS PASS.
+Produced by `python3 design/contrast.py`; re-run it to reproduce. Result: ALL PAIRS PASS.
 
 ### Dark
 

@@ -33,6 +33,9 @@ import re
 import sys
 import tempfile
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
+import atlas_hook_guard  # noqa: E402
+
 # Per-session "recall satisfied" markers (tests point this at a temp dir).
 GATE_MARKER_DIR = os.path.join(tempfile.gettempdir(), "atlas-recall-gate")
 
@@ -56,9 +59,6 @@ _EXEMPT = (
 
 
 def _claude_mem_enabled(cwd: str | None) -> bool:
-    sys.path.insert(
-        0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
-    )
     import tool_routing
 
     return tool_routing.plugin_enabled("claude-mem", cwd)
@@ -201,14 +201,7 @@ def _mem_server_mounted(cwd: str) -> bool:
     return False
 
 
-def _scripts_on_path() -> None:
-    scripts = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
-    if scripts not in sys.path:
-        sys.path.insert(0, scripts)
-
-
 def _gates_armed(cwd: str) -> bool:
-    _scripts_on_path()
     import atlas_scope
 
     return atlas_scope.gates_armed(cwd)
@@ -216,15 +209,9 @@ def _gates_armed(cwd: str) -> bool:
 
 def _record_fault(exc: BaseException, cwd) -> None:
     """Persist a fail-open crash (never raises)."""
-    try:
-        _scripts_on_path()
-        import atlas_faults
-
-        atlas_faults.record(
-            "recall_gate", exc, cwd if isinstance(cwd, str) else os.getcwd()
-        )
-    except Exception:
-        pass
+    atlas_hook_guard.fault(
+        "recall_gate", exc, cwd if isinstance(cwd, str) else os.getcwd()
+    )
 
 
 def _decide(data: dict) -> str | None:

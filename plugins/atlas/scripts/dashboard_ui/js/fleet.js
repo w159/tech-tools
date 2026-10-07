@@ -39,11 +39,6 @@ export function ageTitle(rec) {
   return rec.sinceApprox ? "Since Atlas first saw this state" : "Since the last state change";
 }
 
-// "folder@branch" display for a path; branch comes from the project's main channel when known.
-export function folderOf(p) {
-  return String(p || "").replace(/\/+$/, "").split("/").pop() || "";
-}
-
 export function kindIcon(kind) {
   return icon("kind-" + kind, { class: "icon kind-icon", "aria-hidden": "true" });
 }
@@ -192,16 +187,11 @@ export function nowLine(a) {
   return { label: "", text: a.state === "working" ? "Working, no task recorded" : "No task recorded" };
 }
 
-// state word + duration: "Working 12m", "Ready 3h"
-export function stateFor(a) {
-  const age = ageLabel(a);
-  return STATE_WORD[a.state] + (age ? " " + age : "");
-}
 
 // AgentCard({ agent, selected, onOpen, onTerminal, actions, channel, parent, onParent }): fluid. Click body opens the inspector;
 // the primary button opens the Terminal tab. Border turns --st-input / --st-fail for needs-input / failed.
 // channel: short alias of the agent's channel (or ""), parent: parent record (or null).
-export function AgentCard({ agent: a, selected, onOpen, onTerminal, actions, channel, parent, onParent } = {}) {
+export function AgentCard({ agent: a, selected, onOpen, onTerminal, actions, channel, parent, onParent, onSupervise } = {}) {
   const now = nowLine(a);
   const kids = a.children || [];
   const chips = [
@@ -210,6 +200,7 @@ export function AgentCard({ agent: a, selected, onOpen, onTerminal, actions, cha
     a.colony ? h("span", { class: "chip-lite" }, "colony") : null,
     hpChip(a),
     parent ? h("button", { class: "chip-lite chip-link", type: "button", title: "Parent " + parent.title, onClick: (e) => { e.stopPropagation(); onParent && onParent(parent); } }, "under " + parent.title) : null,
+    onSupervise && (kids.length || (channel && channel.sub && channel.lead === a.name)) ? h("button", { class: "chip-lite chip-link", type: "button", title: "Watch " + a.title + "'s subagents and their todo boards", onClick: (e) => { e.stopPropagation(); onSupervise(a, channel); } }, icon("agents"), "Supervise") : null,
   ];
   const card = h(
     "article",
