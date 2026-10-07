@@ -109,3 +109,12 @@ here; do not duplicate it.
 
 - Session gates (atlas hooks): the first tool call each session must be one claude-mem search (write JSON args to xd://mcp__claude_mem_mcp_search_search). The inline-op gate prints a STOP nudge after about 4-6 inline ops and DENIES the 7th; separately, an inline Edit of target code is denied outright. Route edits and investigation to atlas:implementer / atlas:explorer. Task dispatches must NOT pass a `model` param (agents pin @atlas-worker; the gate denies the override).
 - Advisor gate: close each item with `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py complete --id <id> --evidence "<proof>"` (syntax at plugins/atlas/scripts/atlas_todo.py ~891-898), then re-run `list` and confirm status=completed; a batch close once failed silently.
+
+## Completion-gate friction (top blockers, last 14d)
+
+Recurring Stop-gate blocks: (m) delegation mandate, (c,d,e) CHANGELOG/ROADMAP/README
+missing, (g) implementer dispatches not covered, (i) open todos. Before done:
+delegate code changes to an atlas:* agent; keep CHANGELOG, ROADMAP and README
+present and updated with any non-docs change; for each implementer dispatch run an
+atlas:verifier or a real test-runner command (pytest, vitest) and stamp a
+`verified` finding via scripts/atlas_finding.py; flip or drop every open todo.
