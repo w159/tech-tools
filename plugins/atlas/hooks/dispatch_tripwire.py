@@ -676,6 +676,8 @@ def _pre_tool_use(conn, atlas_db, tool, session, path, tinput=None, session_mode
     run_id = atlas_db.current_run_id(conn, session)
     if run_id is None:
         return  # no active run -> nothing to gate
+    if _is_worker():
+        return  # a headless worker is a leaf: its lead owns delegation
     if not atlas_db.is_orchestrating(conn, session):
         return  # non-orchestration sessions are NEVER denied anything
     if tool in DISPATCH_TOOLS:
@@ -784,11 +786,20 @@ def _pre_tool_use(conn, atlas_db, tool, session, path, tinput=None, session_mode
         )
 
 
+def _is_worker():
+    """Headless atlas_mux worker (ATLAS_WORKER_NAME non-blank): never armed, never gated."""
+    import worker_inbox
+
+    return worker_inbox.is_worker_env()
+
+
 def _arm_orchestrating(conn, atlas_db, session, cwd):
     """Flag the run as orchestration; on DB failure record one friction row so
     the silent miss is observable, then fall through fail-open. The friction
     write is itself guarded: a doubly failing DB must not raise out of the
     hook (the outer main try would abort the rest of the tool's processing)."""
+    if _is_worker():
+        return  # every arm path (skill, dispatch, footprint) funnels here
     try:
         atlas_db.mark_orchestrating(conn, session, cwd)
     except Exception:
@@ -1575,7 +1586,7 @@ def _run(payload):
 
         edit_to_target = tool in EDIT_TOOLS and not _is_orchestration_path(path)
         if armed and (count >= _threshold() or edit_to_target):
-            if not atlas_db.is_orchestrating(conn, session):
+            if _is_worker() or not atlas_db.is_orchestrating(conn, session):
                 return  # WS1: non-orchestration sessions are logged but never nagged
             if edit_to_target:
                 msg = "STOP - route this %s of %s to atlas:implementer." % (tool, path)

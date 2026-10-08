@@ -1,5 +1,11 @@
 # Changelog
 
+## [10.4.1] - 2026-10-08 -- atlas 10.4.1: headless workers exempt from the dispatch tripwire
+
+Marketplace `4.6.1`; atlas `10.4.1`.
+
+A headless atlas worker (non-blank `ATLAS_WORKER_NAME`, pinned by `atlas_mux`/`atlas_launch`) is never armed as an orchestrator (`dispatch_tripwire._arm_orchestrating`, `prompt_optimizer.arm_orchestration`, `omp_runstate cmd_arm`) and is never denied by the tripwire deny tier or sent STOP advisories; leads are unchanged. Trust model is the same as the omp leaf marker (see Residuals in `docs/ROADMAP.md`). Detail in `plugins/atlas/CHANGELOG.md`.
+
 ## [10.4.0] - 2026-10-08 -- atlas 10.4.0: channel delivery, mux reports, Colony roster and Channels pages repaired
 
 Marketplace `4.6.0`; atlas `10.4.0`.

@@ -47,6 +47,12 @@ def _todo():
     return atlas_todo
 
 
+def is_worker_env(env=None):
+    """True for a headless atlas_mux worker: ATLAS_WORKER_NAME set and non-blank (the leaf marker)."""
+    env = os.environ if env is None else env
+    return bool((env.get("ATLAS_WORKER_NAME") or "").strip())
+
+
 def worker_env(env=None):
     """(worker, root) from the atlas_mux worker env, or None when this is not a worker."""
     env = os.environ if env is None else env
