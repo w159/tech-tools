@@ -1,5 +1,11 @@
 # Changelog
 
+## [10.4.2] - 2026-10-08 -- atlas 10.4.2: Colony Kill checks pid identity
+
+Marketplace `4.6.2`; atlas `10.4.2`.
+
+The registry records `pid_start` (process start time) beside a member's harness `pid`; Colony liveness and Kill count the pid as the member's only when it is alive and the start time matches. A recycled or start-less pid is `dead`, Kill returns 409 `member_dead` and sends no signal. Known limit: 1 s `lstart` resolution (see Residuals in `docs/ROADMAP.md`). Detail in `plugins/atlas/CHANGELOG.md`.
+
 ## [10.4.1] - 2026-10-08 -- atlas 10.4.1: headless workers exempt from the dispatch tripwire
 
 Marketplace `4.6.1`; atlas `10.4.1`.

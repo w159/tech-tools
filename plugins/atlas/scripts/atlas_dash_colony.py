@@ -44,17 +44,9 @@ def is_lead_name(name: str) -> bool:
     return name == "lead" or name.startswith("lead-")
 
 
-def _pid_alive(pid) -> bool:
-    try:
-        pid = int(pid)
-        if pid <= 0:
-            return False
-        os.kill(pid, 0)
-        return True
-    except (TypeError, ValueError, ProcessLookupError):
-        return False
-    except PermissionError:
-        return True
+def _pid_alive(entry) -> bool:
+    """The entry's recorded pid is its process only if the start time still matches."""
+    return atlas_todo.pid_matches(entry.get("pid"), entry.get("pid_start"))
 
 
 def _within(cwd: str, root: str) -> bool:
@@ -216,7 +208,7 @@ def build_colony(root: str, all_: bool = False, now: float | None = None) -> dic
         if pane_id is None and c["role"] == "lead":
             pane_id = by_title.get(name)
         row = rows.get(pane_id) if pane_id else None
-        live = pane_id is not None or _pid_alive(entry.get("pid"))
+        live = pane_id is not None or _pid_alive(entry)
         mine = [i for i in items if i.get("owner") == name]
         if c["role"] == "lead" and lead_chan and name == lead_chan["lead"]:
             mine += [  # the lead's own plan (todo mirror) carries no owner
@@ -452,8 +444,9 @@ def h_colony_kill(ctx):
             if out.get("ok")
             else (404, out)
         )
-    pid = _entry_pid(root, name)
-    if pid and _pid_alive(pid):
+    entry = _entry(root, name)
+    if entry and _pid_alive(entry):
+        pid = entry["pid"]
         try:
             os.kill(int(pid), signal.SIGTERM)
         except OSError as e:
@@ -462,11 +455,11 @@ def h_colony_kill(ctx):
     return _err(409, "member_dead", f"{name!r} has no live process", "nothing to kill")
 
 
-def _entry_pid(root: str, name: str):
+def _entry(root: str, name: str):
     for c in _flatten(root):
         for m in c.get("members") or []:
             if m.get("name") == name and m.get("pid"):
-                return m["pid"]
+                return m
     return None
 
 

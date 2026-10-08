@@ -72,7 +72,16 @@ class ChannelModel(unittest.TestCase):
 
     def test_respawn_under_a_finished_name_revives_it_and_drops_stale_handles(self):
         chan = todo.open_lead_channel(self.root, "lead-abc123", ["w1"])["name"]
-        todo.set_member_handles(self.root, "w1", chan, pid=111, pane_id="p-old")
+        gone = subprocess.Popen(["true"])
+        gone.wait()
+        todo.set_member_handles(self.root, "w1", chan, pid=gone.pid, pane_id="p-old")
+        m = {x["name"]: x for x in todo.get_channel(self.root, chan)["members"]}["w1"]
+        self.assertIsNone(m["pid_start"])  # reaped child: ps finds nothing
+        todo.set_member_handles(self.root, "w1", chan, pid=os.getpid())
+        m = {x["name"]: x for x in todo.get_channel(self.root, chan)["members"]}["w1"]
+        self.assertTrue(todo.pid_matches(os.getpid(), m["pid_start"]))
+        self.assertFalse(todo.pid_matches(os.getpid(), None))
+        self.assertFalse(todo.pid_matches(os.getpid(), "Thu Jan  1 00:00:00 1970"))
         todo.mark_finished(self.root, "w1", 1)
         todo.leave(self.root, chan, "w1")
         todo.open_lead_channel(self.root, "lead-abc123", ["w1"])  # idempotent re-open
@@ -80,7 +89,7 @@ class ChannelModel(unittest.TestCase):
         self.assertEqual(m["exit_code"], 1)  # a plain re-open does not revive
         todo.register_member(self.root, "w1", chan)
         m = {x["name"]: x for x in todo.get_channel(self.root, chan)["members"]}["w1"]
-        for key in ("exit_code", "ended_at", "pid", "pane_id"):
+        for key in ("exit_code", "ended_at", "pid", "pid_start", "pane_id"):
             self.assertNotIn(key, m)
         self.assertEqual(todo.set_member_handles(self.root, "w1", chan, pid=222), 1)
         self.assertEqual(todo.set_member_handles(self.root, "ghost", pid=1), 0)

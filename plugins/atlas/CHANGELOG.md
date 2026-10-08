@@ -1,5 +1,11 @@
 # Changelog
 
+## [10.4.2] - 2026-10-08
+
+### Fixed
+
+- **Colony Kill never signals a recycled pid** (`scripts/atlas_todo.py` `pid_start`/`pid_matches`/`set_member_handles`, `scripts/atlas_dash_colony.py` `_pid_alive`). `set_member_handles` records `pid_start` (`ps -o lstart=`, `LC_ALL=C`, run outside the registry lock) beside `pid`. Colony liveness and Kill treat a pid as the member's only when it is alive and its start time matches; a start-less or mismatched pid is `dead`, Kill answers 409 `member_dead` and signals nothing. `register_member` revive clears `pid_start` with `pid`. Known limit: `lstart` has 1 s resolution, so a pid reused within the same second would match.
+
 ## [10.4.1] - 2026-10-08
 
 A headless atlas worker is no longer treated as an orchestrator. Sessions on an older installed plugin cache keep the old behavior until the plugin is updated or reinstalled from the marketplace.
