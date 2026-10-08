@@ -2651,6 +2651,7 @@ def main(argv=None):
         import atlas_faults
 
         atlas_faults.record("atlas_doctor", e)
+        record_hook_verdict(args.plugin, [{"check": "run_checks"}])
         return 0
     failed = [r for r in results if not r["ok"] and r.get("severity") != "warn"]
 
