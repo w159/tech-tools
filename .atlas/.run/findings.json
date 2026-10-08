@@ -4040,5 +4040,23 @@
     "status": "verified",
     "verified_at": "2026-10-08T06:00:57+00:00",
     "verified_by": "ReviewFix1 + lead test run"
+  },
+  {
+    "id": "atlas-1041-worker-exemption",
+    "surface": "hooks",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Headless workers (ATLAS_WORKER_NAME) never armed or denied by the tripwire; leads unchanged",
+    "evidence": [
+      ".atlas/evidence/atlas-10.4.0-repair/suite6.txt",
+      ".atlas/evidence/atlas-10.4.0-repair/tripwire_repro.sh"
+    ],
+    "doc_refs": [],
+    "reproduction": "bash .atlas/evidence/atlas-10.4.0-repair/tripwire_repro.sh",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-08T15:33:00+00:00",
+    "verified_by": "lead test run + repro"
   }
 ]

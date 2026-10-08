@@ -473,6 +473,8 @@ def arm_orchestration(data: dict, prompt: str) -> str | None:
     ATLAS_DECISION=off keeps the regex and skips the local model."""
     if os.environ.get("ATLAS_ENGINE_ARM", "on").strip().lower() == "off":
         return None
+    if (os.environ.get("ATLAS_WORKER_NAME") or "").strip():
+        return None  # headless atlas_mux worker: a leaf, never armed
     if prompt.lstrip().startswith("/"):
         return None  # slash commands expand downstream and self-orchestrate
     if not resolve_substantive(prompt):

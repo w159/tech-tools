@@ -1,5 +1,12 @@
 # Changelog
 
+## [10.4.1] - 2026-10-08
+
+A headless atlas worker is no longer treated as an orchestrator. Sessions on an older installed plugin cache keep the old behavior until the plugin is updated or reinstalled from the marketplace.
+
+### Fixed
+- **Workers are never armed and never denied by the dispatch tripwire** (`hooks/dispatch_tripwire.py` `_is_worker`, `_arm_orchestrating`, `_pre_tool_use`; `hooks/prompt_optimizer.py` `arm_orchestration`; `scripts/omp_runstate.py` `cmd_arm`; `hooks/worker_inbox.py` `is_worker_env`). A session with a non-blank `ATLAS_WORKER_NAME` (pinned by `atlas_mux` and `atlas_launch`) is not armed by the orchestrate skill, an atlas dispatch or the 3-file footprint, gets no tripwire deny tier and no STOP advisories. Root cause: `ATLAS_ENGINE_ARM=off` covered prompt arming only, so a worker that edited 3 files was armed and then denied. Leads are unchanged. Trust model: same as the omp leaf marker; a session that sets `ATLAS_WORKER_NAME` itself escapes the gate.
+
 ## [10.4.0] - 2026-10-08
 
 Repairs the colony channel (IRC), mux workers, Colony and Channels pages, health and improve, and the completion gate. Sessions on an older installed plugin cache keep the old behavior until the plugin is updated or reinstalled from the marketplace.

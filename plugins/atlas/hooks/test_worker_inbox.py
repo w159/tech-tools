@@ -517,7 +517,9 @@ class RealCollisionTest(_Root):
         both = json.loads(self._call(self.env))  # raises if two documents were printed
         ctx = both["hookSpecificOutput"]["additionalContext"]
         self.assertIn("ping during an edit", ctx)
-        self.assertIn("STOP", ctx)
+        self.assertNotIn(
+            "STOP", ctx
+        )  # a worker is a leaf: inbox only, no tripwire STOP
         self.assertEqual(both["hookSpecificOutput"]["hookEventName"], "PostToolUse")
 
 

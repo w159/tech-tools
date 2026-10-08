@@ -81,6 +81,12 @@ def cmd_arm(args) -> dict:
     dispatch so completion-gate (g)/(m) see it."""
     if not args.session_id:
         return {"ok": False, "error": "empty session id"}
+    if (os.environ.get("ATLAS_WORKER_NAME") or "").strip():
+        return {
+            "ok": True,
+            "run_id": None,
+            "orchestrating": False,
+        }  # leaf worker: never armed
     atlas_db, conn = _connect()
     try:
         rid = atlas_db.mark_orchestrating(conn, args.session_id, args.cwd)
