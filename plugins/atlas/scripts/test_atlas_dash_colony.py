@@ -220,6 +220,42 @@ class ColonyTest(unittest.TestCase):
         )
         self.assertEqual((status, body["error"]), (409, "member_dead"))
 
+    def _record(self, pid, start):
+        atlas_todo.set_member_handles(self.root, "w-sub", pid=pid)
+
+        def fn(reg):
+            for chan in reg["channels"].values():
+                for m in chan["members"]:
+                    if m["name"] == "w-sub":
+                        m["pid_start"] = start
+
+        atlas_todo._reg_update(self.root, fn, atlas_todo.CHANNEL_LOCK_TIMEOUT_S)
+
+    def test_kill_refuses_a_recycled_pid_with_a_different_start_time(self):
+        import subprocess
+
+        child = subprocess.Popen(["sleep", "60"])
+        self.addCleanup(child.kill)
+        self._record(child.pid, "Thu Jan  1 00:00:00 1970")
+        self.assertEqual(self.states()["w-sub"], "dead")
+        status, body = colony.h_colony_kill(
+            Ctx(self.root, "w-sub", {"project": self.root})
+        )
+        self.assertEqual((status, body["error"]), (409, "member_dead"))
+        self.assertIsNone(child.poll())  # still alive
+
+    def test_kill_refuses_a_pid_recorded_without_a_start_time(self):
+        import subprocess
+
+        child = subprocess.Popen(["sleep", "60"])
+        self.addCleanup(child.kill)
+        self._record(child.pid, None)
+        status, body = colony.h_colony_kill(
+            Ctx(self.root, "w-sub", {"project": self.root})
+        )
+        self.assertEqual((status, body["error"]), (409, "member_dead"))
+        self.assertIsNone(child.poll())
+
     def test_respawn_under_the_same_name_is_live_again(self):
         atlas_todo.leave(self.root, self.chan, "w-bad")
         self.assertEqual(self.states()["w-bad"], "dead")

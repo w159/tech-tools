@@ -4058,5 +4058,41 @@
     "status": "verified",
     "verified_at": "2026-10-08T15:33:00+00:00",
     "verified_by": "lead test run + repro"
+  },
+  {
+    "id": "atlas-1040-review-fix1",
+    "surface": "dashboard",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Review P1s fixed: page Send/Kill carry project, respawn revives, kill/send only via recorded pane_id or start-time-verified pid",
+    "evidence": [
+      ".atlas/evidence/atlas-10.4.0-repair/verify3-VERDICT.md",
+      ".atlas/evidence/atlas-10.4.0-repair/suite8.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-08T15:58:00+00:00",
+    "verified_by": "Verifier3 (independent, CDP browser) + lead suite run"
+  },
+  {
+    "id": "atlas-1042-pid-identity",
+    "surface": "dashboard",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Kill/liveness refuse recycled pids (pid_start lstart match); start-less pid never signalled",
+    "evidence": [
+      ".atlas/evidence/atlas-10.4.0-repair/verify3-VERDICT.md",
+      ".atlas/evidence/atlas-10.4.0-repair/suite8.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-08T15:58:00+00:00",
+    "verified_by": "Verifier3 (independent, CDP browser) + lead suite run"
   }
 ]

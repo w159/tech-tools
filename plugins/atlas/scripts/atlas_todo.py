@@ -957,7 +957,7 @@ def _add_member(
             if parent and not m.get("parent"):
                 m["parent"] = parent
             if revive:  # a respawn under the same name is a new live run
-                for k in ("exit_code", "ended_at", "pid", "pane_id"):
+                for k in ("exit_code", "ended_at", "pid", "pid_start", "pane_id"):
                     m.pop(k, None)
                 m["joined"] = time.time()
                 chan.get("departed", {}).pop(name, None)
@@ -1097,6 +1097,31 @@ def mark_finished(root: Optional[str], name: str, exit_code: int) -> int:
     return _reg_update(root, fn, CHANNEL_LOCK_TIMEOUT_S)
 
 
+def pid_start(pid) -> Optional[str]:
+    """Start-time string of `pid` from `ps -o lstart=`, or None if ps fails."""
+    try:
+        r = subprocess.run(
+            ["ps", "-o", "lstart=", "-p", str(int(pid))],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            env={**os.environ, "LC_ALL": "C"},
+        )
+    except (OSError, ValueError, TypeError, subprocess.SubprocessError):
+        return None
+    s = " ".join(r.stdout.split())
+    return s if r.returncode == 0 and s else None
+
+
+def pid_matches(pid, recorded_start) -> bool:
+    """True only if `pid` is alive and its current start time equals the recorded one.
+    A record without a start is unverifiable and never matches (no SIGTERM on a guess)."""
+    if not recorded_start:
+        return False
+    cur = pid_start(pid)
+    return cur is not None and cur == recorded_start
+
+
 def set_member_handles(
     root: Optional[str],
     name: str,
@@ -1108,6 +1133,9 @@ def set_member_handles(
     entry of `name`, or only `channel`); returns entries updated. Colony Kill/Send use
     only these handles."""
     n = _sanitize_owner(name)
+    start = (
+        pid_start(pid) if pid is not None else None
+    )  # ps runs outside the registry lock
 
     def fn(reg: dict) -> int:
         hit = 0
@@ -1118,6 +1146,7 @@ def set_member_handles(
                 if m["name"] == n:
                     if pid is not None:
                         m["pid"] = int(pid)
+                        m["pid_start"] = start
                     if pane_id is not None:
                         m["pane_id"] = str(pane_id)
                     hit += 1
