@@ -164,7 +164,8 @@ def _mcp_json():
 
 
 def _settings_path() -> Path:
-    return Path.home() / ".claude" / "settings.json"
+    override = os.environ.get("ATLAS_CLAUDE_SETTINGS")
+    return Path(override) if override else Path.home() / ".claude" / "settings.json"
 
 
 def _plugin_config_options() -> dict:
@@ -1672,7 +1673,7 @@ STATIC_DIR = SCRIPTS_DIR / "dashboard_ui"
 TOKEN_PLACEHOLDER = "__ATLAS_TOKEN__"
 # GETs that expose transcripts/agent output or live streams: token required.
 _SENSITIVE_GET = re.compile(
-    r"^/api/v2/(stream|irc|channels(/[^/]+)?|[^/]+/transcript)$|^/api/sessions/[^/]+/transcript$"
+    r"^/api/v2/(stream|irc|colony|channels(/[^/]+)?|[^/]+/transcript)$|^/api/sessions/[^/]+/transcript$"
     r"|^/api/v2/(herd/)?agents/[^/]+/peek$"
 )
 _TOKEN_EXEMPT = ("/api/health", "/health")
@@ -2526,6 +2527,9 @@ class Handler(BaseHTTPRequestHandler):
                 200, atlas_control.test_connector(name, env=_connector_env(name))
             )
         if u.path == "/api/behavior":
+            # atlas_control binds SETTINGS_PATH at import; re-point it so the
+            # ATLAS_CLAUDE_SETTINGS override (tests) is honoured.
+            atlas_control.SETTINGS_PATH = _settings_path()
             return self._json(
                 200, atlas_control.write_behavior_updates(data.get("updates") or {})
             )

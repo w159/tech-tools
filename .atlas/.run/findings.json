@@ -3896,5 +3896,149 @@
     "status": "verified",
     "verified_at": "2026-10-07T15:50:03+00:00",
     "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "atlas-1040-inbox-scoping",
+    "surface": "channels",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Lead inbox scoped to lead-channel members, exactly-once cursor, membership granted lead-side only",
+    "evidence": [
+      "V1 a-e VERIFIED in verify2 (fix-1/fix-48/IrcLive/ConnectorRuns not delivered; legacy no-seq no replay)",
+      ".atlas/evidence/atlas-10.4.0-repair/verify2-VERDICT.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-08T05:13:58+00:00",
+    "verified_by": "Verifier2/Verifier (headless omp -p)"
+  },
+  {
+    "id": "atlas-1040-mux-report-only",
+    "surface": "mux",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Mux workers post one kind=report note + log file + mark_finished",
+    "evidence": [
+      "V2 VERIFIED: one note, exit 3 tagged, 11-line log, registry exit_code 3",
+      ".atlas/evidence/atlas-10.4.0-repair/verify1-VERDICT.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-08T05:13:58+00:00",
+    "verified_by": "Verifier2/Verifier (headless omp -p)"
+  },
+  {
+    "id": "atlas-1040-colony-roster",
+    "surface": "dashboard",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Atlas-scoped Colony API and roster page, Channels page restored",
+    "evidence": [
+      "V3 VERIFIED: 401 w/o token, finished member 409, unknown 404, CDP render of #/colony #/channels #/irc with 0 exceptions",
+      ".atlas/evidence/atlas-10.4.0-repair/verify1-VERDICT.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-08T05:13:58+00:00",
+    "verified_by": "Verifier2/Verifier (headless omp -p)"
+  },
+  {
+    "id": "atlas-1040-selffix-reconcile",
+    "surface": "improve",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "selffix ready rows with merged/deleted branch reconcile; no git fatal in Improve",
+    "evidence": [
+      "V4 VERIFIED: #48 -> merged (branch gone), /api/v2/improve has no fatal:",
+      ".atlas/evidence/atlas-10.4.0-repair/verify1-VERDICT.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-08T05:13:59+00:00",
+    "verified_by": "Verifier2/Verifier (headless omp -p)"
+  },
+  {
+    "id": "atlas-1040-gate-p",
+    "surface": "hooks",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Gate (p) counts only registered members' notes on the run lead channel",
+    "evidence": [
+      "V5 VERIFIED in verify2: none/lead-note/foreign-report keep (p); member reports clear it",
+      ".atlas/evidence/atlas-10.4.0-repair/verify2-VERDICT.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-08T05:13:59+00:00",
+    "verified_by": "Verifier2/Verifier (headless omp -p)"
+  },
+  {
+    "id": "atlas-1040-suite",
+    "surface": "tests",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Full hooks+scripts suite green except expected InstalledParityContract (HEAD baseline had 19 failures)",
+    "evidence": [
+      "2697 passed, 1 failed (InstalledParityContract); omp bun 356/0; dashboard_ui bun 22/0",
+      ".atlas/evidence/atlas-10.4.0-repair/suite-final.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-08T05:13:59+00:00",
+    "verified_by": "Verifier2/Verifier (headless omp -p)"
+  },
+  {
+    "id": "atlas-1040-owner-spoof",
+    "surface": "channels",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Board note owner is self-asserted: a process can post as a registered member",
+    "evidence": [
+      "verify2 v1spoof.py: --owner Member1 from a Stranger env is delivered",
+      ".atlas/evidence/atlas-10.4.0-repair/verify2-VERDICT.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "open",
+    "verified_at": "2026-10-08T05:13:59+00:00",
+    "verified_by": "Verifier2/Verifier (headless omp -p)"
+  },
+  {
+    "id": "atlas-1040-review-fix1",
+    "surface": "dashboard",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Review P1s fixed: Colony send/kill carry project, respawn revives member, kill/send only via recorded pid/pane_id",
+    "evidence": [
+      ".atlas/evidence/atlas-10.4.0-repair/ReviewFix1.report.md",
+      ".atlas/evidence/atlas-10.4.0-repair/suite4.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-08T06:00:57+00:00",
+    "verified_by": "ReviewFix1 + lead test run"
   }
 ]

@@ -38,6 +38,17 @@ def cli(*argv):
 
 class ChannelModel(unittest.TestCase):
     def setUp(self):
+        env = mock.patch.dict(os.environ)
+        env.start()
+        self.addCleanup(env.stop)
+        for k in (
+            "ATLAS_CHANNELS",  # test_dispatch_tripwire sets it process-wide
+            "ATLAS_CHANNEL",
+            "ATLAS_LEAD_NAME",
+            "ATLAS_WORKER_NAME",
+            "ATLAS_PROJECT_ROOT",
+        ):
+            os.environ.pop(k, None)
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
         self.root = os.path.realpath(self._tmp.name)
@@ -47,6 +58,32 @@ class ChannelModel(unittest.TestCase):
 
     def drain(self, name, **kw):
         return worker_inbox.drain(self.root, name, **kw)
+
+    def test_mark_finished_works_in_either_order_with_leave(self):
+        chan = todo.open_lead_channel(self.root, "L", ["A", "B"])["name"]
+        todo.leave(self.root, chan, "A")
+        self.assertEqual(todo.mark_finished(self.root, "A", 3), 1)
+        todo.mark_finished(self.root, "B", 0)
+        todo.leave(self.root, chan, "B")
+        members = todo._reg_read(self.root)["channels"][chan]["members"]
+        by = {m["name"]: m for m in members}
+        self.assertEqual((by["A"]["exit_code"], by["B"]["exit_code"]), (3, 0))
+        self.assertTrue(by["A"]["ended_at"] and by["B"]["ended_at"])
+
+    def test_respawn_under_a_finished_name_revives_it_and_drops_stale_handles(self):
+        chan = todo.open_lead_channel(self.root, "lead-abc123", ["w1"])["name"]
+        todo.set_member_handles(self.root, "w1", chan, pid=111, pane_id="p-old")
+        todo.mark_finished(self.root, "w1", 1)
+        todo.leave(self.root, chan, "w1")
+        todo.open_lead_channel(self.root, "lead-abc123", ["w1"])  # idempotent re-open
+        m = {x["name"]: x for x in todo.get_channel(self.root, chan)["members"]}["w1"]
+        self.assertEqual(m["exit_code"], 1)  # a plain re-open does not revive
+        todo.register_member(self.root, "w1", chan)
+        m = {x["name"]: x for x in todo.get_channel(self.root, chan)["members"]}["w1"]
+        for key in ("exit_code", "ended_at", "pid", "pane_id"):
+            self.assertNotIn(key, m)
+        self.assertEqual(todo.set_member_handles(self.root, "w1", chan, pid=222), 1)
+        self.assertEqual(todo.set_member_handles(self.root, "ghost", pid=1), 0)
 
     def test_main_channel_branch_detached_and_non_git(self):
         self.assertEqual(todo.main_channel(self.root), self.main)
@@ -210,44 +247,107 @@ class ChannelModel(unittest.TestCase):
         self.assertTrue((Path(self.root) / ".atlas/.run/channels.json").exists())
         self.assertFalse((Path(sub) / ".atlas").exists())
 
-    def test_mux_worker_note_registers_under_lead_once(self):
-        todo.open_lead_channel(self.root, "L", ["A"])
-        with mock.patch.dict(os.environ, {"ATLAS_WORKER_NAME": "W1"}):
-            for i in range(2):  # idempotent
-                rec = todo.note(self.root, "W1", f"hi {i}", to="lead")
-                self.assertEqual(rec["channel"], f"{self.main}/L")
-        channel = todo.get_channel(self.root, f"{self.main}/L")
-        assert channel is not None
-        members = channel["members"]
+    def test_register_member_joins_the_launching_leads_channel_once(self):
+        chan = todo.open_lead_channel(self.root, "L", ["A"])["name"]
+        for _ in range(2):  # idempotent
+            self.assertEqual(todo.register_member(self.root, "W1", chan), chan)
+        members = todo.get_channel(self.root, chan)["members"]
         self.assertEqual([m["name"] for m in members].count("W1"), 1)
         self.assertEqual([m["parent"] for m in members if m["name"] == "W1"], ["L"])
-        # a note by someone who is not this process's worker never self-registers
-        todo.note(self.root, "stranger", "x")
-        after = todo.get_channel(self.root, f"{self.main}/L")
-        assert after is not None
-        names = [m["name"] for m in after["members"]]
-        self.assertNotIn("stranger", names)
 
-    def test_mux_worker_without_lead_opens_default_lead_channel(self):
-        with mock.patch.dict(os.environ, {"ATLAS_WORKER_NAME": "W1"}):
-            todo.note(self.root, "W1", "first", to="lead")
-        children = todo.channels(self.root)[0]["children"]
-        self.assertEqual([c["name"] for c in children], [f"{self.main}/lead"])
+    def test_register_member_without_a_channel_never_picks_the_newest_lead(self):
+        todo.open_lead_channel(self.root, "lead-new", ["A"])
+        self.assertEqual(todo.register_member(self.root, "W1"), f"{self.main}/lead")
+        names = [
+            m["name"]
+            for m in todo.get_channel(self.root, f"{self.main}/lead-new")["members"]
+        ]
+        self.assertNotIn("W1", names)
 
-    def test_worker_registration_fails_open_and_records_fault(self):
-        with tempfile.TemporaryDirectory() as home:
-            env = {"ATLAS_WORKER_NAME": "W1", "ATLAS_HOME": home}
-            with mock.patch.dict(os.environ, env):
-                with mock.patch.object(
-                    todo, "open_lead_channel", side_effect=OSError("boom")
-                ):
-                    err = io.StringIO()
-                    with contextlib.redirect_stderr(err):
-                        rec = todo.note(self.root, "W1", "still lands", to="lead")
-            self.assertEqual(rec["text"], "still lands")
-            self.assertEqual(err.getvalue(), "")
-            faults = (Path(home) / "hook-faults.jsonl").read_text()
-        self.assertIn("atlas_todo.register_worker", faults)
+    def test_a_workers_children_never_enrol_into_the_lead_it_inherited(self):
+        chan = todo.open_lead_channel(self.root, "lead-xxxxxx", ["W"])["name"]
+        env = {
+            "ATLAS_WORKER_NAME": "W",
+            "ATLAS_CHANNEL": chan,
+            "ATLAS_LEAD_NAME": "lead-xxxxxx",
+        }
+        with mock.patch.dict(os.environ, env):
+            got = todo.register_member(self.root, "child")
+        self.assertEqual(got, f"{self.main}/W")  # W leads its own children
+        names = [m["name"] for m in todo.get_channel(self.root, chan)["members"]]
+        self.assertNotIn("child", names)
+        # the lead itself (no worker name in env) still enrols its workers
+        with mock.patch.dict(os.environ, {**env, "ATLAS_WORKER_NAME": ""}):
+            self.assertEqual(todo.register_member(self.root, "kid"), chan)
+
+    def test_worker_with_an_inherited_channel_is_not_a_member_of_it(self):
+        chan = todo.open_lead_channel(self.root, "lead-aaaaaa", ["A"])["name"]
+        env = {
+            "ATLAS_WORKER_NAME": "fix-1",
+            "ATLAS_CHANNEL": chan,
+            "ATLAS_LEAD_NAME": "lead-aaaaaa",
+        }
+        with mock.patch.dict(os.environ, env):
+            implicit = todo.note(self.root, "fix-1", "x", to="lead-aaaaaa")
+            explicit = todo.note(
+                self.root, "fix-1", "y", to="lead-aaaaaa", channel=chan, kind="report"
+            )
+        for rec in (implicit, explicit):
+            self.assertEqual(rec["channel"], self.main)
+        names = [m["name"] for m in todo.get_channel(self.root, chan)["members"]]
+        self.assertNotIn("fix-1", names)
+        # once the lead side registers it, the same env is honoured
+        todo.register_member(self.root, "fix-1", chan)
+        with mock.patch.dict(os.environ, env):
+            self.assertEqual(todo.note(self.root, "fix-1", "z")["channel"], chan)
+
+    def test_lead_inbox_only_carries_notes_from_channel_members(self):
+        chan = todo.open_lead_channel(self.root, "lead-aaaaaa", ["W"])["name"]
+        worker_inbox._write_cursor(
+            worker_inbox.cursor_path(self.root, "lead-aaaaaa"), 0.0, 0
+        )
+        todo.note(self.root, "W", "member report", to="lead-aaaaaa", channel=chan)
+        todo.note(self.root, "stranger", "forged", to="lead-aaaaaa", channel=chan)
+        todo.note(self.root, "stranger", "in main", to="lead-aaaaaa", channel=self.main)
+        todo.note(self.root, "stranger", "no channel", to="lead-aaaaaa", channel="")
+        todo.note(
+            self.root, "human", "human in main", to="lead-aaaaaa", channel=self.main
+        )
+        todo.note(self.root, "stranger", "forged alias", to="lead", channel=chan)
+        todo.note(self.root, "human", "from dashboard", to="lead-aaaaaa", channel=chan)
+        todo.leave(self.root, chan, "W")
+        todo.note(self.root, "W", "late report", to="lead-aaaaaa", channel=chan)
+        got = self.drain("lead-aaaaaa", aliases=("lead",))
+        self.assertIn("member report", got)
+        self.assertIn("from dashboard", got)
+        self.assertIn("late report", got)  # departed members keep their report
+        self.assertNotIn("forged", got)
+        self.assertIn("human in main", got)
+        self.assertNotIn("from stranger", got)
+        self.assertNotIn("no channel", got)
+
+    def test_selffix_worker_gets_its_own_channel_not_the_lead_env(self):
+        import atlas_launch
+        import atlas_selffix
+
+        chan = todo.open_lead_channel(self.root, "lead-aaaaaa", ["A"])["name"]
+        seen = {}
+
+        def fake_launch(root, name, prompt, **kw):
+            seen.update(kw["env"], name=name, root=root)
+            return {"ok": True}
+
+        env = {"ATLAS_CHANNEL": chan, "ATLAS_LEAD_NAME": "lead-aaaaaa"}
+        with mock.patch.dict(os.environ, env):
+            with mock.patch.object(atlas_launch, "launch", fake_launch):
+                with mock.patch.object(atlas_selffix, "build_prompt", lambda *a: "p"):
+                    atlas_selffix._worker_launch(self.root, {"id": 1}, self.root)
+        self.assertEqual(seen["ATLAS_CHANNEL"], f"{self.main}/selffix")
+        self.assertEqual(seen["ATLAS_LEAD_NAME"], "selffix")
+        todo.register_member(
+            self.root, "fix-1", seen["ATLAS_CHANNEL"], seen["ATLAS_LEAD_NAME"]
+        )
+        self.assertEqual(todo.channels_of(self.root, "fix-1"), [f"{self.main}/selffix"])
 
     def test_held_registry_lock_never_hangs_a_worker_note(self):
         lock = Path(self.root) / ".atlas/.run/channels.json.lock"
@@ -266,17 +366,12 @@ class ChannelModel(unittest.TestCase):
         self.addCleanup(holder.kill)
         self.assertEqual(holder.stdout.readline().strip(), "held")
         with tempfile.TemporaryDirectory() as home:
-            env = {"ATLAS_WORKER_NAME": "W1", "ATLAS_HOME": home}
-            with mock.patch.dict(os.environ, env):
-                err = io.StringIO()
+            with mock.patch.dict(os.environ, {"ATLAS_HOME": home}):
                 t0 = time.monotonic()
-                with contextlib.redirect_stderr(err):
-                    rec = todo.note(self.root, "W1", "still lands", to="lead")
+                todo.register_member(self.root, "W1", None, "L")
                 elapsed = time.monotonic() - t0
             faults = (Path(home) / "hook-faults.jsonl").read_text()
         self.assertLess(elapsed, 4)
-        self.assertEqual(rec["text"], "still lands")
-        self.assertEqual(err.getvalue(), "")
         self.assertIn("register_worker.lock_timeout", faults)
 
     def test_file_lock_timeout_param_is_opt_in(self):

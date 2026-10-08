@@ -169,7 +169,9 @@ def _wait_exit(root, owner, timeout=20.0):
     deadline = time.time() + timeout
     while time.time() < deadline:
         recs = _notes(root, owner)
-        if recs and str(recs[-1].get("text", "")).startswith("exit "):
+        if recs and str(recs[-1].get("text", "")).splitlines()[-1:][0].startswith(
+            "exit "
+        ):
             return recs
         time.sleep(0.05)
     raise AssertionError(f"no exit note from {owner!r}: {_texts(_notes(root, owner))}")
@@ -212,7 +214,11 @@ class Base(unittest.TestCase):
             p = pathlib.Path(self.bin_dir) / name
             p.write_text(body)
             p.chmod(0o755)
-        self.env = dict(os.environ)
+        self.env = {
+            k: v
+            for k, v in os.environ.items()
+            if k not in ("ATLAS_CHANNEL", "ATLAS_LEAD_NAME", "ATLAS_WORKER_NAME")
+        }
         self.env["PATH"] = self.bin_dir + os.pathsep + self.env["PATH"]
         self.env["FAKE_TMUX_STATE"] = self.state
         self.env["FAKE_HARNESS_LOG"] = os.path.join(self.state, "log")
@@ -418,15 +424,15 @@ class SpawnClaudeTests(Base):
             ],
             argv,
         )
-        texts = _texts(recs)
-        # single-writer protocol: exact argv first, report lines, exit last
-        self.assertEqual(shlex.join(["claude", *argv]), texts[0])
-        self.assertEqual(["fake-report-1", "fake-report-2"], texts[1:-1])
-        self.assertEqual("exit 0", texts[-1])
-        for rec in recs:
-            self.assertEqual("Alpha", rec.get("owner"))
-            self.assertEqual("lead", rec.get("to"))
-            self.assertIsInstance(rec.get("ts"), float)
+        # contract C2: exactly one note, the report, then the exit line
+        self.assertEqual(1, len(recs))
+        self.assertEqual("fake-report-1\nfake-report-2\nexit 0", recs[0]["text"])
+        self.assertEqual("report", recs[0].get("kind"))
+        self.assertEqual("Alpha", recs[0].get("owner"))
+        self.assertEqual("lead", recs[0].get("to"))
+        self.assertIsInstance(recs[0].get("ts"), float)
+        log = pathlib.Path(self.root) / ".atlas" / ".run" / "logs" / "Alpha.log"
+        self.assertIn("fake-report-2", log.read_text())
 
     def test_claude_env_pinned_for_worker(self):
         self.make_agent("claude", "explorer", "---\nmodel: opus\n---\n")
@@ -504,37 +510,7 @@ class SpawnClaudeTests(Base):
         _, argv = _fake_harness_argv(self.state)
         self.assertIn(["--model", "haiku"], _pairs(argv))
         self.assertIn(["--effort", "max"], _pairs(argv))
-        self.assertEqual("exit 0", _texts(recs)[-1])
-
-    def test_argv_note_round_trips_prompt_with_spaces_and_semicolons(self):
-        self.make_agent("claude", "explorer", "---\nmodel: opus\n---\nbody\n")
-        prompt = "review the plan; then   report; echo $HOME 'quoted' \"dq\""
-        rc, data, _, err = _run(
-            "spawn",
-            "--run",
-            "r1",
-            "--harness",
-            "claude",
-            "--name",
-            "Alpha",
-            "--agent",
-            "explorer",
-            "--prompt-file",
-            self.make_prompt("p", prompt),
-            "--agents-dir",
-            os.path.join(self.root, "agents"),
-            env=self.spawn_env(),
-            cwd=self.root,
-        )
-        self.assertEqual(0, rc, (data, err))
-        recs = _wait_exit(self.root, "Alpha")
-        _, argv = _fake_harness_argv(
-            self.state
-        )  # NUL-separated: spaces/; survive verbatim
-        self.assertEqual(prompt, argv[-1])
-        first = _texts(recs)[0]
-        self.assertEqual(["claude", *argv], shlex.split(first))  # quoting is lossless
-        self.assertEqual(shlex.join(["claude", *argv]), first)
+        self.assertEqual("fake-report-1\nfake-report-2\nexit 0", _texts(recs)[-1])
 
 
 class SpawnOmpTests(Base):
@@ -583,10 +559,11 @@ class SpawnOmpTests(Base):
         self.assertIn("You are the atlas:explorer worker.", hargv[3])
         self.assertIn("explorer body", hargv[3])
         self.assertTrue(hargv[3].endswith("# Task\ncolonize the pane"))
-        first = _texts(_notes(self.root, "Beta"))[0]
+        log = pathlib.Path(self.root) / ".atlas" / ".run" / "logs" / "Beta.log"
+        first = log.read_text().removeprefix("$ ").split("\nfake-report-1")[0]
         self.assertEqual(
             ["omp", *hargv], shlex.split(first)
-        )  # tier auditable from the first note
+        )  # tier auditable from the worker log, not the board
 
     def test_omp_quoted_thinking_level_is_unquoted_in_argv_and_pane_tail(self):
         """gen-agents.ts writes `thinkingLevel: "medium"`; omp rejects a --thinking value that carries the quotes."""
@@ -1281,9 +1258,10 @@ class StatusKillTests(Base):
                 cwd=self.root,
             )
             self.assertEqual(0, rc, (data, err))
+        logs = pathlib.Path(self.root) / ".atlas" / ".run" / "logs"
         deadline = time.time() + 15
         while time.time() < deadline and not all(
-            _notes(self.root, n) for n in ("Alpha", "Beta")
+            (logs / f"{n}.log").exists() for n in ("Alpha", "Beta")
         ):
             time.sleep(0.05)
         rc, data, _, err = _run("kill", "--run", "r1", env=env, cwd=self.root)
@@ -1346,13 +1324,26 @@ class RunWorkerTests(Base):
         self.assertIn("alpha-report-2", out)
         recs = _notes(self.root, "Zeta")
         self.assertEqual(
-            [
-                shlex.join(["/bin/sh", "-c", override]),
-                "alpha-report-1",
-                "alpha-report-2",
-                "exit 7 [failed: nonzero exit]",
-            ],
+            ["alpha-report-1\nalpha-report-2\nexit 7 [failed: nonzero exit]"],
             _texts(recs),
+        )
+
+    def test_run_worker_records_its_harness_pid_on_the_member_entry(self):
+        _atlas_todo().register_member(self.root, "Zeta")
+        rc, _, err = self.run_worker("--command-override", "echo hi")
+        self.assertEqual(0, rc, err)
+        reg = json.loads(
+            (pathlib.Path(self.root) / ".atlas/.run/channels.json").read_text()
+        )
+        entries = [
+            m
+            for c in reg["channels"].values()
+            for m in c["members"]
+            if m["name"] == "Zeta"
+        ]
+        self.assertTrue(entries)
+        self.assertTrue(
+            all(isinstance(m.get("pid"), int) and m["pid"] > 0 for m in entries)
         )
 
     def test_notes_are_atlas_todo_records_only(self):
@@ -1360,15 +1351,16 @@ class RunWorkerTests(Base):
         rc, _, err = self.run_worker("--command-override", "echo one")
         self.assertEqual(0, rc, err)
         lines = _read_board(self.board_file("Zeta"))
-        self.assertEqual(3, len(lines))  # argv, one, exit 0
+        self.assertEqual(1, len(lines))  # one report note: output + exit 0
         for rec in lines:
             # atlas_todo.note records: base keys plus the channel stamp (channel work)
             self.assertEqual(
-                {"ts", "seq", "owner", "to", "item", "text", "channel"}, set(rec)
+                {"ts", "seq", "owner", "to", "item", "text", "channel", "kind"},
+                set(rec),
             )
             self.assertEqual("Zeta", rec["owner"])
             self.assertEqual("lead", rec["to"])
-        self.assertEqual("exit 0", lines[-1]["text"])
+        self.assertEqual("one\nexit 0", lines[-1]["text"])
 
     def test_exit0_harness_failures_are_classified_failed(self):
         # omp -p exits 0 on these, so the output must decide
@@ -1388,10 +1380,23 @@ class RunWorkerTests(Base):
                 )
                 self.assertEqual(1, rc, err)
                 recs = _notes(self.root, name)
-                self.assertEqual(f"exit 1 [failed: {reason}]", _texts(recs)[-1])
+                self.assertEqual(
+                    f"exit 1 [failed: {reason}]", _texts(recs)[-1].splitlines()[-1]
+                )
                 self.assertIn(
-                    output, _texts(recs)
-                )  # the evidence line is still on the board
+                    output, _texts(recs)[-1]
+                )  # the evidence line is in the report
+
+    def test_report_citing_http_codes_is_not_a_failure(self):
+        rc, _, err = self.run_worker(
+            "--command-override",
+            "echo 'STATUS: DONE'; echo 'EVIDENCE: atlas_mux.py:402 returns 401'; echo 'NEXT: none'",
+        )
+        self.assertEqual(0, rc, err)
+        self.assertEqual(
+            "STATUS: DONE\nEVIDENCE: atlas_mux.py:402 returns 401\nNEXT: none\nexit 0",
+            _texts(_notes(self.root, "Zeta"))[-1],
+        )
 
     def test_stderr_is_captured_for_classification(self):
         rc, _, err = self.run_worker(
@@ -1399,7 +1404,8 @@ class RunWorkerTests(Base):
         )
         self.assertEqual(1, rc, err)
         self.assertEqual(
-            "exit 1 [failed: model not found]", _texts(_notes(self.root, "Zeta"))[-1]
+            "exit 1 [failed: model not found]",
+            _texts(_notes(self.root, "Zeta"))[-1].splitlines()[-1],
         )
 
     def test_mcp_connection_warnings_do_not_fail_a_successful_run(self):
@@ -1416,16 +1422,20 @@ class RunWorkerTests(Base):
         rc, _, err = self.run_worker("--command-override", script)
         self.assertEqual(0, rc, err)
         texts = _texts(_notes(self.root, "Zeta"))
-        self.assertEqual("exit 0", texts[-1])
-        self.assertIn("READY", texts)
-        self.assertTrue(all(line in texts for line in noise))  # still on the board
+        self.assertEqual(["READY\nexit 0"], texts)  # MCP warnings are noise, not report
+        log = pathlib.Path(self.root) / ".atlas" / ".run" / "logs" / "Zeta.log"
+        self.assertTrue(
+            all(line in log.read_text() for line in noise)
+        )  # still in the log
 
     def test_clean_run_is_not_flagged(self):
         rc, _, err = self.run_worker(
             "--command-override", "echo READY; echo 'port 14020 ok'"
         )
         self.assertEqual(0, rc, err)
-        self.assertEqual("exit 0", _texts(_notes(self.root, "Zeta"))[-1])
+        self.assertEqual(
+            "READY\nport 14020 ok\nexit 0", _texts(_notes(self.root, "Zeta"))[-1]
+        )
 
     def test_missing_harness_binary_is_a_failed_exit_note(self):
         self.make_agent("claude", "explorer", "---\nmodel: opus\n---\nbody\n")
@@ -1433,11 +1443,9 @@ class RunWorkerTests(Base):
         rc, _, err = self.run_worker(env_mut={"PATH": "/nonexistent"})
         self.assertEqual(127, rc, err)
         texts = _texts(_notes(self.root, "Zeta"))
-        self.assertTrue(
-            texts[0].startswith("claude -p --agent atlas:explorer --model opus"), texts
-        )
-        self.assertTrue(texts[1].startswith("spawn failed:"), texts)
-        self.assertEqual("exit 127 [failed: spawn error]", texts[-1])
+        self.assertEqual(1, len(texts), texts)
+        self.assertTrue(texts[0].startswith("spawn failed:"), texts)
+        self.assertTrue(texts[0].endswith("exit 127 [failed: spawn error]"), texts)
 
     def test_run_worker_pins_contract_env(self):
         rc, out, err = self.run_worker(
@@ -1445,7 +1453,7 @@ class RunWorkerTests(Base):
             'printf "%s|%s\\n" "$ATLAS_WORKER_NAME" "$ATLAS_PROJECT_ROOT"',
         )
         self.assertEqual(0, rc, err)
-        self.assertIn(f"Zeta|{self.root}", _texts(_notes(self.root, "Zeta")))
+        self.assertIn(f"Zeta|{self.root}", _texts(_notes(self.root, "Zeta"))[0])
 
     def test_sigterm_and_sighup_leave_a_failed_exit_note(self):
         """tmux kill-window sends SIGHUP; without a handler the worker died silently and its
@@ -1480,9 +1488,10 @@ class RunWorkerTests(Base):
                 stderr=subprocess.PIPE,
                 text=True,
             )
+            logf = pathlib.Path(self.root) / ".atlas" / ".run" / "logs" / f"{name}.log"
             deadline = time.time() + 15
-            while time.time() < deadline and "up" not in _texts(
-                _notes(self.root, name)
+            while time.time() < deadline and not (
+                logf.exists() and "up" in logf.read_text().splitlines()
             ):
                 time.sleep(0.05)
             p.send_signal(sig)
@@ -1490,7 +1499,7 @@ class RunWorkerTests(Base):
             self.assertEqual(128 + num, rc)
             self.assertEqual(
                 f"exit {128 + num} [failed: killed by signal {num}]",
-                _texts(_notes(self.root, name))[-1],
+                _texts(_notes(self.root, name))[-1].splitlines()[-1],
             )
 
 
@@ -1520,10 +1529,7 @@ class OverrideEnvForwardingTests(Base):
             "--command-override 'echo stubbed'", "\n".join(_tmux_log_calls(self.state))
         )
         recs = _wait_exit(self.root, "Stub")
-        self.assertEqual(
-            [shlex.join(["/bin/sh", "-c", "echo stubbed"]), "stubbed", "exit 0"],
-            _texts(recs),
-        )
+        self.assertEqual(["stubbed\nexit 0"], _texts(recs))
 
 
 class NotesInteropTests(Base):
@@ -1587,9 +1593,9 @@ class NotesInteropTests(Base):
             timeout=60,
         )
         texts = [n.get("text") for n in json.loads(p.stdout).get("notes", [])]
-        self.assertIn("raw-worker-stream", texts)
+        self.assertIn("raw-worker-stream\nexit 0", texts)
         self.assertIn("alpha done, note to lead", texts)
-        self.assertIn("exit 0", texts)
+        self.assertEqual(2, len(texts))
 
 
 class HerdrTransportTests(Base):
@@ -1637,6 +1643,20 @@ class HerdrTransportTests(Base):
         ws = next(p for m, p in self.fake.calls if m == "workspace.create")
         self.assertEqual(ws["label"], "atlas-r1")
         self.assertEqual(ws["env"]["ATLAS_WORKER_NAME"], "Alpha")
+
+    def test_spawn_records_the_created_pane_id_on_the_member_entry(self):
+        rc, data, _, err = self.spawn()
+        self.assertEqual(0, rc, (data, err))
+        reg = json.loads(
+            (pathlib.Path(self.root) / ".atlas/.run/channels.json").read_text()
+        )
+        pane_ids = [
+            m.get("pane_id")
+            for c in reg["channels"].values()
+            for m in c["members"]
+            if m["name"] == "Alpha"
+        ]
+        self.assertTrue(pane_ids and all(isinstance(p, str) and p for p in pane_ids))
 
     def test_tier_enforcement_refuses_before_any_pane(self):
         prompt = self.make_prompt("p", "x")
@@ -1707,7 +1727,7 @@ class HerdrTransportTests(Base):
         )
         self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
         texts = _texts(_wait_exit(self.root, "Alpha"))
-        self.assertEqual(texts[-2:], ["hi", "exit 0"])
+        self.assertEqual(texts[-1], "hi\nexit 0")
 
 
 class DeadFlagTests(unittest.TestCase):

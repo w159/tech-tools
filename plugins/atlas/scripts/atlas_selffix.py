@@ -221,6 +221,11 @@ def _verify_cmd(f) -> str:
 def _worker_launch(top, f, wt):
     import atlas_launch
 
+    # Selffix workers report to the self-fix scheduler, not to whichever lead's shell
+    # (ATLAS_CHANNEL/ATLAS_LEAD_NAME) happens to be running it: they get their own
+    # `<main>/selffix` channel, so no lead's inbox ever receives their notes.
+    todo = atlas_launch.atlas_mux.atlas_todo
+    chan = todo.open_lead_channel(top, "selffix", [])["name"]
     return atlas_launch.launch(
         top,
         f"fix-{f['id']}",
@@ -229,6 +234,7 @@ def _worker_launch(top, f, wt):
         interactive=False,
         cwd=wt,
         run="selffix",
+        env={"ATLAS_CHANNEL": chan, "ATLAS_LEAD_NAME": "selffix"},
     )
 
 
@@ -361,6 +367,8 @@ def _check_running(conn, f, top) -> str | None:
     if live:
         _tmux_kill(f["fix_target"])
         return _fail(conn, f["id"], "worker timed out")
+    if _branch_state(top, f["fix_branch"]) == "gone":
+        return _reconcile_ready(conn, f)  # branch merged+deleted out of band
     return _verify(conn, f, top)
 
 
@@ -378,6 +386,29 @@ def _check_merged(conn, f, top) -> str | None:
         )
         return f"#{f['id']} regressed"
     return None
+
+
+def _branch_state(top, branch) -> str:
+    """'gone' (ref missing), 'merged' (already an ancestor of HEAD) or 'live'."""
+    if (
+        not branch
+        or _git(["rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"], top)[0]
+    ):
+        return "gone"
+    return (
+        "merged"
+        if _git(["merge-base", "--is-ancestor", branch, "HEAD"], top)[0] == 0
+        else "live"
+    )
+
+
+def _reconcile_ready(conn, f) -> str:
+    """A ready fix whose branch was merged/deleted out of band is merged."""
+    from atlas_db import set_finding_status
+
+    set_finding_status(conn, int(f["id"]), "applied", applied_at=time.time())
+    _set(conn, f["id"], "merged", f"branch {f['fix_branch']} already merged or deleted")
+    return f"#{f['id']} merged (branch gone)"
 
 
 def _top_of(f) -> str | None:
@@ -410,9 +441,14 @@ def tick(conn=None) -> dict:
             except Exception as e:
                 notes.append(f"mine failed: {e}")
         for r in conn.execute(
-            "SELECT id FROM findings WHERE fix_state IN ('running','verifying','merged')"
+            "SELECT id FROM findings WHERE fix_state IN ('ready','running','verifying','merged')"
         ).fetchall():
             f = _row(conn, r[0])
+            if f["fix_state"] == "ready":
+                top = _top_of(f)
+                if top and _branch_state(top, f["fix_branch"]) != "live":
+                    notes.append(_reconcile_ready(conn, f))
+                continue
             top = _top_of(f)
             if not top:
                 continue
@@ -465,6 +501,13 @@ def merge(conn, fid) -> dict:
             "ok": False,
             "error": "no_repo",
             "reason": "cannot locate the repository",
+        }
+    if _branch_state(top, branch) != "live":
+        _reconcile_ready(conn, f)
+        return {
+            "ok": False,
+            "error": "branch_gone",
+            "reason": f"branch {branch} is already merged or deleted; marked merged",
         }
     rc, out = _git(["diff", "--name-only", f"HEAD...{branch}"], top)
     overlap = sorted(_dirty_files(top) & set(out.splitlines()))
@@ -553,9 +596,14 @@ def snapshot(conn) -> dict:
 
     ready = items(("ready",))
     for it in ready:
-        top = _top_of(_row(conn, int(it["id"].split(":")[1])))
+        f = _row(conn, int(it["id"].split(":")[1]))
+        top = _top_of(f)
+        state = _branch_state(top, it["branch"]) if top else "live"
+        it["branch_state"] = state
         it["diffstat"] = (
-            _git(["diff", "--stat", f"HEAD...{it['branch']}"], top)[1] if top else ""
+            _git(["diff", "--stat", f"HEAD...{it['branch']}"], top)[1]
+            if state == "live"
+            else f"branch gone ({state}); the next tick marks it merged"
         )
     return {
         "enabled": bool(p["enabled"]),

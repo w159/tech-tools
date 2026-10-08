@@ -114,13 +114,17 @@ def is_read(root, worker, rec, cursors=None):
     return _seen(rec, cursors[worker])
 
 
-def _write_cursor(path, rec):
+def _write_cursor(path, ts, seq):
+    """Persist (ts, seq), never moving either component backwards."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        ts = max(ts, float(data.get("ts") or 0.0))
+        seq = max(seq, int(data.get("seq") or 0))
+    except (OSError, ValueError, TypeError, AttributeError):
+        pass
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".json.tmp")
-    tmp.write_text(
-        json.dumps({"ts": _ts(rec.get("ts")), "seq": _seq(rec)}) + "\n",
-        encoding="utf-8",
-    )
+    tmp.write_text(json.dumps({"ts": ts, "seq": seq}) + "\n", encoding="utf-8")
     os.replace(tmp, path)
 
 
@@ -141,15 +145,18 @@ def _format(notes):
 def drain(root, worker, member_of=None, aliases=()):
     """Notes for `worker` not yet delivered, as additionalContext text.
 
-    Wanted: a note `to` the worker (or an alias such as the lead's `lead`) in a
-    channel the worker belongs to, in the project's current main channel, or with
-    no channel (legacy); or a `to=all` broadcast in a channel the worker is a member
-    of (registry membership + ATLAS_CHANNEL). Notes of any other channel (another
-    lead's subchannel, another branch's main) are never delivered. Returns "" when
+    Wanted: a note `to` the worker in a channel the worker belongs to, in the
+    project's main channel, or with no channel; a note `to` an alias (the lead's `lead`) only in a channel the worker
+    belongs to; or a `to=all` broadcast in a member channel (registry membership +
+    ATLAS_CHANNEL). Notes of any other channel are never delivered. Returns "" when
     nothing is pending. Notes the dashboard already typed into the pane (`delivery`
     delivered/refused) and the worker's own notes are skipped. The cursor (board
-    seq) moves to the last note returned under the same lock the board's writers
-    use, so two hooks racing for one worker cannot deliver a note twice."""
+    seq + ts, monotonic) moves to the last note returned under the same lock the
+    board's writers use, so two hooks racing for one worker cannot deliver a note
+    twice. A lead (alias identity) with no cursor yet starts after its channel's `created`
+    time, or at the board's current max when that is unknown: it never replays
+    history. A worker with no cursor keeps its backlog (briefs sent before its first
+    tool call)."""
     todo = _todo()
     path = cursor_path(root, worker)
     # The lock file would otherwise appear next to the cursor even when idle;
@@ -158,24 +165,60 @@ def drain(root, worker, member_of=None, aliases=()):
         return ""
     chans = set(member_of if member_of is not None else todo.channels_of(root, worker))
     env_chan = (os.environ.get("ATLAS_CHANNEL") or "").strip()
-    if env_chan:
+    if env_chan and todo.may_post(
+        root, env_chan, worker
+    ):  # an inherited env alone grants nothing
         chans.add(env_chan)
+    aliases = set(aliases)
     main = todo.main_channel(todo._resolve_base(root))
-    names = {worker, *aliases}
+
+    channels = todo._reg_read(root)
+    peers = set(todo.SYSTEM_OWNERS)
+    for name in chans:
+        chan = channels["channels"].get(name) or {}
+        peers |= {m["name"] for m in chan.get("members", [])} | set(
+            chan.get("departed") or {}
+        )
 
     def wanted(rec):
         ch = rec.get("channel")
-        if rec.get("to") in names:
+        to = rec.get("to")
+        # a lead channel only carries notes from its own members (or `human`/`board`)
+        if ch and not todo.may_post(root, ch, rec.get("owner"), channels):
+            return False
+        if to in aliases:
+            return bool(ch) and ch in chans
+        if to == worker:
+            if todo.is_lead_name(worker) and (not ch or ch == main):
+                # a lead's inbox admits main/channel-less notes only from its own peers
+                return rec.get("owner") in peers
             return not ch or ch in chans or ch == main
-        return rec.get("to") == "all" and bool(ch) and ch in chans
+        return to == "all" and bool(ch) and ch in chans
 
     with todo._file_lock(path):
         state = _read_state(root, worker)
+        since = 0.0
+        all_notes = todo.notes(root, consistent=True)
+        if not path.exists():
+            created = [
+                float(c.get("created") or 0)
+                for n, c in todo._reg_read(root)["channels"].items()
+                if n in chans
+            ]
+            since = max(created, default=0.0)
+            if not since and aliases:
+                _write_cursor(
+                    path,
+                    max((_ts(r.get("ts")) for r in all_notes), default=0.0),
+                    max((_seq(r) for r in all_notes), default=0),
+                )
+                return ""
         me = todo._sanitize_owner(worker)
         pending = [
             rec
-            for rec in todo.notes(root, consistent=True)
+            for rec in all_notes
             if wanted(rec)
+            and _ts(rec.get("ts")) > since
             and not _seen(rec, state)
             and rec.get("delivery") not in ("delivered", "refused")
             and str(rec.get("owner")) != me
@@ -184,7 +227,7 @@ def drain(root, worker, member_of=None, aliases=()):
             return ""
         pending.sort(key=lambda r: (_seq(r), todo._note_ts_key(r)))
         batch = pending[:MAX_NOTES]
-        _write_cursor(path, batch[-1])
+        _write_cursor(path, _ts(batch[-1].get("ts")), _seq(batch[-1]))
         return _format(batch)
 
 

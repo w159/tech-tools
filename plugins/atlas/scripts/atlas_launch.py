@@ -132,9 +132,16 @@ def launch(
         return _fail(f"invalid run {run!r}: use [A-Za-z0-9_-]")
     if harness not in ("omp", "claude"):
         return _fail(f"unsupported harness {harness!r}")
-    child = _child_env(env)
+    env = dict(env or {})
+    # The channel comes from the launching lead (explicit env, else its own process env);
+    # a launch with neither lands in `<main>/lead`, never in whichever lead opened last.
+    env_chan, env_lead = atlas_mux.atlas_todo.env_channel(root)
+    chan = (env.get("ATLAS_CHANNEL") or env_chan).strip()
+    lead = (env.get("ATLAS_LEAD_NAME") or env_lead).strip()
     use = atlas_mux.transport()
-    if use == "tmux" and not shutil.which("tmux", path=child.get("PATH")):
+    if use == "tmux" and not shutil.which(
+        "tmux", path=atlas_mux.clean_env().get("PATH")
+    ):
         return _fail("tmux not found on PATH (and herdr is not running)")
     session = atlas_mux._session(run)
     if use == "tmux":
@@ -142,6 +149,13 @@ def launch(
         if err:
             return _fail(err)
     window = _unique(_taken(use, run), _sanitize(name))
+    # Membership is granted here, on the lead side, before the worker exists.
+    chan = atlas_mux.atlas_todo.register_member(root, window, chan, lead or None)
+    env["ATLAS_CHANNEL"] = chan
+    env["ATLAS_LEAD_NAME"] = lead or str(
+        (atlas_mux.atlas_todo.get_channel(root, chan) or {}).get("lead") or "lead"
+    )
+    child = _child_env(env)
     prompt_file = _write_prompt(root, window, prompt)
     started = time.time()
     pane_id = None
@@ -174,6 +188,9 @@ def launch(
             if not made["ok"]:
                 return _fail(made["reason"], prompt_file=prompt_file)
             pane_id = made["pane_id"]
+            atlas_mux.atlas_todo.set_member_handles(
+                root, window, chan or None, pane_id=pane_id
+            )
         else:
             res = atlas_mux._tmux(
                 "new-window", "-d", "-t", f"{session}:", "-n", window, "-c", cwd, pane

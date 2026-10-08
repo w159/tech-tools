@@ -65,12 +65,17 @@ class TestAtlasDashboard(unittest.TestCase):
     def test_v2_modules_mounted(self):
         self.assertTrue(self.mod.V2_ROUTES)
         routes = [(m, rx) for m, rx, _f in self.mod.V2_ROUTES]
-        for path in ("/api/v2/irc", "/api/v2/todos", "/api/v2/herd/agents"):
+        for path in (
+            "/api/v2/irc",
+            "/api/v2/todos",
+            "/api/v2/herd/agents",
+            "/api/v2/colony",
+        ):
             self.assertTrue(
                 any(m == "GET" and rx.fullmatch(path) for m, rx in routes), path
             )
-        for gone in ("/api/v2/colony", "/api/v2/colony/send"):
-            self.assertFalse(any(rx.fullmatch(gone) for _m, rx in routes), gone)
+        # the old nameless send route stays gone; send is /colony/<name>/send
+        self.assertFalse(any(rx.fullmatch("/api/v2/colony/send") for _m, rx in routes))
         for name in ("atlas_dash_work", "atlas_dash_irc", "atlas_dash_herd"):
             self.assertNotIn(name, self.mod.V2_MOUNT_ERRORS)
 
@@ -656,6 +661,15 @@ class SecurityGuardTest(unittest.TestCase):
         self.addCleanup(self.httpd.server_close)
         self.addCleanup(self.httpd.shutdown)
         self.port = self.httpd.server_address[1]
+        self.settings = Path(self.static.name) / "claude-settings.json"
+        envp = mock.patch.dict(
+            os.environ, {"ATLAS_CLAUDE_SETTINGS": str(self.settings)}
+        )
+        envp.start()
+        self.addCleanup(envp.stop)
+        ctl = self.mod.atlas_control
+        self.addCleanup(setattr, ctl, "SETTINGS_PATH", ctl.SETTINGS_PATH)
+        ctl.SETTINGS_PATH = self.settings
 
     def _req(self, method, path, body=None, headers=None, host=None):
         import http.client
@@ -749,8 +763,12 @@ class SecurityGuardTest(unittest.TestCase):
         for path in (
             "/api/v2/irc",
             "/api/v2/stream",
+            "/api/v2/colony",
         ):
             self.assertEqual(self._req("GET", path)[0], 401, path)
+        # with the token the route is mounted (served through atlas_dash_herd), not a 404
+        tok = {"X-Atlas-Token": self.mod.DASH_TOKEN}
+        self.assertNotIn(self._req("GET", "/api/v2/colony", None, tok)[0], (401, 404))
         self.assertEqual(self._req("GET", "/api/health")[0], 200)
 
     def test_query_token_only_honoured_on_stream(self):
@@ -781,6 +799,20 @@ class SecurityGuardTest(unittest.TestCase):
             resp.read()
             conn.close()
             self.assertEqual(resp.status, 400, payload)
+
+    def test_behavior_post_writes_only_the_override_file(self):
+        real = Path.home() / ".claude" / "settings.json"
+        before = real.stat().st_mtime_ns if real.exists() else None
+        status, _ = self._req(
+            "POST",
+            "/api/behavior",
+            {"updates": {"ATLAS_WORKER_MAX_TOKENS": "1234"}},
+            self._tok(),
+        )
+        self.assertEqual(status, 200)
+        data = json.loads(self.settings.read_text())
+        self.assertEqual(data["env"]["ATLAS_WORKER_MAX_TOKENS"], "1234")
+        self.assertEqual(real.stat().st_mtime_ns if real.exists() else None, before)
 
 
 class SettingsDataTest(unittest.TestCase):

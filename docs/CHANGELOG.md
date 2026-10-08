@@ -1,5 +1,11 @@
 # Changelog
 
+## [10.4.0] - 2026-10-08 -- atlas 10.4.0: channel delivery, mux reports, Colony roster and Channels pages repaired
+
+Marketplace `4.6.0`; atlas `10.4.0`.
+
+The colony channel now delivers each note once and only inside its channel: membership is granted lead-side only and a non-member's note never reaches a lead. A mux worker posts one `kind=report` note and its full output goes to `.atlas/.run/logs/<worker>.log`. `#/colony` is an Atlas-scoped roster (`GET /api/v2/colony`, `POST /api/v2/colony/<name>/send|kill`), `#/channels` is its own page, and the herdr iframe moved to `#/terminal`. Completion gate (p) counts only registered members' notes on the run's lead channel. Health, improve and doctor fixes and test isolation are listed in `plugins/atlas/CHANGELOG.md`. Known limitations (self-asserted note owner, unregistered workers post to main) are tracked under Residuals in `docs/ROADMAP.md`. Sessions on an older installed cache keep the old behavior until atlas is updated or reinstalled from the marketplace; docs: `docs/atlas-channels.md`, `docs/atlas-colony.md`.
+
 ## 2026-10-07 -- atlas: colony rebuilt on herdr with the Atlas dashboard as the shell, BREAKING Colony routes
 
 Release notes for the plugin live in `plugins/atlas/CHANGELOG.md`; the architecture, install/pin/update procedure, security model and troubleshooting are in `docs/atlas-colony.md`.

@@ -524,7 +524,7 @@ function selffixCard() {
     title: 'Self-fix (git worktrees, merge is local only)',
     actions: [controls],
     children: [
-      h('p', { class: 'pg-hint' }, sf.error ? `Unavailable: ${sf.error}` : `${lastTick}. Fixes run as detached tmux sessions; nothing is pushed.`),
+      h('p', { class: 'pg-hint' }, sf.error ? `Unavailable: ${sf.error}` : `${lastTick}. Each fix runs in a herdr pane on its own git worktree; nothing is pushed.`),
       empty ? h('p', { class: 'pg-hint' }, 'No fixes in flight. Findings that point at source files in a git repo are picked up on the next pass.') : null,
       running.length ? h('div', {}, h('h3', { class: 'pg-sub' }, `Running (${running.length})`),
         h('ul', { class: 'pg-selffix-list' }, ...running.map((it) => fixRow(it,

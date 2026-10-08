@@ -46,33 +46,76 @@ export function reviseForChannel(
 	const revised = structuredClone(input);
 	const items = taskItems(revised).filter(i => typeof i.task === "string");
 	if (!items.length) return undefined;
-	const names = items.map(item => {
-		const agent = typeof item.agent === "string" && item.agent.trim() ? item.agent.trim() : "task";
-		if (typeof item.name !== "string" || !item.name.trim()) item.name = `${sanitizeName(agent)}-${Math.random().toString(16).slice(2, 6)}`;
-		return sanitizeName(item.name as string);
-	});
-	const lead = leadName(opts.sessionId, env);
-	const out = (opts.run ?? defaultRun)(
-		["python3", TODO_SCRIPT, "channel-open", "--root", opts.cwd, "--lead", lead, "--members", names.join(",")],
-		opts.cwd,
-	);
+	return openAndInject(revised, items, opts, env);
+}
+
+type Item = Record<string, unknown>;
+
+const agentOf = (item: Item): string => (typeof item.agent === "string" ? item.agent.trim() : "");
+
+/** The item's member name; an unnamed item gets `<agent>-<hex>` written back so the member name and agent id agree. */
+function memberName(item: Item): string {
+	if (typeof item.name !== "string" || !item.name.trim()) {
+		item.name = `${sanitizeName(agentOf(item) || "task")}-${Math.random().toString(16).slice(2, 6)}`;
+	}
+	return sanitizeName(item.name as string);
+}
+
+/** channel-open output -> briefs + channel name; undefined (and a recorded fault) when it is empty or not JSON. */
+function parseOpen(out: string | undefined, cwd: string): { briefs: Record<string, string>; channel: string } | undefined {
 	if (!out) {
-		recordFault("channels", "channel-open produced no output (non-zero exit or timeout)", "ChannelOpen", opts.cwd);
+		recordFault("channels", "channel-open produced no output (non-zero exit or timeout)", "ChannelOpen", cwd);
 		return undefined;
 	}
-	let briefs: Record<string, string> = {};
 	try {
-		briefs = JSON.parse(out).briefs ?? {};
+		const doc = JSON.parse(out);
+		return { briefs: doc.briefs ?? {}, channel: String(doc.channel?.name ?? "") };
 	} catch (error) {
-		recordFault("channels", String(error), "ChannelOpen", opts.cwd);
+		recordFault("channels", String(error), "ChannelOpen", cwd);
 		return undefined;
 	}
+}
+
+const memberTitle = (task: string): string =>
+	task.match(/^\s*GOAL:\s*(.+)$/m)?.[1]?.trim() || task.replace(/\s+/g, " ").trim().slice(0, 80);
+
+/** contract C4: one owned todo per named-agent member, titled by the GOAL line. */
+function addMemberTodo(run: ChannelRunner, cwd: string, channel: string, item: Item, name: string): void {
+	const agent = agentOf(item);
+	if (!channel || !agent || agent === "task") return;
+	run(["python3", TODO_SCRIPT, "add", memberTitle(item.task as string), "--root", cwd, "--owner", name, "--channel", channel], cwd);
+}
+
+function injectBriefs(
+	run: ChannelRunner,
+	cwd: string,
+	items: Item[],
+	names: string[],
+	parsed: { briefs: Record<string, string>; channel: string },
+): boolean {
 	let changed = false;
 	items.forEach((item, i) => {
-		const brief = briefs[names[i]];
+		const brief = parsed.briefs[names[i]];
 		if (!brief || (item.task as string).includes("CHANNEL:")) return;
+		addMemberTodo(run, cwd, parsed.channel, item, names[i]);
 		item.task = `${item.task as string}\n\n${brief}`;
 		changed = true;
 	});
-	return changed ? revised : undefined;
+	return changed;
+}
+
+function openAndInject(
+	revised: Item,
+	items: Item[],
+	opts: { cwd: string; sessionId?: string; run?: ChannelRunner },
+	env: Record<string, string | undefined>,
+): Item | undefined {
+	const run = opts.run ?? defaultRun;
+	const names = items.map(memberName);
+	const out = run(
+		["python3", TODO_SCRIPT, "channel-open", "--root", opts.cwd, "--lead", leadName(opts.sessionId, env), "--members", names.join(",")],
+		opts.cwd,
+	);
+	const parsed = parseOpen(out, opts.cwd);
+	return parsed && injectBriefs(run, opts.cwd, items, names, parsed) ? revised : undefined;
 }

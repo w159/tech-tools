@@ -79,7 +79,7 @@ The `completion_gate.py` Stop hook (full list in `references/hooks-automation.md
 
 - **(n) Status header.** The final reply starts, on its first non-empty line, with the header matching `headerFirstLinePattern` in `contracts/operating-contract.json` (`ATLAS | <glyph> <phase> | <state>`). Kill switch `ATLAS_GATE_HEADER=off`.
 - **(o) Phased todo.** When this run shipped non-docs code, the session's todo/board items cover every phase in `requiredTodoPhasesWhenCodeShipped` (`implement`, `verify`); an item's phase is its `phase` field or a `[<phase>] ` content prefix. Kill switch `ATLAS_GATE_PHASES=off`.
-- **(p) Colony channel.** When this run dispatched two or more atlas workers, the channel shows use: a board note by an owner other than `lead`, or IRC/SendMessage traffic. Kill switch `ATLAS_GATE_COLONY=off`.
+- **(p) Colony channel.** When this run dispatched two or more atlas workers, the channel shows use: a board note on this run's lead channel, at or after the run start, owned by a registered or departed member that is not a lead, or IRC/SendMessage traffic. A lead's own note, another lead's channel and a non-member's note do not count. Kill switch `ATLAS_GATE_COLONY=off`.
 
 Related switches: `ATLAS_GATE=off` disables the whole gate; `ATLAS_GATE_REPORT=off` disables the `worker_report_gate.py` SubagentStop check that every `atlas:*` worker's final message is the `REPORT:` container.
 

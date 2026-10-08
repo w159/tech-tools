@@ -391,6 +391,8 @@ def add(
     status: str = "pending",
     unique: bool = False,
     phase: Optional[str] = None,
+    owner: Optional[str] = None,
+    channel: Optional[str] = None,
 ) -> dict:
     content = (content or "").strip()
     if not content:
@@ -418,7 +420,7 @@ def add(
             "id": _new_id(),
             "content": content,
             "status": _norm_status(status),
-            "owner": None,
+            "owner": (str(owner).strip() or None) if owner else None,
             "claimed_at": None,
             "origin": origin,
             "session_id": session_id,
@@ -431,6 +433,8 @@ def add(
         norm = _norm_phase(phase)
         if norm:
             item["phase"] = norm
+        if channel:
+            item["channel"] = str(channel).strip()
         board["items"].append(item)
         save(root, board)
         return {"ok": True, "item": item, "counts": counts(board, session_id)}
@@ -750,6 +754,7 @@ def note(
     item: Optional[str] = None,
     delivery: Optional[str] = None,
     channel: Optional[str] = None,
+    kind: str = "note",
 ) -> dict:
     """Append one note to `<root>/.atlas/.run/board/<owner>.jsonl`.
 
@@ -760,8 +765,13 @@ def note(
     records the dashboard's own send outcome on the line; it is omitted when unset.
     Returns the record as written."""
     name = _sanitize_owner(owner)
-    if not (channel or "").strip():
-        _register_worker(root, name)
+    chan = (channel or "").strip()
+    # A launched worker (env ATLAS_WORKER_NAME == owner) is a member only if its lead
+    # registered it; a channel it merely inherited from a lead's env is dropped.
+    worker_env = (os.environ.get("ATLAS_WORKER_NAME") or "").strip()
+    if chan and worker_env and name == _sanitize_owner(worker_env):
+        if not may_post(root, chan, name):
+            chan = ""
     target = notes_dir(root)
     target.mkdir(parents=True, exist_ok=True)
     record = {
@@ -771,8 +781,10 @@ def note(
         "to": to,
         "item": item,
         "text": str(text or ""),
-        "channel": (channel or "").strip() or default_channel(root, name),
+        "channel": chan or default_channel(root, name),
     }
+    if kind and kind != "note":
+        record["kind"] = kind
     if delivery:
         record["delivery"] = delivery
     with _file_lock(target / ".seq"):
@@ -935,14 +947,23 @@ def _reg_update(root: Optional[str], fn, timeout: Optional[float] = None) -> Any
         return out
 
 
-def _add_member(chan: dict, name: str, role: str, parent: Optional[str]) -> None:
+def _add_member(
+    chan: dict, name: str, role: str, parent: Optional[str], revive: bool = False
+) -> None:
     for m in chan["members"]:
         if m["name"] == name:
             if role == "lead":
                 m["role"] = "lead"
             if parent and not m.get("parent"):
                 m["parent"] = parent
+            if revive:  # a respawn under the same name is a new live run
+                for k in ("exit_code", "ended_at", "pid", "pane_id"):
+                    m.pop(k, None)
+                m["joined"] = time.time()
+                chan.get("departed", {}).pop(name, None)
             return
+    if revive:
+        chan.get("departed", {}).pop(name, None)
     chan["members"].append(
         {"name": name, "role": role, "parent": parent, "joined": time.time()}
     )
@@ -988,6 +1009,7 @@ def open_lead_channel(
     lead_name: str,
     subagents: Any = (),
     timeout: Optional[float] = None,
+    revive: bool = False,
 ) -> dict:
     """Open (idempotent) `<main>/<lead>`; the lead joins it and main, each subagent
     joins it with parent=lead. Returns the subchannel record. `timeout` bounds the
@@ -1004,7 +1026,7 @@ def open_lead_channel(
         for s in subagents or ():
             s = _sanitize_owner(s)
             if s != lead:
-                _add_member(sub, s, "subagent", lead)
+                _add_member(sub, s, "subagent", lead, revive)
         sub["last_activity"] = time.time()
         return dict(sub)
 
@@ -1017,29 +1039,94 @@ def join(
     name: str,
     role: str = "subagent",
     parent: Optional[str] = None,
+    timeout: Optional[float] = None,
+    revive: bool = False,
 ) -> dict:
     """Add `name` to an existing channel (idempotent). KeyError if it does not exist."""
 
     def fn(reg: dict) -> dict:
         chan = reg["channels"][channel]
-        _add_member(chan, _sanitize_owner(name), role, parent or chan.get("lead"))
+        _add_member(
+            chan, _sanitize_owner(name), role, parent or chan.get("lead"), revive
+        )
         return dict(chan)
 
-    return _reg_update(root, fn)
+    return _reg_update(root, fn, timeout)
 
 
 def leave(root: Optional[str], channel: str, name: str) -> Optional[dict]:
-    """Remove `name` from a channel; None when the channel does not exist."""
+    """Remove `name` from a channel, except a member already marked finished (it stays so the
+    Colony can list it); None when the channel does not exist. A removed member is kept in
+    chan["departed"] so a later mark_finished() can still restore it as finished."""
 
     def fn(reg: dict) -> Optional[dict]:
         chan = reg["channels"].get(channel)
         if chan is None:
             return None
         n = _sanitize_owner(name)
-        chan["members"] = [m for m in chan["members"] if m["name"] != n]
+        gone = [m for m in chan["members"] if m["name"] == n and "exit_code" not in m]
+        if gone:
+            chan.setdefault("departed", {})[n] = gone[0]
+        chan["members"] = [
+            m for m in chan["members"] if m["name"] != n or "exit_code" in m
+        ]
         return dict(chan)
 
-    return _reg_update(root, fn)
+    return _reg_update(root, fn, CHANNEL_LOCK_TIMEOUT_S)
+
+
+def mark_finished(root: Optional[str], name: str, exit_code: int) -> int:
+    """Record {exit_code, ended_at} on every channel-member entry of `name`, restoring
+    entries leave() already removed (call order vs leave() does not matter); returns how
+    many entries were marked."""
+    n = _sanitize_owner(name)
+    now = time.time()
+
+    def fn(reg: dict) -> int:
+        hit = 0
+        for chan in reg["channels"].values():
+            gone = chan.get("departed", {}).pop(n, None)
+            if gone is not None and not any(m["name"] == n for m in chan["members"]):
+                chan["members"].append(gone)
+            for m in chan["members"]:
+                if m["name"] == n:
+                    m["exit_code"], m["ended_at"] = int(exit_code), now
+                    hit += 1
+        return hit
+
+    return _reg_update(root, fn, CHANNEL_LOCK_TIMEOUT_S)
+
+
+def set_member_handles(
+    root: Optional[str],
+    name: str,
+    channel: Optional[str] = None,
+    pid: Optional[int] = None,
+    pane_id: Optional[str] = None,
+) -> int:
+    """Record the member's own process/pane handles on its registry entry (every channel
+    entry of `name`, or only `channel`); returns entries updated. Colony Kill/Send use
+    only these handles."""
+    n = _sanitize_owner(name)
+
+    def fn(reg: dict) -> int:
+        hit = 0
+        for cname, chan in reg["channels"].items():
+            if channel and cname != channel:
+                continue
+            for m in chan["members"]:
+                if m["name"] == n:
+                    if pid is not None:
+                        m["pid"] = int(pid)
+                    if pane_id is not None:
+                        m["pane_id"] = str(pane_id)
+                    hit += 1
+        return hit
+
+    try:  # never break a worker run over a missing handle
+        return _reg_update(root, fn, CHANNEL_LOCK_TIMEOUT_S)
+    except Exception:
+        return 0
 
 
 def _with_activity(root: Optional[str], chans: List[dict]) -> List[dict]:
@@ -1086,14 +1173,48 @@ def channels_of(root: Optional[str], name: str) -> List[str]:
     ]
 
 
+SYSTEM_OWNERS = (
+    "human",
+    "board",
+)  # dashboard sender / board housekeeping: never members
+
+
+def is_lead_name(name: Any) -> bool:
+    """A lead's identity: the bare alias `lead` or `lead-<session>`."""
+    n = _sanitize_owner(name)
+    return n == "lead" or n.startswith("lead-")
+
+
+def may_post(
+    root: Optional[str], channel: str, name: Any, reg: Optional[dict] = None
+) -> bool:
+    """May `name` speak in `channel`? Membership is granted by the lead side only
+    (open_lead_channel / join / register_member), never by a poster's own env.
+    A lead subchannel admits its members, departed members (a finished worker keeps
+    its report), its lead, the `lead` alias and the dashboard's `human`/`board`.
+    Main and unregistered channels have no inbox to protect and admit anyone."""
+    chan = (reg or _reg_read(root))["channels"].get(channel)
+    if chan is None or chan.get("kind") != "lead":
+        return True
+    n = _sanitize_owner(name)
+    return (
+        n in SYSTEM_OWNERS
+        or n == "lead"
+        or n == chan.get("lead")
+        or n in chan.get("departed", {})
+        or any(m["name"] == n for m in chan["members"])
+    )
+
+
 def default_channel(root: Optional[str], owner: Any = None) -> str:
-    """Channel a note lands in when none is given: ATLAS_CHANNEL, else the newest
-    lead subchannel `owner` belongs to (how an omp subagent, which has no env of
-    its own, posts into its lead's subchannel), else the project's main channel."""
-    env = (os.environ.get("ATLAS_CHANNEL") or "").strip()
-    if env:
-        return env
+    """Channel a note lands in when none is given: ATLAS_CHANNEL when `owner` may
+    speak there (an inherited env alone grants nothing), else the newest lead
+    subchannel `owner` belongs to (how an omp subagent, which has no env of its
+    own, posts into its lead's subchannel), else the project's main channel."""
     n = _sanitize_owner(owner)
+    env = (os.environ.get("ATLAS_CHANNEL") or "").strip()
+    if env and may_post(root, env, n):
+        return env
     mine = [
         c
         for c in _reg_read(root)["channels"].values()
@@ -1115,34 +1236,54 @@ def default_channel(root: Optional[str], owner: Any = None) -> str:
     return main
 
 
-def _register_worker(root: Optional[str], name: str) -> None:
-    """A mux/launch worker (env ATLAS_WORKER_NAME == its note owner) that no lead
-    registered joins the newest lead subchannel of this project@branch (parent=that
-    lead), or `<main>/lead` when none is open, so its board notes group under the
-    lead instead of the bare main channel. Idempotent; fail-open (fault recorded)."""
-    if os.environ.get("ATLAS_CHANNELS") == "off" or name != _sanitize_owner(
-        os.environ.get("ATLAS_WORKER_NAME")
-    ):
-        return
+def env_channel(root: Optional[str]) -> tuple:
+    """(channel, lead) a launcher inherits from its own env. A worker (ATLAS_WORKER_NAME
+    set) that is not that channel's lead has no say over it: its children get no inherited
+    channel and it is their lead, so they never enrol into the lead it merely inherited."""
+    chan = (os.environ.get("ATLAS_CHANNEL") or "").strip()
+    lead = (os.environ.get("ATLAS_LEAD_NAME") or "").strip()
+    me = (os.environ.get("ATLAS_WORKER_NAME") or "").strip()
+    if chan and me:
+        owner_lead = (_reg_read(root)["channels"].get(chan) or {}).get("lead")
+        if _sanitize_owner(me) != owner_lead:
+            return "", _sanitize_owner(me)
+    return chan, lead
+
+
+def register_member(
+    root: Optional[str],
+    name: str,
+    channel: Optional[str] = None,
+    lead: Optional[str] = None,
+) -> str:
+    """LEAD-SIDE registration of a launched worker (atlas_launch, atlas_mux spawn):
+    joins `channel` (default ATLAS_CHANNEL) when it is a registered lead subchannel,
+    else opens `<main>/<lead>` (lead default: ATLAS_LEAD_NAME, else `lead`; never the
+    newest lead of the project, that is how a stranger reached another lead's inbox).
+    Returns the channel the worker ended up
+    in. Idempotent; fail-open (fault recorded, `channel` returned as given)."""
+    env_chan, env_lead = env_channel(root)
+    chan_name = (channel or env_chan or "").strip()
+    worker = _sanitize_owner(name)
     try:
-        if any(
-            c.get("kind") == "lead" and any(m["name"] == name for m in c["members"])
-            for c in _reg_read(root)["channels"].values()
-        ):
-            return
-        main = main_channel(_resolve_base(root))
-        leads = [
-            c
-            for c in _reg_read(root)["channels"].values()
-            if c.get("kind") == "lead"
-            and c.get("parent") == main
-            and c.get("lead") != name
-        ]
-        lead = (
-            max(leads, key=lambda c: c.get("created") or 0)["lead"] if leads else "lead"
-        )
-        open_lead_channel(root, lead, [name], timeout=CHANNEL_LOCK_TIMEOUT_S)
-    except Exception as exc:  # never block a note
+        chans = _reg_read(root)["channels"]
+        chan = chans.get(chan_name)
+        if chan is not None and chan.get("kind") == "lead":
+            join(
+                root,
+                chan_name,
+                worker,
+                "subagent",
+                chan.get("lead"),
+                timeout=CHANNEL_LOCK_TIMEOUT_S,
+                revive=True,
+            )
+            return chan_name
+        lead_n = (lead or env_lead or "lead").strip()
+        return open_lead_channel(
+            root, lead_n, [worker], timeout=CHANNEL_LOCK_TIMEOUT_S, revive=True
+        )["name"]
+    except Exception as exc:  # never block a launch
         try:
             import atlas_faults
 
@@ -1154,6 +1295,7 @@ def _register_worker(root: Optional[str], name: str) -> None:
             atlas_faults.record(hook, exc, str(root or ""))
         except Exception:
             pass
+        return chan_name
 
 
 def _item_counts(items: List[dict]) -> dict:
@@ -1298,6 +1440,8 @@ def _cli(argv: Optional[List[str]] = None) -> int:
                 session_id=flags.get("session"),
                 unique=bool(flags.get("unique")),
                 phase=flags.get("phase"),
+                owner=flags.get("owner"),
+                channel=flags.get("channel"),
             )
         elif cmd == "scaffold":
             phases_raw = flags.get("phases")

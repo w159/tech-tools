@@ -80,6 +80,51 @@ class LaunchArgvTest(unittest.TestCase):
         for banned in ("attach", "select-window", "switch-client"):
             self.assertNotIn(banned, verbs)
 
+    def test_worker_env_carries_channel_and_its_registered_lead(self):
+        root = tempfile.mkdtemp()
+        atlas_todo.open_lead_channel(root, "lead-abc123", ["W"])
+        chan = atlas_todo.channels_of(root, "W")[0]
+        seen = {}
+
+        def spy(env):
+            seen.update(env)
+            raise SystemExit
+
+        with (
+            mock.patch.dict(os.environ, clear=False),
+            mock.patch.object(atlas_launch, "_child_env", spy),
+        ):
+            os.environ["ATLAS_CHANNEL"] = chan
+            os.environ.pop("ATLAS_LEAD_NAME", None)
+            with self.assertRaises(SystemExit):
+                atlas_launch.launch(root, "W2", "p")
+        self.assertEqual("lead-abc123", seen["ATLAS_LEAD_NAME"])
+        self.assertEqual(chan, seen["ATLAS_CHANNEL"])
+        self.assertIn(
+            chan, atlas_todo.channels_of(root, "W2")
+        )  # lead side registered it
+
+    def test_launch_without_a_channel_never_joins_the_newest_lead(self):
+        root = tempfile.mkdtemp()
+        newest = atlas_todo.open_lead_channel(root, "lead-abc123", ["W"])["name"]
+        seen = {}
+
+        def spy(env):
+            seen.update(env)
+            raise SystemExit
+
+        with (
+            mock.patch.dict(os.environ, clear=False),
+            mock.patch.object(atlas_launch, "_child_env", spy),
+        ):
+            os.environ.pop("ATLAS_CHANNEL", None)
+            os.environ.pop("ATLAS_LEAD_NAME", None)
+            with self.assertRaises(SystemExit):
+                atlas_launch.launch(root, "fix-1", "p")
+        self.assertNotEqual(newest, seen["ATLAS_CHANNEL"])
+        self.assertEqual("lead", seen["ATLAS_LEAD_NAME"])
+        self.assertNotIn(newest, atlas_todo.channels_of(root, "fix-1"))
+
     def test_names_are_unique_within_a_taken_set(self):
         self.assertEqual(atlas_launch._unique({"x", "x-2"}, "x"), "x-3")
         self.assertEqual(atlas_launch._unique(set(), "x"), "x")
@@ -90,6 +135,8 @@ class LaunchArgvTest(unittest.TestCase):
 
         def fake_run(argv, **kw):
             calls.append((argv, kw))
+            if argv[0] == "git":  # branch lookup for the channel name
+                return SimpleNamespace(returncode=1, stdout="", stderr="")
             return out
 
         with (
@@ -116,7 +163,7 @@ class LaunchArgvTest(unittest.TestCase):
                 cwd=self.root,
             )
         self.assertTrue(res["ok"], res)
-        argv, kw = calls[0]
+        argv, kw = next(c for c in calls if c[0][0] != "git")
         self.assertEqual(argv[2:4], ["spawn", "--run"])
         self.assertIn("--cwd", argv)
         self.assertEqual(kw["env"]["ATLAS_MUX"], "tmux")

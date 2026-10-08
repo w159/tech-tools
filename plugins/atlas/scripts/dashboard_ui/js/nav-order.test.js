@@ -11,9 +11,9 @@ const shape = (gs) => gs.map((g) => g.id + ":" + g.items.map((i) => i.lens || i.
 
 test("normalizeNav maps aliases, drops unknown, dedupes, appends missing", () => {
   expect(normalizeNav(undefined)).toEqual(DEFAULT_NAV);
-  expect(normalizeNav(["work", "irc", "bogus", "settings", "agents"]).slice(0, 2)).toEqual(["agents", "settings"]);
-  expect(normalizeNav(["console", "overview"]).slice(0, 2)).toEqual(["colony", "overview"]);
-  expect(normalizeNav(["herdr", "colony"]).filter((i) => i === "colony").length).toBe(1);
+  expect(normalizeNav(["work", "irc", "bogus", "settings", "agents"]).slice(0, 3)).toEqual(["agents", "channels", "settings"]);
+  expect(normalizeNav(["console", "overview"]).slice(0, 2)).toEqual(["overview", "activity"]); // console is the terminal route, not a nav entry
+  expect(normalizeNav(["colony", "colony"]).filter((i) => i === "colony").length).toBe(1);
   expect(normalizeNav(["x"]).length).toBe(DEFAULT_NAV.length);
 });
 

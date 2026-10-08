@@ -75,6 +75,24 @@ def _seed_dispatch(db_path, session_id="sess-orch"):
         )
 
 
+def _lead_channel(root, session_id="sess-orch", members=()):
+    """The run's lead subchannel (`<main>/lead-<first 6 of the session id>`) with
+    `members` registered lead-side, as a dispatch/launch does; returns its name."""
+    lead = "lead-" + atlas_todo._sanitize_owner(session_id)[:6]
+    return atlas_todo.open_lead_channel(root, lead, list(members))["name"]
+
+
+def _seed_report_notes(root, owners=("worker-a", "worker-b"), session_id="sess-orch"):
+    """Channel traffic for gate (p): one final-report note per registered worker of
+    the run's lead channel, written through atlas_todo.note exactly as atlas_mux
+    does (C2: kind='report')."""
+    chan = _lead_channel(root, session_id, owners)
+    for owner in owners:
+        atlas_todo.note(
+            root, owner, "STATUS: DONE\nexit 0", channel=chan, kind="report"
+        )
+
+
 class DocsDriftTest(unittest.TestCase):
     def test_non_docs_only_returns_true(self):
         """Non-docs changes with no docs changes -> drift detected."""
@@ -456,6 +474,7 @@ class GateOrchestrationTest(unittest.TestCase):
         """2 implementers + 2 verifiers -> unpaired count 0 -> no (g) block."""
         self._commit_and_make_mixed_diff()
         self._log_dispatches(implementers=2, verifiers=2)
+        _seed_report_notes(self.tmp)
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertEqual(r.returncode, 0)
         self.assertNotIn('"decision": "block"', r.stdout)
@@ -477,7 +496,7 @@ class GateOrchestrationTest(unittest.TestCase):
         self._log_dispatches(implementers=1, verifiers=0)
         # Two atlas workers (the fixture's explorer + this implementer): the (p)
         # colony channel needs one worker handoff note to count as used.
-        atlas_todo.note(self.tmp, "worker-a", "handoff", to="lead")
+        _seed_report_notes(self.tmp, ("worker-a",))
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertEqual(r.returncode, 0)
         self.assertNotIn('"decision": "block"', r.stdout)
@@ -2787,12 +2806,16 @@ class ContractVisibilityTest(unittest.TestCase):
 
     def _worker_note(self, owner="worker-a", to="lead", ts=None, text="handoff"):
         """One board note in atlas_todo.note's exact on-disk shape."""
+        chan = _lead_channel(
+            self.tmp, self.SID_A, [] if atlas_todo.is_lead_name(owner) else [owner]
+        )
         record = {
             "ts": time.time() if ts is None else ts,
             "owner": owner,
             "to": to,
             "item": None,
             "text": text,
+            "channel": chan,
         }
         notes_dir = os.path.join(self.tmp, ".atlas", ".run", "board")
         os.makedirs(notes_dir, exist_ok=True)
@@ -2995,6 +3018,27 @@ class ContractVisibilityTest(unittest.TestCase):
         self._two_workers()
         self._worker_note(owner="worker-a")
         self.assertEqual(self.say(), "")
+
+    def test_p_passes_with_worker_final_report_note(self):
+        """C2: a registered member's kind='report' note counts."""
+        self._two_workers()
+        _seed_report_notes(self.tmp, ("worker-a",), self.SID_A)
+        self.assertEqual(self.say(), "")
+
+    def test_p_lead_owned_report_and_stranger_reports_do_not_count(self):
+        self._two_workers()
+        chan = _lead_channel(self.tmp, self.SID_A, ["worker-a"])
+        other = _lead_channel(self.tmp, "other-session", ["worker-b"])
+        for owner, channel in (
+            ("lead-" + atlas_todo._sanitize_owner(self.SID_A)[:6], chan),
+            ("lead", chan),
+            ("stranger", chan),  # never registered in this run's channel
+            ("worker-b", other),  # a member, but of another lead's channel
+        ):
+            atlas_todo.note(
+                self.tmp, owner, "STATUS: DONE\nexit 0", channel=channel, kind="report"
+            )
+        self.assertIn("(p)", self.say())
 
     def test_p_passes_with_irc_traffic(self):
         self._two_workers()

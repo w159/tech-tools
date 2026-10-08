@@ -41,15 +41,15 @@ const RECENT_KEY = "atlas.recent";
 
 const GROUPS = [
   { id: "observe", label: "Observe", items: [{ page: "overview" }, { page: "activity" }, { page: "health" }] },
-  { id: "operate", label: "Operate", items: [{ page: "agents", label: "Agents" }, { page: "colony", label: "Colony", icon: "herd" }], tree: true },
+  { id: "operate", label: "Operate", items: [{ page: "agents", label: "Agents" }, { page: "colony", label: "Colony", icon: "herd" }, { page: "channels", label: "Channels", icon: "irc" }], tree: true },
   { id: "improve", label: "Improve", items: [{ page: "improve" }] },
   { id: "configure", label: "Configure", items: [{ page: "projects" }, { page: "settings" }] },
 ];
-const LABELS = { overview: "Overview", agents: "Agents", activity: "Activity", health: "Health", improve: "Improve", projects: "Projects", settings: "Settings", colony: "Colony" };
-const ICON_FOR = { overview: "overview", agents: "agents", activity: "activity", health: "heart-pulse", improve: "sparkles", projects: "folder", settings: "settings", colony: "herd" };
-const CHORDS = { o: "overview", a: "agents", l: "activity", h: "health", i: "improve", p: "projects", ",": "settings", d: "agents", s: "improve", w: "agents?lens=board", c: "colony", n: "agents?lens=channel", u: "agents?lens=supervision" };
+const LABELS = { overview: "Overview", agents: "Agents", activity: "Activity", health: "Health", improve: "Improve", projects: "Projects", settings: "Settings", colony: "Colony", channels: "Channels", terminal: "Terminal" };
+const ICON_FOR = { overview: "overview", agents: "agents", activity: "activity", health: "heart-pulse", improve: "sparkles", projects: "folder", settings: "settings", colony: "herd", channels: "irc", terminal: "herd" };
+const CHORDS = { o: "overview", a: "agents", l: "activity", h: "health", i: "improve", p: "projects", ",": "settings", d: "agents", s: "improve", w: "agents?lens=board", c: "colony", n: "channels", u: "agents?lens=supervision" };
 // Old ids keep working: redirect to the canonical page with a lens, keeping the query.
-const ALIASES = { herd: "colony", work: "agents?lens=board", irc: "agents?lens=channel", console: "colony", herdr: "colony" };
+const ALIASES = { herd: "terminal", work: "agents?lens=board", irc: "channels", channel: "channels", console: "terminal", herdr: "terminal" };
 
 const pages = new Map();
 for (const p of [overview]) pages.set(p.id, p);
@@ -58,7 +58,7 @@ export const legacyPages = { work };
 
 async function loadExternalPage(id) {
   try {
-    const mod = await import("./pages/" + (id === "colony" ? "herdr" : id) + ".js"); // Colony is the herdr frame page
+    const mod = await import("./pages/" + (id === "terminal" ? "herdr" : id) + ".js"); // Terminal is the herdr frame page
     if (mod && mod.default) pages.set(id, mod.default);
     return null;
   } catch (err) {
@@ -68,7 +68,7 @@ async function loadExternalPage(id) {
 
 const importErrors = new Map();
 async function loadExternalPages() {
-  const ids = ["agents", "activity", "health", "colony", "improve", "projects", "settings"];
+  const ids = ["agents", "activity", "health", "colony", "channels", "terminal", "improve", "projects", "settings"];
   const errs = await Promise.all(ids.map((id) => loadExternalPage(id)));
   ids.forEach((id, i) => errs[i] && importErrors.set(id, errs[i]));
 }
@@ -162,9 +162,10 @@ function makeCtx(params) {
 
 async function route() {
   let { id, anchor, params } = parseHash();
-  if (id === "agents" && (params.lens === "console" || params.lens === "colony")) { // the Colony lens became its own route
+  const lensRoute = id === "agents" && { console: "terminal", colony: "terminal", channel: "channels" }[params.lens];
+  if (lensRoute) { // old Agents lenses became their own routes
     const { lens: _l, view: _v, ...rest } = params;
-    history.replaceState(null, "", hashFor("colony", rest, anchor));
+    history.replaceState(null, "", hashFor(lensRoute, rest, anchor));
     ({ id, anchor, params } = parseHash());
   }
   if (ALIASES[id]) {
@@ -578,8 +579,8 @@ window.addEventListener("message", (e) => {
   const frame = document.querySelector("iframe.console-frame");
   if (e.origin !== location.origin && !(frame && e.source === frame.contentWindow)) return;
   const pane = typeof d.pane_id === "string" ? d.pane_id : typeof d.paneId === "string" ? d.paneId : "";
-  if (d.type === "select-pane" && pane) navigate("colony", { pane });
-  else if (d.type === "herdr:selected-pane" && pane && parseHash().id === "colony") import("./pages/herdr.js").then((m) => { m.noteFramePane(pane); setParams({ pane }); });
+  if (d.type === "select-pane" && pane) navigate("terminal", { pane });
+  else if (d.type === "herdr:selected-pane" && pane && parseHash().id === "terminal") import("./pages/herdr.js").then((m) => { m.noteFramePane(pane); setParams({ pane }); });
   else if (d.type === "herdr:attention") agentsStore.refresh(["herd"]);
 });
 
@@ -652,7 +653,7 @@ function paletteEntries() {
   go("overview", "Overview", "overview", "g o", "overview");
   go("agents", "Agents: Fleet", "agents?lens=fleet", "g a", "agents");
   go("board", "Agents: Board", "agents?lens=board", "g w", "work");
-  go("channel", "Agents: Channel", "agents?lens=channel", "g n", "irc");
+  go("channel", "Channels", "channels", "g n", "irc");
   go("supervision", "Go to Supervision", "agents?lens=supervision", "g u", "agents");
   go("colony", "Colony", "colony", "g c", "herd");
   go("activity", "Activity", "activity", "g l", "activity");
@@ -664,7 +665,7 @@ function paletteEntries() {
   const act = (id, label, run, keys, ic) => entries.push({ id: "act:" + id, group: "Actions", label, keys, icon: ic, run: () => { remember("act:" + id); run(); } });
   act("launch", "Launch agent", launchAgent, "", "plus");
   act("prompt", "Prompt agent", () => openAppPalette("@"), "", "send");
-  act("post", "Post to channel", () => navigate("agents?lens=channel"), "", "message");
+  act("post", "Post to channel", () => navigate("channels"), "", "message");
   act("todo", "Add todo", () => navigate("agents?lens=board"), "", "work");
   act("hp-thread", "New herdr project thread", () => openNewThread({}), "", "plus");
   act("terminal", "Start terminal service", async () => { try { await api.post("herd/ensure", {}); toast("Terminal service started", { kind: "ok" }); agentsStore.recheck(); } catch (e) { toastError(e, "Could not start the terminal service"); } }, "", "terminal");

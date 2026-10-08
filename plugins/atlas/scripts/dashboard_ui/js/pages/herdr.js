@@ -1,4 +1,4 @@
-// Colony (#/colony[?pane=<id>]): the full herdr web UI (?chrome=full) filling the canvas edge to edge, nothing around it.
+// Terminal (#/terminal[?pane=<id>]): the full herdr web UI (?chrome=full) filling the canvas edge to edge, nothing around it.
 // The host is a separate origin: states here come from the agents store layers, never from reading the frame.
 
 import { h, replace } from "../dom.js";
@@ -27,8 +27,8 @@ export function mountConsoleFrame(ctx, body) {
 
   function draw() {
     const st = agentsStore.getState();
-    if (!st.loaded) return replace(body, State({ variant: "loading", label: "colony", shape: "rows" }));
-    if (isFramed()) return recover(State({ variant: "empty", title: "Colony cannot open inside itself", body: "This dashboard is already shown inside the herdr app. Use the herdr app's own panes.", inline: true }));
+    if (!st.loaded) return replace(body, State({ variant: "loading", label: "terminal", shape: "rows" }));
+    if (isFramed()) return recover(State({ variant: "empty", title: "The terminal cannot open inside itself", body: "This dashboard is already shown inside the herdr app. Use the herdr app's own panes.", inline: true }));
     if (st.down === "herdr") return recover(DegradedState({ layer: "herdr", reason: st.layers.herdr.reason, onRecheck: () => agentsStore.recheck() }));
     if (st.layers.webui.state === "down" || !st.layers.webui.url) {
       return recover(DegradedState({
@@ -55,12 +55,12 @@ export function mountConsoleFrame(ctx, body) {
     built = shown;
     reported = "";
     clearTimeout(S.timer);
-    const veil = h("div", { class: "console-veil" }, State({ variant: "loading", label: "colony", shape: "rows" }));
-    frame = h("iframe", { class: "console-frame", src: next, title: "Colony", sandbox: "allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads", allow: "clipboard-read; clipboard-write; microphone; fullscreen", referrerpolicy: "no-referrer" });
+    const veil = h("div", { class: "console-veil" }, State({ variant: "loading", label: "terminal", shape: "rows" }));
+    frame = h("iframe", { class: "console-frame", src: next, title: "Terminal", sandbox: "allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads", allow: "clipboard-read; clipboard-write; microphone; fullscreen", referrerpolicy: "no-referrer" });
     frame.addEventListener("load", () => { clearTimeout(S.timer); veil.remove(); });
     S.timer = setTimeout(() => {
       if (!veil.isConnected) return;
-      replace(veil, State({ variant: "error", title: "Colony is slow to load", error: { why: "The terminal service answered the health check but the page has not finished loading.", do: "Wait a moment, then recheck." }, onRetry: () => { url = ""; draw(); } }));
+      replace(veil, State({ variant: "error", title: "The terminal is slow to load", error: { why: "The terminal service answered the health check but the page has not finished loading.", do: "Wait a moment, then recheck." }, onRetry: () => { url = ""; draw(); } }));
     }, SLOW_MS);
     replace(body, frame, veil);
   }
@@ -68,8 +68,8 @@ export function mountConsoleFrame(ctx, body) {
 }
 
 export default {
-  id: "colony",
-  title: "Colony",
+  id: "terminal",
+  title: "Terminal",
   icon: "herd",
   group: "Operate",
   async load() {
@@ -77,7 +77,7 @@ export default {
     return null;
   },
   render(ctx) {
-    const mount = h("div", { class: "page colony-page" });
+    const mount = h("div", { class: "page terminal-page" });
     const draw = mountConsoleFrame(ctx, mount);
     let last = -1;
     S.unsub = agentsStore.subscribe((st) => {

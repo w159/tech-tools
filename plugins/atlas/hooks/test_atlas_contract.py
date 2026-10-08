@@ -1511,10 +1511,10 @@ class TodoBoardContract(unittest.TestCase):
         ui_dir = SCRIPTS_DIR / "dashboard_ui"
         self.assertTrue((ui_dir / "index.html").is_file())
         self.assertTrue((ui_dir / "js" / "pages" / "work.js").is_file())
-        self.assertFalse((SCRIPTS_DIR / "atlas_dash_colony.py").exists())
         for module, routes in (
             ("atlas_dash_work.py", ("/api/v2/todos",)),
             ("atlas_dash_irc.py", ("/api/v2/irc",)),
+            ("atlas_dash_colony.py", ("/api/v2/colony",)),
             ("atlas_dash_herd.py", ("/api/v2/herd/agents",)),
         ):
             src = (SCRIPTS_DIR / module).read_text(encoding="utf-8")

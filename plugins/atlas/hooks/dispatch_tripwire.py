@@ -1313,6 +1313,20 @@ def _channel_dispatch(payload):
     chan = atlas_todo.open_lead_channel(
         root, lead, [name], timeout=atlas_todo.CHANNEL_LOCK_TIMEOUT_S
     )
+    if str(tinput.get("subagent_type") or "").startswith("atlas:"):
+        goal = re.search(r"^\s*GOAL:\s*(.+)$", prompt, re.M)
+        title = goal.group(1).strip() if goal else " ".join(prompt.split())[:80]
+        try:  # contract C4: one owned todo per atlas member; never blocks the dispatch
+            atlas_todo.add(
+                root,
+                title,
+                session_id=payload.get("session_id"),
+                origin="dispatch",
+                owner=name,
+                channel=chan["name"],
+            )
+        except Exception:
+            pass
     brief = atlas_todo.channel_brief(root, chan["name"], lead, name)
     return {**tinput, "prompt": f"{prompt}\n\n{brief}"}
 

@@ -22,14 +22,14 @@ role's definition is missing or yields no model, unless the caller passes an exp
 
 Workers share the lead's board: ATLAS_PROJECT_ROOT=<root> and
 ATLAS_WORKER_NAME=<name> are pinned in the worker env. atlas_todo.note is the single
-writer of <root>/.atlas/.run/board/<name>.jsonl: run-worker posts, all to "lead",
-the exact harness argv (shlex-quoted, so the tier is auditable) first, then every
-output line (stderr merged into stdout), then `exit <code>` (+ ` [failed: reason]`).
+writer of <root>/.atlas/.run/board/<name>.jsonl: run-worker posts exactly ONE note per run,
+addressed to ATLAS_LEAD_NAME in ATLAS_CHANNEL (kind=report): the STATUS..NEXT report block
+(else the last 20 non-noise lines) then `exit <code>` (+ ` [failed: reason]`). Full stdout+stderr
+goes to <root>/.atlas/.run/logs/<name>.log and the pane; the worker then leaves the channel and
+is marked finished in the registry.
 `omp -p` exits 0 on `Model "..." not found` and on HTTP 402, so output matching
 not-found / 402 / credit / auth patterns is classified failed and recorded as exit 1
-(`Warning: MCP server ... its tools are unavailable` lines are posted but not scanned).
-`atlas_todo.py notes --to lead` reads them alongside the workers' own
-`atlas_todo.py note --owner <name>` messages.
+(NOISE_RE lines, e.g. `Warning: MCP server ... its tools are unavailable`, are not scanned).
 
 Not Claude Code agent teams: teammates inherit the lead's effort, which would
 erase the per-role tiers. The default in-process colony is unchanged.
@@ -49,6 +49,7 @@ import re
 import shlex
 import signal
 import subprocess
+import time
 import sys
 import tempfile
 from pathlib import Path
@@ -88,10 +89,15 @@ FORWARDED_ENV = (
     "PI_CODING_AGENT_DIR",
     "PI_PROFILE",
     "OMP_PROFILE",
+    "ATLAS_LEAD_NAME",
+    "ATLAS_CHANNEL",
 )
 # omp prints one of these per unreachable MCP server; the run itself is fine.
-NOISE_RE = re.compile(r"^Warning: MCP server .* its tools are unavailable")
-EXIT_NOTE_RE = re.compile(r"^exit (-?\d+)")
+NOISE_RE = re.compile(
+    r"^(Warning: MCP server .* its tools are unavailable|Extension error\b)"
+)
+# the exit line is the LAST line of the report note (a bare `exit N` note is the one-line case)
+EXIT_NOTE_RE = re.compile(r"^exit (-?\d+)[^\n]*\Z", re.M)
 # omp -p exits 0 on these, so run-worker classifies by output. First match wins.
 FAIL_SIGNS = (
     (re.compile(r"\bmodel\b[^\n]{0,60}\bnot found\b", re.I), "model not found"),
@@ -407,6 +413,9 @@ def cmd_spawn(args) -> int:
     root = os.path.abspath(
         args.root or os.environ.get("ATLAS_PROJECT_ROOT") or os.getcwd()
     )
+    # Lead side: this process runs in the lead's env, so the worker joins the lead's channel
+    # here; a worker never registers itself (an inherited env grants no membership).
+    chan = atlas_todo.register_member(root, args.name)
     session = _session(args.run)
     model, level, _, tier_error = _tier(
         args.harness,
@@ -416,6 +425,7 @@ def cmd_spawn(args) -> int:
         args.effort or args.thinking,
     )
     if tier_error:
+        atlas_todo.leave(root, chan, args.name)
         return _emit({"ok": False, "error": tier_error}, 2)
     # Session creation, the name check and new-window run under one lock (_open_window):
     # parallel spawns of one run raced check-then-create and 7 of 8 failed.
@@ -478,9 +488,14 @@ def cmd_spawn(args) -> int:
             env=pins,
         )
         failure = None if made["ok"] else made["reason"]
+        if made["ok"]:
+            atlas_todo.set_member_handles(
+                root, args.name, chan or None, pane_id=made["pane_id"]
+            )
     else:
         failure = _open_window(session, args.name, pane)
     if failure:
+        atlas_todo.leave(root, chan, args.name)
         return _emit({"ok": False, "error": failure}, 1)
     return _emit(
         {
@@ -533,11 +548,38 @@ def cmd_run_worker(args) -> int:
             args.omp_extension,
         )
     env = dict(clean_env(), ATLAS_PROJECT_ROOT=root, ATLAS_WORKER_NAME=args.name)
+    channel = (os.environ.get("ATLAS_CHANNEL") or "").strip()
+    lead = (os.environ.get("ATLAS_LEAD_NAME") or "").strip()
+    if not channel:
+        mine = atlas_todo.channels_of(root, args.name)
+        channel = mine[-1] if mine else ""
+    if not lead and channel:
+        lead = str((atlas_todo.get_channel(root, channel) or {}).get("lead") or "")
+    lead = lead or "lead"
+    log_path = Path(root) / ".atlas" / ".run" / "logs" / f"{args.name}.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log = log_path.open("w", encoding="utf-8")
 
-    def post(text: str) -> None:
-        atlas_todo.note(root, args.name, text, to="lead")
+    def finish(code: int, tail: str, reason: str | None = None) -> int:
+        """The ONE board note of this run: the report block + exit line (contract C2)."""
+        exit_line = f"exit {code}" + (f" [failed: {reason}]" if reason else "")
+        rec = atlas_todo.note(
+            root,
+            args.name,
+            f"{tail}\n{exit_line}" if tail else exit_line,
+            to=lead,
+            channel=channel or None,
+            kind="report",
+        )
+        home = rec.get("channel") or channel
+        if home:
+            atlas_todo.mark_finished(root, args.name, code)
+            atlas_todo.leave(root, home, args.name)
+        log.close()
+        return code
 
-    post(shlex.join(argv))
+    log.write(f"$ {shlex.join(argv)}\n")
+    log.flush()
     try:
         proc = subprocess.Popen(
             argv,
@@ -549,9 +591,9 @@ def cmd_run_worker(args) -> int:
             bufsize=1,
         )
     except OSError as exc:
-        post(f"spawn failed: {exc}")
-        post("exit 127 [failed: spawn error]")
-        return 127
+        log.write(f"spawn failed: {exc}\n")
+        return finish(127, f"spawn failed: {exc}", "spawn error")
+    atlas_todo.set_member_handles(root, args.name, channel or None, pid=proc.pid)
     assert proc.stdout is not None
 
     def _killed(signum, _frame):
@@ -561,15 +603,23 @@ def cmd_run_worker(args) -> int:
     # worker dies silently and its board never shows an exit.
     for sig in (signal.SIGTERM, signal.SIGHUP):
         signal.signal(sig, _killed)
-    seen = []
+    lines: list[str] = []
     try:
         for raw in proc.stdout:
             text = raw.rstrip("\n")
             print(text, flush=True)
+            log.write(raw if raw.endswith("\n") else raw + "\n")
+            log.flush()
             if text.strip():
-                if not NOISE_RE.match(text):
-                    seen.append(text)
-                post(text)
+                lines.append(text)
+        # classify the harness output only: the STATUS..NEXT report is the worker's own prose
+        # (it may cite `foo.py:402`) and must not trip the 402/401 signs
+        head = lines[
+            : next(
+                (i for i, t in enumerate(lines) if t.startswith("STATUS:")), len(lines)
+            )
+        ]
+        seen = [t for t in head if not NOISE_RE.match(t)]
         code, reason = _classify("\n".join(seen), proc.wait())
     except (SystemExit, KeyboardInterrupt) as exc:
         code = (
@@ -578,10 +628,16 @@ def cmd_run_worker(args) -> int:
             else 130
         )
         proc.terminate()
-        post(f"exit {code} [failed: killed by signal {code - 128}]")
-        return code
-    post(f"exit {code}" + (f" [failed: {reason}]" if reason else ""))
-    return code
+        return finish(code, _report(lines), f"killed by signal {code - 128}")
+    return finish(code, _report(lines), reason)
+
+
+def _report(lines: list[str]) -> str:
+    """Report block (first `STATUS:` line to the end), else the last 20 non-noise lines."""
+    for i, t in enumerate(lines):
+        if t.startswith("STATUS:"):
+            return "\n".join(lines[i:])
+    return "\n".join([t for t in lines if not NOISE_RE.match(t)][-20:])
 
 
 def _board_exits(root: Path) -> list:
@@ -595,7 +651,7 @@ def _board_exits(root: Path) -> list:
                 except ValueError:
                     continue
                 m = (
-                    EXIT_NOTE_RE.match(str(rec.get("text", "")))
+                    EXIT_NOTE_RE.search(str(rec.get("text", "")))
                     if isinstance(rec, dict)
                     else None
                 )
@@ -648,7 +704,34 @@ def cmd_status(args) -> int:
 def _exited(root: str, name: str) -> bool:
     """True when the worker's own last board note is an exit note."""
     mine = [r for r in atlas_todo.notes(root) if str(r.get("owner")) == name]
-    return bool(mine) and bool(EXIT_NOTE_RE.match(str(mine[-1].get("text") or "")))
+    return bool(mine) and bool(EXIT_NOTE_RE.search(str(mine[-1].get("text") or "")))
+
+
+def _kill_notes(root: str, names) -> None:
+    """Fallback exit for killed workers that never posted their own (SIGHUP/SIGTERM makes
+    run-worker post it, so give those up to 2s first). Same C2 shape: report note to the
+    worker's lead and channel, then mark_finished + leave."""
+    deadline = time.time() + 2
+    pending = [n for n in names if not _exited(root, n)]
+    while pending and time.time() < deadline:
+        time.sleep(0.1)
+        pending = [n for n in pending if not _exited(root, n)]
+    for name in pending:
+        mine = atlas_todo.channels_of(root, name)
+        chan = mine[-1] if mine else ""
+        lead = str((atlas_todo.get_channel(root, chan) or {}).get("lead") or "lead")
+        rec = atlas_todo.note(
+            root,
+            name,
+            "exit 137 [failed: killed by atlas_mux kill]",
+            to=lead,
+            channel=chan or None,
+            kind="report",
+        )
+        home = rec.get("channel") or chan
+        if home:
+            atlas_todo.mark_finished(root, name, 137)
+            atlas_todo.leave(root, home, name)
 
 
 def cmd_kill(args) -> int:
@@ -671,11 +754,7 @@ def cmd_kill(args) -> int:
                 1,
             )
         # a killed worker never writes its own exit: without one it reads as working forever
-        for name in res["closed"]:
-            if not _exited(root, name):
-                atlas_todo.note(
-                    root, name, "exit 137 [failed: killed by atlas_mux kill]", to="lead"
-                )
+        _kill_notes(root, res["closed"])
         return _emit(
             {
                 "ok": True,
@@ -690,11 +769,7 @@ def cmd_kill(args) -> int:
     res = _tmux("kill-session", "-t", session)
     if res.returncode == 0:
         # a killed worker never writes its own exit: without one it reads as working forever
-        for name in victims:
-            if not _exited(root, name):
-                atlas_todo.note(
-                    root, name, "exit 137 [failed: killed by atlas_mux kill]", to="lead"
-                )
+        _kill_notes(root, victims)
     return _emit(
         {
             "ok": res.returncode == 0,

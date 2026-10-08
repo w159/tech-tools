@@ -119,9 +119,9 @@
 .fleet-list-host { min-width: 0; }
 .agents-head .seg { overflow-x: auto; }
 /* Colony route: the unmodified herdr web UI fills the whole canvas; nothing else on the page */
-.colony-page { max-width: none; margin: calc(-1 * var(--page-pad)); height: calc(100% + 2 * var(--page-pad)); padding: 0; gap: 0; display: flex; flex-direction: column; position: relative; }
-.main:has(.colony-page) #page-root { height: 100%; }
-.colony-page > .state { margin: var(--s-6) var(--page-pad); }
+.terminal-page { max-width: none; margin: calc(-1 * var(--page-pad)); height: calc(100% + 2 * var(--page-pad)); padding: 0; gap: 0; display: flex; flex-direction: column; position: relative; }
+.main:has(.terminal-page) #page-root { height: 100%; }
+.terminal-page > .state { margin: var(--s-6) var(--page-pad); }
 .console-frame { flex: 1; width: 100%; height: 100%; min-height: 0; border: 0; background: var(--bg); }
 .console-veil { position: absolute; inset: 0; background: var(--bg); padding: var(--s-6) var(--page-pad); overflow: auto; }
 /* channel lens: one column that fills the canvas; only .channel-list scrolls (the composer stays in view) */
@@ -218,3 +218,15 @@
 .pg-kvs-inline dd { overflow-wrap: anywhere; }
 .pg-subsys .pg-kvs-inline { grid-template-columns: 1fr 1fr; }
 .pg-subsys .pg-kv dd { font-size: var(--fs-sm); }
+
+/* Colony roster (#/colony) */
+.colony-bar { display: flex; align-items: center; gap: var(--s-3); margin-bottom: var(--s-3); }
+.colony-all { display: inline-flex; align-items: center; gap: var(--s-2); cursor: pointer; }
+.colony-list { list-style: none; margin: 0 0 var(--s-4); padding: 0; display: flex; flex-direction: column; gap: var(--s-3); }
+.colony-row { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-2); padding: var(--s-3) var(--s-4); display: flex; flex-direction: column; gap: var(--s-2); }
+.colony-row[data-state="stuck"] { border-color: var(--st-input); }
+.colony-row[data-state="dead"] { border-color: var(--st-fail); }
+.colony-top, .colony-meta, .colony-send { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+.colony-meta { font-size: var(--fs-sm, 12px); min-width: 0; }
+.colony-send .colony-send-text { flex: 1; min-width: 12rem; }
+.colony-send-why, .colony-notasks { margin: 0; font-size: var(--fs-sm, 12px); }

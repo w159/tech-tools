@@ -24,7 +24,7 @@ import { IntegrationsPanel } from '../integrations.js';
 import { DEFAULT_NAV, normalizeNav } from '../nav-order.js';
 
 const NAV_LABELS = {
-  overview: 'Overview', activity: 'Activity', health: 'Health', agents: 'Agents', colony: 'Colony',
+  overview: 'Overview', activity: 'Activity', health: 'Health', agents: 'Agents', colony: 'Colony', channels: 'Channels',
   improve: 'Self-improvement', projects: 'Projects', settings: 'Settings',
 };
 const DEFAULT_PREFS = {

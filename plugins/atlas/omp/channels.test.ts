@@ -51,6 +51,13 @@ test("dispatch opens <main>/<lead>, registers members, injects the CHANNEL block
 		["Alpha", "lead-sess12"],
 		[tasks[1].name, "lead-sess12"],
 	]);
+
+	// C4: the atlas:* dispatch owns a todo (owner Alpha); the generic `task` agent creates none
+	const items = todo("list", "--root", cwd).items as { owner?: string; channel?: string }[];
+	const owned = items.filter((i) => i.owner === "Alpha");
+	expect(owned).toHaveLength(1);
+	expect(owned[0].channel).toBe(`${main}/lead-sess12`);
+	expect(items.some((i) => i.owner === tasks[1].name)).toBe(false);
 });
 
 test("ATLAS_CHANNELS=off and a failing board leave the dispatch untouched", () => {

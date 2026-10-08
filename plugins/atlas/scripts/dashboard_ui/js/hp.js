@@ -120,7 +120,7 @@ function threadRow(t) {
       h("div", { class: "hp-thread-top" }, Badge({ status: tone, text: t.status || "unknown" }), h("strong", { class: "truncate", title: t.title }, t.title || t.id), h("span", { class: "dim mono" }, "#" + t.id), t.group ? chip(t.group, "Group") : null),
       h("div", { class: "hp-thread-sub" },
         t.branch ? h("span", { class: "mono truncate", title: "Branch" }, t.branch) : h("span", { class: "dim" }, t.kind === "tab" ? "tab thread, no branch" : "no branch recorded"),
-        t.channel ? h("a", { class: "chip-lite chip-link", href: "#/agents?lens=channel" + (t.channel_path ? "&channel=" + encodeURIComponent(t.channel_path) : ""), title: t.channel_path || t.channel }, icon("irc"), t.channel) : null,
+        t.channel ? h("a", { class: "chip-lite chip-link", href: "#/channels" + (t.channel_path ? "?channel=" + encodeURIComponent(t.channel_path) : ""), title: t.channel_path || t.channel }, icon("irc"), t.channel) : null,
         t.pr ? chip("PR " + prLabel(t.pr) + (t.pr_state ? " (" + t.pr_state + ")" : ""), "Pull request") : h("span", { class: "dim" }, "no PR"),
         t.note ? h("span", { class: "dim truncate", title: t.note }, t.note) : null),
       root ? h("div", { class: "hp-thread-files" }, h("span", { class: "dim mono truncate", title: root }, root)) : null),

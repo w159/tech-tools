@@ -37,11 +37,11 @@ function setStore(state) { agentsStore.getState = () => state; agentsStore.subsc
 const up = { loaded: true, down: null, layers: { herdr: { state: "up" }, webui: { state: "up", url: "http://127.0.0.1:7317/" } } };
 const ctxOf = (params = {}) => ({ params, api: {} });
 
-test("Colony page renders only the frame: chrome=full iframe, nothing else in the page", () => {
+test("Terminal page renders only the frame: chrome=full iframe, nothing else in the page", () => {
   setStore(up);
   const page = colony.render(ctxOf());
-  expect(colony.id).toBe("colony");
-  expect(page.attrs.class).toContain("colony-page");
+  expect(colony.id).toBe("terminal");
+  expect(page.attrs.class).toContain("terminal-page");
   // DOM children: the iframe plus its loading veil, no head, lens bar, toggle or status strip
   expect(page.children.map((c) => c.tag + "." + c.attrs.class)).toEqual(["iframe.console-frame", "div.console-veil"]);
   const f = frames(page)[0];
@@ -87,12 +87,14 @@ test("no iframe when the dashboard itself is framed (recursion guard)", () => {
   window.top = SELF;
 });
 
-test("nav model: Colony is one flat entry, mobile More lists it once", () => {
+test("nav model: Colony and Channels are flat entries, mobile More lists each once", () => {
   const colonyTabs = MOBILE_TABS.filter((t) => t[0] === "colony");
   expect(colonyTabs).toEqual([["colony", "Colony"]]);
   expect(MOBILE_TABS.some((t) => /herdr/i.test(t[0] + t[1] + (t[2] || "")))).toBe(false);
   const ordered = normalizeNav(undefined).map((id) => MOBILE_TABS.find((t) => t[0] === id)).filter(Boolean);
   expect(ordered.map((t) => t[0])).toEqual(DEFAULT_NAV);
+  expect(MOBILE_TABS.filter((t) => t[0] === "channels")).toEqual([["channels", "Channels"]]);
+  expect(normalizeNav(["irc", "colony"]).slice(0, 2)).toEqual(["channels", "colony"]);
   expect(ordered.slice(4).filter((t) => t[0] === "colony").length).toBe(1); // reachable from the More popover
 });
 
@@ -134,4 +136,14 @@ test("every id in the nav model has a Settings label (no raw ids in the nav-orde
   for (const id of DEFAULT_NAV) expect(labels).toMatch(new RegExp("\\b" + id + ": '[A-Z]"));
   expect(src).not.toMatch(/Herdr[ ]console/);
   expect(labels).toContain("colony: 'Colony'");
+});
+
+test("colony roster: Send is disabled with a reason for finished/dead, headless explains delivery", async () => {
+  const { sendBlock, canSteer } = await import("./pages/colony.js");
+  expect(sendBlock({ state: "finished", exit_code: 0 })).toContain("exit 0");
+  expect(sendBlock({ state: "dead" })).toContain("gone");
+  expect(sendBlock({ state: "running", steerable: true })).toBe("");
+  expect(sendBlock({ state: "idle", headless: true })).toBe("");
+  expect(canSteer({ state: "finished" })).toBe(false);
+  expect(canSteer({ state: "stuck" })).toBe(true);
 });
