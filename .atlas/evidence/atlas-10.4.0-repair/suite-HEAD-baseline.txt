@@ -1,0 +1,419 @@
+..............................................s..................... [  2%]
+................................................................................................................. [  6%]
+........................................................................ [  9%]
+........................................................................ [ 12%]
+........................................................................ [ 14%]
+............................................................... [ 17%]
+.......................................F........... [ 19%]
+.F.........F.....................F.FF..........FF.....F................F [ 21%]
+........................................................................ [ 24%]
+...........F............................................................ [ 27%]
+.............................................................................. [ 30%]
+.................................................................................................................. [ 34%]
+........................................................................ [ 37%]
+........................................................................ [ 39%]
+........................................................................ [ 42%]
+...................F.................................................... [ 45%]
+..................F......FF..F.......................................... [ 47%]
+........................................................................ [ 50%]
+........................................................................ [ 53%]
+........................................................................ [ 55%]
+..............................................F......... [ 58%]
+........................................................................ [ 60%]
+........................................................................ [ 63%]
+.....F.................................................................. [ 66%]
+........................................................................ [ 68%]
+........................................................................ [ 71%]
+........................................................................ [ 74%]
+.......................................... [ 75%]
+.................................................................F...... [ 78%]
+........................................................................ [ 81%]
+.....................s................................................................. [ 84%]
+........................................................................ [ 87%]
+........................................................................ [ 89%]
+................................................................. [ 92%]
+........................................................................ [ 94%]
+................................................................. [ 97%]
+.....................................................................    [100%]
+=================================== FAILURES ===================================
+_________ TripwireTest.test_notebook_multiedit_on_prod_path_is_denied __________
+
+self = <test_dispatch_tripwire.TripwireTest testMethod=test_notebook_multiedit_on_prod_path_is_denied>
+
+    def test_notebook_multiedit_on_prod_path_is_denied(self):
+        # M3: a MultiEdit on a production .ipynb carries the path under
+        # notebook_path, which the path extractor ignored; the inline-edit
+        # deny tier must still fire on production target code.
+        r = run_hook(
+            self._pre_payload("MultiEdit", {"notebook_path": "src/foo.ipynb"}),
+            self.env,
+        )
+        self.assertEqual(r.returncode, 0)
+>       self.assertIn('"permissionDecision": "deny"', r.stdout)
+E       AssertionError: '"permissionDecision": "deny"' not found in ''
+
+hooks/test_dispatch_tripwire.py:773: AssertionError
+_____________ TripwireTest.test_pre_denies_edit_to_in_root_source ______________
+
+self = <test_dispatch_tripwire.TripwireTest testMethod=test_pre_denies_edit_to_in_root_source>
+
+    def test_pre_denies_edit_to_in_root_source(self):
+        """A path that is not docs/.atlas and not under the system temp dir is
+        still treated as production target code and denied."""
+        r = run_hook(
+            self._pre_payload("Edit", {"file_path": "src/app.py"}),
+            self.env,
+        )
+        self.assertEqual(r.returncode, 0)
+>       self.assertIn('"permissionDecision": "deny"', r.stdout)
+E       AssertionError: '"permissionDecision": "deny"' not found in ''
+
+hooks/test_dispatch_tripwire.py:631: AssertionError
+____________ TripwireTest.test_pre_deny_prod_edit_allows_docs_edit _____________
+
+self = <test_dispatch_tripwire.TripwireTest testMethod=test_pre_deny_prod_edit_allows_docs_edit>
+
+    def test_pre_deny_prod_edit_allows_docs_edit(self):
+        r = run_hook(self._pre_payload("Edit", {"file_path": "src/foo.py"}), self.env)
+        self.assertEqual(r.returncode, 0)
+>       self.assertIn('"permissionDecision": "deny"', r.stdout)
+E       AssertionError: '"permissionDecision": "deny"' not found in ''
+
+hooks/test_dispatch_tripwire.py:751: AssertionError
+_____________ InProcessTest.test_ip_is_orchestration_path_branches _____________
+
+self = <test_dispatch_tripwire.InProcessTest testMethod=test_ip_is_orchestration_path_branches>
+
+    def test_ip_is_orchestration_path_branches(self):
+        f = self.dt._is_orchestration_path
+        self.assertTrue(f(None))  # unknown path -> do not punish
+        self.assertTrue(f(""))  # empty -> do not punish
+        self.assertTrue(f("docs/x.md"))  # startswith docs/
+        self.assertTrue(f("/repo/docs/x.md"))  # contains /docs/
+        self.assertTrue(f(".atlas/evidence/x.md"))  # startswith .atlas/
+        self.assertTrue(f("/repo/.atlas/audits/x.md"))  # contains /.atlas/
+        self.assertTrue(f("docs\\x.md"))  # backslash normalization
+>       self.assertFalse(f("src/foo.py"))  # production target
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: True is not false
+
+hooks/test_dispatch_tripwire.py:1273: AssertionError
+____________ InProcessTest.test_ip_orchestration_path_expands_home _____________
+
+self = <test_dispatch_tripwire.InProcessTest testMethod=test_ip_orchestration_path_expands_home>
+
+    def test_ip_orchestration_path_expands_home(self):
+        # `~/x` is under HOME, not a cwd-relative dir: with HOME in system temp
+        # it is scratch (exempt); before the fix realpath("~/x") hit cwd -> target code.
+        import tempfile
+    
+        with tempfile.TemporaryDirectory() as home:
+            with patch.dict(os.environ, {"HOME": home}):
+                f = self.dt._is_orchestration_path
+                self.assertTrue(f("~/.omp/agent/mcp.json"))
+                self.assertTrue(f("$HOME/.omp/agent/mcp.json"))
+                self.assertTrue(f("${HOME}/x.json"))
+>       self.assertFalse(self.dt._is_orchestration_path("~user_not_home/src/a.py"))
+E       AssertionError: True is not false
+
+hooks/test_dispatch_tripwire.py:1298: AssertionError
+________________ InProcessTest.test_ip_post_edit_to_target_nags ________________
+
+self = <test_dispatch_tripwire.InProcessTest testMethod=test_ip_post_edit_to_target_nags>
+
+    def test_ip_post_edit_to_target_nags(self):
+        out = self._run_main(self._post("Edit", {"file_path": "src/foo.py"}))
+>       self.assertIn("STOP", out)
+E       AssertionError: 'STOP' not found in ''
+
+hooks/test_dispatch_tripwire.py:982: AssertionError
+_________________ InProcessTest.test_ip_pre_deny_notebook_edit _________________
+
+self = <test_dispatch_tripwire.InProcessTest testMethod=test_ip_pre_deny_notebook_edit>
+
+    def test_ip_pre_deny_notebook_edit(self):
+        # M3: notebook_path is the path key for MultiEdit on .ipynb; the inline
+        # edit deny tier must still fire on production target code.
+        out = self._run_main(self._pre("MultiEdit", {"notebook_path": "src/foo.ipynb"}))
+>       self.assertIn('"permissionDecision": "deny"', out)
+E       AssertionError: '"permissionDecision": "deny"' not found in ''
+
+hooks/test_dispatch_tripwire.py:989: AssertionError
+___________________ InProcessTest.test_ip_pre_deny_prod_edit ___________________
+
+self = <test_dispatch_tripwire.InProcessTest testMethod=test_ip_pre_deny_prod_edit>
+
+    def test_ip_pre_deny_prod_edit(self):
+        out = self._run_main(self._pre("Edit", {"file_path": "src/foo.py"}))
+>       self.assertIn('"permissionDecision": "deny"', out)
+E       AssertionError: '"permissionDecision": "deny"' not found in ''
+
+hooks/test_dispatch_tripwire.py:1176: AssertionError
+__ InProcessTest.test_ip_pre_real_source_write_still_denied_after_uri_writes ___
+
+self = <test_dispatch_tripwire.InProcessTest testMethod=test_ip_pre_real_source_write_still_denied_after_uri_writes>
+
+    def test_ip_pre_real_source_write_still_denied_after_uri_writes(self):
+        for _ in range(3):
+            self._run_main(self._post("Write", {"file_path": "agent://Foo"}))
+        out = self._run_main(self._pre("Write", {"file_path": "src/foo.py"}))
+>       self.assertIn('"permissionDecision": "deny"', out)
+E       AssertionError: '"permissionDecision": "deny"' not found in ''
+
+hooks/test_dispatch_tripwire.py:1217: AssertionError
+_ SubagentDenyTierSkipTest.test_same_edit_from_the_main_transcript_is_still_denied _
+
+self = <test_dispatch_tripwire.SubagentDenyTierSkipTest testMethod=test_same_edit_from_the_main_transcript_is_still_denied>
+
+    def test_same_edit_from_the_main_transcript_is_still_denied(self):
+        r = run_hook(
+            self._payload("Edit", {"file_path": "src/app.ts"}, self.main_transcript),
+            self.env,
+        )
+        self.assertEqual(r.returncode, 0)
+>       self.assertEqual(self._decision(r.stdout), "deny")
+E       AssertionError: None != 'deny'
+
+hooks/test_dispatch_tripwire.py:1521: AssertionError
+______ ReadOnlyInvestigationTest.test_edit_and_write_still_trip_the_deny _______
+
+self = <test_dispatch_tripwire.ReadOnlyInvestigationTest testMethod=test_edit_and_write_still_trip_the_deny>
+
+    def test_edit_and_write_still_trip_the_deny(self):
+        # Sanctioned (docs/) writes are exempt from the count by design, so use
+        # mutating Bash to reach the threshold, then confirm an Edit/Write is denied.
+        for _ in range(8):
+            self._call("PostToolUse", "Bash", {"command": "touch a.txt"})
+        for tool in ("Edit", "Write"):
+            r = self._call("PreToolUse", tool, {"file_path": "docs/x.md"})
+            self.assertIn('"permissionDecision": "deny"', r.stdout, tool)
+        # Production target code is denied outright, independent of the count.
+        for tool in ("Edit", "Write"):
+            r = self._call("PreToolUse", tool, {"file_path": "src/app.py"})
+>           self.assertIn("never edit target code inline", r.stdout, tool)
+E           AssertionError: 'never edit target code inline' not found in '{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "DENY - 8 inline ops since your last dispatch. Orchestrators delegate: the work happens in subagents so this session\'s context stays clean. Dispatch the next step to atlas:explorer (investigation) or atlas:implementer (edits). Right-size it - one bounded change is ONE implementer dispatch, not a squad. (Your own docs/ and .atlas/ writes are not counted here; only unsanctioned inline work is.)"}}\n' : Edit
+
+hooks/test_dispatch_tripwire.py:2870: AssertionError
+_______ RealCollisionTest.test_stop_message_and_inbox_share_one_document _______
+
+self = <test_worker_inbox.RealCollisionTest testMethod=test_stop_message_and_inbox_share_one_document>
+
+    def test_stop_message_and_inbox_share_one_document(self):
+        # baseline: without the worker env the tripwire speaks alone
+>       alone = json.loads(
+            self._call({"ATLAS_WORKER_NAME": "", "ATLAS_PROJECT_ROOT": ""})
+        )
+
+hooks/test_worker_inbox.py:447: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/opt/homebrew/Cellar/python@3.14/3.14.8/Frameworks/Python.framework/Versions/3.14/lib/python3.14/json/__init__.py:352: in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+/opt/homebrew/Cellar/python@3.14/3.14.8/Frameworks/Python.framework/Versions/3.14/lib/python3.14/json/decoder.py:345: in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <json.decoder.JSONDecoder object at 0x10a29f0e0>, s = '', idx = 0
+
+    def raw_decode(self, s, idx=0):
+        """Decode a JSON document from ``s`` (a ``str`` beginning with
+        a JSON document) and return a 2-tuple of the Python
+        representation and the index in ``s`` where the document ended.
+    
+        This can be used to decode a JSON document from a string that may
+        have extraneous data at the end.
+    
+        """
+        try:
+            obj, end = self.scan_once(s, idx)
+        except StopIteration as err:
+>           raise JSONDecodeError("Expecting value", s, err.value) from None
+E           json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+/opt/homebrew/Cellar/python@3.14/3.14.8/Frameworks/Python.framework/Versions/3.14/lib/python3.14/json/decoder.py:363: JSONDecodeError
+________ ChannelModel.test_held_registry_lock_never_hangs_a_worker_note ________
+
+self = <test_atlas_channels.ChannelModel testMethod=test_held_registry_lock_never_hangs_a_worker_note>
+
+    def test_held_registry_lock_never_hangs_a_worker_note(self):
+        lock = Path(self.root) / ".atlas/.run/channels.json.lock"
+        lock.parent.mkdir(parents=True, exist_ok=True)
+        code = (
+            "import fcntl,time;"
+            f"f=open({str(lock)!r},'a+');fcntl.flock(f,fcntl.LOCK_EX);"
+            "print('held',flush=True);time.sleep(6)"
+        )
+        holder = subprocess.Popen(
+            [sys.executable, "-c", code], stdout=subprocess.PIPE, text=True
+        )
+        assert holder.stdout is not None
+        self.addCleanup(holder.stdout.close)
+        self.addCleanup(holder.wait)
+        self.addCleanup(holder.kill)
+        self.assertEqual(holder.stdout.readline().strip(), "held")
+        with tempfile.TemporaryDirectory() as home:
+            env = {"ATLAS_WORKER_NAME": "W1", "ATLAS_HOME": home}
+            with mock.patch.dict(os.environ, env):
+                err = io.StringIO()
+                t0 = time.monotonic()
+                with contextlib.redirect_stderr(err):
+                    rec = todo.note(self.root, "W1", "still lands", to="lead")
+                elapsed = time.monotonic() - t0
+>           faults = (Path(home) / "hook-faults.jsonl").read_text()
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+scripts/test_atlas_channels.py:276: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/opt/homebrew/Cellar/python@3.14/3.14.8/Frameworks/Python.framework/Versions/3.14/lib/python3.14/pathlib/__init__.py:787: in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors, newline=newline) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('/var/folders/t4/3yydl26s5mqb99t84qw3_wrm0000gn/T/tmpw7qi_ed3/hook-faults.jsonl')
+mode = 'r', buffering = -1, encoding = 'locale', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed to by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+>       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: '/var/folders/t4/3yydl26s5mqb99t84qw3_wrm0000gn/T/tmpw7qi_ed3/hook-faults.jsonl'
+
+/opt/homebrew/Cellar/python@3.14/3.14.8/Frameworks/Python.framework/Versions/3.14/lib/python3.14/pathlib/__init__.py:771: FileNotFoundError
+_________ ChannelModel.test_mux_worker_note_registers_under_lead_once __________
+
+self = <test_atlas_channels.ChannelModel testMethod=test_mux_worker_note_registers_under_lead_once>
+
+    def test_mux_worker_note_registers_under_lead_once(self):
+        todo.open_lead_channel(self.root, "L", ["A"])
+        with mock.patch.dict(os.environ, {"ATLAS_WORKER_NAME": "W1"}):
+            for i in range(2):  # idempotent
+                rec = todo.note(self.root, "W1", f"hi {i}", to="lead")
+>               self.assertEqual(rec["channel"], f"{self.main}/L")
+E               AssertionError: 'tmpt48yy60m@feature/x' != 'tmpt48yy60m@feature/x/L'
+E               - tmpt48yy60m@feature/x
+E               + tmpt48yy60m@feature/x/L
+E               ?                      ++
+
+scripts/test_atlas_channels.py:218: AssertionError
+_____ ChannelModel.test_mux_worker_without_lead_opens_default_lead_channel _____
+
+self = <test_atlas_channels.ChannelModel testMethod=test_mux_worker_without_lead_opens_default_lead_channel>
+
+    def test_mux_worker_without_lead_opens_default_lead_channel(self):
+        with mock.patch.dict(os.environ, {"ATLAS_WORKER_NAME": "W1"}):
+            todo.note(self.root, "W1", "first", to="lead")
+>       children = todo.channels(self.root)[0]["children"]
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       IndexError: list index out of range
+
+scripts/test_atlas_channels.py:234: IndexError
+______ ChannelModel.test_worker_registration_fails_open_and_records_fault ______
+
+self = <test_atlas_channels.ChannelModel testMethod=test_worker_registration_fails_open_and_records_fault>
+
+    def test_worker_registration_fails_open_and_records_fault(self):
+        with tempfile.TemporaryDirectory() as home:
+            env = {"ATLAS_WORKER_NAME": "W1", "ATLAS_HOME": home}
+            with mock.patch.dict(os.environ, env):
+                with mock.patch.object(
+                    todo, "open_lead_channel", side_effect=OSError("boom")
+                ):
+                    err = io.StringIO()
+                    with contextlib.redirect_stderr(err):
+                        rec = todo.note(self.root, "W1", "still lands", to="lead")
+            self.assertEqual(rec["text"], "still lands")
+            self.assertEqual(err.getvalue(), "")
+>           faults = (Path(home) / "hook-faults.jsonl").read_text()
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+scripts/test_atlas_channels.py:249: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/opt/homebrew/Cellar/python@3.14/3.14.8/Frameworks/Python.framework/Versions/3.14/lib/python3.14/pathlib/__init__.py:787: in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors, newline=newline) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('/var/folders/t4/3yydl26s5mqb99t84qw3_wrm0000gn/T/tmpa7xyrah7/hook-faults.jsonl')
+mode = 'r', buffering = -1, encoding = 'locale', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed to by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+>       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: '/var/folders/t4/3yydl26s5mqb99t84qw3_wrm0000gn/T/tmpa7xyrah7/hook-faults.jsonl'
+
+/opt/homebrew/Cellar/python@3.14/3.14.8/Frameworks/Python.framework/Versions/3.14/lib/python3.14/pathlib/__init__.py:771: FileNotFoundError
+_____________ SettingsDataTest.test_fixture_projects_are_filtered ______________
+
+self = <test_atlas_dashboard.SettingsDataTest testMethod=test_fixture_projects_are_filtered>
+
+    def test_fixture_projects_are_filtered(self):
+        f = self.ctl.is_fixture_project
+        # The checkout itself is a real, non-scratch directory (the OS temp dir is scratch).
+        real = SCRIPTS.parent
+        with tempfile.TemporaryDirectory() as tmp:
+            wt = Path(tmp) / "proj" / ".claude" / "worktrees" / "x"
+            wt.mkdir(parents=True)
+            repo = Path(tmp) / "scratch" / "repo"
+            repo.mkdir(parents=True)
+>           self.assertFalse(f(str(real)))
+E           AssertionError: True is not false
+
+scripts/test_atlas_dashboard.py:915: AssertionError
+______________ AtlasDoctorTest.test_hook_faults_gate_the_verdict _______________
+
+self = <test_atlas_doctor.AtlasDoctorTest testMethod=test_hook_faults_gate_the_verdict>
+
+    def test_hook_faults_gate_the_verdict(self):
+        import atlas_faults
+    
+>       self.assertTrue(self._checks()["hook-faults"]["ok"])
+E       AssertionError: False is not true
+
+scripts/test_atlas_doctor.py:968: AssertionError
+______________________ GatesArmedTest.test_repo_dir_true _______________________
+
+self = <test_atlas_scope.GatesArmedTest testMethod=test_repo_dir_true>
+
+    def test_repo_dir_true(self):
+>       self.assertTrue(atlas_scope.gates_armed(REPO))
+E       AssertionError: False is not true
+
+scripts/test_atlas_scope.py:44: AssertionError
+=========================== short test summary info ============================
+FAILED hooks/test_dispatch_tripwire.py::TripwireTest::test_notebook_multiedit_on_prod_path_is_denied - AssertionError: '"permissionDecision": "deny"' not found in ''
+FAILED hooks/test_dispatch_tripwire.py::TripwireTest::test_pre_denies_edit_to_in_root_source - AssertionError: '"permissionDecision": "deny"' not found in ''
+FAILED hooks/test_dispatch_tripwire.py::TripwireTest::test_pre_deny_prod_edit_allows_docs_edit - AssertionError: '"permissionDecision": "deny"' not found in ''
+FAILED hooks/test_dispatch_tripwire.py::InProcessTest::test_ip_is_orchestration_path_branches - AssertionError: True is not false
+FAILED hooks/test_dispatch_tripwire.py::InProcessTest::test_ip_orchestration_path_expands_home - AssertionError: True is not false
+FAILED hooks/test_dispatch_tripwire.py::InProcessTest::test_ip_post_edit_to_target_nags - AssertionError: 'STOP' not found in ''
+FAILED hooks/test_dispatch_tripwire.py::InProcessTest::test_ip_pre_deny_notebook_edit - AssertionError: '"permissionDecision": "deny"' not found in ''
+FAILED hooks/test_dispatch_tripwire.py::InProcessTest::test_ip_pre_deny_prod_edit - AssertionError: '"permissionDecision": "deny"' not found in ''
+FAILED hooks/test_dispatch_tripwire.py::InProcessTest::test_ip_pre_real_source_write_still_denied_after_uri_writes - AssertionError: '"permissionDecision": "deny"' not found in ''
+FAILED hooks/test_dispatch_tripwire.py::SubagentDenyTierSkipTest::test_same_edit_from_the_main_transcript_is_still_denied - AssertionError: None != 'deny'
+FAILED hooks/test_dispatch_tripwire.py::ReadOnlyInvestigationTest::test_edit_and_write_still_trip_the_deny - AssertionError: 'never edit target code inline' not found in '{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "DENY - 8 inline ops since your last dispatch. Orchestrators delegate: the work happens in subagents so this session\'s context stays clean. Dispatch the next step to atlas:explorer (investigation) or atlas:implementer (edits). Right-size it - one bounded change is ONE implementer dispatch, not a squad. (Your own docs/ and .atlas/ writes are not counted here; only unsanctioned inline work is.)"}}\n' : Edit
+FAILED hooks/test_worker_inbox.py::RealCollisionTest::test_stop_message_and_inbox_share_one_document - json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+FAILED scripts/test_atlas_channels.py::ChannelModel::test_held_registry_lock_never_hangs_a_worker_note - FileNotFoundError: [Errno 2] No such file or directory: '/var/folders/t4/3yydl26s5mqb99t84qw3_wrm0000gn/T/tmpw7qi_ed3/hook-faults.jsonl'
+FAILED scripts/test_atlas_channels.py::ChannelModel::test_mux_worker_note_registers_under_lead_once - AssertionError: 'tmpt48yy60m@feature/x' != 'tmpt48yy60m@feature/x/L'
+- tmpt48yy60m@feature/x
++ tmpt48yy60m@feature/x/L
+?                      ++
+FAILED scripts/test_atlas_channels.py::ChannelModel::test_mux_worker_without_lead_opens_default_lead_channel - IndexError: list index out of range
+FAILED scripts/test_atlas_channels.py::ChannelModel::test_worker_registration_fails_open_and_records_fault - FileNotFoundError: [Errno 2] No such file or directory: '/var/folders/t4/3yydl26s5mqb99t84qw3_wrm0000gn/T/tmpa7xyrah7/hook-faults.jsonl'
+FAILED scripts/test_atlas_dashboard.py::SettingsDataTest::test_fixture_projects_are_filtered - AssertionError: True is not false
+FAILED scripts/test_atlas_doctor.py::AtlasDoctorTest::test_hook_faults_gate_the_verdict - AssertionError: False is not true
+FAILED scripts/test_atlas_scope.py::GatesArmedTest::test_repo_dir_true - AssertionError: False is not true
+19 failed, 2650 passed, 2 skipped, 422 subtests passed in 172.92s (0:02:52)

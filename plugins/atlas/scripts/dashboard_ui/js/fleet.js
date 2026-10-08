@@ -184,7 +184,7 @@ export function AgentRow({ agent: a, selected, onOpen, actions, showProject } = 
 export function nowLine(a) {
   if (a.task) return { label: "Task", text: a.task };
   if (a.lastMsg) return { label: "Latest", text: a.lastMsg };
-  return { label: "", text: a.state === "working" ? "Working, no task recorded" : "No task recorded" };
+  return { label: "", text: "Not attached to an atlas task" + (a.state ? " (" + a.state + ")" : "") };
 }
 
 
@@ -380,10 +380,10 @@ export function Inspector({ agent, tab, onTab } = {}) {
     }
   };
 
-  const consoleButton = () => Button({ label: "Open in Colony", size: "sm", icon: "external-link", onClick: () => { location.hash = "#/colony?pane=" + encodeURIComponent(rec.pane_id || rec.key); } });
+  const consoleButton = () => Button({ label: "Open in Colony", size: "sm", icon: "external-link", onClick: () => { location.hash = "#/terminal?pane=" + encodeURIComponent(rec.pane_id || rec.key); } });
   const nowPanel = () => {
     const state = agentsStore.getState();
-    const rows = [["State", Badge({ status: rec.state })], ["Age", (ageLabel(rec) || "n/a") + (rec.sinceApprox ? " (since this page opened)" : "")], ["Kind", kindWord(rec.kind)], ["Workspace", rec.workspace || ""], ["Pane", h("span", { class: "mono" }, rec.pane_id)], ["Directory", h("span", { class: "mono cwd", title: rec.cwd }, rec.cwd, h("button", { class: "btn btn-ghost btn-icon btn-sm", type: "button", "aria-label": "Copy directory", onClick: () => copyText(rec.cwd) }, icon("copy")))], ["Project", rec.project ? rec.project.split("/").pop() : "None matched"], ["Latest task", rec.task || "No task recorded"]];
+    const rows = [["State", Badge({ status: rec.state })], ["Age", (ageLabel(rec) || "n/a") + (rec.sinceApprox ? " (since this page opened)" : "")], ["Kind", kindWord(rec.kind)], ["Workspace", rec.workspace || ""], ["Pane", h("span", { class: "mono" }, rec.pane_id)], ["Directory", h("span", { class: "mono cwd", title: rec.cwd }, rec.cwd, h("button", { class: "btn btn-ghost btn-icon btn-sm", type: "button", "aria-label": "Copy directory", onClick: () => copyText(rec.cwd) }, icon("copy")))], ["Project", rec.project ? rec.project.split("/").pop() : "None matched"], ["Latest task", rec.task || "Not attached to an atlas task"]];
     const recent = rec.messages.slice(-5).reverse();
     const keysRow = rec.pane_id ? h("div", { class: "row insp-keys", role: "group", "aria-label": "Send keys" }, h("span", { class: "dim" }, "Send keys"), QUICK_KEYS.map(([label, keys]) => Button({ label, size: "sm", disabled: !hostReachable(), title: hostReachable() ? "Send " + label + " to this pane" : "Needs Atlas opened through the herdr host (/atlas/)", onClick: () => sendKeys(rec.pane_id, keys) }))) : null;
     return h("div", { class: "insp-now" }, h("dl", { class: "kv" }, rows.map(([k, v]) => [h("dt", null, k), h("dd", null, v)])), h("div", { class: "row" }, consoleButton()), keysRow, h("h3", null, "Recent activity"), recent.length ? h("div", { class: "feed" }, recent.map((m) => FeedItem({ ts: m.ts, kind: "message", title: (m.from || "system") + (m.to && m.to !== "all" ? " to " + m.to : ""), detail: m.body, root: rec.cwd }))) : h("p", { class: "dim" }, "No channel activity for this agent yet."), state.sources.irc && !state.sources.irc.ok ? h("p", { class: "dim" }, "Channel source unavailable; counts may be incomplete.") : null);

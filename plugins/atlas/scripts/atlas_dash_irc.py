@@ -291,11 +291,18 @@ def _post(ctx, b, root):
             "address an agent name or all",
         )
     stamp, refusal = None, None
+    pane = None
     if to != "all":
         live = atlas_herdr.agents()
         pane = _find_pane(live, to) if live["reachable"] else None
         if pane:
             stamp, refusal = _deliver(pane, sender, to, body)
+    if pane is None and to != "all" and not (to == "lead" or to.startswith("lead-")):
+        import atlas_dash_colony
+
+        gone = atlas_dash_colony.refusal(root, to)
+        if gone:
+            return gone
     msg = _record_irc(root, sender, to, body, delivery=stamp, channel=channel)
     if refusal:
         status = 409 if stamp == "refused" else refusal.pop("http")

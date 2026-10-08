@@ -42,6 +42,7 @@ import atlas_herdr  # noqa: E402
 import atlas_todo  # noqa: E402
 import atlas_dash_irc  # noqa: E402
 import atlas_dash_work  # noqa: E402
+import atlas_dash_colony  # noqa: E402
 
 STATUSES = ("working", "blocked", "idle", "done", "unknown")
 # herdr status -> the one status vocabulary of the UI (MASTER 5.2): blocked reads "Needs input"
@@ -620,7 +621,7 @@ def build_agents(ctx, project: str | None = None) -> dict:
             {
                 "key": name,
                 "name": name,
-                "kind": "unknown",
+                "kind": "lead" if atlas_dash_colony.is_lead_name(name) else "unknown",
                 "status": "unknown",
                 "state": state,
                 "pane_id": None,
@@ -715,6 +716,16 @@ def _unified_peek(ctx):
     return _peek_pane(row["pane_id"], (ctx.query or {}).get("lines"))
 
 
+def _refuse_finished(ctx, ident: str, body: dict):
+    """(409, body) when `ident` is a finished/dead colony member: nothing would ever read the prompt."""
+    project = body.get("project") or (ctx.query or {}).get("project")
+    for root in atlas_dash_work._project_roots(ctx, project):
+        refused = atlas_dash_colony.refusal(root, ident)
+        if refused:
+            return refused
+    return None
+
+
 def _unified_prompt(ctx):
     ident = ctx.groups[0]
     body = ctx.json() or {}
@@ -726,6 +737,9 @@ def _unified_prompt(ctx):
             "why": snap["reason"],
         }
     if row is None:
+        refused = _refuse_finished(ctx, ident, body)
+        if refused:
+            return refused
         return 404, {"ok": False, "error": "no live pane for that agent"}
     if row["agent"] not in atlas_dash_irc.INTERACTIVE_AGENTS:
         return 409, {
@@ -781,4 +795,5 @@ ROUTES = [
     ("GET", r"^/api/v2/agents$", _agents_unified),
     ("GET", rf"^/api/v2/agents/({PANE_RE})/peek$", _unified_peek),
     ("POST", rf"^/api/v2/agents/({PANE_RE})/prompt$", _unified_prompt),
+    *atlas_dash_colony.ROUTES,
 ]

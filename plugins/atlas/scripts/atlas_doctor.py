@@ -365,6 +365,15 @@ def check_typesafe_scoring(now=None):
     return (has_key and not off and bool(rows) and not errs), detail
 
 
+def _repo_root(cwd):
+    """git toplevel of cwd, or cwd itself outside a work tree."""
+    try:
+        r = _git(["rev-parse", "--show-toplevel"], cwd)
+    except (OSError, subprocess.SubprocessError):
+        return cwd
+    return r.stdout.strip() if r.returncode == 0 and r.stdout.strip() else cwd
+
+
 def check_context_tooling(root_path=None):
     """Detect whether this project's AGENTS.md carries the atlas-tooling
     routing block that tells agents to route through context-mode/lean-ctx/
@@ -376,7 +385,7 @@ def check_context_tooling(root_path=None):
     protection stack even when it is installed and reachable - scaffold_docs.py
     (via atlas-setup) is what inserts the block.
     """
-    root = root_path or os.getcwd()
+    root = root_path or _repo_root(os.getcwd())
     path = os.path.join(root, "AGENTS.md")
     if not os.path.isfile(path):
         return False, f"{path} does not exist; run atlas-setup to scaffold it"

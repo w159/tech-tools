@@ -536,6 +536,9 @@ class TestRoutesAndGate(unittest.TestCase):
         spec.loader.exec_module(mod)
         for path in ("/api/v2/agents/wA:p1/peek", "/api/v2/herd/agents/wA:p1/peek"):
             self.assertTrue(mod._SENSITIVE_GET.match(path), path)
+        self.assertTrue(
+            mod._SENSITIVE_GET.match("/api/v2/colony")
+        )  # roster carries task text and pane ids
         self.assertIsNone(mod._SENSITIVE_GET.match("/api/v2/agents"))
         self.assertIn("agents", [event for event, _ in mod.SSE_TOPICS])
         httpd = mod._Server((mod.LOOPBACK, 0), mod.Handler)

@@ -2,7 +2,7 @@
 // one row of member chips, Messages/Board tabs), the message log or the per-member board (the only scroller) and a composer
 // (To, one textarea, Send). To = Everyone posts to the channel; To = a member prompts that agent when its pane is idle,
 // else posts addressed to it. Board = GET /api/v2/channels/<name> board.owners joined to members (chan-names memberBoard).
-// Data: GET /api/v2/channels, GET /api/v2/channels/<name>?limit=, POST /api/v2/channels. Mounted by agents.js.
+// Data: GET /api/v2/channels, GET /api/v2/channels/<name>?limit=, POST /api/v2/channels. Mounted by pages/channels.js (#/channels).
 
 import { h, replace, icon, fmtRelative } from "../dom.js";
 import { agentsStore } from "../agents-store.js";

@@ -191,8 +191,9 @@ orchestrator rationalizes "I'll mark it unverified and move on"); this is the ma
     phase in `requiredTodoPhasesWhenCodeShipped` (`implement`, `verify`). Kill switch
     `ATLAS_GATE_PHASES=off`.
   - (p) Colony channel: when this run dispatched two or more atlas workers, the channel must show use
-    (a board note by an owner other than `lead`, or IRC/SendMessage traffic). Kill switch
-    `ATLAS_GATE_COLONY=off`.
+    (a board note on this run's lead channel, at or after the run start, whose owner is a registered
+    or departed member that is not a lead; or IRC/SendMessage traffic). A lead's own note, another
+    lead's channel and a non-member's note do not count. Kill switch `ATLAS_GATE_COLONY=off`.
   (n)-(p) ask for a presentation repair, so each blocks at most once per session. All three fail open.
   The block message names exactly which condition(s) are missing.
 - **Re-blocks, never a wedge.** Blocks every Stop until (a)-(p) hold, except: a Stop that is already a

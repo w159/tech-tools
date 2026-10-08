@@ -32,10 +32,23 @@ import worker_inbox  # noqa: E402
 
 class _Root(unittest.TestCase):
     def setUp(self):
+        env = patch.dict(os.environ)
+        env.start()
+        self.addCleanup(env.stop)
+        for k in (
+            "ATLAS_CHANNEL",
+            "ATLAS_LEAD_NAME",
+            "ATLAS_WORKER_NAME",
+            "ATLAS_PROJECT_ROOT",
+        ):
+            os.environ.pop(k, None)
         self.tmp = tempfile.mkdtemp()
         self.root = os.path.join(self.tmp, "proj")
         os.makedirs(os.path.join(self.root, ".atlas", ".run"))
         self.env = {"ATLAS_WORKER_NAME": "Alpha", "ATLAS_PROJECT_ROOT": self.root}
+        # an identity with no cursor file starts at "now" (never replays history); the
+        # fixtures post notes before the first drain, so give Alpha an explicit epoch cursor.
+        worker_inbox._write_cursor(worker_inbox.cursor_path(self.root, "Alpha"), 0.0, 0)
 
     def note(self, owner, to, text, ts=None):
         rec = atlas_todo.note(self.root, owner, text, to=to)
@@ -144,7 +157,59 @@ class DrainTest(_Root):
         self.assertEqual(worker_inbox.read_cursor(self.root, "Alpha"), a["ts"])
         self.assertEqual(worker_inbox.read_cursor(self.root, "Beta"), 0.0)
         beta_env = dict(self.env, ATLAS_WORKER_NAME="Beta")
+        worker_inbox._write_cursor(worker_inbox.cursor_path(self.root, "Beta"), 0.0, 0)
         self.assertIn("to beta", worker_inbox.context_for_post_tool_use(beta_env))
+
+    def test_no_seq_note_after_seqd_note_is_not_redelivered(self):
+        a = self.note("human", "Alpha", "seqd")
+        self.assertIn("seqd", worker_inbox.context_for_post_tool_use(self.env))
+        legacy = {"ts": a["ts"] + 1, "owner": "human", "to": "Alpha", "text": "legacy"}
+        with open(Path(atlas_todo.notes_dir(self.root)) / "human.jsonl", "a") as f:
+            f.write(json.dumps(legacy) + "\n")
+        self.assertIn("legacy", worker_inbox.context_for_post_tool_use(self.env))
+        self.assertEqual(worker_inbox.context_for_post_tool_use(self.env), "")
+        self.assertEqual(worker_inbox.context_for_post_tool_use(self.env), "")
+        self.assertEqual(worker_inbox._read_state(self.root, "Alpha")[1], a["seq"])
+
+    def test_cursor_never_regresses(self):
+        path = worker_inbox.cursor_path(self.root, "Alpha")
+        worker_inbox._write_cursor(path, 50.0, 9)
+        worker_inbox._write_cursor(path, 10.0, 0)
+        self.assertEqual(worker_inbox._read_state(self.root, "Alpha"), (50.0, 9))
+
+    def test_lead_alias_only_hears_its_own_channels(self):
+        lead = "lead-aaaaaa"
+        mine = atlas_todo.open_lead_channel(self.root, lead, ["W"])["name"]
+        with patch.dict(os.environ, {"ATLAS_CHANNEL": ""}):
+            legacy = {
+                "ts": time.time(),
+                "seq": 0,
+                "owner": "W",
+                "to": "lead",
+                "text": "no channel",
+            }
+            Path(atlas_todo.notes_dir(self.root)).mkdir(parents=True, exist_ok=True)
+            with open(Path(atlas_todo.notes_dir(self.root)) / "W.jsonl", "a") as f:
+                f.write(json.dumps(legacy) + "\n")
+            atlas_todo.note(
+                self.root, "W", "foreign", to="lead", channel="other@x/lead-bbbbbb"
+            )
+            atlas_todo.note(self.root, "W", "ours", to="lead", channel=mine)
+            worker_inbox._write_cursor(
+                worker_inbox.cursor_path(self.root, lead), 0.0, 0
+            )
+            out = worker_inbox.drain(self.root, lead, aliases=("lead",))
+        self.assertIn("ours", out)
+        self.assertNotIn("foreign", out)
+        self.assertNotIn("no channel", out)
+
+    def test_fresh_lead_does_not_replay_history_but_fresh_worker_keeps_brief(self):
+        self.note("human", "lead", "old news")
+        self.assertEqual(
+            worker_inbox.drain(self.root, "lead-zzzzzz", aliases=("lead",)), ""
+        )
+        self.note("human", "Gamma", "brief before first tool call")
+        self.assertIn("brief before", worker_inbox.drain(self.root, "Gamma"))
 
     def test_unsafe_worker_name_cannot_escape_the_inbox_dir(self):
         path = worker_inbox.cursor_path(self.root, "../../evil")

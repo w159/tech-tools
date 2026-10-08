@@ -10,7 +10,7 @@ import { mountChannelLens } from "./channel-lens.js";
 import { mountSupervisionLens } from "./supervision-lens.js";
 import { newWorkspace, focusPane } from "../herdr-actions.js";
 import { warmHp } from "../integrations.js";
-const LENS = [["fleet", "Fleet"], ["board", "Board"], ["channel", "Channel"], ["supervision", "Supervision"]];
+const LENS = [["fleet", "Fleet"], ["board", "Board"], ["supervision", "Supervision"]];
 
 const S = { ctx: null, lens: "fleet", view: "cards", filter: new Set(), q: "", unsub: null, body: null, legacy: null, chan: null, mount: null, tick: null, sort: { key: "state", dir: 1 }, chans: [], chansAt: 0 };
 

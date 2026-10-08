@@ -23,6 +23,7 @@ class SelffixTest(unittest.TestCase):
         atlas_db.init(self.conn)
         self.git_calls = []
         self.live = True
+        self.branch = "live"
         self.launches = []
         self.verify_cmd = "true"
         self.dirty = ""
@@ -57,6 +58,10 @@ class SelffixTest(unittest.TestCase):
             return 0, self.dirty
         if args[:2] == ["diff", "--name-only"]:
             return 0, self.changed
+        if args[:2] == ["rev-parse", "--verify"]:
+            return (1, "") if self.branch == "gone" else (0, "sha")
+        if args[:2] == ["merge-base", "--is-ancestor"]:
+            return (0 if self.branch == "merged" else 1), ""
         return 0, ""
 
     def fake_launch(self, top, f, wt):
@@ -118,6 +123,47 @@ class SelffixTest(unittest.TestCase):
         self.assertEqual(len(self.launches), n)  # terminal: no auto relaunch
         self.assertTrue(sf.retry(self.conn, fid)["ok"])
         self.assertEqual(self.state(fid), "none")
+
+    def test_ready_row_whose_branch_was_merged_and_deleted_becomes_merged(self):
+        fid = self.add(1)
+        sf.tick(self.conn)
+        self.live = False
+        sf.tick(self.conn)
+        self.assertEqual(self.state(fid), "ready")
+        self.branch = "gone"
+        snap = sf.snapshot(self.conn)
+        self.assertIn("branch gone", snap["ready"][0]["diffstat"])
+        self.assertNotIn("fatal", snap["ready"][0]["diffstat"])
+        sf.tick(self.conn)
+        self.assertEqual(self.state(fid), "merged")
+        self.assertEqual(atlas_db.get_finding(self.conn, fid)["status"], "applied")
+
+    def test_merge_of_missing_branch_reports_branch_gone(self):
+        fid = self.add(1)
+        sf.tick(self.conn)
+        self.live = False
+        sf.tick(self.conn)
+        self.branch = "gone"
+        self.assertEqual(sf.merge(self.conn, fid)["error"], "branch_gone")
+        self.assertEqual(self.state(fid), "merged")
+
+    def test_tick_reconciles_ready_row_whose_branch_is_ancestor_of_head(self):
+        fid = self.add(1)
+        sf.tick(self.conn)
+        self.live = False
+        sf.tick(self.conn)
+        self.branch = "merged"
+        sf.tick(self.conn)
+        self.assertEqual(self.state(fid), "merged")
+
+    def test_dead_running_row_with_gone_branch_becomes_merged(self):
+        fid = self.add(1)
+        sf.tick(self.conn)
+        self.assertEqual(self.state(fid), "running")
+        self.live = False
+        self.branch = "gone"
+        sf.tick(self.conn)
+        self.assertEqual(self.state(fid), "merged")
 
     def test_discard(self):
         fid = self.add(1)

@@ -324,8 +324,9 @@ export function CommandBlock(command) {
       type: "button",
       "aria-label": "Copy command",
       onClick: async (e) => {
+        const label = e.currentTarget.lastChild;
         const ok = await copyText(text);
-        e.currentTarget.lastChild.textContent = ok ? "Copied" : "Copy failed";
+        label.textContent = ok ? "Copied" : "Copy failed";
       },
     },
     icon("copy"),

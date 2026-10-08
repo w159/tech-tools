@@ -476,6 +476,19 @@ _TRACE_RE = re.compile(
 )
 
 
+def _log_size() -> int:
+    try:
+        return DASHBOARD_LOG.stat().st_size
+    except OSError:
+        return 0
+
+
+# The log has no per-line timestamps, so "since this daemon started" is the byte
+# offset at import time (the daemon imports this module at boot).
+_LOG_START = _log_size()
+_RETIRED_404 = re.compile(r"\b404\b.*(?:/static/|\.js\b|\.css\b|\.map\b)")
+
+
 def _fold_dashboard_log(since: float, tail_bytes: int = 262144) -> list[dict]:
     """Python errors in dashboard.log (the daemon's stderr). The access-log
     lines are not failures; only Traceback / *Error lines count."""
@@ -485,8 +498,9 @@ def _fold_dashboard_log(since: float, tail_bytes: int = 262144) -> list[dict]:
         if st.st_mtime < since:
             return []
         with open(p, "rb") as f:
-            if st.st_size > tail_bytes:
-                f.seek(st.st_size - tail_bytes)
+            # start at the daemon's boot offset (0 if the log was rotated since)
+            start = _LOG_START if _LOG_START <= st.st_size else 0
+            f.seek(max(start, st.st_size - tail_bytes))
             text = f.read().decode("utf-8", "replace")
     except OSError:
         return []
@@ -494,6 +508,8 @@ def _fold_dashboard_log(since: float, tail_bytes: int = 262144) -> list[dict]:
     for ln in text.splitlines():
         if not _TRACE_RE.match(ln) or ln.startswith("Traceback"):
             continue  # the *Error line that follows a Traceback carries the cause
+        if _RETIRED_404.search(ln):
+            continue  # 404s for retired static paths are not daemon failures
         kinds[ln[:160]] = kinds.get(ln[:160], 0) + 1
     if not kinds:
         return []

@@ -99,8 +99,8 @@ Sixteen conditions must ALL hold before the gate passes (else block ONCE):
       unreadable board.
   (p) Colony channel: when THIS RUN dispatched two or more atlas workers
       (`dispatches` rows whose agent_type starts `atlas:` or `atlas-`), the
-      channel must show use: a board note under .atlas/.run/board/ authored by
-      an owner other than `lead` inside the run window, or IRC/SendMessage
+      channel must show use: a board note under .atlas/.run/board/ on this run's
+      lead channel, authored by a registered member that is not a lead, inside the run window, or IRC/SendMessage
       traffic (`agent://` event paths, SendMessage tool calls) recorded for the
       run -- the exact sources are listed in `_colony_channel_used`. Kill switch
       ATLAS_GATE_COLONY=off. Fails open on any read error.
@@ -1752,8 +1752,11 @@ def _colony_channel_used(root: Path, session_id: str, started: float | None) -> 
     these evidence sources, any one of which is enough:
 
       1. Board notes: every `<root>/.atlas/.run/board/*.jsonl` line (the file
-         format atlas_todo.note writes: {"ts","owner","to","item","text"}) whose
-         `owner` is not `lead` and whose `ts` is at or after the run start.
+         format atlas_todo.note writes: {"ts","owner","to","item","text"[,"kind"]})
+         whose `ts` is at or after the run start, whose `channel` is one of this run's
+         lead channels (`<main>/<lead_name(session)>`) and whose `owner` is a
+         registered or departed member of it that is not a lead (`is_lead_name`):
+         a lead's own note, another lead's channel and a stranger's report never count.
       2. IRC traffic recorded in `events`: a row of the current-or-latest run
          whose `path` is an `agent://` URI (omp routes SendMessage as a Write to
          `agent://<peer>`; dispatch_tripwire logs it with that path).
@@ -1771,6 +1774,15 @@ def _colony_channel_used(root: Path, session_id: str, started: float | None) -> 
         import atlas_todo
 
         notes_dir = atlas_todo.notes_dir(str(root))
+        # Only this run's lead channel(s) count, and only notes owned by a registered
+        # (or departed) member that is not a lead: a lead's own note, another lead's
+        # channel, or a stranger's report never clears (p).
+        lead = atlas_todo.lead_name(session_id)
+        chans = {
+            n: {m["name"] for m in c["members"]} | set(c.get("departed") or {})
+            for n, c in atlas_todo._reg_read(str(root))["channels"].items()
+            if c.get("kind") == "lead" and c.get("lead") == lead
+        }
         if notes_dir.is_dir():
             for path in sorted(notes_dir.glob("*" + atlas_todo.NOTE_FILE_SUFFIX)):
                 try:
@@ -1782,7 +1794,8 @@ def _colony_channel_used(root: Path, session_id: str, started: float | None) -> 
                         rec = json.loads(line)
                         if (
                             isinstance(rec, dict)
-                            and rec.get("owner") != "lead"
+                            and rec.get("owner") in chans.get(rec.get("channel"), ())
+                            and not atlas_todo.is_lead_name(rec.get("owner"))
                             and float(rec.get("ts") or "nan") >= since
                         ):
                             return True

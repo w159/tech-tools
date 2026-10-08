@@ -965,6 +965,10 @@ class AtlasDoctorTest(unittest.TestCase):
     def test_hook_faults_gate_the_verdict(self):
         import atlas_faults
 
+        # fresh fault log: other test modules in the same process write to the shared one
+        env = mock.patch.dict(os.environ, {"ATLAS_HOME": os.path.join(self.tmp, "ah")})
+        env.start()
+        self.addCleanup(env.stop)
         self.assertTrue(self._checks()["hook-faults"]["ok"])
         for i in range(atlas_doctor.FAULT_FAIL_24H):
             atlas_faults.record("recall_gate", RuntimeError(f"x{i}"))
@@ -1791,6 +1795,18 @@ class MineTurnQualityHarnessTest(unittest.TestCase):
         keys, evaluated = self._mine()
         self.assertEqual(keys, set())
         self.assertEqual(evaluated, set())
+
+
+class TestContextToolingRoot(unittest.TestCase):
+    def test_resolves_repo_root_from_subdir(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as d:
+            subprocess.run(["git", "init", "-q", d], check=True)
+            sub = os.path.join(d, "a", "b")
+            os.makedirs(sub)
+            got = atlas_doctor._repo_root(sub)
+            self.assertEqual(os.path.realpath(got), os.path.realpath(d))
 
 
 if __name__ == "__main__":

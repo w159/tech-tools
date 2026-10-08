@@ -23,8 +23,8 @@ export function mountSupervisionLens(ctx, body) {
         h("h2", { class: "truncate", title: c.name }, "Lead " + info.alias),
         h("span", { class: "dim" }, info.parent + " \u00B7 " + subs + (subs === 1 ? " subagent" : " subagents") + " \u00B7 " + (total ? sum : "no todos")),
         h("span", { class: "grow" }),
-        Button({ label: "Channel", size: "sm", onClick: () => ctx.navigate("agents", { lens: "channel", channel: c.name, tab: "board" }) })),
-      rows.length ? MemberBoard({ rows, nested: true, onOpen: (rec) => ctx.openAgent(rec), onTo: () => ctx.navigate("agents", { lens: "channel", channel: c.name }) }) : h("p", { class: "dim chan-empty" }, "This lead has not dispatched any subagents yet."));
+        Button({ label: "Channel", size: "sm", onClick: () => ctx.navigate("channels", { channel: c.name, tab: "board" }) })),
+      rows.length ? MemberBoard({ rows, nested: true, onOpen: (rec) => ctx.openAgent(rec), onTo: () => ctx.navigate("channels", { channel: c.name }) }) : h("p", { class: "dim chan-empty" }, "This lead has not dispatched any subagents yet."));
   }
 
   function paint() {
@@ -32,7 +32,7 @@ export function mountSupervisionLens(ctx, body) {
     if (S.error) return replace(body, State({ variant: "error", error: S.error, onRetry: refresh }));
     if (!S.chans) return replace(body, State({ variant: "loading", label: "supervision", shape: "rows" }));
     const leads = leadChannels(S.chans);
-    if (!leads.length) return replace(body, State({ variant: "empty", title: "No lead is supervising subagents", body: "When an orchestrating agent runs atlas_todo.py channel-open it gets a subchannel named <folder>@<branch>/<lead>. Its subagents and their todo boards show up here.", action: Button({ label: "Open Channel", onClick: () => ctx.navigate("agents", { lens: "channel" }) }) }));
+    if (!leads.length) return replace(body, State({ variant: "empty", title: "No lead is supervising subagents", body: "When an orchestrating agent runs atlas_todo.py channel-open it gets a subchannel named <folder>@<branch>/<lead>. Its subagents and their todo boards show up here.", action: Button({ label: "Open Channel", onClick: () => ctx.navigate("channels") }) }));
     const sel = ctx.params.channel;
     const ordered = leads.slice().sort((a, b) => (b.name === sel) - (a.name === sel));
     replace(body, h("div", { class: "sup-page" }, ordered.map(section)));

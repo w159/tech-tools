@@ -1255,5 +1255,32 @@ class TestHealthHonesty(InsightsBase):
         )
 
 
+class TestDashboardLogWindow(unittest.TestCase):
+    def test_only_lines_after_daemon_start_and_no_404s(self):
+        import atlas_dash_insights as ins
+
+        with tempfile.TemporaryDirectory() as d:
+            log = Path(d) / "dashboard.log"
+            log.write_text("ValueError: old boot failure\n")
+            start = log.stat().st_size
+            with open(log, "a") as f:
+                f.write("HTTPError: 404 not found /static/retired.js\nKeyError: fresh\n")
+            with mock.patch.object(ins, "DASHBOARD_LOG", log), mock.patch.object(
+                ins, "_LOG_START", start
+            ):
+                out = ins._fold_dashboard_log(time.time() - 60)
+            blob = json.dumps(out)
+            self.assertIn("KeyError", blob)
+            self.assertNotIn("old boot", blob)
+            self.assertNotIn("404", blob)
+            with open(log, "a") as f:
+                f.write("RuntimeError: upstream returned 404 for tenant\n")
+            with mock.patch.object(ins, "DASHBOARD_LOG", log), mock.patch.object(
+                ins, "_LOG_START", start
+            ):
+                out = ins._fold_dashboard_log(time.time() - 60)
+            self.assertEqual(out[0]["count"], 2)  # KeyError + the real 404-mentioning error
+
+
 if __name__ == "__main__":
     unittest.main()
