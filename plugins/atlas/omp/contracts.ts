@@ -229,9 +229,6 @@ export function explorationDenyReason(
 ): string | undefined {
 	const tool = explorationTool(command, ...contract);
 	if (!tool) return undefined;
-	const how =
-		route.via === "tool"
-			? `call ${route.name} directly with JSON args`
-			: `write JSON args to the device ${route.device}`;
-	return `Atlas enforcement: this bash command only reads files, so use lean-ctx ${tool} instead (${how}; lean-ctx is reachable in this session). Native bash stays available for tests, git, builds and anything that writes.`;
+	const how = route.via === "tool" ? `call ${route.name} directly` : `write JSON to ${route.device}`;
+	return `Atlas enforcement: this bash command only reads files, so use lean-ctx ${tool} instead (${how}). Bash stays allowed for tests, git, builds and writes.`;
 }

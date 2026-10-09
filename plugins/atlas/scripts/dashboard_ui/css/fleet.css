@@ -230,3 +230,12 @@
 .colony-meta { font-size: var(--fs-sm, 12px); min-width: 0; }
 .colony-send .colony-send-text { flex: 1; min-width: 12rem; }
 .colony-send-why, .colony-notasks { margin: 0; font-size: var(--fs-sm, 12px); }
+.colony-intro { display: flex; flex-direction: column; gap: var(--s-1); margin-bottom: var(--s-3); }
+.colony-intro p, .chan-explain { margin: 0; font-size: var(--fs-sm, 12px); max-width: 80ch; }
+.colony-sent { display: flex; align-items: baseline; gap: var(--s-2); font-size: var(--fs-xs); min-width: 0; }
+.colony-sent .truncate { flex: 0 1 28ch; }
+.colony-sent-st { color: var(--text); }
+.colony-sent[data-status="undeliverable"] .colony-sent-st, .colony-sent[data-status="refused"] .colony-sent-st { color: var(--st-fail); }
+.chan-cur[data-current="true"] { color: var(--st-ok); border-color: var(--st-ok); }
+.chmsg .delivery-text { display: block; grid-column: 1 / -1; font-size: var(--fs-2xs); }
+.chmsg .delivery-text[data-status="undeliverable"], .chmsg .delivery-text[data-status="refused"] { color: var(--st-fail); }

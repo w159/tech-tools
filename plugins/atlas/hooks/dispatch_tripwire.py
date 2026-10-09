@@ -271,6 +271,22 @@ def _block_body(prompt, labels):
     return None
 
 
+_SPEC_HINTS = {
+    "GOAL:": "<one measurable sentence>",
+    "DELIVERABLE:": "<the exact artifact>",
+    "SUCCESS CRITERIA:": "<independently checkable, each with its evidence>",
+    "OUT OF SCOPE:": "<what not to touch>",
+    "STOP CONDITIONS:": "<when to halt and report instead of pushing through>",
+    "REPORT:": "STATUS, STEPS, FILES_CHANGED, EVIDENCE, DELIVERABLE, NEXT",
+}
+
+
+def _spec_skeleton(missing):
+    """Paste-ready lines for exactly the labels `missing` (entries may end ' (empty)')."""
+    labels = [m.replace(" (empty)", "") for m in missing]
+    return "\n".join("%s %s" % (label, _SPEC_HINTS[label]) for label in labels)
+
+
 def _toolkit_gap(tinput):
     """An atlas:* dispatch whose prompt never orders real code-nav tools.
 
@@ -491,6 +507,11 @@ def _name_missing(tinput):
         return None
     if os.environ.get("CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS") == "1":
         return None
+    # Teammate spawning under tmux needs the lead's pane; with TMUX set but TMUX_PANE
+    # empty a NAMED dispatch dies with "Could not determine current tmux pane/window".
+    # Unnamed stays a plain subagent, so the requirement lifts exactly there.
+    if os.environ.get("TMUX") and not os.environ.get("TMUX_PANE"):
+        return None
     if str(tinput.get("name") or "").strip():
         return None
     return agent
@@ -525,6 +546,19 @@ def _omp_pinned_models(agent):
                 v.strip().strip("'\"").lower() for v in value.split(",") if v.strip()
             ]
     return []
+
+
+def _expands_pin(selector, declared):
+    """omp expands the frontmatter alias to provider/id (`sonnet` ->
+    `anthropic/claude-sonnet-5`): the alias as a dash-delimited token of the
+    model id, with at most one `:<thinking>` suffix, is the same tier. A
+    different family never matches. Twin of omp/index.ts expandsPin."""
+    sel, *suffix = str(selector or "").split(":")
+    alias = str(declared or "").strip().lower()
+    if not alias or len(suffix) > 1:
+        return False
+    model_id = sel.split("/", 1)[1] if "/" in sel else ""
+    return alias in model_id.lower().split("-")
 
 
 def _inherited_selector(selector, live):
@@ -572,6 +606,8 @@ def _model_override(tinput, session_model=""):
     if given.lower() == declared.lower():
         return None
     if given.lower() in _omp_pinned_models(agent[len("atlas:") :]):
+        return None
+    if _expands_pin(given, declared):
         return None
     if _inherited_selector(given, session_model):
         return None
@@ -736,15 +772,10 @@ def _pre_tool_use(conn, atlas_db, tool, session, path, tinput=None, session_mode
             else:
                 deny(
                     "spec",
-                    "DENY - this %s dispatch to %s is unbounded: missing %s. A subagent "
-                    "with no finish line runs until it wanders. Paste the dispatch spec "
-                    "from subagent-kit.md, six blocks: GOAL (one measurable sentence), "
-                    "DELIVERABLE (the exact artifact), SUCCESS CRITERIA (independently "
-                    "checkable, each with its evidence), OUT OF SCOPE (what not to "
-                    "touch), STOP CONDITIONS (when to halt and report back rather than "
-                    "push through), REPORT (the result container; REPORT: must name the "
-                    "fields STATUS, STEPS, FILES_CHANGED, EVIDENCE, DELIVERABLE, NEXT)."
-                    % (tool, agent, ", ".join(missing)),
+                    "DENY - this %s dispatch to %s is unbounded: missing %s. Each block "
+                    "is a line-start `LABEL: text` (labels in a shared batch context "
+                    "count for every task). Add exactly:\n%s\nThen re-dispatch."
+                    % (tool, agent, ", ".join(missing), _spec_skeleton(missing)),
                 )
             return
         steps_problem = _runner_steps_problem(tinput or {})
@@ -1139,10 +1170,8 @@ def _exploration_deny(command, server):
     tools = {_EXPLORATION_TOOL.get(t[0], "ctx_shell") for t in segments}
     tool = tools.pop() if len(tools) == 1 else "ctx_shell"
     return (
-        f"DENY - this Bash command only reads files, so use lean-ctx `{tool}` instead. "
-        f'lean-ctx MCP (server "{server}") is configured for this project: if `{tool}` is '
-        f'not in your tool list yet, load it first with ToolSearch("select:mcp__{server}__{tool}"), '
-        "then call it. Native Bash stays available for tests, git, builds and anything that writes."
+        f"DENY - this Bash command only reads files: use lean-ctx `{tool}` "
+        f'(not loaded? ToolSearch("select:mcp__{server}__{tool}")).'
     )
 
 
@@ -1418,6 +1447,52 @@ def main():
         sys.stdout.write(out)
 
 
+_DEVICE_ARG_KEYS = {
+    "pattern",
+    "path",
+    "queries",
+    "query",
+    "include",
+    "exclude",
+    "max_results",
+    "mode",
+    "command",
+    "file_path",
+    "i",
+    "action",
+}
+
+
+def _device_args_overwrite(payload):
+    """Deny a Write of a small device-arguments JSON over an EXISTING file (.json
+    included): a mis-addressed xd:// device call that would clobber it. True when denied."""
+    if str(payload.get("tool_name") or "").lower() != "write":
+        return False
+    tinput = payload.get("tool_input") or {}
+    path = tinput.get("file_path") or tinput.get("path")
+    content = tinput.get("content")
+    if not isinstance(path, str) or not isinstance(content, str) or _is_uri_path(path):
+        return False
+    if len(content) > 4096 or not content.lstrip().startswith("{"):
+        return False
+    try:
+        base = (
+            payload.get("cwd") if isinstance(payload.get("cwd"), str) else os.getcwd()
+        )
+        if not os.path.isfile(os.path.join(base, os.path.expanduser(path))):
+            return False
+        obj = json.loads(content)
+    except Exception:
+        return False
+    if not isinstance(obj, dict) or not obj or not set(obj) <= _DEVICE_ARG_KEYS:
+        return False
+    _deny(
+        "DENY - this looks like device arguments written over %s; send them to the "
+        "xd:// device path instead." % os.path.basename(path)
+    )
+    return True
+
+
 _PAYLOAD_CWD = [None]
 
 
@@ -1447,6 +1522,10 @@ def _run(payload):
         and _in_subagent(payload)
     ):
         _deny_nested_dispatch(payload.get("tool_name"))
+        return
+    if payload.get("hook_event_name") == "PreToolUse" and _device_args_overwrite(
+        payload
+    ):
         return
     nudge = None
     if armed:

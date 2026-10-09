@@ -42,8 +42,44 @@ def _reply(res: dict):
     return status, res
 
 
+def _connectors() -> list:
+    """Atlas MCP connectors: the same rows Health and Settings use (credentials on file + usage)."""
+    import atlas_dash_insights as ins
+
+    try:
+        rows = (
+            list(ins.CONNECTOR_STATUS_PROVIDER() or [])
+            if ins.CONNECTOR_STATUS_PROVIDER
+            else []
+        )
+    except Exception:
+        return []
+    return [
+        {
+            "name": r.get("name"),
+            "server_name": r.get("server_name"),
+            "health": r.get("health"),
+            "configured": r.get("health") != "unconfigured",
+            "enabled": r.get("enabled"),
+            "missing_required": r.get("missing_required") or [],
+            "env_vars": [
+                {
+                    "env_key": f.get("env_key"),
+                    "is_set": bool(f.get("is_set")),
+                    "sensitive": bool(f.get("sensitive")),
+                    "source": f.get("source"),
+                }
+                for f in r.get("fields") or []
+            ],
+            "usage": r.get("usage"),
+        }
+        for r in rows
+    ]
+
+
 def _integrations(ctx):
-    return 200, ai.detect()
+    # detect() is cached and shared: copy before adding the per-request connector state.
+    return 200, {**ai.detect(), "connectors": _connectors()}
 
 
 def _hp(ctx):

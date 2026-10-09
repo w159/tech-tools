@@ -3,9 +3,10 @@
 // Consumes only the documented component API (see dashboard-contract.md).
 // No innerHTML: every datum reaches the DOM through h() text children.
 import { h, replace } from '../dom.js';
+import { keepView, readableTranscript } from '../keep-view.js';
 import {
   Badge, Card, Table, EmptyState, StatusDot, Drawer,
-  openDrawer, openModal, closeModal, confirm, Modal, toast as toastFn,
+  openDrawer, closeDrawer, openModal, closeModal, confirm, Modal, toast as toastFn,
 } from '../components.js';
 
 const LIVE_MS = 8000;
@@ -60,6 +61,7 @@ function freshState(ctx) {
     ctx,
     mount: null,
     kind: p.kind || '',
+    scratch: p.scratch === '1',
     group: GROUPS.some((g) => g.id === p.group) ? p.group : 'project',
     q: p.q || '',
     live: false,
@@ -78,6 +80,7 @@ function currentParams() {
   const p = { group: S.group, limit: 200 };
   if (S.ctx.project && S.ctx.project !== 'all') p.project = S.ctx.project;
   if (S.kind) p.kind = S.kind;
+  if (S.scratch) p.scratch = 1;
   if (S.q) p.q = S.q;
   return p;
 }
@@ -270,28 +273,83 @@ function kv(label, value) {
     h('dd', {}, value === undefined || value === null || value === '' ? '—' : value));
 }
 
+// Last lines of the session's transcript, readable, in a second drawer.
+async function openTranscript(item) {
+  const box = h('div', { class: 'pg-detail' }, h('p', { class: 'pg-hint', role: 'status' }, 'Loading transcript…'));
+  openDrawer(Drawer({ title: `Transcript: session ${item.session.slice(0, 8)}`, children: [box] }));
+  try {
+    const res = await S.ctx.api.get(`/api/sessions/${encodeURIComponent(item.session)}/transcript`);
+    const lines = readableTranscript(res.text, 40);
+    replace(box,
+      h('p', { class: 'pg-hint' }, `Last ${lines.length} messages${res.truncated ? ' (older part of the file not loaded)' : ''}. File: ${res.path}`),
+      lines.length
+        ? h('ul', { class: 'pg-list' }, ...lines.map((l) => h('li', {}, h('strong', {}, `${l.who}: `), l.text)))
+        : h('p', { class: 'pg-hint' }, 'The transcript has no readable messages yet.'));
+  } catch (err) {
+    const d = describeError(err);
+    replace(box, h('p', { class: 'pg-hint' }, err && err.status === 404
+      ? 'The transcript file is gone (a temporary or cleaned-up session), so there is nothing to open.'
+      : `${d.title}${d.body ? ` — ${d.body}` : ''}`));
+  }
+}
+
+function detailBadges(item, info) {
+  return [
+    Badge({ status: normStatus(item.status), text: item.status || 'info' }),
+    info.label ? Badge({ status: 'info', text: info.label }) : null,
+    item.scratch ? Badge({ status: 'info', text: 'test / temp session' }) : null,
+    item.count > 1 ? Badge({ status: 'info', text: `×${item.count} identical events collapsed` }) : null,
+  ];
+}
+
+function detailActions(item) {
+  return h('div', { class: 'pg-actions' },
+    item.session && item.transcript
+      ? h('button', { type: 'button', class: 'btn btn-primary', onclick: () => openTranscript(item) }, 'Open session transcript')
+      : null,
+    item.kind === 'finding'
+      ? h('button', { type: 'button', class: 'btn btn-primary', onclick: () => { closeDrawer(); S.ctx.navigate('improve'); } }, 'Open in Improve')
+      : null);
+}
+
+function detailNote(item) {
+  if (item.session) {
+    return item.transcript ? null : 'No transcript to open: this session was never ingested into the database, or its file is gone.';
+  }
+  return item.kind === 'finding' ? null : 'This event is not tied to a session, so there is no transcript.';
+}
+
+function detailFacts(item) {
+  return h('dl', { class: 'pg-kvs' },
+    kv(item.count > 1 ? 'Latest' : 'When', item.ts), kv('Project', item.project ? `${projName(item.project)} (${item.project})` : null),
+    kv('Agent / source', item.agent), item.class ? kv('Cause class', item.class) : null);
+}
+
 function openDetail(item) {
-  const ref = item.ref && typeof item.ref === 'object' ? item.ref : {};
-  const refRows = Object.keys(ref).map((k) => kv(k, typeof ref[k] === 'object' ? JSON.stringify(ref[k]) : String(ref[k])));
+  const info = (S.data && S.data.kinds && S.data.kinds[item.kind]) || {};
+  const note = detailNote(item);
   const body = h('div', { class: 'pg-detail' },
-    h('div', { class: 'pg-detail-head' },
-      Badge({ status: normStatus(item.status), text: item.status || 'info' }),
-      item.class ? Badge({ status: 'info', text: item.class }) : null,
-      item.count > 1 ? Badge({ status: 'info', text: `×${item.count} duplicates collapsed` }) : null),
+    h('div', { class: 'pg-detail-head' }, ...detailBadges(item, info)),
     h('p', { class: 'pg-detail-title' }, item.title || '(no title)'),
+    info.help ? h('p', { class: 'pg-hint' }, info.help) : null,
     item.detail ? h('pre', { class: 'pg-mono-block' }, item.detail) : null,
-    h('dl', { class: 'pg-kvs' },
-      kv('When', item.ts), kv('Kind', item.kind), item.class ? kv('Class', item.class) : null, kv('Project', item.project), kv('Agent', item.agent),
-      ...refRows));
+    detailFacts(item),
+    detailActions(item),
+    note ? h('p', { class: 'pg-hint' }, note) : null);
   openDrawer(Drawer({ title: item.title || 'Activity detail', children: [body] }));
 }
 
 // ---- rendering --------------------------------------------------------------
+function kindLabel(k) {
+  const info = S.data && S.data.kinds && S.data.kinds[k];
+  return info ? info.label : k;
+}
+
 function kindOptions() {
   const kinds = new Set();
   for (const it of allItems(S.data)) if (it.kind) kinds.add(it.kind);
   if (S.kind) kinds.add(S.kind);
-  return [...kinds].sort();
+  return [...kinds].sort().map((k) => ({ value: k, label: kindLabel(k) }));
 }
 
 function select(id, label, value, options, onChange) {
@@ -314,7 +372,7 @@ function filterRow() {
     select('pg-act-group', 'Group by', S.group, GROUPS.map((g) => ({ value: g.id, label: g.label })),
       (v) => { S.group = v; refresh(); }),
     select('pg-act-kind', 'Kind', S.kind,
-      [{ value: '', label: 'All kinds' }, ...kindOptions().map((k) => ({ value: k, label: k }))],
+      [{ value: '', label: 'All kinds' }, ...kindOptions()],
       (v) => { S.kind = v; refresh(); }),
     h('div', { class: 'pg-facet pg-facet-grow' }, h('label', { class: 'pg-label', for: 'pg-act-q' }, 'Search'), q),
     h('div', { class: 'pg-facet pg-facet-actions' },
@@ -323,7 +381,13 @@ function filterRow() {
         title: 'Poll for new activity every few seconds', onclick: () => setLive(!S.live),
       }, S.live ? '● Live' : '○ Live tail'),
       h('button', { type: 'button', class: 'btn', onclick: refresh }, 'Refresh'),
-      h('button', { type: 'button', class: 'btn', onclick: openSaveViewModal }, 'Save view')));
+      h('button', { type: 'button', class: 'btn', onclick: openSaveViewModal }, 'Save view')),
+    h('label', { class: 'pg-facet pg-hint', title: 'Sessions in temp directories, self-fix worktrees and e2e fixtures' },
+      h('input', {
+        type: 'checkbox', id: 'pg-act-scratch', checked: S.scratch,
+        onchange: (e) => { S.scratch = e.target.checked; refresh(); },
+      }),
+      ` Show test / temp sessions${S.data && S.data.scratch_hidden ? ` (${S.data.scratch_hidden} hidden)` : ''}`));
 }
 
 function viewsRow() {
@@ -343,10 +407,11 @@ function columns() {
   return [
     { key: 'ts', label: 'When', width: '96px', render: (r) => whenNode(r.ts) },
     { key: 'status', label: 'Status', width: '84px', render: (r) => Badge({ status: normStatus(r.status), text: r.status || 'info' }) },
-    { key: 'kind', label: 'Kind', width: '120px', render: (r) => h('span', { class: 'pg-mono' }, r.kind || '—') },
+    { key: 'kind', label: 'Kind', width: '150px', render: (r) => h('span', { title: (S.data.kinds && S.data.kinds[r.kind] && S.data.kinds[r.kind].help) || '' }, kindLabel(r.kind) || '—') },
     { key: 'title', label: 'Event', render: (r) => h('span', { class: 'pg-evt' },
       h('span', { class: `pg-evt-title${S.newIds.has(r.id) ? ' is-new' : ''}` }, r.title || '(no title)'),
       r.count > 1 ? h('span', { class: 'pg-count', title: `${r.count} identical events collapsed` }, `×${r.count}`) : null,
+      r.detail ? h('span', { class: 'pg-hint pg-clip', title: r.detail }, r.detail) : null,
       S.newIds.has(r.id) ? h('span', { class: 'pg-new' }, 'new') : null) },
     { key: 'agent', label: 'Agent', width: '120px', render: (r) => r.agent || '—' },
     { key: 'project', label: 'Project', width: '140px', render: (r) => projName(r.project) },
@@ -363,7 +428,7 @@ function groupCard(g) {
     Card({
       title: keyLabel,
       actions: [
-        h('span', { class: 'pg-group-meta' }, `${g.count || g.items.length} events · last ${fmtWhen(g.last)}`),
+        h('span', { class: 'pg-group-meta' }, `${g.count || g.items.length} events in ${g.items.length} rows · last ${fmtWhen(g.last)}`),
       ],
       children: [Table({
         columns: columns(), rows: g.items, dense: true, onRow: openDetail,
@@ -398,13 +463,16 @@ function draw() {
   const keepFocusId = active && S.mount.contains(active) ? active.id : '';
   const caret = active && active.id === 'pg-act-q' ? active.selectionStart : null;
   const total = S.data ? visibleGroups(S.data).reduce((n, g) => n + g.items.length, 0) : 0;
-  replace(S.mount, ...[
+  const span = S.data && S.data.since ? `since ${S.data.since.slice(0, 10)}, as of ${fmtWhen(S.data.as_of)}` : '';
+  keepView(S.mount, (t) => replace(t, ...[
     h('header', { class: 'pg-head' },
       h('h1', { class: 'pg-title' }, 'Activity'),
-      h('p', { class: 'pg-sub' }, S.data ? `${total} events shown, grouped by ${S.group}. Identical events are collapsed with a count.` : 'Everything Atlas observed, grouped and de-duplicated.'),
+      h('p', { class: 'pg-sub' }, S.data
+        ? `${total} rows shown, grouped by ${S.group}, ${span}. Identical events are collapsed into one row with a count. Click a row for what it means and, when the session still exists, its transcript.${S.data.truncated ? ' Older rows were cut off; narrow the filters to see them.' : ''}`
+        : 'Everything Atlas observed, grouped and de-duplicated.'),
       S.live ? h('span', { class: 'pg-live-flag', role: 'status' }, StatusDot({ status: 'ok' }), ' Live — checking every 8s') : null),
     filterRow(), viewsRow(), body(),
-  ].filter(Boolean));
+  ].filter(Boolean)));
   if (keepFocusId) {
     const el = S.mount.querySelector(`#${keepFocusId}`);
     if (el) { el.focus(); if (caret !== null && el.setSelectionRange) el.setSelectionRange(caret, caret); }

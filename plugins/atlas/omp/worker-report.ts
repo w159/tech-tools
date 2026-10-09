@@ -14,6 +14,7 @@ import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { readFileSync } from "node:fs";
 import * as nodePath from "node:path";
 
+import type { ChannelOpenInfo, WidgetUi } from "./channel-view";
 import { ATLAS_AGENT_TARGETABLE } from "./atlas-agents";
 import { type ChannelRunner, reviseForChannel } from "./channels";
 import { recordFault, taskItems } from "./hook-bridge";
@@ -26,6 +27,8 @@ export interface WorkerReportDeps {
 	contractPath?: string;
 	/** Test seam for the atlas_todo.py channel-open call (omp/channels.ts). */
 	channelRun?: ChannelRunner;
+	/** The lead dispatched subagents into a channel (omp/channel-view.ts paints the live view from this). */
+	onChannelOpen?: (ui: WidgetUi, info: ChannelOpenInfo) => void;
 }
 
 const schemaCache = new Map<string, Record<string, unknown>>();
@@ -112,7 +115,7 @@ function reviseForEvent(event: { toolName: string; input: unknown }, deps: Worke
 	return schema ? reviseTaskInput(event.input as Record<string, unknown>, schema) : undefined;
 }
 
-type TaskCtx = { cwd?: string; agent?: { kind?: string }; sessionManager?: { getSessionId?: () => unknown } };
+type TaskCtx = { cwd?: string; ui?: WidgetUi; agent?: { kind?: string }; sessionManager?: { getSessionId?: () => unknown } };
 
 /**
  * Registers the `task` dispatch handler (report schema, then the lead's CHANNEL block: omp applies only the last
@@ -132,7 +135,9 @@ export function registerWorkerReport(pi: Pick<ExtensionAPI, "on">, deps: WorkerR
 			const c = ctx as TaskCtx | undefined;
 			if (event.toolName === "task" && current && c?.cwd && c.agent?.kind !== "sub") {
 				const sid = c.sessionManager?.getSessionId?.();
-				const chan = reviseForChannel(current, { cwd: c.cwd, sessionId: typeof sid === "string" ? sid : undefined, env: deps.env, run: deps.channelRun });
+				const ui = c.ui;
+				const onOpen = ui && deps.onChannelOpen ? (info: ChannelOpenInfo) => deps.onChannelOpen?.(ui, info) : undefined;
+				const chan = reviseForChannel(current, { cwd: c.cwd, sessionId: typeof sid === "string" ? sid : undefined, env: deps.env, run: deps.channelRun, onOpen });
 				if (chan) revised = chan;
 			}
 		} catch (error) {

@@ -4,7 +4,7 @@
 name: "completeness-critic"
 description: "Pre-done completeness auditor that hunts unverified claims, unread sources, unexercised paths, and unmet requirements, and returns a gap list; refutes 'done' on a load-bearing gap. Defers docs-drift to docs-auditor. Never fixes. Use when work is about to be declared done and its completeness needs an independent check."
 thinkingLevel: "medium"
-model: ["@atlas-verifier","@default","@smol"]
+model: ["@atlas-verifier","@default","sonnet","@smol"]
 # Lead-only dispatch: atlas workers must not spawn subagents.
 spawns: "none"
 ---

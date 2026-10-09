@@ -577,12 +577,22 @@ test("a per-call model override of an atlas colony agent is blocked with the tri
 	expect(spawn({ type: "before_subagent_spawn", agent: "verifier", invocationKind: "task", modelRole: "task", patterns: ["anthropic/claude-opus-5-5:high"], spawnKey: "OverrideTwo" }, h.ctx)?.reason).toContain("pins model: @atlas-verifier");
 });
 
+test("omp's expansion of the frontmatter alias (sonnet -> anthropic/claude-sonnet-5) is not an override; another family is", () => {
+	const h = harness();
+	const spawn = spawnHandler(h);
+	const ev = (p: string) => ({ agent: "implementer", invocationKind: "task", modelRole: "task", patterns: [p] });
+	expect(spawn(ev("anthropic/claude-sonnet-5"), h.ctx)).toBeUndefined();
+	expect(spawn(ev("anthropic/claude-sonnet-5:high"), h.ctx)).toBeUndefined();
+	expect(spawn(ev("anthropic/claude-opus-5-5"), h.ctx)?.block).toBe(true);
+	expect(spawn(ev("ollama/glm-5.3-flash"), h.ctx)?.block).toBe(true);
+});
+
 test("the expanded pinned tier, no override, other agents and the kill switch all pass", () => {
 	const h = harness();
 	const spawn = spawnHandler(h);
 	expect(spawn({ type: "before_subagent_spawn", agent: "implementer", invocationKind: "task", modelRole: "smol", patterns: ["@atlas-worker", "anthropic/claude-sonnet-5-5:off"], spawnKey: "SpawnOne" }, h.ctx)).toBeUndefined(); // omp's own expansion of the definition's list
 	expect(spawn({ agent: "implementer", invocationKind: "task", modelRole: "smol", patterns: ["anthropic/claude-sonnet-5-5:off", "@Atlas-Worker"] }, h.ctx)).toBeUndefined(); // order and case do not matter
-	const WORKER_TIER = ["@atlas-worker", "@smol"];
+	const WORKER_TIER = ["@atlas-worker", "sonnet", "@smol"];
 	expect(spawn({ agent: "implementer", modelRole: "smol", patterns: [] }, h.ctx)?.model).toEqual(WORKER_TIER); // omitted model: restore the tier
 	expect(spawn({ agent: "implementer", modelRole: "smol", patterns: ["  ", ""] }, h.ctx)?.model).toEqual(WORKER_TIER); // blank patterns are no override
 	expect(spawn({ agent: "implementer", modelRole: "smol" }, h.ctx)).toBeUndefined(); // no patterns array at all: nothing to rewrite
@@ -598,7 +608,7 @@ test("unarmed dirs keep the tier pin but never deny a model override", () => {
 	const prev = process.env.ATLAS_GATES;
 	process.env.ATLAS_GATES = "off";
 	try {
-		expect(spawn({ agent: "implementer", modelRole: "smol", patterns: [] }, h.ctx)?.model).toEqual(["@atlas-worker", "@smol"]);
+		expect(spawn({ agent: "implementer", modelRole: "smol", patterns: [] }, h.ctx)?.model).toEqual(["@atlas-worker", "sonnet", "@smol"]);
 		expect(spawn({ agent: "implementer", modelRole: "task", patterns: ["ollama/glm-5.3-flash:cloud:medium"] }, h.ctx)).toBeUndefined();
 	} finally {
 		process.env.ATLAS_GATES = prev;
@@ -630,7 +640,7 @@ test("a concrete selector with a modelRole outside the pinned roles denies", () 
 
 test("a concrete selector with modelRole undefined denies", () => {
 	const h = harness();
-	const result = spawnHandler(h)({ type: "before_subagent_spawn", agent: "implementer", invocationKind: "task", patterns: ["anthropic/claude-sonnet-5-5:high"], spawnKey: "NoRole" }, h.ctx);
+	const result = spawnHandler(h)({ type: "before_subagent_spawn", agent: "implementer", invocationKind: "task", patterns: ["anthropic/claude-haiku-4-5:high"], spawnKey: "NoRole" }, h.ctx);
 	expect(result?.block).toBe(true);
 });
 
@@ -648,9 +658,9 @@ test("a selector equal to the parent's live model plus a thinking level is inher
 
 test("the same inherited selector denies when the context carries no model", () => {
 	const h = harness();
-	const result = spawnHandler(h)(inheritedSpawn(["anthropic/claude-sonnet-5-5:low"]), h.ctx);
+	const result = spawnHandler(h)(inheritedSpawn(["anthropic/claude-haiku-4-5:low"]), h.ctx);
 	expect(result?.block).toBe(true);
-	expect(result?.reason).toBe(modelOverrideReason("Task", "implementer", "anthropic/claude-sonnet-5-5:low", "@atlas-worker"));
+	expect(result?.reason).toBe(modelOverrideReason("Task", "implementer", "anthropic/claude-haiku-4-5:low", "@atlas-worker"));
 });
 
 test("a different concrete selector still denies when the parent's live model is known", () => {
@@ -676,7 +686,7 @@ test("an omitted model is rewritten to the pinned tier instead of running on the
 	const h = harness();
 	const result = spawnHandler(h)(pinSpawn("implementer", []), h.ctx);
 	expect(result?.block).toBeUndefined();
-	expect(result?.model).toEqual(["@atlas-worker", "@smol"]);
+	expect(result?.model).toEqual(["@atlas-worker", "sonnet", "@smol"]);
 	expect(result?.note).toBe("atlas: implementer pinned to @atlas-worker");
 });
 
@@ -702,11 +712,11 @@ test("a parent-model injection passes for any provider, with or without a level 
 		for (const patterns of [[live], [`${live}:medium`]]) {
 			const result = spawnHandler(h)(pinSpawn("implementer", patterns), h.ctx);
 			expect(result?.block).toBeUndefined();
-			expect(result?.model).toEqual(["@atlas-worker", "@smol"]); // inherited parent model is replaced by the tier
+			expect(result?.model).toEqual(["@atlas-worker", "sonnet", "@smol"]); // inherited parent model is replaced by the tier
 		}
 		const withLevel = harness();
 		withLevel.ctx.model = { provider, id: `${id}:medium` }; // live model string already carries its level
-		expect(spawnHandler(withLevel)(pinSpawn("implementer", [live]), withLevel.ctx)?.model).toEqual(["@atlas-worker", "@smol"]);
+		expect(spawnHandler(withLevel)(pinSpawn("implementer", [live]), withLevel.ctx)?.model).toEqual(["@atlas-worker", "sonnet", "@smol"]);
 	}
 });
 
@@ -714,10 +724,10 @@ test("the rewrite carries each tier's own pinned list", () => {
 	const h = harness();
 	h.ctx.model = { provider: "anthropic", id: "claude-opus-5-5" };
 	const live = "anthropic/claude-opus-5-5:medium";
-	expect(spawnHandler(h)(pinSpawn("verifier", [live]), h.ctx)?.model).toEqual(["@atlas-verifier", "@default", "@smol"]);
+	expect(spawnHandler(h)(pinSpawn("verifier", [live]), h.ctx)?.model).toEqual(["@atlas-verifier", "@default", "sonnet", "@smol"]);
 	expect(spawnHandler(h)(pinSpawn("verifier", [live]), h.ctx)?.note).toBe("atlas: verifier pinned to @atlas-verifier");
-	expect(spawnHandler(h)(pinSpawn("runner", [live]), h.ctx)?.model).toEqual(["@atlas-mechanic", "@smol"]);
-	expect(spawnHandler(h)(pinSpawn("explorer", []), h.ctx)?.model).toEqual(["@atlas-worker", "@smol"]);
+	expect(spawnHandler(h)(pinSpawn("runner", [live]), h.ctx)?.model).toEqual(["@atlas-mechanic", "haiku", "@smol"]);
+	expect(spawnHandler(h)(pinSpawn("explorer", []), h.ctx)?.model).toEqual(["@atlas-worker", "sonnet", "@smol"]);
 });
 
 test("a list that already carries the tier is left untouched, even beside the inherited parent model", () => {
@@ -741,7 +751,7 @@ test("no rewrite when the gate is off, the agent is not an atlas colony agent, o
 test("genuine overrides are still denied: opus, another provider, another tier's role", () => {
 	const h = harness();
 	h.ctx.model = { provider: "anthropic", id: "claude-opus-5-5" };
-	for (const patterns of [["opus"], ["openai/gpt-5"], ["anthropic/claude-sonnet-5-5"], ["@atlas-verifier"], ["sonnet", "opus"]]) {
+	for (const patterns of [["opus"], ["openai/gpt-5"], ["anthropic/claude-haiku-4-5"], ["@atlas-verifier"], ["sonnet", "opus"]]) {
 		const result = spawnHandler(h)(pinSpawn("implementer", patterns), h.ctx);
 		expect(result?.block).toBe(true);
 		expect(result?.reason).toBe(modelOverrideReason("Task", "implementer", patterns.join(", "), "@atlas-worker"));
@@ -855,4 +865,23 @@ test("the default export wires the agent guard: an explorer edit is blocked thro
 	expect(emit({ kind: "main", id: "Main", name: "main" }, "edit", { path: "src/a.ts" })?.block).toBeUndefined();
 	process.env.ATLAS_TRIPWIRE_HARD = "off";
 	expect(emit(explorer, "edit", { path: "src/a.ts" })?.block).toBeUndefined();
+});
+
+test("extension load exports ~/.atlas/settings.json env into process.env; an exported var wins", () => {
+	const home = process.env.ATLAS_HOME as string;
+	mkdirSync(home, { recursive: true });
+	writeFileSync(join(home, "settings.json"), JSON.stringify({ env: { ATLAS_LEAN_SHELL: "off", ATLAS_CHANNELS: "off", NOT_ATLAS: "x" } }));
+	const oldShell = process.env.ATLAS_LEAN_SHELL;
+	const oldChannels = process.env.ATLAS_CHANNELS;
+	delete process.env.ATLAS_LEAN_SHELL;
+	process.env.ATLAS_CHANNELS = "on"; // exported in the shell: must not be overridden
+	try {
+		extension({ on: () => {}, getActiveTools: () => [] } as unknown as ExtensionAPI);
+		expect(process.env.ATLAS_LEAN_SHELL).toBe("off");
+		expect(process.env.ATLAS_CHANNELS).toBe("on");
+		expect(process.env.NOT_ATLAS).toBeUndefined();
+	} finally {
+		if (oldShell === undefined) delete process.env.ATLAS_LEAN_SHELL; else process.env.ATLAS_LEAN_SHELL = oldShell;
+		if (oldChannels === undefined) delete process.env.ATLAS_CHANNELS; else process.env.ATLAS_CHANNELS = oldChannels;
+	}
 });

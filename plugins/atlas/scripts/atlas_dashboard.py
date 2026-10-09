@@ -23,6 +23,7 @@ import signal
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -62,6 +63,38 @@ def dashboard_db_path() -> str:
     if override:
         return os.path.expanduser(override)
     return str(CANONICAL_DB)
+
+
+# The shared Command Center lives on this port and serves the user's real ~/.atlas. A caller whose
+# state is scratch (tests, probes, temp HOME) must never bind, stop or replace it: a temp-env
+# ensure used to SIGTERM the live daemon and respawn one serving a throwaway DB.
+SHARED_PORT = 7421
+
+
+def _temp_roots() -> list[str]:
+    roots = [tempfile.gettempdir(), "/tmp", "/var/folders", "/private/var/folders"]
+    return [os.path.realpath(r) for r in roots]
+
+
+def under_temp_dir(path) -> bool:
+    p = os.path.realpath(os.path.expanduser(str(path)))
+    return any(p == r or p.startswith(r.rstrip(os.sep) + os.sep) for r in _temp_roots())
+
+
+def temp_env_reason() -> str | None:
+    """Why this process must not touch the shared port, or None when its state is real."""
+    for label, value in (
+        ("dashboard db", dashboard_db_path()),
+        ("HOME", str(Path.home())),
+        ("ATLAS_HOME", str(STATE_DIR)),
+    ):
+        if under_temp_dir(value):
+            return f"{label} {value} is under a temp dir"
+    return None
+
+
+def _guard_shared_port(port: int) -> str | None:
+    return temp_env_reason() if port == SHARED_PORT else None
 
 
 def _db():
@@ -869,6 +902,40 @@ def _session_detail(conn, session_id: str):
     }
 
 
+TRANSCRIPT_TAIL_BYTES = 2 * 1024 * 1024
+
+
+def _session_transcript(conn, session_id: str):
+    """(status, payload) serving the file session_logs.transcript_path names.
+
+    The path is the durable one (omp's retained session file, see
+    session_ingest.adopt_source_transcript), never an atlas-ingest-* temp copy.
+    Only the last TRANSCRIPT_TAIL_BYTES are returned."""
+    row = _q(
+        conn,
+        "SELECT transcript_path FROM session_logs WHERE session_id = ?",
+        (session_id,),
+        one=True,
+    )
+    if not row:
+        return 404, {"ok": False, "error": "session_not_found"}
+    path = row.get("transcript_path") or ""
+    try:
+        size = os.path.getsize(path)
+        with open(path, "rb") as f:
+            f.seek(max(0, size - TRANSCRIPT_TAIL_BYTES))
+            data = f.read()
+    except OSError:
+        return 404, {"ok": False, "error": "transcript_unavailable", "path": path}
+    return 200, {
+        "ok": True,
+        "path": path,
+        "size": size,
+        "truncated": size > len(data),
+        "text": data.decode("utf-8", "replace"),
+    }
+
+
 def _run_health(conn, limit=20, project_id=None):
     args: list = []
     where = ""
@@ -1242,18 +1309,36 @@ def _port_open(host: str, port: int) -> bool:
         return False
 
 
-def _read_pidfile():
-    if not PID_PATH.is_file():
-        return None
+def _pidfile_path(port: int) -> Path:
+    """One record per port: a scratch daemon on another port must never overwrite or be
+    mistaken for the shared daemon's record."""
+    return STATE_DIR / f"dashboard-{int(port)}.pid"
+
+
+def _load_pidfile(path: Path):
     try:
-        return json.loads(PID_PATH.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else None
     except Exception:
         return None
 
 
+def _read_pidfile(port: int | None = None):
+    """The record for ``port`` (default: DEFAULT_PORT). The legacy single ``dashboard.pid`` is
+    honoured only while it names that same port."""
+    port = port or DEFAULT_PORT
+    info = _load_pidfile(_pidfile_path(port))
+    if info is not None:
+        return info
+    legacy = _load_pidfile(PID_PATH)
+    if legacy is not None and int(legacy.get("port") or 0) == port:
+        return legacy
+    return None
+
+
 def _write_pidfile(pid: int, port: int, db_path: str):
     STATE_DIR.mkdir(parents=True, exist_ok=True)
-    PID_PATH.write_text(
+    _pidfile_path(port).write_text(
         json.dumps(
             {
                 "pid": pid,
@@ -1270,9 +1355,20 @@ def _write_pidfile(pid: int, port: int, db_path: str):
     )
 
 
-def _clear_pidfile():
+def _clear_pidfile(only_pid: int | None = None, port: int | None = None):
+    """Remove the record for ``port``. A daemon exiting passes its own pid so it never deletes a
+    record that a newer daemon has since written (the old daemon dies after its replacement is
+    up). Other ports' records and a legacy file naming another port are never touched."""
+    port = port or DEFAULT_PORT
     try:
-        PID_PATH.unlink(missing_ok=True)
+        if only_pid is not None:
+            info = _read_pidfile(port) or {}
+            if int(info.get("pid") or 0) != only_pid:
+                return
+        _pidfile_path(port).unlink(missing_ok=True)
+        legacy = _load_pidfile(PID_PATH)
+        if legacy is not None and int(legacy.get("port") or 0) == port:
+            PID_PATH.unlink(missing_ok=True)
     except Exception:
         pass
 
@@ -1308,10 +1404,13 @@ def _daemon_db_ok(port: int) -> bool:
         return False
 
 
-def stop_daemon() -> dict:
-    info = _read_pidfile() or {}
+def stop_daemon(port: int | None = None) -> dict:
+    """Stop OUR daemon on ``port`` (default DEFAULT_PORT) only: the pid in that port's own
+    pidfile, or a listener whose /api/health serves our DB. A listener serving a different DB
+    (another user state, a test) is never touched, however it got on the port."""
+    port = port or DEFAULT_PORT
+    info = _read_pidfile(port) or {}
     pid = int(info.get("pid") or 0)
-    port = int(info.get("port") or DEFAULT_PORT)
     stopped = False
     me = os.getpid()
     if pid and pid != me and _pid_alive(pid):
@@ -1326,7 +1425,8 @@ def stop_daemon() -> dict:
             if not _pid_alive(pid):
                 break
             time.sleep(0.1)
-    if _port_open(LOOPBACK, port):
+    listener_killed = False
+    if _port_open(LOOPBACK, port) and _daemon_db_ok(port):
         try:
             # LISTEN only: plain `tcp:<port>` also returns client sockets
             # (e.g. a browser holding an SSE connection), which must survive.
@@ -1340,12 +1440,28 @@ def stop_daemon() -> dict:
                         continue
                     os.kill(target, signal.SIGTERM)
                     stopped = True
+                    listener_killed = True
                 except Exception:
                     pass
         except Exception:
             pass
+    if listener_killed:
+        # Return only once the listener has released the port: an `ensure` straight after
+        # `stop` otherwise sees the dying daemon, reports already_running and loses it.
+        for _ in range(20):
+            if not _port_open(LOOPBACK, port):
+                break
+            time.sleep(0.1)
+        else:
+            return {
+                "ok": False,
+                "error": "port_still_held",
+                "stopped": stopped,
+                "pid": pid or None,
+                "port": port,
+            }
     time.sleep(0.15)
-    _clear_pidfile()
+    _clear_pidfile(port=port)
     return {"ok": True, "stopped": stopped, "pid": pid or None, "port": port}
 
 
@@ -1364,13 +1480,63 @@ def _version_tuple(value) -> tuple[int, ...] | None:
     return tuple(out) if any(out) else None
 
 
+def _reclaim_temp_listener(port: int, health: dict, want_db: str) -> bool:
+    """A stray daemon serving a TEMP-dir DB (a test or probe) must not hold the shared
+    port against a real-state caller. SIGTERM only the pid that /api/health names AND
+    lsof confirms is the LISTEN owner; True once the port is free. A temp caller never
+    replaces anything, and a daemon serving a real DB is never touched."""
+    if under_temp_dir(want_db) or not under_temp_dir(health.get("db_path") or "/"):
+        return False
+    me = os.getpid()
+    try:
+        pid = int(health.get("pid") or 0)
+        out = subprocess.check_output(
+            ["lsof", "-ti", f"tcp:{port}", "-sTCP:LISTEN"], text=True
+        )
+        if not pid or pid == me or str(pid) not in out.split():
+            return False
+        os.kill(pid, signal.SIGTERM)
+    except Exception:
+        return False
+    for _ in range(20):
+        if not _port_open(LOOPBACK, port):
+            return True
+        time.sleep(0.1)
+    return False
+
+
 def ensure_daemon(port: int | None = None) -> dict:
     port = port or DEFAULT_PORT
     url = dashboard_url(port)
     want_db = dashboard_db_path()
 
+    reason = _guard_shared_port(port)
+    if reason:
+        return {
+            "ok": False,
+            "error": "temp_env_on_shared_port",
+            "reason": reason
+            + f"; refusing to bind or replace the shared daemon on :{port}",
+            "port": port,
+            "db_path": want_db,
+        }
+
     if _port_open(LOOPBACK, port):
         h = _health_payload(port) or {}
+        same_db = _daemon_db_ok(port)
+        reclaimed = False
+        if h and not same_db:
+            # A healthy daemon on another DB is someone else's; never replace it,
+            # unless it only serves a temp-dir DB and we are real state.
+            reclaimed = _reclaim_temp_listener(port, h, want_db)
+            if not reclaimed:
+                return {
+                    "ok": False,
+                    "error": "port_held_by_other_db",
+                    "port": port,
+                    "served_db": h.get("db_path"),
+                    "db_path": want_db,
+                }
         # A daemon started by an older plugin version keeps serving its own UI
         # on this port until it dies. Compare plugin versions, not script paths:
         # harnesses install the plugin at different paths, so a path check would
@@ -1378,7 +1544,7 @@ def ensure_daemon(port: int | None = None) -> dict:
         # missing, older or unparsable version is replaced; a newer one is kept.
         daemon_ver = _version_tuple(h.get("version"))
         mine = _version_tuple(_plugin_manifest().get("version")) or ()
-        if _daemon_db_ok(port) and daemon_ver is not None and daemon_ver >= mine:
+        if same_db and daemon_ver is not None and daemon_ver >= mine:
             return {
                 "ok": True,
                 "already_running": True,
@@ -1387,8 +1553,11 @@ def ensure_daemon(port: int | None = None) -> dict:
                 "port": port,
                 "db_path": want_db,
             }
-        stop_daemon()
-        time.sleep(0.25)
+        if not reclaimed:
+            stop_daemon(port)
+            time.sleep(0.25)
+            if _port_open(LOOPBACK, port):
+                return {"ok": False, "error": "port_still_held", "port": port}
 
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     logf = open(LOG_PATH, "a", encoding="utf-8")
@@ -2380,6 +2549,14 @@ class Handler(BaseHTTPRequestHandler):
                 )
             finally:
                 conn.close()
+        m = re.match(r"^/api/(?:sessions|v2)/([^/]+)/transcript$", u.path)
+        if m:
+            conn, _ = _db()
+            try:
+                code, body = _session_transcript(conn, unquote(m.group(1)))
+                return self._json(code, body)
+            finally:
+                conn.close()
         if u.path.startswith("/api/sessions/"):
             sid = unquote(u.path[len("/api/sessions/") :])
             conn, _ = _db()
@@ -2401,6 +2578,7 @@ class Handler(BaseHTTPRequestHandler):
                 },
             )
         if u.path == "/api/behavior":
+            atlas_control.SETTINGS_PATH = _settings_path()
             return self._json(200, {"ok": True, **atlas_control.behavior_state()})
         if u.path == "/api/ecosystem":
             return self._json(200, {"ok": True, **atlas_control.ecosystem_inventory()})
@@ -2439,8 +2617,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, _todo_payload(root))
         if u.path == "/api/agents":
             qs = parse_qs(u.query)
-            root = _project_root(qs.get("project_id", [None])[0])
-            if not root:
+            pid = qs.get("project_id", [None])[0]
+            root = _project_root(pid)
+            # No project selected: still list the plugin's own agents (no overrides).
+            if pid not in (None, "") and not root:
                 return self._json(400, {"ok": False, "error": "unknown_project"})
             return self._json(200, _agents_payload(root))
         if u.path.startswith("/api/agents/"):
@@ -2636,14 +2816,19 @@ class _Server(ThreadingHTTPServer):
 
 
 def serve(host: str, port: int):
+    reason = _guard_shared_port(port)
+    if reason:
+        sys.stderr.write(f"[atlas-dashboard] refusing to serve on :{port}: {reason}\n")
+        raise SystemExit(1)
     os.environ["ATLAS_DB"] = dashboard_db_path()
     os.environ["ATLAS_DASHBOARD_DB"] = dashboard_db_path()
     httpd = _Server((host, port), Handler)
     _write_pidfile(os.getpid(), port, dashboard_db_path())
-    atexit.register(_clear_pidfile)
+    me = os.getpid()
+    atexit.register(_clear_pidfile, me, port)
 
     def _stop(signum, frame):
-        _clear_pidfile()
+        _clear_pidfile(me, port)
         raise SystemExit(0)
 
     signal.signal(signal.SIGTERM, _stop)
@@ -2674,7 +2859,8 @@ def main(argv=None):
     )
     ep = sub.add_parser("ensure")
     ep.add_argument("--port", type=int, default=DEFAULT_PORT)
-    sub.add_parser("stop")
+    stp = sub.add_parser("stop")
+    stp.add_argument("--port", type=int, default=DEFAULT_PORT)
     sub.add_parser("url")
     args = p.parse_args(argv)
 
@@ -2693,7 +2879,7 @@ def main(argv=None):
         sys.stdout.write("\n")
         return 0 if result.get("ok") else 1
     if args.cmd == "stop":
-        json.dump(stop_daemon(), sys.stdout, indent=2, default=str)
+        json.dump(stop_daemon(args.port), sys.stdout, indent=2, default=str)
         sys.stdout.write("\n")
         return 0
     if args.cmd == "serve":
@@ -2705,7 +2891,7 @@ def main(argv=None):
             return 1
         if _port_open(args.host, args.port) and not args.foreground:
             if not _daemon_db_ok(args.port):
-                stop_daemon()
+                stop_daemon(args.port)
                 time.sleep(0.2)
             else:
                 print(dashboard_url(args.port))

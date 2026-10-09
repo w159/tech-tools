@@ -59,6 +59,66 @@ def _state_file() -> Path:
     return _home() / "selffix-state.json"
 
 
+def _unit_of(f) -> str:
+    """Unit the finding's miner reports its metric in (atlas_doctor.METRIC_UNITS)."""
+    try:
+        import atlas_doctor
+
+        return atlas_doctor.metric_unit(f["fingerprint"])
+    except Exception:
+        return "raw"
+
+
+def _store_baseline(f, value) -> None:
+    st = _read_state()
+    st.setdefault("baseline", {})[str(f["id"])] = {"v": value, "unit": _unit_of(f)}
+    _write_state(st)
+
+
+def _split_baseline(raw):
+    """(value, unit) of a stored baseline; a bare number predates units: raw."""
+    if isinstance(raw, dict):
+        return raw.get("v"), raw.get("unit") or "raw"
+    return raw, "raw"
+
+
+def _baseline(f):
+    """The stored baseline for `f`, only when it is in the metric's current unit.
+    A unitless or mismatched baseline is never compared (raw 4 vs per-100 4.0)."""
+    value, unit = _split_baseline(
+        (_read_state().get("baseline") or {}).get(str(f["id"]))
+    )
+    return value if unit == _unit_of(f) else None
+
+
+def rebaseline_units(conn) -> list[str]:
+    """Replace every stored baseline whose unit no longer matches its miner:
+    re-measured in the current unit while the fix is still watched, else dropped."""
+    base = _read_state().get("baseline") or {}
+    notes: list[str] = []
+    for key, raw in list(base.items()):
+        f = _row(conn, int(key)) if str(key).isdigit() else None
+        if not f or _split_baseline(raw)[1] == _unit_of(f):
+            continue
+        value = None
+        if f["fix_state"] in (*ACTIVE, "ready", "merged"):
+            try:
+                import atlas_doctor
+
+                value = atlas_doctor.measure_finding_metric(conn, f)
+            except Exception:
+                value = None
+        if value is None:
+            del base[key]
+            notes.append(f"#{key} baseline dropped (unit changed)")
+        else:
+            base[key] = {"v": value, "unit": _unit_of(f)}
+            notes.append(f"#{key} re-baselined in {_unit_of(f)}: {value}")
+    if notes:
+        _write_state({"baseline": base})
+    return notes
+
+
 def _read_state() -> dict:
     try:
         return json.loads(_state_file().read_text())
@@ -257,9 +317,7 @@ def _start(conn, f, top) -> str:
     if rc:
         _set(conn, fid, "failed", f"worktree creation failed: {out}")
         return f"#{fid} worktree failed: {out}"
-    st = _read_state()
-    st.setdefault("baseline", {})[str(fid)] = _evidence(f).get("metric_value")
-    _write_state(st)
+    _store_baseline(f, _evidence(f).get("metric_value"))
     res = _worker_launch(top, _row(conn, fid), wt)
     attempts = (f.get("fix_attempts") or 0) + 1
     if not res.get("ok"):
@@ -336,7 +394,7 @@ def _verify(conn, f, top) -> str:
         ok, out = False, f"verify timed out after {VERIFY_TIMEOUT_S}s"
     if not ok:
         return _fail(conn, fid, f"verify failed: `{cmd}`\n{out}")
-    base = (_read_state().get("baseline") or {}).get(str(fid))
+    base = _baseline(f)
     after = None
     try:
         import atlas_doctor
@@ -373,7 +431,7 @@ def _check_running(conn, f, top) -> str | None:
 
 
 def _check_merged(conn, f, top) -> str | None:
-    base = (_read_state().get("baseline") or {}).get(str(f["id"]))
+    base = _baseline(f)
     if base is None or time.time() - (f["fix_updated_at"] or 0) > REGRESSION_WINDOW_S:
         return None
     import atlas_doctor
@@ -440,6 +498,10 @@ def tick(conn=None) -> dict:
                 atlas_doctor.mine(conn)
             except Exception as e:
                 notes.append(f"mine failed: {e}")
+        try:
+            notes += rebaseline_units(conn)
+        except Exception as e:
+            notes.append(f"rebaseline failed: {e}")
         for r in conn.execute(
             "SELECT id FROM findings WHERE fix_state IN ('ready','running','verifying','merged')"
         ).fetchall():

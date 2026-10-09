@@ -4,7 +4,7 @@
 Matches Edit / Write / MultiEdit / NotebookEdit. Picks a formatter by file extension, runs it in place
 using the project's own config, and is a no-op when the formatter is not installed. Meant
 to run ASYNC (hooks.json sets "async": true) so it never blocks the agentic loop. It
-never blocks a tool call; a formatter that fails is recorded via atlas_faults.
+never blocks a tool call; a formatter that fails is a quiet skip (not a hook crash).
 
 Why this matters for an orchestrator: a uniform, formatter-clean tree means diffs stay
 minimal and reviewers (and verifier subagents) see only real changes, not whitespace noise.
@@ -110,13 +110,33 @@ def file_path_from(data: dict) -> str | None:
     return fp
 
 
+def _record_skip(data: dict, fp: str, reason: str) -> None:
+    """One cheap friction row per skip (`formatter_skipped:<reason>`, ext in snippet) so
+    formatter latency/failures are measurable. Never a fault row; never raises."""
+    try:
+        import atlas_db  # noqa: E402  (lazy: only on the skip path)
+
+        conn = atlas_db.connect()
+        try:
+            atlas_db.record_friction(
+                conn,
+                data.get("session_id") or "",
+                "formatter_skipped:" + reason,
+                snippet=os.path.splitext(fp)[1].lower() or "(none)",
+            )
+        finally:
+            conn.close()
+    except Exception:
+        pass  # DB unavailable: the skip stays quiet, exit stays 0
+
+
 def main() -> int:
     data = atlas_hook_guard.load_payload("format_after_edit")
     fp = file_path_from(data)
     if not fp or not os.path.isfile(fp):
         return 0
     cwd = data.get("cwd") or os.getcwd()
-    failures = []
+    reasons: set[str] = set()
     for base in candidates_for(fp, cwd):
         try:
             proc = subprocess.run(
@@ -126,25 +146,23 @@ def main() -> int:
                 text=True,
                 timeout=55,
             )
-        except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as exc:
-            failures.append("%s: %s" % (base[0], type(exc).__name__))
+        except subprocess.TimeoutExpired:
+            reasons.add("timeout")
+            continue
+        except (FileNotFoundError, OSError):
+            reasons.add("missing")
             continue
         if proc.returncode == 0:
             # Silent on success. A formatter that ran is not news; announcing it on
             # every edit is the highest-frequency noise source in the plugin.
             return 0
-        # non-zero (e.g. syntax error mid-edit): try the next candidate
-        err = (getattr(proc, "stderr", "") or "").strip().splitlines()
-        failures.append(
-            "%s exited %s%s"
-            % (base[0], proc.returncode, (": " + err[0][:200]) if err else "")
-        )
-    if failures:
-        # Never blocks the edit, but a formatter that always fails must be visible.
-        atlas_hook_guard.fault(
-            "format_after_edit",
-            "no formatter succeeded for %s (%s)" % (fp, "; ".join(failures)),
-        )
+        reasons.add("parse")  # non-zero (e.g. syntax error mid-edit): try the next
+    # Every candidate failed or was absent: a skip, not a hook crash, so no fault row.
+    # Worst reason wins; no candidates at all means no formatter installed.
+    reason = next(
+        (r for r in ("timeout", "parse", "missing") if r in reasons), "missing"
+    )
+    _record_skip(data, fp, reason)
     return 0
 
 

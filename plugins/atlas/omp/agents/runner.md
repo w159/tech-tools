@@ -4,7 +4,7 @@
 name: "runner"
 description: "Mechanical executor for ONE tiny task given as numbered STEPS. Does not design, investigate or decide: runs each step exactly as written, records the command and real output as evidence, stops on anything unexpected, and returns a fixed report. Use when a task is fully specified as at most 7 exact steps on at most 5 named files."
 thinkingLevel: "off"
-model: ["@atlas-mechanic","@smol"]
+model: ["@atlas-mechanic","haiku","@smol"]
 # Lead-only dispatch: atlas workers must not spawn subagents.
 spawns: "none"
 ---

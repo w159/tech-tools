@@ -68,12 +68,45 @@ loadEnvFile(DEFAULT_ATLAS_ENV_FILE, "default env file");
 // 2. ATLAS_ENV_FILE when explicitly set overrides the baseline file (never the shell).
 if (process.env.ATLAS_ENV_FILE) loadEnvFile(process.env.ATLAS_ENV_FILE, "ATLAS_ENV_FILE");
 
-// 3. Fall back to CFG_<NAME> (from ${user_config.*}) when <NAME> is unset.
+// Helper for step 3: omp doesn't expand ${user_config.*}; read the same saved options Claude Code
+// would have used. In memory only (never written/logged); fails soft.
+const PLACEHOLDER = /^\$\{user_config\.([^}]+)\}$/;
+// Exact `atlas@<marketplace>` key only: name from this repo's marketplace.json, else the literal default.
+function marketplaceName() {
+  try {
+    const name = JSON.parse(readFileSync(join(import.meta.dirname, "..", "..", "..", "..", ".claude-plugin", "marketplace.json"), "utf8")).name;
+    if (typeof name === "string" && name) return name;
+  } catch {
+    // cache install has no repo marketplace.json
+  }
+  return "tech-tools";
+}
+let savedOptions;
+function savedOption(opt) {
+  if (savedOptions === undefined) {
+    savedOptions = {};
+    try {
+      const cfg = JSON.parse(readFileSync(join(homedir(), ".claude", "settings.json"), "utf8")).pluginConfigs;
+      savedOptions = cfg?.[`atlas@${marketplaceName()}`]?.options || {};
+    } catch {
+      // missing/unreadable/invalid settings: behaviour unchanged
+    }
+  }
+  const v = savedOptions[opt];
+  return typeof v === "string" || typeof v === "number" || typeof v === "boolean" ? String(v) : "";
+}
+
+// 3. Fall back to CFG_<NAME> (from ${user_config.*}, else saved pluginConfigs) when <NAME> is unset.
 for (const key of Object.keys(process.env)) {
   if (!key.startsWith("CFG_")) continue;
   const name = key.slice(4);
-  const value = process.env[key];
-  if (!isUsable(value)) continue;
+  let value = process.env[key];
+  const ph = PLACEHOLDER.exec(value);
+  if (ph && process.env[name] === undefined) value = savedOption(ph[1]);
+  if (!isUsable(value)) {
+    if (ph && process.env[name] === undefined) note(`${name}: unresolved; set ${name} in ~/.config/atlas/atlas.env (chmod 600)`);
+    continue;
+  }
   if (process.env[name] === undefined) process.env[name] = value;
   else if (process.env[name] !== value && !shellKeys.has(name)) {
     note(`${name}: env file value wins over saved userConfig (${key}); update or remove the file entry`);

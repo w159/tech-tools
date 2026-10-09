@@ -4,7 +4,7 @@
 name: "db-prober"
 description: "Read-only database prober that inspects SQL/Postgres schema, RLS policies, runtime-role GRANTs, indexes, constraints, and EXPLAIN plans, and returns findings with evidence. Read-only: no writes or migrations, only proposals. Use when a task needs facts about database structure, privileges, or query plans."
 thinkingLevel: "low"
-model: ["@atlas-worker","@smol"]
+model: ["@atlas-worker","sonnet","@smol"]
 # Lead-only dispatch: atlas workers must not spawn subagents.
 spawns: "none"
 ---

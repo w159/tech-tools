@@ -59,7 +59,7 @@ class ClientTests(unittest.TestCase):
     def test_loopback_available_without_key_and_sends_no_auth(self):
         calls = []
 
-        def fake(req, timeout=None):
+        def fake(req, timeout=None, **kw):
             calls.append(req)
             return _Resp({"answers": {}})
 
@@ -81,7 +81,7 @@ class ClientTests(unittest.TestCase):
     def test_retries_429_then_succeeds(self):
         calls = []
 
-        def fake(req, timeout=None):
+        def fake(req, timeout=None, **kw):
             calls.append(req)
             if len(calls) == 1:
                 raise _http_error(429, {"retry-after": "2"})
@@ -96,7 +96,7 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(json.loads(calls[0].data)["model"], "jev-latest")
 
     def test_error_text_never_contains_key(self):
-        def fake(req, timeout=None):
+        def fake(req, timeout=None, **kw):
             raise _http_error(401)
 
         with mock.patch.object(typesafe_client.urllib.request, "urlopen", fake):
@@ -107,7 +107,7 @@ class ClientTests(unittest.TestCase):
         self.assertIn("TYPESAFE_API_KEY", str(cm.exception))
 
     def test_url_error_redacts_key(self):
-        def fake(req, timeout=None):
+        def fake(req, timeout=None, **kw):
             raise urllib.error.URLError(f"boom {KEY}")
 
         with mock.patch.object(typesafe_client.urllib.request, "urlopen", fake):
@@ -119,7 +119,7 @@ class ClientTests(unittest.TestCase):
     def test_gives_up_after_three_retries(self):
         n = []
 
-        def fake(req, timeout=None):
+        def fake(req, timeout=None, **kw):
             n.append(1)
             raise _http_error(529)
 
@@ -128,6 +128,20 @@ class ClientTests(unittest.TestCase):
                 typesafe_client.evaluate("s", {})
         self.assertEqual(cm.exception.status, 529)
         self.assertEqual(len(n), 4)
+
+    def test_tls_context_uses_certifi_bundle_only_when_importable(self):
+        import ssl
+        import types
+
+        fake_certifi = types.SimpleNamespace(where=lambda: "/nonexistent/cacert.pem")
+        with mock.patch.dict(sys.modules, {"certifi": fake_certifi}):
+            with mock.patch.object(ssl, "create_default_context") as ctx:
+                self.assertEqual(
+                    typesafe_client._tls_kwargs(), {"context": ctx.return_value}
+                )
+                ctx.assert_called_once_with(cafile="/nonexistent/cacert.pem")
+        with mock.patch.dict(sys.modules, {"certifi": None}):  # ImportError
+            self.assertEqual(typesafe_client._tls_kwargs(), {})  # system default
 
 
 if __name__ == "__main__":

@@ -212,7 +212,9 @@ class ColonyAdherenceMinerTest(unittest.TestCase):
         for i in range(5):
             self._omp_session(f"b{i}")
         for i, tasks in enumerate(shapes):
-            summary, _ = session_ingest.summarize_input({"context": big, "tasks": tasks})
+            summary, _ = session_ingest.summarize_input(
+                {"context": big, "tasks": tasks}
+            )
             self._call(f"b{i}", "task", summary)
         omp = self._by_key(self._mine())["omp"]
         self.assertAlmostEqual(omp["evidence"]["named_dispatch_rate"], 1 / 3)
@@ -238,11 +240,22 @@ class ColonyAdherenceMinerTest(unittest.TestCase):
         self.assertIn("omp", found)
         self.assertNotIn("claude-code", found)
 
+    def test_uuidv7_session_id_is_omp_even_with_capitalized_names(self):
+        classify = atlas_doctor._colony_classify_harness
+        v7 = "01a117a3-796e-7677-b7f6-c23ee87536a6"
+        v4 = "c947dbf7-a3c3-44b6-9912-1c515075e5ff"
+        self.assertEqual(classify(["Read", "Bash"], v7), "omp")
+        self.assertEqual(classify(["Read", "Bash"], v4), "claude-code")
+        self.assertEqual(classify(["Read"]), "claude-code")
+        self.assertIsNone(classify(["mcp__x__y"], v7))
+
     def test_low_sample_window_is_silent_and_not_evaluated(self):
         for i in range(4):  # one below COLONY_MIN_SESSIONS
             self._omp_session(f"q{i}")  # share 2/3 > 0.5
         self.assertEqual(self._mine(), [])
-        self.assertEqual(atlas_doctor.mine_colony_adherence(self.conn, "/x").evaluated, set())
+        self.assertEqual(
+            atlas_doctor.mine_colony_adherence(self.conn, "/x").evaluated, set()
+        )
 
     def test_fired_keys_stay_evaluated_for_sweep(self):
         for i in range(5):
@@ -289,18 +302,31 @@ class DispatchNameSurvivesIngestTest(unittest.TestCase):
 
     def test_claude_agent_name_survives_a_long_prompt(self):
         summary, _ = self.summarize(
-            {"description": "d", "prompt": self.big, "subagent_type": "atlas:implementer", "name": "auth-impl"}
+            {
+                "description": "d",
+                "prompt": self.big,
+                "subagent_type": "atlas:implementer",
+                "name": "auth-impl",
+            }
         )
         self.assertTrue(summary.startswith('{"name": "auth-impl"'))
         self.assertEqual(atlas_doctor._colony_named_dispatch_stats([summary])[0], 1.0)
 
     def test_omp_batch_is_named_only_when_every_item_is(self):
-        full = {"context": self.big, "tasks": [{"name": "ScoutA", "task": self.big}, {"name": "FixB", "task": self.big}]}
-        partial = {"context": self.big, "tasks": [{"name": "ScoutA", "task": self.big}, {"task": self.big}]}
+        full = {
+            "context": self.big,
+            "tasks": [
+                {"name": "ScoutA", "task": self.big},
+                {"name": "FixB", "task": self.big},
+            ],
+        }
+        partial = {
+            "context": self.big,
+            "tasks": [{"name": "ScoutA", "task": self.big}, {"task": self.big}],
+        }
         rows = [self.summarize(full)[0], self.summarize(partial)[0]]
         rate, text = atlas_doctor._colony_named_dispatch_stats(rows)
         self.assertEqual((rate, text), (0.5, "1/2 named"))
-
 
 
 class _ColonyDb(unittest.TestCase):
@@ -370,12 +396,21 @@ class ColonyReaderRoutingTest(_ColonyDb):
         return found[harness]["evidence"] if harness in found else None
 
     def test_lean_ctx_wrapped_bash_is_ctx_not_native(self):
-        self.assertTrue(atlas_doctor._colony_is_ctx_call(
-            "Bash", '{"command": "/opt/homebrew/bin/lean-ctx -c \'ls -la\'"}'))
-        self.assertTrue(atlas_doctor._colony_is_ctx_call(
-            "bash", '{"command": "lean-ctx -c git status"}'))
-        self.assertFalse(atlas_doctor._colony_is_ctx_call(
-            "Bash", '{"command": "git status && echo lean-ctx"}'))
+        self.assertTrue(
+            atlas_doctor._colony_is_ctx_call(
+                "Bash", '{"command": "/opt/homebrew/bin/lean-ctx -c \'ls -la\'"}'
+            )
+        )
+        self.assertTrue(
+            atlas_doctor._colony_is_ctx_call(
+                "bash", '{"command": "lean-ctx -c git status"}'
+            )
+        )
+        self.assertFalse(
+            atlas_doctor._colony_is_ctx_call(
+                "Bash", '{"command": "git status && echo lean-ctx"}'
+            )
+        )
         self.assertFalse(atlas_doctor._colony_is_ctx_call("Bash", None))
 
     def test_wrapped_bash_leaves_native_share_under_the_cap(self):
@@ -430,10 +465,16 @@ class ColonyReaderRoutingTest(_ColonyDb):
         ):
             self.assertTrue(atlas_doctor._colony_is_ctx_call("write", summary), summary)
         # a write to any other xd:// device (or a repo file) is not a ctx route
-        self.assertFalse(atlas_doctor._colony_is_ctx_call(
-            "write", '{"path": "xd://mcp__serena_find_symbol", "content": "{}"}'))
-        self.assertFalse(atlas_doctor._colony_is_ctx_call(
-            "write", '{"path": "src/a.py", "content": "x"}'))
+        self.assertFalse(
+            atlas_doctor._colony_is_ctx_call(
+                "write", '{"path": "xd://mcp__serena_find_symbol", "content": "{}"}'
+            )
+        )
+        self.assertFalse(
+            atlas_doctor._colony_is_ctx_call(
+                "write", '{"path": "src/a.py", "content": "x"}'
+            )
+        )
 
 
 class ColonyShellEditTest(_ColonyDb):

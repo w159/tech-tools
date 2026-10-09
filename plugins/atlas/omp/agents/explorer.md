@@ -4,7 +4,7 @@
 name: "explorer"
 description: "Read-only codebase explorer that maps a feature, module, or call path, locates the symbol owning a behavior, or summarizes structure without reading whole files. Returns a compact map with file:line refs, not dumps. Use when a task needs to know where something lives or how code connects before it is changed."
 thinkingLevel: "off"
-model: ["@atlas-worker","@smol"]
+model: ["@atlas-worker","sonnet","@smol"]
 # Lead-only dispatch: atlas workers must not spawn subagents.
 spawns: "none"
 ---

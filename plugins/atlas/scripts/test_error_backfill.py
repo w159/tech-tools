@@ -25,6 +25,11 @@ class ClassifyErrorTests(unittest.TestCase):
                 'Traceback (most recent call last):\n  File "/r/plugins/atlas/scripts/atlas_db.py", line 1\nboom',
                 False,
             ),
+            "user_code": (
+                "eval",
+                "Traceback (most recent call last): File \"<cell>\", line 1\nKeyError: 'a'",
+                False,
+            ),
             "unknown": ("Bash", "", False),
         }
         for want, (tool, snip, denied) in cases.items():
@@ -268,7 +273,7 @@ class ClassifyErrorTests(unittest.TestCase):
             # still unknown: short unmarked shell text, user-script tracebacks, non-shell output
             ("unknown", "Bash", "short plain output"),
             ("unknown", "eval", "z" * 500),
-            ("unknown", "Bash", "Traceback (most recent call last): " + "q" * 480),
+            ("user_code", "Bash", "Traceback (most recent call last): " + "q" * 480),
         ]
         for want, tool, snip in cases:
             self.assertEqual(atlas_db.classify_error(tool, snip, False), want, snip)
@@ -304,9 +309,31 @@ class ClassifyErrorTests(unittest.TestCase):
             ("model_misuse", "Write", "content is required for plugins/atlas/x.md"),
             ("model_misuse", "Edit", "Invalid args for edit on plugins/atlas/a.py"),
             ("model_misuse", "Edit", "Validation failed for plugins/atlas/a.py"),
-            ("unknown", "eval", tb % "<cell>"),
-            ("unknown", "Bash", tb % "<string>"),
-            ("unknown", "Bash", tb % "<stdin>"),
+            ("user_code", "eval", tb % "<cell>"),
+            ("user_code", "Bash", tb % "<string>"),
+            ("user_code", "Bash", tb % "<stdin>"),
+            ("user_code", "eval", "SyntaxError: JSON Parse error: Unexpected token"),
+            (
+                "model_misuse",
+                "wait",
+                "Service mode does not accept async or timeout; use ready.timeout",
+            ),
+            (
+                "model_misuse",
+                "wait",
+                "Nothing to wait for: no background job or service you started is running",
+            ),
+            (
+                "environment",
+                "wait",
+                "Skipped due to a queued background completion (job or supervised)",
+            ),
+            (
+                "environment",
+                "mcp__claude_mem__search",
+                "Error calling Worker API: fetch failed",
+            ),
+            ("environment", "mcp__claude_mem__search", "Chroma collection unavailable"),
             ("unknown", "Bash", "error in atlas_db.py line 3"),
             (
                 "model_misuse",
@@ -334,7 +361,7 @@ class ClassifyErrorTests(unittest.TestCase):
                 "Bash",
                 "Traceback (most recent call last): File plugins/atlas/x",
             ),
-            ("unknown", "eval", "Traceback (most recent call last): atlas_db boom"),
+            ("user_code", "eval", "Traceback (most recent call last): atlas_db boom"),
             ("unknown", "Edit", "Traceback (most recent call last): atlas_db boom"),
         ]
         for want, tool, snip in cases:

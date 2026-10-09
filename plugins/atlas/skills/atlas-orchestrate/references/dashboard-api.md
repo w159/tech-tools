@@ -86,12 +86,13 @@ These live in `Handler._legacy_get` / `Handler._legacy_post`, are dispatched **a
 | `/api/sessions/{id}` | session detail (tools, prompts, dispatches) | `ok, session, ...` ; `404 session_not_found` |
 | `/api/connectors` | connector env coverage, no secrets | `ok, connectors, user_config, settings_path` |
 | `/api/connectors/export` | `.env` template, secrets blanked | `ok, text, env_path` |
-| `/api/behavior` | `ATLAS_*` knob groups + advanced list, each with the `file:line` that reads it | `ok, ...behavior_state()` |
+| `/api/behavior` | `ATLAS_*` knob groups + advanced list; each knob and `ATLAS_*` var shows value, source (process > store > claude settings > default), reached harnesses, default, `file:line` ref and last-changed | `ok, ...behavior_state()` |
 | `/api/ecosystem` | installed plugins, MCP servers, atlas hook wiring, skills/agents/output styles | `ok, ...ecosystem_inventory()` |
 | `/api/findings` | doctor findings | `ok, findings` |
 | `/api/runs[?limit=&project_id=]` | recent runs / run health (default limit 20) | `ok, health` |
 | `/api/todo?project_id=` | durable todo board `<project>/.atlas/.run/todos.json` | board payload; `400 unknown_project` |
-| `/api/agents?project_id=` | agent roster: plugin agents plus same-name overrides in `<project>/.claude/agents/` | roster payload; `400 unknown_project` |
+| `/api/agents?project_id=` | agent roster: plugin agents plus same-name overrides in `<project>/.claude/agents/`; without `project_id` it returns the plugin roster (the UI shows it when no projects are registered) | roster payload; `400 unknown_project` |
+| `/api/sessions/<id>/transcript`, `/api/v2/<id>/transcript` | the session's durable transcript (the original recorded file, see `ATLAS_SOURCE_TRANSCRIPT`) | transcript payload |
 | `/api/agents/{name}?project_id=` | one agent's effective body (override wins) | content payload |
 | `/api/memory` | shared memory snapshot from `~/.atlas/memory/` | `ok, ...load_snapshot()` |
 
@@ -102,7 +103,7 @@ These live in `Handler._legacy_get` / `Handler._legacy_post`, are dispatched **a
 | `/api/connectors/env` | `{"updates": {key: value}}` | allowlisted credential writes (userConfig keys or UPPER env keys); `400 updates_required` |
 | `/api/connectors/import` | `{"text": "KEY=VALUE\n..."}` | bulk `.env` paste, same allowlist; `400 no_assignments_found` |
 | `/api/connectors/test` | `{"name": "<connector>"}` | start the connector bundle and complete an MCP handshake |
-| `/api/behavior` | `{"updates": {ATLAS_KEY: value}}` | allowlisted writes to `settings.json` `env`; empty value removes the override; one bad key rejects the batch |
+| `/api/behavior` | `{"updates": {ATLAS_KEY: value}}` | allowlisted writes to the atlas settings store `<ATLAS_HOME or ~/.atlas>/settings.json` (`{env, changed}`, atomic, 0600) and Claude `settings.json` `env`; the omp hook bridge exports the store into hook env; empty value removes the override; one bad key rejects the batch; advanced vars are editable; survives a daemon restart |
 | `/api/mcp/toggle` | `{"name", "enabled"}` | enable/disable one server via `disabledMcpServers` |
 | `/api/mcp/add` | server config object | user-scope server in `~/.claude.json` |
 | `/api/mcp/remove` | `{"name"}` | remove a user-scope server |
@@ -305,7 +306,9 @@ The credential and agent-override APIs below are unchanged and still enforced by
 - **Test** starts the connector's own entry point (`mcp/<name>/server.mjs` under node, or the vendored Python project under `uv run`) with its resolved `${user_config.*}` environment and completes an MCP `initialize` + `tools/list`. It proves the connector runs; vendor credentials are proven only by a live call to the connector's `*_status` tool.
 - Bulk export marks a set secret on its own comment line, never inline.
 - Full flow and E2E matrix: `references/connector-config-flow.md`.
-- Behavior writes go to `~/.claude/settings.json` `"env"` (where hooks read). Atlas refuses to disable itself; use `claude plugin disable atlas` from a terminal.
+- Behavior writes go to the atlas store `<ATLAS_HOME or ~/.atlas>/settings.json` and to `~/.claude/settings.json` `"env"` (where Claude hooks read); omp sessions get the store through the hook bridge. Atlas refuses to disable itself; use `claude plugin disable atlas` from a terminal.
+- Daemon isolation: `ensure`/`serve` refuse a temp env on the shared port 7421 (`temp_env_on_shared_port`); a healthy daemon on a different DB is never replaced (`port_held_by_other_db`); `stop_daemon` kills only its own pidfile pid or a same-DB listener; `session_boot` skips under a temp HOME.
+- The Integrations page lists atlas MCP connectors with health, configured state and missing env var names (never secret values).
 - Agent overrides: `project_id` resolves to the registered `root_path` first, so the server never reads agent files from client-supplied paths.
 
 ## Daemon and DB pinning

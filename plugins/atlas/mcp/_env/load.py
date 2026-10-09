@@ -14,9 +14,12 @@ stdout is reserved for JSON-RPC; diagnostics go to stderr only.
 Usage: python load.py <module.to.run>
 """
 
+import json
 import os
+import re
 import runpy
 import sys
+from pathlib import Path
 
 
 def _is_unexpanded(value: str) -> bool:
@@ -67,13 +70,57 @@ def _load_env_file(path: str, label: str, shell_keys: set) -> None:
         os.environ[key] = value
 
 
+def _marketplace_name() -> str:
+    """Exact `atlas@<marketplace>` key: name from this repo's marketplace.json, else the literal default."""
+    try:
+        mp = Path(__file__).resolve().parents[4] / ".claude-plugin" / "marketplace.json"
+        name = json.loads(mp.read_text()).get("name")
+        if isinstance(name, str) and name:
+            return name
+    except (OSError, ValueError, AttributeError, IndexError):
+        pass  # cache install has no repo marketplace.json
+    return "tech-tools"
+
+
+_PLACEHOLDER = re.compile(r"^\$\{user_config\.([^}]+)\}$")
+_saved_options = None
+
+
+def _saved_option(opt: str) -> str:
+    """omp doesn't expand ${user_config.*}: read Claude Code's saved options. In memory only; fails soft."""
+    global _saved_options
+    if _saved_options is None:
+        _saved_options = {}
+        try:
+            cfg = (
+                json.loads((Path.home() / ".claude" / "settings.json").read_text()).get(
+                    "pluginConfigs"
+                )
+                or {}
+            )
+            _saved_options = (cfg.get(f"atlas@{_marketplace_name()}") or {}).get(
+                "options"
+            ) or {}
+        except (OSError, ValueError, AttributeError):
+            pass
+    v = _saved_options.get(opt)
+    return str(v) if isinstance(v, (str, int, float, bool)) else ""
+
+
 def _promote_cfg(shell_keys: set) -> None:
     for key in list(os.environ):
         if not key.startswith("CFG_"):
             continue
         name = key[4:]
         value = os.environ[key]
+        ph = _PLACEHOLDER.match(value)
+        if ph and name not in os.environ:
+            value = _saved_option(ph.group(1))
         if not _is_usable(value):
+            if ph and name not in os.environ:
+                _note(
+                    f"{name}: unresolved; set {name} in ~/.config/atlas/atlas.env (chmod 600)"
+                )
             continue
         if name not in os.environ:
             os.environ[name] = value

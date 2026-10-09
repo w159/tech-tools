@@ -40,11 +40,32 @@ const RECENT_KEY = "atlas.recent";
 // ---- navigation model (MASTER 8) -------------------------------------------------
 
 const GROUPS = [
-  { id: "observe", label: "Observe", items: [{ page: "overview" }, { page: "activity" }, { page: "health" }] },
-  { id: "operate", label: "Operate", items: [{ page: "agents", label: "Agents" }, { page: "colony", label: "Colony", icon: "herd" }, { page: "channels", label: "Channels", icon: "irc" }], tree: true },
-  { id: "improve", label: "Improve", items: [{ page: "improve" }] },
-  { id: "configure", label: "Configure", items: [{ page: "projects" }, { page: "settings" }] },
+  { id: "observe", label: "Monitor", desc: "See what Atlas and your agents are doing", items: [{ page: "overview" }, { page: "activity" }, { page: "health" }] },
+  { id: "operate", label: "Operate", desc: "Work with running agents and their channel", items: [{ page: "agents", label: "Agents" }, { page: "colony", label: "Colony", icon: "herd" }, { page: "channels", label: "Channels", icon: "irc" }], tree: true },
+  { id: "improve", label: "Improve", desc: "Atlas's self-improvement loop", items: [{ page: "improve" }] },
+  { id: "configure", label: "Configure", desc: "Choose projects and change behavior", items: [{ page: "projects" }, { page: "settings" }] },
 ];
+// One line per page: nav tooltip and the subtitle next to the page title.
+const DESC = {
+  overview: "Is Atlas healthy, what is running now, and what needs you.",
+  activity: "Everything Atlas recorded: runs, dispatches, findings, tool errors, hook denials.",
+  health: "Subsystem checks and silent failures: what is broken and how to fix it.",
+  agents: "Live agent sessions: who is working, waiting or failed, plus the task board.",
+  colony: "The lead and workers dispatched into the selected project, with send and kill.",
+  channels: "The message channel between lead and workers: read it and message members.",
+  improve: "Atlas's self-improvement loop: observe, mine, propose, apply, remeasure.",
+  projects: "Pin, mute or hide the projects Atlas has seen.",
+  settings: "Behavior switches, dashboard preferences and navigation order.",
+  terminal: "The raw herdr terminal for every pane.",
+};
+// Rebuild a chrome region only when what it shows changed, so the 8s refresh never replaces a node under the operator's pointer or focus.
+const sigs = {};
+const changed = (key, value) => {
+  const v = JSON.stringify(value);
+  if (sigs[key] === v) return false;
+  sigs[key] = v;
+  return true;
+};
 const LABELS = { overview: "Overview", agents: "Agents", activity: "Activity", health: "Health", improve: "Improve", projects: "Projects", settings: "Settings", colony: "Colony", channels: "Channels", terminal: "Terminal" };
 const ICON_FOR = { overview: "overview", agents: "agents", activity: "activity", health: "heart-pulse", improve: "sparkles", projects: "folder", settings: "settings", colony: "herd", channels: "irc", terminal: "herd" };
 const CHORDS = { o: "overview", a: "agents", l: "activity", h: "health", i: "improve", p: "projects", ",": "settings", d: "agents", s: "improve", w: "agents?lens=board", c: "colony", n: "channels", u: "agents?lens=supervision" };
@@ -156,6 +177,7 @@ function makeCtx(params) {
     project: store.get("project"),
     prefs: store.get("prefs"),
     setProject,
+    savePrefs,
     params: params || {},
   };
 }
@@ -292,13 +314,14 @@ function navCounts(st) {
 }
 
 function buildNav() {
-  const nav = clear(document.getElementById("nav"));
   const st = agentsStore.getState();
+  if (!changed("nav", [normalizeNav((store.get("prefs") || {}).nav_order), st.counts])) return;
+  const nav = clear(document.getElementById("nav"));
   for (const group of orderGroups(GROUPS, (store.get("prefs") || {}).nav_order)) {
     nav.appendChild(
-      h("div", { class: "nav-group", role: "group", "aria-labelledby": "nav-" + group.id }, h("div", { class: "nav-title", id: "nav-" + group.id }, group.label), group.items.map((it) => {
+      h("div", { class: "nav-group", role: "group", "aria-labelledby": "nav-" + group.id }, h("div", { class: "nav-title", id: "nav-" + group.id, title: group.desc }, group.label), group.items.map((it) => {
         const label = it.label || LABELS[it.page];
-        const a = h("a", { class: "nav-link", href: navHref(it), "data-page": it.page, title: label }, icon(it.icon || ICON_FOR[it.page]), h("span", null, label), it.page === "agents" ? navCounts(st) : null);
+        const a = h("a", { class: "nav-link", href: navHref(it), "data-page": it.page, title: label + ": " + (DESC[it.page] || "") }, icon(it.icon || ICON_FOR[it.page]), h("span", null, label), it.page === "agents" ? navCounts(st) : null);
         if (it.page === "agents") a.addEventListener("click", flyoutIfCollapsed);
         return a;
       }))
@@ -361,8 +384,15 @@ function buildSwitcher() {
 
 let appliedKey = "";
 let navKey = "";
+let themeKey = "";
 function applyPrefs() {
   const prefs = store.get("prefs") || {};
+  const tk = JSON.stringify([prefs.theme, prefs.density, prefs.default_project]);
+  if (tk !== themeKey) { // a save from any page (Settings) restyles the dashboard at once and survives reload without a flash
+    themeKey = tk;
+    persistLocal(prefs);
+    applyTheme();
+  }
   const nk = JSON.stringify(normalizeNav(prefs.nav_order));
   if (nk !== navKey) {
     navKey = nk;
@@ -410,15 +440,16 @@ function placeStrip() {
 }
 
 function buildLive(st) {
-  const host = clear(document.getElementById("live"));
+  const host = document.getElementById("live");
   let mode = st.conn;
   let text = "";
   if (st.layers.daemon.state === "down") { mode = "offline"; text = "Offline"; }
   else if (mode === "live") text = "Live";
   else if (mode === "poll") text = "Polling " + refreshMs() / 1000 + "s";
   else if (mode === "reconnecting") text = "Reconnecting";
-  else return;
-  host.appendChild(
+  else { changed("live", null); host.textContent = ""; return; }
+  if (!changed("live", [mode, text])) return;
+  clear(host).appendChild(
     h("span", { class: "live-pill", "data-mode": mode }, h("span", { class: "live-dot", "aria-hidden": "true" }), h("span", { class: "live-text" }, text), mode === "offline" ? h("button", { class: "btn btn-ghost btn-sm", type: "button", onClick: () => recheckDaemon() }, "Retry") : null)
   );
 }
@@ -434,15 +465,15 @@ function attentionData() {
 
 // Agents waiting on a person and doctor findings are different things: separate pills, separate colors and targets.
 function buildAttention() {
-  const host = clear(document.getElementById("attention"));
+  const host = document.getElementById("attention");
   const d = attentionData();
   const pill = (level, count, word, onClick, extra) => h("button", { class: "attn", type: "button", "data-level": level, ...(extra || {}), "aria-label": count + " " + word, "aria-haspopup": "dialog", onClick: (e) => onClick(e.currentTarget) }, level === "findings" ? icon("alert") : HexGlyph(level, { size: "mini" }), h("span", null, h("span", { class: "num" }, String(count)), h("span", { class: "attn-text" }, " " + word)));
   const pills = [];
   if (d.needs.length) pills.push(pill("input", d.needs.length, "need input", (b) => openAttention(b, "agents")));
   if (d.failed.length) pills.push(pill("fail", d.failed.length, "failed", (b) => openAttention(b, "failed")));
-  if (d.items.length) pills.push(pill("findings", d.items.length, d.items.length === 1 ? "attention item" : "attention items", (b) => openAttention(b, "findings"), { "data-sev": d.itemsFail ? "fail" : "warn" }));
+  if (d.items.length) pills.push(pill("findings", d.items.length, d.items.length === 1 ? "item needs you" : "items need you", (b) => openAttention(b, "findings"), { "data-sev": d.itemsFail ? "fail" : "warn" }));
   if (!pills.length) pills.push(h("button", { class: "attn", type: "button", "data-level": "ok", "aria-label": "All clear", onClick: (e) => openAttention(e.currentTarget, "agents") }, icon("check"), h("span", { class: "attn-text" }, "All clear")));
-  host.appendChild(h("div", { class: "attn-group" }, pills));
+  if (changed("attn", [d.needs.map((a) => a.key), d.failed.map((a) => a.key), d.items.map((i) => [i.title, i.severity])])) clear(host).appendChild(h("div", { class: "attn-group" }, pills));
   if (d.needs.length > lastNeeds) announce(d.needs.length + (d.needs.length === 1 ? " agent needs" : " agents need") + " input");
   lastNeeds = d.needs.length;
   const n = d.needs.length;
@@ -487,13 +518,17 @@ function effectiveTheme() {
 }
 
 function buildToggles() {
-  const host = clear(document.getElementById("toggles"));
+  const host = document.getElementById("toggles");
   const theme = effectiveTheme();
   const density = (store.get("prefs") || {}).density || "comfortable";
+  if (!changed("toggles", [theme, density])) return;
+  const focusId = host.contains(document.activeElement) ? document.activeElement.id : "";
+  clear(host);
   host.append(
     h("button", { class: "btn btn-ghost btn-icon btn-theme", type: "button", id: "toggle-theme", "aria-label": "Switch to " + (theme === "dark" ? "light" : "dark") + " theme", title: "Theme (Shift+D)", onClick: toggleTheme }, icon(theme === "dark" ? "sun" : "moon")),
     h("button", { class: "btn btn-ghost btn-icon btn-density", type: "button", id: "toggle-density", "aria-label": "Use " + (density === "compact" ? "comfortable" : "compact") + " density", "aria-pressed": density === "compact" ? "true" : "false", title: "Density (D)", onClick: toggleDensity }, icon("rows"))
   );
+  if (focusId) document.getElementById(focusId).focus({ preventScroll: true });
 }
 
 function applyTheme() {
@@ -515,14 +550,18 @@ function loadLocalPrefs() {
   }
 }
 
-async function savePrefs(patch) {
-  const next = Object.assign({}, store.get("prefs"), patch);
-  store.set("prefs", next);
+function persistLocal(next) {
   try {
     localStorage.setItem(LOCAL_KEY, JSON.stringify({ theme: next.theme, density: next.density, default_project: next.default_project }));
   } catch (_err) {
     // private mode: server prefs still apply
   }
+}
+
+async function savePrefs(patch) {
+  const next = Object.assign({}, store.get("prefs"), patch);
+  store.set("prefs", next); // the prefs subscription applies theme/density and persists them locally
+  persistLocal(next);
   applyTheme();
   try {
     const saved = await api.put("prefs", patch);
@@ -541,7 +580,7 @@ function setTitle(title, needs) {
   const base = pageTitle + " | Atlas Command Center";
   document.title = (n ? "(" + n + ") " : "") + base;
   const ctxTitle = document.getElementById("ctx-title");
-  if (ctxTitle) ctxTitle.textContent = pageTitle;
+  if (ctxTitle && ctxTitle.textContent !== pageTitle) ctxTitle.textContent = pageTitle;
   if (FRAMED && title) postUp("atlas:title", { title: document.title });
 }
 
@@ -685,8 +724,15 @@ function openAppPalette(initial) {
 function refreshPage() {
   agentsStore.refresh();
   refreshAttention();
+  const main = document.getElementById("main");
+  const top = main ? main.scrollTop : 0;
   current = null;
-  route();
+  route().then(() => { if (main) main.scrollTop = top; });
+}
+
+function stampAsOf() {
+  const el = document.getElementById("asof");
+  if (el) el.textContent = "as of " + new Date().toLocaleTimeString([], { hour12: false });
 }
 
 function showShortcuts() {
@@ -800,6 +846,7 @@ async function boot() {
   store.subscribe("attention", buildAttention);
   document.addEventListener("keydown", onKey);
   document.addEventListener("atlas:launch", launchAgent);
+  document.addEventListener("atlas:fetched", stampAsOf);
 
   const probe = api.probe();
   const [prefs, projects] = await Promise.all([api.get("prefs").catch(() => null), api.get("projects").catch(() => null), loadExternalPages()]).then((r) => [r[0], r[1]]);
@@ -816,7 +863,10 @@ async function boot() {
   probe.then((p) => {
     if (p.up && p.data && p.data.version) {
       store.set("version", p.data.version);
-      document.getElementById("version-chip").textContent = "Atlas " + p.data.version;
+      const db = String(p.data.db_path || "");
+      const temp = /^\/(tmp|private\/var|var\/folders)\//.test(db);
+      replace(document.getElementById("version-chip"), h("span", { title: "Atlas plugin and dashboard version" }, "Atlas " + p.data.version), db ? h("span", { class: "chip-src" + (temp ? " is-temp" : ""), title: "Data source: " + db + (temp ? " (a temporary test database, not your real Atlas data)" : "") }, temp ? "test data" : db.split("/").pop()) : null, h("span", { class: "chip-asof", id: "asof", title: "When the data on screen was last fetched" }));
+      stampAsOf();
     }
   });
 

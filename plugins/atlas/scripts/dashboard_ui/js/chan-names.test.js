@@ -37,4 +37,6 @@ test("leadChannels / chanInfo / memberState", () => {
   expect(memberState({ state: "blocked" }, null)).toBe("input");
   expect(memberState({ state: "working" }, { state: "idle" })).toBe("idle");
   expect(memberState({}, null)).toBe("unknown");
+  expect(memberState({ state: "parked" }, { state: "working" })).toBe("parked");
+  expect(memberState({ parked: true }, { state: "input" })).toBe("parked");
 });

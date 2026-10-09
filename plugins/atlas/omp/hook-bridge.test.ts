@@ -17,6 +17,8 @@ import {
 	claudeNamesFor,
 	claudeNamesForCall,
 	loadBridgedHooks,
+	atlasStoreEnv,
+	hookEnv,
 	matcherNames,
 	parseHookOutput,
 	registerHookBridge,
@@ -528,4 +530,40 @@ test("ast_edit is an Edit for the hooks, with every path it names", async () => 
 	await handlers.tool_call({ toolName: "ast_edit", input: { paths: ["src/x.ts", "src/y.ts"], ops: [{ pat: "a", out: "b" }] } }, ctx());
 	expect(logOf("ast_pre.py").map(p => (p.tool_input as Record<string, unknown>).file_path)).toEqual([join(dir, "src/x.ts"), join(dir, "src/y.ts")]);
 	expect(logOf("ast_pre.py")[0].tool_name).toBe("Edit");
+});
+
+test("hookEnv exports the atlas settings store; the real env wins; fixed omp vars win over the store", () => {
+	const home = mkdtempSync(join(tmpdir(), "atlas-store-"));
+	try {
+		writeFileSync(join(home, "settings.json"), JSON.stringify({ env: { ATLAS_GATE: "off", ATLAS_DEPTH: "3", ATLAS_HARNESS: "claude", NOT_ATLAS: "x", ATLAS_NUM: 5 } }));
+		const env = hookEnv({ ATLAS_HOME: home, ATLAS_DEPTH: "9" });
+		expect(env.ATLAS_GATE).toBe("off");
+		expect(env.ATLAS_DEPTH).toBeUndefined(); // already in process env: not re-exported, not overridden
+		expect(env.ATLAS_HARNESS).toBe("omp");
+		expect(env.NOT_ATLAS).toBeUndefined();
+		expect(env.ATLAS_NUM).toBeUndefined();
+		expect(hookEnv({ ATLAS_HOME: join(home, "missing") }).ATLAS_HARNESS).toBe("omp"); // no store: unchanged behaviour
+		writeFileSync(join(home, "settings.json"), "{not json");
+		expect(atlasStoreEnv({ ATLAS_HOME: home })).toEqual({});
+	} finally {
+		rmSync(home, { recursive: true, force: true });
+	}
+});
+
+test("atlas_doctor.py --hook is bridged and runs on the first main before_agent_start only", async () => {
+	const contract = JSON.parse(readFileSync(BRIDGE_CONTRACT, "utf8")) as { bridged: string[]; notBridged: Record<string, string> };
+	expect(contract.bridged).toContain("atlas_doctor.py");
+	expect(contract.notBridged).not.toHaveProperty("atlas_doctor.py");
+	const real = loadBridgedHooks();
+	expect(real.some(h => h.event === "SessionStart" && /atlas_doctor\.py"? --hook/.test(h.command))).toBe(true);
+	const seen: string[] = [];
+	const runner: HookRunner = async command => {
+		seen.push(command);
+		return "";
+	};
+	const { handlers, ctx } = harness(real, {}, runner);
+	await handlers.before_agent_start({ prompt: "hi", systemPrompt: [] }, ctx("main"));
+	expect(seen.filter(c => c.includes("atlas_doctor.py")).length).toBe(1);
+	await handlers.before_agent_start({ prompt: "again", systemPrompt: [] }, ctx("main"));
+	expect(seen.filter(c => c.includes("atlas_doctor.py")).length).toBe(1);
 });

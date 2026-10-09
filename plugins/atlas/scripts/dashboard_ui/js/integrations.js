@@ -247,6 +247,24 @@ function deckBlock(deck) {
   return h("div", { class: "int-deck", "data-available": "false" }, h("h3", null, "Captain's Deck board"), h("p", null, "Unavailable: " + (deck.reason || "needs Firstmate") + "."), h("p", { class: "dim" }, "Captain's Deck is a read-only view of a Firstmate flow. Atlas shows no board without Firstmate homes, and does not make one up."));
 }
 
+const CONN_STATUS = { ok: "ok", idle: "idle", degraded: "warn", unconfigured: "fail", disabled: "idle" };
+
+// The atlas MCP connectors (same rows Settings > Connectors and Health use): state + the env vars each needs.
+function connectorsBlock(list) {
+  if (!Array.isArray(list) || !list.length) return null;
+  const bad = list.filter((c) => c.health === "unconfigured" || c.health === "degraded").length;
+  return h("div", { class: "int-connectors" }, h("h3", null, "Atlas MCP connectors"),
+    h("p", { class: "dim" }, bad ? bad + " of " + list.length + " need attention. Set credentials under Settings > Connectors." : "All " + list.length + " connectors are configured."),
+    h("ul", { class: "int-list" }, list.map((c) => h("li", { class: "int-tool", "data-connector": c.name, "data-health": c.health },
+      h("div", { class: "int-head" }, h("h3", null, c.name), Badge({ status: CONN_STATUS[c.health] || "idle", text: c.health })),
+      h("dl", { class: "kv int-facts" },
+        [["Server", c.server_name], ["Enabled", c.enabled ? "yes" : "no"],
+          ["Calls (30d)", c.usage ? c.usage.calls + " calls, " + c.usage.errors + " errors" : "n/a"],
+          ["Needs", (c.env_vars || []).map((v) => v.env_key + (v.is_set ? " (set)" : " (missing)")).join(", ") || "nothing"],
+          ...((c.missing_required || []).length ? [["Missing", c.missing_required.join(", ")]] : [])]
+          .map(([k, v]) => [h("dt", null, k), h("dd", { class: "mono" }, v)]))))));
+}
+
 /** Full panel; .reload(force) refetches. */
 export function IntegrationsPanel() {
   const root = h("div", { class: "int-panel", id: "integrations" });
@@ -259,6 +277,7 @@ export function IntegrationsPanel() {
       replace(root,
         h("div", { class: "int-bar" }, h("p", { class: "dim" }, "herdr " + (d.herdr ? "found" : "not found") + ". Atlas only reads this state; installing is always your call."), Button({ label: "Recheck", size: "sm", onClick: () => load(true) })),
         h("ul", { class: "int-list" }, (d.tools || []).map((t) => toolRow(t, { mcp: d.mcp, deck }))),
+        connectorsBlock(d.connectors),
         deckBlock(deck));
     } catch (e) {
       replace(root, h("div", { class: "state state-error", role: "alert" }, h("h2", { class: "state-title" }, "Could not read the integrations"), h("p", { class: "state-body" }, [e.error, e.why, e.do].filter(Boolean).join(". ")), Button({ label: "Retry", variant: "primary", onClick: () => load(true) })));

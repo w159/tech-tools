@@ -183,9 +183,9 @@ function paneLinks(text, onPane) {
   return out;
 }
 
-// ChannelMessage({ ts, from, to, body, kind: note|irc|exit|system, status, onPane, self, plain })
+// ChannelMessage({ ts, from, to, body, kind: note|irc|exit|system, status, onPane, self, plain, delivery_text })
 // plain: body is plain mono text (only pane ids stay links); the delivery glyph shows only for refused/undeliverable.
-export function ChannelMessage({ ts, from, to, body, kind, status, onPane, root, plain } = {}) {
+export function ChannelMessage({ ts, from, to, body, kind, status, onPane, root, plain, delivery_text } = {}) {
   const k = kind || "note";
   if (k === "exit") {
     const m = /^exit (-?\d+)(?: \[failed: (.*)\])?/.exec(String(body || ""));
@@ -203,7 +203,8 @@ export function ChannelMessage({ ts, from, to, body, kind, status, onPane, root,
     h("span", { class: "who", title: who }, who),
     h("span", { class: "to dim" }, to && to !== "all" ? "@" + to : "all"),
     h("span", { class: "body mono" }, plain ? paneLinks(body === undefined || body === null ? "" : body, onPane) : linkify(body === undefined || body === null ? "" : body, onPane, root)),
-    d ? h("span", { class: "delivery", "data-status": status, title: d[1], role: "img", "aria-label": d[1] }, icon(d[0])) : plain ? null : h("span", { class: "delivery" })
+    d ? h("span", { class: "delivery", "data-status": status, title: d[1], role: "img", "aria-label": d[1] }, icon(d[0])) : plain ? null : h("span", { class: "delivery" }),
+    delivery_text ? h("span", { class: "delivery-text dim", "data-status": status }, delivery_text) : null
   );
 }
 

@@ -97,6 +97,10 @@ Taken from `atlas_integrations.py`; the flags follow each tool's own documentati
   - `cmux-browser`: the `cmux-browser` server is registered in `~/.omp/agent/mcp.json` or `~/.claude.json` (only the file path is reported). "n/a" without cmux; WARN "not registered" with the install command otherwise.
 - **cmuxlayer MCP note:** on the author machine `cmuxlayer` is registered in `~/.omp/agent/mcp.json` as a stdio server with `timeout: 120000` (verified in that file). The operator reports `list_agents` takes about 43 s there, so omp's default timeout is too short; after editing that file run `/mcp reload` in omp. The 43 s figure is the operator's, not re-measured for this doc.
 
+## Settings Integrations connectors (10.4.3)
+
+The Settings Integrations page also lists the atlas MCP connectors with health, configured state and the names of missing env vars (no secret values). `/api/agents` without `project_id` returns the plugin roster. See `docs/atlas-workboard.md` "Integrations and Agents pages".
+
 ## Known limits
 
 - The mutating herdr actions (`thread start`, the file-viewer open, the tode launch) were exercised only against stubs. No live pty output was verified.

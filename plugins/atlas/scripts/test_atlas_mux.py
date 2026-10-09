@@ -1740,5 +1740,79 @@ class DeadFlagTests(unittest.TestCase):
             self.assertEqual(atlas_mux._dead_flag(bad), 0, repr(bad))
 
 
+class TmuxStateRobustnessTests(unittest.TestCase):
+    """Colony launches must not depend on the lead's tmux pane or on tmux being present."""
+
+    def test_stale_tmux_env_never_reaches_tmux(self):
+        import atlas_mux
+        from unittest import mock
+
+        seen = {}
+
+        def fake_run(argv, **kw):
+            seen["env"] = kw["env"]
+            seen["timeout"] = kw.get("timeout")
+            return subprocess.CompletedProcess(argv, 0, "", "")
+
+        stale = {"TMUX": "/nonexistent/sock,1,0", "TMUX_PANE": "%99"}
+        with (
+            mock.patch.dict(os.environ, stale),
+            mock.patch.object(atlas_mux.subprocess, "run", fake_run),
+        ):
+            self.assertEqual(0, atlas_mux._tmux("has-session", "-t", "x").returncode)
+        self.assertNotIn("TMUX", seen["env"])
+        self.assertNotIn("TMUX_PANE", seen["env"])
+        self.assertEqual(atlas_mux.TMUX_TIMEOUT_S, seen["timeout"])
+
+    def test_missing_or_wedged_tmux_is_a_failed_result_not_an_exception(self):
+        import atlas_mux
+        from unittest import mock
+
+        def boom(exc):
+            def run(*a, **k):
+                raise exc
+
+            return run
+
+        with mock.patch.object(atlas_mux.subprocess, "run", boom(FileNotFoundError())):
+            r = atlas_mux._tmux("list-windows")
+            self.assertEqual(127, r.returncode)
+            opened = atlas_mux._open_window("atlas-t", "w", "true")
+            assert opened is not None
+            self.assertIn("tmux not found", opened)
+        wedged = subprocess.TimeoutExpired("tmux", 10)
+        with mock.patch.object(atlas_mux.subprocess, "run", boom(wedged)):
+            r = atlas_mux._tmux("list-windows")
+            self.assertEqual(r.returncode, 124)
+            self.assertIn("timed out", r.stderr)
+
+
+class StatusSidebarTests(unittest.TestCase):
+    def test_status_drops_sidebar_and_lead_panes(self):
+        import argparse
+        import io
+        from unittest import mock
+
+        import atlas_herdr
+        import atlas_mux
+
+        panes = [
+            {"label": n, "pane_id": f"p{i}"}
+            for i, n in enumerate(["Sidebar", "Alpha", "Sidebar", "lead", "Beta"])
+        ]
+        out = io.StringIO()
+        with (
+            mock.patch.object(atlas_mux, "transport", return_value="herdr"),
+            mock.patch.object(atlas_herdr, "list_panes", return_value=panes),
+            contextlib.redirect_stdout(out),
+            tempfile.TemporaryDirectory() as root,
+        ):
+            atlas_mux.cmd_status(argparse.Namespace(run="r1", root=root))
+        self.assertEqual(
+            [w["name"] for w in json.loads(out.getvalue())["workers"]],
+            ["Alpha", "Beta"],
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

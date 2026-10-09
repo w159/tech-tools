@@ -23,6 +23,12 @@ test("send is blocked with a reason for finished and dead members only", () => {
   expect(canSteer({ state: "finished" })).toBe(false);
 });
 
+test("a parked member is shown parked and cannot be messaged, never running", () => {
+  const m = { state: "parked", parked: true, deliver: { ok: false, reason: "w is parked: no process" } };
+  expect(canSteer(m)).toBe(false);
+  expect(sendBlock(m)).toContain("parked");
+});
+
 test("sendBlock edge states", () => {
   expect(sendBlock({ state: "finished" })).toBe("Finished: nothing to send to.");
   expect(sendBlock({ state: "idle", steerable: false, headless: false })).toContain("cannot receive");
@@ -30,9 +36,23 @@ test("sendBlock edge states", () => {
   expect(canSteer({ state: "dead" })).toBe(false);
 });
 
+test("sendBlock shows the server's reason when a live member still cannot receive", () => {
+  const deliver = { ok: false, reason: "w is not an atlas worker in this project's channel" };
+  expect(sendBlock({ state: "running", headless: true, deliver })).toBe(deliver.reason);
+  expect(sendBlock({ state: "running", headless: true, deliver: { ok: true } })).toBe("");
+});
+
 test("send and kill POST bodies carry the selected project", () => {
   const ctx = { params: {}, project: "/repo/a" };
   expect(sendBody(ctx, "hi")).toEqual({ text: "hi", project: "/repo/a" });
   expect(killBody(ctx)).toEqual({ project: "/repo/a" });
   expect(killBody({ params: { project: "/repo/b" }, project: "/repo/a" }).project).toBe("/repo/b");
+});
+
+test("headless reads as no terminal pane, and the lead shows its real liveness text", async () => {
+  const { NO_PANE, livenessText } = await import("./pages/colony.js");
+  expect(NO_PANE).toContain("No terminal pane");
+  expect(NO_PANE).toContain("nothing about whether the session is working");
+  expect(livenessText({ liveness: { text: "active, last tool call 12s ago" } })).toBe("active, last tool call 12s ago");
+  expect(livenessText({})).toBe("");
 });

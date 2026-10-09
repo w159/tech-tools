@@ -4094,5 +4094,886 @@
     "status": "verified",
     "verified_at": "2026-10-08T15:58:00+00:00",
     "verified_by": "Verifier3 (independent, CDP browser) + lead suite run"
+  },
+  {
+    "id": "colony-mux-e2e-10.4.3",
+    "surface": "plugins/atlas",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Colony mux E2E on source 10.4.3: one lead-<sid6> channel (lead-9f59ed) holds briefs dispatch + Alpha + Beta; worker<->worker and report notes; PostToolUse inbox delivery; 0 carried/orphan todos (baseline 5); no Sidebar workers; gates denied 3x and final Stop gate-satisfied",
+    "evidence": [
+      "/tmp/atlas-verify/E2E2-VERDICT.md",
+      "/tmp/atlas-verify/e2e2-lead.jsonl",
+      "/Users/jerry/atlas-e2e-colony2/.atlas/.run/channels.json",
+      "/tmp/atlas-verify/e2e2-status-watch.log"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd ~/atlas-e2e-colony2 && ATLAS_SCRIPTS=$SRC/scripts claude -p --plugin-dir $SRC --settings {\"enabledPlugins\":{\"atlas@tech-tools\":false}} --model sonnet --permission-mode bypassPermissions --output-format stream-json --verbose \"$(cat .lead-prompt.md)\"",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-08T19:27:06+00:00",
+    "verified_by": "rerun-colony-e2e"
+  },
+  {
+    "id": "OH-1043-daemon-isolation",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Command Center daemon isolation: temp env refused on :7421, other-DB daemon never replaced, stop_daemon scoped, session_boot skips temp HOME",
+    "evidence": [
+      "scripts/atlas_dashboard.py:1442-1464 (temp_env_on_shared_port, port_held_by_other_db)",
+      "scripts/atlas_dashboard.py:1378-1419 stop_daemon pidfile pid + same-DB LISTEN only",
+      "hooks/session_boot.py:28-49 temp-root skip",
+      "tests test_atlas_dashboard.py:441,458,478,318; test_session_boot.py:1094,1100 pass",
+      "live GET /api/health db_path=/Users/jerry/.atlas/atlas.db pid 75115 v10.4.3; no /var/folders or /tmp in health/behavior/integrations/agents payloads"
+    ],
+    "doc_refs": [],
+    "reproduction": "curl -s http://127.0.0.1:7421/api/health ; python3 -m pytest (19 files incl. scripts/test_atlas_dashboard.py, test_atlas_control.py, test_settings_center.py, hooks/test_*.py) -q -> 1088 passed, 187 subtests passed; omp: ATLAS_DASHBOARD_PORT=17969 bun test -> 358 pass 0 fail",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T15:12:53+00:00",
+    "verified_by": "SessionVerifier"
+  },
+  {
+    "id": "OH-1043-durable-settings",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Durable settings store ~/.atlas/settings.json (atomic 0600), source layering, omp bridge export, restart persistence",
+    "evidence": [
+      "scripts/atlas_control.py:63-67 os.open 0o600 + os.replace; :97-99 store_path ATLAS_HOME or ~/.atlas",
+      "scripts/atlas_control.py:487-501 process>store>claude layering",
+      "omp/hook-bridge.ts:415-425 reads store env",
+      "test_atlas_control.py:430 test_knob_persists_across_restart passes",
+      "live /api/behavior store_path=/Users/jerry/.atlas/settings.json; knobs carry value/source/layers/reaches/default/ref/changed; 48 advanced vars; sources default/process/claude. Note: store file not yet created on disk (no POST made yet) - consistent, not exercised live"
+    ],
+    "doc_refs": [],
+    "reproduction": "curl /api/behavior (token from index.html meta atlas-token); python3 -m pytest (19 files incl. scripts/test_atlas_dashboard.py, test_atlas_control.py, test_settings_center.py, hooks/test_*.py) -q -> 1088 passed, 187 subtests passed; omp: ATLAS_DASHBOARD_PORT=17969 bun test -> 358 pass 0 fail",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T15:12:53+00:00",
+    "verified_by": "SessionVerifier"
+  },
+  {
+    "id": "OH-1043-integrations-agents",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Integrations connectors with health/configured/missing env (no secrets); /api/agents without project_id returns plugin roster",
+    "evidence": [
+      "live /api/v2/integrations: keys ok,herdr,tools,mcp,connectors; 12 connectors, e.g. auvik health=ok configured=true missing_required=[] env_vars[is_set,sensitive,source]; all env values '<redacted>'",
+      "live /api/agents (no project_id): 13 agents source=plugin",
+      "test_settings_center.py:15,71 pass"
+    ],
+    "doc_refs": [],
+    "reproduction": "curl /api/v2/integrations ; curl /api/agents",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T15:12:53+00:00",
+    "verified_by": "SessionVerifier"
+  },
+  {
+    "id": "OH-1043-hooks",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "format_after_edit failure is a quiet skip; breaker bypass writes no fault row; recall_gate normalizes ToolSearch variants",
+    "evidence": [
+      "git diff hooks/format_after_edit.py: atlas_hook_guard.fault(...) removed",
+      "git diff scripts/atlas_hook_guard.py:242 _note_bypass no fault()",
+      "hooks/recall_gate.py:59,239 toolsearch/tool_search/tool-search",
+      "test_format_after_edit.py, test_hook_hardening.py, test_recall_gate.py pass",
+      "CAVEAT: ~/.atlas/hook-faults.jsonl still has a format_after_edit row at 2026-10-09 10:42 (after the 10:25 source edit) in the OLD message format, written by the installed 10.4.2 cache; the 5->0 / 2->0 hold only once 10.4.3 is installed"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 scan of ~/.atlas/hook-faults.jsonl; python3 -m pytest (19 files incl. scripts/test_atlas_dashboard.py, test_atlas_control.py, test_settings_center.py, hooks/test_*.py) -q -> 1088 passed, 187 subtests passed; omp: ATLAS_DASHBOARD_PORT=17969 bun test -> 358 pass 0 fail",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T15:12:53+00:00",
+    "verified_by": "SessionVerifier"
+  },
+  {
+    "id": "OH-1043-completion-gate",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "completion_gate (p) sees sibling-run agent:// traffic; BLOCK_LOOP_LIMIT=3 allows the 4th Stop and records gate_block_loop",
+    "evidence": [
+      "hooks/completion_gate.py:1229 BLOCK_LOOP_LIMIT=3, :1258 count<=limit, :1268 gate_block_loop friction",
+      "hooks/test_completion_gate.py:3045 sibling-run case, :3125-3135 loop-limit case pass"
+    ],
+    "doc_refs": [],
+    "reproduction": "env -u CI python3 -m pytest hooks/test_completion_gate.py -q",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T15:12:53+00:00",
+    "verified_by": "SessionVerifier"
+  },
+  {
+    "id": "OH-1043-dispatch-tripwire",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Spec deny skeleton, exploration deny 126 B, tmux name lift, verifier.md via atlas_finding.py, omp alias expansion accepted",
+    "evidence": [
+      "hooks/dispatch_tripwire.py:280 REPORT fields STATUS, STEPS, FILES_CHANGED, EVIDENCE, DELIVERABLE, NEXT",
+      "_exploration_deny('cat src/a.py','lean-ctx') = 126 bytes (measured)",
+      "hooks/dispatch_tripwire.py:513 TMUX set + TMUX_PANE empty lifts name",
+      "agents/verifier.md:7 disallows Write; 2 refs to atlas_finding.py",
+      "omp/index.test.ts:580-594 alias expansion test passes",
+      "tests test_dispatch_tripwire.py:542,3166,3191 pass. 960x/14d frequency not independently recounted"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -c 'import dispatch_tripwire as dt; len(dt._exploration_deny(...))' ; bun test",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T15:12:53+00:00",
+    "verified_by": "SessionVerifier"
+  },
+  {
+    "id": "OH-1043-multiplexer",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas_mux strips TMUX/TMUX_PANE, 10s tmux timeout, wedged tmux -> ok:false; doctor cmux info-only when inactive",
+    "evidence": [
+      "scripts/atlas_mux.py:137-139 strip TMUX/TMUX_PANE, :154 TMUX_TIMEOUT_S=10, :166-174 timeout -> rc 124",
+      "test_atlas_mux.py:1767 missing_or_wedged_tmux pass",
+      "test_atlas_doctor.py:907,913 cmux info-only pass"
+    ],
+    "doc_refs": [],
+    "reproduction": "env -u CI python3 -m pytest scripts/test_atlas_mux.py scripts/test_atlas_doctor.py -q",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T15:12:53+00:00",
+    "verified_by": "SessionVerifier"
+  },
+  {
+    "id": "OH-1043-context-budget",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "SessionStart additionalContext ~1.1 KB with no static style rules; recallGate 279->197 B",
+    "evidence": [
+      "measured: session_boot.py under temp HOME (ATLAS_DASHBOARD=off) additionalContext = 1102 B (claim 1094; +8 B from env-dependent todo-board line); content has no repeated style rules",
+      "contracts/mandates.json recallGate: HEAD 279 B -> working tree 197 B (measured)",
+      "omp contracts/index tests pass. Pre-change 2987/2864 B baselines not re-measured"
+    ],
+    "doc_refs": [],
+    "reproduction": "echo '{...SessionStart}' | HOME=$(mktemp -d) ATLAS_DASHBOARD=off python3 hooks/session_boot.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T15:12:54+00:00",
+    "verified_by": "SessionVerifier"
+  },
+  {
+    "id": "OH-1043-metrics-truthfulness",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "classify_error user_code/model_misuse/environment; temp/no-prompt exclusion; per-100 friction; UUIDv7 omp; certifi; breaker_tripped",
+    "evidence": [
+      "classify_error('eval',Traceback..)=user_code; ('bash','Service mode does not accept...')=model_misuse; ('mcp__x','chroma fetch failed, falling back')=environment",
+      "atlas.db ro: 14d sessions w/o facets = 489 (claim 489 exact); real (prompted, non-tmp) now 37 (claim 50; window drift)",
+      "colony reclass on db copy: 580 claude-code-by-casing (14d), 533 reclassified omp by UUIDv7 (claim exact)",
+      "mine_recurring_friction on db copy: gate_block 74.4/100 now (claim 56.8 point-in-time; metric is per-100, value drifted with new blocks today)",
+      "typesafe_client.py:35-43 certifi; scorecard/probe_hooks.py:532-536 breaker_tripped",
+      "unknown 26->12 and findings 22->16 not recounted"
+    ],
+    "doc_refs": [],
+    "reproduction": "sqlite3 file:/Users/jerry/.atlas/atlas.db?mode=ro ...; atlas_doctor miners on a backup copy (ATLAS_DB=tmp copy)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T15:12:54+00:00",
+    "verified_by": "SessionVerifier"
+  },
+  {
+    "id": "OH-1043-improvement-units",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Baselines carry units; mismatched units re-baselined, never compared; selffix {v,unit}",
+    "evidence": [
+      "scripts/atlas_doctor.py:2449 METRIC_UNITS, :2469-2529 supersede_unit_mismatch/_supersede_stale_units (pending->superseded, real verdicts kept)",
+      "atlas_selffix.py:72-119 {v,unit} + rebaseline_units",
+      "atlas.db ro: improvements 87-90 're-baselined, supersedes #49/#50/#85/#86 unit=per100_sessions', remeasured_at NULL, no verdict; values 74.436/28.571/3.007/6.015 match current recurring_friction miner output",
+      "49/50/85/86 keep their prior verdicts (not pending, by design)"
+    ],
+    "doc_refs": [],
+    "reproduction": "sqlite3 'file:/Users/jerry/.atlas/atlas.db?mode=ro' 'SELECT ... FROM improvements ORDER BY id DESC LIMIT 8'",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T15:12:54+00:00",
+    "verified_by": "SessionVerifier"
+  },
+  {
+    "id": "OH-1043-durable-owner-dedupe",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "ingest_transcript durable_owner: repeated temp copies re-read from byte 0 do not double rows",
+    "evidence": [
+      "throwaway script, temp ATLAS_DB/ATLAS_HOME/HOME, ATLAS_HARNESS=omp: durable non-tmp file ingested -> messages 4, tool_calls 2, user_prompts 1",
+      "two distinct /var/folders/.../atlas-ingest-*/ copies of identical content -> counts stay 4/2/1 (no doubling)",
+      "grown copy (+1 user line) -> 5/2/2, session_logs transcript_path stays durable, file_size 1244->1469, ended_at advanced, model/cwd set",
+      "dedupe is by UNIQUE indexes atlas_db.py:98,108,113,119 + INSERT OR IGNORE",
+      "side notes: ingest stats report attempted (not inserted) counts; ingest_files keeps one row per temp copy path (temp paths accumulate in ingest_files)"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 /var/folders/.../sv-home-*/t.py with ATLAS_DB=<tmp>/t.db",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T15:12:54+00:00",
+    "verified_by": "SessionVerifier"
+  },
+  {
+    "id": "ownership-reclaim-schedule",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Sidecar ownership, temp-daemon reclaim, re-baseline scheduling",
+    "evidence": [
+      "hooks/test_ingest_session.py::test_temp_sidecar_sharing_session_id_is_not_owner; test_atlas_dashboard.py reclaim tests; test_atlas_doctor.py NULL-source test; full suite 2782 passed"
+    ],
+    "doc_refs": [],
+    "reproduction": "env -u CI python3 -m pytest hooks scripts -q (plugins/atlas)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T15:20:11+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "measurable-skips",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Formatter skips recorded as friction; tool_error_rate min sample",
+    "evidence": [
+      "hooks/test_format_after_edit.py, scripts/test_atlas_doctor.py, scripts/test_atlas_selffix.py; 2785 passed, 3 skipped, 422 subtests passed in 183.68s (0:03:03)"
+    ],
+    "doc_refs": [],
+    "reproduction": "env -u CI python3 -m pytest hooks scripts -q (plugins/atlas)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T15:32:45+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "UX-1",
+    "surface": "command-center",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Overview health/needs-you counts match Health header and top bar; no % delta when prior<10",
+    "evidence": [
+      "tech-tools scope: Overview '0 failing, 3 warning of 11 subsystems, last 7 days' == Health '11 subsystems: 0 failing, 3 warning ... last 7 days'; top bar '1 item needs you' == 'Needs you: attention items (1)'. All projects: 4 warning on both pages; top bar '5 items need you' == list (5). Runs shows '+601.4% vs prior' only with prior=70; prior 7 and 1 show no %. API sweep over all + 9 projects: 0 KPIs carry a delta while prior<10; server rule atlas_dash_insights.py:1958 (prev<10 -> None)"
+    ],
+    "doc_refs": [],
+    "reproduction": "headless Chrome http://127.0.0.1:7421/#/overview and #/health (project tech-tools and all); python urllib GET /api/v2/overview?project=X and /api/v2/health?project=X for all projects",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T16:55:07+00:00",
+    "verified_by": "UxVerifier"
+  },
+  {
+    "id": "UX-2",
+    "surface": "command-center",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Settings knobs: description + Details on all 55, jump bars, working filter, shell-scope read-only, read-at refs accurate",
+    "evidence": [
+      "55 li.pg-row[data-knob]: each has a p.pg-hint description and details.pg-evidence with 'Read at'; nav.pg-index section bar + Behavior-group jump bar (Storage paths jump -> section top at 88px); #pg-knob-filter 'ollama' -> '4 of 55 match'; 16 'set in shell' rows incl ATLAS_HOOK_BRIDGE, ATLAS_ADVISOR_GATE, ATLAS_HOME, ATLAS_DB have no input/button. Read-at: 55/55 file:line contain the key, e.g. hooks/session_boot.py:26, omp/hook-bridge.ts:594, hooks/connector_credential_watch.py:32, hooks/ingest_session.py:62, hooks/dispatch_tripwire.py:1335, hooks/completion_gate.py:1585. Note: the 15 Advanced rows use the raw env key as title (description is still plain language)"
+    ],
+    "doc_refs": [],
+    "reproduction": "headless Chrome #/settings DOM scan of #pg-sec-behavior li.pg-row; node fs read of plugins/atlas/<readAt> line includes the key",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T16:55:07+00:00",
+    "verified_by": "UxVerifier"
+  },
+  {
+    "id": "UX-3",
+    "surface": "command-center",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Refresh keeps scrollTop, open details and focus (Health re-renders; Settings never auto-refreshes)",
+    "evidence": [
+      "Health: scrollTop 1032, open 'about-dispatch', focus SUMMARY 'About this check'; after 21s the marked details node had been replaced (MutationObserver: 26 removals) yet scrollTop 1032, same open key, same focused summary. Settings: scrollTop 6313, open knob:ATLAS_TRIPWIRE_HARD, focus Details; after 45s identical with 0 mutations: settings.js has no onEvent/keepView/interval, so there is no periodic refresh on Settings to survive"
+    ],
+    "doc_refs": [],
+    "reproduction": "headless Chrome: open a details, scrollIntoView, focus its summary, MutationObserver on #main, wait 21s (Health) / 45s (Settings), compare",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T16:55:07+00:00",
+    "verified_by": "UxVerifier"
+  },
+  {
+    "id": "UX-4",
+    "surface": "command-center",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Channels: header and '4 of 28 can receive' count OK, but member rows show parked members as running/waiting for input",
+    "evidence": [
+      "Header 'Current channel tech-tools@main/lead-01a121'; 'subchannel \u00b7 lead lead-01a121 (active, last session write 85s ago) \u00b7 ... \u00b7 4 of 28 members can receive' (2 min later '(idle 2 min)' while Main was running and waiting on this subagent; never 'idle headless'). Receivable = lead-01a121, IngestTruth, UxVerifier, DocsUpdate2. GAP: GET /api/v2/channels/<name> returns 19 members with state=working live_state=running AND deliver.reason '<name> is parked: no process or pane and no activity for 10 min' (UI: e.g. 'TranscriptPaths running \u00b7 2h 13m ago'); 8 more shown 'waiting for input' (live_state stuck) are also parked. Ground truth history://: only Main + UxVerifier running, DocsUpdate2 idle, all 25 others parked. atlas_todo.py channels: 0 of 28 members carry exit_code, so finished members are never recorded as finished; exclusion rests only on the 10-min parked heuristic (TestRecovery, active 58s earlier per history://, counted not-receivable)"
+    ],
+    "doc_refs": [],
+    "reproduction": "headless Chrome #/channels innerText; in-page GET /api/v2/channels/tech-tools%40main%2Flead-01a121 with X-Atlas-Token; python3 plugins/atlas/scripts/atlas_todo.py channels|channel-board --root <repo>; read history://",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-09T16:55:07+00:00",
+    "verified_by": "UxVerifier"
+  },
+  {
+    "id": "UX-5",
+    "surface": "command-center",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Colony project picker excludes e2e, Codex, temp and nonexistent roots",
+    "evidence": [
+      "Picker buttons: gwh-firstrespondersapp, tech-tools, Downloads, thfg-crowdstrike, .omp, cmux, ComfyUI-Installs, clippy (all os.path.isdir True). Raw projects table: 462 roots, 235 junk/temp/missing incl /Users/jerry/atlas-e2e-colony(2), /Users/jerry/Documents/Codex/2026-05-13/*, /private/tmp/*; none shown. Filter atlas_control.py:1407-1439. Note: colony.js:35 slices to 8, so doink (a valid project) is dropped by the cap"
+    ],
+    "doc_refs": [],
+    "reproduction": "headless Chrome #/colony with project=all; GET /api/v2/projects; sqlite ro: select root_path from projects",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T16:55:07+00:00",
+    "verified_by": "UxVerifier"
+  },
+  {
+    "id": "UX-6",
+    "surface": "command-center",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Chronicle numbers reproduce, but backfill is offered for scratch/demo/e2e sessions, not only genuine misses",
+    "evidence": [
+      "Card: 'Live ingest runs on session stop; 44 ended sessions were missed (2 Claude, 42 omp) ...; 874 tracked transcript files, all caught up; ignored, not missed: 12 empty, 13 scratch, 10 subagent'. Independent read-only recompute: 2/42 and 12/13/10, ingest_files 874 rows 0 behind: exact. GAP: both Claude misses are fixtures (/private/tmp/atlas-demo/repo, ~/atlas-e2e-colony2) and 15 of 42 omp misses have cwd under tech-tools/.scratch/mux-bench, e2e or /tmp; atlas_db.is_tmp_path only knows TMPDIR (/var/folders/.../T), so /private/tmp counts as genuine. Card's 'Do this' still offers --backfill (Claude) and --backfill-agent omp for them: 17 of 44 'missed' are not genuine misses"
+    ],
+    "doc_refs": [],
+    "reproduction": "GET /api/v2/health?project=all chronicle row; python3 recompute of _unlogged_transcripts against file:~/.atlas/atlas.db?mode=ro using atlas_db.is_tmp_path",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-09T16:55:07+00:00",
+    "verified_by": "UxVerifier"
+  },
+  {
+    "id": "UX-7",
+    "surface": "command-center",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "No JS or console errors across the 9 pages",
+    "evidence": [
+      "Init-script hooks on console.error/warn, window error, unhandledrejection plus harness console/errors capture: 0 entries on overview, activity, health, agents, colony, channels, improve, projects, settings; capture proven live (a console.error probe was captured); no [role=alert]/.error banners"
+    ],
+    "doc_refs": [],
+    "reproduction": "headless Chrome http://127.0.0.1:7421 with init script, location.hash to each page, 4s each",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T16:55:07+00:00",
+    "verified_by": "UxVerifier"
+  },
+  {
+    "id": "UX-8",
+    "surface": "command-center",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Lead delivery unit + e2e tests exist and pass",
+    "evidence": [
+      "pytest: 55 passed in 5.96s; -k 'lead or deliver or e2e': 17 passed incl test_a_note_to_the_lead_is_tracked_and_reads_as_delivered_only_after_the_hook_drains_it, test_lead_liveness_is_derived_from_session_signals_not_a_pane, SubprocessTest::test_end_to_end_delivery_then_silence; bun test in dashboard_ui: 28 pass, 0 fail, 109 expect() across 6 files"
+    ],
+    "doc_refs": [],
+    "reproduction": "env -u CI python3 -m pytest plugins/atlas/scripts/test_atlas_dash_colony.py plugins/atlas/hooks/test_worker_inbox.py -q; cd plugins/atlas/scripts/dashboard_ui && bun test",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T16:55:07+00:00",
+    "verified_by": "UxVerifier"
+  },
+  {
+    "id": "ux-4-6-followup",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Parked state label, chronicle scratch classification, picker cap",
+    "evidence": [
+      "live :7421 browser: 2 of 28 can receive, returned subagents labelled parked, lead active 2s; chronicle Claude misses 2->0, omp 42->27; suite 2823 passed, dashboard_ui bun 29 pass"
+    ],
+    "doc_refs": [],
+    "reproduction": "env -u CI python3 -m pytest hooks scripts -q (plugins/atlas); bun test (dashboard_ui)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T17:03:08+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "UX-4",
+    "surface": "command-center",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Channels: parked members render parked; '4 of 30 can receive' excludes parked; lead active with real signal",
+    "evidence": [
+      "Live headless Chrome #/channels: 'lead lead-01a121 (active, last session write 18s ago) ... 4 of 30 members can receive'; rows: 26 parked, running only lead-01a121, LeadDelivery, UxReverify, GuardAndPaths; 'waiting for input' appears only in the Messages pane, not member rows",
+      "GET /api/v2/channels/tech-tools%40main%2Flead-01a121 (X-Atlas-Token): Counter (state,live_state,deliver.ok) = {(parked,parked,False):26,(working,running,True):4}; members with deliver.reason containing 'parked' and state!=parked: [] ; lead_liveness {active:True, source:'session write', text:'active, last session write 1s ago'}"
+    ],
+    "doc_refs": [],
+    "reproduction": "py: token from <meta name=atlas-token>; GET /api/v2/channels/<quoted name>; browser.open headless Chrome, location.hash='#/channels', innerText slice after 'can receive'",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T17:06:20+00:00",
+    "verified_by": "UxReverify"
+  },
+  {
+    "id": "UX-6",
+    "surface": "command-center",
+    "category": "correctness",
+    "severity": "low",
+    "title": "Chronicle counts now exact (0 Claude, 27 omp, 30 scratch ignored), but the offered omp backfill still ingests the scratch/fixture sessions",
+    "evidence": [
+      "Live #/health + /api/v2/health: '27 ended sessions were missed (0 Claude, 27 omp) ... ignored, not missed: 12 empty, 30 scratch, 10 subagent'",
+      "Independent read-only recompute (atlas.db ro, 7d window, idle>2h, my own cwd classifier): omp 27, claude 0, scratch 30, empty 12, subagent 10 - exact. Remaining 27 omp misses all real cwds (gwh-firstrespondersapp 18, tech-tools 5, Downloads/.config/kitty/ComfyUI-Installs/.omp 1 each); scratch includes tech-tools/.scratch 15, /var/folders 3, /private/tmp/atlas-demo 1, ~/atlas-e2e-colony2 1, observer 10",
+      "GAP (backfill clause): card's 'next' still offers both commands; 'session_ingest.py --backfill-agent omp' walks the whole omp tree and only skips is_synthetic_session(path) whose SYNTHETIC_SESSION_MARKERS=('.claude-mem/observer-sessions',) (session_ingest.py:342,1391), so running it would ingest the ~20 .scratch//var/folders//private/tmp/atlas-e2e sessions the card calls ignored - backfill does not cover only real misses"
+    ],
+    "doc_refs": [],
+    "reproduction": "py recompute over ~/.claude/projects/*/*.jsonl + ~/.omp/agent/sessions/*/*.jsonl vs session_logs/ingest_files; read session_ingest.py:1369-1411 backfill_agent",
+    "proposed_fix": "skip scratch cwds (same _scratch_cwd rule) in backfill_agent/backfill, or drop the Claude command when claude=0",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-09T17:06:20+00:00",
+    "verified_by": "UxReverify"
+  },
+  {
+    "id": "UX-6",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Chronicle card counts and backfill scope match real misses",
+    "evidence": [
+      "live :7421 pid 7826: card 27 missed (0 Claude, 27 omp), ignored 12 empty/30 scratch/10 subagent; next lists only --backfill-agent omp; backfill read-only would ingest claude 0 omp 27 (equals card); BackfillScopeTest; suite 2827 passed"
+    ],
+    "doc_refs": [],
+    "reproduction": "GET /api/v2/health?window=7d chronicle; env -u CI python3 -m pytest scripts/test_session_ingest.py scripts/test_atlas_chronicle_ingest.py -q",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T17:13:45+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "PV-00-suites",
+    "surface": "omp-parity",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Suites green: omp bun 373/0; pytest env_loaders 24, doctor 116, channels 23, contract 91+3 skipped",
+    "evidence": [
+      "bun test plugins/atlas/omp: 373 pass 0 fail",
+      "pytest: 24/116/23/91 passed, 0 failed"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/omp && bun test; python3 -m pytest -q scripts/test_env_loaders.py scripts/test_atlas_doctor.py scripts/test_atlas_channels.py hooks/test_atlas_contract.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T18:01:01+00:00",
+    "verified_by": "ParityVerifier"
+  },
+  {
+    "id": "PV-01-store-env",
+    "surface": "omp-parity",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "applyAtlasStoreEnv exports ~/.atlas/settings.json ATLAS_* env first in atlasOmpExtension; exported var wins (caveat: an exported EMPTY var is overridden by the store; no direct test of applyAtlasStoreEnv, only atlasStoreEnv/hookEnv)",
+    "evidence": [
+      "plugins/atlas/omp/index.ts:686-691; hook-bridge.ts:419-431",
+      "/tmp/pv/precedence.test.ts: ATLAS_STYLE shell kept, ATLAS_GATE/ATLAS_CHANNELS from store; empty-exported -> store",
+      "no import-time process.env.ATLAS_ reads in omp/*.ts"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd /tmp/pv && bun test precedence.test.ts",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T18:01:01+00:00",
+    "verified_by": "ParityVerifier"
+  },
+  {
+    "id": "PV-02-doctor-bridged",
+    "surface": "omp-parity",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas_doctor.py --hook bridged (contracts/hook-bridge.json bridged list), runs once on first main before_agent_start; omp has no Skill tool mapping",
+    "evidence": [
+      "contracts/hook-bridge.json:20; omp/hook-bridge.test.ts:553-569 drives real loadBridgedHooks through before_agent_start twice -> 1 run; no Skill in omp/hook-bridge.ts"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/omp && bun test hook-bridge.test.ts",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T18:01:01+00:00",
+    "verified_by": "ParityVerifier"
+  },
+  {
+    "id": "PV-03-mcp-creds",
+    "surface": "omp-parity",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "load.mjs/load.py resolve user_config placeholders from pluginConfigs[atlas@tech-tools] only, in memory; shell > atlas.env > pluginConfigs; invalid settings harmless; nothing written; no value on stdout/stderr (minor: py stringifies booleans True vs js true)",
+    "evidence": [
+      "/tmp/pv/secret_check.sh temp HOME: exact key resolved, atlas@evil and atlasx@tech-tools ignored, file wins, shell wins, grep SEKRET in stdout/stderr -> none, no new files in HOME",
+      "mcp/_env/load.mjs:73-114, load.py _saved_option/_promote_cfg"
+    ],
+    "doc_refs": [],
+    "reproduction": "bash /tmp/pv/secret_check.sh",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T18:01:01+00:00",
+    "verified_by": "ParityVerifier"
+  },
+  {
+    "id": "PV-03b-exact-key",
+    "surface": "omp-parity",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Follow-up: only exact atlas@<marketplace> key read (marketplace.json name tech-tools, else literal default); real settings has atlas@tech-tools",
+    "evidence": [
+      "secret_check: SEKRET_WRONGKEY_* and SEKRET_PREFIX_* never set; tests test_other_atlas_entry_is_ignored/test_exact_key_used_among_others"
+    ],
+    "doc_refs": [],
+    "reproduction": "bash /tmp/pv/secret_check.sh",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T18:01:01+00:00",
+    "verified_by": "ParityVerifier"
+  },
+  {
+    "id": "PV-03c-unresolved-warn",
+    "surface": "omp-parity",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Follow-up: unresolved placeholder warns with var NAME only on stderr in both loaders",
+    "evidence": [
+      "stderr: [atlas env] OTHER: unresolved; set OTHER in ~/.config/atlas/atlas.env (chmod 600); no SEKRET values"
+    ],
+    "doc_refs": [],
+    "reproduction": "bash /tmp/pv/secret_check.sh",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T18:01:01+00:00",
+    "verified_by": "ParityVerifier"
+  },
+  {
+    "id": "PV-04-tiers",
+    "surface": "omp-parity",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "ATLAS_TIER_DEFAULTS chains in regenerated omp/agents/*.md; resolved by real omp model-resolver, user modelRoles win; Claude agents model: lines unchanged",
+    "evidence": [
+      "implementer [@atlas-worker,sonnet,@smol], verifier [@atlas-verifier,@default,sonnet,@smol], runner [@atlas-mechanic,haiku,@smol]; gen-agents.test.ts:189-200 uses ~/.bun/.../model-resolver.ts; git diff agents/ has no model: change"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/omp && bun test gen-agents.test.ts",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T18:01:01+00:00",
+    "verified_by": "ParityVerifier"
+  },
+  {
+    "id": "PV-05-content-drift",
+    "surface": "omp-parity",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "check_content_drift reports drift for real omp 10.4.2 cache (31 files now; CHANGELOG says 28, stale count), read-only (cache sha unchanged, 0 new files), warn severity so never triggers apply_fixes",
+    "evidence": [
+      "(False, omp differs from the reference in 31 file(s): agents/verifier.md, contracts/hook-bridge.json, ...)",
+      "atlas_doctor.py:2988 failed excludes severity=warn; apply_fixes only with --fix"
+    ],
+    "doc_refs": [],
+    "reproduction": "cwd=repo: python3 import atlas_doctor; check_content_drift(omp, ~/.omp/plugins/cache/plugins/tech-tools___atlas___10.4.2, atlas)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T18:01:01+00:00",
+    "verified_by": "ParityVerifier"
+  },
+  {
+    "id": "PV-05b-doctor-cwd",
+    "surface": "omp-parity",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Follow-up: cache-run doctor (__file__ in cache, CLAUDE_PLUGIN_ROOT=cache) picks the cwd source checkout; cwd=/tmp -> None (marketplace clone fallback)",
+    "evidence": [
+      "B cache-doctor ref (cwd=repo): .../tech-tools/plugins/atlas; C CLAUDE_PLUGIN_ROOT=cache: same; D cwd=/tmp: None"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 heredoc patching atlas_doctor.__file__ to the cache path",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T18:01:01+00:00",
+    "verified_by": "ParityVerifier"
+  },
+  {
+    "id": "PV-06-channel-view",
+    "surface": "omp-parity",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Channel widget keeps polling after task returns; ATLAS_CHANNELS=off -> no widget/timers; no timer leak after stop (poll and linger phases, real timers); real atlas_todo member-finish/notes read by view",
+    "evidence": [
+      "/tmp/pv/view.test.ts live timers 1 -> 0 after stop; off -> 0; channel-view.test.ts:62-100 behavioural; real channel-open+note+member-finish -> finishedMembers [Alpha], note seq 1",
+      "nit: channel-view.ts header still says one final paint when the task call ends"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd /tmp/pv && bun test view.test.ts",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T18:01:01+00:00",
+    "verified_by": "ParityVerifier"
+  },
+  {
+    "id": "PV-07-yield-finish",
+    "surface": "omp-parity",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "stop-bridge marks a sub finished on ANY successful yield, including incremental type:[...] sections omp treats as non-terminal; CHANGELOG says terminal yield",
+    "evidence": [
+      "stop-bridge.ts:502 checks only toolName===yield && !isError; omp agent-session.ts:10336-10347 #isTerminalYieldToolResult excludes status success + non-empty string[] type; /tmp/pv/view.test.ts PROBE: incremental yield -> finished [Alpha]; view then stops after 3 quiet polls while the sub still works"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd /tmp/pv && bun test view.test.ts",
+    "proposed_fix": "mirror omp predicate: skip when result.details.status===success && Array.isArray(type) && type.length",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-09T18:01:01+00:00",
+    "verified_by": "ParityVerifier"
+  },
+  {
+    "id": "PV-08-brief",
+    "surface": "omp-parity",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "channel_brief makes posting REQUIRED (start intent, sibling on shared-contract change, result before final report); asserted in test_atlas_channels",
+    "evidence": [
+      "scripts/atlas_todo.py:1350-1352; test_atlas_channels.py:213"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m pytest -q scripts/test_atlas_channels.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T18:01:01+00:00",
+    "verified_by": "ParityVerifier"
+  },
+  {
+    "id": "PV-09-docs",
+    "surface": "omp-parity",
+    "category": "correctness",
+    "severity": "low",
+    "title": "Docs/CHANGELOG mismatches: terminal-yield wording (PV-07); drift smoke count 28 vs 31 now; parity doc says drift hashed against source checkout only (code falls back to marketplace clone); shell-wins omits empty-export case; channel-view.ts header comment stale",
+    "evidence": [
+      "CHANGELOG.md:15,17; docs/atlas-harness-parity.md:190; channel-view.ts:10-11"
+    ],
+    "doc_refs": [],
+    "reproduction": "read sections vs code",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-09T18:01:01+00:00",
+    "verified_by": "ParityVerifier"
+  },
+  {
+    "id": "PV-07",
+    "surface": "omp-parity",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "stop-bridge isTerminalYield mirrors omp #isTerminalYieldToolResult; incremental type:[...] yields no longer mark a sub finished",
+    "evidence": [
+      "bun test plugins/atlas/omp x3: 373 pass/0 fail each (22 files, ~20s); channel-view.test.ts:199-210 asserts section yield -> not finished, terminal shapes -> true, finishedMembers==[Alpha]; stop-bridge.ts:328-334 vs agent-session.ts:10336-10347 identical predicate (only diff: unknown-typed event + cast of result); call site stop-bridge.ts:515 gated on agent.kind==sub"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/omp && bun test",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T18:06:18+00:00",
+    "verified_by": "PV07Reverify"
+  },
+  {
+    "id": "PV-09",
+    "surface": "omp-parity",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "PV-09 doc mismatches fixed: TERMINAL yield, 31-files smoke, marketplace-clone fallback, non-empty export qualifier, channel-view header",
+    "evidence": [
+      "CHANGELOG.md:17 'Only a TERMINAL yield counts'; :15 '31 files at the time of writing' + 'else the marketplace clone'; :11 'A non-empty exported variable wins; an empty export is replaced'; docs/atlas-harness-parity.md:185 non-empty export qualifier, :190 'fall back to the marketplace clone'; channel-view.ts:12 TERMINAL yield, constants QUIET_POLLS=3 MAX_MS=30min LINGER_MS=15s match :24-26. Parity doc has no yield/drift-count row, so those two phrases are CHANGELOG-only by design"
+    ],
+    "doc_refs": [],
+    "reproduction": "rg -n -i 'terminal .?yield|31 files at the time of writing|marketplace.clone|non-empty export' plugins/atlas/CHANGELOG.md docs/atlas-harness-parity.md",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T18:06:18+00:00",
+    "verified_by": "PV07Reverify"
+  },
+  {
+    "id": "mod-plan-factcheck",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas-mod plan: 7 factual claims refuted (prompt.context once/conversation; claude -p runs mod hooks; turn_scoring/(o)(p) don't read headerFirstLinePattern; find_root markers; dash_colony has no input state; atlas-agents.ts:37 is runner; per-subagent effort already exists)",
+    "evidence": [
+      "/tmp/mods-ref.md:81,290; /tmp/mods-ov.md:199; plugins/atlas/scripts/turn_scoring.py:40; plugins/atlas/hooks/completion_gate.py:87-106,1682; plugins/atlas/scripts/atlas_todo.py:149-162; plugins/atlas/scripts/atlas_dash_colony.py:12-15; plugins/atlas/omp/atlas-agents.ts:37-38; skills/atlas-orchestrate/references/squad-and-tiers.md:20-27"
+    ],
+    "doc_refs": [],
+    "reproduction": "curl code.claude.com mods docs into /tmp; rg/sed on cited lines; claude --version",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-09T20:58:47+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "atlas-mod-plan-rev2",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Atlas mod plan rev2 fact-check",
+    "evidence": [
+      "All 10 corrections CONFIRMED: interface.md:731,812-830 ($.state reset by /clear,/resume,/branch; classic.SessionStart source clear/resume/fork); overview.md:189-199 (claude -p + Agent SDK: hooks yes, draws no); reference.md:290 (10/s, 30/s visible pane/expanded band/hint line); channel-view.ts:73-80 boardRoot; atlas_todo.py:149-162 find_root (.git/.atlas/docs, worktree map, range(7)); atlas_dash_colony.py:12-13,:38 STUCK_S=15*60,:406 parked; glyphs.js:23 blocked->input; atlas-agents.ts:38 implementer medium vs agents/implementer.md effort: low; squad-and-tiers.md:20-27 effort table; subagent-kit.md:126-128 fork roles,:135-137 fork inherits model+effort; capability-routing.md:27,34 and workflow-template.md:85,129,231 model opus in both atlas-orchestrate and atlas-audit copies; git grep headerFirstLinePattern -> only reader completion_gate.py:1682; turn_scoring.py:40 HEADER_RE ^ATLAS \\|; reference.md:76 prompt.submit next({...e, context}), :81 prompt.context once per conversation. No new factual errors; nit: plan :104 and :308 say 30/s for 'band', docs say 'expanded band' (:45 is exact)."
+    ],
+    "doc_refs": [],
+    "reproduction": "curl -sL https://code.claude.com/docs/en/plugins/mods/reference.md | grep -n 'Throttled\\|prompt.submit'; git grep -n headerFirstLinePattern",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T21:02:00+00:00",
+    "verified_by": "verifier-mod-plan-rev2"
+  },
+  {
+    "id": "atlas-mod-plan-s7",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Atlas mod plan section 7 managed-policy fact-check",
+    "evidence": [
+      "Doc claims mostly confirmed (/tmp/mods-admin.md:58-63,149-150,211-221,233-239,268,291,304; mods-ref.md:305-313; settings-reference.md:4019-4030). WRONG: (1) plan L314-315 kill closes 'the agent's workspace' - atlas_mux.py:854-857 kill takes only --run; atlas_herdr.py:731-738 close_run closes the whole run workspace (every pane), tmux path kill-session (atlas_mux.py:789); exit 137 is a fallback written only for workers that posted no exit within 2s and have a channel (atlas_mux.py:734-754). (2) plan L313 steering via atlas_herdr.py argv: CLI exposes only status|ensure|reap|install-check|create-pane (atlas_herdr.py:1125-1137); send_prompt (L308) has no CLI. (3) plan L275-281: allowManagedHooksOnly blocks plugin hooks/hooks.json (42 atlas hook commands), agent-frontmatter hooks and non-managed statusLine unless managed enabledPlugins force-enables atlas@tech-tools (settings-reference.md:4024-4028), so 'existing hooks keep working' is false there; they are plugin hooks, not 'settings hooks'. MISSING: disableAllHooks (stops mod and all hooks), disableSideloadFlags (rejects --plugin-dir used by Stage 0 spike), guard option key cc-plugin-sec-default@builtin under pluginConfigs and fail-closed rule, deny rules do not govern a mod's own $.process/$.fs calls (admin.md:66), admin sample policy mod refuses user mods calling process.run, --safe-mode/worker-crash unloads. Confirmed: atlas_herdr.py status exists, read-only (L836-889), loopback-only HTTP (L99-106); marketplace lists atlas by ./plugins/atlas so condition 3 is satisfiable."
+    ],
+    "doc_refs": [],
+    "reproduction": "sed -n 229-306 /tmp/mods-admin.md; sed -n 4019-4030 /tmp/settings-reference.md; sed -n 757-858 plugins/atlas/scripts/atlas_mux.py; sed -n 731-744,1125-1142 plugins/atlas/scripts/atlas_herdr.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-09T21:05:58+00:00",
+    "verified_by": "verifier-mod-plan-s7"
+  },
+  {
+    "id": "atlas-mod-plan-rev3",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Atlas mod plan rev3 fact-check (visual v2, section 7)",
+    "evidence": [
+      "REFUTED: hooks.json has 21 hook commands not 42 (doc L415,L455; 42 = grep count of the word command); Svg prop is isInteractive not animate (index.d.ts:12299-12306, doc L108); Svg exists on mobile+vscode per types (index.d.ts:3805-3857) so 'Mobile has neither'/'Svg Desktop-only' wrong vs types (interface.md table says Desktop); BoxProps has no scope, it is hover.scope (index.d.ts:877,925, doc L97); atlas_herdr status does 2 socket pings + possible herdr --version (atlas_herdr.py:335,857,555-563; doc L471); <root>/scripts/atlas_herdr.py does not exist (doc L67; lives in plugins/atlas/scripts); $.session.usage has no token total (index.d.ts:11712-11738, doc L143); s7 'never rewrites a prompt' contradicts s6.4 prompt.submit context. All s7 admin/settings claims CONFIRMED (admin.md:26-38,58-63,66,151-152,203,221,233-239,268,304,314-331,362; settings-ref.md:4019-4030,4048-4058,5939-5945); repo line cites CONFIRMED. Client/Raster/Image/Text/hover/AbovePrompt/sites/advance/144-110/audio asset/prompt.suggest/agent statuses/TurnStepInput/AgentSpawnInput CONFIRMED."
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -c \"import json;h=json.load(open('plugins/atlas/hooks/hooks.json'))['hooks'];print(sum(len(g['hooks']) for v in h.values() for g in v))\"",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-09T21:14:21+00:00",
+    "verified_by": "verifier-mod-plan-rev3"
+  },
+  {
+    "id": "atlas-mod-plan-rev4",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Atlas mod plan rev4 fix check",
+    "evidence": [
+      "All 10 rev3 items fixed: D:422,462 21 hooks (hooks.json parse=21); D:108-111,567-568 Svg isInteractive + surface conflict flagged; D:97 BoxHoverProps/TextHoverProps.scope; D:479-481 two pings :335/:857, herdr --version :555-563, probes :794-829; D:67 $.plugin.root; D:148-150 usage fields; D:469-470 prompt.submit matches 6.4; D:114-116,562-563 tick resets loop; D:426 built-in mods/SDK hooks; D:117,566 1024 pairs (T:9251). No stale phrasing found by grep; surrounding sentences coherent."
+    ],
+    "doc_refs": [],
+    "reproduction": "grep -nE 'hooks|Svg|scope|ping|plugin.root|usage|prompt.submit|setState|disableAllHooks|1,024' docs/plans/2026-10-09-atlas-mod.md",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T21:16:21+00:00",
+    "verified_by": "verifier-mod-plan-rev4"
+  },
+  {
+    "id": "atlas-mod-plan-rev5",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Atlas mod plan rev5 sprite architecture and plugin.root check",
+    "evidence": [
+      "index.d.ts:2333 plugin root: string; :4883 FsAncestorsRequest names; :1415 ClientElements omits Client|Raster|Image; cc-arcade register.tsx AbovePrompt+terminal+!hasSurvey+viewport.columns+maxRows; common.tsx runs/maxRuns fold; doom.tsx:126 every(50)+onKey/onPointer/post; doc 597-598 wording ok; only blit refs 34,97,117 (Raster art), 118 says band independent of blit"
+    ],
+    "doc_refs": [],
+    "reproduction": "grep -n 'blit\\|root: string\\|ClientElements' doc + index.d.ts",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T21:19:45+00:00",
+    "verified_by": "verifier-mod-plan-rev5"
+  },
+  {
+    "id": "release-10.4.3-tests",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "10.4.3 release suites green after two test-assertion fixes",
+    "evidence": [
+      ".atlas/evidence/release-10.4.3/tests.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m pytest -q plugins/atlas/hooks plugins/atlas/scripts && (cd plugins/atlas/omp && bun test)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T21:56:29+00:00",
+    "verified_by": "lead-01a122 (self-recorded test run; no independent verifier)"
+  },
+  {
+    "id": "release-10.4.3-final",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "10.4.3 release tree green after fallow refactors, lint and advisor fixes",
+    "evidence": [
+      ".atlas/evidence/release-10.4.3/tests-final.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m pytest -q plugins/atlas/hooks plugins/atlas/scripts && (cd plugins/atlas/omp && bun test) && fallow audit --format json",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T22:24:15+00:00",
+    "verified_by": "lead-01a122 (self-run test suites; no independent verifier)"
   }
 ]

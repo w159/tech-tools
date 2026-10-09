@@ -320,6 +320,19 @@ function removeOwnedDir(dir: string): void {
 	}
 }
 
+/**
+ * A `tool_execution_end` that is a TERMINAL yield, mirroring omp's own predicate exactly
+ * (session/agent-session.ts #isTerminalYieldToolResult): a successful `yield` whose details are not an incremental
+ * `{status:"success", type:[<string>, ...]}` section submission.
+ */
+export function isTerminalYield(event: { toolName?: unknown; isError?: unknown; result?: unknown }): boolean {
+	if (event.toolName !== "yield" || event.isError) return false;
+	const details = (event.result as { details?: unknown } | null | undefined)?.details;
+	if (!details || typeof details !== "object") return true;
+	const record = details as Record<string, unknown>;
+	return !(record.status === "success" && Array.isArray(record.type) && record.type.length > 0 && record.type.every(item => typeof item === "string"));
+}
+
 export function registerStopBridge(pi: Pick<ExtensionAPI, "on">, deps: StopBridgeDeps = {}): void {
 	const env = () => deps.env ?? process.env;
 	const off = () => env().ATLAS_HOOK_BRIDGE === "off" || env().ATLAS_STOP_BRIDGE === "off";
@@ -353,6 +366,19 @@ export function registerStopBridge(pi: Pick<ExtensionAPI, "on">, deps: StopBridg
 	let hooks: BridgedHook[] | undefined = deps.hooks;
 	const hooksFor = (event: string): BridgedHook[] => (hooks ??= loadBridgedHooksFor(SESSION_END_EVENTS, "bridgedSessionEnd")).filter(h => h.event === event);
 
+	/** A finished omp `task` subagent is parked: nothing drains board notes sent to it. Record that in the channel registry so the dashboard stops offering Send. */
+	const finished = new Set<string>();
+	const markSubFinished = async (ctx: BridgeCtx): Promise<void> => {
+		try {
+			const id = String((ctx.agent as { id?: string } | undefined)?.id ?? "");
+			if (!id || off() || finished.has(id)) return;
+			finished.add(id);
+			await runCapture(["python3", nodePath.join(PLUGIN_ROOT, "scripts", "atlas_todo.py"), "member-finish", "--root", ctx.cwd, "--agent", id, "--exit", "0"], { timeoutMs: 1_500 });
+		} catch {
+			// fail open: a missed mark only leaves the member to the dashboard's parked heuristic
+		}
+	};
+
 	const stops = new Map<string, StopState>();
 	const reset = () => stops.clear();
 	pi.on("session_start", reset);
@@ -361,6 +387,7 @@ export function registerStopBridge(pi: Pick<ExtensionAPI, "on">, deps: StopBridg
 	pi.on("session_stop", async (event, ctx) => {
 		try {
 			const bridgeCtx = ctx as BridgeCtx;
+			if (bridgeCtx.agent?.kind === "sub" && !off()) await markSubFinished(bridgeCtx);
 			if (bridgeCtx.agent?.kind !== "main" || off()) return undefined;
 			// The budget starts HERE, before conversion and rebaseline: omp cuts a session_stop handler at 30 s and
 			// then delivers nothing, so everything below (convert + rebaseline + hooks) has to fit inside it.
@@ -464,7 +491,7 @@ export function registerStopBridge(pi: Pick<ExtensionAPI, "on">, deps: StopBridg
 			cwd: ctx.cwd,
 			stdinFile,
 			ownedDir: dir,
-			env: { CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT, ATLAS_HARNESS: "omp", ATLAS_MANDATES: "off" },
+			env: { CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT, ATLAS_HARNESS: "omp", ATLAS_MANDATES: "off", ATLAS_SOURCE_TRANSCRIPT: sessionFileOf(ctx) },
 		});
 	};
 
@@ -472,10 +499,24 @@ export function registerStopBridge(pi: Pick<ExtensionAPI, "on">, deps: StopBridg
 		try {
 			const bridgeCtx = ctx as BridgeCtx;
 			const sub = bridgeCtx.agent?.kind === "sub";
+			if (sub) await markSubFinished(bridgeCtx);
 			await ingest(sub ? "SubagentStop" : "SessionEnd", bridgeCtx, sub ? "sub" : "main", SHUTDOWN_CONVERT_TIMEOUT_MS);
 		} catch {
 			// fail open: shutdown must never throw into omp
 		}
+	});
+
+	// omp parks a finished in-process `task` subagent instead of ending its session, so session_stop/session_shutdown
+	// never reach the sub while the lead runs. Its TERMINAL `yield` (tools/yield.ts) is the completion signal the live
+	// channel view (channel-view.ts) waits on; an incremental `type: [...]` section yield is not.
+	pi.on("tool_execution_end", async (event, ctx) => {
+		try {
+			const bridgeCtx = ctx as BridgeCtx;
+			if (isTerminalYield(event) && bridgeCtx.agent?.kind === "sub") await markSubFinished(bridgeCtx);
+		} catch {
+			// fail open: the view falls back to its own hard cap
+		}
+		return undefined;
 	});
 
 	pi.on("auto_compaction_start", async (_event, ctx) => {

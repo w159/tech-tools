@@ -1347,6 +1347,9 @@ def channel_brief(root: Optional[str], channel: str, lead: str, name: str) -> st
         f"{', '.join(sibs) or 'none yet'}).\n"
         f'Post: {base} note --root "{rt}" --channel "{channel}" --owner {name} '
         f'--to <sibling|{lead}|all> "<text>" (to=all reaches the whole channel).\n'
+        f"Posting is REQUIRED, one short line each: (1) on start, your intent to {lead}; "
+        f"(2) on any cross-file or shared-contract change, notify the affected sibling; "
+        f"(3) before your final report, the one-line result to {lead}.\n"
         f'Inbox (run between steps): {base} inbox --root "{rt}" --owner {name}\n'
         f'Your todos: {base} claim --root "{rt}" --id <id> --owner {name}; the lead '
         f"watches this channel's board."
@@ -1435,6 +1438,8 @@ def _cli(argv: Optional[List[str]] = None) -> int:
             or a == "--channel"
             or a == "--lead"
             or a == "--members"
+            or a == "--agent"
+            or a == "--exit"
         ):
             flags[a[2:]] = args[i + 1] if i + 1 < len(args) else ""
             i += 2
@@ -1491,6 +1496,22 @@ def _cli(argv: Optional[List[str]] = None) -> int:
                 flags.get("owner", ""),
                 force=bool(flags.get("force")),
             )
+        elif cmd == "member-finish":
+            # an omp subagent's session ended: its id (e.g. `3-Shell`) resolves to the registered member
+            sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "hooks"))
+            import worker_inbox
+
+            proj = find_root(root) if root else root
+            who = worker_inbox._member_for(
+                sys.modules[__name__], proj, flags.get("agent", "")
+            )
+            out = {
+                "ok": True,
+                "member": who,
+                "marked": mark_finished(proj, who, int(flags.get("exit", "0") or 0))
+                if who
+                else 0,
+            }
         elif cmd == "complete":
             out = set_status(
                 root,

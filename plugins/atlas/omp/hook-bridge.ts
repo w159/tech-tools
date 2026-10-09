@@ -412,6 +412,29 @@ export function hookTimeoutMs(configuredMs: number, env: Record<string, string |
 export type HookRunner = (command: string, payload: Record<string, unknown>, timeoutMs: number) => Promise<string>;
 
 /**
+ * Knob values saved by the Command Center: `<ATLAS_HOME or ~/.atlas>/settings.json` `env` (scripts/atlas_control.py
+ * owns the file; Claude Code gets the same values through its own settings.json env). Only ATLAS_* string values;
+ * an unreadable or malformed file exports nothing. A variable already set in the real environment is not overridden.
+ */
+function readStoredEnv(file: string): Record<string, unknown> {
+	try {
+		const stored = JSON.parse(fs.readFileSync(file, "utf8"))?.env;
+		return stored && typeof stored === "object" ? stored : {};
+	} catch {
+		return {};
+	}
+}
+
+export function atlasStoreEnv(env: Record<string, string | undefined> = process.env): Record<string, string> {
+	const file = nodePath.join(env.ATLAS_HOME || nodePath.join(os.homedir(), ".atlas"), "settings.json");
+	const out: Record<string, string> = {};
+	for (const [k, v] of Object.entries(readStoredEnv(file))) {
+		if (/^ATLAS_[A-Z0-9_]+$/.test(k) && typeof v === "string" && v !== "" && (env[k] ?? "") === "") out[k] = v;
+	}
+	return out;
+}
+
+/**
  * Env layered over process.env for every bridged hook.
  * ATLAS_NATIVE_POLICY=off: omp/index.ts already denies/nudges native Read/Grep/Glob/Bash, so the tripwire must not
  * repeat that text; it still runs the inline-op threshold tiers. ATLAS_TOOLKIT_LOAD=omp: omp has no ToolSearch, so the
@@ -422,7 +445,7 @@ export type HookRunner = (command: string, payload: Record<string, unknown>, tim
  * every edit it was spawned to make. A lead (no marker) is armed exactly as before.
  */
 export function hookEnv(env: Record<string, string | undefined> = process.env): Record<string, string> {
-	const base: Record<string, string> = { CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT, ATLAS_HARNESS: "omp", ATLAS_MANDATES: "off", ATLAS_NATIVE_POLICY: "off", ATLAS_TOOLKIT_LOAD: "omp" };
+	const base: Record<string, string> = { ...atlasStoreEnv(env), CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT, ATLAS_HARNESS: "omp", ATLAS_MANDATES: "off", ATLAS_NATIVE_POLICY: "off", ATLAS_TOOLKIT_LOAD: "omp" };
 	if ((env.ATLAS_WORKER_NAME ?? "").trim() !== "") base.ATLAS_ENGINE_ARM = "off";
 	return base;
 }

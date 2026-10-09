@@ -4,9 +4,9 @@
     "env": "ATLAS_MANDATES",
     "value": "off"
   },
-  "commitNudge": "[atlas mandate] Before this commit, run ponytail-review (less-code review) on the staged diff (`git diff --cached`): delete what the change does not need, then commit. Nudge only; it fires once per session (ATLAS_MANDATES=off disables).",
-  "recall": "Recall first: before planning or asking the user to re-explain prior work, run one claude-mem search for this project ({route}, then timeline/get_observations on hits). ATLAS_MANDATES=off disables this line.",
-  "recallGate": "[atlas gate] REQUIRED once per session: your first tool call must be one claude-mem recall for this project ({route}). {example} Every other tool call (TodoWrite and ToolSearch excepted) is denied on every attempt until you make it; then continue. ATLAS_MANDATES=off disables it.",
+  "commitNudge": "[atlas mandate] Before this commit, run ponytail-review on the staged diff (`git diff --cached`): delete what the change does not need, then commit. Fires once per session (ATLAS_MANDATES=off disables).",
+  "recall": "Recall first: before planning or asking the user to re-explain prior work, run one claude-mem search for this project ({route}, then timeline/get_observations on hits).",
+  "recallGate": "[atlas gate] First tool call must be one claude-mem recall for this project ({route}). {example} Every other tool (TodoWrite, ToolSearch excepted) is denied until then. ATLAS_MANDATES=off disables.",
   "recallGateExample": "Example search args: {\"query\": \"<prior work on this project>\"}",
   "recallGateCases": {
     "_doc": "Tool calls the recall gate classifies; asserted by omp/mandates.test.ts and hooks/test_recall_gate.py. name = Claude Code tool name, ompName = omp tool name when it differs. satisfy: a real claude-mem call (allowed, and the only thing that satisfies the gate; it counts even if the call then errors). block: denied on every attempt until a satisfy call happens in the session. exempt: neither denied nor satisfying. Never gated, by the hook rather than by a case: subagent calls (agent_id or /subagents/ transcript), Claude Code ToolSearch (it loads the deferred recall tool), and sessions with no claude-mem tool mounted (allowed, traced once via atlas_faults).",

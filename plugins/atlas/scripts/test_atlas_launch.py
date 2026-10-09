@@ -181,6 +181,20 @@ class LaunchArgvTest(unittest.TestCase):
             with mock.patch.dict(os.environ, {"ATLAS_COLONY_TRANSPORT": "tmux"}):
                 self.assertEqual(atlas_mux.transport(), "tmux")
 
+    def test_herdr_down_and_tmux_absent_is_a_clear_failure_with_no_spawn(self):
+        spawn = mock.Mock()
+        with (
+            mock.patch.dict(os.environ, {"TMUX": "/stale/sock,1,0", "TMUX_PANE": "%9"}),
+            mock.patch.object(atlas_herdr, "_server_up", lambda: False),
+            mock.patch.object(atlas_herdr, "_spawn", spawn),
+            mock.patch("shutil.which", return_value=None),
+        ):
+            os.environ.pop("ATLAS_COLONY_TRANSPORT", None)
+            res = atlas_launch.launch(self.root, "w", "do it")
+        self.assertFalse(res["ok"], res)
+        self.assertIn("tmux not found", res["reason"])
+        spawn.assert_not_called()
+
 
 class _NoTmux:
     """A tmux stand-in that fails the test if anything on the default path calls it."""

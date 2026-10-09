@@ -210,6 +210,24 @@ class ChannelModel(unittest.TestCase):
         rc, out = cli("channel-board", "nope", "--root", self.root)
         self.assertEqual(rc, 1)
 
+    def test_brief_requires_posting_at_start_contract_change_and_before_report(self):
+        todo.open_lead_channel(self.root, "L", ["A", "B"])
+        brief = todo.channel_brief(self.root, f"{self.main}/L", "L", "A").lower()
+        # posting is mandatory, not optional
+        self.assertIn("required", brief)
+        self.assertNotIn("optional", brief)
+        # the three trigger points, each addressed to the right party
+        for token in (
+            "start",
+            "shared-contract",
+            "sibling",
+            "before your final report",
+        ):
+            self.assertIn(token, brief)
+        self.assertRegex(brief, r"result to l\b")
+        # the post command itself is still there
+        self.assertIn(" note ", brief)
+
     def test_cli_channels_open_notes_and_briefs(self):
         rc, out = cli(
             "channel-open", "--root", self.root, "--lead", "L", "--members", "A,B"

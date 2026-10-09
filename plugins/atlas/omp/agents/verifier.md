@@ -4,7 +4,7 @@
 name: "verifier"
 description: "Adversarial verifier that independently confirms or REFUTES a claimed finding or fix in a fresh context: re-opens cited lines, re-runs tests, re-queries data, re-reads the diff. Never fixes; returns an evidence-backed verdict. Use when a finding or fix must be checked before it is recorded as verified."
 thinkingLevel: "medium"
-model: ["@atlas-verifier","@default","@smol"]
+model: ["@atlas-verifier","@default","sonnet","@smol"]
 # Lead-only dispatch: atlas workers must not spawn subagents.
 spawns: "none"
 ---
@@ -98,8 +98,9 @@ array of **numbers**, not strings.
 ## Record the verdict on disk - MANDATORY for you, before you return (a prompt rule: no hook blocks a missing row, the tripwire only reminds the lead)
 
 Your verdict is only real if the completion gate can see it, and the gate reads
-`.atlas/.run/findings.json`, not your chat text. You cannot use `Write`, but `Bash` is
-allowed, so run this as your last action, once per claim you judged:
+`.atlas/.run/findings.json`, not your chat text. NEVER `Write`/`write`/Edit that file or any
+other (your definition disallows them and the gate denies the call: measured 35 wasted denies).
+The one sanctioned path is `Bash`/`bash`: run this as your last action, once per claim you judged:
 
     python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_finding.py" \
       --id <stage-or-finding-id> \
@@ -108,9 +109,10 @@ allowed, so run this as your last action, once per claim you judged:
       --evidence "<file:line, test id, or .atlas/evidence/... path>" \
       --reproduction "<the exact command you ran>"
 
-If `${CLAUDE_PLUGIN_ROOT}` is not set in your environment, find the script with
-`ls "$(git rev-parse --show-toplevel)"/plugins/atlas/scripts/atlas_finding.py` or the
-plugin cache path, and pass `--root <project-root>` if the tool cannot detect the root.
+If `${CLAUDE_PLUGIN_ROOT}` is not set (always the case under omp), use the absolute script path
+given in your dispatch, else find it with
+`ls ~/.omp/plugins/cache/plugins/*atlas*/scripts/atlas_finding.py "$(git rev-parse --show-toplevel)"/plugins/atlas/scripts/atlas_finding.py`,
+and pass `--root <project-root>` if the tool cannot detect the root.
 
 Use `--status verified` only for a claim you personally reproduced. `needs-evidence` is
 the honest status for a plausible but unproven claim, and writing it is still required:

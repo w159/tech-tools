@@ -4,7 +4,7 @@
 name: "planner"
 description: "Multi-stage decomposition specialist that turns a task into a numbered stage map where each stage has one failable check, flags concurrent stages, and marks unverifiable output as proven versus assumed. Use when a task spans several stages or layers and needs an ordered, verifiable plan before work starts."
 thinkingLevel: "low"
-model: ["@atlas-worker","@smol"]
+model: ["@atlas-worker","sonnet","@smol"]
 # Lead-only dispatch: atlas workers must not spawn subagents.
 spawns: "none"
 ---

@@ -8,7 +8,12 @@ code tests round things out; the coverage comes from the in-process calls.
 import os as _iso_os
 import sys as _iso_sys
 
-_iso_sys.path.insert(0, _iso_os.path.join(_iso_os.path.dirname(_iso_os.path.abspath(__file__)), "..", "scripts"))
+_iso_sys.path.insert(
+    0,
+    _iso_os.path.join(
+        _iso_os.path.dirname(_iso_os.path.abspath(__file__)), "..", "scripts"
+    ),
+)
 import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import io
 import json
@@ -247,6 +252,75 @@ class MainInProcessTest(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertTrue(any("ruff" in c for c in ran))
         prn.assert_not_called()
+
+    def test_formatter_failure_is_a_quiet_skip_not_a_crash(self):
+        """No formatter succeeded: exit 0 and no hook-faults row (it showed up as hook_crash)."""
+        import atlas_faults
+
+        before = len(atlas_faults.load())
+
+        class Proc:
+            returncode = 1
+            stderr = "error: cannot parse"
+
+        with (
+            mock.patch.object(format_after_edit.shutil, "which", return_value="/x"),
+            mock.patch.object(format_after_edit.subprocess, "run", return_value=Proc()),
+        ):
+            rc = self._run_main(_payload("Edit", self.target, cwd=self.tmp))
+        self.assertEqual(rc, 0)
+        self.assertEqual(len(atlas_faults.load()), before)
+
+    def _skip_rows(self):
+        import atlas_db
+
+        conn = atlas_db.connect()
+        atlas_db.init(conn)
+        try:
+            return [
+                (c, s)
+                for c, s in conn.execute(
+                    "SELECT category, snippet FROM friction_events "
+                    "WHERE category LIKE 'formatter_skipped:%'"
+                )
+            ]
+        finally:
+            conn.close()
+
+    def test_each_skip_reason_writes_exactly_one_friction_row_and_no_fault(self):
+        import atlas_faults
+
+        class Bad:
+            returncode = 1
+
+        cases = {
+            "parse": dict(return_value=Bad()),
+            "timeout": dict(side_effect=subprocess.TimeoutExpired("x", 55)),
+            "missing": dict(side_effect=FileNotFoundError("x")),
+        }
+        for reason, kw in cases.items():
+            before_rows = len(self._skip_rows())
+            before_faults = len(atlas_faults.load())
+            with (
+                mock.patch.object(format_after_edit.shutil, "which", return_value="/x"),
+                mock.patch.object(format_after_edit.subprocess, "run", **kw),
+            ):
+                rc = self._run_main(_payload("Edit", self.target, cwd=self.tmp))
+            self.assertEqual(rc, 0)
+            rows = self._skip_rows()
+            self.assertEqual(len(rows) - before_rows, 1, reason)
+            self.assertEqual(rows[-1], ("formatter_skipped:" + reason, ".py"))
+            self.assertEqual(len(atlas_faults.load()), before_faults, reason)
+
+    def test_skip_with_db_unavailable_still_exits_zero(self):
+        import atlas_db
+
+        with (
+            mock.patch.object(format_after_edit.shutil, "which", return_value=None),
+            mock.patch.object(atlas_db, "connect", side_effect=OSError("no db")),
+        ):
+            rc = self._run_main(_payload("Edit", self.target, cwd=self.tmp))
+        self.assertEqual(rc, 0)
 
     def test_first_candidate_fails_then_second_succeeds(self):
         payload = _payload("Write", self.target, cwd=self.tmp)

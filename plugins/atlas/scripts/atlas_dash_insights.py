@@ -215,11 +215,12 @@ TOOL_CLASS_KIND = {
     "deny": "gate_deny",
     "model_misuse": "tool_misuse",
     "environment": "tool_env",
+    "user_code": "tool_user_code",
     "tool_fault": "tool_error",
     "unknown": "tool_error_unclassified",
 }
 SILENT_TOOL_KINDS = ("tool_error", "tool_error_unclassified")
-TOOL_CAUSE_KINDS = ("tool_misuse", "tool_env", "tool_error_legacy")
+TOOL_CAUSE_KINDS = ("tool_misuse", "tool_env", "tool_user_code", "tool_error_legacy")
 _TOOL_KIND_HINT = {
     "gate_deny": "An atlas hook blocked this call before it ran; check the deny "
     "rule matches intent.",
@@ -229,8 +230,11 @@ _TOOL_KIND_HINT = {
     "permission, timeout, MCP transport); not an atlas fault.",
     "tool_error": "An atlas script failed internally; repeated errors mean the "
     "tool is broken.",
-    "tool_error_unclassified": "The tool call errored and no error text was "
-    "recorded, so the cause is unknown (rows ingested before snippet capture).",
+    "tool_error_unclassified": "The tool call errored and its error text (see the "
+    "sample) matches no known cause, so atlas cannot tell whose fault it was. Read "
+    "the sample: ignore it if it is your own code's error.",
+    "tool_user_code": "The user's own code (eval cell, shell script) raised; the "
+    "traceback is theirs, not an atlas fault.",
     "tool_error_legacy": "pre-capture history, no error text; not attributable",
 }
 
@@ -451,9 +455,21 @@ def _fold_doctor_regressions(db: _Db) -> list[dict]:
                     }
                 )
     if db.has("improvements") and "verdict" in db.cols("improvements"):
+        # A regression on a finding the miner no longer fires (resolved) or the
+        # user dismissed (rejected) is not actionable; so is any zero-validity
+        # judgment, which the miner auto-resolves.
+        has_f = db.has("findings") and "finding_id" in db.cols("improvements")
         for r in db.dicts(
-            "SELECT COUNT(*) AS n, MIN(ts) AS first, MAX(COALESCE(remeasured_at,ts)) AS last, "
-            "MAX(metric) AS sample FROM improvements WHERE verdict='regressed'"
+            "SELECT COUNT(*) AS n, MIN(i.ts) AS first, "
+            "MAX(COALESCE(i.remeasured_at,i.ts)) AS last, "
+            "MAX(i.metric) AS sample FROM improvements i "
+            + (
+                "LEFT JOIN findings f ON f.id=i.finding_id "
+                "WHERE i.verdict='regressed' "
+                "AND COALESCE(f.status,'') NOT IN ('resolved','rejected')"
+                if has_f
+                else "WHERE i.verdict='regressed'"
+            )
         ):
             if r["n"]:
                 out.append(
@@ -463,7 +479,9 @@ def _fold_doctor_regressions(db: _Db) -> list[dict]:
                         "count": r["n"],
                         "first": r["first"],
                         "last": r["last"],
-                        "sample": _clip(r["sample"]),
+                        "sample": _clip(
+                            f"metric {r['sample']} got worse after its fix"
+                        ),
                         "hint": "Remeasure says this metric got worse after the fix.",
                         "source": "improvements.verdict=regressed",
                     }
@@ -487,6 +505,10 @@ def _log_size() -> int:
 # offset at import time (the daemon imports this module at boot).
 _LOG_START = _log_size()
 _RETIRED_404 = re.compile(r"\b404\b.*(?:/static/|\.js\b|\.css\b|\.map\b)")
+# a browser closing a tab mid-response is the client leaving, not the daemon failing
+_CLIENT_GONE = re.compile(
+    r"^(BrokenPipeError|ConnectionResetError|ConnectionAbortedError)\b"
+)
 
 
 def _fold_dashboard_log(since: float, tail_bytes: int = 262144) -> list[dict]:
@@ -508,8 +530,8 @@ def _fold_dashboard_log(since: float, tail_bytes: int = 262144) -> list[dict]:
     for ln in text.splitlines():
         if not _TRACE_RE.match(ln) or ln.startswith("Traceback"):
             continue  # the *Error line that follows a Traceback carries the cause
-        if _RETIRED_404.search(ln):
-            continue  # 404s for retired static paths are not daemon failures
+        if _RETIRED_404.search(ln) or _CLIENT_GONE.match(ln):
+            continue  # retired-static 404s and client hang-ups are not daemon failures
         kinds[ln[:160]] = kinds.get(ln[:160], 0) + 1
     if not kinds:
         return []
@@ -649,6 +671,87 @@ def _fold_agents_failed(db: _Db, since: float, root: str | None) -> list[dict]:
 # silent_failures, project failures_7d, attention or the silent-failures KPI.
 ENFORCEMENT_KINDS = ("gate_deny", "gate_block")
 
+# A failure last seen within ACTIVE_SECS is "active" (happening now); an older one
+# is "historic" and only waits to age out of the window. These kinds are not
+# bounded by the window (they stay until fixed), so they are always active.
+ACTIVE_SECS = 24 * 3600
+_UNWINDOWED_KINDS = ("doctor_regression", "dashboard_error")
+# kind -> (title, what it is, concrete next action)
+FAILURE_INFO = {
+    "hook_crash": (
+        "A hook crashed",
+        "A hook raised an exception. Atlas swallowed it so your session kept going (fail-open), but that hook did nothing.",
+        "Read the sample (hook name + error) and fix that hook. Full list: tail -n 5 ~/.atlas/hook-faults.jsonl",
+    ),
+    "hook_burst_tripped": (
+        "Stop-hook breaker tripped",
+        "The Stop hook fired many times within seconds in one session, so atlas silenced the hook chain for that session.",
+        "Nothing to do unless it keeps recurring; then look for a loop in hooks/completion_gate.py.",
+    ),
+    "dispatch_unclassified": (
+        "Untyped subagent dispatch",
+        "A subagent dispatch was recorded with no agent type, so it cannot be attributed to a role.",
+        "If it is happening now, check the dispatch hook payload (plugins/atlas/hooks/dispatch_tripwire.py). Historic ones just age out.",
+    ),
+    "tool_error": (
+        "Atlas script failed",
+        "An atlas script failed internally while a tool call ran.",
+        "Re-run the command in the sample and fix the script; repeats mean the tool is broken.",
+    ),
+    "tool_error_unclassified": (
+        "Unclassified tool error",
+        "A tool call errored and its text matches no known cause (model misuse, environment, your code).",
+        "Read the sample. If the tool itself is at fault fix it; otherwise ignore (classifier: atlas_db.classify_error).",
+    ),
+    "ingest_stalled": (
+        "Transcript ingest behind",
+        "A transcript file was only partly read into the database, so stats lag behind what happened.",
+        "python3 plugins/atlas/scripts/session_ingest.py --backfill",
+    ),
+    "doctor_regression": (
+        "A fix stopped holding",
+        "A finding you fixed was remeasured and its metric got worse again.",
+        "Open Improve, find the regressed finding, then Reopen or Remeasure it.",
+    ),
+    "doctor_miner_error": (
+        "Doctor miner crashed",
+        "One of the self-improvement miners raised an error, so its findings are missing.",
+        "python3 plugins/atlas/scripts/atlas_doctor.py --mine shows the error.",
+    ),
+    "dashboard_error": (
+        "Dashboard logged an error",
+        "The dashboard daemon wrote a Python error to its log since it last started.",
+        "tail -n 50 ~/.atlas/dashboard.log",
+    ),
+    "agent_stuck": (
+        "Worker never finished",
+        "A colony worker run started over an hour ago and never ended; it is stuck or died without reporting.",
+        "Open Colony and stop or restart that worker.",
+    ),
+}
+
+
+def _annotate(it: dict, now: float, since: float) -> None:
+    """Add title/what/next plus active-vs-historic state and the date a windowed
+    item stops counting. `first`/`last` are still epoch seconds here."""
+    info = FAILURE_INFO.get(it["kind"])
+    if info:
+        it["title"], it["what"], it["next"] = info
+        if it.get("tool") and it["kind"] in (
+            "hook_crash",
+            "tool_error",
+            "tool_error_unclassified",
+        ):
+            it["title"] += f": {it['tool']}"
+    last = it.get("last")
+    windowed = it["kind"] not in _UNWINDOWED_KINDS
+    it["state"] = (
+        "active"
+        if not windowed or (last is not None and now - last <= ACTIVE_SECS)
+        else "historic"
+    )
+    it["ages_out"] = _iso(last + (now - since)) if windowed and last else None
+
 
 def _collect_events(
     db: _Db, since: float, root: str | None, now: float
@@ -674,6 +777,7 @@ def _collect_events(
     for it in items:
         key = f"{it['kind']}|{it['project']}|{it.get('tool', '')}|{it['source']}"
         it["id"] = hashlib.sha1(key.encode()).hexdigest()[:12]
+        _annotate(it, now, since)
         it["first"] = _iso(it["first"])
         it["last"] = _iso(it["last"])
         if it["kind"] in ENFORCEMENT_KINDS:
@@ -849,6 +953,131 @@ def _connector_aliases() -> dict:
         return {}
 
 
+# subsystem id -> what it measures, what warn means, next action, label of last_ok
+_SUB_INFO = {
+    "hooks": {
+        "what": "Whether atlas hooks run without crashing: swallowed crashes in hook-faults.jsonl and Stop-hook circuit-breaker trips.",
+        "warn_means": "A hook crashed (the session carried on, fail-open) or the Stop breaker silenced a thrashing session.",
+        "next": "Open the hook crash row under Silent failures for the error text, or run: tail -n 5 ~/.atlas/hook-faults.jsonl",
+    },
+    "gate": {
+        "what": "Tool calls the gates allowed versus denied. A deny is policy working, never a fault.",
+        "warn_means": "This card never warns.",
+        "next": "Nothing to do. If a deny looks wrong, see Enforcement below for the rule.",
+        "ok_label": "Last allowed call",
+    },
+    "dispatch": {
+        "what": "Whether subagent dispatches are recorded with an agent type.",
+        "warn_means": "A dispatch in the last 24h was recorded with an empty agent type, so it cannot be attributed.",
+        "next": "Check the dispatch hook payload in plugins/atlas/hooks/dispatch_tripwire.py. Older untyped dispatches just age out.",
+        "ok_label": "Last typed dispatch",
+        "fail_label": "Last untyped dispatch",
+    },
+    "mux": {
+        "what": "Colony worker runs; flags any worker started over an hour ago that never ended.",
+        "warn_means": "A worker run is stuck or died without reporting.",
+        "next": "Open Colony and stop or restart that worker.",
+        "ok_label": "Last worker ended",
+        "fail_label": "Last stuck worker",
+    },
+    "dashboard": {
+        "what": "This dashboard daemon: serving right now, plus Python errors it logged since it last started.",
+        "warn_means": "The daemon logged a Python error since boot.",
+        "next": "tail -n 50 ~/.atlas/dashboard.log",
+        "ok_label": "Serving as of",
+        "fail_label": "Last logged error",
+    },
+    "db": {
+        "what": "The telemetry database opens and has its tables.",
+        "warn_means": "The database has no tables or could not be opened; everything else on this page is blind.",
+        "next": "Check that ~/.atlas/atlas.db exists and is readable, then reload.",
+        "ok_label": "Opened as of",
+    },
+    "connectors": {
+        "what": "Whether each MCP connector has credentials on file and whether its calls fail. No live test is run.",
+        "warn_means": "A connector has no credentials (unconfigured) or most of its calls error (degraded).",
+        "next": "Settings, Connectors: add the credentials. Ignore an unconfigured connector you do not use.",
+        "ok_label": "Last connector call",
+        "fail_label": "Last failed call",
+    },
+    "memory": {
+        "what": "Whether the memory_capture hook has produced a MEMORY.md.",
+        "warn_means": "The hook ran but no MEMORY.md exists.",
+        "next": "Check that the memory_capture hook can write to ~/.atlas/memory.",
+        "ok_label": "Last written or run",
+    },
+    "nudge": {
+        "what": "Whether the nudge hook runs. It checks every prompt and speaks at most once per throttle period.",
+        "warn_means": "This card never warns.",
+        "next": "Nothing to do.",
+        "ok_label": "Hook last ran",
+    },
+    "doctor": {
+        "what": "The self-improvement doctor: open findings, miner errors, and fixes that regressed after remeasuring.",
+        "warn_means": "A miner crashed or a fix you applied stopped holding.",
+        "next": "Open Improve: Reopen or Remeasure the regressed finding; for a miner error run python3 plugins/atlas/scripts/atlas_doctor.py --mine",
+        "ok_label": "Last finding activity",
+        "fail_label": "Last miner error or regression",
+    },
+    "chronicle": {
+        "what": "Whether session transcripts reach the database. Claude and omp both ingest live when a session stops; Gates, Activity and Improve numbers are computed from it.",
+        "warn_means": "Sessions that ended more than 2h ago left a transcript that is not in the database because their stop-time ingest never recorded it, so those numbers lag behind reality. Subagent, empty and scratch/observer files are not counted.",
+        "next": "Backfill only the agent the card names: python3 plugins/atlas/scripts/session_ingest.py --backfill  (Claude)  or  python3 plugins/atlas/scripts/session_ingest.py --backfill-agent omp  (omp)",
+        "ok_label": "Last transcript ingest",
+        "fail_label": "Last stalled transcript",
+    },
+}
+
+_TRANSCRIPT_GLOBS = ("~/.claude/projects/*/*.jsonl", "~/.omp/agent/sessions/*/*.jsonl")
+TRANSCRIPT_IDLE_SECS = (
+    2 * 3600
+)  # a transcript idle this long belongs to an ended session
+
+
+import session_ingest as _si  # noqa: E402  (one classifier shared with backfill)
+
+_transcript_facts = _si.transcript_facts
+_scratch_cwd = _si.scratch_cwd
+
+
+def _unlogged_transcripts(db: _Db, now: float, since: float) -> dict:
+    """Transcripts from ended sessions (idle > 2h, inside the window) the live
+    stop-time ingest never recorded. A file counts as recorded when its filename
+    id OR its header id is a session_logs/ingest_files session id (how ingest keys
+    it). Ignored, with the reason counted in `excluded`: omp subagent/fork files
+    (`parentSession`; their work rides on the parent), files with no messages, and
+    scratch sessions (cwd under the OS temp dir, claude-mem observer): ingest
+    refuses or never wanted those."""
+    known: set[str] = set()
+    for table, col in (("session_logs", "session_id"), ("ingest_files", "session_id")):
+        if db.has(table) and col in db.cols(table):
+            known.update(r[0] for r in db.rows(f"SELECT {col} FROM {table}"))
+    out: dict = {"claude": 0, "omp": 0, "newest": None, "excluded": {}}
+    for pattern in _TRANSCRIPT_GLOBS:
+        agent = "claude" if ".claude" in pattern else "omp"
+        for f in glob.glob(os.path.expanduser(pattern)):
+            try:
+                m = os.path.getmtime(f)
+            except OSError:
+                continue
+            if not since <= m <= now - TRANSCRIPT_IDLE_SECS:
+                continue
+            sid = os.path.basename(f)[:-6].rsplit("_", 1)[-1]
+            if sid in known:
+                continue
+            facts = _transcript_facts(f)
+            if facts[0] in known:
+                continue
+            reason = _si.skip_reason(f, facts)
+            if reason:
+                out["excluded"][reason] = out["excluded"].get(reason, 0) + 1
+                continue
+            out[agent] += 1
+            if out["newest"] is None or m > out["newest"]:
+                out["newest"] = m
+    return out
+
+
 def _health_payload(ctx):
     db = _open(ctx)
     now = time.time()
@@ -866,6 +1095,13 @@ def _health_payload(ctx):
 
     def last_of(kind):
         ls = [s["last"] for s in silent if s["kind"] == kind and s["last"]]
+        return max(ls) if ls else None
+
+    def active_of(kind):
+        return any(s["kind"] == kind and s["state"] == "active" for s in silent)
+
+    def ages_of(kind):
+        ls = [s["ages_out"] for s in silent if s["kind"] == kind and s["ages_out"]]
         return max(ls) if ls else None
 
     def sub(
@@ -886,6 +1122,7 @@ def _health_payload(ctx):
         `last_ok` is an ISO time the subsystem was last seen working (never invented);
         `history` is None when no timestamped source exists, with `history_reason` saying why."""
         measured = reason is None
+        info = _SUB_INFO.get(id_, {})
         return {
             "id": id_,
             "label": label,
@@ -893,6 +1130,11 @@ def _health_payload(ctx):
             "measured": measured,
             "reason": reason,
             "detail": detail if measured else reason,
+            "what": info.get("what"),
+            "warn_means": info.get("warn_means"),
+            "next": info.get("next"),
+            "ok_label": info.get("ok_label", "Last OK"),
+            "fail_label": info.get("fail_label", "Last failure"),
             "last_ok": last_ok if measured else None,
             "last_fail": last_fail if measured else None,
             "evidence": [e for e in evidence if e],
@@ -925,7 +1167,14 @@ def _health_payload(ctx):
     trip_note = (
         f"; last trip {_iso(trips[0][0])} (session {trips[0][1][:12]})" if trips else ""
     )
-    hooks_status = "fail" if trip_active else "warn" if bursts or crashes else "ok"
+    recent_crashes = sum(1 for r in fault_rows if r["ts"] >= now - ACTIVE_SECS)
+    hooks_status = (
+        "fail"
+        if trip_active
+        else "warn"
+        if recent_crashes or active_of("hook_burst_tripped")
+        else "ok"
+    )
     subs.append(
         sub(
             "hooks",
@@ -936,7 +1185,16 @@ def _health_payload(ctx):
                 if scan["sessions"]
                 else "no hookstate recorded"
             )
-            + (f"; {crashes} swallowed hook crashes" if crashes else "")
+            + (
+                f"; {crashes} swallowed hook crashes "
+                + (
+                    f"({recent_crashes} in the last 24h)"
+                    if recent_crashes
+                    else "(all historic, none in the last 24h)"
+                )
+                if crashes
+                else ""
+            )
             + (f"; last hook run {_iso(newest_hook)}" if newest_hook else ""),
             _iso(newest_hook),
             _newest(last_of("hook_burst_tripped"), last_of("hook_crash")),
@@ -1045,8 +1303,16 @@ def _health_payload(ctx):
         sub(
             "dispatch",
             "Dispatch",
-            "warn" if disp_n else "ok",
-            f"{disp_n} unclassified of {disp_win} dispatches in window"
+            "warn" if active_of("dispatch_unclassified") else "ok",
+            (
+                f"{disp_n} unclassified of {disp_win} dispatches in window"
+                + (
+                    ""
+                    if active_of("dispatch_unclassified")
+                    else f"; historic, none since {last_of('dispatch_unclassified')}, "
+                    f"stops counting {ages_of('dispatch_unclassified')}"
+                )
+            )
             if disp_n
             else (
                 f"{disp_win} dispatches in window, all typed"
@@ -1098,7 +1364,7 @@ def _health_payload(ctx):
         sub(
             "mux",
             "Colony / mux",
-            "warn" if stuck else "ok",
+            "warn" if stuck else "ok" if mux_win else "info",
             f"{stuck} worker runs never closed"
             if stuck
             else (
@@ -1289,15 +1555,21 @@ def _health_payload(ctx):
             "nudge",
             "Nudge",
             "ok",
-            f"last nudge {nudge_last}; throttle {NUDGE_THROTTLE_MIN} min",
-            nudge_last,
+            f"nudge hook last ran {_iso(nudge_run)}; it speaks at most once per "
+            f"{NUDGE_THROTTLE_MIN} min"
+            if nudge_run
+            else f"nudge hook has not run yet; throttle {NUDGE_THROTTLE_MIN} min",
+            _newest(_iso(nudge_ts), _iso(nudge_run)),
             None,
             [
-                f"nudge stamp {_iso(nudge_ts)}" if nudge_ts else None,
-                f"nudge hook last ran {_iso(nudge_run)}" if nudge_run else None,
+                f"legacy stamp file {_iso(nudge_ts)} (no longer written)"
+                if nudge_ts
+                else None,
             ],
-            reason=None if nudge_last else "No nudge has fired yet.",
-            history_reason="the nudge stamp keeps only the latest time",
+            reason=None
+            if (nudge_run or nudge_ts)
+            else "The nudge hook has not run yet.",
+            history_reason="the hook records only its latest run time",
         )
     )
     # doctor: findings activity (the miner persists findings, not runs)
@@ -1333,8 +1605,9 @@ def _health_payload(ctx):
         sub(
             "doctor",
             "Doctor",
-            "warn" if miner_err else "ok",
-            f"{open_f} open findings; {miner_err} miner errors; last finding activity {doc_ok}",
+            "warn" if miner_err or active_of("doctor_regression") else "ok",
+            f"{open_f} open findings; {miner_err} miner errors; "
+            f"{by_kind.get('doctor_regression', 0)} regressed; last finding activity {doc_ok}",
             doc_ok,
             last_of("doctor_miner_error") or last_of("doctor_regression"),
             doc_ev,
@@ -1375,31 +1648,65 @@ def _health_payload(ctx):
                 "ORDER BY updated_at DESC LIMIT 3"
             )
         ]
-    subs.append(
-        sub(
-            "chronicle",
-            "Chronicle ingest",
-            "warn" if ing else "ok",
-            f"{ing} transcript files behind"
-            if ing
-            else (
-                f"{ing_n} transcript files tracked, all caught up"
-                if not behind
-                else f"{behind} older transcript files behind (outside the window); {ing_n} tracked"
-            ),
-            chr_ok,
-            last_of("ingest_stalled"),
-            chr_ev,
-            reason=chr_reason,
-            history=chr_hist,
-            history_source="ingest_files.updated_at: caught up (ok) vs cursor behind size (fail)",
+    unlogged = _unlogged_transcripts(db, now, since)
+    unl_n = unlogged["claude"] + unlogged["omp"]
+    skipped = ", ".join(f"{n} {k}" for k, n in sorted(unlogged["excluded"].items()))
+    fixes = [
+        f"{unlogged[a]} {name} sessions missed: python3 plugins/atlas/scripts/session_ingest.py {cmd}"
+        for a, name, cmd in (
+            ("claude", "Claude", "--backfill"),
+            ("omp", "omp", "--backfill-agent omp"),
+        )
+        if unlogged[a]
+    ]
+    chr_base = (
+        f"{ing} transcript files behind"
+        if ing
+        else (
+            f"{ing_n} tracked transcript files, all caught up"
+            if not behind
+            else f"{behind} older transcript files behind (outside the window); {ing_n} tracked"
         )
     )
+    chr_card = sub(
+        "chronicle",
+        "Chronicle ingest",
+        "warn" if ing or unl_n else "ok",
+        (
+            f"Live ingest runs on session stop; {unl_n} ended sessions were missed "
+            f"({unlogged['claude']} Claude, {unlogged['omp']} omp) because their stop-time "
+            f"ingest never recorded them, so Gates, Activity and Improve miss them; "
+            f"{chr_base}" + (f"; ignored, not missed: {skipped}" if skipped else "")
+            if unl_n
+            else chr_base
+            + (f"; ignored, not sessions to ingest: {skipped}" if skipped else "")
+        ),
+        chr_ok,
+        _newest(last_of("ingest_stalled"), _iso(unlogged["newest"])),
+        chr_ev + fixes,
+        reason=chr_reason,
+        history=chr_hist,
+        history_source="ingest_files.updated_at: caught up (ok) vs cursor behind size (fail)",
+    )
+    # only a harness with misses gets a backfill command
+    chr_card["next"] = (
+        "  and  ".join(
+            f"python3 plugins/atlas/scripts/session_ingest.py {cmd}  ({name})"
+            for a, name, cmd in (
+                ("claude", "Claude", "--backfill"),
+                ("omp", "omp", "--backfill-agent omp"),
+            )
+            if unlogged[a]
+        )
+        or "Nothing to do."
+    )
+    subs.append(chr_card)
 
     successes = _successes(db, since, root)
     return {
         "checked_at": _iso(now),
         "window_seconds": int(win),
+        "active_seconds": ACTIVE_SECS,
         "subsystems": subs,
         "silent_failures": silent,
         "successes": successes,
@@ -1482,11 +1789,8 @@ def _todo_counts(root: str) -> dict:
 
 
 def _is_fixture_root(root: str) -> bool:
-    """Scratch/fixture roots, and deleted projects under the user's home, are hidden.
-
-    Paths outside home are judged by the scratch rules alone, so a stale root is not
-    hidden merely because the machine that recorded it is not this one.
-    """
+    """Roots that can never be a Colony/Projects pick: scratch fixtures, anything under a temp
+    dir, and roots that no longer exist (the colony API refuses a non-directory project)."""
     try:
         import atlas_control  # type: ignore
 
@@ -1494,8 +1798,9 @@ def _is_fixture_root(root: str) -> bool:
             return True
     except Exception:
         pass
-    p = str(root or "")
-    return p.startswith(os.path.expanduser("~") + os.sep) and not os.path.isdir(p)
+    p = os.path.realpath(str(root or ""))
+    tmp = os.path.realpath(tempfile.gettempdir())
+    return p == tmp or p.startswith(tmp + os.sep) or not os.path.isdir(p)
 
 
 def route_projects(ctx):
@@ -1580,6 +1885,7 @@ def route_overview(ctx):
     )
     tool_errors = _tool_error_summary(tool_error_items)
     cur_total = sum(s["count"] for s in silent)
+    act_total = sum(s["count"] for s in silent if s["state"] == "active")
     # previous window [since-win, since): only the DB-bounded tool_error fold, so
     # the delta compares like with like (log/ingest/hookstate sources are not
     # windowed) and counts only atlas-attributable tool errors, as the current
@@ -1625,7 +1931,10 @@ def route_overview(ctx):
         open_f = r[0][0] if r else 0
 
     def delta(cur, prev_):
-        return None if not prev_ else round((cur - prev_) / prev_ * 100, 1)
+        # A percentage against a tiny prior window (telemetry that started mid-window) is noise: below the floor the UI shows "prior: N".
+        return (
+            None if not prev_ or prev_ < 10 else round((cur - prev_) / prev_ * 100, 1)
+        )
 
     blocked = 0
     if root:
@@ -1636,6 +1945,7 @@ def route_overview(ctx):
             "label": "Runs",
             "value": runs_n,
             "delta": delta(runs_n, runs_prev),
+            "prior": runs_prev,
             "status": "ok",
             "hint": "orchestrator and worker runs in window",
         },
@@ -1650,11 +1960,13 @@ def route_overview(ctx):
         {
             "id": "silent_failures",
             "label": "Silent failures",
-            "value": cur_total,
+            "value": act_total,
             "delta": delta(cur_bounded, prev_silent_n),
-            "status": "fail" if cur_total >= 100 else "warn" if cur_total else "ok",
-            "hint": "atlas-attributable: internal tool faults, unclassified errors, "
-            "hook crashes, stalls and regressions",
+            "prior": prev_silent_n,
+            "status": "fail" if act_total >= 100 else "warn" if act_total else "ok",
+            "hint": f"atlas faults seen in the last 24h ({cur_total - act_total} older ones "
+            "in the window are historic and listed in Health): internal tool faults, "
+            "unclassified errors, hook crashes, stalls and regressions",
         },
         {
             "id": "tool_errors",
@@ -1689,7 +2001,8 @@ def route_overview(ctx):
         )
 
     attention = []
-    for s in silent[:12]:
+    active = [s for s in silent if s["state"] == "active"]
+    for s in active[:12]:
         sev = (
             "fail"
             if s["kind"]
@@ -1707,8 +2020,10 @@ def route_overview(ctx):
                 "id": s["id"],
                 "severity": sev,
                 "project": s["project"],
-                "title": s["kind"].replace("_", " "),
-                "detail": s["sample"],
+                "title": s.get("title") or s["kind"].replace("_", " "),
+                "detail": _clip(s["sample"], 160),
+                "what": s.get("what"),
+                "next": s.get("next"),
                 "count": s["count"],
                 "first": s["first"],
                 "last": s["last"],
@@ -1741,6 +2056,11 @@ def route_overview(ctx):
                 "project": r[1],
                 "started": _iso(r[2]),
                 "ended": _iso(r[3]),
+                "state": "done"
+                if r[3]
+                else "running"
+                if now - r[2] < 3600
+                else "unfinished",
                 "task": _clip(r[4], 140),
                 "kind": r[5],
                 "model": r[6],
@@ -1763,6 +2083,7 @@ def route_overview(ctx):
     return 200, {
         "kpis": kpis,
         "attention": attention,
+        "attention_historic": len(silent) - len(active),
         "recent_runs": recent,
         "trend": trend,
         "enforcement": _enforcement_summary(enforcement_items),
@@ -1815,7 +2136,11 @@ def _trend(db: _Db, since: float, root: str | None, win: float) -> dict:
             cls = _classify(tool, text, False)
             if b in fail_series and cls in ("tool_fault", "unknown"):
                 fail_series[b] += n  # same attribution as the silent-failures KPI
-            elif b in ext_series and cls in ("model_misuse", "environment"):
+            elif b in ext_series and cls in (
+                "model_misuse",
+                "environment",
+                "user_code",
+            ):
                 ext_series[b] += n  # the tool-errors-by-cause KPI
     if db.has("dispatches", "runs", "projects"):
         where = "AND p.root_path=?" if root else ""
@@ -1870,6 +2195,89 @@ def _norm_title(s: str) -> str:
     return _NUM_RE.sub("#", (s or "").lower()).strip()
 
 
+# kind -> (label, what it means) for the Activity legend and filter
+ACTIVITY_KINDS = {
+    "run": ("Session run", "A Claude or omp session started working in this project."),
+    "dispatch": (
+        "Subagent dispatched",
+        "The lead handed work to a subagent (its type is shown).",
+    ),
+    "deny": (
+        "Blocked by a gate",
+        "An atlas hook refused the tool call before it ran. Policy working, not a fault.",
+    ),
+    "tool_misuse": (
+        "Tool misuse",
+        "The model called a tool wrongly, e.g. edited a file it had not read.",
+    ),
+    "tool_env": (
+        "Environment error",
+        "The command failed for outside reasons: nonzero exit, timeout, missing path.",
+    ),
+    "tool_user_code": (
+        "Your code raised",
+        "Code you or the model ran (eval cell, script) raised an exception.",
+    ),
+    "tool_error": ("Atlas script error", "An atlas script failed internally."),
+    "tool_error_unclassified": (
+        "Unclassified error",
+        "A tool errored and its text matches no known cause.",
+    ),
+    "friction": (
+        "Friction signal",
+        "A gate blocked a turn or refused a dispatch; the doctor mines these.",
+    ),
+    "finding": (
+        "Doctor finding",
+        "A self-improvement finding was raised; act on it in Improve.",
+    ),
+}
+# project paths that are test, temp or self-fix sessions, not real work
+_SCRATCH_MARKS = ("-selffix", "atlas-e2e", "/atlas-work/")
+
+
+def _is_scratch(project: str) -> bool:
+    return bool(project) and (
+        _is_noise_root(project) or any(m in project for m in _SCRATCH_MARKS)
+    )
+
+
+def _friction_detail(raw: str) -> str:
+    """friction snippets are often a JSON object; show it as `key: value` pairs."""
+    s = (raw or "").strip()
+    if s.startswith("{"):
+        try:
+            d = json.loads(s)
+        except ValueError:
+            return s
+        if isinstance(d, dict):
+            return ", ".join(
+                f"{k}: {v}"
+                for k, v in d.items()
+                if isinstance(v, (str, int)) and str(v)
+            )
+    return s
+
+
+def _transcripts_present(db: _Db, sids: set[str]) -> set[str]:
+    """Session ids whose transcript file still exists on disk (what the
+    /api/sessions/<id>/transcript endpoint can serve)."""
+    if not sids or not db.has("session_logs"):
+        return set()
+    found: set[str] = set()
+    ids = sorted(sids)
+    for i in range(0, len(ids), 500):
+        chunk = ids[i : i + 500]
+        for sid, path in db.rows(
+            "SELECT session_id, transcript_path FROM session_logs WHERE session_id IN "
+            f"({','.join('?' * len(chunk))})",
+            chunk,
+        ):
+            if path and os.path.exists(path):
+                found.add(sid)
+    return found
+
+
 def _activity_rows(db: _Db, since: float, root: str | None, limit: int) -> list[dict]:
     """One UNION ALL across the activity sources; the dedupe happens after."""
     parts, params = [], []
@@ -1877,8 +2285,10 @@ def _activity_rows(db: _Db, since: float, root: str | None, limit: int) -> list[
     if db.has("runs", "projects"):
         parts.append(
             "SELECT 'run' AS kind, r.started_at AS ts, COALESCE(p.root_path,'') AS project, "
-            "COALESCE(r.kind,'run') AS agent, COALESCE(NULLIF(r.task_summary,''),'(run)') AS title, "
-            "COALESCE(r.model,'') AS detail, 'ok' AS status, r.id AS ref, '' AS snippet "
+            "COALESCE(r.kind,'run') AS agent, "
+            "COALESCE(NULLIF(r.task_summary,''),'Session ' || substr(COALESCE(r.session_id,''),1,8)) AS title, "
+            "COALESCE(r.model,'') AS detail, 'ok' AS status, r.id AS ref, '' AS snippet, "
+            "COALESCE(r.session_id,'') AS session "
             f"FROM runs r LEFT JOIN projects p ON p.id=r.project_id WHERE r.started_at>=? {wroot}"
         )
         params += [since] + ([root] if root else [])
@@ -1886,7 +2296,8 @@ def _activity_rows(db: _Db, since: float, root: str | None, limit: int) -> list[
         parts.append(
             "SELECT 'dispatch', d.ts, COALESCE(p.root_path,''), COALESCE(NULLIF(d.agent_type,''),'unknown'), "
             "'dispatch ' || COALESCE(NULLIF(d.agent_type,''),'unknown'), COALESCE(d.model,''), "
-            "CASE WHEN COALESCE(d.agent_type,'')='' THEN 'warn' ELSE 'ok' END, d.id, '' "
+            "CASE WHEN COALESCE(d.agent_type,'')='' THEN 'warn' ELSE 'ok' END, d.id, '', "
+            "COALESCE(r.session_id,'') "
             f"FROM dispatches d JOIN runs r ON r.id=d.run_id LEFT JOIN projects p ON p.id=r.project_id WHERE d.ts>=? {wroot}"
         )
         params += [since] + ([root] if root else [])
@@ -1911,7 +2322,7 @@ def _activity_rows(db: _Db, since: float, root: str | None, limit: int) -> list[
                 if "error_snippet" in db.cols("tool_calls")
                 else "''"
             )
-            + " "
+            + ", COALESCE(t.session_id,'') "
             f"FROM tool_calls t {join} WHERE t.ts>=? AND (COALESCE(t.is_error,0)=1 OR COALESCE(t.denied,0)=1) "
             + ("AND p.root_path=?" if root and joined else "")
         )
@@ -1929,7 +2340,7 @@ def _activity_rows(db: _Db, since: float, root: str | None, limit: int) -> list[
         proj = "COALESCE(p.root_path,'')" if joined else "''"
         parts.append(
             f"SELECT 'friction', f.ts, {proj}, 'friction', COALESCE(f.category,'friction'), "
-            "COALESCE(f.snippet,''), 'warn', f.id, '' "
+            "COALESCE(f.snippet,''), 'warn', f.id, '', COALESCE(f.session_id,'') "
             f"FROM friction_events f {join} WHERE f.ts>=? "
             + ("AND p.root_path=?" if root and joined else "")
         )
@@ -1937,7 +2348,7 @@ def _activity_rows(db: _Db, since: float, root: str | None, limit: int) -> list[
     if db.has("findings"):
         parts.append(
             "SELECT 'finding', created_at, '', COALESCE(dimension,'doctor'), COALESCE(title,''), "
-            "COALESCE(detail,''), CASE WHEN severity IN ('HIGH','high') THEN 'fail' ELSE 'warn' END, id, '' "
+            "COALESCE(detail,''), CASE WHEN severity IN ('HIGH','high') THEN 'fail' ELSE 'warn' END, id, '', '' "
             "FROM findings WHERE created_at>=?"
         )
         params += [since]
@@ -1948,6 +2359,9 @@ def _activity_rows(db: _Db, since: float, root: str | None, limit: int) -> list[
     rows = db.dicts(sql, params)
     for r in rows:
         r["class"] = None
+        if r["kind"] == "friction":
+            r["title"] = r["title"].replace("_", " ").replace(":", " · ")
+            r["detail"] = _friction_detail(r["detail"])
         if r["kind"] not in ("deny", "tool_error"):
             continue
         denied = r["kind"] == "deny"
@@ -1991,6 +2405,7 @@ def route_activity(ctx):
             "pass group=project, group=kind or group=agent",
         )
     qtext = _q(ctx, "q", "").lower()
+    show_scratch = _q(ctx, "scratch", "") in ("1", "true")
     try:
         limit = max(1, min(int(_q(ctx, "limit", "200") or 200), MAX_ITEMS))
     except ValueError:
@@ -2000,13 +2415,20 @@ def route_activity(ctx):
     # collapse keyed on (group-agnostic) identity: kind, project, agent, normalized title, status
     folded: dict[tuple, dict] = {}
     order: list[tuple] = []
+    scratch_hidden = 0
     for r in _activity_rows(db, since, root, limit):
         if kind and r["kind"] != kind:
             continue
         hay = f"{r['title']} {r['detail']} {r['agent']}".lower()
         if qtext and qtext not in hay:
             continue
+        scratch = _is_scratch(r["project"])
+        if scratch and not show_scratch:
+            scratch_hidden += 1
+            continue
         k = (r["kind"], r["project"], r["agent"], _norm_title(r["title"]), r["status"])
+        if r["kind"] == "run":  # one row per session, not one per 8-hex-digit title
+            k = k + (r["session"],)
         if not collapse:
             k = k + (r["ref"],)
         if k in folded:
@@ -2014,6 +2436,7 @@ def route_activity(ctx):
             if r["ts"] and (folded[k]["_ts"] is None or r["ts"] > folded[k]["_ts"]):
                 folded[k]["_ts"] = r["ts"]
                 folded[k]["ts"] = _iso(r["ts"])
+                folded[k]["session"] = r["session"] or folded[k]["session"]
             continue
         folded[k] = {
             "id": f"{r['kind']}:{r['ref']}",
@@ -2027,10 +2450,15 @@ def route_activity(ctx):
             "status": r["status"],
             "class": r.get("class"),
             "count": 1,
+            "session": r["session"],
+            "scratch": scratch,
             "ref": {"table": r["kind"], "id": r["ref"]},
         }
         order.append(k)
     items = [folded[k] for k in order][: limit * 2]
+    present = _transcripts_present(db, {it["session"] for it in items if it["session"]})
+    for it in items:
+        it["transcript"] = it["session"] in present
     groups: dict[str, dict] = {}
     for it in items:
         key = {"project": it["project"], "kind": it["kind"], "agent": it["agent"]}[
@@ -2052,7 +2480,14 @@ def route_activity(ctx):
         for it in g["items"]:
             it.pop("_ts", None)
     out = sorted(groups.values(), key=lambda g: g["last"] or "", reverse=True)
-    return 200, {"groups": out}
+    return 200, {
+        "groups": out,
+        "since": _iso(since),
+        "as_of": _iso(now),
+        "scratch_hidden": scratch_hidden,
+        "truncated": len(order) > limit * 2,
+        "kinds": {k: {"label": v[0], "help": v[1]} for k, v in ACTIVITY_KINDS.items()},
+    }
 
 
 # ----------------------------------------------------------------- improve
@@ -2672,6 +3107,15 @@ def route_improve(ctx):
     findings = [f for f in findings if not root or f["project"] in ("", root)]
     ledger_out = [e for e in ledger_out if not root or e["project"] == root]
     ledger_out.sort(key=_ledger_sort_key)
+    # doctor findings awaiting your decision lead; the paged view shows them first
+    findings.sort(
+        key=lambda f: (
+            0 if f["actionable"] and f["status"] in ("open", "accepted") else 1
+        )
+    )
+    status_counts: dict[str, int] = {}
+    for f in findings:
+        status_counts[f["status"]] = status_counts.get(f["status"], 0) + 1
     labels, series = _score_series(db, now)
     mined = len(findings)
     remeasured = sum(1 for v in improv.values() if v.get("verdict") != "pending")
@@ -2684,25 +3128,35 @@ def route_improve(ctx):
             "label": "Observe",
             "count": _count(db, "friction_events") + _count(db, "signals"),
             "status": "ok",
+            "hint": "Raw signals atlas has recorded: friction events plus signals rows.",
         },
         {
             "id": "mine",
             "label": "Mine",
             "count": mined,
             "status": "ok" if mined else "warn",
+            "hint": "Findings the doctor and the verification ledger hold, every status.",
         },
         {
             "id": "propose",
             "label": "Propose",
             "count": propose_n,
             "status": "warn" if propose_n else "ok",
+            "hint": "Doctor findings waiting for you (open or accepted). Warn means a decision is pending below.",
         },
-        {"id": "apply", "label": "Apply", "count": doctor_n["fixed"], "status": "ok"},
+        {
+            "id": "apply",
+            "label": "Apply",
+            "count": doctor_n["fixed"],
+            "status": "ok",
+            "hint": "Doctor findings marked fixed, by a self-fix merge or by hand.",
+        },
         {
             "id": "remeasure",
             "label": "Remeasure",
             "count": remeasured,
             "status": "ok" if remeasured else "unknown",
+            "hint": "Findings whose fix was re-checked against its baseline (verdict decided).",
         },
     ]
     verdict_counts = {"improved": 0, "no_change": 0, "regressed": 0, "pending": 0}
@@ -2711,6 +3165,7 @@ def route_improve(ctx):
     return 200, {
         "loop": {"stages": stages},
         "findings": findings[:MAX_ITEMS],
+        "counts": status_counts,
         "ledger": ledger_out[-100:],
         "nudges": _nudges(),
         "lessons": _lessons(root, roots),
@@ -2830,6 +3285,24 @@ def route_improve_remeasure(ctx):
         "WHERE finding_id=? ORDER BY id DESC LIMIT 1",
         (finding_id,),
     ).fetchone()
+    if existing is not None:
+        latest = atlas_db._rows(
+            conn.execute("SELECT * FROM improvements WHERE id=?", (existing[0],))
+        )[0]
+        new_id = atlas_doctor.supersede_unit_mismatch(conn, latest, finding, value)
+        if new_id:  # stored baseline is in another unit: never compare, re-baseline
+            return 200, {
+                "ok": True,
+                "state": {
+                    "id": fid,
+                    "current": value,
+                    "baseline": value,
+                    "verdict": "superseded",
+                    "resolved": value == 0.0,
+                },
+                "next": "the metric's unit changed since the old baseline; "
+                f"re-baselined as improvement #{new_id}, remeasure again later",
+            }
     if existing is None:
         # No baseline yet: the value the miner recorded when it raised the
         # finding is the baseline (same source `atlas_doctor --baseline` uses).
@@ -2852,7 +3325,10 @@ def route_improve_remeasure(ctx):
             finding.get("dimension"),
             str(baseline),
             "",
-            "recorded by dashboard remeasure",
+            atlas_doctor.with_unit(
+                "recorded by dashboard remeasure",
+                atlas_doctor.metric_unit(finding.get("fingerprint")),
+            ),
             finding_id=finding_id,
             metric=(finding.get("fingerprint") or "").split(":", 1)[0] or None,
             baseline_value=baseline,

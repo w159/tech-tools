@@ -221,7 +221,7 @@ class TestAtlasDashboard(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
 
-        def fake_stop():
+        def fake_stop(port=None):
             state["stopped"] = True
             return {"ok": True}
 
@@ -329,10 +329,34 @@ class StopDaemonTest(unittest.TestCase):
         cls.mod = _load()
 
     def _stop(
-        self, alive, lsof_out="", port_open=True, lsof_exc=None, pidfile_pid=None
+        self,
+        alive,
+        lsof_out="",
+        port_open=True,
+        lsof_exc=None,
+        pidfile_pid=None,
+        db_ok=True,
+        port_calls=None,
+        expect_clear=True,
     ):
-        """Run stop_daemon with a fake pidfile; return (result, kill, lsof, sleep)."""
+        """Run stop_daemon with a fake pidfile; return (result, kill, lsof, sleep).
+
+        The port closes as soon as a lsof-found listener is signaled, unless ``port_calls``
+        scripts _port_open's answers (the last one repeats).
+        """
         alive_calls = iter(alive)
+        state = {"closed": False}
+        script = list(port_calls) if port_calls is not None else None
+
+        def fake_port(*a, **k):
+            if script is not None:
+                return script.pop(0) if len(script) > 1 else script[0]
+            return port_open and not state["closed"]
+
+        def fake_kill(pid, sig):
+            if pid != self.DAEMON:
+                state["closed"] = True
+
         with (
             mock.patch.object(
                 self.mod,
@@ -343,8 +367,9 @@ class StopDaemonTest(unittest.TestCase):
             mock.patch.object(
                 self.mod, "_pid_alive", side_effect=lambda pid: next(alive_calls)
             ),
-            mock.patch.object(self.mod, "_port_open", return_value=port_open),
-            mock.patch.object(self.mod.os, "kill") as kill,
+            mock.patch.object(self.mod, "_port_open", side_effect=fake_port),
+            mock.patch.object(self.mod, "_daemon_db_ok", return_value=db_ok),
+            mock.patch.object(self.mod.os, "kill", side_effect=fake_kill) as kill,
             mock.patch.object(
                 self.mod.subprocess,
                 "check_output",
@@ -353,8 +378,11 @@ class StopDaemonTest(unittest.TestCase):
             ) as lsof,
             mock.patch.object(self.mod.time, "sleep") as sleep,
         ):
-            res = self.mod.stop_daemon()
-        clear.assert_called_once_with()
+            res = self.mod.stop_daemon(self.PORT)
+        if expect_clear:
+            clear.assert_called_once_with(port=self.PORT)
+        else:
+            clear.assert_not_called()
         return res, kill, lsof, sleep
 
     def test_fallback_lists_listeners_only(self):
@@ -412,6 +440,246 @@ class StopDaemonTest(unittest.TestCase):
         lsof.assert_called_once()
         self.assertEqual(res["stopped"], False)
         self.assertTrue(res["ok"])
+
+    def test_waits_for_lsof_killed_listener_to_release_the_port(self):
+        """stop returns only once the SIGTERMed listener is gone: `stop` then `ensure`
+        must not see the dying daemon and report already_running."""
+        res, kill, _, sleep = self._stop(
+            alive=[False],
+            lsof_out="4101\n",
+            port_calls=[True, True, True, False],
+        )
+        kill.assert_called_once_with(4101, self.mod.signal.SIGTERM)
+        polls = [c.args[0] for c in sleep.call_args_list if c.args[0] != 0.15]
+        self.assertEqual(polls, [0.1, 0.1])
+        self.assertTrue(res["ok"] and res["stopped"])
+
+    def test_listener_that_never_exits_reports_port_still_held(self):
+        res, _, _, sleep = self._stop(
+            alive=[False],
+            lsof_out="4101\n",
+            port_calls=[True],
+            expect_clear=False,
+        )
+        polls = [c.args[0] for c in sleep.call_args_list if c.args[0] != 0.15]
+        self.assertEqual(len(polls), 20)
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["error"], "port_still_held")
+
+    def test_exiting_daemon_keeps_a_newer_daemons_pidfile(self):
+        """Old daemon's exit handler must not delete the pidfile a replacement wrote."""
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(self.mod, "STATE_DIR", Path(tmp)):
+                self.mod._write_pidfile(222, 17401, "/db")
+                path = self.mod._pidfile_path(17401)
+                self.mod._clear_pidfile(111, 17401)
+                self.assertTrue(path.exists())
+                self.mod._clear_pidfile(222, 17401)
+                self.assertFalse(path.exists())
+
+    def test_pidfiles_are_per_port_and_isolated(self):
+        """A scratch daemon on another port never overwrites, is read by, or clears the
+        default port's record; stop on the default port leaves the other port alone."""
+        with tempfile.TemporaryDirectory() as tmp:
+            with (
+                mock.patch.object(self.mod, "STATE_DIR", Path(tmp)),
+                mock.patch.object(self.mod, "PID_PATH", Path(tmp) / "dashboard.pid"),
+            ):
+                self.mod._write_pidfile(111, 17401, "/db")
+                self.mod._write_pidfile(222, 17402, "/db")
+                self.assertEqual(self.mod._read_pidfile(17401)["pid"], 111)
+                self.assertEqual(self.mod._read_pidfile(17402)["pid"], 222)
+                self.mod._clear_pidfile(port=17401)
+                self.assertIsNone(self.mod._read_pidfile(17401))
+                self.assertEqual(self.mod._read_pidfile(17402)["pid"], 222)
+                # stop on a port with no record signals nothing, reads no other record
+                with (
+                    mock.patch.object(self.mod.os, "kill") as kill,
+                    mock.patch.object(self.mod, "_port_open", return_value=False),
+                    mock.patch.object(self.mod.time, "sleep"),
+                ):
+                    res = self.mod.stop_daemon(17401)
+                kill.assert_not_called()
+                self.assertIsNone(res["pid"])
+                self.assertEqual(res["port"], 17401)
+                self.assertEqual(self.mod._read_pidfile(17402)["pid"], 222)
+
+    def test_legacy_pidfile_only_honoured_for_its_own_port(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            legacy = Path(tmp) / "dashboard.pid"
+            legacy.write_text(json.dumps({"pid": 5, "port": 17401}))
+            with (
+                mock.patch.object(self.mod, "STATE_DIR", Path(tmp)),
+                mock.patch.object(self.mod, "PID_PATH", legacy),
+            ):
+                self.assertEqual(self.mod._read_pidfile(17401)["pid"], 5)
+                self.assertIsNone(self.mod._read_pidfile(17402))
+                self.mod._clear_pidfile(port=17402)
+                self.assertTrue(legacy.exists())
+                self.mod._clear_pidfile(port=17401)
+                self.assertFalse(legacy.exists())
+
+    def test_foreign_db_listener_is_left_alone(self):
+        """Dead pidfile pid and a listener serving another DB: lsof never runs, nothing is killed."""
+        res, kill, lsof, _ = self._stop(
+            alive=[False], lsof_out="4101\n", pidfile_pid=self.DAEMON, db_ok=False
+        )
+        lsof.assert_not_called()
+        kill.assert_not_called()
+        self.assertTrue(res["ok"])
+        self.assertFalse(res["stopped"])
+
+
+class SharedPortGuardTest(unittest.TestCase):
+    """A temp-dir caller must never bind, stop or replace the shared :7421 daemon."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.mod = _load()
+
+    def test_ensure_from_temp_env_on_shared_port_does_nothing(self):
+        listener = {"pid": 8415, "db_path": "/Users/jerry/.atlas/atlas.db"}
+        with (
+            mock.patch.object(self.mod, "_port_open", return_value=True),
+            mock.patch.object(self.mod, "_health_payload", return_value=listener),
+            mock.patch.object(self.mod, "stop_daemon") as stop,
+            mock.patch.object(self.mod.subprocess, "Popen") as popen,
+            mock.patch.object(self.mod.os, "kill") as kill,
+        ):
+            res = self.mod.ensure_daemon(7421)
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["error"], "temp_env_on_shared_port")
+        self.assertIn("temp dir", res["reason"])
+        stop.assert_not_called()
+        popen.assert_not_called()
+        kill.assert_not_called()
+
+    def test_ensure_never_replaces_healthy_daemon_on_other_db(self):
+        """Non-default port: a healthy daemon serving another DB is not touched."""
+        with (
+            mock.patch.object(self.mod, "_port_open", return_value=True),
+            mock.patch.object(
+                self.mod,
+                "_health_payload",
+                return_value={"pid": 9, "db_path": "/elsewhere/atlas.db"},
+            ),
+            mock.patch.object(self.mod, "_daemon_db_ok", return_value=False),
+            mock.patch.object(self.mod, "stop_daemon") as stop,
+            mock.patch.object(self.mod.subprocess, "Popen") as popen,
+        ):
+            res = self.mod.ensure_daemon(17499)
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["error"], "port_held_by_other_db")
+        self.assertEqual(res["served_db"], "/elsewhere/atlas.db")
+        stop.assert_not_called()
+        popen.assert_not_called()
+
+    def _ensure_against_listener(self, served_db, want_db, lsof_out="4242\n"):
+        state = {"killed": False, "spawned": False}
+
+        def port_open(_h, _p):
+            return state["spawned"] or not state["killed"]
+
+        def kill(pid, sig):
+            state["killed"] = True
+
+        def popen(*a, **k):
+            state["spawned"] = True
+            return mock.Mock(pid=5151)
+
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        tmp = Path(td.name)
+        with (
+            mock.patch.object(self.mod, "_guard_shared_port", return_value=None),
+            mock.patch.object(self.mod, "dashboard_db_path", return_value=want_db),
+            mock.patch.object(self.mod, "STATE_DIR", tmp),
+            mock.patch.object(self.mod, "LOG_PATH", tmp / "d.log"),
+            mock.patch.object(self.mod, "_write_pidfile"),
+            mock.patch.object(self.mod, "_port_open", side_effect=port_open),
+            mock.patch.object(
+                self.mod,
+                "_health_payload",
+                return_value={"pid": 4242, "db_path": served_db},
+            ),
+            mock.patch.object(
+                self.mod, "_daemon_db_ok", side_effect=lambda p: state["spawned"]
+            ),
+            mock.patch.object(self.mod, "stop_daemon") as stop,
+            mock.patch.object(
+                self.mod.subprocess, "check_output", return_value=lsof_out
+            ),
+            mock.patch.object(self.mod.os, "kill", side_effect=kill) as osk,
+            mock.patch.object(self.mod.subprocess, "Popen", side_effect=popen) as pop,
+            mock.patch.object(self.mod.time, "sleep"),
+        ):
+            res = self.mod.ensure_daemon(7421)
+        return res, osk, pop, stop
+
+    def test_real_caller_reclaims_port_from_temp_db_listener(self):
+        res, osk, pop, stop = self._ensure_against_listener(
+            "/var/folders/ab/cd/T/atlas-x/atlas.db", "/Users/x/.atlas/atlas.db"
+        )
+        self.assertTrue(res["ok"], res)
+        osk.assert_called_once_with(4242, self.mod.signal.SIGTERM)
+        pop.assert_called_once()
+        stop.assert_not_called()
+
+    def test_reclaim_requires_health_pid_to_be_the_lsof_listener(self):
+        res, osk, pop, _ = self._ensure_against_listener(
+            "/var/folders/ab/cd/T/atlas-x/atlas.db",
+            "/Users/x/.atlas/atlas.db",
+            lsof_out="999\n",
+        )
+        self.assertEqual(res["error"], "port_held_by_other_db")
+        osk.assert_not_called()
+        pop.assert_not_called()
+
+    def test_temp_caller_never_reclaims(self):
+        res, osk, pop, _ = self._ensure_against_listener(
+            "/var/folders/ab/cd/T/other/atlas.db", "/var/folders/ab/cd/T/mine/atlas.db"
+        )
+        self.assertEqual(res["error"], "port_held_by_other_db")
+        osk.assert_not_called()
+        pop.assert_not_called()
+
+    def test_real_caller_never_reclaims_real_other_db(self):
+        res, osk, pop, _ = self._ensure_against_listener(
+            "/Users/other/.atlas/atlas.db", "/Users/x/.atlas/atlas.db"
+        )
+        self.assertEqual(res["error"], "port_held_by_other_db")
+        osk.assert_not_called()
+        pop.assert_not_called()
+
+    def test_serve_refuses_temp_db_on_shared_port(self):
+        with (
+            mock.patch.object(self.mod, "_Server") as server,
+            self.assertRaises(SystemExit) as cm,
+        ):
+            self.mod.serve(self.mod.LOOPBACK, 7421)
+        self.assertEqual(cm.exception.code, 1)
+        server.assert_not_called()
+
+    def test_temp_roots_are_detected(self):
+        for p in (
+            tempfile.gettempdir(),
+            "/tmp/x/atlas.db",
+            "/var/folders/ab/cd/T/x",
+            "/private/var/folders/ab/cd/T/x",
+        ):
+            self.assertTrue(self.mod.under_temp_dir(p), p)
+        self.assertFalse(self.mod.under_temp_dir("/Users/jerry/.atlas/atlas.db"))
+
+    def test_real_state_is_not_blocked(self):
+        with (
+            mock.patch.object(
+                self.mod, "dashboard_db_path", return_value="/Users/x/.atlas/atlas.db"
+            ),
+            mock.patch.object(self.mod.Path, "home", return_value=Path("/Users/x")),
+            mock.patch.object(self.mod, "STATE_DIR", Path("/Users/x/.atlas")),
+        ):
+            self.assertIsNone(self.mod.temp_env_reason())
+            self.assertIsNone(self.mod._guard_shared_port(7421))
 
 
 class WorkBoardApiTest(unittest.TestCase):
@@ -806,12 +1074,12 @@ class SecurityGuardTest(unittest.TestCase):
         status, _ = self._req(
             "POST",
             "/api/behavior",
-            {"updates": {"ATLAS_WORKER_MAX_TOKENS": "1234"}},
+            {"updates": {"ATLAS_TRIPWIRE_THRESHOLD": "1234"}},
             self._tok(),
         )
         self.assertEqual(status, 200)
         data = json.loads(self.settings.read_text())
-        self.assertEqual(data["env"]["ATLAS_WORKER_MAX_TOKENS"], "1234")
+        self.assertEqual(data["env"]["ATLAS_TRIPWIRE_THRESHOLD"], "1234")
         self.assertEqual(real.stat().st_mtime_ns if real.exists() else None, before)
 
 

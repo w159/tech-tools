@@ -3009,7 +3009,7 @@ class ContractVisibilityTest(unittest.TestCase):
         self.assertIn("(p)", out)
         self.assertIn("note --owner", out)
         self.assertIn("--to lead", out)
-        self.assertIn("independent", out)
+        self.assertIn("atlas_todo.py", out)
 
     def test_p_below_two_workers_is_silent(self):
         self.assertEqual(self.say(), "")
@@ -3039,6 +3039,23 @@ class ContractVisibilityTest(unittest.TestCase):
                 self.tmp, owner, "STATUS: DONE\nexit 0", channel=channel, kind="report"
             )
         self.assertIn("(p)", self.say())
+
+    def test_p_passes_with_irc_traffic_logged_under_another_run_of_the_session(self):
+        """Baseline: 2 of 8 live (p) blocks had agent:// writes in the session
+        but under a sibling run id, so the single-run lookup missed them."""
+        self._two_workers()
+        c = atlas_db.connect(self.env["ATLAS_DB"])
+        c.execute(
+            "INSERT INTO runs(project_id, session_id, started_at) "
+            "SELECT project_id, session_id, started_at - 1 FROM runs "
+            "WHERE session_id=? ORDER BY id DESC LIMIT 1",
+            (self.SID_A,),
+        )
+        other = c.execute("SELECT MAX(id) FROM runs").fetchone()[0]
+        atlas_db.log_event(c, other, "Write", "main", 1, "agent://worker-a")
+        c.commit()
+        c.close()
+        self.assertEqual(self.say(), "")
 
     def test_p_passes_with_irc_traffic(self):
         self._two_workers()
@@ -3092,6 +3109,33 @@ class ContractVisibilityTest(unittest.TestCase):
         self._two_workers()
         with mock.patch("atlas_db.connect", side_effect=RuntimeError("DB down")):
             self.assertIsNone(completion_gate._colony_workers_dispatched(self.SID_A))
+
+
+class BlockLoopCapTest(unittest.TestCase):
+    """Identical consecutive blocks end in an allowed Stop plus a friction row."""
+
+    def test_allows_after_limit_identical_blocks_and_records_friction(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        db = os.path.join(tmp, "atlas.db")
+        atlas_db.init(atlas_db.connect(db))
+        with (
+            mock.patch.dict(os.environ, {"ATLAS_DB": db, "ATLAS_HOOKSTATE_DIR": tmp}),
+        ):
+            lim = completion_gate.BLOCK_LOOP_LIMIT
+            got = [
+                completion_gate._block_loop_exhausted("s1", ["c"])
+                for _ in range(lim + 1)
+            ]
+            self.assertEqual(got, [False] * lim + [True])
+            # a different condition set restarts the count
+            self.assertFalse(completion_gate._block_loop_exhausted("s1", ["c", "d"]))
+            conn = atlas_db.connect(db)
+            rows = conn.execute(
+                "SELECT snippet FROM friction_events WHERE category='gate_block_loop'"
+            ).fetchall()
+            conn.close()
+        self.assertEqual(len(rows), 1)
 
 
 class ItemPhaseExtractionTest(unittest.TestCase):

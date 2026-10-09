@@ -27,7 +27,7 @@ export function MemberBoard({ rows, to, onTo, onOpen, nested } = {}) {
     const shown = r.items.slice(0, ITEM_MAX);
     return h("li", { class: "mb-row", "data-role": r.role, "data-state": state, "data-nested": nested && r.role !== "lead" ? "true" : null, "data-on": on ? "true" : null },
       h("div", { class: "mb-top" },
-        HexGlyph(state, { size: "mini" }),
+        HexGlyph(state === "parked" ? "idle" : state, { size: "mini" }),
         h("strong", { class: "mb-name truncate", title: r.name }, r.name),
         h("span", { class: "chip-lite" }, r.role),
         h("span", { class: "dim mb-presence" }, presenceWord(state)),
@@ -53,11 +53,12 @@ export function mountChannelLens(ctx, body) {
   let comp = null;
   const chans = () => (S.data && S.data.channels) || [];
   const metaNow = () => chans().find((c) => c.name === S.active);
+  const defaultChan = () => { const all = chans(); return all.find((c) => c.name === S.data.current) || all.find((c) => !c.parent) || all[0]; };
   const recOf = recOfMember;
 
   async function loadChannels() {
     try {
-      S.data = await ctx.api.get("channels", { project: ctx.project });
+      S.data = await ctx.api.get("channels", { project: ctx.params.project || ctx.project });
       S.error = null;
     } catch (e) {
       S.error = e;
@@ -67,7 +68,8 @@ export function mountChannelLens(ctx, body) {
     if (!S.active) return;
     const name = S.active;
     try {
-      const d = await ctx.api.get("channels/" + encodeURIComponent(name), { limit: LIMIT, project: ctx.project === "all" ? undefined : ctx.project });
+      const proj = ctx.params.project || ctx.project;
+      const d = await ctx.api.get("channels/" + encodeURIComponent(name), { limit: LIMIT, project: proj === "all" ? undefined : proj });
       if (name === S.active) S.detail = d;
     } catch (e) {
       if (name === S.active) S.detail = { channel: { name }, messages: [], error: e };
@@ -106,11 +108,14 @@ export function mountChannelLens(ctx, body) {
     if (!mem.length) return h("p", { class: "dim chan-empty" }, "No members yet. Subagents join when a lead dispatches them.");
     return h("ul", { class: "chan-chips", "aria-label": "Members" }, mem.map((m) => {
       const rec = recOf(m);
-      const state = memberState(m, rec);
+      const state = m.parked ? "parked" : m.live_state ? m.state : memberState(m, rec);
       const on = S.to === m.name;
+      const ok = reachable(m);
+      const seen = m.last_seen ? ", last seen " + fmtRelative(Date.parse(m.last_seen)) : "";
+      const why = ok ? (on ? ". Click to message everyone instead." : ". Click to message it.") : ". " + ((m.deliver && m.deliver.reason) || "Cannot receive messages.");
       return h("li", { class: "chan-chip", "data-state": state, "data-on": on ? "true" : null },
-        h("button", { class: "chan-chip-main", type: "button", "aria-pressed": on ? "true" : "false", title: m.name + ", " + presenceWord(state) + (on ? ". Click to message everyone instead." : ". Click to message it."), onClick: () => pickTo(m.name) },
-          HexGlyph(state, { size: "mini" }), h("span", { class: "truncate" }, m.name)),
+        h("button", { class: "chan-chip-main", type: "button", disabled: !ok, "aria-pressed": on ? "true" : "false", title: m.name + ", " + presenceWord(state) + seen + why, onClick: () => pickTo(m.name) },
+          HexGlyph(state === "parked" ? "idle" : state, { size: "mini" }), h("span", { class: "truncate" }, m.name), h("span", { class: "dim" }, presenceWord(state) + (m.last_seen ? " \u00B7 " + (state === "parked" ? "last seen " : "") + fmtRelative(Date.parse(m.last_seen)) : ""))),
         rec ? h("button", { class: "chan-chip-open", type: "button", "aria-label": "Open " + m.name, title: "Open " + m.name, onClick: () => ctx.openAgent(rec) }, icon("external-link")) : null);
     }));
   }
@@ -119,41 +124,61 @@ export function mountChannelLens(ctx, body) {
     replace(tabs, [["messages", "Messages"], ["board", "Board"]].map(([id, label]) => h("button", { class: "seg-btn", type: "button", role: "radio", "aria-checked": id === S.tab ? "true" : "false", onClick: () => { S.tab = id; paintTabs(); paintLog(); } }, label)));
   }
 
+  const leadText = (meta) => (!meta.lead ? "" : "lead " + meta.lead + (meta.lead_liveness ? " (" + meta.lead_liveness.text + ")" : meta.lead_state ? " (" + meta.lead_state + ")" : ""));
+
+  function headLine(meta, info) {
+    const n = (meta.members || []).length;
+    const live = (meta.members || []).filter(reachable).length;
+    return [info.sub ? "subchannel" : "main channel", leadText(meta), info.branch, "project " + (info.folder || info.project), live + " of " + n + " members can receive"].filter(Boolean).join(" \u00B7 ");
+  }
+
+  function headPicker(all, cur) {
+    return h("select", { class: "select chan-pick", "aria-label": "Switch channel", onChange: (e) => select(e.target.value) }, all.map((c) => h("option", { value: c.name, selected: c.name === S.active }, (c.parent ? "\u00A0\u00A0" : "") + c.name + (c.name === cur ? "  (current)" : ""))));
+  }
+
   function paintHead() {
-    const all = chans();
     const meta = metaNow();
     if (!meta) return;
     const info = chanInfo(meta);
-    const line = [info.sub ? "subchannel" : "main", meta.lead ? "lead " + meta.lead : "", info.branch].filter(Boolean).join(" \u00B7 ");
-    const picker = all.length > 1
-      ? h("select", { class: "select chan-pick", "aria-label": "Channel", onChange: (e) => select(e.target.value) }, all.map((c) => h("option", { value: c.name, selected: c.name === S.active }, (c.parent ? "\u00A0\u00A0" : "") + c.name)))
-      : null;
-    replace(head, h("div", { class: "chan-title" }, h("h2", { class: ["truncate", picker ? "sr-only" : ""], title: meta.name }, meta.name), picker, h("span", { class: "dim chan-line truncate", title: line }, line), info.sub ? h("span", { class: "grow" }) : null, info.sub ? Button({ label: "Supervise", size: "sm", icon: "agents", title: "Lead to subagents tree with every member's todo board", onClick: () => ctx.navigate("agents", { lens: "supervision", channel: meta.name }) }) : null), chips(meta));
+    const cur = S.data && S.data.current;
+    const line = headLine(meta, info);
+    const isCur = meta.name === cur;
+    replace(head,
+      h("p", { class: "dim chan-explain" }, "A channel is the shared message board of one lead and the agents it dispatched. Choose a recipient below and Send: the message is written to this board and the recipient reads it on its next tool call (or it is typed into its terminal if it is an idle claude/omp session). Each message shows whether it was delivered."),
+      h("div", { class: "chan-title" },
+        h("span", { class: "chip-lite chan-cur", "data-current": isCur ? "true" : "false" }, isCur ? "Current channel" : "Not the current channel"),
+        h("h2", { class: "sr-only", title: meta.name }, meta.name),
+        headPicker(chans(), cur),
+        !isCur && cur ? Button({ label: "Go to current", size: "sm", onClick: () => select(cur) }) : null,
+        info.sub ? h("span", { class: "grow" }) : null,
+        info.sub ? Button({ label: "Supervise", size: "sm", icon: "agents", title: "Lead to subagents tree with every member's todo board", onClick: () => ctx.navigate("agents", { lens: "supervision", channel: meta.name }) }) : null),
+      h("span", { class: "dim chan-line", title: line }, line),
+      chips(meta));
     paintTabs();
   }
+
+  const reachable = (m) => !m.deliver || m.deliver.ok !== false;
 
   function paintComposer() {
     const meta = metaNow();
     if (!meta) return;
-    const names = (meta.members || []).map((m) => m.name);
-    if (S.to !== "all" && !names.includes(S.to)) S.to = "all";
-    const key = meta.name + "|" + names.join(",");
+    const mem = meta.members || [];
+    const anyone = mem.some(reachable);
+    if (S.to !== "all" && !(mem.find((m) => m.name === S.to) && reachable(mem.find((m) => m.name === S.to)))) S.to = "all";
+    const key = meta.name + "|" + mem.map((m) => m.name + (reachable(m) ? "+" : "-")).join(",");
     if (key !== composerKey) {
       composerKey = key;
-      const sel = h("select", { class: "select chan-to", "aria-label": "To", onChange: (e) => { S.to = e.target.value; paintHead(); paintComposer(); } }, h("option", { value: "all" }, "Everyone"), names.map((n) => h("option", { value: n }, n)));
+      const sel = h("select", { class: "select chan-to", "aria-label": "To", onChange: (e) => { S.to = e.target.value; paintHead(); paintComposer(); } },
+        h("option", { value: "all", disabled: !anyone }, anyone ? "Everyone in channel" : "Everyone (nobody can receive)"),
+        mem.map((m) => h("option", { value: m.name, disabled: !reachable(m), title: m.deliver && m.deliver.reason }, m.name + (reachable(m) ? "" : " (" + (m.live_state || "unreachable") + ", cannot receive)"))));
       comp = Composer({
         simple: true,
         lead: sel,
+        // Always the board: the server types it into an idle claude/omp pane, else queues it for the member's next tool call, and records it here with its delivery status.
         onSend: async (_mode, text) => {
-          const m = (meta.members || []).find((x) => x.name === S.to);
-          const rec = m && recOf(m);
-          if (rec && rec.state === "idle" && rec.pane_id) {
-            await ctx.api.post("herd/agents/" + encodeURIComponent(rec.pane_id) + "/prompt", { text });
-            toast("Prompt sent to " + rec.name, { kind: "ok" });
-          } else {
-            await ctx.api.post("channels", { channel: meta.name, to: S.to, body: text, from: "human" });
-            toast("Posted to " + (S.to === "all" ? meta.name : S.to), { kind: "ok" });
-          }
+          const r = await ctx.api.post("channels", { channel: meta.name, to: S.to, body: text, from: "human", project: meta.project });
+          const t = r && r.message && r.message.delivery_text;
+          toast(t || "Posted to " + (S.to === "all" ? meta.name : S.to), { kind: "ok" });
           await loadDetail();
           paintLog();
         },
@@ -162,7 +187,11 @@ export function mountChannelLens(ctx, body) {
     }
     // To changes (chip click or select) only retarget the existing composer, so a typed draft survives.
     comp.querySelector(".chan-to").value = S.to;
-    comp.querySelector("textarea").placeholder = S.to === "all" ? "Message everyone" : "Prompt " + S.to;
+    const ta = comp.querySelector("textarea");
+    const off = S.to === "all" && !anyone;
+    ta.disabled = off;
+    for (const b of comp.querySelectorAll("button")) b.disabled = off;
+    ta.placeholder = off ? "Nobody in this channel can receive a message (members finished, dead or none)" : S.to === "all" ? "Message everyone in " + meta.name : "Message " + S.to + ": it reads this on its next tool call";
   }
 
   function paintLog() {
@@ -187,7 +216,7 @@ export function mountChannelLens(ctx, body) {
     const all = chans();
     if (!all.length) return replace(body, pickProject());
     if (!S.active || !all.some((c) => c.name === S.active)) {
-      S.active = (all.find((c) => !c.parent) || all[0]).name;
+      S.active = defaultChan().name;
       S.detail = null;
     }
     if (layout.parentNode !== body) replace(body, layout);
@@ -203,7 +232,7 @@ export function mountChannelLens(ctx, body) {
       await loadChannels();
       const all = chans();
       if (!S.error && all.length) {
-        if (!S.active || !all.some((c) => c.name === S.active)) S.active = (all.find((c) => !c.parent) || all[0]).name;
+        if (!S.active || !all.some((c) => c.name === S.active)) S.active = defaultChan().name;
         await loadDetail();
       }
     } finally {

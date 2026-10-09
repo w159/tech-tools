@@ -6,7 +6,12 @@ from __future__ import annotations
 import os as _iso_os
 import sys as _iso_sys
 
-_iso_sys.path.insert(0, _iso_os.path.join(_iso_os.path.dirname(_iso_os.path.abspath(__file__)), "..", "scripts"))
+_iso_sys.path.insert(
+    0,
+    _iso_os.path.join(
+        _iso_os.path.dirname(_iso_os.path.abspath(__file__)), "..", "scripts"
+    ),
+)
 import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import io
 import json
@@ -23,17 +28,14 @@ import session_boot  # noqa: E402
 
 
 class StatusContractLinesTest(unittest.TestCase):
-    def test_always_emits_header_loop_dispatch(self):
-        blob = "\n".join(session_boot.status_contract_lines(""))
-        self.assertIn("STATUS HEADER", blob)
-        self.assertIn("ATLAS |", blob)
-        self.assertIn("LOOP", blob)
-        self.assertIn("DISPATCH colors", blob)
-        self.assertIn("research", blob)
+    def test_style_in_force_repeats_nothing(self):
+        # The style file carries header/ledger/done/scope once; boot must not restate it.
+        self.assertEqual(session_boot.status_contract_lines(""), [])
+        self.assertEqual(session_boot.status_contract_lines("Atlas Orchestrator"), [])
 
     def test_override_warns_on_concise(self):
         blob = "\n".join(session_boot.status_contract_lines("concise"))
-        self.assertIn("STYLE OVERRIDE", blob)
+        self.assertIn("ATLAS |", blob)
         self.assertIn("concise", blob)
         self.assertIn("Atlas Orchestrator", blob)
 
@@ -115,7 +117,7 @@ class BootMainStyleTest(unittest.TestCase):
                 self.assertEqual(e.code, 0)
         data = json.loads(stdout.getvalue())
         ctx = data["hookSpecificOutput"]["additionalContext"]
-        self.assertIn("STATUS HEADER", ctx)
+        self.assertIn("ATLAS |", ctx)
         self.assertIn("LOOP", ctx)
         self.assertIn("STYLE OVERRIDE", ctx)
         self.assertIn("concise", data["systemMessage"])
@@ -141,7 +143,7 @@ class BootMainStyleTest(unittest.TestCase):
             except SystemExit as e:
                 self.assertEqual(e.code, 0)
         ctx = json.loads(stdout.getvalue())["hookSpecificOutput"]["additionalContext"]
-        self.assertIn("STATUS HEADER", ctx)
+        self.assertNotIn("ATLAS | <glyph>", ctx)
         self.assertNotIn("STYLE OVERRIDE", ctx)
 
 

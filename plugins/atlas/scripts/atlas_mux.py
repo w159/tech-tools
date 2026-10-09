@@ -134,7 +134,9 @@ def clean_env(env: dict | None = None) -> dict:
     out = {
         k: v
         for k, v in (os.environ if env is None else env).items()
-        if not k.startswith("CMUX_")
+        # TMUX/TMUX_PANE: atlas sessions are detached and addressed by name; a stale or unresolvable
+        # lead pane must not route (or fail) them.
+        if not k.startswith("CMUX_") and k not in ("TMUX", "TMUX_PANE")
     }
     if out.get("TERM_PROGRAM", "").lower() == "cmux":
         del out["TERM_PROGRAM"]
@@ -149,10 +151,28 @@ def clean_env(env: dict | None = None) -> dict:
     return out
 
 
+TMUX_TIMEOUT_S = 10
+
+
 def _tmux(*args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        ["tmux", *args], capture_output=True, text=True, env=clean_env()
-    )
+    """Run tmux with a bounded wait. A missing binary or a wedged server comes back as a failed
+    CompletedProcess (127 / 124) with a stderr reason, never an exception or a hang."""
+    try:
+        return subprocess.run(
+            ["tmux", *args],
+            capture_output=True,
+            text=True,
+            env=clean_env(),
+            timeout=TMUX_TIMEOUT_S,
+        )
+    except FileNotFoundError:
+        return subprocess.CompletedProcess(
+            ["tmux", *args], 127, "", "tmux not found on PATH"
+        )
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(
+            ["tmux", *args], 124, "", f"tmux timed out after {TMUX_TIMEOUT_S}s"
+        )
 
 
 def transport() -> str:
@@ -687,7 +707,7 @@ def cmd_status(args) -> int:
             if _tmux("has-session", "-t", session).returncode == 0
             else None
         )
-    workers = [w for w in (windows or []) if w["name"] != "lead"]
+    workers = [w for w in (windows or []) if w["name"] not in ("lead", "Sidebar")]
     return _emit(
         {
             "ok": True,

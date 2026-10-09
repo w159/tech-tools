@@ -396,6 +396,52 @@ class TestHealth(InsightsBase):
             "dashboard_error", {s["kind"] for s in body["silent_failures"]}
         )
 
+    def test_regressed_improvement_of_resolved_finding_is_not_actionable(self):
+        fid = atlas_db.upsert_finding(
+            self.conn,
+            "turn_quality:next_turn_correction:x",
+            dimension="reply quality",
+            severity="LOW",
+            title="t",
+            detail="d",
+            proposed_action="p",
+            target_path="x",
+        )
+        imp = atlas_db.record_improvement(
+            self.conn,
+            0,
+            "reply quality",
+            "0.2",
+            "0",
+            None,
+            finding_id=fid,
+            metric="turn_quality",
+            baseline_value=0.2,
+        )
+        atlas_db.set_improvement_remeasure(self.conn, imp, 0.5, "regressed")
+
+        def sources():
+            _, body = self.get(ins.route_health)
+            return {s["source"] for s in body["silent_failures"]}
+
+        self.assertIn("improvements.verdict=regressed", sources())
+        self.conn.execute("UPDATE findings SET status='resolved' WHERE id=?", (fid,))
+        self.conn.commit()
+        self.assertNotIn("improvements.verdict=regressed", sources())
+
+    def test_user_code_traceback_is_a_cause_not_a_silent_failure(self):
+        self.conn.execute(
+            "INSERT INTO tool_calls(session_id, tool_use_id, tool_name, kind, target, ts, "
+            "is_error, denied, error_snippet) VALUES('s-uc','uc1','eval','builtin','eval',?,1,0,?)",
+            (
+                NOW - 60,
+                'Traceback (most recent call last): File "<cell>", line 1 KeyError',
+            ),
+        )
+        self.conn.commit()
+        _, body = self.get(ins.route_health)
+        self.assertEqual(body["tool_errors"]["counts"].get("user_code"), 1)
+
     def test_regression_and_missing_tables_degrade(self):
         self.conn.execute("UPDATE findings SET status='regressed'")
         self.conn.commit()
@@ -411,7 +457,9 @@ class TestHealth(InsightsBase):
 
 class TestProjectsOverviewActivity(InsightsBase):
     def test_projects_grouped_with_counts(self):
-        _, body = self.get(ins.route_projects)
+        # the route hides roots that no longer exist on disk; these are fixtures
+        with mock.patch.object(ins, "_is_fixture_root", lambda r: False):
+            _, body = self.get(ins.route_projects)
         by_root = {p["root"]: p for p in body["projects"]}
         self.assertEqual(set(by_root), {ROOT_A, ROOT_B})
         self.assertEqual(by_root[ROOT_A]["runs_7d"], 1)
@@ -919,6 +967,46 @@ class TestImproveNormalisation(InsightsBase):
         (doctor,) = [f for f in page["findings"] if f["source"] == "doctor"]
         self.assertEqual((doctor["baseline"], doctor["current"]), (0.4, 0.9))
 
+    def test_remeasure_refuses_to_compare_across_metric_units(self):
+        fid = self.conn.execute("SELECT id FROM findings").fetchone()[0]
+        self.conn.execute(
+            "UPDATE findings SET fingerprint='recurring_friction:gate_block' WHERE id=?",
+            (fid,),
+        )
+        old = atlas_db.record_improvement(
+            self.conn,
+            1,
+            "d",
+            "4",
+            "",
+            "recorded by dashboard remeasure",  # no unit marker: legacy raw
+            finding_id=fid,
+            metric="recurring_friction",
+            baseline_value=4.0,
+        )
+        orig = ins.atlas_doctor.measure_finding_metric
+        ins.atlas_doctor.measure_finding_metric = lambda *a, **k: 56.8
+        self.addCleanup(setattr, ins.atlas_doctor, "measure_finding_metric", orig)
+        st, body = ins.route_improve_remeasure(
+            Ctx(self.conn, body={"id": f"doctor:{fid}"})
+        )
+        self.assertEqual(st, 200, body)
+        self.assertEqual(body["state"]["verdict"], "superseded")
+        rows = self.conn.execute(
+            "SELECT id, baseline_value, verdict, note FROM improvements "
+            "WHERE finding_id=? ORDER BY id",
+            (fid,),
+        ).fetchall()
+        self.assertEqual(rows[0][0], old)
+        self.assertEqual(rows[0][2], "superseded")  # pending: retired, not judged
+        self.assertEqual((rows[1][1], rows[1][2]), (56.8, None))
+        self.assertIn("unit=per100_sessions", rows[1][3])
+        # a second remeasure now compares like with like
+        st, body = ins.route_improve_remeasure(
+            Ctx(self.conn, body={"id": f"doctor:{fid}"})
+        )
+        self.assertEqual(body["state"]["verdict"], "no_change")
+
     def test_doctor_finding_project_is_resolved_from_evidence_name(self):
         fid = self.conn.execute("SELECT id FROM findings").fetchone()[0]
         self.conn.execute(
@@ -1099,7 +1187,7 @@ class TestHealthHonesty(InsightsBase):
             "dispatch": "No dispatches recorded in the database.",
             "mux": "No colony worker runs recorded yet.",
             "memory": "No MEMORY.md in the state directory.",
-            "nudge": "No nudge has fired yet.",
+            "nudge": "The nudge hook has not run yet.",
             "doctor": "The doctor has not recorded any finding yet.",
             "chronicle": "No transcript ingest has run yet.",
             "connectors": "Connector status is not available from this process.",
@@ -1264,22 +1352,141 @@ class TestDashboardLogWindow(unittest.TestCase):
             log.write_text("ValueError: old boot failure\n")
             start = log.stat().st_size
             with open(log, "a") as f:
-                f.write("HTTPError: 404 not found /static/retired.js\nKeyError: fresh\n")
-            with mock.patch.object(ins, "DASHBOARD_LOG", log), mock.patch.object(
-                ins, "_LOG_START", start
+                f.write(
+                    "HTTPError: 404 not found /static/retired.js\nKeyError: fresh\n"
+                )
+            with (
+                mock.patch.object(ins, "DASHBOARD_LOG", log),
+                mock.patch.object(ins, "_LOG_START", start),
             ):
                 out = ins._fold_dashboard_log(time.time() - 60)
             blob = json.dumps(out)
             self.assertIn("KeyError", blob)
             self.assertNotIn("old boot", blob)
-            self.assertNotIn("404", blob)
+            self.assertNotIn("404 not found", blob)
+            self.assertNotIn("retired.js", blob)
             with open(log, "a") as f:
                 f.write("RuntimeError: upstream returned 404 for tenant\n")
-            with mock.patch.object(ins, "DASHBOARD_LOG", log), mock.patch.object(
-                ins, "_LOG_START", start
+            with (
+                mock.patch.object(ins, "DASHBOARD_LOG", log),
+                mock.patch.object(ins, "_LOG_START", start),
             ):
                 out = ins._fold_dashboard_log(time.time() - 60)
-            self.assertEqual(out[0]["count"], 2)  # KeyError + the real 404-mentioning error
+            self.assertEqual(
+                out[0]["count"], 2
+            )  # KeyError + the real 404-mentioning error
+
+
+class TestOperatorTruth(InsightsBase):
+    """Every fact says what it means, whether it is happening now, and what to do."""
+
+    def health(self):
+        with mock.patch.object(ins, "CONNECTOR_STATUS_PROVIDER", None):
+            return ins.route_health(Ctx(self.conn, {}))[1]
+
+    def test_active_failure_is_explained_and_dated(self):
+        by = {s["kind"]: s for s in self.health()["silent_failures"]}
+        d = by["dispatch_unclassified"]  # seeded 200s ago
+        self.assertEqual(d["state"], "active")
+        self.assertTrue(d["title"] and d["what"] and d["next"])
+        self.assertIsNotNone(d["ages_out"])
+        body = self.health()
+        subs = {s["id"]: s for s in body["subsystems"]}
+        self.assertEqual(subs["dispatch"]["status"], "warn")
+        for s in subs.values():  # every card says what it measures and what to do
+            self.assertTrue(s["what"] and s["next"] and s["warn_means"], s["id"])
+
+    def test_old_failure_is_historic_and_does_not_warn(self):
+        self.conn.execute("UPDATE dispatches SET ts=?", (NOW - 3 * 86400,))
+        self.conn.commit()
+        body = self.health()
+        d = {s["kind"]: s for s in body["silent_failures"]}["dispatch_unclassified"]
+        self.assertEqual(d["state"], "historic")
+        sub = {s["id"]: s for s in body["subsystems"]}["dispatch"]
+        self.assertEqual(sub["status"], "ok")
+        self.assertIn("historic", sub["detail"])
+        self.assertIn(d["ages_out"], sub["detail"])
+        _, ov = self.get(ins.route_overview)
+        self.assertNotIn(d["id"], {a["id"] for a in ov["attention"]})
+        self.assertGreaterEqual(ov["attention_historic"], 1)
+
+    def test_chronicle_counts_transcripts_the_database_never_saw(self):
+        self.conn.execute(
+            "INSERT INTO ingest_files(session_id,path,cursor_bytes,size,row_keys,updated_at)"
+            " VALUES('sess-a','/x/sess-a.jsonl',5,5,'[]',?)",
+            (NOW - 100,),
+        )
+        self.conn.commit()
+        proj = self.home / ".claude" / "p"
+        proj.mkdir(parents=True)
+        for name in ("sess-a", "never-seen"):
+            f = proj / f"{name}.jsonl"
+            f.write_text(
+                '{"type": "user", "cwd": "/work/alpha"}\n'
+            )  # a real session has messages
+            import os
+
+            os.utime(f, (NOW - 3 * 3600, NOW - 3 * 3600))
+        with mock.patch.object(
+            ins, "_TRANSCRIPT_GLOBS", (str(self.home / ".claude" / "*" / "*.jsonl"),)
+        ):
+            sub = {s["id"]: s for s in self.health()["subsystems"]}["chronicle"]
+        self.assertEqual(sub["status"], "warn")
+        self.assertIn("1 ended sessions were missed", sub["detail"])
+
+    def test_client_hangups_are_not_dashboard_errors(self):
+        log = self.home / "dashboard.log"
+        log.write_text("BrokenPipeError: [Errno 32] Broken pipe\n")
+        with mock.patch.object(ins, "_LOG_START", 0):
+            self.assertEqual(ins._fold_dashboard_log(time.time() - 60), [])
+
+    def test_activity_links_sessions_and_hides_scratch(self):
+        t = self.home / "t.jsonl"
+        t.write_text("{}")
+        self.conn.execute(
+            "UPDATE session_logs SET transcript_path=? WHERE session_id='sess-a'",
+            (str(t),),
+        )
+        ps = atlas_db.register_project(self.conn, NOISE_ROOT, "scratch")
+        atlas_db.start_run(self.conn, ps, "sess-x", "scratch run")
+        self.conn.commit()
+        _, body = self.get(ins.route_activity)
+        items = [i for g in body["groups"] for i in g["items"]]
+        self.assertGreaterEqual(body["scratch_hidden"], 1)
+        self.assertFalse(any(i["scratch"] for i in items))
+        mine = [i for i in items if i["session"] == "sess-a"]
+        self.assertTrue(mine and all(i["transcript"] for i in mine))
+        self.assertTrue(
+            all(i["transcript"] is False for i in items if i["session"] == "sess-b")
+        )
+        runs = [i for i in items if i["kind"] == "run"]
+        self.assertTrue(all(i["title"].startswith(("build", "Session")) for i in runs))
+        self.assertIn("deny", body["kinds"])
+        _, body = self.get(ins.route_activity, scratch="1")
+        self.assertTrue(any(i["scratch"] for g in body["groups"] for i in g["items"]))
+
+    def test_improve_counts_cover_every_finding_and_stages_explain_themselves(self):
+        _, body = self.get(ins.route_improve)
+        self.assertEqual(sum(body["counts"].values()), len(body["findings"]))
+        self.assertTrue(all(s["hint"] for s in body["loop"]["stages"]))
+
+
+class TestProjectPicker(unittest.TestCase):
+    """The Colony/project picker never offers fixtures, temp roots or roots that are gone."""
+
+    def test_fixture_temp_and_missing_roots_are_excluded(self):
+        home = Path.home()
+        self.assertFalse(
+            ins._is_fixture_root(str(SCRIPTS))
+        )  # a live, non-temp checkout stays
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertTrue(ins._is_fixture_root(tmp))  # exists, but under the temp dir
+        for gone in (str(home / "no-such-project-dir"), "/definitely/not/here"):
+            self.assertTrue(
+                ins._is_fixture_root(gone), gone
+            )  # the colony API refuses a non-directory
+        for fixture in (str(home / "atlas-e2e-colony2"),):
+            self.assertTrue(ins._is_fixture_root(fixture), fixture)
 
 
 if __name__ == "__main__":

@@ -3,6 +3,7 @@
 // No innerHTML; all data via h() text children.
 import { h, replace } from '../dom.js';
 import { HerdrProjectsSection } from '../hp.js';
+import { activeLabel, focusByLabel } from '../focus.js';
 import { Badge, Card, EmptyState, StatusDot } from '../components.js';
 
 const HEALTH_TONE = { ok: 'ok', warn: 'warn', fail: 'fail', idle: 'info' };
@@ -178,8 +179,7 @@ function body() {
 
 function draw() {
   if (!S || !S.mount || S.destroyed) return;
-  const active = document.activeElement;
-  const label = active && S.mount.contains(active) ? active.getAttribute('aria-label') : null;
+  const label = activeLabel(S.mount);
   replace(S.mount, 
     h('header', { class: 'pg-head' },
       h('h1', { class: 'pg-title' }, 'Projects'),
@@ -188,11 +188,7 @@ function draw() {
         h('button', { type: 'button', class: 'btn', onclick: refresh }, 'Refresh'))),
     S.hp,
     body());
-  if (label) {
-    for (const el of S.mount.querySelectorAll('[aria-label]')) {
-      if (el.getAttribute('aria-label') === label && typeof el.focus === 'function') { el.focus(); break; }
-    }
-  }
+  focusByLabel(S.mount, label);
 }
 
 export default {

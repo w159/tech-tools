@@ -32,7 +32,7 @@ export function projectLabel(root, chans) {
 }
 
 // Presence of a channel member: pane state when a herdr pane exists, else what the channel API reports.
-const PRESENCE = { working: "running", input: "waiting for input", idle: "idle", done: "exited", fail: "failed", unknown: "no pane" };
+const PRESENCE = { working: "running", input: "waiting for input", idle: "idle", parked: "parked", done: "exited", fail: "failed", unknown: "no pane" };
 export const presenceWord = (state) => PRESENCE[state] || "no pane";
 
 // Todo counts for one owner. Items (atlas_dash_work._todo_view statuses: open|in_progress|done|blocked) are the source of truth:
@@ -55,6 +55,7 @@ export const noteText = (n) => (n ? (typeof n === "string" ? n : n.text || n.bod
 
 // Presence word state for a channel member: the live pane record wins, else what the channel API reports.
 export function memberState(m, rec) {
+  if (m.parked || m.state === "parked") return "parked"; // the server decided nothing will read its messages: no pane record overrides it
   return rec ? rec.state : m.state === "blocked" ? "input" : ["working", "idle", "done"].includes(m.state) ? m.state : "unknown";
 }
 

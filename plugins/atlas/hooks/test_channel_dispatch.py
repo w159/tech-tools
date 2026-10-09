@@ -57,6 +57,7 @@ class ChannelDispatchHook(unittest.TestCase):
         self.env.update(
             ATLAS_DASHBOARD="off",
             ATLAS_COLONY="off",
+            ATLAS_DASHBOARD_PORT="17969",
             ATLAS_HOME=home,
             ATLAS_DB=os.path.join(home, "atlas.db"),
             ATLAS_DASHBOARD_DB=os.path.join(home, "atlas.db"),

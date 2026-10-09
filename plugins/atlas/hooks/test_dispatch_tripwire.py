@@ -9,7 +9,10 @@ _iso_sys.path.insert(
 )
 import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import os as _o
-_o.environ.setdefault("ATLAS_CHANNELS", "off")  # channel dispatch is tested in test_atlas_channels
+
+_o.environ.setdefault(
+    "ATLAS_CHANNELS", "off"
+)  # channel dispatch is tested in test_atlas_channels
 import contextlib
 import io
 import json
@@ -523,6 +526,57 @@ class TripwireTest(unittest.TestCase):
             [tuple(r) for r in rows],
             [("atlas:explorer", "haiku"), ("atlas:verifier", "sonnet")],
         )
+
+    def test_post_unnamed_dispatch_never_records_an_empty_agent_type(self):
+        """dispatch_unclassified: a Task with no/blank agent name must land as a
+        defined value (the tool name), never ''."""
+        for tinput in ({"prompt": "x"}, {"subagent_type": "  ", "prompt": "x"}):
+            run_hook(self._post_payload("Task", tinput), self.env)
+        import atlas_db
+
+        conn = atlas_db.connect(self.env["ATLAS_DB"])
+        rows = [r[0] for r in conn.execute("SELECT agent_type FROM dispatches")]
+        conn.close()
+        self.assertEqual(rows, ["Task", "Task"])
+
+    def test_pre_spec_deny_names_missing_labels_and_pastes_a_working_skeleton(self):
+        """The retry must succeed first time: the deny lists exactly the missing
+        labels with a skeleton, and pasting that skeleton satisfies the gate."""
+        prompt = TOOLS_BLOCK + "GOAL: fix it.\nDELIVERABLE: a patch\n"
+        out = self._denied_reason(prompt)
+        reason = json.loads(out)["hookSpecificOutput"]["permissionDecisionReason"]
+        self.assertIn(
+            "missing SUCCESS CRITERIA:, OUT OF SCOPE:, STOP CONDITIONS:, REPORT:",
+            reason,
+        )
+        skeleton = reason.split("Add exactly:\n", 1)[1].split("\nThen re-dispatch", 1)[
+            0
+        ]
+        self.assertIn(
+            "REPORT: STATUS, STEPS, FILES_CHANGED, EVIDENCE, DELIVERABLE, NEXT",
+            skeleton,
+        )
+        self.assertNotIn("GOAL:", skeleton)  # supplied labels are not repeated
+        self.assertEqual(self._denied_reason(prompt + skeleton).strip(), "")
+
+    def test_pre_batch_context_labels_count_for_the_merged_prompt(self):
+        """omp merges the batch `context` before each `task` into the prompt the
+        gate reads, so labels carried only by the shared context are not missing."""
+        context, task = SPEC_BLOCK.split("OUT OF SCOPE:", 1)
+        merged = TOOLS_BLOCK + context.strip() + "\n\n" + "OUT OF SCOPE:" + task
+        self.assertEqual(self._denied_reason(merged).strip(), "")
+
+    def test_pre_write_to_claude_mem_device_uri_is_never_an_inline_edit(self):
+        for key in ("path", "file_path"):
+            r = run_hook(
+                self._pre_payload(
+                    "Write",
+                    {key: "xd://mcp__claude_mem_mcp_search_search", "content": "{}"},
+                ),
+                self.env,
+            )
+            self.assertNotIn("never edit target code inline", r.stdout, key)
+            self.assertEqual(r.stdout.strip(), "", key)
 
     def test_pre_deny_atlas_dispatch_without_report_block(self):
         no_report = SPEC_BLOCK.replace("REPORT: return the structured result\n", "")
@@ -2145,6 +2199,12 @@ class ColonyDenyTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0)
         self.assertEqual(r.stdout.strip(), "")
 
+    def test_omp_expanded_alias_is_allowed_but_other_family_denied(self):
+        self.assertEqual(
+            self._dispatch(model="anthropic/claude-sonnet-5:high").stdout.strip(), ""
+        )
+        self.assertIn("deny", self._dispatch(model="anthropic/claude-opus-5-5").stdout)
+
     def test_case_insensitive_model_match_is_allowed(self):
         r = self._dispatch(model="Sonnet")
         self.assertEqual(r.returncode, 0)
@@ -2704,7 +2764,7 @@ class ModelPinRepresentationTest(unittest.TestCase):
         # Same provider, different model; and a second suffix is not a level.
         self._denied(
             self._dispatch(
-                model="anthropic/claude-sonnet-5-5", session_model=self.PARENT
+                model="anthropic/claude-haiku-4-5", session_model=self.PARENT
             )
         )
         self._denied(
@@ -2724,7 +2784,8 @@ class ModelPinRepresentationTest(unittest.TestCase):
         import dispatch_tripwire as dt
 
         self.assertEqual(
-            dt._omp_pinned_models("implementer"), ["@atlas-worker", "@smol"]
+            dt._omp_pinned_models("implementer"),
+            ["@atlas-worker", "sonnet", "@smol"],
         )
         self.assertEqual(dt._omp_pinned_models("not-an-agent"), [])
         self.assertEqual(dt._omp_pinned_models("../etc/passwd"), [])
@@ -3072,6 +3133,128 @@ class ScopeTest(unittest.TestCase):
             )
             self.assertEqual((p.returncode, p.stdout), (0, ""))
             self.assertNotIn("fail-open", p.stderr)
+
+
+class AtlasAgentDefinitionTest(unittest.TestCase):
+    """Agent definitions and the gate must agree, or every disagreement is a wasted deny."""
+
+    AGENTS = sorted((Path(__file__).resolve().parent.parent / "agents").glob("*.md"))
+
+    @staticmethod
+    def _disallowed(path):
+        for line in path.read_text(encoding="utf-8").splitlines()[:14]:
+            if line.startswith("disallowedTools:"):
+                return {
+                    t.strip() for t in line.split("[", 1)[1].rstrip("] ").split(",")
+                }
+        return set()
+
+    def test_no_atlas_agent_is_offered_the_dispatch_tools(self):
+        """Nested-dispatch denies (x105) start with a subagent that is handed Agent/Task."""
+        self.assertTrue(self.AGENTS)
+        for path in self.AGENTS:
+            self.assertTrue({"Agent", "Task"} <= self._disallowed(path), path.name)
+
+    def test_verifier_cannot_write_and_is_told_to_record_verdicts_via_atlas_finding(
+        self,
+    ):
+        verifier = next(p for p in self.AGENTS if p.name == "verifier.md")
+        self.assertTrue({"Write", "Edit"} <= self._disallowed(verifier))
+        body = verifier.read_text(encoding="utf-8")
+        self.assertIn("atlas_finding.py", body)
+        self.assertIn("NEVER `Write`", body)
+
+    def test_exploration_deny_is_short_and_keeps_its_classifier_marker(self):
+        sys.path.insert(0, os.path.dirname(__file__))
+        import dispatch_tripwire as dt
+
+        reason = dt._exploration_deny("cat src/a.py", "lean-ctx")
+        self.assertIn("ctx_read", reason)
+        self.assertIn("only reads files", reason)
+        self.assertLess(len(reason.encode()), 160)  # was 343 bytes
+
+
+class NameRequirementTmuxTest(unittest.TestCase):
+    """A named dispatch under tmux becomes a teammate that needs the lead's pane."""
+
+    def _gap(self, **env):
+        sys.path.insert(0, os.path.dirname(__file__))
+        import dispatch_tripwire as dt
+
+        base = {"TMUX": "", "TMUX_PANE": "", "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": ""}
+        with patch.dict(os.environ, {**base, **env}):
+            return dt._name_missing({"subagent_type": "atlas:explorer"})
+
+    def test_name_required_normally_and_with_a_resolvable_pane(self):
+        self.assertEqual(self._gap(), "atlas:explorer")
+        self.assertEqual(self._gap(TMUX="/t,1,0", TMUX_PANE="%3"), "atlas:explorer")
+
+    def test_name_lifted_when_tmux_is_set_but_the_pane_is_unresolvable(self):
+        self.assertIsNone(self._gap(TMUX="/t,1,0"))
+
+
+class DeviceArgsOverwriteTest(unittest.TestCase):
+    """A search-args JSON written over an existing source file is a mis-addressed device call."""
+
+    ARGS = json.dumps({"pattern": "foo", "path": "src", "max_results": 20})
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+
+    def _hook(self, tool, path, content, key="file_path"):
+        env = dict(os.environ, ATLAS_GATES="always", HOME=self.tmp)
+        payload = {
+            "hook_event_name": "PreToolUse",
+            "session_id": "wg-1",
+            "cwd": self.tmp,
+            "tool_name": tool,
+            "tool_input": {key: path, "content": content},
+        }
+        return run_hook(payload, env).stdout
+
+    def _existing(self, name):
+        p = os.path.join(self.tmp, name)
+        Path(p).write_text("print(1)\n")
+        return p
+
+    def test_search_json_over_existing_py_and_js_is_denied(self):
+        for name in ("a.py", "b.js"):
+            out = self._hook("Write", self._existing(name), self.ARGS)
+            self.assertIn("device arguments", out, name)
+            self.assertIn("xd:// device path", out)
+
+    def test_omp_write_path_key_is_denied_too(self):
+        out = self._hook("write", self._existing("c.py"), self.ARGS, key="path")
+        self.assertIn("device arguments", out)
+
+    def test_search_json_over_existing_json_is_denied_but_real_edit_passes(self):
+        p = self._existing("plugin.json")
+        self.assertIn("device arguments", self._hook("Write", p, self.ARGS))
+        real = json.dumps({"name": "atlas", "version": "1.0", "path": "x"})
+        self.assertNotIn("device arguments", self._hook("Write", p, real))
+
+    def test_xd_path_json_and_new_file_pass(self):
+        self.assertNotIn(
+            "device arguments",
+            self._hook("write", "xd://mcp__lean_ctx_ctx_search", self.ARGS, key="path"),
+        )
+        self.assertNotIn(
+            "device arguments",
+            self._hook("Write", os.path.join(self.tmp, "new.json"), self.ARGS),
+        )
+        self.assertNotIn(
+            "device arguments",
+            self._hook("Write", os.path.join(self.tmp, "new.py"), self.ARGS),
+        )
+
+    def test_unknown_keys_or_non_json_pass(self):
+        over = self._existing("e.py")
+        self.assertNotIn(
+            "device arguments",
+            self._hook("Write", over, json.dumps({"pattern": "x", "other": 1})),
+        )
+        self.assertNotIn("device arguments", self._hook("Write", over, "{not json"))
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@
 name: "naming-glossary-audit"
 description: "Read-only audit of PostgreSQL table and column names against a project glossary, focused on a user_* to client_* transition. Use when running the nomenclature half of a database audit."
 thinkingLevel: "off"
-model: ["@atlas-mechanic","@smol"]
+model: ["@atlas-mechanic","haiku","@smol"]
 # Lead-only dispatch: atlas workers must not spawn subagents.
 spawns: "none"
 ---

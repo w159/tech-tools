@@ -17,6 +17,7 @@
   },
   "bridged": [
     "session_boot.py",
+    "atlas_doctor.py",
     "prompt_optimizer.py",
     "bash_advisor.py",
     "fallow_gate.py",
@@ -34,7 +35,6 @@
   ],
   "notBridged": {
     "todo_capture.py": "omp/index.ts mirrors the omp todo tool to the board natively (the board-mirror spawn writes .atlas/.run/todos.json on every todo tool result)",
-    "atlas_doctor.py": "mines atlas_db telemetry written by Claude Code hooks; the omp bridge writes the same run/event/dispatch rows, but the doctor surface is only exercised by the Claude path today",
     "worker_report_gate.py": "omp subagent sessions never fire session_stop; the report contract is enforced on omp by omp/worker-report.ts (strict outputSchema injected into atlas task items)",
     "recall_gate.py": "omp/mandates.ts implements the recall gate natively"
   }

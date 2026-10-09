@@ -29,6 +29,7 @@ import json
 import os
 import re
 import sys
+import time
 from pathlib import Path
 
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "scripts"
@@ -37,6 +38,7 @@ INBOX_SUBDIR = "inbox"
 # delivered over successive tool calls instead of flooding one turn.
 MAX_NOTES = 10
 MAX_BODY = 600
+RECEIPT_KEEP = 500  # newest per-note delivery receipts kept in a worker's cursor file
 
 
 def _todo():
@@ -120,18 +122,75 @@ def is_read(root, worker, rec, cursors=None):
     return _seen(rec, cursors[worker])
 
 
-def _write_cursor(path, ts, seq):
-    """Persist (ts, seq), never moving either component backwards."""
+def _write_cursor(path, ts, seq, receipts=None, now=None):
+    """Persist (ts, seq), never moving either component backwards.
+
+    `receipts` ({seq: epoch the hook delivered it}) is the delivery proof the dashboard
+    shows. `legacy_upto` is the highest seq whose delivery is not receipted (cursors
+    written before receipts, or receipts pruned): those count as read without a time.
+    Only the newest RECEIPT_KEEP are kept."""
+    data = {}
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         ts = max(ts, float(data.get("ts") or 0.0))
-        seq = max(seq, int(data.get("seq") or 0))
+        old_seq = int(data.get("seq") or 0)
+        seq = max(seq, old_seq)
     except (OSError, ValueError, TypeError, AttributeError):
-        pass
+        data, old_seq = {}, 0
+    have = data.get("receipts") if isinstance(data.get("receipts"), dict) else None
+    legacy = _seq({"seq": data.get("legacy_upto")}) if have is not None else old_seq
+    merged = dict(have or {})
+    at = time.time() if now is None else now
+    merged.update({str(k): at for k in (receipts or ())})
+    if len(merged) > RECEIPT_KEEP:
+        for k in sorted(merged, key=lambda k: _seq({"seq": k}))[
+            : len(merged) - RECEIPT_KEEP
+        ]:
+            legacy = max(legacy, _seq({"seq": k}))
+            del merged[k]
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps({"ts": ts, "seq": seq}) + "\n", encoding="utf-8")
+    doc = {"ts": ts, "seq": seq, "legacy_upto": legacy, "receipts": merged}
+    tmp.write_text(json.dumps(doc) + "\n", encoding="utf-8")
     os.replace(tmp, path)
+
+
+def delivery(root, worker, rec, memo=None):
+    """(state, at) of the note `rec` addressed to `worker`, from the hook's own receipts.
+
+    state: "delivered" (at = epoch the hook injected it into the worker's context, None for
+    a note delivered before receipts existed), "skipped" (the cursor passed it but the hook
+    never delivered it: it was not addressed to a channel the worker belongs to), or
+    "queued" (not drained yet). A seq-less legacy note falls back to the ts cursor."""
+    key = ("receipts", worker)
+    if memo is not None and key in memo:
+        doc = memo[key]
+    else:
+        try:
+            doc = json.loads(cursor_path(root, worker).read_text(encoding="utf-8"))
+            doc = doc if isinstance(doc, dict) else {}
+        except (OSError, ValueError, TypeError):
+            doc = {}
+        if memo is not None:
+            memo[key] = doc
+    seq = _seq(rec)
+    if not seq:
+        return (
+            ("delivered", None)
+            if _seen(rec, (_ts(doc.get("ts")), 0))
+            else ("queued", None)
+        )
+    receipts = doc.get("receipts")
+    cursor_seq = _seq(doc)
+    if isinstance(receipts, dict):
+        if str(seq) in receipts:
+            return "delivered", _ts(receipts[str(seq)])
+        legacy = _seq({"seq": doc.get("legacy_upto")})
+    else:  # a cursor written before receipts: everything it passed was delivered
+        legacy = cursor_seq
+    if seq <= legacy:
+        return "delivered", None
+    return ("skipped", None) if seq <= cursor_seq else ("queued", None)
 
 
 def _format(notes):
@@ -233,7 +292,12 @@ def drain(root, worker, member_of=None, aliases=()):
             return ""
         pending.sort(key=lambda r: (_seq(r), todo._note_ts_key(r)))
         batch = pending[:MAX_NOTES]
-        _write_cursor(path, _ts(batch[-1].get("ts")), _seq(batch[-1]))
+        _write_cursor(
+            path,
+            _ts(batch[-1].get("ts")),
+            _seq(batch[-1]),
+            [_seq(r) for r in batch if _seq(r)],
+        )
         return _format(batch)
 
 

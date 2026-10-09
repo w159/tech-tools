@@ -172,6 +172,63 @@ class SelffixTest(unittest.TestCase):
         self.assertEqual(self.state(fid), "skipped")
         self.assertIn(["branch", "-D", f"atlas/selffix-{fid}"], self.git_calls)
 
+    # recurring_friction moved from a raw 14-day count to events per 100
+    # sessions: a stored raw baseline must never be compared to the new unit.
+    def _friction(self, baseline, state="merged"):
+        fid = atlas_db.upsert_finding(
+            self.conn,
+            "recurring_friction:gate_block",
+            title="t",
+            severity="MED",
+            target_path="src/a.py",
+            evidence_json=json.dumps({"metric_value": 56.8}),
+        )
+        sf._set(self.conn, fid, state)
+        (Path(self.tmp) / "selffix-state.json").write_text(
+            json.dumps({"baseline": {str(fid): baseline}})
+        )
+        return fid
+
+    def test_unitless_baseline_is_ignored_by_the_regression_check(self):
+        fid = self._friction(3)  # legacy raw 3; per-100 now reads 56.8 (> 3 * 1.25)
+        f = sf._row(self.conn, fid)
+        self.assertIsNone(sf._baseline(f))
+        with mock.patch.object(
+            atlas_doctor, "measure_finding_metric", lambda *a, **k: 56.8
+        ):
+            self.assertIsNone(sf._check_merged(self.conn, f, self.tmp))
+        self.assertEqual(self.state(fid), "merged")  # not regressed
+
+    def test_matching_unit_baseline_still_detects_regression(self):
+        fid = self._friction({"v": 3.0, "unit": "per100_sessions"})
+        f = sf._row(self.conn, fid)
+        with mock.patch.object(
+            atlas_doctor, "measure_finding_metric", lambda *a, **k: 56.8
+        ):
+            self.assertEqual(
+                sf._check_merged(self.conn, f, self.tmp), f"#{fid} regressed"
+            )
+
+    def test_rebaseline_units_remeasures_watched_and_drops_closed(self):
+        watched = self._friction(55, "merged")
+        closed = atlas_db.upsert_finding(
+            self.conn, "recurring_friction:other", title="c", severity="LOW"
+        )
+        sf._set(self.conn, closed, "failed")
+        st = sf._read_state()
+        st["baseline"][str(closed)] = 7
+        sf._write_state(st)
+        with mock.patch.object(
+            atlas_doctor, "measure_finding_metric", lambda *a, **k: 56.8
+        ):
+            notes = sf.rebaseline_units(self.conn)
+        self.assertEqual(len(notes), 2)
+        self.assertEqual(
+            sf._read_state()["baseline"],
+            {str(watched): {"v": 56.8, "unit": "per100_sessions"}},
+        )
+        self.assertEqual(sf.rebaseline_units(self.conn), [])  # idempotent
+
 
 class MinerTest(unittest.TestCase):
     def test_tool_name_normalization(self):
@@ -182,15 +239,15 @@ class MinerTest(unittest.TestCase):
     def test_uuid_connector_is_skipped_and_recovery_resolves(self):
         conn = atlas_db.connect(os.path.join(tempfile.mkdtemp(), "m.db"))
         atlas_db.init(conn)
-        rows = [("mcp", "lean_ctx.ctx_patch", 1)] * 9 + [
+        rows = [("mcp", "lean_ctx.ctx_patch", 1)] * 18 + [
             ("mcp", "lean-ctx.ctx_patch", 0)
-        ] * 3  # 9/12 errors split across two spellings
+        ] * 6  # 18/24 errors split across two spellings
         rows += [("mcp", "35880cc3-5c29-4ec7-88cb-c9f0cab7f98e.x", 1)] * 8
-        for k, t, e in rows:
+        for n, (k, t, e) in enumerate(rows):
             conn.execute(
                 "INSERT INTO tool_calls(session_id,kind,target,is_error,ts) "
-                "VALUES('s',?,?,?,strftime('%s','now'))",
-                (k, t, e),
+                "VALUES(?,?,?,?,strftime('%s','now'))",
+                ("s" if n % 2 else "t", k, t, e),  # errors span 2 sessions
             )
         conn.commit()
         out = atlas_doctor.mine_tool_error_rate(conn, "/x", threshold=0.2)
@@ -198,7 +255,7 @@ class MinerTest(unittest.TestCase):
         self.assertEqual(keys, ["mcp:lean-ctx.ctx_patch"])  # merged, UUID dropped
         atlas_doctor.mine(conn, "/x")
         conn.execute("DELETE FROM tool_calls")
-        for _ in range(10):
+        for _ in range(30):
             conn.execute(
                 "INSERT INTO tool_calls(session_id,kind,target,is_error,ts) "
                 "VALUES('s','mcp','lean-ctx.ctx_patch',0,strftime('%s','now'))"
