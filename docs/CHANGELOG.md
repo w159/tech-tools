@@ -1,5 +1,11 @@
 # Changelog
 
+## [10.4.3] - 2026-10-09 -- atlas 10.4.3: colony identity, harness parity, ops health, release cleanup
+
+Marketplace `4.6.2`; atlas `10.4.3`.
+
+Workers no longer steal a lead's todos; a Claude Code lead pins `ATLAS_LEAD_NAME` so mux workers join its subchannel. omp gets Command Center settings, the doctor hook bridge, `${user_config.*}` credential resolution, model-role fallbacks, a live channel widget and subagent `ended_at`. Ops health: dashboard daemon isolation, durable settings and transcripts, hook/gate/tripwire/mux hardening. Release cleanup: over-complex dashboard and omp functions split (no behaviour change), ruff fixes in three hooks, omp test env preload, CRAP-only fallow findings re-baselined. Verified: pytest 2845 passed, bun omp 373 pass, dashboard js 29 pass, fallow audit pass (`.atlas/evidence/release-10.4.3/tests-final.txt`). The Claude Code mod is designed, not built: `docs/plans/2026-10-09-atlas-mod.md`; 11.0.0 is reserved for it. Detail in `plugins/atlas/CHANGELOG.md`.
+
 ## [10.4.2] - 2026-10-08 -- atlas 10.4.2: Colony Kill checks pid identity
 
 Marketplace `4.6.2`; atlas `10.4.2`.

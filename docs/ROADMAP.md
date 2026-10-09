@@ -78,7 +78,7 @@ Done 2026-10-09 (source tree, see `plugins/atlas/CHANGELOG.md`): omp Command Cen
 - `atlas_doctor.py` `apply_fixes` still copies into the Claude plugin cache on a version mismatch.
 - Claude Code has no equivalent of the omp terminal channel view. Planned as the atlas Claude Code mod (Colony, IRC channel, TODO board, persona sprites, contract track): `docs/plans/2026-10-09-atlas-mod.md`. It ships as **atlas 11.0.0** only after its stage 0 spike proves mods actually run here (animated `Client` band in iTerm2 and herdr, per-subagent `turn.step` effort). If the spike fails, no 11.0.0.
 - Unaddressed P1s from the review: `atlas_mux` report truncation at 600 chars; herdr spawn lock; transport re-decision; selffix metric verification; `dispatch_tripwire.py` `_CLAUSE_START` ReDoS; `completion_gate.py` test-runner regex.
-- fallow debt accepted at 10.4.3: the CRAP-only complexity findings (no coverage data; cyclomatic < 12, cognitive <= 15) were re-baselined in `fallow-baselines/health.json`. Adding dashboard JS coverage would retire them. The real complexity findings and the introduced duplicate were refactored before the commit.
+- fallow at 10.4.3: the real complexity findings and the introduced duplicate were refactored. The CRAP-only findings (cyclomatic < 12, cognitive <= 15, no coverage data) are accepted in `fallow-baselines/health.json`. Adding dashboard JS coverage would retire them.
 
 ### Residuals: atlas 10.4.0 channel repair (added 2026-10-08)
 
