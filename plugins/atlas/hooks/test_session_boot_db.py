@@ -1,3 +1,8 @@
+import os as _iso_os
+import sys as _iso_sys
+
+_iso_sys.path.insert(0, _iso_os.path.join(_iso_os.path.dirname(_iso_os.path.abspath(__file__)), "..", "scripts"))
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import json
 import os
 import subprocess
@@ -11,7 +16,7 @@ BOOT = os.path.join(os.path.dirname(__file__), "session_boot.py")
 class BootDbTest(unittest.TestCase):
     def test_boot_creates_db_and_registers_run(self):
         tmp = tempfile.mkdtemp()
-        env = dict(os.environ, ATLAS_DB=os.path.join(tmp, "atlas.db"))
+        env = dict(os.environ, ATLAS_DB=os.path.join(tmp, "atlas.db"), ATLAS_DASHBOARD="off", ATLAS_COLONY="off")
         payload = json.dumps({"session_id": "sess-boot", "cwd": tmp})
         p = subprocess.run(
             [sys.executable, BOOT],
@@ -29,7 +34,7 @@ class BootDbTest(unittest.TestCase):
 
     def test_missing_session_id_creates_no_phantom_run(self):
         tmp = tempfile.mkdtemp()
-        env = dict(os.environ, ATLAS_DB=os.path.join(tmp, "atlas.db"))
+        env = dict(os.environ, ATLAS_DB=os.path.join(tmp, "atlas.db"), ATLAS_DASHBOARD="off", ATLAS_COLONY="off")
         # No session_id key at all -- boot must not create a phantom run keyed by "".
         payload = json.dumps({"cwd": tmp})
         p = subprocess.run(

@@ -1,5 +1,15 @@
 # Skills Mastery Framework
 
+## Contents
+
+- [Progressive disclosure (three levels)](#progressive-disclosure-three-levels)
+- [Frontmatter fields](#frontmatter-fields)
+- [What is NOT a field: `triggers:`](#what-is-not-a-field-triggers)
+- [SKILL.md limits](#skillmd-limits)
+- [Deterministic operations: scripts/](#deterministic-operations-scripts)
+- [Generated artifacts: templates/](#generated-artifacts-templates)
+- [The mastery checklist](#the-mastery-checklist)
+
 The standard every atlas skill follows. This is the Claude Code Skills
 Mastery Framework: progressive disclosure, strict frontmatter, and
 deterministic operations. Every atlas skill is built against this

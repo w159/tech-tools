@@ -7,16 +7,27 @@
     "strict": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
-    "rootDir": "src",
     "outDir": "dist",
     "declaration": false,
     "resolveJsonModule": true,
     "isolatedModules": true,
     "allowImportingTsExtensions": false,
-    "noEmit": false
+    "noEmit": false,
+    "paths": {
+      "@shared/*": [
+        "../_shared/*"
+      ],
+      "@modelcontextprotocol/sdk/*": [
+        "./node_modules/@modelcontextprotocol/sdk/dist/esm/*"
+      ],
+      "zod": [
+        "./node_modules/zod"
+      ]
+    }
   },
   "include": [
-    "src/**/*"
+    "src/**/*",
+    "../_shared/*.ts"
   ],
   "exclude": [
     "node_modules",

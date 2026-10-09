@@ -1,0 +1,96 @@
+import { describe, expect, it } from "bun:test";
+
+import { toolVerb, toolVerbKind } from "./toolVerbs.ts";
+
+describe("toolVerbKind", () => {
+  it("reads every agent's file and shell tools as one of four verbs", () => {
+    const expected: Record<string, string> = {
+      // Claude Code
+      Read: "read", Edit: "edit", MultiEdit: "edit", NotebookEdit: "edit", Write: "write", Bash: "run",
+      // Codex
+      exec: "run", exec_command: "run", shell: "run", shell_command: "run", local_shell: "run", apply_patch: "edit",
+      // pi, omp, gjc and omo name theirs in lowercase
+      read: "read", edit: "edit", multiedit: "edit", patch: "edit", write: "write", bash: "run",
+    };
+    for (const [name, kind] of Object.entries(expected)) expect([name, toolVerbKind(name)]).toEqual([name, kind as ReturnType<typeof toolVerbKind>]);
+  });
+
+  it("leaves every other tool the chat knows under its own name", () => {
+    const untouched = [
+      // counted as a file read or a command in the header, but not a plain read or run
+      "Grep", "grep", "Glob", "glob", "LS", "ls", "find", "list", "search", "eval", "run_command",
+      // tools with their own row or panel
+      "Skill", "Task", "Agent", "task", "WebFetch", "WebSearch", "webfetch", "web_search",
+      "TodoWrite", "update_plan", "todo", "todo_write", "mcp__omo__todo",
+      "create_goal", "update_goal", "get_goal", "request_user_input_async",
+      // a name that only contains a known one
+      "mcp__files__read_all", "read_mcp_resource", "BashOutput", "write_stdin", "tool",
+    ];
+    for (const name of untouched) expect([name, toolVerbKind(name)]).toEqual([name, null]);
+  });
+
+  it("calls a Codex exec that applies a patch an edit", () => {
+    const script = 'const r = await tools.apply_patch("*** Begin Patch\\n*** Update File: src/a.ts\\n@@\\n-a\\n+b\\n*** End Patch");';
+    expect(toolVerbKind("exec", script)).toBe("edit");
+    expect(toolVerbKind("exec", '{"cmd":"bun test"}')).toBe("run");
+    // only a shell tool is re-read this way
+    expect(toolVerbKind("Read", "*** Begin Patch\n*** End Patch")).toBe("read");
+    expect(toolVerbKind("lookup", "*** Begin Patch\n*** End Patch")).toBeNull();
+  });
+});
+
+describe("toolVerb", () => {
+  const part = (name: string, args: Record<string, unknown> = {}) => ({ name, input: JSON.stringify(args, null, 2) });
+
+  it("is the verb a row shows before its object", () => {
+    expect(toolVerb(part("Read", { file_path: "src/metrics.ts" }), "src/metrics.ts")).toBe("Read");
+    expect(toolVerb(part("read", { path: "src/metrics.ts" }), "src/metrics.ts")).toBe("Read");
+    expect(toolVerb(part("Edit", { file_path: "src/pages/Reports.tsx", old_string: "a", new_string: "b" }), "src/pages/Reports.tsx")).toBe("Edited");
+    expect(toolVerb(part("Write", { file_path: "notes.md", content: "x" }), "notes.md")).toBe("Wrote");
+    expect(toolVerb(part("exec", { cmd: "pnpm test" }), "pnpm test")).toBe("Ran");
+    expect(toolVerb(part("bash", { command: "pnpm test" }), "pnpm test")).toBe("Ran");
+  });
+
+  it("names the files of a patch, bare or inside an exec script", () => {
+    const patch = "*** Begin Patch\n*** Update File: src/a.ts\n@@\n-a\n+b\n*** Add File: src/b.ts\n+c\n*** End Patch";
+    expect(toolVerb({ name: "apply_patch", input: patch }, "src/a.ts, src/b.ts")).toBe("Edited");
+    expect(toolVerb({ name: "exec", input: `await tools.apply_patch(${JSON.stringify(patch)});` }, "src/a.ts, src/b.ts")).toBe("Edited");
+    expect(toolVerb({ name: "exec", input: `await tools.apply_patch(${JSON.stringify(patch)});` }, "Fixing the typo")).toBeNull();
+  });
+
+  it("follows the server's cut of a long command", () => {
+    const command = `echo ${"x".repeat(200)}`;
+    expect(toolVerb(part("Bash", { command }), command.slice(0, 120))).toBe("Ran");
+    expect(toolVerb(part("Bash", { command }), command.slice(0, 60))).toBeNull();
+  });
+
+  it("keeps the tool id when the summary is the call's intent, not its command or path", () => {
+    // omp sums a call up by its intent: server/transcript-records.ts
+    expect(toolVerb(part("bash", { command: "ss -tlnp" }), "Checking ports")).toBeNull();
+    expect(toolVerb(part("read", { path: "config.toml" }), "Looking at the config")).toBeNull();
+    expect(toolVerb(part("edit", { path: "README.md", old_text: "teh", new_text: "the" }), "Fixing the typo")).toBeNull();
+    expect(toolVerb(part("write", { path: "notes.md", content: "x" }), "Saving the notes")).toBeNull();
+    // the same calls without an intent are summed up by the command or path
+    expect(toolVerb(part("bash", { command: "ss -tlnp" }), "ss -tlnp")).toBe("Ran");
+    // a Claude Bash call is summed up by its command, never its description
+    expect(toolVerb(part("Bash", { command: "ss -tlnp", description: "Check ports" }), "Check ports")).toBeNull();
+    // a path is not what a command ran, nor a command what a file call read
+    expect(toolVerb(part("bash", { path: "src/a.ts" }), "src/a.ts")).toBeNull();
+    expect(toolVerb(part("read", { command: "cat a" }), "cat a")).toBeNull();
+  });
+
+  it("keeps the tool id when there is nothing to put after the verb", () => {
+    expect(toolVerb(part("Bash"), "")).toBeNull();
+    expect(toolVerb(part("bash", { command: "   " }), "   ")).toBeNull();
+    // a call with no command or path is summed up by its own name
+    expect(toolVerb(part("Bash"), "Bash")).toBeNull();
+    // input that is not JSON and not a patch
+    expect(toolVerb({ name: "exec", input: "console.log(1)" }, "console.log(1)")).toBeNull();
+    expect(toolVerb({ name: "exec", input: "null" }, "null")).toBeNull();
+  });
+
+  it("keeps the id of a tool it does not know", () => {
+    expect(toolVerb(part("Grep", { pattern: "TODO" }), "TODO")).toBeNull();
+    expect(toolVerb(part("mcp__linear__create_issue", { path: "Fix the chart" }), "Fix the chart")).toBeNull();
+  });
+});

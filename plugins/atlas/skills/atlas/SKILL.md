@@ -1,8 +1,7 @@
 ---
 name: atlas
-description: 'Atlas architect: boot the workspace. Verify claude-mem and context-mode,
-  scan the project, recommend tooling (confirm first), wire hooks, seed the docs/
-  SSOT.'
+description: "Boots the atlas workspace: verifies claude-mem and context-mode, scans the project, recommends tooling (confirming first), wires hooks and seeds the docs/ SSOT. Use when setting up atlas in a project; manual invocation only."
+when_to_use: "atlas architect, boot the workspace, project bootstrap, seed docs SSOT"
 argument-hint: '[menu [described need] | deps | discover | hooks | config | all]'
 disable-model-invocation: true
 ---
@@ -18,6 +17,8 @@ standards. Confirm before any install or any write outside `docs/` and `.claude/
 show the discoverability menu in the "## Menu mode" section below and stop. If anything
 follows `menu` (a described need, e.g. `/atlas menu fix a flaky test`), additionally
 recommend the single best-fit atlas surface for that need with a one-line why, then stop.
+Recommending nothing is a valid outcome: if no surface fits the described need, say so
+rather than naming the closest one, because a list of names invites a guess.
 
 Otherwise run these stages in order. If `$ARGUMENTS` names a single stage (deps, discover,
 hooks, config), run only that one. Default is all.

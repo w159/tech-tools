@@ -1,9 +1,11 @@
 ---
 name: atlas-component
-description: Create or modify a reusable component that survives latency, cancellation, and partial failure (progress modal, upload widget, job panel), handling every backend state with all six interaction states rendered.
-when_to_use: build a reusable component that handles latency, cancellation, and partial failure - progress modal, upload widget, or job panel
-allowed-tools: Read, Glob, Grep, Bash, Edit, MultiEdit
-paths: ["components/**", "**/*.tsx"]
+description: "Builds or modifies a reusable UI component that survives latency, cancellation and partial failure, rendering all six interaction states for every backend state. Use when creating a progress modal, upload widget, job panel or other async component."
+when_to_use: "async component, progress modal, upload widget, job panel, loading and error states, cancellation, partial failure"
+allowed-tools: Read, Glob, Grep, Bash, Edit, Write
+# paths: reusable components only -- frontend screens keep the broad *.tsx glob,
+# so the two skills never share an identical literal glob and co-activate.
+paths: ["components/**"]
 argument-hint: '[component name+purpose] [props contract] [backend contract]'
 ---
 

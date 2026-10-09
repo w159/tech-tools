@@ -83,6 +83,7 @@ For tenant pivots, see the `organizations` skill.
 | `threatlocker_approvals_get` | Single approval with full context |
 | `threatlocker_approvals_pending_count` | Quick pending-queue size |
 | `threatlocker_approvals_get_permit_application` | Application that would be permitted |
+| `threatlocker_approvals_get_storage_approval` | What a storage approval request would permit |
 
 ### Audit Log (Action Log)
 
@@ -99,6 +100,46 @@ For tenant pivots, see the `organizations` skill.
 | `threatlocker_organizations_list_children` | All child orgs visible to the key |
 | `threatlocker_organizations_get_auth_key` | Auth key for a specific org |
 | `threatlocker_organizations_for_move_computers` | Orgs eligible as move targets |
+
+### Policies (Application Control)
+
+| Tool | Description |
+|------|-------------|
+| `threatlocker_policies_list` | List policies by group, filter (match/ringfence/elevation/monitor/...), OS, or search text |
+| `threatlocker_policies_get` | Full policy detail by name (exact, case-insensitive) or `policyId` GUID |
+
+### Applications
+
+| Tool | Description |
+|------|-------------|
+| `threatlocker_applications_list` | Search the vendor application catalog (searchBy app/process/hash/cert, category, OS) |
+| `threatlocker_applications_get` | Full application detail by name (exact, case-insensitive) or `applicationId` GUID |
+
+### Config Manager (device configurations)
+
+| Tool | Description |
+|------|-------------|
+| `threatlocker_config_manager_configurations_list` | Catalog of configurable device-configuration checks (category + integer value) |
+| `threatlocker_config_manager_policies_list` | Device-configuration policies enforced on an org/group/computer, by `appliesTo` and `status` |
+
+### DAC (Defense Against Configurations / storage-risk findings)
+
+| Tool | Description |
+|------|-------------|
+| `threatlocker_dac_results_list` | DAC Health Center risk findings by category/criticality/entity — closest read source for Storage Control and Network Control posture (neither has a documented list/get endpoint in the KB or the live public swagger checked on two instances; unprobed, not confirmed absent) |
+| `threatlocker_dac_item_get` | One analysis item by integer `analysisItemId` (not a GUID) |
+
+### System Audit
+
+| Tool | Description |
+|------|-------------|
+| `threatlocker_system_audit_search` | Portal administrator/login audit trail (who changed what in the portal); not the endpoint Unified Audit |
+
+### Tags
+
+| Tool | Description |
+|------|-------------|
+| `threatlocker_tags_list` | Tag names as `{label, value}` options; `includeBuiltIns` adds built-in tags |
 
 ## POST-Based "GetByParameters" Pattern
 

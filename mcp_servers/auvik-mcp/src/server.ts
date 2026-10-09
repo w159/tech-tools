@@ -1,7 +1,9 @@
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { z } from 'zod';
+import { toZodShape, type JsonObjectSchema } from '@shared/zod-shape.js';
 import { toMcpError } from './errors.js';
 import { annotate } from './annotate-tool.js';
+import { getCredentials } from './credentials.js';
 
 import { statusTool, handleStatus } from './tools/status.js';
 import { navigateTool, handleNavigate } from './tools/navigate.js';
@@ -192,27 +194,40 @@ const HANDLERS: Record<string, Handler> = {
   auvik_billing_device_usage: (args) => handleBillingDeviceUsage(args),
 };
 
-export function createServer(): Server {
-  const server = new Server({ name: 'auvik-mcp', version: '0.4.2' }, { capabilities: { tools: {}, logging: {} } });
-
-  server.setRequestHandler(ListToolsRequestSchema, async () => {
-    return { tools: annotate(TOOLS, 'Auvik') };
+export function createServer(): McpServer {
+  const server = new McpServer({ name: 'auvik-mcp', version: '0.4.2' }, {
+    capabilities: { logging: {} },
+    instructions:
+      'Auvik network monitoring: tenants, devices (details, warranty, lifecycle), networks, interfaces, configurations, components, entity notes and audits, alerts, statistics, and billing usage. ' +
+      'Call auvik_tenants_list or the matching list tool to find IDs before any get-by-id tool. ' +
+      'On 401/403, "not configured", or a connection failure, call auvik_status once and report its output to the user instead of retrying other tools. ' +
+      'When credentials are missing only auvik_status and auvik_navigate are listed; the user must set AUVIK_USERNAME and AUVIK_API_KEY and restart the session.',
   });
 
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const { name, arguments: rawArgs = {} } = request.params;
-    const handler = HANDLERS[name];
-    try {
-      if (!handler) throw new Error(`Unknown tool: ${name}`);
-      return await handler(rawArgs);
-    } catch (error) {
-      const mcpError = toMcpError(error);
-      return {
-        content: [{ type: 'text' as const, text: mcpError.message }],
-        isError: true,
-      };
-    }
-  });
+  // Progressive disclosure: status + navigate only until credentials resolve.
+  // (HTTP gateway mode builds a server per request inside the credential
+  // context, so getCredentials() here sees that request's headers.)
+  const tools = getCredentials()
+    ? TOOLS
+    : TOOLS.filter((t) => t.name === 'auvik_status' || t.name === 'auvik_navigate');
+
+  for (const tool of tools) {
+    // annotate() derives title + read/destructive hints; registerTool validates
+    // args against the zod shape before the handler runs.
+    const { title, ...annotations } = annotate([tool], 'Auvik')[0].annotations ?? {};
+    server.registerTool(
+      tool.name,
+      { title, description: tool.description, inputSchema: toZodShape(z, tool.inputSchema as JsonObjectSchema), annotations: { title, ...annotations } },
+      async (args) => {
+        try {
+          return await HANDLERS[tool.name](args);
+        } catch (error) {
+          const mcpError = toMcpError(error);
+          return { content: [{ type: 'text' as const, text: mcpError.message }], isError: true };
+        }
+      },
+    );
+  }
 
   return server;
 }

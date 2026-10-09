@@ -8,7 +8,11 @@ anything. Prints a human table and a JSON block. Exits 0 always.
 
 import json
 import os
+import shutil
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import tool_routing  # noqa: E402
 
 # Each rule: id, type, reason, install command, and a predicate over the scan context.
 RULES = [
@@ -34,6 +38,47 @@ RULES = [
         "match": lambda c: c["dep_count"] >= 8,
     },
     {
+        "id": "serena",
+        "type": "mcp",
+        "reason": "Symbol intelligence for code: activate_project, overview, find, "
+        "referencing, surgical edits. Primary nav; never start with Grep/Bash.",
+        "cmd": "claude mcp add serena -- uvx --from git+https://github.com/oraios/serena serena start-mcp-server --context claude-code --project-from-cwd",
+        "match": lambda c: c["has_code"],
+    },
+    {
+        "id": "lean-ctx",
+        "type": "mcp",
+        "reason": "Context-shaped compose/search/read so raw file bytes stay out of the window. "
+        "Fallback when serena is down; first choice for prose/config.",
+        "cmd": "claude mcp add lean-ctx -- lean-ctx",
+        "match": lambda c: c["has_code"],
+    },
+    {
+        "id": "fallow",
+        "type": "cli",
+        "reason": "JS/TS codebase intelligence (dead code, duplication, health). "
+        "Atlas ships a PreToolUse fallow_gate that blocks git commit/push on "
+        "fallow audit fail once the CLI is installed.",
+        "cmd": "npm install -g fallow",
+        "match": lambda c: c["js_ts"],
+    },
+    {
+        "id": "fallow-mcp",
+        "installed": "fallow",
+        "type": "mcp",
+        "reason": "Structured fallow tools for agents (audit, dead_code, dupes, health).",
+        "cmd": "claude mcp add fallow -- fallow-mcp",
+        "match": lambda c: c["js_ts"],
+    },
+    {
+        "id": "fallow-skills",
+        "type": "plugin",
+        "reason": "Agent skills teaching fallow workflows, flags, and adoption recipes.",
+        "cmd": "/plugin marketplace add fallow-rs/fallow-skills && "
+        "/plugin install fallow-skills@fallow-rs/fallow-skills",
+        "match": lambda c: c["js_ts"],
+    },
+    {
         "id": "playwright",
         "type": "mcp",
         "reason": "Frontend project; browser tests and runtime UI checks.",
@@ -51,23 +96,11 @@ RULES = [
         "id": "microsoft-docs",
         "type": "mcp",
         "reason": "Microsoft stack detected (PowerShell, Graph, .NET); official docs grounding.",
-        "cmd": "claude mcp add microsoft-docs -- npx -y @microsoft/mcp-docs",
+        "cmd": "claude mcp add --transport http microsoft-docs https://learn.microsoft.com/api/mcp",
         "match": lambda c: c["microsoft"],
     },
-    {
-        "id": "iac-skill",
-        "type": "skill",
-        "reason": "Terraform/IaC files found; infra-aware review and generation.",
-        "cmd": "claude plugin install <iac-skill>",
-        "match": lambda c: c["terraform"],
-    },
-    {
-        "id": "container-tooling",
-        "type": "skill",
-        "reason": "Dockerfiles or k8s manifests found; container build/deploy awareness.",
-        "cmd": "claude plugin install <container-skill>",
-        "match": lambda c: c["containers"],
-    },
+    # No iac/container rules: no real package exists to install, and a placeholder
+    # command is worse than silence.
     {
         "id": "ponytail",
         "type": "plugin",
@@ -85,9 +118,9 @@ RULES = [
     {
         "id": "connectors (atlas-setup)",
         "type": "note",
-        "reason": "Vendor MCP connectors live in the domain plugins (it-operations, "
-        "security-compliance, microsoft-365, hr-payroll), disabled by default; use "
-        "atlas-setup as the cross-plugin setup guide.",
+        "reason": "Vendor MCP connectors ship inside atlas (plugins/atlas/mcp), "
+        "unconfigured until credentials are saved; run the dashboard Settings page or "
+        "the atlas-setup skill, then check <vendor>_status.",
         "cmd": "(already shipped with atlas)",
         "match": lambda c: c["has_mcp_servers"],
     },
@@ -95,6 +128,7 @@ RULES = [
 
 SKIP_DIRS = {
     ".git",
+    ".kilo",
     "node_modules",
     ".venv",
     ".venv.nosync.noindex",
@@ -112,6 +146,8 @@ def scan(root):
     c = {
         "dep_count": 0,
         "frontend": False,
+        "js_ts": False,
+        "has_code": False,
         "terraform": False,
         "containers": False,
         "microsoft": False,
@@ -146,12 +182,46 @@ def scan(root):
                 "k8s" in dp.lower() or "kustomize" in low or "deployment" in low
             ):
                 c["containers"] = True
+            if low.endswith(
+                (
+                    ".ts",
+                    ".tsx",
+                    ".js",
+                    ".jsx",
+                    ".mjs",
+                    ".cjs",
+                    ".mts",
+                    ".cts",
+                    ".py",
+                    ".go",
+                    ".rs",
+                    ".java",
+                    ".cs",
+                )
+            ):
+                c["has_code"] = True
+            if low.endswith(
+                (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts")
+            ):
+                c["js_ts"] = True
+                c["has_code"] = True
+            if fn in (
+                "pyproject.toml",
+                "setup.py",
+                "requirements.txt",
+                "go.mod",
+                "Cargo.toml",
+            ):
+                c["has_code"] = True
             if fn == "package.json":
+                c["js_ts"] = True
+                c["has_code"] = True
                 try:
-                    pkg = json.load(open(os.path.join(dp, fn)))
+                    with open(os.path.join(dp, fn), encoding="utf-8") as fh:
+                        pkg = json.load(fh)
                     deps = {}
-                    deps.update(pkg.get("dependencies", {}))
-                    deps.update(pkg.get("devDependencies", {}))
+                    deps.update(pkg.get("dependencies", {}) or {})
+                    deps.update(pkg.get("devDependencies", {}) or {})
                     c["dep_count"] = max(c["dep_count"], len(deps))
                     if any(
                         k in deps
@@ -175,13 +245,36 @@ def scan(root):
     return c
 
 
+def _mcp_server_names(root):
+    """MCP servers already configured: user scope (~/.claude.json) and the project .mcp.json."""
+    names = set()
+    for path in (os.path.expanduser("~/.claude.json"), os.path.join(root, ".mcp.json")):
+        try:
+            with open(path, encoding="utf-8") as fh:
+                names |= set((json.load(fh).get("mcpServers") or {}))
+        except (OSError, ValueError, AttributeError):
+            continue
+    return names
+
+
+def is_installed(rule, root, servers):
+    """True when the recommendation is already present, so it is not recommended again."""
+    name = rule.get("installed", rule["id"])
+    if rule["type"] == "cli":
+        return shutil.which(name) is not None
+    if rule["type"] == "note":
+        return False
+    return name in servers or tool_routing.plugin_enabled(name, root)
+
+
 def main():
     root = sys.argv[1] if len(sys.argv) > 1 else "."
     c = scan(root)
+    servers = _mcp_server_names(root)
     recs = []
     for r in RULES:
         try:
-            if r["match"](c):
+            if r["match"](c) and not is_installed(r, root, servers):
                 recs.append(
                     {
                         "id": r["id"],

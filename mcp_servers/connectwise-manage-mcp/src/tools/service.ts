@@ -5,8 +5,8 @@ import { READ, titled } from "./annotations.js";
 import {
   shapeList,
   type SummaryFn,
-} from "../_shared/response-shaper.js";
-import { toolErrorFromCatch } from "../_shared/error-envelope.js";
+} from "@shared/response-shaper.js";
+import { toolErrorFromCatch } from "@shared/error-envelope.js";
 
 const boardSummary: SummaryFn = (b) => ({
   id: b["id"],

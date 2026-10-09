@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests for atlas_curator.py \u2014 skill lifecycle management."""
 
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import os
 import sys
 import tempfile

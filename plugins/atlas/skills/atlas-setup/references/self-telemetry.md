@@ -1,5 +1,15 @@
 # Atlas self-telemetry (atlas-audit mode)
 
+## Contents
+
+- [Single source of truth](#single-source-of-truth)
+- [What it measures](#what-it-measures)
+- [Measurable improvements](#measurable-improvements)
+- [Asset/context audit (the context-cost lens)](#assetcontext-audit-the-context-cost-lens)
+- [Session forensics (the transcript-mirror lens)](#session-forensics-the-transcript-mirror-lens)
+- [Trends (no-arg)](#trends-no-arg)
+- [The nudge](#the-nudge)
+
 Atlas improves by measuring itself. Each run emits quantitative signals to the
 global SQLite observability DB at `~/.atlas/atlas.db` (env `ATLAS_DB`). This
 skill reads those signals, surfaces the run's health scores, and proposes
@@ -245,6 +255,9 @@ Use these; do not re-parse transcripts.
    `cache_hit_ratio`, or context-mode/claude-mem/ponytail with near-zero calls
    on large-output sessions, means the protection is configured but unused -
    propose a CLAUDE.md nudge or a hook, with the ratio as the baseline.
+   The doctor's `--mine` path surfaces a low ratio automatically as the
+   `cache_hit_ratio_low` finding (fires only above a token floor, so thin
+   histories stay quiet).
 3. **What is being asked repeatedly?** `repeated_prompts` clusters re-typed
    requests. A cluster of 3+ is a workflow that should become a skill/command or
    a standing CLAUDE.md rule so the user stops re-asking.

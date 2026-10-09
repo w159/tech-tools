@@ -1,6 +1,6 @@
 {
   "name": "ninjaone-mcp",
-  "version": "1.6.2",
+  "version": "1.8.2",
   "description": "NinjaOne MCP server with decision tree architecture for Claude",
   "type": "module",
   "main": "dist/mcp_servers/ninjaone-mcp/src/index.js",
@@ -20,7 +20,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "pack:mcpb": "node scripts/pack-mcpb.js",
-    "validate:mcpb": "mcpb validate manifest.json"
+    "validate:mcpb": "mcpb validate manifest.json",
+    "bundle:atlas": "tsup --config tsup.bundle.config.ts"
   },
   "repository": {
     "type": "git",
@@ -44,7 +45,9 @@
   "homepage": "https://github.com/w159/tech-tools/tree/main/mcp_servers/ninjaone-mcp",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.25.3",
-    "node-ninjaone": "file:../../mcp_node/node-ninjaone"
+    "node-ninjaone": "file:../../mcp_node/node-ninjaone",
+    "zod": "^4.0.0",
+    "tsup": "^8.5.1"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

@@ -1,0 +1,765 @@
+/**
+ * Atlas enforcement extension for omp (oh-my-pi).
+ *
+ * Enforces two atlas rules that nothing else enforces in omp:
+ *
+ * 1. Native-tool tripwire — in a docs/ project, `grep` / `glob` are BLOCKED
+ *    only when a lean-ctx replacement is actually callable in THIS session,
+ *    decided per call: a bare `ctx_search` / `ctx_glob` tool being named when
+ *    the session exposes one directly, otherwise the connected lean-ctx MCP
+ *    device named as `xd://mcp__lean_ctx_ctx_search` / `…_ctx_glob`. When
+ *    neither is reachable the call is allowed with a one-time nudge saying
+ *    lean-ctx is not reachable here — the lean-ctx binary on PATH alone no
+ *    longer arms the deny. `read` / `bash` receive a one-time per-tool
+ *    additionalContext nudge that names the actually-reachable replacement
+ *    (or stays silent when nothing is reachable). Applies in subagents too.
+ * 2. Delegation-at-Stop — if the main thread edited/wrote non-docs files but
+ *    never dispatched a subagent (`task` tool), the session is blocked ONCE at
+ *    session_stop with the fix.
+ * 3. Task naming — a main-thread `task` dispatch naming atlas subagents while
+ *    some targeted item omits `name` gets a one-time additionalContext hint:
+ *    named items double as sibling addresses (`write agent://<name>`).
+ *
+ * 4. Output style — omp/style.ts appends the translated
+ *    output-styles/atlas-orchestrator.md to the main session's system prompt.
+ * 5. Tool mandates — omp/mandates.ts: claude-mem recall line and the one-time
+ *    ponytail-review nudge before `git commit` (twins of session_boot.py and
+ *    bash_advisor.py; shared text in contracts/mandates.json).
+ *
+ * 6. Hook bridge — omp/hook-bridge.ts runs the Claude Code turn hooks that
+ *    contracts/hook-bridge.json marks bridgeable (session boot, prompt
+ *    optimizer, bash advisor, fallow gate, format-after-edit, docs-drift
+ *    watch, dispatch tripwire, connector credential watch) straight from
+ *    hooks/hooks.json, translating omp events to Claude payloads.
+ *    omp/stop-bridge.ts runs the session-end family (Stop chain, detached
+ *    SessionEnd/SubagentStop/PreCompact ingest) and omp/run-state.ts keeps
+ *    the observability DB's run/dispatch/event rows. The model-override deny
+ *    on before_subagent_spawn lives in register() below.
+ *    ATLAS_HOOK_BRIDGE=off disables the bridges.
+ *
+ * Native-tool routing data (which tool is denied or nudged, toward which
+ * replacement) and the delegation exemption come from contracts/native-tools.json,
+ * shared with hooks/dispatch_tripwire.py and hooks/completion_gate.py.
+ *
+ * Kill switches: ATLAS_STYLE=off, ATLAS_MANDATES=off; ATLAS_GATE=off disables the delegation check; ATLAS_TRIPWIRE_HARD=off
+ * disables the whole native-tool tripwire (grep/glob deny and its unreachable
+ * nudge), while read/bash preference nudges remain. All handlers fail open: any
+ * internal error returns undefined (omp's tool_call dispatch is fail-closed,
+ * so an uncaught throw here would strand the agent).
+ *
+ * Discovery: loaded via the atlas plugin package manifest (`omp.extensions`)
+ * or an explicit `extensions:` path in ~/.omp/agent/config.yml — see README.md.
+ */
+import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
+import { readFileSync, statSync } from "node:fs";
+import * as nodePath from "node:path";
+import { registerAgentGuard } from "./agent-guard";
+import { registerChannelView } from "./channel-view";
+import { ATLAS_AGENT_TARGETABLE, frontmatterModelFor, isInheritedSelector, modelPatternsFor, roleFor } from "./atlas-agents";
+import { defaultAdvisorDeps, registerAdvisorGate } from "./advisor";
+import { type LeanKind, explorationDenyReason, explorationTool, kindOfOmpTool, loadNativeTools, resolveTarget } from "./contracts";
+import { createShellEditTracker } from "./delegation";
+import { atlasStoreEnv, registerHookBridge } from "./hook-bridge";
+import { type RunStateSink, createRunStateSink } from "./run-state";
+import { createTranscriptCache, registerStopBridge, sessionFileOf } from "./stop-bridge";
+import { registerMandates } from "./mandates";
+import { gatesArmed } from "./scope";
+import { defaultLeanCtxBin, registerShellRoute } from "./shell-route";
+import { registerStyle } from "./style";
+import { registerWorkerBudget } from "./workers";
+import { registerWorkerReport } from "./worker-report";
+
+/** Absolute atlas plugin root: the directory containing scripts/atlas_todo.py. */
+const PLUGIN_ROOT = nodePath.resolve(import.meta.dir, "..");
+
+/** The durable todo board CLI, shipped alongside this module. */
+const TODO_SCRIPT = nodePath.join(PLUGIN_ROOT, "scripts", "atlas_todo.py");
+
+/** The only item statuses the atlas board vocabulary accepts. */
+const BOARD_STATUSES: Record<string, true> = { pending: true, in_progress: true, completed: true };
+
+/** A board item as mirrored to `atlas_todo.py set`; `phase` is present only for a contract phase. */
+export interface BoardItem {
+	content: string;
+	status: string;
+	phase?: string;
+}
+
+/** contracts/operating-contract.json: the single source of the phase ids a board item may carry. */
+const OPERATING_CONTRACT_PATH = nodePath.join(PLUGIN_ROOT, "contracts", "operating-contract.json");
+
+let cachedTodoPhases: string[] | undefined;
+
+/** The contract's `todoPhases`; unreadable or malformed → [] so no item gets a phase (fail open). */
+function todoPhases(): string[] {
+	if (cachedTodoPhases) return cachedTodoPhases;
+	let phases: string[] = [];
+	try {
+		const raw: unknown = JSON.parse(readFileSync(OPERATING_CONTRACT_PATH, "utf8"));
+		const list = (raw as { todoPhases?: unknown } | null)?.todoPhases;
+		if (Array.isArray(list) && list.every(p => typeof p === "string")) phases = list as string[];
+	} catch {
+		phases = [];
+	}
+	cachedTodoPhases = phases;
+	return phases;
+}
+
+/**
+ * Point `CLAUDE_PLUGIN_ROOT` at the atlas plugin root so omp workers can run
+ * `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py" ...`. omp substitutes
+ * that placeholder only during Claude-plugin discovery, so it is unset for
+ * omp-native agents; the value comes from this module's own location and is
+ * only written when the board CLI actually exists there. A pre-existing value
+ * is preserved only while `<value>/scripts/atlas_todo.py` exists: a stale one
+ * (the plugin was upgraded under a long-lived omp process, so the old versioned
+ * cache dir is gone) would otherwise leave every worker's board CLI unresolved.
+ */
+export function ensureClaudePluginRoot(
+	env: Record<string, string | undefined> = process.env,
+	scriptPath: string = TODO_SCRIPT,
+): boolean {
+	const current = env.CLAUDE_PLUGIN_ROOT;
+	if (typeof current === "string" && current.trim() !== "") {
+		try {
+			if (statSync(nodePath.join(current, "scripts", "atlas_todo.py")).isFile()) return true;
+		} catch {
+			// stale or foreign root without the board CLI: fall through and replace it
+		}
+	}
+	try {
+		if (statSync(scriptPath).isFile()) {
+			env.CLAUDE_PLUGIN_ROOT = PLUGIN_ROOT;
+			return true;
+		}
+	} catch {
+		return false; // fail open: the CLI path stays unresolved, nothing crashes
+	}
+	return false;
+}
+
+/**
+ * Flatten the omp `todo` tool's phase-shaped result details into atlas board
+ * items. `details.phases` is the full current plan ({ name, tasks:
+ * [{content, status}] }) after every state-changing op, so the board mirror is
+ * a whole-plan replacement, exactly like a TodoWrite mirror. Statuses outside
+ * the board vocabulary (blocked, abandoned) normalize to pending. The omp phase
+ * name, lowercased, becomes the item's `phase` when it is one of the contract's
+ * `todoPhases` (contracts/operating-contract.json); any other name (`Tasks`,
+ * `Phase 2`) leaves `phase` absent.
+ */
+export function boardItemsFromTodoDetails(details: unknown): BoardItem[] {
+	const phases = details && typeof details === "object" ? (details as Record<string, unknown>).phases : undefined;
+	if (!Array.isArray(phases)) return [];
+	const known = todoPhases();
+	const items: BoardItem[] = [];
+	for (const phase of phases) {
+		const tasks = phase && typeof phase === "object" ? (phase as Record<string, unknown>).tasks : undefined;
+		if (!Array.isArray(tasks)) continue;
+		const rawName = (phase as Record<string, unknown>).name;
+		const lowered = typeof rawName === "string" ? rawName.trim().toLowerCase() : "";
+		const boardPhase = known.includes(lowered) ? lowered : undefined;
+		for (const task of tasks) {
+			const content = (task as Record<string, unknown> | null)?.content;
+			if (typeof content !== "string" || content.trim() === "") continue;
+			const rawStatus = (task as Record<string, unknown>).status;
+			const item: BoardItem = {
+				content: content.trim(),
+				status: typeof rawStatus === "string" && BOARD_STATUSES[rawStatus] ? rawStatus : "pending",
+			};
+			if (boardPhase) item.phase = boardPhase;
+			items.push(item);
+		}
+	}
+	return items;
+}
+
+/** Session id for board attribution; absent or blank ids are skipped (fail open). */
+function sessionIdOf(ctx: { sessionManager?: { getSessionId?: () => unknown } }): string | undefined {
+	const id = ctx.sessionManager?.getSessionId?.();
+	return typeof id === "string" && id.trim() !== "" ? id : undefined;
+}
+
+/**
+ * CLI for `atlas_todo.py set`, which mirrors a JSON array of {content,status}
+ * (plus `phase` when the item has one) into the board for one session. Passing
+ * the list as a single argv element avoids any shell interpolation.
+ */
+export function boardMirrorArgv(
+	items: BoardItem[],
+	sessionId: string | undefined,
+	root: string,
+): string[] {
+	const argv = ["python3", TODO_SCRIPT, "set", "--root", root];
+	if (sessionId) argv.push("--session", sessionId);
+	argv.push(JSON.stringify(items));
+	return argv;
+}
+
+/** Longest IRC message body logged to the board; longer text is cut with a ` [+N chars]` suffix. */
+const IRC_NOTE_MAX_CHARS = 500;
+
+/** Board owner for an omp agent id: the main thread (`Main`) is the colony `lead`. */
+function ircOwner(agentId: string | undefined): string {
+	const id = (agentId ?? "").trim();
+	return id === "" || id.toLowerCase() === "main" ? "lead" : id;
+}
+
+/** Board recipient for an IRC address: `Main`/`main`/`parent` are the `lead`; `all` and worker names stay. */
+function ircRecipient(address: string): string {
+	const lowered = address.toLowerCase();
+	return lowered === "main" || lowered === "parent" ? "lead" : address;
+}
+
+/**
+ * CLI for `atlas_todo.py note`, recording one delivered IRC message
+ * (`write agent://<name>`) on the project board so colony conversation lands in
+ * `<root>/.atlas/.run/board/<sender>.jsonl` next to worker notes instead of only
+ * the omp session transcript. Undefined for any other tool call. The sender is
+ * the omp agent id (`Main` -> `lead`; the CLI sanitizes the file name), the
+ * recipient is the address with `Main`/`parent` -> `lead`, and the logged text
+ * is the first 500 chars plus ` [+N chars]` when longer.
+ */
+export function ircNoteArgv(
+	agentId: string | undefined,
+	toolName: string,
+	input: Record<string, unknown> | undefined,
+	root: string,
+): string[] | undefined {
+	if (toolName.toLowerCase() !== "write") return undefined;
+	const path = typeof input?.path === "string" ? input.path.trim() : "";
+	const content = typeof input?.content === "string" ? input.content : "";
+	if (!path.startsWith("agent://") || content.trim() === "") return undefined;
+	const target = ircRecipient(path.slice("agent://".length).split("/")[0] || "all");
+	const text =
+		content.length > IRC_NOTE_MAX_CHARS
+			? `${content.slice(0, IRC_NOTE_MAX_CHARS)} [+${content.length - IRC_NOTE_MAX_CHARS} chars]`
+			: content;
+	return ["python3", TODO_SCRIPT, "note", "--root", root, "--owner", ircOwner(agentId), "--to", target, text];
+}
+
+/** Kinds of native tool calls the tripwire redirects to a lean-ctx replacement (contracts/native-tools.json). */
+export type { LeanKind };
+
+/**
+ * A lean-ctx replacement actually callable in the session right now: either a
+ * first-class tool to call directly, or an xd:// device route to write JSON
+ * args to.
+ */
+export type LeanReplacement = { via: "tool"; name: string } | { via: "device"; device: string };
+
+const CONTEXT_MODE_SERVER = /context[-_]?mode/i;
+
+/**
+ * The xd:// device route for one MCP tool. omp mints MCP tool names as
+ * `mcp__<sanitized server>_<tool>` and presents connected MCP tools as `xd://`
+ * devices; the route is live exactly when the minted name is in the session's
+ * enabled set (session-tools: every connected MCP tool is enabled; loadMode
+ * only decides top-level vs device presentation). Matching is by tool-name
+ * suffix plus server-name shape, so mint collisions/caps and server spellings
+ * (`lean-ctx`, `lean_ctx`) both resolve.
+ */
+function deviceRoute(active: string[], serverName: RegExp, mcpToolName: string): string | undefined {
+	for (const name of active) {
+		if (!name.startsWith("mcp__")) continue;
+		const rest = name.slice("mcp__".length);
+		if (!rest.toLowerCase().endsWith(`_${mcpToolName.toLowerCase()}`)) continue;
+		const server = rest.slice(0, rest.length - mcpToolName.length - 1);
+		if (serverName.test(server)) return `xd://${name}`;
+	}
+	return undefined;
+}
+
+/**
+ * Resolve the lean-ctx replacement for one kind from the session's currently
+ * enabled tool names: a bare builtin/custom `ctx_*` tool first (callable
+ * directly), otherwise the connected lean-ctx MCP device route
+ * (`xd://mcp__lean_ctx_ctx_search`; context-mode's execute device is accepted
+ * as a shell surrogate). `undefined` means nothing is reachable in this
+ * session and the caller must allow the native tool (fail open).
+ */
+export function resolveLeanReplacement(kind: LeanKind, active: string[] | undefined): LeanReplacement | undefined {
+	if (!Array.isArray(active)) return undefined;
+	const replacements = loadNativeTools()?.kinds[kind].replacements;
+	if (!replacements) return undefined; // contract unreadable: allow
+	for (const { tool } of replacements) {
+		if (active.includes(tool)) return { via: "tool", name: tool };
+	}
+	// xd:// devices are invoked by writing to them, so without `write` the route is not callable.
+	if (!active.includes("write")) return undefined;
+	for (const { tool, servers } of replacements) {
+		for (const server of servers) {
+			const route = deviceRoute(active, server, tool);
+			if (route) return { via: "device", device: route };
+		}
+	}
+	return undefined;
+}
+
+/**
+ * Route to one specific lean-ctx tool by name (ctx_read, ctx_search, ctx_glob,
+ * ctx_tree, ctx_shell): a bare tool of that name, else the lean-ctx device
+ * `xd://mcp__lean_ctx_<tool>`. ctx_shell defers to the shell kind so the
+ * context-mode execute surrogate still counts. `undefined` = that exact tool
+ * is not reachable, and the caller must not deny toward it.
+ */
+export function resolveLeanToolRoute(tool: string, active: string[] | undefined): LeanReplacement | undefined {
+	if (!Array.isArray(active)) return undefined;
+	if (tool === "ctx_shell") return resolveLeanReplacement("shell", active);
+	if (active.includes(tool)) return { via: "tool", name: tool };
+	if (!active.includes("write")) return undefined;
+	const device = deviceRoute(active, /lean[-_]?ctx/i, tool);
+	return device ? { via: "device", device } : undefined;
+}
+
+const REPLACEMENT_EXAMPLES: Record<"search" | "glob", { tool: string; example: string }> = {
+	search: { tool: "ctx_search", example: '{"pattern": "...", "path": "..."}' },
+	glob: { tool: "ctx_glob", example: '{"pattern": "**/*.ts"}' },
+};
+
+/** Deny text naming the replacement form the session can actually reach. */
+function denyReason(tool: "grep" | "glob", replacement: LeanReplacement): string {
+	const spec = REPLACEMENT_EXAMPLES[tool === "grep" ? "search" : "glob"];
+	if (replacement.via === "tool") {
+		return `Atlas enforcement: use lean-ctx ${spec.tool} instead of ${tool}: call ${replacement.name} directly, e.g. ${spec.example}`;
+	}
+	return `Atlas enforcement: use lean-ctx ${spec.tool} instead of ${tool}: write JSON to ${replacement.device}, e.g. ${spec.example}`;
+}
+
+/** One-time nudge when grep/glob is allowed because nothing lean-ctx is reachable. */
+const UNREACHABLE_NUDGE = (tool: "grep" | "glob") =>
+	`Atlas nudge: lean-ctx is not reachable in this session, so native ${tool} stays allowed.`;
+
+/** Read nudge naming the replacement form the session can actually reach. */
+function readNudge(replacement: LeanReplacement): string {
+	const how =
+		replacement.via === "tool"
+			? `call the lean-ctx ${replacement.name} tool directly`
+			: `write JSON args to ${replacement.device}`;
+	return `Atlas nudge: for exploration, prefer lean-ctx ctx_read (${how}). Native Read is still fine immediately before an Edit.`;
+}
+
+/** Bash nudge naming the replacement form the session can actually reach. */
+function bashNudge(replacement: LeanReplacement, active: string[]): string {
+	const via =
+		replacement.via === "tool"
+			? `the lean-ctx ${replacement.name} tool`
+			: `lean-ctx ctx_shell (write JSON args to ${replacement.device})`;
+	const contextMode = deviceRoute(active, CONTEXT_MODE_SERVER, "ctx_execute");
+	const alt = contextMode && !(replacement.via === "device" && contextMode === replacement.device) ? ` or context-mode ctx_execute (${contextMode})` : "";
+	return `Atlas nudge: for anything producing output (~20+ lines, logs, data), prefer ${via}${alt}. Native Bash remains fine for mutations and short fixed output.`;
+}
+
+const STOP_MESSAGE = (n: number) =>
+	`Atlas delegation gate: this session issued ${n} non-docs edit/write call(s) without dispatching a single subagent (task tool). The orchestrator must delegate code changes to subagents instead of writing them itself. Fix: dispatch the code change via the task tool (e.g. to an atlas:implementer subagent), then verify its result. Inline edits already made may stand; the delegation must still happen. (Set ATLAS_GATE=off to disable this check.)`;
+
+/**
+ * True if the path is a non-docs code file: outside the contract's exempt dirs
+ * (docs/, .atlas/), not an exempt extension (*.md), not an internal URI.
+ * Contract unreadable → false (never counted, so the gate fails open).
+ */
+export function isNonDocsPath(p: string): boolean {
+	if (typeof p !== "string" || p.length === 0) return false;
+	if (p.includes("://")) return false;
+	const contract = loadNativeTools();
+	if (!contract) return false;
+	const normalized = nodePath.normalize(p).replaceAll("\\", "/");
+	if (contract.exemptExtensions.some(ext => normalized.endsWith(ext))) return false;
+	return !normalized.split("/").some(seg => contract.exemptDirs.includes(seg));
+}
+
+function inputPaths(input: Record<string, unknown>): string[] {
+	const paths = Array.isArray(input.paths)
+		? input.paths.filter((p): p is string => typeof p === "string")
+		: [];
+	if (typeof input.path === "string") paths.push(input.path);
+	return paths;
+}
+
+/** Walk ancestors exactly as the completion gate's docs/ project scope does. */
+function docsRoot(cwd: string): string | undefined {
+	let root = nodePath.resolve(cwd);
+	for (; ;) {
+		try {
+			if (statSync(nodePath.join(root, "docs")).isDirectory()) return root;
+		} catch (error) {
+			if (!(error instanceof Error) || !("code" in error) || error.code !== "ENOENT") throw error;
+		}
+		const parent = nodePath.dirname(root);
+		if (parent === root) return undefined;
+		root = parent;
+	}
+}
+
+const TASK_NAMING_HINT = (count: number, agents: string) =>
+	`Atlas colony: ${count} task item(s) dispatched to ${agents} carry no name. omp auto-generates one, but unnamed workers cannot be addressed by their siblings. Give every atlas-bound item a stable \`name\` (unique, CamelCase, <= 32 chars) — it doubles as the worker's spawn handle and its address for sibling messaging: \`write agent://<name>\`. This notice fires once per session; unnamed dispatches still run.`;
+
+/**
+ * Atlas-targeted, unnamed task dispatches for one `task` tool_call input.
+ * Handles both shapes: the batch `tasks[]` items and the single top-level
+ * dispatch (`agent` + `task`). Items defaulting to the generic `task` agent
+ * do not count as atlas-targeted.
+ */
+function taskNamingHint(input: Record<string, unknown>): { count: number; agents: string } | undefined {
+	const items: Record<string, unknown>[] = Array.isArray(input.tasks)
+		? (input.tasks.filter((item): item is Record<string, unknown> => item !== null && typeof item === "object"))
+		: [input];
+	const unnamed = items.filter(item => {
+		const agent = typeof item.agent === "string" ? item.agent.trim() : undefined;
+		if (!agent || !ATLAS_AGENT_TARGETABLE[agent]) return false;
+		return typeof item.name !== "string" || item.name.trim() === "";
+	});
+	if (unnamed.length === 0) return undefined;
+	const agents = [...new Set(unnamed.map(item => item.agent as string))].sort().join(", ");
+	return { count: unnamed.length, agents };
+}
+
+export interface ExtensionDeps {
+	/**
+	 * Names of the tools callable in the session RIGHT NOW — omp's enabled set
+	 * (top-level names plus live `xd://` device mounts). Returning undefined
+	 * means availability is unknown and every native call fails open (allowed).
+	 * Evaluated per call: tool surfaces change mid-session (MCP connect, code
+	 * mode partitions, restricted subagent sets).
+	 */
+	activeTools(): string[] | undefined;
+	/**
+	 * Fire-and-forget spawn of the board mirror CLI. The real binding detaches
+	 * the child (unref) so the session never waits for python startup; tests
+	 * inject a recording or synchronous runner instead.
+	 */
+	spawnBoardMirror(argv: string[], opts: { cwd: string }): void;
+	/** Run-state sink (omp_runstate.py begin/snapshot at session start); absent in tests that do not exercise it. */
+	runState?: RunStateSink;
+}
+
+/**
+ * Deny text for a per-call model override of an atlas colony agent. Verbatim twin of
+ * dispatch_tripwire.py's `_pre_tool_use` (c1) text, with the omp-pinned role as `declared`.
+ */
+export function modelOverrideReason(tool: string, agent: string, given: string, declared: string): string {
+	return `DENY - this ${tool} dispatch to ${agent} overrides model with '${given}'. The agent definition pins model: ${declared}; per-role models are the colony's cost/runtime contract and a per-call override drifts it quietly. Drop the \`model\` param and re-dispatch. Wrong tier for the job? Fix the definition, not the dispatch.`;
+}
+
+/** Per-call availability read; any internal failure means unknown (allow). */
+function activeToolsOf(deps: ExtensionDeps): string[] | undefined {
+	try {
+		return deps.activeTools();
+	} catch {
+		return undefined;
+	}
+}
+
+/**
+ * Registers the enforcement handlers on the given extension API.
+ * Exported for tests; the default export binds real dependencies.
+ * All state lives in this closure, which omp rebinds per session
+ * (module-level variables would be shared across subagent sessions).
+ */
+export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): void {
+	let nondocsEdits = 0;
+	let taskCalls = 0;
+	// Code written through the shell (sed -i, python -c, ...) counts as an edit too.
+	const shellTracker = createShellEditTracker();
+	let namingNoticeGiven = false;
+	const nudged = new Set<string>();
+	let stopBlocked = false;
+	const reset = () => {
+		try {
+			nondocsEdits = 0;
+			taskCalls = 0;
+			namingNoticeGiven = false;
+			nudged.clear();
+			stopBlocked = false;
+			shellTracker.reset();
+		} catch { return undefined; }
+	};
+	// A session switch (/new, fork, resume) is a new session in the same process: it needs its own shell baseline and
+	// its own begin+snapshot, exactly like session_start.
+	const start = (_event: unknown, ctx: { cwd: string; agent: { kind: string }; sessionManager?: { getSessionId?: () => unknown } }) => {
+		reset();
+		try {
+			if (ctx.agent.kind !== "sub") {
+				const root = docsRoot(ctx.cwd);
+				shellTracker.capture(root);
+				deps.runState?.onSessionStart({ cwd: root ?? ctx.cwd, sessionId: sessionIdOf(ctx) ?? "", kind: ctx.agent.kind });
+			}
+		} catch {
+			// fail open: no snapshot means shell edits are not counted
+		}
+	};
+	pi.on("session_start", start);
+	pi.on("session_switch", start);
+	// Per main turn: a Stop finalizes the run, and a continued/resumed session never fires session_start again, so
+	// re-run the create-if-absent `begin` here or the DB gates (current_run_id) see no open run.
+	pi.on("before_agent_start", (_event, ctx) => {
+		try {
+			if (ctx.agent.kind === "sub") return undefined;
+			deps.runState?.onTurnStart({ cwd: docsRoot(ctx.cwd) ?? ctx.cwd, sessionId: sessionIdOf(ctx) ?? "", kind: ctx.agent.kind });
+		} catch {
+			// fail open: run-state is telemetry
+		}
+		return undefined;
+	});
+
+
+	pi.on("tool_call", (event, ctx) => {
+		try {
+			const tool = (event.toolName ?? "").toLowerCase();
+			const cwd = ctx.cwd;
+			const input = event.input as Record<string, unknown>;
+			if (!docsRoot(cwd) || !gatesArmed(cwd)) return undefined;
+			const isSub = ctx.agent.kind === "sub";
+
+			// 1) Native-tool tripwire: grep/glob -> the replacement reachable NOW,
+			// checked per call (subagents included). Hard-off silences the whole
+			// tripwire; otherwise deny when a replacement is live, else one-time
+			// allow-nudge naming the unavailability.
+			const contract = loadNativeTools();
+			const kind = kindOfOmpTool(tool, contract);
+			if ((tool === "grep" || tool === "glob") && kind && contract?.kinds[kind].mode === "deny") {
+				if (process.env.ATLAS_TRIPWIRE_HARD === "off") return undefined;
+				const active = activeToolsOf(deps);
+				if (!active) return undefined; // availability unknown: allow silently, never claim "unreachable"
+				const replacement = resolveLeanReplacement(kind, active);
+				if (replacement) return { block: true, reason: denyReason(tool, replacement) };
+				if (!nudged.has(tool)) {
+					nudged.add(tool);
+					return { additionalContext: UNREACHABLE_NUDGE(tool) };
+				}
+				return undefined;
+			}
+
+			// 2) One-time per-tool nudges for read/bash, naming a reachable form;
+			// silent when nothing lean-ctx/context-mode is reachable to prefer.
+			if ((tool === "read" || tool === "bash") && kind) {
+				// Exploration-only shell (cat/grep/find/...) is denied toward lean-ctx when a
+				// replacement is reachable now (contracts/native-tools.json explorationShell).
+				if (tool === "bash" && process.env.ATLAS_TRIPWIRE_HARD !== "off") {
+					const command = typeof input.command === "string" ? input.command : "";
+					const picked = explorationTool(command, contract);
+					const route = picked ? resolveLeanToolRoute(picked, activeToolsOf(deps)) : undefined;
+					const reason = route ? explorationDenyReason(command, route, contract) : undefined;
+					if (reason) return { block: true, reason };
+				}
+				if (nudged.has(tool)) return undefined;
+				const active = activeToolsOf(deps);
+				const replacement = resolveLeanReplacement(kind, active);
+				if (!replacement) return undefined;
+				nudged.add(tool);
+				return { additionalContext: tool === "read" ? readNudge(replacement) : bashNudge(replacement, active ?? []) };
+			}
+
+			// 3) Delegation tracking — main thread only.
+			if (!isSub) {
+				shellTracker.capture(docsRoot(cwd));
+				if (tool === "edit" || tool === "write" || tool === "ast_edit") {
+					const paths = inputPaths(input);
+					// ast_edit without a path rewrites under cwd: that is a code edit, not nothing.
+					if (tool === "ast_edit" && paths.length === 0 ? true : paths.some(p => !p.includes("://") && isNonDocsPath(resolveTarget(cwd, p)))) nondocsEdits++;
+				} else if (tool === "task") {
+					taskCalls++;
+					const hint = taskNamingHint(input);
+					if (hint && !namingNoticeGiven) {
+						namingNoticeGiven = true;
+						return { additionalContext: TASK_NAMING_HINT(hint.count, hint.agents) };
+					}
+				}
+			}
+			return undefined;
+		} catch {
+			return undefined; // fail open — never strand the agent
+		}
+	});
+
+	// 4) Board mirror: the omp lead's todo plan lands in .atlas/.run/todos.json
+	// so workers can claim items (main thread only), and every DELIVERED IRC
+	// message (`write agent://<name>`, any agent) lands as a board note. Runs on
+	// tool_result so failed sends are never logged. Fails open, never blocks.
+	pi.on("tool_result", (event, ctx) => {
+		try {
+			if (event.isError) return undefined;
+			const tool = (event.toolName ?? "").toLowerCase();
+			if (tool === "write") {
+				const ircArgv = ircNoteArgv(ctx.agent.id, tool, event.input, docsRoot(ctx.cwd) ?? ctx.cwd);
+				if (ircArgv) deps.spawnBoardMirror(ircArgv, { cwd: ctx.cwd });
+				return undefined;
+			}
+			if (tool !== "todo") return undefined;
+			if (ctx.agent.kind !== "main") return undefined;
+			const root = docsRoot(ctx.cwd);
+			if (!root) return undefined;
+			const items = boardItemsFromTodoDetails(event.details);
+			if (items.length === 0) return undefined;
+			deps.spawnBoardMirror(boardMirrorArgv(items, sessionIdOf(ctx), root), { cwd: root });
+			return undefined;
+		} catch {
+			return undefined; // fail open — mirroring never blocks the session
+		}
+	});
+
+	// Model-override deny, twin of dispatch_tripwire._model_override. before_subagent_spawn fires in the
+	// PARENT once per spawn with the caller's requested model patterns; an atlas colony agent's generated
+	// definition pins its tier (atlas-agents.ts), and a per-call override drifts it quietly.
+	pi.on("before_subagent_spawn", (event, ctx) => {
+		try {
+			if (process.env.ATLAS_TRIPWIRE_HARD === "off") return undefined;
+			const armed = gatesArmed(ctx?.cwd);
+			const spawn = event as { agent?: unknown; patterns?: unknown; modelRole?: unknown };
+			const agent = typeof spawn.agent === "string" ? spawn.agent.trim() : "";
+			if (!agent || !ATLAS_AGENT_TARGETABLE[agent] || !Array.isArray(spawn.patterns)) return undefined;
+			const requested = spawn.patterns.filter((p): p is string => typeof p === "string" && p.trim() !== "").map(p => p.trim());
+			// before_subagent_spawn may return `{ model }`: omp replaces the spawn's model patterns with it (BeforeSubagentSpawnEventResult.model;
+			// aliases expand, and an expansion to nothing leaves the spawn unchanged).
+			// An omitted or purely inherited model would silently run the child on the parent's model, so it is rewritten to the pinned tier.
+			// For an omitted model omp's event `patterns` is normally the expanded parent selector (the inherited branch below);
+			// the empty-list branch is defensive. An unconfigured tier degrades via `@smol` expansion, then the parent fallback in createAgentSession.
+			// A later extension's before_subagent_spawn `model` can override this pin (omp: last defined model wins).
+			const tierRewrite = { model: modelPatternsFor(agent), note: `atlas: ${agent} pinned to ${roleFor(agent)}` };
+			if (requested.length === 0) return tierRewrite;
+			// omp hands EXPANDED patterns: an override is a token that is neither a pinned alias nor a selector explained by a pinned modelRole.
+			const pinned = modelPatternsFor(agent).map(p => p.toLowerCase());
+			const role = typeof spawn.modelRole === "string" ? spawn.modelRole.trim().replace(/^@+/, "").toLowerCase() : "";
+			const roleExplained = role !== "" && pinned.some(p => p.replace(/^@+/, "") === role);
+			// A marketplace install does not discover the pinned agents, so omp resolves the child to the parent's live model:
+			// a selector equal to it (either side may carry one `:<thinking-level>` suffix) is the inherited default, not an override.
+			const liveModel = ctx?.model && typeof ctx.model.provider === "string" && typeof ctx.model.id === "string" ? `${ctx.model.provider}/${ctx.model.id}` : "";
+			// The Claude-format definition pins the same tier under its own name (`model: sonnet`); dispatch_tripwire.py accepts it, so this gate must too.
+			const claudePin = frontmatterModelFor(agent).toLowerCase();
+			// omp also expands that alias to a provider/id (`sonnet` -> `anthropic/claude-sonnet-5`): the alias as a dash-delimited id token is the same tier.
+			const expandsPin = (p: string): boolean => { const [sel, ...suffix] = p.split(":"); return claudePin !== "" && suffix.length <= 1 && (sel.split("/")[1] ?? "").toLowerCase().split("-").includes(claudePin); };
+			const carriesTier = (p: string): boolean => pinned.includes(p.toLowerCase()) || (claudePin !== "" && p.toLowerCase() === claudePin) || expandsPin(p) || (p.includes("/") && roleExplained);
+			if (requested.every(p => carriesTier(p) || isInheritedSelector(p, liveModel))) {
+				// Accepted. When no token carries the tier the list is purely the inherited parent model (a marketplace install does not
+				// discover the pinned agents), so the tier is restored instead of running on the parent's model.
+				return requested.some(carriesTier) ? undefined : tierRewrite;
+			}
+			// The override deny is a soft policy deny: scoped to armed dirs. The tier pin above is not.
+			if (!armed) return undefined;
+			return { block: true, reason: modelOverrideReason("Task", agent, requested.join(", "), roleFor(agent)) };
+		} catch {
+			return undefined; // fail open
+		}
+	});
+
+	pi.on("session_stop", (_event, ctx) => {
+		try {
+			if (stopBlocked || ctx.agent.kind === "sub" || !docsRoot(ctx.cwd) || !gatesArmed(ctx.cwd)) return undefined;
+			if (process.env.ATLAS_GATE === "off") return undefined;
+			// A standalone `omp -p` worker launched by atlas_mux is reported as a main session (kind is never "sub"), but its
+			// lead owns delegation. atlas_mux pins ATLAS_WORKER_NAME in the worker env, and nothing else sets it.
+			if ((process.env.ATLAS_WORKER_NAME ?? "").trim() !== "") return undefined;
+			// session_stop never fires for in-process task/subagent sessions, so past the checks above this is a lead.
+			const edits = nondocsEdits + shellTracker.stop(docsRoot(ctx.cwd)).length;
+			if (edits > 0 && taskCalls === 0) {
+				stopBlocked = true;
+				return { decision: "block", reason: STOP_MESSAGE(edits) };
+			}
+			return undefined;
+		} catch {
+			return undefined; // fail open
+		}
+	});
+}
+
+/** Session tool surfaces are per-session: omp rebinds the factory, so state and availability stay session-local. */
+/**
+ * Rewrite `${CLAUDE_PLUGIN_ROOT}` in `bash` commands. Setting process.env is
+ * NOT enough: omp's worker bash spawns from a cached, snapshot-taken env, not
+ * live process.env, so a variable an extension injects at tool-call time never
+ * reaches the shell. Rewriting the command text is the layer we control (see
+ * exec/bash-executor.ts `callerEnv`/`spawn env` comments in omp source).
+ */
+const CLAUDE_PLUGIN_ROOT_RE = /\$\{?CLAUDE_PLUGIN_ROOT\}?/g;
+
+function rewritePluginRoot(input: Record<string, unknown> | undefined): string | undefined {
+	const command = input?.command;
+	if (typeof command !== "string" || !command.includes("CLAUDE_PLUGIN_ROOT")) return undefined;
+	return command.replace(CLAUDE_PLUGIN_ROOT_RE, PLUGIN_ROOT);
+}
+
+/**
+ * Export the Command Center knobs (~/.atlas/settings.json `env`) into the real environment at load, before
+ * style/mandates/agent-guard/shell-route/channels/stop-bridge read process.env. An already-exported variable wins
+ * (atlasStoreEnv skips it). Detached ingest spawns inherit it, since they spread process.env.
+ */
+export function applyAtlasStoreEnv(env: Record<string, string | undefined> = process.env): void {
+	Object.assign(env, atlasStoreEnv(env));
+}
+
+export default function atlasOmpExtension(pi: ExtensionAPI): void {
+	applyAtlasStoreEnv();
+	ensureClaudePluginRoot();
+	// omp applies only the LAST tool_call input revision and handlers never see each other's revisions, so the
+	// CLAUDE_PLUGIN_ROOT rewrite and the `lean-ctx -c` wrap (shell-route.ts, lean-ctx's Claude Code hook parity) must be
+	// ONE handler: the wrap runs over the already-rewritten command instead of the original.
+	type BashCall = { toolName: string; input: unknown };
+	let leanRoute: ((event: BashCall) => unknown) | undefined;
+	registerShellRoute({ on: ((_name: string, handler: (event: BashCall) => unknown) => void (leanRoute = handler)) as ExtensionAPI["on"] }, {
+		leanCtxBin: defaultLeanCtxBin,
+		activeTools: () => {
+			try {
+				return pi.getActiveTools();
+			} catch {
+				return undefined;
+			}
+		},
+	});
+	pi.on("tool_call", event => {
+		if (event.toolName !== "bash") return undefined;
+		try {
+			const input = event.input as Record<string, unknown> | undefined;
+			const rewritten = rewritePluginRoot(input);
+			const call: BashCall = rewritten === undefined ? event : { toolName: event.toolName, input: { ...input, command: rewritten } };
+			const routed = leanRoute?.(call) as { input: Record<string, unknown> } | undefined;
+			if (routed) return routed;
+			return rewritten === undefined ? undefined : { input: { ...input, command: rewritten } };
+		} catch {
+			return undefined; // fail open
+		}
+	});
+	const activeTools = () => {
+		try {
+			return pi.getActiveTools();
+		} catch {
+			return undefined; // fail open — runtime not wired yet or API absent means allow
+		}
+	};
+	registerStyle(pi, { activeTools });
+	registerMandates(pi, { activeTools });
+	// One session-scoped transcript cache and run-state sink: omp rebinds this factory per session.
+	const transcripts = createTranscriptCache();
+	const runState = createRunStateSink();
+	registerHookBridge(pi, {
+		// Only subagent tool hooks read a transcript path (dispatch_tripwire keys `_in_subagent` on /subagents/).
+		transcriptPath: ctx => transcripts.forToolHook(sessionFileOf(ctx), sessionIdOf(ctx) ?? "", ctx.agent?.kind === "sub" ? "sub" : "main"),
+		onToolAllowed: info => runState.onToolAllowed(info),
+		onToolResult: info => runState.onToolResult(info),
+	});
+	// Registered before the advisor and delegation gates: omp takes the first `block` across handlers.
+	registerStopBridge(pi, { cache: transcripts });
+	registerWorkerBudget(pi);
+	// disallowedTools of atlas agents, which omp does not enforce itself (omp/agent-guard.ts).
+	registerAgentGuard(pi);
+	// Live channel view above the editor while task subagents run (omp's irc:relay card lasts 10s and hides lead<->child).
+	const channelView = registerChannelView(pi);
+	registerWorkerReport(pi, { onChannelOpen: channelView.open });
+	registerAdvisorGate(pi, defaultAdvisorDeps());
+	register(pi, {
+		runState,
+		// getActiveTools() is omp's enabled set (top-level names plus live xd://
+		// device mounts) — exactly the callable surface. getAllTools() provenance
+		// is deliberately NOT consulted: it lists configured servers even when
+		// their tools are inactive, which must not arm the deny. The lean-ctx
+		// binary on PATH is likewise not a session tool and never consulted.
+		activeTools,
+		spawnBoardMirror: (argv, opts) => {
+			try {
+				const child = Bun.spawn(argv, { cwd: opts.cwd, stdin: "ignore", stdout: "ignore", stderr: "ignore" });
+				child.unref();
+			} catch {
+				// fail open — the board stays stale, the session keeps running
+			}
+		},
+	});
+}

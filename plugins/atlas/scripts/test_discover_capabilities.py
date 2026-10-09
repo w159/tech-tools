@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """In-process tests for discover_capabilities: scan() and main() branches."""
 
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import contextlib
 import io
 import json
@@ -35,6 +36,8 @@ class ScanTests(unittest.TestCase):
         c = discover_capabilities.scan(self.tmp)
         self.assertEqual(c["files"], 0)
         self.assertFalse(c["frontend"])
+        self.assertFalse(c["js_ts"])
+        self.assertFalse(c["has_code"])
         self.assertFalse(c["terraform"])
         self.assertFalse(c["containers"])
         self.assertFalse(c["microsoft"])
@@ -121,13 +124,27 @@ class ScanTests(unittest.TestCase):
         write(os.path.join(self.tmp, "package.json"), json.dumps(pkg))
         c = discover_capabilities.scan(self.tmp)
         self.assertTrue(c["frontend"])
+        self.assertTrue(c["js_ts"])
         self.assertEqual(c["dep_count"], 2)
+
+    def test_scan_py_marks_has_code(self):
+        write(os.path.join(self.tmp, "x.py"), "x=1\n")
+        c = discover_capabilities.scan(self.tmp)
+        self.assertTrue(c["has_code"])
+        self.assertFalse(c["js_ts"])
+
+    def test_scan_ts_file_marks_js_ts(self):
+        write(os.path.join(self.tmp, "app.ts"), "export const x = 1\n")
+        c = discover_capabilities.scan(self.tmp)
+        self.assertTrue(c["js_ts"])
+        self.assertFalse(c["frontend"])
 
     def test_scan_package_json_non_frontend(self):
         pkg = {"dependencies": {"express": "^4.0.0"}}
         write(os.path.join(self.tmp, "package.json"), json.dumps(pkg))
         c = discover_capabilities.scan(self.tmp)
         self.assertFalse(c["frontend"])
+        self.assertTrue(c["js_ts"])
         self.assertEqual(c["dep_count"], 1)
 
     def test_scan_package_json_deps_merge_takes_max(self):
@@ -196,9 +213,19 @@ class MainTests(unittest.TestCase):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def _run_main(self, argv):
-        """Run main() capturing stdout; main calls sys.exit(0)."""
+        """Run main() capturing stdout; main calls sys.exit(0). Host install state is faked bare."""
         buf = io.StringIO()
-        with mock.patch.object(sys, "argv", argv), contextlib.redirect_stdout(buf):
+        with (
+            mock.patch.object(sys, "argv", argv),
+            contextlib.redirect_stdout(buf),
+            mock.patch.object(
+                discover_capabilities, "_mcp_server_names", return_value=set()
+            ),
+            mock.patch.object(
+                discover_capabilities.tool_routing, "plugin_enabled", return_value=False
+            ),
+            mock.patch.object(discover_capabilities.shutil, "which", return_value=None),
+        ):
             with self.assertRaises(SystemExit) as cm:
                 discover_capabilities.main()
         self.assertEqual(cm.exception.code, 0)
@@ -247,11 +274,19 @@ class MainTests(unittest.TestCase):
         self.assertIn("playwright", ids)
         self.assertIn("ui-ux-pro-max", ids)
         self.assertIn("context7", ids)  # dep_count >= 8
+        self.assertIn("serena", ids)
+        self.assertIn("lean-ctx", ids)
+        self.assertIn("fallow", ids)
+        self.assertIn("fallow-mcp", ids)
+        self.assertIn("fallow-skills", ids)
         self.assertIn("microsoft-docs", ids)
-        self.assertIn("iac-skill", ids)
-        self.assertIn("container-tooling", ids)
+        self.assertNotIn(
+            "iac-skill", ids
+        )  # no real package to install: never recommended
+        self.assertNotIn("container-tooling", ids)
         self.assertIn("context-mode", ids)  # has_logs True
         self.assertIn("connectors (atlas-setup)", ids)  # has_mcp_servers True
+        self.assertTrue(payload["context"]["js_ts"])
         # Each recommendation carries the required fields.
         for r in payload["recommendations"]:
             self.assertIn("type", r)
@@ -318,6 +353,93 @@ class RulesTests(unittest.TestCase):
     def test_skip_dirs_contains_common_artifacts(self):
         for d in (".git", "node_modules", "__pycache__", "dist", "build"):
             self.assertIn(d, discover_capabilities.SKIP_DIRS)
+
+    def test_no_command_is_a_placeholder(self):
+        for rule in discover_capabilities.RULES:
+            self.assertNotRegex(rule["cmd"], r"<[^>]*>", rule["id"])
+
+    def test_ignored_worktree_dirs_are_not_scanned(self):
+        self.assertIn(".kilo", discover_capabilities.SKIP_DIRS)
+
+
+class InstalledTests(unittest.TestCase):
+    """Recommendations skip what the machine already has (the real host is never read)."""
+
+    def setUp(self):
+        self.home = tempfile.mkdtemp()
+        self.proj = tempfile.mkdtemp()
+        write(os.path.join(self.proj, "a.ts"), "x\n")
+        write(os.path.join(self.proj, "package.json"), "{}")
+        for patch in (
+            mock.patch.dict(os.environ, {"HOME": self.home}),
+            mock.patch(
+                "pathlib.Path.home", return_value=__import__("pathlib").Path(self.home)
+            ),
+            mock.patch.object(discover_capabilities.shutil, "which", return_value=None),
+        ):
+            patch.start()
+            self.addCleanup(patch.stop)
+
+    def ids(self):
+        buf = io.StringIO()
+        with (
+            mock.patch.object(sys, "argv", ["prog", self.proj]),
+            contextlib.redirect_stdout(buf),
+        ):
+            with self.assertRaises(SystemExit):
+                discover_capabilities.main()
+        return {
+            r["id"]
+            for r in json.loads(buf.getvalue().split("JSON:")[1])["recommendations"]
+        }
+
+    def test_everything_is_recommended_on_a_bare_machine(self):
+        ids = self.ids()
+        for want in (
+            "claude-mem",
+            "serena",
+            "lean-ctx",
+            "fallow",
+            "fallow-mcp",
+            "fallow-skills",
+        ):
+            self.assertIn(want, ids)
+
+    def test_enabled_plugins_user_mcp_servers_and_cli_are_skipped(self):
+        os.makedirs(os.path.join(self.home, ".claude"))
+        write(
+            os.path.join(self.home, ".claude", "settings.json"),
+            json.dumps(
+                {
+                    "enabledPlugins": {
+                        "claude-mem@thedotmack": True,
+                        "fallow-skills@x": True,
+                    }
+                }
+            ),
+        )
+        write(
+            os.path.join(self.home, ".claude.json"),
+            json.dumps({"mcpServers": {"serena": {}, "lean-ctx": {}, "fallow": {}}}),
+        )
+        write(
+            os.path.join(self.proj, ".mcp.json"),
+            json.dumps({"mcpServers": {"context7": {}}}),
+        )
+        with mock.patch.object(
+            discover_capabilities.shutil, "which", return_value="/usr/bin/fallow"
+        ):
+            ids = self.ids()
+        for installed in (
+            "claude-mem",
+            "serena",
+            "lean-ctx",
+            "fallow",
+            "fallow-mcp",
+            "fallow-skills",
+        ):
+            self.assertNotIn(installed, ids)
+        self.assertIn("ponytail", ids)  # not installed: still recommended
 
 
 if __name__ == "__main__":

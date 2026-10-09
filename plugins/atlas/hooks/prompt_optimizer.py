@@ -35,7 +35,7 @@ Configuration (environment variables):
   ATLAS_OPTIMIZE_TIMEOUT  seconds before giving up  (default: 110)
   ATLAS_OPTIMIZE_MINLEN   skip prompts shorter than this many chars, in BOTH trigger
                                 and always mode (default: 12)
-  ATLAS_OPTIMIZE_QUIET    if set, suppress the stderr banner (silent injection)
+  ATLAS_OPTIMIZE_VERBOSE  if set, print a one-line stderr banner (quiet by default)
   ATLAS_OPTIMIZE_LOG      if set, append an audit line (orig -> optimized) to this file
 
 Wire it up (settings.json) with a generous timeout so Claude Code does not kill the
@@ -60,6 +60,13 @@ import sys
 import time
 import urllib.error
 import urllib.request
+
+import prompt_decision
+
+sys.path.insert(
+    0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
+)
+import atlas_hook_guard  # noqa: E402
 
 # The ollama CLI renderer rewrites partial words at the wrap boundary using cursor-back +
 # erase sequences (e.g. "data c\x1b[1D\x1b[K\nconsistency"). Stripping those codes naively
@@ -353,6 +360,18 @@ _CODE_REFERENCE = re.compile(
     re.IGNORECASE | re.MULTILINE,
 )
 
+# File, path, or declaration. Generic nouns (table, service, column) are not
+# an anchor: "add a bow to the table" matches _CODE_REFERENCE and is the case
+# a local choice model is allowed to veto.
+_CODE_ANCHOR = re.compile(
+    r"(\b[\w./-]+\.(?:py|ts|tsx|js|jsx|go|rs|java|rb|php|sql|json|ya?ml|toml|sh|"
+    r"c|cc|cpp|h|hpp|css|scss|html|vue|svelte)\b"
+    r"|(?:^|[\s(])(?:src|lib|app|components?|hooks?|scripts?|services?|routes?|"
+    r"models?|pages?|api|backend|frontend|tests?|migrations?)/[\w./-]+"
+    r"|\b(?:class|def|function|interface|struct|enum)\s+\w+)",
+    re.IGNORECASE | re.MULTILINE,
+)
+
 
 def looks_substantive(prompt: str) -> bool:
     """Conservative classifier: True only for real engineering work. Defaults to
@@ -383,17 +402,82 @@ def looks_substantive(prompt: str) -> bool:
     return has_common and has_code
 
 
+def _regex_band(prompt: str) -> str:
+    """arm, skip, or ask. Only ask may call the local decision model."""
+    text = prompt.strip()
+    if len(text) < 20 or text.lower().strip(" .!?,") in _TRIVIAL_ACKS:
+        return "skip"
+    if _ERROR_SIGNAL.search(text) or _STRONG_ENGINEERING_VERBS.search(text):
+        return "arm"
+    if _COMMON_VERBS.search(text) and _CODE_ANCHOR.search(text):
+        return "arm"
+    return "ask"
+
+
+def resolve_substantive(prompt: str, decide=None) -> bool:
+    """Regex first. The local model may only override the ask band.
+
+    Stack traces, strong engineering verbs, and a common verb plus a file,
+    path, or declaration arm with no model call. A confident conversation
+    label vetoes a generic-noun arm ("add a bow to the table"). A confident
+    code_change or investigation label can arm a regex miss ("explain how
+    the completion gate decides"). Timeout, low confidence, ATLAS_DECISION=off,
+    and a bare defect label keep the regex answer.
+    """
+    band = _regex_band(prompt)
+    if band == "skip":
+        return False
+    if band == "arm":
+        return True
+    regex_yes = looks_substantive(prompt)
+    if (
+        decide is None
+        and os.environ.get("ATLAS_DECISION", "on").strip().lower() == "off"
+    ):
+        return regex_yes
+    decider = decide if decide is not None else prompt_decision.local_decision
+    try:
+        verdict = decider(prompt)
+    except Exception:
+        return regex_yes
+    return prompt_decision.apply_verdict(regex_yes, verdict, prompt)
+
+
+def _is_harness_event(prompt: str) -> bool:
+    """True when `prompt` is a harness-generated event, not a user request.
+
+    UserPromptSubmit fires for more than typed user input: a subagent
+    hand-back report ("Another Claude session sent a message: ...
+    <agent-message from=...>[Subagent hand-back] ..."), a background task
+    notification ("<task-notification>..."), and other tag-wrapped harness
+    payloads (e.g. "<system-reminder>", "<local-command-...>") all arrive on
+    this same hook. None of these is a user request, so neither the
+    optimizer nor the orchestration classifier should ever see or act on
+    them - re-arming orchestration on a hand-back re-injects the nudge for
+    no new work.
+    """
+    head = prompt.lstrip()[:200]
+    if head.startswith("<"):
+        return True
+    if head.startswith("Another Claude session sent a message"):
+        return True
+    return "<agent-message from=" in head
+
+
 def arm_orchestration(data: dict, prompt: str) -> str | None:
     """Flag this session's run as an atlas orchestration run when the prompt is
     substantive engineering work, and return the engine nudge. Trivial or
     conversational prompts return None and touch nothing. Fully self-guarded: any
-    failure (unreadable DB, missing module) returns None so the prompt is never
-    blocked. Disable entirely with ATLAS_ENGINE_ARM=off."""
+    failure (unreadable DB, missing module, decision-model error) returns None
+    so the prompt is never blocked. Disable entirely with ATLAS_ENGINE_ARM=off.
+    ATLAS_DECISION=off keeps the regex and skips the local model."""
     if os.environ.get("ATLAS_ENGINE_ARM", "on").strip().lower() == "off":
         return None
+    if (os.environ.get("ATLAS_WORKER_NAME") or "").strip():
+        return None  # headless atlas_mux worker: a leaf, never armed
     if prompt.lstrip().startswith("/"):
         return None  # slash commands expand downstream and self-orchestrate
-    if not looks_substantive(prompt):
+    if not resolve_substantive(prompt):
         return None
     session = (data.get("session_id") or "").strip()
     if not session:
@@ -404,10 +488,34 @@ def arm_orchestration(data: dict, prompt: str) -> str | None:
 
         conn = atlas_db.connect()
         atlas_db.init(conn)
-        atlas_db.mark_orchestrating(conn, session, data.get("cwd"))
+        try:
+            atlas_db.mark_orchestrating(conn, session, data.get("cwd"))
+        except Exception:
+            # The arm failed, so this run will not be flagged as an
+            # orchestration run; record one friction row so the silent miss
+            # is observable. The friction write is itself guarded: a doubly
+            # failing DB must not raise out of the hook.
+            try:
+                conn.rollback()
+                atlas_db.record_friction(
+                    conn,
+                    session,
+                    "orchestration_flag_arm_failed",
+                    snippet="mark_orchestrating raised; run not flagged",
+                )
+            except Exception:
+                pass
+            # Preserve the original contract: an arm failure returns None
+            # (no nudge), re-raise into the outer fail-open handler.
+            raise
         conn.close()
-    except Exception:
-        return None  # fail-open: never block a prompt over a DB hiccup
+    except Exception as exc:
+        # fail-open: never block a prompt over a DB hiccup, but leave a trace --
+        # an unarmed run means the dispatch/completion gates stay inert.
+        atlas_hook_guard.fault(
+            "prompt_optimizer", "orchestration arm failed (gates inert): %s" % exc
+        )
+        return None
     return ENGINE_NUDGE
 
 
@@ -456,13 +564,14 @@ def is_skip(optimized: str) -> bool:
 
 
 def notify(optimized: str) -> None:
-    """Brief colored banner to STDERR so the user sees the optimizer fired.
+    """One-line stderr banner, off unless ATLAS_OPTIMIZE_VERBOSE is set.
 
     stderr is surfaced in the terminal and renders ANSI color; unlike stdout it never enters
-    Claude's context, so it can't pollute the spec. Silence it with ATLAS_OPTIMIZE_QUIET.
+    Claude's context, so it can't pollute the spec. It is still terminal noise on every
+    optimized prompt, and the spec itself is already in context, so the default is silence.
     """
-    if os.environ.get("ATLAS_OPTIMIZE_QUIET", "").strip():
-        return
+    if not os.environ.get("ATLAS_OPTIMIZE_VERBOSE", "").strip():
+        return  # quiet by default: the spec is in context, the banner adds nothing
     # Pull the one-line Intent out of the spec for an at-a-glance summary, if present.
     intent = ""
     lines = optimized.splitlines()
@@ -475,13 +584,10 @@ def notify(optimized: str) -> None:
             break
     if len(intent) > 96:
         intent = intent[:95].rstrip() + "..."
-    header = (
-        "\033[48;5;22m\033[97;1m * prompt-optimizer \033[0m"
-        f"\033[38;5;108m optimized spec injected - {len(optimized)} chars \033[0m"
+    print(
+        f"\033[38;5;108m[atlas] spec injected: {intent or str(len(optimized)) + ' chars'}\033[0m",
+        file=sys.stderr,
     )
-    print(header, file=sys.stderr)
-    if intent:
-        print(f"\033[38;5;108m   -> {intent}\033[0m", file=sys.stderr)
 
 
 def audit(original: str, optimized: str | None) -> None:
@@ -500,14 +606,12 @@ def audit(original: str, optimized: str | None) -> None:
 
 
 def main() -> int:
-    try:
-        raw = sys.stdin.read()
-        data = json.loads(raw) if raw.strip() else {}
-    except (json.JSONDecodeError, ValueError):
-        return 0  # malformed input -> passthrough
-    prompt = (data.get("prompt") or "").strip()
+    data = atlas_hook_guard.load_payload("prompt_optimizer")
+    prompt = data.get("prompt", "").strip()
     if not prompt:
         return 0
+    if _is_harness_event(prompt):
+        return 0  # hand-back report / task-notification / system-reminder, not a user request
 
     # Arm the orchestration flag up front for substantive engineering prompts. This
     # is independent of the optimizer: it runs whether or not the prompt opted in,
@@ -539,4 +643,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(atlas_hook_guard.run_hook("prompt_optimizer", main))

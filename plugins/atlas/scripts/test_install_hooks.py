@@ -7,6 +7,7 @@ validation, empty/missing inputs, and edge cases. File IO uses small temp
 dirs so no real installed paths are touched.
 """
 
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import datetime as _dt
 import io
 import json
@@ -149,7 +150,7 @@ class TestApplyInstall(unittest.TestCase):
         self.assertEqual(n, 1)
         groups = settings["hooks"]["PostToolUse"]
         self.assertEqual(len(groups), 1)
-        self.assertEqual(groups[0]["matcher"], "Edit|Write|MultiEdit")
+        self.assertEqual(groups[0]["matcher"], "Edit|Write|MultiEdit|NotebookEdit")
         cmd = groups[0]["hooks"][0]["command"]
         self.assertIn("format_after_edit.py", cmd)
         self.assertTrue(groups[0]["hooks"][0]["async"])

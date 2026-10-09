@@ -1,3 +1,13 @@
+import os as _iso_os
+import sys as _iso_sys
+
+_iso_sys.path.insert(
+    0,
+    _iso_os.path.join(
+        _iso_os.path.dirname(_iso_os.path.abspath(__file__)), "..", "scripts"
+    ),
+)
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import io
 import json
 import os
@@ -12,6 +22,7 @@ sys.path.insert(0, SCRIPTS)
 sys.path.insert(0, HERE)
 
 import atlas_db  # noqa: E402
+import atlas_hook_guard  # noqa: E402
 import memory_capture  # noqa: E402
 
 
@@ -143,6 +154,19 @@ class MemoryCaptureAddFailureTest(unittest.TestCase):
         self._atlas_memory = atlas_memory
         self._orig_add = atlas_memory.add
 
+        # Isolate the guard's hookstate dir and the seen-hash file in tmp so
+        # this test never touches (or is throttled/deduped by) real ~/.atlas
+        # state.
+        self.seen_path = os.path.join(self.tmp, ".memory_capture_seen")
+        patcher1 = mock.patch.object(atlas_hook_guard, "_state_dir", lambda: self.tmp)
+        patcher2 = mock.patch.object(
+            memory_capture, "_seen_hashes_path", lambda: self.seen_path
+        )
+        patcher1.start()
+        patcher2.start()
+        self.addCleanup(patcher1.stop)
+        self.addCleanup(patcher2.stop)
+
     def tearDown(self):
         self._atlas_memory.add = self._orig_add
         if self._orig_env is None:
@@ -164,6 +188,65 @@ class MemoryCaptureAddFailureTest(unittest.TestCase):
             sys.stdin = sys.__stdin__
             sys.stderr = sys.__stderr__
             sys.stdout = sys.__stdout__
+
+    def _memory_drop_rows(self):
+        conn = atlas_db.connect(self.db)
+        try:
+            return conn.execute(
+                "SELECT session_id, category, snippet FROM friction_events "
+                "WHERE category='memory_drop' ORDER BY id"
+            ).fetchall()
+        finally:
+            conn.close()
+
+    def test_unstorable_lesson_is_recorded_not_dropped(self):
+        """The bug this guards: MEMORY.md sat over its cap for three weeks and
+        every lesson add() refused was discarded with no record anywhere. A
+        refusal must now land in friction_events so it is mineable."""
+
+        def refuse(target, content):
+            return {"success": False, "error": "entry exceeds cap"}
+
+        self._atlas_memory.add = refuse
+
+        self._run_main({"session_id": "fail-sess", "cwd": "/repo/atlas"})
+
+        rows = self._memory_drop_rows()
+        self.assertTrue(rows, "a refused lesson must be recorded, not discarded")
+        for session_id, category, snippet in rows:
+            self.assertEqual(session_id, "fail-sess")
+            self.assertEqual(category, "memory_drop")
+            self.assertIn("entry exceeds cap", snippet)
+
+    def test_success_path_records_no_drop(self):
+        """A stored lesson must not manufacture a spurious drop event."""
+
+        def accept(target, content):
+            return {"success": True}
+
+        self._atlas_memory.add = accept
+
+        self._run_main({"session_id": "fail-sess", "cwd": "/repo/atlas"})
+
+        self.assertEqual(self._memory_drop_rows(), [])
+
+    def test_drop_recording_failure_stays_fail_open(self):
+        """Recording the drop is observability, never a reason to break capture:
+        if the write connection itself fails, the hook still exits 0 and the
+        drop is still surfaced on stderr."""
+
+        def refuse(target, content):
+            return {"success": False, "error": "entry exceeds cap"}
+
+        self._atlas_memory.add = refuse
+
+        def broken_connect(*a, **kw):
+            raise RuntimeError("db unavailable")
+
+        with mock.patch.object(atlas_db, "connect", broken_connect):
+            err, out = self._run_main({"session_id": "fail-sess", "cwd": "/repo/atlas"})
+
+        self.assertIn("dropped a", err + out)
 
     def test_atlas_memory_add_failure_surfaced(self):
         # Simulate a broken atlas_memory.add (disk full / module write error).
@@ -206,6 +289,19 @@ class MemoryCaptureMainPathTest(unittest.TestCase):
         self._atlas_memory = atlas_memory
         self._orig_add = atlas_memory.add
 
+        # Isolate the guard's hookstate dir and the seen-hash file in tmp so
+        # this test never touches (or is throttled/deduped by) real ~/.atlas
+        # state.
+        self.seen_path = os.path.join(self.tmp, ".memory_capture_seen")
+        patcher1 = mock.patch.object(atlas_hook_guard, "_state_dir", lambda: self.tmp)
+        patcher2 = mock.patch.object(
+            memory_capture, "_seen_hashes_path", lambda: self.seen_path
+        )
+        patcher1.start()
+        patcher2.start()
+        self.addCleanup(patcher1.stop)
+        self.addCleanup(patcher2.stop)
+
     def tearDown(self):
         self._atlas_memory.add = self._orig_add
         for name, orig in (
@@ -245,6 +341,19 @@ class MemoryCaptureMainPathTest(unittest.TestCase):
     @staticmethod
     def _add_ok(target, content):
         return {"success": True}
+
+    def _recording_add(self):
+        """Capture is silent on success since 5.11.0 (a Stop-hook announcement
+        costs a model turn to narrate bookkeeping). The observable is the write
+        itself, not stdout."""
+        calls = []
+
+        def add(target, content):
+            calls.append((target, content))
+            return {"success": True}
+
+        self._atlas_memory.add = add
+        return calls
 
     @staticmethod
     def _add_fail(target, content):
@@ -336,12 +445,12 @@ class MemoryCaptureMainPathTest(unittest.TestCase):
         )
         conn.commit()
         conn.close()
-        self._atlas_memory.add = self._add_ok
+        calls = self._recording_add()
         err, out = self._run_main(
             json.dumps({"session_id": "ok-sess", "cwd": "/repo/atlas"})
         )
-        self.assertIn("additionalContext", out)
-        self.assertIn("captured 1 memory fact", out)
+        self.assertEqual(out, "", "capture must be silent on success")
+        self.assertEqual([t for t, _ in calls], ["memory"])
 
     def test_capture_success_project_fact(self):
         conn, rid = self._seed_run("proj-sess")
@@ -350,12 +459,12 @@ class MemoryCaptureMainPathTest(unittest.TestCase):
         )
         conn.commit()
         conn.close()
-        self._atlas_memory.add = self._add_ok
+        calls = self._recording_add()
         err, out = self._run_main(
             json.dumps({"session_id": "proj-sess", "cwd": "/repo/atlas"})
         )
-        self.assertIn("additionalContext", out)
-        self.assertIn("1 project fact", out)
+        self.assertEqual(out, "", "capture must be silent on success")
+        self.assertEqual([t for t, _ in calls], ["project"])
 
     def test_add_returns_failure_no_context(self):
         conn, _ = self._seed_run("failret-sess")
@@ -514,8 +623,11 @@ class MemoryCaptureHelpersCoverageTest(unittest.TestCase):
         )
         self.assertTrue(any("parallelism" in f for f in proj_facts), proj_facts)
 
-    def test_extract_tool_error_patterns(self):
-        """Tool error patterns are captured only for non-trivial tools with ≥3 failures."""
+    def test_tool_error_tallies_are_never_captured_as_memory(self):
+        """Reversed in 5.11.0. A tally names no lesson and no action; its only
+        consumer was SessionStart recall, where 40+ lines of "Tool 'Write'
+        errored 2x in agent-a870d7a4169e4bb8b" buried every real lesson. The
+        counts still live in atlas_db for atlas-audit to query."""
         self._seed_run("tool-sess")
         # Insert 3 Write errors (non-trivial tool, ≥3 threshold)
         for i in range(3):
@@ -533,7 +645,7 @@ class MemoryCaptureHelpersCoverageTest(unittest.TestCase):
         mem_facts, _proj = memory_capture._extract_facts(
             self.conn, "tool-sess", "/repo/atlas"
         )
-        self.assertTrue(any("Tool 'Write'" in f for f in mem_facts), mem_facts)
+        self.assertEqual([f for f in mem_facts if "Tool '" in f], [])
 
     def test_extract_tool_error_trivial_tool_skipped(self):
         """Bash errors are NOT captured — Bash is a trivial tool where single
@@ -578,6 +690,160 @@ class MemoryCaptureHelpersCoverageTest(unittest.TestCase):
         self.assertEqual(proj_facts, [])
 
 
+class MemoryCaptureLoopGuardTest(unittest.TestCase):
+    """Regression coverage for the Stop-hook loop that burned the usage limit:
+    the stop_hook_active loop guard, and the seen-hash dedupe that must
+    survive both a repeat call and a different cwd (the project_name in the
+    formatted fact string must not defeat the dedupe)."""
+
+    def _recording_add(self):
+        """Capture is silent on success since 5.11.0 (a Stop-hook announcement
+        costs a model turn to narrate bookkeeping). The observable is the write
+        itself, not stdout."""
+        calls = []
+
+        def add(target, content):
+            calls.append((target, content))
+            return {"success": True}
+
+        self._atlas_memory.add = add
+        return calls
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.db = os.path.join(self.tmp, "atlas.db")
+        self.conn = atlas_db.connect(self.db)
+        atlas_db.init(self.conn)
+        self.pid = atlas_db.register_project(self.conn, "/repo/atlas")
+        self.conn.close()
+
+        self._orig_env_db = os.environ.get("ATLAS_DB")
+        os.environ["ATLAS_DB"] = self.db
+
+        import atlas_memory
+
+        self._atlas_memory = atlas_memory
+        self._orig_add = atlas_memory.add
+        self._atlas_memory.add = self._add_ok
+
+        # Isolate the guard's hookstate dir and the seen-hash file in tmp so
+        # this test never touches (or is throttled/deduped by) real ~/.atlas
+        # state.
+        self.seen_path = os.path.join(self.tmp, ".memory_capture_seen")
+        patcher1 = mock.patch.object(atlas_hook_guard, "_state_dir", lambda: self.tmp)
+        patcher2 = mock.patch.object(
+            memory_capture, "_seen_hashes_path", lambda: self.seen_path
+        )
+        patcher1.start()
+        patcher2.start()
+        self.addCleanup(patcher1.stop)
+        self.addCleanup(patcher2.stop)
+
+    def tearDown(self):
+        self._atlas_memory.add = self._orig_add
+        if self._orig_env_db is None:
+            os.environ.pop("ATLAS_DB", None)
+        else:
+            os.environ["ATLAS_DB"] = self._orig_env_db
+
+    @staticmethod
+    def _add_ok(target, content):
+        return {"success": True}
+
+    def _seed_correction(self, session_id, snippet, message_uuid="m"):
+        conn = atlas_db.connect(self.db)
+        rid = atlas_db.start_run(conn, self.pid, session_id)
+        conn.execute(
+            "UPDATE runs SET orchestrating=1, started_at=100 WHERE id=?", (rid,)
+        )
+        atlas_db.insert_signal(
+            conn,
+            session_id,
+            {
+                "message_uuid": message_uuid,
+                "signal_type": "user_correction",
+                "weight": 1.0,
+                "snippet": snippet,
+            },
+        )
+        conn.commit()
+        conn.close()
+
+    def _run_main(self, payload):
+        sys.stdin = io.StringIO(json.dumps(payload))
+        sys.stderr = io.StringIO()
+        sys.stdout = io.StringIO()
+        try:
+            try:
+                memory_capture.main()
+            except SystemExit:
+                pass
+            return sys.stderr.getvalue(), sys.stdout.getvalue()
+        finally:
+            sys.stdin = sys.__stdin__
+            sys.stderr = sys.__stderr__
+            sys.stdout = sys.__stdout__
+
+    def test_stop_hook_active_produces_no_output(self):
+        # A Stop hook must never react to a continuation IT forced.
+        err, out = self._run_main(
+            {
+                "session_id": "guard-sess",
+                "cwd": "/repo/atlas",
+                "stop_hook_active": True,
+            }
+        )
+        self.assertEqual(out, "")
+
+    def test_same_snippet_announced_once_then_silent(self):
+        """Without the seen-hash dedupe, _should_capture keeps returning True
+        forever once one user_correction row exists, so the second call also
+        produces output -- this is the regression test for the loop and must
+        fail against the pre-fix code."""
+        self._seed_correction("repeat-sess", "Always run tests before commit")
+        payload = {"session_id": "repeat-sess", "cwd": "/repo/atlas"}
+        # Bypass the time throttle so this exercises the hash dedupe
+        # specifically, not the blast-radius cap (covered separately below).
+        calls = self._recording_add()
+        with mock.patch.object(atlas_hook_guard, "should_run", return_value=True):
+            self._run_main(payload)
+            first = len(calls)
+            self._run_main(payload)
+        self.assertEqual(first, 1, "first call must capture the correction")
+        self.assertEqual(len(calls), 1, "repeat must be deduped, not re-captured")
+
+    def test_same_snippet_different_cwd_announced_once(self):
+        """The fact string embeds os.path.basename(cwd), so a naive dedupe on
+        the formatted string never matches across two subagent working
+        directories. Hashing the raw snippet must still catch the duplicate."""
+        snippet = "Never edit files outside the assigned scope"
+        self._seed_correction("agent-aaa-sess", snippet, message_uuid="m-a")
+        self._seed_correction("agent-bbb-sess", snippet, message_uuid="m-b")
+        calls = self._recording_add()
+        with mock.patch.object(atlas_hook_guard, "should_run", return_value=True):
+            self._run_main({"session_id": "agent-aaa-sess", "cwd": "/x/agent-aaa"})
+            first = len(calls)
+            self._run_main({"session_id": "agent-bbb-sess", "cwd": "/x/agent-bbb"})
+        self.assertEqual(first, 1)
+        self.assertEqual(
+            len(calls), 1, "the same snippet under a second cwd must not re-capture"
+        )
+
+    def test_throttle_blocks_second_call_within_window(self):
+        """Belt-and-braces: even with a fresh (never-seen) fact, a second call
+        within the throttle window must stay silent -- the blast-radius cap."""
+        self._seed_correction("throttle-sess", "Prefer composition over inheritance")
+        payload = {"session_id": "throttle-sess", "cwd": "/repo/atlas"}
+        calls = self._recording_add()
+        self._run_main(payload)
+        self.assertEqual(len(calls), 1)
+        # Second call, same window, no throttle bypass this time.
+        self._seed_correction(
+            "throttle-sess", "A different fact entirely", message_uuid="m2"
+        )
+        self._run_main(payload)
+        self.assertEqual(len(calls), 1, "throttle must block the second capture")
+
 
 class OuterMainGuardTest(unittest.TestCase):
     """Cover the fail-open `if __name__ == '__main__'` guard: an exception
@@ -600,9 +866,7 @@ class OuterMainGuardTest(unittest.TestCase):
             mock.patch("sys.exit", side_effect=_fake_exit),
             mock.patch("sys.stdin", io.StringIO("")),
             mock.patch("sys.stdout", io.StringIO()),
-            mock.patch.dict(
-                os.environ, {"ATLAS_MEMORY_CAPTURE": "off"}, clear=False
-            ),
+            mock.patch.dict(os.environ, {"ATLAS_MEMORY_CAPTURE": "off"}, clear=False),
         ):
             # ATLAS_MEMORY_CAPTURE=off makes main() hit its first sys.exit(0);
             # the patched sys.exit raises RuntimeError, which escapes main(),
@@ -612,6 +876,174 @@ class OuterMainGuardTest(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 exec(compile(source, src_path, "exec"), g)
         self.assertGreaterEqual(guard_calls.call_count, 2)
+
+
+# Fake secrets are assembled from parts so no scanner (or this repo) sees a live-looking literal.
+def _s(*parts):
+    return "".join(parts)
+
+
+_STRIPE = _s("sk", "_live_", "51HAbCdEfGhIjKlMnOpQrStUv")
+_JWT = _s("ey", "JhbGciOiJIUzI1NiJ9.", "ey", "JzdWIiOiIxMjM0In0.", "c2lnbmF0dXJlMTIz")
+_GHP = _s("gh", "p_", "aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789")
+_AWS = _s("AK", "IAIOSFODNN7EXAMPLE")
+_SLACK = _s("xo", "xb-", "1234567890-abcdefghij")
+_PEM = _s(
+    "-----BEGIN RSA PRIVATE",
+    " KEY-----\nMIIEowTOPSECRETbody\n-----END RSA PRIVATE",
+    " KEY-----",
+)
+_ANT = _s("sk", "-ant-api03-", "AbCdEfGhIjKlMnOpQrStUvWxYz")
+_GOOG = _s("AI", "zaSyA-1234567890abcdefghijklmnopqrstu")
+
+# (text, substring that must NOT survive). 15 secret shapes.
+SECRET_SHAPES = [
+    (f"Use API key {_STRIPE} now", "51HAbCdEfGhIjKlMn"),
+    (f"Send Bearer {_JWT} on every call", "c2lnbmF0dXJlMTIz"),
+    ("and password hunter2xyz please", "hunter2xyz"),
+    ("config api_key=AbCd1234EfGh5678 in .env", "AbCd1234EfGh5678"),
+    (f"token {_GHP} leaked", "aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789"),
+    (f"aws {_AWS} is the id", _AWS),
+    (f"slack {_SLACK} works", "1234567890-abcdefghij"),
+    (f"key {_PEM}", "TOPSECRETbody"),
+    ("db postgres://admin:S3cr3tPw@db.internal:5432/app", "S3cr3tPw"),
+    ('CLIENT_SECRET="very secret value with spaces"', "very secret value"),
+    (f"anthropic {_ANT}", "AbCdEfGhIjKlMnOpQrStUvWxYz"),
+    ("Authorization: Basic dXNlcjpwYXNzd29yZDEyMw==", "dXNlcjpwYXNzd29yZDEyMw"),
+    (f"jwt {_JWT} here", "JzdWIiOiIxMjM0In0"),
+    (f"google {_GOOG}", "1234567890abcdefghijklmnopqrstu"),
+    ("DB_PASSWORD: 'p@ss w0rd!'", "p@ss w0rd"),
+]
+
+
+class MemoryCaptureRedactionTest(unittest.TestCase):
+    """AuditConnectors F8: secrets in captured user text never reach MEMORY.md."""
+
+    def test_every_secret_shape_is_redacted(self):
+        import atlas_memory
+
+        for text, secret in SECRET_SHAPES:
+            with self.subTest(text=text):
+                out = atlas_memory.redact_secrets(text)
+                self.assertNotIn(secret, out)
+                self.assertIn("[REDACTED]", out)
+                self.assertEqual(out, atlas_memory.redact_secrets(out), "idempotent")
+
+    def test_ordinary_lessons_are_untouched(self):
+        import atlas_memory
+
+        for text in (
+            "Prefer alpha over beta",
+            "User correction (atlas): password reset flow is slow, author: bob",
+            "Use ctx_read, not cat; the token budget is 200k",
+            "Run tests with python3 -m unittest, see https://example.com/docs",
+        ):
+            self.assertEqual(atlas_memory.redact_secrets(text), text)
+
+    def test_captured_corrections_never_persist_secrets(self):
+        import atlas_memory
+
+        tmp = tempfile.mkdtemp()
+        db = os.path.join(tmp, "atlas.db")
+        conn = atlas_db.connect(db)
+        atlas_db.init(conn)
+        pid = atlas_db.register_project(conn, "/repo/atlas")
+        rid = atlas_db.start_run(conn, pid, "sec-sess")
+        conn.execute(
+            "UPDATE runs SET orchestrating=1, started_at=100 WHERE id=?", (rid,)
+        )
+        # user_correction rows are capped at 5 per capture: seed batches of 5 across sessions
+        batches = [SECRET_SHAPES[i : i + 5] for i in range(0, len(SECRET_SHAPES), 5)]
+        for n, batch in enumerate(batches):
+            sid = f"sec-sess-{n}" if n else "sec-sess"
+            if n:
+                rid = atlas_db.start_run(conn, pid, sid)
+                conn.execute(
+                    "UPDATE runs SET orchestrating=1, started_at=100 WHERE id=?", (rid,)
+                )
+            for j, (text, _) in enumerate(batch):
+                atlas_db.insert_signal(
+                    conn,
+                    sid,
+                    {
+                        "message_uuid": f"m{n}{j}",
+                        "signal_type": "user_correction",
+                        "weight": 1.0,
+                        "snippet": text,
+                    },
+                )
+        conn.commit()
+        conn.close()
+
+        home = os.path.join(tmp, "home")
+        env = {"ATLAS_DB": db, "ATLAS_HOME": home}
+        with (
+            mock.patch.dict(os.environ, env),
+            mock.patch.object(atlas_hook_guard, "_state_dir", lambda: tmp),
+            mock.patch.object(
+                memory_capture, "_seen_hashes_path", lambda: os.path.join(tmp, ".seen")
+            ),
+            mock.patch.object(atlas_hook_guard, "should_run", lambda *a, **k: True),
+        ):
+            for n in range(len(batches)):
+                sid = f"sec-sess-{n}" if n else "sec-sess"
+                sys.stdin = io.StringIO(
+                    json.dumps({"session_id": sid, "cwd": "/repo/atlas"})
+                )
+                try:
+                    memory_capture.main()
+                except SystemExit:
+                    pass
+                finally:
+                    sys.stdin = sys.__stdin__
+            memory_md = os.path.join(home, "memory", "MEMORY.md")
+            self.assertTrue(
+                os.path.exists(memory_md), "capture should have written entries"
+            )
+            stored = open(memory_md, encoding="utf-8").read()
+            snapshot = atlas_memory.load_snapshot()["memory"]
+        self.assertIn("[REDACTED]", stored)
+        for _, secret in SECRET_SHAPES:
+            self.assertNotIn(secret, stored)
+            self.assertNotIn(secret, snapshot)
+
+    def test_preexisting_secret_is_scrubbed_from_the_injected_snapshot(self):
+        import atlas_memory
+
+        home = tempfile.mkdtemp()
+        with mock.patch.dict(os.environ, {"ATLAS_HOME": home}):
+            mem = os.path.join(home, "memory")
+            os.makedirs(mem)
+            with open(os.path.join(mem, "MEMORY.md"), "w", encoding="utf-8") as fh:
+                fh.write("User correction (atlas): use api_key=AbCd1234EfGh5678")
+            snap = atlas_memory.load_snapshot()["memory"]
+        self.assertNotIn("AbCd1234EfGh5678", snap)
+
+    def test_db_open_failure_leaves_a_fault_trace(self):
+        tmp = tempfile.mkdtemp()
+        bad = os.path.join(tmp, "atlas.db")
+        with mock.patch.dict(os.environ, {"ATLAS_DB": bad, "ATLAS_HOME": tmp}):
+            open(bad, "w").close()
+            with (
+                mock.patch.object(atlas_hook_guard, "_state_dir", lambda: tmp),
+                mock.patch.object(atlas_hook_guard, "should_run", lambda *a, **k: True),
+                mock.patch.object(
+                    memory_capture.sqlite3,
+                    "connect",
+                    side_effect=memory_capture.sqlite3.OperationalError("boom"),
+                ),
+            ):
+                sys.stdin = io.StringIO(
+                    json.dumps({"session_id": "s", "cwd": "/repo/atlas"})
+                )
+                try:
+                    memory_capture.main()
+                except SystemExit:
+                    pass
+                finally:
+                    sys.stdin = sys.__stdin__
+            faults = os.path.join(tmp, "hook-faults.jsonl")
+            self.assertIn("memory_capture", open(faults, encoding="utf-8").read())
 
 
 if __name__ == "__main__":

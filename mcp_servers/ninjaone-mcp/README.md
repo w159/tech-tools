@@ -14,7 +14,7 @@ A Model Context Protocol (MCP) server for interacting with NinjaOne, featuring a
 This MCP server uses a **hierarchical tool loading approach** instead of exposing all tools upfront:
 
 1. **Navigation Phase**: Initially exposes only a navigation tool (`ninjaone_navigate`)
-2. **Domain Selection**: User selects a domain (devices, organizations, alerts, tickets)
+2. **Domain Selection**: User selects a domain (devices, organizations, alerts, tickets, queries, automation, directory)
 3. **Domain Tools**: Server exposes domain-specific tools after selection
 4. **Lazy Loading**: Domain handlers and the NinjaOne client are loaded on-demand
 

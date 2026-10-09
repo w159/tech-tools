@@ -1,7 +1,7 @@
 ---
 name: atlas-ux-test
-description: Use when asked to run a UX test swarm, full UI/UX test pass, persona testing review, or pre-release frontend sweep on any web app, or to re-test after fixes from a previous run. Discovers the target app from the repo automatically and adapts to any frontend stack. Drives persona generation, scripted data entry, real-browser walkthroughs, fuzzing, and an independent calc oracle, then gates on whether the CLIENT surface is actually correct.
-when_to_use: asked to run a UX test swarm, full UI/UX test pass, persona testing review, or pre-release frontend sweep on any web app, or to re-test after fixes from a previous run. Discovers the target app from the repo automatically and adapts to any frontend stack. Drives persona generation, scripted data entry, real-browser walkthroughs, fuzzing, and an independent calc oracle, then gates on whether the CLIENT surface is actually correct
+description: "Runs a UX test swarm on a web app: auto-discovers the app, generates personas, drives real-browser walkthroughs, data entry and fuzzing with an independent calc oracle, then gates on client-surface correctness. Use when asked for a full UI/UX test pass, persona testing, pre-release frontend sweep, or re-test after fixes."
+when_to_use: "UX test swarm, persona testing, pre-release sweep, full UI pass, re-test after fixes, fuzz the forms"
 allowed-tools: Read, Glob, Grep, Bash
 ---
 

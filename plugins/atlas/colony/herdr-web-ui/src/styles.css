@@ -1,0 +1,1570 @@
+/*
+ * Shell layout + shared primitives for herdr web ui.
+ *
+ * Every color, size and space is a :root token; DESIGN.md is the human-readable
+ * mirror of this block and the two must not drift. Dark is the default theme and
+ * `[data-theme="light"]` overrides the color group only (src/lib/settings.ts sets
+ * the attribute); `[data-density="compact"]` overrides the type scale and row
+ * heights. The base blocks are the amber palette, the default and the look before
+ * settings load; `[data-palette]` blocks override them for the opt-in report,
+ * charcoal and catppuccin palettes. xterm cannot read CSS custom properties, so the --term-* group
+ * is mirrored in settings.ts `terminalTheme()`.
+ * Component-scoped rules live beside their component (Sidebar.css,
+ * PaneTerminal.css, ...); this file owns the app shell, the header and the
+ * primitives (.icon-button, .btn, .pill, .badge, .segmented, .modal, .menu, .kbd)
+ * that more than one component uses.
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* surfaces (tonal steps, darkest to lightest): lamp-lit graphite, warm not tinted */
+  --bg: #12100e;
+  --bg-panel: #181613;
+  --bg-elevated: #211e1a;
+  --bg-hover: #2a2621;
+  --bg-input: #1c1916;
+  --border: #2d2924;
+  --border-strong: #3e3830;
+  /* the chat's user bubble: no edge where --bg-elevated alone parts it from --bg (the dark
+     amber, report and charcoal palettes), --border where the two surfaces sit close */
+  --bubble-border: transparent;
+
+  /* text */
+  --text: #d8d0c3;
+  --text-dim: #9b9183;
+  --text-strong: #f2ebdf;
+
+  /* the saturated colors: ONE amber (selection, focus, cursor and the user's own
+     action - an amber-phosphor terminal) and the four agent states, none of them amber */
+  --accent: #f0a830;
+  --accent-tint: rgba(240, 168, 48, 0.13);
+  --primary: #f0a830;
+  --primary-hover: #f6bb55;
+  --primary-text: #1b1407;
+  --primary-tint: rgba(240, 168, 48, 0.16);
+  --status-idle: #9b9183;
+  --status-working: #6cb8d6;
+  --status-blocked: #ff7b70;
+  --status-done: #93c36b;
+  --status-working-tint: rgba(108, 184, 214, 0.14);
+  --status-blocked-tint: rgba(255, 123, 112, 0.14);
+  --status-done-tint: rgba(147, 195, 107, 0.14);
+  --danger-tint: rgba(255, 123, 112, 0.12);
+  --danger-text: #ffd9d4;
+
+  /* overlays */
+  --scrim: rgba(8, 6, 4, 0.55);
+  --shadow-drawer: 0 0 40px rgba(0, 0, 0, 0.6);
+  --shadow-pop: 0 16px 48px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--border);
+  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.35);
+
+  /* terminal theme: mirrored verbatim in src/lib/settings.ts terminalTheme() */
+  --term-bg: #181613;
+  --term-fg: #d8d0c3;
+  --term-cursor: #f0a830;
+  --term-selection: #4a3d26;
+
+  /* type (comfortable density; compact overrides below) */
+  --font-ui: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", "Malgun Gothic", sans-serif;
+  /* "JetBrains Mono Web" is the bundled face (fonts/fonts.css): after the icon font, which draws
+     the private use area alone, and never in the terminal's own stack (lib/fontFamily.ts) */
+  --font-mono: "Symbols Nerd Font Mono", "JetBrains Mono Web", ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, "D2Coding", monospace;
+  --fs-2xs: 11px;
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-md: 14px;
+  --fs-chat: 15px; /* text that is read at length: chat prose, the user's bubble, the message box with a mouse */
+  --fs-lg: 16px;
+  --fs-xl: 18px;
+  --fs-display: 22px;
+  --fs-input: 16px; /* the one size iOS Safari does not zoom on focus */
+  --lh-tight: 1.2;
+  --lh-base: 1.5;
+  --lh-code: 1.6;
+  --lh-prose: 1.65;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --tracking-tight: -0.01em;
+  --tracking-display: -0.02em;
+  --tracking-caps: 0.06em;
+
+  /* space (4px base) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* radii */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
+  --radius-pill: 999px;
+
+  /* sizes */
+  --header-h: 52px;
+  /* the header from 769px, in either density: one line beside the sidebar's own top row */
+  --header-h-wide: 46px;
+  --sidebar-w: 320px;
+  --control-h: 34px;
+  --touch-target: 40px;
+  --keybar-h: 48px;
+  --row-h: 56px;
+  --chip-h: 20px;
+  --icon-size: 18px;
+  --mark-size: 22px;
+  --avatar-size: 32px;
+  --dot-size: 7px;
+  --rail-w: 3px;
+  --hairline: 1px;
+  --content-w: 820px;
+  /* the chat lane: transcript, composer column, held list (Settings → Chat width, lib/settings.ts).
+     At the Default step PaneTerminal writes the pane's own lane on .terminal-stack, as one
+     length (chatLaneLength: 71.43% of the pane in px, min 820px, max 60rem); this is that rule's floor, for a
+     pane not measured yet. Never a percentage here: each column would resolve it against its
+     own box and the columns would differ by their gutters */
+  --chat-w: var(--content-w);
+  --palette-w: 640px;
+  --palette-top: 12vh;
+
+  /* focus */
+  --ring: 2px solid var(--accent);
+  --ring-offset: 2px;
+
+  /* motion: only real state changes move (drawer, dialogs, working/reconnecting pulse) */
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-pulse: 1600ms;
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
+  /* the pulse jumps between its two looks: a smooth one has the browser draw a new frame at
+     every display refresh for as long as an agent works (60+ a second), which stutters a
+     video playing beside the app; two steps draw about one frame a second */
+  --ease-pulse: steps(2, jump-none);
+
+  /* layers */
+  --z-banner: 5;
+  --z-popover: 10;
+  --z-scrim: 15;
+  --z-drawer: 20;
+  --z-modal: 30;
+  --z-droplet: 40;
+
+  /* in-app alert (components/Droplet.css): island black in either theme, so one set */
+  --droplet-bg: #000;
+  --droplet-text: #f5f5f7;
+  --droplet-text-dim: rgba(245, 245, 247, 0.62);
+  --droplet-blocked: #ff8a80;
+  --droplet-done: #9fd47a;
+  --droplet-mark-bg: rgba(255, 255, 255, 0.1);
+  --droplet-ring: rgba(255, 255, 255, 0.1);
+  --droplet-shadow: rgba(0, 0, 0, 0.35);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #eeeae2;
+  --bg-panel: #faf8f3;
+  --bg-elevated: #f2eee6;
+  --bg-hover: #e8e2d6;
+  --bg-input: #fffdf9;
+  --border: #dcd4c6;
+  --border-strong: #c5baa8;
+  --bubble-border: var(--border);
+  --text: #2a251f;
+  --text-dim: #685e52;
+  --text-strong: #16120d;
+  --accent: #8c5000;
+  --accent-tint: rgba(140, 80, 0, 0.1);
+  --primary: #c57d12;
+  --primary-hover: #d48c1f;
+  --primary-text: #1b1407;
+  --primary-tint: rgba(197, 125, 18, 0.14);
+  --status-idle: #685e52;
+  --status-working: #155a72;
+  --status-blocked: #a82323;
+  --status-done: #2f6317;
+  --status-working-tint: rgba(21, 90, 114, 0.12);
+  --status-blocked-tint: rgba(168, 35, 35, 0.12);
+  --status-done-tint: rgba(47, 99, 23, 0.12);
+  --danger-tint: rgba(168, 35, 35, 0.1);
+  --danger-text: #8f1d1d;
+  --scrim: rgba(40, 32, 22, 0.35);
+  --shadow-drawer: 0 0 40px rgba(40, 32, 22, 0.22);
+  --shadow-pop: 0 16px 48px rgba(40, 32, 22, 0.16), 0 0 0 1px var(--border);
+  --shadow-card: 0 4px 16px rgba(40, 32, 22, 0.07);
+  --term-bg: #faf8f3;
+  --term-fg: #2a251f;
+  --term-cursor: #8c5000;
+  --term-selection: #f0d9ae;
+}
+
+/* Dark report palette (Settings → Appearance → Colors): a near-black blue-grey canvas
+   with 1px hairlines and near-square panels. The user's own action (Send, primary
+   buttons) is white on the canvas; electric blue is kept for small marks only - the
+   selected row's rail, focus, links, the cursor. Agent states carry the report's
+   meaning colors: amber working, red input, green done, none of them blue. */
+[data-palette="report"] {
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 3px;
+  --radius-xl: 4px;
+  --radius-2xl: 6px;
+}
+
+[data-theme="dark"][data-palette="report"] {
+  --bg: #0a0d12;
+  --bg-panel: #0f1319;
+  --bg-elevated: #141922;
+  --bg-hover: #1a212c;
+  --bg-input: #0c1016;
+  --border: #1e2530;
+  --border-strong: #2a3340;
+  --text: #b4bdc9;
+  --text-dim: #8792a3;
+  --text-strong: #e8ecf2;
+  --accent: #4c9aff;
+  --accent-tint: rgba(76, 154, 255, 0.12);
+  --primary: #e8ecf2;
+  --primary-hover: #ffffff;
+  --primary-text: #0a0d12;
+  --primary-tint: rgba(232, 236, 242, 0.1);
+  --status-idle: #8792a3;
+  --status-working: #f5b544;
+  --status-blocked: #ff6b7a;
+  --status-done: #3ddc97;
+  --status-working-tint: rgba(245, 181, 68, 0.14);
+  --status-blocked-tint: rgba(255, 107, 122, 0.14);
+  --status-done-tint: rgba(61, 220, 151, 0.14);
+  --danger-tint: rgba(255, 107, 122, 0.12);
+  --danger-text: #ffd6db;
+  --scrim: rgba(4, 6, 10, 0.6);
+  /* resting surfaces carry no shadow: the one card, the composer's box, is a hairline */
+  --shadow-card: none;
+  --term-bg: #0f1319;
+  --term-fg: #c9d1dc;
+  --term-cursor: #4c9aff;
+  --term-selection: #1f3a66;
+}
+
+/* Report and charcoal share plain paper in light; charcoal's own light block below
+   swaps the blue for ink */
+[data-theme="light"]:is([data-palette="report"], [data-palette="charcoal"]) {
+  --bg: #f2f2f0;
+  --bg-panel: #fafaf9;
+  --bg-elevated: #efefed;
+  --bg-hover: #e6e6e3;
+  --bg-input: #ffffff;
+  --border: #dcdcd8;
+  --border-strong: #c4c4bf;
+  --text: #242424;
+  --text-dim: #5f5b56;
+  --text-strong: #111111;
+  --accent: #1f5fcc;
+  --accent-tint: rgba(31, 95, 204, 0.1);
+  --primary: #242424;
+  --primary-hover: #3a3a3a;
+  --primary-text: #fafaf9;
+  --primary-tint: rgba(36, 36, 36, 0.1);
+  --scrim: rgba(20, 20, 20, 0.35);
+  --shadow-drawer: 0 0 40px rgba(20, 20, 20, 0.2);
+  --shadow-pop: 0 16px 48px rgba(20, 20, 20, 0.14), 0 0 0 1px var(--border);
+  --shadow-card: 0 4px 16px rgba(20, 20, 20, 0.06);
+  --term-bg: #fafaf9;
+  --term-fg: #242424;
+  --term-cursor: #1f5fcc;
+  --term-selection: #cfe0fb;
+}
+
+/* Charcoal: neutral charcoal, a Ghostty-style terminal (the panel is its #171717), no
+   chrome hue - selection, focus, cursor and the user's action are near-white; agent
+   states are muted as in the terminal palette. Light keeps the base paper with ink. */
+[data-theme="dark"][data-palette="charcoal"] {
+  --bg: #0f0f0f;
+  --bg-panel: #171717;
+  --bg-elevated: #1f1f1f;
+  --bg-hover: #262626;
+  --bg-input: #141414;
+  --border: #262626;
+  --border-strong: #363636;
+  --text: #cbc7c0;
+  --text-dim: #918c85;
+  --text-strong: #f5f2ec;
+  --accent: #e8e4dc;
+  --accent-tint: rgba(232, 228, 220, 0.1);
+  --primary: #e8e4dc;
+  --primary-hover: #f5f2ec;
+  --primary-text: #171717;
+  --primary-tint: rgba(232, 228, 220, 0.12);
+  --status-idle: #9a958e;
+  --status-working: #c2a2af;
+  --status-blocked: #e0877f;
+  --status-done: #a7b789;
+  --status-working-tint: rgba(194, 162, 175, 0.14);
+  --status-blocked-tint: rgba(224, 135, 127, 0.14);
+  --status-done-tint: rgba(167, 183, 137, 0.14);
+  --danger-tint: rgba(224, 135, 127, 0.12);
+  --danger-text: #f2c9c4;
+  --scrim: rgba(0, 0, 0, 0.6);
+  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --term-bg: #171717;
+  --term-fg: #cbc7c0;
+  --term-cursor: #cbc7c0;
+  --term-selection: #49443d;
+}
+
+[data-theme="light"][data-palette="charcoal"] {
+  --accent: #242424;
+  --accent-tint: rgba(36, 36, 36, 0.08);
+  --term-cursor: #242424;
+  --term-selection: #dedad3;
+}
+
+/* Catppuccin (catppuccin.com/palette): Mocha in dark, Latte in light, mapped by the
+   Catppuccin style guide and its Zed port's surfaces - the content (chat canvas, terminal)
+   on Base, the chrome (sidebar, header, tabs) and popovers on Mantle, dimmed text in
+   Subtext1, a Surface0 hover in Mocha and a Crust one in Latte (the darkest Subtext1 stays
+   AA on). Surface borders, Mauve for the accent, Blue/Maroon/Green for working/input/done,
+   a Rosewater cursor and the style guide's Overlay2-at-25% selection. Mocha uses palette
+   colors; only the primary hover (Mauve lightened) and the tints are derived. Maroon, not
+   Red, keeps input readable on a hovered row. Latte's accents sit under 4.5:1 on its own
+   surfaces, so the style guide's "legibility first" applies: each keeps its hue and is
+   darkened until it passes AA (Mauve 17%, Red 18%, Blue 22%, Green 37%). */
+[data-theme="dark"][data-palette="catppuccin"] {
+  --bg: #1e1e2e;
+  --bg-panel: #181825;
+  --bg-elevated: #181825;
+  --bg-hover: #313244;
+  --bg-input: #11111b;
+  --border: #313244;
+  --border-strong: #45475a;
+  --bubble-border: var(--border);
+  --text: #cdd6f4;
+  --text-dim: #bac2de;
+  --text-strong: #cdd6f4;
+  --accent: #cba6f7;
+  --accent-tint: rgba(203, 166, 247, 0.12);
+  --primary: #cba6f7;
+  --primary-hover: #d3b3f8;
+  --primary-text: #11111b;
+  --primary-tint: rgba(203, 166, 247, 0.16);
+  --status-idle: #a6adc8;
+  --status-working: #89b4fa;
+  --status-blocked: #eba0ac;
+  --status-done: #a6e3a1;
+  --status-working-tint: rgba(137, 180, 250, 0.14);
+  --status-blocked-tint: rgba(235, 160, 172, 0.14);
+  --status-done-tint: rgba(166, 227, 161, 0.14);
+  --danger-tint: rgba(235, 160, 172, 0.12);
+  --danger-text: #f2cdcd;
+  --scrim: rgba(17, 17, 27, 0.6);
+  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --term-bg: #1e1e2e;
+  --term-fg: #cdd6f4;
+  --term-cursor: #f5e0dc;
+  --term-selection: #3b3d4f;
+}
+
+[data-theme="light"][data-palette="catppuccin"] {
+  --bg: #eff1f5;
+  --bg-panel: #e6e9ef;
+  --bg-elevated: #e6e9ef;
+  --bg-hover: #dce0e8;
+  --bg-input: #eff1f5;
+  --border: #ccd0da;
+  --border-strong: #bcc0cc;
+  --text: #4c4f69;
+  --text-dim: #5c5f77;
+  --text-strong: #4c4f69;
+  --accent: #712fc6;
+  --accent-tint: rgba(113, 47, 198, 0.1);
+  --primary: #712fc6;
+  --primary-hover: #8839ef;
+  --primary-text: #eff1f5;
+  --primary-tint: rgba(113, 47, 198, 0.14);
+  --status-idle: #5c5f77;
+  --status-working: #1750bf;
+  --status-blocked: #ac0c2f;
+  --status-done: #28651b;
+  --status-working-tint: rgba(23, 80, 191, 0.12);
+  --status-blocked-tint: rgba(172, 12, 47, 0.12);
+  --status-done-tint: rgba(40, 101, 27, 0.12);
+  --danger-tint: rgba(172, 12, 47, 0.1);
+  --danger-text: #ac0c2f;
+  --scrim: rgba(76, 79, 105, 0.35);
+  --shadow-drawer: 0 0 40px rgba(76, 79, 105, 0.22);
+  --shadow-pop: 0 16px 48px rgba(76, 79, 105, 0.16), 0 0 0 1px var(--border);
+  --shadow-card: 0 4px 16px rgba(76, 79, 105, 0.07);
+  --term-bg: #eff1f5;
+  --term-fg: #4c4f69;
+  --term-cursor: #dc8a78;
+  --term-selection: #d2d4dc;
+}
+
+/* Lilac: one quiet lavender. Light is the look it was drawn for: a lavender canvas (`--bg`)
+   under paler lavender chrome (`--bg-panel`: sidebar, header, tabs), indigo ink, and an indigo
+   accent for the user's own action. Dark is the same hue at night: an indigo-black canvas, violet
+   chrome and a pale lilac accent. No gradient and no translucency: every surface is flat. */
+[data-theme="dark"][data-palette="lilac"] {
+  --bg: #16152b;
+  --bg-panel: #1c1b34;
+  --bg-elevated: #23223f;
+  --bg-hover: #2c2a4f;
+  --bg-input: #13122a;
+  --border: #2f2d52;
+  --border-strong: #423f6e;
+  --text: #dcdaf4;
+  --text-dim: #a5a2cc;
+  --text-strong: #f2f1ff;
+  --accent: #b3abff;
+  --accent-tint: rgba(179, 171, 255, 0.13);
+  --primary: #b3abff;
+  --primary-hover: #c5bfff;
+  --primary-text: #17163a;
+  --primary-tint: rgba(179, 171, 255, 0.16);
+  --status-idle: #a5a2cc;
+  --status-working: #85b8ff;
+  --status-blocked: #ff94ad;
+  --status-done: #92d9ab;
+  --status-working-tint: rgba(133, 184, 255, 0.14);
+  --status-blocked-tint: rgba(255, 148, 173, 0.14);
+  --status-done-tint: rgba(146, 217, 171, 0.14);
+  --danger-tint: rgba(255, 148, 173, 0.12);
+  --danger-text: #ffd6df;
+  --scrim: rgba(9, 8, 22, 0.6);
+  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --term-bg: #18172f;
+  --term-fg: #dcdaf4;
+  --term-cursor: #b3abff;
+  --term-selection: #3a3768;
+}
+
+[data-theme="light"][data-palette="lilac"] {
+  --bg: #f0eefc;
+  --bg-panel: #f6f5fe;
+  --bg-elevated: #fbfaff;
+  --bg-hover: #e8e5f8;
+  --bg-input: #fdfcff;
+  --border: #e0dcf4;
+  --border-strong: #c8c2ea;
+  --text: #2b2d4d;
+  --text-dim: #545779;
+  --text-strong: #17193a;
+  --accent: #4a42c2;
+  --accent-tint: rgba(74, 66, 194, 0.12);
+  --primary: #4a42c2;
+  --primary-hover: #5951d0;
+  --primary-text: #ffffff;
+  --primary-tint: rgba(74, 66, 194, 0.14);
+  --status-idle: #545779;
+  --status-working: #1f4aa6;
+  --status-blocked: #9c2044;
+  --status-done: #1f5c39;
+  --status-working-tint: rgba(31, 74, 166, 0.12);
+  --status-blocked-tint: rgba(156, 32, 68, 0.12);
+  --status-done-tint: rgba(31, 92, 57, 0.12);
+  --danger-tint: rgba(156, 32, 68, 0.1);
+  --danger-text: #8c1f3a;
+  --scrim: rgba(43, 35, 100, 0.32);
+  --shadow-drawer: 0 0 40px rgba(60, 50, 130, 0.22);
+  --shadow-pop: 0 16px 48px rgba(60, 50, 130, 0.16), 0 0 0 1px var(--border);
+  --shadow-card: 0 4px 16px rgba(60, 50, 130, 0.08);
+  --term-bg: #f8f7fe;
+  --term-fg: #2b2d4d;
+  --term-cursor: #4a42c2;
+  --term-selection: #dcd7f8;
+}
+
+[data-chat-width="narrow"] {
+  --chat-w: var(--content-w);
+}
+
+[data-chat-width="wide"] {
+  --chat-w: 72rem;
+}
+
+/* the whole pane: each column keeps its own gutter */
+[data-chat-width="full"] {
+  --chat-w: 100%;
+}
+
+[data-density="compact"] {
+  --fs-2xs: 10px;
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-md: 13px;
+  --fs-chat: 14px;
+  --fs-lg: 15px;
+  --fs-xl: 17px;
+  --fs-display: 21px;
+  --lh-base: 1.45;
+  --header-h: 46px;
+  --sidebar-w: 300px;
+  --control-h: 32px;
+  --row-h: 44px;
+  --chip-h: 18px;
+  --avatar-size: 26px;
+}
+
+/* after the density block on purpose: same specificity, and from 769px both densities share one
+   header height */
+@media (min-width: 769px) {
+  :root {
+    --header-h: var(--header-h-wide);
+  }
+}
+
+/* ---------- reset + base ---------- */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-regular);
+  line-height: var(--lh-base);
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: var(--ring);
+  outline-offset: var(--ring-offset);
+}
+
+/* only dots pulse (connection, RUN, "Working…"): state words stay at full contrast, so the
+   trough can go deep enough to read as motion */
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* read by assistive tech, not drawn: a live status that would repeat what a dot shows */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- shell ---------- */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  height: var(--app-height, 100dvh);
+}
+
+/* ?chrome=pane: a title strip over the terminal/chat, nothing else (Command Center inspector iframe) */
+.pane-strip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 0 0 auto;
+  height: 32px;
+  padding: 0 var(--space-3);
+  border-bottom: var(--hairline) solid var(--border);
+  background: var(--bg-panel);
+  font-size: 12px;
+}
+
+.pane-strip-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ?chrome=full: the tabs live inside the one strip (no second row), flat on the strip's own surface */
+.pane-strip-colony .tab-strip {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  padding: 0;
+  border-bottom: 0;
+  --strip-bg: var(--bg-panel);
+}
+
+/* ?chrome=full on a phone: the Atlas tab bar is the one bottom bar; the terminal keys show only while
+   the soft keyboard is up (lib/viewport.ts sets [data-keyboard]), when that bar is out of sight */
+html[data-chrome="full"]:not([data-keyboard]) .key-bar {
+  display: none;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 0 0 auto;
+  height: calc(var(--header-h) + env(safe-area-inset-top, 0px));
+  padding: env(safe-area-inset-top, 0px) calc(var(--space-3) + env(safe-area-inset-right, 0px)) 0
+    calc(var(--space-3) + env(safe-area-inset-left, 0px));
+  background: var(--bg-panel);
+  border-bottom: var(--hairline) solid var(--border);
+  /* Keep the header's painted background at the top of the app. The home-screen
+     status-bar layout is controlled by index.html; see docs/ios-home-screen-testing.md. */
+  position: sticky;
+  top: 0;
+}
+
+.app-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  width: var(--sidebar-w);
+  flex: 0 0 var(--sidebar-w);
+  min-height: 0;
+  background: var(--bg-panel);
+  border-right: var(--hairline) solid var(--border);
+  padding-left: env(safe-area-inset-left, 0px);
+}
+
+.app.sidebar-collapsed .sidebar {
+  display: none;
+}
+
+.scrim {
+  display: none;
+}
+
+/* the pane and, over it, its workspace's tab strip when there is more than one pane to pick */
+.pane-column {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.terminal-host {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  /* the terminal's own colour, not the panel's: a palette may set the two apart (catppuccin),
+     and the rows the grid leaves over must not show as a band of another colour */
+  background: var(--term-bg);
+  padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
+
+/* the chat's composer takes the home-indicator inset itself (Composer.css): kept here as
+   well, it stacked under the composer's own padding as a band of another colour */
+.terminal-host:has(.composer) {
+  padding-bottom: 0;
+}
+
+/* ---------- header ---------- */
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 0 0 auto;
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--lh-tight);
+  color: var(--text-strong);
+  white-space: nowrap;
+}
+
+.brand-mark {
+  display: block;
+  width: var(--mark-size);
+  height: var(--mark-size);
+}
+
+.brand-sub {
+  color: var(--text-dim);
+  font-weight: var(--fw-medium);
+}
+
+/* The selected pane on one line: mark and title, then PC › workspace › folder. The title may
+   shorten; the crumb may not: when it does not fit whole beside a whole title it wraps to a second
+   line that the height clips, so it is all there or gone, and the title has the row. The full
+   location is in the tooltip and at the top of the More menu. */
+.context {
+  --context-line: calc(var(--fs-lg) * var(--lh-base));
+  display: flex;
+  flex-flow: row wrap;
+  align-items: center;
+  justify-content: flex-start;
+  column-gap: var(--space-3);
+  row-gap: var(--header-h);
+  flex: 1 1 auto;
+  min-width: 0;
+  max-height: var(--context-line);
+  /* the title never touches the lens switch */
+  margin-right: var(--space-1);
+  overflow: hidden;
+  line-height: var(--lh-tight);
+}
+
+.context-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  /* the first line is as tall as the box that clips the second: the title sits the same with
+     the crumb beside it or gone */
+  min-height: var(--context-line);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+  color: var(--text-strong);
+  letter-spacing: var(--tracking-tight);
+}
+
+.context-title-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-sub {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: 0 0 auto;
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+/* the PC's name is whole in the crumb, like the rest of it: the crumb fits or is not drawn.
+   Its cap (Machines.css) is for the header with no pane, where it sits beside the brand. */
+.context-sub .machine-context-name {
+  max-width: none;
+  overflow: visible;
+}
+
+/* the switch keeps its size; the pane title (.context) is the header's one flexible item */
+.view-switch {
+  flex: 0 0 auto;
+}
+
+/* the workspace-list toggle and the palette: in the bar below 769px and beside a collapsed
+   sidebar, the sidebar's own top row otherwise (further down) */
+.header-side {
+  display: contents;
+}
+
+.header-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-size: var(--fs-xs);
+}
+
+/* one chip for the connection, drawn only while the bridge is not live; the herdr version lives
+   in its tooltip and in Settings */
+.conn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--chip-h);
+  white-space: nowrap;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--bg-elevated);
+  color: var(--text-dim);
+}
+
+/* live is the state nobody needs told: the chip stays in the document as a status a screen
+   reader can read, and takes no room. Never display: none. */
+.conn-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.conn-dot {
+  flex: 0 0 auto;
+  width: var(--dot-size);
+  height: var(--dot-size);
+  border-radius: var(--radius-pill);
+  background: var(--status-done);
+}
+
+.conn-reconnecting {
+  color: var(--status-working);
+}
+
+.conn-reconnecting .conn-dot {
+  background: var(--status-working);
+  animation: pulse var(--dur-pulse) var(--ease-pulse) infinite;
+}
+
+/* A narrow window: the chip keeps its pulsing dot and gives its word's room to the pane title.
+   The word stays for a screen reader and in the chip's title. */
+@media (max-width: 900px) {
+  .conn-reconnecting {
+    gap: 0;
+  }
+
+  .conn-reconnecting .conn-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+
+/* New tab, Browse files and Alerts are one menu's items (RowMenu, through its portal) */
+.header-more {
+  position: relative;
+  display: inline-flex;
+}
+
+/* nothing to offer but the palette, which has its own button above phone width */
+.header-more.is-phone-only {
+  display: none;
+}
+
+/* alerts are off on this device: the one state of the menu worth a glance. The button's name
+   and the Alerts item say it in words. */
+.header-more-dot {
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-1);
+  width: var(--dot-size);
+  height: var(--dot-size);
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  pointer-events: none;
+}
+
+/* the menu's first thing, two lines on purpose: "PC › workspace", then the whole path in the
+   mono face. It is where a touch screen reads the path. A path longer than six lines scrolls
+   here, so the items under it stay on the screen. */
+.header-more-crumb {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(6em * var(--lh-base));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  color: var(--text-dim);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-base);
+  overflow-wrap: anywhere;
+}
+
+.header-more-path {
+  color: var(--text);
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+}
+
+/* From 769px the header is two zones. Over the sidebar, the sidebar's own top row (its toggle
+   and the palette) on the sidebar's surface, the seam between sidebar and pane running to the
+   top of the window. Over the pane, the pane's surface: under the chat lens no bar and no rule,
+   the transcript scrolls under a short fade (ChatView.css); under the terminal lens the
+   terminal's colour and the rule. A collapsed sidebar leaves one bar. A phone keeps the
+   --bg-panel bar and its rule: the installed app's theme-color matches it. */
+@media (min-width: 769px) {
+  .app-header.is-zoned {
+    background: var(--term-bg);
+  }
+
+  .app-header.is-zoned.is-chat {
+    border-bottom-color: transparent;
+    background: var(--bg);
+  }
+
+  .app:not(.sidebar-collapsed) .app-header.is-zoned {
+    padding-left: 0;
+  }
+
+  /* stretched over the header's top inset and its bottom rule, so the sidebar's surface is
+     one piece from the window's top down */
+  .app:not(.sidebar-collapsed) .header-side {
+    display: flex;
+    flex: 0 0 var(--sidebar-w);
+    align-items: center;
+    align-self: stretch;
+    justify-content: space-between;
+    margin: calc(-1 * env(safe-area-inset-top, 0px)) var(--space-2) calc(-1 * var(--hairline)) 0;
+    padding: env(safe-area-inset-top, 0px) var(--space-3) 0 calc(var(--space-3) + env(safe-area-inset-left, 0px));
+    border-right: var(--hairline) solid var(--border);
+    background: var(--bg-panel);
+  }
+}
+
+/* ---------- primitives ---------- */
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: var(--control-h);
+  height: var(--control-h);
+  padding: 0;
+  background: transparent;
+  border: var(--hairline) solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--text);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.icon-button.is-outlined {
+  border-color: var(--border);
+}
+
+/* a disabled control must not read as the strongest control on screen: 0.7 keeps the dark
+   accent glyph at 4.93:1 on --bg-panel (disabled controls are exempt from the AA minimum) */
+.icon-button:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.icon-button svg {
+  width: var(--icon-size);
+  height: var(--icon-size);
+}
+
+/* hover only where a pointer can hover: after a tap a touch screen keeps :hover on the button */
+@media (hover: hover) {
+  .icon-button:hover:not(:disabled) {
+    background: var(--bg-hover);
+  }
+}
+
+.icon-button:active,
+.icon-button[aria-expanded="true"] {
+  background: var(--bg-elevated);
+  border-color: var(--accent);
+  color: var(--text-strong);
+}
+
+/* after .icon-button on purpose: same specificity, and hidden must win on desktop */
+.drawer-toggle {
+  display: none;
+}
+
+/* text buttons: .btn (neutral), .btn-primary, .btn-danger, .btn-ghost */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: var(--control-h);
+  padding: 0 var(--space-3);
+  background: var(--bg-elevated);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+  text-decoration: none; /* a link styled as a button (Reconnect, Star on GitHub) */
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    opacity var(--dur-fast) var(--ease-out);
+}
+
+.btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+@media (hover: hover) {
+  .btn:hover:not(:disabled) {
+    background: var(--bg-hover);
+    border-color: var(--border-strong);
+  }
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.btn-primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-text);
+}
+
+@media (hover: hover) {
+  .btn-primary:hover:not(:disabled) {
+    background: var(--primary-hover);
+    border-color: var(--primary-hover);
+  }
+}
+
+.btn-danger {
+  background: var(--danger-tint);
+  border-color: var(--status-blocked);
+  color: var(--danger-text);
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text);
+}
+
+@media (hover: hover) {
+  .btn-ghost:hover:not(:disabled) {
+    border-color: transparent;
+  }
+}
+
+/* fingers: the header controls grow to the touch target; the header still fits them */
+@media (pointer: coarse) {
+  .icon-button {
+    width: var(--touch-target);
+    height: var(--touch-target);
+  }
+
+  .btn,
+  .error-retry {
+    height: var(--touch-target);
+  }
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  height: var(--chip-h);
+  padding: 0 var(--space-2);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-pill);
+  font-family: var(--font-mono);
+  font-size: var(--fs-2xs);
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.pill-offline {
+  color: var(--status-blocked);
+  border-color: var(--status-blocked);
+  background: var(--danger-tint);
+}
+
+/* a lens that is on its way: inside a segmented button, so it stays small */
+.pill-soon {
+  height: auto;
+  padding: 0 var(--space-1);
+  margin-left: var(--space-1);
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  text-transform: uppercase;
+}
+
+/* status badge: tinted background + text, the state readable as a word */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: var(--chip-h);
+  padding: 0 var(--space-2);
+  border: var(--hairline) solid transparent;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.badge-idle {
+  color: var(--text-dim);
+  background: var(--bg-elevated);
+}
+
+.badge-working {
+  color: var(--status-working);
+  background: var(--status-working-tint);
+}
+
+/* RUN is the one state that moves: a dot breathes before the word, the word holds still */
+.badge-working::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: var(--radius-pill);
+  background: currentColor;
+  animation: pulse var(--dur-pulse) var(--ease-pulse) infinite;
+}
+
+.badge-blocked {
+  color: var(--status-blocked);
+  background: var(--status-blocked-tint);
+}
+
+.badge-done {
+  color: var(--status-done);
+  background: var(--status-done-tint);
+}
+
+/* a pane herdr could not restore: no status to show, and nothing runs in it */
+.badge-restore-error {
+  color: var(--danger-text);
+  background: var(--danger-tint);
+}
+
+/* unknown keeps the dim text color (contrast) and is told apart by the dashed edge */
+.badge-unknown {
+  color: var(--text-dim);
+  border-color: var(--border);
+  border-style: dashed;
+}
+
+/* segmented control: one selected option, the rest quiet */
+.segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  background: var(--bg-elevated);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.segmented > button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  white-space: nowrap; /* Hangul/CJK may break between any two syllables: keep a label on one line */
+  height: calc(var(--control-h) - 6px);
+  padding: 0 var(--space-3);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.segmented > button svg {
+  width: 15px;
+  height: 15px;
+}
+
+.segmented > button[aria-pressed="true"] {
+  background: var(--bg-hover);
+  color: var(--text-strong);
+}
+
+/* the chosen lens carries the selection color on its glyph, like the rail does in the list */
+.segmented > button[aria-pressed="true"] svg {
+  color: var(--accent);
+}
+
+/* keyboard key hint */
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 5px;
+  border: var(--hairline) solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: var(--fs-2xs);
+  line-height: 1;
+}
+
+/* modal dialog: scrim + centered card; mobile: bottom sheet */
+.modal-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: var(--scrim);
+}
+
+.modal {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 560px);
+  max-height: min(100%, 720px);
+  background: var(--bg-panel);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-pop);
+  overflow: hidden;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: var(--hairline) solid var(--border);
+}
+
+.modal-title {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-semibold);
+  color: var(--text-strong);
+}
+
+.modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-4) var(--space-5);
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  border-top: var(--hairline) solid var(--border);
+}
+
+@media (max-width: 640px) {
+  .modal-scrim {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .modal {
+    width: 100%;
+    max-height: 92%;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+/* A phone's keyboard is up (lib/viewport.ts): the scrim ends where the keyboard begins, as the
+   shell does. An iPhone home screen app keeps the layout viewport at full height under the
+   keyboard, so a sheet on the screen's bottom edge sat behind it, its text field included. */
+[data-keyboard] .modal-scrim {
+  bottom: auto;
+  height: var(--app-height, 100%);
+}
+
+/* the keyboard covers the home indicator: the sheet drops the room it kept for it */
+@media (max-width: 640px) {
+  [data-keyboard] .modal {
+    padding-bottom: 0;
+  }
+}
+
+/* form fields inside dialogs */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: var(--space-4);
+}
+
+.field-label {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  color: var(--text-dim);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+}
+
+.field-hint {
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+}
+
+.input,
+.select {
+  height: var(--control-h);
+  padding: 0 var(--space-3);
+  background: var(--bg-input);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-strong);
+  font: inherit;
+  font-size: var(--fs-input);
+}
+
+/* a bordered field shows focus on its own border; the offset ring is for controls without one */
+.input:focus,
+.select:focus,
+.input:focus-visible,
+.select:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+
+@media (min-width: 641px) {
+  .input,
+  .select {
+    font-size: var(--fs-sm);
+  }
+}
+
+/* popover menu (palette rows, slash/@ completions) */
+.menu {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-1);
+  background: var(--bg-panel);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-pop);
+  overflow: hidden;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-h);
+  padding: var(--space-1) var(--space-2);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-item svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  color: var(--text-dim);
+}
+
+.menu-item[aria-selected="true"] {
+  background: var(--bg-hover);
+  color: var(--text-strong);
+}
+
+@media (hover: hover) {
+  .menu-item:hover {
+    background: var(--bg-hover);
+    color: var(--text-strong);
+  }
+}
+
+.menu-item-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu-item-hint {
+  flex: 0 0 auto;
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+}
+
+.menu-heading {
+  padding: var(--space-2) var(--space-2) var(--space-1);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+/* ---------- sidebar error state (App-owned) ---------- */
+
+.error-state {
+  margin: var(--space-2);
+  padding: var(--space-3);
+  border: var(--hairline) solid var(--status-blocked);
+  border-radius: var(--radius-md);
+  background: var(--danger-tint);
+}
+
+.error-message {
+  margin: 0 0 var(--space-3);
+  font-size: var(--fs-sm);
+  color: var(--danger-text);
+  overflow-wrap: anywhere;
+}
+
+.error-retry {
+  height: var(--control-h);
+  padding: 0 var(--space-3);
+  background: transparent;
+  border: var(--hairline) solid var(--status-blocked);
+  border-radius: var(--radius-sm);
+  color: var(--danger-text);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+@media (hover: hover) {
+  .error-retry:hover {
+    background: var(--danger-tint);
+  }
+}
+
+/* ---------- mobile: sidebar becomes a drawer ---------- */
+
+@media (max-width: 768px) {
+  .drawer-toggle {
+    display: inline-flex;
+  }
+
+  /* drawer mode: the collapse toggle has nothing to collapse, and sign out is in the palette */
+  .sidebar-toggle,
+  .lock-button {
+    display: none;
+  }
+
+  .app.sidebar-collapsed .sidebar {
+    display: flex;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: calc(var(--header-h) + env(safe-area-inset-top, 0px));
+    bottom: 0;
+    left: 0;
+    z-index: var(--z-drawer);
+    width: min(88vw, var(--sidebar-w));
+    transform: translateX(-100%);
+    visibility: hidden;
+    box-shadow: var(--shadow-drawer);
+    transition:
+      transform var(--dur-base) var(--ease-out),
+      visibility 0s linear var(--dur-base);
+  }
+
+  .sidebar.is-open {
+    transform: translateX(0);
+    visibility: visible;
+    transition-delay: 0s;
+  }
+
+  .scrim {
+    display: block;
+    position: fixed;
+    inset: calc(var(--header-h) + env(safe-area-inset-top, 0px)) 0 0 0;
+    z-index: var(--z-scrim);
+    background: var(--scrim);
+  }
+}
+
+/* the key bar (KeyBar.css) shows under the same query and carries env(safe-area-inset-bottom) itself */
+@media (pointer: coarse), (max-width: 768px) {
+  .terminal-host:has(.key-bar) {
+    padding-bottom: 0; /* no pane = no bar, and the host keeps the inset */
+  }
+}
+
+/* phones: the version pill is the least useful header item; below that, the brand word goes
+   too - the mark keeps the identity. The palette's button gives its room to the pane's title:
+   the palette is the More menu's first item there. */
+@media (max-width: 480px) {
+  .conn {
+    padding: 0 var(--space-1);
+    background: transparent;
+  }
+
+  .pill-version,
+  .pill-offline,
+  .brand-name,
+  .palette-button,
+  .header-desktop-only {
+    display: none;
+  }
+
+  .header-more.is-phone-only {
+    display: inline-flex;
+  }
+}
+
+/* just above phone width the lens labels would squeeze the pane title to a glyph: icons only */
+@media (max-width: 560px) {
+  .view-switch .header-desktop-only { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .icon-button,
+  .btn,
+  .error-retry {
+    transition: none;
+  }
+
+  .badge-working::before,
+  .conn-reconnecting .conn-dot {
+    animation: none;
+  }
+}
+
+/* Keep native tap overlays from obscuring the app's own pressed/selected states. */
+button, a, [role="button"] {
+  -webkit-tap-highlight-color: transparent;
+}

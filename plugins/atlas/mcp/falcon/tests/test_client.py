@@ -1,0 +1,546 @@
+"""
+Tests for the Falcon API client.
+"""
+
+import platform
+import sys
+import unittest
+from unittest.mock import MagicMock, patch
+
+from falcon_mcp.client import FalconClient
+
+
+class TestFalconClient(unittest.TestCase):
+    """Test cases for the Falcon API client."""
+
+    @patch("falcon_mcp.client.os.environ.get")
+    @patch("falcon_mcp.client.APIHarnessV2")
+    def test_client_initialization(self, mock_apiharness, mock_environ_get):
+        """Test client initialization with base URL."""
+        # Setup mock environment variables
+        mock_environ_get.side_effect = lambda key, default=None: {
+            "FALCON_CLIENT_ID": "test-client-id",
+            "FALCON_CLIENT_SECRET": "test-client-secret",
+        }.get(key, default)
+
+        # Create client with base URL
+        _client = FalconClient(base_url="https://api.test.crowdstrike.com", debug=True)
+
+        # Verify APIHarnessV2 was initialized correctly with config values
+        mock_apiharness.assert_called_once()
+        call_args = mock_apiharness.call_args[1]
+        self.assertEqual(call_args["client_id"], "test-client-id")
+        self.assertEqual(call_args["client_secret"], "test-client-secret")
+        self.assertEqual(call_args["base_url"], "https://api.test.crowdstrike.com")
+        self.assertTrue(call_args["debug"])
+
+    @patch("falcon_mcp.client.os.environ.get")
+    @patch("falcon_mcp.client.APIHarnessV2")
+    def test_client_initialization_with_env_vars(
+        self, mock_apiharness, mock_environ_get
+    ):
+        """Test client initialization with environment variables."""
+        # Setup mock environment variables
+        mock_environ_get.side_effect = lambda key, default=None: {
+            "FALCON_CLIENT_ID": "env-client-id",
+            "FALCON_CLIENT_SECRET": "env-client-secret",
+            "FALCON_BASE_URL": "https://api.env.crowdstrike.com",
+        }.get(key, default)
+
+        # Create client with environment variables
+        _client = FalconClient()
+
+        # Verify APIHarnessV2 was initialized correctly
+        mock_apiharness.assert_called_once()
+        call_args = mock_apiharness.call_args[1]
+        self.assertEqual(call_args["client_id"], "env-client-id")
+        self.assertEqual(call_args["client_secret"], "env-client-secret")
+        self.assertEqual(call_args["base_url"], "https://api.env.crowdstrike.com")
+        self.assertFalse(call_args["debug"])
+
+    @patch("falcon_mcp.client.os.environ.get")
+    def test_client_initialization_missing_credentials(self, mock_environ_get):
+        """Test client initialization with missing credentials."""
+        # Setup mock environment variables (missing credentials)
+        mock_environ_get.return_value = None
+
+        # Verify ValueError is raised when credentials are missing
+        with self.assertRaises(ValueError):
+            FalconClient()
+
+    @patch("falcon_mcp.client.os.environ.get")
+    @patch("falcon_mcp.client.APIHarnessV2")
+    def test_client_initialization_with_direct_credentials(
+        self, mock_apiharness, mock_environ_get
+    ):
+        """Test client initialization with directly passed credentials."""
+        # No environment variables set
+        mock_environ_get.return_value = None
+        mock_apiharness.return_value = MagicMock()
+
+        # Create client with direct credentials
+        _client = FalconClient(
+            client_id="direct-client-id",
+            client_secret="direct-client-secret",
+        )
+
+        # Verify APIHarnessV2 was initialized with direct credentials
+        mock_apiharness.assert_called_once()
+        call_args = mock_apiharness.call_args[1]
+        self.assertEqual(call_args["client_id"], "direct-client-id")
+        self.assertEqual(call_args["client_secret"], "direct-client-secret")
+
+    @patch("falcon_mcp.client.os.environ.get")
+    @patch("falcon_mcp.client.APIHarnessV2")
+    def test_client_direct_credentials_override_env_vars(
+        self, mock_apiharness, mock_environ_get
+    ):
+        """Test that direct credentials take precedence over environment variables."""
+        # Setup mock environment variables
+        mock_environ_get.side_effect = lambda key, default=None: {
+            "FALCON_CLIENT_ID": "env-client-id",
+            "FALCON_CLIENT_SECRET": "env-client-secret",
+        }.get(key, default)
+        mock_apiharness.return_value = MagicMock()
+
+        # Create client with direct credentials (should override env vars)
+        _client = FalconClient(
+            client_id="direct-client-id",
+            client_secret="direct-client-secret",
+        )
+
+        # Verify APIHarnessV2 was initialized with direct credentials, not env vars
+        mock_apiharness.assert_called_once()
+        call_args = mock_apiharness.call_args[1]
+        self.assertEqual(call_args["client_id"], "direct-client-id")
+        self.assertEqual(call_args["client_secret"], "direct-client-secret")
+
+    @patch("falcon_mcp.client.os.environ.get")
+    def test_client_initialization_error_message(self, mock_environ_get):
+        """Test that error message mentions both credential approaches."""
+        # No environment variables set
+        mock_environ_get.return_value = None
+
+        # Verify error message mentions both approaches
+        with self.assertRaises(ValueError) as context:
+            FalconClient()
+
+        error_message = str(context.exception)
+        self.assertIn("client_id", error_message)
+        self.assertIn("client_secret", error_message)
+        self.assertIn("FALCON_CLIENT_ID", error_message)
+        self.assertIn("FALCON_CLIENT_SECRET", error_message)
+
+    @patch("falcon_mcp.client.os.environ.get")
+    @patch("falcon_mcp.client.APIHarnessV2")
+    def test_authenticate(self, mock_apiharness, mock_environ_get):
+        """Test authenticate method."""
+        # Setup mock environment variables
+        mock_environ_get.side_effect = lambda key, default=None: {
+            "FALCON_CLIENT_ID": "test-client-id",
+            "FALCON_CLIENT_SECRET": "test-client-secret",
+        }.get(key, default)
+
+        # Setup mock
+        mock_instance = MagicMock()
+        mock_instance.login.return_value = True
+        mock_apiharness.return_value = mock_instance
+
+        # Create client and authenticate
+        client = FalconClient()
+        result = client.authenticate()
+
+        # Verify login was called and result is correct
+        mock_instance.login.assert_called_once()
+        self.assertTrue(result)
+
+    @patch("falcon_mcp.client.os.environ.get")
+    @patch("falcon_mcp.client.APIHarnessV2")
+    def test_is_authenticated(self, mock_apiharness, mock_environ_get):
+        """Test is_authenticated method."""
+        # Setup mock environment variables
+        mock_environ_get.side_effect = lambda key, default=None: {
+            "FALCON_CLIENT_ID": "test-client-id",
+            "FALCON_CLIENT_SECRET": "test-client-secret",
+        }.get(key, default)
+
+        # Setup mock
+        mock_instance = MagicMock()
+        mock_instance.token_valid = True
+        mock_apiharness.return_value = mock_instance
+
+        # Create client and check authentication status
+        client = FalconClient()
+        result = client.is_authenticated()
+
+        # Verify result is correct
+        self.assertTrue(result)
+
+    @patch("falcon_mcp.client.os.environ.get")
+    @patch("falcon_mcp.client.APIHarnessV2")
+    def test_get_headers(self, mock_apiharness, mock_environ_get):
+        """Test get_headers method."""
+        # Setup mock environment variables
+        mock_environ_get.side_effect = lambda key, default=None: {
+            "FALCON_CLIENT_ID": "test-client-id",
+            "FALCON_CLIENT_SECRET": "test-client-secret",
+        }.get(key, default)
+
+        # Setup mock
+        mock_instance = MagicMock()
+        mock_instance.auth_headers = {"Authorization": "Bearer test-token"}
+        mock_apiharness.return_value = mock_instance
+
+        # Create client and get headers
+        client = FalconClient()
+        headers = client.get_headers()
+
+        # Verify headers are correct
+        self.assertEqual(headers, {"Authorization": "Bearer test-token"})
+
+    @patch("falcon_mcp.client.os.environ.get")
+    @patch("falcon_mcp.client.APIHarnessV2")
+    def test_command(self, mock_apiharness, mock_environ_get):
+        """Test command method."""
+        # Setup mock environment variables
+        mock_environ_get.side_effect = lambda key, default=None: {
+            "FALCON_CLIENT_ID": "test-client-id",
+            "FALCON_CLIENT_SECRET": "test-client-secret",
+        }.get(key, default)
+
+        # Setup mock
+        mock_instance = MagicMock()
+        mock_instance.command.return_value = {
+            "status_code": 200,
+            "body": {"resources": [{"id": "test"}]},
+        }
+        mock_apiharness.return_value = mock_instance
+
+        # Create client and execute command
+        client = FalconClient()
+        response = client.command("TestOperation", parameters={"filter": "test"})
+
+        # Verify command was called with correct arguments
+        mock_instance.command.assert_called_once_with(
+            "TestOperation", parameters={"filter": "test"}
+        )
+
+        # Verify response is correct
+        self.assertEqual(response["status_code"], 200)
+        self.assertEqual(response["body"]["resources"][0]["id"], "test")
+
+    @patch("falcon_mcp.client.version")
+    @patch("falcon_mcp.client.os.environ.get")
+    @patch("falcon_mcp.client.APIHarnessV2")
+    def test_get_user_agent_best_case_scenario(
+        self, mock_apiharness, mock_environ_get, mock_version
+    ):
+        """Test get_user_agent method in the best case scenario with all packages installed."""
+        # Setup mock environment variables
+        mock_environ_get.side_effect = lambda key, default=None: {
+            "FALCON_CLIENT_ID": "test-client-id",
+            "FALCON_CLIENT_SECRET": "test-client-secret",
+        }.get(key, default)
+
+        # Setup mock version calls for best case scenario
+        def version_side_effect(package_name):
+            if package_name == "falcon-mcp":
+                return "1.2.3"
+            if package_name == "crowdstrike-falconpy":
+                return "1.3.4"
+            raise ValueError(f"Unexpected package: {package_name}")
+
+        mock_version.side_effect = version_side_effect
+        mock_apiharness.return_value = MagicMock()
+
+        # Create client and get user agent
+        client = FalconClient()
+        user_agent = client.get_user_agent()
+
+        # Verify user agent format and content
+        python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+        platform_info = f"{platform.system()}/{platform.release()}"
+        expected = f"falcon-mcp/1.2.3 (falconpy/1.3.4; Python/{python_version}; {platform_info})"
+
+        self.assertEqual(user_agent, expected)
+
+        # Verify user agent is properly used in APIHarnessV2 initialization
+        mock_apiharness.assert_called_once()
+        call_args = mock_apiharness.call_args[1]
+        self.assertEqual(call_args["user_agent"], expected)
+
+        # Verify format components
+        self.assertTrue(user_agent.startswith("falcon-mcp/1.2.3"))
+        self.assertIn(f"Python/{python_version}", user_agent)
+        self.assertIn(platform_info, user_agent)
+        self.assertIn("falconpy/1.3.4", user_agent)
+
+    @patch("falcon_mcp.client.version")
+    @patch("falcon_mcp.client.os.environ.get")
+    @patch("falcon_mcp.client.APIHarnessV2")
+    def test_get_user_agent_with_user_agent_comment(
+        self, mock_apiharness, mock_environ_get, mock_version
+    ):
+        """Test get_user_agent method with a user agent comment."""
+        # Setup mock environment variables
+        mock_environ_get.side_effect = lambda key, default=None: {
+            "FALCON_CLIENT_ID": "test-client-id",
+            "FALCON_CLIENT_SECRET": "test-client-secret",
+        }.get(key, default)
+
+        # Setup mock version calls
+        def version_side_effect(package_name):
+            if package_name == "falcon-mcp":
+                return "1.2.3"
+            if package_name == "crowdstrike-falconpy":
+                return "1.3.4"
+            raise ValueError(f"Unexpected package: {package_name}")
+
+        mock_version.side_effect = version_side_effect
+        mock_apiharness.return_value = MagicMock()
+
+        # Create client with user agent comment
+        client = FalconClient(user_agent_comment="CustomApp/1.0")
+        user_agent = client.get_user_agent()
+
+        # Verify user agent format and content (RFC-compliant format)
+        python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+        platform_info = f"{platform.system()}/{platform.release()}"
+        expected = f"falcon-mcp/1.2.3 (CustomApp/1.0; falconpy/1.3.4; Python/{python_version}; {platform_info})"
+
+        self.assertEqual(user_agent, expected)
+
+        # Verify user agent is properly used in APIHarnessV2 initialization
+        mock_apiharness.assert_called_once()
+        call_args = mock_apiharness.call_args[1]
+        self.assertEqual(call_args["user_agent"], expected)
+
+    @patch("falcon_mcp.client.os.environ.get")
+    @patch("falcon_mcp.client.APIHarnessV2")
+    def test_client_initialization_with_member_cid(
+        self, mock_apiharness, mock_environ_get
+    ):
+        """Test client initialization with member_cid parameter."""
+        # Setup mock environment variables
+        mock_environ_get.side_effect = lambda key, default=None: {
+            "FALCON_CLIENT_ID": "test-client-id",
+            "FALCON_CLIENT_SECRET": "test-client-secret",
+        }.get(key, default)
+
+        # Create client with member_cid parameter
+        _client = FalconClient(member_cid="abc123-child-cid-xyz")
+
+        # Verify APIHarnessV2 was initialized with member_cid
+        mock_apiharness.assert_called_once()
+        call_args = mock_apiharness.call_args[1]
+        self.assertEqual(call_args["member_cid"], "abc123-child-cid-xyz")
+
+    @patch("falcon_mcp.client.os.environ.get")
+    @patch("falcon_mcp.client.APIHarnessV2")
+    def test_client_initialization_with_member_cid_env_var(
+        self, mock_apiharness, mock_environ_get
+    ):
+        """Test client initialization with FALCON_MEMBER_CID environment variable."""
+        # Setup mock environment variables including member_cid
+        mock_environ_get.side_effect = lambda key, default=None: {
+            "FALCON_CLIENT_ID": "test-client-id",
+            "FALCON_CLIENT_SECRET": "test-client-secret",
+            "FALCON_MEMBER_CID": "env-child-cid-456",
+        }.get(key, default)
+
+        # Create client without member_cid parameter (should use env var)
+        _client = FalconClient()
+
+        # Verify APIHarnessV2 was initialized with member_cid from env var
+        mock_apiharness.assert_called_once()
+        call_args = mock_apiharness.call_args[1]
+        self.assertEqual(call_args["member_cid"], "env-child-cid-456")
+
+    @patch("falcon_mcp.client.os.environ.get")
+    @patch("falcon_mcp.client.APIHarnessV2")
+    def test_client_member_cid_parameter_overrides_env_var(
+        self, mock_apiharness, mock_environ_get
+    ):
+        """Test that member_cid parameter takes precedence over environment variable."""
+        # Setup mock environment variables with both member_cid
+        mock_environ_get.side_effect = lambda key, default=None: {
+            "FALCON_CLIENT_ID": "test-client-id",
+            "FALCON_CLIENT_SECRET": "test-client-secret",
+            "FALCON_MEMBER_CID": "env-child-cid",
+        }.get(key, default)
+
+        # Create client with member_cid parameter (should override env var)
+        _client = FalconClient(member_cid="param-child-cid")
+
+        # Verify APIHarnessV2 was initialized with member_cid from parameter, not env var
+        mock_apiharness.assert_called_once()
+        call_args = mock_apiharness.call_args[1]
+        self.assertEqual(call_args["member_cid"], "param-child-cid")
+
+    @patch("falcon_mcp.client.os.environ.get")
+    @patch("falcon_mcp.client.APIHarnessV2")
+    def test_client_initialization_without_member_cid(
+        self, mock_apiharness, mock_environ_get
+    ):
+        """Test client initialization without member_cid (parent CID mode)."""
+        # Setup mock environment variables without member_cid
+        mock_environ_get.side_effect = lambda key, default=None: {
+            "FALCON_CLIENT_ID": "test-client-id",
+            "FALCON_CLIENT_SECRET": "test-client-secret",
+        }.get(key, default)
+
+        # Create client without member_cid
+        _client = FalconClient()
+
+        # Verify APIHarnessV2 was initialized without member_cid
+        mock_apiharness.assert_called_once()
+        call_args = mock_apiharness.call_args[1]
+        self.assertNotIn("member_cid", call_args)
+
+
+    @patch("falcon_mcp.client.os.environ.get")
+    @patch("falcon_mcp.client.APIHarnessV2")
+    def test_client_initialization_with_proxy(self, mock_apiharness, mock_environ_get):
+        """Test that proxy parameter is forwarded to APIHarnessV2."""
+        mock_environ_get.side_effect = lambda key, default=None: {
+            "FALCON_CLIENT_ID": "test-client-id",
+            "FALCON_CLIENT_SECRET": "test-client-secret",
+        }.get(key, default)
+        mock_apiharness.return_value = MagicMock()
+
+        _client = FalconClient(proxy="http://proxy.corp.example.com:8080")
+
+        mock_apiharness.assert_called_once()
+        call_args = mock_apiharness.call_args[1]
+        self.assertEqual(call_args["proxy"], {"https": "http://proxy.corp.example.com:8080"})
+
+    @patch("falcon_mcp.client.os.environ.get")
+    @patch("falcon_mcp.client.APIHarnessV2")
+    def test_client_proxy_from_env_var(self, mock_apiharness, mock_environ_get):
+        """Test that FALCON_PROXY_URL env var is used when no proxy param is passed."""
+        mock_environ_get.side_effect = lambda key, default=None: {
+            "FALCON_CLIENT_ID": "test-client-id",
+            "FALCON_CLIENT_SECRET": "test-client-secret",
+            "FALCON_PROXY_URL": "http://proxy.env.example.com:3128",
+        }.get(key, default)
+        mock_apiharness.return_value = MagicMock()
+
+        _client = FalconClient()
+
+        mock_apiharness.assert_called_once()
+        call_args = mock_apiharness.call_args[1]
+        self.assertEqual(call_args["proxy"], {"https": "http://proxy.env.example.com:3128"})
+
+    @patch("falcon_mcp.client.os.environ.get")
+    @patch("falcon_mcp.client.APIHarnessV2")
+    def test_client_proxy_param_overrides_env_var(self, mock_apiharness, mock_environ_get):
+        """Test that explicit proxy param takes precedence over FALCON_PROXY_URL env var."""
+        mock_environ_get.side_effect = lambda key, default=None: {
+            "FALCON_CLIENT_ID": "test-client-id",
+            "FALCON_CLIENT_SECRET": "test-client-secret",
+            "FALCON_PROXY_URL": "http://proxy.env.example.com:3128",
+        }.get(key, default)
+        mock_apiharness.return_value = MagicMock()
+
+        _client = FalconClient(proxy="http://proxy.param.example.com:8080")
+
+        mock_apiharness.assert_called_once()
+        call_args = mock_apiharness.call_args[1]
+        self.assertEqual(call_args["proxy"], {"https": "http://proxy.param.example.com:8080"})
+
+    @patch("falcon_mcp.client.os.environ.get")
+    @patch("falcon_mcp.client.APIHarnessV2")
+    def test_client_initialization_without_proxy(self, mock_apiharness, mock_environ_get):
+        """Test that proxy key is absent from APIHarnessV2 call when no proxy is configured."""
+        mock_environ_get.side_effect = lambda key, default=None: {
+            "FALCON_CLIENT_ID": "test-client-id",
+            "FALCON_CLIENT_SECRET": "test-client-secret",
+        }.get(key, default)
+        mock_apiharness.return_value = MagicMock()
+
+        _client = FalconClient()
+
+        mock_apiharness.assert_called_once()
+        call_args = mock_apiharness.call_args[1]
+        self.assertNotIn("proxy", call_args)
+
+    @patch("falcon_mcp.client.os.environ.get")
+    @patch("falcon_mcp.client.APIHarnessV2")
+    def test_auth_failure_message_401(self, mock_apiharness, mock_environ_get):
+        """Test auth failure message for invalid credentials (HTTP 401)."""
+        mock_environ_get.side_effect = lambda key, default=None: {
+            "FALCON_CLIENT_ID": "test-client-id",
+            "FALCON_CLIENT_SECRET": "test-client-secret",
+        }.get(key, default)
+
+        mock_instance = MagicMock()
+        mock_instance.token_status = 401
+        mock_instance.token_fail_reason = "invalid credentials"
+        mock_apiharness.return_value = mock_instance
+
+        client = FalconClient()
+        msg = client.auth_failure_message()
+        self.assertIn("HTTP 401", msg)
+        self.assertIn("invalid credentials", msg)
+        self.assertIn("FALCON_CLIENT_ID", msg)
+
+    @patch("falcon_mcp.client.os.environ.get")
+    @patch("falcon_mcp.client.APIHarnessV2")
+    def test_auth_failure_message_403_with_member_cid(self, mock_apiharness, mock_environ_get):
+        """Test auth failure with member_cid hints about child CID misconfiguration."""
+        mock_environ_get.side_effect = lambda key, default=None: {
+            "FALCON_CLIENT_ID": "test-client-id",
+            "FALCON_CLIENT_SECRET": "test-client-secret",
+        }.get(key, default)
+
+        mock_instance = MagicMock()
+        mock_instance.token_status = 403
+        mock_instance.token_fail_reason = "access denied"
+        mock_apiharness.return_value = mock_instance
+
+        client = FalconClient(member_cid="parent-cid-used-by-mistake")
+        msg = client.auth_failure_message()
+        self.assertIn("HTTP 403", msg)
+        self.assertIn("member_cid", msg)
+        self.assertIn("parent-cid-used-by-mistake", msg)
+
+    @patch("falcon_mcp.client.os.environ.get")
+    @patch("falcon_mcp.client.APIHarnessV2")
+    def test_auth_failure_message_403_without_member_cid(self, mock_apiharness, mock_environ_get):
+        """Test auth failure without member_cid hints about scopes."""
+        mock_environ_get.side_effect = lambda key, default=None: {
+            "FALCON_CLIENT_ID": "test-client-id",
+            "FALCON_CLIENT_SECRET": "test-client-secret",
+        }.get(key, default)
+
+        mock_instance = MagicMock()
+        mock_instance.token_status = 403
+        mock_instance.token_fail_reason = "access denied"
+        mock_apiharness.return_value = mock_instance
+
+        client = FalconClient()
+        msg = client.auth_failure_message()
+        self.assertIn("HTTP 403", msg)
+        self.assertIn("required scopes", msg)
+
+    @patch("falcon_mcp.client.os.environ.get")
+    @patch("falcon_mcp.client.APIHarnessV2")
+    def test_auth_failure_message_no_status(self, mock_apiharness, mock_environ_get):
+        """Test auth failure with no status suggests network/URL check."""
+        mock_environ_get.side_effect = lambda key, default=None: {
+            "FALCON_CLIENT_ID": "test-client-id",
+            "FALCON_CLIENT_SECRET": "test-client-secret",
+        }.get(key, default)
+
+        mock_instance = MagicMock()
+        mock_instance.token_status = None
+        mock_instance.token_fail_reason = None
+        mock_apiharness.return_value = mock_instance
+
+        client = FalconClient(base_url="https://api.crowdstrike.com")
+        msg = client.auth_failure_message()
+        self.assertIn("FALCON_BASE_URL", msg)
+
+
+if __name__ == "__main__":
+    unittest.main()

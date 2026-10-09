@@ -1,5 +1,16 @@
 # docs/ + .atlas/ Single Source of Truth
 
+## Contents
+
+- [What each path holds](#what-each-path-holds)
+- [Ownership: who writes what](#ownership-who-writes-what)
+- [When to write](#when-to-write)
+- [Naming conventions](#naming-conventions)
+- [Tooling activation (atlas-setup)](#tooling-activation-atlas-setup)
+- ["docs-current": the completion gate definition](#docs-current-the-completion-gate-definition)
+- [Copy-ready templates](#copy-ready-templates)
+- [Relationship to the rest of the skill](#relationship-to-the-rest-of-the-skill)
+
 This is the ONE canonical definition of the atlas project structure. Every atlas
 skill, script, agent, and hook that creates, reads, enforces, or maintains project
 structure defers to this file. `atlas-setup` scaffolds it; `atlas:docs-curator`
@@ -39,7 +50,7 @@ finishing work; it is not a manual afterthought. Layout and root detection live 
 `specs/`, `features/`) or a `docs/` subdirectory. A leftover `.atlas/docs/` from
 before this SSOT split is a defect: move its unique content into `docs/` or the
 appropriate `.atlas/` subfolder, delete the directory, and re-run
-`scripts/scaffold_docs.py`, which refuses (exit 1) to scaffold over a non-empty
+`skills/atlas-setup/scripts/scaffold_docs.py`, which refuses (exit 1) to scaffold over a non-empty
 legacy `.atlas/docs/` holding durable content or over `.atlas/` with project wiki
 subdirs present.
 

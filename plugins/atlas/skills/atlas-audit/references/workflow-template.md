@@ -1,5 +1,15 @@
 # Workflow template - atlas squad skeleton
 
+## Contents
+
+- [Rules before you start](#rules-before-you-start)
+- [Full skeleton (explore -> plan -> implement -> verify)](#full-skeleton-explore---plan---implement---verify)
+- [Shape: pipeline (the default for multi-stage per-item work)](#shape-pipeline-the-default-for-multi-stage-per-item-work)
+- [Shape: loop-until-dry](#shape-loop-until-dry)
+- [Shape: adversarial-verify wave](#shape-adversarial-verify-wave)
+- [pipeline() vs parallel() - when to use which](#pipeline-vs-parallel---when-to-use-which)
+- [Key rule](#key-rule)
+
 A Workflow script is a plain JavaScript (not TypeScript) file. The engine authors it;
 the Workflow tool executes it. Copy this skeleton, fill in the phase titles and agent
 prompts, delete the shapes you do not need.

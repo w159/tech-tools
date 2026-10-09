@@ -1,0 +1,22 @@
+node_modules/
+dist/
+*.log
+.env
+evidence/
+.omo/
+.gjc/
+.herdr-web-ui/
+
+remote-bundles/
+
+# README demo videos: uploaded to GitHub, not committed (docs/development.md)
+docs/screenshots/*.mp4
+
+# the website, assembled by scripts/build-site.ts
+_site/
+
+# film footage and renders, made by scripts/film/
+_film/
+
+# one-off screenshot and probe scripts kept inside the repo so imports resolve
+scripts/*.tmp.ts

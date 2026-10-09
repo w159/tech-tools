@@ -1,0 +1,41 @@
+herdr
+Copyright (c) herdrdev
+https://github.com/herdrdev/herdr
+
+Licensed under the Apache License, Version 2.0 (see LICENSE in this directory).
+
+Pinned version : 0.9.3
+Pinned commit  : a124eed73c1f911ddf89a6ac5b2f7ab70d76f5c2
+Protocol       : 22 (PROTOCOL_VERSION in src/protocol/wire.rs)
+
+The herdr runtime is NOT vendored in this repository. It is installed as a
+pre-built binary (see PIN.json). Only this attribution, the Apache-2.0 LICENSE
+and the pin metadata ship with atlas. Binaries are not modified by atlas.
+
+herdr itself bundles the following third-party components (MIT):
+
+libghostty-vt (source commit 44f2a44df7e8c4a0c6df3f7d872ef3d7ead88e51)
+  MIT License
+  Copyright (c) 2024 Mitchell Hashimoto, Ghostty contributors
+
+portable-pty 0.9.0
+  MIT License
+  Copyright (c) 2018 Wez Furlong
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+the above software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

@@ -1,10 +1,8 @@
 ---
 name: atlas-audit
-description: 'Audits, three modes. CODE (default): comprehensive, discovery-first code-quality and security audit of a whole codebase - correctness, OWASP/security, SOLID/DRY/KISS, risk hotspots, dead code, coverage gaps, code-vs-docs drift - as a Workflow that builds a knowledge graph, targets the hottest nodes, fans out one reviewer per dimension, and adversarially verifies every finding. ARCHITECTURE: map the codebase into feature flowcharts, find duplication, propose the simplest unified architecture. SELF: measure atlas run health, context/asset waste, and session-transcript forensics.'
-when_to_use: audit a codebase for quality/security, map its architecture and find duplication before a refactor, or measure atlas's own run health and context waste
-allowed-tools: Read, Glob, Grep, Bash
-context: fork
-agent: general-purpose
+description: "Audits a codebase in three modes: CODE (default) for quality, security, risk hotspots, dead code and docs drift with adversarially verified findings; ARCHITECTURE for feature flowcharts, duplication and a simpler unified design; SELF for atlas run health and context waste. Use when asked to audit a repo, map its architecture before a refactor, or check atlas's own health."
+when_to_use: "full-codebase quality or security audit, OWASP review, architecture map, find duplication, dead code, coverage gaps, atlas run health, session transcript forensics"
+allowed-tools: Read, Glob, Grep, Bash, Agent, Task
 ---
 
 
@@ -139,3 +137,8 @@ As each dimension reviewer completes, its findings flow into a per-finding verif
 ### Phase 4 - Synthesize and output (orchestrator only)
 
 The orchestrator collects all verified findings, assigns final severity ordering (HIGH first), writes report.md, and generates handoff prompts for accepted findings. Synthesis is never delegated. If atlas:docs-curator is available, the orchestrator dispatches it to record the audit run in docs/CHANGELOG.md and under docs/audits/; if it is not available, the orchestrator writes those entries itself. (atlas:docs-curator is the only writer of durable docs/ content when present.)
+
+## Additional references
+
+- [Lens set](references/lens-set.md): the three self-mode lenses (run health, asset/context audit, session forensics). Read when running `self` mode.
+- [Graph-to-hub pipeline](references/graph-to-hub-pipeline.md): how Phase 4 turns graphify output into the knowledge-graph hub. Read when building the hub or debugging one that came out wrong.

@@ -143,11 +143,11 @@ describe('vanta_status (no credentials)', () => {
     // Ensure credentials are absent
     clearVantaEnv();
 
-    const server = createMcpServer();
+    const server = await createMcpServer();
 
     // Call the tool handler directly by simulating the MCP request
     // @ts-expect-error -- accessing internal handler map for testing
-    const handlers = server._requestHandlers;
+    const handlers = server.server._requestHandlers;
     const callHandler = handlers?.get('tools/call');
     expect(callHandler).toBeDefined();
 
@@ -172,9 +172,9 @@ describe('vanta_status (no credentials)', () => {
 // ---------------------------------------------------------------------------
 describe('vanta_navigate', () => {
   it('returns isError when given an unrecognised domain', async () => {
-    const server = createMcpServer();
+    const server = await createMcpServer();
     // @ts-expect-error -- internal handler map
-    const callHandler = server._requestHandlers?.get('tools/call');
+    const callHandler = server.server._requestHandlers?.get('tools/call');
     expect(callHandler).toBeDefined();
 
     const result = await callHandler(
@@ -186,13 +186,14 @@ describe('vanta_navigate', () => {
     );
 
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('Invalid domain');
+    // registerTool validates the enum before the handler's own domain check runs.
+    expect(result.content[0].text).toContain('Input validation error');
   });
 
   it('returns tool list for a valid domain', async () => {
-    const server = createMcpServer();
+    const server = await createMcpServer();
     // @ts-expect-error -- internal handler map
-    const callHandler = server._requestHandlers?.get('tools/call');
+    const callHandler = server.server._requestHandlers?.get('tools/call');
 
     const result = await callHandler(
       {
@@ -312,12 +313,14 @@ describe('error envelope', () => {
   it('controls.list returns isError when VantaClient throws a status error', async () => {
     // Arrange: make VantaClient throw an HTTP-like error when controls.list is called
     const { VantaClient } = await import('node-vanta');
-    vi.mocked(VantaClient).mockImplementation(() => ({
+    vi.mocked(VantaClient).mockImplementation(function () {
+      return {
       controls: {
         list: vi.fn().mockRejectedValue({ statusCode: 401, message: 'Unauthorized', body: 'invalid_client' }),
         get: vi.fn(),
       },
-    }) as never);
+    } as never;
+    });
 
     resetClient();
     setVantaEnv('fake-id', 'fake-secret');
@@ -333,12 +336,14 @@ describe('error envelope', () => {
 
   it('controls.get returns isError when the client throws a 404', async () => {
     const { VantaClient } = await import('node-vanta');
-    vi.mocked(VantaClient).mockImplementation(() => ({
+    vi.mocked(VantaClient).mockImplementation(function () {
+      return {
       controls: {
         list: vi.fn(),
         get: vi.fn().mockRejectedValue({ statusCode: 404, message: 'Not Found', body: 'not_found' }),
       },
-    }) as never);
+    } as never;
+    });
 
     resetClient();
     setVantaEnv('fake-id', 'fake-secret');
@@ -355,9 +360,11 @@ describe('error envelope', () => {
     // must be present for the switch's default branch to be reachable.  node-vanta is
     // mocked at the top of this file, so no real API call is made.
     const { VantaClient } = await import('node-vanta');
-    vi.mocked(VantaClient).mockImplementation(() => ({
+    vi.mocked(VantaClient).mockImplementation(function () {
+      return {
       controls: { list: vi.fn(), get: vi.fn() },
-    }) as never);
+    } as never;
+    });
     resetClient();
     setVantaEnv('fake-id', 'fake-secret');
 

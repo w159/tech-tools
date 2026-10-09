@@ -1,6 +1,6 @@
 # Agent operating rules for this repo
 
-This file is the canonical AGENTS.md directive set for any AI agent (Claude Code, Codex, Cursor, Copilot, Kimi Code CLI, custom orchestrators) operating in this repository. It is loaded every session.
+This file is the canonical AGENTS.md directive set for any AI agent (Claude Code, Codex, Cursor, Copilot, custom orchestrators) operating in this repository. It is loaded every session.
 
 ## 0. Repository identity: atlas and armada are products built here, not tools to run here (READ FIRST)
 
@@ -23,11 +23,41 @@ Do the opposite: open the relevant files under `plugins/atlas/` or `plugins/arma
 
 ### Runtime artifacts are not the product
 
-atlas and armada happen to be *active in the harness* while you work here (this session's output style, the loaded skills, the subagent registry). That is incidental. The following are runtime state written by a running atlas, **not** the product source, and are not your edit target unless the user explicitly asks about atlas's own runtime files:
+atlas and armada may be *active in the harness* while you work here (output style, loaded skills, subagent registry). Dogfooding the product in this checkout is expected. That still does **not** make install-cache paths or nested runtime trees the product source.
 
-- `.atlas/` (departments, evidence, nudge, self-improvement), `.fallow/`, `.supermemory/`, `.taskmaster/`
+Runtime / non-product paths (not edit targets for feature work unless the user explicitly asks):
 
-If a request seems to ask you to operate atlas here rather than change its code, stop and confirm scope before acting. The default interpretation is always: change the plugin source.
+- Repo-root `.atlas/` only (departments, evidence, nudge, self-improvement, `.run/` scratch)
+- `.fallow/`, `.supermemory/`, `.taskmaster/`, `.scratch/`, `.agents/`
+- **Never** create or use `plugins/**/.atlas/` — that is install-shaped contamination of product source
+
+### `docs/` is project SSOT (hard rule)
+
+- `docs/` is the single source of truth for this marketplace and its plugins.
+- **Retain and update** documentation under `docs/`. Do not delete, hollow out, or gitignore docs content as "junk," "unused," or "cleanup."
+- When behavior changes, prefer updating the relevant `docs/` pages (and plugin references under `plugins/*/references/` when those ship with the plugin).
+
+### NEVER edit the local Claude install/cache (hard rule)
+
+This repository is **marketplace source code**, not a place to patch a live install.
+
+**Do not create, modify, delete, rsync, cp, or "deploy into" any of:**
+
+- `~/.claude/plugins/cache/**`
+- `~/.claude/plugins/marketplaces/**` (except when the user explicitly asks you to change a separate checkout that is *not* this repo)
+- `~/.claude/plugins/installed_plugins.json` or other Claude install metadata under `~/.claude/plugins/`
+
+Also enforced for Claude Code via:
+
+- `CLAUDE.md` (session hard gate)
+- `.claude/rules/marketplace-source-only.md`
+- `.claude/settings.json` permission denials on cache/marketplace paths
+
+Consumer installs are refreshed by **shipping this repo** (commit/push + marketplace update / plugin reinstall). Hot-copying `plugins/atlas/` into the cache is a process defect.
+
+Verify product behavior from **this tree** (`plugins/atlas/...`, tests under the repo). If the user needs a running install to pick up changes, tell them to update/reinstall from the marketplace source — do not mutate their cache yourself.
+
+If a request seems to ask you to operate atlas here rather than change its code, stop and confirm scope before acting. The default interpretation is always: change the plugin source under `plugins/`.
 
 ### What "dependencies" covers
 
@@ -93,3 +123,44 @@ When the user asks for a multi-step or wide-blast-radius change, prefer to spawn
 ## 6. Memory / continuity
 
 The `memory/` directory at the user's `~/.claude/projects/.../memory/` is for cross-session facts. This repo's own facts live here in `CLAUDE.md` and `AGENTS.md`. Both files are authoritative; keep them in sync.
+
+<!-- atlas-tooling -->
+## Tool Routing
+
+Minimum tooling bar for this project, wired by atlas-setup. Do not read/grep
+source or shell out for things these tools already do:
+
+- **claude-mem** -- cross-session memory. Search it before re-discovering
+  something a prior session already worked out.
+- **context-mode** -- context-window protection for noisy output (build/test
+  logs, large command output, web fetches). Route anything over ~20 lines
+  through it instead of raw shell into context.
+- **serena** + **lean-ctx** -- the code-nav pair for this tree. serena for
+  code symbols (definitions, references, call graphs); lean-ctx for shaped
+  file/tree access, search, and edits on everything else (prose, config,
+  markdown). Native Read/Grep on source is a fallback only when both are
+  unreachable, never a first choice.
+- **ponytail** -- simplicity discipline; keep changes minimal and avoid
+  speculative abstraction.
+
+Run `atlas-doctor` to check whether this project's tooling is actually
+wired (`context-tooling` check) and whether it is doing its job (session
+cache-hit ratio, per-tool error rate).
+<!-- /atlas-tooling -->
+
+## Session gates
+
+- Session gates (atlas hooks): the first tool call each session must be one claude-mem search (write JSON args to xd://mcp__claude_mem_mcp_search_search). The inline-op gate prints a STOP nudge after about 4-6 inline ops and DENIES the 7th; separately, an inline Edit of target code is denied outright. Route edits and investigation to atlas:implementer / atlas:explorer. Task dispatches must NOT pass a `model` param (agents pin @atlas-worker; the gate denies the override).
+- Advisor gate: close each item with `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py complete --id <id> --evidence "<proof>"` (syntax at plugins/atlas/scripts/atlas_todo.py :1515), then re-run `list` and confirm status=completed; a batch close once failed silently.
+- Dispatch gate (`dispatch_denied:toolkit`): every `atlas:*` Task/`task` prompt needs a line-anchored `TOOLS:` block (runs to the next ALL-CAPS label) whose own text contains BOTH `ToolSearch` AND a code-nav token (serena, lean-ctx, ctx_search, ctx_read, find_symbol). Naming tools elsewhere in the prompt does not count. On omp (`ATLAS_TOOLKIT_LOAD=omp`) the `ToolSearch` requirement is waived. Example: `TOOLS: ToolSearch lean-ctx (ctx_search, ctx_read) + serena (activate_project, find_symbol); context-mode for noisy output.`
+
+## Completion-gate friction (top blockers, last 14d)
+
+Recurring Stop-gate blocks: (m) delegation mandate, (c,d,e) CHANGELOG/ROADMAP/README
+missing, (g) implementer dispatches not covered, (i) open todos. Before done:
+delegate code changes to an atlas:* agent; keep CHANGELOG, ROADMAP and README
+present and updated with any non-docs change; for each implementer dispatch run an
+atlas:verifier or a real test-runner command (pytest, vitest) and stamp a
+`verified` finding via scripts/atlas_finding.py; flip or drop every open todo;
+open the colony IRC channel and message siblings when dispatching a named colony (p);
+open each reply with the `ATLAS | <glyph> <phase> | <state>` status header (n).

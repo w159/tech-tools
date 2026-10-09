@@ -128,6 +128,14 @@ export interface Device extends BaseEntity, TimestampFields {
  * Device list parameters
  */
 export interface DeviceListParams extends BaseListParams {
+  /**
+   * NinjaOne device filter expression, e.g. "org = 12 AND class = WINDOWS_SERVER".
+   * This is the only filter /v2/devices honours: organizationId, status and
+   * nodeClass below apply to the organization-scoped and detailed endpoints.
+   */
+  df?: string;
+  /** Pagination: highest device ID from the previous page. /v2/devices pages by ID, not cursor. */
+  after?: number;
   /** Filter by organization ID */
   organizationId?: number;
   /** Filter by device status */
@@ -206,6 +214,31 @@ export interface DeviceActivity {
 export interface DeviceActivityListResponse {
   activities: DeviceActivity[];
   cursor?: string;
+}
+
+/**
+ * One OS patch install record.
+ *
+ * Deliberately unpinned: NinjaOne's apidocs pages are JS-rendered and the
+ * response schema could not be read from them, so records pass through
+ * unshaped rather than being narrowed to guessed field names.
+ */
+export type OsPatchInstall = Record<string, unknown>;
+
+/**
+ * Filters for OS patch install queries.
+ *
+ * installedAfter and installedBefore are Unix epoch seconds. Tenant-wide
+ * scoping goes through `df` (NinjaOne's device filter, e.g. 'org = 1'):
+ * the /v2/queries/* endpoints have no organizationId parameter.
+ */
+export interface OsPatchInstallListParams {
+  df?: string;
+  status?: 'FAILED' | 'INSTALLED';
+  installedAfter?: number;
+  installedBefore?: number;
+  cursor?: string;
+  pageSize?: number;
 }
 
 /**

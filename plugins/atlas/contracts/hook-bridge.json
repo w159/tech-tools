@@ -1,0 +1,41 @@
+{
+  "_doc": "Which Claude Code hooks (hooks/hooks.json) omp runs: the turn hooks through omp/hook-bridge.ts (`bridged`) and the session-end family through omp/stop-bridge.ts (`bridgedSessionEnd`: Stop chain plus the SessionEnd/SubagentStop/PreCompact ingest). hooks.json stays the single wiring source (order, matchers, timeouts); this file only says which scripts are safe to run from omp and why the rest are not. Bridged hooks run with ATLAS_MANDATES=off because omp/mandates.ts owns the mandates with omp-native reachability. Every Stop/SessionEnd/SubagentStop/PreCompact payload carries a transcript_path that scripts/omp_transcript.py produced (the omp session file converted to a Claude-shaped transcript JSONL in a plugin temp dir): omp/stop-bridge.ts converts BEFORE any Stop hook runs, because the gate and the ingest hooks re-read the converted transcript. Conversion failure degrades individual hooks fail-open; no broken adapter may wedge or block a session. The bridged Stop chain self-limits: at most 3 consecutive block refusals per session (the counter resets on session start/switch and on a passing Stop), and a hook block whose reason repeats while the payload's stop_hook_active is set never blocks again.",
+  "events": {
+    "SessionStart": "first main before_agent_start",
+    "UserPromptSubmit": "every main before_agent_start",
+    "PreToolUse": "tool_call (main and subagent sessions); an omp task batch is run once per item as a Claude Task dispatch",
+    "PostToolUse": "tool_result (payload carries tool_response = stringified result content, transcript_path and is_error; omp-minted mcp__<server>_<tool> names of the hooks.json connector servers are re-split to mcp__<server>__<tool>)",
+    "Stop": "session_stop (main only): omp_transcript.py converts the omp session file BEFORE any hook runs, then the five Stop hooks all run in hooks.json order (capture hooks must run even when the gate blocks); the first {decision: block, reason} becomes the omp session_stop result {decision: block, reason}, not plain context. The payload mirrors Claude Code's Stop payload, including last_assistant_message: the text blocks of session_stop.last_assistant_message joined by newlines (omitted when the event carries no text), which completion_gate.py condition (n) reads",
+    "SessionEnd": "session_shutdown on a main session: ingest_session.py spawned detached (never awaited) after transcript conversion",
+    "SubagentStop": "session_shutdown on a subagent session: ingest_session.py spawned detached after transcript conversion",
+    "PreCompact": "auto_compaction_start: ingest_session.py spawned detached (session_before_compact is deliberately NOT used: registering a handler for it disables omp async compaction)"
+  },
+  "decisions": {
+    "PreToolUse": "hookSpecificOutput.permissionDecision deny AND ask block the omp call (omp has no per-hook permission prompt, so ask fails closed); allow/absent passes; additionalContext is appended. A legacy top-level decision:block on a turn hook is advisory context only. Exit code 2 is not honoured: the runner captures stdout only, so a hook must print its decision.",
+    "Stop": "decision:block -> session_stop block; a non-blocking hookSpecificOutput.additionalContext -> session_stop {continue:true, additionalContext}, delivered once per distinct text per session, never while stop_hook_active, at most MAX_STOP_BLOCKS times",
+    "budgets": "tool_call/tool_result hooks of one call (all task batch items together) share TOOL_CALL_BUDGET_MS=20000 (omp blocks a call at 30 s); before_agent_start and session_stop share HANDLER_BUDGET_MS=25000 measured from handler entry (omp drops a result at 30 s). Every skipped or timed-out hook leaves a row in hook-faults.jsonl."
+  },
+  "bridged": [
+    "session_boot.py",
+    "atlas_doctor.py",
+    "prompt_optimizer.py",
+    "bash_advisor.py",
+    "fallow_gate.py",
+    "format_after_edit.py",
+    "docs_drift_watch.py",
+    "dispatch_tripwire.py",
+    "connector_credential_watch.py"
+  ],
+  "bridgedSessionEnd": [
+    "completion_gate.py",
+    "ingest_session.py",
+    "chronicle_facet.py",
+    "memory_capture.py",
+    "nudge.py"
+  ],
+  "notBridged": {
+    "todo_capture.py": "omp/index.ts mirrors the omp todo tool to the board natively (the board-mirror spawn writes .atlas/.run/todos.json on every todo tool result)",
+    "worker_report_gate.py": "omp subagent sessions never fire session_stop; the report contract is enforced on omp by omp/worker-report.ts (strict outputSchema injected into atlas task items)",
+    "recall_gate.py": "omp/mandates.ts implements the recall gate natively"
+  }
+}

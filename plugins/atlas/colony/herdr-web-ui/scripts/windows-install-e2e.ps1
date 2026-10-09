@@ -1,0 +1,136 @@
+# The real installer on a real Windows PC: herdr's and Bun's own installers, herdr's plugin build,
+# the app's first start and, with -Update, an update from the release before the latest one.
+# scripts/windows-install.test.ps1 checks install.ps1's decisions against stand-ins; this runs them.
+#
+#   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows-install-e2e.ps1 [-Installer <path|url>] [-Ref <tag|commit>] [-Update] [-Fresh]
+#
+# It replaces an installed herdr web ui and leaves the one it installed. A herdr server it had to
+# start is stopped again; one that was already running is left alone.
+param(
+    # install.ps1 in this checkout, or a URL to pipe into Invoke-Expression as the README says
+    [string]$Installer = (Join-Path $PSScriptRoot '..\install.ps1'),
+    # a release tag or a full commit; empty is the latest release (with -Update, the one before it)
+    [string]$Ref = '',
+    # after installing, update to the latest release through the app's own updater
+    [switch]$Update,
+    # fail unless herdr and Bun are missing, so that their installers run (a CI runner)
+    [switch]$Fresh
+)
+$ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
+$origin = 'http://127.0.0.1:7317'
+$pluginId = 'devswha.herdr-web-ui'
+# where the official installers put both tools; a terminal opened before them has neither on PATH
+$env:PATH = "$env:USERPROFILE\.bun\bin;$env:LOCALAPPDATA\Programs\Herdr\bin;$env:PATH"
+
+function Assert([bool]$Condition, [string]$Message) { if (-not $Condition) { throw $Message } }
+function Get-Json([string]$Path) { (Invoke-WebRequest "$origin$Path" -UseBasicParsing -TimeoutSec 5).Content | ConvertFrom-Json }
+# The app and herdr report their state only when asked; an unanswered question is asked again.
+function Wait-Until([scriptblock]$Test, [int]$Seconds, [string]$What) {
+    $deadline = (Get-Date).AddSeconds($Seconds)
+    do {
+        try { $value = & $Test; if ($value) { return $value } } catch { }
+        Start-Sleep -Milliseconds 500
+    } while ((Get-Date) -lt $deadline)
+    throw "Timed out after $Seconds s: $What"
+}
+function Test-Herdr { [bool](Get-Command herdr -ErrorAction SilentlyContinue) }
+function Test-ServerRunning { (Test-Herdr) -and [bool](herdr status server --json | ConvertFrom-Json).running }
+function Find-Plugin {
+    if (-not (Test-Herdr)) { return $null }
+    (herdr plugin list --json | ConvertFrom-Json).result.plugins | Where-Object { $_.plugin_id -eq $pluginId } | Select-Object -First 1
+}
+function Get-ReleaseTags {
+    $tags = @(git ls-remote --tags --refs 'https://github.com/devswha/herdr-web-ui.git' 'v*' |
+        ForEach-Object { if ($_ -match 'refs/tags/(v\d+\.\d+\.\d+)$') { $Matches[1] } } |
+        Sort-Object { [version]$_.Substring(1) })
+    Assert ($tags.Count -ge 2) 'Could not read the release tags from GitHub'
+    $tags
+}
+function Invoke-Installer([string]$InstallRef) {
+    if ($Installer -match '^https://') {
+        $env:HERDR_WEB_UI_REF = $InstallRef
+        try { Invoke-RestMethod $Installer | Invoke-Expression }
+        finally { Remove-Item Env:\HERDR_WEB_UI_REF -ErrorAction SilentlyContinue }
+    } else { & $Installer -Ref $InstallRef }
+}
+# $Expected is a full commit or a release tag.
+function Assert-App([string]$Expected) {
+    $health = Wait-Until { $answer = Get-Json '/api/health'; if ($answer.ok) { $answer } } 60 'the app to answer'
+    $updates = Get-Json '/api/updates'
+    if ($Expected -match '^[0-9a-f]{40}$') {
+        Assert ($health.web_ui.revision -eq $Expected) "The app runs $($health.web_ui.revision), not $Expected"
+    } else {
+        Assert ("v$($updates.current_version)" -eq $Expected) "The app runs $($updates.current_version), not $Expected"
+    }
+    $page = Invoke-WebRequest "$origin/" -UseBasicParsing -TimeoutSec 10
+    $bundle = [regex]::Match($page.Content, 'assets/index-[^"]+\.js').Value
+    Assert ($page.StatusCode -eq 200 -and $bundle) 'The app page is not the built app'
+    Assert ((Invoke-WebRequest "$origin/$bundle" -UseBasicParsing -TimeoutSec 30).StatusCode -eq 200) 'The app page cannot load its script'
+    $session = Get-Json '/api/session'
+    Assert ([bool]$session.snapshot.version) 'The app does not reach herdr'
+    Write-Host "PASS herdr web ui $($updates.current_version) ($($health.web_ui.revision)) runs with herdr $($session.snapshot.version)"
+}
+
+if ($Fresh) {
+    Assert (-not (Test-Herdr)) '-Fresh: herdr is already installed'
+    Assert (-not (Get-Command bun -ErrorAction SilentlyContinue)) '-Fresh: Bun is already installed'
+}
+$tags = Get-ReleaseTags
+$latest = $tags[-1]
+if ($Update -and -not $Ref) { $Ref = $tags[-2] }
+$expected = if ($Ref) { $Ref } else { $latest }
+$startedServer = $false
+try {
+    $plugin = Find-Plugin
+    if ($plugin) {
+        Write-Host "e2e: removing the installed herdr web ui $($plugin.version)"
+        if (Test-ServerRunning) { herdr plugin action invoke "$pluginId.stop-windows" | Out-Null }
+        Wait-Until { -not (Get-NetTCPConnection -LocalPort 7317 -State Listen -ErrorAction SilentlyContinue) } 30 'the installed app to stop' | Out-Null
+        herdr plugin uninstall $pluginId | Out-Null
+        Assert ($LASTEXITCODE -eq 0) 'herdr plugin uninstall failed'
+    }
+
+    Write-Host "e2e: installing $expected with $Installer"
+    Invoke-Installer $Ref
+    if (-not (Test-ServerRunning)) {
+        # the installer's last line on a PC where herdr is not running: "Open a new terminal and run: herdr"
+        Write-Host 'e2e: starting herdr'
+        Start-Process -FilePath (Get-Command herdr).Source -ArgumentList 'server' -WindowStyle Hidden
+        $startedServer = $true
+        Wait-Until { Test-ServerRunning } 30 'herdr to start' | Out-Null
+        Wait-Until { (Get-Json '/api/health').ok } 60 'the app to start with herdr' | Out-Null
+        # with herdr running, the installer finds the app installed and reports where it runs
+        Invoke-Installer $Ref
+    }
+    Assert-App $expected
+
+    if ($Update) {
+        $found = Wait-Until { $status = Get-Json '/api/updates'; if ($status.latest_version) { $status } } 90 'the app to find the latest release'
+        Assert ($found.available -and "v$($found.latest_version)" -eq $latest) "The app offers $($found.latest_version) (available: $($found.available)), not $latest"
+        Write-Host "e2e: updating $expected to $latest"
+        Invoke-WebRequest "$origin/api/updates/install" -Method POST -Headers @{ 'x-herdr-update' = '1' } -UseBasicParsing -TimeoutSec 30 | Out-Null
+        # the app restarts in the middle of this, so some of these questions go unanswered
+        $after = Wait-Until {
+            $status = Get-Json '/api/updates'
+            if ($status.phase -eq 'error' -or ($status.phase -eq 'idle' -and "v$($status.current_version)" -eq $latest)) { $status }
+        } 600 "the update to $latest"
+        Assert ($after.phase -ne 'error') "The update failed: $($after.error)"
+        Assert ((Get-Json '/api/health').web_ui.revision -eq $found.latest_revision) 'The updated app does not run the latest release'
+        Assert-App $latest
+    }
+} catch {
+    Write-Host "FAIL $($_.Exception.Message)"
+    # what herdr and the app wrote, for a run on a PC nobody can log in to
+    if (Test-Herdr) { herdr plugin log list | Out-String | Write-Host }
+    $logs = @("$env:APPDATA\herdr\herdr-server.log") + @(Get-ChildItem "$env:APPDATA\herdr", "$env:LOCALAPPDATA\herdr" -Recurse -Filter server.log -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
+    foreach ($log in $logs) {
+        if (Test-Path -LiteralPath $log) { Write-Host "--- $log"; Get-Content -LiteralPath $log -Tail 40 | Out-String | Write-Host }
+    }
+    throw
+} finally {
+    if ($startedServer) {
+        herdr plugin action invoke "$pluginId.stop-windows" | Out-Null
+        herdr server stop | Out-Null
+    }
+}

@@ -6,8 +6,8 @@ import {
   shapeList,
   shapeItem,
   type SummaryFn,
-} from "../_shared/response-shaper.js";
-import { toolErrorFromCatch } from "../_shared/error-envelope.js";
+} from "@shared/response-shaper.js";
+import { toolErrorFromCatch } from "@shared/error-envelope.js";
 
 const memberSummary: SummaryFn = (m) => ({
   id: m["id"],

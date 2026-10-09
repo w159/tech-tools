@@ -8,9 +8,20 @@ the helper functions directly so coverage traces the real code paths.
 Scope: session_boot.py only. The hook source is never modified.
 """
 
+import os as _iso_os
+import sys as _iso_sys
+
+_iso_sys.path.insert(
+    0,
+    _iso_os.path.join(
+        _iso_os.path.dirname(_iso_os.path.abspath(__file__)), "..", "scripts"
+    ),
+)
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import io
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -54,7 +65,10 @@ class MainInProcessTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
         self.db = os.path.join(self.tmp, "atlas.db")
-        self.env = dict(os.environ, ATLAS_DB=self.db)
+        # Never let boot reach the real dashboard daemon (ensure would stop/respawn it).
+        self.env = dict(
+            os.environ, ATLAS_DB=self.db, ATLAS_DASHBOARD="off", ATLAS_COLONY="off"
+        )
         # Pre-inject mock curator/memory so main()'s import is a no-op and
         # apply_transitions / load_snapshot do not touch the real filesystem.
         self._curator = mock.MagicMock()
@@ -64,8 +78,14 @@ class MainInProcessTest(unittest.TestCase):
         self._orig_memory = sys.modules.get("atlas_memory")
         sys.modules["atlas_curator"] = self._curator
         sys.modules["atlas_memory"] = self._memory
+        # Plugin enablement reads the real ~/.claude/settings.json; isolate it.
+        self._plugins = mock.patch.object(
+            session_boot, "plugin_enabled", return_value=False
+        )
+        self._plugins.start()
 
     def tearDown(self):
+        self._plugins.stop()
         for name, orig in (
             ("atlas_curator", self._orig_curator),
             ("atlas_memory", self._orig_memory),
@@ -89,23 +109,16 @@ class MainInProcessTest(unittest.TestCase):
         self.assertEqual(code, 0)
         data = json.loads(out)
         self.assertIn(
-            "Atlas runtime active", data["hookSpecificOutput"]["additionalContext"]
+            "Atlas: orchestrator posture",
+            data["hookSpecificOutput"]["additionalContext"],
         )
         self.assertIn(
             "research -> theory", data["hookSpecificOutput"]["additionalContext"]
         )
         self.assertIn("atlas:<role>", data["hookSpecificOutput"]["additionalContext"])
-        # All three deps absent -> all three "absent" lines present.
+        # All three deps absent -> one consolidated "Setup gap" line naming all three.
         self.assertIn(
-            "Memory (claude-mem): absent",
-            data["hookSpecificOutput"]["additionalContext"],
-        )
-        self.assertIn(
-            "Context protection (context-mode): absent",
-            data["hookSpecificOutput"]["additionalContext"],
-        )
-        self.assertIn(
-            "Less-code mode (ponytail): absent",
+            "Setup gap: claude-mem, context-mode, ponytail absent",
             data["hookSpecificOutput"]["additionalContext"],
         )
         self.assertEqual(
@@ -125,18 +138,8 @@ class MainInProcessTest(unittest.TestCase):
             )
         self.assertEqual(code, 0)
         data = json.loads(out)
-        self.assertIn(
-            "Memory (claude-mem): available",
-            data["hookSpecificOutput"]["additionalContext"],
-        )
-        self.assertIn(
-            "Context protection (context-mode): available",
-            data["hookSpecificOutput"]["additionalContext"],
-        )
-        self.assertIn(
-            "Less-code mode (ponytail): available",
-            data["hookSpecificOutput"]["additionalContext"],
-        )
+        # Nothing missing -> the noise-reduction contract says say nothing.
+        self.assertNotIn("Setup gap", data["hookSpecificOutput"]["additionalContext"])
         self.assertEqual(data["systemMessage"], "Atlas ready")
 
     def test_main_ponytail_via_config_file_branch(self):
@@ -155,10 +158,13 @@ class MainInProcessTest(unittest.TestCase):
             )
         self.assertEqual(code, 0)
         data = json.loads(out)
-        self.assertIn(
-            "Less-code mode (ponytail): available",
-            data["hookSpecificOutput"]["additionalContext"],
-        )
+        gap = [
+            ln
+            for ln in data["hookSpecificOutput"]["additionalContext"].splitlines()
+            if ln.startswith("Setup gap:")
+        ]
+        self.assertTrue(gap)
+        self.assertNotIn("ponytail", gap[0])
 
     # --- DB start_run path ------------------------------------------------
 
@@ -260,7 +266,7 @@ class MainInProcessTest(unittest.TestCase):
             )
         self.assertEqual(code, 0)
         self.assertIn(
-            "Atlas runtime active",
+            "Atlas: orchestrator posture",
             json.loads(out)["hookSpecificOutput"]["additionalContext"],
         )
 
@@ -296,7 +302,7 @@ class MainInProcessTest(unittest.TestCase):
             )
         self.assertEqual(code, 0)
         self.assertIn(
-            "Atlas runtime active",
+            "Atlas: orchestrator posture",
             json.loads(out)["hookSpecificOutput"]["additionalContext"],
         )
 
@@ -311,7 +317,7 @@ class MainInProcessTest(unittest.TestCase):
             code, out = run_main_inprocess("{not valid json", self.env)
         self.assertEqual(code, 0)
         self.assertIn(
-            "Atlas runtime active",
+            "Atlas: orchestrator posture",
             json.loads(out)["hookSpecificOutput"]["additionalContext"],
         )
 
@@ -327,7 +333,7 @@ class MainInProcessTest(unittest.TestCase):
             )
         self.assertEqual(code, 0)
         self.assertIn(
-            "Atlas runtime active",
+            "Atlas: orchestrator posture",
             json.loads(out)["hookSpecificOutput"]["additionalContext"],
         )
 
@@ -541,6 +547,9 @@ class AtlasSessionContextTest(unittest.TestCase):
 
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
+        patcher = mock.patch.dict(os.environ)  # restores ATLAS_DB on cleanup
+        patcher.start()
+        self.addCleanup(patcher.stop)
         self.db = os.path.join(self.tmp, "atlas.db")
         os.environ["ATLAS_DB"] = self.db
         self.conn = atlas_db.connect(self.db)
@@ -549,7 +558,6 @@ class AtlasSessionContextTest(unittest.TestCase):
 
     def tearDown(self):
         self.conn.close()
-        os.environ.pop("ATLAS_DB", None)
 
     def test_no_session_row_returns_none(self):
         self.assertIsNone(session_boot._atlas_session_context(self.conn, self.tmp))
@@ -622,7 +630,12 @@ class SubprocessExitCodeTest(unittest.TestCase):
 
     def test_subprocess_valid_payload_exits_zero(self):
         tmp = tempfile.mkdtemp()
-        env = dict(os.environ, ATLAS_DB=os.path.join(tmp, "atlas.db"))
+        env = dict(
+            os.environ,
+            ATLAS_DB=os.path.join(tmp, "atlas.db"),
+            ATLAS_DASHBOARD="off",
+            ATLAS_COLONY="off",
+        )
         p = subprocess.run(
             [sys.executable, BOOT],
             input=json.dumps({"session_id": "e2e", "cwd": tmp}),
@@ -631,12 +644,17 @@ class SubprocessExitCodeTest(unittest.TestCase):
             env=env,
         )
         self.assertEqual(p.returncode, 0)
-        self.assertIn("Atlas runtime active", p.stdout)
+        self.assertIn("Atlas: orchestrator posture", p.stdout)
 
     def test_subprocess_garbage_stdin_exits_zero(self):
         """Hook must never block boot, even on garbage stdin."""
         tmp = tempfile.mkdtemp()
-        env = dict(os.environ, ATLAS_DB=os.path.join(tmp, "atlas.db"))
+        env = dict(
+            os.environ,
+            ATLAS_DB=os.path.join(tmp, "atlas.db"),
+            ATLAS_DASHBOARD="off",
+            ATLAS_COLONY="off",
+        )
         p = subprocess.run(
             [sys.executable, BOOT],
             input="<<<not json",
@@ -645,6 +663,457 @@ class SubprocessExitCodeTest(unittest.TestCase):
             env=env,
         )
         self.assertEqual(p.returncode, 0)
+
+
+class DocsStructureRepairTest(unittest.TestCase):
+    """SessionStart repairs the durable docs/ tree instead of blocking on it.
+
+    Creating an empty, scaffolder-owned subfolder is mechanical and safe, so it
+    is auto-fixed here. Anything needing judgement (a file's name, a CHANGELOG
+    entry) stays a completion-gate block instead.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        subprocess.run(["git", "init", "-q", self.tmp], check=True, capture_output=True)
+        with open(os.path.join(self.tmp, "README.md"), "w", encoding="utf-8") as fh:
+            fh.write("# r\n")
+        self.env = dict(
+            os.environ,
+            ATLAS_DB=os.path.join(self.tmp, "atlas.db"),
+            ATLAS_HOOKSTATE_DIR=os.path.join(self.tmp, "hookstate"),
+            ATLAS_DASHBOARD="off",
+            ATLAS_COLONY="off",
+        )
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _boot(self, session="s1"):
+        return subprocess.run(
+            [sys.executable, BOOT],
+            input=json.dumps({"session_id": session, "cwd": self.tmp}),
+            capture_output=True,
+            text=True,
+            env=self.env,
+        ).stdout
+
+    def _subdirs(self):
+        docs = os.path.join(self.tmp, "docs")
+        if not os.path.isdir(docs):
+            return set()
+        return {n for n in os.listdir(docs) if os.path.isdir(os.path.join(docs, n))}
+
+    def test_partial_docs_tree_is_completed(self):
+        os.makedirs(os.path.join(self.tmp, "docs"), exist_ok=True)
+        out = self._boot()
+        self.assertIn("docs structure repaired", out)
+        for required in ("architecture", "decisions", "plans", "specs", "lessons"):
+            self.assertIn(required, self._subdirs())
+
+    def test_repair_is_idempotent_and_then_silent(self):
+        os.makedirs(os.path.join(self.tmp, "docs"), exist_ok=True)
+        self._boot("s1")
+        before = self._subdirs()
+        out = self._boot("s2")
+        self.assertNotIn("docs structure repaired", out)
+        self.assertEqual(before, self._subdirs())
+
+    def test_project_with_no_docs_tree_is_not_scaffolded_behind_the_users_back(self):
+        """Onboarding a project that never asked for docs/ belongs to
+        atlas-setup. Boot reports the gap and creates nothing."""
+        out = self._boot()
+        self.assertIn("docs SSOT absent", out)
+        self.assertFalse(os.path.isdir(os.path.join(self.tmp, "docs")))
+
+    def test_kill_switch_disables_repair(self):
+        os.makedirs(os.path.join(self.tmp, "docs"), exist_ok=True)
+        self.env["ATLAS_DOCS_REPAIR"] = "off"
+        out = self._boot()
+        self.assertNotIn("docs structure repaired", out)
+        self.assertEqual(self._subdirs(), set())
+
+
+class RecallMandateTest(unittest.TestCase):
+    """claude-mem recall mandate: armed only when the claude-mem plugin is enabled."""
+
+    setUp = MainInProcessTest.setUp
+    tearDown = MainInProcessTest.tearDown
+
+    def _context(self, enabled, mandates=""):
+        self._plugins.stop()
+        self._plugins = mock.patch.object(
+            session_boot,
+            "plugin_enabled",
+            side_effect=lambda name, root=None: name in enabled,
+        )
+        self._plugins.start()
+        with (
+            mock.patch.object(session_boot, "detect_dep", return_value=False),
+            mock.patch.object(session_boot, "has_cmd", return_value=False),
+        ):
+            code, out = run_main_inprocess(
+                {"session_id": "r1", "cwd": self.tmp},
+                dict(self.env, ATLAS_MANDATES=mandates),
+            )
+        self.assertEqual(code, 0)
+        return json.loads(out)["hookSpecificOutput"]["additionalContext"]
+
+    def test_enabled_plugin_arms_recall_and_clears_setup_gap(self):
+        ctx = self._context({"claude-mem", "ponytail", "context-mode"})
+        self.assertIn(session_boot.recall_mandate(), ctx)
+        self.assertIn("mcp__plugin_claude-mem_mcp-search__search", ctx)
+        self.assertNotIn("Setup gap", ctx)
+
+    def test_absent_plugin_stays_silent(self):
+        ctx = self._context(set())
+        self.assertNotIn("Recall first", ctx)
+
+    def test_kill_switch(self):
+        ctx = self._context({"claude-mem"}, "off")
+        self.assertNotIn("Recall first", ctx)
+
+
+class PluginEnabledTest(unittest.TestCase):
+    """tool_routing.plugin_enabled: settings precedence and fail-open parsing."""
+
+    def setUp(self):
+        import tool_routing
+
+        self.tr = tool_routing
+        self.home = tempfile.mkdtemp()
+        self.proj = tempfile.mkdtemp()
+        os.makedirs(os.path.join(self.home, ".claude"))
+        os.makedirs(os.path.join(self.proj, ".claude"))
+
+    def tearDown(self):
+        shutil.rmtree(self.home, ignore_errors=True)
+        shutil.rmtree(self.proj, ignore_errors=True)
+
+    def _write(self, base, name, data):
+        with open(os.path.join(base, ".claude", name), "w") as fh:
+            fh.write(data if isinstance(data, str) else json.dumps(data))
+
+    def test_user_setting_enables_and_project_override_disables(self):
+        self._write(
+            self.home, "settings.json", {"enabledPlugins": {"ponytail@ponytail": True}}
+        )
+        with mock.patch.dict(os.environ, {"HOME": self.home}):
+            self.assertTrue(self.tr.plugin_enabled("ponytail", self.proj))
+            self.assertFalse(self.tr.plugin_enabled("pony", self.proj))
+            self._write(
+                self.proj,
+                "settings.local.json",
+                {"enabledPlugins": {"ponytail@ponytail": False}},
+            )
+            self.assertFalse(self.tr.plugin_enabled("ponytail", self.proj))
+
+    def test_malformed_settings_fail_open(self):
+        self._write(self.home, "settings.json", "{not json")
+        self._write(self.proj, "settings.json", {"enabledPlugins": ["ponytail"]})
+        with mock.patch.dict(os.environ, {"HOME": self.home}):
+            self.assertFalse(self.tr.plugin_enabled("ponytail", self.proj))
+
+    def test_omp_lock_decides_under_omp_only(self):
+        # An omp-installed plugin is absent from the Claude settings; boot called it "absent - run the atlas skill".
+        os.makedirs(os.path.join(self.home, ".omp", "plugins"))
+        with open(
+            os.path.join(self.home, ".omp", "plugins", "omp-plugins.lock.json"), "w"
+        ) as fh:
+            json.dump(
+                {
+                    "plugins": {
+                        "ponytail": {"enabled": True},
+                        "pyright-lsp": {"enabled": False},
+                    }
+                },
+                fh,
+            )
+        self._write(
+            self.home, "settings.json", {"enabledPlugins": {"pyright-lsp@x": True}}
+        )
+        with mock.patch.dict(os.environ, {"HOME": self.home}):
+            self.assertFalse(
+                self.tr.plugin_enabled("ponytail", self.proj)
+            )  # Claude Code never reads the omp lock
+            self.assertTrue(self.tr.plugin_enabled("pyright-lsp", self.proj))
+        with mock.patch.dict(os.environ, {"HOME": self.home, "ATLAS_HARNESS": "omp"}):
+            self.assertTrue(self.tr.plugin_enabled("ponytail", self.proj))
+            self.assertFalse(
+                self.tr.plugin_enabled("pyright-lsp", self.proj)
+            )  # omp lock disables it for omp
+            self.assertFalse(self.tr.plugin_enabled("unknown", self.proj))
+
+
+def _git(root, *args):
+    subprocess.run(["git", *args], cwd=root, check=True, capture_output=True)
+
+
+def make_repo():
+    """A REAL git repo: committed src/calc.py and docs/guide.md."""
+    root = os.path.realpath(tempfile.mkdtemp())
+    _git(root, "init", "-q")
+    _git(root, "config", "user.email", "t@example.com")
+    _git(root, "config", "user.name", "t")
+    os.makedirs(os.path.join(root, "src"))
+    os.makedirs(os.path.join(root, "docs"))
+    with open(os.path.join(root, "src", "calc.py"), "w") as fh:
+        fh.write("def add(a, b):\n    return a - b\n")
+    with open(os.path.join(root, "docs", "guide.md"), "w") as fh:
+        fh.write("# guide\n")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "init")
+    return root
+
+
+class DirtySnapshotTest(unittest.TestCase):
+    """SessionStart records which non-docs paths are already dirty, so the Stop
+    gate can tell shell-written code (sed -i, tee, ...) from inherited dirt."""
+
+    def setUp(self):
+        self.root = make_repo()
+        self.addCleanup(shutil.rmtree, self.root, True)
+
+    def snap_path(self, session="s1"):
+        return os.path.join(
+            self.root, ".atlas", ".run", "dirty-snapshot-%s.json" % session
+        )
+
+    def put(self, rel, body):
+        path = os.path.join(self.root, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as fh:
+            fh.write(body)
+
+    def test_snapshot_maps_non_docs_dirty_paths_to_hashes(self):
+        self.put("src/calc.py", "def add(a, b):\n    return a + b\n")
+        self.put("src/new.py", "x = 1\n")
+        self.put("docs/guide.md", "# changed\n")
+        self.put("README.md", "r\n")
+        self.put(".atlas/state.json", "{}\n")
+        self.assertEqual(
+            session_boot.write_dirty_snapshot(self.root, "s1"), self.snap_path()
+        )
+        with open(self.snap_path()) as fh:
+            paths = json.load(fh)["paths"]
+        self.assertEqual(sorted(paths), ["src/calc.py", "src/new.py"])
+        self.assertTrue(all(len(h) == 64 for h in paths.values()))
+
+    def test_first_snapshot_wins_on_repeat_session_start(self):
+        self.put("src/new.py", "x = 1\n")
+        session_boot.write_dirty_snapshot(self.root, "s1")
+        self.put(
+            "src/later.py", "y = 1\n"
+        )  # shell edit between two SessionStart events
+        session_boot.write_dirty_snapshot(self.root, "s1")
+        with open(self.snap_path()) as fh:
+            self.assertEqual(sorted(json.load(fh)["paths"]), ["src/new.py"])
+
+    def test_not_a_git_repo_writes_nothing(self):
+        plain = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, plain, True)
+        self.assertIsNone(session_boot.write_dirty_snapshot(plain, "s1"))
+        self.assertFalse(os.path.exists(os.path.join(plain, ".atlas")))
+
+    def test_missing_session_id_writes_nothing(self):
+        self.assertIsNone(session_boot.write_dirty_snapshot(self.root, ""))
+        self.assertFalse(os.path.exists(os.path.join(self.root, ".atlas")))
+
+    def test_unwritable_target_is_swallowed(self):
+        self.put(".atlas", "a file where the dir should be\n")
+        self.assertIsNone(session_boot.write_dirty_snapshot(self.root, "s1"))
+
+    def test_main_writes_snapshot_for_the_session(self):
+        self.put("src/new.py", "x = 1\n")
+        home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, home, True)
+        env = {
+            "ATLAS_DB": os.path.join(home, "atlas.db"),
+            "HOME": home,
+            "ATLAS_DASHBOARD": "off",
+            "ATLAS_COLONY": "off",
+        }
+        with mock.patch.object(session_boot, "plugin_enabled", return_value=False):
+            code, _ = run_main_inprocess({"session_id": "s1", "cwd": self.root}, env)
+        self.assertEqual(code, 0)
+        for _ in range(
+            100
+        ):  # the snapshot is written by a detached child, off the boot path
+            if os.path.exists(self.snap_path()):
+                break
+            time.sleep(0.05)
+        with open(self.snap_path()) as fh:
+            self.assertEqual(sorted(json.load(fh)["paths"]), ["src/new.py"])
+
+
+class EnsureColonyCacheTest(unittest.TestCase):
+    """A fresh healthy status cache skips the slow `atlas_herdr.py status` probe; stale/unhealthy re-probe."""
+
+    def setUp(self):
+        self.home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.home, True)
+        self.cache = os.path.join(self.home, "herdr-status-cache.json")
+
+    def seed(self, data, age):
+        with open(self.cache, "w") as fh:
+            json.dump(data, fh)
+        t = time.time() - age
+        os.utime(self.cache, (t, t))
+
+    def run_colony(self):
+        with mock.patch.dict(
+            os.environ, {"ATLAS_HOME": self.home, "ATLAS_COLONY": "on"}
+        ):
+            with (
+                mock.patch("subprocess.run") as run,
+                mock.patch("subprocess.Popen") as popen,
+            ):
+                run.return_value = mock.Mock(
+                    stdout=json.dumps({"healthy": False, "herdr_server": False})
+                )
+                return session_boot.ensure_colony(), run, popen
+
+    def test_fresh_healthy_cache_skips_probe(self):
+        self.seed({"healthy": True, "url": "http://x:1"}, 5)
+        out, run, popen = self.run_colony()
+        self.assertEqual(out, "colony ready at http://x:1")
+        run.assert_not_called()
+        popen.assert_not_called()
+
+    def test_stale_healthy_cache_refreshes_detached(self):
+        self.seed({"healthy": True, "url": "http://x:1"}, 100)
+        out, run, popen = self.run_colony()
+        self.assertEqual(out, "colony ready at http://x:1")
+        run.assert_not_called()
+        popen.assert_called_once()
+
+    def test_cold_cache_never_probes_on_boot_path(self):
+        out, run, popen = self.run_colony()
+        self.assertEqual(out, "colony: checking")
+        run.assert_not_called()
+        popen.assert_called_once()  # detached status refresh
+
+    def test_recent_herdr_down_is_negative_cached(self):
+        self.seed({"healthy": False, "herdr_server": False}, 5)
+        out, run, popen = self.run_colony()
+        self.assertIsNone(out)
+        run.assert_not_called()
+        popen.assert_not_called()
+
+    def test_recent_web_ui_down_reuses_status_and_starts_ensure(self):
+        self.seed({"healthy": False, "herdr_server": True, "url": "u"}, 5)
+        with mock.patch.object(session_boot, "_colony_stack_url", return_value=None):
+            out, run, popen = self.run_colony()
+        self.assertTrue(out.startswith("colony: starting"))
+        run.assert_not_called()
+        popen.assert_called_once()
+
+    def test_expired_cache_reprobes(self):
+        for data, age in (
+            ({"healthy": False}, 9999),
+            ({"healthy": True, "url": "u"}, 9999),
+        ):
+            self.seed(data, age)
+            out, run, _ = self.run_colony()
+            self.assertIsNone(out)
+            run.assert_called_once()
+
+
+class WorkerIdentityTest(unittest.TestCase):
+    """10.4.3: workers never steal carry-over; a Claude Code lead pins ATLAS_LEAD_NAME via CLAUDE_ENV_FILE."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.root = os.path.join(self.tmp, "proj")
+        os.makedirs(os.path.join(self.root, ".atlas"))
+        self.env_file = os.path.join(self.tmp, "claude.env")
+        self.env = {
+            "ATLAS_DB": os.path.join(self.tmp, "atlas.db"),
+            "ATLAS_DASHBOARD": "off",
+            "ATLAS_COLONY": "off",
+            "ATLAS_TODO": "on",
+            "ATLAS_WORKER_NAME": "",
+            "ATLAS_LEAD_NAME": "",
+            "CLAUDE_ENV_FILE": self.env_file,
+        }
+
+    def boot(self, sid, **over):
+        env = dict(self.env, **over)
+        return run_main_inprocess({"session_id": sid, "cwd": self.root}, env)
+
+    def test_worker_session_does_not_carry_other_sessions_items(self):
+        import atlas_todo
+
+        atlas_todo.mirror(
+            self.root, [{"content": "lead item", "status": "pending"}], "lead-sid"
+        )
+        self.boot("worker-sid", ATLAS_WORKER_NAME="Alpha")
+        item = atlas_todo.load(self.root)["items"][0]
+        self.assertEqual((item["session_id"], item["origin"]), ("lead-sid", "session"))
+        # a non-worker session still carries it (the behaviour a worker must not trigger)
+        self.boot("next-sid")
+        item = atlas_todo.load(self.root)["items"][0]
+        self.assertEqual((item["session_id"], item["origin"]), ("next-sid", "carried"))
+
+    def test_lead_gets_exactly_one_export_line(self):
+        self.boot("01a11c99-aaaa")
+        self.boot("01a11c99-aaaa")
+        with open(self.env_file) as f:
+            lines = f.read().splitlines()
+        self.assertEqual(lines, ["export ATLAS_LEAD_NAME=lead-01a11c"])
+
+    def test_worker_and_preset_lead_name_write_nothing(self):
+        self.boot("sid-1234567", ATLAS_WORKER_NAME="Beta")
+        self.boot("sid-1234567", ATLAS_LEAD_NAME="custom")
+        self.assertFalse(os.path.exists(self.env_file))
+
+
+class EnsureDashboardTempEnvTest(unittest.TestCase):
+    """Boot under scratch state must never reach the shared :7421 daemon."""
+
+    def _run(self, **env):
+        drop = (
+            "ATLAS_DASHBOARD",
+            "ATLAS_DASHBOARD_PORT",
+            "ATLAS_HOME",
+            "ATLAS_DASHBOARD_DB",
+        )
+        base = {k: v for k, v in os.environ.items() if k not in drop}
+        base.update(env)
+        fake = mock.Mock(
+            returncode=0,
+            stdout='{"url": "http://127.0.0.1:7421/", "already_running": true}',
+        )
+        with (
+            mock.patch.dict(os.environ, base, clear=True),
+            mock.patch("subprocess.run", return_value=fake) as run,
+        ):
+            return session_boot.ensure_dashboard(), run
+
+    def test_temp_home_skips_without_spawn(self):
+        with tempfile.TemporaryDirectory() as home:
+            out, run = self._run(HOME=home)
+        self.assertIsNone(out)
+        run.assert_not_called()
+
+    def test_temp_db_skips_without_spawn(self):
+        out, run = self._run(
+            HOME="/Users/someone", ATLAS_DASHBOARD_DB="/tmp/x/atlas.db"
+        )
+        self.assertIsNone(out)
+        run.assert_not_called()
+
+    def test_temp_home_with_explicit_spare_port_is_allowed(self):
+        with tempfile.TemporaryDirectory() as home:
+            out, run = self._run(HOME=home, ATLAS_DASHBOARD_PORT="17969")
+        run.assert_called_once()
+        self.assertIn("dashboard:", out)
+
+    def test_real_home_still_ensures(self):
+        out, run = self._run(HOME="/Users/someone")
+        run.assert_called_once()
+        self.assertIn("dashboard:", out)
 
 
 if __name__ == "__main__":

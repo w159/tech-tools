@@ -1,4 +1,5 @@
 """Wire lint_skill_names.py into the test suite so drift in skill naming is caught."""
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import subprocess
 import sys
 from pathlib import Path

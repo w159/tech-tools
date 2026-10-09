@@ -1,9 +1,12 @@
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import contextlib
 import io
+import json
 import os
 import runpy
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -235,6 +238,33 @@ class AtlasDbTest(unittest.TestCase):
             atlas_db.latest_run_id(self.conn, "sess-l"), rid
         )  # still found
 
+    def test_start_run_twice_for_one_session_yields_one_open_run(self):
+        # Race: omp fires `begin` from session_start and before_agent_start as
+        # separate python processes. start_run must be conditional in SQL so the
+        # loser returns the winner's run instead of inserting a second open run.
+        pid = atlas_db.register_project(self.conn, "/repo/x")
+        first = atlas_db.start_run(self.conn, pid, "sess-race")
+        second = atlas_db.start_run(self.conn, pid, "sess-race")
+        self.assertEqual(first, second)  # the existing open run's id is returned
+        # A second connection is the real cross-process shape (its own handle on the file).
+        other = atlas_db.connect(self.path)
+        try:
+            third = atlas_db.start_run(other, pid, "sess-race")
+        finally:
+            other.close()
+        self.assertEqual(first, third)
+        open_rows = self.conn.execute(
+            "SELECT COUNT(*) FROM runs WHERE session_id=? AND ended_at IS NULL",
+            ("sess-race",),
+        ).fetchone()[0]
+        self.assertEqual(open_rows, 1)
+        # Other sessions are unaffected, and a finalized run does not block a new one.
+        self.assertNotEqual(atlas_db.start_run(self.conn, pid, "sess-other"), first)
+        atlas_db.finalize_run(self.conn, first)
+        reopened = atlas_db.start_run(self.conn, pid, "sess-race")
+        self.assertNotEqual(reopened, first)
+        self.assertEqual(atlas_db.current_run_id(self.conn, "sess-race"), reopened)
+
     def test_derive_does_not_clobber_finalized_wall_clock(self):
         # Regression: finalize_run sets the authoritative wall clock; a later
         # derive_run_metrics (transcript-span based, often 0) must NOT overwrite it.
@@ -460,6 +490,49 @@ class AtlasDbTest(unittest.TestCase):
             self.conn.execute("SELECT COUNT(*) FROM dispatches").fetchone()[0], 1
         )
 
+    def test_purge_tmp_sessions_dry_run_default_then_apply(self):
+        pid = atlas_db.register_project(self.conn, "/repo/x")
+        tmp_t = os.path.join(tempfile.gettempdir(), "atlas-omp-abc", "t.jsonl")
+        for sid, path in (
+            ("t1", tmp_t),
+            ("real", "/home/u/.claude/projects/x/real.jsonl"),
+            # shares the temp dir's name as a prefix only: must NOT match
+            ("sib", tempfile.gettempdir() + "-sibling/s.jsonl"),
+        ):
+            atlas_db.upsert_session_log(
+                self.conn, sid, project_id=pid, transcript_path=path, cwd="/repo/x"
+            )
+            self._seed_session_children(sid)
+            rid = atlas_db.start_run(self.conn, pid, sid)
+            atlas_db.log_dispatch(self.conn, rid, "atlas:worker")
+            atlas_db.finalize_run(self.conn, rid)
+        tables = (
+            "session_logs",
+            "messages",
+            "tool_calls",
+            "runs",
+            "dispatches",
+            "metrics",
+        )
+        count = lambda t: self.conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
+        before = {t: count(t) for t in tables}
+        counts = atlas_db.purge_tmp_sessions(self.conn)  # dry run is the default
+        self.assertEqual(
+            (counts["session_logs"], counts["runs"], counts["dispatches"]), (1, 1, 1)
+        )
+        self.assertEqual(before, {t: count(t) for t in tables})
+        atlas_db.purge_tmp_sessions(self.conn, apply=True)
+        left = {r[0] for r in self.conn.execute("SELECT session_id FROM session_logs")}
+        self.assertEqual(left, {"real", "sib"})
+        for t in ("messages", "tool_calls", "runs"):
+            self.assertEqual(
+                self.conn.execute(
+                    f"SELECT COUNT(*) FROM {t} WHERE session_id='t1'"
+                ).fetchone()[0],
+                0,
+            )
+        self.assertEqual(count("dispatches"), 2)
+
     def test_purge_observer_sessions_noop_when_none(self):
         pid = atlas_db.register_project(self.conn, "/repo/x")
         atlas_db.upsert_session_log(
@@ -539,12 +612,22 @@ class UncoveredPathsTest(unittest.TestCase):
         # The ATLAS_DB branch of db_path() (line 90).
         with patch.dict(os.environ, {"ATLAS_DB": "/custom/path/atlas.db"}):
             self.assertEqual(atlas_db.db_path(), "/custom/path/atlas.db")
-        env_copy = dict(os.environ)
-        env_copy.pop("ATLAS_DB", None)
+        env_copy = {
+            k: v for k, v in os.environ.items() if k not in ("ATLAS_DB", "ATLAS_HOME")
+        }
         with patch.dict(os.environ, env_copy, clear=True):
             self.assertEqual(
                 atlas_db.db_path(), os.path.expanduser("~/.atlas/atlas.db")
             )
+        # ATLAS_HOME alone relocates the DB; ATLAS_DB still wins over it
+        with patch.dict(os.environ, {**env_copy, "ATLAS_HOME": "/h/x"}, clear=True):
+            self.assertEqual(atlas_db.db_path(), "/h/x/atlas.db")
+        with patch.dict(
+            os.environ,
+            {**env_copy, "ATLAS_HOME": "/h/x", "ATLAS_DB": "/e/a.db"},
+            clear=True,
+        ):
+            self.assertEqual(atlas_db.db_path(), "/e/a.db")
 
     def test_init_migrates_pre_kind_pre_orchestrating_runs(self):
         # A DB whose `runs` table predates the kind/orchestrating columns: the
@@ -577,6 +660,34 @@ class UncoveredPathsTest(unittest.TestCase):
             rid = atlas_db.mark_orchestrating(self.conn, "sess-sentinel", cwd=self.tmp)
         self.assertIsNotNone(rid)
         self.assertTrue(atlas_db.is_orchestrating(self.conn, "sess-sentinel"))
+
+    def test_sentinel_walks_up_to_project_root(self):
+        # A session cwd deep inside a repo (e.g. a plugin source checkout) must
+        # never grow its own .atlas/.run tree: the sentinel belongs at the
+        # project root, next to the board and findings the rest of the system
+        # reads. Writing it at the raw cwd made find_root() stop there and sent
+        # the durable todo board into product source (5.27.0 live-install fail).
+        deep = os.path.join(self.tmp, "repo", "a", "b", "c")
+        os.makedirs(deep)
+        git_dir = os.path.join(self.tmp, "repo", ".git")
+        os.makedirs(git_dir)
+        atlas_db._write_orchestration_sentinel(deep)
+        sentinel = os.path.join(
+            self.tmp, "repo", ".atlas", ".run", "atlas-orchestrate.active"
+        )
+        self.assertTrue(os.path.exists(sentinel))
+        self.assertFalse(os.path.exists(os.path.join(deep, ".atlas")))
+
+    def test_sentinel_stays_at_cwd_without_any_marker(self):
+        # No .git/.atlas/docs ancestor: fail open to the cwd as before.
+        deep = os.path.join(self.tmp, "nomarker", "x")
+        os.makedirs(deep)
+        atlas_db._write_orchestration_sentinel(deep)
+        self.assertTrue(
+            os.path.exists(
+                os.path.join(deep, ".atlas", ".run", "atlas-orchestrate.active")
+            )
+        )
 
     def test_run_metrics_empty_for_missing_run(self):
         # No metrics row -> {} (line 337).
@@ -993,6 +1104,221 @@ class UncoveredPathsTest(unittest.TestCase):
         self.assertEqual(idle, ["atlas-wiki"])
 
 
+class ChronicleInsightsTest(unittest.TestCase):
+    """Chronicle/insights schema: facets, friction_events, findings, and the
+    additive improvements columns."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.path = os.path.join(self.tmp, "atlas.db")
+        self.conn = atlas_db.connect(self.path)
+        atlas_db.init(self.conn)
+
+    def tearDown(self):
+        self.conn.close()
+
+    def test_fresh_db_gets_chronicle_tables(self):
+        names = {
+            r[0]
+            for r in self.conn.execute(
+                "select name from sqlite_master where type='table'"
+            )
+        }
+        self.assertTrue({"facets", "friction_events", "findings"} <= names)
+
+    def test_chronicle_migration_is_idempotent(self):
+        atlas_db.init(self.conn)  # second call
+        atlas_db.init(self.conn)  # third call
+        names = {
+            r[0]
+            for r in self.conn.execute(
+                "select name from sqlite_master where type='table'"
+            )
+        }
+        self.assertTrue({"facets", "friction_events", "findings"} <= names)
+        cols = {r[1] for r in self.conn.execute("PRAGMA table_info(improvements)")}
+        self.assertIn("verdict", cols)
+
+    def test_improvements_migration_from_old_schema_preserves_rows(self):
+        # A DB whose `improvements` table predates the finding/remeasure
+        # columns: init() must ALTER it additively, keeping existing rows.
+        path = os.path.join(self.tmp, "old_improvements.db")
+        raw = atlas_db.connect(path)
+        raw.executescript(
+            "CREATE TABLE improvements ("
+            "  id INTEGER PRIMARY KEY, run_id INTEGER NOT NULL, ts REAL,"
+            "  dimension TEXT, baseline TEXT, target TEXT, note TEXT);"
+        )
+        raw.execute(
+            "INSERT INTO improvements(run_id,ts,dimension,baseline,target,note) "
+            "VALUES(1,100.0,'parallelism','0 waves','>=3 waves','fan out')"
+        )
+        raw.commit()
+        cols_before = {r[1] for r in raw.execute("PRAGMA table_info(improvements)")}
+        self.assertNotIn("verdict", cols_before)
+        atlas_db.init(raw)  # must not raise; adds the columns
+        cols_after = {r[1] for r in raw.execute("PRAGMA table_info(improvements)")}
+        for col in atlas_db.IMPROVEMENT_REMEASURE_COLUMNS:
+            self.assertIn(col, cols_after)
+        row = raw.execute(
+            "SELECT run_id, dimension, baseline, target, note FROM improvements"
+        ).fetchone()
+        self.assertEqual(row, (1, "parallelism", "0 waves", ">=3 waves", "fan out"))
+        self.assertEqual(
+            raw.execute("SELECT COUNT(*) FROM improvements").fetchone()[0], 1
+        )
+        atlas_db.init(raw)  # idempotent second call on the migrated DB
+        raw.close()
+
+    def test_upsert_facet_roundtrip_and_pending(self):
+        pid = atlas_db.register_project(self.conn, "/repo/x")
+        atlas_db.upsert_facet(
+            self.conn,
+            "sess-f1",
+            project_id=pid,
+            message_count=10,
+            tool_call_count=5,
+            verifier_coverage=0.5,
+        )
+        row = self.conn.execute(
+            "SELECT project_id, message_count, tool_call_count, verifier_coverage, "
+            "enriched_at FROM facets WHERE session_id='sess-f1'"
+        ).fetchone()
+        self.assertEqual(row, (pid, 10, 5, 0.5, None))
+        # still pending (enriched_at IS NULL)
+        pending = atlas_db.pending_facets(self.conn)
+        self.assertEqual([p["session_id"] for p in pending], ["sess-f1"])
+        # a second upsert enriches it; absent keys keep their stored value.
+        atlas_db.upsert_facet(
+            self.conn,
+            "sess-f1",
+            enriched_at=200.0,
+            underlying_goal="ship the chronicle schema",
+        )
+        row2 = self.conn.execute(
+            "SELECT message_count, enriched_at, underlying_goal FROM facets "
+            "WHERE session_id='sess-f1'"
+        ).fetchone()
+        self.assertEqual(row2, (10, 200.0, "ship the chronicle schema"))
+        self.assertEqual(atlas_db.pending_facets(self.conn), [])
+
+    def test_record_friction_roundtrip(self):
+        fid = atlas_db.record_friction(
+            self.conn, "sess-fr", "gate_block", weight=2.0, snippet="blocked at gate"
+        )
+        row = self.conn.execute(
+            "SELECT session_id, category, weight, snippet FROM friction_events "
+            "WHERE id=?",
+            (fid,),
+        ).fetchone()
+        self.assertEqual(row, ("sess-fr", "gate_block", 2.0, "blocked at gate"))
+
+    def test_upsert_finding_fingerprint_dedupes(self):
+        fid1 = atlas_db.upsert_finding(
+            self.conn,
+            "fp-1",
+            dimension="security",
+            severity="high",
+            title="hardcoded secret",
+            proposed_action="move to env",
+        )
+        self.assertEqual(
+            self.conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0], 1
+        )
+        # Re-upserting the same fingerprint updates the row, not a duplicate.
+        fid2 = atlas_db.upsert_finding(
+            self.conn,
+            "fp-1",
+            severity="critical",
+        )
+        self.assertEqual(fid1, fid2)
+        self.assertEqual(
+            self.conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0], 1
+        )
+        row = self.conn.execute(
+            "SELECT severity, title, status FROM findings WHERE id=?", (fid1,)
+        ).fetchone()
+        self.assertEqual(row, ("critical", "hardcoded secret", "open"))
+
+    def test_upsert_finding_never_clobbers_decision_status(self):
+        """A re-mine refreshes evidence but must not reset a decided finding
+        back to open (upsert_finding passes status='open' by default, and the
+        conflict update used to write it, silently undoing user decisions)."""
+        fid = atlas_db.upsert_finding(
+            self.conn, "fp-decide", dimension="perf", title="t1"
+        )
+        atlas_db.set_finding_status(self.conn, fid, "accepted", decided_at=42.0)
+        atlas_db.upsert_finding(
+            self.conn,
+            "fp-decide",
+            dimension="perf",
+            title="t2",  # re-mine
+        )
+        row = self.conn.execute(
+            "SELECT status, decided_at, title, created_at FROM findings WHERE id=?",
+            (fid,),
+        ).fetchone()
+        self.assertEqual(row[0], "accepted")
+        self.assertEqual(row[1], 42.0)
+        self.assertEqual(row[2], "t2")  # evidence DID refresh
+        created = self.conn.execute(
+            "SELECT created_at FROM findings WHERE id=?", (fid,)
+        ).fetchone()[0]
+        atlas_db.upsert_finding(
+            self.conn, "fp-decide", dimension="perf", title="t3", created_at=1.0
+        )
+        self.assertEqual(
+            self.conn.execute(
+                "SELECT created_at FROM findings WHERE id=?", (fid,)
+            ).fetchone()[0],
+            created,
+        )
+
+    def test_set_finding_status(self):
+        fid = atlas_db.upsert_finding(self.conn, "fp-2", dimension="perf", title="t")
+        atlas_db.set_finding_status(self.conn, fid, "accepted", decided_at=50.0)
+        row = self.conn.execute(
+            "SELECT status, decided_at, applied_at FROM findings WHERE id=?", (fid,)
+        ).fetchone()
+        self.assertEqual(row, ("accepted", 50.0, None))
+        atlas_db.set_finding_status(self.conn, fid, "applied", applied_at=75.0)
+        row2 = self.conn.execute(
+            "SELECT status, decided_at, applied_at FROM findings WHERE id=?", (fid,)
+        ).fetchone()
+        self.assertEqual(row2, ("applied", 50.0, 75.0))  # decided_at untouched
+
+    def test_record_improvement_with_remeasure_fields_and_pending(self):
+        pid = atlas_db.register_project(self.conn, "/repo/x")
+        rid = atlas_db.start_run(self.conn, pid, "sess-imp")
+        fid = atlas_db.upsert_finding(self.conn, "fp-3", dimension="parallelism")
+        iid = atlas_db.record_improvement(
+            self.conn,
+            rid,
+            "parallelism",
+            "0 waves",
+            ">=3 waves",
+            "fan out",
+            finding_id=fid,
+            metric="parallel_waves",
+            baseline_value=0.0,
+            target_value=3.0,
+            measure_after_runs=5,
+        )
+        row = self.conn.execute(
+            "SELECT finding_id, metric, baseline_value, target_value, "
+            "measure_after_runs, remeasured_at FROM improvements WHERE id=?",
+            (iid,),
+        ).fetchone()
+        self.assertEqual(row, (fid, "parallel_waves", 0.0, 3.0, 5, None))
+        pending = atlas_db.pending_remeasures(self.conn)
+        self.assertEqual([p["id"] for p in pending], [iid])
+        # a call with no remeasure kwargs still works (existing call sites).
+        atlas_db.record_improvement(self.conn, rid, "dim", "b", "t", "n")
+        self.assertEqual(
+            self.conn.execute("SELECT COUNT(*) FROM improvements").fetchone()[0], 2
+        )
+
+
 class MainCliTest(unittest.TestCase):
     """Cover the `if __name__ == '__main__'` CLI entry points in-process.
 
@@ -1034,8 +1360,13 @@ class MainCliTest(unittest.TestCase):
         c.close()
 
     def test_main_mark_orchestrating_defaults_cwd(self):
-        # No cwd arg -> os.getcwd() default branch.
-        out = self._run_cli(["atlas_db.py", "mark-orchestrating", "sess-cwd"])
+        # No cwd arg -> os.getcwd() default branch (run from tmp so the sentinel stays out of the repo).
+        old = os.getcwd()
+        os.chdir(self.tmp)
+        try:
+            out = self._run_cli(["atlas_db.py", "mark-orchestrating", "sess-cwd"])
+        finally:
+            os.chdir(old)
         self.assertIn("orchestrating run", out)
 
     def test_main_purge_observer_sessions(self):
@@ -1123,5 +1454,458 @@ class MainCliTest(unittest.TestCase):
         self.assertIn("Usage", err.getvalue())
 
 
+class IngestFilesSchemaTest(unittest.TestCase):
+    """`ingest_files` (per-(session, file) ingest cursors) belongs to the
+    shared schema, so connect()+init(), doctor and purge all see it."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.path = os.path.join(self.tmp, "atlas.db")
+        self.conn = atlas_db.connect(self.path)
+        self.addCleanup(self.conn.close)
+
+    def _cols(self):
+        return [r[1] for r in self.conn.execute("PRAGMA table_info(ingest_files)")]
+
+    def test_fresh_init_creates_ingest_files(self):
+        atlas_db.init(self.conn)
+        self.assertEqual(
+            self._cols(),
+            ["session_id", "path", "cursor_bytes", "size", "row_keys", "updated_at"],
+        )
+
+    def test_init_adds_ingest_files_to_a_pre_existing_db(self):
+        atlas_db.init(self.conn)
+        self.conn.execute("DROP TABLE ingest_files")
+        self.conn.commit()
+        atlas_db.init(self.conn)  # legacy DB: table missing, init must add it
+        self.assertIn("cursor_bytes", self._cols())
+
+    def test_init_keeps_existing_ingest_files_rows(self):
+        atlas_db.init(self.conn)
+        self.conn.execute(
+            "INSERT INTO ingest_files(session_id,path,cursor_bytes) VALUES('s','p',7)"
+        )
+        self.conn.commit()
+        atlas_db.init(self.conn)
+        self.assertEqual(
+            self.conn.execute("SELECT cursor_bytes FROM ingest_files").fetchone()[0], 7
+        )
+
+    def test_purge_observer_sessions_clears_their_ingest_files(self):
+        atlas_db.init(self.conn)
+        marker = atlas_db.OBSERVER_SESSION_MARKER
+        atlas_db.upsert_session_log(
+            self.conn, "obs-1", transcript_path=f"/h/{marker}/x.jsonl"
+        )
+        self.conn.execute(
+            "INSERT INTO ingest_files(session_id,path,cursor_bytes) VALUES('obs-1','p',1)"
+        )
+        self.conn.execute(
+            "INSERT INTO ingest_files(session_id,path,cursor_bytes) VALUES('keep','q',1)"
+        )
+        self.conn.commit()
+        atlas_db.purge_observer_sessions(self.conn)
+        left = [r[0] for r in self.conn.execute("SELECT session_id FROM ingest_files")]
+        self.assertEqual(left, ["keep"])
+
+
+class ErrorSnippetTest(unittest.TestCase):
+    def test_plain_text_is_head_capped(self):
+        self.assertEqual(atlas_db.error_snippet_of("a  b\nc"), "a b c")
+        self.assertEqual(atlas_db.error_snippet_of("x" * 900), "x" * 500)
+        self.assertIsNone(atlas_db.error_snippet_of(""))
+
+    def test_short_traceback_is_unchanged(self):
+        text = (
+            'Traceback (most recent call last):\n  File "a.py", line 1\nValueError: x'
+        )
+        self.assertEqual(atlas_db.error_snippet_of(text), " ".join(text.split()))
+
+    def test_long_traceback_keeps_head_and_tail(self):
+        frames = "".join(
+            '  File "m%d.py", line %d, in f\n    g()\n' % (i, i) for i in range(40)
+        )
+        text = "Traceback (most recent call last):\n" + frames + "KeyError: 'boom'"
+        snip = atlas_db.error_snippet_of(text)
+        self.assertLessEqual(len(snip), 500)
+        self.assertTrue(snip.startswith("Traceback (most recent call last):"))
+        self.assertIn(" ... ", snip)
+        self.assertTrue(snip.endswith("KeyError: 'boom'"))
+        self.assertIn('File "m39.py"', snip)
+
+
+class ToolCallDeniedTest(unittest.TestCase):
+    """A hook/extension-blocked call never ran. update_tool_result flags it
+    `denied` from the result text so the colony miner can drop it from native
+    usage; a genuine tool failure is never flagged."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.conn = atlas_db.connect(os.path.join(self.tmp, "atlas.db"))
+        atlas_db.init(self.conn)
+        self.addCleanup(self.conn.close)
+        atlas_db.insert_tool_call(
+            self.conn, "s1", {"tool_use_id": "tu-1", "tool_name": "grep"}
+        )
+
+    def _denied(self):
+        return self.conn.execute(
+            "SELECT denied FROM tool_calls WHERE tool_use_id='tu-1'"
+        ).fetchone()[0]
+
+    def test_default_is_not_denied(self):
+        self.assertEqual(self._denied(), 0)
+
+    def test_omp_enforcement_deny_text_is_flagged(self):
+        atlas_db.update_tool_result(
+            self.conn,
+            "tu-1",
+            1,
+            90,
+            "Atlas enforcement: use lean-ctx ctx_search instead of grep",
+        )
+        self.assertEqual(self._denied(), 1)
+
+    def test_recall_gate_text_is_flagged(self):
+        atlas_db.update_tool_result(
+            self.conn,
+            "tu-1",
+            1,
+            90,
+            "[atlas gate] REQUIRED once per session: your first tool call",
+        )
+        self.assertEqual(self._denied(), 1)
+
+    def test_claude_hook_error_prefix_is_flagged(self):
+        atlas_db.update_tool_result(
+            self.conn,
+            "tu-1",
+            1,
+            90,
+            "PreToolUse:Grep hook error: Atlas enforcement: use ctx_search",
+        )
+        self.assertEqual(self._denied(), 1)
+
+    def test_ordinary_failure_is_not_flagged(self):
+        atlas_db.update_tool_result(self.conn, "tu-1", 1, 4, "boom")
+        self.assertEqual(self._denied(), 0)
+
+    def test_textless_update_does_not_clear_an_existing_denied_flag(self):
+        atlas_db.update_tool_result(
+            self.conn, "tu-1", 1, 90, "Atlas enforcement: use lean-ctx ctx_search"
+        )
+        atlas_db.update_tool_result(self.conn, "tu-1", 1, 90)  # no text this pass
+        self.assertEqual(self._denied(), 1)
+
+    def test_reingest_with_ordinary_text_does_not_set_the_flag(self):
+        atlas_db.update_tool_result(self.conn, "tu-1", 1, 4, "boom")
+        atlas_db.update_tool_result(self.conn, "tu-1", 1, 4, "boom")
+        self.assertEqual(self._denied(), 0)
+
+    def test_text_argument_is_optional(self):
+        atlas_db.update_tool_result(self.conn, "tu-1", 1, 999)
+        self.assertEqual(self._denied(), 0)
+
+    def test_denied_column_migrates_onto_a_legacy_table(self):
+        self.conn.execute("ALTER TABLE tool_calls DROP COLUMN denied")
+        self.conn.commit()
+        atlas_db.init(self.conn)
+        self.assertEqual(self._denied(), 0)
+
+    def _snippet(self, tuid="tu-1"):
+        return self.conn.execute(
+            "SELECT error_snippet FROM tool_calls WHERE tool_use_id=?", (tuid,)
+        ).fetchone()[0]
+
+    def test_omp_dispatch_deny_text_is_flagged(self):
+        """omp surfaces a gate denial of a Task dispatch as 'DENY - ...' or
+        'Task execution failed: DENY - ...'; neither is a tool failure."""
+        atlas_db.update_tool_result(
+            self.conn, "tu-1", 1, 90, "DENY - this Task dispatch overrides model"
+        )
+        self.assertEqual(self._denied(), 1)
+        atlas_db.update_tool_result(
+            self.conn, "tu-1", 1, 90, "Task execution failed: DENY - 6 inline ops"
+        )
+        self.assertEqual(self._denied(), 1)
+
+    def test_deny_prefix_must_lead_the_text(self):
+        """A real failure that merely mentions DENY mid-text is not a denial."""
+        atlas_db.update_tool_result(
+            self.conn, "tu-1", 1, 40, "request failed: DENY - from upstream proxy"
+        )
+        self.assertEqual(self._denied(), 0)
+
+    def test_error_snippet_stored_for_a_real_failure(self):
+        atlas_db.update_tool_result(
+            self.conn, "tu-1", 1, 30, "Exit code 1\n  grep:   no  such file"
+        )
+        # whitespace is collapsed so one row is one readable line
+        self.assertEqual(self._snippet(), "Exit code 1 grep: no such file")
+
+    def test_error_snippet_is_capped(self):
+        atlas_db.update_tool_result(self.conn, "tu-1", 1, 9000, "x" * 9000)
+        self.assertEqual(len(self._snippet()), atlas_db.ERROR_SNIPPET_CAP)
+        self.assertEqual(atlas_db.ERROR_SNIPPET_CAP, 500)
+
+    def test_no_snippet_for_a_successful_call(self):
+        atlas_db.update_tool_result(self.conn, "tu-1", 0, 12, "all good")
+        self.assertIsNone(self._snippet())
+
+    def test_denied_row_keeps_the_gate_text(self):
+        atlas_db.update_tool_result(
+            self.conn, "tu-1", 1, 90, "Atlas enforcement: use lean-ctx ctx_search"
+        )
+        self.assertEqual(self._denied(), 1)
+        self.assertIn("lean-ctx ctx_search", self._snippet())
+
+    def test_textless_update_keeps_an_existing_snippet(self):
+        atlas_db.update_tool_result(self.conn, "tu-1", 1, 4, "boom")
+        atlas_db.update_tool_result(self.conn, "tu-1", 1, 4)  # codex-style, no text
+        self.assertEqual(self._snippet(), "boom")
+
+    def test_error_snippet_column_migrates_onto_a_legacy_table(self):
+        """A DB created before error_snippet existed upgrades in place, keeps
+        its rows, and the new column starts NULL."""
+        atlas_db.update_tool_result(self.conn, "tu-1", 1, 4, "boom")
+        self.conn.execute("ALTER TABLE tool_calls DROP COLUMN error_snippet")
+        self.conn.commit()
+        atlas_db.init(self.conn)
+        self.assertIsNone(self._snippet())
+        self.assertEqual(
+            self.conn.execute("SELECT COUNT(*) FROM tool_calls").fetchone()[0], 1
+        )
+        atlas_db.init(self.conn)  # idempotent second run
+        atlas_db.update_tool_result(self.conn, "tu-1", 1, 4, "boom")
+        self.assertEqual(self._snippet(), "boom")
+
+    def test_tool_usage_separates_denials_from_real_errors(self):
+        for i, text in enumerate(
+            ["Atlas enforcement: use ctx_search", "Atlas enforcement: use ctx_search"]
+        ):
+            atlas_db.insert_tool_call(
+                self.conn,
+                "s1",
+                {
+                    "tool_use_id": f"d{i}",
+                    "tool_name": "Glob",
+                    "kind": "builtin",
+                    "target": "Glob",
+                },
+            )
+            atlas_db.update_tool_result(self.conn, f"d{i}", 1, 9, text)
+        atlas_db.insert_tool_call(
+            self.conn,
+            "s1",
+            {
+                "tool_use_id": "r1",
+                "tool_name": "Glob",
+                "kind": "builtin",
+                "target": "Glob",
+            },
+        )
+        atlas_db.update_tool_result(self.conn, "r1", 1, 9, "ENOENT")
+        row = next(r for r in atlas_db.tool_usage(self.conn) if r["target"] == "Glob")
+        self.assertEqual(
+            (row["calls"], row["errors"], row["denied"], row["real_errors"]),
+            (3, 3, 2, 1),
+        )
+        top = atlas_db.top_error_snippets(self.conn, "builtin", "Glob")
+        self.assertEqual(top, [{"snippet": "ENOENT", "count": 1}])
+
+    def test_deny_markers_match_what_the_enforcers_emit(self):
+        """DENY_MARKERS must stay in lockstep with the deny texts the omp
+        extension and the mandate contract actually emit, or real blocks are
+        counted as native usage again."""
+        import json
+
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(root, "contracts", "mandates.json")) as f:
+            gate = json.load(f)["recallGate"]
+        self.assertTrue(atlas_db.is_denied_result(gate))
+        with open(os.path.join(root, "omp", "index.ts")) as f:
+            index_src = f.read()
+        with open(os.path.join(root, "omp", "contracts.ts")) as f:
+            contracts_src = f.read()
+        # grep/glob deny and exploration-shell deny both open with this prefix
+        self.assertIn("`Atlas enforcement: use ", index_src)
+        self.assertIn(
+            "`Atlas enforcement: this bash command only reads files", contracts_src
+        )
+        self.assertTrue(
+            atlas_db.is_denied_result("Atlas enforcement: use lean-ctx ctx_search")
+        )
+        self.assertTrue(
+            atlas_db.is_denied_result(
+                "Atlas enforcement: this bash command only reads files, so use lean-ctx ctx_read"
+            )
+        )
+        # the advisory recall line and the unreachable nudge are not denials
+        self.assertFalse(atlas_db.is_denied_result("Recall first: before planning"))
+        self.assertFalse(
+            atlas_db.is_denied_result("Atlas nudge: for exploration, prefer")
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
+
+
+class UnsanctionedInlineOpsTest(unittest.TestCase):
+    """The deny tier counts inline work the orchestrator should have delegated.
+    It must NOT count the docs/ and .atlas/ writes the completion gate itself
+    orders at closeout -- denying the remediation the gate just demanded is a
+    deadlock, not a guardrail."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.conn = atlas_db.connect(os.path.join(self.tmp, "atlas.db"))
+        atlas_db.init(self.conn)
+        pid = atlas_db.register_project(self.conn, "/repo")
+        self.rid = atlas_db.start_run(self.conn, pid, "s1")
+
+    def tearDown(self):
+        self.conn.close()
+
+    def _log(self, tool, path):
+        atlas_db.log_event(self.conn, self.rid, tool, "main", 1, path)
+
+    def test_sanctioned_docs_and_atlas_writes_are_not_counted(self):
+        for path in (
+            "docs/CHANGELOG.md",
+            "/repo/docs/ROADMAP.md",
+            ".atlas/.run/findings.json",
+            "/repo/.atlas/evidence/run.log",
+        ):
+            self._log("Edit", path)
+        self.assertEqual(
+            atlas_db.unsanctioned_inline_ops_since_last_dispatch(self.conn, self.rid), 0
+        )
+
+    def test_target_code_edits_are_counted(self):
+        self._log("Edit", "backend/app.py")
+        self._log("Write", "src/x.ts")
+        self.assertEqual(
+            atlas_db.unsanctioned_inline_ops_since_last_dispatch(self.conn, self.rid), 2
+        )
+
+    def test_pathless_bash_is_still_counted(self):
+        """'Unknown path' is the largest inline surface there is -- 378 Bash
+        calls was the measured failure. Exempting it would empty the counter."""
+        for _ in range(3):
+            self._log("Bash", None)
+        self.assertEqual(
+            atlas_db.unsanctioned_inline_ops_since_last_dispatch(self.conn, self.rid), 3
+        )
+
+    def test_reads_of_docs_are_counted(self):
+        """Only WRITES to docs/ are sanctioned. Reading your way through the
+        task inline is exactly the drift the tier exists to stop."""
+        self._log("Read", "docs/architecture/overview.md")
+        self.assertEqual(
+            atlas_db.unsanctioned_inline_ops_since_last_dispatch(self.conn, self.rid), 1
+        )
+
+    def test_a_dispatch_resets_the_count(self):
+        self._log("Bash", None)
+        atlas_db.log_dispatch(self.conn, self.rid, "atlas:implementer")
+        self.assertEqual(
+            atlas_db.unsanctioned_inline_ops_since_last_dispatch(self.conn, self.rid), 0
+        )
+
+    def test_uri_scheme_writes_are_not_counted(self):
+        """IRC (agent://) and device (xd://) writes surface as Write calls with a
+        URI path. They are messages, not file edits, so they never count toward
+        the inline-op deny threshold."""
+        for path in (
+            "agent://ParityHarness",
+            "xd://report_issue",
+            "proc://job1/kill",
+            "local://plan.md",
+        ):
+            for tool in ("Write", "Edit", "MultiEdit", "NotebookEdit"):
+                self._log(tool, path)
+        self.assertEqual(
+            atlas_db.unsanctioned_inline_ops_since_last_dispatch(self.conn, self.rid), 0
+        )
+
+    def test_uri_exclusion_keeps_real_code_and_non_write_tools_counted(self):
+        self._log("Write", "agent://Foo")
+        self._log("Write", "src/real.py")
+        self._log("Read", "agent://Foo")  # only WRITE tools are sanctioned
+        self.assertEqual(
+            atlas_db.unsanctioned_inline_ops_since_last_dispatch(self.conn, self.rid), 2
+        )
+
+
+class UriPathTest(unittest.TestCase):
+    """One shared notion of 'URI path' for the tripwire, the inline-op counter
+    and the completion gate."""
+
+    def test_is_uri_path(self):
+        for p in (
+            "agent://Foo",
+            "xd://x",
+            "proc://j/kill",
+            "git+ssh://h/p",
+            "a1.b-c://z",
+        ):
+            self.assertTrue(atlas_db.is_uri_path(p), p)
+        for p in (
+            "",
+            None,
+            "src/app.py",
+            "/abs/path.py",
+            "C:\\repo\\a.py",  # Windows drive path: no '://'
+            "1bad://x",  # scheme must start with a letter
+            "src/a://b.py",  # '/' before '://' means a relative file path
+        ):
+            self.assertFalse(atlas_db.is_uri_path(p), p)
+
+
+class RunChangedPathsUriTest(unittest.TestCase):
+    """A URI is not a shipped file: it must never reach the completion gate's
+    'did this run ship non-docs code' signal."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.conn = atlas_db.connect(os.path.join(self.tmp, "atlas.db"))
+        atlas_db.init(self.conn)
+        pid = atlas_db.register_project(self.conn, "/repo")
+        self.rid = atlas_db.start_run(self.conn, pid, "s-uri")
+
+    def tearDown(self):
+        self.conn.close()
+
+    def test_uri_paths_from_events_and_tool_calls_are_dropped(self):
+        atlas_db.log_event(self.conn, self.rid, "Write", "main", 1, "agent://Foo")
+        atlas_db.log_event(self.conn, self.rid, "Write", "main", 1, "xd://report_issue")
+        atlas_db.log_event(self.conn, self.rid, "Edit", "main", 1, "src/real.py")
+        self.conn.execute(
+            "INSERT INTO tool_calls(session_id,ts,tool_name,is_sidechain,input_summary) "
+            "VALUES(?,?,?,?,?)",
+            (
+                "s-uri",
+                time.time(),
+                "Write",
+                1,
+                json.dumps({"file_path": "agent://Bar"}),
+            ),
+        )
+        self.conn.execute(
+            "INSERT INTO tool_calls(session_id,ts,tool_name,is_sidechain,input_summary) "
+            "VALUES(?,?,?,?,?)",
+            (
+                "s-uri",
+                time.time(),
+                "Write",
+                1,
+                json.dumps({"file_path": "src/other.py"}),
+            ),
+        )
+        self.conn.commit()
+        self.assertEqual(
+            sorted(atlas_db.run_changed_paths(self.conn, self.rid)),
+            ["src/other.py", "src/real.py"],
+        )

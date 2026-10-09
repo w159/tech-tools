@@ -1,0 +1,22 @@
+{
+  "$schema": "https://fallow.dev/schema.json",
+  "ignorePatterns": [
+    "plugins/atlas/mcp/*/server.mjs",
+    "plugins/atlas/mcp/*/http.mjs"
+  ],
+  "entry": [
+    "mcp_servers/_shared/__tests__/*.test.ts",
+    "plugins/atlas/mcp/_env/load.mjs",
+    "plugins/atlas/scripts/dashboard_ui/js/*.test.js",
+    "plugins/atlas/scripts/dashboard_ui/js/pages/*.js",
+    "plugins/atlas/omp/*.test.ts",
+    "plugins/atlas/omp/index.ts",
+    "plugins/atlas/omp/test-env-preload.ts",
+    "test-mcp-tools.mjs"
+  ],
+  "audit": {
+    "deadCodeBaseline": "fallow-baselines/dead-code.json",
+    "healthBaseline": "fallow-baselines/health.json",
+    "dupesBaseline": "fallow-baselines/dupes.json"
+  }
+}

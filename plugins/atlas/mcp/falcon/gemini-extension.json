@@ -1,0 +1,14 @@
+{
+  "name": "falcon-mcp",
+  "version": "0.18.0",
+  "mcpServers": {
+    "falcon-mcp": {
+      "command": "uvx",
+      "args": [
+        "--env-file",
+        "${extensionPath}${pathSeparator}.env",
+        "falcon-mcp"
+      ]
+    }
+  }
+}

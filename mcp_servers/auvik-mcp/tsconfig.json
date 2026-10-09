@@ -9,13 +9,28 @@
     "declaration": true,
     "sourceMap": true,
     "esModuleInterop": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "paths": {
+      "@shared/*": [
+        "../_shared/*"
+      ],
+      "@modelcontextprotocol/sdk/*": [
+        "./node_modules/@modelcontextprotocol/sdk/dist/esm/*"
+      ],
+      "zod": [
+        "./node_modules/zod/index.d.ts"
+      ]
+    }
   },
   "include": [
     "src/**/*",
     "../_shared/response-shaper.ts",
     "../_shared/error-envelope.ts",
-    "../_shared/base-url.ts"
+    "../_shared/base-url.ts",
+    "../_shared/zod-shape.ts"
   ],
-  "exclude": ["node_modules", "dist"]
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
 }

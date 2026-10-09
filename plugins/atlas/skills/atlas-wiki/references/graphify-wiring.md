@@ -1,5 +1,14 @@
 # Graphify Wiring
 
+## Contents
+
+- [The graphify skill](#the-graphify-skill)
+- [The wiki pipeline](#the-wiki-pipeline)
+- [Wiki freshness check (completion gate)](#wiki-freshness-check-completion-gate)
+- [Who owns what in this pipeline](#who-owns-what-in-this-pipeline)
+- [Why graphify lives at the repo root](#why-graphify-lives-at-the-repo-root)
+- [What atlas-setup does NOT do](#what-atlas-setup-does-not-do)
+
 How atlas plugin skills invoke the repo-root graphify skill to render
 diagrams into `docs/wiki/` from `docs/architecture/` and the
 atlas-audit graph.json. atlas-setup wires this pipeline so the wiki stays

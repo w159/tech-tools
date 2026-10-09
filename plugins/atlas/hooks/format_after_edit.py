@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """PostToolUse hook - auto-format a file right after Claude edits it.
 
-Matches Edit / Write / MultiEdit. Picks a formatter by file extension, runs it in place
+Matches Edit / Write / MultiEdit / NotebookEdit. Picks a formatter by file extension, runs it in place
 using the project's own config, and is a no-op when the formatter is not installed. Meant
-to run ASYNC so it never blocks the agentic loop. Any failure is swallowed - formatting
-must never break a tool call.
+to run ASYNC (hooks.json sets "async": true) so it never blocks the agentic loop. It
+never blocks a tool call; a formatter that fails is a quiet skip (not a hook crash).
 
 Why this matters for an orchestrator: a uniform, formatter-clean tree means diffs stay
 minimal and reviewers (and verifier subagents) see only real changes, not whitespace noise.
@@ -19,7 +19,7 @@ Formatters (first available wins; all respect the repo's local config):
 
 Wire it up (settings.json), async so it never blocks:
   "PostToolUse": [
-    { "matcher": "Edit|Write|MultiEdit",
+    { "matcher": "Edit|Write|MultiEdit|NotebookEdit",
       "hooks": [ { "type": "command",
                    "command": "python3 ~/.claude/hooks/format_after_edit.py",
                    "async": true, "timeout": 60 } ] }
@@ -30,11 +30,15 @@ Stdlib only.
 
 from __future__ import annotations
 
-import json
 import os
 import shutil
 import subprocess
 import sys
+
+sys.path.insert(
+    0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
+)
+import atlas_hook_guard  # noqa: E402
 
 # extension -> ordered list of candidate commands; the file path is appended as the last arg.
 PRETTIER_EXTS = {
@@ -85,22 +89,54 @@ def candidates_for(path: str, cwd: str) -> list[list[str]]:
     return []
 
 
+def _is_uri_path(path: str) -> bool:
+    """URI-scheme path (`agent://`, `xd://`, ...): an IRC/device message, not a file.
+    Shared definition lives in atlas_db.is_uri_path; fail open (treat as a file)
+    if it cannot be imported."""
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        from atlas_db import is_uri_path
+
+        return is_uri_path(path)
+    except Exception:
+        return False
+
+
 def file_path_from(data: dict) -> str | None:
     ti = data.get("tool_input") or {}
     fp = ti.get("file_path") or ti.get("path") or ti.get("notebook_path")
-    return fp if isinstance(fp, str) and fp else None
+    if not isinstance(fp, str) or not fp or _is_uri_path(fp):
+        return None
+    return fp
+
+
+def _record_skip(data: dict, fp: str, reason: str) -> None:
+    """One cheap friction row per skip (`formatter_skipped:<reason>`, ext in snippet) so
+    formatter latency/failures are measurable. Never a fault row; never raises."""
+    try:
+        import atlas_db  # noqa: E402  (lazy: only on the skip path)
+
+        conn = atlas_db.connect()
+        try:
+            atlas_db.record_friction(
+                conn,
+                data.get("session_id") or "",
+                "formatter_skipped:" + reason,
+                snippet=os.path.splitext(fp)[1].lower() or "(none)",
+            )
+        finally:
+            conn.close()
+    except Exception:
+        pass  # DB unavailable: the skip stays quiet, exit stays 0
 
 
 def main() -> int:
-    try:
-        raw = sys.stdin.read()
-        data = json.loads(raw) if raw.strip() else {}
-    except (json.JSONDecodeError, ValueError):
-        return 0
+    data = atlas_hook_guard.load_payload("format_after_edit")
     fp = file_path_from(data)
     if not fp or not os.path.isfile(fp):
         return 0
     cwd = data.get("cwd") or os.getcwd()
+    reasons: set[str] = set()
     for base in candidates_for(fp, cwd):
         try:
             proc = subprocess.run(
@@ -110,24 +146,25 @@ def main() -> int:
                 text=True,
                 timeout=55,
             )
-        except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        except subprocess.TimeoutExpired:
+            reasons.add("timeout")
+            continue
+        except (FileNotFoundError, OSError):
+            reasons.add("missing")
             continue
         if proc.returncode == 0:
-            tool = os.path.basename(base[0])
-            print(
-                json.dumps(
-                    {
-                        "hookSpecificOutput": {
-                            "hookEventName": "PostToolUse",
-                            "additionalContext": f"[atlas] auto-formatted {os.path.basename(fp)} with {tool}.",
-                        }
-                    }
-                )
-            )
+            # Silent on success. A formatter that ran is not news; announcing it on
+            # every edit is the highest-frequency noise source in the plugin.
             return 0
-        # non-zero (e.g. syntax error mid-edit): try the next candidate, else give up quietly
+        reasons.add("parse")  # non-zero (e.g. syntax error mid-edit): try the next
+    # Every candidate failed or was absent: a skip, not a hook crash, so no fault row.
+    # Worst reason wins; no candidates at all means no formatter installed.
+    reason = next(
+        (r for r in ("timeout", "parse", "missing") if r in reasons), "missing"
+    )
+    _record_skip(data, fp, reason)
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(atlas_hook_guard.run_hook("format_after_edit", main))

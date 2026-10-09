@@ -137,8 +137,41 @@ export function toolErrorFromCatch(
 
   return toolError(code, message, {
     detail: ctx.detail ?? detail,
-    hint: ctx.hint,
+    hint: hintFor(code, ctx.hint),
   });
+}
+
+/**
+ * Pick the hint an agent should act on.
+ *
+ * Callers pass a fixed hint per call site, which is right for a resource that
+ * genuinely might not exist but wrong for a 404 on the endpoint itself: an
+ * agent reading "verify your credentials" after a wrong-path 404 concludes the
+ * API app lacks permissions and reports a configuration problem that does not
+ * exist. That misdiagnosis is what this override prevents.
+ */
+function hintFor(code: ErrorCode, callerHint: string | undefined): string | undefined {
+  if (code === "FORBIDDEN") {
+    // Without this, agents read a 401 as a bad argument and retry sibling
+    // tools, each failing the same way (seen live across vanta/panos/knowbe4).
+    const suffix = callerHint ? ` ${callerHint}` : "";
+    return (
+      "HTTP 401/403/440 is an authentication or permission failure, not a bad argument. " +
+      "Every tool on this server will fail the same way until the credential is replaced or re-scoped: " +
+      "stop retrying and report this to the user." +
+      suffix
+    );
+  }
+  if (code === "NOT_FOUND") {
+    const suffix = callerHint ? ` ${callerHint}` : "";
+    return (
+      "HTTP 404 means the endpoint path or the resource ID is wrong. " +
+      "This is NOT a credentials or permissions failure - the request authenticated successfully. " +
+      "Do not tell the user to change API permissions." +
+      suffix
+    );
+  }
+  return callerHint;
 }
 
 // ---------------------------------------------------------------------------
@@ -170,8 +203,11 @@ function classifyError(operation: string, err: unknown): Classification {
       err.message.includes("ECONNREFUSED") ||
       err.message.includes("ETIMEDOUT") ||
       err.message.includes("fetch failed");
+    // Some vendor libraries (node-knowbe4) throw a bare Error for a rejected
+    // token; classify it as the auth failure it is, not a server bug.
+    const isAuth = /authentication failed|unauthori[sz]ed|invalid token|token revoked/i.test(err.message);
     return {
-      code: isNet ? "NETWORK_ERROR" : "INTERNAL_ERROR",
+      code: isNet ? "NETWORK_ERROR" : isAuth ? "FORBIDDEN" : "INTERNAL_ERROR",
       message: `${operation} failed: ${err.message}`,
     };
   }
@@ -200,10 +236,10 @@ function extractBody(err: {
 }): string | undefined {
   // Prefer .body (node-fetch / undici shape); fall back to .response (ServiceError shape)
   const payload = err.body !== undefined ? err.body : err.response;
-  if (typeof payload === "string") return payload.slice(0, 500);
+  if (typeof payload === "string") return redactSecrets(payload).slice(0, 500);
   if (payload !== undefined && payload !== null) {
     try {
-      return JSON.stringify(payload).slice(0, 500);
+      return redactSecrets(JSON.stringify(payload)).slice(0, 500);
     } catch {
       // ignore
     }
@@ -212,8 +248,19 @@ function extractBody(err: {
   return undefined;
 }
 
+// Vendors echo the rejected credential in auth-error bodies (ThreatLocker's 440
+// returns the API token). Error detail reaches the model, transcripts and logs,
+// so credential-named JSON fields are masked before it leaves the server.
+const SECRET_FIELD = /("(?:[a-z_]*token|api[_-]?key|apikey|secret|client[_-]?secret|password|authorization)"\s*:\s*)"[^"]*"/gi;
+
+export function redactSecrets(text: string): string {
+  return text.replace(SECRET_FIELD, '$1"[REDACTED]"');
+}
+
 function httpStatusToCode(status: number): ErrorCode {
-  if (status === 401 || status === 403) return "FORBIDDEN";
+  // 440 is the non-standard "login time-out" status; ThreatLocker uses it for
+  // any token it does not recognize (TOKEN_REVOKED). It is an auth failure.
+  if (status === 401 || status === 403 || status === 440) return "FORBIDDEN";
   if (status === 404) return "NOT_FOUND";
   if (status === 429) return "RATE_LIMITED";
   if (status >= 400 && status < 500) return "INVALID_ARGS";
@@ -222,7 +269,9 @@ function httpStatusToCode(status: number): ErrorCode {
 
 /**
  * Convenience: build a MISSING_CREDENTIALS error with a standard hint.
- * Use in the `<vendor>_status` tool when credentials are absent.
+ * Do NOT use this in the `<vendor>_status` tool: status tools return a prose
+ * report with `isError: false` when credentials are missing, so they stay
+ * callable for diagnosis. Use this in tools that need credentials to proceed.
  *
  * @param vendorName  Display name of the vendor (e.g. "NinjaOne").
  * @param envVars     Names of the required environment variables.

@@ -1,32 +1,28 @@
-# programmer (Claude Code plugin in the atlas marketplace)
+# programmer (Claude Code plugin in the tech-tools marketplace)
 
 Turns The Pragmatic Programmer (20th Anniversary Edition) into an active codebase auditor and coding-time advisor. The book's principles, tips, practices, and lessons become things you can run against a real codebase, not just quotes on a page.
 
-This plugin ships as part of the [atlas marketplace](https://github.com/w159/atlas) (owner w159), alongside the `atlas` and `armada` plugins. Skills are namespaced `tpp-*` (The Pragmatic Programmer).
+This plugin ships as part of the [tech-tools marketplace](https://github.com/w159/tech-tools) (owner w159), alongside the `atlas` and `armada` plugins. Skills are namespaced `tpp-*` (The Pragmatic Programmer).
 
 ## What's included
 
 | Component | Count | Purpose |
 |---|---|---|
-| Skills | 2 | `tpp-audit` (user-run review of a codebase) and `tpp-principles` (auto-fires while you work to surface relevant lessons) |
-| Agents | 1 | `tpp-auditor` - per-dimension auditor dispatched by the audit skill |
-| Hooks | 1 | `UserPromptSubmit` prompt hook that nudges the single most relevant principle based on prompt keywords |
+| Skills | 4 | `code-review` (user-run 6-lens, multi-agent review), `code-principles` (auto-fires while you work to surface relevant book principles), `tpp-audit` (Pragmatic Programmer audit), and `tpp-principles` (Pragmatic Programmer principles advisor) |
+| Agents | 7 | `code-review-architecture`, `code-review-correctness`, `code-review-craft`, `code-review-security`, `code-review-data`, `code-review-process`, `tpp-auditor` |
+| Hooks | 0 | disabled — see "The nudge hook" below |
 | References | 89 | the book's concept glossary, repackaged as `references/concepts/*.md` for citation |
 
-## The 10 audit dimensions
+## The 6 review lenses
 
-| # | Dimension | Book chapter |
+| # | Lens | What it reviews |
 |---|---|---|
-| 1 | A Pragmatic Philosophy | Ch 1 |
-| 2 | A Pragmatic Approach | Ch 2 |
-| 3 | The Basic Tools | Ch 3 |
-| 4 | Pragmatic Paranoia | Ch 4 |
-| 5 | Bend, or Break | Ch 5 |
-| 6 | Concurrency | Ch 6 |
-| 7 | While You Are Coding | Ch 7 |
-| 8 | Before the Project | Ch 8 |
-| 9 | Pragmatic Projects | Ch 9 |
-| 10 | A Pragmatic Philosophy of Ethics | Postface |
+| 1 | Architecture | Module boundaries, dependency direction, use-case isolation, service seams. |
+| 2 | Correctness | Contracts, invariants, error handling, resource safety, concurrency, temporal ordering. |
+| 3 | Craft | Naming, function size, duplication, comments, intent, maintainability. |
+| 4 | Security | Attack surface, least privilege, trust boundaries, secrets, privacy. |
+| 5 | Data | Data ownership, consistency, schema evolution, idempotency, observability. |
+| 6 | Process | Traceability to user need, test quality, delivery safety, feedback loops. |
 
 ## Install
 
@@ -35,10 +31,29 @@ Install from the atlas marketplace, then enable the `programmer` plugin. Restart
 If you are developing this plugin in place, you can also point Claude Code at the plugin dir directly:
 
 ```bash
-cc --plugin-dir /Users/jerry/MEGA/Projects/Agentic/atlas/plugins/programmer
+cc --plugin-dir /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/programmer
 ```
 
 ## Usage
+
+### Run a book-derived code review
+
+```text
+/programmer:code-review ./my-project
+/programmer:code-review . --scope diff
+/programmer:code-review ./repo --scope all --report ./review.md
+```
+
+The skill dispatches 6 reviewer agents in parallel. Each agent scans for concrete evidence signals defined in `skills/code-review/references/rubric.md` and returns a JSON findings array. The skill synthesizes a ranked report (blockers first, then majors, minors, notes) with `file:line` citations, the source book, and an actionable fix. It writes the report to `.code-review-report.md` (or the `--report` path) and prints a summary table plus the top 10 findings.
+
+### Principles while you work
+
+```text
+What book principle applies to this refactor?
+Is this a bounded context?
+```
+
+The `code-principles` skill auto-fires while you work to surface 1-4 relevant book principles, each with a concrete pointer tied to your situation and a citation.
 
 ### Audit a codebase
 
@@ -63,11 +78,15 @@ What does The Pragmatic Programmer say about inheritance vs composition?
 Is this DRY?
 ```
 
-### The nudge hook
+### The nudge hook (disabled)
 
-On every prompt submission, the `UserPromptSubmit` hook matches your prompt against a domain keyword map and injects a single one-line pointer to the most relevant concept (for example: `TPP relevant: dry-dont-repeat-yourself.md - single source for duplicated knowledge`). If no domain matches, it emits nothing. It never lectures and never outputs more than one line.
+The `UserPromptSubmit` command hook has been disabled: `hooks/hooks.json` now registers no hooks. The implementation (`hooks/tpp_nudge.py`) is preserved on disk, unwired, in case the nudge is wanted again. It matches prompts against a deterministic domain keyword map and injects a single one-line pointer to the most relevant concept; it never lectures, never outputs more than one line, and can never block a prompt (it always exits 0).
 
-To disable the nudge hook: remove the `UserPromptSubmit` entry from `hooks/hooks.json`, or uninstall the plugin. Hook changes require a Claude Code restart to take effect.
+To re-enable: add a `UserPromptSubmit` entry back to `hooks/hooks.json` calling `python3 "${CLAUDE_PLUGIN_ROOT}/hooks/tpp_nudge.py"`. Hook changes require a Claude Code restart to take effect.
+
+## Book corpus
+
+The `code-review` and `code-principles` skills use a curated 31-book corpus as their principle map. The corpus is not a replacement for the books. It is an operational index: each review finding cites a book and a lens so you can trace the recommendation back to the source.
 
 ## Source
 
@@ -79,6 +98,14 @@ The concept content under `skills/tpp-principles/references/concepts/` is source
 plugins/programmer/
   .claude-plugin/plugin.json
   skills/
+    code-review/
+      SKILL.md
+      references/books.md
+      references/rubric.md
+    code-principles/
+      SKILL.md
+      references/books.md
+      references/rubric.md
     tpp-audit/
       SKILL.md
       references/dimensions.md
@@ -86,7 +113,17 @@ plugins/programmer/
       SKILL.md
       references/index.md
       references/concepts/*.md   (89 files)
-  agents/tpp-auditor.md
-  hooks/hooks.json
+  agents/
+    code-review-architecture.md
+    code-review-correctness.md
+    code-review-craft.md
+    code-review-security.md
+    code-review-data.md
+    code-review-process.md
+    tpp-auditor.md
+  hooks/
+    hooks.json
+    tpp_nudge.py
+    test_tpp_nudge.py
   README.md
 ```

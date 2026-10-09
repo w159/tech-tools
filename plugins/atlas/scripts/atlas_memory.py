@@ -23,10 +23,13 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
+import time
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 # fcntl is Unix-only; on Windows use msvcrt for file locking
 fcntl = None
@@ -39,8 +42,71 @@ except ImportError:
         msvcrt: Any = None
 
 ENTRY_DELIMITER = "\n§\n"
-DEFAULT_MEMORY_LIMIT = 4000  # chars — generous for project-specific lessons
-DEFAULT_PROJECT_LIMIT = 4000
+
+# Working cap for the LIVE memory file (chars, not tokens -- model-independent).
+# MEMORY.md is long-lived: it accumulates a handful of short lessons per
+# session across months of use, and 4000 chars (sized for a "quick note") was
+# hit within about three weeks of normal use, at which point add() rejected
+# every new lesson and the failure was silent (see PROBLEM 1). 20,000 chars is
+# roughly a week or two of injected boot-context budget's worth of headroom --
+# generous enough that rotation, not rejection, is the normal outcome of
+# reaching it. When this cap is hit, oldest entries are rotated into a dated
+# archive file rather than dropped (see _rotate_to_fit).
+WORKING_CAP_CHARS = 20_000
+
+
+# Secrets never reach long-term memory: MEMORY.md is re-injected at every SessionStart and
+# captured text comes from raw user messages. ponytail: pattern list, not entropy detection;
+# add a shape here when a new secret format leaks.
+_REDACTED = "[REDACTED]"
+_SECRET_PATTERNS = [
+    (
+        re.compile(
+            r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|\Z)"
+        ),
+        _REDACTED,
+    ),
+    (
+        re.compile(r"\beyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]*"),
+        _REDACTED,
+    ),  # JWT
+    (re.compile(r"(?i)\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}"), r"\1 " + _REDACTED),
+    (
+        re.compile(r"\b([A-Za-z][\w+.-]*://)[^\s:/@]+:[^\s@/]+@"),
+        r"\1" + _REDACTED + "@",
+    ),  # URL userinfo
+    (
+        re.compile(
+            r"\b(?:(?:sk|pk|rk)[-_][A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}"
+            r"|xox[abprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}"
+            r"|glpat-[A-Za-z0-9_-]{16,}|npm_[A-Za-z0-9]{30,}|SG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,})"
+        ),
+        _REDACTED,
+    ),
+    (  # key=value / key: value, quoted values may hold spaces
+        re.compile(
+            r"(?i)\b([\w.-]*(?:password|passwd|pwd|passphrase|secret|token|api[_-]?key|apikey|access[_-]?key"
+            r"|private[_-]?key|credentials?|authorization)[\w-]*[\"']?\s*[:=]\s*)"
+            r"(?:\"[^\"\n]*\"|'[^'\n]*'|[^\s,;\"']+)"
+        ),
+        r"\1" + _REDACTED,
+    ),
+    (  # "password hunter2" / "api key is abc123": whitespace form, value must look non-prose
+        re.compile(
+            r"(?i)\b((?:password|passwd|passphrase|pwd|secret|token|api[ _-]?key)\s+(?:is\s+)?)"
+            r"(?=\S*[\d!@#$%^&*_=+-])(?!\[REDACTED\])\S{6,}"
+        ),
+        r"\1" + _REDACTED,
+    ),
+]
+
+
+def redact_secrets(text: str) -> str:
+    """Replace credential-shaped substrings (keys, bearer tokens, JWTs, passwords,
+    key=value secrets, private key blocks, URL credentials) with [REDACTED]."""
+    for pattern, repl in _SECRET_PATTERNS:
+        text = pattern.sub(repl, text)
+    return text
 
 
 def _memory_dir() -> Path:
@@ -57,14 +123,31 @@ def _path_for(target: str) -> Path:
 
 
 def _char_limit(target: str) -> int:
-    if target == "project":
-        return DEFAULT_PROJECT_LIMIT
-    return DEFAULT_MEMORY_LIMIT
+    return WORKING_CAP_CHARS
+
+
+def _archive_dir() -> Path:
+    d = _memory_dir() / "archive"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _archive_path(target: str) -> Path:
+    """Dated archive file for entries rotated out of the live file this month."""
+    name = "PROJECT" if target == "project" else "MEMORY"
+    stamp = datetime.now().strftime("%Y-%m")
+    return _archive_dir() / f"{name}-{stamp}.md"
+
+
+class LockTimeout(OSError):
+    """`_file_lock(timeout=...)` could not take the lock in time."""
 
 
 @contextmanager
-def _file_lock(path: Path):
-    """Exclusive file lock for read-modify-write safety."""
+def _file_lock(path: Path, timeout: Optional[float] = None):
+    """Exclusive file lock for read-modify-write safety. `timeout=None` blocks
+    until acquired (the default, unchanged); a number of seconds polls a
+    non-blocking flock and raises LockTimeout when it runs out (POSIX only)."""
     lock_path = path.with_suffix(path.suffix + ".lock")
     lock_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -74,7 +157,17 @@ def _file_lock(path: Path):
 
     fd = open(lock_path, "a+", encoding="utf-8")
     try:
-        if fcntl:
+        if fcntl and timeout is not None:
+            deadline = time.monotonic() + timeout
+            while True:
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    if time.monotonic() >= deadline:
+                        raise LockTimeout(f"lock busy: {lock_path}")
+                    time.sleep(0.02)
+        elif fcntl:
             fcntl.flock(fd, fcntl.LOCK_EX)
         else:
             fd.seek(0)
@@ -132,6 +225,109 @@ def _write_file(path: Path, entries: List[str]) -> None:
         raise
 
 
+def _archive_entries(target: str, entries_to_archive: List[str]) -> None:
+    """Append rotated-out entries to this month's dated archive file.
+
+    Read-then-append (never overwrite) so multiple rotations within the same
+    month accumulate rather than clobber each other. Reuses the same
+    §-delimited reader/writer as the live file, so the archive stays in the
+    same format and is just as readable.
+    """
+    if not entries_to_archive:
+        return
+    archive = _archive_path(target)
+    with _file_lock(archive):
+        existing = _read_file(archive)
+        _write_file(archive, existing + entries_to_archive)
+
+
+def _rotate_to_fit(target: str, entries: List[str]) -> Dict[str, Any]:
+    """Trim `entries` from the oldest end until they fit the working cap,
+    archiving anything rotated out (PROBLEM 2: rotate, never silently reject).
+
+    Returns {"entries": fitted_list, "rotated": [popped_oldest_first], "dropped": bool}.
+    dropped=True means even the newest entry alone still exceeds the cap --
+    `entries` is returned unchanged so the caller can refuse the write (this
+    is the one remaining genuine-drop case, and it must be reported, not
+    silent -- see PROBLEM 1).
+    """
+    limit = _char_limit(target)
+    working = list(entries)
+    rotated: List[str] = []
+    while len(working) > 1 and len(ENTRY_DELIMITER.join(working)) > limit:
+        rotated.append(working.pop(0))  # oldest first
+
+    if len(ENTRY_DELIMITER.join(working)) > limit:
+        return {"entries": entries, "rotated": [], "dropped": True}
+
+    if rotated:
+        _archive_entries(target, rotated)
+
+    return {"entries": working, "rotated": rotated, "dropped": False}
+
+
+# --- Recall filtering -------------------------------------------------------
+# MEMORY.md holds up to WORKING_CAP_CHARS. load_snapshot used to inject ALL of
+# it into every SessionStart: a measured 10,874-char wall of text, most of it
+# "Tool 'Write' errored 2x in agent-a870d7a4169e4bb8b" telemetry and six
+# near-identical copies of the same user correction, one per subagent scope.
+# Nobody can read that as it scrolls past, and it buries anything that matters.
+# The file stays whole; only what gets INJECTED is filtered and capped.
+
+RECALL_MAX_ENTRIES = 8
+RECALL_MAX_CHARS = 1200
+
+# Tool-error tallies are already in atlas_db, queryable by atlas-audit. As a
+# recall line they are pure noise: they name no lesson and no action.
+_NOISE_PREFIXES = ("Tool '",)
+
+# Scope names that are not projects. A subagent's cwd basename becomes its
+# "project", so lessons got filed under agent-<hex> and .run.
+_JUNK_SCOPE = re.compile(r"^(agent-[0-9a-f]{6,}|\.run|\.atlas)$")
+
+
+def _scope_of(entry: str) -> str:
+    """The `(project)` qualifier a captured entry carries, or ''."""
+    m = re.match(r"^[^(\n]{0,60}\(([^)\n]{1,80})\):", entry)
+    return m.group(1).strip() if m else ""
+
+
+def _dedupe_key(entry: str) -> str:
+    """Collapse near-duplicates: the same lesson captured under six different
+    subagent scopes differs ONLY in its `(project)` qualifier. Strip that, fold
+    whitespace, and the six become one."""
+    stripped = re.sub(r"\(([^)\n]{1,80})\):", ":", entry, count=1)
+    return " ".join(stripped.split()).lower()[:160]
+
+
+def filter_for_recall(entries: List[str]) -> List[str]:
+    """What actually gets injected at SessionStart: newest first, junk scopes and
+    tool-error telemetry dropped, near-duplicates collapsed, hard-capped by both
+    entry count and total chars."""
+    kept: List[str] = []
+    seen = set()
+    total = 0
+    for entry in reversed(entries):  # newest first
+        text = entry.strip()
+        if not text:
+            continue
+        if text.startswith(_NOISE_PREFIXES):
+            continue
+        if _JUNK_SCOPE.match(_scope_of(text)):
+            continue
+        key = _dedupe_key(text)
+        if key in seen:
+            continue
+        if total + len(text) > RECALL_MAX_CHARS and kept:
+            break
+        seen.add(key)
+        kept.append(text)
+        total += len(text)
+        if len(kept) >= RECALL_MAX_ENTRIES:
+            break
+    return kept
+
+
 def load_snapshot() -> Dict[str, str]:
     """Load memory entries and return a rendered snapshot for injection.
 
@@ -144,9 +340,16 @@ def load_snapshot() -> Dict[str, str]:
     memory_entries = _read_file(mem_dir / "MEMORY.md")
     project_entries = _read_file(mem_dir / "PROJECT.md")
 
-    # Deduplicate preserving order
-    memory_entries = list(dict.fromkeys(memory_entries))
-    project_entries = list(dict.fromkeys(project_entries))
+    # Exact dedupe first, then the recall filter (junk scopes, telemetry lines,
+    # near-duplicates, hard cap). The files on disk are untouched.
+    memory_entries = [
+        redact_secrets(e)
+        for e in filter_for_recall(list(dict.fromkeys(memory_entries)))
+    ]
+    project_entries = [
+        redact_secrets(e)
+        for e in filter_for_recall(list(dict.fromkeys(project_entries)))
+    ]
 
     return {
         "memory": _render_block("MEMORY", memory_entries),
@@ -163,8 +366,10 @@ def _render_block(title: str, entries: List[str]) -> str:
 
 
 def add(target: str, content: str) -> Dict[str, Any]:
-    """Append a new entry. Returns error if it would exceed the char limit."""
-    content = content.strip()
+    """Append a new entry. Rotates oldest entries to the archive rather than
+    rejecting when the working cap would be exceeded (see _rotate_to_fit).
+    Only fails if this single entry alone cannot fit even in an empty file."""
+    content = redact_secrets(content.strip())
     if not content:
         return {"success": False, "error": "Content cannot be empty."}
 
@@ -179,29 +384,28 @@ def add(target: str, content: str) -> Dict[str, Any]:
                 "message": "Entry already exists (no duplicate added).",
             }
 
-        limit = _char_limit(target)
-        new_entries = entries + [content]
-        new_total = len(ENTRY_DELIMITER.join(new_entries))
-
-        if new_total > limit:
-            current = len(ENTRY_DELIMITER.join(entries)) if entries else 0
+        fit = _rotate_to_fit(target, entries + [content])
+        if fit["dropped"]:
+            limit = _char_limit(target)
             return {
                 "success": False,
-                "error": f"Memory at {current:,}/{limit:,} chars. Adding this entry ({len(content)} chars) would exceed the limit. Use 'replace' or 'remove' to make room.",
+                "error": f"Entry alone is {len(content):,} chars, exceeding the {limit:,}-char working cap even after rotating out all prior entries. Shorten it.",
                 "current_entries": entries,
-                "usage": f"{current:,}/{limit:,}",
             }
 
-        entries.append(content)
-        _write_file(path, entries)
+        _write_file(path, fit["entries"])
 
-    return {"success": True, "message": "Entry added."}
+    message = "Entry added."
+    if fit["rotated"]:
+        n = len(fit["rotated"])
+        message += f" Rotated {n} older entr{'y' if n == 1 else 'ies'} to archive to stay within cap."
+    return {"success": True, "message": message}
 
 
 def replace(target: str, old_text: str, new_content: str) -> Dict[str, Any]:
     """Find entry containing old_text substring, replace it with new_content."""
     old_text = old_text.strip()
-    new_content = new_content.strip()
+    new_content = redact_secrets(new_content.strip())
     if not old_text:
         return {"success": False, "error": "old_text cannot be empty."}
     if not new_content:
@@ -298,12 +502,12 @@ def apply_batch(target: str, operations: List[Dict[str, Any]]) -> Dict[str, Any]
         for op in operations:
             action = op.get("action", "")
             if action == "add":
-                content = op.get("content", "").strip()
+                content = redact_secrets(op.get("content", "").strip())
                 if content and content not in entries:
                     entries.append(content)
             elif action == "replace":
                 old_text = op.get("old_text", "").strip()
-                new_content = op.get("content", "").strip()
+                new_content = redact_secrets(op.get("content", "").strip())
                 if old_text and new_content:
                     for i, e in enumerate(entries):
                         if old_text in e:
@@ -379,7 +583,9 @@ def _cli():
     elif cmd in ("--help", "-h", "help"):
         print("Usage: atlas_memory.py [snapshot|list|add|remove|usage]")
     else:
-        print("Usage: atlas_memory.py [snapshot|list|add|remove|usage]", file=sys.stderr)
+        print(
+            "Usage: atlas_memory.py [snapshot|list|add|remove|usage]", file=sys.stderr
+        )
         print(f"Unknown command: {cmd}", file=sys.stderr)
         sys.exit(2)
 

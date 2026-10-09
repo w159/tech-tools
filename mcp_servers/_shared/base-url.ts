@@ -54,7 +54,7 @@ export type VendorKey =
  *   knowbe4      https://developer.knowbe4.com (US datacenter)
  *   ninjaone     https://app.ninjarmm.com (US region)
  *   paylocity    https://developer.paylocity.com
- *   threatlocker https://threatlocker.com/platform/api (US cloud)
+ *   threatlocker https://threatlocker.com/platform/api (instance "g"; NOT universal, tokens are per instance)
  *   vanta        https://developer.vanta.com
  *   cipp         self-hosted — no global default, env var is REQUIRED
  *   connectwise  self-hosted — no global default, env var is REQUIRED
