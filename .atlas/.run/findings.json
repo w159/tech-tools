@@ -4975,5 +4975,22 @@
     "status": "verified",
     "verified_at": "2026-10-09T22:24:15+00:00",
     "verified_by": "lead-01a122 (self-run test suites; no independent verifier)"
+  },
+  {
+    "id": "release-10.4.3-stash-scan",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "stash branches contain no secret patterns",
+    "evidence": [
+      ".atlas/evidence/release-10.4.3/stash-scan.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "git diff main...stash/2026-10-06 | grep -E \"^\\+\" | grep -c -E \"sk-ant-|ghp_|AKIA\"",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-09T22:28:32+00:00",
+    "verified_by": "lead-01a122 (self-run scan)"
   }
 ]
