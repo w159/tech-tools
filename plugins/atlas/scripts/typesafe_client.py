@@ -18,6 +18,7 @@ The hosted default still requires TYPESAFE_API_KEY.
 
 import json
 import os
+import ssl
 import time
 import urllib.error
 import urllib.parse
@@ -28,6 +29,18 @@ DEFAULT_MODEL = "jev-latest"
 RETRYABLE = (429, 529)
 MAX_RETRIES = 3
 MAX_BACKOFF_S = 30.0
+
+
+def _tls_kwargs():
+    """urlopen kwargs: verify against certifi's bundle when certifi is already
+    importable (python.org builds ship no system CAs and fail with
+    CERTIFICATE_VERIFY_FAILED), else the system default. Verification is never
+    disabled."""
+    try:
+        import certifi
+    except ImportError:
+        return {}
+    return {"context": ssl.create_default_context(cafile=certifi.where())}
 
 
 class TypeSafeError(Exception):
@@ -98,7 +111,7 @@ def evaluate(state, questions, *, model=None, timeout=30.0):
             headers=headers,
         )
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
+            with urllib.request.urlopen(req, timeout=timeout, **_tls_kwargs()) as resp:
                 return json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as e:
             try:

@@ -73,7 +73,7 @@ def _state_dir():
     try:
         os.makedirs(base, exist_ok=True)
     except Exception:
-        base = "/tmp"
+        base = "/tmp"  # noqa: S108 -- literal fallback; gettempdir() differs on macOS
     return base
 
 
@@ -112,7 +112,7 @@ def _locked(session_id):
     acquired = False
     try:
         os.makedirs(_state_dir(), exist_ok=True)
-        lock_file = open(_lock_path(session_id), "a+")
+        lock_file = open(_lock_path(session_id), "a+")  # noqa: SIM115 -- held across the yield, closed in finally
         # time.monotonic(), not _now(): the lock timeout is wall-clock
         # bookkeeping, unrelated to the business-logic clock tests mock via
         # _now() -- consuming _now() here would desync those mocks.
@@ -131,14 +131,10 @@ def _locked(session_id):
     finally:
         if lock_file is not None:
             if acquired:
-                try:
+                with contextlib.suppress(Exception):
                     fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
-                except Exception:
-                    pass
-            try:
+            with contextlib.suppress(Exception):
                 lock_file.close()
-            except Exception:
-                pass
 
 
 def _load_state(session_id):
@@ -150,7 +146,8 @@ def _load_state(session_id):
 
 
 def _save_state(session_id, state):
-    try:
+    # best-effort: a lost update just costs one extra hook firing
+    with contextlib.suppress(Exception):
         state_dir = _state_dir()
         os.makedirs(state_dir, exist_ok=True)
         path = _state_path(session_id)
@@ -163,13 +160,9 @@ def _save_state(session_id, state):
                 json.dump(state, f)
             os.replace(tmp_path, path)
         except Exception:
-            try:
+            with contextlib.suppress(Exception):
                 os.remove(tmp_path)
-            except Exception:
-                pass
             raise
-    except Exception:
-        pass  # best-effort: a lost update just costs one extra hook firing
 
 
 def _prune_stale_sessions(now):
@@ -177,18 +170,14 @@ def _prune_stale_sessions(now):
     grow without bound on a long-lived machine. Takes `now` from the caller
     instead of calling _now() itself so it never consumes an extra tick from
     a test's mocked time source."""
-    try:
+    with contextlib.suppress(Exception):
         base = _state_dir()
         cutoff = now - STALE_SESSION_SECONDS
         for name in os.listdir(base):
             path = os.path.join(base, name)
-            try:
+            with contextlib.suppress(Exception):
                 if os.path.isfile(path) and os.path.getmtime(path) < cutoff:
                     os.remove(path)
-            except Exception:
-                continue
-    except Exception:
-        pass
 
 
 def _record_stop_event(state, now):
@@ -227,7 +216,7 @@ GATE_HOOKS = ("completion_gate",)
 
 def fault(hook, message, cwd=None):
     """Record a durable fail-open trace via atlas_faults. Never raises."""
-    try:
+    with contextlib.suppress(Exception):
         try:
             import atlas_faults
         except ImportError:
@@ -235,41 +224,26 @@ def fault(hook, message, cwd=None):
             import atlas_faults
         exc = message if isinstance(message, BaseException) else ValueError(message)
         atlas_faults.record(hook, exc, cwd)
-    except Exception:
-        pass
 
 
 def _note_bypass(hook_name, session_id, first_trip):
-    """Make a breaker bypass visible: always a fault row for gate hooks (once
-    per trip for the rest), and a one-line stderr note every time a gate is
-    skipped. Never raises."""
-    try:
+    """Make a breaker bypass visible on stderr (every bypassed gate, the first
+    trip for other hooks). No hook-faults row: a deliberate bypass is not a crash;
+    the durable record is the session's hookstate (breaker_tripped), which the
+    dashboard reads as a hook_burst_tripped event. Never raises."""
+    with contextlib.suppress(Exception):
         gate = hook_name in GATE_HOOKS
         if first_trip or gate:
-            fault(
-                hook_name,
-                "circuit breaker open for session %s: %s bypassed this Stop "
-                "(more than %d Stops within %ds)"
-                % (session_id, hook_name, STOP_BURST_LIMIT, STOP_BURST_WINDOW),
+            state = "tripped" if first_trip else "open"
+            tail = (
+                f"{hook_name} BYPASSED (gate not enforced this Stop)"
+                if gate
+                else "silencing all atlas Stop hooks for the rest of this session"
             )
-        if first_trip or gate:
             sys.stderr.write(
-                "[atlas] hook_guard: circuit breaker %s for session %s -- "
-                "Stop fired more than %d times within %ds; %s\n"
-                % (
-                    "tripped" if first_trip else "open",
-                    session_id,
-                    STOP_BURST_LIMIT,
-                    STOP_BURST_WINDOW,
-                    (
-                        "%s BYPASSED (gate not enforced this Stop)" % hook_name
-                        if gate
-                        else "silencing all atlas Stop hooks for the rest of this session"
-                    ),
-                )
+                f"[atlas] hook_guard: circuit breaker {state} for session {session_id} -- "
+                f"Stop fired more than {STOP_BURST_LIMIT} times within {STOP_BURST_WINDOW}s; {tail}\n"
             )
-    except Exception:
-        pass
 
 
 _STR_FIELDS = (
@@ -302,20 +276,20 @@ def load_payload(hook_name, raw=None):
             return {}
         data = json.loads(raw)
     except Exception as exc:
-        fault(hook_name, "unreadable payload: %s: %s" % (type(exc).__name__, exc))
+        fault(hook_name, f"unreadable payload: {type(exc).__name__}: {exc}")
         return {}
     if not isinstance(data, dict):
-        fault(hook_name, "payload is %s, not an object" % type(data).__name__)
+        fault(hook_name, f"payload is {type(data).__name__}, not an object")
         return {}
     bad = []
     if "tool_input" in data and not isinstance(data["tool_input"], dict):
         if data["tool_input"] is not None:
-            bad.append("tool_input=%s" % type(data["tool_input"]).__name__)
+            bad.append(f"tool_input={type(data['tool_input']).__name__}")
         data["tool_input"] = {}
     for key in _STR_FIELDS:
         val = data.get(key)
         if val is not None and not isinstance(val, str):
-            bad.append("%s=%s" % (key, type(val).__name__))
+            bad.append(f"{key}={type(val).__name__}")
             data[key] = ""
     if bad:
         fault(hook_name, "wrong-typed payload fields: " + ", ".join(bad))
@@ -330,10 +304,8 @@ def run_hook(hook_name, main):
         raise
     except BaseException as exc:  # noqa: BLE001 -- fail-open is absolute
         fault(hook_name, exc)
-        try:
-            sys.stderr.write("[atlas] %s fail-open: %s\n" % (hook_name, exc))
-        except Exception:
-            pass
+        with contextlib.suppress(Exception):
+            sys.stderr.write(f"[atlas] {hook_name} fail-open: {exc}\n")
         return 0
 
 

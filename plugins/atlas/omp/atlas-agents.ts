@@ -80,13 +80,22 @@ export const SMOL_FALLBACK_ROLE = "@smol";
  */
 export const ATLAS_DEFAULT_FALLBACK_ROLE = "@default";
 
+/**
+ * Built-in tier defaults, mirroring the Claude pins in `agents/*.md` (`model: sonnet|haiku`). A marketplace
+ * install has no `modelRoles.atlas-*` entry, and omp leaves an unset custom role alias as a literal that matches
+ * no model (config/model-resolver.ts getModelRoleAlias :1050-1058, resolveConfiguredRolePattern :1188-1231),
+ * so the list falls through to the next token. A concrete selector right after the role alias makes the tier
+ * hold without user config; a user-set `modelRoles.<role>` expands in the first slot and still wins.
+ */
+export const ATLAS_TIER_DEFAULTS = { worker: "sonnet", verifier: "sonnet", mechanic: "haiku" } as const;
+
 /** Prioritized `model` list for one atlas agent (frontmatter accepts arrays). */
 export function modelPatternsFor(agentName: string): string[] {
 	const role = roleFor(agentName);
-	if (role === ATLAS_MECHANIC_ROLE) return [ATLAS_MECHANIC_ROLE, SMOL_FALLBACK_ROLE];
+	if (role === ATLAS_MECHANIC_ROLE) return [role, ATLAS_TIER_DEFAULTS.mechanic, SMOL_FALLBACK_ROLE];
 	return role === ATLAS_VERIFIER_ROLE
-		? [role, ATLAS_DEFAULT_FALLBACK_ROLE, SMOL_FALLBACK_ROLE]
-		: [role, SMOL_FALLBACK_ROLE];
+		? [role, ATLAS_DEFAULT_FALLBACK_ROLE, ATLAS_TIER_DEFAULTS.verifier, SMOL_FALLBACK_ROLE]
+		: [role, ATLAS_TIER_DEFAULTS.worker, SMOL_FALLBACK_ROLE];
 }
 
 /**

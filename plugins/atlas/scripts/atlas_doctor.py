@@ -16,6 +16,7 @@ import argparse
 import json
 import os
 import re
+import hashlib
 import shutil
 import subprocess
 import sys
@@ -440,6 +441,113 @@ def check_omp_bridge(plugin_name, version):
     return True, f"omp bridge {reg.get('version')} at {ip}"
 
 
+DRIFT_GLOBS = (
+    ("omp", ".ts"),
+    ("hooks", ".py"),
+    ("contracts", ".json"),
+    ("agents", ".md"),
+    ("omp/agents", ".md"),
+)
+DRIFT_REMEDY = "commit, push, then update the plugin in Claude Code and omp and restart"
+
+
+def _drift_files(root):
+    """{rel: sha256} of the runtime-critical files under root (omp/*.ts minus
+    *.test.ts, hooks/*.py minus test_*, contracts/*.json, agents/*.md,
+    omp/agents/*.md). Read-only, non-recursive per dir, so a few hundred small
+    files at most."""
+    out = {}
+    for sub, ext in DRIFT_GLOBS:
+        d = os.path.join(root, sub)
+        try:
+            names = sorted(os.listdir(d))
+        except OSError:
+            continue
+        for n in names:
+            if not n.endswith(ext) or n.endswith(".test.ts") or n.startswith("test_"):
+                continue
+            try:
+                with open(os.path.join(d, n), "rb") as f:
+                    out[f"{sub}/{n}"] = hashlib.sha256(f.read()).hexdigest()
+            except OSError:
+                continue
+    return out
+
+
+def _source_checkout(plugin_name):
+    """plugins/<name> of the git checkout to compare against. Order:
+    ATLAS_SOURCE, the checkout this doctor file lives in, then a checkout
+    containing the cwd or CLAUDE_PROJECT_DIR (--hook reads no payload cwd, so
+    it uses os.getcwd()). Uses __file__, never CLAUDE_PLUGIN_ROOT: that env
+    points at the installed cache, which is the thing under test. The cwd step
+    catches a cache-run doctor whose marketplace clone matches the install but
+    not the uncommitted/unpushed source."""
+
+    def checkout(start, need_manifest):
+        p = os.path.realpath(start)
+        while p != os.path.dirname(p):
+            plug = os.path.join(p, "plugins", plugin_name)
+            if os.path.exists(os.path.join(p, ".git")):
+                if not need_manifest or os.path.isfile(
+                    os.path.join(plug, ".claude-plugin", "plugin.json")
+                ):
+                    return plug
+                return None
+            p = os.path.dirname(p)
+        return None
+
+    cands = [
+        os.environ.get("ATLAS_SOURCE"),
+        checkout(os.path.dirname(os.path.abspath(__file__)), False),
+        checkout(os.getcwd(), True),
+        checkout(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd(), True),
+    ]
+    return next((c for c in cands if c and os.path.isdir(c)), None)
+
+
+def _reference_root(plugin_name):
+    """The tree an installed copy should match: the source checkout when the
+    doctor runs from one, else the marketplace clone's copy. None when neither
+    exists."""
+    src = _source_checkout(plugin_name)
+    if src:
+        return src
+    try:
+        for m in _load_json(
+            os.path.join(PLUGINS_DIR, "known_marketplaces.json")
+        ).values():
+            ref = os.path.join(m.get("installLocation", ""), "plugins", plugin_name)
+            if m.get("installLocation") and os.path.isdir(ref):
+                return ref
+    except Exception:
+        pass
+    return None
+
+
+def check_content_drift(label, install_path, plugin_name, reference=None):
+    """(ok, detail): does the installed copy match the reference byte-for-byte
+    on the runtime-critical files? Read-only; skips (ok) when either side is
+    missing."""
+    try:
+        ref = reference or _reference_root(plugin_name)
+    except Exception:
+        ref = None
+    if not install_path or not os.path.isdir(install_path):
+        return True, f"{label}: install path missing, content check skipped"
+    if not ref or not os.path.isdir(ref):
+        return True, f"{label}: no reference copy, content check skipped"
+    if os.path.realpath(install_path) == os.path.realpath(ref):
+        return True, f"{label}: running from the reference tree"
+    a, b = _drift_files(install_path), _drift_files(ref)
+    diff = sorted(k for k in a.keys() | b.keys() if a.get(k) != b.get(k))
+    if not diff:
+        return True, f"{label}: {len(b)} runtime files match the reference"
+    return False, (
+        f"{label} differs from the reference in {len(diff)} file(s): "
+        f"{', '.join(diff[:5])}; {DRIFT_REMEDY}"
+    )
+
+
 CMUX_DEFAULT_BIN = "/Applications/cmux.app/Contents/Resources/bin/cmux"
 CMUX_INSTALL = (
     "git clone https://github.com/jasonraz/cmux-browser-mcp && cd cmux-browser-mcp "
@@ -462,6 +570,13 @@ def _cmux_bin():
     return None
 
 
+def _cmux_active():
+    """True when this session runs under cmux (its env hooks are set): only then
+    is an unreachable cmux socket or missing cmux-browser MCP a real problem."""
+    env = os.environ
+    return env.get("TERM_PROGRAM") == "cmux" or any(k.startswith("CMUX_") for k in env)
+
+
 def check_cmux_socket():
     """(ok, detail): cmux's control socket answers `cmux capabilities`
     (read-only, 3 s). n/a (ok) off macOS or without cmux: it is optional."""
@@ -470,6 +585,8 @@ def check_cmux_socket():
     binary = _cmux_bin()
     if not binary:
         return True, "cmux not installed (n/a)"
+    if not _cmux_active():
+        return True, "cmux installed but not the active terminal (info)"
     try:
         r = subprocess.run(
             [binary, "capabilities"], capture_output=True, text=True, timeout=3
@@ -491,6 +608,8 @@ def check_cmux_browser_mcp(home=None):
     when cmux itself is absent."""
     if sys.platform != "darwin" or not _cmux_bin():
         return True, "cmux browser not applicable (n/a)"
+    if not _cmux_active():
+        return True, "cmux not the active terminal (info)"
     home = home or os.path.expanduser("~")
     for path in (
         os.path.join(home, ".omp", "agent", "mcp.json"),
@@ -590,6 +709,17 @@ def behaviour_checks(add, plugin_name, version, now=None):
     # B3: omp bridge
     ok, detail = check_omp_bridge(plugin_name, version)
     add("omp-bridge", ok, detail)
+    # B3b: omp copy matches the reference in content, not only version
+    try:
+        omp_reg = os.path.join(_omp_plugins_dir(), "installed_plugins.json")
+        _, oreg = find_registration(_load_json(omp_reg), plugin_name)
+        if oreg:
+            dok, ddetail = check_content_drift(
+                "omp", oreg.get("installPath", ""), plugin_name
+            )
+            add("omp-content", dok, ddetail, severity="warn")
+    except Exception:  # no/unreadable omp registry: nothing to compare
+        pass
     # B4/B5/B6: the DB the hooks write to
     path = atlas_db.db_path()
     if not os.path.isfile(path):
@@ -784,6 +914,8 @@ def install_checks(plugin_name="atlas"):
             v == reg["version"],
             f"cache manifest {v} vs entry {reg['version']}",
         )
+    ok, detail = check_content_drift("claude-code", ip, plugin_name)
+    add("install-content", ok, detail, severity="warn")
 
     # C6: every hook the plugin declares must exist in the installed copy
     hooks_file = os.path.join(ip, "hooks", "hooks.json")
@@ -1195,11 +1327,18 @@ def mine_gate_block_silences_capture(conn, root):
     a fresh nonzero means chronicle_facet is not running for those Stops
     (plugin absent, ATLAS_CHRONICLE off, or the circuit breaker)."""
     window = f"-{RECENT_WINDOW_DAYS} days"
+    tmp_sql, tmp_args = atlas_db.tmp_sessions_sql()
+    # Not capture holes: transcripts under the OS temp dir (test fixtures) and
+    # sessions with no user prompt (omp bridge copies, subagent and empty
+    # transcripts; 452 of the 489 missing rows in 14 days). chronicle_facet
+    # chronicles sessions a human drove.
     n = conn.execute(
         "SELECT COUNT(*) FROM session_logs "
         "WHERE session_id NOT IN (SELECT session_id FROM facets) "
+        f"AND session_id NOT IN ({tmp_sql}) "
+        "AND COALESCE(user_prompt_count,0) > 0 "
         "AND started_at > strftime('%s','now', ?)",
-        (window,),
+        (*tmp_args, window),
     ).fetchone()[0]
     if n <= 0:
         return []
@@ -1367,7 +1506,20 @@ def _norm_tool_target(target):
     return server.lower().replace("_", "-") + dot + tool
 
 
-def mine_tool_error_rate(conn, root, threshold=0.2, min_calls=5, window_days=None):
+# Sample floor: a rate over a handful of calls from one session is noise, not a
+# tool defect (3/7 explorer calls from one session while the fleet ran 37/742).
+TOOL_ERROR_MIN_CALLS = 20  # executed (non-denied) calls
+TOOL_ERROR_MIN_ERROR_SESSIONS = 2  # distinct sessions contributing real errors
+
+
+def mine_tool_error_rate(
+    conn,
+    root,
+    threshold=0.2,
+    min_calls=TOOL_ERROR_MIN_CALLS,
+    window_days=None,
+    min_error_sessions=TOOL_ERROR_MIN_ERROR_SESSIONS,
+):
     """Behavioral check: per-tool error rate from the tool_calls mirror. One
     finding per tool crossing the threshold, so each can be triaged (and
     remeasured) independently.
@@ -1392,6 +1544,27 @@ def mine_tool_error_rate(conn, root, threshold=0.2, min_calls=5, window_days=Non
     # Recent window, test sessions excluded: an all-time rate barely moves when a
     # tool is fixed, so improvement was unmeasurable (and tmp sessions skewed it).
     since = time.time() - (window_days or RECENT_WINDOW_DAYS) * 86400
+    # The user's own failing code, calls that recovered (claude-mem falling back
+    # when Chroma is down) and MCP server outages are not defects of the tool.
+    tmp_sql, tmp_args = atlas_db.tmp_sessions_sql()
+    excluded = {}
+    err_sessions = {}
+    for kind, tgt, tool, snip, sid, n in conn.execute(
+        "SELECT kind, target, tool_name, error_snippet, session_id, COUNT(*) FROM tool_calls "
+        "WHERE COALESCE(is_error,0)=1 AND COALESCE(denied,0)=0 AND ts >= ? "
+        f"AND COALESCE(session_id,'') NOT IN ({tmp_sql}) GROUP BY 1,2,3,4,5",
+        (since, *tmp_args),
+    ):
+        cls = atlas_db.classify_error(tool, snip, False)
+        key = (kind, _norm_tool_target(tgt))
+        if (
+            atlas_db.is_recovered_error(snip)
+            or cls == "user_code"
+            or (cls == "environment" and kind == "mcp")
+        ):
+            excluded[key] = excluded.get(key, 0) + n
+        else:
+            err_sessions.setdefault(key, set()).add(sid)
     for r in atlas_db.tool_usage(conn, since=since, exclude_tmp=True):
         target = _norm_tool_target(r.get("target"))
         if r.get("kind") == "mcp" and _UUID_RE.match(target.split(".", 1)[0]):
@@ -1410,9 +1583,13 @@ def mine_tool_error_rate(conn, root, threshold=0.2, min_calls=5, window_days=Non
         # removed from BOTH the error numerator and the call population, so the
         # gate's own volume can neither inflate the rate nor dilute a genuinely
         # failing tool's rate. A tool that was only ever blocked is skipped.
-        denied, errors = a["denied"], a["errors"]
+        denied = a["denied"]
+        errors = max(a["errors"] - excluded.get((kind, target), 0), 0)
         calls = a["calls"] - denied
-        if calls < min_calls:
+        if (
+            calls < min_calls
+            or len(err_sessions.get((kind, target), ())) < min_error_sessions
+        ):
             continue
         rate = errors / calls
         out.values[f"{kind}:{target}"] = rate
@@ -1518,15 +1695,31 @@ def mine_recurring_friction(conn, root, min_count=3):
     underlying behavior improves - the same defect the missing-facets miner
     had. Recent recurrence is the actionable signal; history stays in the DB.
     """
+    window = "-%d days" % RECENT_WINDOW_DAYS
+    tmp_sql, tmp_args = atlas_db.tmp_sessions_sql()
     rows = conn.execute(
         "SELECT category, COUNT(*) AS n FROM friction_events "
         "WHERE ts > strftime('%s','now', ?) "
+        f"AND COALESCE(session_id,'') NOT IN ({tmp_sql}) "
         "GROUP BY category ORDER BY n DESC",
-        ("-%d days" % RECENT_WINDOW_DAYS,),
+        (window, *tmp_args),
     ).fetchall()
+    # Raw sliding-window counts track activity volume, not behaviour (a burst of
+    # sessions inflated one 55 -> 97). Metric = events per 100 user-driven
+    # sessions (subagent/bridge transcripts have no user prompt and are not
+    # the sessions these gates fire in).
+    sessions = conn.execute(
+        "SELECT COUNT(*) FROM session_logs WHERE started_at > strftime('%s','now', ?) "
+        f"AND session_id NOT IN ({tmp_sql}) AND COALESCE(user_prompt_count,0) > 0",
+        (window, *tmp_args),
+    ).fetchone()[0]
+
+    def per100(n):
+        return n * 100.0 / max(sessions, 1)
+
     out = MinerResult()
     out.absent_is_zero = True  # a category with no rows in the window IS 0
-    out.values = dict(rows)
+    out.values = {c: per100(n) for c, n in rows}
     for category, n in rows:
         if n < min_count:
             continue
@@ -1537,7 +1730,7 @@ def mine_recurring_friction(conn, root, min_count=3):
                 title=f"recurring {category} friction ({n}x in {RECENT_WINDOW_DAYS}d)",
                 detail=(
                     f"{n} friction_events row(s) categorized '{category}' in the "
-                    f"last {RECENT_WINDOW_DAYS} days."
+                    f"last {RECENT_WINDOW_DAYS} days ({per100(n):.1f} per 100 sessions)."
                 ),
                 proposed_action=(
                     f"Read the recent snippets for category='{category}' "
@@ -1547,7 +1740,9 @@ def mine_recurring_friction(conn, root, min_count=3):
                 ),
                 target_path="CLAUDE.md",
                 key=category,
-                metric_value=n,
+                metric_value=per100(n),
+                count=n,
+                sessions=sessions,
             )
         )
     return out
@@ -1593,7 +1788,12 @@ _COLONY_NAMES_RE = re.compile(r'"names":\s*"\[(.*?)\]"')
 _COLONY_URI_SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*:(?://|\\\\|_)")
 
 
-def _colony_classify_harness(session_names):
+_UUIDV7_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$"
+)
+
+
+def _colony_classify_harness(session_names, session_id=None):
     """claude-code vs omp from EACH SESSION's tool-name casing (the one
     property both telemetry paths preserve). Claude Code names its bare
     builtins Capitalized (Bash, Read, Agent, ToolSearch); omp names the same
@@ -1606,8 +1806,14 @@ def _colony_classify_harness(session_names):
     also use lowercase names and are measured inside the omp class; they read
     through the same enforcement surfaces.
 
+    A UUIDv7 session id (third group starts with 7) is omp's id scheme (Claude
+    Code mints v4), so it decides first: omp sessions that log Capitalized
+    Read/Bash were being counted as claude-code (533 of 580 in 14 days).
+
     Returns 'claude-code', 'omp', or None (unclassifiable)."""
     names = [n for n in session_names if n and not n.startswith("mcp__")]
+    if names and _UUIDV7_RE.match(session_id or ""):
+        return "omp"
     if any(n[:1].isupper() for n in names):
         return "claude-code"
     if names:
@@ -1822,7 +2028,7 @@ def mine_colony_adherence(conn, root, window_days=None, min_sessions=None):
 
     per = {}
     for sid, s in sessions.items():
-        harness = _colony_classify_harness(s["names"])
+        harness = _colony_classify_harness(s["names"], sid)
         if harness is None:
             continue  # mcp-only session: no casing evidence, not measured
         agg = per.setdefault(
@@ -2081,6 +2287,19 @@ def mine_turn_quality(conn, root, window_days=None, min_turns=20):
         hits = {(r["sid"], r["uuid"]): _turn_hit(spec, r) for r in jr}
         pred = predictive(j, hits) if j != "next_turn_correction" else None
         pred_gt = split(gt, hits)
+
+        # Zero validity: the next-turn ground truth is measured on both sides and
+        # hit turns are no likelier to be corrected, and Jev's own agreement shows
+        # no lift either. Such a judgment cannot be told apart from noise.
+        def _lift(p):
+            return p[1] > 0 and p[3] > 0 and p[0] > p[2]
+
+        zero_validity = (
+            pred_gt[1] > 0
+            and pred_gt[3] > 0
+            and not _lift(pred_gt)
+            and not (pred and _lift(pred))
+        )
         scopes = [(None, jr)]
         for proj in sorted({r["project"] for r in jr}):
             scopes.append((proj, [r for r in jr if r["project"] == proj]))
@@ -2091,6 +2310,8 @@ def mine_turn_quality(conn, root, window_days=None, min_turns=20):
             out.evaluated.add(f"{j}:{proj}" if proj else j)
             hit_rows = [r for r in sub if hits[(r["sid"], r["uuid"])]]
             rate = len(hit_rows) / n
+            if zero_validity:
+                continue  # no finding and no remeasurable value: never a regression
             out.values[f"{j}:{proj}" if proj else j] = rate
             if not spec.get("validated", True):
                 continue  # scored and stored, but shown not to measure what it names
@@ -2358,6 +2579,100 @@ def measure_finding_metric(conn, finding, root=None):
 HIGHER_IS_BETTER_METRICS = {"verifier_coverage", "cache_hit_ratio"}
 HIGHER_IS_BETTER_KEYS = {"verifier_coverage_low", "cache_hit_ratio_low"}
 
+# The unit each miner's metric_value is expressed in. A baseline is comparable
+# only to a value in the same unit. Improvement notes carry `unit=<name>` for
+# every non-raw metric; an unmarked baseline predates units and is "raw"
+# (recurring_friction was a raw 14-day count before it became events per 100
+# real sessions, so a raw 4 vs a per-100 4.0 is a different quantity).
+RAW_UNIT = "raw"
+SUPERSEDED = "superseded"
+METRIC_UNITS = {"recurring_friction": "per100_sessions"}
+_UNIT_RE = re.compile(r"\bunit=(\w+)")
+
+
+def metric_unit(fingerprint):
+    """Unit of the metric behind a finding fingerprint '<miner>:<key>'."""
+    return METRIC_UNITS.get((fingerprint or "").split(":", 1)[0], RAW_UNIT)
+
+
+def baseline_unit(note):
+    m = _UNIT_RE.search(note or "")
+    return m.group(1) if m else RAW_UNIT
+
+
+def with_unit(note, unit):
+    """`note` tagged with its metric unit (raw stays untagged)."""
+    base = _UNIT_RE.sub("", note or "").strip()
+    return base if unit == RAW_UNIT else f"{base} unit={unit}".strip()
+
+
+DEFAULT_MEASURE_AFTER = 5  # runs before a baseline is due; the --after default
+
+
+def supersede_unit_mismatch(conn, imp, finding, value):
+    """If `imp`'s baseline unit differs from the miner's current unit, never
+    compare: retire a still-pending row as 'superseded' and record a fresh
+    baseline (`value`, in the current unit) linked to the same finding. Rows
+    already carrying a real verdict keep it (it was valid in its own unit).
+    Returns the new improvement id, or None when units already agree."""
+    unit = metric_unit(finding.get("fingerprint"))
+    if baseline_unit(imp.get("note")) == unit:
+        return None
+    pending = imp.get("remeasured_at") is None
+    if pending:
+        atlas_db.set_improvement_remeasure(conn, imp["id"], None, SUPERSEDED)
+    return atlas_db.record_improvement(
+        conn,
+        imp["run_id"],
+        imp.get("dimension"),
+        str(value),
+        imp.get("target"),
+        with_unit(f"re-baselined, supersedes #{imp['id']}", unit),
+        finding_id=imp.get("finding_id"),
+        metric=imp.get("metric"),
+        baseline_value=value,
+        target_value=imp.get("target_value"),
+        # A NULL source row (never scheduled) would leave the fresh baseline
+        # never due; fall back to the CLI's --after default.
+        measure_after_runs=imp.get("measure_after_runs") or DEFAULT_MEASURE_AFTER,
+    )
+
+
+def _supersede_stale_units(conn, root=None):
+    """Re-baseline the latest improvement of every finding whose stored unit no
+    longer matches its miner. Returns report rows (id, finding_id, baseline_unit,
+    verdict, rebaselined_as, rebaselined_value)."""
+    out = []
+    for imp in atlas_db._rows(
+        conn.execute(
+            "SELECT * FROM improvements WHERE finding_id IS NOT NULL AND id IN "
+            "(SELECT MAX(id) FROM improvements WHERE finding_id IS NOT NULL "
+            "GROUP BY finding_id)"
+        )
+    ):
+        finding = atlas_db.get_finding(conn, imp["finding_id"])
+        if finding is None:
+            continue
+        if baseline_unit(imp.get("note")) == metric_unit(finding.get("fingerprint")):
+            continue
+        state, value = _measure(conn, finding, root=root)
+        if state != "measured":
+            continue  # nothing comparable to baseline with; leave it
+        new_id = supersede_unit_mismatch(conn, imp, finding, value)
+        row = atlas_db._rows(
+            conn.execute("SELECT * FROM improvements WHERE id=?", (imp["id"],))
+        )[0]
+        out.append(
+            dict(
+                row,
+                old_unit=baseline_unit(imp.get("note")),
+                new_unit=metric_unit(finding.get("fingerprint")),
+                rebaselined_as=new_id,
+                rebaselined_value=value,
+            )
+        )
+    return out
+
 
 def remeasure_verdict(baseline, value, higher=False):
     """improved|no_change|regressed|no_baseline. Changes inside a noise band
@@ -2375,7 +2690,7 @@ def remeasure(conn, root=None):
     improved|no_change|regressed|not_reproduced|no_baseline. A finding the
     miner can no longer measure is 'not_reproduced' with a NULL value (never a
     fabricated 0.0). Direction: HIGHER_IS_BETTER_* improve by increasing."""
-    updated = []
+    updated = _supersede_stale_units(conn, root)
     for imp in atlas_db.pending_remeasures(conn):
         runs_since = conn.execute(
             "SELECT COUNT(*) FROM runs WHERE started_at > ?", (imp["ts"],)
@@ -2468,7 +2783,7 @@ def main(argv=None):
     ap.add_argument(
         "--after",
         type=int,
-        default=5,
+        default=DEFAULT_MEASURE_AFTER,
         help="runs to wait before --remeasure is due (default: 5)",
     )
     ap.add_argument("--note", default=None, help="free-text note for --baseline")
@@ -2593,7 +2908,7 @@ def main(argv=None):
             finding["dimension"],
             str(baseline_value),
             str(args.target),
-            args.note,
+            with_unit(args.note, metric_unit(finding.get("fingerprint"))),
             finding_id=args.baseline,
             metric=args.metric,
             baseline_value=baseline_value,
@@ -2616,6 +2931,14 @@ def main(argv=None):
             print(json.dumps(updated, indent=2))
         else:
             for u in updated:
+                if u.get("rebaselined_as"):
+                    print(
+                        f"improvement {u['id']} (finding {u['finding_id']}): baseline "
+                        f"unit {u['old_unit']} -> {u['new_unit']}: "
+                        f"re-baselined as #{u['rebaselined_as']} = "
+                        f"{u['rebaselined_value']} (verdict {u['verdict'] or 'kept'})"
+                    )
+                    continue
                 print(
                     f"improvement {u['id']} (finding {u['finding_id']}): "
                     f"{u['baseline_value']} -> {u['remeasured_value']} "

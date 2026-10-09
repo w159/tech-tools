@@ -7,8 +7,10 @@ surfaces a one-line ready status. Never blocks session start: any error exits 0
 silently.
 """
 
+import contextlib
 import json
 import os
+import shlex
 import shutil
 import sqlite3
 import sys
@@ -23,6 +25,30 @@ def ensure_dashboard():
     Returns a short status line with the URL, or None on failure (fail-open).
     """
     if os.environ.get("ATLAS_DASHBOARD", "on").lower() in ("0", "off", "false", "no"):
+        return None
+    # Scratch state (temp HOME/ATLAS_HOME/DB) must never reach the shared :7421 daemon, which
+    # serves the user's real ~/.atlas. Mirrors atlas_dashboard.under_temp_dir; duplicated so boot
+    # skips without importing the dashboard module.
+    import tempfile
+
+    roots = [
+        os.path.realpath(r)
+        for r in (tempfile.gettempdir(), "/tmp", "/var/folders", "/private/var/folders")  # noqa: S108 -- scratch-root literal, not a file create
+    ]
+    state = os.environ.get("ATLAS_HOME") or os.path.join(
+        os.path.expanduser("~"), ".atlas"
+    )
+    scratch = (
+        os.path.expanduser("~"),
+        state,
+        os.environ.get("ATLAS_DASHBOARD_DB") or os.path.join(state, "atlas.db"),
+    )
+    shared = os.environ.get("ATLAS_DASHBOARD_PORT", "7421").strip() in ("", "7421")
+    if shared and any(
+        p == r or p.startswith(r + os.sep)
+        for p in (os.path.realpath(os.path.expanduser(v)) for v in scratch)
+        for r in roots
+    ):
         return None
     try:
         import subprocess
@@ -48,10 +74,7 @@ def ensure_dashboard():
         if not url:
             return None
         state = "ready" if data.get("already_running") else "started"
-        return "dashboard: %s (%s) — open once; all concurrent terminals share it" % (
-            url,
-            state,
-        )
+        return f"dashboard: {url} ({state})"
     except Exception:
         return None
 
@@ -75,27 +98,23 @@ def _colony_stack_url(data):
 
     first = data.get("url")
     urls = ([first] if first else []) + [
-        "http://127.0.0.1:%d" % p
+        f"http://127.0.0.1:{p}"
         for p in _COLONY_PORTS
-        if "http://127.0.0.1:%d" % p != first
+        if f"http://127.0.0.1:{p}" != first
     ]
     for url in urls:
-        try:
+        with contextlib.suppress(Exception):
             with urllib.request.urlopen(url + "/api/health", timeout=0.3) as r:
                 if r.status == 200:
                     return url
-        except Exception:
-            continue
     if data.get("upstream_plugin_on_port"):
         return ""
-    try:
+    with contextlib.suppress(Exception):
         ps = subprocess.run(
             ["ps", "-axo", "command"], capture_output=True, text=True, timeout=2
         )
         if re.search(_COLONY_PS_RE, ps.stdout or ""):
             return ""
-    except Exception:
-        pass
     return None
 
 
@@ -177,14 +196,14 @@ def ensure_colony():
             os.replace(cache + ".tmp", cache)
         url = data.get("url")
         if data.get("healthy"):
-            return "colony ready at %s" % url
+            return f"colony ready at {url}"
         if not data.get("herdr_server"):
             return None  # herdr itself is not running; Atlas cannot start it
         existing = _colony_stack_url(data)
         if existing is not None:
             # a stack exists: never spawn a second one; only name a URL that answered
             return (
-                "colony: %s (ready)" % existing
+                f"colony: {existing} (ready)"
                 if existing
                 else "colony: herdr web UI running (port unknown)"
             )
@@ -199,7 +218,7 @@ def ensure_colony():
                 start_new_session=True,
                 env=os.environ.copy(),
             )
-        return "colony: starting the herdr web UI at %s (log: %s)" % (url, log_path)
+        return f"colony: starting the herdr web UI at {url} (log: {log_path})"
     except Exception:
         return None
 
@@ -237,44 +256,19 @@ def read_output_style(settings_path=None):
 
 
 def status_contract_lines(active_style=""):
-    """Always-on reporting + loop contract. Survives outputStyle overrides."""
-    lines = [
-        "STATUS HEADER (mandatory every substantive reply): "
-        "ATLAS | <glyph> <phase> | <one-line state>  "
-        "phases/glyphs: %s. Lead with the decision; no preamble." % _STATUS_GLYPHS,
-        "LOOP (do not skip): research (tools first: serena activate_project + lean-ctx, "
-        "not Bash grep) -> theory -> test (failing check) -> validate -> implement "
-        "(atlas:implementer only) -> verify (test stamp or atlas:verifier) -> docs "
-        "(atlas:docs-curator: CHANGELOG/ROADMAP/findings; archive fixed noise).",
-        "DISPATCH colors (Claude Code activity): explorer cyan, implementer green, "
-        "verifier red, planner blue, docs-curator purple, db-prober yellow, "
-        "ui-runtime-tester pink. Name every dispatch: DISPATCH -> atlas:<role> (...).",
-        "LEDGER under the header when TodoWrite is unavailable: "
-        "LEDGER | n/m | now: ... | left: ...",
-        "BEFORE DONE: re-read the user's request; every named deliverable exists in "
-        "the format asked; nothing unasked was built instead; evidence exercised the "
-        "surface the user reported against; CHANGELOG/docs updated in the same turn. "
-        "A repeated request means the first answer missed.",
-        "SCOPE: build only what was named; never revert changes you did not make; "
-        "name the source-tree edit target (never ~/.claude/plugins/cache). "
-        "Corrections persist all session; a corrected report replaces the old one; "
-        "after one wrong guess on an ambiguity, ask.",
-    ]
+    """Style-override hedge only. The status header, ledger, done-check and scope
+    rules live once in output-styles/atlas-orchestrator.md (Claude Code applies it
+    force-for-plugin; omp injects it from omp/style.ts), so boot repeats them only
+    when settings.json outputStyle replaces that style."""
     style = (active_style or "").strip()
-    if style and style != ATLAS_OUTPUT_STYLE:
-        lines.append(
-            "STYLE OVERRIDE: settings.json outputStyle is %r, not %r. Current Claude Code "
-            "docs say plugin force-for-plugin overrides it, but atlas 5.25.0 observed "
-            "headers vanishing in this configuration. Either way, follow this boot "
-            "contract and emit ATLAS | headers every substantive reply."
-            % (style, ATLAS_OUTPUT_STYLE)
-        )
-    elif not style:
-        lines.append(
-            "outputStyle unset - atlas output-styles/atlas-orchestrator.md "
-            "(force-for-plugin) should apply; still emit ATLAS | headers."
-        )
-    return lines
+    if not style or style == ATLAS_OUTPUT_STYLE:
+        return []
+    return [
+        f"STYLE OVERRIDE: outputStyle is {style!r}, not {ATLAS_OUTPUT_STYLE!r}; it may suppress the atlas style. "
+        f"Every substantive reply opens `ATLAS | <glyph> <phase> | <state>` ({_STATUS_GLYPHS}); "
+        "before done re-read the request and show evidence; build only what was named; "
+        "without TodoWrite add `LEDGER | n/m | now: ... | left: ...`."
+    ]
 
 
 def plugin_enabled(name, root=None):
@@ -372,7 +366,7 @@ def dirty_map(root):
 
 def snapshot_path(root, session_id):
     return os.path.join(
-        str(root), ".atlas", ".run", "dirty-snapshot-%s.json" % session_id
+        str(root), ".atlas", ".run", f"dirty-snapshot-{session_id}.json"
     )
 
 
@@ -492,7 +486,7 @@ def heal_serena_project(root):
         "\n# required by serena >= 1.6 (ProjectConfig.FIELDS_WITHOUT_DEFAULTS); without it the\n"
         "# project fails to load with KeyError: 'languages' and every symbol tool goes dark\n"
         "# for this session and all its subagents. Added automatically by atlas session_boot.\n"
-        "languages: [%s]\n" % ", ".join('"%s"' % lang for lang in langs)
+        "languages: [" + ", ".join(f'"{lang}"' for lang in langs) + "]\n"
     )
     try:
         with open(cfg, "a", encoding="utf-8") as fh:
@@ -500,12 +494,8 @@ def heal_serena_project(root):
     except Exception:
         return None
     return (
-        "serena: repaired %s (added languages: %s) - symbol tools now load for "
+        f"serena: repaired {cfg} (added languages: {', '.join(langs)}) - symbol tools now load for "
         "subagents; they had been failing with KeyError: 'languages'"
-        % (
-            cfg,
-            ", ".join(langs),
-        )
     )
 
 
@@ -515,10 +505,10 @@ def _relative_time(epoch_s):
     if delta < 60:
         return "just now"
     if delta < 3600:
-        return "%dm ago" % (delta // 60)
+        return f"{int(delta // 60)}m ago"
     if delta < 86400:
-        return "%dh ago" % (delta // 3600)
-    return "%dd ago" % (delta // 86400)
+        return f"{int(delta // 3600)}h ago"
+    return f"{int(delta // 86400)}d ago"
 
 
 def _claude_mem_summary(project_name):
@@ -729,28 +719,28 @@ def resume_block(root):
         if atlas_ctx and atlas_ctx.get("started_at"):
             newest_epoch = max(newest_epoch or 0, atlas_ctx["started_at"])
 
-        lines = ["## Resuming %s" % project_name]
+        lines = [f"## Resuming {project_name}"]
 
         header = []
         if newest_epoch:
-            header.append("Last active: %s" % _relative_time(newest_epoch))
+            header.append(f"Last active: {_relative_time(newest_epoch)}")
         if atlas_ctx and atlas_ctx.get("branch"):
-            header.append("branch: %s" % atlas_ctx["branch"])
+            header.append(f"branch: {atlas_ctx['branch']}")
         if header:
             lines.append("  |  ".join(header))
 
         if summary and summary[0]:
-            lines.append("Last task: %s" % str(summary[0])[:150])
+            lines.append(f"Last task: {str(summary[0])[:150]}")
         if atlas_ctx and atlas_ctx.get("prompt"):
-            lines.append("Last intent: %s" % str(atlas_ctx["prompt"])[:150])
+            lines.append(f"Last intent: {str(atlas_ctx['prompt'])[:150]}")
 
         last_file = atlas_ctx.get("last_file") if atlas_ctx else None
         if not last_file and summary and summary[2]:
             last_file = str(summary[2]).splitlines()[0].strip(" -*\t,")
         if last_file:
-            tail = "Last file: %s" % last_file
+            tail = f"Last file: {last_file}"
             if atlas_ctx and atlas_ctx.get("lag_kb"):
-                tail += " (mirror %dKB behind live)" % atlas_ctx["lag_kb"]
+                tail += f" (mirror {atlas_ctx['lag_kb']}KB behind live)"
             lines.append(tail)
 
         threads = []
@@ -764,18 +754,17 @@ def resume_block(root):
             threads.extend(mem["threads"])
         if threads:
             lines.append("Open threads:")
-            lines.extend("- %s" % t[:120] for t in threads[:3])
+            lines.extend(f"- {t[:120]}" for t in threads[:3])
 
         if atlas_ctx and atlas_ctx.get("unverified"):
             lines.append(
-                "Unfinished verification: %d unverified claim(s)"
-                % atlas_ctx["unverified"]
+                f"Unfinished verification: {atlas_ctx['unverified']} unverified claim(s)"
             )
 
         if summary and summary[1]:
             first_step = str(summary[1]).splitlines()[0].strip(" -*\t")
             if first_step:
-                lines.append("Next step: %s" % first_step[:150])
+                lines.append(f"Next step: {first_step[:150]}")
 
         return "\n".join(lines)
     except Exception:
@@ -784,11 +773,9 @@ def resume_block(root):
 
 def main():
     payload = {}
-    try:
+    with contextlib.suppress(Exception):
         raw = sys.stdin.read()
         payload = json.loads(raw) if raw.strip() else {}
-    except Exception:
-        pass
     payload = payload if isinstance(payload, dict) else {}
 
     # Observability DB lifecycle -- fail-open; must not block boot.
@@ -806,8 +793,8 @@ def main():
         # corrupt is_orchestrating/current_run_id lookups -- skip run creation.
         if _sid and atlas_db.current_run_id(_conn, _sid) is None:
             atlas_db.start_run(_conn, _pid, _sid)
-    except Exception:
-        pass  # observability is best-effort; never block boot
+    except Exception:  # noqa: S110 -- observability is best-effort; never block boot
+        pass
     finally:
         if _conn is not None:
             _conn.close()
@@ -818,9 +805,51 @@ def main():
     # (origin=carried) and archive what completed. The boot line gives the
     # session its starting ledger; the dashboard Work tab renders the board.
     # Fail-open; ATLAS_TODO=off skips entirely.
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import worker_inbox
+
+    # Claude Code sources CLAUDE_ENV_FILE before every Bash command: pin the lead's
+    # subchannel name so `atlas_mux spawn` run from Bash registers workers into
+    # <main>/lead-<sid6> (the name hook-side Task dispatches already use).
+    with contextlib.suppress(
+        Exception
+    ):  # lead identity pin is best-effort; never block boot
+        _env_file = os.environ.get("CLAUDE_ENV_FILE", "").strip()
+        _lead_sid = payload.get("session_id", "")
+        if (
+            _env_file
+            and _lead_sid
+            and not worker_inbox.is_worker_env()
+            and not (os.environ.get("ATLAS_LEAD_NAME") or "").strip()
+        ):
+            sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+            import atlas_todo as _at
+
+            _line = f"export ATLAS_LEAD_NAME={shlex.quote(_at.lead_name(_lead_sid))}\n"
+            try:
+                with open(_env_file, encoding="utf-8") as _f:
+                    _have = _line in _f.read().splitlines(True)
+            except OSError:
+                _have = False
+            if not _have:
+                with open(_env_file, "a", encoding="utf-8") as _f:
+                    _f.write(_line)
+
     todo_line = None
-    try:
-        if os.environ.get("ATLAS_TODO", "").lower() not in ("0", "off", "false", "no"):
+    with contextlib.suppress(
+        Exception
+    ):  # todo carry-over is best-effort; never block boot
+        # A mux worker's own session must not re-tag the lead's live items as carried.
+        if (
+            os.environ.get("ATLAS_TODO", "").lower()
+            not in (
+                "0",
+                "off",
+                "false",
+                "no",
+            )
+            and not worker_inbox.is_worker_env()
+        ):
             sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
             import atlas_todo
 
@@ -829,17 +858,9 @@ def main():
             c = carry.get("counts") or {}
             if c.get("needed") or carry.get("carried"):
                 todo_line = (
-                    "todo board: %d needed / %d remaining / %d complete (%d carried "
-                    "from previous sessions; dashboard Work tab)"
-                    % (
-                        c.get("needed", 0),
-                        c.get("remaining", 0),
-                        c.get("complete", 0),
-                        carry.get("carried", 0),
-                    )
+                    f"todo board: {c.get('needed', 0)} needed / {c.get('remaining', 0)} remaining / "
+                    f"{c.get('complete', 0)} complete ({carry.get('carried', 0)} carried)"
                 )
-    except Exception:
-        pass  # todo carry-over is best-effort; never block boot
 
     # Docs structure conformance: repair the durable docs/ tree so the curator
     # always has somewhere to write. Deliberately auto-FIX rather than report:
@@ -854,7 +875,9 @@ def main():
     # (deliberately NOT prefixed 'Setup gap:', which means a missing dependency).
     # Fail-open; ATLAS_DOCS_REPAIR=off skips entirely.
     docs_line = None
-    try:
+    with contextlib.suppress(
+        Exception
+    ):  # structure repair is best-effort; never block boot
         if os.environ.get("ATLAS_DOCS_REPAIR", "").lower() not in (
             "0",
             "off",
@@ -879,8 +902,8 @@ def main():
                     (_docs_root / rel.rstrip("/")).mkdir(parents=True, exist_ok=True)
                     created.append(rel)
                 if created:
-                    docs_line = "docs structure repaired: created %s" % ", ".join(
-                        created[:6]
+                    docs_line = (
+                        f"docs structure repaired: created {', '.join(created[:6])}"
                     )
             else:
                 docs_line = (
@@ -889,21 +912,17 @@ def main():
                     "automatically: onboarding a project that never asked for "
                     "one is intrusive. ATLAS_DOCS_REPAIR=off silences this.)"
                 )
-    except Exception:
-        pass  # structure repair is best-effort; never block boot
 
     # Run the curator to manage auto-created skill lifecycle (fail-open)
-    try:
+    with contextlib.suppress(Exception):  # curator is best-effort; never block boot
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         import atlas_curator
 
         atlas_curator.apply_transitions()
-    except Exception:
-        pass  # curator is best-effort; never block boot
 
     # Load and inject memory snapshot
     memory_block = None
-    try:
+    with contextlib.suppress(Exception):  # memory is best-effort
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         import atlas_memory
 
@@ -923,15 +942,13 @@ def main():
                 head = memory_block[:700]
                 cut = head.rfind("\n\u00a7\n")
                 memory_block = head[:cut] if cut > 0 else head.rsplit("\n", 1)[0]
-    except Exception:
-        pass  # memory is best-effort
 
     # Hash already-dirty non-docs paths so the Stop gate's delegation mandate can
     # tell shell-written code from inherited dirt. `git status` + hashing costs 60-90 ms on a big dirty tree,
     # so it runs DETACHED (`session_boot.py --snapshot`), never on the boot path. The gate fails open on a
     # missing snapshot. Best-effort, never blocks boot.
     if os.environ.get("ATLAS_GATE", "").lower() != "off" and payload.get("session_id"):
-        try:
+        with contextlib.suppress(Exception):
             import subprocess
 
             subprocess.Popen(
@@ -947,8 +964,6 @@ def main():
                 stderr=subprocess.DEVNULL,
                 start_new_session=True,
             )
-        except Exception:
-            pass
 
     boot_root = payload.get("cwd") or os.getcwd()
     mem_plugin = plugin_enabled("claude-mem", boot_root)
@@ -977,9 +992,10 @@ def main():
         else read_output_style()
     )
     lines = [
-        "Atlas: orchestrator posture. research -> theory -> test -> validate -> implement -> verify; "
-        "evidence before any done claim. Route execution to atlas:<role> subagents; "
-        "invoke atlas-orchestrate for multi-step or whole-codebase work.",
+        "Atlas: orchestrator posture. LOOP: research -> theory -> test (failing check) -> "
+        "validate -> implement (atlas:implementer only) -> verify (test stamp or "
+        "atlas:verifier) -> docs (atlas:docs-curator); evidence before any done claim. "
+        "Route execution to atlas:<role> subagents; invoke atlas-orchestrate for multi-step or whole-codebase work.",
     ]
     lines.extend(status_contract_lines(active_style))
     # claude-mem recall mandate: armed only when the claude-mem plugin (its MCP
@@ -1002,17 +1018,15 @@ def main():
     ]
     if absent:
         lines.append(
-            "Setup gap: %s absent - run the `atlas` skill to install."
-            % ", ".join(absent)
+            f"Setup gap: {', '.join(absent)} absent - run the `atlas` skill to install."
         )
     if fallow:
         lines.append(
-            "fallow: CLI on PATH - PreToolUse fallow_gate audits git commit/push "
-            "(ATLAS_FALLOW=off to disable). JS/TS: prefer fallow --format json / fallow-mcp."
+            "fallow: CLI on PATH; fallow_gate audits git commit/push (ATLAS_FALLOW=off disables)."
         )
     else:
         # Only nudge when the cwd looks like JS/TS so Python-only repos stay quiet.
-        try:
+        with contextlib.suppress(Exception):
             cwd = payload.get("cwd") or os.getcwd()
             js_hint = os.path.isfile(os.path.join(cwd, "package.json"))
             if not js_hint:
@@ -1042,18 +1056,15 @@ def main():
                     "fallow: CLI absent on a JS/TS tree - install with `npm install -g fallow` "
                     "(atlas fallow_gate stays inert until then; see fallow-tools.md)."
                 )
-        except Exception:
-            pass
 
-    try:
+    with contextlib.suppress(
+        Exception
+    ):  # structure advisory is best-effort; never block boot
         missing = missing_structure(payload.get("cwd") or os.getcwd())
         if missing:
             lines.append(
-                "atlas: project structure incomplete (missing: %s) - run /atlas-setup to scaffold/repair"
-                % ", ".join(missing)
+                f"atlas: project structure incomplete (missing: {', '.join(missing)}) - run /atlas-setup to scaffold/repair"
             )
-    except Exception:
-        pass  # structure advisory is best-effort; never block boot
 
     if todo_line:
         lines.append(todo_line)
@@ -1061,41 +1072,33 @@ def main():
     if docs_line:
         lines.append(docs_line)
 
-    try:
+    with contextlib.suppress(Exception):  # serena heal is best-effort; never block boot
         healed = heal_serena_project(payload.get("cwd") or os.getcwd())
         if healed:
             lines.append(healed)
-    except Exception:
-        pass  # serena heal is best-effort; never block boot
 
     # Compact tool-routing lines (serena/lean-ctx/claude-mem/...). Full matrix is
     # progressive-disclosure under atlas-orchestrate/references/tool-routing.md.
-    try:
+    with contextlib.suppress(Exception):
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         import tool_routing
 
         for line in tool_routing.boot_lines(root=payload.get("cwd") or os.getcwd()):
             if line and line not in lines:
                 lines.append(line)
-    except Exception:
-        pass
 
     if memory_block:
         lines.append(memory_block)
     if resume:
         lines.append(resume)
-    try:
+    with contextlib.suppress(Exception):  # dashboard is best-effort; never block boot
         dash = ensure_dashboard()
         if dash:
             lines.append(dash)
-    except Exception:
-        pass  # dashboard is best-effort; never block boot
-    try:
+    with contextlib.suppress(Exception):  # colony is best-effort; never block boot
         colony = ensure_colony()
         if colony:
             lines.append(colony)
-    except Exception:
-        pass  # colony is best-effort; never block boot
     sys_msg = "Atlas ready"
     if not (mem and ctx):
         sys_msg += " (run the `atlas` skill to complete setup)"
@@ -1126,11 +1129,9 @@ if __name__ == "__main__":
             sys.exit(0)
         main()
     except Exception as exc:
-        try:
+        with contextlib.suppress(Exception):
             sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
             import atlas_faults
 
             atlas_faults.record("session_boot", exc)
-        except Exception:
-            pass
         sys.exit(0)

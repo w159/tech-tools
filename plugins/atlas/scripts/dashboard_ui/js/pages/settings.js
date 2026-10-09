@@ -25,7 +25,7 @@ import { DEFAULT_NAV, normalizeNav } from '../nav-order.js';
 
 const NAV_LABELS = {
   overview: 'Overview', activity: 'Activity', health: 'Health', agents: 'Agents', colony: 'Colony', channels: 'Channels',
-  improve: 'Self-improvement', projects: 'Projects', settings: 'Settings',
+  improve: 'Improve', projects: 'Projects', settings: 'Settings',
 };
 const DEFAULT_PREFS = {
   theme: 'dark', density: 'comfortable', default_project: 'all', refresh_seconds: 8,
@@ -44,7 +44,7 @@ let S = null;
 
 function freshState(ctx) {
   return {
-    ctx, mount: null, destroyed: false, busy: new Set(), drafts: {}, tests: {},
+    ctx, mount: null, destroyed: false, busy: new Set(), drafts: {}, tests: {}, knobQuery: '',
     behavior: null, ecosystem: null, connectors: null, prefs: null, projects: [],
     credDrafts: {}, projectList: null, agentPid: null, agents: null,
     ecoTab: 'plugins', ecoQuery: '', ecoLimit: ECO_PAGE,
@@ -55,6 +55,46 @@ function freshState(ctx) {
 
 function notify(msg, kind) {
   if (S && S.ctx && typeof S.ctx.toast === 'function') S.ctx.toast(msg, { kind });
+}
+
+// The page scrolls inside <main id="main">; the document itself never scrolls.
+const scroller = () => (S && S.mount && S.mount.closest('#main')) || document.getElementById('main');
+
+// Inline "Saved" / error line that sits next to a control. Saved clears itself; an error stays until the next save.
+function savedTag(id) {
+  return h('span', { class: 'pg-saved', role: 'status', ...(id ? { id } : {}) });
+}
+
+const flashTimers = new WeakMap();
+function flash(host, text, kind = 'ok') {
+  const el = typeof host === 'string' ? document.getElementById(host)
+    : host && (host.classList.contains('pg-saved') ? host : host.querySelector('.pg-saved'));
+  if (!el) return;
+  clearTimeout(flashTimers.get(el));
+  el.textContent = text;
+  el.className = `pg-saved is-${kind}`;
+  if (kind === 'ok') flashTimers.set(el, setTimeout(() => { el.textContent = ''; el.className = 'pg-saved'; }, 4000));
+}
+
+// Replace one element in place, keeping which <details> were open and where focus and the caret were.
+function focusRestored(next, keepId, caret) {
+  const el = keepId && next.querySelector(`#${CSS.escape(keepId)}`);
+  if (!el) return;
+  el.focus({ preventScroll: true });
+  if (caret && typeof el.setSelectionRange === 'function') { try { el.setSelectionRange(caret[0], caret[1]); } catch { /* no caret on this input type */ } }
+}
+
+function swapEl(old, make) {
+  const next = make();
+  if (!old || !old.isConnected) return next;
+  const open = [...old.querySelectorAll('details')].map((d) => d.open);
+  const active = document.activeElement;
+  const keepId = active && old.contains(active) ? active.id : '';
+  const caret = keepId && typeof active.selectionStart === 'number' ? [active.selectionStart, active.selectionEnd] : null;
+  old.replaceWith(next);
+  next.querySelectorAll('details').forEach((d, i) => { if (open[i]) d.open = true; });
+  focusRestored(next, keepId, caret);
+  return next;
 }
 
 // Legacy routes answer `{ok:false,error,hint}` with HTTP 200, so check `ok` too.
@@ -124,7 +164,11 @@ async function loadAgentBody(name) {
 }
 
 async function loadAgentRoster() {
-  if (!S.agentPid) { S.agents = { agents: [] }; S.agentName = null; S.agentBody = ''; return; }
+  if (!S.agentPid) {
+    await loadSection('agents', () => S.ctx.api.get('/api/agents'));
+    S.agentName = null; S.agentBody = '';
+    return;
+  }
   await loadSection('agents', () => S.ctx.api.get(`/api/agents?project_id=${encodeURIComponent(S.agentPid)}`));
   const roster = agentRoster();
   const keep = roster.some((a) => a.name === S.agentName) ? S.agentName : (roster[0] && roster[0].name) || null;
@@ -184,10 +228,12 @@ function prefs() {
   };
 }
 
-async function savePrefs(patch, okMsg) {
+// Saves one preference and reports inline next to the control (statusId); nothing else on the page is rebuilt.
+async function savePrefs(patch, statusId) {
   const key = 'prefs';
-  if (S.busy.has(key)) return;
+  if (S.busy.has(key)) return false;
   S.busy.add(key);
+  let ok = false;
   try {
     const res = await S.ctx.api.put('/api/v2/prefs', patch);
     const next = res && res.state ? res.state : res;
@@ -197,14 +243,15 @@ async function savePrefs(patch, okMsg) {
       if (S.ctx.store) S.ctx.store.set('prefs', next);
     }
     delete S.errors.prefsSave;
-    notify(okMsg || 'Preferences saved', 'ok');
+    flash(statusId, 'Saved');
+    ok = true;
   } catch (err) {
     S.errors.prefsSave = err;
     const d = describeError(err);
-    notify([d.title, d.body].filter(Boolean).join(': '), 'fail');
+    flash(statusId, `Not saved: ${[d.title, d.body].filter(Boolean).join(' — ')}`, 'fail');
   }
   S.busy.delete(key);
-  draw();
+  return ok;
 }
 
 // ---- small form helpers -----------------------------------------------------
@@ -247,32 +294,54 @@ async function reloadAll() {
 }
 
 // ---- Behavior knobs ---------------------------------------------------------
+const isOn = (knob, v) => String(v ?? '').toLowerCase() !== String(knob.off ?? 'off').toLowerCase();
+
+function findKnob(key) {
+  const b = S.behavior || {};
+  for (const g of b.groups || []) for (const k of g.knobs || []) if (k.key === key) return k;
+  return (b.advanced || []).find((a) => a.key === key);
+}
+
+function knobRowEl(key) {
+  return [...S.mount.querySelectorAll('li[data-knob]')].find((li) => li.dataset.knob === key);
+}
+
+function setBusy(el, on) {
+  if (el) for (const c of el.querySelectorAll('input,select,button')) c.disabled = on;
+}
+
 async function saveKnob(knob, value) {
   const key = `knob:${knob.key}`;
   if (S.busy.has(key)) return;
   S.busy.add(key);
-  draw();
+  setBusy(knobRowEl(knob.key), true);
   try {
-    const res = await legacyPost('/api/behavior', { updates: { [knob.key]: value } });
-    S.note = res.note || S.note;
+    await legacyPost('/api/behavior', { updates: { [knob.key]: value } });
     delete S.drafts[knob.key];
-    await loadSection('behavior', () => S.ctx.api.get('/api/behavior'));
-    notify(`${knob.title || knob.key} saved. ${res.note || ''}`.trim(), 'ok');
+    S.behavior = await S.ctx.api.get('/api/behavior');
+    delete S.errors.behavior;
+    S.busy.delete(key);
+    const fresh = findKnob(knob.key);
+    const old = knobRowEl(knob.key);
+    if (fresh) flash(swapEl(old, () => knobRow(fresh)), value === '' ? 'Reset to default' : 'Saved');
+    else if (old) old.remove(); // a stale value nothing reads, now cleared
   } catch (err) {
     const d = describeError(err);
-    notify([`Could not save ${knob.key}`, d.title, d.body].filter(Boolean).join(': '), 'fail');
+    S.busy.delete(key);
+    const old = knobRowEl(knob.key);
+    const cur = findKnob(knob.key);
+    flash(swapEl(old, () => knobRow(cur || knob)), `Not saved: ${[d.title, d.body].filter(Boolean).join(' — ')}`, 'fail');
   }
-  S.busy.delete(key);
-  draw();
 }
 
 function knobControl(knob) {
   const id = `pg-knob-${knob.key}`;
   const busy = S.busy.has(`knob:${knob.key}`);
-  const value = knob.value === undefined ? '' : String(knob.value);
+  if (knob.scope === 'shell') return h('span', { class: 'pg-hint pg-mono', id }, 'set in shell');
+  if (knob.unread) return h('button', { type: 'button', class: 'btn', id, disabled: busy, onclick: () => saveKnob(knob, '') }, 'Clear');
+  const value = String((knob.hook_value ?? knob.value) ?? '');
   if (knob.kind === 'toggle') {
-    const on = value === String(knob.on ?? 'on');
-    return switchEl(id, on, `${knob.title || knob.key}`, (next) => saveKnob(knob, next ? (knob.on ?? 'on') : (knob.off ?? 'off')), busy);
+    return switchEl(id, isOn(knob, value), knob.title || knob.key, (next) => saveKnob(knob, next ? (knob.on ?? 'on') : (knob.off ?? 'off')), busy);
   }
   if (knob.kind === 'choice') {
     return selectEl(id, value, (knob.options || []).map((o) => ({ value: o, label: o })), (v) => saveKnob(knob, v));
@@ -289,12 +358,82 @@ function knobControl(knob) {
       'aria-label': `Save ${knob.title || knob.key}` }, 'Save'));
 }
 
+const SOURCE_LABEL = { store: 'saved here (atlas store)', claude: 'Claude Code settings.json only', process: 'this dashboard’s own environment', default: 'built-in default' };
+
+function whenText(epochS) {
+  return epochS ? `${ago(epochS)} (${new Date(Number(epochS) * 1000).toLocaleString()})` : 'never changed from this page';
+}
+
+function showValue(knob, v) {
+  if (knob.kind === 'toggle') return isOn(knob, v) ? 'On' : 'Off';
+  return v === '' || v == null ? '(empty)' : String(v);
+}
+
+function shellKnobRows(knob, layers) {
+  return [
+    ['Now', layers.process != null ? `${layers.process} in this dashboard’s environment (your terminal may differ)` : 'not set in this dashboard’s environment, so the default applies'],
+    ['Set it with', `export ${knob.key}=… in the shell that starts the program that reads it.`],
+    ['Takes effect', 'The next time that program is launched from a shell where the variable is exported.'],
+  ];
+}
+
+function hookKnobRows(knob, layers) {
+  const src = knob.hook_source || knob.source || 'default';
+  const now = knob.hook_value ?? knob.value;
+  const reach = [layers.claude != null ? 'Claude Code (settings.json env)' : null, layers.store != null ? 'omp (atlas store)' : null].filter(Boolean);
+  const envNote = layers.process != null && layers.process !== now ? `; this dashboard’s own environment has ${layers.process}, which only affects this dashboard` : '';
+  return [
+    ['Now', `${showValue(knob, now)} — ${SOURCE_LABEL[src] || src}${envNote}`],
+    ['Reaches', reach.length ? reach.join(' + ') : 'nothing saved: every session uses the built-in default'],
+    ['Takes effect', 'Claude Code: when a new session starts. omp: on the next hook run. A variable exported in your shell overrides both.'],
+  ];
+}
+
+function knobDetailRows(knob, layers, shell) {
+  const [now, reaches, effect] = shell ? shellKnobRows(knob, layers) : hookKnobRows(knob, layers);
+  return [
+    knob.details ? ['What it does', knob.details] : null,
+    ['Default', showValue(knob, knob.default)],
+    now, reaches, effect,
+    knob.shell_also ? ['Also read by omp', 'omp’s own extension reads this from its shell environment too, so under omp export it there as well; the saved value does not reach that part.'] : null,
+    ['Last changed', whenText(knob.changed)],
+    ['Read at', knob.ref || 'no shipped file reads it'],
+  ].filter(Boolean);
+}
+
+function knobDetailActions(knob, layers, shell) {
+  if (shell) return [null, null];
+  const claudeOnly = layers.claude != null && layers.store == null;
+  return [
+    claudeOnly ? h('button', { type: 'button', class: 'btn', onclick: () => saveKnob(knob, layers.claude) }, 'Apply to omp too') : null,
+    layers.store != null || layers.claude != null
+      ? h('button', { type: 'button', class: 'btn', onclick: () => saveKnob(knob, '') }, 'Reset to default') : null,
+  ];
+}
+
+function knobDetail(knob) {
+  const layers = knob.layers || {};
+  const shell = knob.scope === 'shell';
+  const rows = knobDetailRows(knob, layers, shell);
+  return h('details', { class: 'pg-evidence', dataset: { keep: `knob:${knob.key}` } },
+    h('summary', {}, 'Details'),
+    h('dl', { class: 'pg-kvs' }, ...rows.map(([k, v]) => h('div', { class: 'pg-kv' }, h('dt', {}, k), h('dd', { class: k === 'Read at' ? 'pg-mono' : '' }, v)))),
+    h('p', { class: 'pg-actions' }, ...knobDetailActions(knob, layers, shell)));
+}
+
 function knobRow(knob) {
-  return h('li', { class: 'pg-row' },
+  const title = knob.title || knob.key;
+  const search = `${knob.key} ${title} ${knob.description || ''}`.toLowerCase();
+  const custom = knob.scope !== 'shell' && (knob.hook_source || knob.source) !== 'default' && String(knob.hook_value ?? knob.value) !== String(knob.default);
+  return h('li', { class: 'pg-row', dataset: { knob: knob.key, search }, hidden: !knobMatches(search) },
     h('div', { class: 'pg-row-main' },
-      h('label', { class: 'pg-row-title', for: `pg-knob-${knob.key}` }, knob.title || knob.key),
+      h('label', { class: 'pg-row-title', for: `pg-knob-${knob.key}` }, title,
+        knob.scope === 'shell' ? Badge({ status: 'info', text: 'set in shell' }) : null,
+        knob.documented === false ? Badge({ status: 'warn', text: knob.unread ? 'not read' : 'undocumented' }) : null,
+        custom ? Badge({ status: 'ok', text: 'customised' }) : null),
       h('p', { class: 'pg-hint' }, knob.description || ''),
-      h('p', { class: 'pg-mono pg-hint' }, `${knob.key} · from ${knob.source || 'default'}${knob.ref ? ` · ${knob.ref}` : ''}`)),
+      savedTag(),
+      knobDetail(knob)),
     h('div', { class: 'pg-row-ctl' }, knobControl(knob)));
 }
 
@@ -324,76 +463,124 @@ function ompSection(omp) {
       : null);
 }
 
+function knobMatches(search) {
+  const q = S.knobQuery.trim().toLowerCase();
+  return !q || search.includes(q);
+}
+
+// Filtering only toggles `hidden` on existing rows: no rebuild, so typing never loses focus or scroll.
+function applyKnobFilter() {
+  const q = S.knobQuery.trim().toLowerCase();
+  const rows = [...S.mount.querySelectorAll('li[data-knob]')];
+  for (const li of rows) li.hidden = !knobMatches(li.dataset.search);
+  for (const g of S.mount.querySelectorAll('section[data-group]')) g.hidden = !g.querySelector('li[data-knob]:not([hidden])');
+  const adv = S.mount.querySelector('details[data-keep="advanced"]');
+  if (adv) {
+    const any = !!adv.querySelector('li[data-knob]:not([hidden])');
+    adv.hidden = !!q && !any;
+    if (q && any) adv.open = true;
+  }
+  const count = S.mount.querySelector('#pg-knob-count');
+  if (count) count.textContent = q ? `${rows.filter((li) => !li.hidden).length} of ${rows.length} match` : `${rows.length} switches`;
+}
+
 function behaviorSection() {
   const err = sectionError('behavior', 'Behavior knobs');
-  if (err) return Card({ title: 'Behavior', children: [err] });
-  if (!S.behavior) return Card({ title: 'Behavior', children: [h('p', { class: 'pg-hint', role: 'status' }, 'Loading…')] });
+  if (err) return Card({ id: 'pg-sec-behavior', title: 'Behavior', children: [err] });
+  if (!S.behavior) return Card({ id: 'pg-sec-behavior', title: 'Behavior', children: [h('p', { class: 'pg-hint', role: 'status' }, 'Loading…')] });
   const groups = S.behavior.groups || [];
   const advanced = S.behavior.advanced || [];
-  return Card({
+  const filter = h('input', {
+    id: 'pg-knob-filter', class: 'input', type: 'search', value: S.knobQuery,
+    placeholder: 'Filter switches by name or what they do', 'aria-label': 'Filter behavior switches',
+  });
+  filter.addEventListener('input', (e) => { S.knobQuery = e.target.value; applyKnobFilter(); });
+  const slug = (t) => `pg-grp-${t.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+  const jump = (id) => () => { const el = document.getElementById(id); if (el) { if (el.tagName === 'DETAILS') el.open = true; el.scrollIntoView({ block: 'start' }); } };
+  const card = Card({
+    id: 'pg-sec-behavior',
     title: 'Behavior',
-    actions: [h('span', { class: 'pg-hint' }, S.behavior.settings_path || '')],
+    actions: [h('span', { class: 'pg-hint pg-mono' }, S.behavior.store_path || '')],
     children: [
-      h('p', { class: 'pg-hint' }, S.note || S.behavior.note || ''),
-      ...groups.map((g) => h('section', { class: 'pg-knob-group', 'aria-label': g.title },
+      h('p', { class: 'pg-hint' }, 'Switches for what atlas’s hooks do inside Claude Code and omp. Each row says what it changes; open Details for the default, where it is read and when a change takes effect. A change is saved to the atlas store (omp reads it on its next hook run) and to Claude Code’s settings.json (read when a session starts); sessions already running keep their old value. Rows marked “set in shell” are read straight from the environment of the program that uses them, so they cannot be saved here.'),
+      h('div', { class: 'pg-field' }, filter, h('span', { class: 'pg-hint', id: 'pg-knob-count', role: 'status' }, '')),
+      h('nav', { class: 'pg-index', 'aria-label': 'Behavior groups' },
+        ...groups.map((g) => h('button', { type: 'button', class: 'pg-tab', onclick: jump(slug(g.title)) }, g.title)),
+        advanced.length ? h('button', { type: 'button', class: 'pg-tab', onclick: jump('pg-grp-advanced') }, 'Advanced') : null),
+      ...groups.map((g) => h('section', { class: 'pg-knob-group', id: slug(g.title), dataset: { group: g.title }, 'aria-label': g.title },
         h('h3', { class: 'pg-h3' }, g.title),
+        g.intro ? h('p', { class: 'pg-hint' }, g.intro) : null,
         h('ul', { class: 'pg-rows' }, ...(g.knobs || []).map(knobRow)))),
       advanced.length
-        ? h('details', { class: 'pg-evidence' },
-          h('summary', {}, `Other ATLAS_* variables the code reads (${advanced.length})`),
-          h('ul', { class: 'pg-rows' }, ...advanced.map((a) => knobRow({
-            key: a.key, title: a.key, description: '', kind: 'text', value: a.value, source: a.source, ref: a.ref,
-          }))))
+        ? h('details', { class: 'pg-evidence', id: 'pg-grp-advanced', dataset: { keep: 'advanced' } },
+          h('summary', {}, `Advanced: other ATLAS_* variables the code reads (${advanced.length})`),
+          h('p', { class: 'pg-hint' }, 'Rarely needed: kill switches and overrides for single hooks. Internal wiring that atlas sets itself is not listed. “Undocumented” means the code reads the variable but nothing explains it; open Details to see the reading line.'),
+          h('ul', { class: 'pg-rows' }, ...advanced.map(knobRow)))
         : null,
       ompSection(S.behavior.omp),
     ],
   });
+  queueMicrotask(() => S.mount && applyKnobFilter());
+  return card;
 }
 
 // ---- Ecosystem toggles ------------------------------------------------------
-async function toggleEco(kind, id, label, enabled) {
+// Rebuild one inventory row from fresh data (the current tab only shows one list, so the row is looked up by key).
+function redrawEcoRow(kind, id, msg, tone) {
+  const key = `eco:${kind}:${id}`;
+  const old = [...S.mount.querySelectorAll('li[data-eco]')].find((li) => li.dataset.eco === key);
+  if (!old) return;
+  const list = kind === 'plugin' ? (S.ecosystem.plugins || []) : ((S.ecosystem.mcp && S.ecosystem.mcp.servers) || []);
+  const item = list.find((x) => (kind === 'plugin' ? x.key : x.name) === id);
+  if (!item) return;
+  const next = swapEl(old, () => (kind === 'plugin' ? pluginRow(item) : mcpRow(item)));
+  if (msg) flash(next, msg, tone);
+}
+
+async function toggleEco(kind, id, enabled) {
   const key = `eco:${kind}:${id}`;
   if (S.busy.has(key)) return;
   S.busy.add(key);
-  draw();
+  redrawEcoRow(kind, id);
   try {
-    const res = kind === 'plugin'
-      ? await legacyPost('/api/plugins/toggle', { key: id, enabled })
-      : await legacyPost('/api/mcp/toggle', { name: id, enabled });
+    if (kind === 'plugin') await legacyPost('/api/plugins/toggle', { key: id, enabled });
+    else await legacyPost('/api/mcp/toggle', { name: id, enabled });
     await loadSection('ecosystem', () => S.ctx.api.get('/api/ecosystem'));
-    notify(`${label} ${enabled ? 'enabled' : 'disabled'}. ${res.note || ''}`.trim(), 'ok');
+    S.busy.delete(key);
+    redrawEcoRow(kind, id, `${enabled ? 'Enabled' : 'Disabled'}. Restart Claude Code to apply.`);
   } catch (err) {
     const d = describeError(err);
-    notify([`Could not toggle ${label}`, d.title, d.body].filter(Boolean).join(': '), 'fail');
+    S.busy.delete(key);
+    redrawEcoRow(kind, id, `Not changed: ${[d.title, d.body].filter(Boolean).join(' — ')}`, 'fail');
   }
-  S.busy.delete(key);
-  draw();
 }
 
 function pluginRow(p) {
   const key = `eco:plugin:${p.key}`;
   const host = String(p.key).startsWith('atlas@');
-  return h('li', { class: 'pg-row' },
+  return h('li', { class: 'pg-row', dataset: { eco: key } },
     h('div', { class: 'pg-row-main' },
       h('span', { class: 'pg-row-title' }, p.name || p.key, ' ', h('span', { class: 'pg-mono pg-hint' }, p.version || '')),
       h('p', { class: 'pg-hint' }, p.description || ''),
-      h('p', { class: 'pg-mono pg-hint' }, `${p.key} · ${p.skills || 0} skills · ${p.agents || 0} agents · ${(p.mcp_servers || []).length} MCP`)),
+      h('p', { class: 'pg-mono pg-hint' }, `${p.key} · ${p.skills || 0} skills · ${p.agents || 0} agents · ${(p.mcp_servers || []).length} MCP`),
+      savedTag()),
     h('div', { class: 'pg-row-ctl' },
       host
         ? Badge({ status: 'info', text: 'host plugin' })
         : switchEl(`pg-plugin-${p.key}`, p.enabled, `Enable plugin ${p.name || p.key}`,
-          (next) => toggleEco('plugin', p.key, p.name || p.key, next), S.busy.has(key) || !p.installed)));
+          (next) => toggleEco('plugin', p.key, next), S.busy.has(key) || !p.installed)));
 }
 
 function mcpRow(m) {
   const key = `eco:mcp:${m.name}`;
-  return h('li', { class: 'pg-row' },
+  return h('li', { class: 'pg-row', dataset: { eco: key } },
     h('div', { class: 'pg-row-main' },
       h('span', { class: 'pg-row-title pg-mono' }, m.name),
-      h('p', { class: 'pg-mono pg-hint' }, `${m.origin}${m.origin_detail ? ` · ${m.origin_detail}` : ''} · ${m.transport}`)),
+      h('p', { class: 'pg-mono pg-hint' }, `${m.origin}${m.origin_detail ? ` · ${m.origin_detail}` : ''} · ${m.transport}`),
+      savedTag()),
     h('div', { class: 'pg-row-ctl' },
       switchEl(`pg-mcp-${m.name}`, m.enabled, `Enable MCP server ${m.name}`,
-        (next) => toggleEco('mcp', m.name, m.name, next), S.busy.has(key) || (m.origin === 'plugin' && m.plugin_enabled === false))));
+        (next) => toggleEco('mcp', m.name, next), S.busy.has(key) || (m.origin === 'plugin' && m.plugin_enabled === false))));
 }
 
 const ECO_PAGE = 100;
@@ -435,15 +622,17 @@ function ecoTabs() {
   ];
 }
 
+// Search and tab changes rebuild only the Ecosystem card (focus and caret kept), never the whole page.
 function setEco(patch) {
   Object.assign(S, patch);
-  draw();
+  const old = document.getElementById('pg-sec-ecosystem');
+  if (old) swapEl(old, ecosystemSection);
 }
 
 function ecosystemSection() {
   const err = sectionError('ecosystem', 'Ecosystem');
-  if (err) return Card({ title: 'Ecosystem', children: [err] });
-  if (!S.ecosystem) return Card({ title: 'Ecosystem', children: [h('p', { class: 'pg-hint', role: 'status' }, 'Loading…')] });
+  if (err) return Card({ id: 'pg-sec-ecosystem', title: 'Ecosystem', children: [err] });
+  if (!S.ecosystem) return Card({ id: 'pg-sec-ecosystem', title: 'Ecosystem', children: [h('p', { class: 'pg-hint', role: 'status' }, 'Loading…')] });
   const atlas = S.ecosystem.atlas || {};
   const tabs = ecoTabs();
   const tab = tabs.find((t) => t.id === S.ecoTab) || tabs[0];
@@ -457,8 +646,10 @@ function ecosystemSection() {
   });
   search.addEventListener('input', (ev) => { setEco({ ecoQuery: ev.target.value, ecoLimit: ECO_PAGE }); });
   return Card({
+    id: 'pg-sec-ecosystem',
     title: 'Ecosystem',
     children: [
+      h('p', { class: 'pg-hint' }, 'What Claude Code has installed that atlas can see. Plugin and MCP switches edit Claude Code’s settings and take effect when Claude Code restarts; every other tab is a read-only list of what atlas ships or what you have in ~/.claude.'),
       atlas.hooks_disabled_globally
         ? h('p', { class: 'pg-banner is-warn', role: 'alert' }, 'Hooks are disabled globally (disableAllHooks) — Atlas hooks will not run.')
         : null,
@@ -477,7 +668,6 @@ function ecosystemSection() {
           ? h('p', { class: 'pg-hint' }, `Showing ${shown.length} of ${matched.length}. `,
             h('button', { type: 'button', class: 'btn', onclick: () => setEco({ ecoLimit: S.ecoLimit + ECO_PAGE }) }, 'Show more'))
           : null),
-      h('p', { class: 'pg-hint' }, 'Plugin and MCP toggles are written to Claude settings; reload Claude Code to apply. Other tabs are read-only inventory.'),
     ],
   });
 }
@@ -488,7 +678,7 @@ async function testConnector(c) {
   if (S.busy.has(key)) return;
   S.busy.add(key);
   delete S.tests[c.name];
-  draw();
+  redrawConnector(c.name);
   try {
     const res = await S.ctx.api.post('/api/connectors/test', { name: c.name });
     S.tests[c.name] = res;
@@ -496,24 +686,24 @@ async function testConnector(c) {
     S.tests[c.name] = { ok: false, error: describeError(err).title, hint: describeError(err).body };
   }
   S.busy.delete(key);
-  draw();
+  redrawConnector(c.name);
 }
 
 async function toggleConnector(c, enabled) {
   const key = `eco:mcp:${c.server_name}`;
   if (S.busy.has(key)) return;
   S.busy.add(key);
-  draw();
+  redrawConnector(c.name);
   try {
     await legacyPost('/api/mcp/toggle', { name: c.server_name, enabled });
     await loadSection('connectors', () => S.ctx.api.get('/api/connectors'));
-    notify(`${c.name} ${enabled ? 'enabled' : 'disabled'}. Reload Claude Code to apply.`, 'ok');
+    S.busy.delete(key);
+    redrawConnector(c.name, `${enabled ? 'Enabled' : 'Disabled'}. Restart Claude Code to apply.`);
   } catch (err) {
     const d = describeError(err);
-    notify([`Could not toggle ${c.name}`, d.title, d.body].filter(Boolean).join(': '), 'fail');
+    S.busy.delete(key);
+    redrawConnector(c.name, `Not changed: ${[d.title, d.body].filter(Boolean).join(' — ')}`, 'fail');
   }
-  S.busy.delete(key);
-  draw();
 }
 
 // ---- Connector credentials --------------------------------------------------
@@ -576,7 +766,7 @@ function syncGuard() {
   if (banner) banner.hidden = !credDirty();
   const list = (S.connectors && S.connectors.connectors) || [];
   for (const c of list) {
-    const row = S.mount.querySelector(`li[data-connector="${CSS.escape ? CSS.escape(c.name) : c.name}"]`);
+    const row = S.mount.querySelector(`li.pg-cred-row[data-connector="${CSS.escape ? CSS.escape(c.name) : c.name}"]`);
     if (!row) continue;
     const dirty = connectorDirty(c);
     const busy = S.busy.has(`cred:${c.name}`);
@@ -595,7 +785,7 @@ function updateCredDraft(key, input, baseline) {
 function revertCreds(c) {
   for (const f of c.fields || []) delete S.credDrafts[credKey(f)];
   syncGuard();
-  draw();
+  redrawConnector(c.name);
 }
 
 async function saveCreds(c) {
@@ -611,20 +801,19 @@ async function saveCreds(c) {
     return;
   }
   S.busy.add(busyKey);
-  draw();
+  redrawConnector(c.name);
   try {
     const res = await legacyPost('/api/connectors/env', { updates });
     for (const k of Object.keys(updates)) delete S.credDrafts[k];
-    syncGuard();
     await loadSection('connectors', () => S.ctx.api.get('/api/connectors'));
     const saved = [...new Set([...(res.updated_user_config_keys || []), ...(res.updated_env_keys || [])])];
-    notify(`${c.name}: saved ${saved.join(', ') || Object.keys(updates).join(', ')}. Reload Claude Code so the server re-reads credentials.`, 'ok');
+    S.busy.delete(busyKey);
+    redrawConnector(c.name, `Saved ${saved.join(', ') || Object.keys(updates).join(', ')}. Restart Claude Code so the server re-reads credentials.`);
   } catch (err) {
     const d = describeError(err);
-    notify([`Could not save ${c.name} credentials`, d.title, d.body].filter(Boolean).join(': '), 'fail');
+    S.busy.delete(busyKey);
+    redrawConnector(c.name, `Not saved: ${[d.title, d.body].filter(Boolean).join(' — ')}`, 'fail');
   }
-  S.busy.delete(busyKey);
-  draw();
 }
 
 function credFieldRow(c, f) {
@@ -688,7 +877,8 @@ function connectorRow(c) {
       (c.missing_required || []).length
         ? h('p', { class: 'pg-hint' }, `Missing: ${c.missing_required.join(', ')}.`)
         : null,
-      testLine(S.tests[c.name])),
+      testLine(S.tests[c.name]),
+      savedTag()),
     h('div', { class: 'pg-row-ctl' },
       h('button', {
         type: 'button', class: 'btn', disabled: testing, 'aria-label': `Test connector ${c.name}`,
@@ -709,20 +899,38 @@ function connectorRow(c) {
       : h('p', { class: 'pg-hint pg-cred-none' }, 'No credential fields declared for this connector.'));
 }
 
-function connectorsSection() {
-  const err = sectionError('connectors', 'Connectors');
-  if (err) return Card({ title: 'Connectors', children: [err] });
-  if (!S.connectors) return Card({ title: 'Connectors', children: [h('p', { class: 'pg-hint', role: 'status' }, 'Loading…')] });
-  const list = S.connectors.connectors || [];
+function connectorsTitle(list) {
   const ready = list.filter((c) => c.configured_hint).length;
   const degraded = list.filter((c) => c.health === 'degraded').length;
+  return `Connectors (${ready}/${list.length} configured${degraded ? `, ${degraded} degraded` : ''})`;
+}
+
+// Rebuild one connector row (and the card's count) from state, leaving the rest of the page untouched.
+function redrawConnector(name, msg, kind) {
+  const list = (S.connectors && S.connectors.connectors) || [];
+  const c = list.find((x) => x.name === name);
+  const old = [...S.mount.querySelectorAll('li.pg-cred-row[data-connector]')].find((li) => li.dataset.connector === name);
+  if (!c || !old) return;
+  const next = swapEl(old, () => connectorRow(c));
+  const head = S.mount.querySelector('#pg-sec-connectors h2');
+  if (head) head.textContent = connectorsTitle(list);
+  if (msg) flash(next, msg, kind);
+  syncGuard();
+}
+
+function connectorsSection() {
+  const err = sectionError('connectors', 'Connectors');
+  if (err) return Card({ id: 'pg-sec-connectors', title: 'Connectors', children: [err] });
+  if (!S.connectors) return Card({ id: 'pg-sec-connectors', title: 'Connectors', children: [h('p', { class: 'pg-hint', role: 'status' }, 'Loading…')] });
+  const list = S.connectors.connectors || [];
   return Card({
-    title: `Connectors (${ready}/${list.length} configured${degraded ? `, ${degraded} degraded` : ''})`,
+    id: 'pg-sec-connectors',
+    title: connectorsTitle(list),
     actions: [h('span', { class: 'pg-hint' }, S.connectors.settings_path || '')],
     children: [
       h('p', { class: 'pg-banner is-warn', id: 'pg-cred-dirty', role: 'status', hidden: !credDirty() },
         'Unsaved credential edits. Save or Revert each connector before leaving; the browser will also ask before reload or close.'),
-      h('p', { class: 'pg-hint' }, 'Saved credentials are never shown or read back — a field only reports set or missing, and typing a new value replaces it. Only fields you changed are sent. Test starts the connector and completes an MCP handshake; it proves the bundle runs, not that vendor credentials are accepted — use the connector’s own status tool for that.'),
+      h('p', { class: 'pg-hint' }, 'Vendor connectors atlas ships as MCP servers (CrowdStrike, NinjaOne, Vanta, …). Each needs its own credentials before Claude Code can use it. Saved credentials are never shown or read back — a field only reports set or missing, and typing a new value replaces it. Only fields you changed are sent. Test starts the connector and completes an MCP handshake; it proves the bundle runs, not that vendor credentials are accepted — use the connector’s own status tool for that. Enabling or disabling a connector, or saving credentials, takes effect when Claude Code restarts.'),
       list.length ? h('ul', { class: 'pg-rows' }, ...list.map(connectorRow)) : h('p', { class: 'pg-hint' }, 'No connectors declared.'),
     ],
   });
@@ -738,11 +946,8 @@ function ago(epochS) {
 // ---- Agents editor ----------------------------------------------------------
 function agentsSection() {
   const err = sectionError('agents', 'Agents');
-  if (err) return Card({ title: 'Agents', children: [err] });
+  if (err) return Card({ id: 'pg-sec-agents', title: 'Agents', children: [err] });
   const projects = legacyProjects();
-  if (!projects.length) {
-    return Card({ title: 'Agents', children: [h('p', { class: 'pg-hint' }, 'No registered projects yet. Agent overrides are stored per project; run Claude Code in a project first.')] });
-  }
   const roster = agentRoster();
   const rosterTable = roster.length
     ? h('div', { class: 'pg-table-wrap' }, h('table', { class: 'pg-table', 'aria-label': 'Agent roster' },
@@ -760,6 +965,11 @@ function agentsSection() {
           h('td', { title: d.last_used ? new Date(d.last_used * 1000).toISOString() : '' }, d.last_used ? ago(d.last_used) : 'never'));
       }))))
     : null;
+  if (!projects.length) {
+    return Card({ id: 'pg-sec-agents', title: 'Agents', children: [
+      h('p', { class: 'pg-hint' }, 'No registered projects yet, so overrides cannot be edited. The plugin’s own agents are listed below; run Claude Code or omp in a project to register it.'),
+      rosterTable] });
+  }
   const entry = roster.find((a) => a.name === S.agentName);
   const busy = S.busy.has('agents');
   const source = !entry ? '—' : entry.overridden ? 'overridden (project)' : entry.source === 'override' ? 'override (project-only)' : 'plugin';
@@ -772,6 +982,7 @@ function agentsSection() {
   body.addEventListener('input', (e) => { S.agentBody = e.target.value; });
   const bodyErr = S.errors.agentBody ? describeError(S.errors.agentBody) : null;
   return Card({
+    id: 'pg-sec-agents',
     title: 'Agents',
     children: [
       h('p', { class: 'pg-hint' }, 'Plugin agents are listed beside this project’s same-name overrides in <project>/.claude/agents/. Save writes a project override; Reset deletes it so the plugin definition applies again. Dispatch counts come from the dispatches table; its model column is not populated, so the model shown is the agent definition’s, not what actually ran.'),
@@ -802,7 +1013,9 @@ function moveNav(order, i, d) {
   if (j < 0 || j >= order.length) return;
   const next = [...order];
   [next[i], next[j]] = [next[j], next[i]];
-  savePrefs({ nav_order: next }, 'Navigation order saved');
+  savePrefs({ nav_order: next }, 'pg-pref-nav-status').then((ok) => {
+    if (ok) swapEl(S.mount.querySelector('.pg-nav-edit'), () => navEditor(prefs()));
+  });
 }
 
 function navEditor(p) {
@@ -824,18 +1037,18 @@ function refreshField(p) {
     'aria-describedby': 'pg-pref-refresh-hint',
   });
   const err = h('p', { class: 'pg-field-error', role: 'alert' }, '');
-  const commit = () => {
+  const commit = async () => {
     const n = Number(input.value);
     if (!Number.isInteger(n) || n < 2 || n > 300) { err.textContent = 'Enter a whole number from 2 to 300.'; return; }
     err.textContent = '';
-    if (n !== p.refresh_seconds) savePrefs({ refresh_seconds: n }, 'Refresh interval saved');
+    if (n !== prefs().refresh_seconds && !(await savePrefs({ refresh_seconds: n }, 'pg-pref-refresh-status'))) input.value = String(prefs().refresh_seconds);
   };
   input.addEventListener('change', commit);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } });
   return h('div', { class: 'pg-field' },
-    h('label', { class: 'pg-label', for: 'pg-pref-refresh' }, 'Polling fallback interval (seconds)'),
-    input,
-    h('p', { class: 'pg-hint', id: 'pg-pref-refresh-hint' }, 'Used only when the live stream is unavailable.'),
+    h('label', { class: 'pg-label', for: 'pg-pref-refresh' }, 'Fallback refresh interval (seconds)'),
+    h('span', { class: 'pg-inline' }, input, savedTag('pg-pref-refresh-status')),
+    h('p', { class: 'pg-hint', id: 'pg-pref-refresh-hint' }, 'How often pages re-fetch when the live connection to the dashboard drops. It does not slow the normal live updates. 2 to 300.'),
     err);
 }
 
@@ -843,9 +1056,17 @@ function integrationsSection() {
   return Card({
     id: 'integrations',
     title: 'Integrations',
-    actions: [h('span', { class: 'pg-hint' }, 'herdr tooling, read-only')],
+    actions: [h('span', { class: 'pg-hint' }, 'herdr tooling and atlas MCP connectors, read-only')],
     children: [S.integrations || (S.integrations = IntegrationsPanel())],
   });
+}
+
+// Selects revert to the saved value when a save fails, so the control never lies about what is stored.
+function prefSelect(id, label, current, options, patchOf, hint) {
+  const sel = selectEl(id, current, options, async (v) => {
+    if (!(await savePrefs(patchOf(v), `${id}-status`))) sel.value = current;
+  }, hint ? `${id}-hint` : undefined);
+  return field(id, label, h('span', { class: 'pg-inline' }, sel, savedTag(`${id}-status`)), hint);
 }
 
 function prefsSection() {
@@ -860,34 +1081,43 @@ function prefsSection() {
     projectOptions.push({ value: p.default_project, label: p.default_project });
   }
   return Card({
+    id: 'pg-sec-prefs',
     title: 'Dashboard preferences',
     children: [
+      h('p', { class: 'pg-hint' }, 'How this dashboard looks and behaves. Each change is saved as soon as you make it and applies to this dashboard only; it never touches Claude Code or omp.'),
       fail,
       h('div', { class: 'pg-form' },
-        field('pg-pref-theme', 'Theme', selectEl('pg-pref-theme', p.theme,
+        prefSelect('pg-pref-theme', 'Theme', p.theme,
           [{ value: 'dark', label: 'Dark' }, { value: 'light', label: 'Light' }, { value: 'system', label: 'Match system' }],
-          (v) => savePrefs({ theme: v }, 'Theme saved'))),
-        field('pg-pref-density', 'Density', selectEl('pg-pref-density', p.density,
+          (v) => ({ theme: v }), 'Colour scheme of this dashboard.'),
+        prefSelect('pg-pref-density', 'Density', p.density,
           [{ value: 'comfortable', label: 'Comfortable' }, { value: 'compact', label: 'Compact' }],
-          (v) => savePrefs({ density: v }, 'Density saved'))),
-        field('pg-pref-project', 'Default project', selectEl('pg-pref-project', p.default_project, projectOptions,
-          (v) => savePrefs({ default_project: v }, 'Default project saved')), 'Opened when the dashboard loads.'),
+          (v) => ({ density: v }), 'Row spacing across every page.'),
+        prefSelect('pg-pref-project', 'Default project', p.default_project, projectOptions,
+          (v) => ({ default_project: v }), 'The project selected when the dashboard opens. Takes effect the next time you open it.'),
         refreshField(p),
-        h('fieldset', { class: 'pg-fieldset' },
-          h('legend', { class: 'pg-label' }, 'Noise filters'),
-          h('div', { class: 'pg-row' },
-            h('div', { class: 'pg-row-main' },
-              h('span', { class: 'pg-row-title' }, 'Collapse duplicate events'),
-              h('p', { class: 'pg-hint' }, 'Identical events show once with a ×count.')),
-            h('div', { class: 'pg-row-ctl' },
-              switchEl('pg-pref-collapse', p.noise.collapse_duplicates, 'Collapse duplicate events',
-                (next) => savePrefs({ noise: { ...p.noise, collapse_duplicates: next } }, 'Noise filter saved'), S.busy.has('prefs')))),
-          field('pg-pref-minsev', 'Hide events below severity', selectEl('pg-pref-minsev', p.noise.min_severity,
-            [{ value: 'info', label: 'Show everything' }, { value: 'warn', label: 'Warnings and failures' }, { value: 'fail', label: 'Failures only' }],
-            (v) => savePrefs({ noise: { ...p.noise, min_severity: v } }, 'Noise filter saved')))),
-        h('fieldset', { class: 'pg-fieldset' }, h('legend', { class: 'pg-label' }, 'Navigation order'), navEditor(p))),
+        prefSelect('pg-pref-minsev', 'Activity page: hide events below', p.noise.min_severity,
+          [{ value: 'info', label: 'Show everything' }, { value: 'warn', label: 'Warnings and failures' }, { value: 'fail', label: 'Failures only' }],
+          (v) => ({ noise: { ...prefs().noise, min_severity: v } }), 'Filters the Activity page only. Duplicate events are always collapsed with a ×count.'),
+        h('fieldset', { class: 'pg-fieldset' }, h('legend', { class: 'pg-label' }, 'Sidebar order'),
+          h('p', { class: 'pg-hint' }, 'Move pages up or down in the left sidebar. ', savedTag('pg-pref-nav-status')),
+          navEditor(p))),
     ],
   });
+}
+
+const SECTIONS = [
+  ['pg-sec-prefs', 'Preferences'], ['integrations', 'Integrations'], ['pg-sec-behavior', 'Behavior'],
+  ['pg-sec-ecosystem', 'Ecosystem'], ['pg-sec-connectors', 'Connectors'], ['pg-sec-agents', 'Agents'],
+];
+
+// A jump bar for a very long page. Buttons, not links: a "#id" href would be read as a route change.
+function sectionIndex() {
+  return h('nav', { class: 'pg-index', 'aria-label': 'Settings sections' },
+    ...SECTIONS.map(([id, label]) => h('button', {
+      type: 'button', class: 'pg-tab',
+      onclick: () => { const el = document.getElementById(id); if (el) el.scrollIntoView({ block: 'start' }); },
+    }, label)));
 }
 
 function draw() {
@@ -895,17 +1125,21 @@ function draw() {
   const active = document.activeElement;
   const keepId = active && S.mount.contains(active) ? active.id : '';
   const caret = keepId && typeof active.selectionStart === 'number' ? [active.selectionStart, active.selectionEnd] : null;
-  const scroll = S.mount.scrollTop;
-  replace(S.mount, 
+  const main = scroller();
+  const scroll = main ? main.scrollTop : 0;
+  const open = new Set([...S.mount.querySelectorAll('details[data-keep]')].filter((d) => d.open).map((d) => d.dataset.keep));
+  replace(S.mount,
     h('header', { class: 'pg-head' },
       h('h1', { class: 'pg-title' }, 'Settings'),
-      h('p', { class: 'pg-sub' }, 'Behavior and ecosystem changes are written to Claude settings and apply after you reload Claude Code. Preferences apply to this dashboard immediately.')),
+      h('p', { class: 'pg-sub' }, 'Dashboard preferences apply to this page at once. Behavior switches are written to Claude Code settings and the atlas store; a session that is already running keeps its old values until it restarts.'),
+      sectionIndex()),
     h('div', { class: 'pg-settings' },
       prefsSection(), integrationsSection(), behaviorSection(), ecosystemSection(), connectorsSection(), agentsSection()));
-  S.mount.scrollTop = scroll;
+  for (const d of S.mount.querySelectorAll('details[data-keep]')) if (open.has(d.dataset.keep)) d.open = true;
+  if (main) main.scrollTop = scroll;
   if (keepId) {
     const el = S.mount.querySelector(`#${CSS.escape ? CSS.escape(keepId) : keepId}`);
-    if (el && typeof el.focus === 'function') el.focus();
+    if (el && typeof el.focus === 'function') el.focus({ preventScroll: true });
     if (el && caret && typeof el.setSelectionRange === 'function') {
       try { el.setSelectionRange(caret[0], caret[1]); } catch { /* input types without a caret */ }
     }

@@ -576,7 +576,7 @@ class ChannelsTest(IrcTestBase):
                 "lead": "lead-a",
                 "members": [
                     {"name": "lead-a", "role": "lead", "parent": None},
-                    {"name": "sub-1", "role": "subagent", "parent": "lead-a"},
+                    {"name": "sub-1", "role": "subagent", "parent": "lead-a", "joined": time.time()},
                 ],
                 "project_root": self.root,
                 "branch": "main",

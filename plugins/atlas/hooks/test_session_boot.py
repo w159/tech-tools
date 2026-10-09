@@ -1019,5 +1019,102 @@ class EnsureColonyCacheTest(unittest.TestCase):
             run.assert_called_once()
 
 
+class WorkerIdentityTest(unittest.TestCase):
+    """10.4.3: workers never steal carry-over; a Claude Code lead pins ATLAS_LEAD_NAME via CLAUDE_ENV_FILE."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.root = os.path.join(self.tmp, "proj")
+        os.makedirs(os.path.join(self.root, ".atlas"))
+        self.env_file = os.path.join(self.tmp, "claude.env")
+        self.env = {
+            "ATLAS_DB": os.path.join(self.tmp, "atlas.db"),
+            "ATLAS_DASHBOARD": "off",
+            "ATLAS_COLONY": "off",
+            "ATLAS_TODO": "on",
+            "ATLAS_WORKER_NAME": "",
+            "ATLAS_LEAD_NAME": "",
+            "CLAUDE_ENV_FILE": self.env_file,
+        }
+
+    def boot(self, sid, **over):
+        env = dict(self.env, **over)
+        return run_main_inprocess({"session_id": sid, "cwd": self.root}, env)
+
+    def test_worker_session_does_not_carry_other_sessions_items(self):
+        import atlas_todo
+
+        atlas_todo.mirror(
+            self.root, [{"content": "lead item", "status": "pending"}], "lead-sid"
+        )
+        self.boot("worker-sid", ATLAS_WORKER_NAME="Alpha")
+        item = atlas_todo.load(self.root)["items"][0]
+        self.assertEqual((item["session_id"], item["origin"]), ("lead-sid", "session"))
+        # a non-worker session still carries it (the behaviour a worker must not trigger)
+        self.boot("next-sid")
+        item = atlas_todo.load(self.root)["items"][0]
+        self.assertEqual((item["session_id"], item["origin"]), ("next-sid", "carried"))
+
+    def test_lead_gets_exactly_one_export_line(self):
+        self.boot("01a11c99-aaaa")
+        self.boot("01a11c99-aaaa")
+        with open(self.env_file) as f:
+            lines = f.read().splitlines()
+        self.assertEqual(lines, ["export ATLAS_LEAD_NAME=lead-01a11c"])
+
+    def test_worker_and_preset_lead_name_write_nothing(self):
+        self.boot("sid-1234567", ATLAS_WORKER_NAME="Beta")
+        self.boot("sid-1234567", ATLAS_LEAD_NAME="custom")
+        self.assertFalse(os.path.exists(self.env_file))
+
+
+class EnsureDashboardTempEnvTest(unittest.TestCase):
+    """Boot under scratch state must never reach the shared :7421 daemon."""
+
+    def _run(self, **env):
+        drop = (
+            "ATLAS_DASHBOARD",
+            "ATLAS_DASHBOARD_PORT",
+            "ATLAS_HOME",
+            "ATLAS_DASHBOARD_DB",
+        )
+        base = {k: v for k, v in os.environ.items() if k not in drop}
+        base.update(env)
+        fake = mock.Mock(
+            returncode=0,
+            stdout='{"url": "http://127.0.0.1:7421/", "already_running": true}',
+        )
+        with (
+            mock.patch.dict(os.environ, base, clear=True),
+            mock.patch("subprocess.run", return_value=fake) as run,
+        ):
+            return session_boot.ensure_dashboard(), run
+
+    def test_temp_home_skips_without_spawn(self):
+        with tempfile.TemporaryDirectory() as home:
+            out, run = self._run(HOME=home)
+        self.assertIsNone(out)
+        run.assert_not_called()
+
+    def test_temp_db_skips_without_spawn(self):
+        out, run = self._run(
+            HOME="/Users/someone", ATLAS_DASHBOARD_DB="/tmp/x/atlas.db"
+        )
+        self.assertIsNone(out)
+        run.assert_not_called()
+
+    def test_temp_home_with_explicit_spare_port_is_allowed(self):
+        with tempfile.TemporaryDirectory() as home:
+            out, run = self._run(HOME=home, ATLAS_DASHBOARD_PORT="17969")
+        run.assert_called_once()
+        self.assertIn("dashboard:", out)
+
+    def test_real_home_still_ensures(self):
+        out, run = self._run(HOME="/Users/someone")
+        run.assert_called_once()
+        self.assertIn("dashboard:", out)
+
+
 if __name__ == "__main__":
     unittest.main()

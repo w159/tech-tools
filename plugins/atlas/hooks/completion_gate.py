@@ -134,6 +134,7 @@ Stdlib only.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
@@ -569,10 +570,8 @@ def _run_used_worktrees(session_id: str) -> bool:
         return False
     finally:
         if conn is not None:
-            try:
+            with contextlib.suppress(Exception):
                 conn.close()
-            except Exception:
-                pass
 
 
 _IN_FLIGHT_DISPATCH_TYPES = {"subagent", "workflow", "teammate"}
@@ -792,25 +791,25 @@ def _reason(
         )
     if unverified > 0:
         parts.append(
-            "  (g) Law 5 -- verification coverage: %d implementer dispatch(es) "
+            f"  (g) Law 5 -- verification coverage: {unverified} implementer dispatch(es) "
             "shipped code this run with nothing independent checking them. Two ways "
             "to close this, cheapest first: (1) run the failing check yourself -- the "
             "project's test/lint/typecheck gate -- and record the result with "
-            'python3 "%s" --id <stage> '
+            f'python3 "{SCRIPTS_DIR / "atlas_finding.py"}" --id <stage> '
             "--status verified --title '<one line>' --evidence '<test id>' "
             "--reproduction '<command>'; a "
             "`verified` entry stamped during this run pairs an implementer exactly "
             "like a dispatch does, and a test cannot hallucinate. (2) Dispatch "
             "atlas:verifier only when no test can express the check. Then retry Stop."
-            % (unverified, SCRIPTS_DIR / "atlas_finding.py")
+            ""
         )
     if git_error:
         parts.append(
             "  (f/g) Could not verify docs drift or verifier coverage: git is "
-            "unavailable, so the gate cannot inspect the run's diff (%s). The "
+            f"unavailable, so the gate cannot inspect the run's diff ({git_error}). The "
             "gate must not let unverified code ship on the assumption that "
             "nothing changed. -> Ensure git is reachable from this environment "
-            "and retry Stop." % git_error
+            "and retry Stop."
         )
     if roadmap_not_reconciled:
         parts.append(
@@ -835,34 +834,28 @@ def _reason(
         )
     if open_todos > 0:
         parts.append(
-            "  (i) Todo list not drained: %d item(s) are still open (transcript "
+            f"  (i) Todo list not drained: {open_todos} item(s) are still open (transcript "
             "TodoWrite, the .atlas/.run/todos.json board, or the LEDGER line). An "
             "item is `completed` only when its check passed -- not when a subagent "
             "returned. -> Finish them, or mark what you are deliberately leaving and "
-            "say so out loud in your reply, then retry Stop." % open_todos
+            "say so out loud in your reply, then retry Stop."
         )
     if worktrees:
         parts.append(
-            "  (j) %d git worktree(s) from this run are still on disk: %s. A worktree "
+            f"  (j) {len(worktrees)} git worktree(s) from this run are still on disk: {', '.join(worktrees[:4])}. A worktree "
             "holding changes does not clean itself up. -> For each: commit inside it if "
             "`git -C <tree> status --porcelain` is non-empty, merge it into the local "
             "branch (git merge --no-ff <branch>), then `git worktree remove` it. Offer "
             "the push; never run it unasked."
-            % (len(worktrees), ", ".join(worktrees[:4]))
         )
     if name_violations:
         parts.append(
-            "  (l) %d docs artifact(s) this run touched are not named date-first: "
-            "%s. A dated record (plan, spec, lesson, decision, audit, finding) is "
+            f"  (l) {len(name_violations)} docs artifact(s) this run touched are not named date-first: "
+            f"{'; '.join(p for p, _ in name_violations[:5])}. A dated record (plan, spec, lesson, decision, audit, finding) is "
             "<YYYY-MM-DD>-<slug> so a plain listing sorts chronologically; a "
             "trailing date or a leading sequence number sorts by subject instead. "
             "-> Rename with `git mv` (keep the history), then re-check with "
-            'python3 "%s".'
-            % (
-                len(name_violations),
-                "; ".join(p for p, _ in name_violations[:5]),
-                SCRIPTS_DIR / "lint_docs_names.py",
-            )
+            f'python3 "{SCRIPTS_DIR / "lint_docs_names.py"}".'
         )
     if missing_delegation:
         parts.append(
@@ -1097,6 +1090,8 @@ def main() -> int:
             )
             if failing
         ]
+        if _block_loop_exhausted(session, failed):
+            return 0
         _record_gate_block(data.get("session_id", ""), failed)
         for letter, needs_marker in (
             ("n", header_failing),
@@ -1155,15 +1150,13 @@ def _finalize_db(session_id: str) -> None:
         # Best-effort for the Stop itself, but an unusable DB means no run row,
         # so is_orchestrating is false and every gate below is inert: trace it.
         atlas_hook_guard.fault(
-            "completion_gate", "atlas DB unusable, gates inert: %s" % exc
+            "completion_gate", f"atlas DB unusable, gates inert: {exc}"
         )
-        try:
+        with contextlib.suppress(Exception):
             sys.stderr.write(
-                "[atlas] completion_gate: atlas DB unusable (%s); run not tracked, "
-                "orchestration gates inert\n" % exc
+                f"[atlas] completion_gate: atlas DB unusable ({exc}); run not tracked, "
+                "orchestration gates inert\n"
             )
-        except Exception:
-            pass
     finally:
         if _conn is not None:
             _conn.close()
@@ -1221,6 +1214,57 @@ def _gate_block_snippet(failed: list) -> str:
     return "conditions: " + ",".join(failed) + " (" + names + ")"
 
 
+# Identical consecutive blocks tolerated per session. The gate re-blocks every
+# Stop by design, but an unchanged condition set 4+ times in a row is a loop the
+# model cannot escape (Stop bursts ~13s apart tripped the circuit breaker).
+BLOCK_LOOP_LIMIT = 3
+
+
+def _block_loop_exhausted(session_id: str, failed: list) -> bool:
+    """True once the same `failed` letters blocked BLOCK_LOOP_LIMIT times in a
+    row for this session: the caller then ALLOWS the Stop, after one friction
+    row. State: `loop-<session>` marker holding `<letters> <count>`. Never
+    raises; an unwritable marker means no cap, the lesser failure."""
+    if not session_id:
+        return False
+    sig = ",".join(failed)
+    state_dir = atlas_hook_guard._state_dir()
+    path = os.path.join(
+        state_dir, "gate-loop-" + re.sub(r"[^A-Za-z0-9_.-]", "_", session_id)
+    )
+    count = 1
+    with contextlib.suppress(OSError, ValueError):
+        with open(path, encoding="utf-8") as fh:
+            last_sig, _, n = fh.read().strip().rpartition(" ")
+        if last_sig == sig:
+            count = int(n) + 1
+    try:
+        os.makedirs(state_dir, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(f"{sig} {count}")
+    except OSError:
+        return False
+    if count <= BLOCK_LOOP_LIMIT:
+        return False
+    conn = None
+    try:
+        with contextlib.suppress(Exception):
+            import atlas_db
+
+            conn = atlas_db.connect()
+            atlas_db.record_friction(
+                conn,
+                session_id,
+                "gate_block_loop",
+                weight=float(count),
+                snippet=f"allowed Stop after {count - 1} identical blocks: {_gate_block_snippet(failed)}",
+            )
+    finally:
+        if conn is not None:
+            conn.close()
+    return True
+
+
 def _record_gate_block(session_id: str, failed: list) -> None:
     """Persist one friction_events row per block decision, so a gate block is a
     measurable event (facets.gate_block_count) and not just a line of stdout the
@@ -1229,18 +1273,17 @@ def _record_gate_block(session_id: str, failed: list) -> None:
         return
     conn = None
     try:
-        import atlas_db
+        with contextlib.suppress(Exception):
+            import atlas_db
 
-        conn = atlas_db.connect()
-        atlas_db.record_friction(
-            conn,
-            session_id,
-            "gate_block",
-            weight=float(len(failed)),
-            snippet=_gate_block_snippet(failed),
-        )
-    except Exception:
-        pass
+            conn = atlas_db.connect()
+            atlas_db.record_friction(
+                conn,
+                session_id,
+                "gate_block",
+                weight=float(len(failed)),
+                snippet=_gate_block_snippet(failed),
+            )
     finally:
         if conn is not None:
             conn.close()
@@ -1550,7 +1593,7 @@ def _switch_off(name: str) -> bool:
 def _contract_marker(cond: str, session_id: str) -> str:
     return os.path.join(
         CONTRACT_GATE_MARKER_DIR,
-        "%s-%s" % (cond, re.sub(r"[^A-Za-z0-9_.-]", "_", session_id)),
+        f"{cond}-{re.sub(r'[^A-Za-z0-9_.-]', '_', session_id)}",
     )
 
 
@@ -1629,7 +1672,7 @@ def _status_header_would_block(data: dict, contract: dict | None) -> bool:
 
 def _header_reason_part(contract: dict | None) -> str:
     phases = ", ".join(
-        "%s %s" % (p.get("id"), p.get("glyph"))
+        f"{p.get('id')} {p.get('glyph')}"
         for p in ((contract or {}).get("phases") or [])
         if isinstance(p, dict)
     )
@@ -1697,22 +1740,16 @@ def _missing_required_phases(
 
 def _phases_reason_part(missing: list, contract: dict | None, session_id: str) -> str:
     prefix = str((contract or {}).get("itemPhasePrefix") or "[<phase>] ")
+    todo_script = SCRIPTS_DIR / "atlas_todo.py"
     return (
         "  (o) Phased todo: this run shipped code, but this session's todo items do "
-        "not cover the required phase(s): %s. A phase rides on an item either as its "
-        "`phase` field (omp todo phases) or as a `%s` content prefix (Claude "
-        "TodoWrite), for example `[%s] <step>`. Two ways to fix it: (1) re-tag "
+        f"not cover the required phase(s): {', '.join(missing)}. A phase rides on an item either as its "
+        f"`phase` field (omp todo phases) or as a `{prefix}` content prefix (Claude "
+        f"TodoWrite), for example `[{missing[0]}] <step>`. Two ways to fix it: (1) re-tag "
         "your items with that prefix in TodoWrite, or (2) run "
-        'python3 "%s" scaffold '
-        '--task "<title>" --session %s '
+        f'python3 "{todo_script}" scaffold '
+        f'--task "<title>" --session {session_id or "<id>"} '
         "and then retry Stop. (This check blocks once per session.)"
-        % (
-            ", ".join(missing),
-            prefix,
-            missing[0],
-            SCRIPTS_DIR / "atlas_todo.py",
-            session_id or "<id>",
-        )
     )
 
 
@@ -1805,16 +1842,11 @@ def _colony_channel_used(root: Path, session_id: str, started: float | None) -> 
 
         conn = atlas_db.connect()
         try:
-            rid = atlas_db.current_run_id(conn, session_id) or atlas_db.latest_run_id(
-                conn, session_id
-            )
-            if (
-                rid is not None
-                and conn.execute(
-                    "SELECT 1 FROM events WHERE run_id=? AND path LIKE 'agent://%' LIMIT 1",
-                    (rid,),
-                ).fetchone()
-            ):
+            if conn.execute(
+                "SELECT 1 FROM events WHERE path LIKE 'agent://%' AND ts>=? "
+                "AND run_id IN (SELECT id FROM runs WHERE session_id=?) LIMIT 1",
+                (since, session_id),
+            ).fetchone():
                 return True
             return bool(
                 conn.execute(
@@ -1830,16 +1862,15 @@ def _colony_channel_used(root: Path, session_id: str, started: float | None) -> 
 
 
 def _colony_reason_part(workers: int | None) -> str:
+    count = workers if workers is not None else "two or more"
     return (
-        "  (p) Colony channel: this run dispatched %s atlas workers but the colony "
+        f"  (p) Colony channel: this run dispatched {count} atlas workers but the colony "
         "channel carried nothing -- no worker board note under .atlas/.run/board/ "
         "and no IRC/SendMessage traffic was recorded for the run. Workers that "
         "never report on the channel leave the lead synthesizing from nothing. "
-        "-> Have each worker post its handoff note "
-        '(`atlas_todo.py note --owner <worker> --to lead "<summary>"`), or state '
-        "in your final reply why the work was independent and needed no handoff, "
+        "-> Post one handoff note per worker: "
+        f'`python3 "{SCRIPTS_DIR / "atlas_todo.py"}" note --owner <worker> --to lead "<summary>"`, '
         "then retry Stop. (This check blocks once per session.)"
-        % (workers if workers is not None else "two or more")
     )
 
 

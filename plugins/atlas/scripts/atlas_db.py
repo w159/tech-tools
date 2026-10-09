@@ -1324,7 +1324,14 @@ def update_tool_result(conn, tool_use_id, is_error, result_bytes, text=None):
     )
 
 
-ERROR_CLASSES = ("deny", "model_misuse", "environment", "tool_fault", "unknown")
+ERROR_CLASSES = (
+    "deny",
+    "model_misuse",
+    "environment",
+    "user_code",
+    "tool_fault",
+    "unknown",
+)
 
 _MODEL_MISUSE = re.compile(
     r"(without (first )?read|has not been read|must (first )?read|read (it|the file) first"
@@ -1334,7 +1341,7 @@ _MODEL_MISUSE = re.compile(
     r"|inputvalidationerror|missing (a )?required|required (parameter|argument|field)"
     r"|is required|unexpected (keyword|parameter|argument)|schema"
     r"|nothing to wait for|fact-forcing gate|edit rejected for|input header must be|retryable"
-    r"|invalid args for|content is required"
+    r"|invalid args for|content is required|does not accept"
     r"|no preceding hunk header|close enough match|found \d+ occurrences"
     r"|did not answer|path escapes project root|refusing to scan|none of the requested paths"
     r"|unknown key|queries array limited|invalid (regex|glob|read mode)"
@@ -1365,7 +1372,8 @@ _ENVIRONMENT = re.compile(
     r"|tmux pane|temporarily unavailable|no verdict|was denied or failed"
     r"|previous omp process exited|(?:was|were|input was) cancelled|cancelled by the user"
     r"|session closed|detached frame|cannot find module|auth check: failed"
-    r"|unknown tool from js runtime|multiple windows match|is not alive)",
+    r"|unknown tool from js runtime|multiple windows match|is not alive"
+    r"|chroma|fetch failed|claude_mem_runtime|fell back|falling back)",
     re.I,
 )
 _ATLAS_FRAME = r'File "[^"\n]*(?:plugins/atlas/|/\.(?:claude|omp)/[^"\n]*atlas[^"\n/]*/)[^"\n]*\.py"'
@@ -1374,6 +1382,23 @@ _TOOL_FAULT = re.compile(
     re.I,
 )
 _TOOL_FAULT_SCRIPT = re.compile(r"can't open file '[^']*scripts/atlas_[^']*\.py'", re.I)
+# A failed run of the user's own code (eval cell, shell one-liner, ctx_execute) is a
+# traceback or a bare `XError:` line that names no atlas frame (_TOOL_FAULT ran first).
+_CODE_TOOL = re.compile(r"(?:^|__|_)(?:bash|shell|eval|execute|execute_file)$", re.I)
+_USER_CODE = re.compile(
+    r"\s*(?:Traceback \(most recent call last\)"
+    r"|(?:Syntax|Type|Reference|Range|Value|Key|Name|Attribute|Import|Index|Assertion"
+    r"|ModuleNotFound|ZeroDivision|FileNotFound)Error\b)"
+)
+# An error-flagged result whose text says the call recovered (e.g. claude-mem
+# falling back to SQLite when Chroma is down): not a tool failure.
+_RECOVERED = re.compile(
+    r"(?:fell|falling|falls) back to|fallback (?:succeeded|used|result)", re.I
+)
+
+
+def is_recovered_error(snippet):
+    return bool(snippet and _RECOVERED.search(snippet))
 
 
 # error_snippet_of keeps only the head, so a shell result that fills the whole cap
@@ -1400,6 +1425,8 @@ def classify_error(tool_name, snippet, denied):
         and ("atlas_" in snippet or "plugins/atlas" in snippet)
     ):
         return "tool_fault"
+    if _CODE_TOOL.search(tool_name or "") and _USER_CODE.match(snippet):
+        return "user_code"
     if _MODEL_MISUSE.search(snippet):
         return "model_misuse"
     if _ENVIRONMENT.search(snippet):
@@ -1547,6 +1574,22 @@ def is_tmp_path(path):
     roots = os_tmp_roots()
     return _under_any(str(path), roots) or _under_any(
         os.path.realpath(str(path)), roots
+    )
+
+
+def tmp_sessions_sql():
+    """(subquery, args) selecting session_ids whose transcript lives under the OS
+    temp dir: test/benchmark fixtures, never real usage. Use as
+    `session_id NOT IN (<subquery>)` so fixture leakage cannot skew a miner."""
+    likes = [
+        r.rstrip("/").replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        + "/%"
+        for r in sorted(os_tmp_roots())
+    ]
+    return (
+        "SELECT session_id FROM session_logs WHERE "
+        + " OR ".join("transcript_path LIKE ? ESCAPE '\\'" for _ in likes),
+        likes,
     )
 
 

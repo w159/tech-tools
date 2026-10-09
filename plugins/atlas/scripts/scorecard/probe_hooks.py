@@ -528,6 +528,17 @@ def probe_bash_advisor_scaling(ctx):
     return out
 
 
+def _tripped_sessions(state_dir):
+    """Sessions whose hookstate file has breaker_tripped (a bypass writes no hook-faults row)."""
+    n = 0
+    for f in state_dir.glob("*.json"):
+        try:
+            n += bool(json.loads(f.read_text()).get("breaker_tripped"))
+        except (OSError, ValueError, AttributeError):
+            pass
+    return n
+
+
 def probe_completion_breaker(ctx):
     """Nine Stops 2.2s apart on a run with unmet conditions: does the gate keep blocking?"""
     cmd = CMD + "completion_breaker"
@@ -550,7 +561,7 @@ def probe_completion_breaker(ctx):
             )
             for n in names
         ]
-    blocks, before = 0, len(core.faults(sb.atlas))
+    blocks = 0
     for _ in range(9):
         r = sb.run(
             "completion_gate.py",
@@ -576,12 +587,12 @@ def probe_completion_breaker(ctx):
         ),
         metric(
             names[1],
-            len(core.faults(sb.atlas)) - before,
-            "faults",
+            _tripped_sessions(sb.atlas / "hookstate"),
+            "sessions",
             "higher",
             cmd=cmd,
             group="gates",
-            note="a durable trace when the breaker trips",
+            note="hookstate breaker_tripped: the durable trace when the breaker trips",
         ),
     ]
 

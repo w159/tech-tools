@@ -47,7 +47,9 @@ html[data-rail="collapsed"] .nav-link[aria-current="page"]::before { left: -4px;
 .palette-btn span { overflow: hidden; text-overflow: ellipsis; }
 .strip-host { flex: 1; min-width: 0; overflow: hidden; display: flex; align-items: center; }
 .ctx-title { display: none; font-weight: 650; }
-.version-chip { font-size: var(--fs-xs); color: var(--text-dim); white-space: nowrap; }
+.version-chip { display: inline-flex; gap: var(--s-2); font-size: var(--fs-xs); color: var(--text-dim); white-space: nowrap; }
+.version-chip .chip-src::before, .version-chip .chip-asof::before { content: "·"; margin-right: var(--s-2); }
+.version-chip .chip-src.is-temp { color: var(--st-input); font-weight: 550; }
 .top-end { display: flex; align-items: center; gap: var(--s-2); flex: none; }
 
 .live-pill, .attn { display: inline-flex; align-items: center; gap: var(--s-2); height: 24px; padding: 0 var(--s-3); border-radius: var(--r-pill); border: 1px solid var(--pill-c, var(--border-strong)); background: none; font-size: var(--fs-xs); font-weight: 550; color: var(--pill-c, var(--text-dim)); white-space: nowrap; }

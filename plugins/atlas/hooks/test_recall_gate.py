@@ -281,6 +281,16 @@ class RecallGateTest(unittest.TestCase):
             code, out = _run_main(self._payload(CASES["block"][0], session_id=sid))
             self.assertTrue(_denied(out))
 
+    def test_toolsearch_passes_before_recall(self):
+        """ToolSearch is how Claude Code loads the claude-mem tool: denying it deadlocks the gate."""
+        for name in ("ToolSearch", "tool_search", "toolsearch"):
+            case = {"name": name, "input": {"query": "select:%s" % CC_ROUTE}}
+            self.assertEqual(_run_main(self._payload(case, session_id="ts")), (0, ""))
+        self.assertEqual(self._markers(), [])
+        self.assertTrue(
+            _denied(_run_main(self._payload(CASES["block"][0], session_id="ts"))[1])
+        )
+
     def test_sessions_are_independent(self):
         case = CASES["block"][0]
         self.assertTrue(_denied(_run_main(self._payload(case, session_id="one"))[1]))

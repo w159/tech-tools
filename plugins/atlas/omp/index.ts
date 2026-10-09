@@ -54,11 +54,12 @@ import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { readFileSync, statSync } from "node:fs";
 import * as nodePath from "node:path";
 import { registerAgentGuard } from "./agent-guard";
+import { registerChannelView } from "./channel-view";
 import { ATLAS_AGENT_TARGETABLE, frontmatterModelFor, isInheritedSelector, modelPatternsFor, roleFor } from "./atlas-agents";
 import { defaultAdvisorDeps, registerAdvisorGate } from "./advisor";
 import { type LeanKind, explorationDenyReason, explorationTool, kindOfOmpTool, loadNativeTools, resolveTarget } from "./contracts";
 import { createShellEditTracker } from "./delegation";
-import { registerHookBridge } from "./hook-bridge";
+import { atlasStoreEnv, registerHookBridge } from "./hook-bridge";
 import { type RunStateSink, createRunStateSink } from "./run-state";
 import { createTranscriptCache, registerStopBridge, sessionFileOf } from "./stop-bridge";
 import { registerMandates } from "./mandates";
@@ -320,14 +321,14 @@ const REPLACEMENT_EXAMPLES: Record<"search" | "glob", { tool: string; example: s
 function denyReason(tool: "grep" | "glob", replacement: LeanReplacement): string {
 	const spec = REPLACEMENT_EXAMPLES[tool === "grep" ? "search" : "glob"];
 	if (replacement.via === "tool") {
-		return `Atlas enforcement: use the lean-ctx ${spec.tool} TOOL instead of ${tool} — call ${replacement.name} directly with JSON args (e.g. ${spec.example}).`;
+		return `Atlas enforcement: use lean-ctx ${spec.tool} instead of ${tool}: call ${replacement.name} directly, e.g. ${spec.example}`;
 	}
-	return `Atlas enforcement: use lean-ctx ${spec.tool} instead of ${tool} — write JSON args to the device ${replacement.device} (e.g. ${spec.example}).`;
+	return `Atlas enforcement: use lean-ctx ${spec.tool} instead of ${tool}: write JSON to ${replacement.device}, e.g. ${spec.example}`;
 }
 
 /** One-time nudge when grep/glob is allowed because nothing lean-ctx is reachable. */
 const UNREACHABLE_NUDGE = (tool: "grep" | "glob") =>
-	`Atlas nudge: lean-ctx is not reachable in this session, so native ${tool} stays allowed. The lean-ctx binary on PATH is not, by itself, a callable session tool; the deny arms only when a ctx_* replacement (tool or xd:// device) is live here.`;
+	`Atlas nudge: lean-ctx is not reachable in this session, so native ${tool} stays allowed.`;
 
 /** Read nudge naming the replacement form the session can actually reach. */
 function readNudge(replacement: LeanReplacement): string {
@@ -625,7 +626,9 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 			const liveModel = ctx?.model && typeof ctx.model.provider === "string" && typeof ctx.model.id === "string" ? `${ctx.model.provider}/${ctx.model.id}` : "";
 			// The Claude-format definition pins the same tier under its own name (`model: sonnet`); dispatch_tripwire.py accepts it, so this gate must too.
 			const claudePin = frontmatterModelFor(agent).toLowerCase();
-			const carriesTier = (p: string): boolean => pinned.includes(p.toLowerCase()) || (claudePin !== "" && p.toLowerCase() === claudePin) || (p.includes("/") && roleExplained);
+			// omp also expands that alias to a provider/id (`sonnet` -> `anthropic/claude-sonnet-5`): the alias as a dash-delimited id token is the same tier.
+			const expandsPin = (p: string): boolean => { const [sel, ...suffix] = p.split(":"); return claudePin !== "" && suffix.length <= 1 && (sel.split("/")[1] ?? "").toLowerCase().split("-").includes(claudePin); };
+			const carriesTier = (p: string): boolean => pinned.includes(p.toLowerCase()) || (claudePin !== "" && p.toLowerCase() === claudePin) || expandsPin(p) || (p.includes("/") && roleExplained);
 			if (requested.every(p => carriesTier(p) || isInheritedSelector(p, liveModel))) {
 				// Accepted. When no token carries the tier the list is purely the inherited parent model (a marketplace install does not
 				// discover the pinned agents), so the tier is restored instead of running on the parent's model.
@@ -675,7 +678,17 @@ function rewritePluginRoot(input: Record<string, unknown> | undefined): string |
 	return command.replace(CLAUDE_PLUGIN_ROOT_RE, PLUGIN_ROOT);
 }
 
+/**
+ * Export the Command Center knobs (~/.atlas/settings.json `env`) into the real environment at load, before
+ * style/mandates/agent-guard/shell-route/channels/stop-bridge read process.env. An already-exported variable wins
+ * (atlasStoreEnv skips it). Detached ingest spawns inherit it, since they spread process.env.
+ */
+export function applyAtlasStoreEnv(env: Record<string, string | undefined> = process.env): void {
+	Object.assign(env, atlasStoreEnv(env));
+}
+
 export default function atlasOmpExtension(pi: ExtensionAPI): void {
+	applyAtlasStoreEnv();
 	ensureClaudePluginRoot();
 	// omp applies only the LAST tool_call input revision and handlers never see each other's revisions, so the
 	// CLAUDE_PLUGIN_ROOT rewrite and the `lean-ctx -c` wrap (shell-route.ts, lean-ctx's Claude Code hook parity) must be
@@ -728,7 +741,9 @@ export default function atlasOmpExtension(pi: ExtensionAPI): void {
 	registerWorkerBudget(pi);
 	// disallowedTools of atlas agents, which omp does not enforce itself (omp/agent-guard.ts).
 	registerAgentGuard(pi);
-	registerWorkerReport(pi);
+	// Live channel view above the editor while task subagents run (omp's irc:relay card lasts 10s and hides lead<->child).
+	const channelView = registerChannelView(pi);
+	registerWorkerReport(pi, { onChannelOpen: channelView.open });
 	registerAdvisorGate(pi, defaultAdvisorDeps());
 	register(pi, {
 		runState,

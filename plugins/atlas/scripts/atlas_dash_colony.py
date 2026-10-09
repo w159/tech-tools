@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import os
 import signal
+import sqlite3
 import sys
 import time
 from pathlib import Path
@@ -29,6 +30,7 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 import atlas_dash_irc  # noqa: E402
+import atlas_db  # noqa: E402
 import atlas_herdr  # noqa: E402
 import atlas_todo  # noqa: E402
 from atlas_dash_work import _err  # noqa: E402
@@ -38,6 +40,9 @@ NOTE_PREVIEW = 400
 TITLE_MAX = 200
 LIVE_STATES = ("running", "idle", "stuck")
 OPEN = ("pending", "in_progress")
+PARKED_S = (
+    10 * 60
+)  # a pane-less, pid-less worker silent this long is parked, not working
 
 
 def is_lead_name(name: str) -> bool:
@@ -82,8 +87,15 @@ def _active_lead(chans: list[dict]) -> dict | None:
     leads = [c for c in chans if c.get("kind") == "lead" and c.get("lead")]
     if not leads:
         return None
+    # A session lead (`lead-<sid>`) is a person's working channel; a named lead (e.g. the self-improve daemon's `selffix`)
+    # also posts constantly and must not take "current" from it just by being busier.
     return max(
-        leads, key=lambda c: (c.get("last_activity") or 0, c.get("created") or 0)
+        leads,
+        key=lambda c: (
+            is_lead_name(str(c.get("lead"))),
+            c.get("last_activity") or 0,
+            c.get("created") or 0,
+        ),
     )
 
 
@@ -119,6 +131,132 @@ def _candidates(chans: list[dict], lead_chan: dict | None, all_: bool) -> dict:
     return out
 
 
+def _cursor_touch(root: str, name: str) -> float:
+    """When the worker's inbox hook last delivered it a note: proof it was making tool calls then."""
+    try:
+        return float(
+            atlas_dash_irc.worker_inbox.cursor_path(root, name).stat().st_mtime
+        )
+    except (OSError, AttributeError):
+        return 0.0
+
+
+LEAD_ACTIVE_S = (
+    120  # a lead whose newest real signal is older than this is idle, not active
+)
+
+
+def _session_roots() -> list[Path]:
+    home = Path.home()
+    return [home / ".omp" / "agent" / "sessions", home / ".claude" / "projects"]
+
+
+def _session_file_mtime(sid6: str) -> float:
+    """Newest mtime of the lead's transcript: omp `<slug>/<ts>_<sid>.jsonl`, Claude `<slug>/<sid>.jsonl`."""
+    best = 0.0
+    for base in _session_roots():
+        for f in base.glob(f"*/*{sid6}*.jsonl"):
+            try:
+                best = max(best, f.stat().st_mtime)
+            except OSError:
+                pass
+    return best
+
+
+def _db_last(sid6: str) -> dict[str, float]:
+    """Newest tool_calls / hook-event ts of any session whose id starts with `sid6` (read-only, indexed range)."""
+    path = atlas_db.db_path()
+    if not os.path.isfile(path):
+        return {}
+    lo, hi = sid6, sid6 + "\uffff"
+    try:
+        c = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=0.3)
+        try:
+            tool = c.execute(
+                "SELECT MAX(ts) FROM tool_calls WHERE session_id>=? AND session_id<?",
+                (lo, hi),
+            ).fetchone()[0]
+            hook = c.execute(
+                "SELECT MAX(ts) FROM events WHERE run_id IN "
+                "(SELECT id FROM runs WHERE session_id>=? AND session_id<?)",
+                (lo, hi),
+            ).fetchone()[0]
+        finally:
+            c.close()
+    except sqlite3.Error:
+        return {}
+    return {"tool call": float(tool or 0), "hook call": float(hook or 0)}
+
+
+def _span(age: float) -> str:
+    age = int(max(age, 0))
+    if age < 120:
+        return f"{age}s"
+    return f"{age // 60} min" if age < 7200 else f"{age // 3600} h"
+
+
+def lead_liveness(root: str, lead: str, now: float) -> dict | None:
+    """Is the session behind `lead-<sid6>` working? From real signals, never from a herdr pane:
+    its newest tool call / hook event in the atlas DB, its transcript file's mtime, and the inbox
+    cursor mtime. None when no signal exists (the caller then falls back to board activity)."""
+    if not lead.startswith("lead-") or len(lead) <= 5:
+        return None
+    sid6 = lead[5:]
+    sig = {
+        **_db_last(sid6),
+        "session write": _session_file_mtime(sid6),
+        "inbox read": _cursor_touch(root, lead),
+    }
+    source, at = max(sig.items(), key=lambda kv: kv[1])
+    if at <= 0:
+        return None
+    age = max(now - at, 0.0)
+    active = age <= LEAD_ACTIVE_S
+    return {
+        "active": active,
+        "at": at,
+        "source": source,
+        "text": f"active, last {source} {_span(age)} ago"
+        if active
+        else f"idle {_span(age)}",
+    }
+
+
+def _deliver(
+    name: str, c: dict, state: str, steerable: bool, parked: bool = False
+) -> dict:
+    """Can a message to this member ever be read, and how? The reason is shown before sending."""
+    if state in REFUSAL:
+        return {
+            "ok": False,
+            "how": None,
+            "reason": f"{name} is {state}: nothing will read a message sent to it",
+        }
+    if parked:
+        return {
+            "ok": False,
+            "how": None,
+            "reason": f"{name} is parked: no process or pane and no activity for {PARKED_S // 60} min, so it makes no tool calls to read a board note until it is revived",
+        }
+    if steerable:
+        return {
+            "ok": True,
+            "how": "pane",
+            "reason": "typed into its terminal when it is idle, otherwise queued for its next tool call",
+        }
+    if not c.get("channel"):
+        return {
+            "ok": False,
+            "how": None,
+            "reason": f"{name} is not an atlas worker in this project's channel and has no interactive claude/omp pane",
+        }
+    return {
+        "ok": True,
+        "how": "hook",
+        "reason": "queued on the channel board; it reads it on its next tool call",
+    }
+
+
 def _state(
     c: dict,
     live: bool,
@@ -126,17 +264,18 @@ def _state(
     idle_since_activity: float,
     open_todo: bool,
     log_stale: bool = False,
+    liveness: dict | None = None,
 ) -> str:
     entry = c["entry"]
     if "exit_code" in entry:
         return "finished" if int(entry["exit_code"]) == 0 else "dead"
     quiet = idle_since_activity > STUCK_S
     if c["role"] == "lead":
-        return (
-            "idle"
-            if (row and row["status"] == "idle") or (not live and quiet)
-            else "running"
-        )
+        if row and row["status"] == "idle":
+            return "idle"
+        if not row and liveness:  # no pane to ask: the session's own signals decide
+            return "running" if liveness["active"] else "idle"
+        return "idle" if not live and quiet else "running"
     if live:
         if quiet and open_todo:
             return "stuck"
@@ -184,11 +323,19 @@ def build_colony(root: str, all_: bool = False, now: float | None = None) -> dic
 
     items = [i for i in atlas_todo.load(root).get("items", []) if not i.get("archived")]
     last_note: dict = {}
+    sent: dict = {}  # member -> the newest message the dashboard (human) sent to it
     try:
         for r in atlas_todo.notes(root):
             last_note[r.get("owner")] = r
+            if r.get("owner") == atlas_dash_irc.HUMAN:
+                sent[r.get("to")] = r
     except OSError:
         pass
+    try:
+        reg = atlas_todo._reg_read(root)["channels"]
+    except (OSError, KeyError, ValueError):
+        reg = {}
+    memo: dict = {}
     sid6 = (
         lead_chan["lead"][5:]
         if lead_chan and lead_chan["lead"].startswith("lead-")
@@ -221,9 +368,11 @@ def build_colony(root: str, all_: bool = False, now: float | None = None) -> dic
                 )
             ]
         note = last_note.get(name)
+        liveness = lead_liveness(root, name, now) if c["role"] == "lead" else None
         activity = max(
             [float(entry.get("joined") or 0), float(note["ts"]) if note else 0.0]
             + [float(i.get("updated_at") or 0) for i in mine]
+            + [_cursor_touch(root, name), liveness["at"] if liveness else 0.0]
         )
         log = Path(root) / ".atlas" / ".run" / "logs" / f"{name}.log"
         try:  # a mux worker streams its log; a stale one with no process is a crash
@@ -237,19 +386,48 @@ def build_colony(root: str, all_: bool = False, now: float | None = None) -> dic
             now - activity,
             any(i.get("status") in OPEN for i in mine),
             log_stale,
+            liveness,
         )
         steerable = (
             bool(row and row["agent"] in atlas_dash_irc.INTERACTIVE_AGENTS)
             and state in LIVE_STATES
         )
+        snt = sent.get(name)
+        parked = (
+            c["role"] != "lead"
+            and not live
+            and state in LIVE_STATES
+            and now - activity > PARKED_S
+        )
         members.append(
             {
                 "name": name,
                 "kind": c["role"],
-                "state": state,
+                "state": "parked" if parked else state,  # same decision as deliver
+                "parked": parked,
                 "pane_id": pane_id,
                 "steerable": steerable,
-                "headless": state in LIVE_STATES and not steerable,
+                "headless": state in LIVE_STATES
+                and not steerable,  # = no terminal pane, not a state
+                "liveness": liveness,
+                "deliver": _deliver(
+                    name,
+                    c,
+                    state,
+                    steerable,
+                    parked=parked,
+                ),
+                "last_active": activity or None,
+                "last_sent": {
+                    k: v
+                    for k, v in atlas_dash_irc._normalize_note(
+                        root, snt, memo, reg
+                    ).items()
+                    if k in ("id", "ts", "status", "delivery_text")
+                }
+                | {"body": str(snt.get("text") or "")[:NOTE_PREVIEW]}
+                if snt
+                else None,
                 "channel": c["channel"],
                 "tasks": [
                     {
@@ -279,12 +457,25 @@ def build_colony(root: str, all_: bool = False, now: float | None = None) -> dic
             m["name"],
         )
     )
+    chan = (
+        {
+            "name": lead_chan["name"],
+            "lead": lead_chan["lead"],
+            "project": root,
+            "created": lead_chan.get("created"),
+            "branch": lead_chan.get("branch"),
+            "members": len([m for m in members if m["kind"] != "lead"]),
+        }
+        if lead_chan
+        else None
+    )
     return {
         "ok": True,
         "project": root,
         "lead": {"name": lead_chan["lead"], "channel": lead_chan["name"]}
         if lead_chan
         else None,
+        "channel": chan,
         "members": members,
         "herdr_url": _herdr_url(),
     }
@@ -309,16 +500,16 @@ REFUSAL = {"finished": "member_finished", "dead": "member_dead"}
 
 
 def refusal(root: str, name: str):
-    """(409, body) when a message to `name` could never be read (finished/dead), else None."""
-    state = member_state(root, name)
-    if state not in REFUSAL:
-        return None
-    return _err(
-        409,
-        REFUSAL[state],
-        f"{name!r} is {state}; nothing will read a message sent to it",
-        "dispatch a new worker, or read its final report on the channel",
-    )
+    """(409, body) when a message to `name` could never be read (finished, dead, not an atlas worker), else None."""
+    for m in build_colony(root, all_=True)["members"]:
+        if m["name"] == name and m["kind"] != "lead" and not m["deliver"]["ok"]:
+            return _err(
+                409,
+                REFUSAL.get(m["state"], "not_deliverable"),
+                m["deliver"]["reason"],
+                "dispatch a new worker, or read its final report on the channel",
+            )
+    return None
 
 
 # --- routes ----------------------------------------------------------------------------------
@@ -382,6 +573,13 @@ def h_colony_send(ctx):
             f"{name!r} is {m['state']}; nothing will read a message sent to it",
             "dispatch a new worker, or read its final report on the channel",
         )
+    if not m["deliver"]["ok"]:
+        return _err(
+            409,
+            "not_deliverable",
+            m["deliver"]["reason"],
+            "pick a member that is running, or dispatch a new worker",
+        )
     channel = m["channel"]
     if m["steerable"]:
         flat = atlas_dash_irc.sanitize_keys(
@@ -393,7 +591,7 @@ def h_colony_send(ctx):
             if e.http != 409:  # busy falls through to the board queue
                 return e.http, {"ok": False, "error": e.error, "why": e.why}
         else:
-            atlas_dash_irc._record_irc(
+            msg = atlas_dash_irc._record_irc(
                 root,
                 atlas_dash_irc.HUMAN,
                 name,
@@ -401,9 +599,11 @@ def h_colony_send(ctx):
                 delivery="delivered",
                 channel=channel,
             )
-            return 200, {"ok": True, "delivered": True, "queued": False}
-    atlas_dash_irc._record_irc(root, atlas_dash_irc.HUMAN, name, text, channel=channel)
-    return 200, {"ok": True, "delivered": False, "queued": True}
+            return 200, {"ok": True, "delivered": True, "queued": False, "message": msg}
+    msg = atlas_dash_irc._record_irc(
+        root, atlas_dash_irc.HUMAN, name, text, channel=channel
+    )
+    return 200, {"ok": True, "delivered": False, "queued": True, "message": msg}
 
 
 def h_colony_kill(ctx):

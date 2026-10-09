@@ -1,9 +1,9 @@
 // Atlas Workboard v2 — Health page: subsystem grid, silent-failure list with
 // fix hints, and what is working. No innerHTML; all data via h() text children.
 import { h, replace } from '../dom.js';
-import { stableJson } from '../api.js';
+import { changeKey, keepView } from '../keep-view.js';
 import {
-  Badge, Card, Table, Tabs, EmptyState, StatusDot, Drawer, openDrawer, Sparkline,
+  Badge, Card, Table, Tabs, EmptyState, StatusDot, Sparkline,
 } from '../components.js';
 
 const WINDOWS = [
@@ -76,7 +76,7 @@ async function refresh(force) {
   }
   if (!S || S.destroyed) return;
   if (fresh) {
-    const key = stableJson(fresh);
+    const key = changeKey(fresh);
     const same = key === S.key;
     S.data = fresh;
     S.key = key;
@@ -89,6 +89,9 @@ function kv(label, value) {
   return h('div', { class: 'pg-kv' }, h('dt', {}, label), h('dd', {}, value || '—'));
 }
 
+// Calendar day of an ISO time, for "stops counting on <date>".
+const day = (iso) => (iso ? String(iso).slice(0, 10) : '—');
+
 function subsystemCard(s) {
   const status = normStatus(s.status === 'unknown' ? 'info' : s.status);
   const evidence = Array.isArray(s.evidence) ? s.evidence : [];
@@ -98,53 +101,69 @@ function subsystemCard(s) {
     : h('p', { class: 'pg-hint', title: hist ? '' : (s.history_reason || '') }, hist ? 'No activity in this window' : 'No history for this subsystem');
   const notMeasured = s.measured === false ? 'Not measured' : null;
   const reason = s.measured === false ? (s.reason || 'no data source yet') : null;
-  return h('article', { class: `pg-subsys is-${status}`, 'aria-label': `${s.label || s.id}: ${s.status || 'unknown'}` },
+  const needsYou = s.status === 'warn' || s.status === 'fail';
+  const explain = (s.warn_means || s.next)
+    ? h('div', { class: 'pg-hintbox' },
+      needsYou ? h('strong', {}, `Why ${s.status}`) : h('strong', {}, 'If this warns'),
+      s.warn_means ? h('p', {}, s.warn_means) : null,
+      s.next ? h('p', {}, h('strong', {}, 'Do this: '), s.next) : null)
+    : null;
+  return h('article', { id: `sub-${s.id}`, class: `pg-subsys is-${status}`, 'aria-label': `${s.label || s.id}: ${s.status || 'unknown'}` },
     h('header', { class: 'pg-subsys-head' },
       StatusDot({ status }),
       h('h3', { class: 'pg-subsys-name' }, s.label || s.id),
       Badge({ status, text: s.status || 'unknown' })),
-    h('p', { class: 'pg-subsys-detail', title: s.detail || '' }, s.detail || 'No detail reported.'),
+    s.what ? h('p', { class: 'pg-hint' }, s.what) : null,
+    h('p', { class: 'pg-subsys-detail' }, s.detail || 'No detail reported.'),
+    needsYou ? explain : null,
     h('dl', { class: 'pg-kvs pg-kvs-inline' },
-      kv('Last OK', s.last_ok ? whenNode(s.last_ok) : (notMeasured || 'No success recorded in this window')),
-      kv('Last failure', s.last_fail ? whenNode(s.last_fail) : (notMeasured || 'None recorded in this window'))),
+      kv(s.ok_label || 'Last OK', s.last_ok ? whenNode(s.last_ok) : (notMeasured || 'No success recorded in this window')),
+      kv(s.fail_label || 'Last failure', s.last_fail ? whenNode(s.last_fail) : (notMeasured || 'None recorded in this window'))),
     reason && !(s.last_ok && s.last_fail)
-      ? h('details', { class: 'pg-reason' }, h('summary', {}, 'Why not measured'), h('p', {}, reason))
+      ? h('details', { class: 'pg-reason', 'data-keep': `why-${s.id}` }, h('summary', {}, 'Why not measured'), h('p', {}, reason))
       : null,
     spark,
+    needsYou ? null : h('details', { class: 'pg-evidence', 'data-keep': `about-${s.id}` }, h('summary', {}, 'About this check'), explain),
     evidence.length
-      ? h('details', { class: 'pg-evidence' },
+      ? h('details', { class: 'pg-evidence', 'data-keep': `ev-${s.id}` },
         h('summary', {}, `Evidence (${evidence.length})`),
         h('ul', {}, ...evidence.map((e) => h('li', { class: 'pg-mono' }, String(e)))))
       : null);
 }
 
-function openFailure(f) {
-  const body = h('div', { class: 'pg-detail' },
-    h('div', { class: 'pg-detail-head' },
-      Badge({ status: 'fail', text: f.kind || 'failure' }),
-      f.count > 1 ? Badge({ status: 'info', text: `×${f.count}` }) : null),
-    f.hint
-      ? h('div', { class: 'pg-hintbox' }, h('strong', {}, 'What to do'), h('p', {}, f.hint))
-      : h('p', { class: 'pg-hint' }, 'No hint recorded for this failure kind.'),
-    f.sample ? h('pre', { class: 'pg-mono-block' }, f.sample) : null,
-    h('dl', { class: 'pg-kvs' },
-      kv('Project', f.project), kv('First seen', f.first), kv('Last seen', f.last), kv('Source', f.source)));
-  openDrawer(Drawer({ title: f.kind || 'Silent failure', children: [body] }));
+function clip(s, n) {
+  return s.length > n ? `${s.slice(0, n)}…` : s;
 }
 
-function failureColumns() {
-  return [
-    { key: 'kind', label: 'Kind', width: '160px', render: (r) => h('span', { class: 'pg-mono' }, r.kind || '—') },
-    { key: 'count', label: 'Count', width: '72px', sortable: true, render: (r) => h('span', { class: 'pg-count' }, `×${r.count || 1}`) },
-    { key: 'project', label: 'Project', width: '140px', render: (r) => projName(r.project) },
-    { key: 'sample', label: 'Sample', render: (r) => h('span', { class: 'pg-clip', title: r.sample || '' }, r.sample || '—') },
-    { key: 'hint', label: 'Hint', render: (r) => h('span', { class: 'pg-clip pg-hint-cell', title: r.hint || '' }, r.hint || '—') },
-    { key: 'last', label: 'Last', width: '96px', sortable: true, render: (r) => whenNode(r.last) },
-    { key: 'open', label: '', width: '72px', render: (r) => h('button', {
-      type: 'button', class: 'btn btn-ghost', 'aria-label': `Open failure ${r.kind}`,
-      onclick: (e) => { e.stopPropagation(); openFailure(r); },
-    }, 'How to fix') },
-  ];
+function agesOutText(f, active) {
+  if (!f.ages_out) return 'when fixed';
+  return `${day(f.ages_out)}${active ? ' unless it recurs' : ', no action needed'}`;
+}
+
+function failureFacts(f, active) {
+  return h('dl', { class: 'pg-kvs pg-kvs-inline' },
+    kv('Times', `×${f.count || 1}`),
+    kv('Project', projName(f.project)),
+    kv('Last seen', f.last ? whenNode(f.last) : null),
+    kv(f.ages_out ? 'Stops counting' : 'Clears', agesOutText(f, active)));
+}
+
+// One silent failure as a card with an id, so "Open in Health" from Overview lands on it.
+function failureCard(f) {
+  const active = f.state === 'active';
+  const tone = active ? 'warn' : 'info';
+  const stateText = active ? 'happening now' : 'historic';
+  const title = f.title || f.kind;
+  const sample = String(f.sample || '');
+  return h('article', { id: f.id, class: `pg-subsys is-${tone}`, 'aria-label': `${title}: ${stateText}` },
+    h('header', { class: 'pg-subsys-head' },
+      StatusDot({ status: tone }),
+      h('h3', { class: 'pg-subsys-name' }, title),
+      Badge({ status: tone, text: stateText })),
+    f.what ? h('p', { class: 'pg-hint' }, f.what) : null,
+    sample ? h('pre', { class: 'pg-mono-block' }, clip(sample, 220)) : null,
+    h('div', { class: 'pg-hintbox' }, h('strong', {}, 'Do this'), h('p', {}, f.next || f.hint || 'No action recorded for this failure kind.')),
+    failureFacts(f, active));
 }
 
 function enforcementCard(e) {
@@ -215,49 +234,81 @@ function successCard(s) {
     h('span', { class: 'pg-success-last' }, fmtWhen(s.last)));
 }
 
+function silentFailuresCard(fails) {
+  const now = fails.filter((f) => f.state === 'active');
+  const old = fails.filter((f) => f.state !== 'active');
+  const grid = (list) => h('div', { class: 'pg-subsys-grid' }, ...list.map(failureCard));
+  const historic = old.length
+    ? [
+      h('h3', { class: 'pg-sub' }, `Historic, aging out (${old.length})`),
+      h('p', { class: 'pg-hint' }, 'Seen earlier in this window and not since. No action needed; each stops counting on the date shown.'),
+      grid(old),
+    ]
+    : [];
+  return Card({
+    title: `Silent failures (${fails.length})`,
+    actions: [h('span', { class: 'pg-group-meta' }, 'Errored or stalled without surfacing')],
+    children: [fails.length
+      ? h('div', { class: 'pg-stack' },
+        h('h3', { class: 'pg-sub' }, `Happening now (${now.length})`),
+        now.length ? grid(now) : h('p', { class: 'pg-hint' }, 'Nothing is failing quietly right now: no failure was seen in the last 24h.'),
+        ...historic)
+      : EmptyState({ icon: 'check', title: 'No silent failures', body: 'Nothing errored quietly in this window.' })],
+  });
+}
+
+function subsystemsCard(subs) {
+  return Card({
+    title: 'Subsystems',
+    children: [subs.length
+      ? h('div', { class: 'pg-subsys-grid' }, ...subs.map(subsystemCard))
+      : EmptyState({ icon: 'inbox', title: 'No subsystem data', body: 'The health endpoint returned no subsystems.' })],
+  });
+}
+
+function workingCard(wins) {
+  return Card({
+    title: `Working (${wins.length})`,
+    children: [wins.length
+      ? h('div', { class: 'pg-success-grid' }, ...wins.map(successCard))
+      : h('p', { class: 'pg-hint' }, 'No successful operations recorded in this window.')],
+  });
+}
+
+function errorBody() {
+  const d = describeError(S.error);
+  return EmptyState({
+    icon: 'alert', title: d.title, body: d.body || 'The health endpoint did not answer.',
+    actions: [h('button', { type: 'button', class: 'btn btn-primary', onclick: refresh }, 'Retry')],
+  });
+}
+
+function summaryLine(subs) {
+  const bad = subs.filter((s) => s.status === 'fail').length;
+  const warn = subs.filter((s) => s.status === 'warn').length;
+  const winLabel = (WINDOWS.find((w) => w.id === S.window) || WINDOWS[1]).label.toLowerCase();
+  return h('p', { class: 'pg-sub', role: 'status' },
+    `${subs.length} subsystems: ${bad} failing, ${warn} warning. Measured over the ${winLabel}; checked ${fmtWhen(S.data.checked_at)} (${S.data.checked_at}). `,
+    'OK means no failure was seen. Warn means something needs a look; the card says what and what to do. "Happening now" means seen in the last 24h; "historic" only waits to age out of the window.');
+}
+
 function body() {
-  if (S.error && !S.data) {
-    const d = describeError(S.error);
-    return EmptyState({
-      icon: 'alert', title: d.title, body: d.body || 'The health endpoint did not answer.',
-      actions: [h('button', { type: 'button', class: 'btn btn-primary', onclick: refresh }, 'Retry')],
-    });
-  }
+  if (S.error && !S.data) return errorBody();
   if (!S.data) return h('p', { class: 'pg-hint', role: 'status' }, 'Checking subsystems…');
   const subs = S.data.subsystems || [];
   const fails = [...(S.data.silent_failures || [])].sort((a, b) => (b.count || 0) - (a.count || 0));
-  const wins = S.data.successes || [];
-  const bad = subs.filter((s) => s.status === 'fail').length;
-  const warn = subs.filter((s) => s.status === 'warn').length;
   return h('div', { class: 'pg-stack' },
-    h('p', { class: 'pg-sub', role: 'status' },
-      `${subs.length} subsystems: ${bad} failing, ${warn} warning. ${fails.length} silent failure kinds in this window.`),
-    Card({
-      title: 'Subsystems',
-      children: [subs.length
-        ? h('div', { class: 'pg-subsys-grid' }, ...subs.map(subsystemCard))
-        : EmptyState({ icon: 'inbox', title: 'No subsystem data', body: 'The health endpoint returned no subsystems.' })],
-    }),
-    Card({
-      title: `Silent failures (${fails.length})`,
-      actions: [h('span', { class: 'pg-group-meta' }, 'Errored or stalled without surfacing')],
-      children: [fails.length
-        ? Table({ columns: failureColumns(), rows: fails, dense: true, onRow: openFailure })
-        : EmptyState({ icon: 'check', title: 'No silent failures', body: 'Nothing errored quietly in this window.' })],
-    }),
+    summaryLine(subs),
+    subsystemsCard(subs),
+    silentFailuresCard(fails),
     toolErrorsCard(S.data.tool_errors),
     enforcementCard(S.data.enforcement),
-    Card({
-      title: `Working (${wins.length})`,
-      children: [wins.length
-        ? h('div', { class: 'pg-success-grid' }, ...wins.map(successCard))
-        : h('p', { class: 'pg-hint' }, 'No successful operations recorded in this window.')],
-    }));
+    workingCard(S.data.successes || []));
 }
 
 function draw() {
   if (!S || !S.mount || S.destroyed) return;
-  replace(S.mount, 
+  keepView(S.mount, (t) => replace(t,
     h('header', { class: 'pg-head' },
       h('h1', { class: 'pg-title' }, 'Health'),
       h('div', { class: 'pg-head-actions' },
@@ -267,7 +318,7 @@ function draw() {
           onChange: (id) => { S.window = id; refresh(true); },
         }),
         h('button', { type: 'button', class: 'btn', onclick: () => refresh(true) }, 'Refresh'))),
-    body());
+    body()));
 }
 
 export default {

@@ -6,8 +6,15 @@ from __future__ import annotations
 import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import importlib.util
 import json
+import os
+import re
+import shutil
+import subprocess
+import sys
 import tempfile
+import time
 import unittest
+import urllib.request
 from pathlib import Path
 from unittest import mock
 
@@ -37,6 +44,9 @@ class ControlTestCase(unittest.TestCase):
         self.claude_json = root / ".claude.json"
         self.settings.write_text("{}", encoding="utf-8")
         self.claude_json.write_text("{}", encoding="utf-8")
+        envp = mock.patch.dict(os.environ, {"ATLAS_HOME": str(root / "atlas-home")})
+        envp.start()
+        self.addCleanup(envp.stop)
         patches = [
             mock.patch.object(self.mod, "SETTINGS_PATH", self.settings),
             mock.patch.object(self.mod, "CLAUDE_JSON_PATH", self.claude_json),
@@ -67,7 +77,7 @@ class TestBehaviorKnobs(ControlTestCase):
         self.assertEqual(self.read_settings()["env"]["ATLAS_TRIPWIRE_THRESHOLD"], "9")
         knob = self._find_knob("ATLAS_TRIPWIRE_THRESHOLD")
         self.assertEqual(knob["value"], "9")
-        self.assertEqual(knob["source"], "settings")
+        self.assertEqual(knob["source"], "store")
 
     def test_empty_value_clears_the_override(self):
         self.mod.write_behavior_updates({"ATLAS_TRIPWIRE_THRESHOLD": "9"})
@@ -104,6 +114,121 @@ class TestBehaviorKnobs(ControlTestCase):
         env = self.read_settings()["env"]
         self.assertEqual(env["OTHER"], "keep")
         self.assertEqual(env["ATLAS_GATE"], "off")
+
+    def test_store_round_trip_is_atomic_private_and_removes_on_empty(self):
+        self.mod.write_behavior_updates({"ATLAS_TRIPWIRE_THRESHOLD": "9"})
+        path = self.mod.store_path()
+        self.assertEqual(path, Path(os.environ["ATLAS_HOME"]) / "settings.json")
+        data = json.loads(path.read_text())
+        self.assertEqual(data["env"], {"ATLAS_TRIPWIRE_THRESHOLD": "9"})
+        self.assertIn("ATLAS_TRIPWIRE_THRESHOLD", data["changed"])
+        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(list(path.parent.glob("*.atlas-tmp")), [])
+        self.mod.write_behavior_updates({"ATLAS_TRIPWIRE_THRESHOLD": ""})
+        self.assertEqual(json.loads(path.read_text())["env"], {})
+
+    def test_precedence_process_then_store_then_claude_then_default(self):
+        key = "ATLAS_TRIPWIRE_THRESHOLD"
+        default = self._find_knob(key)["default"]
+        self.assertEqual(self._find_knob(key)["source"], "default")
+        self.settings.write_text(json.dumps({"env": {key: "3"}}), encoding="utf-8")
+        k = self._find_knob(key)
+        self.assertEqual(
+            (k["value"], k["source"], k["reaches"]), ("3", "claude", ["claude"])
+        )
+        self.mod.write_behavior_updates({key: "5"})
+        self.settings.write_text(json.dumps({"env": {key: "3"}}), encoding="utf-8")
+        k = self._find_knob(key)
+        self.assertEqual((k["value"], k["source"]), ("5", "store"))
+        self.assertEqual(k["reaches"], ["claude", "omp"])
+        self.assertEqual(k["layers"], {"process": None, "store": "5", "claude": "3"})
+        self.assertEqual(k["default"], default)
+        self.assertTrue(k["changed"])
+        with mock.patch.dict(os.environ, {key: "7"}):
+            k = self._find_knob(key)
+            self.assertEqual((k["value"], k["source"]), ("7", "process"))
+
+    def test_advanced_vars_get_the_same_detail(self):
+        adv = self.mod.behavior_state()["advanced"]
+        self.assertTrue(adv)
+        for row in adv[:3]:
+            for field in (
+                "value",
+                "source",
+                "layers",
+                "reaches",
+                "default",
+                "changed",
+                "ref",
+            ):
+                self.assertIn(field, row)
+
+    def test_refs_point_at_a_line_that_names_the_variable(self):
+        """The 'Read at' evidence must be a real reader, not a docstring or a stale line number."""
+        for key, ref in self.mod.discovered_env_keys().items():
+            rel, _, line = ref.rpartition(":")
+            text = (
+                (self.mod.PLUGIN_ROOT / rel)
+                .read_text(encoding="utf-8")
+                .splitlines()[int(line) - 1]
+            )
+            self.assertIn(key, text, ref)
+            self.assertFalse(text.lstrip().startswith(("#", "//", "*")), ref)
+
+    def test_python_constants_and_internal_wiring_are_not_settings(self):
+        found = self.mod.discovered_env_keys()
+        for key in (
+            "ATLAS_OUTPUT_STYLE",
+            "ATLAS_PLUGIN",
+            "ATLAS_TOOLING_MARKER",
+            "ATLAS_HARNESS",
+            "ATLAS_CLAUDE_SETTINGS",
+        ):
+            self.assertNotIn(key, found)
+
+    def test_every_documented_advanced_key_is_still_read(self):
+        stale = [k for k in self.mod._AD if k not in self.mod.discovered_env_keys()]
+        self.assertEqual(stale, [], f"documented but no shipped file reads: {stale}")
+
+    def test_shell_scope_knobs_cannot_be_saved(self):
+        """omp's extension and atlas CLIs read process env, so a saved value would silently do nothing."""
+        shell = [k["key"] for k in self.mod.BEHAVIOR_KNOBS if k["scope"] == "shell"]
+        self.assertIn("ATLAS_WORKER_MAX_TOKENS", shell)
+        res = self.mod.write_behavior_updates({"ATLAS_WORKER_MAX_TOKENS": "5"})
+        self.assertEqual(res["error"], "keys_not_allowlisted")
+        self.assertEqual(self.read_settings(), {})
+
+    def test_a_stale_value_for_a_shell_knob_can_still_be_cleared(self):
+        self.settings.write_text(
+            json.dumps({"env": {"ATLAS_WORKER_MAX_TOKENS": "5"}}), encoding="utf-8"
+        )
+        res = self.mod.write_behavior_updates({"ATLAS_WORKER_MAX_TOKENS": ""})
+        self.assertTrue(res["ok"], res)
+        self.assertNotIn("ATLAS_WORKER_MAX_TOKENS", self.read_settings()["env"])
+
+    def test_too_long_value_gets_its_own_error(self):
+        res = self.mod.write_behavior_updates(
+            {"ATLAS_OPTIMIZE_LOG": "x" * (self.mod.MAX_VALUE_LEN + 1)}
+        )
+        self.assertEqual(res["error"], "value_too_long")
+
+    def test_hook_value_ignores_the_dashboards_own_environment(self):
+        """Hooks never see the dashboard process env, so a saved setting's effective value must not either."""
+        key = "ATLAS_TRIPWIRE_THRESHOLD"
+        with mock.patch.dict(os.environ, {key: "7"}):
+            k = self._find_knob(key)
+            self.assertEqual((k["value"], k["source"]), ("7", "process"))
+            self.assertEqual(
+                (k["hook_value"], k["hook_source"]), (k["default"], "default")
+            )
+
+    def test_every_knob_explains_itself(self):
+        for group in self.mod.behavior_state()["groups"]:
+            self.assertTrue(group["intro"], group["id"])
+            for knob in group["knobs"]:
+                self.assertTrue(knob["description"].strip(), knob["key"])
+                self.assertIn(knob["scope"], ("hooks", "shell"), knob["key"])
+                self.assertTrue(knob["ref"], knob["key"])
 
     def _find_knob(self, key):
         for group in self.mod.behavior_state()["groups"]:
@@ -324,6 +449,89 @@ class TestWritePrivate(ControlTestCase):
                 self.mod.write_private(target, "new")
         self.assertEqual(target.read_text(), "old")
         self.assertEqual([p.name for p in target.parent.glob("*atlas-tmp")], [])
+
+
+class TestSettingsSurviveDaemonRestart(unittest.TestCase):
+    """A knob set through a (test) daemon is still there after that daemon restarts."""
+
+    PORT = 17431  # never the user's 7421
+
+    def _serve(self, env):
+        proc = subprocess.Popen(
+            [
+                sys.executable,
+                str(SCRIPTS / "atlas_dashboard.py"),
+                "serve",
+                "--foreground",
+                "--port",
+                str(self.PORT),
+            ],
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        self.addCleanup(lambda: proc.poll() is None and proc.kill())
+        base = f"http://127.0.0.1:{self.PORT}"
+        for _ in range(100):
+            try:
+                html = urllib.request.urlopen(base + "/", timeout=1).read().decode()
+                return (
+                    proc,
+                    base,
+                    re.search(r'atlas-token" content="([^"]+)"', html).group(1),
+                )
+            except Exception:
+                time.sleep(0.1)
+        proc.kill()
+        self.fail("test daemon did not come up")
+
+    def _call(self, base, token, method, path, body=None):
+        req = urllib.request.Request(
+            base + path,
+            method=method,
+            data=json.dumps(body).encode() if body is not None else None,
+            headers={"X-Atlas-Token": token, "Content-Type": "application/json"},
+        )
+        return json.load(urllib.request.urlopen(req, timeout=10))
+
+    def test_knob_persists_across_restart(self):
+        home = tempfile.mkdtemp(prefix="atlas-settings-restart-")
+        self.addCleanup(shutil.rmtree, home, True)
+        env = {
+            **os.environ,
+            "HOME": home,
+            "ATLAS_HOME": home + "/.atlas",
+            "ATLAS_DB": home + "/.atlas/atlas.db",
+            "ATLAS_DASHBOARD_DB": home + "/.atlas/atlas.db",
+            "ATLAS_DASHBOARD": "off",
+            "ATLAS_COLONY": "off",
+            "ATLAS_DASHBOARD_PORT": str(self.PORT),
+            "ATLAS_CLAUDE_SETTINGS": home + "/claude-settings.json",
+        }
+        env.pop("ATLAS_TRIPWIRE_THRESHOLD", None)
+        proc, base, tok = self._serve(env)
+        res = self._call(
+            base,
+            tok,
+            "POST",
+            "/api/behavior",
+            {"updates": {"ATLAS_TRIPWIRE_THRESHOLD": "11"}},
+        )
+        self.assertTrue(res["ok"], res)
+        proc.kill()
+        proc.wait()
+        proc, base, tok = self._serve(env)
+        state = self._call(base, tok, "GET", "/api/behavior")
+        knob = next(
+            k
+            for g in state["groups"]
+            for k in g["knobs"]
+            if k["key"] == "ATLAS_TRIPWIRE_THRESHOLD"
+        )
+        self.assertEqual((knob["value"], knob["source"]), ("11", "store"))
+        self.assertEqual(state["store_path"], home + "/.atlas/settings.json")
+        self.assertTrue(Path(home, ".atlas", "settings.json").is_file())
+        proc.kill()
 
 
 if __name__ == "__main__":

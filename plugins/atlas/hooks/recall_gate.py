@@ -33,7 +33,9 @@ import re
 import sys
 import tempfile
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
+sys.path.insert(
+    0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
+)
 import atlas_hook_guard  # noqa: E402
 
 # Per-session "recall satisfied" markers (tests point this at a temp dir).
@@ -232,7 +234,9 @@ def _decide(data: dict) -> str | None:
             data.get("transcript_path") or ""
         ):
             return None
-        if tool_name.lower() in _EXEMPT:
+        if (
+            re.sub(r"[\W_]", "", tool_name.lower()) in _EXEMPT
+        ):  # ToolSearch / tool_search / tool-search
             return None
         cwd = data.get("cwd") if isinstance(data.get("cwd"), str) else None
         cwd = cwd or os.getcwd()

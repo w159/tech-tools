@@ -96,6 +96,7 @@ async function request(method, path, params, body) {
     err.data = d;
     throw err;
   }
+  if (method === "GET") document.dispatchEvent(new CustomEvent("atlas:fetched")); // drives the top bar "as of" stamp
   if (method === "GET" && hiddenRoots.size && (!params || !params.project || params.project === "all") && /^\/?(api\/v2\/)?(overview|todos)(\?|$)/.test(path)) {
     data = dropHidden(data);
   }

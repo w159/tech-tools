@@ -31,7 +31,7 @@ def tearDownModule():
 
 def _line(**kw):
     kw.setdefault("sessionId", SID)
-    kw.setdefault("cwd", "/repo/demo")
+    kw.setdefault("cwd", "/repo/app")
     kw.setdefault("gitBranch", "main")
     return json.dumps(kw)
 
@@ -1879,7 +1879,7 @@ class BackfillTest(unittest.TestCase):
     def test_progress_print_at_200(self):
         for i in range(200):
             with open(os.path.join(self.root, f"t{i:04d}.jsonl"), "w") as f:
-                f.write("")
+                f.write(_msg("u1", "user", "hello there") + "\n")
         buf = io.StringIO()
         with contextlib.redirect_stderr(buf):
             totals = session_ingest.backfill(self.root, conn=self.conn)
@@ -2446,7 +2446,7 @@ class OmpDispatchAccountingTest(unittest.TestCase):
 
     def test_rows_the_harness_already_logged_are_kept_not_doubled(self):
         self._transcript(3)
-        pid = atlas_db.register_project(self.conn, "/repo/demo")
+        pid = atlas_db.register_project(self.conn, "/repo/app")
         rid = atlas_db.start_run(self.conn, pid, SID)
         atlas_db.log_dispatch(self.conn, rid, "atlas:worker")  # the harness's own row
         self.conn.commit()

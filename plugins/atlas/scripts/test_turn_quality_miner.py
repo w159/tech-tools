@@ -129,6 +129,32 @@ class TurnQualityMinerTest(unittest.TestCase):
         self.assertIn("80%", f["detail"])
         self.assertIn("10%", f["detail"])
 
+    def test_zero_validity_judgment_is_neither_finding_nor_regression(self):
+        """P(corr|hit)=0% vs P(corr|not hit)=0%: noise. No finding, and no
+        remeasurable value (a value would let remeasure score it 'regressed')."""
+        base = time.time() - 3600
+        self._session("z", self.pid)
+        for i in range(20):
+            ts = base + i * 10
+            atlas_db.upsert_turn_score(
+                self.conn,
+                "z",
+                f"r{i}",
+                DONE,
+                ts=ts,
+                kind="noul",
+                value=0.95 if i < 10 else 0.05,
+            )
+            self.conn.execute(
+                "INSERT INTO user_prompts(session_id,uuid,ts,text) VALUES(?,?,?,?)",
+                ("z", f"p{i}", ts + 5, "next"),
+            )
+        self.conn.commit()
+        found = self._mine(min_turns=20)
+        self.assertNotIn(DONE, self._keys(found))
+        self.assertIn(DONE, found.evaluated)  # so a stale open finding is resolved
+        self.assertNotIn(DONE, found.values)
+
     def test_metric_findings(self):
         for i in range(20):
             self._turn(

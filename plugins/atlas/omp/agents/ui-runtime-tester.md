@@ -4,7 +4,7 @@
 name: "ui-runtime-tester"
 description: "Live frontend runtime tester that starts a web app and validates OBSERVED behavior in a real browser (cmux browser, Claude_Preview or Playwright): render, console, network shapes, and loading/empty/error/success states. Never edits code. Use when a UI change needs confirming in a running app rather than by reading code."
 thinkingLevel: "low"
-model: ["@atlas-worker","@smol"]
+model: ["@atlas-worker","sonnet","@smol"]
 # Lead-only dispatch: atlas workers must not spawn subagents.
 spawns: "none"
 ---

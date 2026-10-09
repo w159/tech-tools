@@ -101,38 +101,90 @@ def _tracked(rec: dict, kind: str) -> bool:
     )
 
 
-def _delivery_status(root: str, rec: dict, kind: str, memo: dict | None) -> str:
-    """``queued``, ``read``, ``delivered``, ``refused`` or ``undeliverable`` for one message.
+def _delivery(root: str, rec: dict, kind: str, memo: dict | None):
+    """(status, delivered_at) for one message: ``queued``, ``read``, ``delivered``, ``refused`` or ``undeliverable``.
 
     Human and agent-to-agent notes to a named agent are tracked alike. When the dashboard
     itself typed one into an interactive pane the send outcome is persisted on the note
     (``delivery``): ``delivered`` (typed; the worker hook skips it, so it is never injected
     twice) or ``refused`` (shell/non-steerable pane, never typed). Otherwise it is queued
-    on the board until that worker's PostToolUse hook drains it (hooks/worker_inbox.py moves
-    the cursor), then read; one nobody drained within QUEUED_TTL_S is ``undeliverable``,
-    so every message reaches a terminal state. Untracked lines are always ``read``."""
+    on the board until that worker's PostToolUse hook drains it; the hook's per-note receipt
+    (hooks/worker_inbox.py) makes it ``read`` with the time it was injected. A note the hook's
+    cursor passed without delivering (not addressed to a channel the worker is in) and one
+    nobody drained within QUEUED_TTL_S are ``undeliverable``, so every message reaches a
+    terminal state. Untracked lines are always ``read``."""
     if not _tracked(rec, kind):
-        return "read"
+        return "read", None
     outcome = rec.get("delivery")
     if outcome in ("delivered", "refused"):
-        return outcome
+        return outcome, _epoch(rec.get("ts")) if outcome == "delivered" else None
     to = str(rec.get("to") or "all")
-    if worker_inbox is not None and worker_inbox.is_read(root, to, rec, memo):
-        return "read"
-    return (
-        "undeliverable"
-        if time.time() - _epoch(rec.get("ts")) > QUEUED_TTL_S
-        else "queued"
+    state, at = (
+        worker_inbox.delivery(root, to, rec, memo)
+        if worker_inbox is not None
+        else ("queued", None)
     )
+    if state == "delivered":
+        return "read", at
+    if state == "skipped":
+        return "undeliverable", None
+    late = time.time() - _epoch(rec.get("ts")) > QUEUED_TTL_S
+    return ("undeliverable" if late else "queued"), None
 
 
-def _normalize_note(root: str, rec: dict, memo: dict | None = None) -> dict:
+def _delivery_status(root: str, rec: dict, kind: str, memo: dict | None) -> str:
+    return _delivery(root, rec, kind, memo)[0]
+
+
+def _clock(at) -> str:
+    return time.strftime("%H:%M:%S", time.localtime(at)) if at else "an earlier time"
+
+
+def _delivery_text(root: str, rec: dict, status: str, at, kind: str, memo, reg) -> str:
+    """One honest line saying where the message stands; "" for lines nobody is meant to read."""
+    to = str(rec.get("to") or "all")
+    if to == "all":
+        chan = (reg or {}).get(rec.get("channel") or "")
+        if not chan or kind in ("exit", "system"):
+            return ""
+        sender = str(rec.get("owner") or "")
+        peers = [
+            str(m.get("name"))
+            for m in chan.get("members") or []
+            if m.get("name") and m.get("name") != sender
+        ]
+        if not peers:
+            return "posted to the channel board; it has no members to receive it"
+        got = sum(
+            1
+            for p in peers
+            if worker_inbox is not None
+            and worker_inbox.delivery(root, p, rec, memo)[0] == "delivered"
+        )
+        return f"delivered to {got} of {len(peers)} members so far (each reads it on its next tool call)"
+    if not _tracked(rec, kind):
+        return ""
+    if status == "read":
+        return f"delivered to {to} at {_clock(at)}"
+    if status == "delivered":
+        return f"typed into {to}'s pane at {_clock(at)}"
+    if status == "refused":
+        return f"not deliverable: {to}'s pane is not an interactive claude/omp session"
+    if status == "undeliverable":
+        return f"not deliverable: {to} did not read it (not a member of this channel, finished, or not running atlas hooks)"
+    return f"queued: {to} reads it on its next tool call"
+
+
+def _normalize_note(
+    root: str, rec: dict, memo: dict | None = None, reg: dict | None = None
+) -> dict:
     text = str(rec.get("text") or "")
     sender = str(rec.get("owner") or "anon")
     to = str(rec.get("to") or "all")
     kind = "exit" if EXIT_RE.match(text) else ("irc" if rec.get("irc") else "note")
     if sender in ("board", "system"):
         kind = "system"
+    status, at = _delivery(root, rec, kind, memo)
     return {
         "id": _message_id(root, rec),
         "ts": _iso(rec.get("ts")),
@@ -140,7 +192,9 @@ def _normalize_note(root: str, rec: dict, memo: dict | None = None) -> dict:
         "to": to,
         "body": text,
         "kind": kind,
-        "status": _delivery_status(root, rec, kind, memo),
+        "status": status,
+        "delivered_at": _iso(at) if at else None,
+        "delivery_text": _delivery_text(root, rec, status, at, kind, memo, reg),
         "tracked": _tracked(rec, kind),
         "run": rec.get("run"),
         "project": root,
@@ -172,6 +226,10 @@ def read_messages(
         except OSError:
             continue
         memo: dict = {}  # worker -> cursor for THIS root: two projects can share a worker name
+        try:
+            reg = atlas_todo._reg_read(root)["channels"]
+        except (OSError, KeyError, ValueError):
+            reg = {}
         for rec in recs:
             if not isinstance(rec, dict):
                 continue
@@ -181,7 +239,7 @@ def read_messages(
                 and not (legacy_main and not rec.get("channel"))
             ):
                 continue  # another channel's note (channel-less legacy notes belong to main)
-            msg = _normalize_note(root, rec, memo)
+            msg = _normalize_note(root, rec, memo, reg)
             seen.setdefault(msg["id"], msg)
     msgs = sorted(seen.values(), key=lambda m: (m["_epoch"], m["id"]))
     paging = False
@@ -270,6 +328,20 @@ def h_irc_post(ctx):
     return _post(ctx, b, ctx.project_root(b.get("project")))
 
 
+def _lead_of(root: str, channel: str | None) -> str | None:
+    """The session lead a bare `to=lead` means: its channel's lead, else the project's active lead.
+    Addressed by name the note is tracked, so the UI shows the hook's real delivery receipt."""
+    import atlas_dash_colony
+
+    try:
+        chans = atlas_dash_colony._flatten(root)
+    except (OSError, KeyError, ValueError):
+        return None
+    chan = next((c for c in chans if channel and c.get("name") == channel), None)
+    lead = ((chan or atlas_dash_colony._active_lead(chans)) or {}).get("lead")
+    return lead if lead and lead != "lead" else None
+
+
 def _post(ctx, b, root):
     channel = b.get("channel") or None
     to, body = str(b.get("to") or "all"), str(b.get("body") or "")
@@ -290,6 +362,8 @@ def _post(ctx, b, root):
             f"{to!r} is not [A-Za-z0-9_.:-] or 'all'",
             "address an agent name or all",
         )
+    if to == "lead":
+        to = _lead_of(root, channel) or to
     stamp, refusal = None, None
     pane = None
     if to != "all":
@@ -357,26 +431,73 @@ def _live_index() -> dict:
     return idx
 
 
-def _member_view(m: dict, live: dict, seen: dict | None = None) -> dict:
+def _roster(root: str) -> tuple[dict, str | None]:
+    """({member name -> Colony row}, name of the project's current channel).
+
+    The Colony roster is the one place that decides finished/dead/stuck/live and whether a
+    message to a member can be read, so channel views reuse it instead of guessing from herdr.
+    The current channel is the active lead's subchannel (the one agents are working in)."""
+    import atlas_dash_colony
+
+    try:
+        rows = atlas_dash_colony.build_colony(root, all_=True)["members"]
+        lead = atlas_dash_colony._active_lead(atlas_dash_colony._flatten(root))
+    except (OSError, KeyError, ValueError):
+        return {}, None
+    return {r["name"]: r for r in rows}, (lead or {}).get("name")
+
+
+PRESENCE_STATE = {
+    "running": "working",
+    "idle": "idle",
+    "stuck": "input",
+    "finished": "done",
+    "dead": "fail",
+    "parked": "parked",
+}
+
+
+def _member_view(
+    m: dict, live: dict, seen: dict | None = None, roster: dict | None = None
+) -> dict:
     name = str(m.get("name") or "")
     info = live.get(name) or {}
+    row = (roster or {}).get(name) or {}
+    note = row.get("last_note")
     return {
         "name": name,
         "kind": m.get("role") or "subagent",
         "parent": m.get("parent"),
-        "pane_id": info.get("pane_id"),
-        "state": info.get("state"),
-        "last_seen": (seen or {}).get(name),
+        "pane_id": info.get("pane_id") or row.get("pane_id"),
+        "state": PRESENCE_STATE.get(row.get("state")) or info.get("state"),
+        "live_state": row.get("state"),
+        "parked": bool(row.get("parked")),
+        "deliver": row.get("deliver"),
+        "exit_code": row.get("exit_code"),
+        "last_seen": (seen or {}).get(name) or (_iso(note["ts"]) if note else None),
     }
 
 
-def _chan_view(root: str, c: dict, live: dict) -> dict:
+def _chan_view(
+    root: str,
+    c: dict,
+    live: dict,
+    roster: dict | None = None,
+    current: str | None = None,
+) -> dict:
+    lead = c.get("lead")
+    lrow = (roster or {}).get(lead or "") or {}
     return {
         "name": c.get("name"),
         "kind": c.get("kind") or "main",
         "parent": c.get("parent"),
-        "lead": c.get("lead"),
-        "members": [_member_view(m, live) for m in c.get("members") or []],
+        "lead": lead,
+        "lead_state": lrow.get("state"),
+        "lead_liveness": lrow.get("liveness"),
+        "current": bool(current) and c.get("name") == current,
+        "members": [
+            _member_view(m, live, None, roster) for m in c.get("members") or []
+        ],
         "project": c.get("project_root") or root,
         "branch": c.get("branch"),
         "created": _iso(c.get("created"))
@@ -408,10 +529,13 @@ def h_channels_get(ctx):
                 mains = atlas_todo.channels(root)
         except OSError:
             continue
+        roster, cur = _roster(root)
         for m in mains:
             for c in [m, *(m.get("children") or [])]:
-                out.append(_chan_view(root, c, live))
-    return 200, {"channels": out}
+                out.append(_chan_view(root, c, live, roster, cur or m.get("name")))
+    cur_views = [c for c in out if c["current"]]
+    current = max(cur_views, key=lambda c: c.get("last_activity") or 0, default=None)
+    return 200, {"channels": out, "current": current["name"] if current else None}
 
 
 def _find_channel(ctx, name: str):
@@ -483,7 +607,8 @@ def h_channel_get(ctx):
     seen: dict = {}
     for m in msgs:  # presence: newest message each member sent in this channel
         seen[m["from"]] = m["ts"]
-    view = _chan_view(root, chan, _live_index())
+    roster, cur = _roster(root)
+    view = _chan_view(root, chan, _live_index(), roster, cur)
     for mem in view["members"]:
         mem["last_seen"] = seen.get(mem["name"])
     return 200, {

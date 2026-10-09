@@ -212,39 +212,25 @@ def boot_lines(stack: dict | None = None, root: str | None = None) -> list[str]:
     if stack is None:
         stack = scan_stack(root or os.getcwd())
     lines = [
-        "Tool routing (min context): code symbols/edits -> serena "
-        "(activate_project on cwd FIRST, then get_symbols_overview/find_symbol/"
-        "replace_symbol_body); tree orient/search -> lean-ctx ctx_compose/ctx_search/"
-        "ctx_read; output >~20 lines -> context-mode ctx_batch_execute; "
-        "prior lessons -> claude-mem search then timeline then get_observations "
-        "(ids as numbers); never Bash grep/cat/sed as first code read.",
+        "Tool routing: code symbols/edits -> serena (activate_project on cwd first); "
+        "tree orient/search -> lean-ctx ctx_compose/ctx_search/ctx_read; "
+        "output >~20 lines -> context-mode ctx_batch_execute; "
+        "prior lessons -> claude-mem search, timeline, get_observations (ids as numbers)."
     ]
     if stack.get("has_code"):
         langs = ",".join(stack.get("languages") or []) or "code"
-        lines.append(
-            "Code stack (%s): load ToolSearch batch once before Read/Grep/Bash; "
-            "serena down -> lean-ctx only, still no Bash file reads. "
-            "Matrix: atlas-orchestrate/references/tool-routing.md" % langs
-        )
+        note = ""
         if not stack.get("serena_yml"):
-            lines.append(
-                "serena: no .serena/project.yml - after MCP is connected, "
-                "activate_project(cwd) then onboarding if needed; atlas-setup install covers this."
-            )
+            note = "; no .serena/project.yml yet (atlas-setup covers it)"
         elif not stack.get("serena_languages_ok"):
-            lines.append(
-                "serena: project.yml missing top-level languages: key - session_boot heals this; "
-                "then activate_project before symbol calls."
-            )
-        else:
-            lines.append(
-                "serena: project.yml present - call activate_project on this cwd before symbol work."
-            )
-    if stack.get("js_ts"):
+            note = "; project.yml lacks languages: (boot heals it)"
         lines.append(
-            "JS/TS: fallow for dead-code/dupes/health/audit (CLI or fallow-mcp); "
-            "agent git commit/push still gated by fallow_gate when CLI present."
+            "Code stack (%s): ToolSearch-load the batch once first; serena down -> "
+            "lean-ctx only%s. Matrix: atlas-orchestrate/references/tool-routing.md"
+            % (langs, note)
         )
+    if stack.get("js_ts"):
+        lines.append("JS/TS: fallow for dead-code/dupes/audit (CLI or fallow-mcp).")
     return lines
 
 

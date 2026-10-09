@@ -523,5 +523,44 @@ class RealCollisionTest(_Root):
         self.assertEqual(both["hookSpecificOutput"]["hookEventName"], "PostToolUse")
 
 
+class ReceiptTest(_Root):
+    """The hook's own per-note proof of delivery, which the dashboard shows as 'delivered at'."""
+
+    def test_queued_then_delivered_with_time(self):
+        rec = self.note("human", "Alpha", "ping")
+        self.assertEqual(
+            worker_inbox.delivery(self.root, "Alpha", rec), ("queued", None)
+        )
+        before = time.time()
+        self.assertIn("ping", worker_inbox.context_for_post_tool_use(self.env))
+        state, at = worker_inbox.delivery(self.root, "Alpha", rec)
+        self.assertEqual(state, "delivered")
+        self.assertTrue(before - 1 <= at <= time.time() + 1)
+
+    def test_note_the_cursor_passed_without_delivering_is_skipped(self):
+        # another channel's note to Alpha: never wanted, yet a later delivered note moves the cursor past it
+        atlas_todo.open_lead_channel(self.root, "lead-x", ["Other"])
+        chan = atlas_todo.channels_of(self.root, "Other")[0]
+        stray = atlas_todo.note(
+            self.root, "human", "not yours", to="Alpha", channel=chan
+        )
+        mine = self.note("human", "Alpha", "yours")
+        self.assertIn("yours", worker_inbox.context_for_post_tool_use(self.env))
+        self.assertEqual(
+            worker_inbox.delivery(self.root, "Alpha", mine)[0], "delivered"
+        )
+        self.assertEqual(
+            worker_inbox.delivery(self.root, "Alpha", stray), ("skipped", None)
+        )
+
+    def test_cursor_written_before_receipts_counts_as_delivered(self):
+        rec = self.note("human", "Alpha", "old")
+        path = worker_inbox.cursor_path(self.root, "Alpha")
+        path.write_text(json.dumps({"ts": rec["ts"], "seq": rec["seq"]}))
+        self.assertEqual(
+            worker_inbox.delivery(self.root, "Alpha", rec), ("delivered", None)
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

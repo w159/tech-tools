@@ -63,7 +63,7 @@ const MAX_CELLS = 24;
 // Hover/focus popover after 300ms. .update(agents) redraws in place. Overflow collapses into a "+N" cell.
 export function FleetStrip({ agents, onOpen, max } = {}) {
   const limit = max || MAX_CELLS;
-  const root = h("div", { class: "fleet-strip", role: "toolbar", "aria-label": "Fleet" });
+  const root = h("div", { class: "fleet-strip", role: "toolbar", "aria-label": "Agents (one hexagon per agent; click to open)", title: "Agents: one hexagon per agent session, colored by state. Click one to open it." });
   const summary = h("span", { class: "sr-only" });
   let list = [];
   let popTimer = null;

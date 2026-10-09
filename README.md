@@ -305,7 +305,7 @@ which conditions are unmet:
 - (m) delegation mandate: at least one `Task`/`Agent` dispatch when main-thread code shipped outside `docs/`
 - (n) status header: an orchestrating session's final reply starts with `ATLAS | <glyph> <phase> | <state>`
 - (o) phased todo: when code shipped, the session's board items cover the `implement` and `verify` phases
-- (p) colony channel: with two or more atlas workers dispatched, the board notes or IRC show use by someone other than `lead`
+- (p) colony channel: with two or more atlas workers dispatched, the board notes or IRC show use: a board note on this run's lead channel authored by a registered (or departed) member that is not a lead, or IRC/`SendMessage` traffic recorded for the run
 
 (a), (b), (f) and (g) apply only when the run shipped non-docs code. (n), (o)
 and (p) ask for presentation repairs, so each blocks at most once per session;

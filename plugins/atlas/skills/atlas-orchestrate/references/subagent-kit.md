@@ -245,13 +245,15 @@ SessionStart.
   `~/.omp/agent/config.yml` (`ATLAS_MUX_OMP_CONFIG` overrides the path); the first pattern
   that resolves wins and omp receives that concrete selector. Nothing resolving = refused.
 - Each worker pane gets `ATLAS_PROJECT_ROOT`, `ATLAS_WORKER_NAME` and the lead's `FORWARDED_ENV` switches as `env K=V` pins inside the pane command itself (so a shell that resets its environment cannot drop them), whatever the transport. `atlas_todo.note` is the
-  single writer of `.atlas/.run/board/<Name>.jsonl`: run-worker posts, all addressed to
-  `lead`, the exact harness argv (shlex-quoted, so model and effort are auditable) first,
-  then every output line (stderr merged), then `exit <code>`, plus ` [failed: <reason>]`
-  on failure. `omp -p` exits 0 on `Model "..." not found` and on HTTP 402, so output
-  matching model-not-found / 402 / credit / auth patterns is recorded as `exit 1`.
+  single writer of `.atlas/.run/board/<Name>.jsonl`: run-worker posts exactly ONE
+  `kind=report` note to `lead`: the `STATUS..end` block of the worker's output, else its
+  last 20 non-noise lines, then `exit <code>` (plus ` [failed: <reason>]` on failure). The
+  full output goes to `.atlas/.run/logs/<Name>.log`. `omp -p` exits 0 on
+  `Model "..." not found` and on HTTP 402, so output matching model-not-found / 402 /
+  credit / auth patterns is recorded as `exit 1`.
   Workers post their own notes with `atlas_todo.py note --owner <Name>`.
-- The lead reads everything with `atlas_todo.py notes --to lead`.
+- The lead needs nothing beyond `atlas_todo.py notes --channel <its lead subchannel>`; no
+  separate `--to lead` read.
 - Not Claude Code agent teams: teammates inherit the lead's effort, which would erase
   the per-role tiers.
 - Test-only: `ATLAS_MUX_WORKER_CMD` / `--command-override` replaces the harness command.

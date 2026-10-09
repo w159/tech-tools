@@ -126,6 +126,13 @@ from `agents/*.md` with tuned `thinkingLevel` and model-role fallbacks -- see
 works. The same `ATLAS_TRIPWIRE_HARD=off` and `ATLAS_GATE=off` kill switches
 apply.
 
+On omp, `~/.atlas/settings.json` `env` (Command Center settings) is applied at
+extension load (`applyAtlasStoreEnv` in `omp/index.ts`), and while `task`
+subagents run an `atlas-channel` widget (`omp/channel-view.ts`) shows the live
+channel notes and member status (`ATLAS_CHANNELS=off` disables it). Doctor checks
+`install-content` and `omp-content` (`check_content_drift`) warn when an installed
+copy differs from the source checkout.
+
 ## Hooks
 
 The hooks auto-load from `hooks/hooks.json` when the plugin is installed - no

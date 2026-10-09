@@ -54,11 +54,16 @@ def _leaks_to_real_db(path, atlas_db):
     """A transcript under the OS temp dir headed for the DEFAULT ~/.atlas DB is
     test/benchmark leakage (252 such sessions polluted the real DB). Anything
     that isolates state (ATLAS_DB / ATLAS_HOME) or opts in with
-    ATLAS_ALLOW_TMP_INGEST=1 is a deliberate run and ingests normally."""
+    ATLAS_ALLOW_TMP_INGEST=1 is a deliberate run and ingests normally. omp's
+    bridge converts every session into the temp dir, so there the retained
+    ATLAS_SOURCE_TRANSCRIPT decides: a real session file outside temp is no leak."""
     if os.environ.get("ATLAS_ALLOW_TMP_INGEST") == "1":
         return False
     if os.environ.get("ATLAS_DB") or os.environ.get("ATLAS_HOME"):
         return False
+    source = os.environ.get("ATLAS_SOURCE_TRANSCRIPT")
+    if source and os.path.exists(source):
+        return atlas_db.is_tmp_path(source)
     return atlas_db.is_tmp_path(path)
 
 
@@ -99,6 +104,11 @@ def main():
 
     session_id = payload.get("session_id")
     session_ingest.ingest_transcript(path, session_id=session_id)
+    # omp's bridge ingests a throwaway conversion; record the retained original.
+    session_ingest.adopt_source_transcript(
+        session_id or session_ingest._read_session_id(path),
+        os.environ.get("ATLAS_SOURCE_TRANSCRIPT"),
+    )
     _refresh_facet(path, session_id, session_ingest)
     _spawn_scoring(payload)
 

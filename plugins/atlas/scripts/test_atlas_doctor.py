@@ -910,6 +910,22 @@ class AtlasDoctorTest(unittest.TestCase):
         self.assertTrue(c["cmux-browser"]["ok"])
         self.assertIn("n/a", c["cmux-browser"]["detail"])
 
+    def test_cmux_installed_but_inactive_is_info_not_warn(self):
+        env = {k: v for k, v in os.environ.items() if not k.startswith("CMUX_")}
+        env["TERM_PROGRAM"] = "xterm"
+        with (
+            mock.patch.object(
+                atlas_doctor, "_cmux_bin", return_value=self._fake_cmux(1)
+            ),
+            mock.patch.dict(os.environ, env, clear=True),
+            mock.patch.object(atlas_doctor.sys, "platform", "darwin"),
+        ):
+            c = self._checks()
+        self.assertTrue(c["cmux-socket"]["ok"])
+        self.assertIn("info", c["cmux-socket"]["detail"])
+        self.assertTrue(c["cmux-browser"]["ok"])
+        self.assertIn("info", c["cmux-browser"]["detail"])
+
     def test_cmux_socket_and_unregistered_mcp_warn_with_install_steps(self):
         home = os.path.join(self.tmp, "home")
         os.makedirs(home)
@@ -917,7 +933,7 @@ class AtlasDoctorTest(unittest.TestCase):
             mock.patch.object(
                 atlas_doctor, "_cmux_bin", return_value=self._fake_cmux(0)
             ),
-            mock.patch.dict(os.environ, {"HOME": home}),
+            mock.patch.dict(os.environ, {"HOME": home, "CMUX_SOCKET_PATH": "/x"}),
             mock.patch.object(atlas_doctor.sys, "platform", "darwin"),
         ):
             c = self._checks()
@@ -940,7 +956,7 @@ class AtlasDoctorTest(unittest.TestCase):
             mock.patch.object(
                 atlas_doctor, "_cmux_bin", return_value=self._fake_cmux(1)
             ),
-            mock.patch.dict(os.environ, {"HOME": home}),
+            mock.patch.dict(os.environ, {"HOME": home, "CMUX_SOCKET_PATH": "/x"}),
             mock.patch.object(atlas_doctor.sys, "platform", "darwin"),
         ):
             c = self._checks()
@@ -957,7 +973,7 @@ class AtlasDoctorTest(unittest.TestCase):
             mock.patch.object(
                 atlas_doctor, "_cmux_bin", return_value=self._fake_cmux(0)
             ),
-            mock.patch.dict(os.environ, {"HOME": home}),
+            mock.patch.dict(os.environ, {"HOME": home, "CMUX_SOCKET_PATH": "/x"}),
             mock.patch.object(atlas_doctor.sys, "platform", "darwin"),
         ):
             self.assertIn(".claude.json", self._checks()["cmux-browser"]["detail"])
@@ -1175,6 +1191,8 @@ class AtlasDoctorMiningTest(unittest.TestCase):
         atlas_db.upsert_session_log(
             self.conn, "s1", project_id=self.pid, started_at=time.time()
         )
+        self.conn.execute("UPDATE session_logs SET user_prompt_count=1")
+        self.conn.commit()
         found = atlas_doctor.mine_gate_block_silences_capture(self.conn, self.root)
         self.assertEqual(len(found), 1)
         self.assertEqual(found[0]["metric_value"], 1)
@@ -1241,7 +1259,9 @@ class AtlasDoctorMiningTest(unittest.TestCase):
                     "is_error": 1 if i < 5 else 0,
                 },
             )
-        found = atlas_doctor.mine_tool_error_rate(self.conn, self.root, min_calls=5)
+        found = atlas_doctor.mine_tool_error_rate(
+            self.conn, self.root, min_calls=5, min_error_sessions=1
+        )
         self.assertEqual(len(found), 1)
         self.assertAlmostEqual(found[0]["metric_value"], 0.5)
 
@@ -1267,7 +1287,10 @@ class AtlasDoctorMiningTest(unittest.TestCase):
                 f"g{i}", "Grep", 1, "Atlas enforcement: use lean-ctx ctx_search"
             )
         self.assertEqual(
-            atlas_doctor.mine_tool_error_rate(self.conn, self.root, min_calls=5), []
+            atlas_doctor.mine_tool_error_rate(
+                self.conn, self.root, min_calls=5, min_error_sessions=1
+            ),
+            [],
         )
 
     def test_tool_error_rate_excludes_denials_from_the_population_too(self):
@@ -1280,7 +1303,9 @@ class AtlasDoctorMiningTest(unittest.TestCase):
             )
         for i in range(10):
             self._tool_call(f"r{i}", "Glob", 1 if i < 6 else 0, "ENOENT: no such dir")
-        found = atlas_doctor.mine_tool_error_rate(self.conn, self.root, min_calls=5)
+        found = atlas_doctor.mine_tool_error_rate(
+            self.conn, self.root, min_calls=5, min_error_sessions=1
+        )
         self.assertEqual(len(found), 1)
         self.assertAlmostEqual(found[0]["metric_value"], 0.6)
         ev = found[0]["evidence"]
@@ -1293,7 +1318,9 @@ class AtlasDoctorMiningTest(unittest.TestCase):
             self._tool_call(f"b{i}", "Bash", 1, "Exit code 2: usage")
         for i in range(2):
             self._tool_call(f"c{i}", "Bash", 0, "ok")
-        found = atlas_doctor.mine_tool_error_rate(self.conn, self.root, min_calls=5)
+        found = atlas_doctor.mine_tool_error_rate(
+            self.conn, self.root, min_calls=5, min_error_sessions=1
+        )
         self.assertEqual(len(found), 1)
         top = found[0]["evidence"]["top_errors"]
         self.assertEqual(
@@ -1318,7 +1345,9 @@ class AtlasDoctorMiningTest(unittest.TestCase):
                     "is_error": 1,
                 },
             )
-        found = atlas_doctor.mine_tool_error_rate(self.conn, self.root, min_calls=5)
+        found = atlas_doctor.mine_tool_error_rate(
+            self.conn, self.root, min_calls=5, min_error_sessions=1
+        )
         self.assertEqual(len(found), 1)
         self.assertEqual(found[0]["evidence"]["top_errors"], [])
 
@@ -1352,13 +1381,144 @@ class AtlasDoctorMiningTest(unittest.TestCase):
         atlas_db.refresh_session_aggregates(self.conn, "s2")
         self.assertEqual(atlas_doctor.mine_low_cache_hit(self.conn, self.root), [])
 
+    def _real_sessions(self, n=100, prefix="rs"):
+        """n recent user-driven non-tmp sessions: the friction metric's denominator."""
+        for i in range(n):
+            atlas_db.upsert_session_log(
+                self.conn,
+                f"{prefix}{i}",
+                started_at=time.time() - 3600,
+                transcript_path="/home/u/.claude/projects/p/x.jsonl",
+            )
+            self.conn.execute(
+                "UPDATE session_logs SET user_prompt_count=1 WHERE session_id=?",
+                (f"{prefix}{i}",),
+            )
+        self.conn.commit()
+
     def test_recurring_friction_miner(self):
+        self._real_sessions()
         for _ in range(4):
             atlas_db.record_friction(self.conn, "s1", "user_correction")
         found = atlas_doctor.mine_recurring_friction(self.conn, self.root, min_count=3)
         self.assertEqual(len(found), 1)
         self.assertEqual(found[0]["key"], "user_correction")
-        self.assertEqual(found[0]["metric_value"], 4)
+        self.assertEqual(found[0]["metric_value"], 4)  # 4 events / 100 sessions
+
+    def test_recurring_friction_is_per_session_not_raw(self):
+        """Same behaviour (4 events per 100 sessions) at 2x the activity must
+        read the same, or a session burst reads as a regression (55 -> 97)."""
+        self._real_sessions(100)
+        for _ in range(4):
+            atlas_db.record_friction(self.conn, "rs0", "gate_block")
+        before = atlas_doctor.mine_recurring_friction(self.conn, self.root)
+        self._real_sessions(100, prefix="burst")
+        for _ in range(4):
+            atlas_db.record_friction(self.conn, "burst0", "gate_block")
+        after = atlas_doctor.mine_recurring_friction(self.conn, self.root)
+        self.assertEqual(before[0]["metric_value"], after[0]["metric_value"])
+
+    def test_recurring_friction_ignores_tmp_fixture_sessions(self):
+        self._real_sessions(100)
+        for i in range(5):
+            atlas_db.upsert_session_log(
+                self.conn,
+                f"tmp{i}",
+                started_at=time.time() - 60,
+                transcript_path=os.path.join(
+                    tempfile.gettempdir(), f"atlas-ingest-{i}/a.jsonl"
+                ),
+            )
+            atlas_db.record_friction(self.conn, f"tmp{i}", "gate_block")
+            atlas_db.record_friction(self.conn, f"tmp{i}", "gate_block")
+            atlas_db.record_friction(self.conn, f"tmp{i}", "gate_block")
+        self.assertEqual(
+            atlas_doctor.mine_recurring_friction(self.conn, self.root, min_count=3), []
+        )
+
+    def test_gate_silences_capture_ignores_tmp_fixture_sessions(self):
+        def session(sid, path, prompts):
+            atlas_db.upsert_session_log(
+                self.conn, sid, started_at=time.time() - 60, transcript_path=path
+            )
+            self.conn.execute(
+                "UPDATE session_logs SET user_prompt_count=? WHERE session_id=?",
+                (prompts, sid),
+            )
+            self.conn.commit()
+
+        session(
+            "fixture",
+            os.path.join(tempfile.gettempdir(), "atlas-ingest-x/a.jsonl"),
+            2,
+        )
+        # omp bridge / subagent copy: a real path but no human turn
+        session("bridge", "/home/u/.omp/agent/sessions/bridge.jsonl", 0)
+        self.assertEqual(
+            atlas_doctor.mine_gate_block_silences_capture(self.conn, self.root), []
+        )
+        session("real", "/home/u/.omp/agent/sessions/x.jsonl", 3)
+        found = atlas_doctor.mine_gate_block_silences_capture(self.conn, self.root)
+        self.assertEqual(found[0]["metric_value"], 1)
+
+    def _calls(self, target, snippet, n, is_error=1, sid="real-s", kind="builtin"):
+        for i in range(n):
+            self.conn.execute(
+                "INSERT INTO tool_calls(session_id, tool_use_id, tool_name, kind, "
+                "target, ts, is_error, denied, error_snippet) VALUES(?,?,?,?,?,?,?,0,?)",
+                (
+                    sid,
+                    f"{target}-{snippet}-{i}-{is_error}",
+                    target,
+                    kind,
+                    target,
+                    time.time() - 60,
+                    is_error,
+                    snippet,
+                ),
+            )
+        self.conn.commit()
+
+    def test_tool_error_rate_ignores_user_code_and_env_outages(self):
+        self._calls(
+            "eval", 'Traceback (most recent call last): File "<cell>", line 1', 6
+        )
+        self._calls("eval", None, 4, is_error=0)
+        self.assertEqual(
+            atlas_doctor.mine_tool_error_rate(
+                self.conn, self.root, min_calls=5, min_error_sessions=1
+            ),
+            [],
+        )
+        mem = "claude-mem.search"
+        self._calls(mem, "Error calling Worker API: fetch failed", 6, kind="mcp")
+        self._calls(mem, "claude-mem fell back to SQLite search", 3, kind="mcp")
+        self._calls(mem, None, 4, is_error=0, kind="mcp")
+        self.assertEqual(
+            atlas_doctor.mine_tool_error_rate(
+                self.conn, self.root, min_calls=5, min_error_sessions=1
+            ),
+            [],
+        )
+        self._calls(mem, "Error: Must provide either anchor or query", 6, kind="mcp")
+        found = atlas_doctor.mine_tool_error_rate(
+            self.conn, self.root, min_calls=5, min_error_sessions=1
+        )
+        self.assertEqual([f["key"] for f in found], ["mcp:claude-mem.search"])
+
+    def test_tool_error_rate_needs_a_real_sample(self):
+        """3/7 from one session (the doctor:802 shape) is noise; >=20 executed
+        calls with errors from >=2 sessions still fires."""
+        self._calls("explorer", "boom", 3, sid="one-s")
+        self._calls("explorer", "ok-a", 4, is_error=0, sid="one-s")
+        self.assertEqual(atlas_doctor.mine_tool_error_rate(self.conn, self.root), [])
+        # 20 calls, errors from one session only: below the session floor
+        self._calls("explorer", "ok-b", 13, is_error=0, sid="one-s")
+        self.assertEqual(atlas_doctor.mine_tool_error_rate(self.conn, self.root), [])
+        # a second session contributes errors: fires
+        self._calls("explorer", "boom2", 2, sid="two-s")
+        found = atlas_doctor.mine_tool_error_rate(self.conn, self.root)
+        self.assertEqual([f["key"] for f in found], ["builtin:explorer"])
 
     def test_recurring_friction_miner_window(self):
         """Old friction must not count: a lifetime count can only grow, so a
@@ -1366,6 +1526,7 @@ class AtlasDoctorMiningTest(unittest.TestCase):
         improves."""
         import time as _time
 
+        self._real_sessions()
         stale = _time.time() - (atlas_doctor.RECENT_WINDOW_DAYS + 1) * 86400
         for _ in range(5):
             atlas_db.record_friction(self.conn, "s1", "gate_block", ts=stale)
@@ -1421,6 +1582,7 @@ class AtlasDoctorMiningTest(unittest.TestCase):
     # --- baseline + remeasure ------------------------------------------------
 
     def _seed_friction_finding(self, count):
+        self._real_sessions()
         for _ in range(count):
             atlas_db.record_friction(self.conn, "s1", "user_correction")
         atlas_doctor.mine(self.conn, self.root)
@@ -1459,7 +1621,9 @@ class AtlasDoctorMiningTest(unittest.TestCase):
             finding["dimension"],
             str(baseline_value),
             "0",
-            None,
+            atlas_doctor.with_unit(
+                None, atlas_doctor.metric_unit(finding["fingerprint"])
+            ),
             finding_id=finding["id"],
             metric="friction_count",
             baseline_value=baseline_value,
@@ -1492,6 +1656,98 @@ class AtlasDoctorMiningTest(unittest.TestCase):
         self.assertEqual(len(updated), 1)
         self.assertEqual(updated[0]["verdict"], "no_change")
 
+    def test_remeasure_supersedes_legacy_raw_baseline_never_compares(self):
+        """A unitless (raw 14-day count) baseline on a per-100 metric must get
+        'superseded' plus a fresh per-100 baseline, not improved/regressed."""
+        finding = self._seed_friction_finding(5)  # now 5.0 per 100 sessions
+        legacy = atlas_db.record_improvement(
+            self.conn,
+            0,
+            finding["dimension"],
+            "43",
+            "0",
+            None,  # no unit marker: legacy raw
+            finding_id=finding["id"],
+            metric="recurring_friction",
+            baseline_value=43.0,  # raw count; 5.0 vs 43 would read "improved"
+            target_value=0.0,
+            measure_after_runs=1,
+        )
+        rid = atlas_db.start_run(self.conn, self.pid, "later-run")
+        atlas_db.finalize_run(self.conn, rid)
+        updated = atlas_doctor.remeasure(self.conn, self.root)
+        self.assertEqual([u["id"] for u in updated], [legacy])
+        old = self.conn.execute(
+            "SELECT verdict, remeasured_value FROM improvements WHERE id=?", (legacy,)
+        ).fetchone()
+        self.assertEqual(old, ("superseded", None))
+        new = self.conn.execute(
+            "SELECT baseline_value, note, verdict, measure_after_runs FROM improvements "
+            "WHERE finding_id=? AND id!=?",
+            (finding["id"], legacy),
+        ).fetchall()
+        self.assertEqual(len(new), 1)
+        self.assertEqual(new[0][0], 5.0)
+        self.assertIn("unit=per100_sessions", new[0][1])
+        self.assertIsNone(new[0][2])  # fresh baseline, no verdict yet
+        self.assertEqual(new[0][3], 1)
+        # idempotent: units now agree, nothing further to do
+        self.assertEqual(atlas_doctor._supersede_stale_units(self.conn, self.root), [])
+
+    def test_supersede_gives_unscheduled_baseline_the_default_after(self):
+        finding = self._seed_friction_finding(5)
+        legacy = atlas_db.record_improvement(
+            self.conn,
+            0,
+            finding["dimension"],
+            "43",
+            "0",
+            None,
+            finding_id=finding["id"],
+            metric="recurring_friction",
+            baseline_value=43.0,
+        )  # measure_after_runs NULL
+        (imp,) = atlas_db._rows(
+            self.conn.execute("SELECT * FROM improvements WHERE id=?", (legacy,))
+        )
+        new = atlas_doctor.supersede_unit_mismatch(self.conn, imp, finding, 5.0)
+        got = self.conn.execute(
+            "SELECT measure_after_runs FROM improvements WHERE id=?", (new,)
+        ).fetchone()[0]
+        self.assertEqual(got, atlas_doctor.DEFAULT_MEASURE_AFTER)
+
+    def test_remeasured_legacy_row_keeps_its_verdict_and_gets_a_new_baseline(self):
+        finding = self._seed_friction_finding(5)
+        imp = atlas_db.record_improvement(
+            self.conn,
+            0,
+            finding["dimension"],
+            "5",
+            "",
+            "recorded by dashboard remeasure",
+            finding_id=finding["id"],
+            metric="recurring_friction",
+            baseline_value=5.0,
+        )
+        atlas_db.set_improvement_remeasure(self.conn, imp, 5.0, "no_change")
+        (u,) = atlas_doctor.remeasure(self.conn, self.root)
+        self.assertEqual(
+            (u["id"], u["verdict"], u["old_unit"]), (imp, "no_change", "raw")
+        )
+        self.assertEqual(u["new_unit"], "per100_sessions")
+        self.assertEqual(
+            self.conn.execute(
+                "SELECT verdict FROM improvements WHERE id=?", (imp,)
+            ).fetchone()[0],
+            "no_change",  # valid in its own unit: history is not rewritten
+        )
+        latest = self.conn.execute(
+            "SELECT note, verdict FROM improvements WHERE finding_id=? ORDER BY id DESC",
+            (finding["id"],),
+        ).fetchone()
+        self.assertIn("unit=per100_sessions", latest[0])
+        self.assertIsNone(latest[1])
+
     def test_remeasure_regressed_verdict(self):
         finding = self._seed_friction_finding(5)
         self._due_improvement(finding, baseline_value=5.0)
@@ -1510,7 +1766,9 @@ class AtlasDoctorMiningTest(unittest.TestCase):
             finding["dimension"],
             "5",
             "0",
-            None,
+            atlas_doctor.with_unit(
+                None, atlas_doctor.metric_unit(finding["fingerprint"])
+            ),
             finding_id=finding["id"],
             metric="friction_count",
             baseline_value=5.0,
@@ -1608,7 +1866,7 @@ class RemeasureVerdictTest(unittest.TestCase):
         for i in range(n_ok + n_err):
             atlas_db.insert_tool_call(
                 self.conn,
-                "s1",
+                "s1" if i % 2 else "s2",  # errors span 2 sessions (miner floor)
                 {
                     "message_uuid": f"m{i}",
                     "ts": time.time() - 100 + i,
@@ -1655,20 +1913,20 @@ class RemeasureVerdictTest(unittest.TestCase):
         )
 
     def test_rate_below_threshold_is_measured_not_zeroed(self):
-        # 5 of 10 errored -> finding; then 8 more clean calls -> 5/18 = 0.28 (still
-        # above 0.2) -- push further so it drops under the 0.2 threshold: 5/30.
-        self._tool_calls(5, 5)
+        # 10 of 20 errored -> finding; then 40 more clean calls -> 10/60 = 0.167,
+        # under the 0.2 threshold.
+        self._tool_calls(10, 10)
         atlas_doctor.mine(self.conn, self.root)
         fp = "tool_error_rate_high:builtin:bash"
         finding = self._finding(fp)
         self._due(finding, 0.5, "tool_error_rate")
-        self._tool_calls(20, 0)  # 5/30 = 0.1667 < 0.2: no longer fires
+        self._tool_calls(40, 0)  # 10/60 = 0.1667 < 0.2: no longer fires
         updated = atlas_doctor.remeasure(self.conn, self.root)
         self.assertEqual(updated[0]["verdict"], "improved")
-        self.assertAlmostEqual(updated[0]["remeasured_value"], 5 / 30, places=3)
+        self.assertAlmostEqual(updated[0]["remeasured_value"], 10 / 60, places=3)
 
     def test_under_min_calls_is_not_reproduced_with_null_value(self):
-        self._tool_calls(5, 5)
+        self._tool_calls(10, 10)
         atlas_doctor.mine(self.conn, self.root)
         finding = self._finding("tool_error_rate_high:builtin:bash")
         self._due(finding, 0.5, "tool_error_rate")
@@ -1807,6 +2065,107 @@ class TestContextToolingRoot(unittest.TestCase):
             os.makedirs(sub)
             got = atlas_doctor._repo_root(sub)
             self.assertEqual(os.path.realpath(got), os.path.realpath(d))
+
+
+class ContentDriftTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp)
+        self.ref = os.path.join(self.tmp, "ref")
+        self.inst = os.path.join(self.tmp, "inst")
+        for root in (self.ref, self.inst):
+            for rel in (
+                "hooks/a.py",
+                "omp/index.ts",
+                "contracts/c.json",
+                "agents/x.md",
+            ):
+                p = os.path.join(root, rel)
+                os.makedirs(os.path.dirname(p), exist_ok=True)
+                with open(p, "w") as f:
+                    f.write("same")
+            # excluded files may differ freely
+            for rel in ("hooks/test_a.py", "omp/index.test.ts"):
+                with open(os.path.join(root, rel), "w") as f:
+                    f.write(root)
+
+    def test_identical_ok(self):
+        ok, detail = atlas_doctor.check_content_drift(
+            "omp", self.inst, "atlas", reference=self.ref
+        )
+        self.assertTrue(ok, detail)
+
+    def test_changed_hook_warns_with_path_and_remedy(self):
+        with open(os.path.join(self.inst, "hooks", "a.py"), "w") as f:
+            f.write("changed")
+        ok, detail = atlas_doctor.check_content_drift(
+            "omp", self.inst, "atlas", reference=self.ref
+        )
+        self.assertFalse(ok)
+        self.assertIn("1 file(s)", detail)
+        self.assertIn("hooks/a.py", detail)
+        self.assertIn(atlas_doctor.DRIFT_REMEDY, detail)
+
+    def test_missing_install_path_skips(self):
+        ok, detail = atlas_doctor.check_content_drift(
+            "omp", os.path.join(self.tmp, "nope"), "atlas", reference=self.ref
+        )
+        self.assertTrue(ok)
+        self.assertIn("skipped", detail)
+        ok, _ = atlas_doctor.check_content_drift("omp", "", "atlas", reference=self.ref)
+        self.assertTrue(ok)
+
+    def test_source_checkout_beats_marketplace_clone_and_env_root(self):
+        """Install == marketplace clone (same stale commit); source differs.
+        CLAUDE_PLUGIN_ROOT points at the install, as in a real session."""
+        plugins = os.path.join(self.tmp, "plugins")
+        clone_plugin = os.path.join(plugins, "mkt", "plugins", "atlas")
+        shutil.copytree(self.inst, clone_plugin)
+        write_json(
+            os.path.join(plugins, "known_marketplaces.json"),
+            {"mkt": {"installLocation": os.path.join(plugins, "mkt")}},
+        )
+        with open(os.path.join(self.ref, "hooks", "a.py"), "w") as f:
+            f.write("newer source")
+        env = {"CLAUDE_PLUGIN_ROOT": self.inst, "ATLAS_SOURCE": self.ref}
+        with (
+            mock.patch.dict(os.environ, env),
+            mock.patch.object(atlas_doctor, "PLUGINS_DIR", plugins),
+        ):
+            self.assertEqual(atlas_doctor._reference_root("atlas"), self.ref)
+            ok, detail = atlas_doctor.check_content_drift("omp", self.inst, "atlas")
+        self.assertFalse(ok)
+        self.assertIn("hooks/a.py", detail)
+
+    def test_cwd_checkout_beats_marketplace_clone_for_cache_run_doctor(self):
+        """Doctor file lives in a cache-shaped dir (no .git); cwd is a source
+        checkout whose content differs from the install: drift is reported."""
+        cache = os.path.join(self.tmp, "cache", "scripts")
+        os.makedirs(cache)
+        src = os.path.join(self.tmp, "checkout")
+        shutil.copytree(self.ref, os.path.join(src, "plugins", "atlas"))
+        os.makedirs(os.path.join(src, ".git"))
+        manifest = os.path.join(src, "plugins", "atlas", ".claude-plugin")
+        os.makedirs(manifest)
+        write_json(os.path.join(manifest, "plugin.json"), {"name": "atlas"})
+        with open(os.path.join(src, "plugins", "atlas", "hooks", "a.py"), "w") as f:
+            f.write("unpushed source")
+        plugins = os.path.join(self.tmp, "plugins")
+        shutil.copytree(self.inst, os.path.join(plugins, "mkt", "plugins", "atlas"))
+        write_json(
+            os.path.join(plugins, "known_marketplaces.json"),
+            {"mkt": {"installLocation": os.path.join(plugins, "mkt")}},
+        )
+        env = {k: v for k, v in os.environ.items() if k != "ATLAS_SOURCE"}
+        with (
+            mock.patch.dict(os.environ, env, clear=True),
+            mock.patch.object(atlas_doctor, "__file__", os.path.join(cache, "d.py")),
+            mock.patch.object(atlas_doctor, "PLUGINS_DIR", plugins),
+            mock.patch("os.getcwd", return_value=os.path.join(src, "plugins")),
+        ):
+            ok, detail = atlas_doctor.check_content_drift("omp", self.inst, "atlas")
+        self.assertFalse(ok)
+        self.assertIn("hooks/a.py", detail)
 
 
 if __name__ == "__main__":

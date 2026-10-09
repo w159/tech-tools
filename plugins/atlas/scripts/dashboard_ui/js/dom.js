@@ -148,6 +148,74 @@ export function replace(node, ...children) {
   return node;
 }
 
+// In-place update: reconcile `oldEl`'s children with `newEl`'s (a freshly built twin) instead of replacing the region.
+// Identical subtrees are kept as-is (listeners, focus, scroll, selection); containers with the same tag/attributes are
+// descended into; anything else is swapped, carrying over open <details>, focus and edited field values. Pages call this for
+// periodic refresh and post-save updates so the operator never loses their place.
+const STRUCT = new Set(["DIV", "SECTION", "UL", "OL", "TBODY", "TABLE", "DETAILS", "ARTICLE", "MAIN", "NAV", "FORM", "ASIDE"]);
+const attrKey = (el) => Array.from(el.attributes).filter((a) => a.name !== "open").map((a) => a.name + "=" + a.value).sort().join("|");
+const fieldsOf = (el) => [...(el.matches && el.matches("input,textarea,select") ? [el] : []), ...el.querySelectorAll("input,textarea,select")];
+
+function carryState(old, nu) {
+  const oldD = old.matches("details") ? [old, ...old.querySelectorAll("details")] : [...old.querySelectorAll("details")];
+  const newD = nu.matches("details") ? [nu, ...nu.querySelectorAll("details")] : [...nu.querySelectorAll("details")];
+  if (oldD.length === newD.length) oldD.forEach((d, i) => { if (d.open) newD[i].open = true; });
+  const of = fieldsOf(old);
+  const nf = fieldsOf(nu);
+  const active = document.activeElement;
+
+  if (of.length === nf.length) {
+    of.forEach((f, i) => {
+      const dirty = f === active || (f.type === "checkbox" || f.type === "radio" ? f.checked !== f.defaultChecked : f.value !== f.defaultValue);
+      if (!dirty) return;
+      if (f.type === "checkbox" || f.type === "radio") nf[i].checked = f.checked;
+      else nf[i].value = f.value;
+    });
+  }
+  // Focus follows the same child-index path inside the replacement (buttons and links too, not just fields).
+  const path = [];
+  for (let n = active; old.contains(active) && n && n !== old; n = n.parentNode) path.unshift(Array.prototype.indexOf.call(n.parentNode.childNodes, n));
+  return () => {
+    if (!old.contains(active) && active !== old) return;
+    let n = nu;
+    for (const i of path) n = n && n.childNodes[i];
+    if (n && n.focus && n.isConnected) {
+      n.focus({ preventScroll: true });
+      try { n.setSelectionRange(active.selectionStart, active.selectionEnd); } catch (_err) { /* not a text field */ }
+    }
+  };
+}
+
+const sameStruct = (a, b) => a.nodeType === 1 && b.nodeType === 1 && a.tagName === b.tagName && STRUCT.has(a.tagName) && attrKey(a) === attrKey(b);
+
+function syncNode(parent, old, nu) {
+  if (!old) { parent.appendChild(nu); return; }
+  if (old.isEqualNode(nu)) return;
+  if (old.nodeType === 3 && nu.nodeType === 3) { old.nodeValue = nu.nodeValue; return; }
+  if (sameStruct(old, nu)) {
+    syncChildren(old, nu);
+    return;
+  }
+  const restore = old.nodeType === 1 && nu.nodeType === 1 ? carryState(old, nu) : null;
+  parent.replaceChild(nu, old);
+  if (restore) restore();
+}
+
+function syncChildren(oldEl, newEl) {
+  const next = Array.from(newEl.childNodes);
+  const prev = Array.from(oldEl.childNodes);
+  next.forEach((n, i) => syncNode(oldEl, prev[i], n));
+  for (let i = next.length; i < prev.length; i++) oldEl.removeChild(prev[i]);
+}
+
+export function patchInto(oldEl, newEl) {
+  const main = document.getElementById("main");
+  const top = main ? main.scrollTop : 0;
+  syncChildren(oldEl, newEl);
+  if (main && main.scrollTop !== top) main.scrollTop = top;
+  return oldEl;
+}
+
 export function debounce(fn, ms) {
   let t = null;
   const wrapped = (...args) => {

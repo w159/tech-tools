@@ -101,7 +101,7 @@ class ColonyTest(unittest.TestCase):
     def test_quiet_with_open_todo_is_stuck_never_dead_without_a_pid(self):
         s = self.states(now=__import__("time").time() + 3600)
         self.assertEqual(s["w-idle"], "stuck")
-        self.assertEqual(s["w-sub"], "stuck")  # in-process subagent: no pane, no pid
+        self.assertEqual(s["w-sub"], "parked")  # no pane, no pid, silent: parked wins over stuck
 
     def test_tasks_join_by_owner_and_lead_is_kind_lead(self):
         ms = {m["name"]: m for m in colony.build_colony(self.root)["members"]}
@@ -261,6 +261,162 @@ class ColonyTest(unittest.TestCase):
         self.assertEqual(self.states()["w-bad"], "dead")
         atlas_todo.register_member(self.root, "w-bad", self.chan)
         self.assertEqual(self.states()["w-bad"], "running")
+
+    def test_deliver_flags_and_last_sent_follow_the_hook_receipt(self):
+        d = colony.build_colony(self.root)
+        ms = {m["name"]: m for m in d["members"]}
+        self.assertEqual(d["channel"]["name"], self.chan)
+        self.assertFalse(ms["w-fin"]["deliver"]["ok"])
+        self.assertIn("finished", ms["w-fin"]["deliver"]["reason"])
+        self.assertEqual(ms["w-idle"]["deliver"]["how"], "pane")
+        self.assertEqual(ms["w-sub"]["deliver"]["how"], "hook")
+        self.assertIsNone(ms["w-sub"]["last_sent"])
+        code, body = colony.h_colony_send(
+            Ctx(self.root, "w-sub", {"text": "hello sub", "project": self.root})
+        )
+        self.assertEqual(code, 200)
+        self.assertTrue(body["message"]["delivery_text"].startswith("queued"))
+        sent = {m["name"]: m for m in colony.build_colony(self.root)["members"]}[
+            "w-sub"
+        ]["last_sent"]
+        self.assertEqual(sent["status"], "queued")
+        # the worker's hook drains it: the dashboard now reports the receipt time
+        out = atlas_dash_irc.worker_inbox.drain(self.root, "w-sub")
+        self.assertIn("hello sub", out)
+        sent = {m["name"]: m for m in colony.build_colony(self.root)["members"]}[
+            "w-sub"
+        ]["last_sent"]
+        self.assertEqual(sent["status"], "read")
+        self.assertTrue(sent["delivery_text"].startswith("delivered to w-sub at "))
+
+    def test_channel_views_carry_member_state_current_and_refusal(self):
+        roster, cur = atlas_dash_irc._roster(self.root)
+        self.assertEqual(cur, self.chan)
+        view = atlas_dash_irc._chan_view(
+            self.root, atlas_todo.get_channel(self.root, self.chan), {}, roster, cur
+        )
+        self.assertTrue(view["current"])
+        mem = {m["name"]: m for m in view["members"]}
+        self.assertEqual(mem["w-fin"]["live_state"], "finished")
+        self.assertEqual(mem["w-fin"]["state"], "done")
+        self.assertFalse(mem["w-fin"]["deliver"]["ok"])
+        self.assertEqual(mem["w-bad"]["state"], "fail")
+
+    def test_current_channel_prefers_a_session_lead_over_a_busier_named_lead(self):
+        chans = [
+            {"kind": "lead", "lead": "selffix", "last_activity": 9},
+            {"kind": "lead", "lead": "lead-a1b2c3", "last_activity": 1},
+        ]
+        self.assertEqual(colony._active_lead(chans)["lead"], "lead-a1b2c3")
+
+    def test_pane_less_pid_less_worker_silent_10_min_is_parked_and_cannot_receive(self):
+        later = __import__("time").time() + colony.PARKED_S + 60
+        ms = {
+            m["name"]: m for m in colony.build_colony(self.root, now=later)["members"]
+        }
+        self.assertFalse(ms["w-sub"]["deliver"]["ok"])
+        self.assertIn("parked", ms["w-sub"]["deliver"]["reason"])
+        self.assertTrue(ms["w-idle"]["deliver"]["ok"])  # has a live pane
+        # the state label comes from the same decision as deliver: parked, never running/idle
+        self.assertEqual(ms["w-sub"]["state"], "parked")
+        self.assertTrue(ms["w-sub"]["parked"])
+        self.assertNotEqual(ms["w-idle"]["state"], "parked")
+        fresh = {m["name"]: m for m in colony.build_colony(self.root)["members"]}
+        self.assertTrue(fresh["w-sub"]["deliver"]["ok"])
+
+    def test_member_finish_cli_resolves_an_omp_subagent_id(self):
+        import subprocess
+
+        out = subprocess.run(
+            [
+                sys.executable,
+                str(Path(colony.__file__).with_name("atlas_todo.py")),
+                "member-finish",
+                "--root",
+                self.root,
+                "--agent",
+                "3-w-sub",
+                "--exit",
+                "0",
+            ],
+            capture_output=True,
+            text=True,
+            env={**os.environ, "ATLAS_HOME": self.root},
+        )
+        self.assertIn('"member": "w-sub"', out.stdout)
+        self.assertEqual(self.states()["w-sub"], "finished")
+
+    def _sessions(self, age, now):
+        """A fake omp session dir holding the lead's transcript (id starts abc123), `age` seconds old."""
+        base = Path(self.root) / "sessions"
+        f = base / "-proj" / "2026-10-09T16-00-00-000Z_abc123ff-0000.jsonl"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.touch()
+        t = now - age
+        os.utime(f, (t, t))
+        return base
+
+    def test_lead_liveness_is_derived_from_session_signals_not_a_pane(self):
+        now = __import__("time").time()
+        for age, db, want_active, text in (
+            (30, {}, True, "active, last session write 30s ago"),
+            (600, {}, False, "idle 10 min"),
+            (600, {"tool call": now - 5}, True, "active, last tool call 5s ago"),
+        ):
+            base = self._sessions(age, now)
+            with (
+                mock.patch.object(colony, "_session_roots", lambda b=base: [b]),
+                mock.patch.object(colony, "_db_last", lambda _s, d=db: d),
+            ):
+                lv = colony.lead_liveness(self.root, LEAD, now)
+                lead = next(
+                    m
+                    for m in colony.build_colony(self.root, now=now)["members"]
+                    if m["kind"] == "lead"
+                )
+            self.assertIsNotNone(lv)
+            assert lv
+            self.assertEqual(lv["active"], want_active)
+            self.assertEqual(lv["text"], text)
+            self.assertEqual(lead["state"], "running" if want_active else "idle")
+            self.assertIsNone(
+                lead["pane_id"]
+            )  # no pane involved: headless is only "no terminal pane"
+            self.assertTrue(lead["headless"])
+            self.assertEqual(lead["liveness"]["text"], text)
+        with (
+            mock.patch.object(colony, "_session_roots", lambda: []),
+            mock.patch.object(colony, "_db_last", lambda _s: {}),
+        ):
+            self.assertIsNone(colony.lead_liveness(self.root, LEAD, now))
+            self.assertIsNone(colony.lead_liveness(self.root, "selffix", now))
+
+    def test_a_note_to_the_lead_is_tracked_and_reads_as_delivered_only_after_the_hook_drains_it(
+        self,
+    ):
+        dead = {"reachable": False, "agents": []}
+        with mock.patch.object(atlas_herdr, "agents", lambda: dead):
+            for to in ("lead", LEAD):  # bare `lead` resolves to the channel's lead
+                code, body = atlas_dash_irc._post(
+                    Ctx(self.root),
+                    {"to": to, "body": f"hi {to}", "channel": self.chan},
+                    self.root,
+                )
+                self.assertEqual(code, 200)
+                self.assertEqual(body["message"]["to"], LEAD)
+                self.assertEqual(body["message"]["status"], "queued")
+                self.assertTrue(body["message"]["delivery_text"].startswith("queued"))
+        import worker_inbox  # the hook module, as the lead's PostToolUse runs it
+
+        out = worker_inbox.drain(self.root, LEAD, aliases=("lead",))
+        self.assertIn("hi lead", out)
+        self.assertIn(f"hi {LEAD}", out)
+        msgs, _more = atlas_dash_irc.read_messages([self.root])
+        got = {m["body"]: m for m in msgs if m["body"].startswith("hi ")}
+        self.assertEqual({m["status"] for m in got.values()}, {"read"})
+        self.assertTrue(
+            got["hi lead"]["delivery_text"].startswith(f"delivered to {LEAD} at ")
+        )
 
 
 if __name__ == "__main__":

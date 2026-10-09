@@ -3,17 +3,19 @@
 // rollup across projects, ledger, nudges, lessons and score trends.
 // No innerHTML; all data via h() text children.
 import { h, replace } from '../dom.js';
+import { keepView } from '../keep-view.js';
+import { activeLabel, focusByLabel } from '../focus.js';
 import {
   Badge, Card, Table, EmptyState, StatusDot, Timeline, LineChart, Drawer, openDrawer,
 } from '../components.js';
 
 const STAGES = ['observe', 'mine', 'propose', 'apply', 'remeasure'];
 const STATUS_ACTIONS = [
-  { to: 'accepted', label: 'Accept', from: ['open'] },
+  { to: 'accepted', label: 'Accept', from: ['open'], hint: 'Agree this finding is real and keep it in the queue to fix.' },
   { to: 'fixed', label: 'Mark resolved (manual)', from: ['open', 'accepted'], hint: 'Records that you fixed this yourself; nothing is verified until Remeasure.' },
-  { to: 'dismissed', label: 'Dismiss', from: ['open', 'accepted'] },
-  { to: 'wontfix', label: "Won't fix", from: ['open', 'accepted'] },
-  { to: 'open', label: 'Reopen', from: ['fixed', 'dismissed', 'wontfix'] },
+  { to: 'dismissed', label: 'Dismiss', from: ['open', 'accepted'], hint: 'Close it as not a real problem. Reopen brings it back.' },
+  { to: 'wontfix', label: "Won't fix", from: ['open', 'accepted'], hint: 'A real problem you choose to live with. Reopen brings it back.' },
+  { to: 'open', label: 'Reopen', from: ['fixed', 'dismissed', 'wontfix'], hint: 'Put it back in the queue of things waiting for a decision.' },
 ];
 const STATUS_TONE = {
   open: 'warn', accepted: 'info', fixed: 'ok', dismissed: 'info', wontfix: 'info',
@@ -76,7 +78,7 @@ function describeError(err) {
 let S = null;
 
 function freshState(ctx) {
-  return { ctx, mount: null, data: null, error: null, busy: new Set(), destroyed: false, inFlight: false, filter: 'all' };
+  return { ctx, mount: null, data: null, error: null, busy: new Set(), destroyed: false, inFlight: false, filter: 'all', all: false };
 }
 
 function notify(msg, kind) {
@@ -86,6 +88,7 @@ function notify(msg, kind) {
 async function fetchImprove() {
   const p = {};
   if (S.ctx.project && S.ctx.project !== 'all') p.project = S.ctx.project;
+  if (S.all) p.limit = 'all';
   return S.ctx.api.get('/api/v2/improve', p);
 }
 
@@ -132,7 +135,7 @@ async function mutate(finding, path, payload, okMsg) {
 const setStatus = (f, to) => mutate(f, '/api/v2/improve/finding', { id: f.id, status: to },
   `“${f.title || f.id}” marked ${to}`);
 const remeasure = (f) => mutate(f, '/api/v2/improve/remeasure', { id: f.id },
-  `Re-measured “${f.title || f.id}”`);
+  `Remeasure “${f.title || f.id}”`);
 
 function kv(label, value) {
   return h('div', { class: 'pg-kv' }, h('dt', {}, label), h('dd', {}, text(value)));
@@ -172,11 +175,12 @@ function stageStrip() {
     ...STAGES.map((id, i) => {
       const s = byId.get(id) || { id, label: id, count: 0, status: 'info' };
       const status = normStatus(s.status);
-      return h('li', { class: `pg-stage is-${status}` },
+      return h('li', { class: `pg-stage is-${status}`, title: s.hint || '' },
         h('span', { class: 'pg-stage-step', 'aria-hidden': 'true' }, String(i + 1)),
         h('span', { class: 'pg-stage-label' }, s.label || id),
         h('span', { class: 'pg-stage-count' }, String(s.count ?? 0)),
-        Badge({ status, text: s.status || 'idle' }));
+        Badge({ status, text: s.status || 'idle' }),
+        s.hint ? h('span', { class: 'pg-hint' }, s.hint) : null);
     }));
 }
 
@@ -220,6 +224,7 @@ function findingColumns() {
         h('span', { class: 'pg-evt' },
           h('span', { class: 'pg-evt-title' }, r.title || r.id),
           Badge({ status: SEVERITY_TONE[r.severity] || 'info', text: r.severity || 'info' })),
+        r.actionable && r.proposed_action ? h('span', { class: 'pg-hint' }, `Suggested: ${r.proposed_action}`) : null,
         delta);
     } },
     { key: 'rule', label: 'Rule · project', width: '170px', render: (r) => h('div', { class: 'pg-rulecell' },
@@ -230,27 +235,65 @@ function findingColumns() {
   ];
 }
 
-function findingsCard() {
-  const all = S.data.findings || [];
+// Status tabs count the whole store (server `counts`); the table holds one page of it.
+function loadAll() {
+  S.all = true;
+  S.inFlight = false;
+  return refresh();
+}
+
+function findingCounts(all, sc) {
+  if (sc) return { ...sc, all: Object.values(sc).reduce((a, b) => a + b, 0) };
   const counts = { all: all.length };
   for (const f of all) counts[f.status || 'open'] = (counts[f.status || 'open'] || 0) + 1;
-  // Hide empty status tabs so ten filters never overflow; keep the active one.
-  const tabs = FILTER_TABS.filter((t) => t === 'all' || t === S.filter || counts[t] || ['open', 'accepted', 'wontfix'].includes(t));
+  return counts;
+}
+
+// Hide empty status tabs so ten filters never overflow; keep the active one.
+function visibleTabs(counts) {
+  const always = ['all', S.filter, 'open', 'accepted', 'wontfix'];
+  return FILTER_TABS.filter((t) => always.includes(t) || counts[t]);
+}
+
+function partialNotice(shown, total) {
+  return h('p', { class: 'pg-hint', role: 'status' },
+    `Showing the first ${shown} of ${total}; doctor findings waiting for you come first. `,
+    S.all
+      ? 'The list is capped at 500 rows.'
+      : h('button', { type: 'button', class: 'btn btn-ghost', onclick: loadAll }, `Show all ${total}`));
+}
+
+function findingsEmpty(hasAny) {
+  return EmptyState({
+    icon: 'check', title: hasAny ? `No ${statusText(S.filter)} findings` : 'No findings yet',
+    body: hasAny ? 'Pick another status filter.' : 'atlas-doctor has nothing to report for this scope.',
+    command: hasAny ? undefined : 'python3 plugins/atlas/scripts/atlas_doctor.py',
+  });
+}
+
+function filterTab(t, counts, partial) {
+  return h('button', {
+    type: 'button', class: `pg-seg${S.filter === t ? ' is-active' : ''}`, 'aria-pressed': String(S.filter === t),
+    onclick: () => { S.filter = t; if (partial && !S.all && t !== 'all') loadAll(); else draw(); },
+  }, `${statusText(t)} ${counts[t] || 0}`);
+}
+
+function findingsCard() {
+  const all = S.data.findings || [];
+  const counts = findingCounts(all, S.data.counts || null);
+  const partial = all.length < counts.all;
   const rows = S.filter === 'all' ? all : all.filter((f) => (f.status || 'open') === S.filter);
   return Card({
-    title: `Findings (${all.length})`,
+    title: `Findings (${counts.all})`,
     actions: [h('div', { class: 'pg-segment', role: 'group', 'aria-label': 'Filter findings by status' },
-      ...tabs.map((t) => h('button', {
-        type: 'button', class: `pg-seg${S.filter === t ? ' is-active' : ''}`, 'aria-pressed': String(S.filter === t),
-        onclick: () => { S.filter = t; draw(); },
-      }, `${statusText(t)} ${counts[t] || 0}`)))],
-    children: [rows.length
-      ? Table({ columns: findingColumns(), rows, dense: true, onRow: openFinding })
-      : EmptyState({
-        icon: 'check', title: all.length ? `No ${statusText(S.filter)} findings` : 'No findings yet',
-        body: all.length ? 'Pick another status filter.' : 'atlas-doctor has nothing to report for this scope.',
-        command: all.length ? undefined : 'python3 plugins/atlas/scripts/atlas_doctor.py',
-      })],
+      ...visibleTabs(counts).map((t) => filterTab(t, counts, partial)))],
+    children: [
+      h('p', { class: 'pg-hint' },
+        'Things the doctor noticed. Open = waiting for your decision (Accept, Mark resolved, Dismiss or Won\u2019t fix); Remeasure re-checks the metric against its baseline. Rows marked read-only come from the verification ledger and cannot be changed here (they also count in the Open tab).'),
+      partial ? partialNotice(all.length, counts.all) : null,
+      rows.length
+        ? Table({ columns: findingColumns(), rows, dense: true, onRow: openFinding })
+        : findingsEmpty(all.length > 0)],
   });
 }
 
@@ -370,7 +413,7 @@ function nudgesCard() {
       recent.length
         ? h('ul', { class: 'pg-list' }, ...recent.slice(0, 12).map((r) => h('li', {},
           h('span', { class: 'pg-mono' }, typeof r === 'object' ? text(r.ts || r.time || '') : ''),
-          ' ', typeof r === 'object' ? text(`session ${r.session || ''}${r.emitted ? ` · ${r.emitted} emitted` : ''}`) : String(r))))
+          ' ', typeof r === 'object' ? text(`session ${r.session || ''}: ${r.emitted ? `${r.emitted} reminder${r.emitted > 1 ? 's' : ''} shown` : 'checked, nothing to say'}`) : String(r))))
         : h('p', { class: 'pg-hint' }, 'No nudges sent recently.'),
     ],
   });
@@ -564,20 +607,15 @@ function body() {
 
 function draw() {
   if (!S || !S.mount || S.destroyed) return;
-  const active = document.activeElement;
-  const label = active && S.mount.contains(active) ? active.getAttribute('aria-label') : null;
-  replace(S.mount, 
+  const label = activeLabel(S.mount);
+  keepView(S.mount, (t) => replace(t,
     h('header', { class: 'pg-head' },
       h('h1', { class: 'pg-title' }, 'Self-improvement'),
       h('p', { class: 'pg-sub' }, 'Observe, mine, propose, apply, then remeasure — every change is checked against its baseline.'),
       h('div', { class: 'pg-head-actions' },
         h('button', { type: 'button', class: 'btn', onclick: refresh }, 'Refresh'))),
-    body());
-  if (label) {
-    for (const el of S.mount.querySelectorAll('[aria-label]')) {
-      if (el.getAttribute('aria-label') === label && typeof el.focus === 'function') { el.focus(); break; }
-    }
-  }
+    body()));
+  focusByLabel(S.mount, label);
 }
 
 export default {
@@ -607,6 +645,7 @@ export default {
   onEvent(name, _ctx, data) {
     if (!S || S.destroyed || S.busy.size) return;
     if (name === 'improve' && data && Array.isArray(data.findings)) {
+      if (S.all) { refresh(); return; } // the stream carries the paged view; keep the full list
       S.data = data;
       S.error = null;
       draw();

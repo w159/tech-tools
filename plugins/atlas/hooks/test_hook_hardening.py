@@ -336,11 +336,11 @@ class BreakerVisibilityTests(unittest.TestCase):
             self.assertEqual(allowed, [True] * 5 + [False] * 4)
             for ok, text in results[5:]:
                 self.assertIn("completion_gate BYPASSED", text)
-            fp = os.path.join(home, "hook-faults.jsonl")
-            rows = [json.loads(x) for x in open(fp).read().splitlines()]
-            self.assertEqual(len(rows), 4)  # one per bypassed Stop
-            self.assertTrue(all(r["hook"] == "completion_gate" for r in rows))
-            self.assertIn("circuit breaker", rows[0]["error"])
+            # A deliberate bypass is not a crash: no hook-faults row (the dashboard
+            # would count it as hook_crash); the trip lives in hookstate instead.
+            self.assertFalse(os.path.exists(os.path.join(home, "hook-faults.jsonl")))
+            st = json.load(open(os.path.join(home, "hookstate", "brk.json")))
+            self.assertTrue(st["breaker_tripped"])
         finally:
             for k, v in old.items():
                 if v is None:
@@ -363,8 +363,7 @@ class BreakerVisibilityTests(unittest.TestCase):
                     atlas_hook_guard.should_run({"session_id": "brk2"}, "nudge")
             finally:
                 atlas_hook_guard._now = real_now
-            fp = os.path.join(home, "hook-faults.jsonl")
-            self.assertEqual(len(open(fp).read().splitlines()), 1)
+            self.assertFalse(os.path.exists(os.path.join(home, "hook-faults.jsonl")))
         finally:
             for k, v in old.items():
                 if v is None:

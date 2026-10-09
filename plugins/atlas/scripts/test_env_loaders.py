@@ -90,6 +90,64 @@ class LoaderCase:
         self.assertIn("AUVIK_API_KEY: env file value wins over saved userConfig", err)
         self.assertNotIn("stale", err.replace("env file value", ""))
 
+    def settings(self, options, key="atlas@tech-tools"):
+        d = self.home / ".claude"
+        d.mkdir(exist_ok=True)
+        (d / "settings.json").write_text(
+            json.dumps({"pluginConfigs": {key: {"options": options}}})
+        )
+
+    def test_unexpanded_placeholder_resolves_from_plugin_configs(self):
+        self.settings({"foo": "saved-foo", "auvik_region": "us1"})
+        vals, err = self.run_loader(
+            self.base(
+                CFG_FOO="${user_config.foo}",
+                CFG_AUVIK_REGION="${user_config.auvik_region}",
+            )
+        )
+        self.assertEqual(vals["FOO"], "saved-foo")
+        self.assertEqual(vals["AUVIK_REGION"], "us1")
+        self.assertNotIn("saved-foo", err)
+
+    def test_env_file_beats_plugin_configs(self):
+        self.settings({"auvik_api_key": "saved"})
+        f = self.env_file("AUVIK_API_KEY=from-file\n")
+        vals, _ = self.run_loader(
+            self.base(
+                ATLAS_ENV_FILE=str(f), CFG_AUVIK_API_KEY="${user_config.auvik_api_key}"
+            )
+        )
+        self.assertEqual(vals["AUVIK_API_KEY"], "from-file")
+
+    def test_other_atlas_entry_is_ignored(self):
+        self.settings({"foo": "other-foo"}, key="atlas@other")
+        vals, err = self.run_loader(self.base(CFG_FOO="${user_config.foo}"))
+        self.assertIsNone(vals["FOO"])
+        self.assertNotIn("other-foo", err)
+
+    def test_exact_key_used_among_others(self):
+        self.settings({"foo": "other-foo"}, key="atlas@other")
+        p = self.home / ".claude" / "settings.json"
+        cfg = json.loads(p.read_text())
+        cfg["pluginConfigs"]["atlas@tech-tools"] = {"options": {"foo": "exact-foo"}}
+        p.write_text(json.dumps(cfg))
+        vals, _ = self.run_loader(self.base(CFG_FOO="${user_config.foo}"))
+        self.assertEqual(vals["FOO"], "exact-foo")
+
+    def test_unresolved_warns_with_name_not_value(self):
+        _, err = self.run_loader(self.base(CFG_FOO="${user_config.secretish}"))
+        self.assertEqual(err.count("FOO: unresolved"), 1)
+        self.assertIn("atlas.env", err)
+        self.assertNotIn("secretish", err)
+
+    def test_missing_or_broken_settings_is_harmless(self):
+        vals, _ = self.run_loader(self.base(CFG_FOO="${user_config.foo}"))
+        self.assertIsNone(vals["FOO"])
+        (self.home / ".claude").mkdir()
+        (self.home / ".claude" / "settings.json").write_text("{not json")
+        vals, _ = self.run_loader(self.base(CFG_FOO="${user_config.foo}"))
+        self.assertIsNone(vals["FOO"])
+
 
 class NodeLoader(LoaderCase, unittest.TestCase):
     def run_loader(self, env):

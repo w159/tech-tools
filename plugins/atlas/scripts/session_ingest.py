@@ -16,6 +16,10 @@ Two entry points:
                                                walk another agent's session tree
                                                (codex: ~/.codex/sessions,
                                                omp: ~/.omp/agent/sessions)
+                 session_ingest.py --repair-tmp-paths [--apply]
+                                               re-point temp-dir transcript_path
+                                               rows at the original omp session
+                                               file (dry run unless --apply)
 
 Beyond claude, a pluggable adapter layer (AGENT_ADAPTERS) chronicles other
 coding agents' sessions into the same store (codex, omp). The
@@ -367,6 +371,70 @@ def _read_session_cwd(path):
     return None
 
 
+SCRATCH_CWD_PREFIXES = ("/tmp", "/private/tmp", "/var/folders", "/private/var/folders")
+
+
+def scratch_cwd(cwd):
+    """A session cwd that is a fixture, never real usage: OS/system temp, a
+    `.scratch` dir, or a fixture root (/atlas-e2e*, demo repos). One definition,
+    shared by backfill and the Health Chronicle card."""
+    if not cwd:
+        return False
+    p = os.path.normpath(str(cwd))
+    if any(p == x or p.startswith(x + "/") for x in SCRATCH_CWD_PREFIXES):
+        return True
+    if "/.scratch/" in p + "/" or atlas_db.is_tmp_path(p):
+        return True
+    try:
+        import atlas_control  # type: ignore
+
+        return bool(atlas_control.is_fixture_project(p, must_exist=False))
+    except Exception:
+        return False
+
+
+def transcript_facts(path):
+    """(header id, cwd, is_subagent, has_messages) from the head of a transcript.
+    omp: the `session` header carries id/cwd and `parentSession` for a subagent
+    or fork; Claude: cwd rides on the message lines. Stops at the first message."""
+    hid = cwd = None
+    sub = msgs = False
+    try:
+        with open(path, errors="replace") as fh:
+            for line in fh:
+                try:
+                    j = json.loads(line)
+                except ValueError:
+                    continue
+                if not isinstance(j, dict):
+                    continue
+                t = j.get("type")
+                if t == "session":
+                    hid, cwd = j.get("id"), j.get("cwd")
+                    sub = bool(j.get("parentSession") or j.get("parent"))
+                elif t in ("message", "user", "assistant"):
+                    msgs = True
+                    cwd = cwd or j.get("cwd")
+                    break
+    except OSError:
+        pass
+    return hid, cwd, sub, msgs
+
+
+def skip_reason(path, facts=None):
+    """Why a transcript is not a session worth ingesting, else None: 'subagent'
+    (omp parentSession), 'empty' (no message lines), or 'scratch' (observer
+    mirror, fixture cwd). Backfill and the Chronicle card both decide with this."""
+    _hid, cwd, sub, msgs = facts or transcript_facts(path)
+    if sub:
+        return "subagent"
+    if not msgs:
+        return "empty"
+    if "claude-mem-observer-sessions" in str(path) or is_synthetic_session(path=path):
+        return "scratch"
+    return "scratch" if scratch_cwd(cwd) else None
+
+
 # --- per-file ingest cursors --------------------------------------------------
 
 # A Claude Code session is more than one transcript: subagent transcripts live
@@ -554,6 +622,22 @@ def ingest_transcript(path, conn=None, session_id=None, force=False):
             (session_id,),
         ).fetchone()
         owner_path = owner[0] if owner else None
+        # omp's bridge converts the session into a throwaway temp copy each time;
+        # once the row points at the durable original, that temp copy is still the
+        # owner's update (keep the durable path). A different durable file is not,
+        # and neither is a colony/advisor sidecar (omp_transcript.convert_file
+        # writes those to <out dir>/subagents/agent-*.jsonl, sharing the session
+        # id, and they inherit the same ATLAS_SOURCE_TRANSCRIPT as the lead).
+        source = os.environ.get("ATLAS_SOURCE_TRANSCRIPT")
+        durable_owner = bool(
+            owner_path
+            and owner_path != path
+            and atlas_db.is_tmp_path(path)
+            and not atlas_db.is_tmp_path(owner_path)
+            and os.path.basename(os.path.dirname(path)) != "subagents"
+            and (not source or source == owner_path)
+            and os.path.isfile(owner_path)
+        )
         frow = conn.execute(
             "SELECT cursor_bytes, row_keys FROM ingest_files "
             "WHERE session_id=? AND path=?",
@@ -616,7 +700,7 @@ def ingest_transcript(path, conn=None, session_id=None, force=False):
                 )
             except Exception:
                 pass
-        if owner_path and owner_path != path:
+        if owner_path and owner_path != path and not durable_owner:
             # A different transcript file sharing this sessionId (a subagent
             # file) must not move the session row's ownership columns: the
             # transcript_path/cursor stay with the file that created the row.
@@ -629,7 +713,7 @@ def ingest_transcript(path, conn=None, session_id=None, force=False):
                 session_id,
                 agent=harness_agent(),
                 project_id=meta["project_id"],
-                transcript_path=path,
+                transcript_path=owner_path if durable_owner else path,
                 cwd=meta["cwd"],
                 git_branch=meta["git_branch"],
                 model=meta["model"],
@@ -1370,6 +1454,8 @@ def backfill_agent(agent, root=None, conn=None):
                     continue
                 if is_synthetic_session(path=p):
                     continue
+                if agent == "omp" and not member and skip_reason(p):
+                    continue  # subagent/fork, empty, fixture cwd (as the Health card)
                 kwargs = {}
                 if member:
                     parent = AGENT_COLONY_PARENT[agent](dirpath)
@@ -1407,8 +1493,8 @@ def backfill(root=None, conn=None):
                 if not fn.endswith(".jsonl"):
                     continue
                 p = os.path.join(dirpath, fn)
-                if is_synthetic_session(path=p):
-                    continue  # skip observer-session mirrors and other synthetics
+                if skip_reason(p):
+                    continue  # observer mirrors, fixture cwds, empty files
                 try:
                     s = ingest_transcript(p, conn=conn)
                 except Exception:
@@ -1539,6 +1625,87 @@ def backfill_errors(roots=None, conn=None, batch=500):
             conn.close()
 
 
+def adopt_source_transcript(session_id, source, conn=None):
+    """Re-point session_logs.transcript_path at the DURABLE original session file.
+
+    omp's bridge ingests a throwaway conversion under an atlas-ingest-* temp dir
+    and deletes it when the child exits; the original ~/.omp session file is
+    retained by omp, so recording that path (not a second copy under ~/.atlas)
+    keeps every row's transcript readable. A missing or temp-dir source is
+    ignored. Returns True when a row was updated."""
+    if not session_id or not source or not os.path.isfile(source):
+        return False
+    if atlas_db.is_tmp_path(source):
+        return False
+    own = conn is None
+    if own:
+        conn = atlas_db.connect()
+    try:
+        cur = conn.execute(
+            "UPDATE session_logs SET transcript_path=? "
+            "WHERE session_id=? AND COALESCE(transcript_path,'')<>?",
+            (source, session_id, source),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        if own:
+            conn.close()
+
+
+def _omp_session_files(root=None):
+    """{session_id: path} from the `session` header of every omp session file
+    (first file seen wins when a sub-agent file carries the same id)."""
+    root = root or os.path.expanduser(AGENT_DEFAULT_ROOTS["omp"])
+    found = {}
+    for dirpath, _dirs, files in os.walk(root):
+        for name in files:
+            if not name.endswith(".jsonl"):
+                continue
+            p = os.path.join(dirpath, name)
+            try:
+                with open(p, "rb") as f:
+                    for _ in range(3):
+                        raw = f.readline(65536)
+                        if b'"type":"session"' in raw:
+                            found.setdefault(json.loads(raw)["id"], p)
+                            break
+            except Exception:
+                continue
+    return found
+
+
+def repair_tmp_transcript_paths(apply=False, root=None, conn=None):
+    """Re-point session_logs rows whose transcript_path lies under the OS temp
+    dir at the original omp session file when it still exists. Dry run unless
+    apply=True (the dry run opens the DB read-only). Returns counts."""
+    own = conn is None
+    if own:
+        if apply:
+            conn = atlas_db.connect()
+        else:
+            import sqlite3
+
+            conn = sqlite3.connect(f"file:{atlas_db.db_path()}?mode=ro", uri=True)
+    try:
+        sub, args = atlas_db.tmp_sessions_sql()
+        sids = [r[0] for r in conn.execute(sub, args).fetchall()]
+        files = _omp_session_files(root)
+        todo = [(s, files[s]) for s in sids if s in files]
+        if apply:
+            for s, p in todo:
+                adopt_source_transcript(s, p, conn=conn)
+        return {
+            "tmp_rows": len(sids),
+            "repointable": len(todo),
+            "unrecoverable": len(sids) - len(todo),
+            "applied": len(todo) if apply else 0,
+        }
+    finally:
+        if own:
+            conn.close()
+
+
 def main(argv):
     if not argv or argv[0] in ("-h", "--help"):
         print(__doc__)
@@ -1556,6 +1723,10 @@ def main(argv):
         totals = backfill(root)
         out = {**totals, "seconds": round(time.time() - t0, 1)}
         print(json.dumps(out, indent=2))
+        return 0
+    if argv[0] == "--repair-tmp-paths":
+        out = repair_tmp_transcript_paths(apply="--apply" in argv)
+        print(json.dumps({**out, "dry_run": "--apply" not in argv}, indent=2))
         return 0
     if argv[0] == "--backfill-agent":
         if len(argv) < 2 or argv[1] not in AGENT_ADAPTERS:

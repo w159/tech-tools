@@ -33,13 +33,16 @@ const defaultRun: ChannelRunner = (argv, cwd) => {
 	return code === 0 ? stdout : undefined;
 };
 
+/** Called once a dispatch has opened the lead's channel: the live view subscribes here. */
+export type OnChannelOpen = (info: { channel: string; members: string[]; cwd: string }) => void;
+
 /**
  * A revised copy of a `task` input with the CHANNEL block on every dispatch item (items without a name get one, so
  * the member name and the agent id agree); undefined when nothing changes or the board is unavailable.
  */
 export function reviseForChannel(
 	input: Record<string, unknown>,
-	opts: { cwd: string; sessionId?: string; env?: Record<string, string | undefined>; run?: ChannelRunner },
+	opts: { cwd: string; sessionId?: string; env?: Record<string, string | undefined>; run?: ChannelRunner; onOpen?: OnChannelOpen },
 ): Record<string, unknown> | undefined {
 	const env = opts.env ?? process.env;
 	if (env.ATLAS_CHANNELS === "off") return undefined;
@@ -107,7 +110,7 @@ function injectBriefs(
 function openAndInject(
 	revised: Item,
 	items: Item[],
-	opts: { cwd: string; sessionId?: string; run?: ChannelRunner },
+	opts: { cwd: string; sessionId?: string; run?: ChannelRunner; onOpen?: OnChannelOpen },
 	env: Record<string, string | undefined>,
 ): Item | undefined {
 	const run = opts.run ?? defaultRun;
@@ -117,5 +120,7 @@ function openAndInject(
 		opts.cwd,
 	);
 	const parsed = parseOpen(out, opts.cwd);
-	return parsed && injectBriefs(run, opts.cwd, items, names, parsed) ? revised : undefined;
+	if (!parsed || !injectBriefs(run, opts.cwd, items, names, parsed)) return undefined;
+	opts.onOpen?.({ channel: parsed.channel, members: names, cwd: opts.cwd });
+	return revised;
 }
