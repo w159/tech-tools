@@ -1,5 +1,17 @@
 # Component Pattern
 
+## Contents
+
+- [Props interface](#props-interface)
+- [className via cn()](#classname-via-cn)
+- [The six interaction states](#the-six-interaction-states)
+- [Backend resilience](#backend-resilience)
+- [Accessibility](#accessibility)
+- [File pattern](#file-pattern)
+- [Component file location](#component-file-location)
+- [What this pattern is not](#what-this-pattern-is-not)
+- [Verify](#verify)
+
 The contract every component this skill creates or modifies follows.
 The pattern is strict because components are composed hundreds of
 times across a codebase. A component that breaks one rule here breaks

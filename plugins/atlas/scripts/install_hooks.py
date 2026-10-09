@@ -42,7 +42,7 @@ HOOK_SPECS = {
     "optimizer": ("UserPromptSubmit", None, "prompt_optimizer.py", {"timeout": 120}),
     "format": (
         "PostToolUse",
-        "Edit|Write|MultiEdit",
+        "Edit|Write|MultiEdit|NotebookEdit",
         "format_after_edit.py",
         {"async": True, "timeout": 60},
     ),

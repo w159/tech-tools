@@ -1,5 +1,15 @@
 # Architecture mapping (atlas-audit mode)
 
+## Contents
+
+- [Zero-arg discovery](#zero-arg-discovery)
+- [Workflow shape](#workflow-shape)
+- [Evidence contract](#evidence-contract)
+- [Filename safety](#filename-safety)
+- [Boundary](#boundary)
+- [Output](#output)
+- [Anti-patterns to reject in the proposal](#anti-patterns-to-reject-in-the-proposal)
+
 Discovery-first codebase mapper. You supply no arguments. The cartographer reads the repo, proposes its own feature boundaries, maps each feature as a Mermaid flowchart with every node labeled file:line, finds structural duplication across features, and proposes the simplest unified architecture. Everything lands in docs/audits/atlas-audit-<date>/.
 
 **Elicitation:** zero-arg means zero *required* input, not zero dialogue. If discovery finds more than one plausible codebase root (monorepo with several apps, nested projects), ask ONE AskUserQuestion - which root(s) to map (multiSelect, "all of them" as an option) - before fanning out. Everything else (features, boundaries, hotspots) is discovered, never asked.

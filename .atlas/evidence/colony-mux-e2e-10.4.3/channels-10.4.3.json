@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "channels": {
+    "atlas-e2e-colony2@main": {
+      "name": "atlas-e2e-colony2@main",
+      "kind": "main",
+      "parent": null,
+      "lead": null,
+      "members": [
+        {
+          "name": "lead-9f59ed",
+          "role": "lead",
+          "parent": null,
+          "joined": 1791487219.488904
+        }
+      ],
+      "project_root": "/Users/jerry/atlas-e2e-colony2",
+      "branch": "main",
+      "created": 1791487219.4889011,
+      "last_activity": 1791487219.4889011
+    },
+    "atlas-e2e-colony2@main/lead-9f59ed": {
+      "name": "atlas-e2e-colony2@main/lead-9f59ed",
+      "kind": "lead",
+      "parent": "atlas-e2e-colony2@main",
+      "lead": "lead-9f59ed",
+      "members": [
+        {
+          "name": "lead-9f59ed",
+          "role": "lead",
+          "parent": null,
+          "joined": 1791487219.488906
+        },
+        {
+          "name": "briefs",
+          "role": "subagent",
+          "parent": "lead-9f59ed",
+          "joined": 1791487219.488908
+        },
+        {
+          "name": "Alpha",
+          "role": "subagent",
+          "parent": "lead-9f59ed",
+          "joined": 1791487242.929992,
+          "pane_id": "wP:p5",
+          "pid": 33786,
+          "pid_start": "Thu Oct 8 15:20:43 2026",
+          "exit_code": 0,
+          "ended_at": 1791487298.471369
+        },
+        {
+          "name": "Beta",
+          "role": "subagent",
+          "parent": "lead-9f59ed",
+          "joined": 1791487243.004597,
+          "pane_id": "wP:p7",
+          "pid": 33798,
+          "pid_start": "Thu Oct 8 15:20:43 2026",
+          "exit_code": 0,
+          "ended_at": 1791487294.2454872
+        },
+        {
+          "name": "docs-changelog",
+          "role": "subagent",
+          "parent": "lead-9f59ed",
+          "joined": 1791487414.394145
+        }
+      ],
+      "project_root": "/Users/jerry/atlas-e2e-colony2",
+      "branch": "main",
+      "created": 1791487219.488905,
+      "last_activity": 1791487414.394145
+    }
+  }
+}

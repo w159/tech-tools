@@ -9,10 +9,6 @@ export interface ThreatLockerClientConfig {
 export interface PaginationParams {
   pageNumber?: number;
   pageSize?: number;
-  isAscending?: boolean;
-  orderBy?: string;
-  searchText?: string;
-  childOrganizations?: boolean;
 }
 
 export interface PaginatedResponse<T> {
@@ -23,22 +19,15 @@ export interface PaginatedResponse<T> {
   hasMore: boolean;
 }
 
-export interface SearchBody extends PaginationParams {
-  pageNumber: number;
-  pageSize: number;
-  isAscending: boolean;
-  orderBy: string;
-  searchText: string;
-  childOrganizations: boolean;
-}
-
-export function buildSearchBody(params: Partial<PaginationParams> = {}): SearchBody {
-  return {
-    pageNumber: params.pageNumber ?? 1,
-    pageSize: params.pageSize ?? 25,
-    isAscending: params.isAscending ?? true,
-    orderBy: params.orderBy ?? '',
-    searchText: params.searchText ?? '',
-    childOrganizations: params.childOrganizations ?? false,
-  };
+/**
+ * The PortalAPI dropdown/lookup endpoints (computer groups, organizations)
+ * return this flat option shape: `label` is the display name, `value` the GUID.
+ */
+export interface LabelValue {
+  label: string;
+  value: string;
+  numericValue?: number | null;
+  entityType?: number | null;
+  parentId?: string | null;
+  disabled?: boolean;
 }

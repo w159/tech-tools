@@ -1,5 +1,13 @@
 # Capability Routing
 
+## Contents
+
+- [Step 1 - Discover what is actually live (do this once per session, cheaply)](#step-1---discover-what-is-actually-live-do-this-once-per-session-cheaply)
+- [Step 2 - Route by task signal](#step-2---route-by-task-signal)
+- [Step 2b - The tool names to actually put in the prompt](#step-2b---the-tool-names-to-actually-put-in-the-prompt)
+- [Step 3 - Hard rules that override convenience](#step-3---hard-rules-that-override-convenience)
+- [Cross-surface fault localization (which layer owns the bug?)](#cross-surface-fault-localization-which-layer-owns-the-bug)
+
 The orchestrator's job is to put the *right* capability on each task. This file maps task signals -> agent type + skill + MCP tools + model. It is a default; always prefer a live-discovered better fit.
 
 ## Step 1 - Discover what is actually live (do this once per session, cheaply)
@@ -15,11 +23,12 @@ Pass the chosen capabilities into each subagent's spec as directives, **and** te
 
 | Task signal | Agent type | Skill(s) | MCP / tools | Model |
 |---|---|---|---|---|
-| Understand a codebase / map a feature | `atlas:explorer`, `codebase-explorer`*, `Explore`* | `smart-explore`, `learn-codebase`, `graphify`, `pathfinder` | `serena`, LSP, `context-mode` | haiku |
+| Understand a codebase / map a feature | `atlas:explorer`, `codebase-explorer`*, `Explore`* | `smart-explore`, `learn-codebase`, `graphify`, `pathfinder` | `serena`, LSP, `context-mode` | sonnet |
 | Plan a feature / multi-step task | `Plan`* | `superpowers:brainstorming` -> `make-plan` -> `writing-plans` | `sequentialthinking` | opus/sonnet |
-| Implement a feature / bounded change | `atlas:implementer`, `frontend-developer`*, `backend-architect`* | `superpowers:test-driven-development`, `frontend-design`/`ui-ux-pro-max` | `context7` (mandatory), `serena`, LSP | sonnet |
+| Implement a feature / bounded change | `atlas:implementer`, `frontend-developer`*, `backend-architect`* | `superpowers:test-driven-development`, `frontend-design`/`ui-ux-pro-max` | `context7` (mandatory), `serena`, LSP; on JS/TS also `fallow` MCP/CLI after edits | sonnet |
 | Fix a bug / regression / incident | `debugger`* | `superpowers:systematic-debugging` | `serena`, `context-mode`, Sentry MCP if present | sonnet |
-| Run & validate behavior (FE/BE/DB) | `atlas:ui-runtime-tester`, `test-executor`*, `test-engineer`* | `verify`, `run`, `webapp-testing`, `python-testing-patterns` | Claude_Preview MCP, `context-mode`, curl, playwright | sonnet |
+| Dead code / duplication / complexity / JS-TS cleanup | `atlas:implementer` + `atlas:verifier` | `fallow-skills` if installed | `fallow` MCP or `fallow dead-code|dupes|health|audit --format json`; see `fallow-tools.md` | sonnet |
+| Run & validate behavior (FE/BE/DB) | `atlas:ui-runtime-tester`, `test-executor`*, `test-engineer`* | `verify`, `run`, `webapp-testing`, `python-testing-patterns` | Claude_Preview MCP, `context-mode`, curl, playwright; JS/TS: `fallow audit --format json` before commit | sonnet |
 | Full UI/UX test pass / persona testing / pre-release UX sweep (any app) | (orchestrator dispatches atlas-ux-test) | `atlas-ux-test` (canonical home; auto-discovers routes and fields) | Chrome DevTools MCP / Claude_Preview MCP / `browser-harness` / playwright, `context-mode` | sonnet; opus for the reporter |
 | Probe the database (read-only) | `atlas:db-prober` | - | read-only `psql`, `whodb`/data-agent-kit plugin if present, `gcloud` | sonnet |
 | Verify a finding / fix (adversarial) | `atlas:verifier`, `secondary-expert-validator`* | `superpowers:requesting-code-review` | re-run tests/queries; `codex` for a true second opinion | sonnet -> opus if critical |
@@ -41,12 +50,62 @@ Pass the chosen capabilities into each subagent's spec as directives, **and** te
 
 \* Built-in/global agent type, not shipped under `plugins/atlas/agents/` - resolved from `~/.claude/agents/`, `.claude/agents/`, or Claude Code's built-in agent types.
 
+## Step 2b - The tool names to actually put in the prompt
+
+A subagent that reads "use serena" will not use serena. These are **deferred MCP tools**: their
+schemas are not loaded, so the name has to be concrete and the agent has to `ToolSearch` for it
+first. Server prefixes vary per install (`mcp__serena__*`, `mcp__lean-ctx__*`,
+`mcp__plugin_context-mode_context-mode__*`, `mcp__plugin_claude-mem_mcp-search__*`), so tell the
+agent to search by keyword rather than hardcoding a prefix.
+
+**Load the set in one call, up front.** Per-tool `ToolSearch` at the moment of need is how an
+agent still ends up on `Grep`: by the time it reaches for the symbol tool it has already fallen
+back. serena's own claude-code context says to load them "immediately, before performing any
+read, grep or bash commands". Put the batched form in the prompt:
+
+    ToolSearch("select:mcp__serena__get_symbols_overview,mcp__serena__find_symbol,mcp__serena__find_referencing_symbols,mcp__serena__find_declaration,mcp__serena__find_implementations")
+
+Do **not** name `search_for_pattern`, `read_file`, `execute_shell_command`, `find_file`,
+`list_dir` or `create_text_file`: the claude-code context excludes all six so they never
+duplicate Claude Code's own tools, and every call to one fails. See
+`references/lsp-and-symbols.md` for the serena-vs-native-`LSP` split and the active-project
+preconditions.
+
+| Job | Name these tools in the prompt | Instead of |
+|---|---|---|
+| Orient in unfamiliar code | `ctx_compose` (lean-ctx) | a spray of `Read` calls |
+| Outline a file | `get_symbols_overview` (serena), `ctx_read` `mode=signatures` | reading the whole file |
+| Locate a symbol / its callers | `find_symbol`, `find_declaration`, `find_referencing_symbols` (serena) | `Grep` + `Read` |
+| Edit a named function or class | `replace_symbol_body`, `insert_after_symbol` (serena) | rewriting the file |
+| Confirm an edit type-checks | `get_diagnostics_for_file` (serena) | eyeballing the diff |
+| Impact / callers-of-callers | `ctx_callgraph` (lean-ctx) | manual grep sweeps |
+| Pattern or semantic search | `ctx_search` (lean-ctx, `action=semantic`) | `Grep` over the tree |
+| Command output past ~20 lines | `ctx_batch_execute` / `ctx_execute` (context-mode) | raw `Bash` |
+| Analyze a large file | `ctx_execute_file` (context-mode) | `Read` on the whole file |
+| Fetch a web page | `ctx_fetch_and_index` (context-mode) | `WebFetch` |
+| Library / SDK behavior | `context7` `resolve-library-id` -> `query-docs` | memory |
+| Azure / .NET / M365 / Entra | `microsoft-docs` `microsoft_docs_search` -> `_fetch` | memory |
+| JS/TS dead code / dupes / health / PR gate | fallow MCP (`audit`, analyze/dead-code tools) or `fallow … --format json` | guessing unused exports from a partial read |
+| "Did we hit this before?" | claude-mem `search` -> `timeline` -> `get_observations` | re-deriving it |
+
+context7 arg shape (measured cause of its historical 56% error rate): `resolve_library_id`
+requires **both** `libraryName` and `query` - a call with only `libraryName` is rejected by
+schema validation, which is what the errors were. Then `query-docs` takes the returned
+`/org/project` id. Same discipline as claude-mem below: a validated arg shape beats a retry.
+
+claude-mem worker-runtime arg shapes (the historical error source, see `memory-access.md`):
+`timeline` takes `anchor` (int) or `query` and has **no** `limit`; `get_observations` takes `ids` as
+an array of **numbers**. `observation_search` is server-beta only - use `search`.
+
+Serena is for **code symbols**. For prose, markdown, JSON, and config, `ctx_read` / `ctx_search` are
+correct and serena is not.
+
 ## Step 3 - Hard rules that override convenience
 
 - **Never grep-then-read when an LSP/`serena` symbol call answers it.** For an LSP-enabled language (TS, Python via `typescript-lsp`/`pyright-lsp`, etc.), instruct subagents: "use find-references / go-to-definition, not grep + read."
 - **`context7` is mandatory** before any library behavior claim or API-targeted edit. A finding that says "library X is misused" with no doc citation is `unverified`.
 - **`context-mode` for anything noisy.** Bash is only for git/mkdir/rm/mv/navigation and short fixed-output observation.
-- **Read-only stays read-only.** Discovery/verification/DB-probing subagents get `disallowedTools: [Write, Edit, MultiEdit, NotebookEdit]` so they cannot mutate.
+- **Read-only stays read-only.** Discovery/verification/DB-probing subagents get `disallowedTools: [Agent, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, Write, Edit, MultiEdit, NotebookEdit]` so they cannot mutate.
 - **`isolation: worktree`** on any two subagents that might edit the same files in parallel - prevents working-tree conflicts.
 
 ## Cross-surface fault localization (which layer owns the bug?)

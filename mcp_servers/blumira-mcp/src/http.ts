@@ -107,7 +107,7 @@ function startHttpServer(): void {
           if (sid) delete transports[sid];
         };
 
-        const server = createServer();
+        const server = await createServer();
         await server.connect(transport);
         await transport.handleRequest(req, res, parsed);
         return;

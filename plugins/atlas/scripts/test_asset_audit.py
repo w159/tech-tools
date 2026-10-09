@@ -5,6 +5,7 @@ Run in-process so the source module is traced by coverage:
     python3 -m coverage run --source=asset_audit -m unittest test_asset_audit
 """
 
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import io
 import json
 import os
@@ -369,7 +370,10 @@ class TestSummarize(unittest.TestCase):
 class TestDb(unittest.TestCase):
     def test_db_success_returns_module_and_conn(self):
         fake_conn = object()
-        with mock.patch.object(atlas_db, "connect", return_value=fake_conn), \
+        # Another suite replaces sys.modules['atlas_db']; pin the object
+        # _db() will import so the patches below hit the same module.
+        with mock.patch.dict(sys.modules, {"atlas_db": atlas_db}), \
+             mock.patch.object(atlas_db, "connect", return_value=fake_conn), \
              mock.patch.object(atlas_db, "init", return_value=None) as init_mock:
             db, conn = asset_audit._db()
         self.assertIs(db, atlas_db)
@@ -377,7 +381,8 @@ class TestDb(unittest.TestCase):
         init_mock.assert_called_once_with(fake_conn)
 
     def test_db_fail_open_returns_none(self):
-        with mock.patch.object(atlas_db, "connect", side_effect=RuntimeError("boom")):
+        with mock.patch.dict(sys.modules, {"atlas_db": atlas_db}), \
+             mock.patch.object(atlas_db, "connect", side_effect=RuntimeError("boom")):
             db, conn = asset_audit._db()
         self.assertIsNone(db)
         self.assertIsNone(conn)

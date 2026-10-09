@@ -1,5 +1,15 @@
 # Synthesis framework
 
+## Contents
+
+- [The pipeline shape](#the-pipeline-shape)
+- [What synthesis owns](#what-synthesis-owns)
+- [The seven dimensions](#the-seven-dimensions)
+- [Severity assignment](#severity-assignment)
+- [Handoff prompts](#handoff-prompts)
+- [The docs gate](#the-docs-gate)
+- [Anti-patterns to reject in synthesis](#anti-patterns-to-reject-in-synthesis)
+
 How atlas-audit turns seven independent dimension reviews into one
 prioritized, file:line-anchored report. Read this when you are running
 Phase 4 (synthesize and output) of an the code-audit mode run, or when a report came
@@ -54,6 +64,8 @@ order of completion does not matter).
 3. SOLID / DRY / KISS + best practices - single-responsibility, open/
    closed, leaky abstractions, local code-smell duplication. Composes
    `quality-playbook`.
+   The adversarial `atlas:verifier` pass in Phase 3 still governs whether
+   any resulting finding survives.
 4. Risk hotspots - churn rate, coupling, coverage density from the
    graph's god nodes and bridge nodes.
 5. Dead code - unreachable branches, unused exports, orphaned modules,

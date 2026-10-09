@@ -79,6 +79,17 @@ Lives at `.atlas/.run/findings.json`. One object per finding:
 }
 ```
 
+Do not hand-write this file. Append entries with the CLI, which does an atomic write and
+cannot corrupt the ledger - and which `atlas:verifier` can run even though it has no
+`Write` tool:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_finding.py" \
+  --id S3 --status verified --title "one line" \
+  --evidence "backend/tests/test_budget.py::test_multi_income" \
+  --reproduction "pytest backend/tests/test_budget.py -q"
+```
+
 The `status` enum is `verified | rejected | needs-evidence | open`. A finding starts `open`, becomes `needs-evidence` when it lacks a reproduction or capture, and resolves to `verified` or `rejected` only through a separate verifier context. Bulky evidence referenced from a finding is committed under `.atlas/evidence/`, not inlined. The curator later distills `verified` entries into the dated `.atlas/findings/<YYYY-MM-DD>-<slug>.md` history.
 
 ## Living-docs discipline

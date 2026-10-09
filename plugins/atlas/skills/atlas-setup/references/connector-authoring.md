@@ -6,76 +6,72 @@ table) when guiding setup.
 
 ## Ownership rule
 
-Every connector lives inside the atlas plugin's `mcp/` tree:
+Every connector lives inside the atlas plugin's **flat** `mcp/` tree:
 
 ```
 plugins/atlas/
   .claude-plugin/
     plugin.json          # declares all connector userConfig keys (defaults to "")
-    .mcp.json            # launches every connector server
+  .mcp.json              # launches every connector server (plugin root)
   mcp/
-    hr/
-      paylocity.mcpb
-      launch.sh
-      extract.sh
-    it-operations/
-      auvik.mcpb
-      connectwise.mcpb
-      ninjaone.mcpb
-      spanning.mcpb
-      launch.sh
-      extract.sh
-    microsoft-365/
-      cipp.mcpb
-      launch.sh
-      extract.sh
-    security/
-      blumira.mcpb
-      knowbe4.mcpb
-      threatlocker.mcpb
-      vanta.mcpb
-      launch.sh
-      extract.sh
+    _env/
+      load.mjs           # Node env preloader (ATLAS_ENV_FILE + CFG_* → canonical env)
+      load.py            # Python twin for Falcon
+    auvik/server.mjs
+    blumira/server.mjs
+    cipp/server.mjs
+    connectwise/server.mjs
+    spanning/server.mjs
+    knowbe4/server.mjs
+    ninjaone/server.mjs
+    paylocity/server.mjs
+    threatlocker/server.mjs
+    vanta/server.mjs
+    falcon/              # vendored Python project (pyproject.toml + falcon_mcp/)
   skills/atlas-setup/
-    references/vendors.md    # per-vendor table
-    references/connectors.md # setup workflow
+    references/vendors.md
+    references/connectors.md
+    references/connector-authoring.md
 ```
+
+Do **not** author new connectors under department folders (`mcp/hr/`,
+`mcp/security/`, …) or as loose `.mcpb` files in those folders — that layout is
+obsolete.
 
 ## Inert-by-default mechanism
 
-Every `userConfig` key in `plugin.json` defaults to the empty string. The
-connector's server entry in `.mcp.json` runs a credential check on startup;
-with any required key empty, that check fails and the server never loads. So
-"installed but not configured" is indistinguishable from "absent" to the
-runtime - no MCP server, no tools. Filling the required keys on the atlas
-plugin via `/plugin config` is the single act that enables the connector.
+Every `userConfig` key in `plugin.json` defaults to the empty string. Node
+connectors start over stdio and expose at least a `*_status` / `cw_status` tool;
+with required keys empty, domain tools return MISSING_CREDENTIALS / NOT
+CONFIGURED (ConnectWise/Blumira additionally shrink the tool list until configured).
+
+**Falcon:** boots inert without credentials (diagnostic tools + `falcon_status`
+only) and expands to the full catalog after successful auth. Match that pattern
+for any new Python connectors.
 
 ## The four fields the connectors mode reads per connector
 
 For each connector, `vendors.md` carries these columns. The connectors mode reads
 them directly, never from memory:
 
-1. **owning plugin** - always `atlas` for the bundled connectors.
-2. **required_to_enable** - the `userConfig` keys that must be non-empty.
-3. **optional** - keys that may stay blank (typically `*_base_url`).
-4. **bundle path** - where the `.mcpb` bundle and launch scripts live.
+1. **owning plugin** — always `atlas` for the bundled connectors.
+2. **required_to_enable** — the `userConfig` keys that must be non-empty.
+3. **optional** — keys that may stay blank (typically `*_base_url` / region).
+4. **entry point** — `mcp/<name>/server.mjs` or `mcp/falcon/` for Python.
 
 ## Status detection (no-args scan)
 
-To report a connector's status, the connectors mode:
-
 1. Resolve the atlas plugin as the owning plugin from `vendors.md`.
-2. Read the atlas plugin's effective merged `userConfig` values.
+2. Read effective credentials (pluginConfigs / `.env` / dashboard marks).
 3. Mark ENABLED if every `required_to_enable` key is non-empty, else DISABLED.
+4. When a `*_status` tool exists, prefer calling it after reload for runtime proof.
 
 ## Guided enable flow
 
 1. Open `vendors.md`, find the connector row.
-2. Tell the user the required keys, the optional keys, the base-url/region
-   defaults, and the bundle path - nothing else.
-3. Point the user at `/plugin config` on the **atlas plugin**.
-4. Re-read the effective config to confirm; never ask the user to paste the
-   values back into chat.
+2. Tell the user the required keys, optional keys, defaults, and entry path.
+3. Point at dashboard Credentials or `/plugin config` on the **atlas** plugin.
+4. Re-read effective config to confirm; never ask the user to paste secret values.
 
 ## What the connectors mode never does
 
@@ -84,9 +80,14 @@ To report a connector's status, the connectors mode:
 - Never echo credential values back.
 - Never collect more keys than the chosen connector needs.
 - Never push the user to fill an optional base-url key.
+- Never implement connector changes under install/cache paths.
 
 ## Seed manifest
 
 Use `templates/connector-manifest.seed.json` as the starting shape when you
 need to document a new connector's required/optional keys. One seed per vendor
 type; replace every `<placeholder>` with the vendor's real values.
+
+After adding a connector: update `.mcp.json`, `plugin.json` userConfig, copy or
+vendor the server under `mcp/<name>/`, extend `vendors.md` / `connectors.md`,
+and ensure `test_connectors_wiring.py` still passes.

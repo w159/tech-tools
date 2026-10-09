@@ -128,7 +128,11 @@ export function getCredentials(): NinjaOneCredentials | null {
   // region-derived default (e.g. https://app.ninjarmm.com for "us").
   // Set it only to override the regional default for staging/sovereign shards.
   const baseUrlOverride = cleanEnv(process.env.NINJAONE_BASE_URL);
-  const baseUrl = resolveBaseUrl("ninjaone", baseUrlOverride) ?? getBaseUrlForRegion(region);
+  // resolveBaseUrl falls back to the US vendor default, which would shadow the
+  // region URL, so only consult it when an override is actually set.
+  const baseUrl = baseUrlOverride
+    ? (resolveBaseUrl("ninjaone", baseUrlOverride) ?? getBaseUrlForRegion(region))
+    : getBaseUrlForRegion(region);
 
   return { clientId, clientSecret, region, baseUrl, authMode };
 }

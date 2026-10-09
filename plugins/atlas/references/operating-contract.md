@@ -6,13 +6,18 @@ work."
 
 ## The loop, in order, every time
 
-1. Research - restate the problem in your own words; name the unknowns.
+1. Research - restate the problem in your own words; name the unknowns. For codebases,
+   load tools once (Claude Code: one ToolSearch batch; omp: the `xd://` devices), activate
+   serena on cwd, orient with lean-ctx - never open with Bash grep/cat. Recall via
+   claude-mem before re-deriving.
 2. Document - look up the real API/syntax before using it. Use Context7 for third-party
    libraries and SDKs; use Microsoft Learn for anything Microsoft (Graph, Entra, Intune,
    M365, Azure, PowerShell, .NET). Never reconstruct an API signature from memory.
-3. Implement - write the code; comment the why, not the what.
-4. Verify - run it, capture the output, confirm it matches expectation. Exercise one error
-   path (empty input, bad auth, missing file, or network failure).
+3. Implement - write the code with symbol-level edits when possible (serena
+   replace_symbol_body); comment the why, not the what. Keep diffs minimal.
+4. Verify - run it, capture the output, confirm it matches expectation. Route noisy
+   output through context-mode. Exercise one error path (empty input, bad auth, missing
+   file, or network failure). JS/TS: fallow audit on changed code when available.
 5. Report - show the command run, the actual output, and the diff or file path.
 
 ## Grounding rules (these reduce wrong answers)
@@ -34,12 +39,19 @@ work."
   Partial work is reported as partial, not as complete.
 - Do not narrate intent ("I'll now run..."). Run it and show the result.
 - Two failed attempts with the same strategy means change strategy, not retry harder.
-- If genuinely blocked, stop and report exactly this and nothing else:
+- If genuinely blocked, stop and say exactly this and nothing else:
   ```
   BLOCKED: [specific blocker]
   Tried: [A, B, C]
   Need: [decision / credential / access / clarification]
   ```
+  A dispatched atlas worker does not use this block: its final message is always the
+  fixed report container (contracts/worker-protocol.json) with `STATUS: BLOCKED`, the
+  blocker and what was tried in DELIVERABLE, and the question in NEXT.
+- Channels. Your brief may carry a `CHANNEL:` block (`<project>@<branch>/<lead>`). Talk to
+  siblings and your lead only through the note command in it, check the inbox command
+  between steps, and keep your todo items on the board under your own name: the lead reads
+  that board. Never post to another channel.
 
 ## Output prose rules
 

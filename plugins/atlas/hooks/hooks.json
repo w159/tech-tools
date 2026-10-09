@@ -1,5 +1,5 @@
 {
-  "description": "Atlas automation: boot, doctor rollback guard, guards, formatting, prompt optimization, completion gate, self-improvement (memory capture + auto-skill + nudge), session-transcript ingest.",
+  "description": "Atlas automation: boot, doctor rollback guard, guards (claude-mem recall gate + bash advisor + fallow agent gate), formatting, prompt optimization, completion gate, self-improvement (memory capture + nudge), session-transcript ingest.",
   "hooks": {
     "SessionStart": [
       {
@@ -7,11 +7,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/session_boot.py\""
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/session_boot.py\"",
+            "timeout": 30
           },
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/atlas_doctor.py\" --hook"
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/atlas_doctor.py\" --hook",
+            "timeout": 30
           }
         ]
       }
@@ -30,40 +32,85 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Bash",
+        "matcher": "*",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/bash_advisor.py\""
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/recall_gate.py\"",
+            "timeout": 10
           }
         ]
       },
       {
-        "matcher": "Edit|Write|MultiEdit|Read|Grep|Glob|Bash",
+        "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/dispatch_tripwire.py\""
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/bash_advisor.py\"",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/fallow_gate.py\"",
+            "timeout": 300
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Read|Grep|Glob|Bash|Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/dispatch_tripwire.py\"",
+            "timeout": 15
           }
         ]
       }
     ],
     "PostToolUse": [
       {
-        "matcher": "Edit|Write|MultiEdit",
+        "matcher": "TodoWrite",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/format_after_edit.py\""
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/todo_capture.py\"",
+            "timeout": 10
           }
         ]
       },
       {
-        "matcher": "Read|Grep|Glob|Edit|Write|Bash|Agent|Task|MultiEdit|Skill",
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/dispatch_tripwire.py\""
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/format_after_edit.py\"",
+            "timeout": 60,
+            "async": true
+          },
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/docs_drift_watch.py\"",
+            "timeout": 15
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Grep|Glob|Edit|Write|Bash|Agent|Task|MultiEdit|NotebookEdit|Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/dispatch_tripwire.py\"",
+            "timeout": 15
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__plugin_atlas_.*|mcp__falcon-mcp__.*|mcp__cipp.*|mcp__connectwise.*|mcp__plaid__.*|mcp__gcloud__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/connector_credential_watch.py\"",
+            "timeout": 10
           }
         ]
       }
@@ -74,23 +121,28 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/completion_gate.py\""
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/completion_gate.py\"",
+            "timeout": 60
           },
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/ingest_session.py\""
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/ingest_session.py\"",
+            "timeout": 60
           },
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/memory_capture.py\""
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/chronicle_facet.py\"",
+            "timeout": 30
           },
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/auto_skill.py\""
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/memory_capture.py\"",
+            "timeout": 30
           },
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/nudge.py\""
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/nudge.py\"",
+            "timeout": 15
           }
         ]
       }
@@ -101,15 +153,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/ingest_session.py\""
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/ingest_session.py\"",
+            "timeout": 60
           },
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/memory_capture.py\""
-          },
-          {
-            "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/nudge.py\""
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/worker_report_gate.py\"",
+            "timeout": 15
           }
         ]
       }
@@ -120,7 +170,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/ingest_session.py\""
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/ingest_session.py\"",
+            "timeout": 60
           }
         ]
       }
@@ -131,7 +182,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/ingest_session.py\""
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/ingest_session.py\"",
+            "timeout": 60
           }
         ]
       }

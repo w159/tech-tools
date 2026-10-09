@@ -347,6 +347,30 @@ describe("toolErrorFromCatch", () => {
     assert.equal(parsed.error.code, "NOT_FOUND");
   });
 
+  it("tells the agent a 404 is not a credentials problem, overriding the caller hint", () => {
+    // Regression: every ninjaone handler passed "Verify NINJAONE_CLIENT_ID..."
+    // as its hint, so a wrong-path 404 was reported to the user as a missing
+    // API permission that did not exist.
+    const err = { status: 404, body: "not found" };
+    const result = toolErrorFromCatch("ninjaone_scripts_list", err, {
+      hint: "Verify NINJAONE_CLIENT_ID, NINJAONE_CLIENT_SECRET, and NINJAONE_REGION are set.",
+    });
+    const parsed = parseText(result) as { error: Record<string, unknown> };
+    const hint = parsed.error.hint as string;
+
+    assert.equal(parsed.error.code, "NOT_FOUND");
+    assert.ok(hint.includes("NOT a credentials or permissions failure"));
+    assert.ok(hint.includes("Do not tell the user to change API permissions"));
+  });
+
+  it("leaves the caller hint alone for errors other than 404 and auth failures", () => {
+    const err = { status: 429 };
+    const result = toolErrorFromCatch("devices.get", err, { hint: "Wait 60 seconds." });
+    const parsed = parseText(result) as { error: Record<string, unknown> };
+
+    assert.equal(parsed.error.hint, "Wait 60 seconds.");
+  });
+
   it("maps HTTP 429 to RATE_LIMITED", () => {
     const err = { status: 429 };
     const result = toolErrorFromCatch("reports.list", err);
@@ -361,13 +385,43 @@ describe("toolErrorFromCatch", () => {
     assert.equal(parsed.error.code, "FORBIDDEN");
   });
 
+  it("maps a plain Error saying authentication failed to FORBIDDEN, not INTERNAL_ERROR", () => {
+    // node-knowbe4 throws this shape with no status field (seen live 2026-09-29).
+    const err = new Error("Authentication failed: Invalid Token. Check your KNOWBE4_API_KEY.");
+    const parsed = parseText(toolErrorFromCatch("knowbe4_users_list", err)) as { error: Record<string, unknown> };
+    assert.equal(parsed.error.code, "FORBIDDEN");
+  });
+
+  it("prefixes FORBIDDEN hints with 'stop retrying, credential problem' guidance", () => {
+    const parsed = parseText(
+      toolErrorFromCatch("frameworks.list", { status: 401 }, { hint: "Check VANTA_CLIENT_ID." }),
+    ) as { error: Record<string, unknown> };
+    assert.match(parsed.error.hint as string, /not a bad argument/);
+    assert.match(parsed.error.hint as string, /Check VANTA_CLIENT_ID\./);
+  });
+
+  it("redacts credential values a vendor echoes back in the error body", () => {
+    // ThreatLocker's 440 body echoes the rejected API token (seen live 2026-09-29).
+    const err = { status: 440, body: { message: "Unauthorized", error: "TOKEN_REVOKED", token: "65076350967B6ABCDEF" } };
+    const parsed = parseText(toolErrorFromCatch("computers.list", err)) as { error: Record<string, unknown> };
+    assert.doesNotMatch(parsed.error.detail as string, /65076350967B6/);
+    assert.match(parsed.error.detail as string, /TOKEN_REVOKED/);
+  });
+
+  it("redacts credential values inside a string error body", () => {
+    const err = { status: 401, body: '{"error":"bad","api_key":"sk-live-123","password":"hunter2"}' };
+    const parsed = parseText(toolErrorFromCatch("users.list", err)) as { error: Record<string, unknown> };
+    assert.doesNotMatch(parsed.error.detail as string, /sk-live-123|hunter2/);
+  });
+
   it("applies caller-supplied hint over auto-detected values", () => {
     const err = { status: 404 };
     const result = toolErrorFromCatch("tickets.get", err, {
       hint: "Use ninjaone_tickets_list to find valid IDs.",
     });
     const parsed = parseText(result) as { error: Record<string, unknown> };
-    assert.equal(parsed.error.hint, "Use ninjaone_tickets_list to find valid IDs.");
+    // The 404 guidance is prepended, but the caller's hint survives intact.
+    assert.ok((parsed.error.hint as string).endsWith("Use ninjaone_tickets_list to find valid IDs."));
   });
 
   it("handles unknown thrown shapes gracefully", () => {
@@ -395,7 +449,7 @@ describe("toolErrorFromCatch", () => {
     const parsed = parseText(result) as { error: Record<string, unknown> };
     assert.equal(parsed.error.code, "NOT_FOUND");
     assert.ok((parsed.error.message as string).includes("cw_get_ticket"));
-    assert.equal(parsed.error.hint, "Verify the ticket_id with cw_search_tickets first.");
+    assert.ok((parsed.error.hint as string).endsWith("Verify the ticket_id with cw_search_tickets first."));
   });
 
   it("maps Error subclass with status 429 to RATE_LIMITED", () => {
@@ -478,6 +532,15 @@ describe("toolErrorFromCatch — statusCode+response (ServiceError shape)", () =
       (parsed.error.detail as string).includes("FORBIDDEN"),
       "detail should contain response body content"
     );
+  });
+
+  it("maps HTTP 440 (ThreatLocker TOKEN_REVOKED) to FORBIDDEN, not INVALID_ARGS", () => {
+    // ThreatLocker answers 440 TOKEN_REVOKED for ANY token it does not recognize
+    // (verified 2026-09-01 with a zero-filled token). It is an auth failure.
+    const err = new ServiceError("Unauthorized", 440, { error: "TOKEN_REVOKED", token: "..." });
+    const result = toolErrorFromCatch("threatlocker.list", err);
+    const parsed = parseText(result) as { error: Record<string, unknown> };
+    assert.equal(parsed.error.code, "FORBIDDEN");
   });
 
   it("maps NotFoundError (statusCode 404) to NOT_FOUND", () => {

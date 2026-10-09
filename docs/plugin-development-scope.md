@@ -20,12 +20,13 @@ and how to tell a code-change request from an operate-the-plugin request.
 
 This is the **atlas marketplace** repo. Its root manifest,
 `.claude-plugin/marketplace.json`, declares a Claude Code plugin marketplace named
-`atlas` that publishes two plugins:
+`tech-tools` that publishes three plugins:
 
 | Plugin   | Source directory   | What the product is                                                                 |
 |----------|--------------------|-------------------------------------------------------------------------------------|
 | `atlas`  | `plugins/atlas/`   | Multi-agent coding architect: skills, core agents, hooks, output styles, MCP config. |
 | `armada` | `plugins/armada/`  | Organizational deployment layer for atlas: department agents and department skills.  |
+| `programmer` | `plugins/programmer/` | Independent developer-tools plugin (added 2026-07-21). |
 
 A consumer would add this marketplace in Claude Code and install one or both
 plugins. That consumer workflow is **not** what happens in this repo. Here, we are
@@ -33,6 +34,14 @@ the authors: we change the plugins' code and ship new versions.
 
 The repository also holds the plugins' dependencies (see Section 4) and their
 developer documentation (this `docs/` tree).
+
+### `docs/` is SSOT — not disposable
+
+`docs/` is the **project single source of truth**. Agents must **retain and
+update** it. Cleanup, refactor, or "junk removal" tasks must **never** delete
+or hollow out `docs/` content, and `docs/` must remain trackable in git (see
+`.gitignore` allowlist `!docs/**`). Nested `.git` metadata under docs stays
+excluded; the documentation itself does not.
 
 ## 2. Why the distinction matters (the confusion vector)
 
@@ -66,10 +75,13 @@ against this workspace, confirm scope first.
 
 ```
 plugins/atlas/
-├── SKILL.md            # top-level atlas skill entry
+├── .claude-plugin/plugin.json  # plugin manifest
+├── .mcp.json
 ├── agents/             # core subagent definitions (explorer, verifier, planner, ...)
+├── contracts/          # shared hook/omp contracts
 ├── hooks/              # self-improvement + lifecycle hooks
-├── mcp/                # atlas's own MCP config
+├── mcp/                # 12 connector bundles
+├── omp/                # omp extension
 ├── output-styles/      # the Atlas Orchestrator output style
 ├── references/         # reference material bundled with the plugin
 ├── scripts/            # helper scripts shipped with the plugin
@@ -79,7 +91,7 @@ plugins/atlas/
 ```
 
 Edit targets for an atlas change: whichever of `skills/`, `agents/`, `hooks/`,
-`output-styles/`, `scripts/`, `mcp/` owns the behavior, plus `plugin.json` and
+`output-styles/`, `scripts/`, `mcp/` owns the behavior, plus `.claude-plugin/plugin.json` and
 `CHANGELOG.md`/`README.md` when the user-visible surface changes.
 
 ### armada - `plugins/armada/`
@@ -109,8 +121,9 @@ the plugins are built on:
   the top-level `skills/` library that plugin skills draw from.
 - **Vendor connectors that armada department agents call:**
   - `mcp_servers/<svc>-mcp/` - the MCP server per vendor (Auvik, Blumira, CIPP,
-    ConnectWise Manage, KnowBe4, NinjaOne, Paylocity, Spanning, ThreatLocker, Vanta).
-  - the `.mcpb` archives those servers pack into.
+    ConnectWise Manage, KnowBe4, NinjaOne, PAN-OS, Paylocity, Spanning, ThreatLocker, Vanta;
+    CrowdStrike Falcon is a Python connector under `plugins/atlas/mcp/falcon`).
+  - `.mcpb` archives some of those servers pack into (currently threatlocker and panos).
   - `mcp_node/node-<svc>/` - the Node client libraries those servers depend on.
 
 Changes to a vendor connector propagate across every layer for that vendor. That
@@ -125,19 +138,44 @@ definition and the mandatory propagation checklist). Follow it.
 | "armada's IT-ops agent should mention SLA policy." | Run `/armada:armada` to reconfigure a department. | Edit `plugins/armada/agents/armada-it-ops.md`. |
 | "Fix the atlas nudge hook - it fires too often." | Adjust `.atlas/nudge/` runtime state. | Edit the hook source in `plugins/atlas/hooks/`. |
 | "Set up ConnectWise for armada." | Walk `/armada:armada` setup, write `.atlas/departments/*.yaml`. | Edit the armada department agent/skill and the `connectwise-manage` MCP connector. |
-| "Bump atlas and publish." | Try to install/publish into this session. | Edit `plugins/atlas/plugin.json` + `.claude-plugin/marketplace.json` versions, update CHANGELOG. |
+| "Bump atlas and publish." | Try to install/publish into this session. | Edit `plugins/atlas/.claude-plugin/plugin.json` + `.claude-plugin/marketplace.json` versions, update CHANGELOG. |
 
 ## 6. Runtime artifacts - not the product
 
-These directories are state written by a *running* atlas/armada in this session or
-prior ones. They are not the plugin source and are not edit targets unless the user
-explicitly asks about atlas's own runtime behavior:
+Dogfooding atlas **in this marketplace checkout** is allowed and common: the
+plugin may be loaded while you improve it. Runtime state from that dogfood is
+still not the product source.
 
-- `.atlas/` (`departments/`, `evidence/`, `nudge/`, `self-improvement/`)
-- `.fallow/`, `.supermemory/`, `.taskmaster/`
+These directories are state written by a *running* atlas/armada. They are not the
+plugin source and are not edit targets unless the user explicitly asks about
+atlas's own runtime behavior:
 
-If a task pushes you to write into these instead of into `plugins/`, that is the
-signal you have slipped from "develop" into "operate." Stop and re-read Section 2.
+- Repo-root `.atlas/` only (`departments/`, `evidence/`, `nudge/`, `self-improvement/`, `.run/`)
+- `.fallow/`, `.supermemory/`, `.taskmaster/`, `.scratch/`
+- **Forbidden shape:** `plugins/**/.atlas/` (do not create; remove if found)
+
+### 6.1 Local Claude plugin install/cache - never edit
+
+**Hard rule:** do not modify the consumer install layout Claude maintains under
+the home directory. That includes:
+
+- `~/.claude/plugins/cache/**` (versioned installed plugin copies)
+- `~/.claude/plugins/marketplaces/**` when it is Claude's clone/install of a
+  marketplace (not this repository's working tree)
+- `~/.claude/plugins/installed_plugins.json` and related install metadata
+
+This repo is the **source** of the atlas marketplace. The correct delivery path
+is: edit `plugins/<name>/` here → version/CHANGELOG/marketplace manifest →
+commit/push → consumer updates/reinstalls the plugin. Copying or rsyncing source
+into `~/.claude/plugins/cache/...` to "make it work now" is forbidden process.
+
+Product code must not hardcode cache paths either. Runtime paths resolve from
+`CLAUDE_PLUGIN_ROOT` / the plugin package location, not from a fixed list of
+`~/.claude/plugins/cache/tech-tools/atlas/<version>` directories.
+
+If a task pushes you to write into runtime dirs or install caches instead of
+into `plugins/`, that is the signal you have slipped from "develop" into
+"operate." Stop and re-read Section 2.
 
 ## 7. When to confirm scope
 

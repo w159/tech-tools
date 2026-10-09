@@ -65,6 +65,7 @@ import { registerServiceTools } from "./tools/service.js";
 import { registerActivityTools } from "./tools/activities.js";
 import { registerCatalogTools } from "./tools/catalog.js";
 import { registerHealthTools } from "./tools/health.js";
+import { READ, titled } from "./tools/annotations.js";
 import { registerAgreementTools } from "./tools/agreements.js";
 import { registerOpportunityTools } from "./tools/opportunities.js";
 
@@ -73,19 +74,33 @@ import { registerOpportunityTools } from "./tools/opportunities.js";
 // ---------------------------------------------------------------------------
 
 function createMcpServer(): McpServer {
-  const server = new McpServer({
-    name: "connectwise-manage-mcp",
-    version: "1.5.2",
-  });
+  const server = new McpServer(
+    {
+      name: "connectwise-manage-mcp",
+      version: "1.5.2",
+    },
+    {
+      instructions:
+        "ConnectWise Manage PSA: tickets and ticket notes, companies, contacts, projects and project tickets, time entries, members, configurations, agreements, opportunities, activities, invoices, and the product catalog. " +
+        "Search tools (cw_search_*) return IDs; call one before any cw_get_* or update tool that takes an ID, and use cw_list_boards, cw_list_statuses, and cw_list_priorities to resolve board, status, and priority IDs before creating or updating tickets. " +
+        "On a 401, 403, or connection failure, or if the server reports missing credentials, call cw_status once and report its output to the user instead of retrying other tools. " +
+        "When credentials are missing only cw_status and cw_test_connection are listed; the user must set the CW_MANAGE_* environment variables and restart the session.",
+    },
+  );
 
   const config = getConfig();
 
   if (!config) {
     // Register diagnostic tools so the client can check configuration state
-    server.tool(
+    // Same title + permission hints as the configured-mode health tools, so the
+    // client can auto-approve these read-only diagnostics.
+    server.registerTool(
       "cw_status",
-      "Show ConnectWise Manage MCP server configuration status: which environment variables are set and what base URL is in use. Always works, even with missing credentials.",
-      {},
+      {
+        title: "CW Manage: status",
+        description: "Show ConnectWise Manage MCP server configuration status: which environment variables are set and what base URL is in use. Always works, even with missing credentials.",
+        annotations: titled("CW Manage: status", READ),
+      },
       async () => ({
         content: [
           {
@@ -105,10 +120,13 @@ function createMcpServer(): McpServer {
         ],
       }),
     );
-    server.tool(
+    server.registerTool(
       "cw_test_connection",
-      "Verify ConnectWise Manage API connectivity by fetching system info. Returns API version and licensing details. Use to confirm credentials are working.",
-      {},
+      {
+        title: "CW Manage: test connection",
+        description: "Verify ConnectWise Manage API connectivity by fetching system info. Returns API version and licensing details. Use to confirm credentials are working.",
+        annotations: titled("CW Manage: test connection", READ),
+      },
       async () => ({
         content: [
           {

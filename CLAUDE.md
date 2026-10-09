@@ -1,12 +1,123 @@
 # CLAUDE.md
 
-Claude-Code-specific operating rules for this repo. `AGENTS.md` is the
-canonical, shared source of truth for how this project works; this file
-only carries guidance specific to Claude Code and must not duplicate it.
+Claude Code loads this file every session in this repo. `AGENTS.md` is the
+shared canonical rule set; this file is the **hard gate** for Claude Code so
+the marketplace source is never confused with a live install/cache.
 
-Read `AGENTS.md` first.
+Read `AGENTS.md` and `docs/plugin-development-scope.md` next.
 
-## Claude-Code-specific notes
+---
 
-<!-- Filled in as Claude-Code-specific conventions emerge: hook behavior,
-     skill routing, permission notes. Do not restate AGENTS.md here. -->
+## HARD RULES (non-negotiable)
+
+### 1. This checkout is marketplace SOURCE, not the installed plugin
+
+| Path | Role |
+|---|---|
+| `.claude-plugin/marketplace.json` | Marketplace catalog (this repo) |
+| `plugins/atlas/` | **atlas product source** — edit here |
+| `plugins/armada/` | **armada product source** — edit here |
+| `plugins/programmer/` | **programmer product source** — edit here |
+| `mcp_servers/`, `mcp_node/`, `skills/` | Shared dependencies of those plugins |
+| `docs/` | **Project SSOT documentation** — retain and update; never delete as "junk" |
+| `.atlas/` (repo root only) | Dogfood runtime state while atlas is loaded here |
+| `~/.claude/plugins/cache/**` | **Consumer install cache — FORBIDDEN to edit** |
+
+When the user says fix/improve/change atlas (or armada/programmer), open files
+under `plugins/<name>/` (and related deps/docs) in **this** tree. Do not open
+or patch the copy under the home-directory cache.
+
+### 2. NEVER write the Claude install/cache
+
+**Forbidden** (create / modify / delete / rsync / cp / deploy into):
+
+- `~/.claude/plugins/cache/**`
+- `~/.claude/plugins/marketplaces/**` (except this repo if it *is* the working tree)
+- `~/.claude/plugins/installed_plugins.json` and other install metadata under `~/.claude/plugins/`
+
+Delivery path for consumers:
+
+1. Edit source under `plugins/…` (and deps)
+2. Update versions / CHANGELOG / `.claude-plugin/marketplace.json` when shipping
+3. Commit / push
+4. User reinstalls or updates the plugin from the marketplace
+
+Hot-copying `plugins/atlas/` into the cache is a process defect. If behavior
+must be verified after install, tell the user to reinstall — do not mutate
+their cache.
+
+### 3. Dogfooding atlas here is allowed; product edits stay in source
+
+It is intentional that atlas may be **loaded and running** while you develop
+it in this repo (skills, hooks, dashboard, `.atlas/` dogfood state). That does
+**not** change the edit target:
+
+- Change product behavior → `plugins/atlas/**` (etc.)
+- Record durable project knowledge → `docs/**`
+- Ephemeral orchestration scratch → `.atlas/.run/` (do not invent
+  `plugins/atlas/.atlas/` or other nested install-shaped trees inside source)
+
+Do **not** treat "atlas is active in this session" as permission to operate
+this repo like a customer deploy (department YAML setup, install flows) unless
+the user explicitly asks for dogfood runtime config.
+
+### 4. `docs/` is SSOT — never strip it
+
+- Everything under `docs/` is project documentation.
+- Do not delete, "clean", or gitignore docs content as unused junk.
+- Prefer updating `docs/` when behavior or architecture changes.
+- Full explanation: `docs/plugin-development-scope.md`.
+
+### 5. Verify from this tree
+
+Run tests, dashboard, and scripts from **repo paths**:
+
+- `plugins/atlas/scripts/…`
+- `plugins/atlas/hooks/…`
+- `python3 -m unittest discover -s plugins/atlas/…`
+
+Do not use `~/.claude/plugins/cache/tech-tools/atlas/<version>/…` as the place
+to implement or "make it take effect."
+
+---
+
+## Quick routing
+
+| User intent | Do this |
+|---|---|
+| Fix atlas skill/hook/dashboard | Edit `plugins/atlas/…` |
+| Fix connector MCP | Edit `mcp_servers/<svc>-mcp/` + `mcp_node/…` + plugin wiring |
+| Update project knowledge | Edit `docs/…` |
+| "Make my install pick this up" | Ship source; tell user to reinstall — **no cache writes** |
+| Ambiguous develop vs operate | Default to **develop source**; confirm only if truly ambiguous |
+
+---
+
+## Permissions intent
+
+Project `.claude/settings.json` denies Read/Edit/Write under the home plugin
+cache paths. Do not ask to bypass those denials for "faster iteration."
+
+<!-- atlas-tooling -->
+See `AGENTS.md`'s Tool Routing section (canonical, shared) for the
+claude-mem / context-mode / serena+lean-ctx / ponytail tooling bar this
+project expects every agent to use. Nothing Claude-Code-specific to add
+here; do not duplicate it.
+<!-- /atlas-tooling -->
+
+## Session gates
+
+- Session gates (atlas hooks): the first tool call each session must be one claude-mem search (write JSON args to xd://mcp__claude_mem_mcp_search_search). The inline-op gate prints a STOP nudge after about 4-6 inline ops and DENIES the 7th; separately, an inline Edit of target code is denied outright. Route edits and investigation to atlas:implementer / atlas:explorer. Task dispatches must NOT pass a `model` param (agents pin @atlas-worker; the gate denies the override).
+- Advisor gate: close each item with `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py complete --id <id> --evidence "<proof>"` (syntax at plugins/atlas/scripts/atlas_todo.py :1515), then re-run `list` and confirm status=completed; a batch close once failed silently.
+- Dispatch gate (`dispatch_denied:toolkit`): every `atlas:*` Task/`task` prompt needs a line-anchored `TOOLS:` block (runs to the next ALL-CAPS label) whose own text contains BOTH `ToolSearch` AND a code-nav token (serena, lean-ctx, ctx_search, ctx_read, find_symbol). Naming tools elsewhere in the prompt does not count. On omp (`ATLAS_TOOLKIT_LOAD=omp`) the `ToolSearch` requirement is waived. Example: `TOOLS: ToolSearch lean-ctx (ctx_search, ctx_read) + serena (activate_project, find_symbol); context-mode for noisy output.`
+
+## Completion-gate friction (top blockers, last 14d)
+
+Recurring Stop-gate blocks: (m) delegation mandate, (c,d,e) CHANGELOG/ROADMAP/README
+missing, (g) implementer dispatches not covered, (i) open todos. Before done:
+delegate code changes to an atlas:* agent; keep CHANGELOG, ROADMAP and README
+present and updated with any non-docs change; for each implementer dispatch run an
+atlas:verifier or a real test-runner command (pytest, vitest) and stamp a
+`verified` finding via scripts/atlas_finding.py; flip or drop every open todo;
+open the colony IRC channel and message siblings when dispatching a named colony (p);
+open each reply with the `ATLAS | <glyph> <phase> | <state>` status header (n).

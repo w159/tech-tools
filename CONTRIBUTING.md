@@ -37,14 +37,40 @@ committed so the test harness runs against a fresh clone without a build step.
 
 ## Testing
 
-- `node test-mcp-tools.mjs` runs the full suite; `node test-mcp-tools.mjs <server>` runs a subset.
-- The harness extracts the `.mcpb`, spawns it over stdio, lists tools, and calls a couple of safe
-  tools. A tool-count regression after a change is a bug - investigate before continuing.
+- `node test-mcp-tools.mjs` probes every connector; `node test-mcp-tools.mjs <server>` probes
+  one; `--list` prints the known names.
+- The harness launches each connector exactly as `plugins/atlas/.mcp.json` declares it - the
+  eleven Node connectors as `plugins/atlas/mcp/<name>/server.mjs` over MCP stdio, `falcon`
+  through its `uv run --project plugins/atlas/mcp/falcon ...` entry - with placeholder
+  credentials in a from-scratch child environment, so it needs no real
+  credentials and cannot reach a live vendor appliance. Per connector it checks BOOT
+  (`initialize` + `tools/list` answered), FLOOR (no tool-count regression below the baseline
+  recorded in the file), AGREEMENT (a `DESTRUCTIVE:` / `VISIBLE-TO-OTHERS:` description must
+  carry `readOnlyHint: false`, and no tool may omit `readOnlyHint`), and SHAPE (non-empty
+  description, object `inputSchema`).
+- A tool-count regression after a change is a bug - investigate before continuing. An
+  intentional tool-surface change updates that connector's floor in the same commit.
+- Every tool a connector can register must be reachable by the gate: a tool the harness never
+  lists is a tool whose safety signals were never checked. Connectors that swap their listed
+  surface behind a `<vendor>_navigate` step are walked domain by domain and unioned (`blumira`:
+  2 cold + 30 across 5 domains), and `falcon`, which registers its domain modules only after an
+  OAuth exchange, is probed against a loopback stub answering `POST /oauth2/token` and nothing
+  else. Current run: 523 tools across 12 connectors, all fully enumerated, 0 gated, 0 skipped.
+- `GATED` and `SKIP` are still real verdicts for a surface that cannot be enumerated (a missing
+  `uv` or venv for falcon reports a named SKIP with the fix command). Neither is a clean pass
+  and neither is a failure; if you add a connector that cannot be fully enumerated, say why in
+  its COVERAGE entry instead of passing on a partial surface.
+- Some servers ship their own deeper probe, e.g. `cd mcp_servers/panos-mcp && npm run
+  test:boot`. Run it too when you touch that server.
 
 ## Quality bar
 
 - Every tool has a one-line description that says what it returns and when to call it; destructive
-  or externally-visible tools are prefixed `DESTRUCTIVE:` or `VISIBLE-TO-OTHERS:`.
+  or externally-visible tools are prefixed `DESTRUCTIVE:` or `VISIBLE-TO-OTHERS:`, and the MCP
+  annotations must agree with that prefix. The prefix alone is not enough: `readOnlyHint` is what
+  a client reads to decide it may run a tool unattended. The full contract, including the four
+  annotation classes and the fail-closed rule for an unclassified tool, is
+  `docs/standards/connector-safety-signals.md`.
 - Servers boot without crashing when credentials are missing; the `<vendor>_status` tool always
   runs and reports the missing-creds state.
 - Vendor base-URL env vars are optional and default to the documented vendor URL.

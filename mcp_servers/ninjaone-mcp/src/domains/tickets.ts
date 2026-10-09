@@ -110,7 +110,7 @@ function getTools(): Tool[] {
     },
     {
       name: "ninjaone_tickets_create",
-      description: "Create a new NinjaOne helpdesk ticket (subject required). Optionally specify description, organization_id, device_id, priority, and status.",
+      description: "VISIBLE-TO-OTHERS: Create a new NinjaOne helpdesk ticket (subject required). The ticket appears in the customer's portal for the organization it is raised against and notifies the requester. Optionally specify description, organization_id, device_id, priority, and status.",
       inputSchema: {
         type: "object" as const,
         properties: {
@@ -150,7 +150,7 @@ function getTools(): Tool[] {
     },
     {
       name: "ninjaone_tickets_update",
-      description: "Update existing ticket",
+      description: "DESTRUCTIVE: VISIBLE-TO-OTHERS: Update an existing NinjaOne helpdesk ticket (ticket_id required). This is a full replace of the fields you pass: the previous subject, description, status, priority or assignee is overwritten with no prior version kept, and subject, description and status are what the customer sees in the portal. Read the ticket with ninjaone_tickets_get first.",
       inputSchema: {
         type: "object" as const,
         properties: {

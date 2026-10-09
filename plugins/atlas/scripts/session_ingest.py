@@ -12,12 +12,17 @@ Two entry points:
   - ingest_transcript(path) for one session (the Stop/SessionEnd hook calls this)
   - main() CLI:  session_ingest.py <path>      ingest one transcript
                  session_ingest.py --backfill  walk ~/.claude/projects
-                 session_ingest.py --backfill-agent codex [root]
+                 session_ingest.py --backfill-agent codex|omp [root]
                                                walk another agent's session tree
-                                               (codex defaults to ~/.codex/sessions)
+                                               (codex: ~/.codex/sessions,
+                                               omp: ~/.omp/agent/sessions)
+                 session_ingest.py --repair-tmp-paths [--apply]
+                                               re-point temp-dir transcript_path
+                                               rows at the original omp session
+                                               file (dry run unless --apply)
 
 Beyond claude, a pluggable adapter layer (AGENT_ADAPTERS) chronicles other
-coding agents' sessions into the same store; codex is the first adapter. The
+coding agents' sessions into the same store (codex, omp). The
 claude Stop/SessionEnd hook path never triggers cross-agent ingest - that runs
 only via the explicit --backfill-agent CLI.
 
@@ -80,13 +85,29 @@ SECRET_VAL = re.compile(
 )
 
 
+# Dispatch identity survives the 500-char cap: these keys go first, and a
+# batched omp `task` call's per-item names are lifted into `names`, so the
+# colony_adherence miner can measure named dispatch instead of reading a
+# truncated prompt.
+_IDENTITY_KEYS = ("name", "names", "subagent_type", "agent", "model", "isolation")
+
+
 def summarize_input(tinput):
     """Compact, secret-scrubbed JSON of a tool input, capped to 500 chars.
     Returns (summary, true_byte_size)."""
     tinput = tinput or {}
     raw = json.dumps(tinput, default=str)
+    items = dict(tinput)
+    tasks = items.get("tasks")
+    if isinstance(tasks, list) and "names" not in items:
+        items["names"] = [
+            str(t.get("name") or "") for t in tasks if isinstance(t, dict)
+        ]
+    ordered = [k for k in _IDENTITY_KEYS if k in items]
+    ordered += [k for k in items if k not in _IDENTITY_KEYS]
     parts = {}
-    for k, v in tinput.items():
+    for k in ordered:
+        v = items[k]
         if SECRET_KEY.search(str(k)):
             parts[k] = "***"
             continue
@@ -115,15 +136,86 @@ CORRECTION = re.compile(
     r"\b(that'?s (wrong|not right|incorrect|not what)|"
     r"you (lied|never|did ?n'?t actually|claimed|said)|"
     r"stop (doing|assuming|making)|why did you (assume|say|claim|not)|"
-    r"you said .{0,40}? but|no,? (it|that|you|don'?t|stop)|"
+    r"you said .{0,40}? but|no,\s+(it|that|you|don'?t|stop)|"
     r"actually,? (no|it|that|you))\b",
     re.I,
 )
+# Fenced code blocks and markdown table rows: doc excerpts and tool output.
+# Signal phrases inside them are quoting, not behavior - a findings-table row
+# ("... never verified") or a pasted rule ("No 'should work' claims") is not an
+# admission or a correction. Measured on the live corpus before adding this:
+# user_correction 15 -> 9 matching rows, the legacy `friction` bucket 5 -> 0,
+# assumption_admission 51 -> 49.
+QUOTED_BLOCK = re.compile(r"```.*?```|^\s*\|.*$", re.S | re.M)
+
+
+def _matchable_text(text):
+    """Text with quoted doc/tool-output blocks removed for signal matching."""
+    return QUOTED_BLOCK.sub(" ", text or "")
+
+
 SIGNAL_WEIGHT = {
     "assumption_admission": 2.0,
     "user_correction": 1.5,
     "unverified_claim": 0.5,
 }
+
+# Substrings that mark a message as atlas's own hook output, or a quoted
+# transcript of it, rather than something a human wrote. The CORRECTION regex
+# above matches ordinary correction vocabulary ("you never...", "that's
+# wrong") - vocabulary atlas's own hooks also use in their own output (e.g.
+# memory_capture's "Captured: User correction ... You NEVER edit the target
+# codebase yourself"). A human pasting a hook transcript while reporting a bug
+# must not have that pasted text laundered into a durable signal.
+#
+# "[atlas]" is checked per line, anchored to the start of the (stripped)
+# line, rather than as a substring anywhere in the text: every atlas hook
+# prefixes its own output with "[atlas]" at the start of the line, but users
+# also name the plugin in ordinary prose ("the [atlas] plugin is broken"),
+# and a substring-anywhere match wrongly swallowed those genuine complaints.
+# Before the anchor is applied, a leading markdown blockquote marker is also
+# stripped (">", ">>", "> >", ">[atlas]" with no space, any amount of leading
+# whitespace) - a human pasting hook output verbatim commonly quotes it with
+# "> ", and that quoting must not defeat the anchor. Only ">" and whitespace
+# are stripped, and only from the very start of the line, so "[atlas]"
+# appearing after any other character (mid-sentence prose, e.g. "I think the
+# [atlas] plugin ...") is left alone and still mints a signal normally.
+# "hook feedback:" and "Self-improvement: captured" stay substring matches
+# anywhere in the text - they are distinctive enough not to appear in
+# ordinary prose, and this is what catches the mid-line quoted form "Stop
+# hook feedback: [atlas] Self-improvement: captured ...".
+MACHINE_MARKERS = (
+    "hook feedback:",
+    "Self-improvement: captured",
+)
+
+_QUOTE_PREFIX = re.compile(r"^[\s>]*")
+
+
+def _strip_quote_prefix(line):
+    """Strip leading whitespace and markdown blockquote markers from one line,
+    so a quoted "> [atlas] ..." line is recognized the same as an unquoted
+    "[atlas] ..." line. See the MACHINE_MARKERS comment above for why only
+    ">" and whitespace are stripped, and only from the start of the line."""
+    return _QUOTE_PREFIX.sub("", line, count=1)
+
+
+def _is_machine_authored(text):
+    """True when text was authored by atlas's own hooks, or quotes them
+    verbatim (e.g. a bug report pasting a hook transcript, including one
+    blockquoted with a leading "> "). NOISE_PREFIXES is reused rather than
+    duplicated - it already lists atlas/claude-mem's own machine-generated
+    message openings. "[atlas]" is checked per line, after stripping any
+    leading blockquote marker (see _strip_quote_prefix), anchored to the
+    start of what remains - so prose that merely names the plugin mid-line
+    (quoted or not) is not flagged."""
+    if text.lstrip().startswith(NOISE_PREFIXES):
+        return True
+    if any(
+        _strip_quote_prefix(line).startswith("[atlas]") for line in text.splitlines()
+    ):
+        return True
+    return any(marker in text for marker in MACHINE_MARKERS)
 
 
 def _snippet(text, m):
@@ -164,25 +256,37 @@ def detect_signals(role, text):
     """Yield (signal_type, weight, snippet) for one message's text."""
     if not text:
         return
+    # Wholesale suppression: once _is_machine_authored finds a machine marker
+    # anywhere in the message (a hook-output line, or one of the substring
+    # markers), no signal is minted from the message at all, even if the
+    # same message also contains genuine human correction text elsewhere.
+    # Simpler than locating and excluding just the matching span, at the cost
+    # of losing that rare mixed case; a missed signal is cheaper than one
+    # that never expires.
+    if _is_machine_authored(text):
+        return
+    scan = _matchable_text(text)
+    if not scan.strip():
+        return
     if role == "assistant":
-        m = ADMISSION.search(text)
+        m = ADMISSION.search(scan)
         if m:
             yield (
                 "assumption_admission",
                 SIGNAL_WEIGHT["assumption_admission"],
-                _snippet(text, m),
+                _snippet(scan, m),
             )
-        m = UNVERIFIED.search(text)
+        m = UNVERIFIED.search(scan)
         if m:
             yield (
                 "unverified_claim",
                 SIGNAL_WEIGHT["unverified_claim"],
-                _snippet(text, m),
+                _snippet(scan, m),
             )
     elif role == "user":
-        m = CORRECTION.search(text)
+        m = CORRECTION.search(scan)
         if m:
-            yield "user_correction", SIGNAL_WEIGHT["user_correction"], _snippet(text, m)
+            yield "user_correction", SIGNAL_WEIGHT["user_correction"], _snippet(scan, m)
 
 
 # --- transcript parsing -------------------------------------------------------
@@ -267,6 +371,220 @@ def _read_session_cwd(path):
     return None
 
 
+SCRATCH_CWD_PREFIXES = ("/tmp", "/private/tmp", "/var/folders", "/private/var/folders")
+
+
+def scratch_cwd(cwd):
+    """A session cwd that is a fixture, never real usage: OS/system temp, a
+    `.scratch` dir, or a fixture root (/atlas-e2e*, demo repos). One definition,
+    shared by backfill and the Health Chronicle card."""
+    if not cwd:
+        return False
+    p = os.path.normpath(str(cwd))
+    if any(p == x or p.startswith(x + "/") for x in SCRATCH_CWD_PREFIXES):
+        return True
+    if "/.scratch/" in p + "/" or atlas_db.is_tmp_path(p):
+        return True
+    try:
+        import atlas_control  # type: ignore
+
+        return bool(atlas_control.is_fixture_project(p, must_exist=False))
+    except Exception:
+        return False
+
+
+def transcript_facts(path):
+    """(header id, cwd, is_subagent, has_messages) from the head of a transcript.
+    omp: the `session` header carries id/cwd and `parentSession` for a subagent
+    or fork; Claude: cwd rides on the message lines. Stops at the first message."""
+    hid = cwd = None
+    sub = msgs = False
+    try:
+        with open(path, errors="replace") as fh:
+            for line in fh:
+                try:
+                    j = json.loads(line)
+                except ValueError:
+                    continue
+                if not isinstance(j, dict):
+                    continue
+                t = j.get("type")
+                if t == "session":
+                    hid, cwd = j.get("id"), j.get("cwd")
+                    sub = bool(j.get("parentSession") or j.get("parent"))
+                elif t in ("message", "user", "assistant"):
+                    msgs = True
+                    cwd = cwd or j.get("cwd")
+                    break
+    except OSError:
+        pass
+    return hid, cwd, sub, msgs
+
+
+def skip_reason(path, facts=None):
+    """Why a transcript is not a session worth ingesting, else None: 'subagent'
+    (omp parentSession), 'empty' (no message lines), or 'scratch' (observer
+    mirror, fixture cwd). Backfill and the Chronicle card both decide with this."""
+    _hid, cwd, sub, msgs = facts or transcript_facts(path)
+    if sub:
+        return "subagent"
+    if not msgs:
+        return "empty"
+    if "claude-mem-observer-sessions" in str(path) or is_synthetic_session(path=path):
+        return "scratch"
+    return "scratch" if scratch_cwd(cwd) else None
+
+
+# --- per-file ingest cursors --------------------------------------------------
+
+# A Claude Code session is more than one transcript: subagent transcripts live
+# at <session>/subagents/agent-*.jsonl and carry the SAME sessionId as the main
+# one. session_logs holds a single cursor per session, so ingesting a (shorter)
+# subagent file after the main file tripped the truncate reset and wiped the
+# main transcript's rows. Cursors and row attribution are therefore per
+# (session, file): `ingest_files` records, for each file, its byte cursor and
+# the message uuids / tool_use ids it contributed, so a truncate/force reset
+# deletes only that file's rows.
+_KEY_CAP = 20000  # attribution per file is bounded; past it the file is "full"
+
+
+def _key_add(keys, kind, val):
+    """Record one row key this file contributed (bounded by _KEY_CAP)."""
+    if not val or keys["full"]:
+        return
+    if len(keys[kind]) >= _KEY_CAP:
+        keys["full"] = True
+        return
+    keys[kind].append(val)
+
+
+def _key_json(keys):
+    """Serialized attribution, or None when empty/over the cap (unattributable)."""
+    if keys["full"] or not (keys["m"] or keys["t"]):
+        return None
+    return json.dumps({"m": keys["m"], "t": keys["t"]})
+
+
+def _reset_file_rows(conn, session_id, path, row_keys, owner_path):
+    """Undo one transcript file's contribution before re-ingesting it from 0.
+
+    With attribution, delete exactly the rows that file wrote. Without it
+    (pre-upgrade state, or a file past the key cap), only the file that owns
+    the session row may fall back to the legacy whole-session reset; any other
+    file just restarts its cursor so sibling files' rows are never erased."""
+    if row_keys:
+        ks = json.loads(row_keys)
+        uuids, tuids = ks.get("m", []), ks.get("t", [])
+        for tbl, col, vals in (
+            ("messages", "uuid", uuids),
+            ("user_prompts", "uuid", uuids),
+            ("signals", "message_uuid", uuids),
+            ("tool_calls", "tool_use_id", tuids),
+        ):
+            for i in range(0, len(vals), 500):
+                chunk = vals[i : i + 500]
+                conn.execute(
+                    f"DELETE FROM {tbl} WHERE session_id=? AND {col} IN "
+                    f"({','.join('?' * len(chunk))})",
+                    (session_id, *chunk),
+                )
+    elif owner_path == path:
+        atlas_db.reset_session_rows(conn, session_id)
+        # every sibling file's rows went with it; make them re-ingest from 0
+        conn.execute("DELETE FROM ingest_files WHERE session_id=?", (session_id,))
+    conn.execute(
+        "DELETE FROM ingest_files WHERE session_id=? AND path=?", (session_id, path)
+    )
+
+
+# --- harness labeling ---------------------------------------------------------
+
+# Harnesses whose hook processes announce themselves through ATLAS_HARNESS.
+# Extend this set (one place) only after verifying the new harness's bridge sets
+# the variable; an unlisted value is ignored rather than trusted.
+RECOGNIZED_HARNESSES = frozenset({"omp"})
+
+
+def harness_agent():
+    """session_logs.agent for a hook-driven ingest, or None to leave the schema
+    DEFAULT ('claude') in force.
+
+    Rule: ATLAS_HARNESS, when it names a RECOGNIZED_HARNESSES entry, is the
+    agent. omp's bridge sets ATLAS_HARNESS=omp on every atlas hook process it
+    starts: the synchronous hooks (omp/hook-bridge.ts hookEnv()) and the
+    detached ingest spawned at session_shutdown / auto_compaction_start for
+    main AND subagent sessions (omp/stop-bridge.ts, whose startDetached merges
+    opts.env over process.env). Claude Code starts the same hook scripts
+    without it, so an absent, empty or unrecognized value stays 'claude'.
+
+    Why the environment and not the transcript path: the bridge converts the
+    omp session into a Claude-shaped file under an atlas-ingest-* temp dir
+    before spawning the hook, so neither the path nor the content identifies
+    omp at this boundary.
+
+    Failure modes: (1) running this module by hand over an omp transcript
+    without ATLAS_HARNESS labels the row 'claude' - backfill omp history with
+    --backfill-agent omp, which stamps agent itself; (2) ATLAS_HARNESS=omp
+    exported into a Claude Code user shell would mislabel that shell's rows
+    'omp' - the bridges set it per child process, never in user shells, so this
+    needs a manual export; (3) a future harness is labeled 'claude' until it is
+    added to RECOGNIZED_HARNESSES. Rows already stored as 'claude' are not
+    rewritten here.
+    """
+    value = (os.environ.get("ATLAS_HARNESS") or "").strip().lower()
+    return value if value in RECOGNIZED_HARNESSES else None
+
+
+_TASK_TOOLS = ("Task", "task", "Agent")
+
+
+def reconcile_task_dispatches(conn, session_id):
+    """omp has no PreToolUse hook writing `dispatches` (79 rows for 604 omp task
+    calls), so dispatch discipline was computed almost entirely from claude
+    data. For an omp session, top up the run's dispatch rows from the ingested
+    main-thread task tool_calls: idempotent by count (rows the harness already
+    logged are kept), each missing row carries the call's own ts and agent
+    type. Returns the number of rows added. Never raises into ingest."""
+    try:
+        row = conn.execute(
+            "SELECT agent, project_id FROM session_logs WHERE session_id=?",
+            (session_id,),
+        ).fetchone()
+        if not row or row[0] != "omp":
+            return 0
+        calls = conn.execute(
+            "SELECT ts, input_summary FROM tool_calls WHERE session_id=? "
+            "AND COALESCE(is_sidechain,0)=0 AND tool_name IN (?,?,?) ORDER BY ts, id",
+            (session_id, *_TASK_TOOLS),
+        ).fetchall()
+        if not calls:
+            return 0
+        rid = atlas_db.latest_run_id(conn, session_id)
+        if rid is None:
+            if row[1] is None:
+                return 0
+            rid = atlas_db.start_run(conn, row[1], session_id)
+        have = conn.execute(
+            "SELECT COUNT(*) FROM dispatches WHERE run_id=?", (rid,)
+        ).fetchone()[0]
+        missing = len(calls) - have
+        for ts, summary in calls[len(calls) - missing :] if missing > 0 else ():
+            try:
+                agent_type = atlas_db.resolve_agent_type(json.loads(summary or "{}"))
+            except (TypeError, ValueError):
+                agent_type = atlas_db.DEFAULT_AGENT_TYPE
+            conn.execute(
+                "INSERT INTO dispatches(run_id,ts,agent_type) VALUES(?,?,?)",
+                (rid, ts, agent_type),
+            )
+        return max(missing, 0)
+    except Exception as exc:  # derived accounting must never break ingest
+        import atlas_faults
+
+        atlas_faults.record("session_ingest.dispatches", exc)
+        return 0
+
+
 def ingest_transcript(path, conn=None, session_id=None, force=False):
     """Ingest new lines of one transcript. Returns a small stats dict.
     Incremental via byte cursor; resets cleanly if the file was truncated."""
@@ -296,12 +614,53 @@ def ingest_transcript(path, conn=None, session_id=None, force=False):
                 _read_session_id(path) or os.path.splitext(os.path.basename(path))[0]
             )
         size = os.path.getsize(path)
-        cursor, _prev = atlas_db.session_cursor(conn, session_id)
-        if force or cursor > size:  # truncated/rewritten/forced -> full re-ingest
-            atlas_db.reset_session_rows(conn, session_id)
+        # ingest_files is defined once, in atlas_db.SCHEMA. A caller-supplied
+        # connection may predate it (pre-upgrade DB).
+        atlas_db.ensure_ingest_files(conn)
+        owner = conn.execute(
+            "SELECT transcript_path FROM session_logs WHERE session_id=?",
+            (session_id,),
+        ).fetchone()
+        owner_path = owner[0] if owner else None
+        # omp's bridge converts the session into a throwaway temp copy each time;
+        # once the row points at the durable original, that temp copy is still the
+        # owner's update (keep the durable path). A different durable file is not,
+        # and neither is a colony/advisor sidecar (omp_transcript.convert_file
+        # writes those to <out dir>/subagents/agent-*.jsonl, sharing the session
+        # id, and they inherit the same ATLAS_SOURCE_TRANSCRIPT as the lead).
+        source = os.environ.get("ATLAS_SOURCE_TRANSCRIPT")
+        durable_owner = bool(
+            owner_path
+            and owner_path != path
+            and atlas_db.is_tmp_path(path)
+            and not atlas_db.is_tmp_path(owner_path)
+            and os.path.basename(os.path.dirname(path)) != "subagents"
+            and (not source or source == owner_path)
+            and os.path.isfile(owner_path)
+        )
+        frow = conn.execute(
+            "SELECT cursor_bytes, row_keys FROM ingest_files "
+            "WHERE session_id=? AND path=?",
+            (session_id, path),
+        ).fetchone()
+        if frow is not None:
+            cursor, prev_keys = frow[0] or 0, frow[1]
+        else:
+            # Sessions ingested before per-file cursors kept one cursor on the
+            # session row, valid only for the file that owns it. Any other
+            # file sharing the sessionId (a subagent transcript) starts at 0.
+            cursor = (
+                atlas_db.session_cursor(conn, session_id)[0]
+                if owner_path == path
+                else 0
+            )
+            prev_keys = None
+        if force or cursor > size:  # truncated/rewritten/forced -> re-ingest
+            _reset_file_rows(conn, session_id, path, prev_keys, owner_path)
             cursor = 0
         if cursor == size:
             return stats  # nothing new
+        keys = {"m": [], "t": [], "full": False}
         with open(path, "rb") as f:
             f.seek(cursor)
             data = f.read()
@@ -332,7 +691,7 @@ def ingest_transcript(path, conn=None, session_id=None, force=False):
                         f"json parse failed: {type(e).__name__}: {e}"
                     )
                 continue
-            _ingest_line(conn, session_id, obj, meta, stats)
+            _ingest_line(conn, session_id, obj, meta, stats, keys)
         # link project from the cwd seen in the transcript
         if meta["cwd"]:
             try:
@@ -341,21 +700,37 @@ def ingest_transcript(path, conn=None, session_id=None, force=False):
                 )
             except Exception:
                 pass
-        atlas_db.upsert_session_log(
-            conn,
-            session_id,
-            project_id=meta["project_id"],
-            transcript_path=path,
-            cwd=meta["cwd"],
-            git_branch=meta["git_branch"],
-            model=meta["model"],
-            started_at=meta["started_at"],
-            ended_at=meta["ended_at"],
-            cursor_bytes=new_cursor,
-            file_size=size,
-            file_mtime=os.path.getmtime(path),
-            last_ingest_at=time.time(),
+        if owner_path and owner_path != path and not durable_owner:
+            # A different transcript file sharing this sessionId (a subagent
+            # file) must not move the session row's ownership columns: the
+            # transcript_path/cursor stay with the file that created the row.
+            atlas_db.upsert_session_log(
+                conn, session_id, agent=harness_agent(), last_ingest_at=time.time()
+            )
+        else:
+            atlas_db.upsert_session_log(
+                conn,
+                session_id,
+                agent=harness_agent(),
+                project_id=meta["project_id"],
+                transcript_path=owner_path if durable_owner else path,
+                cwd=meta["cwd"],
+                git_branch=meta["git_branch"],
+                model=meta["model"],
+                started_at=meta["started_at"],
+                ended_at=meta["ended_at"],
+                cursor_bytes=new_cursor,
+                file_size=size,
+                file_mtime=os.path.getmtime(path),
+                last_ingest_at=time.time(),
+            )
+        conn.execute(
+            "INSERT OR REPLACE INTO ingest_files"
+            "(session_id,path,cursor_bytes,size,row_keys,updated_at) "
+            "VALUES(?,?,?,?,?,?)",
+            (session_id, path, new_cursor, size, _key_json(keys), time.time()),
         )
+        reconcile_task_dispatches(conn, session_id)
         atlas_db.refresh_session_aggregates(conn, session_id)
         # The mirror is now current for this session, so the run-health columns
         # that no live hook can fill (est_context_tokens, verifier_coverage,
@@ -389,7 +764,7 @@ def _read_session_id(path):
     return None
 
 
-def _ingest_line(conn, session_id, obj, meta, stats):
+def _ingest_line(conn, session_id, obj, meta, stats, keys):
     ts = _epoch(obj.get("timestamp"))
     if obj.get("cwd"):
         meta["cwd"] = obj["cwd"]
@@ -414,7 +789,7 @@ def _ingest_line(conn, session_id, obj, meta, stats):
         elif bt == "thinking":
             thinking.append(b.get("thinking", "") or b.get("text", ""))
         elif bt == "tool_use":
-            _ingest_tool_use(conn, session_id, obj, b, ts, stats)
+            _ingest_tool_use(conn, session_id, obj, b, ts, stats, keys)
         elif bt == "tool_result":
             _ingest_tool_result(conn, b, stats)
     text = "\n".join(t for t in texts if t).strip()
@@ -424,6 +799,7 @@ def _ingest_line(conn, session_id, obj, meta, stats):
         meta["model"] = msg["model"]
     uuid = obj.get("uuid")
     if uuid:
+        _key_add(keys, "m", uuid)
         atlas_db.insert_message(
             conn,
             session_id,
@@ -472,7 +848,7 @@ def _ingest_line(conn, session_id, obj, meta, stats):
         stats["signals"] += 1
 
 
-def _ingest_tool_use(conn, session_id, obj, block, ts, stats):
+def _ingest_tool_use(conn, session_id, obj, block, ts, stats, keys):
     tinput = block.get("input") or {}
     kind, target, server = classify(block.get("name"), tinput)
     summary, ibytes = summarize_input(tinput)
@@ -495,6 +871,16 @@ def _ingest_tool_use(conn, session_id, obj, block, ts, stats):
         },
     )
     stats["tools"] += 1
+    _key_add(keys, "t", block.get("id"))
+
+
+def _result_text(content):
+    """Flatten a tool_result `content` (str, or a list of text blocks) to text."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "\n".join(b.get("text", "") for b in content if isinstance(b, dict))
+    return ""
 
 
 def _ingest_tool_result(conn, block, stats):
@@ -508,7 +894,7 @@ def _ingest_tool_result(conn, block, stats):
         else len(json.dumps(content, default=str))
     )
     is_err = 1 if block.get("is_error") in (True, "true", "True") else 0
-    atlas_db.update_tool_result(conn, tuid, is_err, rbytes)
+    atlas_db.update_tool_result(conn, tuid, is_err, rbytes, _result_text(content))
     stats["results"] += 1
 
 
@@ -574,7 +960,7 @@ def _persist_agent_message(conn, meta, rec, stats):
                 "parent_uuid": rec.get("parent_uuid"),
                 "ts": ts,
                 "role": role,
-                "is_sidechain": 0,
+                "is_sidechain": int(rec.get("is_sidechain") or 0),
                 "model": rec.get("model") or meta.get("model"),
                 "thinking": think[:CAP] or None,
                 "text": text[:CAP] or None,
@@ -586,7 +972,9 @@ def _persist_agent_message(conn, meta, rec, stats):
             },
         )
         stats["messages"] += 1
-    if role == "user" and _is_real_prompt(text, []):
+    # user_prompts has no sidechain column, so a colony member's prompt would
+    # read as the lead's own request; only main-thread text counts as one.
+    if role == "user" and not rec.get("is_sidechain") and _is_real_prompt(text, []):
         atlas_db.insert_user_prompt(
             conn,
             sid,
@@ -626,7 +1014,7 @@ def _persist_agent_tool_call(conn, meta, rec, stats):
         {
             "message_uuid": rec.get("message_uuid"),
             "ts": rec.get("ts"),
-            "is_sidechain": 0,
+            "is_sidechain": int(rec.get("is_sidechain") or 0),
             "tool_use_id": rec.get("tool_use_id"),
             "tool_name": rec.get("tool_name"),
             "kind": kind,
@@ -641,12 +1029,14 @@ def _persist_agent_tool_call(conn, meta, rec, stats):
     stats["tools"] += 1
 
 
-def ingest_agent_session(path, adapter, conn=None, session_id=None):
+def ingest_agent_session(path, adapter, conn=None, session_id=None, sidechain=False):
     """Drive one non-claude session file through the normalized records its
     `adapter` yields, persisting via atlas_db. Full-file reparse each call;
     idempotent because every insert helper is INSERT OR IGNORE keyed on a stable
     id the adapter assigns. Honors the same synthetic-session exclusion the
-    claude path does (by path and by the cwd the adapter reports)."""
+    claude path does (by path and by the cwd the adapter reports). `session_id`
+    overrides the adapter's own id; `sidechain` flags every row is_sidechain=1
+    and leaves the session row to the owning main file."""
     stats = {"messages": 0, "tools": 0, "prompts": 0, "signals": 0, "results": 0}
     if is_synthetic_session(path=path):
         return stats
@@ -668,6 +1058,10 @@ def ingest_agent_session(path, adapter, conn=None, session_id=None):
             kind = rec.get("kind")
             if kind == "meta":
                 for k in ("session_id", "agent", "cwd", "model"):
+                    # an explicit session_id argument (a colony member landing
+                    # under its lead) outranks the id the adapter reads
+                    if k == "session_id" and session_id is not None:
+                        continue
                     if rec.get(k) is not None:
                         meta[k] = rec[k]
                 if rec.get("started_at") is not None and (
@@ -681,14 +1075,22 @@ def ingest_agent_session(path, adapter, conn=None, session_id=None):
                 if meta["cwd"] and is_synthetic_session(cwd=meta["cwd"]):
                     return {k: 0 for k in stats}
             elif kind == "message":
+                if sidechain:
+                    rec = {**rec, "is_sidechain": 1}
                 _persist_agent_message(conn, meta, rec, stats)
             elif kind == "tool_call":
+                if sidechain:
+                    rec = {**rec, "is_sidechain": 1}
                 _persist_agent_tool_call(conn, meta, rec, stats)
             elif kind == "tool_result":
                 tuid = rec.get("tool_use_id")
                 if tuid:
                     atlas_db.update_tool_result(
-                        conn, tuid, rec.get("is_error"), rec.get("result_bytes")
+                        conn,
+                        tuid,
+                        rec.get("is_error"),
+                        rec.get("result_bytes"),
+                        rec.get("text"),
                     )
                     stats["results"] += 1
         sid = meta["session_id"] or os.path.splitext(os.path.basename(path))[0]
@@ -701,21 +1103,26 @@ def ingest_agent_session(path, adapter, conn=None, session_id=None):
             except Exception:
                 pass
         size = os.path.getsize(path)
-        atlas_db.upsert_session_log(
-            conn,
-            sid,
-            agent=meta["agent"],
-            project_id=meta["project_id"],
-            transcript_path=path,
-            cwd=meta["cwd"],
-            model=meta["model"],
-            started_at=meta["started_at"],
-            ended_at=meta["ended_at"],
-            cursor_bytes=size,
-            file_size=size,
-            file_mtime=os.path.getmtime(path),
-            last_ingest_at=time.time(),
-        )
+        if not sidechain:
+            # Colony members share their lead's session id; the lead's own file
+            # owns the session row, so a member must not overwrite its
+            # transcript_path/cursor columns.
+            atlas_db.upsert_session_log(
+                conn,
+                sid,
+                agent=meta["agent"],
+                project_id=meta["project_id"],
+                transcript_path=path,
+                cwd=meta["cwd"],
+                model=meta["model"],
+                started_at=meta["started_at"],
+                ended_at=meta["ended_at"],
+                cursor_bytes=size,
+                file_size=size,
+                file_mtime=os.path.getmtime(path),
+                last_ingest_at=time.time(),
+            )
+        reconcile_task_dispatches(conn, sid)
         atlas_db.refresh_session_aggregates(conn, sid)
         conn.commit()
     finally:
@@ -869,16 +1276,165 @@ def codex_adapter(path):
                     }
 
 
-# agent name -> (adapter callable, default session root). Extend both here when
-# adding an agent; the driver and CLI are already generic over this table.
-AGENT_ADAPTERS = {"codex": codex_adapter}
-AGENT_DEFAULT_ROOTS = {"codex": "~/.codex/sessions"}
+def _omp_text(content, kind="text"):
+    if isinstance(content, str):
+        return content if kind == "text" else ""
+    if not isinstance(content, list):
+        return ""
+    return "\n".join(
+        b.get(kind) or ""
+        for b in content
+        if isinstance(b, dict) and b.get("type") == kind and b.get(kind)
+    )
+
+
+def omp_adapter(path):
+    """Parse an omp (oh-my-pi) session JSONL
+    (~/.omp/agent/sessions/<project>/<ts>_<id>.jsonl) into normalized records.
+      session                         -> session id, cwd, start time
+      message role=user               -> prompt only when attribution is "user";
+                                         agent/harness-authored user text is
+                                         stored as role "system", never a prompt
+      message role=assistant          -> text, thinking, usage, model; each
+                                         toolCall block -> tool_call
+      message role=toolResult         -> tool_result (isError is reliable)
+    omp entry ids are only session-unique, so uuids are "<session>:<id>".
+    custom_message/custom (advisories, hook output) are machine-authored and
+    skipped."""
+    sid = None
+    with open(path, "rb") as f:
+        for raw in f:
+            if not raw.strip():
+                continue
+            try:
+                obj = json.loads(raw)
+            except Exception:
+                continue
+            typ = obj.get("type")
+            ts = _epoch(obj.get("timestamp"))
+            if typ == "session":
+                sid = obj.get("id") or os.path.splitext(os.path.basename(path))[0]
+                yield {
+                    "kind": "meta",
+                    "session_id": sid,
+                    "agent": "omp",
+                    "cwd": obj.get("cwd"),
+                    "started_at": ts,
+                }
+                continue
+            if typ == "model_change" and obj.get("model"):
+                yield {"kind": "meta", "model": obj["model"]}
+                continue
+            if typ != "message" or not sid:
+                continue
+            msg = obj.get("message") or {}
+            role = msg.get("role")
+            uuid = f"{sid}:{obj.get('id')}"
+            parent = f"{sid}:{obj['parentId']}" if obj.get("parentId") else None
+            content = msg.get("content")
+            if role == "user":
+                attribution = msg.get("attribution")
+                yield {
+                    "kind": "message",
+                    "uuid": uuid,
+                    "parent_uuid": parent,
+                    "ts": ts,
+                    "role": "user" if attribution in (None, "user") else "system",
+                    "text": _omp_text(content),
+                }
+            elif role == "assistant":
+                usage = msg.get("usage") or {}
+                yield {
+                    "kind": "message",
+                    "uuid": uuid,
+                    "parent_uuid": parent,
+                    "ts": ts,
+                    "role": "assistant",
+                    "model": msg.get("model"),
+                    "text": _omp_text(content),
+                    "thinking": _omp_text(content, "thinking"),
+                    "input_tokens": usage.get("input"),
+                    "output_tokens": usage.get("output"),
+                    "cache_read_tokens": usage.get("cacheRead"),
+                    "cache_creation_tokens": usage.get("cacheWrite"),
+                }
+                for b in content if isinstance(content, list) else []:
+                    if isinstance(b, dict) and b.get("type") == "toolCall":
+                        yield {
+                            "kind": "tool_call",
+                            "message_uuid": uuid,
+                            "ts": ts,
+                            "tool_use_id": f"{sid}:{b.get('id')}",
+                            "tool_name": b.get("name"),
+                            "input": _codex_args(b.get("arguments")),
+                        }
+            elif role == "toolResult" and msg.get("toolCallId"):
+                yield {
+                    "kind": "tool_result",
+                    "tool_use_id": f"{sid}:{msg['toolCallId']}",
+                    "is_error": 1 if msg.get("isError") else 0,
+                    "result_bytes": len(_omp_text(content)),
+                    "text": _omp_text(content)[:500],
+                }
+
+
+# agent name -> (adapter callable, default session root, session-file filter).
+# Extend all three here when adding an agent; the driver and CLI are already
+# generic over these tables. The filter gets (root, dirpath, filename).
+AGENT_ADAPTERS = {"codex": codex_adapter, "omp": omp_adapter}
+AGENT_DEFAULT_ROOTS = {"codex": "~/.codex/sessions", "omp": "~/.omp/agent/sessions"}
+AGENT_FILE_FILTERS = {
+    "codex": lambda root, d, fn: fn.startswith("rollout-") and fn.endswith(".jsonl"),
+    # Main sessions sit directly under <root>/<project>/; colony member
+    # transcripts one level deeper are routed by AGENT_COLONY_* below.
+    "omp": lambda root, d, fn: (
+        fn.endswith(".jsonl") and os.path.dirname(os.path.relpath(d, root)) == ""
+    ),
+}
+
+
+def _omp_colony_main(colony_dir):
+    """Path of the main session file a colony directory belongs to: omp keeps a
+    colony's member transcripts (__advisor.jsonl, <AgentName>.jsonl) in a
+    directory named after the lead's session file, next to <stem>.jsonl."""
+    return os.path.join(
+        os.path.dirname(colony_dir), os.path.basename(colony_dir) + ".jsonl"
+    )
+
+
+def _omp_colony_parent(colony_dir):
+    """Session id of the colony's lead, read from its sibling main file's
+    `session` record. None when there is no readable lead to attach to."""
+    try:
+        with open(_omp_colony_main(colony_dir), "rb") as f:
+            for raw in f:
+                try:
+                    obj = json.loads(raw)
+                except Exception:
+                    continue
+                if obj.get("type") == "session" and obj.get("id"):
+                    return obj["id"]
+    except OSError:
+        pass
+    return None
+
+
+# Colony agents (omp): member transcripts carry their own internal session ids
+# and no sidechain marker, so ingesting them like main sessions made every
+# worker/advisor a "lead" to the is_sidechain=0 colony miner. They are instead
+# landed as is_sidechain=1 rows under their lead's session id. A member whose
+# lead cannot be found is skipped, never promoted to a session of its own.
+AGENT_COLONY_FILTERS = {
+    "omp": lambda d, fn: fn.endswith(".jsonl") and os.path.isfile(_omp_colony_main(d)),
+}
+AGENT_COLONY_PARENT = {"omp": _omp_colony_parent}
 
 
 def backfill_agent(agent, root=None, conn=None):
     """Walk an agent's on-disk session tree and ingest every session file via
     that agent's registered adapter. Path-overridable (tests pass a temp tree).
-    Codex files are rollout-*.jsonl under a YYYY/MM/DD date tree."""
+    Codex files are rollout-*.jsonl under a YYYY/MM/DD date tree. For colony
+    agents, member transcripts land as sidechain rows under their lead."""
     adapter = AGENT_ADAPTERS.get(agent)
     if adapter is None:
         raise ValueError(f"no adapter registered for agent {agent!r}")
@@ -888,16 +1444,26 @@ def backfill_agent(agent, root=None, conn=None):
         conn = atlas_db.connect()
         atlas_db.init(conn)
     totals = {"files": 0, "messages": 0, "tools": 0, "prompts": 0, "signals": 0}
+    colony = AGENT_COLONY_FILTERS.get(agent)
     try:
         for dirpath, _dirs, files in os.walk(root):
-            for fn in files:
-                if not (fn.startswith("rollout-") and fn.endswith(".jsonl")):
-                    continue
+            for fn in sorted(files):
                 p = os.path.join(dirpath, fn)
+                member = bool(colony and colony(dirpath, fn))
+                if not member and not AGENT_FILE_FILTERS[agent](root, dirpath, fn):
+                    continue
                 if is_synthetic_session(path=p):
                     continue
+                if agent == "omp" and not member and skip_reason(p):
+                    continue  # subagent/fork, empty, fixture cwd (as the Health card)
+                kwargs = {}
+                if member:
+                    parent = AGENT_COLONY_PARENT[agent](dirpath)
+                    if not parent:
+                        continue
+                    kwargs = {"session_id": parent, "sidechain": True}
                 try:
-                    s = ingest_agent_session(p, adapter, conn=conn)
+                    s = ingest_agent_session(p, adapter, conn=conn, **kwargs)
                 except Exception:
                     continue
                 totals["files"] += 1
@@ -927,8 +1493,8 @@ def backfill(root=None, conn=None):
                 if not fn.endswith(".jsonl"):
                     continue
                 p = os.path.join(dirpath, fn)
-                if is_synthetic_session(path=p):
-                    continue  # skip observer-session mirrors and other synthetics
+                if skip_reason(p):
+                    continue  # observer mirrors, fixture cwds, empty files
                 try:
                     s = ingest_transcript(p, conn=conn)
                 except Exception:
@@ -944,9 +1510,211 @@ def backfill(root=None, conn=None):
     return totals
 
 
+# --- error-snippet backfill ---------------------------------------------------
+
+
+def _error_results(path):
+    """Yield (tool_use_id, result_bytes, text) for every failed tool result in a
+    claude or omp transcript. An omp result yields its raw toolCallId; the
+    caller maps it onto whichever stored form a row has ('<session>:<callId>'
+    from omp_adapter, or the bare/agent-prefixed id from omp_transcript). Cheap
+    byte prefilter: lines without an error flag are never JSON-parsed."""
+    with open(path, "rb") as f:
+        for raw in f:
+            if b"is_error" not in raw and b"isError" not in raw:
+                continue
+            try:
+                obj = json.loads(raw)
+            except Exception:
+                continue
+            typ = obj.get("type")
+            if typ == "message":
+                msg = obj.get("message") or {}
+                if msg.get("role") == "toolResult" and msg.get("isError"):
+                    tuid = msg.get("toolCallId")
+                    if tuid:
+                        text = _omp_text(msg.get("content"))
+                        yield tuid, len(text), text
+            elif typ in ("user", "assistant"):
+                for b in _blocks(obj.get("message") or {}):
+                    if (
+                        isinstance(b, dict)
+                        and b.get("type") == "tool_result"
+                        and b.get("is_error") in (True, "true", "True")
+                        and b.get("tool_use_id")
+                    ):
+                        content = b.get("content")
+                        rbytes = (
+                            len(content)
+                            if isinstance(content, str)
+                            else len(json.dumps(content, default=str))
+                        )
+                        yield b["tool_use_id"], rbytes, _result_text(content)
+
+
+_EMPTY_ERRORS = (
+    "FROM tool_calls WHERE is_error=1 AND (error_snippet IS NULL OR error_snippet='')"
+)
+
+
+def backfill_errors(roots=None, conn=None, batch=500):
+    """Re-read claude and omp transcripts and fill `error_snippet` + `denied` on
+    tool_calls rows that failed (is_error=1) but carry no snippet, keyed by
+    tool_use_id, through atlas_db.update_tool_result (the live-ingest path).
+    Idempotent: a filled row leaves the target set, so a rerun changes nothing.
+    Rows whose transcript no longer exists (or whose result text is empty) stay
+    empty and show up in `empty_after`. `roots` overrides the default
+    (~/.claude/projects, ~/.omp/agent/sessions)."""
+    roots = roots or [
+        os.path.expanduser("~/.claude/projects"),
+        os.path.expanduser(AGENT_DEFAULT_ROOTS["omp"]),
+    ]
+    own = conn is None
+    if own:
+        conn = atlas_db.connect()
+        atlas_db.init(conn)
+    try:
+        targets = {r[0] for r in conn.execute("SELECT tool_use_id " + _EMPTY_ERRORS)}
+        # omp rows reach the DB two ways: omp_adapter ('<session>:<callId>') and
+        # omp_transcript's claude-shaped mirror (raw callId, optionally
+        # '<agent>:' prefixed, '.N' per batched task item, '#N' on repeats).
+        # Index every such variant back to the stored id.
+        index = {}
+        for full in targets:
+            base = re.sub(r"#\d+$", "", full)
+            for v in {full, base, base.partition(":")[2] or base}:
+                index.setdefault(v, set()).add(full)
+                index.setdefault(re.sub(r"\.\d+$", "", v), set()).add(full)
+        out = {"empty_before": len(targets), "files": 0, "updated": 0, "denied": 0}
+        pending = 0
+        for root in roots:
+            for dirpath, _dirs, files in os.walk(root):
+                for fn in files:
+                    if not targets:
+                        break
+                    if not fn.endswith(".jsonl"):
+                        continue
+                    out["files"] += 1
+                    try:
+                        for tuid, rbytes, text in _error_results(
+                            os.path.join(dirpath, fn)
+                        ):
+                            hits = index.get(tuid, set()) & targets
+                            if not hits:
+                                continue
+                            for full in hits:
+                                targets.discard(full)
+                                atlas_db.update_tool_result(conn, full, 1, rbytes, text)
+                                out["updated"] += 1
+                                out["denied"] += atlas_db.is_denied_result(text)
+                            pending += 1
+                            if pending >= batch:
+                                conn.commit()
+                                pending = 0
+                    except OSError:
+                        continue
+                    if out["files"] % 500 == 0:
+                        print(f"  ...{out['files']} transcripts", file=sys.stderr)
+        conn.commit()
+        out["empty_after"] = conn.execute(
+            "SELECT COUNT(*) " + _EMPTY_ERRORS
+        ).fetchone()[0]
+        return out
+    finally:
+        if own:
+            conn.close()
+
+
+def adopt_source_transcript(session_id, source, conn=None):
+    """Re-point session_logs.transcript_path at the DURABLE original session file.
+
+    omp's bridge ingests a throwaway conversion under an atlas-ingest-* temp dir
+    and deletes it when the child exits; the original ~/.omp session file is
+    retained by omp, so recording that path (not a second copy under ~/.atlas)
+    keeps every row's transcript readable. A missing or temp-dir source is
+    ignored. Returns True when a row was updated."""
+    if not session_id or not source or not os.path.isfile(source):
+        return False
+    if atlas_db.is_tmp_path(source):
+        return False
+    own = conn is None
+    if own:
+        conn = atlas_db.connect()
+    try:
+        cur = conn.execute(
+            "UPDATE session_logs SET transcript_path=? "
+            "WHERE session_id=? AND COALESCE(transcript_path,'')<>?",
+            (source, session_id, source),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        if own:
+            conn.close()
+
+
+def _omp_session_files(root=None):
+    """{session_id: path} from the `session` header of every omp session file
+    (first file seen wins when a sub-agent file carries the same id)."""
+    root = root or os.path.expanduser(AGENT_DEFAULT_ROOTS["omp"])
+    found = {}
+    for dirpath, _dirs, files in os.walk(root):
+        for name in files:
+            if not name.endswith(".jsonl"):
+                continue
+            p = os.path.join(dirpath, name)
+            try:
+                with open(p, "rb") as f:
+                    for _ in range(3):
+                        raw = f.readline(65536)
+                        if b'"type":"session"' in raw:
+                            found.setdefault(json.loads(raw)["id"], p)
+                            break
+            except Exception:
+                continue
+    return found
+
+
+def repair_tmp_transcript_paths(apply=False, root=None, conn=None):
+    """Re-point session_logs rows whose transcript_path lies under the OS temp
+    dir at the original omp session file when it still exists. Dry run unless
+    apply=True (the dry run opens the DB read-only). Returns counts."""
+    own = conn is None
+    if own:
+        if apply:
+            conn = atlas_db.connect()
+        else:
+            import sqlite3
+
+            conn = sqlite3.connect(f"file:{atlas_db.db_path()}?mode=ro", uri=True)
+    try:
+        sub, args = atlas_db.tmp_sessions_sql()
+        sids = [r[0] for r in conn.execute(sub, args).fetchall()]
+        files = _omp_session_files(root)
+        todo = [(s, files[s]) for s in sids if s in files]
+        if apply:
+            for s, p in todo:
+                adopt_source_transcript(s, p, conn=conn)
+        return {
+            "tmp_rows": len(sids),
+            "repointable": len(todo),
+            "unrecoverable": len(sids) - len(todo),
+            "applied": len(todo) if apply else 0,
+        }
+    finally:
+        if own:
+            conn.close()
+
+
 def main(argv):
     if not argv or argv[0] in ("-h", "--help"):
         print(__doc__)
+        return 0
+    if argv[0] == "--backfill-errors":
+        t0 = time.time()
+        print("Backfilling error snippets from claude + omp transcripts ...")
+        out = backfill_errors(argv[1:] or None)
+        print(json.dumps({**out, "seconds": round(time.time() - t0, 1)}, indent=2))
         return 0
     if argv[0] == "--backfill":
         root = argv[1] if len(argv) > 1 else None
@@ -955,6 +1723,10 @@ def main(argv):
         totals = backfill(root)
         out = {**totals, "seconds": round(time.time() - t0, 1)}
         print(json.dumps(out, indent=2))
+        return 0
+    if argv[0] == "--repair-tmp-paths":
+        out = repair_tmp_transcript_paths(apply="--apply" in argv)
+        print(json.dumps({**out, "dry_run": "--apply" not in argv}, indent=2))
         return 0
     if argv[0] == "--backfill-agent":
         if len(argv) < 2 or argv[1] not in AGENT_ADAPTERS:

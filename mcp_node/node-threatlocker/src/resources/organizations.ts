@@ -1,17 +1,24 @@
 import type { HttpClient } from '../http.js';
-import type { Organization, OrganizationListParams, AuthKey, PaginatedResponse } from '../types/index.js';
-import { buildSearchBody } from '../types/index.js';
+import type { Organization, OrganizationListParams, AuthKey, LabelValue, PaginatedResponse } from '../types/index.js';
 import { unwrapPaginatedResponse } from '../pagination.js';
 
 export class OrganizationsResource {
   constructor(private readonly http: HttpClient) {}
 
+  /**
+   * Direct child organizations. Documented in the KB (Organization article) but
+   * absent from the public swagger; a single-organization tenant gets [].
+   */
   async listChildren(params: OrganizationListParams = {}): Promise<PaginatedResponse<Organization>> {
-    const body = buildSearchBody(params);
-    const response = await this.http.request<any>('/Organization/OrganizationGetChildOrganizationsByParameters', {
-      method: 'POST',
-      body,
-    });
+    const body = {
+      orderBy: params.orderBy ?? 'name',
+      isAscending: params.isAscending ?? true,
+      searchText: params.searchText ?? '',
+      includeAllChildren: params.includeAllChildren ?? false,
+      pageNumber: params.pageNumber ?? 1,
+      pageSize: params.pageSize ?? 25,
+    };
+    const response = await this.http.request<Organization[]>('/Organization/OrganizationGetChildOrganizationsByParameters', { method: 'POST', body });
     return unwrapPaginatedResponse<Organization>(response, body.pageNumber, body.pageSize);
   }
 
@@ -19,8 +26,9 @@ export class OrganizationsResource {
     return this.http.request<AuthKey>('/Organization/OrganizationGetAuthKeyById');
   }
 
-  async listForMoveComputers(): Promise<Organization[]> {
-    const response = await this.http.request<{ organizations?: Organization[] }>('/Organization/OrganizationGetForMoveComputers');
-    return response.organizations || [];
+  /** Organizations the key can act on, as {label, value} (verified live: the managed org itself is included). */
+  async listForMoveComputers(searchText = ''): Promise<LabelValue[]> {
+    const response = await this.http.request<LabelValue[]>('/Organization/OrganizationGetForMoveComputers', { params: { searchText } });
+    return Array.isArray(response) ? response : [];
   }
 }

@@ -25,19 +25,18 @@
  * - X-Ninja-Region
  */
 
-import { createServer, IncomingMessage, ServerResponse } from "node:http";
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
-import type { Tool } from "@modelcontextprotocol/sdk/types.js";
+import type { CallToolResult, Tool } from "@modelcontextprotocol/sdk/types.js";
+import { z } from "zod";
+import { toZodShape } from "../../_shared/zod-shape.js";
 import { getDomainHandler, getAvailableDomains } from "./domains/index.js";
 import { isDomainName, isValidRegion, getBaseUrlForRegion } from "./utils/types.js";
 import {
   getCredentials,
+  getClient,
   createClientDirect,
   setClientOverride,
   clearClientOverride,
@@ -48,12 +47,17 @@ import {
 } from "./utils/client.js";
 import { logger } from "./utils/logger.js";
 import { setServerRef } from "./utils/server-ref.js";
-import { missingCredsError } from "../../_shared/error-envelope.js";
+import { describeUnconfigured } from "./status.js";
 import { describeBaseUrl } from "../../_shared/base-url.js";
 import { registerPromptHandlers } from "./prompts.js";
 import { annotate } from "./annotate-tool.js";
 import { runUserFlow, DEFAULT_SCOPES, REDIRECT_URI } from "./oauth/user-flow.js";
-import { loadTokens, clearTokens, storagePath } from "./oauth/token-store.js";
+import { loadTokens, clearTokens, storagePath, type StoredTokens } from "./oauth/token-store.js";
+import { createToolRegistrar, runAuthCheck } from "../../_shared/mcp-server-kit.js";
+import {
+  textResult, formatToolSummary, serveStatelessRequest, runMain, requestUrl, respondHealth, httpConfigFromEnv,
+  respondMissingCredentials, respondNotFound, listenHttp, exitOnSignals,
+} from "../../_shared/server-entry.js";
 
 /**
  * Collect all domain tools at startup for flattened tool listing
@@ -72,18 +76,42 @@ async function getAllDomainTools(): Promise<Tool[]> {
 }
 
 /**
+ * Tool name -> declaring domain, built once from the handlers themselves so a
+ * tool can never be listed but unroutable. Lazily populated on first call.
+ */
+let toolDomainIndex: Map<string, DomainName> | null = null;
+
+export async function getDomainForTool(
+  toolName: string
+): Promise<DomainName | undefined> {
+  if (!toolDomainIndex) {
+    toolDomainIndex = new Map();
+    for (const domain of getAvailableDomains()) {
+      const handler = await getDomainHandler(domain);
+      for (const tool of handler.getTools()) {
+        toolDomainIndex.set(tool.name, domain as DomainName);
+      }
+    }
+  }
+  return toolDomainIndex.get(toolName);
+}
+
+/**
  * Available domains for navigation
  */
-type DomainName = "devices" | "organizations" | "alerts" | "tickets";
+type DomainName = "devices" | "organizations" | "alerts" | "tickets" | "queries" | "automation" | "directory";
 
 /**
  * Domain metadata for discovery
  */
 const domainDescriptions: Record<DomainName, string> = {
-  devices: "Device management - manage endpoints, reboot systems, view services, and get device alerts/activities",
+  devices: "Device management - find and inspect endpoints, run scripts, scan and apply patches, control Windows services, reboot, schedule maintenance, and read per-device hardware, software, patch and job inventory",
   organizations: "Organization management - manage customer accounts, locations, and view organization devices",
   alerts: "Alert management - view, reset, and summarize monitoring alerts across devices and organizations",
   tickets: "Ticket management - create, update, comment on, and track service tickets",
+  queries: "Cross-org reporting - 24 fleet-wide queries covering patch compliance, software and hardware inventory, antivirus posture, device health and vulnerability scan groups, without per-device fan-out",
+  automation: "Automation - run scripts and built-in actions, browse the script catalog, watch active jobs and scheduled tasks, and read the tenant-wide activity log",
+  directory: "Org structure - policies, saved device groups, users, locations, roles, and node classes",
 };
 
 /**
@@ -106,7 +134,10 @@ const navigateTool: Tool = {
 - devices: ${domainDescriptions.devices}
 - organizations: ${domainDescriptions.organizations}
 - alerts: ${domainDescriptions.alerts}
-- tickets: ${domainDescriptions.tickets}`,
+- tickets: ${domainDescriptions.tickets}
+- queries: ${domainDescriptions.queries}
+- automation: ${domainDescriptions.automation}
+- directory: ${domainDescriptions.directory}`,
       },
     },
     required: ["domain"],
@@ -139,7 +170,7 @@ const signInTool: Tool = {
 const signOutTool: Tool = {
   name: "ninjaone_sign_out",
   description:
-    "Forget the stored NinjaOne refresh token (deletes ~/.atlas/ninjaone-tokens.json). After sign-out you must call ninjaone_sign_in again before any read/write tools will work.",
+    "DESTRUCTIVE: Forget the stored NinjaOne refresh token (deletes ~/.atlas/ninjaone-tokens.json). The token cannot be recovered - after sign-out you must call ninjaone_sign_in and complete the browser flow again before any read/write tools will work.",
   inputSchema: { type: "object", properties: {} },
 };
 
@@ -150,6 +181,217 @@ const authStatusTool: Tool = {
   inputSchema: { type: "object", properties: {} },
 };
 
+/** Attach the numeric HTTP status (`status` or `statusCode`) that runAuthCheck reads. */
+function withStatusCode(err: unknown): Error {
+  const e = err as { statusCode?: number; status?: number; message?: string };
+  return Object.assign(new Error(e.message ?? String(err)), { statusCode: e.statusCode ?? e.status });
+}
+
+/**
+ * "Configured" only proves credentials are present. One cheap authenticated
+ * read (organizations, page size 1) shows whether NinjaOne accepts them.
+ * Response data is never printed. Never throws.
+ */
+const liveAuthCheck = (): Promise<string> =>
+  runAuthCheck(async () => {
+    try {
+      const client = await getClient();
+      await client.organizations.list({ pageSize: 1 });
+    } catch (err) {
+      throw withStatusCode(err);
+    }
+  }, "10 s");
+
+type ToolArgs = Record<string, unknown>;
+type ToolHandler = (args: ToolArgs) => Promise<CallToolResult>;
+
+/** Navigation / discovery helper (stateless). */
+async function navigate(args: ToolArgs): Promise<CallToolResult> {
+  const domain = args.domain as string;
+  if (!isDomainName(domain)) {
+    return textResult(`Invalid domain: ${domain}. Available domains: ${getAvailableDomains().join(", ")}`, true);
+  }
+  const handler = await getDomainHandler(domain);
+  const toolSummary = formatToolSummary(handler.getTools());
+  return textResult(`${domainDescriptions[domain]}\n\nAvailable tools:\n${toolSummary}\n\nYou can call any of these tools directly.`);
+}
+
+async function status(): Promise<CallToolResult> {
+  const creds = getCredentials();
+  if (!creds) return describeUnconfigured(getAvailableDomains());
+
+  const urlDesc = describeBaseUrl("ninjaone", process.env.NINJAONE_BASE_URL, "NINJAONE_BASE_URL");
+  const credStatus = `Configured (region: ${creds.region}, base URL: ${urlDesc}, auth: ${creds.authMode})`;
+  const authCheck = await liveAuthCheck();
+  return {
+    content: [
+      {
+        type: "text",
+        text: `NinjaOne MCP Server Status\n\nCredentials: ${credStatus}\nAuth check: ${authCheck}\nAvailable domains: ${getAvailableDomains().join(", ")}\n\nUse ninjaone_navigate to discover tools by domain.`,
+      },
+    ],
+    isError: authCheck.startsWith("FAILED"),
+  };
+}
+
+/** Explains why sign-in cannot start, or null when it can. */
+function signInBlocker(creds: NinjaOneCredentials | null): string | null {
+  if (!creds) return "Set NINJAONE_CLIENT_ID, NINJAONE_REGION, and NINJAONE_AUTH_MODE=user before signing in.";
+  if (creds.authMode !== "user") return `Auth mode is "${creds.authMode}". Set NINJAONE_AUTH_MODE=user to enable browser sign-in.`;
+  return null;
+}
+
+async function signIn(): Promise<CallToolResult> {
+  const creds = getCredentials();
+  const blocker = signInBlocker(creds);
+  if (blocker !== null || !creds) return textResult(blocker ?? "", true);
+  return runSignIn(creds);
+}
+
+async function runSignIn(creds: NinjaOneCredentials): Promise<CallToolResult> {
+  try {
+    let authorizeUrl = "";
+    const tokens = await runUserFlow({
+      baseUrl: creds.baseUrl,
+      clientId: creds.clientId,
+      region: creds.region,
+      scopes: DEFAULT_SCOPES,
+      onAuthorizeUrl: (u) => { authorizeUrl = u; },
+    });
+    ensureUserTokenManager(creds).setTokens(tokens);
+    return textResult(`Signed in to NinjaOne (region: ${creds.region}). Refresh token stored at ${storagePath()}.\n\nIf the browser did not open, manually visit:\n${authorizeUrl}`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return textResult(`Sign-in failed: ${msg}\n\nVerify your NinjaOne OAuth app includes the redirect URI ${REDIRECT_URI} and the scopes ${DEFAULT_SCOPES.join(" ")}.`, true);
+  }
+}
+
+async function signOut(): Promise<CallToolResult> {
+  await clearTokens();
+  return textResult(`Cleared stored NinjaOne tokens.`);
+}
+
+/** The "Status:" line for user-OAuth mode. */
+function describeStoredToken(stored: StoredTokens | null, creds: NinjaOneCredentials): string {
+  if (!stored) return `Status: NOT SIGNED IN — call ninjaone_sign_in to authenticate.`;
+  const remainingMs = stored.expiresAt - Date.now();
+  const human = remainingMs > 0 ? `${Math.floor(remainingMs / 60000)}m remaining` : `EXPIRED (refresh will mint a new one on next call)`;
+  const regionMatch = stored.region === creds.region ? "region matches" : `region MISMATCH (stored=${stored.region}, current=${creds.region})`;
+  return `Status: signed in — access token ${human}, scope="${stored.scope}", ${regionMatch}`;
+}
+
+async function authStatus(): Promise<CallToolResult> {
+  const creds = getCredentials();
+  const stored = await loadTokens().catch(() => null);
+  return textResult([...authHeaderLines(creds), describeAuthStatus(creds, stored)].join("\n"));
+}
+
+function authHeaderLines(creds: NinjaOneCredentials | null): string[] {
+  const { authMode, region } = creds ?? { authMode: "unknown", region: "unknown" };
+  return [`Auth mode: ${authMode}`, `Region: ${region}`, `Storage: ${storagePath()}`];
+}
+
+function describeAuthStatus(creds: NinjaOneCredentials | null, stored: StoredTokens | null): string {
+  return creds?.authMode === "user"
+    ? describeStoredToken(stored, creds)
+    : `Status: using client_credentials. Set NINJAONE_AUTH_MODE=user to switch to interactive sign-in.`;
+}
+
+/**
+ * Route by the tool's declaring domain, not by name prefix. A prefix chain
+ * silently drops any tool whose name does not match its domain
+ * (ninjaone_scripts_list in "automation", ninjaone_devices_os_patch_installs
+ * in "queries"), which surfaces to the caller as "Unknown tool".
+ */
+async function routeDomainTool(name: string, args: ToolArgs): Promise<CallToolResult> {
+  const domain = await getDomainForTool(name);
+  if (!domain) {
+    return textResult(`Unknown tool: ${name}. Use ninjaone_navigate to discover available tools by domain.`, true);
+  }
+  const handler = await getDomainHandler(domain);
+  return await handler.handleCall(name, args);
+}
+
+const localToolHandlers = new Map<string, ToolHandler>([
+  ["ninjaone_navigate", navigate],
+  ["ninjaone_status", status],
+  ["ninjaone_sign_in", signIn],
+  ["ninjaone_sign_out", signOut],
+  ["ninjaone_auth_status", authStatus],
+]);
+
+function dispatchTool(name: string, args: ToolArgs): Promise<CallToolResult> {
+  const handler = localToolHandlers.get(name);
+  return handler ? handler(args) : routeDomainTool(name, args ?? {});
+}
+
+type HttpStatus = number | string;
+
+/** Operator hint for an API failure, keyed on the HTTP status. */
+function errorHint(status: HttpStatus): string {
+  if (status === 401 || status === 403) return "Verify NINJAONE_CLIENT_ID, NINJAONE_CLIENT_SECRET, and NINJAONE_REGION are correct.";
+  if (status === 429) return "NinjaOne API rate limit hit. Wait before retrying.";
+  return "Check that NINJAONE_CLIENT_ID and NINJAONE_CLIENT_SECRET are set. Verify NINJAONE_REGION (us, eu, oc, ca, us2, fed).";
+}
+
+/** HTTP status from `status`, `statusCode` or `response.status`; empty string when absent. */
+function errorStatus(error: unknown): HttpStatus {
+  const err = (typeof error === "object" && error !== null ? error : {}) as {
+    status?: unknown;
+    statusCode?: unknown;
+    response?: { status?: unknown } | null;
+  };
+  const found = [err.status, err.statusCode, err.response?.status].find(
+    (v): v is HttpStatus => typeof v === "number" || typeof v === "string",
+  );
+  return found ?? "";
+}
+
+function toolFailure(name: string, error: unknown): CallToolResult {
+  const message = error instanceof Error ? error.message : String(error);
+  const stack = error instanceof Error ? error.stack : undefined;
+  const status = errorStatus(error);
+  const msg = `NinjaOne API error${status ? ` (HTTP ${status})` : ''}: ${message}. ${errorHint(status)}`;
+  logger.error("Tool call failed", { tool: name, error: msg, stack });
+  return textResult(msg, true);
+}
+
+/**
+ * Handle a tool call. Registered per tool; registerTool has already validated
+ * args against the tool's schema by the time this runs. Per-request
+ * credentials (gateway mode) get an isolated client that every domain handler
+ * picks up via getClient(), cleared again when the call ends.
+ */
+async function callTool(
+  name: string,
+  args: ToolArgs,
+  credentialOverrides?: NinjaOneCredentials,
+): Promise<CallToolResult> {
+  logger.info("Tool call received", { tool: name, arguments: args });
+
+  if (credentialOverrides) {
+    setCredentialOverrides(credentialOverrides);
+    setClientOverride(await createClientDirect(credentialOverrides));
+  }
+
+  try {
+    return await dispatchTool(name, args);
+  } catch (error) {
+    return toolFailure(name, error);
+  } finally {
+    if (credentialOverrides) {
+      clearClientOverride();
+      clearCredentialOverrides();
+    }
+  }
+}
+
+const SERVER_INSTRUCTIONS =
+  "NinjaOne RMM: devices, organizations, locations, alerts, activities, tickets, policies, scripts, groups, patching, and queries. " +
+  "Use ninjaone_devices_list or ninjaone_devices_search and ninjaone_organizations_list to find IDs before calling a get-by-id, update, or action tool. " +
+  "On a 401, 403, or 440, a not-configured message, or a connection failure, call ninjaone_status once and report its output to the user instead of retrying other tools. " +
+  "When credentials are missing only the status, navigate, and sign-in/auth tools are listed; the user must set NINJAONE_CLIENT_ID and NINJAONE_CLIENT_SECRET and restart the session.";
+
 /**
  * Create a fresh MCP server instance with all handlers registered.
  * Called once for stdio, or per-request for HTTP transport.
@@ -158,235 +400,30 @@ const authStatusTool: Tool = {
  *   When provided, a per-request client is created from these credentials
  *   instead of reading from process.env.
  */
-async function createMcpServer(credentialOverrides?: NinjaOneCredentials): Promise<Server> {
+async function createMcpServer(credentialOverrides?: NinjaOneCredentials): Promise<McpServer> {
   // Collect all domain tools once at startup for flattened tool listing
   const allDomainTools = await getAllDomainTools();
 
-  const server = new Server(
+  const server = new McpServer(
+    { name: "ninjaone-mcp", version: "1.8.0" },
     {
-      name: "ninjaone-mcp",
-      version: "1.6.2",
-    },
-    {
-      capabilities: {
-        tools: {},
-        prompts: {},
-      },
+      // registerTool adds the tools capability itself; prompts are served by the
+      // low-level handlers in registerPromptHandlers.
+      capabilities: { logging: {}, prompts: {} },
+      instructions: SERVER_INSTRUCTIONS,
     }
   );
-  setServerRef(server);
-  registerPromptHandlers(server);
+  setServerRef(server.server);
+  registerPromptHandlers(server.server);
 
-  /**
-   * Handle ListTools requests - always returns ALL tools
-   */
-  server.setRequestHandler(ListToolsRequestSchema, async () => {
-    return {
-      tools: annotate(
-        [navigateTool, statusTool, signInTool, signOutTool, authStatusTool, ...allDomainTools],
-        "NinjaOne",
-      ),
-    };
-  });
-
-  /**
-   * Handle CallTool requests
-   */
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const { name, arguments: args } = request.params;
-    logger.info("Tool call received", { tool: name, arguments: args });
-
-    // If per-request credentials were provided, create an isolated client
-    // and set it as the override so all domain handlers pick it up via getClient().
-    if (credentialOverrides) {
-      setCredentialOverrides(credentialOverrides);
-      const directClient = await createClientDirect(credentialOverrides);
-      setClientOverride(directClient);
-    }
-
-    try {
-      // Handle navigation / discovery helper (stateless)
-      if (name === "ninjaone_navigate") {
-        const domain = (args as { domain: string }).domain;
-
-        if (!isDomainName(domain)) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Invalid domain: ${domain}. Available domains: ${getAvailableDomains().join(", ")}`,
-              },
-            ],
-            isError: true,
-          };
-        }
-
-        const handler = await getDomainHandler(domain);
-        const domainTools = handler.getTools();
-
-        const toolSummary = domainTools
-          .map((t) => `- ${t.name}: ${t.description}`)
-          .join("\n");
-
-        return {
-          content: [
-            {
-              type: "text",
-              text: `${domainDescriptions[domain]}\n\nAvailable tools:\n${toolSummary}\n\nYou can call any of these tools directly.`,
-            },
-          ],
-        };
-      }
-
-      // Handle status tool
-      if (name === "ninjaone_status") {
-        const creds = getCredentials();
-        if (!creds) {
-          return missingCredsError("NinjaOne", [
-            "NINJAONE_CLIENT_ID",
-            "NINJAONE_CLIENT_SECRET",
-          ]);
-        }
-
-        const urlDesc = describeBaseUrl(
-          "ninjaone",
-          process.env.NINJAONE_BASE_URL,
-          "NINJAONE_BASE_URL"
-        );
-        const credStatus = `Configured (region: ${creds.region}, base URL: ${urlDesc}, auth: ${creds.authMode})`;
-
-        return {
-          content: [
-            {
-              type: "text",
-              text: `NinjaOne MCP Server Status\n\nCredentials: ${credStatus}\nAvailable domains: ${getAvailableDomains().join(", ")}\n\nAll tools are available. Use ninjaone_navigate to discover tools by domain.`,
-            },
-          ],
-        };
-      }
-
-      if (name === "ninjaone_sign_in") {
-        const creds = getCredentials();
-        if (!creds) {
-          return {
-            content: [{ type: "text", text: "Set NINJAONE_CLIENT_ID, NINJAONE_REGION, and NINJAONE_AUTH_MODE=user before signing in." }],
-            isError: true,
-          };
-        }
-        if (creds.authMode !== "user") {
-          return {
-            content: [{ type: "text", text: `Auth mode is "${creds.authMode}". Set NINJAONE_AUTH_MODE=user to enable browser sign-in.` }],
-            isError: true,
-          };
-        }
-        try {
-          let authorizeUrl = "";
-          const tokens = await runUserFlow({
-            baseUrl: creds.baseUrl,
-            clientId: creds.clientId,
-            region: creds.region,
-            scopes: DEFAULT_SCOPES,
-            onAuthorizeUrl: (u) => { authorizeUrl = u; },
-          });
-          ensureUserTokenManager(creds).setTokens(tokens);
-          return {
-            content: [{
-              type: "text",
-              text: `Signed in to NinjaOne (region: ${creds.region}). Refresh token stored at ${storagePath()}.\n\nIf the browser did not open, manually visit:\n${authorizeUrl}`,
-            }],
-          };
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          return {
-            content: [{
-              type: "text",
-              text: `Sign-in failed: ${msg}\n\nVerify your NinjaOne OAuth app includes the redirect URI ${REDIRECT_URI} and the scopes ${DEFAULT_SCOPES.join(" ")}.`,
-            }],
-            isError: true,
-          };
-        }
-      }
-
-      if (name === "ninjaone_sign_out") {
-        await clearTokens();
-        return { content: [{ type: "text", text: `Cleared stored NinjaOne tokens.` }] };
-      }
-
-      if (name === "ninjaone_auth_status") {
-        const creds = getCredentials();
-        const stored = await loadTokens().catch(() => null);
-        const lines = [
-          `Auth mode: ${creds?.authMode ?? "unknown"}`,
-          `Region: ${creds?.region ?? "unknown"}`,
-          `Storage: ${storagePath()}`,
-        ];
-        if (creds?.authMode === "user") {
-          if (!stored) {
-            lines.push(`Status: NOT SIGNED IN — call ninjaone_sign_in to authenticate.`);
-          } else {
-            const remainingMs = stored.expiresAt - Date.now();
-            const human = remainingMs > 0 ? `${Math.floor(remainingMs / 60000)}m remaining` : `EXPIRED (refresh will mint a new one on next call)`;
-            const regionMatch = stored.region === creds.region ? "region matches" : `region MISMATCH (stored=${stored.region}, current=${creds.region})`;
-            lines.push(`Status: signed in — access token ${human}, scope="${stored.scope}", ${regionMatch}`);
-          }
-        } else {
-          lines.push(`Status: using client_credentials. Set NINJAONE_AUTH_MODE=user to switch to interactive sign-in.`);
-        }
-        return { content: [{ type: "text", text: lines.join("\n") }] };
-      }
-
-      // Route to appropriate domain handler based on tool name prefix
-      const toolArgs = (args ?? {}) as Record<string, unknown>;
-
-      if (name.startsWith("ninjaone_devices_")) {
-        const handler = await getDomainHandler("devices");
-        return await handler.handleCall(name, toolArgs);
-      }
-      if (name.startsWith("ninjaone_organizations_")) {
-        const handler = await getDomainHandler("organizations");
-        return await handler.handleCall(name, toolArgs);
-      }
-      if (name.startsWith("ninjaone_alerts_")) {
-        const handler = await getDomainHandler("alerts");
-        return await handler.handleCall(name, toolArgs);
-      }
-      if (name.startsWith("ninjaone_tickets_")) {
-        const handler = await getDomainHandler("tickets");
-        return await handler.handleCall(name, toolArgs);
-      }
-
-      // Unknown tool
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Unknown tool: ${name}. Use ninjaone_navigate to discover available tools by domain.`,
-          },
-        ],
-        isError: true,
-      };
-    } catch (error: any) {
-      const message = error instanceof Error ? error.message : String(error);
-      const stack = error instanceof Error ? error.stack : undefined;
-      const status = error?.status ?? error?.statusCode ?? error?.response?.status ?? '';
-      const hint = status === 401 || status === 403
-        ? 'Verify NINJAONE_CLIENT_ID, NINJAONE_CLIENT_SECRET, and NINJAONE_REGION are correct.'
-        : status === 429
-        ? 'NinjaOne API rate limit hit. Wait before retrying.'
-        : 'Check that NINJAONE_CLIENT_ID and NINJAONE_CLIENT_SECRET are set. Verify NINJAONE_REGION (us, eu, oc, ca, us2, fed).';
-      const msg = `NinjaOne API error${status ? ` (HTTP ${status})` : ''}: ${message}. ${hint}`;
-      logger.error("Tool call failed", { tool: name, error: msg, stack });
-      return {
-        content: [{ type: "text", text: msg }],
-        isError: true,
-      };
-    } finally {
-      if (credentialOverrides) {
-        clearClientOverride();
-        clearCredentialOverrides();
-      }
-    }
-  });
+  // Progressive disclosure: status/auth shell until credentials resolve. Gateway
+  // requests carry their credentials in credentialOverrides, not process.env.
+  const shell = [navigateTool, statusTool, signInTool, signOutTool, authStatusTool];
+  const tools = credentialOverrides || getCredentials() ? [...shell, ...allDomainTools] : shell;
+  const register = createToolRegistrar({ server, z, toZodShape, annotate, vendorTitle: "NinjaOne" });
+  for (const tool of tools) {
+    register(tool, (args) => callTool(tool.name, args, credentialOverrides));
+  }
 
   return server;
 }
@@ -406,22 +443,11 @@ async function startStdioTransport(): Promise<void> {
  * Each request gets a fresh Server + Transport (stateless).
  */
 async function startHttpTransport(): Promise<void> {
-  const port = parseInt(process.env.MCP_HTTP_PORT || "8080", 10);
-  const host = process.env.MCP_HTTP_HOST || "0.0.0.0";
-  const isGatewayMode = process.env.AUTH_MODE === "gateway";
+  const { port, host, isGatewayMode } = httpConfigFromEnv();
 
   const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
-    const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
-
-    // Health endpoint - shallow, unauthenticated liveness probe.
-    // Must NOT call getCredentials() or any upstream: in gateway mode
-    // credentials only arrive per-request via headers, so a credential
-    // check here would always 503 and trip upstream restart loops.
-    if (url.pathname === "/health" || url.pathname === "/healthz") {
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ status: "ok" }));
-      return;
-    }
+    const url = requestUrl(req);
+    if (respondHealth(url, res)) return;
 
     // MCP endpoint
     if (url.pathname === "/mcp") {
@@ -435,15 +461,11 @@ async function startHttpTransport(): Promise<void> {
         const region = req.headers["x-ninja-region"] as string | undefined;
 
         if (!clientId || !clientSecret) {
-          res.writeHead(401, { "Content-Type": "application/json" });
-          res.end(
-            JSON.stringify({
-              error: "Missing credentials",
-              message:
-                "Gateway mode requires X-Ninja-Client-ID and X-Ninja-Client-Secret headers",
-              required: ["X-Ninja-Client-ID", "X-Ninja-Client-Secret"],
-              optional: ["X-Ninja-Region"],
-            })
+          respondMissingCredentials(
+            res,
+            "Gateway mode requires X-Ninja-Client-ID and X-Ninja-Client-Secret headers",
+            ["X-Ninja-Client-ID", "X-Ninja-Client-Secret"],
+            ["X-Ninja-Region"],
           );
           return;
         }
@@ -465,42 +487,20 @@ async function startHttpTransport(): Promise<void> {
         sessionIdGenerator: undefined,
         enableJsonResponse: true,
       });
-
-      res.on("close", () => {
-        transport.close();
-        server.close();
-      });
-
-      await server.connect(transport);
-      transport.handleRequest(req, res);
+      await serveStatelessRequest(server, transport, req, res);
       return;
     }
 
     // 404 for everything else
-    res.writeHead(404, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "Not found", endpoints: ["/mcp", "/health"] }));
+    respondNotFound(res, ["/mcp", "/health"]);
   });
 
-  await new Promise<void>((resolve) => {
-    httpServer.listen(port, host, () => {
-      logger.info(`NinjaOne MCP server listening on http://${host}:${port}/mcp`);
-      logger.info(`Health check available at http://${host}:${port}/health`);
-      logger.info(`Authentication mode: ${isGatewayMode ? "gateway (header-based)" : "env (environment variables)"}`);
-      resolve();
-    });
+  await listenHttp(httpServer, port, host, () => {
+    logger.info(`NinjaOne MCP server listening on http://${host}:${port}/mcp`);
+    logger.info(`Health check available at http://${host}:${port}/health`);
+    logger.info(`Authentication mode: ${isGatewayMode ? "gateway (header-based)" : "env (environment variables)"}`);
   });
-
-  // Graceful shutdown
-  const shutdown = async () => {
-    logger.info("Shutting down NinjaOne MCP server...");
-    await new Promise<void>((resolve, reject) => {
-      httpServer.close((err) => (err ? reject(err) : resolve()));
-    });
-    process.exit(0);
-  };
-
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
+  exitOnSignals(httpServer, () => logger.info("Shutting down NinjaOne MCP server..."));
 }
 
 /**
@@ -521,10 +521,4 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  logger.error("Fatal startup error", {
-    error: error instanceof Error ? error.message : String(error),
-    stack: error instanceof Error ? error.stack : undefined,
-  });
-  process.exit(1);
-});
+runMain(main, (message, fields) => logger.error(message, fields));

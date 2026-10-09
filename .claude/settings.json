@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "deny": [
+      "Read(/Users/jerry/.claude/plugins/cache/**)",
+      "Edit(/Users/jerry/.claude/plugins/cache/**)",
+      "Read(/Users/jerry/.claude/plugins/marketplaces/**)",
+      "Edit(/Users/jerry/.claude/plugins/marketplaces/**)",
+      "Edit(/Users/jerry/.claude/plugins/installed_plugins.json)",
+      "Bash(rsync *~/.claude/plugins/cache*)",
+      "Bash(cp *~/.claude/plugins/cache*)",
+      "Bash(rm *~/.claude/plugins/cache*)"
+    ]
+  }
+}

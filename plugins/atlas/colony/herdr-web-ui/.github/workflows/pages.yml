@@ -1,0 +1,42 @@
+name: Website
+# Builds site/ into the GitHub Pages site (https://devswha.github.io/herdr-web-ui/) on every push to
+# main: the page, and the browser demo, which is the app itself, so any client change is a site
+# change. README.md is a source too: the page's top video and feature clips are the README's
+# (docs/development.md, "README media").
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      # poster frames and scaled stills (scripts/build-site.ts); the runner image has no ffmpeg
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends ffmpeg
+      # the demo is a Vite build of the client
+      - run: bun install --frozen-lockfile
+      - run: bun scripts/build-site.ts
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

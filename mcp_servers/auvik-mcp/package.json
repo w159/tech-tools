@@ -13,12 +13,14 @@
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
     "clean": "rm -rf dist",
-    "pack:mcpb": "node scripts/pack-mcpb.js"
+    "pack:mcpb": "node scripts/pack-mcpb.js",
+    "bundle:atlas": "tsup --config tsup.bundle.config.ts"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.27.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "fastify": "^5.0.0",
-    "dotenv": "^16.4.0"
+    "dotenv": "^16.4.0",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

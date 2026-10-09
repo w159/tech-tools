@@ -1,10 +1,20 @@
 {
   "name": "programmer",
-  "version": "0.1.0",
-  "description": "Turns The Pragmatic Programmer (20th Anniversary Edition) into an active codebase auditor and coding-time advisor. Audits a codebase against the book's principles, tips, and practices, and surfaces relevant lessons while you work.",
-  "author": { "name": "Jerry", "url": "https://github.com/w159" },
-  "repository": "https://github.com/w159/atlas",
-  "homepage": "https://github.com/w159/atlas/tree/main/plugins/programmer",
+  "version": "0.2.1",
+  "description": "A book-derived code-review engine with 4 skills: code-review runs a 6-lens, multi-agent review across a target or diff and produces an evidence-backed report; code-principles surfaces 1-4 relevant book principles while you work; tpp-audit is the Pragmatic Programmer audit; tpp-principles is the Pragmatic Programmer principles advisor.",
+  "author": {
+    "name": "w159",
+    "url": "https://github.com/w159"
+  },
+  "repository": "https://github.com/w159/tech-tools",
+  "homepage": "https://github.com/w159/tech-tools/tree/main/plugins/programmer",
   "license": "MIT",
-  "keywords": ["tpp", "pragmatic-programmer", "audit", "code-review", "principles", "best-practices"]
+  "keywords": [
+    "tpp",
+    "pragmatic-programmer",
+    "audit",
+    "code-review",
+    "principles",
+    "best-practices"
+  ]
 }

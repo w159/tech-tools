@@ -13,6 +13,9 @@ const sharedDir = resolve(__dirname, '../_shared');
 export default defineConfig({
   test: {
     globals: true,
+    // node_modules is a symlink to node_modules.nosync.noindex; vitest's
+    // default exclude only covers the "node_modules" name.
+    exclude: ['**/node_modules/**', '**/node_modules.nosync.noindex/**'],
   },
   resolve: {
     alias: {

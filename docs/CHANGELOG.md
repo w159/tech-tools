@@ -1,6 +1,2803 @@
 # Changelog
 
+## [10.4.3] - 2026-10-09 -- atlas 10.4.3: colony identity, harness parity, ops health, release cleanup
+
+Marketplace `4.6.2`; atlas `10.4.3`.
+
+Workers no longer steal a lead's todos; a Claude Code lead pins `ATLAS_LEAD_NAME` so mux workers join its subchannel. omp gets Command Center settings, the doctor hook bridge, `${user_config.*}` credential resolution, model-role fallbacks, a live channel widget and subagent `ended_at`. Ops health: dashboard daemon isolation, durable settings and transcripts, hook/gate/tripwire/mux hardening. Release cleanup: over-complex dashboard and omp functions split (no behaviour change), ruff fixes in three hooks, omp test env preload, CRAP-only fallow findings re-baselined. Verified: pytest 2845 passed, bun omp 373 pass, dashboard js 29 pass, fallow audit pass (`.atlas/evidence/release-10.4.3/tests-final.txt`). The Claude Code mod is designed, not built: `docs/plans/2026-10-09-atlas-mod.md`; 11.0.0 is reserved for it. Detail in `plugins/atlas/CHANGELOG.md`.
+
+## [10.4.2] - 2026-10-08 -- atlas 10.4.2: Colony Kill checks pid identity
+
+Marketplace `4.6.2`; atlas `10.4.2`.
+
+The registry records `pid_start` (process start time) beside a member's harness `pid`; Colony liveness and Kill count the pid as the member's only when it is alive and the start time matches. A recycled or start-less pid is `dead`, Kill returns 409 `member_dead` and sends no signal. Known limit: 1 s `lstart` resolution (see Residuals in `docs/ROADMAP.md`). Detail in `plugins/atlas/CHANGELOG.md`.
+
+## [10.4.1] - 2026-10-08 -- atlas 10.4.1: headless workers exempt from the dispatch tripwire
+
+Marketplace `4.6.1`; atlas `10.4.1`.
+
+A headless atlas worker (non-blank `ATLAS_WORKER_NAME`, pinned by `atlas_mux`/`atlas_launch`) is never armed as an orchestrator (`dispatch_tripwire._arm_orchestrating`, `prompt_optimizer.arm_orchestration`, `omp_runstate cmd_arm`) and is never denied by the tripwire deny tier or sent STOP advisories; leads are unchanged. Trust model is the same as the omp leaf marker (see Residuals in `docs/ROADMAP.md`). Detail in `plugins/atlas/CHANGELOG.md`.
+
+## [10.4.0] - 2026-10-08 -- atlas 10.4.0: channel delivery, mux reports, Colony roster and Channels pages repaired
+
+Marketplace `4.6.0`; atlas `10.4.0`.
+
+The colony channel now delivers each note once and only inside its channel: membership is granted lead-side only and a non-member's note never reaches a lead. A mux worker posts one `kind=report` note and its full output goes to `.atlas/.run/logs/<worker>.log`. `#/colony` is an Atlas-scoped roster (`GET /api/v2/colony`, `POST /api/v2/colony/<name>/send|kill`), `#/channels` is its own page, and the herdr iframe moved to `#/terminal`. Completion gate (p) counts only registered members' notes on the run's lead channel. Health, improve and doctor fixes and test isolation are listed in `plugins/atlas/CHANGELOG.md`. Known limitations (self-asserted note owner, unregistered workers post to main) are tracked under Residuals in `docs/ROADMAP.md`. Sessions on an older installed cache keep the old behavior until atlas is updated or reinstalled from the marketplace; docs: `docs/atlas-channels.md`, `docs/atlas-colony.md`.
+
+## 2026-10-07 -- atlas: colony rebuilt on herdr with the Atlas dashboard as the shell, BREAKING Colony routes
+
+Release notes for the plugin live in `plugins/atlas/CHANGELOG.md`; the architecture, install/pin/update procedure, security model and troubleshooting are in `docs/atlas-colony.md`.
+
+\1- The Channel lens is one simple column (header with member chips, a log that is the only scroller, an always-visible `To` + textarea + Send composer); the channel tree, Members column, Messages/Board tabs, mode toggle, "Load earlier messages" and per-message path links are removed, and the rail's Fleet/Board/Channel items are one Agents item. Detail in `plugins/atlas/CHANGELOG.md` and `docs/atlas-channels.md`.
+\2 the recurring "unclassified" tool errors onto `model_misuse` / `environment` (272 to 26 unknown-with-snippet events over 14 days); the Overview KPI "Open findings" is renamed "Doctor findings" and the top-bar pill says "attention items" so Needs attention, the pill and the KPI each name what they count. Detail in `plugins/atlas/CHANGELOG.md`.
+
+### Breaking
+
+- Workers run as panes of a **herdr** workspace (`atlas-<run>`), not tmux windows. `atlas_mux.transport()` returns `herdr` by default and `tmux` only when `ATLAS_COLONY_TRANSPORT=tmux` is set or the herdr socket does not answer. `atlas_launch.launch()` keeps its signature. `ATLAS_MUX=tmux` is still the opt-in gate for `atlas_mux.py spawn`.
+- `scripts/atlas_dash_colony.py` and the tmux Colony dashboard page (`dashboard_ui/js/pages/colony.js`) are deleted. Removed routes: `GET /api/v2/colony`, `colony/agent`, `colony/capture`; `POST colony/send`, `colony/kill`, `colony/spawn-help`, `colony/attach-command`. The SSE topics are now `herd`, `agents`, `todos`, `irc`, `health`, `improve` (no `colony`). Operate is now Fleet, Board and Channel (lenses of the Agents page) plus the Colony page (see below).
+- The dashboard no longer computes per-agent states (`infer_state`), the `diagnose_stuck` verdict, the `typing_guard`/`input_pending`/`force` overrides or `probe_pane`: agent state is herdr's (`working`, `blocked`, `idle`, `done`, `unknown`) and prompts are delivered to idle agents only.
+
+### Added
+
+- **Colony is one page: the herdr UI, edge to edge.** `#/colony[?pane=<id>]` (`dashboard_ui/js/pages/herdr.js`) is only the herdr-web-ui `?chrome=full&theme=<t>` iframe filling the canvas: no page header, no lens bar, no Console/Map toggle. Operate = Agents (lenses Fleet, Board, Channel, Supervision) and Colony; the rail has two entries there, Agents and Colony. The legacy routes `#/herd`, `#/herdr`, `#/console` and `#/agents?lens=colony` redirect to `#/colony`; the mobile bottom bar / More menu has a single `Colony` entry (`MOBILE_TABS`, `js/nav-order.js`). The page shows a recovery card only when a layer is down: "herdr isn't running" (**Recheck**) or "The terminal service isn't running. The agent list is live; terminals need it." (**Start terminal service** = `POST herd/ensure`, **Recheck**); a slow-load card follows after 12 s and a recursion guard replaces the frame when the dashboard is itself framed. The Fleet inspector button is "Open in Colony" (`#/colony?pane=<id>`). Removed in this entry: the Herdr console page and rail entry, the Colony lens (`pages/colony-lens.js`, which was never committed), the Console | Map control, the `g x` chord (`g c` opens Colony), every "Herdr console" label, the `view` URL parameter and the `atlas.colony.view` sessionStorage key; the settings navigation editor lists `Colony` (`js/pages/settings.js`, `js/nav-order.js`). **The frame node stays put:** `pages/herdr.js` `noteFramePane(pane)`, called by the `herdr:selected-pane` handler in `js/app.js`, records the pane the frame itself reported, so the iframe is not rebuilt (no reload, no flash) when the frame reports its own pane, nor on store or SSE ticks; a pane that arrives from outside (deep link, Fleet "Open in Colony", route change) still navigates it. Tests: `js/colony-embed.test.js`, `js/nav-order.test.js`. Lead supervision (subagents, per-member todo boards) is the Agents Supervision lens, not Colony.
+- **The Atlas dashboard is the shell; the Colony page and the Fleet inspector frame herdr-web-ui.** herdr-web-ui is vendored at `plugins/atlas/colony/herdr-web-ui` (MIT; it is patched, every server and app source change is listed under `ATLAS-PATCHES` in its `UPSTREAM.md`) and runs as the one colony web UI: `atlas_herdr.py ensure` mirrors it to `$ATLAS_HOME/colony`, builds it and binds `127.0.0.1:7317` when that port is free, otherwise a fallback port (a user-run upstream instance on 7317 is never touched; `status` prints the `takeover` hint). The dashboard's own nav (Observe, Operate, Improve, Configure) is the only Atlas navigation: framed inside it the herdr-web-ui app has no Atlas navigation, header chip or nested dashboard. There are no herd or irc page files: Operate is the Fleet, Board and Channel lenses of `pages/agents.js` plus the Colony page `pages/herdr.js`.
+- Front door: the Bun server redirects browsers from `/` to `/atlas/#/herd` (the router redirects that alias to `#/colony`). Flow: browser -> `tailscale serve :8443` -> herdr-web-ui Bun server; after its own auth, a plain browser navigation of `/` gets `302 /atlas/#/herd` (`server/atlas-landing.ts`; an `embed`, `pane`, `machine` or `chrome` query serves the SPA) and `/atlas/**` is proxied to the loopback dashboard (`server/atlas-gateway.ts`). The Colony page frames `/?chrome=full`, the Fleet inspector frames `/?pane=<id>&machine=local&chrome=pane&theme=<t>`; the legacy `?embed=1` is retired and rewritten by the host. `ATLAS_LANDING=off` disables the redirect; `ATLAS_DASHBOARD_URL` (loopback only, default `http://127.0.0.1:7421`) points the gateway at the dashboard.
+- Taking 7317 from an upstream herdr-web-ui: stop it first (`herdr plugin action invoke stop --plugin devswha.herdr-web-ui`), then `herdr plugin disable devswha.herdr-web-ui`, `rm -f $ATLAS_HOME/colony/port`, `atlas_herdr.py ensure`, `atlas_remote.py apply --yes --replace`; disabling first makes `stop` fail with `plugin_disabled`. Verified 2026-10-07: the vendored build was then the sole 7317 listener, `/atlas/api/health` returned the dashboard JSON locally and over the tailnet `:8443` URL, `/` redirected to `/atlas/#/herd`, and a forwarded unauthenticated request got `pairing_required`.
+- `atlas_dash_colony.py` split into `atlas_dash_work.py` (`/api/v2/todos`) and `atlas_dash_irc.py` (`/api/v2/irc`; delivery to an idle interactive `claude`/`omp` pane through `atlas_herdr.send_prompt`, stamped `delivery=delivered|refused` so `hooks/worker_inbox.py` never injects it twice). New Herd routes `GET /api/v2/herd/colony`, `POST /api/v2/herd/panes`, `POST /api/v2/herd/panes/<pane>/kill`.
+- `atlas_herdr.py` manages the one vendored colony web UI (healthy -> reused, `managed.ts` present -> wait, else mirror to `$ATLAS_HOME/colony/herdr-web-ui`, `bun install --frozen-lockfile` + `bun run build`, then `bun scripts/plugin.ts start` under the flock; never starts herdr), checks the herdr binary against `colony/herdr/PIN.json` (`install-check`), and has the new verb `create-pane`. `status` reports `duplicates` for extra `managed.ts` processes and `upstream_plugin_on_port` + `takeover` commands when a user-run upstream herdr-web-ui holds the port.
+- `scripts/atlas_remote.py status|plan|apply --yes [--replace]|disable --yes|url`: tailnet-only `tailscale serve` of the web UI; never funnel, never port 443, refuses when auth is open. Reference: `skills/atlas-orchestrate/references/remote-access.md`.
+- `hooks/session_boot.py` `ensure_colony()`: fail-open; reads a cached `atlas_herdr.py status` (`$ATLAS_HOME/herdr-status-cache.json`) and starts `atlas_herdr.py ensure` detached under the shared flock when herdr runs but the web UI does not (never a second instance).
+- `public/sw.js` bumped to `v6`: top-level navigations to `/` are not handled by the service worker, so the landing redirect to `/atlas/#/herd` keeps working after the first visit; every older cache is deleted on activation.
+- `?chrome=full` hides the herdr rail and header when framed by the dashboard (Colony page). Upstream takeover order: stop -> disable -> `rm` colony/port -> ensure.
+- **Dispatch fix (omp `--thinking`).** `scripts/atlas_mux.py` `_frontmatter` strips one matched pair of surrounding quotes from agent frontmatter scalars. `omp/gen-agents.ts` writes `thinkingLevel: "medium"` into all 13 `omp/agents/*.md`, and omp rejected the resulting `--thinking="medium"` (exit 2). The regression was a quoted generator against a reader that did not unquote; the generator keeps quoting, the reader unquotes. `scripts/test_atlas_mux.py` (`ShippedOmpAgentsThinkingTests`) runs every shipped `omp/agents/*.md` through the argv builder, the pane command and the `spawn` CLI and asserts a valid, quote-free `--thinking` level.
+- **Channel registration is automatic.** An omp `task` dispatch (`omp/channels.ts`), a Claude Code `Task`/`Agent` dispatch (`hooks/dispatch_tripwire.py` `_channel_dispatch`) and a mux/launch worker (`atlas_todo._register_worker`, on its first channel-less board note) register the worker in the lead's subchannel `<main>/<lead>` (main = `<folder>@<branch>`, `@<short-sha>` on a detached HEAD, the folder name outside git; a mux worker with no open lead joins `<main>/lead`). `channel-open --root` canonicalizes a subdirectory to the project root; `default_channel` routes notes from owner `lead` to the newest lead subchannel; `channel_board` groups the lead's own plan items under the lead. A `channel-open` or dispatch-hook failure is recorded in `hook-faults.jsonl` instead of printing to stderr. The registry lock wait is bounded: `atlas_memory._file_lock(path, timeout=None)` keeps blocking by default and, given seconds, polls a non-blocking flock and raises `LockTimeout`; `atlas_todo.CHANNEL_LOCK_TIMEOUT_S = 2.0` is passed by `_register_worker`, `open_lead_channel` and the dispatch hook, so a stuck lock costs a note or a dispatch at most 2 s, never a hang. A timeout is recorded as `atlas_todo.register_worker.lock_timeout` (mux worker note) or `dispatch_tripwire.channel_lock_timeout` (Claude Code dispatch), other failures under `atlas_todo.register_worker` / `dispatch_tripwire`, and the note or dispatch still proceeds. The dispatch hook decides whether to open a channel with `_is_deny(out)`, which parses the emitted hook JSON (`hookSpecificOutput.permissionDecision == "deny"`) instead of matching literal text, so spacing or key order cannot hide a denial; a denied dispatch never opens a channel. `ATLAS_CHANNELS=off` disables the wiring. Tests: `scripts/test_atlas_channels.py`, `omp/channels.test.ts`, `hooks/test_channel_dispatch.py`.
+- **Health hooks row severity.** `scripts/atlas_dash_insights.py` (hooks subsystem) is `fail` only while the newest `hook_burst_tripped` is newer than (or equal to) the newest successful hook run; when an older trip is still in the window and a later hook run exists it is `warn` and the detail names the trip (`last trip <ISO timestamp> (session <12-char id>)`); with no trip it is `ok`, and swallowed hook crashes still make it `warn`. Hook fault entries keep their own severity. Tests: `scripts/test_atlas_dash_insights.py` (`test_old_breaker_trip_with_newer_hook_run_is_warn_naming_the_trip`, `test_breaker_trip_newer_than_last_hook_run_is_fail`, `test_no_breaker_trip_is_ok`). The dashboard daemon on `127.0.0.1:7421` imports its Python modules at start, so the live Health row changes only after that daemon restarts (the UI files are served from the repo directly).
+- **Test fixtures no longer write the real `~/.atlas`.** The omp bridge tests point `ATLAS_HOME` (and `ATLAS_DB` in `omp/index.test.ts`) at a temp directory (`omp/hook-bridge.test.ts` and `omp/stop-bridge.test.ts` via per-test `ATLAS_HOME`, `omp/index.test.ts` in `beforeEach`), so the hook faults they provoke land in a temp `hook-faults.jsonl`.
+- **Updating the plugin.** The running omp and Claude Code runtimes load the **installed plugin cache**, so the `--thinking` fix, the channel registration and the Colony page reach a live session only after this tree is committed, released and the plugin is reinstalled or updated from this marketplace repo. The dashboard daemon on `127.0.0.1:7421` serves `dashboard_ui/` from the repo directly, so only the UI part is live without an update.
+
+### Environment variables
+
+`ATLAS_COLONY` (`off` skips `ensure_colony`), `ATLAS_COLONY_TRANSPORT` (`tmux` forces the fallback), `ATLAS_REMOTE_PORT` (default 8443), `ATLAS_DASHBOARD_URL` (gateway upstream, loopback only), `ATLAS_LANDING` (`off` disables the `/` redirect), `HERDR_WEB_URL` (web UI base URL, loopback only), `HERDR_WEB_TOKEN` (shared token for the web UI).
+
+### Verification status
+
+The documentation in this entry was written by reading the source on 2026-10-07; no live browser or runtime result is claimed. Behavior verified by reading the source on 2026-10-07 (file:line references are in `docs/atlas-colony.md`). Not observed here: a live end-to-end round trip on a clean machine (see `docs/ROADMAP.md`, In Progress).
+
+### Fixed
+
+- The `.atlas-build` stamp covers the whole vendored tree (not only `package.json`, `bun.lock`, `UPSTREAM.md`), and `atlas_herdr.py ensure` now rebuilds and restarts only the vendored server when the mirror is stale while a colony is already running (`action: restarted`, `reason: stale_mirror`; it builds first and a failed build leaves the running server untouched).
+
+## 2026-10-06 -- atlas 10.1.2: updates no longer leave an old dashboard running
+
+### Fixed
+
+- After updating atlas, a dashboard daemon started by an older plugin version
+  kept serving its old UI on port 7421, because `ensure_daemon` reused any
+  daemon whose database matched. `/api/health` now reports the plugin
+  `version`; `ensure` replaces a daemon whose version is missing or older than
+  its own script's, and keeps a newer one so harnesses on different versions do
+  not restart each other's daemon. `stop_daemon` now stops only the listening
+  process and waits for the old daemon to exit; it no longer signals browser
+  or other client processes. Update, then restart the session (SessionStart
+  runs `ensure`). Verified by an independent verifier: `pytest hooks scripts`
+  2230 passed, 0 failed, and the new tests fail against the previous
+  `ensure_daemon`. Not yet observed: a real upgrade from an older install on a
+  user machine.
+
+## 2026-10-06 -- atlas: Workboard v2 dashboard (static UI, SSE, /api/v2), BREAKING request guard
+
+### Breaking
+
+- The dashboard now guards every route and method: `Host` must be
+  `127.0.0.1:<port>` or `localhost:<port>` (403), POST/PUT need
+  `Content-Type: application/json` (415), a present `Origin` must be that loopback
+  origin (403), and every mutation, `GET /api/v2/stream` and the sensitive GETs
+  (`/api/v2/irc`, `/api/v2/colony/capture`, `/api/v2/colony/agent`,
+  `.../transcript`) need the per-daemon `X-Atlas-Token` (401). The token is
+  regenerated on each daemon start and delivered only as
+  `<meta name="atlas-token">` in `GET /`; `?token=` works on the stream only.
+  External callers that POST to the dashboard must fetch `GET /` first, read the
+  token from the meta tag, and send `X-Atlas-Token` plus the JSON `Content-Type`.
+  `/api/health` and `/health` stay token-exempt.
+- `Access-Control-Allow-Origin` is removed from all responses and `OPTIONS`
+  answers 204 with `Allow` only; cross-origin pages can no longer call the
+  dashboard.
+
+### Added
+
+- New static-asset UI (`plugins/atlas/scripts/dashboard_ui/`) replaces the inline
+  `UI_HTML` page: nine pages (Overview, Activity, Health, Colony, Work, IRC,
+  Self-improvement, Projects, Settings) on one design system, no build step and no
+  CDN.
+- `GET /api/v2/stream` (SSE: hash-gated `colony`, `todos`, `irc`, `health`,
+  `tick`, 15 s heartbeat, 8 s polling fallback) and 21 `/api/v2` routes in
+  `atlas_dash_colony.py` (colony, IRC, todos) and `atlas_dash_insights.py`
+  (projects, overview, health, activity, improve, prefs).
+- `POST /api/v2/colony/send`: interactive `claude`/`omp` panes are typed into;
+  shell, python, node and other non-harness panes are refused with 409; headless
+  `-p` mux workers are queued as board notes.
+- Health returns policy enforcement (`gate_deny`, `gate_block`) as a stream
+  separate from real failures.
+- Worker inbox delivery: queued board notes reach a mux worker as hook
+  `additionalContext` from the PostToolUse branch of `dispatch_tripwire.py`
+  (`hooks/worker_inbox.py`); omp receives it through the existing hook bridge
+  (`dispatch_tripwire.py` is a bridged hook), with no `omp/index.ts` change.
+  Messages carry `status: queued|read|delivered|refused`
+  (`queued`/`read` for `-p` workers, `delivered` when typed into an interactive
+  pane, `refused` for a shell pane). `POST /api/v2/colony/send` returns 409 on
+  refusal; `POST /api/v2/irc` returns HTTP 200 with `ok:false` and
+  `error:"pane_not_steerable"`.
+- Settings connector credential form and Agents editor are present in the v2
+  UI: password inputs (set/missing only, nothing echoed, token carried, unsaved
+  draft guard) post to `POST /api/connectors/env`; the Agents editor saves or
+  resets per-project overrides through `POST /api/agents`.
+
+### Changed
+
+- `plugins/atlas/skills/atlas-orchestrate/references/dashboard-api.md` rewritten
+  from `atlas_dashboard.py`, `atlas_dash_colony.py`, `atlas_dash_insights.py` and
+  `dashboard_ui/`: request guard, legacy and v2 routes (21 v2), SSE events and the
+  8 s polling fallback, pages, prefs file, shortcuts, design tokens, components.
+- `plugins/atlas/README.md` and `plugins/atlas/references/connector-config-flow.md`
+  no longer describe the removed inline page or polling as the update path.
+- New `docs/atlas-workboard.md`: overview, information architecture, OpenRig-derived
+  concepts and an OpenRig-to-atlas mapping table. Full detail in
+  `plugins/atlas/CHANGELOG.md` [Unreleased].
+
+## 2026-10-06 -- atlas: minimal-task worker tier, deterministic reports, header/phase/colony gates
+
+- New `atlas:runner` agent and `contracts/worker-protocol.json`: singular,
+  step-driven tasks for cheap low-effort models; every dispatch requires a
+  `REPORT:` container; SubagentStop `worker_report_gate.py` and omp
+  `worker-report.ts` enforce it. `completion_gate` gains (n)(o)(p); omp gains
+  an agent tool guard; footprint arming; connector status tools work without
+  credentials. Docs audited claim-by-claim and corrected (see
+  `plugins/atlas/CHANGELOG.md` [Unreleased]).
+- omp now calls `omp_runstate.py begin` on every main-session turn
+  (`before_agent_start`), so a session that continues after a Stop gets a new
+  open run and the DB gates (`dispatch_tripwire` `current_run_id`) keep firing;
+  calls are serialized on one promise tail.
+
+## 2026-10-06 -- advisor board import is idempotent
+
+- omp replays the whole message history into the advisor gate's `context`
+  handler on restart/resume, and the in-memory dedupe was lost, so each replay
+  re-added every note as a new pending board item (126 items for ~60 notes).
+- `atlas_todo.py add --unique` returns the existing item (`duplicate: true`)
+  for the same session and exact content in any status; the gate now uses it.
+- The omp recall gate persisted nothing, so resuming a session re-armed it and
+  forced a second claude-mem recall. `omp/mandates.ts` now shares the Python
+  gate's per-session marker (same directory, filename scheme, `O_EXCL` create);
+  the same session id stays satisfied after `session_start`/`session_switch`,
+  a new id must still recall, and no session id or an fs error fails open to
+  the in-memory gate.
+- omp model-override guard: on a marketplace install the pinned colony agents
+  are not discovered, so omp resolves the child to the parent's live model and
+  the `before_subagent_spawn` handler denied every atlas dispatch as an
+  override (`overrides model with 'anthropic/claude-sonnet-5-5:low'`). A
+  selector equal to `ctx.model` (`provider/id`, optionally one thinking-level
+  suffix) is now no override; other concrete selectors still deny.
+
+## 2026-10-05 -- atlas 9.5.1: IRC no longer denied by the delegation gates; IRC mirrored to the project board; stale plugin root
+
+- `write agent://<name>` (IRC) and `write xd://...` reach the hooks as a `Write`
+  whose path is a URI. In an orchestrating session `dispatch_tripwire` denied
+  every IRC message as an inline edit of target code, the inline-op counter and
+  `completion_gate` counted them as shipped code, and the PostToolUse hooks
+  (`docs_drift_watch`, `format_after_edit`) treated them as file edits. URI-scheme
+  paths (`atlas_db.is_uri_path`) are now non-file writes everywhere; real source
+  writes are still denied. Regression tests in `hooks/` and `scripts/test_atlas_db.py`.
+- omp extension: IRC messages are appended to the project board
+  (`.atlas/.run/board/<sender>.jsonl`, delivered messages only), so colony
+  conversation is stored in the project and readable with `atlas_todo.py notes`.
+- omp extension: `ensureClaudePluginRoot` replaces a stale `CLAUDE_PLUGIN_ROOT`
+  (a long-lived omp process keeps the pre-upgrade cache path; the board CLI
+  was unresolved for workers). Restart omp after a plugin upgrade.
+- README.md rewritten as a current reference (install for Claude Code and omp,
+  hooks, skills, agents, connectors, colony, troubleshooting).
+
+## 2026-10-05 -- Local System One model on ambiguous prompt arming and turn scoring
+
+- Ambiguous user prompts can be classified by a local Ollama System One model
+  (`plugins/atlas/hooks/prompt_decision.py`, default `http://127.0.0.1:11434`,
+  model `nimble`, 4 second timeout). Stack traces, strong engineering verbs,
+  and a common verb plus a file, path, or declaration still arm from the regex
+  with no model call. A conversation label at confidence >= 0.7 vetoes a
+  generic-noun arm. A `code_change` or `investigation` label at that
+  confidence can arm a regex miss only when the prompt also names an
+  engineering object (a gate, a hook, a test, a schema, a file extension).
+  A bare question is not promoted. Timeout, low confidence, a bare defect
+  label, and `ATLAS_DECISION=off` keep the regex answer.
+- Completion-gate conditions, the dispatch tripwire, recall, bash advice, and
+  fallow stay code. They are not model calls.
+- `typesafe_client` scores against an explicit loopback `ATLAS_TYPESAFE_URL`
+  with no API key and no `Authorization` header. The hosted default still
+  requires `TYPESAFE_API_KEY`. Set `ATLAS_TYPESAFE_MODEL` to the local tag.
+- Turn-scoring questions are one observable each. Three stored judgment ids
+  (`literal_ask_delivered`, `done_claim_unverified`, `buried_decision`) are
+  folded in code. The doctor still mines those ids.
+- Measured on this machine: warm nimble choice about 190ms; a cold load about
+  3 seconds. A sandbox slugify task scored `code_change` at confidence 0.978,
+  and the reply nouls for a quoted pytest count were 0.998. Hook replay of
+  that tree blocked completion on condition (m) and allowed the Edit.
+  Detail: `docs/atlas-turn-scoring.md` and `plugins/atlas/CHANGELOG.md`.
+
+## 2026-10-05 -- Skills and agents rewritten to Anthropic's agent-skills best practices; omp mux/hook parity audit
+
+Marketplace `4.5.1`; atlas `9.0.0`.
+
+- All 47 SKILL.md descriptions rewritten third person with a "Use when ..."
+  clause, each <=400 chars (was 29 over 400, 2 over the 1024 hard limit; 21
+  had no when-to-use clause; 3 were first/second person). Total preloaded
+  description+when_to_use chars across all 47 skills, measured with a YAML
+  parser against HEAD: 29074 -> 17454 (about -40%), saved on every session
+  start.
+- 46 reference files over 100 lines gained a table of contents; 42 orphaned
+  reference files are now linked from their SKILL.md; no reference requires
+  another through a markdown link, and every `${CLAUDE_PLUGIN_ROOT}` path was
+  kept literal (141 directives in 8.7.1, 141 now); all 12 agent descriptions
+  reworded to the same third-person/"Use when" shape.
+- New `TestAnthropicSkillChecklist`/`TestAnthropicAgentChecklist` conformance
+  tests (35 in the module) enforce the format going forward. An independent
+  verifier found the orphan-file test passed with an orphan present; it was
+  tightened and now fails on one.
+- Two older defects fixed on the way: `atlas-orchestrate/references/hooks-automation.md`
+  pointed at an `install_hooks.py` path that never existed, and
+  `atlas-dogfood`'s description was invalid YAML.
+- omp/mux parity fixes: `atlas_mux.py` now forwards 18 lead environment
+  switches into tmux colony worker panes (was 2; a tmux pane does not inherit
+  the spawning client's environment, so switches like `ATLAS_MANDATES=off`
+  were silently lost); omp plugin-enablement detection now reads
+  `~/.omp/plugins/omp-plugins.lock.json` instead of only
+  `~/.claude/settings.json`; the omp output style no longer injects Claude's
+  `outputStyle` override line or a broken `TodoWrite`-gating paragraph.
+- No skill was renamed and no frontmatter key was removed; `bun test` (245
+  pass) and the atlas hooks and scripts pytest suites verify the change, but
+  the omp-side fixes were not exercised in a live omp session, and the user's
+  installed omp plugin cache (8.6.0) only picks up 9.0.0 after an upgrade or
+  reinstall from the marketplace. Full detail in `plugins/atlas/CHANGELOG.md`.
+
+## 2026-10-03 -- omp colony dispatch no longer self-denies; prompt prefix is stable; tool state stops tripping the delegation gate
+
+Marketplace `4.5.1`; atlas `8.7.1`.
+
+- Fixed five false denies that sent the omp lead off the atlas roles on a fixed
+  three-module task (model-override expanded-pattern compare, `xd://` writes counted as
+  inline edits, `ToolSearch` demanded for the TOOLS block, batch `context` dropped by the
+  tripwire, tool-state dirs counted as lead-written code). Per-run counts 3-4, 1-5, 2-3,
+  2-3 and one false gate block, all 0 after. Details in `plugins/atlas/CHANGELOG.md`.
+- The omp output style, a new lead addendum and the recall line render once per session
+  and stay frozen, removing one 54,956-token cache rewrite observed in a transcript.
+- Claude Code behavior is unchanged: its output style, agents, skills, commands and
+  hooks.json are byte-identical; `dispatch_tripwire.py` gained two branches that only
+  run when the omp bridge sets `ATLAS_TOOLKIT_LOAD=omp`.
+- Fixed the tmux colony (`atlas_mux`) for omp: a worker is a standalone `omp -p` that omp
+  reports as a main session, so it was armed as an orchestrator from its own task prompt
+  and every edit it was spawned to make was denied (one baseline worker left its module
+  a stub). Workers now carry the leaf marker `ATLAS_WORKER_NAME` through the bridge
+  (`ATLAS_ENGINE_ARM=off`, no Python hook changed) and the delegation check. `atlas_mux`
+  can pin workers to one atlas tree (`--omp-extension` / `ATLAS_MUX_OMP_EXTENSION`;
+  unpinned they load whichever atlas omp has installed) and forwards the lead's
+  `ATLAS_DB` and `ATLAS_GATE` into the pane.
+- Measured cost and time deltas (-26%, -22% median) are **not statistically
+  significant** at n=2 per side; the mechanism counts are the evidence.
+
+## 2026-10-02 -- atlas runs its definition-of-done gate, ingest, chronicle and tripwire rules in omp
+
+Marketplace `4.5.0`; atlas `8.7.0`.
+
+- `plugins/atlas/omp/stop-bridge.ts` bridges `session_stop`, `session_shutdown`
+  and `auto_compaction_start`; `scripts/omp_transcript.py` converts omp sessions
+  to the Claude transcript shape and `scripts/omp_runstate.py` records the run
+  state the gate needs, so the unchanged Claude hooks run in omp.
+- Each gate condition (a)-(l) is tested individually on omp-derived state;
+  `dispatch_tripwire.py` dispatch-spec, one-GOAL and production-edit denies are
+  tested against the real hook through the bridge.
+- Fixed a per-ingest temp-directory leak in the detached ingest child.
+- `docs/atlas-harness-parity.md` rows moved from gap only where tested; memory
+  capture's durable write and the connector watch are not shown on a live omp run,
+  and the inline-op, production-edit and dispatch-spec denies are tested against
+  the real hook but not observed live.
+- Fixed: the inline-op threshold deny never fired in omp (the bridge skipped the
+  tripwire's PreToolUse for Read/Grep/Glob/Bash); plaintext session copies are now
+  deleted after use; a main conversion no longer deletes a running subagent's
+  transcript. `dispatch_tripwire.py` gained one env-gated guard
+  (`ATLAS_NATIVE_POLICY=off`, set only by the omp bridge); unset, Claude Code is
+  unchanged.
+
+## 2026-10-01 -- One contract per rule across Claude Code and omp, omp output style, tool mandates, tmux colony mode
+
+Marketplace `4.4.0`; atlas `8.6.0`.
+
+- `plugins/atlas/contracts/` holds the native-tool, mandate and tool-name
+  contracts; the Python hooks and the omp extension both read them, and both
+  test suites run the same shared cases.
+- omp main sessions receive the atlas-orchestrator output style rendered from the
+  single `.md` source (`omp/style.ts`); subagents do not.
+- claude-mem recall and ponytail-before-commit mandates in both harnesses
+  (`ATLAS_MANDATES=off`).
+- `scripts/atlas_mux.py`: opt-in tmux colony mode (`ATLAS_MUX=tmux`).
+- `omp/hook-bridge.ts` runs the bridgeable Claude Code hooks from
+  `hooks/hooks.json` in omp (session boot, prompt optimizer, bash advisor, fallow
+  gate, format-after-edit, docs-drift watch); `contracts/hook-bridge.json` lists
+  the rest and why.
+- omp now also has: a worker output-token clamp (the cause of subagent HTTP 402s),
+  an advisor gate that turns advisor concerns into board items and blocks stop
+  until they are closed, `lean-ctx -c` shell routing, and a temp-file process
+  transport for hooks.
+- Both harnesses: exploration-only shell commands denied toward lean-ctx,
+  claude-mem recall required once per session, shell-written code counted by the
+  delegation gate. Session ingest fixed for subagent transcripts (Claude) and
+  worker files (omp).
+- `docs/atlas-harness-parity.md`: status per rule, a miner-measured paired
+  benchmark, the open delegation-policy decision, and remaining gaps.
+
+## 2026-10-01 -- Nudge-marker, ingest dispatch-name, and omp indentation fixes
+
+Marketplace `4.3.1`; atlas `8.5.1`.
+
+- The tripwire's once-per-session native-tool nudge is no longer lost when the
+  inline-op threshold deny replaces it; the marker is claimed only on print.
+- Session ingest keeps dispatch identity (`name`, `subagent_type`, omp batch
+  `names`) ahead of the 500-char summary cap, so `colony_adherence`'s
+  named-dispatch rate measures real adoption.
+- `plugins/atlas/omp/.editorconfig` pins tab indentation; omp's formatOnWrite
+  had been reindenting those files to one space (content sniffing on a JSDoc
+  ` *` line).
+- Known limitations: plugin-supplied lean-ctx MCP servers are not detected
+  (falls back to the nudge); marketplace installs still don't surface
+  `omp/agents/` (deferred).
+
+## 2026-10-01 -- Availability-aware native-tool enforcement, inline-op deny regression fix, colony adherence miner
+
+Marketplace `4.3.0`; atlas `8.5.0`.
+
+- Fixed (regression since 8.3.0): in `docs/` projects the Claude Code
+  tripwire returned early for every native Read/Bash/Grep/Glob, so an armed
+  orchestrator past the inline-op limit was never denied for them. Allowed
+  native calls now reach the threshold deny; a deny replaces the nudge.
+- Claude Code: native Grep/Glob are denied only when lean-ctx is reachable
+  (binary on PATH AND a lean-ctx MCP server configured for the project); the
+  deny names the `ToolSearch("select:mcp__<server>__ctx_search")` load step.
+  Otherwise a one-time allow-nudge.
+- omp: grep/glob deny arms per call only when a replacement is live in the
+  session (`pi.getActiveTools()`): a bare `ctx_*` tool, or a lean-ctx `xd://`
+  device plus the `write` tool. Binary-on-PATH alone no longer arms it.
+- New `colony_adherence` miner in `atlas_doctor.py --mine`: per-harness
+  native-reader share, delegation rate, and named-dispatch rate, with
+  findings that name the enforcement surface. Baseline: Claude Code 0.784 /
+  0.556, omp 0.989 / 0.804 (share / delegation).
+- Verification: pytest 1649 passed / 3 skipped / 0 failed; bun 38 pass; hook
+  subprocess smoke (nudge without MCP config, deny with `.mcp.json`); real
+  omp runs (deny with full tools, allow-nudge with `--tools=grep`).
+
+## 2026-10-01 -- Colony board safety, dispatch tripwires, native omp agents
+
+Marketplace `4.2.0`; atlas `8.4.0`.
+
+- Board safety (`plugins/atlas/scripts/atlas_todo.py`): a linked git worktree
+  resolves to the main repo's board (workers with `isolation: "worktree"`
+  previously wrote separate, invisible boards); the lead's TodoWrite mirror
+  no longer reverts a worker's completed-with-evidence item or reopens a
+  worker-claimed in_progress item; an unparseable
+  `todos.json` is moved aside to `todos.json.corrupt-<ns>` instead of being
+  silently replaced by an empty board. Locking was already correct (flock
+  plus tmp+os.replace): 8 processes racing for 40 items produced exactly 40
+  claims.
+- New notes channel: append-only per-worker files
+  `.atlas/.run/board/<owner>.jsonl` (one writer per file, no contention), with
+  `atlas_todo.py note --owner <name> [--to <name|all>] [--item <id>] "<text>"`
+  and `atlas_todo.py notes [--to <name>] [--since <ts>]`.
+- `hooks/dispatch_tripwire.py` gains two `atlas:*` denies: a dispatch whose
+  `model` param overrides the agent definition's own `model:` frontmatter
+  (`inherit`/absent accept anything; unreadable definitions fail open), and a
+  dispatch with no `name` (named dispatches hand a subagent the sibling roster
+  and SendMessage). Both follow the existing `atlas:*` gating and
+  `ATLAS_TRIPWIRE_HARD=off`; the name-required deny is lifted under
+  `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`, where a named main-conversation
+  dispatch launches as a teammate inheriting the lead's effort and cwd.
+- Agent bodies call the board CLI through `${CLAUDE_PLUGIN_ROOT}`: Claude Code
+  substitutes it inline in agent markdown bodies but does not set it in the
+  Bash environment; the omp extension sets `process.env.CLAUDE_PLUGIN_ROOT` on
+  load when unset, and omp subagents inherit it.
+- Colony protocol prose: `## Colony protocol (siblings)` in
+  `subagent-kit.md`, a Siblings paragraph in each `agents/*.md`, and lines in
+  `output-styles/atlas-orchestrator.md` and `hooks-automation.md`. Stated
+  plainly: Claude Code has no per-subagent thinking setting -- subagents
+  inherit the session's thinking (per code.claude.com/docs/en/sub-agents), so
+  worker cost there is controlled by the existing `model:`/`effort:`
+  frontmatter.
+- Native omp agents: `plugins/atlas/omp/agents/*.md`, generated by
+  `bun plugins/atlas/omp/gen-agents.ts` from `plugins/atlas/agents/*.md`,
+  carry omp-understood `thinkingLevel` (off/low/medium tiers) and ordered
+  `model` lists with built-in fallbacks: `["@atlas-worker", "@smol"]` for
+  workers, `["@atlas-verifier", "@default", "@smol"]` for the verifier tier,
+  so the verifier falls back to the session's main model, not the cheapest
+  one, and to `@smol` only when `modelRoles.default` is unset. `spawns: "none"`
+  makes dispatch lead-only. omp discards the `model` of Claude-format plugin
+  agents, so atlas agents previously ran on omp's default model. Optional
+  `modelRoles.atlas-worker`/`atlas-verifier` in the omp config, plus a
+  one-time nudge to name atlas task items (siblings address each other with
+  `write agent://<name>`).
+- `plugins/atlas/omp/package.json` makes `omp/` its own extension package;
+  load it as a DIRECTORY (`omp --extension <abs>/plugins/atlas/omp`, or add
+  that directory to `extensions:` in `~/.omp/agent/config.yml`). This replaces
+  the previous `omp/index.ts` instruction; agents are only discovered from a
+  directory entry.
+- New omp todo mirror: on the main thread in a `docs/` project the extension
+  mirrors the lead's omp `todo` plan into `<project>/.atlas/.run/todos.json`
+  through `atlas_todo.py set --root <project> --session <omp-session-id>` --
+  the omp counterpart of Claude Code's TodoWrite mirror; detached, fails open.
+- Verification: `cd plugins/atlas && python3 -m pytest hooks/ scripts/ -q`
+  -> 1625 passed, 3 skipped, 0 failed; `bun test plugins/atlas/omp`
+  -> 35 pass, 0 fail; the generator is idempotent ("omp agent files up to
+  date (12 files)"). Real omp runs proved the notes CLI (exit 0 with the
+  environment unset at launch), the todo mirror (board held the lead's items,
+  pending -> completed), and the model fallbacks (verifier tier resolved to
+  the default model at :medium; unconfigured worker role fell back to
+  `@smol`).
+
+## 2026-10-01 -- Delegation mandate and native tool routing in Claude Code and omp
+
+Marketplace `4.1.0`; atlas `8.3.0`.
+
+- `completion_gate.py` gains condition (m), bringing the gate to thirteen
+  conditions: main-thread non-docs code shipping with zero `Task`/`Agent`
+  dispatches blocks once even without an orchestration flag. It is scoped
+  to `docs/` projects, exempts sidechains, fails open on errors, and respects
+  `ATLAS_GATE=off`.
+- `dispatch_tripwire.py` denies native `Grep`/`Glob` in `docs/` projects
+  with lean-ctx on PATH, including subagents, independently of orchestration.
+  It points at `ctx_search`/`ctx_glob`; `Read`/`Bash` get one nudge per
+  session toward `ctx_read` and `ctx_shell`/context-mode `ctx_execute`, with
+  markers under `.atlas/.run/native_nudges/`.
+- New `plugins/atlas/omp/index.ts` is the first atlas enforcement in omp:
+  native `grep`/`glob` are blocked toward the lean-ctx MCP tools, `read`/`bash`
+  get a one-time nudge, and `session_stop` blocks once for main-thread
+  non-docs `edit`/`write` calls without a `task` dispatch. The extension is
+  registered in `plugins/atlas/package.json` and documented in
+  `plugins/atlas/omp/README.md`. Install with
+  `omp --extension <abs>/plugins/atlas/omp/index.ts`, or add that absolute
+  path to `extensions:` in `~/.omp/agent/config.yml`.
+- Both harnesses use `ATLAS_TRIPWIRE_HARD=off` to disable native-tool
+  enforcement and `ATLAS_GATE=off` to disable the delegation Stop gate.
+- Measured in `~/.atlas/atlas.db` over 14 days: 62 omp sessions with zero
+  orchestration flags, about 8.1k native read/grep/bash calls versus about
+  400 lean-ctx calls; Claude Code had 410 native versus 255 ctx calls and
+  three code-shipping runs with no dispatch. The new independent checks
+  close the never-armed-run gap rather than adding another prose rule.
+- Verification: `cd plugins/atlas && python3 -m pytest hooks/ scripts/ -q`
+  -> 1598 passed, 3 skipped; `bun test plugins/atlas/omp/index.test.ts`
+  -> 18 pass. Subprocess smoke confirmed (m) blocks an unflagged run,
+  clears after a `Task` dispatch, denies `Grep`/`Glob`, and nudges `Read`
+  once before staying silent.
+
+## 2026-10-01 -- TypeSafe scoring enabled, omp ingest, scoring-error visibility
+
+- Scoring enabled (`ATLAS_TYPESAFE_SCORING=on` in `~/.claude/settings.json`
+  env; `TYPESAFE_API_KEY` comes from `~/.zshrc`, so hooks in GUI-launched
+  Claude Code sessions will not see the key).
+- `session_ingest.py --backfill-agent omp` ingests omp sessions (74 sessions,
+  538 prompts live) so they can be scored.
+- `--status` and the doctor `typesafe-scoring` WARN report recorded scoring
+  errors. The `turn_quality` style metrics now count Claude Code sessions only.
+- `docs/atlas-turn-scoring.md` names TypeSafe as a third-party processor of
+  possible NPI under GLBA/Reg S-P (ZDR is enterprise-only) and how to exclude
+  a project.
+- First 14-day pass: 400 calls, 1.27M input tokens, 0 errors, `turn_quality`
+  findings in the doctor. Full hooks + scripts suite: 1581 passed, 3 skipped.
+
+## 2026-09-29 -- MCP connectors: server instructions, honest status, typecheck fixes
+
+- Every node connector (auvik, blumira, cipp, connectwise, knowbe4, ninjaone,
+  panos, paylocity, spanning, threatlocker, vanta) now sends MCP server
+  `instructions`: what it covers, which list tool finds IDs, and "on
+  401/403/440 or not-configured, call `<vendor>_status` once and report it".
+  Claude Code's MCP Tool Search loads only tool names plus `instructions` at
+  startup, so this is the one place tool-choice guidance always reaches Claude.
+- `*_status` no longer claims "all tools are available at all times" /
+  "registered upfront" while the credential gate lists only status and
+  navigate (threatlocker, vanta, paylocity, panos, knowbe4, ninjaone).
+- Blumira lists all domain tools once credentials resolve, instead of hiding
+  them behind per-session `blumira_navigate` state; `blumira_back` removed.
+- SDK floor raised to `^1.29.0` where it was lower.
+- Typecheck: `@shared/*` alias fixed to `../_shared/*`, `_shared`'s SDK type
+  import mapped to each server's `node_modules`, `rootDir` dropped from
+  spanning, `as unknown as` casts in blumira/spanning. `tsc --noEmit` is 0
+  errors in all 11 servers.
+- New `plugins/atlas/scripts/test_connector_protocol.py` boots every bundle
+  unconfigured over stdio and asserts instructions, a callable status tool,
+  and no false availability claim. Result with the wiring suite: 13 tests OK.
+- Root cause of "tools missing" in live sessions: the installed atlas 8.0.1
+  predates the `_env/load.mjs` change that reads `~/.config/atlas/atlas.env`,
+  so keys stored only there never reach the server. Ships with the next
+  release.
+
+### Wave 2: McpServer, validated input, live auth checks
+
+- All 11 node connectors moved from the low-level `Server` +
+  `setRequestHandler` to `McpServer.registerTool` (MCP TS SDK 1.29 guidance).
+  Tool names are unchanged (baseline-diffed per bundle); every tool carries
+  `title`, `readOnlyHint` and `destructiveHint`.
+- Input validation: new `mcp_servers/_shared/zod-shape.ts` converts each tool's
+  existing JSON `inputSchema` to zod, so the SDK rejects wrong-typed arguments
+  ("Input validation error") before any vendor call. Unsupported schema
+  features throw at startup. Tests: `_shared/__tests__/zod-shape.test.ts` (9).
+- Every `<vendor>_status` makes one live authenticated read (10 s cap) and
+  reports `Auth check: OK | FAILED HTTP <code> | SKIPPED`, so a rejected key
+  shows up in status instead of "Configured" followed by 401s.
+- Shared error envelope: bare "Authentication failed" errors classify as
+  `FORBIDDEN` (was `INTERNAL_ERROR`); FORBIDDEN hints now say to stop retrying;
+  credential-named fields in vendor error bodies are redacted (ThreatLocker's
+  440 body echoed the API token). PAN-OS REST 401 with no PAN-OS code now
+  classifies as `FORBIDDEN` (was `VENDOR_ERROR`).
+- auvik, connectwise and cipp import the canonical `_shared` modules; their
+  drifted `src/_shared` forks are deleted. connectwise/cipp `npm run build`
+  now type-checks with tsc and emits `dist/` with tsup (plain tsc does not
+  rewrite `@shared`).
+- NinjaOne: EU/OC/CA/US2/FED tenants were routed to the US base URL because
+  the region fallback never ran; fixed in `src/utils/client.ts`. The 11
+  failing ninjaone tests are fixed (178 pass). vitest configs in blumira,
+  connectwise and ninjaone exclude `node_modules.nosync.noindex`, which was
+  pulling vendored dependency test files into the run.
+- Shared server scaffolding: `_shared/mcp-server-kit.ts` (tool registration,
+  navigate, credential-gated status, auth-check timing/formatting),
+  `_shared/server-entry.ts` (stdio/HTTP entry, health, signals) and
+  `_shared/clean-env.ts` replace per-server copies; ninjaone/knowbe4
+  `callTool` and the ThreatLocker domain handlers are name -> handler maps.
+  Stdio probes are byte-identical before/after each refactor. New
+  `.fallowrc.json` excludes the generated `plugins/atlas/mcp/*/server.mjs`
+  bundles; `fallow audit` passes with 0 introduced dead code, complexity or
+  duplication. Fixed copy-paste tool titles ("Vanta: panos ..." in panos and
+  paylocity).
+- Live read-only smoke (real credentials, counts and status codes only):
+  ninjaone and connectwise authenticate and return data; threatlocker (440 on
+  every instance b-h), vanta, knowbe4 and panos (401) have rejected
+  credentials; auvik, blumira, cipp, spanning and paylocity have no
+  credentials configured in any source.
+
+## 2026-09-29 -- Atlas TypeSafe turn scoring and `turn_quality` miner
+
+- Added `docs/atlas-turn-scoring.md` and the feature it documents: model-scored
+  reply judgments (`turn_scores`), the `turn_quality` doctor miner with
+  predictive-value reporting, metric findings, the `typesafe-scoring` WARN
+  check, three `ATLAS_TYPESAFE_*` knobs, and the `TYPESAFE_API_KEY` entry in
+  `.env.template`. Live smoke: 5 calls, 34 rows, 18,364 input tokens on one
+  session; 0 findings (below the 20-turn minimum). See
+  `plugins/atlas/CHANGELOG.md`.
+
+## 2026-09-29 -- Atlas Orchestrator output style rewritten from transcript evidence
+
+- Rewrote `plugins/atlas/output-styles/atlas-orchestrator.md` against
+  https://code.claude.com/docs/en/output-styles.md and a mining pass over
+  `~/.claude/projects` and `~/.omp/agent/sessions`. Top measured failures:
+  `done` on an answer in the wrong shape or missing a named deliverable
+  (~12 Claude sessions, 12 omp), users repeating the same correction (3-49x
+  in 9 omp sessions), scope drift and reverting unrelated changes, edits
+  aimed at the plugin cache, code-only verification of UI bugs ("still
+  broken", 5x), missing headers on resumed replies (~16% in the largest
+  project), and completion-gate loops on docs/CHANGELOG drift (155 blocks in
+  one project). Each now has a dedicated rule; the glyph table, ASCII section,
+  and todo section were compressed since the style is sent on every request.
+  `session_boot` and `atlas_doctor` now describe the explicit-user-`outputStyle`
+  case as a risk (docs say the plugin style wins; atlas 5.25.0 observed header
+  loss) instead of asserting either. Full hooks + scripts suite: 1573 passed,
+  3 skipped.
+
+## 2026-09-28 -- atlas scaffolding now propagates tool routing to new/existing repos; test-isolation bug fixed
+
+- atlas-setup's `scaffold_docs.py` scaffolded `AGENTS.md`/`CLAUDE.md` from
+  static templates that carried zero tool-routing guidance
+  (`grep -r 'context-mode|lean-ctx|claude-mem' skills/atlas-setup/templates/`
+  returned nothing), so every project atlas-setup scaffolded got no
+  claude-mem/context-mode/serena+lean-ctx/ponytail routing rules in its own
+  docs, even though the atlas plugin's own skills were fully wired
+  internally. Added `ensure_tooling_block()`: inserts a marker-delimited
+  `<!-- atlas-tooling -->` block into `AGENTS.md` (full canonical routing
+  rules) and `CLAUDE.md` (short cross-reference, per that template's own
+  no-duplication rule) on first scaffold, and replaces the span in place on
+  every later run so a content change propagates to already-scaffolded
+  repos. Verified live: fresh empty repo (block inserted both files), a repo
+  with a pre-existing hand-written `AGENTS.md` (block appended, existing
+  content untouched), an idempotent re-run (`tooling block unchanged`, one
+  marker pair, no duplication), and a direct content bump
+  (`tooling block updated`, old span replaced, hand-written content
+  preserved). `python3 -m pytest skills/atlas-setup/scripts/test_scaffold_docs.py -q`
+  -> 13 passed (unchanged).
+- `atlas_doctor` gained a `context-tooling` check (C11): reads the current
+  project's `AGENTS.md` for the `<!-- atlas-tooling -->` marker planted by
+  the above. Given **WARN severity**, a new field on `add()`'s result dict
+  that both `failed = [...]` filters in `main()` and the `--hook`
+  SessionStart-warning path now exclude -- this is a signal about the
+  *consuming project*, not the plugin install, and would otherwise print
+  "ATLAS-DOCTOR WARNING: plugin is unhealthy" on every session start in any
+  repo predating atlas-tooling, a user-visible regression caught before
+  merge. Two tests exercise the severity-filtering logic itself (both stub
+  `run_checks` with a synthetic warn-severity result, since this class's
+  shared fixture is a deliberately-unhealthy sandbox): one shows `--hook`
+  exits 0 with no warning text when only the warn-severity check fails, the
+  other shows `CHECK` mode prints `WARN  context-tooling ...` without
+  flipping the `HEALTHY` summary or exit code. Neither exercises the check
+  against a real repo's `AGENTS.md` end-to-end beyond the direct
+  `check_context_tooling()` unit tests.
+- `atlas_db.context_tool_health()`'s per-server IN-list grew from
+  `('context-mode','claude-mem','ponytail')` to include `'lean-ctx'` and
+  `'serena'` (confirmed as the real `tool_calls.server` values against the
+  live `~/.atlas/atlas.db`). Re-running the query with the new IN-list
+  against that same DB (1718 sessions, 2026-04-16 to 2026-09-28) gives the
+  first-ever visibility into their usage: `lean-ctx` 3333 calls / 113 errors
+  (3.4%) / 136 sessions (7.9% of all sessions); `serena` 99 calls / 14
+  errors (14.1%) / 26 sessions (1.5%). For comparison, the two tools already
+  in the IN-list: `context-mode` 3848 calls / 194 errors (5.0%) / 379
+  sessions (22.1%); `claude-mem` 145 calls / 28 errors (19.3%) / 88 sessions
+  (5.1%). No historical baseline exists for lean-ctx/serena before this
+  change (they were invisible to this telemetry), so there is nothing to
+  compare these first numbers against; serena's 14.1% error rate and
+  claude-mem's 19.3% are both notably higher than context-mode's and lean-
+  ctx's, and are flagged here as open questions, not fixed in this pass.
+- Fixed a cross-file test-isolation bug: `hooks/test_status_contract.py`'s
+  `BootMainStyleTest.setUp()` replaced `sys.modules["atlas_curator"]`/
+  `["atlas_memory"]` with `MagicMock`s to isolate `session_boot.main()` but
+  never restored them, so any later test in the same pytest process doing
+  `import atlas_curator` (`scripts/test_atlas_curator.py`) got the mock
+  instead of the real module, silently defeating
+  `mock.patch("atlas_curator.shutil.move", ...)`. Reproduced
+  (`pytest hooks/ scripts/test_atlas_curator.py` -> 2 failed;
+  `pytest scripts/test_atlas_curator.py` alone -> 38 passed; bisected to
+  this one file), fixed with a `tearDown` restoring the original
+  `sys.modules` entries. Full combined suite:
+  `pytest hooks/ scripts/ skills/atlas-setup/scripts/ -q` -> 1560 passed, 0
+  failed (was 2 failed, 1540 passed before this fix).
+- Confirmed the fork/branch audit for this pass: `gh api
+  repos/w159/tech-tools/forks` shows one fork,
+  `henssler-financial/tech-tools`, 0 commits ahead / 69 behind (stale
+  mirror, nothing to port). `git diff main...origin/atlas-marketplace-hardening`
+  across all 16 `plugins/atlas/**` paths it touches is fully superseded by
+  main (bash_advisor already replaces bash_guard, `atlas-validate` already
+  exists as a richer skill, etc.) -- zero ports needed, safe to delete.
+  Live `context_tool_health()` query against `~/.atlas/atlas.db` shows the
+  session cache-hit ratio rose from 0.912 (older half, Apr 16 - Jul 15) to
+  0.980 (newer half, Jul 15 - Sep 28). That trend is measured, real, and
+  favorable, but the *cause* is not isolated: prompt cache-hit rate also
+  moves with harness version, model, and session length, and nothing in
+  this telemetry separates a tool-routing effect from those. Read it as a
+  directional signal, not proof that context-mode/lean-ctx adoption alone
+  drove it. The adoption baseline itself is the real unmeasured-footprint
+  gap this pass closes visibility into: context-mode in ~22% of sessions,
+  claude-mem in ~5% (with a 19.3% error rate), lean-ctx in ~7.9%, serena in
+  ~1.5% -- most sessions in this history used none of the code-nav pair at
+  all, which this changelog entry's `context-tooling` doctor check and
+  scaffold-time routing block exist to start correcting going forward, not
+  retroactively.
+
+## 2026-09-28 -- atlas doctor surfaces session cache health; setup docs close lean-ctx check gap
+
+- atlas_doctor: `atlas_db.context_tool_health()` (cache-read share plus
+  call/error counts for context-mode/claude-mem/ponytail) was documented for
+  the manual audit lens but never surfaced by the doctor itself -- the
+  `--mine` path covered per-tool error rates (`tool_error_rate_high`) but
+  nothing reported a low session cache-hit ratio. Added the
+  `cache_hit_ratio_low` miner (registered in `MINERS`): fires MED,
+  dimension "context efficiency", when `cache_hit_ratio` < 0.5 with at least
+  100k tokens of cache+fresh input, so thin or codex-only histories stay
+  quiet; the ratio is the remeasurable baseline the self-telemetry lens
+  prescribes. Test: `test_low_cache_hit_miner` (thin DB silent, low ratio
+  fires with metric 0.0, healthy ratio silent). `python3 -m pytest
+  plugins/atlas/scripts/test_atlas_doctor.py plugins/atlas/scripts/test_atlas_db.py -q`
+  -> 139 passed.
+- atlas-setup checks-matrix: the doctor's eight checks are install-integrity
+  only, and none of the session-augmentation trio / code-nav pair appeared in
+  the matrix. Added an "Additional surface checks" bullet documenting the
+  real per-tool check surface (session_boot absent-list for the trio,
+  `tool_routing.scan_stack` for serena's `.serena/project.yml` `languages:`,
+  `lean-ctx doctor` effective roots for lean-ctx) and that these do not
+  affect the doctor's exit code.
+- atlas-setup install.md Stage 1: lean-ctx had a mention where serena had a
+  concrete check; added the `lean-ctx doctor` effective-roots reachability
+  check inline in the minimum-bar list.
+- atlas-setup repair.md: documented `--fix`'s actual scope explicitly -- it
+  repairs plugin/marketplace install state only and has no MCP remediation
+  for any of the five tools (claude-mem/context-mode/ponytail/serena/lean-ctx
+  equally); the repair for a missing MCP entry is the install command from
+  install.md Stage 1. No code change: there was no existing per-tool MCP
+  remediation pattern in `apply_fixes` to extend, and `plugin-health.py` is
+  read-only by design (skill/agent counts), so no speculative remediation was
+  invented.
+
+## 2026-09-28 -- atlas and programmer hook reliability and gate integrity pass
+
+Driven by an evaluation of both plugins (hooks, skills/agents, connectors)
+and a feedback report of the programmer plugin blocking prompts. Every item
+below has a verified entry in `.atlas/.run/findings.json` with the test
+command that proves it. Delivery is source-only: users must reinstall the
+atlas and programmer plugins for the fixes to take effect.
+
+- programmer 0.2.1: the Pragmatic Programmer nudge was a `type: "prompt"`
+  UserPromptSubmit hook. Prompt hooks can only return `{ok, reason}`
+  (code.claude.com/docs/en/hooks, "Response schema"), cannot emit
+  `additionalContext`, and `ok: false` on UserPromptSubmit ends the turn.
+  The hook therefore stopped subagent hand-backs, task notifications, and
+  meta-questions with "Operation stopped by hook". Replaced by the
+  deterministic command hook `hooks/tpp_nudge.py`, which always exits 0 and
+  also removes one model call per prompt.
+- atlas completion_gate: conditions (a) evidence and (b) verified finding
+  now only credit artifacts produced during the current run (file mtime and
+  `verified_at` at or after run start). Previously one stale file and one
+  stale row satisfied both forever.
+- atlas_hook_guard: throttle, circuit-breaker, and emit-dedupe state updates
+  hold a bounded `fcntl.flock` and write atomically. Parallel Stop hooks
+  (the docs state all matching hooks run in parallel) could lose updates.
+- atlas_dashboard `serve` refuses a non-loopback `--host` unless
+  `--allow-remote` is passed; the dashboard has no auth and shows data from
+  a GLBA / Reg S-P regulated environment.
+- Agent definitions: the Write-disallowed database audit agents and
+  db-prober no longer instruct themselves to write files; they return their
+  reports and atlas-db-audit persists them. verifier and explorer state they
+  must be dispatched fresh. A contract test enforces the read-only rule.
+- dispatch_tripwire: no longer denies orchestrator writes to the system
+  temp dir, and accepts plural spec labels (`DELIVERABLES:`).
+- prompt_optimizer: ignores subagent hand-backs and task notifications, so
+  they no longer re-arm orchestration or inject the orchestrate nudge.
+- completion_gate stays silent while a `subagent`, `workflow`, or `teammate`
+  entry in the Stop input's `background_tasks` is still in flight (shell and
+  monitor tasks never suppress it), its `atlas_finding.py` hint now includes
+  the required `--title`, and `python -m unittest` counts as a test run.
+- README: the blanket "hooks fail open" claim is replaced with the actual
+  fail-closed hooks, and documents the two writers of the orchestrating
+  flag the completion gate depends on.
+- Not changed, by decision: atlas-ship, atlas-worktree, and atlas-commit keep
+  model invocation. Other skills compose them, and
+  `disable-model-invocation` would block those callers.
+- Follow-up to the pass above, closing three residual gaps left open by it:
+  - completion_gate's orchestration flag (`atlas_db.mark_orchestrating`) is
+    armed by `prompt_optimizer.arm_orchestration` and two `dispatch_tripwire`
+    call sites, both of which fail-open silently on a DB write error so a
+    genuinely-orchestrating session could go ungated with zero telemetry
+    distinguishing that from a session that legitimately never orchestrated.
+    All three call sites now record one `friction_events` row
+    (category `orchestration_flag_arm_failed`) before falling through to the
+    existing fail-open return; the friction write itself is guarded so a
+    doubly-failing DB still cannot raise out of the hook. Tests force
+    `mark_orchestrating` to raise and assert both the friction row and the
+    unchanged fail-open behavior (`hooks/test_prompt_optimizer.py`,
+    `hooks/test_dispatch_tripwire.py`).
+  - The "verifier and explorer must be dispatched fresh" doctrine (previous
+    entry above) lived only as prose in `agents/verifier.md` /
+    `agents/explorer.md`, with no test pinning it -- a future edit could
+    delete the sentence unnoticed. `hooks/test_atlas_contract.py` gained
+    `test_verifier_and_explorer_refuse_forking`, asserting both files still
+    carry the fresh-dispatch commitment independent of whether
+    `skills/atlas-orchestrate/references/subagent-kit.md` is loaded.
+  - `atlas-frontend` and `atlas-component` SKILL.md `paths:` globs were
+    byte-identical on two entries (`**/*.tsx`, `components/**`). `paths` is a
+    real, if under-documented, SKILL.md frontmatter field that glob-matches
+    edited files to scope auto-activation (agentscamp.com SKILL.md frontmatter
+    reference; anthropics/claude-code#39105). `atlas-component` now scopes to
+    `components/**` only; `atlas-frontend` keeps `**/*.tsx`, `**/*.css`,
+    `**/*.scss` and drops `components/**`. `hooks/test_atlas_contract.py`
+    gained `SkillPathsContract.test_no_two_skills_share_identical_paths_globs`,
+    a fleet-wide regression guard against any two skills sharing a literal
+    paths glob. Scope: this removes the literal-list duplication only. A
+    `.tsx` file under `components/**` still matches both skills' remaining
+    globs and both still co-activate for it -- the field has no documented
+    negation syntax, so full mutual exclusion is not achievable this way, and
+    arguably should not be: a reusable component is legitimately both a
+    design-system concern and an interaction-state concern.
+  - `test_atlas_contract.py`'s `_run_hook` did not isolate
+    `ATLAS_HOOKSTATE_DIR`, unlike `test_completion_gate.py` and
+    `test_nudge.py`, which already did. `CompletionGateContract`'s tests use
+    fixed literal session ids (`no-such-run`, `s-block`, `s-quiet`), and
+    `atlas_hook_guard`'s circuit breaker persists to disk keyed by session id
+    (trips after 5 Stop events within 120s, with events under 2s apart
+    collapsed): enough repeated runs of this suite against a real `~/.atlas`
+    permanently silences `completion_gate.py` for that session id, not just
+    in-process. Reproduced with a shared hookstate dir and >2s spacing
+    between calls (needed since events under `STOP_EVENT_DEDUP_SECONDS`
+    (2s) apart collapse into one) -- a genuine block goes silent after the
+    5th call. Fixed: `_run_hook` now always points `ATLAS_HOOKSTATE_DIR` at
+    a scoped `tempfile.TemporaryDirectory()` per call (or the caller's
+    `hookstate=` dir, via `contextlib.nullcontext`, when reuse across calls
+    is wanted) instead of the developer's real `~/.atlas/hookstate/`. New
+    test `test_run_hook_isolates_the_circuit_breaker_across_calls` proves
+    both directions with no sleeps: pre-seeding a shared dir's state file
+    with `breaker_tripped: true` silences the gate immediately (the real
+    read path `should_run` exercises), then a default call is made with
+    `ATLAS_HOOKSTATE_DIR` forced to that same tripped dir in `os.environ`
+    (`mock.patch.dict`, simulating a stale value inherited from a parent
+    shell/CI env) and must still block -- proving `_run_hook` unconditionally
+    overrides with a fresh dir rather than only setting the key when a
+    caller passes `hookstate=` explicitly. Proven red against exactly that
+    narrower regression (explicit override still respected, only the
+    default path loses isolation) and green against the real fix.
+
+## 2026-09-28 -- ThreatLocker connector gains policy, application, Config Manager, DAC, system-audit, and tag read tools
+
+Marketplace threatlocker-mcp `1.5.0`; node-threatlocker `1.2.0`.
+
+The connector covered computers, computer groups, approval requests, the
+Unified Audit, and organizations; it had no way to examine what is actually
+*configured* -- Application Control policies and applications, Config
+Manager device-configuration policies, or the DAC Health Center's
+storage/network risk findings. Added 11 new read-only tools, all following
+the connector's existing names-not-GUIDs convention:
+
+- `threatlocker_policies_list` / `threatlocker_policies_get` (Application
+  Control policies via `Policy/PolicyGetByParameters` and `PolicyGetById`).
+- `threatlocker_applications_list` / `threatlocker_applications_get`
+  (`Application/ApplicationGetByParameters`, `ApplicationGetById`).
+- `threatlocker_config_manager_configurations_list` /
+  `threatlocker_config_manager_policies_list` (the device-configuration
+  catalog and the Config Manager policies actually enforced per
+  org/group/computer, via `CMConfiguration/CMConfigurationGetWithCategoryByIsEnabled`
+  and `CMPolicy/CMPolicyGetbyParameters`).
+- `threatlocker_dac_results_list` / `threatlocker_dac_item_get` (Defense
+  Against Configurations Health Center risk findings, via
+  `DACAnalysisResult/DACAnalysisResultsGetByParameters` and
+  `DACAnalysisItem/DACAnalysisItemGetById`).
+- `threatlocker_system_audit_search` (the Portal's own administrator/login
+  audit trail via `SystemAudit/SystemAuditGetByParameters` -- distinct from
+  the existing `threatlocker_audit_search`, which covers endpoint Unified
+  Audit events, not portal admin actions).
+- `threatlocker_tags_list` (`Tag/TagGetDowndownOptionsByOrganizationId`).
+- `threatlocker_approvals_get_storage_approval`, added to the existing
+  `approval_requests` domain (`ApprovalRequest/ApprovalRequestGetStorageApprovalById`),
+  mirroring the existing app-control `get_permit_application` tool.
+
+`resolvePolicy` and `resolveApplication` were added to
+`mcp_servers/threatlocker-mcp/src/utils/resolve.ts`, following the existing
+`resolveComputer` pattern exactly (case-insensitive exact-name match via
+`.list({ searchText })`, GUID accepted as-is, fail closed with candidate
+names on zero or several matches), so `threatlocker_policies_get` and
+`threatlocker_applications_get` take a name, not only a GUID.
+
+**Storage Control and Network Control policies are not covered.** Neither
+has a documented list/get endpoint in the ThreatLocker KB or the live,
+unauthenticated swagger fetched from two separate instances
+(`portalapi.b.threatlocker.com` and
+`portalapi.h.threatlocker.com/swagger/public/swagger.json`, 92 paths each,
+identical tag sets: no `NetworkAccessPolicy` or `StoragePolicy` read tag;
+the KB-documented `NetworkAccessPolicyInsert` doesn't appear at all). That
+is weaker evidence than it first looks: the same live swagger also omits
+`Policy/PolicyGetByParameters`, which this connector does ship, because it
+is KB-documented -- the swagger is a known partial subset, not a complete
+catalog, so its silence on Storage/Network Control proves the capability is
+**unprobed, not confirmed absent**. Worded that way (not as a proven
+limitation) in three places (`dac.ts` tool description, `manifest.json`
+`long_description`, README/armada skill doc):
+`threatlocker_dac_results_list` (category `storage-policy` /
+`network-policy`) is the closest available read source for that posture
+today, not a substitute for a real policy listing.
+
+`plugins/atlas/mcp/threatlocker/server.mjs` was rebuilt via `npm run
+bundle:atlas` so the deployed connector actually ships the new tools.
+
+Two items surfaced during this work and were deliberately left untouched,
+each flagged rather than silently fixed: (1) live swagger exposes
+`GET /RingfencePolicy/{ringfencePolicyId}` on both instances, a dedicated
+ringfencing-policy detail-by-id endpoint -- low priority, since
+`ringfencingOptions` is already returned inline by `PolicyGetById`
+(`threatlocker_policies_get`); (2) `src/domains/audit_log.ts`'s `ACTION_ID`
+map uses `deny: 99`, but the live swagger's `ActionLogGetByParametersV2`
+documents the `ActionId` enum as `Permit=1 | Deny=2 | DenyOptionToRequest=3
+| InstallMode=4 | MissingCoreFiles=5 | Ringfenced=6 | AnyDeny=7` -- a
+genuine, unresolved tension against the 2026-09-01 entry below, which
+claims `99` was independently verified live. Worth a dedicated follow-up
+with a working credential; not changed here.
+
+Evidence: `npm run build && npx tsc --noEmit && npm test` clean in both
+`mcp_node/node-threatlocker` (5 files / 23 tests) and
+`mcp_servers/threatlocker-mcp` (2 files / 10 tests, 15 pre-existing
+`@shared/*` rootDir lint errors unchanged). Standalone stdio boot of the
+rebuilt bundle from an empty `/tmp` cwd with a dummy key: `initialize` ->
+`{name: threatlocker-mcp, version: 1.5.0}`; `tools/list` -> 30 tools;
+`tools/call threatlocker_policies_list` -> clean `{code: FORBIDDEN, message:
+"HTTP 440", detail: TOKEN_REVOKED}` envelope, no stack trace, exit 0.
+**Live-data verification was not possible**: the configured production key
+(`plugins/atlas/.env`, prefix `6507...`) returns `HTTP 440 TOKEN_REVOKED` on
+every instance b-h, confirmed directly via a real `threatlocker_status`
+call against the live connector in this session. A second candidate file,
+`~/.config/atlas/atlas.env`, was checked directly (length/prefix compared,
+value never printed): it holds the byte-identical `6507...` key, and a raw
+`curl` auth probe against instance h with it returned the same `HTTP 440
+TOKEN_REVOKED`. Both credential sources are the one dead key. New request
+bodies are therefore verified against the documented/live-swagger DTOs
+only, not exercised against real data; findings.json entry
+`threatlocker-policy-config-audit-expansion-2026-09-28`.
+
+
+## [Unreleased] -- atlas-doctor/gate machinery: decisions survive re-mines, verdicts tell the truth, self-attestation no longer passes law 5
+
+Four defects in atlas-doctor's machinery (one in `atlas_db.py`'s finding
+store, three in `atlas_doctor.py`'s miners and remeasure loop) and one in the
+completion gate, all surfaced by a doctor run fed its first fully enriched
+facet set (264/264).
+
+`upsert_finding` rewrote `status` and `created_at` on every re-mine
+(`COALESCE(excluded...)` across all columns), silently resetting
+accepted/rejected/applied verdicts to open - six decided tool-reliability
+findings were reset mid-run before the fix was noticed. Decision and
+provenance fields are now insert-only; evidence fields still refresh.
+Regression-tested.
+
+`remeasure()` judged every metric lower-is-better, so `verifier_coverage`
+collapsing 0.381 -> 0.062 against a 0.7 target was recorded as verdict
+"improved". Direction is now per metric (`HIGHER_IS_BETTER_METRICS`).
+
+The missing-facets observability miner counted all history (1446 and climbing)
+against a target of 0 that the all-time backlog could never reach even with
+capture working - the real fix (capture hooks no longer silenced on blocked
+Stops) was already live, so the metric read "regressed" forever. It now counts
+only sessions from the last 14 days (`RECENT_WINDOW_DAYS`, shared with the
+friction miner), the window
+where a live capture hole can actually be seen.
+
+The tool-error miner flagged by-design control flow as defects: Write's
+read-before-edit gate rejecting a blind write (23% of 1857 calls), ctx_patch's
+stale-anchor CONFLICT routing the caller through a re-read (47%), WebFetch
+site-side failures (50%). Per-tool threshold overrides keep those out of the
+findings list while a genuine defect on those tools still surfaces above the
+higher bar.
+
+The completion gate's condition (g) accepted any `status:"verified"`
+findings.json entry stamped during the run as implementer pairing credit -
+self-attestation, since the same session that shipped the code could write the
+stamp. Runs shipped with implementer dispatches, zero verifier dispatches, and
+no test command at all while the gate stayed green (average coverage across
+recent orchestrator runs measured 0.06 against the 0.7 threshold). Credit now
+requires an actually executed test-runner command in the run window
+(pytest, vitest, cargo test, ...); a deterministic test remains the cheapest
+valid pairing, which was the point of the doctrine change.
+
+Follow-up (same session): the initial fix matched only `tool_name='Bash'`,
+but this workspace's own CLAUDE.md mandates `lean-ctx`'s `ctx_shell` and
+`context-mode`'s `ctx_execute`/`ctx_batch_execute`/`ctx_execute_file` MCP
+tools for shell commands, reserving native Bash for mutating state and short
+fixed output - so a run that followed that convention and ran pytest through
+`ctx_shell` would have earned no (g) credit at all. `_tests_executed_this_run`
+now also matches `target IN ('lean-ctx.ctx_shell', 'context-mode.ctx_execute',
+'context-mode.ctx_batch_execute', 'context-mode.ctx_execute_file')`, derived
+from `session_ingest.classify()`'s actual `mcp__<server>__<tool>` parsing.
+Two regression tests cover the MCP-shell path directly.
+
+Full suite: 1462 passed, 3 skipped, 75 subtests
+(`python3 -m pytest scripts/ hooks/ -q` from `plugins/atlas/`). Consumers pick
+up the fix on their next marketplace update / plugin reinstall.
+
+Second pass (same day): condition (f)'s commit-scan extension was written, then
+REVERTED after the premise failed checking. It paired a docs path with a commit
+carrying one of the run's own non-docs paths, on the story that runs were being
+blocked for docs they had already committed. Pulling the evidence instead of
+trusting the story: for a session where (f) fired, `run_changed_paths` held no
+docs path AND the commit touching its code (`5619171d`, gwh-firstrespondersapp)
+carried no docs either - a correct block. With the false-positive class
+unreproduced and the extension costing a `git log` per Stop plus path
+normalization, it is rolled back to the dirty-tree cross-check and the finding
+recorded open. The same check killed a claimed win: an initial note said the
+gate's fail-open cascade was resolved per-condition; with `ATLAS_DB` pointed at
+an unusable path the gate still exits silently (rc 0, empty stdout), so the
+2026-07-09 lesson stays open.
+
+Friction measurement was the other real defect found here. The
+recurring-friction miner counted lifetime `friction_events`, so its baselines
+could never be met however well behavior improved - it now shares
+`RECENT_WINDOW_DAYS` (14) with the missing-facets miner. And sampling the
+snippets showed the classifier minting signals from quoted text: fenced code and
+markdown table rows are now stripped before matching, and `CORRECTION`'s `no,?`
+arm was matching the fleet's own "no stop condition was hit" boilerplate.
+Measured on the live corpus before the guard: user_correction 15 -> 9 matching
+rows, the legacy `friction` bucket 5 -> 0, assumption_admission 51 -> 49
+(assumption_admission is genuinely behavioral; user_correction was ~40% noise).
+
+The remaining clusters got measured-cause fixes. context7: of its 19 errored
+calls, 13 lacked the required `query` arg and 6 lacked `libraryName`, none of
+the 19 carried both, and 17 of 25 successes carried both - the call shape
+explains every recorded error, and it is now documented in
+`capability-routing.md`. Credentials: where an installed copy reads them
+(`ATLAS_ENV_FILE=${CLAUDE_PLUGIN_ROOT}/.env`, which resolves into a cache with no
+`.env`) and the two failure shapes that must not be conflated (missing-var /
+NOT CONFIGURED vs keys-present-but-stale 400 Invalid Token / TOKEN_REVOKED) are
+documented in `.env.example` without machine-specific state;
+`anti-rationalization.md` gained rows for after-the-fact assumptions and skipped
+restatement.
+
+Full suite after the second pass: 1467 passed, 3 skipped, 75 subtests (measured on the working tree; the 1469 figure was from the pass-2 gate tests, which were reverted with the (f) work).
+
+Third pass (same session, after the second pass above): three more gaps in
+condition (g), found during review rather than assumed fixed - the review
+comments predate any fix, dispatching a verifier came after. First,
+`hooks.json` runs `completion_gate.py` BEFORE `ingest_session.py` at Stop, so
+`tool_calls` (populated only by ingestion) does not yet hold the CURRENT
+turn's own test-runner command when the gate evaluates - an honest run got
+blocked once, spuriously, self-correcting only on the next Stop cycle.
+`_transcript_test_commands` now scans the raw Stop transcript directly (the
+same technique `_latest_transcript_todos` already used for conditions i/k)
+as a second signal OR'd with the DB query. Independently verified with
+mutation-test proof (agent NarrowMouse); findings.json entry
+`verify-9f9eaa2-completion-gate-transcript-fallback`.
+
+Second, `_TEST_RUNNER_RE` matched any MENTION of a runner name anywhere in a
+command string - `grep -n pytest .`, `ls pytest.ini`, `echo pytest` all
+"earned" credit without running anything, which is exactly the
+self-attestation shape this whole line of fixes exists to close. The regex is
+now anchored to a command-start position (after `;`/`&`/`|`/`&&`/`||`/a JSON
+`"command":`/`"code":` prefix/start-of-string). Independently verified with
+mutation-test proof (agent SpontaneousFish); findings.json entry
+`verify-7e4876b-test-runner-anchor-and-undated-transcript`.
+`completion-gate-mcp-shell-credit-2026-09-24` covers the earlier MCP-shell
+detection follow-up above.
+
+Third, both callers search `json.dumps(...)` output, so an embedded newline in
+a multi-line ctx_execute `code` string is JSON-escaped to the literal two
+characters `\n`, never a real newline byte - the anchor's `\n` alternative
+only matched a real newline byte, so an honest multi-line test run earned no
+credit. Added a literal `\\n` alternative. Caught a vacuous test in the same
+pass: the first version of the regression test called a helper that wrote its
+own unrelated matching row, so the test passed even with the fix reverted;
+fixed by isolating the row under test, then mutation-tested (fails without the
+fix, passes with it). Independently verified with mutation-test proof
+(agent ResponsibleRaccoon, including a mutation that re-introduced the
+confounding call to reproduce the vacuous-test shape and confirm it would
+wrongly pass); findings.json entry `verify-3bbce5a-test-runner-regex`.
+
+Full suite after the third pass: 1471 passed, 3 skipped, 75 subtests
+(`python3 -m pytest scripts/ hooks/ -q` from `plugins/atlas/`; a fresh
+detached-worktree run by the verifier showed 1469 passed, 5 skipped -
+benign environment-dependent fixture-skip variance, no failures either way).
+
+## [Unreleased] -- mcp-gateway: one Entra-authenticated remote connector for every vendor (IN PROGRESS, not verified)
+
+New package `mcp_servers/mcp-gateway/`: a single Streamable HTTP endpoint for
+Claude Enterprise custom connectors. Entra ID is the authorization server
+directly; the gateway only serves RFC 9728 protected resource metadata and
+validates v2 access tokens. Each vendor bundle under `plugins/atlas/mcp/` runs
+as a stdio child with only its own env prefix. Per-vendor app roles
+(`<Vendor>.Read` / `<Vendor>.Write`, 26 total) filter `tools/list` and gate
+`tools/call`; tools without `readOnlyHint: true` require Write. Every call is
+audited (oid, upn, tool, decision), never arguments or results.
+
+Azure (tenant Henssler Financial, RG `gwh-mcp-gateway-rg`): Entra app
+"Henssler MCP Gateway" (appId `c6e1bf1e-2520-4f1d-b329-8f0f05de34a6`),
+identifier URI `https://mcp.henssler.com/mcp`, v2 tokens, scope
+`access_as_user`, redirect `https://claude.ai/api/mcp/auth_callback`, user
+assignment required, admin consent granted. Hosting (ACR, Key Vault, Container
+Apps) is being provisioned. Design and runbook: `docs/mcp-gateway-design.md`.
+
+Status: gateway build/tests and deployment not yet verified. This entry is
+updated when they are.
+
+## [Unreleased] -- the boot harness the checklist required, which nothing had ever written
+
+`AGENTS.md:95` makes `node test-mcp-tools.mjs <svc>` a mandatory propagation
+check ("Boot test passes without tool-count regression"), `AGENTS.md:94` requires
+its probes to still target tools that exist, and `AGENTS.md:77` lists the harness
+itself as part of the product surface. The file did not exist. `.gitignore:154`
+even carried an explicit `!test-mcp-tools.mjs` negation to keep it tracked - an
+allowlist entry for a file nothing had ever created. Every connector change to
+date passed that gate by never being able to run it.
+
+It exists now: stdlib only, no test framework. It launches each connector exactly
+as `plugins/atlas/.mcp.json` declares it - the Node connectors at
+`plugins/atlas/mcp/<name>/server.mjs` over MCP stdio, `falcon` through its
+`uv run --project plugins/atlas/mcp/falcon ...` entry - with placeholder
+credentials built from scratch (`PATH`/`HOME` only, `ATLAS_ENV_FILE` pointed at
+a nonexistent path), so no configured vendor secret in the parent environment
+can reach a server and no probe can touch a live appliance. Four checks per
+connector: **BOOT** (the bundle answers `initialize` + `tools/list`), **FLOOR**
+(tool count has not regressed below the observed baseline recorded in the file),
+**AGREEMENT** (any tool whose description starts `DESTRUCTIVE:` or
+`VISIBLE-TO-OTHERS:` carries `readOnlyHint: false`, and no tool is missing
+`readOnlyHint` entirely), and **SHAPE** (non-empty description, object
+`inputSchema`). `node test-mcp-tools.mjs` probes every connector,
+`node test-mcp-tools.mjs <svc>` probes one, `--list` prints the known names, and
+an unknown name exits 2 with the valid names listed.
+
+**The first run found a live mislabel.** `ninjaone_devices_service_control` -
+"DESTRUCTIVE: Start, stop, pause, or restart a Windows service on a device
+(POST /v2/device/{id}/windows-service/{serviceId}/control). Stopping a service
+can take a production application offline" - shipped `readOnlyHint: true`.
+`readOnlyHint` is the flag a client reads to decide it may run a tool without
+asking the operator first, so the prose warned a human while the machine-readable
+half invited unattended execution of the thing the prose warns about.
+
+Root cause: nine connectors (auvik, blumira, cipp, kaseya-spanning-backup,
+knowbe4, ninjaone, paylocity, threatlocker, vanta) inferred MCP annotations from
+a regex over the tool *name* and returned `"read"` for any name no table matched.
+`service_control` matched nothing - `DESTRUCTIVE_PATTERNS` has `restart`,
+`reboot`, `reset` and `delete` entries but no `control` - so a tool that can take
+production offline was classified as a read. The other eight connectors' mutating
+tools passed only because their names happened to match a pattern. A default of
+"read" fails toward unattended execution, which is the wrong direction for a
+default to fail in.
+
+Fixed across all nine plus the `mcp_servers/_shared/annotate-tool.ts` master they
+were copied from: the `DESTRUCTIVE:` / `VISIBLE-TO-OTHERS:` description marker is
+now authoritative, `classifyTool()` returns `ToolClass | undefined` with no
+default, an unmatched name fails closed to mutating and is named on stderr
+(stdout is the JSON-RPC channel), and 25 names that name-matching got wrong or
+never matched are declared explicitly in per-connector `CLASS_OVERRIDES` tables
+(auvik 6, blumira 2, knowbe4 7, ninjaone 9, threatlocker 1). Fleet safety-signal
+mismatches went 1 -> 0. `grep -rn 'return "read";' mcp_servers --include=*.ts`
+still returns 10 hits and every one is guarded by an actual
+`matchesAny(name, READ_PATTERNS)` match; the no-match outcome is
+`return undefined;`.
+
+**Then the second-order question: what can the AGREEMENT check not catch?** It
+compares prose against annotations, so it only ever catches *disagreement*. A
+connector that marks nothing as mutating agrees with itself and passes
+vacuously - which is exactly what auvik, connectwise, knowbe4, paylocity and
+vanta do. The harness refuses to hide that: those rows read
+`ok (no prose effect markers - agreement check vacuous here)` and never a bare
+`ok` (`test-mcp-tools.mjs:302`). `.atlas/.run/vacuous-check.mjs` probes the
+blind spot from the other side: tools that *look* like writes (an HTTP verb in
+the description, a mutating verb in the name) while carrying
+`readOnlyHint: true` and no effect marker. Heuristic by design - it produces candidates for review, not verdicts.
+Of its four candidates, three were false positives (`ninjaone_queries_run` is a
+GET, `ninjaone_devices_os_patch_installs` is GET patch history,
+`threatlocker_organizations_for_move_computers` lists organizations) and one was
+real: `panos_keygen` mints a long-lived PAN-OS API key into the transcript while
+annotated read-only.
+
+`panos_keygen` gets a fourth annotation class rather than being forced into an
+existing one, because neither was honest: read-only would say it is safe to run
+unattended when its output is credential material, and destructive would
+overstate a call that destroys nothing.
+`CREDENTIAL_ISSUING_ANNOTATIONS` / `credentialIssuingTool()` is
+`readOnlyHint: false` (issuance is a real side effect),
+`destructiveHint: false` (nothing on the appliance is destroyed),
+`idempotentHint: true` (PAN-OS returns the same key for the same credentials)
+and `openWorldHint: true`. It carries no `DESTRUCTIVE:` prefix: it is not
+destructive, and its description already warns about transcript exposure. The
+boot probe's former one-name allowlist became a name -> exact-four-flags pin for
+`panos_op` and `panos_keygen`, so a pinned name cannot drift on its other flags;
+both directions were proven by temporarily reverting each.
+
+As shipped, verified 2026-09-17:
+
+- `node test-mcp-tools.mjs` -> exit 0, PASS: 348 tools across 11 probed
+  connectors, 0 safety-signal mismatches.
+- `falcon` reports SKIP: it is the Python connector and ships no `server.mjs`
+  bundle to boot.
+- `blumira` reports `GATED (2 tools)`: `blumira_navigate` + `blumira_status` are
+  the whole credential-less surface because its remaining tools register only
+  after a `blumira_navigate` domain selection. Recorded as gated rather than
+  passing cleanly on 2 tools, since a vacuous pass is the failure mode this whole
+  entry is about.
+- `cd mcp_servers/panos-mcp && npm run test:boot` -> PROBE PASS, annotation
+  classes `read=26, mutating=32, unprefixed-mutating=2` (`panos_op` and
+  `panos_keygen`) = 60.
+
+The contract is written down at `docs/standards/connector-safety-signals.md`,
+including the vacuous-pass limitation, so the next connector is held to it
+without re-deriving it from the code.
+
+## [Unreleased] -- the PAN-OS connector
+
+New vendor: `panos`, covering Palo Alto firewalls and Panorama. 60 tools across
+eleven domains, sourced from the vendor's own `PAN-OS XML API` postman
+collection (71 requests) rather than from recollection. `mcp_node/node-panos`
+holds the client; `mcp_servers/panos-mcp` holds the server; the bundle lands at
+`plugins/atlas/mcp/panos/server.mjs` and is registered in `.mcp.json` with seven
+`CFG_PANOS_*` values.
+
+The design is written down first, in `docs/panos-connector-design.md`, because
+five agents built against it concurrently and a contract in prose is cheaper
+than a merge conflict in code.
+
+Three decisions are worth reading before touching this connector.
+
+**PAN-OS reports failure with HTTP 200.** An authorization failure, a bad xpath,
+and a malformed element all come back `200 OK` carrying
+`<response status="error" code="403">`. A client that checks `res.ok` calls every
+one of those a success. `PanosApiError` is therefore raised off the parsed
+`status` attribute and never off the HTTP status, and that is the invariant the
+test file exists to hold.
+
+**Objects and policies go over the JSON REST API, not xpath strings.** A model
+composing an xpath from memory writes to the wrong node silently; the REST API
+is schema'd per resource and rejects a bad shape. Where an xpath is unavoidable,
+`action=complete` ships as a first-class tool so the model can enumerate a node's
+valid children, and every xpath-taking write tool's description ends by telling
+it to ground the path first. `panos_policies_move` is the one policy tool still
+on XML: Palo Alto publishes no REST move endpoint, so the connector builds the
+rule's xpath itself from validated arguments, which keeps the no-invented-xpath
+rule intact.
+
+**The API key travels in an `X-PAN-KEY` header and `type=keygen` is a POST.** The
+postman collection shows both as query-string GETs. A key in a URL lands in proxy
+logs, access logs and shell history, which is the wrong answer under the
+Safeguards Rule and Reg S-P, so the collection is not copied here.
+
+Writes touch the candidate config only and never commit; `panos_commit` is a
+separate, explicit call. 32 of the 60 tools carry the `DESTRUCTIVE:` prefix and
+`panos_system_reboot` additionally carries `VISIBLE-TO-OTHERS:`, since it drops
+traffic for every user behind the firewall.
+
+`PANOS_HOST` is required and has no default, which is a deliberate exception to
+the base-URL rule in `AGENTS.md`: PAN-OS publishes no API base URL because the
+base URL is the appliance. The manifest says so rather than leaving a future
+reader to assume the invariant broke by accident.
+
+`tests/boot-probe.mjs` (`npm run test:boot`) drives the bundled server over MCP
+stdio and asserts the progressive-disclosure gate in all three credential states,
+that unresolved `${user_config.*}` placeholders degrade to the no-credential
+state, and that the destructive prefixes are actually present on the tools that
+mutate. It stands in for `test-mcp-tools.mjs`, which `AGENTS.md` names as the
+boot harness but which is absent from this tree.
+
+Not shipped: `type=user-id` (IP-to-user mapping, dynamic address and user
+groups).
+
+**Then it was run against a real firewall, and four defects fell out.** Until
+2026-09-17 no call in this connector had touched hardware; every request shape
+was grounded in the collection and the vendor docs, which turns out to be a
+different claim than "it works". The appliance: a PA-460 on PAN-OS 11.1.13-h6, a
+standalone firewall with `multi-vsys: off` - not Panorama - serving its
+self-signed factory certificate, so `PANOS_VERIFY_TLS=false` was the documented
+exception rather than a shortcut. It was driven through the shipped bundle
+exactly as `plugins/atlas/.mcp.json` launches it, not through `dist/` and not by
+calling the client library directly. `tools/list` returned 60 tools and 14 of 14
+read-only steps passed, `panos_config_complete` among them, which matters because
+every write tool's description tells the model to ground its xpath with that
+tool. The HTTP-200-with-`status="error"` path this connector is designed around
+is now confirmed on real firmware and not only on captured shapes. Redacted
+evidence: `.atlas/evidence/2026-09-17-panos-live-validation.md`.
+
+**The load-bearing find was XML numeric coercion.** `fast-xml-parser` ran with
+its default value parsing, so `<serial>023009014025</serial>` came back as the
+*number* `23009014025`. Every Panorama-routed call addresses a firewall by
+`target=<serial>`; a serial read from the appliance and passed straight back as
+`target` would have addressed nothing, silently, on whatever device the truncated
+string did or did not match. `av-version` and `family` were coerced the same way.
+The fix is two options - `parseTagValue: false`, `parseAttributeValue: false` -
+and three failing-first guards, taking `mcp_node/node-panos` from 6 tests to 9.
+No mock-only suite was ever going to catch it: a fixture author writes the serial
+they already expect to read back, so the coercion only shows up when the string
+comes off real wire. The parser options are now contract in
+`docs/panos-connector-design.md`, with the reason attached, because the next
+person to "clean up" the parser config needs to know what they would be breaking.
+
+The other three were smaller and all in the same family - the connector knew
+something and did not say it.
+
+`panos_devices_list` answered PAN-OS code 17 with "Check PANOS_HOST and
+PANOS_API_KEY are set correctly", in a session where thirteen other calls
+succeeded on those same credentials. `show devices` is Panorama-only; on a
+standalone firewall code 17 is a topology fact, and sending an operator to
+rotate a working credential is the worst available answer. A bad xpath, meanwhile,
+produced a bare "PAN-OS API error" with the appliance's own `<msg>` thrown away:
+`PanosApiError` carries `httpStatus`, not `.status`, so the shared classifier fell
+through to its plain-`Error` branch and dropped `responseText`. Both are fixed by
+one new module, `mcp_servers/panos-mcp/src/utils/panos-error.ts`, mapping vendor
+code -> vendor meaning -> failure class -> canonical code -> hint. 30 call sites
+across the ten domain modules plus one in `src/server.ts` report through it, and
+`src/domains/_helpers.ts` pointedly does not re-export the generic
+`toolErrorFromCatch`, so a domain cannot fall back to a classifier that cannot
+read a `PanosApiError`. The rule the incident produced is now written down: only
+the credential failure class may name `PANOS_API_KEY` or `panos_keygen`, and
+every other class says the request authenticated successfully.
+
+Fourth, log-query and report job ids turn out to live in a namespace of their
+own. `panos_logs_query` and `panos_report_*` return ids that are not in
+`<show><jobs>`: `panos_job_status` on one answers code 7, and so does a
+hand-built `<show><jobs><id>NNN</id></jobs></show>`, which is what proves it is
+PAN-OS behavior and not bad command construction here. `panos_job_status` on a
+commit job is fine and returned `FIN`/100/`OK` live. The descriptions now route a
+log id to `panos_logs_retrieve` and a report id to `panos_report_get`, and both
+job tools say they see only job-table jobs. And `panos_status`, which had been
+echoing a prefix of the API key into the transcript, now reports it as
+`configured (<n> chars)`, with the boot probe failing on any 6-or-more-character
+prefix of the key appearing in that output.
+
+**A fifth defect was in the safety signals themselves, and it was the one a
+client could act on.** Every mutating tool carried `DESTRUCTIVE:` in its
+description, as the design contract required - and simultaneously shipped
+`readOnlyHint: true` in its MCP annotations, which is the flag a client reads to
+decide it may run something without asking. The prose said do not do this
+unattended; the machine-readable half said help yourself. The cause was
+inference: annotations came from a regex classifier over the tool's *name*, and a
+name-pattern classifier has to default somewhere. It defaulted to "read", so
+every mutating tool whose name it did not match - `panos_commit` and
+`panos_software_install` among those the deleted code's own comment names -
+inherited the safe answer.
+
+Name-pattern classification is gone rather than patched, because the defect is
+structural: a classifier that guesses from names will keep being wrong for names
+nobody anticipated, and its failure mode is silent and biased toward unsafe. A
+tool now declares its effect class once, at its declaration site, through one of
+`readOnlyTool()` / `destructiveTool()` / `unknownEffectTool()` in
+`src/domains/_helpers.ts`, and that single decision emits both the `DESTRUCTIVE: `
+prefix a human reads and the `readOnlyHint` / `destructiveHint` /
+`idempotentHint` flags a client automates on - so the two cannot disagree again,
+because there is only one of them. A tool that goes through none of the three
+fails closed to mutating, never to read-only, and `annotate()` names it on stderr
+(stdout is the JSON-RPC channel, so a complaint cannot go there).
+
+The split is 27 read, 32 mutating, 1 passthrough - 60 exactly, nothing
+unclassified. The passthrough is `panos_op`, whose `<cmd>` is arbitrary XML: it
+can show the clock or reboot the appliance, so its effect is not knowable at
+declaration time. It takes the mutating annotations and keeps its own unprefixed
+description, since a blanket `DESTRUCTIVE: ` would claim every op command mutates
+while its description already spells out the hazard. Tool counts are otherwise
+unchanged: 60 with a key, 32 `DESTRUCTIVE:`-prefixed, 2 with no credentials, 3 in
+the bootstrap state. Mutating tools also drop `idempotentHint` from true to
+false, which was simply wrong before: a second commit pushes whatever landed in
+the candidate config meanwhile, and a second install or reboot takes the box down
+again, so a client must not treat a retry as free.
+
+`mcp_servers/panos-mcp` is `0.2.0` for all of this: error text, several tool
+descriptions, the safety annotations, and `panos_status` output are user-visible
+and all changed, with no tool removed or renamed.
+
+**What is still unproven is stated as unproven.** Every mutating tool - config
+set/edit/delete/rename/clone/move/override, every REST create/update/delete,
+commit, commit_all, content and software download/install, system reboot,
+certificate generate/renew/revoke/import, GlobalProtect disconnect - was
+deliberately never called. The appliance is the user's live production firewall,
+the user was away from keyboard, and the safety contract requires approval at the
+point of risk for each of those calls. Sixty tools exist; the fourteen read paths
+exercised above are the ones with evidence behind them.
+
+## [6.4.0] - 2026-09-17 -- the statusline could never be where it was asked to be
+
+atlas `6.4.0`.
+
+The ATLAS statusline segment is removed. Not reworked, not relocated: deleted.
+
+It was built to put the durable todo board at the prompt input. Claude Code
+renders `statusLine` *below* the prompt input, and what was asked for was the
+list *above* it. That single fact was never checked, and three releases went into
+the segment's plumbing instead: `5.27.2` rebuilt it as a real list after the
+one-line counter was rejected, `6.0.1` promoted it to "the plan surface" and took
+a major bump for it, `6.0.2` found the documented wiring drained its own stdin.
+Each was a correct fix to a real defect in a thing that could not satisfy its own
+requirement.
+
+Gone with it: `scripts/atlas_statusline.py` and its renderer tests, the
+`~/.atlas/atlas_statusline.py` shim `session_boot.py` re-synced on every boot, the
+`StatuslineContract` and
+`DocsMatchCodeContract.test_readme_statusline_snippet_captures_stdin` contract
+cases, the README section with its `statusLine` JSON, and the output-style
+paragraph telling the orchestrator that the segment was what the user reads. The
+`ATLAS_STATUSLINE` switch no longer exists because there is nothing to switch off.
+
+The board itself is unchanged and is still the plan record:
+`<project>/.atlas/.run/todos.json`, `atlas_todo.py`, `todo_capture.py`, and the
+dashboard Work tab. The surface the orchestrator owes the user is the one-line
+`LEDGER` under the status header.
+
+No replacement above-the-input surface ships in this release. Claude Code
+documents no way to pin content above the prompt input, so atlas claims none. The
+user's own `statusLine` block and their `~/.atlas/atlas_statusline.py` shim were
+removed from their machine at their explicit request, outside plugin source.
+
+## [6.3.0] - 2026-09-15 -- conformance that fixes itself, in any repo
+
+Marketplace `3.20.0`; atlas `6.3.0`.
+
+6.2.0 could *detect* a non-conformant docs tree. It could not repair one, and
+the repair is the part that matters when atlas is dropped into a repo it has
+never seen.
+
+`scripts/lint_docs_names.py` is now the same tool in three modes, with no
+per-project configuration: changed-files (the gate), `--all --structure` (whole
+tree plus missing durable subfolders), and `--all --fix` (rename, then rewrite
+every reference). The fixer never invents a date -- it prefers the date already
+embedded in the name, because a name like `atlas-harden-2026-07-07` is the
+author's own claim about what the artifact is *about*, which beats whenever the
+file happened to land in git; then the first-commit date; then the mtime.
+Renames go through `git mv` so history follows the file. References are rewritten
+tree-wide afterwards -- full path, bare filename, bare stem, longest pattern
+first so a path is never corrupted by a name substitution -- across markdown,
+code and comments alike, because a rename that leaves dangling references has
+traded one defect for a worse one.
+
+Structure is repaired rather than reported. `session_boot.py` creates any missing
+durable `docs/` subfolder at SessionStart, so the curator always has somewhere to
+write. That split is deliberate: an empty scaffolder-owned directory is
+mechanical and safe, so blocking on it would spend a gate block and a model turn
+to avoid a `mkdir`, while anything needing judgement -- a file's name, a
+CHANGELOG entry -- stays a hard block. It fires only when `docs/` already exists;
+onboarding a project that never asked for one belongs to atlas-setup, and boot
+says so in one line instead of scaffolding behind the user's back.
+`ATLAS_DOCS_REPAIR=off` disables it.
+
+Two things went wrong and are worth recording. A hard gate condition (m) for
+missing subfolders was written, measured, and removed: it failed 67 existing gate
+tests, because every fixture builds a bare `docs/` dir and any project with a
+minimal tree would have been wedged on its first Stop. And the first real `--fix`
+run rewrote the fixer's *own* fixtures -- they cite example artifact names as
+documentation -- inverting one assertion to
+`is_dated_name("<compliant name>") is False` and failing three of its own tests.
+The rewriter now excludes its own source and tests: a fixer must never rewrite
+its own definition of the thing it fixes.
+
+Migration is complete. The three frozen audit hubs are date-first
+(`2026-06-29-atlas-cohesion`, `2026-07-07-atlas-harden`, `2026-07-17-atlas-audit`):
+3 renames, references rewritten in 12 files, and **0** occurrences of any old
+name remain outside the tool's own fixtures. Whole-tree recheck reports
+`docs structure OK` and `docs naming OK (47 path(s) checked, whole tree)`. The
+CHANGELOGs were included in the rewrite on purpose -- a resolvable link was
+judged worth more than the exact historical spelling of a path, and every
+rewritten file is listed in the command output so the change is auditable.
+
+Verified live: a project with a bare `docs/` gained all 7 subfolders on boot and
+was silent on the second run; a project with no `docs/` got the notice and no
+directory. 1430 tests pass; 12 new.
+
+## [6.2.0] - 2026-09-15 -- docs the gate could not actually see
+
+Marketplace `3.19.0`; atlas `6.2.0`.
+
+Three separate reasons the docs tree went unmaintained, none of which was the
+part anyone suspected.
+
+**The naming convention contradicted itself in three places.** `docs-ssot.md`
+specified `docs/plans/<task-slug>.md` while the scaffolded
+`templates/plans/README.md` specified `<YYYY-MM-DD>-<slug>.md`; audits were
+specified date-LAST (`atlas-<scope>-<YYYY-MM-DD>/`); and the decisions and specs
+templates specified undated names. With no single answer and nothing checking,
+the tree filled with leading sequence numbers and trailing dates that sort by
+subject instead of by time. `docs-ssot.md` now states one rule with an explicit
+split: an artifact recording an **event** (plan, spec, lesson, decision, audit,
+finding, evidence) is `<YYYY-MM-DD>-<slug>`; one describing **living state**
+(architecture, features, wiki) is a bare slug, because it is revised in place
+and a date would lie. `scripts/lint_docs_names.py` enforces it as gate
+condition (l), run-scoped via git so historical names never wedge a run. A
+sequence number after the date is still fine, which is how a same-day ordered
+set keeps its order.
+
+**Condition (f) was satisfiable by touching any single document.**
+`docs_drift()` returned "no drift" the moment any `docs/` path appeared in the
+diff, so a one-line edit to a `docs/architecture/` scratch file kept the gate
+quiet indefinitely while the CHANGELOG, the ROADMAP and the README rotted. The
+question it needs to answer is whether the *record of this change* was written,
+and `docs-ssot.md` already named the CHANGELOG for exactly that. (f) now
+requires `docs/CHANGELOG.md` specifically. A docs-only run is still never
+drift.
+
+**Nothing verified that a documented number was true.** `DocsMatchCodeContract`
+checked that the README listed every wired hook, but no count anywhere was
+checked against disk, so any skill or agent added without touching the
+manifests left atlas advertising a wrong figure. Three tests now derive
+skills/agents/hook-programs/bindings from the filesystem and `hooks.json` and
+assert `plugin.json`, the plugin README and `marketplace.json` agree. Today's
+21/12/15/19 are correct; from here drift fails a test instead of rotting.
+
+What is still *not* automatic, and cannot be made so by a hook: hooks are shell
+programs that advise or block. They cannot dispatch a subagent or author prose.
+`atlas:docs-curator` appears in three hooks only as a string inside a message --
+no code path invokes it, and none can. "Automatic docs maintenance" has always
+meant "the gate blocks and the model is told to dispatch". What is now genuinely
+automatic is the verification: (f) catches an unwritten record, (l) catches a
+misnamed one, and the contract tests catch a false count.
+
+Migration: `docs/plans/*` and `docs/decisions/*` renamed date-first with
+`git mv`, dates taken from each file's first commit rather than invented. The
+three frozen `docs/audits/` hubs were left alone -- they carry many internal
+cross-references and renaming an archived record rewrites history for nothing;
+(l) is run-scoped so they never block. Verified live: (f) blocks a run shipping
+`src/app.py` with only `docs/architecture/notes.md` and passes once the
+CHANGELOG is in the diff; (l) blocks both `00-MASTER-plan.md` and
+`packer-consolidation-2026-09-15.md` and passes `2026-09-15-packer-consolidation.md`.
+25 permanent tests.
+
+## [6.1.0] - 2026-09-15 -- the contracts nothing was checking
+
+Marketplace `3.18.0`; atlas `6.1.0`.
+
+Two of atlas's load-bearing rules were prose only, and both failed in the same
+direction: the orchestrator was *told* to plan and *told* to keep dispatches
+small, and nothing verified either.
+
+The todo list was never mandatory. Completion gate condition (i) enforced
+*draining* a list and said so in its own docstring; an absent list has zero
+open items, so a run that never planned anything passed it trivially. Every
+surface downstream - the widget, the statusline, the durable board, the
+dashboard Work tab - was wired correctly and simply had nothing to render. The
+preceding three releases chased the surfaces (`6.0.1` the statusline,
+`6.0.2` the stdin capture, `5.27.2` the model gate and
+`CLAUDE_CODE_ENABLE_TODO_TOOLS`) without touching the reason the board was
+empty. New condition (k) blocks a code-shipping run when no plan surface ever
+carried a single item: no transcript `TodoWrite` call, no non-manual board item
+for the session, no `LEDGER` line. Manual items are a human's notes and never
+satisfy it. `_open_todos` moved onto a `_latest_transcript_todos` helper so
+"drained a list" and "never made one" are distinguishable at all, and
+`_has_ledger_line` reads presence rather than arithmetic, since a drained `3/3`
+still proves a plan existed.
+
+Dispatch size was unbounded. `subagent-kit.md` has specified GOAL, DELIVERABLE,
+SUCCESS CRITERIA, OUT OF SCOPE and STOP CONDITIONS for versions; the tripwire
+checked only that a dispatch named its code-nav tools. A subagent with no
+DELIVERABLE has nothing to stop at, with no OUT OF SCOPE it wanders into
+neighbouring code, and with no STOP CONDITIONS it pushes through a blocker
+instead of reporting back - which is how single dispatches reached 30-60
+minutes. The deny tier now rejects an `atlas:*` dispatch missing any of the five
+blocks (naming which), and separately rejects one carrying more than a single
+line-anchored `GOAL:`, because a wave compressed into one context is the
+orchestrator's own sprawl moved a level down rather than delegated. Forks and
+non-`atlas:*` agents are exempt; `ATLAS_TRIPWIRE_HARD=off` still disables it.
+
+One real bug fell out of the new fixtures: `atlas_todo.mirror` rebuilt the board
+as `manual + fresh` and so deleted every non-manual item owned by a *different*
+session. Concurrent terminals share one project board, so a `TodoWrite` mirror
+in one session destroyed a parallel run's plan and any carried-over work. Now
+`manual + others + fresh`.
+
+Verified live, not just in unit tests: an unbounded dispatch and a two-GOAL
+dispatch both denied as subprocesses while a compliant one passed silently; the
+gate blocked a code-shipping run with an empty board and passed the same run
+once one completed item was mirrored onto it. 9 permanent tests. Pre-existing
+gate fixtures were fixed at the fixture level (a shared `_seed_plan` helper)
+rather than re-pinned to the new text, so each still tests the condition it
+names.
+
+## [6.0.2] - 2026-09-15 -- the wiring drained its own payload
+
+Marketplace `3.17.1`; atlas `6.0.2`.
+
+6.0.1 made the statusline the surface the plan reaches the user on, then
+documented a `statusLine` snippet that could not work next to an existing
+statusline script. Claude Code pipes the status JSON to the command once. Stdin
+is single-use, so a first segment doing `input=$(cat)` consumes it and every
+later segment reads empty. `atlas_statusline.py` is fail-open by design: empty
+payload, exit 0, no output. The board was full and the prompt showed nothing,
+which reads as a broken board rather than a broken pipe.
+
+Measured on a live four-item board: wired per 6.0.1, the `statusLine` command
+printed the project line and the context-mode line and no ATLAS block. Capturing
+the payload once (`input=$(cat)`) and piping a copy to each segment printed
+`✓ ATLAS Todos 4/4` with all four items. The same capture also restored the
+payload to `context-mode statusline`, which had been reading empty for the same
+reason.
+
+The README now carries the complete `statusLine` JSON, names the trap, and gives
+a one-line way to test the renderer on its own. `test_atlas_contract.py` gains
+`DocsMatchCodeContract.test_readme_statusline_snippet_captures_stdin`, which
+fails if that wiring ever loses its stdin capture. No runtime code changed.
+
+## [6.0.1] - 2026-09-15 -- the statusline is the plan surface
+
+Marketplace `3.17.0`; atlas `6.0.1`.
+
+5.27.2 attributed the missing todo list to gated model families and pointed at
+`CLAUDE_CODE_ENABLE_TODO_TOOLS=1`. A user reported that setting it changed
+nothing, and this session found out why: the env var clears one of three
+conditions, not all of them.
+
+With `CLAUDE_CODE_ENABLE_TODO_TOOLS=true` and `ENABLE_TOOL_SEARCH=true` both set
+in `~/.claude/settings.json`, `TodoWrite` was present in the session but
+*deferred* behind `ToolSearch`, so its schema had to be fetched before it could
+be called at all. Fetching it and calling it then produced no visible checklist,
+which the user confirmed: the widget draws inline with the tool call, and focus
+mode suppresses tool calls. So on a focus-mode session the native widget cannot
+be made to appear by configuration at all.
+
+`atlas_statusline.py` is unchanged from 5.27.2 (same list format, same 8-item
+cap, same fail-open, same `ATLAS_STATUSLINE=off`). What changed is its standing:
+the docstring, the README section, and the output style now describe all three
+conditions, the output style tells the orchestrator to open with
+`ToolSearch("select:TodoWrite")` instead of concluding the tool is gone, and it
+forbids treating a `TodoWrite` call as having communicated anything to the user.
+Major bump because the `statusLine` block is no longer optional garnish, it is
+the documented way the plan reaches the reader.
+
+Branch hygiene: `fix/atlas-stop-hook-loop` deleted locally after confirming its
+tip is an ancestor of `main` (`git merge-base --is-ancestor`, exit 0); the only
+worktree is the main checkout.
+
+## [5.27.2] - 2026-09-09 -- statusline segment rebuilt as a real todo list
+
+Marketplace `3.16.2`; atlas `5.27.2`.
+
+The user rejected the 5.27.0 segment on two grounds, both fair: a one-line
+counter is not a todo list, and it looked bad. They also correctly noted the
+statusline modification itself had never been requested; the wiring note below
+is the only change outside plugin source. `atlas_statusline.py` now renders the
+durable board as a compact ATLAS-branded list: a `⎇ ATLAS Todos n/m done`
+header (a green `✓ ATLAS Todos` variant when everything is complete), then one
+line per item - `✓` completed in green, `❯` in progress in cyan, `○` pending
+dim - capped at 8 items with a `+ N more` line. The user's
+`statusline-command.sh` call changed from a single-line `%b` print to a
+multi-line-safe `%s` print. Session preference, whole-board fallback (carried
+items still show), fail-open on missing boards, and `ATLAS_STATUSLINE=off` are
+unchanged. Verified live against the repo's real board:
+
+```
+⎇ ATLAS Todos 0/1 done
+  ❯ prove ATLAS statusline renders at the prompt
+```
+
+9 renderer tests (`test_atlas_statusline.py` rewritten to the list contract,
+including the 8-item cap and `+ N more`).
+
+Correction to the 5.27.0 entry below: its root-cause claim (auto mode drops
+`TodoWrite`) is wrong. The documented mechanism is the model gate: Opus 4.8+/Sonnet
+5/Fable 5+ sessions lack `TodoWrite` and the task tools unless
+`CLAUDE_CODE_ENABLE_TODO_TOOLS=1` (docs: tools-reference), and the env var
+restores them on every model and provider. Applied to the user's `~/.zshrc`
+with their approval (2026-09-09); the native todo list returns on their next
+`claude` launch, and atlas's board mirrors it via `todo_capture.py`. The
+native widget has no branding surface (docs: interactive-mode), so the
+ATLAS-branded list remains a statusline choice the user wires themselves.
+
+## [5.27.1] - 2026-09-09 -- sentinel root resolution (live-install test pass)
+
+Marketplace `3.16.1`; atlas `5.27.1`.
+
+The user reinstalled (cache now runs 5.27.0) and asked for a live-install test
+pass. All three `InstalledParityContract` tests ran and passed for the first
+time (`test_installed_version_matches_manifest`,
+`test_installed_hook_files_match_repo`, `test_installed_hook_bindings_match_repo`),
+the shim at `~/.atlas/atlas_statusline.py` was byte-identical to source, and the
+statusline rendered the board. The pass also caught a real defect: this session
+had been opened with cwd inside `plugins/atlas/`, so hook payloads carried that
+subdirectory as cwd, and `atlas_db._write_orchestration_sentinel` wrote the
+advisory `atlas-orchestrate.active` sentinel at the raw cwd, re-growing a
+`.atlas/.run/` tree inside product source (the exact contamination 5.26.0
+purged). The stray `.atlas` marker then made `atlas_todo.find_root()` stop
+there, so an `atlas_todo.py set` run from that cwd wrote the durable todo board
+into the plugin source tree and the statusline (reading the project root)
+showed nothing. Fix: the sentinel writer walks up to the nearest project marker
+(.git, .atlas, docs) before writing, matching `find_root`'s markers, so runtime
+state always lands at the project root. Verified: failing test first
+(`test_sentinel_walks_up_to_project_root`), then green with
+`test_sentinel_stays_at_cwd_without_any_marker` guarding the fail-open fallback;
+suites 650 scripts OK + 86 hooks OK; board relocated to the repo root and the
+statusline renders it: `ATLAS 1/2 | now: prove ATLAS statusline renders at the
+prompt | 1 left`.
+
+## [5.27.0] - 2026-09-09 -- ATLAS statusline: the todo board as a static line at the prompt
+
+Marketplace `3.16.0`; atlas `5.27.0`.
+
+The user ran atlas after reinstall and saw no todo list in the terminal: their
+`settings.json` sets `"defaultMode": "auto"`, which drops the `TodoWrite` tool, so
+Claude Code's native todo widget can never render and no hook can brand it. The
+durable board (`<project>/.atlas/.run/todos.json`) is the plan, so atlas now
+renders it statically at the prompt: `scripts/atlas_statusline.py` reads the board
+and prints one ATLAS-branded line (counts, current item, remaining) that sits at
+the prompt input while output scrolls. It prefers the current session's items and
+falls back to the whole project board so carried-over work still shows; it prints
+nothing when the board is empty or unreadable (fail-open) and `ATLAS_STATUSLINE=off`
+disables it. `session_boot.py` copies the self-contained script to
+`~/.atlas/atlas_statusline.py` so the statusline command calls a stable path that
+survives plugin reinstalls. Verified live: with a seeded board, the user's
+`statusline-command.sh` renders line 4 as `ATLAS 1/3 | now: wire the ATLAS
+statusline | 2 left`; with no board it renders nothing. 7 renderer unit tests plus
+3 permanent `StatuslineContract` cases in the atlas contract suite.
+
+Also in this release: the dispatch tripwire's PreToolUse deny tier now skips
+dispatched subagents (transcript_path detection, `SubagentDenyTierSkipTest`).
+The tier polices the orchestrator's own inline drift; a subagent's Read/Edit/
+Write is the delegated work, and its payload can carry the parent's flagged
+session_id.
+
+## [5.26.0] - 2026-09-09 -- durable todo board, gate drain fallback, dashboard Work/Agents tabs
+
+Marketplace `3.15.0`; atlas `5.26.0`.
+
+The user's charge that started this release: "the dashboard doesn't actually do
+anything ... there's zero way to know how much is needed, remaining, or complete."
+Four pillars closed: run insight, behavior/agent customization, shared memory for
+parallel subagents, and the todo list built and used every session.
+
+- `hooks/todo_capture.py` (PostToolUse TodoWrite, `ATLAS_TODO=off` disables)
+  mirrors every todo plan into `<project>/.atlas/.run/todos.json`;
+  `scripts/atlas_todo.py` is the CLI (list/set/add/claim/complete/reopen/remove/
+  counts/carry). Claims survive mirrors on matching content; manual-origin and
+  other-session items never block the gate.
+- `completion_gate.py` drain fallback: transcript TodoWrite count first, then the
+  board (same session, non-manual), then the `LEDGER | n/m` line the orchestrator
+  emits in auto mode, so a CLI re-plan or auto-mode run cannot slip past the gate
+  with open todos.
+- `session_boot.py` carries unfinished board items into the next session's plan
+  (the accepted carry-over decision: carried items land in the active list).
+- Dashboard Work tab: counts (needed/remaining/complete/claimed), add/claim/
+  complete/reopen/remove, and the shared memory snapshot from `~/.atlas/memory/`;
+  Agents tab: same-name overrides under `<project>/.claude/agents/` (frontmatter
+  required, safe names only) with Reset to plugin source. New endpoints `/api/todo`,
+  `/api/agents`, `/api/memory`.
+- Subagent claim protocol documented in `subagent-kit.md` and the orchestrator
+  style; 6 permanent `TodoBoardContract` tests + 9 live HTTP `WorkBoardApiTest`
+  cases + 8 gate `TodoBoardDrainTest` fixtures. Suites at this writing:
+  test_completion_gate 151 OK, test_atlas_dashboard 17 OK, test_atlas_contract
+  81/83 (the 2 installed-parity failures resolve when the cache moves to 5.26.0).
+
+## [5.22.0] - 2026-09-02
+
+### Fixed
+- Node MCP atlas bundles now inject `createRequire` so ESM self-contained builds no longer crash on dynamic `require` (auvik/cipp init failures).
+- Progressive credential-gated tool disclosure verified unconfigured for all 11 connectors (status/navigate shell only).
+- CIPP HTTP ListTools uses per-request gateway credentials when present; stdio remains env-gated to `cipp_status`.
+- Rebuilt knowbe4/connectwise/auvik/cipp and remaining node connector bundles into `plugins/atlas/mcp/*/server.mjs`.
+
+## 2026-09-01 -- ThreatLocker connector rebuilt around names: hostnames, users, files, policies, never GUIDs
+
+Marketplace `3.11.0`; atlas `5.21.0`; threatlocker-mcp `1.4.0`; node-threatlocker `1.1.0`.
+
+Once auth worked (previous entry), the user tested the tools from a second
+session and every data call still returned nothing or errored, and the tools
+that did answer led with GUIDs. The requirement stated then: never make a human
+reference an ID; address devices, users, applications, and policies by name.
+
+Contract fixes, each traced to a live probe against instance `h` and the public
+swagger at `portalapi.h.threatlocker.com/swagger/public/swagger.json` (88 paths,
+97 DTOs; the `/swagger/v1` document is empty):
+
+- `buildSearchBody` in node-threatlocker was the shared root cause: it emitted
+  six pagination fields and dropped everything else. Approvals never sent
+  `statusId` (500), audit never sent `startDate`/`endDate` (417), check-ins
+  never sent `computerId`. Replaced by per-resource bodies built from the
+  swagger DTOs (`ComputerParameterDto`, `ApprovalRequestParametersDto`,
+  `ActionLogParamsDto`, `ComputerCheckinParametersDto`).
+- `ActionLogGetByParametersV2` needs the `usenewsearch: true` header (500
+  without it) and dates without fractional seconds; `HttpClient.request` now
+  accepts per-request headers. `ActionLogGetAllForFileHistoryV2` needs
+  `hostname` or `computerId` beside `fullPath` (417 with the path alone).
+- `ComputerGroupGetGroupAndComputer` returns a picker tree, never `.groups`;
+  the dropdown endpoint returns the flat `{label, value, numericValue}` list
+  and is what the groups tools read now. `OrganizationGetForMoveComputers`
+  returns `{label, value}` too, so the old `.organizations || []` was always
+  empty. `ApprovalRequestGetCount` takes `includeChildOrganizations` as a
+  query parameter.
+- Audit `action` filter: `actionId 99` is the documented "Any Deny"; verified
+  live it returns only Deny rows across action types. `actionId 1` is Permit.
+- Audit filters, probed one by one against 50 baseline rows: top-level
+  `hostname` filters; top-level `username` and `fullPath` are silently ignored
+  (identical row set, or zero rows). The Advanced Search list
+  (`paramsFieldsDto`, `filterType 1`) is what filters `username` (partial
+  tolerated), `fullPath`, `applicationName`, and `policyName`, all exact; no
+  filterType produced a substring match. The tool exposes `path`,
+  `application`, `policy` as exact server-side filters and `contains` as a
+  labeled client-side substring over the fetched page.
+- `computers_list group:` resolves the group name to its GUID through the
+  dropdown list (the DTO rejects a name with 400) so the filter is server-side
+  and `totalDevices` is the true group count (Workstations: 141 of 148).
+  `mode:` maps to the DTO `action` field, verified live (Secure 128, Learning
+  20).
+
+Name-first surface (`mcp_servers/threatlocker-mcp/src/utils/resolve.ts`):
+
+- `resolveComputer` turns a hostname (case-insensitive exact match on hostname
+  or computer name) into the row, and `resolveApprovalRequest` turns hostname
+  plus a path fragment into exactly one request. Zero or several matches return
+  NOT_FOUND with the candidate names; approve is destructive and fails closed.
+- Default summaries carry names only: computers `hostname, user, OS, group,
+  organization, mode, lastCheckin, agentVersion, deniesLast7Days`; approvals
+  `requestedAt, hostname, user, file, organization, status, requestor, reason`;
+  audit `time, hostname, user, action, actionType, application, policy, path`.
+  GUIDs and hashes sit behind `full:true`. Every list is prefixed with a
+  one-line summary (`totalDevices` from the per-row `totalRows`,
+  `pendingApprovals`, the audit window). Approval status and OS enums are
+  translated both ways. Elicitation prompts on list tools are gone (the
+  `elicitation.ts` module was deleted); approvals default to Pending, audit to
+  the last 24 hours.
+- New tool `threatlocker_computers_maintenance_modes`. Tool names unchanged.
+
+Evidence: end-to-end stdio run of the rebuilt bundle against instance `h` with
+the real key, 24 checks, all passing on the final run: `tools/list` 19 tools;
+`Auth check: OK`; `computers_list` -> `{"totalDevices":148,...}` with five
+name-only rows and no GUID in the output; `computers_get` by lowercased
+hostname returns make/model and serial; unknown hostname -> `NOT_FOUND` with
+the search hint; check-ins, maintenance modes, groups (6, with OS names),
+organizations (`Henssler Financial`), pending count `1`, approvals list
+Pending and Approved with status names, `approvals_get` and permit
+application resolved by hostname plus `pathContains`, audit search over 48h
+with no id fields in default rows, Deny filter returns only Deny rows, audit
+by hostname returns only that host, file history by hostname plus path (25
+events), `audit_get` from a `full:true` id, and INVALID_ARGS on a bad status
+and a bad date. Unit: `_shared` 67 pass; node-threatlocker pagination 3 pass;
+wiring 9 pass; fake-key smoke and no-key status PASS.
+
+## 2026-09-01 -- ThreatLocker 440 TOKEN_REVOKED is an auth failure, and the hint now says what it means
+
+Marketplace `3.10.1`; atlas `5.20.1`; threatlocker-mcp `1.3.1`.
+
+Report: every `threatlocker_*` tool returned `HTTP 440 {"error":"TOKEN_REVOKED"}`
+and the user read the wording as a connector bug. Investigation against the
+ThreatLocker docs (`threatlocker.kb.help/getting-started-with-threatlocker-portalapis/`)
+and the live API showed the wiring is correct and the credential is not:
+`node-threatlocker` sends the raw token in `Authorization` and the org GUID in
+`managedOrganizationId`, exactly as documented, and the portal answers
+`440 TOKEN_REVOKED` for any token it does not recognize (a zero-filled token and
+the literal string `not-a-token` get the same body; no header at all gets 403).
+The configured key received the same 440 on every reachable instance (b through h).
+
+- `mcp_servers/_shared/error-envelope.ts`: HTTP 440 now classifies as `FORBIDDEN`
+  instead of falling through to `INVALID_ARGS`. Test added in
+  `_shared/__tests__/response-quality.test.ts`.
+- `mcp_servers/threatlocker-mcp/src/domains/_helpers.ts`: a local
+  `toolErrorFromCatch` wrapper replaces the per-call-site "verify the env vars
+  are set" hint with a 440-specific one: the token is unknown to ThreatLocker
+  (expired after the inactivity window, deleted, mistyped, or the organization
+  Auth Key pasted in place of an API User token), how to mint a new API User
+  token, check the instance letter, and restart the server since credentials
+  are read at launch.
+- `threatlocker_status` now makes one authenticated call (pending approval
+  count) and reports `Auth check: OK (...)` or `Auth check: FAILED HTTP 440
+  TOKEN_REVOKED: ...`, with `isError` set on failure. "Configured" only ever
+  meant a value was present, and a session read it as "reachable" and told the
+  user the connector worked when the very next call was rejected. Status also
+  prints the first four characters of the loaded key,
+  so the credential a server actually loaded is visible in one call. That is how
+  the second defect surfaced: the running server was sending a key (prefix
+  `CB23`, already failing on 2026-08-26) that exists in neither
+  `plugins/atlas/.env` nor settings.json `pluginConfigs` (both hold the newer
+  `6507` value the dashboard saved on 2026-08-28). `threatlocker_api_key` is
+  `sensitive: true` in `plugin.json`, and Claude Code stores sensitive
+  userConfig in secure storage, not settings.json
+  (`code.claude.com/docs/en/plugins-reference.md`, user configuration). On this
+  Mac that is the Keychain item `Claude Code-credentials`, whose
+  `pluginSecrets["atlas@tech-tools"].threatlocker_api_key` still holds the old
+  `CB23` token. The installed plugin (cache `5.20.0`) ships no `.env`, so
+  `ATLAS_ENV_FILE` points at nothing and the `CFG_` fallback is what Claude Code
+  substituted from Keychain. Net: the dashboard credentials form writes to two
+  places the installed plugin never reads for sensitive fields. Not changed in
+  this entry; recorded as an open item.
+- `mcp_servers/threatlocker-mcp/tsup.bundle.config.ts` is the reproducible
+  recipe for `plugins/atlas/mcp/threatlocker/server.mjs` (noExternal, minified,
+  `@shared` aliased); the bundle is rebuilt from it.
+
+Evidence: `node --experimental-strip-types --test mcp_servers/_shared/__tests__/response-quality.test.ts`
+-> 67 pass, 0 fail (66/1 before the envelope change). Stdio smoke against the
+rebuilt bundle with a fake key: `threatlocker_status` shows `prefix 0000...`,
+`threatlocker_computer_groups_list` returns `code: FORBIDDEN`, `HTTP 440`, hint
+starting `HTTP 440 TOKEN_REVOKED: ThreatLocker does not recognize this token`.
+`pytest plugins/atlas/scripts/test_connectors_wiring.py` -> 9 passed.
+Follow-up in the same day, shipped as marketplace `3.10.2`; atlas `5.20.2`;
+threatlocker-mcp `1.3.2`; node-threatlocker `1.0.4`.
+
+Resolution, found after the user minted a third token and it still got 440: the
+organization lives on ThreatLocker instance `h`, and the connector's default base
+URL assumes instance `g`. A token is only known to the instance that issued it,
+and every other instance answers the same `440 TOKEN_REVOKED`, so a wrong
+instance letter is indistinguishable from a dead token. Probing the new key
+against `b` through `h`: `h` returned `200` (pending count `1`), all others 440.
+
+- `threatlocker_status` now probes every instance on a 440 and names the one that
+  accepts the key, with the exact `THREATLOCKER_BASE_URL` to set. The 440 hint
+  leads with the instance-letter cause and points at status.
+- `plugin.json` `threatlocker_base_url` description, `plugins/atlas/.env.example`,
+  and the `_shared/base-url.ts` vendor table now say the `g` default is not
+  universal and how to find the instance letter.
+- The user's `threatlocker_base_url` plugin option was set to instance `h`.
+  A `/reload-plugins` is needed for the running server to pick it up.
+
+With auth working, the first real calls exposed two response-shape bugs in
+`mcp_node/node-threatlocker` (now `1.0.4`), invisible while every call was 440:
+
+- `unwrapPaginatedResponse` only looked for `items` / `data` / `results`
+  envelopes, but the PortalAPI `*GetByParameters` endpoints (Computer,
+  ApprovalRequest, ComputerCheckin, verified live) return a bare JSON array with
+  the total repeated on every row as `totalRows`. Every list tool returned `[]`
+  against a tenant with 148 devices. Arrays are now unwrapped and `total` comes
+  from `totalRows`. Unit test: `tests/unit/pagination.test.ts`.
+- `getPendingCount` read `response.count`; the endpoint returns a bare number.
+- `threatlocker_computers_list` summary used field names the API does not send
+  (`hostName`, `computerGroup`, `policyStatus`); it now maps `computerId`,
+  `hostname`, `operatingSystem`, `lastCheckin`, `group`, `action`,
+  `organization`, and `totalRows`.
+
+Evidence (rebuilt bundle, real key, instance `h`): `threatlocker_status` ->
+`Auth check: OK (authenticated; pending approvals: 1)`, `isError: false`;
+`threatlocker_computers_list` -> rows with hostName, OS, group, `policyStatus:
+"Secure"`. At the `g` default the same bundle reports `FAILED HTTP 440 ... but
+instance "h" accepts this key. Set THREATLOCKER_BASE_URL=...h...`.
+`vitest run tests/unit/pagination.test.ts` (setup file bypassed: the library's
+`msw` dev dependency is not installed in this checkout, so the pre-existing
+suite cannot load) -> 3 passed.
+
+## 2026-09-01 -- CrowdStrike Falcon joins the bundled connectors
+
+Marketplace `3.10.0`; atlas `5.20.0`.
+
+Falcon is the eleventh bundled connector and the first Python one. CrowdStrike's
+`falcon-mcp` 0.18.0 source is vendored at `plugins/atlas/mcp/falcon/` with no
+`.git`, no submodule, and no remote, so nothing fetches from CrowdStrike's
+repository again; runtime dependencies still resolve from PyPI against the
+vendored `uv.lock`.
+
+- Every other connector is a Node ESM bundle, so this needed a second launch
+  shape: `uv run --project mcp/falcon python mcp/_env/load.py falcon_mcp.server`.
+  The new `mcp/_env/load.py` is the Python twin of the Node env preloader, with
+  the same precedence (`.env` beats `CFG_*`, empty or unexpanded values never
+  promote). Empty-value suppression carries more weight here: a blank
+  `FALCON_BASE_URL` would otherwise beat the vendored server's own default in
+  `os.environ.get(key, default)`.
+- Connector discovery, the wiring test, the dashboard connector list and its Test
+  button now recognize a Python connector (`mcp/<name>/pyproject.toml`) alongside
+  a Node bundle, through the new `atlas_control.connector_entry()`.
+- Four userConfig keys, all defaulting to `""`: `falcon_client_id`,
+  `falcon_client_secret`, `falcon_base_url`, `falcon_member_cid`.
+
+Evidence: `atlas_control.test_connector("falcon")` completed an MCP initialize
+plus `tools/list` handshake -- Falcon MCP Server 0.18.0, 144 tools, 1091 ms --
+with no credentials set, confirming inert-by-default still holds. Suites green:
+`plugins/atlas/scripts` 611 tests OK, `plugins/atlas/hooks` 624 tests OK
+(skipped=3). The user-scope `falcon-mcp` entry in `~/.claude.json` was removed so
+the plugin connector is the only Falcon server.
+
+## 2026-08-29 -- Dashboard becomes a control plane, not just a viewer
+
+Marketplace `3.9.0`; atlas `5.19.0`.
+
+The dashboard could observe sessions and take credentials, and nothing else. It
+now configures atlas and surfaces the rest of the install.
+
+- **Behavior** page: the `ATLAS_*` knobs the hooks read, each showing the
+  `file:line` that reads it. Writes land in `~/.claude/settings.json` `"env"`,
+  verified as the block Claude Code exports into hook subprocesses.
+- **Ecosystem** page: hook wiring with a present/missing verdict per binding, 48
+  installed plugins with enable toggles, 26 MCP servers (plugin and user scope)
+  with enable / add / remove, and the skills, agents and output styles reachable
+  here.
+- **Connectors**: editable non-secret values, a real connection test against the
+  connector's own bundle, a per-connector enable switch, bulk `.env` import and
+  redacted export.
+- New `plugins/atlas/scripts/atlas_control.py` plus 21 tests. Full suite green:
+  611 scripts tests, 624 hooks tests (77 of them the atlas contract suite).
+
+Evidence and the API table: `plugins/atlas/skills/atlas-orchestrate/references/dashboard-api.md`.
+
+
+## 2026-08-28 -- Atlas multi-session dashboard + version bump
+
+- Marketplace `3.7.0`; atlas `5.17.0`; armada `1.1.1`; programmer `0.1.1`.
+- Atlas dashboard: shared UI at `http://127.0.0.1:7421/` for concurrent agent terminals (project/session switcher).
+- Kimi dual-manifest packaging removed earlier the same day.
+
+
+## 2026-08-28 -- Remove Kimi Code CLI dual-manifest support
+
+Removed all Kimi marketplace / dual-manifest packaging from this repo. The tech-tools marketplace is Claude Code only (atlas, armada, programmer via `.claude-plugin/marketplace.json`).
+
+Deleted:
+- root `.kimi-plugin/` (marketplace.json, import-plan.json, import-report.json)
+- root `kimi.plugin.json`
+- `plugins/atlas/.kimi-plugin/`, `plugins/armada/.kimi-plugin/`, `plugins/programmer/.kimi-plugin/`
+
+Updated living docs (README, plugins/README, AGENTS.md, docs/AGENTS.md, .gitignore) and tests that required claude/kimi version parity.
+
+
 Newest entry on top. Dates are ISO 8601 (YYYY-MM-DD).
+
+---
+
+## 2026-08-20 -- atlas ran on Bash and kept no todo list: both were Claude Code auto mode
+
+Two complaints, one cause. Neither was an atlas regression: `permissionMode:
+"auto"` is recorded in 201 session transcripts, earliest 2026-07-21, a month
+before the 5.15.0 refactor that got blamed.
+
+**Auto mode injects a bash-first steer.** It lands after CLAUDE.md and after the
+output style, so it outranks `assets/rules/mcp-tools.md`:
+
+> Do your work through the Bash tool wherever it can accomplish the job: read
+> files with cat, head, or sed -n, search with grep and find, and make file
+> changes with sed, heredocs, or short scripts, rather than using the dedicated
+> Read, Edit, or Write tools.
+
+Tool census over the last eight sessions matches the directive exactly - MCP is
+reached for only where Bash cannot do the job:
+
+| Session | Bash | MCP |
+|---|---|---|
+| hyper_plugins `eddacb2c` | 24 | 0 |
+| hyper_plugins `0dd963bf` | 106 | 0 |
+| tech-tools `e9d694ab` | 29 | 0 |
+| thfg-crowdstrike `d50e88dd` | 1 | 14 |
+
+The switch, in the 2.1.237 bundle: `bashFirst = hasBash && hasEdit/Write &&
+TYo()`, where `TYo()` returns `G.CLAUDE_CODE_THRIFTY_SONIC` verbatim when that
+env var is defined, otherwise the `tengu_thrifty_sonic` gate. The emitter returns
+nothing when `steerOnly` is set but `bashFirst` is not, so falsifying `TYo()`
+removes the block. Fix, applied to `~/.claude/settings.json` env:
+
+    "CLAUDE_CODE_THRIFTY_SONIC": "false"
+
+Auto mode stays on. Probe (`claude -p --permission-mode auto --model opus`,
+asking whether the system prompt contains "Do your work through the Bash tool"):
+
+    before                 -> YES
+    THRIFTY_SONIC=""       -> YES   (empty string reads as unset)
+    THRIFTY_SONIC=0        -> NO
+    THRIFTY_SONIC=false    -> NO
+    from settings.json     -> NO    (no inline env var)
+    permission-mode default (control) -> NO
+
+`tengu_thrifty_sonic` is an undocumented experiment gate. A CLI upgrade can
+rename or drop it and silently restore the steer, so re-run that probe after
+upgrades.
+
+**Auto mode also strips `TodoWrite` from the toolset.**
+
+    claude -p --permission-mode auto    --model opus  -> TodoWrite absent
+    claude -p --permission-mode default --model opus  -> TodoWrite present
+    CLAUDE_CODE_AUTO_MODE_EDIT_REMOVAL=false / =0     -> still absent
+
+No override restores it. The atlas todo contract therefore named a tool that
+could not be called on any auto-mode run, which is the whole of `todoWrite=0`
+across 14 consecutive hyper_plugins transcripts. It was never a discipline
+failure. `plugins/atlas/output-styles/atlas-orchestrator.md` now names the
+absence and gives an executable fallback - a one-line `LEDGER | 3/5 | now: ... |
+left: ...` under the status header - with the verified-only rule intact.
+`OrchestrationContract.test_todo_contract_degrades_when_todowrite_is_absent`
+locks it in; 77 contract tests pass.
+
+**What was checked and found fine.**
+
+- `outputStyle: "concise"` does not suppress the atlas style. The style declares
+  `force-for-plugin: true` and applies on top wherever the plugin is enabled;
+  probing a live auto-mode session from the repo returns YES for both
+  "Atlas Orchestrator" and the new "LEDGER |". No settings change was needed.
+- serena is healthy. The `unhealthy` record in `mcp-health-cache.json` expired
+  2026-08-05 and came from `--project-from-cwd` resolving into a deleted
+  worktree. `~/.serena/serena_config.yml` lists 5 projects, 0 missing, and a live
+  `find_symbol("main", plugins/atlas/hooks/completion_gate.py)` returns lines
+  420-553.
+- The session reported as hung was not. `eddacb2c` finished at 12:08:08 with a
+  full `ATLAS | verify` message and a `turn_duration` of 340108 ms; the spinner
+  screenshot was taken about 20 seconds early.
+
+**One real trap worth remembering.**
+`~/.claude/plugins/cache/tech-tools/atlas/5.15.0` is a copy of `plugins/atlas`,
+not a link - different inodes. Editing the repo does not change what a running
+session loads until the plugin is reinstalled. That is a genuine
+"my change did nothing" cause, independent of everything above.
+
+Evidence: `.atlas/.run/2026-08-20-tooling-diagnosis.md`, `.atlas/.run/findings.json`
+batch `2026-08-20-tooling`.
+
+---
+
+## 2026-08-19 -- ninjaone-mcp 1.8.0: five endpoints were wrong, and the 404s read as a permissions problem
+
+An agent reported that the NinjaOne connector "can only list scripts" and that
+the API app's permissions needed updating. Neither was true. Five endpoints
+were transcribed wrong, and the error envelope told the agent to blame
+credentials for every failure including a 404.
+
+**The five wrong endpoints**, each checked against `NinjaRMM-API-v2.json`:
+
+| Tool | 1.7.0 sent | The spec says |
+|---|---|---|
+| `ninjaone_scripts_list` | `GET /v2/scripts` | `GET /v2/automation/scripts` -- `/v2/scripts` does not exist |
+| `ninjaone_devices_script_run` | body `{scriptId, parameters, runAs}` | `{type: SCRIPT\|ACTION, id, uid, parameters, runAs}` |
+| `ninjaone_devices_reboot` | `POST /v2/device/{id}/reboot` | `POST /v2/device/{id}/reboot/{NORMAL\|FORCED}` -- mode is a path segment |
+| `ninjaone_devices_inventory` kind=`scripting-options` | `/v2/device/{id}/scripting-options` | `/v2/device/{id}/scripting/options` |
+| `ninjaone_devices_maintenance` | `POST /maintenance`, no body | `PUT /maintenance` with a required `end` |
+
+Windows service start/stop/restart were also wrong: the SDK called
+`/windows-service/{name}/start`, `/stop` and `/restart`, none of which exist.
+The spec has one `POST /windows-service/{serviceId}/control` with the verb in
+the body.
+
+Live red evidence, this session, against the installed 1.7.0 bundle:
+
+```
+ninjaone_scripts_list
+-> {"code":"NOT_FOUND","message":"ninjaone_scripts_list failed: HTTP 404",
+    "hint":"Verify NINJAONE_CLIENT_ID, NINJAONE_CLIENT_SECRET, and NINJAONE_REGION are set."}
+```
+
+That hint is the second defect. Every handler passed a fixed credentials hint
+regardless of status, so an agent reading a wrong-path 404 concluded the API
+app lacked permissions and told the user to change them. `toolErrorFromCatch`
+in `mcp_servers/_shared/error-envelope.ts` now overrides the hint on
+`NOT_FOUND` with an explicit "this is NOT a credentials or permissions failure,
+do not tell the user to change API permissions", keeping the caller's hint
+appended. This applies to all ten connectors at source. Only the ninjaone bundle was rebuilt this session, so the
+other nine pick the change up on their next rebuild.
+
+**New capability.** 39 tools to 45, and the existing tools reach far more of the
+API:
+
+- `ninjaone_devices_patch_run` -- OS and third-party patch scan and apply
+  (`POST /v2/device/{id}/patch/{os|software}/{scan|apply}`), the four endpoints
+  that make patching actionable rather than read-only.
+- `ninjaone_devices_service_control` -- START/STOP/PAUSE/RESTART a Windows service.
+- `ninjaone_devices_search` -- free-text lookup by hostname, user or IP, so an
+  agent can resolve a name to the numeric `device_id` every other tool needs.
+- `ninjaone_activities_list` -- the tenant-wide activity log, which is where a
+  script's actual result lands.
+- `ninjaone_tasks_list` -- scheduled tasks.
+- `ninjaone_vulnerability_scan_groups` -- scan groups. Scope note stated in the
+  tool description: the public v2 API exposes scan-group configuration only,
+  not per-device CVE findings. Real vulnerability posture comes from
+  `os-patches` (severity=CRITICAL), `software-patches` and `antivirus-threats`.
+- `ninjaone_devices_inventory` -- 9 kinds to 15, adding `software-patches`,
+  `os-patch-installs`, `software-patch-installs`, `jobs`, `policy/overrides`,
+  `windows-services`, and the corrected `scripting/options`. Patch kinds now
+  forward `status`, `type` and `severity`, which were previously undeclared.
+- `ninjaone_queries_run` -- 13 query names to all 24 in the spec, adding
+  `antivirus-threats`, `device-health`, `software-patches`,
+  `software-patch-installs`, `raid-controllers`, `raid-drives`, `backup/usage`,
+  the detailed and scoped custom-field variants, and `windows-services`. Each
+  is described in one line on the tool schema so an agent can pick one without
+  reading the REST docs, and `severity`/`type`/`productName`/`productState`
+  filters are forwarded.
+- `ninjaone_devices_script_run` -- gained `type` and `action_uid`, so built-in
+  actions (the "run a command" surface) are reachable, not just catalog scripts.
+- `ninjaone_devices_reboot` -- gained `mode`.
+- `ninjaone_devices_maintenance` -- gained `end`, `start`, `disabled_features`
+  and `reason`; `action=start` without `end` is now rejected locally instead of
+  being refused by the API.
+
+**A third inert-parameter defect, same class as the two recorded in `6df018c`.**
+`ninjaone_devices_list` declared `device_class` and `online`, logged them, and
+never sent them: `/v2/devices` accepts no such params, so a
+`device_class=WINDOWS_SERVER` request returned the whole tenant and read like a
+scoped answer. Its `cursor` param was inert for the same reason, since that
+endpoint pages by `after` (last device ID). All three filters now compile into
+one `df` expression, `cursor` is replaced by `after`, and `device_filter` lets a
+caller write the df directly. A regression test pins the compiled expression.
+
+Tool descriptions were rewritten to say what an agent should reach for and in
+what order: which tool yields the ID the next one needs, when a fleet query
+beats a per-device loop, and that a script run returns when queued rather than
+when finished.
+
+**SDK** (`mcp_node/node-ninjaone` 1.4.0 -> 1.5.0): the five path/body fixes,
+`controlService` replacing the three phantom per-verb methods, plus
+`getScriptingOptions`, `runPatchAction`, `getActiveJobs`, `getPolicyOverrides`,
+`resetPolicyOverrides`, `getDashboardUrl`, `search`, `listDetailed`,
+`automation.listTasks`, and a new `VulnerabilityResource`.
+`getInventoryByKind` now forwards query params and accepts multi-segment tails.
+
+**Docs.** `docs/vendors/ninjaone/api-reference.md` listed `/scripts`, the
+`{scriptId}` body and `POST /maintenance` -- the code was written from that
+table, so the table was corrected and the 16 missing endpoints added.
+
+Evidence:
+
+- Red: the live `ninjaone_scripts_list` 404 above, against installed 1.7.0.
+- `mcp_node/node-ninjaone`: `npm run typecheck` clean, `npm test` 111 passed
+  (was 94). 17 new msw tests assert one spec-verified path per endpoint;
+  `onUnhandledRequest: 'error'` means a drifted path fails the suite.
+- `mcp_servers/ninjaone-mcp`: `npm run typecheck` clean, `npm test` 162 passed /
+  11 failed. The same 11 fail on `6df018c` with this change stashed (response-
+  shaper and credential-resolution assertions, unrelated); baseline was 142
+  passed / 11 failed.
+- `mcp_servers/_shared`: 66 passed / 0 failed, including two new tests pinning
+  the 404 hint override.
+- `plugins/atlas/mcp/ninjaone/server.mjs` rebuilt with esbuild (bundled ESM,
+  minified, no `node_modules`). Copied alone into an empty directory it
+  completes an MCP initialize handshake as `ninjaone-mcp 1.8.0` and returns 45
+  tools, with `ninjaone_devices_inventory` offering 15 kinds and
+  `ninjaone_queries_run` 24 queries.
+- `python3 -m pytest plugins/atlas/scripts/test_connectors_wiring.py
+  plugins/atlas/hooks/test_atlas_contract.py -q`: 82 passed, 3 skipped.
+
+UNVERIFIED - needs user retest: no live API call was made against the corrected
+paths. The MCP server in this session still runs the old 1.7.0 bundle until
+Claude Code restarts, and the write paths (script run, reboot, patch apply,
+service control, maintenance) must not be smoke-tested against production
+endpoints. After a restart, `ninjaone_scripts_list` should return the script
+catalog instead of HTTP 404.
+
+---
+
+## 2026-08-19 -- atlas 5.14.0: the plugin talked too much and tracked too little
+
+Released as atlas 5.14.0 (`plugins/atlas/.claude-plugin/plugin.json:3`).
+
+**Noise.** Every routine event had a voice, and none of it was actionable.
+`format_after_edit.py` printed "auto-formatted X with ruff" on every successful
+edit; `prompt_optimizer.py` printed a two-line colored stderr banner on every
+optimized prompt; `session_boot.py` opened each session with eight lines of
+methodology recital plus a status line for claude-mem, context-mode, and
+ponytail *whether present or absent*, capped at 9000 characters. Volume is not
+neutral: a user who learns atlas output is skimmable stops reading the one line
+that is a real blocker.
+
+The rule is now uniform, and an advisory hook says nothing on the happy path.
+`format_after_edit.py:118-121` returns silently on success. The optimizer banner is
+opt-in via `ATLAS_OPTIMIZE_VERBOSE` (was opt-out via `ATLAS_OPTIMIZE_QUIET`) and
+is one line when it fires (`hooks/prompt_optimizer.py:458-489`).
+`session_boot.py:466-486` emits one posture line plus a single `Setup gap:` line
+naming only what is missing, capped at 3000 chars with the memory snapshot cut
+at 700 on a record boundary. `dispatch_tripwire.py` and `docs_drift_watch.py`
+keep their content and lose their padding. Measured: the boot block went from
+~5k chars to 1,744.
+
+**The todo list.** The orchestrator had no user-visible progress surface and no
+mechanical guard against dropping a stage. `TodoWrite` is now mandatory in
+`plugins/atlas/skills/atlas-orchestrate/SKILL.md:92-109`: the stage map mirrors
+into it at plan time, an item flips to `completed` only when its
+`findings.json` entry reads `verified`, and re-reading the list is close-out
+step 1. `TodoWrite` and `AskUserQuestion` were added to the skill's
+`allowed-tools`, since mandating a forbidden tool is a dead rule.
+
+**Mid-run steering.** A user message arriving during a wave is classified before
+it is acted on (`SKILL.md:111-123`): a correction stops the affected work now,
+new scope is inserted into the todo list at its dependency position, a process
+change applies from the next wave. Ambiguity routes to `AskUserQuestion`.
+
+**Worktree close-out.** Waves with more than one writer get
+`isolation: "worktree"`, and a worktree containing changes does not clean itself
+up. The done gate (`SKILL.md:174-192`) now requires committing inside a dirty
+worktree first, merging into the local branch, removing the tree, then
+*offering* the push. Pushing on atlas's own initiative was never allowed and is
+now stated where the gate can be read.
+
+**Enforcement, not prose.** The todo, worktree, and docs-drift rules above
+would otherwise have been markdown that only a compliant model obeys. Three
+mechanisms now carry them, all fail-open like every sibling condition:
+
+- **Condition (i), todo drain.** `completion_gate.py` reads `transcript_path`
+  for the run's most recent `TodoWrite` tool_use. TodoWrite rewrites the whole
+  list every call, so the last one is current state. A run that shipped code and
+  still holds non-`completed` items is blocked. A run with no todo list at all
+  passes: (i) enforces draining a list, not creating one, and demanding a todo
+  list for a two-line change is the busywork this plugin exists to avoid.
+- **Condition (j), worktree close-out.** `dispatch_tripwire.py` records
+  `isolation: "worktree"` on any dispatch via the new `runs.used_worktrees`
+  column, and the gate blocks when that flag is set *and* `git worktree list`
+  still shows trees beyond the main one. Scoped to this run's own dispatches on
+  purpose: a gate that fires on the user's long-lived worktrees is the false
+  positive that teaches people to ignore gates.
+- **Condition (f) cross-check.** (f)'s signal is `run_changed_paths`, fed by
+  tool calls carrying a `file_path`. A docs file written by a Bash-invoked
+  script produces none, so a run whose docs were genuinely current was blocked
+  for drift twice while shipping this very release. The gate now cross-checks
+  `git` before blocking. The suppression is one-directional (it can only prevent
+  a false block); the cost is that stale docs edits from an earlier session can
+  mask real drift, which is the cheaper failure.
+
+The (f) fix carries a red->green capture on live session state
+(`.atlas/evidence/2026-08-19-gate-f-cross-check.md`): the same payload, same
+session, same docs state, blocked by installed 5.13.0 on `(f)` and passing
+silently on the repo copy. Conditions (i) and (j) were inert during that capture
+and stay fixture-verified only.
+
+Mid-run steering classification stays instruction-layer: no hook can tell a
+correction from new scope, because that is a judgment about intent.
+
+Each mechanism is pinned by fixture-driven tests (`OpenTodosTest`,
+`LeftoverWorktreeTest`, `GateConditionIJTest`, `DocsMovedInGitTest`,
+`WorktreeFlagTest`) and each was mutation-checked: disabling the condition in
+the hook makes its test fail.
+
+**Subagent tiers and colors.** `docs-auditor` and `naming-glossary-audit`
+dropped to haiku; both read and report, neither renders a judgment. `verifier`
+and `completeness-critic` stay sonnet/medium on purpose, because cheapening the
+adversarial pass works against the reason the noise was cut. Colors are assigned
+by role family (cyan discovery, blue planning, green code writes, purple docs
+writes, pink runtime testing, yellow/orange probe and audit, red verdict) and
+pinned to Claude Code's eight-color palette. That palette is a closed set, not a
+style preference: the frontmatter value is a key into the CLI's own color map
+(`{red:"red",...,purple:"magenta",orange:"colour208",pink:"colour205",cyan:"cyan"}`,
+confirmed by grepping the shipped binary), so a value outside it misses the map
+and the dispatch renders uncolored. `ui-runtime-tester` had been set to
+`magenta`, which appears in that map only as a value (what `purple` resolves to)
+and never as a key, so it was rendering uncolored. Moved to `pink`.
+
+**Verification.** `hooks/test_atlas_contract.py` gained `NoiseContract` and
+`OrchestrationContract` (11 checks) so the next hook that narrates itself, or a
+dropped todo/worktree rule, fails the suite. Full run:
+`python3 -m pytest -q` in `plugins/atlas/hooks` -> 578 passed, 3 skipped, 67
+subtests. The 3 skips are `InstalledParityContract`, which is inert until the
+plugin is reinstalled at 5.14.0.
+
+**Known gap.** Nothing above is live until the plugin reinstalls; the running
+copy is 5.13.0.
+
+---
+
+## 2026-08-18 -- atlas 5.13.0: the NinjaOne connector listed tools it could not call
+
+Released as atlas 5.13.0 (`plugins/atlas/.claude-plugin/plugin.json:3`,
+`.kimi-plugin/plugin.json:3`), ninjaone-mcp 1.7.0, node-ninjaone 1.4.0.
+
+**Root cause of "tools that do not work."** `mcp_servers/ninjaone-mcp/src/index.ts`
+routed `tools/call` through four hardcoded `name.startsWith("ninjaone_<domain>_")`
+branches and answered `Unknown tool` to everything else. Any tool whose name does
+not encode its own domain was listed by `tools/list` and uncallable. Replaced with
+`getDomainForTool()` (`src/index.ts:74-93`), a name -> domain index built from the
+handlers' own `getTools()` at first call. `src/__tests__/flattened-navigation.test.ts`
+now pins routability rather than naming.
+
+**Coverage.** `mcp_node/node-ninjaone` covered five resources; everything in
+`docs/vendors/ninjaone/api-reference.md:81-158` had no client code. Added
+`resources/queries.ts`, `resources/automation.ts`, `resources/directory.ts`, and
+extended `resources/devices.ts` with per-device inventory, `runScript`,
+`startMaintenance`, `cancelMaintenance`. All wired onto `NinjaOneClient`
+(`src/client.ts`). Tool count 26 -> 39; near-identical endpoints collapse behind
+an enum (`ninjaone_queries_run` covers all 13 `/v2/queries/*`,
+`ninjaone_devices_inventory` covers 9 per-device paths) rather than one tool each.
+
+**Verified behaviors.** Tenant scoping builds `df: "org = <id>"`, never
+`organizationId` -- those endpoints have no such parameter, so passing one filters
+nothing while returning a whole-tenant result that reads scoped. Unparseable
+`installed_after` / `installed_before` drop the filter instead of sending `NaN`.
+`ninjaone_devices_activities` now actually sends its `activity_type` as `type`
+(`api-reference.md:79`); the property was declared and never read.
+
+**Annotations.** `src/annotate-tool.ts` classified by name pattern:
+`ninjaone_devices_maintenance` fell through to the read-only default while
+mutating state, and `ninjaone_queries_run` was marked a write because its name
+contains "run". Explicit overrides plus `src/__tests__/annotations.test.ts`,
+which fails if a mutation-implying name lands in the read class.
+
+**Supersedes 5.12.0's placement.** `ninjaone_devices_os_patch_installs` moved
+from the devices domain to queries and shares one routing path with
+`ninjaone_queries_run`. The duplicate client methods
+`devices.getOsPatchInstalls` / `listOsPatchInstalls` and their orphaned
+`unwrapQueryResults` helper are removed (node-ninjaone 1.4.0).
+
+**Deliberately unshaped.** NinjaOne apidocs are JS-rendered and return nothing, so
+response field names for the new endpoints are unverifiable. Records pass through
+without summary functions rather than being narrowed against guessed names.
+
+**Fixed: node-ninjaone's suite could not run.** Nine test files, a vitest
+config, an empty `scripts` block, and no `msw` or `vitest` in devDependencies.
+Added both plus `@vitest/coverage-v8` and the missing scripts; the 82 existing
+tests pass unchanged. New `tests/integration/resources.test.ts` asserts that
+`queries`, `automation`, and `directory` are reachable on `NinjaOneClient` and
+that each method hits its documented path, which is the failure mode this
+release hit. Suite: 94 passed.
+
+**Evidence.** `tsc --noEmit` clean. Suite 142 passed / 11 failed vs a pre-change
+baseline of 94 / 11 -- 48 tests added, zero new failures; the 11 are pre-existing
+mock-shape mismatches. Isolated bundle handshake against
+`plugins/atlas/mcp/ninjaone/server.mjs`: ninjaone-mcp 1.7.0, 39 tools, all 35
+domain tools reached a handler with zero `Unknown tool`.
+
+**Open.** No new endpoint has been exercised against the live API.
+
+
+## 2026-08-18 -- atlas 5.12.0: NinjaOne OS patch history
+
+Released as atlas 5.12.0 (`plugins/atlas/.claude-plugin/plugin.json:3`,
+`.kimi-plugin/plugin.json:3`), ninjaone-mcp 1.6.3, node-ninjaone 1.3.0.
+
+The NinjaOne connector could not answer patch questions. Its four domains
+(devices, organizations, alerts, tickets) wrap no part of the `/v2/queries/*`
+API, and the only fallback, `ninjaone_devices_activities`, truncates at the
+40,000-char response cap while saturated with remote-session records, so it
+cannot reach back a week on a busy device.
+
+- New tool `ninjaone_devices_os_patch_installs`
+  (`mcp_servers/ninjaone-mcp/src/domains/devices.ts`). With `device_id` it hits
+  `/v2/device/{id}/os-patch-installs`; without one it hits
+  `/v2/queries/os-patch-installs`. Filters: `status` (INSTALLED/FAILED),
+  `installed_after`, `installed_before`, `organization_id` or `device_filter`,
+  `limit`, `cursor`. Requires the `monitoring` API scope.
+- Tenant-wide scoping goes through NinjaOne's `df` device filter, not
+  `organizationId`, which those endpoints do not accept. The tool builds
+  `df: "org = <id>"`; an explicit `device_filter` overrides it. Pinned by test.
+- `installed_after` / `installed_before` accept ISO 8601 or epoch seconds. An
+  unparseable value drops the filter instead of sending NaN, so a typo cannot
+  return an empty result that reads as a real answer.
+- Patch records are returned unshaped. NinjaOne's apidocs pages are JS-rendered
+  and the response schema could not be verified, so nothing narrows the record
+  to guessed field names.
+- SDK: `devices.getOsPatchInstalls()` and `devices.listOsPatchInstalls()`
+  (`mcp_node/node-ninjaone/src/resources/devices.ts`), both normalizing the bare
+  array and `{ cursor, results }` envelope shapes to an array.
+
+Evidence: `npm run typecheck` clean. `vitest src/__tests__/domains/devices.test.ts`
+18 passed, 2 failed; both failures reproduce on `81af28f` with the change stashed
+and are unrelated response-shaper assertions. `plugins/atlas/mcp/ninjaone/server.mjs`
+rebuilt (esbuild, bundled ESM, minified, no `node_modules`); copied alone into an
+empty directory it completes an MCP initialize handshake as ninjaone-mcp and
+returns 27 tools, up from 26, including the new tool with all ten schema
+properties.
+
+Not fixed here: `ninjaone_devices_activities` declares an `activity_type`
+property that its handler never reads, so the filter is inert.
+
+---
+
+## 2026-08-18 -- atlas 5.11.0: cut the terminal noise, make decisions block
+
+Released as atlas 5.11.0 (`plugins/atlas/.claude-plugin/plugin.json:3`,
+`.kimi-plugin/plugin.json:3`).
+
+**The boot banner was the noise, and it was measurable.** `hooks/session_boot.py`
+emitted 9,820 bytes on every SessionStart. 10,874 chars of that was the memory block,
+because `scripts/atlas_memory.py:load_snapshot()` injected the whole of MEMORY.md, whose
+cap is 20,000 chars. The content: ~40 lines of `Tool 'Write' errored 2x in
+agent-a870d7a4169e4bb8b`, six near-identical copies of one user correction filed once per
+subagent scope, and fragments cut mid-word. New `filter_for_recall()` filters injection
+only and never the file -- drops tool-error telemetry and junk scopes (`agent-<hex>`,
+`.run`, `.atlas`), collapses near-duplicates by normalizing away the `(project)` qualifier,
+and caps at 8 entries / 1,200 chars newest-first. Measured after: SessionStart 9,820 ->
+3,649 bytes, memory block 10,874 -> 1,068 chars.
+
+**The junk was still being written.** `hooks/memory_capture.py` refuses subagent scopes,
+never captures tool-error tallies (the counts stay in atlas_db for atlas-audit; recall was
+their only consumer), truncates on a word boundary, and is unbound from `SubagentStop` in
+`hooks/hooks.json` -- per-dispatch capture is what produced one copy per agent, and the
+parent `Stop` already resolves subagent sessions.
+
+**Two Stop hooks narrated their own bookkeeping.** `memory_capture` announced "captured N
+memory fact(s)" on every Stop. additionalContext on Stop costs a whole model turn to say
+nothing, the same defect `nudge.py` carried until 5.9.0. Silent on success now.
+
+**Decisions stop the line.** `output-styles/atlas-orchestrator.md` asked for a
+`DECISION NEEDED:` label and only "preferred" AskUserQuestion; a label scrolls past in a
+fast-moving terminal. A decision that gates the next step now MUST go through
+AskUserQuestion and wait, up to three batched into one call. Prose is reserved for an FYI
+decision that does not gate the work and names the default already taken.
+`skills/atlas-orchestrate/SKILL.md` closes the other lost path: a subagent returning
+`DECISION NEEDED:` makes AskUserQuestion the orchestrator's very next action, before
+further dispatch or synthesis.
+
+Verification: `python3 -m pytest plugins/atlas/hooks plugins/atlas/scripts -q` -- 1136
+passed. New coverage: `RecallFilterTest` (8), `QuietTerminalContract` (5, including a hard
+byte ceiling on SessionStart so this cannot creep back), `DecisionsAreBlockingContract` (2).
+
+---
+
+## 2026-08-18 -- atlas 5.10.0: no nested subagents, and stop sending a squad after a one-file change
+
+Released as atlas 5.10.0 (`plugins/atlas/.claude-plugin/plugin.json:3`,
+`.kimi-plugin/plugin.json:3`). Both rules were asserted in prose and enforced nowhere.
+
+**Subagents launched subagents.** No agent definition listed `Agent` or `Task` in
+`disallowedTools`, and no hook denied a nested dispatch. A nested agent is invisible to
+the orchestrator that owns the task: its dispatch is never counted toward verifier
+coverage, its verdict never reaches `findings.json`, its context is unreachable. Fixed in
+two independent layers so a change to either alone cannot reopen the hole: all 12 specs in
+`plugins/atlas/agents/` now carry `Agent, Task` in `disallowedTools` plus a "You do not
+dispatch" section, and `hooks/dispatch_tripwire.py:123` denies any `Agent`/`Task` whose
+`transcript_path` is a `subagents/` transcript. That deny runs before the `ATLAS_TRIPWIRE`
+kill switch (a structural invariant is not a taste setting) and before any DB call, because
+a subagent's session_id has no run row and everything downstream of `current_run_id()`
+returns early.
+
+**Every task cost two subagents.** Law 5 (`skills/atlas-orchestrate/SKILL.md:111`) required
+an `atlas:verifier` dispatch to pair each implementer, "no exceptions, no it is trivial",
+and completion-gate condition (g) enforced exactly that. A one-file change with a passing
+test still needed a second agent, which contradicts atlas's own doctrine that verification
+is a test run, not a subagent. Condition (g) is now
+`max(0, unpaired_implementer_dispatches - verified_findings_stamped_this_run)`
+(`hooks/completion_gate.py`): a `verified` entry written during the run pairs an
+implementer exactly like a verifier dispatch, scoped to the run window so an inherited or
+undated entry earns nothing. `SKILL.md` gains a wave-sizing ladder.
+
+**The orchestrator still never does the work.** Right-sizing is about how many subagents,
+never about working inline. The deny tier got tighter, 8 inline ops to 6
+(`hooks/dispatch_tripwire.py:32`). Tightening is safe because the count now excludes the
+orchestrator's own `docs/` and `.atlas/` writes via
+`atlas_db.unsanctioned_inline_ops_since_last_dispatch` -- counting those was a latent
+deadlock, since the completion gate orders exactly those writes at closeout and the
+tripwire would have denied them.
+
+Verification: `python3 -m pytest plugins/atlas/hooks plugins/atlas/scripts -q` -- 1129
+passed. New coverage: `NestedSubagentDenyTest` (7), `TestRunPairsAnImplementerTest` (5),
+`UnsanctionedInlineOpsTest` (5), `NoNestedSubagentsContract` (4),
+`RightSizedDelegationContract` (4).
+
+---
+
+## 2026-08-18 -- atlas 5.9.0: the four atlas-side defects the usage-insight report measured
+
+Released as atlas 5.9.0 (`plugins/atlas/.claude-plugin/plugin.json:3`,
+`.kimi-plugin/plugin.json:3`). Source: `~/.claude/usage-data/report-2026-08-18-075202.html`,
+6,284 messages across 369 sessions, 2026-07-02 to 2026-08-17.
+
+**1. The verifier had no write path for its verdict.**
+`plugins/atlas/agents/verifier.md:7` declares `disallowedTools: [Write, Edit, MultiEdit,
+NotebookEdit]`, and the file never mentioned `findings.json`. The completion gate's
+condition (b) (`plugins/atlas/hooks/completion_gate.py:85`) reads
+`.atlas/.run/findings.json` for `status: "verified"`. The contract required a file the
+agent was structurally prevented from writing and never told about, so verdicts came back
+as prose and the gate re-tripped. Fixed with `plugins/atlas/scripts/atlas_finding.py` (a
+Bash-invocable atomic append the verifier can actually run), a MANDATORY final step in
+`agents/verifier.md:72`, and a `PreToolUse`/`PostToolUse` bracket around every `*verifier*`
+dispatch in `hooks/dispatch_tripwire.py:227` that flags a returned verifier which added no
+row.
+
+**2. Closeout gates turned a handoff request into a fresh dispatch wave.** The gate's block
+text led with "dispatch atlas:completeness-critic", and `atlas-handoff` had no preflight.
+`hooks/completion_gate.py:250` now orders remediation smallest-first (write the unwritten
+record inline; dispatch only for evidence that does not exist yet; never start a dispatch
+that cannot finish), and `skills/atlas-handoff/SKILL.md:19` gains a Step 0 gate preflight
+ahead of the summary body.
+
+**3. Stale MCP credentials ate whole sessions.** New
+`plugins/atlas/hooks/connector_credential_watch.py`, wired `PostToolUse` on `mcp__.*`
+(`hooks/hooks.json`): on the first 401/403, or a 400 whose body names the token, from any
+MCP tool, inject one instruction to restart the server rather than sweep the remaining
+endpoints. Once per server per session, advisory only, `ATLAS_CONNECTOR_WATCH=off`.
+
+**4. nudge.py announced its own success on Stop.** additionalContext on Stop prompts
+another model turn. `hooks/nudge.py` is now silent on the success path.
+
+Also closed here (moved out of `docs/ROADMAP.md`): the "[active] Reinstall after the
+5.6.0 bump" item. `InstalledParityContract` no longer skips -- all three assertions run
+and pass against the installed 5.9.0 cache.
+
+Verification: `python3 -m pytest plugins/atlas/hooks plugins/atlas/scripts -q` -- 1082
+passed. New coverage: `scripts/test_atlas_finding.py` (9),
+`hooks/test_connector_credential_watch.py` (11), `VerifierVerdictBracketTest` in
+`hooks/test_dispatch_tripwire.py` (6), and
+`hooks/test_atlas_contract.py::InsightRemediationContract` (7 permanent invariants pinning
+each fix).
+
+---
+
+## 2026-08-11 -- atlas 5.8.0: subagents fell back to Bash grep because serena died first
+
+Released as atlas 5.8.0 (`plugins/atlas/.claude-plugin/plugin.json:3`, `.kimi-plugin/plugin.json:3`).
+
+Measured across the 12 most recent recorded subagent transcripts under
+`~/.claude/projects/*/subagents/`: 378 Bash calls (190 `cd`, 61 `grep`, 25 `cat`, 15 `sed`)
+against 8 successful MCP calls. All 9 serena calls failed. Zero lean-ctx calls in any run.
+Three of the twelve never called `ToolSearch` at all. The agents were not ignoring their
+tools - they were taking a documented fallback that fired on every single dispatch.
+
+Three defects in series:
+
+- The mandated batched `ToolSearch("select:...")` named serena only. serena failed on the
+  target repo (`KeyError: 'languages'`), and since nothing else had been loaded, `Bash grep`
+  was the only reader left. lean-ctx sat in the agents' tool tables but never in the line
+  that loads a schema (`plugins/atlas/agents/*.md`).
+- 5.7.1 taught agents to recognize the broken `.serena/project.yml` and fall back; nothing
+  ever repaired the file, so the fallback fired forever.
+- A dispatch could omit its TOOLS block and nothing objected.
+
+Fixes: one batched `ToolSearch` per agent spanning lean-ctx + serena + context-mode with an
+explicit serena-down ladder to `ctx_search`/`ctx_read`
+(`plugins/atlas/agents/*.md`); `heal_serena_project()` in
+`plugins/atlas/hooks/session_boot.py` appends the required `languages:` key at SessionStart
+(idempotent, never creates an absent config, fails open); a PreToolUse deny in
+`plugins/atlas/hooks/dispatch_tripwire.py` for an `atlas:*` dispatch that orders no
+`ToolSearch`, bound via `hooks.json` on `Agent|Task`; and the same block in
+`skills/atlas-orchestrate/references/subagent-kit.md`. 10 contract tests added; full hook
+suite 500 passed.
+
+---
+
+## 2026-08-11 -- atlas 5.7.1: serena was never activating a project
+
+Released as atlas 5.7.1 (`plugins/atlas/.claude-plugin/plugin.json:3`, `.kimi-plugin/plugin.json:3`).
+
+5.7.0 made every agent name serena's tools correctly and serena still did nothing. Two
+configuration defects sat in series underneath it:
+
+- serena 1.6 made `languages:` a `ProjectConfig` field with no default. Every
+  `.serena/project.yml` on this machine predates the rename and carries only
+  `language_servers:`, so `serena_config.py:569` raises `KeyError: 'languages'`, the project
+  is skipped at load, and every symbol tool answers `No active project`.
+- `~/.mcp.json:57` - the entry the session actually reads - launched the server with
+  `--context claude-code` and no `--project`, so nothing activated even where the yml was
+  valid.
+
+Together they produced the always-empty status bar, the `tools/list`-then-silence logs, and a
+29% serena tool error rate (against 4.6% for context-mode and 6.8% for lean-ctx) that read as
+a bad tool rather than a bad config.
+
+The first determination, "the native `LSP` tool subsumes serena, remove it", was wrong and is
+recorded as such. `LSP` takes `(filePath, line, character)` and returns locations;
+`find_symbol` takes a name and returns a body. Serena's symbol-edit tools have no native
+equivalent, and its `claude-code` context excludes `read_file`, `search_for_pattern` and four
+others by construction, so it never overlapped lean-ctx or context-mode at all.
+
+Changed: all 12 agents load the symbol toolset in one up-front `ToolSearch`; the dispatch
+brief carries a `NON-INTERACTIVE` clause overriding serena's `interactive` default mode, which
+tells subagents to ask the user questions they cannot ask; `lsp-and-symbols.md` and
+`capability-routing.md` document the serena-vs-`LSP` split and the active-project
+preconditions; three contract tests enforce all of it. Full detail in
+`.atlas/findings/2026-08-11-serena-never-activated.md`.
+
+Known gap: ~40 other `.serena/project.yml` files on the machine still lack `languages:`; the
+sweep was declined. Repos with no project.yml are unaffected.
+
+---
+
+## 2026-08-06 -- atlas 5.7.0: subagents call the MCP tools, at the right tier
+
+Released as atlas 5.7.0 (`plugins/atlas/.claude-plugin/plugin.json:3`, `.kimi-plugin/plugin.json:3`), marketplace 3.6.0.
+
+**The defect.** Atlas subagents were told to "use `serena`" and to "route noisy output through `context-mode`" in prose. Those are deferred MCP tools: the schema is not in a subagent's tool list until it calls `ToolSearch`, so an agent looking for a tool literally named `serena` finds nothing and falls back to `Grep` + `Read` without saying so. `lean-ctx` and `claude-mem` appeared in no agent body at all. Three agents (`schema-inventory.md:4`, `rls-privilege-audit.md:4`, `naming-glossary-audit.md:4`) additionally carried a `tools:` frontmatter allowlist, which excludes every `mcp__*` tool by construction, so the routing could not have worked there even if the names had been right.
+
+**The fix, agent side.** All 12 agents in `plugins/atlas/agents/` now carry a tool-routing table ahead of their Method section: need, exact callable tool name, and what it replaces. The names are real (`ctx_compose`, `get_symbols_overview`, `find_symbol`, `find_referencing_symbols`, `replace_symbol_body`, `get_diagnostics_for_file`, `ctx_callgraph`, `ctx_search`, `ctx_batch_execute`, `ctx_execute_file`, `ctx_fetch_and_index`, `query-docs`, claude-mem `search`/`timeline`/`get_observations`), each agent gets only the rows its job needs, and every agent is told to `ToolSearch` for schemas first and to search by keyword because server prefixes differ per install. The three `tools:` allowlists are removed; `disallowedTools` already carried the read-only guarantee.
+
+**The fix, tier side.** `effort` is a real plugin-agent frontmatter key (`low`/`medium`/`high`/`xhigh` or an integer, confirmed against the CLI's own validator strings) and is the only reasoning-depth lever available to a subagent - there is no `thinking` key. Every agent now declares one. Sonnet is the ceiling for `atlas:*`: `rls-privilege-audit` drops from opus, and the `SKILL.md` tier table no longer routes `planner`, `completeness-critic`, or critical `verifier` work to opus. Effort is `low` for the nine roles that execute a spec the orchestrator already wrote and `medium` for the three that render an independent verdict against evidence they were not handed. The rationale is stated where it can act: a subagent that appears to need a bigger model is an underspecified prompt, and the fix is the prompt.
+
+**The fix, orchestrator side.** The routing table in `capability-routing.md` already existed and did not change behavior, because nothing required the orchestrator to put those names into a dispatch. The enforcement point moved into the prompt feed: `subagent-kit.md`'s dispatch spec now has a required `TOOLS` block, `prompt-optimization.md` makes naming exact tools a per-dispatch rule with the failure mode spelled out, and `capability-routing.md` gains a Step 2b table of the names to paste, plus the claude-mem worker-runtime argument shapes that caused its historical error rate. `subagent-kit.md` also now warns that a fork inherits the parent's model and effort, so an agent file's `model: sonnet` / `effort: low` do not apply to a forked dispatch.
+
+**Contract test.** `plugins/atlas/hooks/test_atlas_contract.py` gains `AgentTierContract` (7 tests) rather than a verifier subagent: every agent declares a valid `effort`; no agent exceeds sonnet; only `verifier`, `completeness-critic`, and `rls-privilege-audit` get `medium`; no agent carries a `tools:` allowlist; every agent names a `ToolSearch` instruction and at least one context-mode/lean-ctx tool; the five code-facing agents name a serena symbol tool.
+
+Evidence: `python3 -m pytest plugins/atlas/hooks/test_atlas_contract.py -q` -> **31 passed, 48 subtests passed in 2.03s**. Negative control: setting `planner` to `model: opus` and stripping its `effort` line fails 3 of the 7 new tests (`effort tier drift: ['planner.md: None (want low)']`), restored after.
+
+Not addressed: nothing enforces at runtime that a dispatched subagent actually called an MCP tool. The contract test proves the instruction is present and callable, not that the model obeyed it. Per-dispatch tool-use telemetry already lands in `~/.atlas/atlas.db`; measuring MCP-tool share per agent from it is the follow-up.
+
+---
+
+## 2026-08-06 -- armada 1.1.0: setup you can actually run, branding first
+
+Released as armada 1.1.0 (`plugins/armada/.claude-plugin/plugin.json:3`, `.kimi-plugin/plugin.json:3`), marketplace 3.5.0.
+
+**The defect.** Claude Code discovers only `plugins/<p>/skills/<name>/SKILL.md`, `plugins/<p>/commands/*.md` and `plugins/<p>/agents/`. armada had no `commands/` directory at all and exactly one skill directory, so its 123 department commands and 156 department skills -- all nested under `skills/armada/departments/` -- were invisible. The single visible skill opened with an `## Elicitation` section instructing it to ask an `AskUserQuestion` (org setup / department onboarding / brand enforcement / connector provisioning) before doing anything, and there was no skill to route any of those answers to. `/armada` therefore asked a question, had nowhere to send the answer, and burned the turn.
+
+**The fix: three setup skills promoted to the discoverable level, in run order.** `armada-brand` (step 1) detects org name, logo, colors, voice and commit style from `package.json`, `README.md`, theme files and `git log`, asks at most one question covering only what it could not detect, and writes the `org:` and `branding:` blocks of `.atlas/org-config.yaml`, merging rather than truncating. `armada-department` (step 2) refuses to run before branding exists, resolves a department name (with aliases), reads the real `skills/` and `commands/` listings out of the plugin tree, and writes `.atlas/departments/<dept>.yaml` from the existing seed template; with no argument it prints the 11-department table with live state and stops. `armada-connect` (step 3) reports which vendor connectors are live in-session versus missing credentials, and names the exact `userConfig` keys -- credentials stay on the atlas plugin and are never accepted in chat.
+
+**Departments activate by config, not by copying.** Department skills and commands stay in the plugin tree as the department agent's reference library; the yaml is the activation record. One copy of the content, so it cannot drift from the plugin, and nothing is written into the user's `.claude/`. The department files are not slash commands in a project, and the root skill and new README now say so instead of implying otherwise.
+
+**The root `armada` skill no longer elicits.** Its `## Elicitation` section is gone, `allowed-tools` is read-only (`Read, Glob, Grep, Bash`), and its job is a state scan that ends in exactly one recommended next command.
+
+**Contract test.** `plugins/armada/tests/test_armada_contract.py` (14 tests) locks the invariants that broke: the four setup skills resolve as `skills/<name>/SKILL.md`, dir names match frontmatter names, names are unique, the root skill contains no `AskUserQuestion` and declares no write tools, every `${CLAUDE_PLUGIN_ROOT}/...` path cited in any skill resolves to a real file (this caught a bad seed path during authoring), all 11 department dirs have their agent, and the two manifests agree on version while declaring no credentials.
+
+Evidence: `python3 plugins/armada/tests/test_armada_contract.py` -> **14 tests, OK**. Against the pre-change tree the same assertions fail: `git show HEAD:plugins/armada/skills/armada/SKILL.md | grep -c AskUserQuestion` -> `1`, `git ls-tree --name-only HEAD plugins/armada/skills/` -> `plugins/armada/skills/armada` (one skill), `git ls-tree HEAD plugins/armada/commands/` -> empty.
+
+Not addressed: the per-department `.mcp.json` files under `skills/armada/departments/*/` are equally undiscovered (only a plugin-root `.mcp.json` loads). Connectors work today because atlas declares them; armada's copies are dead files.
+
+---
+
+## 2026-08-06 -- atlas 5.6.0: the carried gaps closed, and the gate's own blind spot with them
+
+Released as atlas 5.6.0 (`plugins/atlas/.claude-plugin/plugin.json:3`, `.kimi-plugin/plugin.json:3`). Every item below was a gap this repo had recorded and left open, either in ROADMAP or as an honest caveat inside an earlier CHANGELOG entry. Evidence: `.atlas/evidence/2026-08-06-atlas-5.6.0-gap-closure.md`.
+
+**The one pre-existing test failure, explained and fixed.** `scripts/test_connectors_wiring.py` still discovered connectors by globbing `*.mcpb`, a layout the 2026-07-31 release replaced with vendored ESM bundles. Discovery returned an empty dict, so three of its four bundle tests passed vacuously and `test_every_mcp_server_has_a_bundle` failed. Discovery now keys on `mcp/<name>/server.mjs`; a new `test_connectors_are_discoverable_at_all` fails loudly if discovery ever goes empty again, and `test_mcp_server_runs_vendored_bundle_through_env_preloader` asserts the real `node --import ${CLAUDE_PLUGIN_ROOT}/mcp/_env/load.mjs .../server.mjs` shape instead of the retired `launch.sh` contract. 9 passed.
+
+**Gate-block persistence (`facets.gate_block_count` was permanently NULL).** `completion_gate.py` now writes one `friction_events` row per block (category `gate_block`, weight = number of failed conditions, snippet naming them: `conditions: a,b,f`), and `chronicle_facet.py` counts them into the facet. Wiring it surfaced a second defect: `_sync_friction_events` deleted *every* friction_events row for the session before re-mirroring `signals`, which silently erased both the new `gate_block` rows and `memory_capture`'s `memory_drop` rows -- neither of which any signal can reinsert. The delete is now scoped to the categories that hook actually owns (`chronicle_facet.py:_sync_friction_events`).
+
+**The gate's no-telemetry blind spot.** Conditions (a), (b), (f) and (g) key off the atlas_db run-write signal, which could not distinguish "this run wrote no files" from "nothing was ever recorded". A session whose telemetry never landed therefore got a gate that enforced only "the docs files exist" -- the skipped-reads-as-passed failure mode, previously asserted as a KNOWN GAP in `test_atlas_contract.py`. `_run_written_paths` now falls back to the git working tree when the run has zero `events` AND zero `tool_calls`; a run that logged activity and reports no writes is still trusted, so the dirty-tree false block the 2026-08-06 entry below fixed stays fixed. Both halves are asserted (`test_no_telemetry_falls_back_to_git_condition_f`, `test_gate_trusts_a_run_row_that_reports_no_writes`).
+
+**SECURITY: ten more secret shapes were trackable inside allowlisted folders.** The 2026-08-05 entry closed the ordering bug but explicitly did not claim full coverage. Probing with `git check-ignore` found `*.pgdump`, `*.dmp`, `*.rdb`, `*.bacpac`, `*.sqlite`, `*.sqlite3`, `*.db`, `*.jceks`, `*.keytab` and `*.p7b` still trackable under `docs/`, `.atlas/` and `plugins/`; the shapes that entry named as unverified (`*.jks`, `*.keystore`, `*.p8`, `id_ecdsa`, `.git-credentials`, `secrets.yml`) were in fact already covered. All ten are now in the terminal block. No tracked file matches any new pattern (`git ls-files` verified), and `docs/CHANGELOG.md`, `README.md` and `.atlas/findings/INDEX.md` remain trackable. A new `GitignoreSecretContract` probes 24 paths on every test run so this cannot regress silently.
+
+**`skill_factory.py` deleted.** 5.5.0 unwired `auto_skill.py` but left the script that actually wrote the SKILL.md files sitting in `scripts/`, callable by anything, and `atlas-setup` still verified its presence as a deployment step. Both the script and `test_skill_factory.py` are gone, `atlas-setup` no longer checks for it, and `test_no_script_writes_a_skill_either` asserts no script under `scripts/` writes a SKILL.md (reading one is still fine -- the asset auditor inventories them).
+
+**Facet enrichment is a command, not a prose step.** `atlas_doctor.py --enrich-facet <session_id> '<json>'` validates keys against `atlas_db.FACET_COLUMNS` and writes the LLM-judged columns; unknown columns, non-object payloads and unparseable JSON all exit 2. The judgment stays the model's; the write is now deterministic and testable.
+
+**Manifest and README drift corrected.** Both plugin manifests still advertised `auto-skill` and "automatic skill creation from session transcripts"; the Kimi manifest claimed 22 skills and 16 task skills (real: 21 and 14) and 11 hooks (real: 12, and `docs_drift_watch.py` was never listed). The plugin README repeated the same auto-skill claim and a 22-skill count.
+
+Evidence: `cd plugins/atlas && python3 -m pytest hooks scripts -q` -> **1028 passed, 3 skipped, 56 subtests passed**. The 3 skips are `InstalledParityContract` (installed cache at 5.5.0 vs manifest 5.6.0); they un-skip and pass after reinstall.
+
+---
+
+## 2026-08-06 -- Stop-hook noise: stop gating research-only runs and stop narrating passes, stop injecting nudge into subagent replies
+
+A user-reported transcript showed a chain of Stop-hook messages each forcing another assistant turn, burying the actual decision point. Three defects fixed:
+
+- **`completion_gate.py` conditions (a) evidence and (b) verified-finding no longer apply to a run that shipped zero non-docs code.** A prior run answered a question (no code shipped) and was still blocked on "no verified finding" -- the model then edited `findings.json` purely to satisfy the gate, inventing a schema key and corrupting the ledger. (a) and (b) now reuse the exact `_nondocs_changed` run-write signal already computed for (f)/(g): both are skipped when this run's own activity wrote no non-docs files. Conditions (c)/(d)/(e)/(h) (docs files existing, ROADMAP reconciled) are unaffected and still evaluated unconditionally. When code did ship this run, (a)/(b) block exactly as before.
+- **The gate no longer narrates a pass.** It previously emitted `[atlas] completion_gate: this run wrote zero non-docs files, so conditions (f)... and (g)... were not evaluated this Stop` as `additionalContext` on every zero-code-change Stop -- in a long session this fired every single turn, pure noise that invited a reply. The gate is now silent on every pass; it speaks only when it blocks. (Telemetry/logging of the same signal, if any is later added, is a separate concern from what reaches the model.)
+- **`nudge.py` removed from the `SubagentStop` binding in `plugins/atlas/hooks/hooks.json`** (now `Stop` only). The self-improvement nudge injected "capture the reusable lesson / confirm docs match" into a dispatched subagent's context immediately before it composed its final response; four of six dispatched agents in the reported session answered that prompt instead of returning their deliverable, each costing a full resume round trip. A subagent reports its lesson to its orchestrator in the deliverable -- it has no business writing to the ledger on its own. `ingest_session.py` was confirmed to emit nothing into the model's context on `SubagentStop` (silent DB mirroring only), so it was left untouched as instructed. `memory_capture.py` was also left untouched per explicit scope, but investigation found it does **not** match the "captures silently" assumption: it emits an `additionalContext` summary of what it captured on both `Stop` and `SubagentStop` (`memory_capture.py:413-422`) -- a real instance of the same class of noise this fix targeted for `nudge.py`, flagged here rather than silently changed.
+
+`plugins/atlas/hooks/test_completion_gate.py` gained tests: a run with zero non-docs changes and no evidence/findings passes the gate with empty stdout; the same run still blocks on missing evidence/findings once it has shipped code; a DB read error on the run-write query fails open to a silent pass rather than a warn. `plugins/atlas/hooks/test_nudge.py` gained a `hooks.json`-binding test asserting `nudge.py` is present under `Stop` and absent under `SubagentStop`.
+
+Evidence: `python3 -m pytest plugins/atlas/hooks -q` -> 467 passed (was 460), 8 subtests passed, 0 failures. This entry's `.atlas/.run/findings.json` record is `needs-verification`, not self-certified `verified` -- an independent verifier owns promoting it.
+
+## 2026-08-06 -- docs_drift_watch.py: session-scoped debounce, cached git calls, atomic state writes
+
+An independent verifier confirmed the mechanical claims in the entry below but found three defects in `plugins/atlas/hooks/docs_drift_watch.py`, fixed in this pass:
+
+- **Debounce was repo-global, not session-scoped.** The state file at `.atlas/.run/docs_drift_watch.json` carried no session identity, so a fresh session could inherit a prior session's streak and stay silent through its first drifting edits -- breaking the module's own "first drifting edit always warns" guarantee. Fixed: the state file now stores the `session_id` from the PostToolUse payload; a differing or missing `session_id` resets the streak to 0 before it increments.
+- **The git subprocess ran on every qualifying edit, debounce or not.** Measured ~38ms avg / 46ms max per edit (two `git diff` calls plus one `git rev-parse`) on a near-empty repo. Fixed: the git result is cached in the same state file, keyed on `time.monotonic()`, and reused for `GIT_CACHE_TTL_SECONDS = 2` (no config knob). Re-measured on the same kind of repo: ~20.8ms avg / ~34.3ms max per edit. Bailing out before any git call on `docs/`/`.atlas/` paths, no-`docs/`-root, and `ATLAS_GATE=off` was already in place and unaffected. The tradeoff: within the 2s window a burst of edits can report a slightly stale non-docs file count; the drift/no-drift boolean itself is unaffected because same-direction bursts (all-docs or all-non-docs) don't change that outcome mid-burst.
+- **State writes were not atomic.** `_save_state` did a bare `path.write_text(...)`; a crash mid-write could corrupt the file. Fixed: write to a temp file in the same directory, then `os.replace()` onto the target (atomic on POSIX), with temp-file cleanup on any failure. A lost increment under concurrent invocations remains an accepted, fail-open tradeoff.
+
+`plugins/atlas/hooks/test_docs_drift_watch.py` gained 6 tests: differing/missing/same `session_id` streak handling, git-cache reuse-then-refresh (call counted via monkeypatch, no real sleep), docs/`.atlas` paths never reaching git, and atomic replace leaving no partial file on a simulated write failure. One pre-existing test (`test_drift_cleared_then_reintroduced_warns_again`) now sleeps past the 2s cache TTL where it needs to observe a real git-state change made moments earlier -- a direct consequence of the new cache, not a flaky test.
+
+Evidence: `python3 -m pytest plugins/atlas/hooks -q` -> 460 passed (was 454), 0 failures. `pyright` on both touched files -> 0 errors, 0 warnings (the one pre-existing `memory_capture.py:84` error is untouched and unrelated). This entry's `.atlas/.run/findings.json` record is `needs-verification`, not self-certified `verified` -- an independent verifier owns promoting it.
+
+## 2026-08-06 -- Inline docs-drift warning (PostToolUse), so completion_gate's Stop check is a backstop, not the first notice
+
+`completion_gate.py` condition (f) only ever fires at Stop -- often many edits after the moment code drifted from `docs/`. New PostToolUse hook `plugins/atlas/hooks/docs_drift_watch.py` (matcher `Edit|Write|MultiEdit`) surfaces the same signal inline, immediately after the edit that caused it.
+
+- `_find_root`, `_docs_drift`, and `_git_changed_paths` were extracted out of `completion_gate.py` into a new shared module, `plugins/atlas/hooks/docs_drift.py` (public names `find_root`, `docs_drift`, `git_changed_paths`). `completion_gate.py` imports and re-aliases them to their old underscored names, so its own tests and public behavior are unchanged (verified: `test_completion_gate.py` unmodified, still green).
+- `docs_drift_watch.py` is a silent no-op when: no project root with `docs/` is found, `ATLAS_GATE=off`, the edited file is itself under `docs/`, or under `.atlas/`. Otherwise it computes drift via the shared helper and warns once, naming the count of non-docs files changed and the instruction to dispatch `atlas:docs-curator` before Stop.
+- Debounced via run-scoped state at `.atlas/.run/docs_drift_watch.json` (own file, distinct from `atlas_db`): warns on the first drifting edit, then every 5th one after, and resets the streak the moment a `docs/` file reappears in the diff so a later regression warns again immediately. Fails open on any error, including an unreadable/corrupt state file.
+- Wired into `plugins/atlas/hooks/hooks.json` under `PostToolUse`, alongside the existing `format_after_edit.py` entry. Hook count corrected from 12 to 13 in `plugins/atlas/README.md` and `docs/architecture/atlas-plugin-map-2026-07-17.md` (the latter was also missing `chronicle_facet.py` from its table; folded in while touching the count).
+
+Evidence: `python3 -m pytest plugins/atlas/hooks -q` -> 454 passed (was 445 before this change; 9 new tests in `test_docs_drift_watch.py`), 0 failures. `pyright plugins/atlas/hooks/` -> 1 pre-existing, unrelated error in `memory_capture.py:84` (confirmed present before this change), 0 errors in any file touched by this entry.
+
+## 2026-08-05 -- Chronicle/insights schema, atlas-doctor self-improvement skill, and two root-cause fixes for a learning stall
+
+**Released as atlas 5.4.0** (`plugins/atlas/.claude-plugin/plugin.json:3`), marketplace 3.2.0
+(`.claude-plugin/marketplace.json:5`), commit `da0f90e`. Manifest descriptions in both files
+were corrected to the verified counts: 21 skills (`atlas-doctor` was missing) and 12 hooks
+(`chronicle_facet` was missing); they had read 20 and 11. Per-plugin release notes live in
+`plugins/atlas/CHANGELOG.md`.
+
+Root-cause investigation (`.agents/notes/atlas-self-improvement-rootcause.md`) found that atlas's own capture pipeline worked but consumption of what it captured was dead: `improvements` was 24 days stale, `asset_verdicts` 27 days stale, and lessons written to `MEMORY.md` after 2026-07-16 were silently discarded. This entry ships the schema and skill that let atlas mine, review, and apply its own findings, plus fixes for both silent-drop causes.
+
+- Added three tables to `plugins/atlas/scripts/atlas_db.py`: `facets` (`atlas_db.py:43-52`, one deterministic+LLM-enriched insight row per session, primary key `session_id`), `friction_events` (`atlas_db.py:57-60`, categorized friction events), and `findings` (`atlas_db.py:62-67`, doctor-produced findings with a `UNIQUE fingerprint` and a `status` lifecycle of `open|accepted|rejected|applied|verified|regressed`). `improvements` extended additively with `finding_id`, `metric`, `baseline_value`, `target_value`, `measure_after_runs`, `remeasured_at`, `remeasured_value`, `verdict` (`atlas_db.py:165-172,613-620`). `facets` and `findings` are deliberately left out of `TELEMETRY_TABLES` (`atlas_doctor.py:40-53`) so they are never row-capped like per-event telemetry. Verified: migrating a copy of the live 119MB `~/.atlas/atlas.db` left all 12 pre-existing tables' row counts identical and `improvements` kept its 38 rows.
+- New Stop hook `plugins/atlas/hooks/chronicle_facet.py` (191 lines) writes one deterministic `facets` row per session from data `ingest_session.py` already stored, and mirrors this session's `signals` into `friction_events` via `FRICTION_CATEGORY_BY_SIGNAL` (`chronicle_facet.py:24-29`). Writes NULL, not a fabricated 0, for counts on a session that was never ingested. Wired into the Stop chain in `plugins/atlas/hooks/hooks.json` (line 85), after `ingest_session.py`, before `memory_capture.py`.
+- New skill `plugins/atlas/skills/atlas-doctor/SKILL.md`: an interactive self-improvement loop, promoted out of `atlas-setup` into its own skill. Five phases: enrich pending facets, mine findings, ask the user per finding (apply/skip/modify), apply accepted changes as real edits, record a baseline and re-measure later.
+- `plugins/atlas/scripts/atlas_doctor.py`: added a `MINERS` registry of 8 miners (`atlas_doctor.py:925-933`: `memory_capture_silent_drop`, `doctor_hook_stale_verdicts`, `gate_block_silences_capture`, `facet_uningested_hardcoded_zero`, `inline_dispatch_ratio_high`, `verifier_coverage_low`, `tool_error_rate_high`, `recurring_friction`); a new CLI (`--mine`, `--list-findings`, `--set-status`, `--baseline`, `--remeasure`, `--pending-facets`, `--json`); and `record_hook_verdict()` (`atlas_doctor.py:460`) wired into the `--hook` path (`atlas_doctor.py:1233`), which fixes cause 2 below. Verified end to end: `mine` -> `set-status` -> `baseline` -> `remeasure` produced a real `improved` verdict; re-running `--mine` did not duplicate findings (fingerprint-keyed upsert).
+- `completion_gate.py` conditions (f) docs-drift and (g) verifier-coverage rescoped from the whole git working tree to only the files this run wrote, via the `atlas_db` run signal (`completion_gate.py:346-370`, helpers `_run_written_paths`/`_docs_drift`/`_unpaired_implementer_dispatches` at `completion_gate.py:450-488`). A dirty tree inherited from a previous session no longer blocks a run that touched nothing; (f) now WARNs instead of blocking when a run wrote zero non-docs files (`completion_gate.py:376-393`).
+
+### Root cause 1: `stop_hook_active` was silencing atlas's own telemetry, not just its retry loops
+
+`atlas_hook_guard.should_run()` gained a `kind` parameter, `"capture"` or `"emit"` (default `"emit"`), documented at `atlas_hook_guard.py:140-159`. The `stop_hook_active` short-circuit (`atlas_hook_guard.py:162`) now suppresses only `kind="emit"` hooks (nudge/auto_skill/completion_gate re-emitting a message or block decision, which is what the guard was built to stop). `ingest_session.py:29`, `memory_capture.py:329`, and `chronicle_facet.py:155` all now pass `kind="capture"`. Root cause: whenever `completion_gate` blocked, Claude Code re-fired Stop with `stop_hook_active=true`, and the old unconditional guard silenced every atlas Stop hook on that retry -- so the gate's false-positive blocks (the whole-tree drift check fixed above) had been switching off atlas's own capture hooks since late July. See `.atlas/findings/2026-08-05-stop-hook-active-silenced-capture-hooks.md`.
+
+### Root cause 2: `MEMORY.md`'s 4000-byte cap silently discarded every lesson since 2026-07-16
+
+`plugins/atlas/scripts/atlas_memory.py`: `WORKING_CAP_CHARS` raised from `4_000` to `20_000` (`atlas_memory.py:53`), with rotation to a dated `archive/<NAME>-<YYYY-MM>.md` file (`atlas_memory.py:76-79`) instead of outright rejection when the cap is still hit. Root cause: the user's real `MEMORY.md` sat at 4058 bytes against the old 4000-byte cap, so `atlas_memory.add()` returned `success=False` with no error surfaced, and `memory_capture.py` silently swallowed it. Verified: a forced rotation of 50 entries produced 41 live + 10 archived + 1 new with zero entries lost; the user's actual 4058-byte file gains a new entry cleanly with the original content untouched. Companion fix: `plugins/atlas/hooks/memory_capture.py` added `_record_drop()` (`memory_capture.py:280-296`) and else-branches at both `atlas_memory.add()` call sites (`memory_capture.py:387,397`) so an unstorable lesson is now recorded to `friction_events` (category `memory_drop`) and surfaced on stderr instead of vanishing. Verified: the `mine_memory_capture_silent_drop` miner reported this defect before the fix and reports no finding after. See `.atlas/findings/2026-08-05-memory-cap-silently-dropped-lessons.md`.
+
+### Decision: anonymized feedback exporter built, then removed
+
+An exporter meant to share anonymized session facets/findings was built (`atlas_feedback.py`, `test_atlas_feedback.py`), then deleted this session at the user's direction after an adversarial verifier proved it leaked the user's vendor stack (MCP connector UUIDs, vendor tool names, internal skill codenames) into what was meant to be a shareable export. See `docs/decisions/no-anonymized-feedback-exporter-without-designed-in-redaction.md`. The underlying facets/findings data keeps accumulating, so the exporter can be rebuilt later with anonymization designed in rather than retrofitted.
+
+Evidence: `python3 -m pytest scripts hooks -q` from `plugins/atlas` -> 1045 passed, 1 pre-existing failure (`test_connectors_wiring::test_every_mcp_server_has_a_bundle`, confirmed unrelated by reproducing it on a clean stashed tree).
+
+Known gaps, not shipped this run -- see ROADMAP:
+- Gate-block persistence (which condition fired, to `atlas.db`) is not implemented; `facets.gate_block_count` stays NULL.
+- Phase 1 facet enrichment has no deterministic CLI flag; it is an LLM judgment driven by the `atlas-doctor` skill reading `--pending-facets`.
+- No unit test yet asserts a memory drop is recorded to `friction_events`.
+
+### SECURITY: secret-pattern re-exclusions sat above the allowlist, so every `!docs/**`/`!.atlas/**` rule re-admitted them -- pre-existing, not introduced this session
+
+`.gitignore`'s Section 3 secret patterns (`*.key`, `*.pem`, `id_rsa`, `credentials.json`, etc., `.gitignore:66-91` before the fix) sat above Section 4's allowlist (`!docs/`, `!.atlas/`, and their per-subdir `!docs/<subdir>/**` / `!.atlas/<subdir>/**` entries). Because later `.gitignore` rules win, every one of those allowlist entries silently re-admitted the secret patterns underneath it. This was **pre-existing** and dated back to whenever the per-subdir allowlist entries were added (see the 2026-07-17 canonical-structure-scaffolding and 2026-07-31 `.mcpb` entries above); it was not caused by this session's `docs/decisions/` addition, which merely inherited the same flaw. It affected every allowlisted secret-adjacent folder identically, confirmed for `docs/audits/` and `docs/specs/` as well as `docs/decisions/`, not just the folder this session happened to be writing to.
+
+Verified with `git check-ignore` **before** the fix -- all trackable (i.e. the bug was live):
+`docs/decisions/secret.key`, `docs/decisions/foo.pem`, `docs/decisions/id_rsa`, `docs/decisions/credentials.json`, `docs/audits/secret.key`, `docs/specs/id_rsa`. Only `.env` variants were safe, because they alone had a dedicated post-allowlist re-exclusion block (`**/.env` family).
+
+Fix (`.gitignore:341-371`): added a "Global secret re-exclusion (MUST stay after the allowlist)" block immediately before the `plugins/atlas/.env` re-exclusion, mirroring the existing `**/.env` pattern for the rest of the secret set (`**/*.key`, `**/*.pem`, `**/*.p12`, `**/*.pfx`, `**/*.crt`, `**/*.cer`, `**/*.der`, `**/*.asc`, `**/*.gpg`, `**/id_rsa`, `**/id_ed25519`, `**/*_rsa`, `**/*_ed25519`, `**/credentials.json`, `**/secrets.json`, `**/secrets.yaml`, `**/service-account*.json`, `**/firebase-adminsdk*.json`, `**/.netrc`, `**/.npmrc`, `**/.pypirc`, `**/*.tfstate`, `**/*.tfstate.*`).
+
+Verified after the fix: all 8 probe paths (`docs/decisions/{secret.key,foo.pem,id_rsa,credentials.json}`, `docs/audits/secret.key`, `docs/specs/id_rsa`, `plugins/atlas/private.pem`, `.atlas/findings/id_rsa`) -> IGNORED. Real docs still trackable (`docs/CHANGELOG.md`, the new ADR, `.atlas/findings/INDEX.md`). `git ls-files | wc -l` -> 1650, with no already-tracked file matching the new patterns.
+
+Not comprehensively verified: an atlas verifier is separately auditing pattern coverage for secret shapes this list may still miss (e.g. `*.jks`, `*.keystore`, `*.p8`, `id_ecdsa`, `.git-credentials`, `secrets.yml` vs `secrets.yaml`). This entry covers only what was checked above; it does not claim all secret shapes are now blocked. See `.atlas/findings/2026-08-05-gitignore-secret-patterns-above-allowlist.md`.
+
+---
+
+## 2026-07-31 -- All 10 atlas MCP connectors were dead on arrival; replaced .mcpb launchers with vendored ESM bundles
+
+`.gitignore` had `*.mcpb`, so the 10 vendored MCP connector bundles were never committed. An installed plugin's `mcp/<name>/` folder held only `extract.sh` and `launch.sh`; `launch.sh` called `extract.sh <name>`, which had no `<name>.mcpb` to find, so no server ever started and zero `mcp__plugin_atlas_*` tools existed in any session. Separately, `.mcpb` is a Claude Desktop installation format that Claude Code plugins cannot execute natively (`code.claude.com/docs/en/plugins-reference.md`), so the extract-and-exec wrapper was never going to work as a plugin mechanism.
+
+- Replaced the `.mcpb` + `launch.sh` + `extract.sh` mechanism with one self-contained ESM bundle per server: `plugins/atlas/mcp/<key>/server.mjs`, built with tsup `noExternal:[/.*/]`, no `dist/`, no `node_modules/`. Removed the 4 domain subfolders (`hr`, `it-operations`, `microsoft-365`, `security`), the 8 shell scripts, and the 10 `.mcpb` bundles; layout is now one folder per connector key (auvik, blumira, cipp, connectwise, knowbe4, ninjaone, paylocity, spanning, threatlocker, vanta). `plugins/atlas/mcp/` went from 31 MB to 4.3 MB.
+- `plugins/atlas/.mcp.json`: all 10 entries rewired from `bash .../launch.sh` to `command: "node"`, `args: ["--import", "${CLAUDE_PLUGIN_ROOT}/mcp/_env/load.mjs", "${CLAUDE_PLUGIN_ROOT}/mcp/<key>/server.mjs"]` (e.g. `plugins/atlas/.mcp.json:99-105` for ninjaone).
+- Added `plugins/atlas/mcp/_env/load.mjs`, a dependency-free ESM preloader: loads `ATLAS_ENV_FILE` (default `${CLAUDE_PLUGIN_ROOT}/.env`) with override semantics, then promotes `CFG_<NAME>` to `<NAME>` only when `<NAME>` is unset, non-empty, and not an unexpanded `${...}` literal (`load.mjs:5-34`). Never writes to stdout, since stdout is reserved for JSON-RPC. `.env` now takes precedence over the plugin's `userConfig` Keychain values (which remain as fallback), because node's `--env-file` does not override variables already present in the environment, so `userConfig` would otherwise always win. Added `plugins/atlas/.env.example` covering all 40 credential variables, commented, no values.
+- `.gitignore:307-314`: added `!plugins/atlas/mcp/` + `!plugins/atlas/mcp/**` (re-included after the generic `dist/`/`node_modules/` excludes) so the bundles actually ship; `plugins/atlas/.env` explicitly re-excluded at `.gitignore:339-340`, `.env.example` stays tracked. `*.mcpb` rule retained.
+- Marketplace metadata: removed the stray root `marketplace.json`, which duplicated all 3 plugins and produced 6 cards for 3 plugins in the plugin browser. `plugins/programmer/.claude-plugin/plugin.json:5` author corrected `"Jerry"` -> `"w159"`. Corrected stale counts in `.claude-plugin/marketplace.json:4,13`: "22 plainly named skills" -> 20, "16 task skills" -> 14.
+
+Known limitation, recorded honestly: Claude Code has no per-MCP-server enable/disable, only plugin-level `defaultEnabled` (`plugins-reference.md:509-518`). All 10 servers load together; those without credentials sit in a reduced diagnostic mode.
+
+Evidence (independently verified by a fresh-context verifier): all 10 servers complete an MCP initialize handshake and return `tools/list` (auvik-mcp 0.4.2, 39 tools; blumira-mcp 1.1.5, 2 credential-gated; cipp-mcp 0.2.2, 43; connectwise-manage-mcp 1.5.2, 2 without credentials / 52 with; kaseya-spanning-backup-mcp 1.1.3, 14; mcp-server-knowbe4 1.1.2, 30; ninjaone-mcp 1.6.2, 26; paylocity-mcp 0.1.4, 16; threatlocker-mcp 1.3.0, 18; vanta-mcp 0.2.3, 28), all exit cleanly. `ninjaone/server.mjs` copied alone into an empty temp dir ran and returned its full 26-tool list with no `node_modules` present. All 10 bundles confirmed git-addable; `plugins/atlas/.env` confirmed ignored. 40 `userConfig` keys reconcile exactly across `plugin.json`, `.mcp.json`, and `.env.example` with none renamed, dropped, or orphaned. Credential precedence verified in all four cases (`.env` beats `CFG_`, `CFG_` used when `.env` omits, unexpanded `${user_config.x}` not promoted, empty `CFG_` not promoted). Preloader stdout-safety verified against malformed input, a missing file, and a directory passed instead of a file: zero stdout bytes in every case, never throws.
+
+Not yet verified: this has not been proven working from an installed plugin cache, since that requires this commit to be pushed first.
+
+---
+
+## 2026-07-29 -- Marketplace renamed atlas -> tech-tools (repo rename follow-up)
+
+The GitHub repo was renamed from `w159/atlas` to `w159/tech-tools` (confirmed via `gh api repos/w159/atlas -q .full_name` returning `w159/tech-tools`, the old URL now a live redirect). This is a naming-inconsistency fix, not the "marketplace source mismatch" the 2026-07-28 entry and ROADMAP had guessed at: `atlas_doctor.py` derives its expected repo straight from the `atlas` plugin's own `repository` field in `plugin.json`, and that field still read the pre-rename URL.
+
+- Marketplace catalog name changed `atlas` -> `tech-tools` in `.claude-plugin/marketplace.json:3`. Plugin references now read `atlas@tech-tools`, `programmer@tech-tools`, `armada@tech-tools`. The two Kimi-schema catalogs (`marketplace.json`, `.kimi-plugin/marketplace.json`) have no top-level marketplace name field to change (schema `"version": "2"`, `id`/`displayName`/`source` per plugin); their per-plugin `source` URLs were repointed from `w159/atlas` to `w159/tech-tools`.
+- Plugin identities are unchanged: `atlas`, `programmer`, and `armada` still each carry `"name": "<plugin>"` in their own `plugin.json` / Kimi manifest. Only the `repository` and `homepage` URLs in all six plugin manifests (`.claude-plugin/plugin.json` and `.kimi-plugin/plugin.json` for each of the three plugins), the two armada `department-config.json` files (security-compliance, microsoft-365), and doc links in `README.md` / `plugins/README.md` were repointed to `github.com/w159/tech-tools`.
+- `plugins/atlas/scripts/atlas_doctor.py`: added `LEGACY_REPO_ALIAS = "w159/atlas"`; the `marketplace-source` check now accepts either the current `expected_repo` (derived from the plugin's own `repository` field, now `w159/tech-tools`) or the legacy pre-rename URL, since GitHub's redirect means an unmigrated install is not actually broken. Still a warning-only check in `--hook` mode, never a hard failure. New test: `test_legacy_pre_rename_repo_url_accepted_as_marketplace_source` in `test_atlas_doctor.py`.
+- Corrects `docs/ROADMAP.md`: the open item describing this as an `atlas_doctor` "marketplace-source repair" / mismatch has been resolved and removed from Backlog; it was this same naming inconsistency, not a fork or a real source-of-truth problem.
+
+Evidence: `python3 -m pytest plugins/atlas/scripts/test_atlas_doctor.py -q` -> 36 passed. Every `*.json` file in the repo still parses (`python3 -c "import json,glob; [json.load(open(f)) for f in glob.glob('**/*.json', recursive=True) if '.git' not in f and 'node_modules' not in f]"`).
+
+---
+
+## 2026-07-28 -- atlas 5.2.0: shared Stop-hook guard module with a session circuit breaker
+
+The point fix earlier this date (`ab67df4`) patched `memory_capture.py` directly. The user pushed back that this was insufficient: the invariant "a Stop hook must not re-emit identical feedback forever" was still hand-implemented inconsistently across five hooks, and any new hook would inherit nothing. This release is the structural answer: one shared module plus a session-wide circuit breaker that can see the Stop chain thrashing as a whole, which no per-hook throttle can do.
+
+- New module `plugins/atlas/scripts/atlas_hook_guard.py` (about 218 lines). API: `read_payload()`, `should_run(payload, hook_name, window_seconds=None)`, `emit(payload, hook_name, message)`. Per-session JSON state at `~/.atlas/hookstate/<session_id>.json`, overridable via `ATLAS_HOOKSTATE_DIR` for tests. Tracks `last_run` per hook, `stop_events` for the breaker, and emitted message hashes (sha256, first 16 hex chars).
+- Circuit breaker: `STOP_BURST_LIMIT = 5`, `STOP_BURST_WINDOW = 120` seconds. More than 5 Stop events inside 120 seconds trips it for the rest of the session, silencing every atlas Stop hook. Writes one line to stderr, never stdout (stdout output would itself become hook feedback and could re-enter the loop it is meant to stop).
+- All five Stop hooks rewired to the guard, each keeping its previous throttle window now expressed through it: `nudge.py` 900s, `auto_skill.py` 600s, `memory_capture.py` 900s; `ingest_session.py` and `completion_gate.py` carry no throttle of their own (breaker only).
+- Design decision: `completion_gate.py` uses `should_run()` only, not `emit()`. Its definition-of-done block message is meant to repeat identically every Stop until the conditions are actually met; content-hash dedupe would silently defeat the gate. Only the breaker can silence it. Verified: three consecutive subprocess calls returned the identical block; a 7-call burst silenced it at call 6 via the breaker.
+- `memory_capture.py` keeps its separate fact-level seen-marker (`~/.atlas/.memory_capture_seen`) unchanged. That marker is about facts; the guard's dedupe is about messages. Two different mechanisms, both retained deliberately.
+- Version bumped 5.1.1 -> 5.2.0 in `plugins/atlas/.claude-plugin/plugin.json:3` and `plugins/atlas/.kimi-plugin/plugin.json:3` (minor bump: new capability plus a bug fix, no breaking change). No marketplace manifest carries a per-plugin atlas version (`.claude-plugin/marketplace.json` entries hold only name, source, description, category, keywords; the Kimi registries hold only id, displayName, source), so those two plugin manifests are the entire version surface. The registry's own `3.1.0` in `.claude-plugin/marketplace.json` is unrelated and was correctly left alone.
+
+Evidence: 23 passed in `test_atlas_hook_guard.py`; 129 passed across the five wired hook suites; 562 passed in `plugins/atlas/scripts`; 427 passed in `plugins/atlas/hooks`; ruff clean on all touched files. Incident replay end to end against the real `memory_capture.py` hook, same session, 4 calls about 1 second apart: call 1 emitted `additionalContext`, calls 2, 3, and 4 emitted nothing, exit 0 throughout. Breaker probe on a 13-second cadence: allowed, allowed, allowed, allowed, allowed, then blocked at Stop 6 (t=65s); after tripping, `should_run` returned False for all five hook names. Breaker probe on a legitimate slow cadence, 5 Stops over 10 minutes: never trips. Breaker is per-session: tripping session A does not silence session B. Fail-open held under ten adversarial probes, including corrupt JSON state, the state path being a directory, a chmod 000 state dir, malformed stdin, a missing `session_id`, and a poisoned schema; no exception escaped any of them.
+
+Known pre-existing operational issue, not introduced by this work: `atlas_doctor.py` reports the plugin's marketplace source pointing at `w159/tech-tools` where it expects `w159/atlas`. See ROADMAP.
+
+---
+
+## 2026-07-28 -- Fixed endless Stop-hook self-improvement loop that burned a usage limit
+
+A Claude Code session entered an endless Stop-hook loop: every turn re-emitted "[atlas] Self-improvement: captured 1 memory fact(s) and 0 project fact(s) from this session..." roughly every 13 seconds until the usage limit was exhausted. Root cause was two-fold: `memory_capture.py` had no loop guard and its per-cwd fact string defeated its own dedupe, and `session_ingest.py`'s signal detector could promote the hooks' own announcement text into a durable `user_correction` signal, which then kept `_should_capture()` returning true forever.
+
+- `plugins/atlas/hooks/memory_capture.py`: added the `stop_hook_active` early-exit guard (`memory_capture.py:316-317`), mirroring the existing pattern at `plugins/atlas/hooks/completion_gate.py:319-320`. The same guard was added to `plugins/atlas/hooks/ingest_session.py:25`, `plugins/atlas/hooks/auto_skill.py:69`, and `plugins/atlas/hooks/nudge.py:90` -- previously only `completion_gate.py` checked this payload flag.
+- `memory_capture.py`: replaced the per-cwd formatted-string dedupe with a content-hash seen-marker. `_hash_key()` (`memory_capture.py:60`) hashes the raw signal snippet, not the per-cwd formatted fact string, so a varying subagent working-directory label can no longer defeat the dedupe. The seen-hash set is persisted at `~/.atlas/.memory_capture_seen` and loaded before any output is built (`memory_capture.py:357`), so a fully-deduped batch now exits silently.
+- `memory_capture.py`: added a 900-second throttle (`CAPTURE_WINDOW_SECONDS`, `memory_capture.py:25,44`) with a marker file at `~/.atlas/.atlas_memory_capture`, mirroring `nudge.py`'s existing throttle pattern. The `ATLAS_MEMORY_CAPTURE=off` kill switch is unchanged.
+- `plugins/atlas/scripts/session_ingest.py`: `detect_signals()` previously ran its CORRECTION/ADMISSION regexes against any user-role transcript text with no filter, so the hooks' own output could be promoted into a durable `user_correction` signal (the CORRECTION regex matches "you never...", and the hooks emit "You NEVER edit the target codebase yourself"). Added `MACHINE_MARKERS` and `_is_machine_authored()`; `detect_signals()` now returns no signal for machine-authored text. Known accepted cost: this is a wholesale suppression -- a genuine human correction that shares a message with pasted hook output is a false negative.
+- Test coverage: `python3 -m pytest plugins/atlas/hooks/test_memory_capture.py plugins/atlas/hooks/test_ingest_session.py plugins/atlas/hooks/test_auto_skill.py plugins/atlas/hooks/test_nudge.py -q` -> 84 passed (confirmed by direct run: memory_capture 30, ingest_session 15, auto_skill 10, nudge 29). New `MemoryCaptureLoopGuardTest` (`test_memory_capture.py:611`) fails against pre-fix code. Live subprocess proof: first hook invocation emits `hookSpecificOutput.additionalContext`, an identical second invocation emits nothing, exit 0. `session_ingest` fix: 94 passed; 3 of 4 new tests fail against pre-fix code; the real incident announcement string now yields `[]` from `detect_signals()`.
+
+`plugins/atlas/scripts/session_ingest.py`: `_is_machine_authored()`'s substring match on the `[atlas]` marker also swallowed ordinary human prose that happened to contain it (for example "the [atlas] plugin is broken, you never verified the fix"). Narrowed to a per-line, start-anchored check: `any(line.lstrip().startswith("[atlas]") for line in text.splitlines())`. `"[atlas]"` was removed from the substring-anywhere `MACHINE_MARKERS` tuple, which now holds only `"hook feedback:"` and `"Self-improvement: captured"`. `NOISE_PREFIXES` and `_is_real_prompt` were untouched. Diff: 45 insertions, 0 deletions. Evidence: 97 passed in `test_session_ingest.py`, ruff clean, the four pre-existing filter tests still pass unmodified. Verifier probe confirmed real hook output still suppressed in five forms (plain, indented, buried on line 3, "Stop hook feedback:" prefixed, last line with no trailing newline), and confirmed genuine human prose naming the plugin now correctly mints a `user_correction` again; prefixes such as `[atlas-orchestrate]` and `[atlassian]` are correctly not suppressed because the anchor requires the closing bracket.
+
+`plugins/atlas/scripts/session_ingest.py`: the line-start anchor above was still defeated by markdown-blockquoted hook output, since `lstrip()` strips whitespace but not markdown quote markers (a line like `> [atlas] Definition-of-done gate: ... you never ran the tests` was not suppressed). Fixed by adding `_QUOTE_PREFIX = re.compile(r"^[\s>]*")` and a helper `_strip_quote_prefix(line)` (`session_ingest.py:157-165`); `_is_machine_authored()` now applies `_strip_quote_prefix(line).startswith("[atlas]")` instead of `line.lstrip().startswith("[atlas]")` (`session_ingest.py:179-182`). The docstring was corrected so it no longer overclaims what is caught. `MACHINE_MARKERS` behavior, `NOISE_PREFIXES`, `_is_real_prompt`, and the `detect_signals` call site were untouched; `NOISE_PREFIXES` and `_is_real_prompt` confirmed byte-identical to HEAD. Diff: 66 insertions, 0 deletions. Pre-fix reproduction confirmed the bug (`detect_signals` returned `[('user_correction', 1.5, '> [atlas] Definition-of-done gate: ...')]`); post-fix it returns `[]`. Evidence: 101 passed in `test_session_ingest.py`, ruff clean. Adversarial verifier probe: all blockquote forms suppressed (`>`, `>>`, `> >`, leading whitespace then `>`, `>` with no space, hook line buried on line 3 of a blockquoted paste, and the full real incident string); genuine human corrections still fire, including the two closest calls, "> means greater than, and you never explained that" and "> atlas plugin you never ran the tests" (no brackets); a 2000-space, 5000-char line caused no crash or slowdown since the anchored `[\s>]*` does not backtrack. Verifier closing verdict: the blockquote gap is closed without opening a false-positive hole.
+
+Accepted trade-off, by design, pre-dating this fix: suppression in `_is_machine_authored()` is wholesale. Any message containing a machine marker anywhere is suppressed entirely, so a genuine human correction that shares a message with pasted hook output is a false negative. This is deliberate, pinned by `test_correction_wholesale_suppressed_when_sharing_a_message_with_hook_output`, and was judged cheaper than a signal that never expires.
 
 ---
 
@@ -141,21 +2938,21 @@ of scope for this remediation (not fixed here, tracked in ROADMAP):
 ## 2026-07-17 -- Full audit remediation and marketplace truth pass (v5.1.1)
 
 Follow-up to the entry below: the remaining defects in
-`atlas-audit-2026-07-17.md` were reproduced, fixed, and verified
+`2026-07-17-atlas-audit.md` were reproduced, fixed, and verified
 (972 passed, 0 failed). Root `SKILL.md` moved to `skills/atlas/`
 (the root file never loaded; /atlas now works), skill factory output
 redirected to `~/.claude/skills/`, trigger flags reconciled
 (22 skills: 2 manual, 20 auto), CLI exit codes hardened, prompt-optimizer
 timeout wired, and every stale count/version/path in README.md,
 plugins/README.md, plugin manifests, and atlas-setup references corrected.
-Audit-review verdicts recorded in `atlas-audit-2026-07-17-review.md`.
+Audit-review verdicts recorded in `2026-07-17-atlas-audit-review.md`.
 Detail: `plugins/atlas/CHANGELOG.md` 5.1.1.
 
 ---
 
 ## 2026-07-17 -- Security/correctness remediation from atlas-audit CODE 2026-07-17
 
-Findings from `docs/audits/atlas-audit-2026-07-17/report.md` (baseline: 967 tests passing).
+Findings from `docs/audits/2026-07-17-atlas-audit/report.md` (baseline: 967 tests passing).
 Verified: `python3 -m pytest plugins/atlas/ -q` -> 973 passed, 8 subtests passed.
 
 **Hook contract fix (H1-H4):** `additionalContext` was emitted as a bare top-level JSON key,
@@ -324,7 +3121,7 @@ and `.atlas/evidence/2026-07-16-atlas-5.1.0-wiring-repair.md`.
 ## 2026-07-15 -- SSOT correction: atlas-internal content moved from docs/ to .atlas/
 
 The previous `.atlas/docs/` → `docs/` refactor (2026-07-14) moved paths but left
-atlas-internal content in `docs/` — the exact dual-SSOT problem it was supposed
+atlas-internal content in `docs/` - the exact dual-SSOT problem it was supposed
 to solve. This correction moves all atlas-internal content to `.atlas/` and
 restores the correct split: `docs/` is the project wiki (CHANGELOG, ROADMAP,
 dynamic subfolders including graphify results); `.atlas/` is atlas's auditable
@@ -346,7 +3143,7 @@ wiki, nudge, self-improvement, memory, .run state).
 - Updated `scaffold_docs.py`: `ATLAS_ENTRIES` expanded from 3 to 11 subdirs
   (evidence, audits, plans, specs, architecture, lessons, wiki, nudge,
   self-improvement, memory, .run). `DURABLE_ENTRIES` remains minimal
-  (CHANGELOG.md, ROADMAP.md) — the wiki grows dynamically.
+  (CHANGELOG.md, ROADMAP.md) - the wiki grows dynamically.
 - Rewrote `docs-ssot.md` (atlas-orchestrate + atlas-loop): new contract with
   correct split. docs/ = project wiki (dynamic); .atlas/ = self-improvement
   surface (auditable tracking, skill generation/disabling, subagent management).
@@ -693,13 +3490,13 @@ shipping change carries an independent atlas:verifier record in
 
 ## Unreleased -- atlas harden: agent-roster cleanup, spec conformance, routing, marketplace repoint (2026-07-07)
 
-Audit: `docs/audits/atlas-harden-2026-07-07/` (orientation, decisions, per-stage
+Audit: `docs/audits/2026-07-07-atlas-harden/` (orientation, decisions, per-stage
 reports, red baseline, green-gate cross-check, final report). No plugin.json version
 bump in this pass - release timing left to Jerry.
 
 - Removed the five `ux-*` agent specs (`ux-cartographer`, `ux-persona`, `ux-fuzzer`,
   `ux-accuracy-oracle`, `ux-reporter`) and `api-usage-map`, guarded by a pre-delete grep
-  for live skill/command dispatches (`docs/audits/atlas-harden-2026-07-07/stage-removals.md:13-41`).
+  for live skill/command dispatches (`docs/audits/2026-07-07-atlas-harden/stage-removals.md:13-41`).
   UX testing's canonical owner is now `atlas-odysseus`; `ux-test-swarm.md` collapsed
   to an 11-line pointer at that skill (`stage-removals.md:75-78`). Struck all
   references to the six removed names from `plugins/atlas/README.md` (roster count
@@ -712,28 +3509,28 @@ bump in this pass - release timing left to Jerry.
   (orchestration), and atlas-nestor (skill selection); annotated 12 built-in/global
   agent-type mentions (`codebase-explorer`, `Explore`, `Plan`, `debugger`, etc.) with a
   `*` footnote marking them as not shipped under `plugins/atlas/agents/`
-  (`docs/audits/atlas-harden-2026-07-07/stage-routing.md:6-14`).
+  (`docs/audits/2026-07-07-atlas-harden/stage-routing.md:6-14`).
 - Added named-field Report-back sections to the three agent specs that lacked one
   (`naming-glossary-audit.md`, `rls-privilege-audit.md`, `schema-inventory.md`) and
   explicit hallucination-control grounding language ("I don't know" is a valid
   result, cite what was actually read, unproven gaps stay `[unverified]`) across all
   12 remaining agent specs
-  (`docs/audits/atlas-harden-2026-07-07/stage-conformance.md:7-36`).
+  (`docs/audits/2026-07-07-atlas-harden/stage-conformance.md:7-36`).
 - Repointed the tech-tools marketplace registration from the stale
   `henssler-financial/tech-tools` fork to canonical `w159/tech-tools` via
   `atlas_doctor.py --fix`, which rewrote `known_marketplaces.json`'s source URL and
   reset the marketplace clone's git remote/HEAD; doctor now reports `HEALTHY - atlas`
-  with 0 problems (`docs/audits/atlas-harden-2026-07-07/stage-marketplace.md:37-105`).
+  with 0 problems (`docs/audits/2026-07-07-atlas-harden/stage-marketplace.md:37-105`).
 - Hardened repo-root `.gitignore`: added a re-exclusion for `**/.in_use/` (and
   `**/.in_use/**`) after the `!plugins/**` allowlist, the one dev-runtime pattern of
   four checked that was not already covered
-  (`docs/audits/atlas-harden-2026-07-07/stage-gitignore.md:19-39`).
+  (`docs/audits/2026-07-07-atlas-harden/stage-gitignore.md:19-39`).
 - Deleted untracked dev caches (`plugins/atlas/.pytest_cache`,
   `plugins/atlas/.ruff_cache`, `plugins/atlas/scripts/.claude`) and the empty
   `plugins/atlas/references/` directory; no tracked file was affected
-  (`docs/audits/atlas-harden-2026-07-07/stage-removals.md:96-107`).
+  (`docs/audits/2026-07-07-atlas-harden/stage-removals.md:96-107`).
 - Known residue carried into the audit's final report for owner follow-up (not fixed
-  in this pass; see `docs/audits/atlas-harden-2026-07-07/final-report.md` section 4):
+  in this pass; see `docs/audits/2026-07-07-atlas-harden/final-report.md` section 4):
   a prior commit (`d1be66b`) already baked the local-relative-path marketplace scheme
   into `.kimi-plugin/marketplace.json` before this session's revert step ran, so the
   intended revert was a no-op and reverting it now requires a history-changing commit
@@ -804,7 +3601,7 @@ hooks, no engine). Marketplace repointed to w159/tech-tools; atlas re-registered
 ## Atlas v2.3.0 -- cohesion program (2026-06-30)
 
 The five-workstream Atlas cohesion program plus three adoption follow-ups. Each workstream was
-independently reviewed before merge. Plans + evidence under `docs/audits/atlas-cohesion-2026-06-29/`.
+independently reviewed before merge. Plans + evidence under `docs/audits/2026-06-29-atlas-cohesion/`.
 
 - **WS1 - hook misfires**: per-session orchestration marker (`runs.orchestrating` + `mark-orchestrating`
   CLI). The dispatch tripwire, completion gate, and nudge now gate on it, so non-orchestration sessions

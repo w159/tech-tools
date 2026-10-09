@@ -1,5 +1,12 @@
 # Recommendation Engine
 
+## Contents
+
+- [Analysis matrix](#analysis-matrix)
+- [Presentation format](#presentation-format)
+- [Confidence levels](#confidence-levels)
+- [What atlas-setup never recommends](#what-atlas-setup-never-recommends)
+
 the onboard mode analyzes the workspace and produces ranked recommendations. Each
 recommendation names a skill, a reason, a confidence level, and the command to
 run.

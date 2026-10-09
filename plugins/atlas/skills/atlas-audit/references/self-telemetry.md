@@ -1,5 +1,15 @@
 # Atlas self-telemetry (atlas-audit mode)
 
+## Contents
+
+- [Single source of truth](#single-source-of-truth)
+- [What it measures](#what-it-measures)
+- [Measurable improvements](#measurable-improvements)
+- [Asset/context audit (the context-cost lens)](#assetcontext-audit-the-context-cost-lens)
+- [Session forensics (the transcript-mirror lens)](#session-forensics-the-transcript-mirror-lens)
+- [Trends (no-arg)](#trends-no-arg)
+- [The nudge](#the-nudge)
+
 Atlas improves by measuring itself. Each run emits quantitative signals to the
 global SQLite observability DB at `~/.atlas/atlas.db` (env `ATLAS_DB`). This
 skill reads those signals, surfaces the run's health scores, and proposes

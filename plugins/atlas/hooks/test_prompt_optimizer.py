@@ -7,6 +7,11 @@ subprocess end-to-end exit-code tests round it out, but the line coverage
 comes from the in-process calls.
 """
 
+import os as _iso_os
+import sys as _iso_sys
+
+_iso_sys.path.insert(0, _iso_os.path.join(_iso_os.path.dirname(_iso_os.path.abspath(__file__)), "..", "scripts"))
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import io
 import json
 import os
@@ -380,12 +385,111 @@ class LooksSubstantiveTest(unittest.TestCase):
         )
 
 
+class ResolveSubstantiveTest(unittest.TestCase):
+    def test_strong_verb_does_not_call_model(self):
+        called = []
+
+        def decide(prompt):
+            called.append(prompt)
+            return ("conversation", 0.99)
+
+        self.assertTrue(
+            po.resolve_substantive(
+                "please refactor the authentication module thoroughly", decide=decide
+            )
+        )
+        self.assertEqual(called, [])
+
+    def test_generic_noun_veto(self):
+        text = "add a bow to the table centerpiece before the guests arrive"
+        self.assertTrue(po.looks_substantive(text))
+        self.assertFalse(
+            po.resolve_substantive(text, decide=lambda _p: ("conversation", 0.837))
+        )
+
+    def test_low_confidence_keeps_regex_arm(self):
+        text = "add a bow to the table centerpiece before the guests arrive"
+        self.assertTrue(
+            po.resolve_substantive(text, decide=lambda _p: ("conversation", 0.4))
+        )
+
+    def test_model_error_keeps_regex_arm(self):
+        text = "add a bow to the table centerpiece before the guests arrive"
+
+        def boom(_prompt):
+            raise OSError("down")
+
+        self.assertTrue(po.resolve_substantive(text, decide=boom))
+
+    def test_explain_promoted(self):
+        text = "explain how the completion gate decides to block a turn"
+        self.assertFalse(po.looks_substantive(text))
+        self.assertTrue(
+            po.resolve_substantive(text, decide=lambda _p: ("investigation", 0.978))
+        )
+
+    def test_bare_question_is_not_promoted(self):
+        text = "what does this acronym mean"
+        self.assertFalse(po.looks_substantive(text))
+        self.assertFalse(
+            po.resolve_substantive(text, decide=lambda _p: ("investigation", 0.99))
+        )
+
+    def test_bare_defect_does_not_promote(self):
+        text = "the service is down right now"
+        self.assertFalse(po.looks_substantive(text))
+        self.assertFalse(
+            po.resolve_substantive(text, decide=lambda _p: ("defect", 0.863))
+        )
+
+    def test_decision_off_keeps_regex(self):
+        text = "explain how the completion gate decides to block a turn"
+        with mock.patch.dict(os.environ, {"ATLAS_DECISION": "off"}):
+            self.assertFalse(po.resolve_substantive(text))
+
+
+class IsHarnessEventTest(unittest.TestCase):
+    def test_tag_prefixed_event(self):
+        self.assertTrue(
+            po._is_harness_event(
+                "<task-notification>build finished</task-notification>"
+            )
+        )
+
+    def test_system_reminder(self):
+        self.assertTrue(
+            po._is_harness_event("<system-reminder>context</system-reminder>")
+        )
+
+    def test_handback_report(self):
+        self.assertTrue(
+            po._is_harness_event(
+                "Another Claude session sent a message: "
+                '<agent-message from="implementer">[Subagent hand-back] done</agent-message>'
+            )
+        )
+
+    def test_agent_message_anywhere_in_head(self):
+        self.assertTrue(po._is_harness_event('preamble <agent-message from="x">body'))
+
+    def test_genuine_user_prompt_not_harness(self):
+        self.assertFalse(
+            po._is_harness_event(
+                "refactor the auth module and add tests in src/auth.py"
+            )
+        )
+
+    def test_leading_whitespace_stripped(self):
+        self.assertTrue(po._is_harness_event("   <task-notification>x"))
+
+
 class ArmOrchestrationTest(unittest.TestCase):
     def setUp(self):
         self.env = mock.patch.dict(os.environ, {}, clear=False)
         self.env.start()
         self.tmp = tempfile.mkdtemp()
         os.environ["ATLAS_DB"] = os.path.join(self.tmp, "atlas.db")
+        os.environ["ATLAS_DECISION"] = "off"
 
     def tearDown(self):
         self.env.stop()
@@ -435,6 +539,42 @@ class ArmOrchestrationTest(unittest.TestCase):
                 )
             )
 
+    def test_mark_orchestrating_failure_records_friction(self):
+        fake_conn = mock.MagicMock()
+        fake = mock.MagicMock()
+        fake.connect.return_value = fake_conn
+        fake.mark_orchestrating.side_effect = Exception("db down")
+        calls = []
+        fake.record_friction.side_effect = lambda conn, s, cat, **kw: (
+            calls.append((conn, s, cat)) or 1
+        )
+        with (
+            mock.patch.dict(sys.modules, {"atlas_db": fake}),
+        ):
+            self.assertIsNone(
+                po.arm_orchestration(
+                    {"session_id": "s1", "cwd": self.tmp},
+                    "refactor the db module now please",
+                )
+            )
+        self.assertEqual(calls, [(fake_conn, "s1", "orchestration_flag_arm_failed")])
+
+    def test_friction_write_failure_still_fail_open(self):
+        fake_conn = mock.MagicMock()
+        fake = mock.MagicMock()
+        fake.connect.return_value = fake_conn
+        fake.mark_orchestrating.side_effect = Exception("db down")
+        fake.record_friction.side_effect = Exception("db still down")
+        with (
+            mock.patch.dict(sys.modules, {"atlas_db": fake}),
+        ):
+            self.assertIsNone(
+                po.arm_orchestration(
+                    {"session_id": "s1", "cwd": self.tmp},
+                    "refactor the db module now please",
+                )
+            )
+
 
 class FramingEmitSkipTest(unittest.TestCase):
     def test_framing_contains_spec(self):
@@ -472,29 +612,34 @@ class NotifyTest(unittest.TestCase):
     def setUp(self):
         self.env = mock.patch.dict(os.environ, {}, clear=False)
         self.env.start()
-        os.environ.pop("ATLAS_OPTIMIZE_QUIET", None)
+        os.environ.pop("ATLAS_OPTIMIZE_VERBOSE", None)
 
     def tearDown(self):
         self.env.stop()
 
-    def test_quiet_silent(self):
-        os.environ["ATLAS_OPTIMIZE_QUIET"] = "1"
+    def test_default_is_silent(self):
+        """Noise contract: the banner is opt-in, not opt-out."""
         with mock.patch("sys.stderr", new_callable=io.StringIO) as err:
-            po.notify("spec text")
+            po.notify("## Intent\nDo the thing")
             self.assertEqual(err.getvalue(), "")
 
-    def test_banner_without_intent(self):
+    def test_verbose_banner_without_intent(self):
+        os.environ["ATLAS_OPTIMIZE_VERBOSE"] = "1"
         with mock.patch("sys.stderr", new_callable=io.StringIO) as err:
             po.notify("just a plain spec with no intent header")
-            self.assertIn("prompt-optimizer", err.getvalue())
+            self.assertIn("[atlas] spec injected", err.getvalue())
 
-    def test_banner_with_intent(self):
+    def test_verbose_banner_with_intent(self):
+        os.environ["ATLAS_OPTIMIZE_VERBOSE"] = "1"
         spec = "## Intent\nDo the thing\n## Steps\n1. x"
         with mock.patch("sys.stderr", new_callable=io.StringIO) as err:
             po.notify(spec)
-            self.assertIn("Do the thing", err.getvalue())
+            out = err.getvalue()
+            self.assertIn("Do the thing", out)
+            self.assertEqual(len(out.strip().splitlines()), 1)  # one line, always
 
     def test_intent_truncated(self):
+        os.environ["ATLAS_OPTIMIZE_VERBOSE"] = "1"
         spec = "## Intent\n" + "a" * 200
         with mock.patch("sys.stderr", new_callable=io.StringIO) as err:
             po.notify(spec)
@@ -580,6 +725,70 @@ class MainTest(unittest.TestCase):
 
     def test_empty_prompt(self):
         self.assertEqual(self._run({"prompt": ""}), 0)
+
+    def test_handback_report_no_output_no_arming(self):
+        os.environ["ATLAS_OPTIMIZE"] = "always"
+        os.environ["ATLAS_ENGINE_ARM"] = "on"
+        with mock.patch("prompt_optimizer.arm_orchestration") as arm:
+            with mock.patch("sys.stdout", new_callable=io.StringIO) as out:
+                with mock.patch(
+                    "sys.stdin",
+                    new=_stdin(
+                        {
+                            "prompt": (
+                                "Another Claude session sent a message: "
+                                '<agent-message from="implementer">'
+                                "[Subagent hand-back] refactor done, tests pass"
+                                "</agent-message>"
+                            ),
+                            "session_id": "s",
+                        }
+                    ),
+                ):
+                    self.assertEqual(po.main(), 0)
+            self.assertEqual(out.getvalue(), "")
+            arm.assert_not_called()
+
+    def test_task_notification_no_output(self):
+        os.environ["ATLAS_OPTIMIZE"] = "always"
+        os.environ["ATLAS_ENGINE_ARM"] = "on"
+        with mock.patch("prompt_optimizer.arm_orchestration") as arm:
+            with mock.patch("sys.stdout", new_callable=io.StringIO) as out:
+                with mock.patch(
+                    "sys.stdin",
+                    new=_stdin(
+                        {
+                            "prompt": "<task-notification>build finished successfully</task-notification>",
+                            "session_id": "s",
+                        }
+                    ),
+                ):
+                    self.assertEqual(po.main(), 0)
+            self.assertEqual(out.getvalue(), "")
+            arm.assert_not_called()
+
+    def test_genuine_engineering_prompt_still_arms(self):
+        os.environ["ATLAS_OPTIMIZE"] = "trigger"
+        os.environ["ATLAS_ENGINE_ARM"] = "on"
+        with mock.patch(
+            "prompt_optimizer.arm_orchestration", return_value=po.ENGINE_NUDGE
+        ) as arm:
+            with mock.patch("sys.stdout", new_callable=io.StringIO) as out:
+                with mock.patch(
+                    "sys.stdin",
+                    new=_stdin(
+                        {
+                            "prompt": "refactor the auth module in src/auth.py and add tests",
+                            "session_id": "s",
+                        }
+                    ),
+                ):
+                    self.assertEqual(po.main(), 0)
+            arm.assert_called_once()
+            data = json.loads(out.getvalue())
+            self.assertIn(
+                "atlas-orchestrate", data["hookSpecificOutput"]["additionalContext"]
+            )
 
     def test_no_optimize_passthrough(self):
         # no trigger, no optimize -> nothing emitted, exit 0

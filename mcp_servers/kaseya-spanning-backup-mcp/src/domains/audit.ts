@@ -76,8 +76,8 @@ async function handleCall(toolName: string, args: Record<string, unknown>): Prom
         const result = await client.audit.list(params);
         const items: unknown[] = Array.isArray(result)
           ? result
-          : (result as Record<string, unknown>)['auditEvents'] as unknown[] ?? (result as Record<string, unknown>)['items'] as unknown[] ?? [];
-        const next = (result as Record<string, unknown>)['next'] as string | undefined;
+          : (result as unknown as Record<string, unknown>)['auditEvents'] as unknown[] ?? (result as unknown as Record<string, unknown>)['items'] as unknown[] ?? [];
+        const next = (result as unknown as Record<string, unknown>)['next'] as string | undefined;
         return shapeList(
           items as Record<string, unknown>[],
           auditSummary,

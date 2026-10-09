@@ -83,7 +83,7 @@ export const handlers = [
     return new HttpResponse(null, { status: 204 });
   }),
 
-  http.post(`${BASE_URL}/v2/device/:id/reboot`, () => {
+  http.post(`${BASE_URL}/v2/device/:id/reboot/:mode`, () => {
     return new HttpResponse(null, { status: 204 });
   }),
 

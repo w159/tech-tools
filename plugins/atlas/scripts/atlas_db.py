@@ -4,7 +4,9 @@ Stdlib-only. Stores paths, tool names, counts, timestamps - never code or secret
 Callers in hooks MUST wrap usage in try/except and fail open; this module may raise.
 """
 
+import json
 import os
+import re
 import sqlite3
 import time
 
@@ -15,7 +17,8 @@ CREATE TABLE IF NOT EXISTS projects (
 CREATE TABLE IF NOT EXISTS runs (
   id INTEGER PRIMARY KEY, project_id INTEGER NOT NULL, session_id TEXT,
   started_at REAL, ended_at REAL, wall_clock_s REAL, task_summary TEXT, model TEXT,
-  kind TEXT DEFAULT 'orchestrator', orchestrating INTEGER DEFAULT 0);
+  kind TEXT DEFAULT 'orchestrator', orchestrating INTEGER DEFAULT 0,
+  used_worktrees INTEGER DEFAULT 0);
 CREATE TABLE IF NOT EXISTS events (
   id INTEGER PRIMARY KEY, run_id INTEGER NOT NULL, ts REAL, tool TEXT,
   context TEXT, is_inline_op INTEGER, path TEXT);
@@ -35,6 +38,36 @@ CREATE TABLE IF NOT EXISTS asset_verdicts (
   kind TEXT, key TEXT, tags TEXT, verdict TEXT, est_tokens INTEGER,
   applied INTEGER DEFAULT 0, restored INTEGER DEFAULT 0);
 CREATE INDEX IF NOT EXISTS ix_asset_verdicts_key ON asset_verdicts(kind, key);
+
+-- Chronicle/insights layer: one qualitative record per session (facets),
+-- categorized friction finer-grained than `signals`, and doctor-produced
+-- findings that the user accepts, rejects, or applies.
+CREATE TABLE IF NOT EXISTS facets (
+  session_id TEXT PRIMARY KEY, project_id INTEGER, created_at REAL,
+  -- deterministic, filled by the Stop hook from existing tables:
+  message_count INTEGER, user_prompt_count INTEGER, tool_call_count INTEGER,
+  error_count INTEGER, dispatch_count INTEGER, verifier_coverage REAL,
+  wall_clock_s REAL, edit_count INTEGER, read_count INTEGER,
+  gate_block_count INTEGER, correction_count INTEGER,
+  -- LLM-enriched later by the doctor; NULL means pending:
+  enriched_at REAL, underlying_goal TEXT, outcome TEXT, session_type TEXT,
+  primary_success TEXT, friction_detail TEXT, brief_summary TEXT,
+  goal_categories_json TEXT, friction_counts_json TEXT,
+  user_satisfaction TEXT, claude_helpfulness TEXT);
+CREATE INDEX IF NOT EXISTS ix_facets_enriched_at ON facets(enriched_at);
+CREATE INDEX IF NOT EXISTS ix_facets_created_at ON facets(created_at);
+CREATE TABLE IF NOT EXISTS friction_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT, category TEXT,
+  weight REAL, snippet TEXT, ts REAL);
+CREATE INDEX IF NOT EXISTS ix_friction_events_category_ts ON friction_events(category, ts);
+CREATE INDEX IF NOT EXISTS ix_friction_events_session ON friction_events(session_id);
+CREATE TABLE IF NOT EXISTS findings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, created_at REAL, dimension TEXT,
+  severity TEXT, title TEXT, detail TEXT, evidence_json TEXT,
+  proposed_action TEXT, target_path TEXT,
+  status TEXT DEFAULT 'open',
+  decided_at REAL, applied_at REAL, fingerprint TEXT UNIQUE);
+CREATE INDEX IF NOT EXISTS ix_findings_status_created ON findings(status, created_at);
 
 -- Session-log mirror: the rich transcript forensics layer. Populated by the
 -- ingest hook (Stop/SubagentStop/SessionEnd/PreCompact) and the backfill CLI,
@@ -68,7 +101,8 @@ CREATE TABLE IF NOT EXISTS tool_calls (
   is_sidechain INTEGER DEFAULT 0, tool_use_id TEXT, tool_name TEXT,
   kind TEXT, target TEXT, server TEXT,
   input_summary TEXT, input_bytes INTEGER DEFAULT 0,
-  is_error INTEGER, result_bytes INTEGER DEFAULT 0);
+  is_error INTEGER, result_bytes INTEGER DEFAULT 0, denied INTEGER DEFAULT 0,
+  error_snippet TEXT);
 CREATE INDEX IF NOT EXISTS ix_tool_calls_session ON tool_calls(session_id);
 CREATE INDEX IF NOT EXISTS ix_tool_calls_kind ON tool_calls(kind, target);
 CREATE UNIQUE INDEX IF NOT EXISTS ix_tool_calls_tuid ON tool_calls(tool_use_id);
@@ -83,11 +117,35 @@ CREATE TABLE IF NOT EXISTS signals (
   signal_type TEXT, weight REAL DEFAULT 1.0, snippet TEXT);
 CREATE INDEX IF NOT EXISTS ix_signals_session ON signals(session_id);
 CREATE UNIQUE INDEX IF NOT EXISTS ix_signals_dedupe ON signals(message_uuid, signal_type);
+
+-- Per-(session, transcript file) ingest cursor + the row keys that file
+-- contributed (session_ingest.py). Subagent transcripts share their main
+-- session's id, so cursors cannot live on session_logs alone.
+CREATE TABLE IF NOT EXISTS ingest_files (
+  session_id TEXT NOT NULL, path TEXT NOT NULL,
+  cursor_bytes INTEGER NOT NULL DEFAULT 0, size INTEGER,
+  row_keys TEXT, updated_at REAL, PRIMARY KEY(session_id, path));
+
+-- Model-scored per-turn judgments (turn_scoring.py). One row per
+-- (session, assistant message, judgment); kind is noul|score|choice|metric.
+CREATE TABLE IF NOT EXISTS turn_scores (
+  id INTEGER PRIMARY KEY, session_id TEXT NOT NULL, message_uuid TEXT NOT NULL,
+  ts REAL, judgment TEXT NOT NULL, kind TEXT, value REAL, label TEXT,
+  confidence REAL, model TEXT, scored_at REAL, input_tokens INTEGER);
+CREATE UNIQUE INDEX IF NOT EXISTS ix_turn_scores_key ON turn_scores(session_id, message_uuid, judgment);
+CREATE INDEX IF NOT EXISTS ix_turn_scores_ts ON turn_scores(ts);
 """
 
 
+def atlas_home():
+    """The one resolver for atlas state: ATLAS_HOME, else ~/.atlas."""
+    return os.environ.get("ATLAS_HOME") or os.path.join(
+        os.path.expanduser("~"), ".atlas"
+    )
+
+
 def db_path():
-    return os.environ.get("ATLAS_DB") or os.path.expanduser("~/.atlas/atlas.db")
+    return os.environ.get("ATLAS_DB") or os.path.join(atlas_home(), "atlas.db")
 
 
 def connect(path=None):
@@ -97,6 +155,14 @@ def connect(path=None):
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=5000")
     return conn
+
+
+def ensure_ingest_files(conn):
+    """Create `ingest_files` on a connection that predates it, using the one DDL
+    in SCHEMA. Cheap (no run backfill), so the per-transcript ingest path can
+    call it on caller-supplied connections."""
+    start = SCHEMA.index("CREATE TABLE IF NOT EXISTS ingest_files")
+    conn.execute(SCHEMA[start : SCHEMA.index(";", start) + 1])
 
 
 def init(conn):
@@ -115,6 +181,14 @@ def init(conn):
         conn.commit()
     except sqlite3.OperationalError:
         pass  # column already present
+    # Idempotent migration: records whether this run dispatched an isolated
+    # writer, so the completion gate can demand worktree close-out WITHOUT
+    # firing on worktrees the user created themselves.
+    try:
+        conn.execute("ALTER TABLE runs ADD COLUMN used_worktrees INTEGER DEFAULT 0")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # column already present
     # Idempotent migration: add the agent column to pre-existing DBs so the
     # session_logs mirror can distinguish coding agents (claude, codex, ...).
     # Fresh DBs already have it from the SCHEMA; the OperationalError is the
@@ -125,6 +199,56 @@ def init(conn):
         conn.commit()
     except sqlite3.OperationalError:
         pass  # column already present
+    # Idempotent migration: tool_calls.denied flags calls a hook/extension
+    # blocked (they never ran). Fresh DBs have it from the SCHEMA.
+    try:
+        conn.execute("ALTER TABLE tool_calls ADD COLUMN denied INTEGER DEFAULT 0")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # column already present
+    # Idempotent migration: tool_calls.error_snippet keeps the head of a failed
+    # call's result text so an error finding can name the failure, not just
+    # count it. Pre-existing rows stay NULL (their text was never stored).
+    try:
+        conn.execute("ALTER TABLE tool_calls ADD COLUMN error_snippet TEXT")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # column already present
+    # Idempotent migration: extend the pre-existing `improvements` table with
+    # finding-linkage and remeasure-tracking columns, additively. Existing rows
+    # (run_id, dimension, baseline, target, note) are untouched; ALTER TABLE
+    # ADD COLUMN only appends. The OperationalError is the success path once a
+    # column already exists.
+    for _col, _decl in (
+        ("finding_id", "INTEGER"),
+        ("metric", "TEXT"),
+        ("baseline_value", "REAL"),
+        ("target_value", "REAL"),
+        ("measure_after_runs", "INTEGER"),
+        ("remeasured_at", "REAL"),
+        ("remeasured_value", "REAL"),
+        ("verdict", "TEXT"),
+    ):
+        try:
+            conn.execute(f"ALTER TABLE improvements ADD COLUMN {_col} {_decl}")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # column already present
+    # Idempotent migration: self-fix state per finding (atlas_selffix.py).
+    for _col, _decl in (
+        ("fix_state", "TEXT DEFAULT 'none'"),
+        ("fix_branch", "TEXT"),
+        ("fix_worktree", "TEXT"),
+        ("fix_target", "TEXT"),
+        ("fix_log", "TEXT"),
+        ("fix_attempts", "INTEGER DEFAULT 0"),
+        ("fix_updated_at", "REAL"),
+    ):
+        try:
+            conn.execute(f"ALTER TABLE findings ADD COLUMN {_col} {_decl}")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # column already present
     backfill_run_kinds(conn)
 
 
@@ -169,13 +293,23 @@ def register_project(conn, root_path, name=None, stack=None):
 
 
 def start_run(conn, project_id, session_id, task_summary=None, model=None):
+    """Open a run for the session, or return the id of the one already open.
+
+    The existence check and the insert are ONE statement, so concurrent callers
+    (omp fires `begin` from session_start and before_agent_start as separate
+    processes) cannot both insert: SQLite serializes writers, and the loser's
+    NOT EXISTS sees the winner's row. A finalized run (ended_at set) does not
+    block a new one."""
     cur = conn.execute(
         "INSERT INTO runs(project_id,session_id,started_at,task_summary,model) "
-        "VALUES(?,?,?,?,?)",
-        (project_id, session_id, time.time(), task_summary, model),
+        "SELECT ?,?,?,?,? WHERE NOT EXISTS "
+        "(SELECT 1 FROM runs WHERE session_id=? AND ended_at IS NULL)",
+        (project_id, session_id, time.time(), task_summary, model, session_id),
     )
     conn.commit()
-    return cur.lastrowid
+    if cur.rowcount == 1:
+        return cur.lastrowid
+    return current_run_id(conn, session_id)
 
 
 def current_run_id(conn, session_id):
@@ -214,6 +348,30 @@ def mark_orchestrating(conn, session_id, cwd=None):
     return rid
 
 
+def mark_used_worktrees(conn, session_id):
+    """Record that this run dispatched an agent with isolation="worktree".
+
+    Scoping the gate's worktree check to this flag is the whole point: a gate
+    that blocks on any tree `git worktree list` reports would fire on the user's
+    own long-lived trees, and a gate with false positives is one people learn to
+    ignore. No-op when there is no run yet."""
+    rid = current_run_id(conn, session_id) or latest_run_id(conn, session_id)
+    if rid is None:
+        return None
+    conn.execute("UPDATE runs SET used_worktrees=1 WHERE id=?", (rid,))
+    conn.commit()
+    return rid
+
+
+def run_used_worktrees(conn, session_id):
+    """True when this session's current-or-latest run dispatched an isolated writer."""
+    rid = current_run_id(conn, session_id) or latest_run_id(conn, session_id)
+    if rid is None:
+        return False
+    row = conn.execute("SELECT used_worktrees FROM runs WHERE id=?", (rid,)).fetchone()
+    return bool(row and row[0])
+
+
 def is_orchestrating(conn, session_id):
     """True when this session's current-or-latest run is flagged orchestrating."""
     rid = current_run_id(conn, session_id) or latest_run_id(conn, session_id)
@@ -223,10 +381,27 @@ def is_orchestrating(conn, session_id):
     return bool(row and row[0])
 
 
+def _project_root_for_sentinel(cwd):
+    """Walk up from cwd to the nearest project root (.git, .atlas, or docs
+    marker, same markers find_root uses) so runtime state always lands next to
+    the board and findings the rest of the system reads, never in an arbitrary
+    subdirectory of product source."""
+    d = os.path.abspath(cwd or ".")
+    for _ in range(7):
+        for marker in (".git", ".atlas", "docs"):
+            if os.path.exists(os.path.join(d, marker)):
+                return d
+        parent = os.path.dirname(d)
+        if parent == d:
+            return os.path.abspath(cwd or ".")
+        d = parent
+    return os.path.abspath(cwd or ".")
+
+
 def _write_orchestration_sentinel(cwd):
     """Advisory only. Never read for gating; a stale file must not enable a gate."""
     try:
-        run_dir = os.path.join(cwd, ".atlas", ".run")
+        run_dir = os.path.join(_project_root_for_sentinel(cwd), ".atlas", ".run")
         os.makedirs(run_dir, exist_ok=True)
         with open(os.path.join(run_dir, "atlas-orchestrate.active"), "w") as f:
             f.write(str(time.time()))
@@ -264,7 +439,31 @@ def log_event(conn, run_id, tool, context, is_inline_op, path=None):
     return cur.lastrowid
 
 
+DEFAULT_AGENT_TYPE = "general-purpose"
+_AGENT_KEYS = ("subagent_type", "agent", "agent_type", "type")
+
+
+def resolve_agent_type(tinput, default=DEFAULT_AGENT_TYPE):
+    """Real agent name of a Task/Agent dispatch input. Claude uses
+    `subagent_type`; omp/other shapes use `agent`/`agent_type`/`type`, at the top
+    level or on the first batched `tasks[]` item that names one. A blank value
+    is skipped, never recorded; `default` only when the dispatch names none (a
+    genuine default Task)."""
+    if not isinstance(tinput, dict):
+        return default
+    items = [tinput] + [i for i in (tinput.get("tasks") or []) if isinstance(i, dict)]
+    for item in items:
+        for k in _AGENT_KEYS:
+            v = item.get(k)
+            if isinstance(v, str) and v.strip():
+                return v.strip()
+    return default
+
+
 def log_dispatch(conn, run_id, agent_type, model=None, wave_id=None):
+    """Record one dispatch. A blank agent_type (an unnamed default Task) is
+    stored as DEFAULT_AGENT_TYPE, never ''."""
+    agent_type = (agent_type or "").strip() or DEFAULT_AGENT_TYPE
     conn.execute(
         "INSERT INTO dispatches(run_id,ts,agent_type,model,wave_id) VALUES(?,?,?,?,?)",
         (run_id, time.time(), agent_type, model, wave_id),
@@ -289,6 +488,19 @@ def record_recall(conn, run_id, hit):
     conn.commit()
 
 
+# A URI-scheme path (`agent://Foo` IRC messages, `xd://tool` device calls,
+# `proc://`, `local://`, `artifact://`, `mcp://`, ...) is a harness message
+# routed through a Write/Edit tool call, not a file. It is never target code, so
+# the tripwire, the inline-op counter and the completion gate all share this one
+# notion. `://` is required: a Windows drive path (`C:\repo\a.py`) has no `//`.
+_URI_PATH = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")
+
+
+def is_uri_path(path):
+    """True when `path` is a URI (`scheme://...`), not a filesystem path."""
+    return bool(path) and _URI_PATH.match(str(path)) is not None
+
+
 def inline_ops_since_last_dispatch(conn, run_id):
     last = conn.execute(
         "SELECT COALESCE(MAX(id),0) FROM events WHERE run_id=? AND is_inline_op=0",
@@ -296,6 +508,34 @@ def inline_ops_since_last_dispatch(conn, run_id):
     ).fetchone()[0]
     return conn.execute(
         "SELECT COUNT(*) FROM events WHERE run_id=? AND is_inline_op=1 AND id>?",
+        (run_id, last),
+    ).fetchone()[0]
+
+
+def unsanctioned_inline_ops_since_last_dispatch(conn, run_id):
+    """inline_ops_since_last_dispatch, minus the orchestrator's sanctioned writes.
+
+    The tripwire's deny tier exists to stop an orchestrator from doing the WORK
+    inline. But the completion gate explicitly requires the orchestrator to write
+    docs/ and .atlas/ records itself at closeout -- counting those against the
+    inline budget would deny the very remediation the gate just ordered.
+
+    Excluded: Edit/Write/MultiEdit/NotebookEdit whose path is under docs/ or
+    .atlas/, or is a URI (`agent://`, `xd://`, ...: IRC and device calls the
+    harness routes through a Write, which are not file edits). NOT excluded: any
+    op with no path (all Bash), because 'unknown path' is the largest inline
+    surface there is and exempting it would empty the counter.
+    """
+    last = conn.execute(
+        "SELECT COALESCE(MAX(id),0) FROM events WHERE run_id=? AND is_inline_op=0",
+        (run_id,),
+    ).fetchone()[0]
+    return conn.execute(
+        "SELECT COUNT(*) FROM events WHERE run_id=? AND is_inline_op=1 AND id>? "
+        "AND NOT (tool IN ('Edit','Write','MultiEdit','NotebookEdit') AND path IS NOT NULL AND ("
+        "  path LIKE 'docs/%' OR path LIKE '%/docs/%'"
+        "  OR path LIKE '.atlas/%' OR path LIKE '%/.atlas/%'"
+        "  OR path LIKE '%://%'))",
         (run_id, last),
     ).fetchone()[0]
 
@@ -384,6 +624,19 @@ def _dispatch_coverage_counts(conn, run_id):
     return impl, ver
 
 
+def run_started_at(conn, run_id):
+    """Epoch seconds the run began, or None. The completion gate uses this to ask
+    whether a findings.json verdict was written during THIS run rather than
+    inherited from an earlier one."""
+    try:
+        row = conn.execute(
+            "SELECT started_at FROM runs WHERE id=?", (run_id,)
+        ).fetchone()
+        return row[0] if row else None
+    except Exception:
+        return None
+
+
 def unpaired_implementer_dispatches(conn, run_id):
     """Implementer dispatches beyond the verifier dispatches available to check them
     for a run: max(0, implementers - verifiers). The completion gate consumes this to
@@ -391,6 +644,66 @@ def unpaired_implementer_dispatches(conn, run_id):
     dispatches-table matching rule as verifier_coverage."""
     impl, ver = _dispatch_coverage_counts(conn, run_id)
     return max(0, impl - ver)
+
+
+_WRITE_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
+
+
+def run_changed_paths(conn, run_id):
+    """File paths this run's OWN activity actually wrote -- the completion gate's
+    run-scoped replacement for diffing the whole working tree, which cannot tell
+    a file this run touched from one left dirty by an earlier session.
+
+    Combines two existing signals rather than inventing a new one:
+      - `events`: Edit/Write/MultiEdit/NotebookEdit ops on the main thread, logged by
+        dispatch_tripwire's PostToolUse hook with a clean `path` column.
+      - `tool_calls`: the same tool names from ANY thread (including dispatched
+        subagents' sidechain work, which dispatch_tripwire never sees since it
+        only fires on the main session's own tool calls), scoped to this run's
+        session and its [started_at, ended_at] window, with the path recovered
+        from the scrubbed `input_summary` JSON written at transcript-ingest time.
+
+    Returns a de-duplicated list of path strings. Fails open to [] on any DB
+    error -- callers must treat "unknown" the same as "nothing changed" so a
+    read failure here can never turn into a false block.
+    """
+    try:
+        row = conn.execute(
+            "SELECT session_id, started_at, ended_at FROM runs WHERE id=?",
+            (run_id,),
+        ).fetchone()
+        if not row:
+            return []
+        session_id, started_at, ended_at = row
+        paths = set()
+        placeholders = ",".join("?" for _ in _WRITE_TOOLS)
+        for (path,) in conn.execute(
+            "SELECT DISTINCT path FROM events WHERE run_id=? AND tool IN "
+            f"({placeholders}) AND path IS NOT NULL",
+            (run_id, *_WRITE_TOOLS),
+        ):
+            if path and not is_uri_path(path):
+                paths.add(path)
+        if session_id:
+            end = ended_at if ended_at is not None else time.time()
+            start = started_at or 0
+            rows = conn.execute(
+                "SELECT input_summary FROM tool_calls WHERE session_id=? "
+                f"AND tool_name IN ({placeholders}) AND ts>=? AND ts<=?",
+                (session_id, *_WRITE_TOOLS, start, end),
+            ).fetchall()
+            for (summary,) in rows:
+                if not summary:
+                    continue
+                try:
+                    file_path = json.loads(summary).get("file_path")
+                except Exception:
+                    continue
+                if file_path and not is_uri_path(file_path):
+                    paths.add(file_path)
+        return list(paths)
+    except Exception:
+        return []
 
 
 def derive_run_metrics(conn, run_id, session_id, window_s=10.0):
@@ -498,14 +811,242 @@ def _dispatch_waves(sorted_ts, window_s):
     return peak, waves
 
 
-def record_improvement(conn, run_id, dimension, baseline, target, note):
+IMPROVEMENT_REMEASURE_COLUMNS = (
+    "finding_id",
+    "metric",
+    "baseline_value",
+    "target_value",
+    "measure_after_runs",
+    "remeasured_at",
+    "remeasured_value",
+    "verdict",
+)
+
+
+def record_improvement(conn, run_id, dimension, baseline, target, note, **fields):
+    """Log one improvement note for a run. Optional keyword fields
+    (IMPROVEMENT_REMEASURE_COLUMNS) link it to a finding and track a later
+    remeasure; every one defaults to NULL when omitted, so pre-existing call
+    sites are unaffected."""
+    extra_vals = [fields.get(c) for c in IMPROVEMENT_REMEASURE_COLUMNS]
     cur = conn.execute(
-        "INSERT INTO improvements(run_id,ts,dimension,baseline,target,note) "
-        "VALUES(?,?,?,?,?,?)",
-        (run_id, time.time(), dimension, baseline, target, note),
+        "INSERT INTO improvements(run_id,ts,dimension,baseline,target,note,"
+        + ",".join(IMPROVEMENT_REMEASURE_COLUMNS)
+        + ") VALUES(?,?,?,?,?,?,"
+        + ",".join("?" for _ in IMPROVEMENT_REMEASURE_COLUMNS)
+        + ")",
+        (run_id, time.time(), dimension, baseline, target, note, *extra_vals),
     )
     conn.commit()
     return cur.lastrowid
+
+
+def pending_remeasures(conn, limit=50):
+    """Improvements flagged for remeasurement (measure_after_runs set) that
+    have not yet been remeasured, oldest first. Thin selection only --
+    deciding whether enough runs have elapsed since is the doctor's job."""
+    return _rows(
+        conn.execute(
+            "SELECT * FROM improvements WHERE measure_after_runs IS NOT NULL "
+            "AND remeasured_at IS NULL ORDER BY ts ASC LIMIT ?",
+            (limit,),
+        )
+    )
+
+
+def set_improvement_remeasure(
+    conn, improvement_id, remeasured_value, verdict, remeasured_at=None
+):
+    """Record a remeasurement's result: the fresh metric value, the
+    improved|no_change|regressed verdict, and when it was taken (defaults to
+    now). This is what turns a baseline into an actually-measured outcome."""
+    conn.execute(
+        "UPDATE improvements SET remeasured_value=?, verdict=?, remeasured_at=? "
+        "WHERE id=?",
+        (
+            remeasured_value,
+            verdict,
+            remeasured_at if remeasured_at is not None else time.time(),
+            improvement_id,
+        ),
+    )
+    conn.commit()
+
+
+# --- chronicle/insights: facets, friction, findings ---------------------------
+
+FACET_COLUMNS = (
+    "project_id",
+    "created_at",
+    "message_count",
+    "user_prompt_count",
+    "tool_call_count",
+    "error_count",
+    "dispatch_count",
+    "verifier_coverage",
+    "wall_clock_s",
+    "edit_count",
+    "read_count",
+    "gate_block_count",
+    "correction_count",
+    "enriched_at",
+    "underlying_goal",
+    "outcome",
+    "session_type",
+    "primary_success",
+    "friction_detail",
+    "brief_summary",
+    "goal_categories_json",
+    "friction_counts_json",
+    "user_satisfaction",
+    "claude_helpfulness",
+)
+
+
+TURN_SCORE_COLUMNS = (
+    "ts",
+    "kind",
+    "value",
+    "label",
+    "confidence",
+    "model",
+    "scored_at",
+    "input_tokens",
+)
+
+
+def upsert_turn_score(conn, session_id, message_uuid, judgment, **fields):
+    """Insert or replace one turn judgment, idempotent on
+    (session_id, message_uuid, judgment). Unknown fields are ignored."""
+    fields.setdefault("scored_at", time.time())
+    vals = [fields.get(c) for c in TURN_SCORE_COLUMNS]
+    conn.execute(
+        "INSERT INTO turn_scores(session_id,message_uuid,judgment,"
+        + ",".join(TURN_SCORE_COLUMNS)
+        + ") VALUES(?,?,?,"
+        + ",".join("?" for _ in TURN_SCORE_COLUMNS)
+        + ") ON CONFLICT(session_id,message_uuid,judgment) DO UPDATE SET "
+        + ",".join(f"{c}=excluded.{c}" for c in TURN_SCORE_COLUMNS),
+        (session_id, message_uuid, judgment, *vals),
+    )
+    conn.commit()
+
+
+def upsert_facet(conn, session_id, **fields):
+    """Insert or update the per-session qualitative facet row. Only keys
+    passed in `fields` are written; absent keys keep their stored value
+    (COALESCE), matching upsert_session_log's semantics. `created_at`
+    defaults to now so a fresh insert is never left NULL."""
+    fields.setdefault("created_at", time.time())
+    vals = [fields.get(c) for c in FACET_COLUMNS]
+    conn.execute(
+        "INSERT INTO facets(session_id," + ",".join(FACET_COLUMNS) + ") "
+        "VALUES(?," + ",".join("?" for _ in FACET_COLUMNS) + ") "
+        "ON CONFLICT(session_id) DO UPDATE SET "
+        + ",".join(f"{c}=COALESCE(excluded.{c},{c})" for c in FACET_COLUMNS),
+        (session_id, *vals),
+    )
+    conn.commit()
+
+
+def pending_facets(conn, limit=50):
+    """Facets rows not yet LLM-enriched (enriched_at IS NULL), oldest first --
+    the doctor's work queue."""
+    return _rows(
+        conn.execute(
+            "SELECT * FROM facets WHERE enriched_at IS NULL "
+            "ORDER BY created_at ASC LIMIT ?",
+            (limit,),
+        )
+    )
+
+
+def record_friction(conn, session_id, category, weight=1.0, snippet=None, ts=None):
+    """Log one categorized friction event for a session."""
+    cur = conn.execute(
+        "INSERT INTO friction_events(session_id,category,weight,snippet,ts) "
+        "VALUES(?,?,?,?,?)",
+        (session_id, category, weight, snippet, ts if ts is not None else time.time()),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+FINDING_COLUMNS = (
+    "created_at",
+    "dimension",
+    "severity",
+    "title",
+    "detail",
+    "evidence_json",
+    "proposed_action",
+    "target_path",
+    "status",
+    "decided_at",
+    "applied_at",
+)
+
+
+def upsert_finding(conn, fingerprint, **fields):
+    """Insert a new finding, or update the existing one sharing `fingerprint`
+    so re-running the doctor refreshes a finding instead of duplicating it.
+    `created_at` defaults to now and `status` defaults to 'open' on first
+    insert. On conflict, `status` and `created_at` are decision/provenance
+    fields and are NEVER overwritten: a re-mine refreshes the evidence but
+    must not clobber the user's accepted/rejected/applied verdict (that
+    clobber is what reset decided findings back to open on every doctor run).
+    Returns the finding id."""
+    fields.setdefault("created_at", time.time())
+    fields.setdefault("status", "open")
+    vals = [fields.get(c) for c in FINDING_COLUMNS]
+    update_cols = [c for c in FINDING_COLUMNS if c not in ("status", "created_at")]
+    conn.execute(
+        "INSERT INTO findings(fingerprint," + ",".join(FINDING_COLUMNS) + ") "
+        "VALUES(?," + ",".join("?" for _ in FINDING_COLUMNS) + ") "
+        "ON CONFLICT(fingerprint) DO UPDATE SET "
+        + ",".join(f"{c}=COALESCE(excluded.{c},{c})" for c in update_cols),
+        (fingerprint, *vals),
+    )
+    conn.commit()
+    return conn.execute(
+        "SELECT id FROM findings WHERE fingerprint=?", (fingerprint,)
+    ).fetchone()[0]
+
+
+def set_finding_status(conn, finding_id, status, decided_at=None, applied_at=None):
+    """Transition a finding's status (open|accepted|rejected|applied|
+    verified|regressed). decided_at/applied_at are only overwritten when a
+    caller passes them explicitly."""
+    conn.execute(
+        "UPDATE findings SET status=?, "
+        "decided_at=COALESCE(?,decided_at), applied_at=COALESCE(?,applied_at) "
+        "WHERE id=?",
+        (status, decided_at, applied_at, finding_id),
+    )
+    conn.commit()
+
+
+def get_finding(conn, finding_id):
+    """One findings row by id, or None. Dict keyed by column name."""
+    rows = _rows(conn.execute("SELECT * FROM findings WHERE id=?", (finding_id,)))
+    return rows[0] if rows else None
+
+
+def list_findings(conn, status=None, limit=100):
+    """Findings, most recent first, optionally filtered by status."""
+    if status:
+        return _rows(
+            conn.execute(
+                "SELECT * FROM findings WHERE status=? "
+                "ORDER BY created_at DESC LIMIT ?",
+                (status, limit),
+            )
+        )
+    return _rows(
+        conn.execute(
+            "SELECT * FROM findings ORDER BY created_at DESC LIMIT ?", (limit,)
+        )
+    )
 
 
 TREND_COLUMNS = (
@@ -630,11 +1171,13 @@ def upsert_session_log(conn, session_id, agent=None, **fields):
     `fields` are written; absent keys keep their stored value (COALESCE).
 
     `agent` is handled separately from the COALESCE columns: it is written into
-    the row only when a caller passes it explicitly. That is deliberate - the
-    claude ingest path never passes it, so on a fresh insert the column is
-    omitted and its SCHEMA DEFAULT 'claude' governs, rather than an inserted NULL
-    clobbering the default. The codex (and any future) adapter passes agent so
-    its rows land the correct value."""
+    the row only when a caller passes a non-None value. That is deliberate - a
+    caller with nothing to say (the claude hook path, via
+    session_ingest.harness_agent() returning None) omits it, so on a fresh
+    insert the column is omitted and its SCHEMA DEFAULT 'claude' governs,
+    rather than an inserted NULL clobbering the default. The omp hook path
+    passes 'omp' (read from ATLAS_HARNESS), and the codex/omp backfill adapters
+    pass their own name, so those rows land the correct value."""
     cols = (
         "project_id",
         "transcript_path",
@@ -716,13 +1259,185 @@ def insert_tool_call(conn, session_id, t):
     )
 
 
-def update_tool_result(conn, tool_use_id, is_error, result_bytes):
+# Result-text prefixes of a call that an atlas hook (Claude Code) or the omp
+# extension blocked before it ran: grep/glob + exploration-shell denies
+# ("Atlas enforcement:"), the recall gate ("[atlas gate]"), and the omp
+# extension's dispatch/edit denies ("DENY - ...", which a Task dispatch surfaces
+# as "Task execution failed: DENY - ...").
+# Claude Code prefixes a hook denial with "PreToolUse:<Tool> hook error: ".
+DENY_MARKERS = (
+    "Atlas enforcement:",
+    "[atlas gate]",
+    "DENY - ",
+    "Task execution failed: DENY",
+)
+_HOOK_ERROR_PREFIX = re.compile(r"^\s*PreToolUse:\S+ hook error:\s*")
+
+# error_snippet cap: long enough to carry a gate/exception reason, short enough
+# to keep one row per failed call bounded.
+ERROR_SNIPPET_CAP = 500
+
+
+def is_denied_result(text):
+    """True when a tool_result's text is an atlas deny, not a real tool failure."""
+    if not text:
+        return False
+    return _HOOK_ERROR_PREFIX.sub("", text, count=1).lstrip().startswith(DENY_MARKERS)
+
+
+def error_snippet_of(text, cap=ERROR_SNIPPET_CAP):
+    """Whitespace-collapsed, capped head of an error result's text, or None.
+
+    A Python traceback over the cap keeps its head (first 200 chars) plus its tail
+    (the last File frame and exception line, up to 300 chars, trimmed so the pair
+    fits the cap) joined by ' ... ': the head alone would cut off the exception."""
+    if not text:
+        return None
+    clean = " ".join(text.split())
+    if clean.startswith("Traceback") and len(clean) > cap:
+        head, sep = clean[:200], " ... "
+        tail = clean[-min(300, cap - len(head) - len(sep)) :]
+        return head + sep + tail
+    return clean[:cap] or None
+
+
+def update_tool_result(conn, tool_use_id, is_error, result_bytes, text=None):
     """Join a tool_result back onto its tool_use row (results arrive in the
-    next message, sometimes a later ingest batch). Idempotent."""
+    next message, sometimes a later ingest batch). Idempotent. `text` is the
+    result text, used to flag a hook/extension denial and, for a real failure,
+    to keep an `error_snippet`; a pass without text (codex results carry none)
+    leaves an existing flag and snippet untouched."""
+    if text is None:
+        conn.execute(
+            "UPDATE tool_calls SET is_error=?, result_bytes=? WHERE tool_use_id=?",
+            (is_error, result_bytes, tool_use_id),
+        )
+        return
+    denied = is_denied_result(text)
+    # A denial keeps its text too: error_snippet on a denied row names the gate
+    # that fired, which is what makes a deny-heavy tool diagnosable.
+    snippet = error_snippet_of(text) if (is_error or denied) else None
     conn.execute(
-        "UPDATE tool_calls SET is_error=?, result_bytes=? WHERE tool_use_id=?",
-        (is_error, result_bytes, tool_use_id),
+        "UPDATE tool_calls SET is_error=?, result_bytes=?, denied=?, error_snippet=? "
+        "WHERE tool_use_id=?",
+        (is_error, result_bytes, 1 if denied else 0, snippet, tool_use_id),
     )
+
+
+ERROR_CLASSES = (
+    "deny",
+    "model_misuse",
+    "environment",
+    "user_code",
+    "tool_fault",
+    "unknown",
+)
+
+_MODEL_MISUSE = re.compile(
+    r"(without (first )?read|has not been read|must (first )?read|read (it|the file) first"
+    r"|file has been modified|modified since (it was )?read|stale|hash mismatch"
+    r"|hashline|anchor|no (such )?(line|match)|(old_string|old_text).*(not found|unique|multiple)"
+    r"|found \d+ matches|invalid (arguments?|input|params?|parameters?)|validation (error|failed)"
+    r"|inputvalidationerror|missing (a )?required|required (parameter|argument|field)"
+    r"|is required|unexpected (keyword|parameter|argument)|schema"
+    r"|nothing to wait for|fact-forcing gate|edit rejected for|input header must be|retryable"
+    r"|invalid args for|content is required|does not accept"
+    r"|no preceding hunk header|close enough match|found \d+ occurrences"
+    r"|did not answer|path escapes project root|refusing to scan|none of the requested paths"
+    r"|unknown key|queries array limited|invalid (regex|glob|read mode)"
+    r"|prior computer\{|no read_page tree|missing phase name|invalid todo"
+    r"|expects an? (options|json args) object|no such tool available|selector only supports"
+    r"|is writable only|while in plan mode|detected a file-write command"
+    r"|string to replace not found|not found in (the )?file"
+    r"|use the write tool|write tool to create"
+    r"|`put [^`]*` (?:rejected|resolved|could not resolve|promises)|`-` rows are not valid"
+    r"|a register `put`|edit appeared successful|eisdir|is a directory|is not a directory"
+    r"|invalid range|no such tool: xd://|unknown (?:agent|skill|daemon)\b|requires an output id"
+    r"|failed to execute json query|is not valid json|sqlite (?:limit|query parameters)"
+    r"|must be a json object|refuses the redirect|selector must be a string"
+    r"|not supported on the \w+ backend|takes \(key, options\)|cannot load xd://"
+    r"|requires user consent|missing items for|no active project|is not a function"
+    r"|added as a read-only root|rule=\"[\w-]+\" path=)",
+    re.I,
+)
+_ENVIRONMENT = re.compile(
+    r"(exit code|exited with|non-?zero|command failed|enoent|no such file|not found"
+    r"|does not exist|permission|eacces|denied by user|timed? ?out|timeout|etimedout"
+    r"|econnr|connection (refused|reset|closed)|network|dns|unreachable|mcp error"
+    r"|not connected|transport|aborted|interrupted|user rejected|doesn't want to proceed"
+    r"|rate limit|(?:http|status(?: code)?|error)[ :]+(?:40[0-9]|50[0-9])\b"
+    r"|\b(?:40[0-9]|50[0-9]) (?:bad gateway|not found|forbidden|unauthorized|service unavailable|gateway time-?out|internal server error)"
+    r"|skipped due to|tool execution failed|lock contention|worker api"
+    r"|missing_credentials|\[exit:[1-9]|blocked by security policy|is busy"
+    r"|tmux pane|temporarily unavailable|no verdict|was denied or failed"
+    r"|previous omp process exited|(?:was|were|input was) cancelled|cancelled by the user"
+    r"|session closed|detached frame|cannot find module|auth check: failed"
+    r"|unknown tool from js runtime|multiple windows match|is not alive"
+    r"|chroma|fetch failed|claude_mem_runtime|fell back|falling back)",
+    re.I,
+)
+_ATLAS_FRAME = r'File "[^"\n]*(?:plugins/atlas/|/\.(?:claude|omp)/[^"\n]*atlas[^"\n/]*/)[^"\n]*\.py"'
+_TOOL_FAULT = re.compile(
+    r"(?:Traceback \(most recent call last\)[\s\S]*?" + _ATLAS_FRAME + r"|hook error:)",
+    re.I,
+)
+_TOOL_FAULT_SCRIPT = re.compile(r"can't open file '[^']*scripts/atlas_[^']*\.py'", re.I)
+# A failed run of the user's own code (eval cell, shell one-liner, ctx_execute) is a
+# traceback or a bare `XError:` line that names no atlas frame (_TOOL_FAULT ran first).
+_CODE_TOOL = re.compile(r"(?:^|__|_)(?:bash|shell|eval|execute|execute_file)$", re.I)
+_USER_CODE = re.compile(
+    r"\s*(?:Traceback \(most recent call last\)"
+    r"|(?:Syntax|Type|Reference|Range|Value|Key|Name|Attribute|Import|Index|Assertion"
+    r"|ModuleNotFound|ZeroDivision|FileNotFound)Error\b)"
+)
+# An error-flagged result whose text says the call recovered (e.g. claude-mem
+# falling back to SQLite when Chroma is down): not a tool failure.
+_RECOVERED = re.compile(
+    r"(?:fell|falling|falls) back to|fallback (?:succeeded|used|result)", re.I
+)
+
+
+def is_recovered_error(snippet):
+    return bool(snippet and _RECOVERED.search(snippet))
+
+
+# error_snippet_of keeps only the head, so a shell result that fills the whole cap
+# with plain output and no failure marker is a command that printed a lot and then
+# exited non-zero: the marker sat in the cut tail.
+_SHELL_TOOL = re.compile(r"(?:^|__|_)(?:bash|shell)$", re.I)
+
+
+def classify_error(tool_name, snippet, denied):
+    """Bucket a failed tool call into ERROR_CLASSES. Precedence: deny (flag or
+    DENY_MARKERS text) > tool_fault (atlas script crash) > model_misuse >
+    environment > unknown (empty or unmatched)."""
+    if denied or is_denied_result(snippet):
+        return "deny"
+    if not snippet or not snippet.strip():
+        return "unknown"
+    if _TOOL_FAULT.search(snippet) or _TOOL_FAULT_SCRIPT.search(snippet):
+        return "tool_fault"
+    # error_snippet_of caps at 500 chars, so the atlas frame may be cut off a
+    # Bash traceback; a leading Traceback naming atlas is still an atlas crash.
+    if (
+        (tool_name or "").lower() == "bash"
+        and snippet.lstrip().startswith("Traceback")
+        and ("atlas_" in snippet or "plugins/atlas" in snippet)
+    ):
+        return "tool_fault"
+    if _CODE_TOOL.search(tool_name or "") and _USER_CODE.match(snippet):
+        return "user_code"
+    if _MODEL_MISUSE.search(snippet):
+        return "model_misuse"
+    if _ENVIRONMENT.search(snippet):
+        return "environment"
+    if (
+        _SHELL_TOOL.search(tool_name or "")
+        and len(snippet) >= ERROR_SNIPPET_CAP
+        and not snippet.lstrip().startswith("Traceback")
+    ):
+        return "environment"
+    return "unknown"
 
 
 def insert_user_prompt(conn, session_id, p):
@@ -822,11 +1537,127 @@ def purge_observer_sessions(conn):
             f"DELETE FROM {tbl} WHERE session_id IN ({placeholders})", sids
         )
         counts[tbl] = cur.rowcount
+    conn.execute(f"DELETE FROM ingest_files WHERE session_id IN ({placeholders})", sids)
     cur = conn.execute(
         f"DELETE FROM session_logs WHERE session_id IN ({placeholders})", sids
     )
     counts["session_logs"] = cur.rowcount
     conn.commit()
+    return counts
+
+
+_SESSION_CHILD_TABLES = (
+    "messages",
+    "tool_calls",
+    "user_prompts",
+    "signals",
+    "turn_scores",
+    "facets",
+    "friction_events",
+    "ingest_files",
+)
+_RUN_CHILD_TABLES = ("events", "dispatches", "metrics")
+
+
+def os_tmp_roots():
+    import tempfile
+
+    return {tempfile.gettempdir(), os.path.realpath(tempfile.gettempdir())}
+
+
+def _under_any(path, roots):
+    return any(path == r or path.startswith(r.rstrip("/") + "/") for r in roots)
+
+
+def is_tmp_path(path):
+    """True when `path` (as given or resolved) lies under the OS temp dir."""
+    roots = os_tmp_roots()
+    return _under_any(str(path), roots) or _under_any(
+        os.path.realpath(str(path)), roots
+    )
+
+
+def tmp_sessions_sql():
+    """(subquery, args) selecting session_ids whose transcript lives under the OS
+    temp dir: test/benchmark fixtures, never real usage. Use as
+    `session_id NOT IN (<subquery>)` so fixture leakage cannot skew a miner."""
+    likes = [
+        r.rstrip("/").replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        + "/%"
+        for r in sorted(os_tmp_roots())
+    ]
+    return (
+        "SELECT session_id FROM session_logs WHERE "
+        + " OR ".join("transcript_path LIKE ? ESCAPE '\\'" for _ in likes),
+        likes,
+    )
+
+
+def purge_tmp_sessions(conn, apply=False, tmp_roots=None):
+    """One-off cleanup of test/benchmark leakage: remove every session whose
+    transcript_path lies under the OS temp dir (default tempfile.gettempdir()
+    and its realpath), with its child rows and its runs (+ their events,
+    dispatches, metrics). Dry-run by default: nothing is deleted unless
+    apply=True. Returns {table: rows} (rows that WOULD be / WERE deleted)."""
+    roots = tmp_roots or os_tmp_roots()
+    sids = [
+        sid
+        for sid, p in conn.execute(
+            "SELECT session_id, transcript_path FROM session_logs "
+            "WHERE transcript_path IS NOT NULL"
+        ).fetchall()
+        if _under_any(p, roots)
+    ]
+    counts = {"session_logs": len(sids)}
+    if not sids:
+        return counts
+    have = {
+        r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    }
+    # one temp table of ids keeps every statement well under SQLite's variable cap
+    conn.execute("CREATE TEMP TABLE IF NOT EXISTS _purge_sids(sid TEXT PRIMARY KEY)")
+    conn.execute("DELETE FROM _purge_sids")
+    conn.executemany("INSERT INTO _purge_sids VALUES(?)", [(s,) for s in sids])
+    if "runs" in have:
+        conn.execute(
+            "CREATE TEMP TABLE IF NOT EXISTS _purge_runs(rid INTEGER PRIMARY KEY)"
+        )
+        conn.execute("DELETE FROM _purge_runs")
+        conn.execute(
+            "INSERT INTO _purge_runs SELECT id FROM runs WHERE session_id IN "
+            "(SELECT sid FROM _purge_sids)"
+        )
+        for t in _RUN_CHILD_TABLES:
+            if t in have:
+                col = "run_id"
+                counts[t] = conn.execute(
+                    f"SELECT COUNT(*) FROM {t} WHERE {col} IN (SELECT rid FROM _purge_runs)"
+                ).fetchone()[0]
+        counts["runs"] = conn.execute("SELECT COUNT(*) FROM _purge_runs").fetchone()[0]
+    for t in _SESSION_CHILD_TABLES:
+        if t in have:
+            counts[t] = conn.execute(
+                f"SELECT COUNT(*) FROM {t} WHERE session_id IN (SELECT sid FROM _purge_sids)"
+            ).fetchone()[0]
+    if apply:
+        if "runs" in have:
+            for t in _RUN_CHILD_TABLES:
+                if t in have:
+                    conn.execute(
+                        f"DELETE FROM {t} WHERE run_id IN (SELECT rid FROM _purge_runs)"
+                    )
+            conn.execute("DELETE FROM runs WHERE id IN (SELECT rid FROM _purge_runs)")
+        for t in _SESSION_CHILD_TABLES:
+            if t in have:
+                conn.execute(
+                    f"DELETE FROM {t} WHERE session_id IN (SELECT sid FROM _purge_sids)"
+                )
+        conn.execute(
+            "DELETE FROM session_logs WHERE session_id IN (SELECT sid FROM _purge_sids)"
+        )
+        conn.commit()
+    conn.execute("DROP TABLE IF EXISTS _purge_sids")
+    conn.execute("DROP TABLE IF EXISTS _purge_runs")
     return counts
 
 
@@ -838,12 +1669,21 @@ def _rows(cur):
     return [dict(zip(cols, r)) for r in cur.fetchall()]
 
 
-def tool_usage(conn, kind=None, project_id=None):
+def tool_usage(conn, kind=None, project_id=None, since=None, exclude_tmp=False):
     """Per-target usage rollup: calls, errors, sessions touched, total input
-    bytes. Filter by kind (builtin|skill|mcp|agent|command) and/or project."""
+    bytes. Filter by kind (builtin|skill|mcp|agent|command) and/or project.
+
+    `errors` counts every is_error row (unchanged, other readers depend on it);
+    `denied` counts calls an atlas gate blocked before they ran, and
+    `real_errors` is the errors that were NOT gate denials -- the number a
+    reliability check should use, since a gate denial is a redirect, not a tool
+    failure."""
     q = (
         "SELECT t.kind, t.target, t.server, COUNT(*) AS calls,"
         " SUM(COALESCE(t.is_error,0)) AS errors,"
+        " SUM(COALESCE(t.denied,0)) AS denied,"
+        " SUM(CASE WHEN COALESCE(t.is_error,0)=1 AND COALESCE(t.denied,0)=0"
+        " THEN 1 ELSE 0 END) AS real_errors,"
         " COUNT(DISTINCT t.session_id) AS sessions,"
         " SUM(COALESCE(t.input_bytes,0)) AS input_bytes "
         "FROM tool_calls t "
@@ -856,16 +1696,50 @@ def tool_usage(conn, kind=None, project_id=None):
     if kind:
         where.append("t.kind=?")
         args.append(kind)
+    if since is not None:
+        where.append("t.ts >= ?")
+        args.append(since)
+    if exclude_tmp:
+        # test/benchmark sessions (transcript under the OS temp dir) are not usage
+        likes = [
+            r.rstrip("/").replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            + "/%"
+            for r in sorted(os_tmp_roots())
+        ]
+        where.append(
+            "t.session_id NOT IN (SELECT session_id FROM session_logs WHERE "
+            + " OR ".join("transcript_path LIKE ? ESCAPE '\\'" for _ in likes)
+            + ")"
+        )
+        args.extend(likes)
     if where:
         q += "WHERE " + " AND ".join(where) + " "
     q += "GROUP BY t.kind, t.target, t.server ORDER BY calls DESC"
     return _rows(conn.execute(q, args))
 
 
+def top_error_snippets(conn, kind, target, limit=3, since=None):
+    """Most frequent error texts for one tool target (gate denials excluded),
+    as [{"snippet", "count"}]. Rows ingested before error_snippet existed have
+    no text and are skipped, so an empty list means "no text captured", not
+    "no errors". `since` (epoch) restricts to recent calls."""
+    return _rows(
+        conn.execute(
+            "SELECT error_snippet AS snippet, COUNT(*) AS count FROM tool_calls "
+            "WHERE kind IS ? AND target IS ? AND COALESCE(is_error,0)=1 "
+            "AND COALESCE(denied,0)=0 AND error_snippet IS NOT NULL "
+            "AND (? IS NULL OR ts >= ?) "
+            "GROUP BY error_snippet ORDER BY count DESC, error_snippet LIMIT ?",
+            (kind, target, since, since, limit),
+        )
+    )
+
+
 def context_tool_health(conn):
-    """Cache efficiency + the context/memory trio's call and error rates. Low
-    cache-read share or a high error rate on context-mode/claude-mem/ponytail
-    means the context-protection layer is not actually helping."""
+    """Cache efficiency + the context/memory/code-nav stack's call and error
+    rates. Low cache-read share or a high error rate on context-mode,
+    claude-mem, ponytail, lean-ctx, or serena means the context-protection
+    layer is not actually helping."""
     tok = conn.execute(
         "SELECT COALESCE(SUM(cache_read_tokens),0), COALESCE(SUM(input_tokens),0),"
         " COALESCE(SUM(cache_creation_tokens),0), COALESCE(SUM(output_tokens),0) "
@@ -878,7 +1752,8 @@ def context_tool_health(conn):
             "SELECT server, COUNT(*) AS calls, SUM(COALESCE(is_error,0)) AS errors,"
             " COUNT(DISTINCT session_id) AS sessions FROM tool_calls "
             "WHERE kind='mcp' AND server IN "
-            "('context-mode','claude-mem','ponytail') GROUP BY server"
+            "('context-mode','claude-mem','ponytail','lean-ctx','serena') "
+            "GROUP BY server"
         )
     )
     return {

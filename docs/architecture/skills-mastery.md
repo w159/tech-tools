@@ -1,7 +1,7 @@
 # Skills Mastery Framework Application
 
 How the post-5.0.0 atlas fleet is structured to the Claude Code Skills Mastery
-Framework. The fleet is now split across two plugins: a 20-skill
+Framework. The fleet is now split across two plugins: a 21-skill
 plugins/atlas (12 core agents in plugins/atlas/agents) and a separate
 plugins/armada (11 department agents in plugins/armada/agents, with the
 armada department skills under plugins/armada/skills/armada/departments/).
@@ -14,15 +14,17 @@ plugins/atlas/skills/atlas-setup/references/mastery-framework.md (moved here
 when atlas-olympus was merged into atlas-setup in 5.0.0).
 
 Counts are verified by plugins/atlas/skills/atlas-setup/scripts/plugin-health.py,
-which reports `skills: actual=20` and `agents: actual=12`, both PASS against
-the atlas manifest. The 20 atlas skills are: atlas, atlas-audit,
-atlas-component, atlas-db-audit, atlas-debug, atlas-feature, atlas-frontend,
-atlas-gitignore, atlas-handoff, atlas-harden, atlas-launch, atlas-loop,
-atlas-orchestrate, atlas-prompt, atlas-readme, atlas-refactor, atlas-setup,
-atlas-ux-test, atlas-validate, atlas-wiki (atlas-m365 and
+which reports `skills: actual=21` and `agents: actual=12`, both PASS against
+the atlas manifest. The 21 atlas skills are: atlas, atlas-audit,
+atlas-component, atlas-db-audit, atlas-debug, atlas-doctor, atlas-feature,
+atlas-frontend, atlas-gitignore, atlas-handoff, atlas-harden, atlas-launch,
+atlas-loop, atlas-orchestrate, atlas-prompt, atlas-readme, atlas-refactor,
+atlas-setup, atlas-ux-test, atlas-validate, atlas-wiki (atlas-m365 and
 atlas-vendor-assessment removed 2026-07-21; see docs/CHANGELOG.md and
-.atlas/findings/2026-07-21-remove-m365-vendor-assessment.md). The 12
-core agents live in plugins/atlas/agents/: completeness-critic, db-prober,
+.atlas/findings/2026-07-21-remove-m365-vendor-assessment.md; atlas-doctor,
+absent since the pre-5.0.0 rebuild, was re-added 2026-08-05 as the
+interactive self-improvement skill -- see docs/CHANGELOG.md 2026-08-05). The
+12 core agents live in plugins/atlas/agents/: completeness-critic, db-prober,
 docs-auditor, docs-curator, explorer, implementer, naming-glossary-audit,
 planner, rls-privilege-audit, schema-inventory, ui-runtime-tester, verifier.
 
@@ -55,8 +57,10 @@ atlas-setup, atlas-vendor-assessment, atlas-wiki (each at
 plugins/atlas/skills/<name>/SKILL.md, plus three reference files under
 atlas-setup/references/). The pre-5.0.0 claim that only atlas-olympus and
 atlas-doctor were manual is obsolete: atlas-olympus was merged into
-atlas-setup and atlas-doctor no longer exists in the plugin. Every
-non-manual skill auto-triggers from its description.
+atlas-setup, and atlas-doctor (re-added 2026-08-05) auto-triggers rather
+than requiring manual invocation -- it carries no `disable-model-invocation`
+field (`plugins/atlas/skills/atlas-doctor/SKILL.md:1-6`). Every non-manual
+skill auto-triggers from its description.
 
 The atlas-invented `triggers:` field is NOT a real Claude Code frontmatter
 field. The harness ignores it. Auto-trigger behavior comes only from the

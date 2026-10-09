@@ -51,6 +51,30 @@ const { mockHandlers } = vi.hoisted(() => {
         content: [{ type: "text", text: "Alert tool called" }],
       }),
     },
+    queries: {
+      getTools: vi.fn().mockReturnValue([
+        { name: "ninjaone_queries_run", description: "Run query", inputSchema: { type: "object", properties: {} } },
+      ]),
+      handleCall: vi.fn().mockResolvedValue({
+        content: [{ type: "text", text: "Query tool called" }],
+      }),
+    },
+    automation: {
+      getTools: vi.fn().mockReturnValue([
+        { name: "ninjaone_scripts_list", description: "List scripts", inputSchema: { type: "object", properties: {} } },
+      ]),
+      handleCall: vi.fn().mockResolvedValue({
+        content: [{ type: "text", text: "Automation tool called" }],
+      }),
+    },
+    directory: {
+      getTools: vi.fn().mockReturnValue([
+        { name: "ninjaone_policies_list", description: "List policies", inputSchema: { type: "object", properties: {} } },
+      ]),
+      handleCall: vi.fn().mockResolvedValue({
+        content: [{ type: "text", text: "Directory tool called" }],
+      }),
+    },
     tickets: {
       getTools: vi.fn().mockReturnValue([
         { name: "ninjaone_tickets_list", description: "List tickets", inputSchema: { type: "object", properties: {} } },
@@ -79,6 +103,18 @@ vi.mock("../domains/alerts.js", () => ({
 
 vi.mock("../domains/tickets.js", () => ({
   ticketsHandler: mockHandlers.tickets,
+}));
+
+vi.mock("../domains/queries.js", () => ({
+  queriesHandler: mockHandlers.queries,
+}));
+
+vi.mock("../domains/automation.js", () => ({
+  automationHandler: mockHandlers.automation,
+}));
+
+vi.mock("../domains/directory.js", () => ({
+  directoryHandler: mockHandlers.directory,
 }));
 
 vi.mock("../utils/server-ref.js", () => ({
@@ -112,12 +148,21 @@ describe("Flattened Navigation Architecture", () => {
       { name: "ninjaone_tickets_list", description: "List tickets", inputSchema: { type: "object", properties: {} } },
       { name: "ninjaone_tickets_get", description: "Get ticket", inputSchema: { type: "object", properties: {} } },
     ]);
+    mockHandlers.queries.getTools.mockReturnValue([
+      { name: "ninjaone_queries_run", description: "Run query", inputSchema: { type: "object", properties: {} } },
+    ]);
+    mockHandlers.automation.getTools.mockReturnValue([
+      { name: "ninjaone_scripts_list", description: "List scripts", inputSchema: { type: "object", properties: {} } },
+    ]);
+    mockHandlers.directory.getTools.mockReturnValue([
+      { name: "ninjaone_policies_list", description: "List policies", inputSchema: { type: "object", properties: {} } },
+    ]);
   });
 
   describe("Tool Collection for Flattened Architecture", () => {
     it("should collect all domain tools", async () => {
       const domains = getAvailableDomains();
-      expect(domains).toEqual(["devices", "organizations", "alerts", "tickets"]);
+      expect(domains).toEqual(["devices", "organizations", "alerts", "tickets", "queries", "automation", "directory"]);
 
       const allTools = [];
       for (const domain of domains) {
@@ -153,7 +198,6 @@ describe("Flattened Navigation Architecture", () => {
 
         for (const tool of tools) {
           expect(tool.name).toMatch(/^ninjaone_[a-z]+_[a-z_]+$/);
-          expect(tool.name).toContain(`ninjaone_${domain}_`);
           expect(tool.description).toBeDefined();
           expect(tool.inputSchema).toBeDefined();
         }
@@ -162,16 +206,25 @@ describe("Flattened Navigation Architecture", () => {
   });
 
   describe("Navigation Architecture Verification", () => {
-    it("should support prefix-based routing for all domains", async () => {
+    it("should route every listed tool back to its declaring domain", async () => {
+      // The invariant that matters: a tool that appears in tools/list must be
+      // callable. Tool names do not encode their domain (ninjaone_scripts_list
+      // is in "automation"), so routing indexes names rather than parsing them.
       const domains = getAvailableDomains();
+      const index = new Map<string, string>();
 
       for (const domain of domains) {
         const handler = await getDomainHandler(domain);
-        const tools = handler.getTools();
+        for (const tool of handler.getTools()) {
+          expect(index.has(tool.name)).toBe(false); // no duplicate ownership
+          index.set(tool.name, domain);
+        }
+      }
 
-        // All tools in a domain should have the domain prefix
-        for (const tool of tools) {
-          expect(tool.name.startsWith(`ninjaone_${domain}_`)).toBe(true);
+      for (const domain of domains) {
+        const handler = await getDomainHandler(domain);
+        for (const tool of handler.getTools()) {
+          expect(index.get(tool.name)).toBe(domain);
         }
       }
     });

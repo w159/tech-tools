@@ -1,15 +1,24 @@
+import os as _iso_os
+import sys as _iso_sys
+
+_iso_sys.path.insert(0, _iso_os.path.join(_iso_os.path.dirname(_iso_os.path.abspath(__file__)), "..", "scripts"))
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import io
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 import unittest
 from contextlib import redirect_stdout
+from unittest import mock
 from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from bash_advisor import _match_catastrophic, main  # noqa: E402
+import bash_advisor  # noqa: E402
+from bash_advisor import _match_catastrophic, _match_git_commit, main  # noqa: E402
 
 HOOK_PATH = os.path.join(os.path.dirname(__file__), "bash_advisor.py")
 
@@ -262,6 +271,141 @@ class SubprocessEndToEndTest(unittest.TestCase):
         )
         self.assertEqual(proc.returncode, 0)
         self.assertEqual(proc.stdout, "")
+
+
+class GitCommitParseTest(unittest.TestCase):
+    """Conservative git-commit tokenizer.
+
+    Parse contract (mirrored 1:1 by omp/mandates.ts): shell operators
+    (&& || ; |) split segments; leading NAME=value env assignments are
+    skipped; the first remaining token must be `git` (or a path ending in
+    /git); global options -C <path>, -c <key=val>, --git-dir=, --work-tree=,
+    --exec-path=, --namespace= and a bare `--` are consumed; the next token
+    must be exactly `commit`. Flags after the subcommand are irrelevant.
+    Consequences: `git commit-tree ...` is NOT a commit (different token),
+    `echo git commit` is NOT (echo wins), `git stash commit` is NOT
+    (stash is not a consumed global option), `git commit --amend` IS.
+    """
+
+    def matches(self, cmd):
+        return _match_git_commit(cmd)
+
+    CASES = json.load(
+        open(os.path.join(os.path.dirname(__file__), "..", "contracts", "mandates.json"))
+    )["gitCommitCases"]
+
+    def test_matches(self):
+        for cmd in self.CASES["match"]:
+            with self.subTest(cmd=cmd):
+                self.assertTrue(self.matches(cmd))
+
+    def test_non_matches(self):
+        for cmd in self.CASES["noMatch"]:
+            with self.subTest(cmd=cmd):
+                self.assertFalse(self.matches(cmd))
+
+
+class CommitReviewNudgeTest(unittest.TestCase):
+    """Ponytail-before-commit mandate: one-time, armed, kill-switched."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        # Point the one-time marker at a throwaway dir so tests never read or
+        # write the real user temp state.
+        self._marker = bash_advisor.MANDATE_MARKER_DIR
+        bash_advisor.MANDATE_MARKER_DIR = self.tmp
+
+    def tearDown(self):
+        bash_advisor.MANDATE_MARKER_DIR = self._marker
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _payload(self, command, session_id="sess-pony-1"):
+        return json.dumps(
+            {
+                "tool_name": "Bash",
+                "tool_input": {"command": command},
+                "session_id": session_id,
+            }
+        )
+
+    def test_armed_git_commit_nudges_once(self):
+        with mock.patch.object(bash_advisor, "_ponytail_installed", return_value=True):
+            code, out = _run_main(self._payload("git commit -m 'wip'"))
+            self.assertEqual(code, 0)
+            ctx = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+            self.assertEqual(ctx, bash_advisor._mandates()["commitNudge"])
+            # One-time: a second commit in the SAME session stays silent.
+            code2, out2 = _run_main(self._payload("git commit --amend"))
+            self.assertEqual(code2, 0)
+            self.assertEqual(out2, "")
+
+    def test_armed_nudge_fires_again_for_a_new_session(self):
+        with mock.patch.object(bash_advisor, "_ponytail_installed", return_value=True):
+            code, out = _run_main(self._payload("git commit -m a", session_id="one"))
+            self.assertEqual(code, 0)
+            self.assertIn("ponytail-review", out)
+            code2, out2 = _run_main(self._payload("git commit -m b", session_id="two"))
+            self.assertEqual(code2, 0)
+            self.assertIn("ponytail-review", out2)
+
+    def test_unarmed_silent_when_ponytail_absent(self):
+        with mock.patch.object(bash_advisor, "_ponytail_installed", return_value=False):
+            code, out = _run_main(self._payload("git commit -m 'wip'"))
+        self.assertEqual(code, 0)
+        self.assertEqual(out, "")
+
+    def test_non_commit_commands_stay_silent_when_armed(self):
+        with mock.patch.object(bash_advisor, "_ponytail_installed", return_value=True):
+            for cmd in ("git commit-tree x", "echo git commit", "git status"):
+                with self.subTest(cmd=cmd):
+                    code, out = _run_main(self._payload(cmd))
+                    self.assertEqual(code, 0)
+                    self.assertEqual(out, "")
+
+    def test_kill_switch_off_silences_mandate(self):
+        with (
+            mock.patch.object(bash_advisor, "_ponytail_installed", return_value=True),
+            mock.patch.dict(os.environ, {"ATLAS_MANDATES": "off"}),
+        ):
+            code, out = _run_main(self._payload("git commit -m 'wip'"))
+        self.assertEqual(code, 0)
+        self.assertEqual(out, "")
+
+    def test_kill_switch_is_exactly_off(self):
+        """Equivalence contract: both harnesses check the literal string "off";
+        "Off" must not kill, or the two runtimes diverge."""
+        with (
+            mock.patch.object(bash_advisor, "_ponytail_installed", return_value=True),
+            mock.patch.dict(os.environ, {"ATLAS_MANDATES": "Off"}),
+        ):
+            code, out = _run_main(self._payload("git commit -m 'wip'"))
+        self.assertEqual(code, 0)
+        self.assertIn("ponytail-review", out)
+
+    def test_missing_session_id_stays_silent(self):
+        """One-time needs a session key; absent id means no nudge (same
+        behavior as dispatch_tripwire's session-gated nudges)."""
+        with mock.patch.object(bash_advisor, "_ponytail_installed", return_value=True):
+            code, out = _run_main(
+                json.dumps({"tool_name": "Bash", "tool_input": {"command": "git commit"}})
+            )
+        self.assertEqual(code, 0)
+        self.assertEqual(out, "")
+
+    def test_malformed_json_fail_open(self):
+        code, out = _run_main("{{bad json")
+        self.assertEqual(code, 0)
+        self.assertEqual(out, "")
+
+    def test_catastrophic_warning_precedes_commit_nudge(self):
+        """rm -rf / inside the payload must keep its advisory; the commit
+        nudge never replaces/erases the existing advisor output."""
+        with mock.patch.object(bash_advisor, "_ponytail_installed", return_value=True):
+            code, out = _run_main(self._payload("rm -rf /"))
+        self.assertEqual(code, 0)
+        ctx = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("catastrophic", ctx)
+        self.assertNotIn("ponytail-review", ctx)
 
 
 if __name__ == "__main__":

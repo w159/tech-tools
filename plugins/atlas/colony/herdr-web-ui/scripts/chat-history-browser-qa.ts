@@ -1,0 +1,203 @@
+/** Real React + browser regressions with controlled HTTP timing. No herdr panes are touched. */
+import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { chromium } from "playwright-core";
+
+const root = mkdtempSync(join(tmpdir(), "herdr-history-browser-"));
+let server: ReturnType<typeof Bun.serve> | undefined;
+let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
+const releases: Array<() => void> = [];
+try {
+  const build = await Bun.build({ entrypoints: ["scripts/chat-history-fixture.tsx"], outdir: root, target: "browser", define: { "process.env.NODE_ENV": '"development"' } });
+  assert.ok(build.success, String(build.logs));
+  server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch(request) {
+    const path = new URL(request.url).pathname;
+    if (path === "/ws") return new Response(null, { status: 404 });
+    if (path.endsWith("/pane/commands")) return Response.json({ commands: [] });
+    return path === "/" ? new Response('<html><head><link rel="stylesheet" href="/chat-history-fixture.css"></head><body><div id="root"></div><script type="module" src="/chat-history-fixture.js"></script></body></html>', { headers: { "Content-Type": "text/html" } }) : new Response(Bun.file(join(root, path.slice(1))));
+  } });
+  browser = await chromium.launch({ executablePath: process.env.CHROME_PATH ?? "/opt/google/chrome/chrome", headless: true, args: ["--no-sandbox"] });
+  const page = await browser.newPage();
+  page.setDefaultTimeout(10_000);
+  const errors: string[] = [];
+  page.on("pageerror", (error) => { errors.push(error.message); console.error(error.stack); });
+  let epoch = "one", newest = "old newest", before: string | null = "one:100";
+  let holdOlder = false, olderRequested = false;
+  let product = false;
+  /** product panes ("machine/pane") whose conversation requests wait for the script, and those that fail */
+  const held = new Set<string>(), failing = new Set<string>();
+  const pending: Array<{ key: string; answer: (status: number) => Promise<void> }> = [];
+  const user = (text: string) => ({ role: "user", ts: text, parts: [{ kind: "text", text }] });
+  await page.route("**/api/**/conversation?*", async (route) => {
+    const url = new URL(route.request().url());
+    if (product) {
+      const pane = url.searchParams.get("pane_id") ?? url.searchParams.get("pane") ?? "";
+      const key = `${/\/api\/machines\/([^/]+)\//.exec(url.pathname)?.[1] ?? "local"}/${pane}`;
+      const answer = (status: number) => status === 200
+        ? route.fulfill({ json: { source: "omp-transcript", history_id: key, cursor: null, turns: [user(`history ${key}`)] } })
+        : route.fulfill({ status, json: { error: { code: "unavailable", message: "conversation unavailable" } } });
+      // answered as it arrives unless its pane is held: a poll an abandoned mount left
+      // behind can then never stand in for the request an assertion waits on
+      if (held.has(key)) await new Promise<void>((resolve) => pending.push({ key, answer: (status) => answer(status).finally(resolve) }));
+      else await answer(failing.has(key) ? 503 : 200);
+      return;
+    }
+    const captured = epoch;
+    const cursor = url.searchParams.get("before") ?? url.searchParams.get("from");
+    if (cursor && !cursor.startsWith(`${epoch}:`)) {
+      await route.fulfill({ status: 409, json: { error: { code: "history_changed", message: "reload history" } } });
+      return;
+    }
+    if (url.searchParams.has("before")) {
+      olderRequested = true;
+      if (holdOlder) await new Promise<void>((resolve) => releases.push(resolve));
+      await route.fulfill({ json: { source: "omp-transcript", history_id: captured, cursor: null, turns: [user("old earlier")] } });
+    } else {
+      const tool = { role: "assistant", ts: "reused", parts: [{ kind: "tool", name: "Read", summary: "same", input: "{}", output: "preview", output_ref: "reused", output_size: 9000 }] };
+      await route.fulfill({ json: { source: "omp-transcript", history_id: epoch, cursor: before, turns: newest ? [user(newest), tool] : [] } });
+    }
+  });
+  await page.goto(`http://127.0.0.1:${server.port}/`);
+  await page.getByText("old newest", { exact: true }).waitFor();
+  const refresh = () => page.evaluate(() => window.qa.refresh());
+  const output = page.locator("#output");
+  await page.locator("#fetch-output").click();
+  assert.equal(await page.evaluate(() => window.qa.requests.length), 1, "duplicate load deduplicated");
+  await page.evaluate(() => window.qa.target("/qa-output?pane=b&ref=x", "one"));
+  await page.waitForFunction(() => window.qa.requests[0].signal.aborted);
+  await page.evaluate(() => window.qa.requests[0].resolve("STALE A"));
+  assert.equal(await output.textContent(), "idle:");
+  await page.locator("#fetch-output").click();
+  await page.evaluate(() => window.qa.requests[1].resolve("B result"));
+  await page.waitForFunction(() => document.querySelector("#output")?.textContent === "idle:B result");
+  await page.evaluate(() => window.qa.target("/qa-output?pane=b&ref=y", "one"));
+  await page.waitForFunction(() => document.querySelector("#output")?.textContent === "idle:");
+  await page.locator("#fetch-output").click();
+  await page.evaluate(() => window.qa.target("/qa-output?pane=b&ref=y", "two"));
+  await page.waitForFunction(() => window.qa.requests[2].signal.aborted);
+  await page.evaluate(() => window.qa.requests[2].reject());
+  assert.equal(await output.textContent(), "idle:");
+  console.log("PASS duplicate requests, pane/ref/history changes, abort, late success and late failure");
+
+  // Start an older-page request, then observe clear before it completes.
+  holdOlder = true;
+  await page.locator(".chat-older").click();
+  while (!olderRequested) await Bun.sleep(20);
+  epoch = "two"; newest = ""; before = null;
+  await refresh();
+  await page.getByText("No conversation yet — say something below", { exact: true }).waitFor();
+  releases.splice(0).forEach((release) => release());
+  await page.waitForTimeout(100);
+  assert.equal(await page.locator(".chat-turn").count(), 0, "late older page cannot revive cleared history");
+  assert.equal(await page.locator(".chat-older").count(), 0);
+  console.log("PASS clear while earlier page is in flight and empty history before a new prompt");
+
+  newest = "new newest";
+  await refresh();
+  await page.getByText(newest, { exact: true }).waitFor();
+  // a settled turn's work is folded: open the block, then its row
+  await page.locator(".work-block-head").click();
+  await page.locator(".work-row-head").click();
+  await page.locator(".chat-tool-more").click();
+  const requestIndex = await page.evaluate(() => window.qa.requests.length - 1);
+  epoch = "three"; newest = "newest after another clear";
+  await refresh();
+  await page.getByText(newest, { exact: true }).waitFor();
+  await page.waitForFunction((i) => window.qa.requests[i].signal.aborted, requestIndex);
+  await page.evaluate((i) => window.qa.requests[i].resolve("STALE TOOL OUTPUT"), requestIndex);
+  // the cleared history brought a new turn, folded like any settled one
+  assert.equal(await page.locator(".work-block-head").getAttribute("aria-expanded"), "false");
+  await page.locator(".work-block-head").click();
+  await page.locator(".work-row-head").click();
+  assert.equal(await page.getByText("STALE TOOL OUTPUT", { exact: true }).count(), 0);
+  assert.equal(await page.locator(".chat-tool-more").count(), 1);
+  // A remote PC with the same pane/tool id is a distinct target too.
+  await page.locator(".chat-tool-more").click();
+  const remoteIndex = await page.evaluate(() => window.qa.requests.length - 1);
+  await page.evaluate(() => window.qa.chat("a", "remote-pc"));
+  await page.waitForFunction((i) => window.qa.requests[i].signal.aborted, remoteIndex);
+  await page.evaluate((i) => window.qa.requests[i].reject(), remoteIndex);
+  await page.getByText(newest, { exact: true }).waitFor();
+  assert.equal(await page.getByText("Couldn't load the whole output — retry", { exact: true }).count(), 0);
+  // Already loaded older history must be discarded when a held cursor gets 409.
+  epoch = "four"; newest = "loaded history newest"; before = "four:100"; holdOlder = false;
+  await page.evaluate(() => window.qa.chat("b"));
+  await page.getByText(newest, { exact: true }).waitFor();
+  await page.locator(".chat-older").click();
+  await page.getByText("old earlier", { exact: true }).waitFor();
+  epoch = "five"; newest = "after held cursor reset"; before = null;
+  await refresh();
+  await page.getByText(newest, { exact: true }).waitFor();
+  assert.equal(await page.getByText("old earlier", { exact: true }).count(), 0);
+  assert.equal(await page.locator(".chat-older").count(), 0);
+
+  // A stale cursor discovered by the Earlier button also triggers a fresh poll.
+  epoch = "six"; newest = "before older cursor reset"; before = "six:100";
+  await refresh();
+  await page.getByText(newest, { exact: true }).waitFor();
+  epoch = "seven"; newest = "after older cursor reset"; before = null;
+  await page.locator(".chat-older").click();
+  await page.getByText(newest, { exact: true }).waitFor();
+  assert.equal(await page.locator(".chat-older").count(), 0);
+  console.log("PASS held-cursor and older-page 409 recovery discard history and immediately reload");
+  assert.deepEqual(errors, []);
+  console.log("PASS reused tool ids after clear, machine switch and unmount cancellation; no browser errors");
+
+  // Exercise the actual product owner. A profiler observes every committed DOM, not just the final frame.
+  const select = async (pane: string, machine: string) => {
+    product = true;
+    // the log is cleared in the task that switches: no commit of the pane being left slips in between
+    await page.evaluate(([p, m]) => { window.qa.commits.length = 0; window.qa.select(p!, m!); }, [pane, machine]);
+  };
+  /** The expected chat is up, and no commit since the switch showed the other pane's. */
+  const shows = async (expected: string, forbidden: string) => {
+    await page.getByText(`history ${expected}`, { exact: true }).waitFor();
+    const commits = await page.evaluate(() => window.qa.commits);
+    assert.ok(commits.length > 0, "profiler recorded product commits");
+    assert.ok(commits.every((turns) => !turns.some((turn) => turn.includes(`history ${forbidden}`))), `stale ${forbidden} in intermediate commits: ${JSON.stringify(commits)}`);
+  };
+  await select("a", "local");
+  await page.getByText("history local/a", { exact: true }).waitFor();
+  await select("b", "local");
+  await shows("local/b", "local/a");
+  await select("a", "local");
+  await shows("local/a", "local/b");
+  await select("a", "remote-pc");
+  await shows("remote-pc/a", "local/a");
+  // A late success and a late error from B must neither replace nor erase A's chat.
+  for (const status of [200, 503]) {
+    held.add("remote-pc/b");
+    const ended = await page.evaluate(() => window.qa.answered.filter((key) => key === "remote-pc/b").length);
+    await select("b", "remote-pc");
+    const deadline = Date.now() + 10_000;
+    while (!pending.some((request) => request.key === "remote-pc/b")) {
+      assert.ok(Date.now() < deadline, "missing delayed B request");
+      await Bun.sleep(20);
+    }
+    await select("a", "remote-pc");
+    await page.getByText("history remote-pc/a", { exact: true }).waitFor();
+    held.delete("remote-pc/b");
+    for (const request of pending.splice(0)) await request.answer(status);
+    // B's request has ended in the page (answered, or cancelled when B left) and two frames
+    // have passed: whatever it could change is committed
+    await page.waitForFunction((count) => window.qa.answered.filter((key) => key === "remote-pc/b").length > count, ended);
+    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    await shows("remote-pc/a", "remote-pc/b");
+    assert.equal(await page.getByText("history remote-pc/a", { exact: true }).count(), 1, "late response preserves active chat");
+    assert.equal(await page.locator(".chat-inline-error").count(), 0, "late error belongs to the abandoned pane");
+  }
+  failing.add("remote-pc/b");
+  await select("b", "remote-pc");
+  await page.locator(".chat-inline-error").waitFor();
+  assert.equal(await page.getByText("history remote-pc/a", { exact: true }).count(), 0, "unavailable chat cannot show another pane's history");
+  assert.ok((await page.evaluate(() => window.qa.commits)).every((turns) => !turns.some((turn) => turn.includes("history remote-pc/a"))), "no commit of the unavailable chat showed another pane's history");
+  assert.deepEqual(errors, []);
+  console.log("PASS product pane commits across A→B→A, another PC, and late or failed answers");
+} finally {
+  releases.forEach((release) => release());
+  await browser?.close();
+  server?.stop(true);
+  rmSync(root, { recursive: true, force: true });
+}

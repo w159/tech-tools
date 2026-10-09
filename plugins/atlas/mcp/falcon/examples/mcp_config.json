@@ -1,0 +1,25 @@
+{
+  "servers": [
+    {
+      "name": "falcon-stdio",
+      "transport": {
+        "type": "stdio",
+        "command": "python -m falcon_mcp.server"
+      }
+    },
+    {
+      "name": "falcon-sse",
+      "transport": {
+        "type": "sse",
+        "url": "http://127.0.0.1:8000/sse"
+      }
+    },
+    {
+      "name": "falcon-streamable-http",
+      "transport": {
+        "type": "streamable-http",
+        "url": "http://127.0.0.1:8000/mcp"
+      }
+    }
+  ]
+}

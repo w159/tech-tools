@@ -42,6 +42,15 @@ The script prints one PASS/FAIL line per check and exits 0 (healthy) or 1
 5. If FAILs persist after `--fix`, show the exact failing lines and stop; do
    not hand-edit plugin manager state beyond what the script does.
 
+**Scope of `--fix`:** it repairs plugin/marketplace install state only. It
+does not repair MCP registrations or installations - a missing or
+misregistered claude-mem, context-mode, ponytail, serena, or lean-ctx entry
+is out of its reach for all of them equally (there is no per-tool MCP
+remediation path in the doctor). The repair for those is the install
+command from `discover_capabilities.py` / `references/install.md` Stage 1,
+run with the user's explicit OK; session boot announces the trio gap via its
+"Setup gap: ... absent" line.
+
 The same checks also run automatically at SessionStart in warn-only mode, so a
 future rollback announces itself at the top of the session instead of
 silently degrading atlas.

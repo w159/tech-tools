@@ -12,13 +12,88 @@ Unlike the old nudge.py which said "please capture a lesson," this hook
 DOES the capture — no agent action required. It writes to
 ~/.atlas/memory/MEMORY.md and ~/.atlas/memory/PROJECT.md via atlas_memory.
 
+The Stop-hook loop guard (stop_hook_active, the throttle window, and the
+session circuit breaker) lives in atlas_hook_guard now. The seen-hash dedupe
+below is a SEPARATE, older mechanism about facts (durable content already
+captured to memory across sessions) and is kept independent of it.
+
 Fail-open: any error exits 0 silently. Disable with ATLAS_MEMORY_CAPTURE=off.
 """
 
-import json
+import hashlib
 import os
+import re
 import sqlite3
 import sys
+
+CAPTURE_WINDOW_SECONDS = 900  # blast-radius cap: at most once per 15 minutes
+SEEN_MAX_LINES = 500  # cap the seen-hash file so it cannot grow unbounded
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+import atlas_faults  # noqa: E402
+import atlas_hook_guard  # noqa: E402
+import atlas_memory  # noqa: E402
+
+
+def _trace(exc, cwd=None):
+    """Leave a durable trace for a swallowed failure (never raises)."""
+    atlas_faults.record("memory_capture", exc, cwd or None)
+
+
+def _seen_hashes_path():
+    base = os.environ.get("ATLAS_HOME") or os.path.join(
+        os.path.expanduser("~"), ".atlas"
+    )
+    return os.path.join(base, ".memory_capture_seen")
+
+
+def _hash_key(raw_text):
+    """sha256 of the durable raw content (never the formatted, per-cwd fact
+    string) so a fact is recognized as the same fact across subagent dirs."""
+    return hashlib.sha256(raw_text.strip().encode("utf-8", "replace")).hexdigest()[:16]
+
+
+def _load_seen_hashes(path):
+    try:
+        with open(path) as f:
+            return {line.strip() for line in f if line.strip()}
+    except Exception:
+        return set()
+
+
+def _append_seen_hashes(path, new_hashes):
+    """Persist newly-announced fact hashes. Fail-open: any IO error here must
+    not affect the hook result, since the fact was already written to memory
+    by the time this is called."""
+    if not new_hashes:
+        return
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        existing = []
+        if os.path.exists(path):
+            with open(path) as f:
+                existing = [line.strip() for line in f if line.strip()]
+        for h in new_hashes:
+            if h not in existing:
+                existing.append(h)
+        existing = existing[-SEEN_MAX_LINES:]  # cap unbounded growth
+        with open(path, "w") as f:
+            f.write("\n".join(existing) + "\n")
+    except Exception:
+        pass
+
+
+class _Fact(str):
+    """A captured fact string that also carries the durable dedupe key (the
+    raw signal content) separately from its formatted display text. Needed
+    because the display text embeds a per-cwd project label, which would
+    defeat a naive string-hash dedupe across subagents running in different
+    working directories."""
+
+    def __new__(cls, text, dedupe_key):
+        obj = str.__new__(cls, text)
+        obj.dedupe_key = dedupe_key
+        return obj
 
 
 def _resolve_scope(conn, session_id):
@@ -125,6 +200,11 @@ def _extract_facts(conn, session_id, cwd):
     project_facts = []  # project-specific
 
     project_name = os.path.basename(cwd) if cwd else "unknown"
+    # A subagent's cwd basename becomes agent-<hex> or .run, which is not a
+    # project. Lessons filed under those scopes are unfindable and duplicate the
+    # same lesson once per dispatched agent.
+    if _JUNK_SCOPE.match(project_name):
+        return [], []
 
     try:
         session_ids, run_ids = _resolve_scope(conn, session_id)
@@ -142,10 +222,11 @@ def _extract_facts(conn, session_id, cwd):
             snippet = row[0]
             if snippet and snippet.strip():
                 # Keep it concise — truncate to 200 chars
-                fact = f"User correction ({project_name}): {snippet.strip()[:200]}"
+                clean = atlas_memory.redact_secrets(snippet.strip())
+                fact = _Fact(f"User correction ({project_name}): {_clip(clean)}", clean)
                 memory_facts.append(fact)
-    except sqlite3.Error:
-        pass
+    except sqlite3.Error as exc:
+        _trace(exc, cwd)
 
     # 2. Assumption admissions → memory (agent-level lessons)
     try:
@@ -157,10 +238,13 @@ def _extract_facts(conn, session_id, cwd):
         ).fetchall():
             snippet = row[0]
             if snippet and snippet.strip():
-                fact = f"Assumption to avoid ({project_name}): {snippet.strip()[:200]}"
+                clean = atlas_memory.redact_secrets(snippet.strip())
+                fact = _Fact(
+                    f"Assumption to avoid ({project_name}): {_clip(clean)}", clean
+                )
                 memory_facts.append(fact)
-    except sqlite3.Error:
-        pass
+    except sqlite3.Error as exc:
+        _trace(exc, cwd)
 
     # 3. Improvements → project memory (project-specific decisions)
     try:
@@ -173,49 +257,80 @@ def _extract_facts(conn, session_id, cwd):
             ).fetchall():
                 dim, baseline, target, note = row
                 if note and note.strip():
-                    fact = (
-                        f"[{project_name}] {dim or 'Improvement'}: {note.strip()[:200]}"
+                    clean = atlas_memory.redact_secrets(note.strip())
+                    dim_label = dim or "Improvement"
+                    fact = _Fact(
+                        f"[{project_name}] {dim_label}: {_clip(clean)}",
+                        f"{dim_label}:{clean}",
                     )
                     project_facts.append(fact)
-    except sqlite3.Error:
-        pass
+    except sqlite3.Error as exc:
+        _trace(exc, cwd)
 
     # 4. Tool error patterns → memory (agent-level tool quirks)
-    # Only capture persistent errors (≥3 failures of the same tool in a session).
-    # Single Bash/Read failures are normal during development and create noise.
-    # Also skip "trivial" tools where single failures are expected (Bash, Read, Glob, Grep).
-    TRIVIAL_TOOLS = {"Bash", "Read", "Glob", "Grep"}
-    try:
-        ph, params = _in_clause(session_ids)
-        error_tools = conn.execute(
-            "SELECT tool_name, COUNT(*) as cnt FROM tool_calls "
-            "WHERE session_id IN (" + ph + ") AND is_error=1 "
-            "GROUP BY tool_name HAVING cnt >= 3 ORDER BY cnt DESC LIMIT 3",
-            params,
-        ).fetchall()
-        for tool_name, cnt in error_tools:
-            if tool_name and tool_name not in TRIVIAL_TOOLS:
-                fact = f"Tool '{tool_name}' errored {cnt}x in {project_name} — check usage pattern"
-                memory_facts.append(fact)
-    except sqlite3.Error:
-        pass
+    # Tool-error tallies are NOT captured as memory. They live in atlas_db
+    # (queryable by atlas-audit) and their only consumer was SessionStart recall,
+    # where 40+ lines of "Tool 'Write' errored 2x in agent-a870d7a4169e4bb8b"
+    # buried every real lesson. A tally names no lesson and no action.
 
     return memory_facts, project_facts
+
+
+# A subagent's cwd basename is not a project name.
+_JUNK_SCOPE = re.compile(r"^(agent-[0-9a-f]{6,}|\.run|\.atlas|)$")
+
+
+def _clip(text, limit=200):
+    """Truncate on a word boundary. A fact cut mid-word ("It just never ran,
+    because the") is unreadable, and recall showed a screenful of them."""
+    text = " ".join(text.split())
+    if len(text) <= limit:
+        return text
+    cut = text[:limit].rsplit(" ", 1)[0]
+    return (cut or text[:limit]).rstrip(",;:-") + "..."
+
+
+def _record_drop(session_id, kind, result):
+    """A lesson could not be stored: record it instead of discarding it.
+
+    The hook's own `conn` is opened read-only, so this takes its own
+    short-lived write connection. Fail-open in every direction: a logging
+    failure must never cost us the capture path or block Stop.
+    """
+    try:
+        import atlas_db
+
+        reason = (result or {}).get("error") or "unknown"
+        conn = atlas_db.connect()
+        try:
+            atlas_db.record_friction(
+                conn,
+                session_id,
+                "memory_drop",
+                weight=1.0,
+                snippet=f"{kind}: {reason}"[:200],
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception as exc:
+        _trace(exc)
+    # Surface it too -- a drop that is only in the DB is still invisible today.
+    try:
+        sys.stderr.write(
+            f"[atlas] memory_capture dropped a {kind} lesson: "
+            f"{(result or {}).get('error', 'unknown')}\n"
+        )
+    except Exception:
+        pass
 
 
 def main():
     if os.environ.get("ATLAS_MEMORY_CAPTURE", "on").lower() == "off":
         sys.exit(0)
 
-    raw = ""
-    try:
-        raw = sys.stdin.read()
-    except Exception:
-        pass
-    try:
-        payload = json.loads(raw) if raw.strip() else {}
-    except (json.JSONDecodeError, ValueError):
-        payload = {}
+    payload = atlas_hook_guard.read_payload()
+    payload = payload if isinstance(payload, dict) else {}
 
     session_id = payload.get("session_id", "")
     cwd = payload.get("cwd", "")
@@ -223,8 +338,11 @@ def main():
     if not session_id:
         sys.exit(0)
 
-    # Connect to the atlas DB
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+    # stop_hook_active, the throttle window, and the circuit breaker.
+    if not atlas_hook_guard.should_run(
+        payload, "memory_capture", window_seconds=CAPTURE_WINDOW_SECONDS, kind="capture"
+    ):
+        sys.exit(0)
 
     db_path = os.environ.get("ATLAS_DB", os.path.expanduser("~/.atlas/atlas.db"))
     if not os.path.exists(db_path):
@@ -232,7 +350,8 @@ def main():
 
     try:
         conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
-    except sqlite3.Error:
+    except sqlite3.Error as exc:
+        _trace(exc, cwd)
         sys.exit(0)
 
     captured = {"memory": 0, "project": 0, "facts": []}
@@ -247,24 +366,55 @@ def main():
         if not memory_facts and not project_facts:
             sys.exit(0)
 
+        # Content-hash dedupe: a fact already announced in a prior turn (even
+        # under a different cwd/project label) must never be re-announced --
+        # that is what let the fact-string dedupe in atlas_memory.add miss and
+        # sustained the Stop-hook loop.
+        seen_path = _seen_hashes_path()
+        seen = _load_seen_hashes(seen_path)
+
+        def _fresh(facts):
+            fresh = []
+            for fact in facts:
+                key = getattr(fact, "dedupe_key", fact)
+                h = _hash_key(key)
+                if h in seen:
+                    continue
+                seen.add(h)  # also dedupes within this same batch
+                fresh.append((fact, h))
+            return fresh
+
+        fresh_memory = _fresh(memory_facts)
+        fresh_project = _fresh(project_facts)
+
+        if not fresh_memory and not fresh_project:
+            sys.exit(0)  # nothing NEW -> emit nothing, so the loop cannot sustain
+
         # Write to memory
         import atlas_memory
 
-        for fact in memory_facts:
+        for fact, h in fresh_memory:
             result = atlas_memory.add("memory", fact)
             if result.get("success"):
                 captured["memory"] += 1
                 captured["facts"].append(fact[:80])
+                _append_seen_hashes(seen_path, [h])
+            else:
+                _record_drop(session_id, "memory", result)
 
-        for fact in project_facts:
+        for fact, h in fresh_project:
             result = atlas_memory.add("project", fact)
             if result.get("success"):
                 captured["project"] += 1
                 captured["facts"].append(fact[:80])
+                _append_seen_hashes(seen_path, [h])
+            else:
+                _record_drop(session_id, "project", result)
 
     except Exception as exc:
         # fail-open: never block the hook. But surface the failure on stderr so
         # a silent capture miss is observable instead of invisible.
+        atlas_faults.record("memory_capture", exc, cwd or None)
         try:
             sys.stderr.write(f"[atlas] memory_capture fail-open: {exc}\n")
         except Exception:
@@ -276,30 +426,16 @@ def main():
         except Exception:
             pass
 
-    # Report what was captured via additionalContext (non-blocking)
-    if captured["memory"] or captured["project"]:
-        msg = (
-            f"[atlas] Self-improvement: captured {captured['memory']} memory fact(s) "
-            f"and {captured['project']} project fact(s) from this session. "
-            f"They will be available next session."
-        )
-        if captured["facts"]:
-            msg += " Captured: " + "; ".join(captured["facts"][:3])
-        sys.stdout.write(
-            json.dumps(
-                {
-                    "hookSpecificOutput": {
-                        "hookEventName": payload.get("hook_event_name", "Stop"),
-                        "additionalContext": msg,
-                    }
-                }
-            )
-        )
+    # Silent on success. Capture is bookkeeping the user did not ask to watch,
+    # and additionalContext on Stop costs a whole model turn to narrate it. The
+    # facts are in ~/.atlas/memory/ and surface next SessionStart. Same defect
+    # nudge.py carried until 5.9.0.
     sys.exit(0)
 
 
 if __name__ == "__main__":
     try:
         main()
-    except Exception:
+    except Exception as exc:
+        atlas_faults.record("memory_capture", exc)
         sys.exit(0)

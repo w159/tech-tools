@@ -203,5 +203,102 @@ class GitignoreTest(unittest.TestCase):
             self.assertEqual((root / ".gitignore").read_text(), "# custom\n*.log\n")
 
 
+class ToolingBlockTest(unittest.TestCase):
+    """ensure_tooling_block: insert / replace / skip-on-ambiguity, and the
+    full main() propagation of the block into AGENTS.md + CLAUDE.md."""
+
+    NEW_BLOCK = "<!-- atlas-tooling -->\nNEW BLOCK\n<!-- /atlas-tooling -->"
+
+    def test_inserts_when_absent(self):
+        with TempRepo() as root:
+            path = root / "AGENTS.md"
+            path.write_text("# AGENTS.md\nexisting content\n")
+            status = scaffold_docs.ensure_tooling_block(path, self.NEW_BLOCK)
+            self.assertIn("inserted", status)
+            text = path.read_text()
+            self.assertIn("existing content", text)
+            self.assertIn(self.NEW_BLOCK, text)
+
+    def test_replaces_existing_well_formed_pair(self):
+        with TempRepo() as root:
+            path = root / "AGENTS.md"
+            path.write_text(
+                "# AGENTS.md\nkeep me\n"
+                "<!-- atlas-tooling -->\nOLD BLOCK\n<!-- /atlas-tooling -->\n"
+                "keep me too\n"
+            )
+            status = scaffold_docs.ensure_tooling_block(path, self.NEW_BLOCK)
+            self.assertIn("updated", status)
+            text = path.read_text()
+            self.assertIn("keep me\n", text)
+            self.assertIn("keep me too", text)
+            self.assertIn("NEW BLOCK", text)
+            self.assertNotIn("OLD BLOCK", text)
+
+    def test_idempotent_on_rerun(self):
+        with TempRepo() as root:
+            path = root / "AGENTS.md"
+            path.write_text("# AGENTS.md\n")
+            scaffold_docs.ensure_tooling_block(path, self.NEW_BLOCK)
+            before = path.read_text()
+            status = scaffold_docs.ensure_tooling_block(path, self.NEW_BLOCK)
+            self.assertIn("unchanged", status)
+            self.assertEqual(path.read_text(), before)
+            self.assertEqual(before.count("<!-- atlas-tooling -->"), 1)
+
+    def test_skips_and_preserves_content_on_orphan_start_marker(self):
+        # Regression: an unpaired START earlier in the file (e.g. quoted in
+        # a doc example) followed by a real, later pair used to make the
+        # naive first-START/first-END replace delete everything in between,
+        # including real user content and the legitimate block.
+        with TempRepo() as root:
+            path = root / "AGENTS.md"
+            original = (
+                "# AGENTS.md\n"
+                "Some doc text showing an example:\n"
+                "<!-- atlas-tooling -->\n"
+                "IMPORTANT USER CONTENT THAT MUST SURVIVE\n"
+                "<!-- atlas-tooling -->\n"
+                "old block\n"
+                "<!-- /atlas-tooling -->\n"
+                "tail content\n"
+            )
+            path.write_text(original)
+            status = scaffold_docs.ensure_tooling_block(path, self.NEW_BLOCK)
+            self.assertIn("SKIP", status)
+            self.assertEqual(path.read_text(), original)
+
+    def test_skips_on_unpaired_end_marker(self):
+        with TempRepo() as root:
+            path = root / "AGENTS.md"
+            original = "# AGENTS.md\nstray <!-- /atlas-tooling --> with no start\n"
+            path.write_text(original)
+            status = scaffold_docs.ensure_tooling_block(path, self.NEW_BLOCK)
+            self.assertIn("SKIP", status)
+            self.assertEqual(path.read_text(), original)
+
+    def test_main_propagates_block_into_agents_and_claude_md(self):
+        with TempRepo() as root:
+            rc = scaffold_docs.main(["scaffold_docs.py", str(root)])
+            self.assertEqual(rc, 0)
+            agents = (root / "AGENTS.md").read_text()
+            claude = (root / "CLAUDE.md").read_text()
+            self.assertIn(scaffold_docs.TOOLING_MARKER_START, agents)
+            self.assertIn(scaffold_docs.TOOLING_MARKER_END, agents)
+            self.assertIn(scaffold_docs.TOOLING_MARKER_START, claude)
+            self.assertIn(scaffold_docs.TOOLING_MARKER_END, claude)
+
+    def test_main_preserves_preexisting_hand_written_agents_md(self):
+        with TempRepo() as root:
+            (root / "AGENTS.md").write_text(
+                "# AGENTS.md\nHand-written project rules, pre-dating atlas-setup.\n"
+            )
+            scaffold_docs.main(["scaffold_docs.py", str(root)])
+            text = (root / "AGENTS.md").read_text()
+            self.assertIn("Hand-written project rules", text)
+            self.assertIn(scaffold_docs.TOOLING_MARKER_START, text)
+
+
+
 if __name__ == "__main__":
     unittest.main()

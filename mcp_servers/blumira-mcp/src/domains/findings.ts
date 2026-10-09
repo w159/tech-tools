@@ -183,14 +183,14 @@ async function handleCall(toolName: string, args: Record<string, unknown>): Prom
         if (!id) return toolError('INVALID_ARGS', 'finding_id is required.', { hint: 'Pass the finding UUID string.' });
         logger.info('API call: findings.get', { id });
         const res = await client.findings.get(id);
-        return shapeItem(res as Record<string, unknown>, findingSummary, shapeArgs);
+        return shapeItem(res as unknown as Record<string, unknown>, findingSummary, shapeArgs);
       }
       case 'blumira_findings_details': {
         const id = args.finding_id as string;
         if (!id) return toolError('INVALID_ARGS', 'finding_id is required.', { hint: 'Pass the finding UUID string.' });
         logger.info('API call: findings.getDetails', { id });
         const res = await client.findings.getDetails(id);
-        return shapeItem(res as Record<string, unknown>, findingSummary, shapeArgs);
+        return shapeItem(res as unknown as Record<string, unknown>, findingSummary, shapeArgs);
       }
       case 'blumira_findings_evidence': {
         const id = args.finding_id as string;

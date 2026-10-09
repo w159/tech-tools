@@ -317,7 +317,7 @@ async function handleCall(toolName: string, args: Record<string, unknown>): Prom
         if (!accountId) return toolError('INVALID_ARGS', 'account_id is required.', { hint: 'Pass the account UUID string.' });
         logger.info('API call: msp.getAccount', { accountId });
         const res = await client.msp.getAccount(accountId);
-        return shapeItem(res as Record<string, unknown>, accountSummary, shapeArgs);
+        return shapeItem(res as unknown as Record<string, unknown>, accountSummary, shapeArgs);
       }
       case 'blumira_msp_findings_all': {
         logger.info('API call: msp.listAllFindings', args);
@@ -337,7 +337,7 @@ async function handleCall(toolName: string, args: Record<string, unknown>): Prom
         if (!findingId) return toolError('INVALID_ARGS', 'finding_id is required.', { hint: 'Pass the finding UUID string.' });
         logger.info('API call: msp.getFinding', { accountId, findingId });
         const res = await client.msp.getFinding(accountId, findingId);
-        return shapeItem(res as Record<string, unknown>, findingSummary, shapeArgs);
+        return shapeItem(res as unknown as Record<string, unknown>, findingSummary, shapeArgs);
       }
       case 'blumira_msp_findings_evidence': {
         if (!accountId) return toolError('INVALID_ARGS', 'account_id is required.', { hint: 'Pass the account UUID string.' });
@@ -405,7 +405,7 @@ async function handleCall(toolName: string, args: Record<string, unknown>): Prom
         if (!deviceId) return toolError('INVALID_ARGS', 'device_id is required.', { hint: 'Pass the device UUID string.' });
         logger.info('API call: msp.getDevice', { accountId, deviceId });
         const res = await client.msp.getDevice(accountId, deviceId);
-        return shapeItem(res as Record<string, unknown>, deviceSummary, shapeArgs);
+        return shapeItem(res as unknown as Record<string, unknown>, deviceSummary, shapeArgs);
       }
       case 'blumira_msp_keys_list': {
         if (!accountId) return toolError('INVALID_ARGS', 'account_id is required.', { hint: 'Pass the account UUID string.' });
@@ -420,7 +420,7 @@ async function handleCall(toolName: string, args: Record<string, unknown>): Prom
         if (!keyId) return toolError('INVALID_ARGS', 'key_id is required.', { hint: 'Pass the key UUID string.' });
         logger.info('API call: msp.getKey', { accountId, keyId });
         const res = await client.msp.getKey(accountId, keyId);
-        return shapeItem(res as Record<string, unknown>, keySummary, shapeArgs);
+        return shapeItem(res as unknown as Record<string, unknown>, keySummary, shapeArgs);
       }
       case 'blumira_msp_users_list': {
         if (!accountId) return toolError('INVALID_ARGS', 'account_id is required.', { hint: 'Pass the account UUID string.' });

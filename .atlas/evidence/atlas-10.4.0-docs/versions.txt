@@ -1,0 +1,4 @@
+plugins/atlas/.claude-plugin/plugin.json:3:    "version": "10.4.0",
+.claude-plugin/marketplace.json:5:    "version": "4.6.0",
+.claude-plugin/marketplace.json:50:            "version": "10.4.0"
+0

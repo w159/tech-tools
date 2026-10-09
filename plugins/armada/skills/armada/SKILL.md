@@ -1,150 +1,115 @@
 ---
 name: armada
-description: Organizational configuration layer for the atlas plugin. When an organization deploys atlas, this skill ensures every role and department is provisioned with the right skills, agents, connectors, branding, and compliance policies. Use when setting up an org's atlas deployment, onboarding a new department, enforcing org branding on coding-agent outputs, or routing a user to their department's toolset. Triggers on org setup, department onboarding, brand enforcement, policy compliance, and connector provisioning.
-when_to_use: setting up an org's atlas deployment, onboarding a new department, enforcing org branding on coding-agent outputs, or routing a user to their department's toolset. Triggers on org setup, department onboarding, brand enforcement, policy compliance, and connector provisioning
+description: 'Organizational deployment status and router for the atlas fleet. Reports what is configured (branding, active departments, connectors) and routes to the skill that fixes what is missing. Setup itself lives in armada-brand (branding, run first), armada-department (activate a department), and armada-connect (vendor connectors).'
+when_to_use: checking an org's atlas deployment state, or finding the right armada setup command
+allowed-tools: Read, Glob, Grep, Bash
+argument-hint: '[blank for status]'
 ---
-
 
 # armada - the organizational fleet
 
-You are the **fleet organizer**. When an organization deploys the atlas plugin,
-armada ensures the org's roles and departments are provisioned correctly. Each
-department gets the right skills, agents, vendor connectors, branding rules,
-and compliance policies so that coding agents operating within the org follow
-its standards.
+Armada is the organizational layer over atlas. Branding and departments are set
+up here so that every coding agent working in this repo carries the org's
+identity, policies, and toolset.
 
-Armada does not orchestrate coding work itself -- that is atlas-orchestrate. Armada
-sets up the organizational context that the rest of the fleet operates within.
+Armada does not orchestrate coding work. That is `atlas-orchestrate`.
 
-## When this skill activates
+## This skill only reports and routes
 
-- An organization is deploying atlas for the first time (org setup)
-- A new department or role is being onboarded to an existing deployment
-- Org branding needs enforcement on docs, code comments, or agent outputs
-- Org policies and procedures need to be loaded and made available to agents
-- Vendor connectors need provisioning for a specific department
-- A user needs routing to their department's skills and agents
+Setup happens in three skills, in this order:
 
-## Elicitation
+| Order | Skill | Does |
+|---|---|---|
+| 1 | `/armada:armada-brand` | org name, voice, colors, commit style -> `.atlas/org-config.yaml` |
+| 2 | `/armada:armada-department` | activate a department -> `.atlas/departments/<dept>.yaml` + its agent |
+| 3 | `/armada:armada-connect` | vendor MCP connectors for a department |
 
-When invoked without a specific task, ask ONE AskUserQuestion: what does the
-user need -- org setup (first-time deployment), department onboarding (adding
-a role), brand enforcement (apply org branding to outputs), or connector
-provisioning (enable a vendor for a department). Everything else (installed
-departments, existing config, connector state) is detected, never asked.
+Do not run a guided setup from this skill and do not ask the user which of the
+three they want. Scan, report, and name the next command. They run it.
+
+## The scan
+
+Run these in one pass and build the report from the results. Everything below
+is detected, never asked:
+
+```bash
+cat .atlas/org-config.yaml 2>/dev/null
+ls .atlas/departments/*.yaml 2>/dev/null
+ls "${CLAUDE_PLUGIN_ROOT}/agents"
+ls "${CLAUDE_PLUGIN_ROOT}/skills/armada/departments"
+```
+
+Report, compactly:
+
+1. **Branding** - configured (org name, voice) or missing.
+2. **Departments** - a row per active department: name, owning agent, count of
+   skills and commands it carries, connector state. Then one line naming how
+   many of the 11 are available but not activated.
+3. **Connectors** - live in session (`mcp__plugin_atlas_<vendor>__*` tools
+   present) versus recorded but not loaded versus not provisioned.
+4. **Next** - exactly one recommended command, chosen by the first gap in the
+   order above.
+
+Install nothing. Write nothing. Changing state is the other three skills' job.
 
 ## The org config
 
-The org config is the single source of truth for organizational identity. It
-lives at `.atlas/org-config.yaml` in the project root and is loaded by armada
-on activation. See `references/org-config-schema.md` for the full schema.
+`.atlas/org-config.yaml` is the single source of truth for organizational
+identity. Full schema:
+`${CLAUDE_PLUGIN_ROOT}/skills/armada/references/org-config-schema.md`.
 
-Key sections:
-- **branding**: org name, logo path, voice/tone guidelines, color palette
-- **policies**: compliance frameworks (SOC 2, HIPAA, ISO 27001), coding
-  standards, documentation standards, approval workflows
-- **departments**: the org's roles mapped to atlas departments (it-operations,
-  security, microsoft-365, hr, finance, engineering, data, design, product,
-  support, productivity)
-- **connectors**: vendor MCP connectors the org has provisioned, with
-  credentials stored in the owning department's config (never in the org config
-  itself)
+- **org / branding**: name, logo, voice and tone, colors, commit style
+- **policies**: compliance frameworks (SOC 2, HIPAA, ISO 27001), coding and
+  documentation standards, approval workflows
+- **departments.active**: which of the 11 departments this org runs
+- **connectors.provisioned**: which vendors are set up, and for which department.
+  Credentials are never stored here; they live on the atlas plugin's userConfig.
 
-If no org config exists, armada offers to create one via a guided setup that
-asks for org name, branding basics, which departments are active, and which
-compliance frameworks apply. This is a recommend-then-confirm flow.
+## The 11 departments
 
-## Departments
+| Department | Covers | Agent | Connectors |
+|---|---|---|---|
+| it-operations | MSP IT ops: RMM, PSA, networking, backup | armada-it-ops | NinjaOne, ConnectWise, Auvik, Spanning |
+| security | GRC, SIEM, EDR, awareness training | armada-security | Vanta, KnowBe4, ThreatLocker, Blumira |
+| microsoft-365 | M365 administration and identity | armada-m365 | CIPP |
+| hr | HR and payroll operations | armada-hr | Paylocity |
+| finance | Finance and revenue ops | armada-finance | PandaDoc, Pax8 |
+| engineering | Software engineering, code review, incident response | armada-engineering | none |
+| data | Data exploration, SQL, visualization, dashboards | armada-data | none |
+| design | UX, accessibility, design systems | armada-design | none |
+| product | Product management, roadmaps, research | armada-product | none |
+| support | Customer support, ticket triage, KB | armada-support | none |
+| productivity | Memory, tasks, search, PDF, brand voice | armada-productivity | none |
 
-Armada organizes the org's roles into departments. Each department has its
-own skills, commands, agents, and optional vendor connectors. See
-`references/role-routing.md` for the full routing table and
-`references/department-schema.md` for the canonical list of 11 departments,
-their owning agents, and the fields every department config carries.
+Routing table: `${CLAUDE_PLUGIN_ROOT}/skills/armada/references/role-routing.md`.
+Department config fields:
+`${CLAUDE_PLUGIN_ROOT}/skills/armada/references/department-schema.md`.
 
-When onboarding a department, seed its config from
-`templates/department-onboarding.seed.yaml` and activate it at
-`.atlas/departments/<department>.yaml`.
+## How the departments actually get used
 
-| Department | Covers | Vendor connectors |
-|---|---|---|
-| it-operations | MSP IT ops: RMM, PSA, networking, backup | NinjaOne, ConnectWise, Auvik, Spanning |
-| security | Security and compliance: GRC, SIEM, EDR, awareness | Vanta, KnowBe4, ThreatLocker, Blumira |
-| microsoft-365 | M365 administration and identity | CIPP |
-| hr | HR and payroll operations | Paylocity |
-| finance | Finance and revenue ops | PandaDoc, Pax8 |
-| engineering | Software engineering, code review, incident response | (none) |
-| data | Data exploration, SQL, visualization, dashboards | (none) |
-| design | UX, accessibility, design systems | (none) |
-| product | Product management, roadmaps, research | (none) |
-| support | Customer support, ticket triage, KB | (none) |
-| productivity | Memory, tasks, search, PDF, brand voice | (none) |
+Each active department has an agent (`armada-<slug>`, in
+`${CLAUDE_PLUGIN_ROOT}/agents/`) that carries the org's branding and policies.
+Its skills and commands live in the plugin tree under
+`skills/armada/departments/<dept>/` and are the agent's reference library, read
+on demand. They are not slash commands in your project, and activating a
+department copies nothing into it - the department yaml is the activation
+record.
 
-## Department agents
+To do department work: `Agent(subagent_type: "armada:armada-design", ...)`, or
+just describe the task and let the routing table pick the agent.
 
-Each department has a dedicated agent (`armada:<dept>`) that carries the
-department's org context, policies, and branding. When a coding agent works on
-a task within a department's domain, armada routes it to the department agent
-so the work follows org standards.
+## Branding and policy enforcement
 
-The department agents are auto-registered in `plugins/atlas/agents/`:
-`armada-it-ops.md`, `armada-security.md`, `armada-m365.md`, `armada-hr.md`,
-`armada-finance.md`, `armada-engineering.md`, `armada-data.md`,
-`armada-design.md`, `armada-product.md`, `armada-support.md`,
-`armada-productivity.md`.
+Branding is loaded into the department agent before work begins, so output is
+branded from the start rather than rewritten after. It governs docs, code
+comments, commit messages, and report templates.
 
-## Branding enforcement
-
-When org branding is configured, armada ensures coding agents produce outputs
-that carry the org's identity:
-
-- **Docs**: README, CHANGELOG, and docs/ entries use the org name, logo, and
-  voice
-- **Code comments**: follow the org's commenting standards
-- **Commit messages**: follow the org's commit-message conventions
-- **Reports**: audit reports and assessments use the org's template and branding
-
-Armada does not rewrite outputs after the fact. It loads the branding context
-into the department agent before work begins, so the agent produces branded
-output from the start.
-
-## Policy compliance
-
-Armada loads the org's compliance policies and makes them available to all
-agents. This ensures:
-
-- End users are guided to follow org policies and procedures
-- Compliance-sensitive actions (data access, security changes, financial
-  entries) are flagged for approval per the org's workflows
-- Required documentation is generated alongside the work (e.g. change logs for
-  audited systems, approval tickets for production deployments)
-- Agents reference the correct policy framework (SOC 2, HIPAA, ISO 27001)
-  when assessing or documenting work
-
-## Connector provisioning
-
-When a department needs a vendor connector, armada guides the setup. See
-`references/connector-provisioning.md` for the full per-vendor table.
-
-Armada detects which connectors are configured (credentials present) vs
-disabled (credentials missing) and routes the user to the right setup path.
-Credentials are collected via the plugin's `userConfig` keys, never through
-free-text chat.
-
-## No-args behavior
-
-Invoked with no task, armada runs a status scan:
-1. Check for `.atlas/org-config.yaml` -- present or missing
-2. If present, load and report: org name, active departments, configured
-   connectors, compliance frameworks
-3. For each department, report: skills available, agent present, connector
-   state (enabled/disabled/not-installed)
-4. Recommend the next setup step if anything is missing
-
-Install nothing without the user's explicit OK.
+Policies work the same way: with compliance frameworks configured, agents cite
+the applicable framework, flag compliance-sensitive actions (data access,
+security changes, financial entries) for approval per the org's workflows, and
+produce the required artifacts (change logs, approval tickets, evidence) as
+part of the work.
 
 ## First move
 
-Check for the org config. If it exists, load it and report the org's
-deployment state. If it does not exist, offer to create one via guided setup.
-Either way, present a compact status table and the next recommended action.
+Run the scan. Print the status table and the single next command. Stop there.

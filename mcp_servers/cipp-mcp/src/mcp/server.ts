@@ -3,13 +3,12 @@
 // Supports both local (env-based) and gateway (header-based) credential modes.
 
 import { createServer, IncomingMessage, ServerResponse, Server as HttpServer } from 'node:http';
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { z } from 'zod';
+import { toZodShape } from '@shared/zod-shape.js';
 import { CippService } from '../services/cipp.service.js';
 import { Logger } from '../utils/logger.js';
 import { McpServerConfig } from '../types/index.js';
@@ -18,7 +17,7 @@ import { CippToolHandler } from '../handlers/tool.handler.js';
 import { annotate } from '../annotate-tool.js';
 
 export class CippMcpServer {
-  private server: Server;
+  private server: McpServer;
   private config: McpServerConfig;
   private cippService: CippService;
   private toolHandler: CippToolHandler;
@@ -41,34 +40,89 @@ export class CippMcpServer {
    * Create a fresh MCP Server with all handlers registered.
    * Called per-request in HTTP (stateless) mode so each initialise gets a clean server.
    */
-  private createFreshServer(): Server {
-    const server = new Server(
-      {
-        name: this.config.name,
-        version: this.config.version,
-      },
-      {
-        capabilities: {
-          tools: {
-            listChanged: true,
-          },
-        },
-        instructions: this.getServerInstructions(),
-      }
-    );
+  private createFreshServer(): McpServer {
+    const server = this.buildServer(this.toolHandler, this.hasUsableCredentials());
 
-    server.onerror = (error) => {
+    server.server.onerror = (error) => {
       this.logger.error('MCP Server error:', error);
     };
 
-    server.oninitialized = () => {
+    server.server.oninitialized = () => {
       this.logger.info('MCP Server initialized and ready to serve requests');
     };
 
-    this.setupHandlers(server);
-    this.toolHandler.setServer(server);
-
     return server;
+  }
+
+  /**
+   * Build an McpServer with one registered tool per definition. Shared by the
+   * stdio server and the per-request HTTP server (which may carry gateway
+   * credentials in its own toolHandler). Progressive disclosure: cipp_status
+   * only until credentials resolve. registerTool validates args against the zod
+   * shape derived from the tool's JSON schema before the handler runs.
+   */
+  private buildServer(toolHandler: CippToolHandler, configured: boolean): McpServer {
+    const server = new McpServer(
+      { name: this.config.name, version: this.config.version },
+      { capabilities: { logging: {} }, instructions: this.getServerInstructions() }
+    );
+
+    const tools = toolHandler
+      .getToolDefinitions()
+      .filter((tool) => configured || tool.name === 'cipp_status');
+
+    // Loosely typed view of registerTool: inferring per-tool zod generics exceeds
+    // tsc's instantiation depth in this CommonJS/zod 3 build. Runtime is unchanged.
+    const registerTool = server.registerTool.bind(server) as unknown as (
+      name: string,
+      config: object,
+      handler: (args: Record<string, unknown>) => Promise<CallToolResult>
+    ) => unknown;
+
+    for (const tool of annotate(tools, 'CIPP')) {
+      const { title, ...annotations } = tool.annotations ?? {};
+      registerTool(
+        tool.name,
+        {
+          title,
+          description: tool.description,
+          inputSchema: toZodShape(z, tool.inputSchema),
+          annotations: { title, ...annotations },
+        },
+        async (args): Promise<CallToolResult> => {
+          this.logger.debug(`Handling tool call: ${tool.name}`);
+          try {
+            const result = await toolHandler.handleToolCall(tool.name, args || {});
+            return { content: result.content, isError: result.isError } as CallToolResult;
+          } catch (error) {
+            this.logger.error(`Failed to call tool ${tool.name}:`, error);
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            return { content: [{ type: 'text', text: message }], isError: true };
+          }
+        }
+      );
+    }
+
+    toolHandler.setServer(server.server);
+    return server;
+  }
+
+  /** True when env/gateway credentials are enough to attempt CIPP API calls. */
+  private hasUsableCredentials(configOverride?: McpServerConfig): boolean {
+    const c = (configOverride ?? this.config)?.cipp as {
+      baseUrl?: string;
+      apiKey?: string;
+      tenantId?: string;
+      clientId?: string;
+      clientSecret?: string;
+    } | undefined;
+    const base = (c?.baseUrl || process.env.CIPP_BASE_URL || '').trim();
+    if (!base) return false;
+    if ((c?.apiKey || process.env.CIPP_API_KEY || '').trim()) return true;
+    const tenant = (c?.tenantId || process.env.CIPP_TENANT_ID || '').trim();
+    const clientId = (c?.clientId || process.env.CIPP_CLIENT_ID || '').trim();
+    const secret = (c?.clientSecret || process.env.CIPP_CLIENT_SECRET || '').trim();
+    return Boolean(tenant && clientId && secret);
   }
 
   /**
@@ -96,38 +150,6 @@ Tool categories:
 - Scheduler: list and create scheduled tasks
 - Core: ping, version, logs
 `.trim();
-  }
-
-  /**
-   * Register all MCP request handlers on the given server instance.
-   */
-  private setupHandlers(server: Server): void {
-    server.setRequestHandler(ListToolsRequestSchema, async () => {
-      this.logger.debug('Handling list tools request');
-      return { tools: annotate(this.toolHandler.getToolDefinitions(), 'CIPP') };
-    });
-
-    server.setRequestHandler(CallToolRequestSchema, async (request) => {
-      this.logger.debug(`Handling tool call: ${request.params.name}`);
-      try {
-        const result = await this.toolHandler.handleToolCall(
-          request.params.name,
-          (request.params.arguments as Record<string, unknown>) || {}
-        );
-        return {
-          content: result.content,
-          isError: result.isError,
-        };
-      } catch (error) {
-        this.logger.error(`Failed to call tool ${request.params.name}:`, error);
-        const message = error instanceof Error ? error.message : 'Unknown error';
-        return {
-          content: [{ type: 'text', text: message }],
-          isError: true,
-        };
-      }
-    });
-
   }
 
   /**
@@ -179,6 +201,7 @@ Tool categories:
 
         let toolHandler = this.toolHandler;
         let cippService = this.cippService;
+        let requestConfig: McpServerConfig | undefined;
 
         if (isGatewayMode) {
           const credentials = parseCredentialsFromHeaders(
@@ -207,7 +230,7 @@ Tool categories:
             return;
           }
 
-          const requestConfig: McpServerConfig = {
+          requestConfig = {
             name: this.config.name,
             version: this.config.version,
             cipp: {
@@ -225,40 +248,12 @@ Tool categories:
           toolHandler = new CippToolHandler(cippService, this.logger);
         }
 
-        const server = new Server(
-          { name: this.config.name, version: this.config.version },
-          {
-            capabilities: { tools: { listChanged: true } },
-            instructions: this.getServerInstructions(),
-          }
+        const server = this.buildServer(
+          toolHandler,
+          requestConfig ? this.hasUsableCredentials(requestConfig) : this.hasUsableCredentials()
         );
 
-        server.onerror = (error) => this.logger.error('MCP request server error:', error);
-
-        // Wire up handlers using the (possibly per-request) toolHandler
-        server.setRequestHandler(ListToolsRequestSchema, async () => ({
-          tools: annotate(toolHandler.getToolDefinitions(), 'CIPP'),
-        }));
-
-        server.setRequestHandler(CallToolRequestSchema, async (request) => {
-          this.logger.debug(`Handling tool call: ${request.params.name}`);
-          try {
-            const result = await toolHandler.handleToolCall(
-              request.params.name,
-              (request.params.arguments as Record<string, unknown>) || {}
-            );
-            return { content: result.content, isError: result.isError };
-          } catch (error) {
-            this.logger.error(`Failed to call tool ${request.params.name}:`, error);
-            const message = error instanceof Error ? error.message : 'Unknown error';
-            return {
-              content: [{ type: 'text', text: message }],
-              isError: true,
-            };
-          }
-        });
-
-        toolHandler.setServer(server);
+        server.server.onerror = (error) => this.logger.error('MCP request server error:', error);
 
         const transport = new StreamableHTTPServerTransport({
           sessionIdGenerator: undefined,

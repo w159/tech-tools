@@ -1,0 +1,4 @@
+Lead on omp: decompose, dispatch, verify once. Do not pre-read, list or test what workers will touch; hand them paths and the contract.
+- One `task` batch for independent slices: `agent:` an atlas name (no prefix) and a `name` each. Never drop `agent` to get past a deny. Size each task to ONE action a cheap model can follow: `runner` for exact numbered steps (max 7), `implementer` or `explorer` for a bounded spec, `verifier` for judgment.
+- One GOAL per task, with these labels: `GOAL:` `DELIVERABLE:` `SUCCESS CRITERIA:` `OUT OF SCOPE:` `STOP CONDITIONS:` `REPORT:` (runner also `STEPS:`), plus `TOOLS: use lean-ctx via its xd:// devices; do not activate serena unless a symbol edit needs it`.
+- Workers run their own tests; you do not rerun them. One final test command on the real surface is your verification.

@@ -5,6 +5,16 @@ mocked sys.stdin / subprocess / shutil.which. A few subprocess end-to-end exit
 code tests round things out; the coverage comes from the in-process calls.
 """
 
+import os as _iso_os
+import sys as _iso_sys
+
+_iso_sys.path.insert(
+    0,
+    _iso_os.path.join(
+        _iso_os.path.dirname(_iso_os.path.abspath(__file__)), "..", "scripts"
+    ),
+)
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import io
 import json
 import os
@@ -216,14 +226,17 @@ class MainInProcessTest(unittest.TestCase):
         with mock.patch.object(sys, "stdin", new=buf):
             return format_after_edit.main()
 
-    def test_success_path_prints_context_and_returns_zero(self):
+    def test_success_path_is_silent_and_returns_zero(self):
+        """Noise contract: a formatter that succeeded emits nothing at all."""
         payload = _payload("Edit", self.target, cwd=self.tmp)
+        ran = []
 
         class FakeProc:
             returncode = 0
 
         def fake_run(cmd, **kw):
             assert cmd[-1] == self.target
+            ran.append(cmd[0])
             return FakeProc()
 
         with (
@@ -237,13 +250,77 @@ class MainInProcessTest(unittest.TestCase):
         ):
             rc = self._run_main(payload)
         self.assertEqual(rc, 0)
-        prn.assert_called_once()
-        emitted = json.loads(prn.call_args[0][0])
-        self.assertEqual(emitted["hookSpecificOutput"]["hookEventName"], "PostToolUse")
-        self.assertIn(
-            "auto-formatted edited.py with ruff",
-            emitted["hookSpecificOutput"]["additionalContext"],
-        )
+        self.assertTrue(any("ruff" in c for c in ran))
+        prn.assert_not_called()
+
+    def test_formatter_failure_is_a_quiet_skip_not_a_crash(self):
+        """No formatter succeeded: exit 0 and no hook-faults row (it showed up as hook_crash)."""
+        import atlas_faults
+
+        before = len(atlas_faults.load())
+
+        class Proc:
+            returncode = 1
+            stderr = "error: cannot parse"
+
+        with (
+            mock.patch.object(format_after_edit.shutil, "which", return_value="/x"),
+            mock.patch.object(format_after_edit.subprocess, "run", return_value=Proc()),
+        ):
+            rc = self._run_main(_payload("Edit", self.target, cwd=self.tmp))
+        self.assertEqual(rc, 0)
+        self.assertEqual(len(atlas_faults.load()), before)
+
+    def _skip_rows(self):
+        import atlas_db
+
+        conn = atlas_db.connect()
+        atlas_db.init(conn)
+        try:
+            return [
+                (c, s)
+                for c, s in conn.execute(
+                    "SELECT category, snippet FROM friction_events "
+                    "WHERE category LIKE 'formatter_skipped:%'"
+                )
+            ]
+        finally:
+            conn.close()
+
+    def test_each_skip_reason_writes_exactly_one_friction_row_and_no_fault(self):
+        import atlas_faults
+
+        class Bad:
+            returncode = 1
+
+        cases = {
+            "parse": dict(return_value=Bad()),
+            "timeout": dict(side_effect=subprocess.TimeoutExpired("x", 55)),
+            "missing": dict(side_effect=FileNotFoundError("x")),
+        }
+        for reason, kw in cases.items():
+            before_rows = len(self._skip_rows())
+            before_faults = len(atlas_faults.load())
+            with (
+                mock.patch.object(format_after_edit.shutil, "which", return_value="/x"),
+                mock.patch.object(format_after_edit.subprocess, "run", **kw),
+            ):
+                rc = self._run_main(_payload("Edit", self.target, cwd=self.tmp))
+            self.assertEqual(rc, 0)
+            rows = self._skip_rows()
+            self.assertEqual(len(rows) - before_rows, 1, reason)
+            self.assertEqual(rows[-1], ("formatter_skipped:" + reason, ".py"))
+            self.assertEqual(len(atlas_faults.load()), before_faults, reason)
+
+    def test_skip_with_db_unavailable_still_exits_zero(self):
+        import atlas_db
+
+        with (
+            mock.patch.object(format_after_edit.shutil, "which", return_value=None),
+            mock.patch.object(atlas_db, "connect", side_effect=OSError("no db")),
+        ):
+            rc = self._run_main(_payload("Edit", self.target, cwd=self.tmp))
+        self.assertEqual(rc, 0)
 
     def test_first_candidate_fails_then_second_succeeds(self):
         payload = _payload("Write", self.target, cwd=self.tmp)
@@ -268,8 +345,8 @@ class MainInProcessTest(unittest.TestCase):
         ):
             rc = self._run_main(payload)
         self.assertEqual(rc, 0)
-        emitted = json.loads(prn.call_args[0][0])
-        self.assertIn("black", emitted["hookSpecificOutput"]["additionalContext"])
+        self.assertEqual(seq, [])  # both candidates were tried
+        prn.assert_not_called()  # success is silent
 
     def test_all_candidates_fail_returns_zero_silently(self):
         payload = _payload("MultiEdit", self.target, cwd=self.tmp)
@@ -285,6 +362,41 @@ class MainInProcessTest(unittest.TestCase):
             rc = self._run_main(payload)
         self.assertEqual(rc, 0)
         prn.assert_not_called()
+
+    def test_uri_path_is_never_formatted_even_if_a_file_exists_there(self):
+        # `write agent://X` / `write xd://...` carry a URI path. Even when a
+        # same-named relative file exists on disk (agent:/X.py), the hook must
+        # treat it as a message, not a file, and never invoke a formatter.
+        uri = "agent://BetaSend.py"
+        os.makedirs(os.path.join(self.tmp, "agent:"), exist_ok=True)
+        with open(os.path.join(self.tmp, "agent:", "BetaSend.py"), "w") as f:
+            f.write("x = 1\n")
+        old = os.getcwd()
+        os.chdir(self.tmp)
+        try:
+            with (
+                mock.patch.object(format_after_edit.shutil, "which", return_value="x"),
+                mock.patch.object(format_after_edit.subprocess, "run") as run,
+            ):
+                rc = self._run_main(_payload("Write", uri, cwd=self.tmp))
+        finally:
+            os.chdir(old)
+        self.assertEqual(rc, 0)
+        run.assert_not_called()
+
+    def test_real_path_still_formatted_control(self):
+        class Ok:
+            returncode = 0
+
+        with (
+            mock.patch.object(format_after_edit.shutil, "which", return_value="x"),
+            mock.patch.object(
+                format_after_edit.subprocess, "run", return_value=Ok()
+            ) as run,
+        ):
+            rc = self._run_main(_payload("Write", self.target, cwd=self.tmp))
+        self.assertEqual(rc, 0)
+        run.assert_called()
 
     def test_formatter_not_installed_noop(self):
         payload = _payload("Edit", self.target, cwd=self.tmp)
@@ -445,8 +557,7 @@ class MainInProcessTest(unittest.TestCase):
         ):
             rc = self._run_main(payload)
         self.assertEqual(rc, 0)
-        emitted = json.loads(prn.call_args[0][0])
-        self.assertIn("app.js", emitted["hookSpecificOutput"]["additionalContext"])
+        prn.assert_not_called()  # success is silent
 
     def test_go_success_with_gofmt(self):
         target = os.path.join(self.tmp, "main.go")

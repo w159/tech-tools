@@ -5,10 +5,11 @@ import { logger } from '../utils/logger.js';
 import {
   shapeList,
   extractShapeArgs,
-  SHAPE_PROPS,
-  toolError,
   toolErrorFromCatch,
   unknownTool,
+  extractItems,
+  userIdInputSchema,
+  missingUserIdError,
   type SummaryFn,
 } from './_helpers.js';
 
@@ -29,14 +30,7 @@ function getTools(): Tool[] {
         'Returns the backed-up services for one user (e.g. mail, drive, calendar, contacts). ' +
         'Use this to discover valid service names before calling spanning_backups_list. ' +
         'Requires userId from spanning_users_list.',
-      inputSchema: {
-        type: 'object' as const,
-        properties: {
-          ...SHAPE_PROPS,
-          userId: { type: 'string', description: 'Spanning user ID (required) — opaque string from spanning_users_list.' },
-        },
-        required: ['userId'],
-      },
+      inputSchema: userIdInputSchema(),
     },
   ];
 }
@@ -47,19 +41,13 @@ async function handleCall(toolName: string, args: Record<string, unknown>): Prom
   switch (toolName) {
     case 'spanning_services_list': {
       const userId = args.userId as string;
-      if (!userId) {
-        return toolError('INVALID_ARGS', 'userId is required.', {
-          hint: 'Pass the opaque userId string returned by spanning_users_list.',
-        });
-      }
+      if (!userId) return missingUserIdError();
       try {
         const client = getClient();
         logger.info('API call: services.list', { userId });
         const result = await client.services.list(userId);
-        const items: unknown[] = Array.isArray(result)
-          ? result
-          : (result as Record<string, unknown>)['services'] as unknown[] ?? (result as Record<string, unknown>)['items'] as unknown[] ?? [];
-        return shapeList(items as Record<string, unknown>[], serviceSummary, shapeArgs);
+        const items = extractItems(result, 'services');
+        return shapeList(items, serviceSummary, shapeArgs);
       } catch (err) {
         return toolErrorFromCatch('spanning_services_list', err, {
           hint: 'Verify userId with spanning_users_list and that the user has active services.',
