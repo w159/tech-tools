@@ -224,7 +224,7 @@ class GateOrchestrationTest(unittest.TestCase):
             )
         for name in ("CHANGELOG.md", "ROADMAP.md"):
             with open(os.path.join(docs, name), "w") as f:
-                f.write("# %s\ncontent\n" % name)
+                f.write(f"# {name}\ncontent\n")
         with open(os.path.join(self.tmp, "README.md"), "w") as f:
             f.write("# project\n")
         _seed_plan(self.tmp)
@@ -359,7 +359,7 @@ class GateOrchestrationTest(unittest.TestCase):
         docs = os.path.join(self.tmp, "docs")
         for name in ("CHANGELOG.md", "ROADMAP.md"):
             with open(os.path.join(docs, name), "w") as f:
-                f.write("# %s\ncontent\n" % name)
+                f.write(f"# {name}\ncontent\n")
         with open(os.path.join(self.tmp, "README.md"), "w") as f:
             f.write("# project\n")
         # Deliberately no .atlas/evidence/ and no findings.json.
@@ -718,7 +718,7 @@ class InProcessMainTest(unittest.TestCase):
             )
         for name in ("CHANGELOG.md", "ROADMAP.md"):
             with open(os.path.join(docs, name), "w") as f:
-                f.write("# %s\ncontent\n" % name)
+                f.write(f"# {name}\ncontent\n")
         with open(os.path.join(self.tmp, "README.md"), "w") as f:
             f.write("# project\n")
         _seed_plan(self.tmp)
@@ -1464,7 +1464,7 @@ class GateConditionIJTest(GateOrchestrationTest):
             )
         for name in ("CHANGELOG.md", "ROADMAP.md"):
             with open(os.path.join(self.tmp, "docs", name), "w") as fh:
-                fh.write("# %s\ncontent\n" % name)
+                fh.write(f"# {name}\ncontent\n")
         with open(os.path.join(self.tmp, "README.md"), "w") as fh:
             fh.write("# readme\n")
         # A docs write in the same run clears (f).
@@ -2100,6 +2100,100 @@ class TestRunPairsAnImplementerTest(GateOrchestrationTest):
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertIn("verification coverage", r.stdout)
 
+    def test_one_implementer_plus_a_test_run_without_a_verdict_still_blocks(self):
+        """ATLAS_MODE unset (default): an executed test run pairs nothing by
+        itself -- the findings entry must also be status 'verified'. This is
+        the strictness the solo fast path relaxes (see
+        SoloModeVerifierCoverageTest)."""
+        self._commit_and_make_mixed_diff()
+        self._log_dispatches(implementers=1, verifiers=0)
+        self._exec_test_command()
+        self._write_findings(
+            [{"id": "S1", "status": "needs-evidence", "verified_at": self._stamp(1)}]
+        )
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertIn('"decision": "block"', r.stdout)
+        self.assertIn("(g)", r.stdout)
+
+
+class SoloModeVerifierCoverageTest(GateOrchestrationTest):
+    """ATLAS_MODE=solo fast path for (g): a real test-runner command executed
+    during this run pairs one unpaired implementer even with no stamped
+    findings entry. Not a blanket exemption: with no executed test (or a stamp
+    whose run never executed a test) the gate still blocks, and one test run
+    covers exactly one implementer. Standalone fixture (not a subclass of
+    TestRunPairsAnImplementerTest) because those tests assert NON-solo
+    strictness and must not re-run under solo."""
+
+    def setUp(self):
+        super().setUp()
+        self.env["ATLAS_MODE"] = "solo"
+
+    def _write_findings(self, entries):
+        path = os.path.join(self.tmp, ".atlas", ".run", "findings.json")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            json.dump(entries, f)
+
+    def _exec_test_command(self):
+        """Log a test-runner bash call inside the run window."""
+        c = atlas_db.connect(self.env["ATLAS_DB"])
+        atlas_db.insert_tool_call(
+            c,
+            "sess-orch",
+            {
+                "message_uuid": "msg-testrun",
+                "ts": time.time(),
+                "tool_use_id": "toolu-testrun",
+                "tool_name": "Bash",
+                "kind": "bash",
+                "input_summary": '{"command": "pytest -q"}',
+            },
+        )
+        c.commit()
+        c.close()
+
+    def test_solo_test_run_covers_the_second_unpaired_implementer(self):
+        """Solo: two implementers, one verified stamp, one executed test run
+        -> the test run itself pairs the second implementer, gate silent.
+        (Without solo the same fixture blocks: the stamp covers only one.)"""
+        self._commit_and_make_mixed_diff()
+        self._log_dispatches(implementers=2, verifiers=0)
+        self._exec_test_command()
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertEqual(r.stdout.strip(), "", r.stdout)
+
+    def test_solo_without_a_test_run_still_blocks(self):
+        """Non-test evidence still flags in solo mode: a verified stamp with
+        no executed test behind it pairs nothing."""
+        self._commit_and_make_mixed_diff()
+        self._log_dispatches(implementers=1, verifiers=0)
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertIn('"decision": "block"', r.stdout)
+        self.assertIn("(g)", r.stdout)
+
+    def test_solo_test_run_covers_only_one_implementer(self):
+        """The solo credit is one independent check: three unpaired
+        implementers still leave one uncovered after one pytest run."""
+        self._commit_and_make_mixed_diff()
+        self._log_dispatches(implementers=3, verifiers=0)
+        self._exec_test_command()
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertIn('"decision": "block"', r.stdout)
+        self.assertIn("(g)", r.stdout)
+        self.assertIn("1 implementer", r.stdout)
+
+    def test_env_unset_keeps_g_strict(self):
+        """ATLAS_MODE unset: the same two-implementer fixture that solo
+        passes silently still blocks -- solo is opt-in only."""
+        self.env.pop("ATLAS_MODE", None)
+        self._commit_and_make_mixed_diff()
+        self._log_dispatches(implementers=2, verifiers=0)
+        self._exec_test_command()
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+        self.assertIn('"decision": "block"', r.stdout)
+        self.assertIn("(g)", r.stdout)
+
 
 class TodoBoardDrainTest(GateConditionIJTest):
     """(i) beyond the transcript: the durable board and the LEDGER line.
@@ -2270,7 +2364,7 @@ class GatePlanMandateTest(GateConditionIJTest):
             )
         for name in ("CHANGELOG.md", "ROADMAP.md"):
             with open(os.path.join(self.tmp, "docs", name), "w") as fh:
-                fh.write("# %s\ncontent\n" % name)
+                fh.write(f"# {name}\ncontent\n")
         with open(os.path.join(self.tmp, "README.md"), "w") as fh:
             fh.write("# readme\n")
         self._log_run_read("src/app.py")  # the recorder was working this run
@@ -2555,6 +2649,11 @@ class DelegationMandateTest(unittest.TestCase):
         self.rid = atlas_db.start_run(self.conn, pid, "mandate")
 
     def write(self, path="src/app.py", context="main"):
+        # F2: the gate re-verifies target existence at block time, so a logged
+        # write must correspond to a real file on disk for (m) to fire.
+        target = self.root / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.touch()
         atlas_db.log_event(self.conn, self.rid, "Write", context, 1, path)
 
     def gate(self, **extra):
@@ -2680,6 +2779,112 @@ class DelegationMandateTest(unittest.TestCase):
         self.assertIn("(m) Delegation mandate", self.gate())
 
 
+class SoloModeDelegationTest(unittest.TestCase):
+    """ATLAS_MODE=solo fast path for (m): main-thread direct changes to at
+    most 5 non-docs source files are acknowledged instead of demanding an
+    implementer dispatch. Above 5 files, or with the env var unset, the
+    delegation mandate is unchanged. The (m) path list is untouched; solo
+    only changes what the gate does with it."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        (self.root / "docs").mkdir()
+        self.env = dict(
+            os.environ,
+            ATLAS_DB=str(self.root / "atlas.db"),
+            ATLAS_HOOKSTATE_DIR=str(self.root / "hookstate"),
+            ATLAS_MODE="solo",
+        )
+        self.conn = atlas_db.connect(self.env["ATLAS_DB"])
+        self.addCleanup(self.conn.close)
+        atlas_db.init(self.conn)
+        pid = atlas_db.register_project(self.conn, str(self.root))
+        self.rid = atlas_db.start_run(self.conn, pid, "mandate")
+
+    def write(self, path="src/app.py", context="main"):
+        # F2: the gate re-verifies target existence at block time, so a logged
+        # write must correspond to a real file on disk for (m) to fire.
+        target = self.root / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.touch()
+        atlas_db.log_event(self.conn, self.rid, "Write", context, 1, path)
+
+    def gate(self, **extra):
+        return _run_gate(
+            dict(session_id="mandate", cwd=str(self.root), **extra), self.env
+        ).stdout
+
+    def test_solo_five_code_writes_are_acknowledged(self):
+        for i in range(1, 6):
+            self.write(f"src/app{i}.py")
+        self.assertEqual(self.gate(), "")
+
+    def test_solo_six_code_writes_still_block(self):
+        for i in range(1, 7):
+            self.write(f"src/app{i}.py")
+        self.assertIn("(m) Delegation mandate", self.gate())
+
+    def test_solo_mode_is_case_insensitive(self):
+        self.env["ATLAS_MODE"] = "SOLO"
+        self.write()
+        self.assertEqual(self.gate(), "")
+
+    def test_solo_counts_nondocs_files_only(self):
+        for i in range(1, 6):
+            self.write(f"src/app{i}.py")
+        self.write("docs/notes.md")
+        self.write("README.md")
+        self.assertEqual(self.gate(), "")
+
+    def test_env_unset_keeps_delegation_block(self):
+        self.env.pop("ATLAS_MODE", None)
+        self.write()
+        self.assertIn("(m) Delegation mandate", self.gate())
+
+
+class SoloModeSurfaceTest(unittest.TestCase):
+    """In solo mode the (m) acknowledgment surfaces in any block the gate
+    emits for another reason: the delegation demand is gone, the note is
+    not. Standalone fixture: the base GateOrchestrationTest cases assert
+    non-solo conditions and must not re-run with a main-thread code write
+    baked into setUp. The note is informative -- it never makes the gate
+    speak on a pass."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp)
+        os.makedirs(os.path.join(self.tmp, "docs"), exist_ok=True)
+        self.env = dict(
+            os.environ,
+            ATLAS_DB=os.path.join(self.tmp, "atlas.db"),
+            ATLAS_HOOKSTATE_DIR=os.path.join(self.tmp, "hookstate"),
+            ATLAS_MODE="solo",
+        )
+        c = atlas_db.connect(self.env["ATLAS_DB"])
+        atlas_db.init(c)
+        pid = atlas_db.register_project(c, self.tmp)
+        rid = atlas_db.start_run(c, pid, "sess-solo")
+        atlas_db.mark_orchestrating(c, "sess-solo")
+        target = os.path.join(self.tmp, "app.py")
+        with open(target, "w") as f:
+            f.write("print('x')\n")
+        atlas_db.log_event(c, rid, "Write", "main", 1, target)
+        c.commit()
+        c.close()
+
+    def test_solo_ack_note_surfaced_and_mandate_dropped(self):
+        r = _run_gate({"session_id": "sess-solo", "cwd": self.tmp}, self.env)
+        self.assertIn('"decision": "block"', r.stdout)
+        self.assertIn(
+            "(m) solo mode: direct changes acknowledged for 1 files; "
+            "verifier still required for shipped work",
+            r.stdout,
+        )
+        self.assertNotIn("(m) Delegation mandate", r.stdout)
+
+
 class ContractVisibilityTest(unittest.TestCase):
     """Conditions (n)/(o)/(p) -- the contract-visibility conditions.
 
@@ -2733,7 +2938,7 @@ class ContractVisibilityTest(unittest.TestCase):
             )
         for rel in ("docs/CHANGELOG.md", "docs/ROADMAP.md", "README.md"):
             with open(os.path.join(self.tmp, rel), "w") as f:
-                f.write("# %s\n" % rel)
+                f.write(f"# {rel}\n")
         self.prepare_run(self.SID_A)
 
     def tearDown(self):
@@ -2819,7 +3024,7 @@ class ContractVisibilityTest(unittest.TestCase):
         }
         notes_dir = os.path.join(self.tmp, ".atlas", ".run", "board")
         os.makedirs(notes_dir, exist_ok=True)
-        with open(os.path.join(notes_dir, "%s.jsonl" % owner), "a") as f:
+        with open(os.path.join(notes_dir, f"{owner}.jsonl"), "a") as f:
             f.write(json.dumps(record) + "\n")
 
     def gate(self, payload=None, sid=None):
@@ -2926,7 +3131,8 @@ class ContractVisibilityTest(unittest.TestCase):
         self.assertNotIn("CLAUDE_PLUGIN_ROOT", out)
         m = re.search(r'python3 \\"([^"\\]*atlas_todo\.py)\\" scaffold', out)
         self.assertIsNotNone(m, out)
-        self.assertTrue(os.path.isabs(m.group(1)) and os.path.exists(m.group(1)))
+        scaffold = m.group(1) if m else ""
+        self.assertTrue(os.path.isabs(scaffold) and os.path.exists(scaffold))
 
     def test_o_passes_when_prefixes_cover_required_phases(self):
         self.assertEqual(self.say(), "")
@@ -2939,7 +3145,7 @@ class ContractVisibilityTest(unittest.TestCase):
         data["items"] = [
             {
                 **template,
-                "id": "cv-%s" % phase,
+                "id": f"cv-{phase}",
                 "content": "step",
                 "phase": phase,
                 "status": "completed",
@@ -3199,3 +3405,202 @@ class ItemPhaseExtractionTest(unittest.TestCase):
             completion_gate._item_phase({"content": "plain item"}, self.PHASES)
         )
         self.assertIsNone(completion_gate._item_phase({}, self.PHASES))
+
+
+class ReasonDeltaTest(unittest.TestCase):
+    """F8: a letter that already blocked once this session re-blocks as a
+    one-line delta, never as the full clause again."""
+
+    def test_repeat_letter_renders_one_line_delta(self):
+        delta = _reason(False, True, False, repeat=["b"])
+        self.assertIn("(b) still open:", delta)
+        self.assertNotIn("findings.json is missing or has no entry", delta)
+
+    def test_delta_only_block_drops_the_full_guidance_footer(self):
+        msg = _reason(False, True, False, repeat=["b"])
+        self.assertNotIn("Close the gap with the SMALLEST", msg)
+
+    def test_first_block_keeps_full_clause_and_footer(self):
+        msg = _reason(False, True, False)
+        self.assertIn("(b) .atlas/.run/findings.json is missing", msg)
+        self.assertIn("Close the gap with the SMALLEST", msg)
+
+    def test_m_delta_gist_still_names_the_mandate(self):
+        msg = _reason(False, False, False, missing_delegation=True, repeat=["m"])
+        self.assertIn("(m) still open:", msg)
+
+
+class DelegationReasonPathTest(unittest.TestCase):
+    """F9: the (m) block names the exact files that triggered it, so the model
+    can dispatch or justify an exemption in one turn."""
+
+    def test_m_clause_names_triggering_files(self):
+        msg = _reason(
+            False,
+            False,
+            False,
+            missing_delegation=True,
+            delegation_paths=["app/main.py", "app/util.py"],
+        )
+        self.assertIn("app/main.py", msg)
+        self.assertIn("app/util.py", msg)
+
+    def test_m_clause_without_paths_still_renders(self):
+        msg = _reason(False, False, False, missing_delegation=True)
+        self.assertIn("(m) Delegation mandate", msg)
+
+
+class BlockLoopFinalNoticeTest(unittest.TestCase):
+    """F4: the last block before the loop cap says so, visibly; the exhausted
+    Stop is stated, never a silent pass."""
+
+    def test_notice_appears_only_at_the_cap(self):
+        self.assertIsNone(completion_gate._block_loop_notice(2, ["c"]))
+        notice = completion_gate._block_loop_notice(3, ["c"]) or ""
+        self.assertIn("FINAL block", notice)
+        self.assertIn("CHANGELOG missing", notice)
+
+
+class ColonyRunScopeTest(unittest.TestCase):
+    """F4a: (p) only counts channel traffic from this run; a sibling run's
+    note (ts before `started`) never clears it."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.db = os.path.join(self.tmp, "atlas.db")
+        atlas_db.init(atlas_db.connect(self.db))
+        patcher = mock.patch.dict(os.environ, {"ATLAS_DB": self.db})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.chan = _lead_channel(self.tmp, "sess-p", members=("worker-a",))
+
+    def _note(self, ts):
+        target = atlas_todo.notes_dir(str(self.tmp))
+        target.mkdir(parents=True, exist_ok=True)
+        path = target / ("chan" + atlas_todo.NOTE_FILE_SUFFIX)
+        rec = {"ts": ts, "owner": "worker-a", "channel": self.chan, "text": "hi"}
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(rec) + "\n")
+
+    def test_note_before_run_start_does_not_count(self):
+        self._note(1000.0)
+        self.assertFalse(
+            completion_gate._colony_channel_used(
+                Path(self.tmp), "sess-p", 2_000_000_000.0
+            )
+        )
+
+    def test_note_from_this_run_counts(self):
+        self._note(2_000_000_001.0)
+        self.assertTrue(
+            completion_gate._colony_channel_used(
+                Path(self.tmp), "sess-p", 2_000_000_000.0
+            )
+        )
+
+
+class PhantomDropTest(GateOrchestrationTest):
+    """F2 (refuted-phantom class): gate items naming file targets re-verify
+    existence at block time; stale/nonexistent targets are dropped instead of
+    being chased by the model."""
+
+    def setUp(self):
+        super().setUp()
+        # In-process _missing_delegation reads atlas_db.connect() with no arg,
+        # so point it at this test's DB; (o)/(p) are out of scope here.
+        self._env_patch = mock.patch.dict(
+            os.environ,
+            {
+                "ATLAS_DB": self.env["ATLAS_DB"],
+                "ATLAS_GATE_PHASES": "off",
+                "ATLAS_GATE_COLONY": "off",
+            },
+        )
+        self._env_patch.start()
+        self.addCleanup(self._env_patch.stop)
+
+    def _log_write(self, path):
+        c = atlas_db.connect(self.env["ATLAS_DB"])
+        rid = atlas_db.current_run_id(c, "sess-orch") or atlas_db.latest_run_id(
+            c, "sess-orch"
+        )
+        atlas_db.log_event(c, rid, "Write", "main", 1, path)
+        c.commit()
+        c.close()
+
+    def test_delegation_drops_paths_that_no_longer_exist(self):
+        self._log_write(os.path.join(self.tmp, "ghost.py"))
+        self.assertEqual(
+            completion_gate._missing_delegation("sess-orch", "", self.tmp), []
+        )
+
+    def test_delegation_keeps_paths_that_still_exist(self):
+        real = os.path.join(self.tmp, "real.py")
+        with open(real, "w") as f:
+            f.write("x = 1\n")
+        self._log_write(real)
+        self.assertEqual(
+            completion_gate._missing_delegation("sess-orch", "", self.tmp), [real]
+        )
+
+    def test_target_exists_helper(self):
+        self.assertTrue(
+            completion_gate._target_exists(
+                os.path.join(self.tmp, "docs"), Path(self.tmp)
+            )
+        )
+        self.assertFalse(
+            completion_gate._target_exists("ghost/never.md", Path(self.tmp))
+        )
+        self.assertFalse(completion_gate._target_exists("", Path(self.tmp)))
+
+
+class GateDeltaReblockTest(GateOrchestrationTest):
+    """F8 end to end: the first blocked Stop per letter carries the full
+    clause; the next identical Stop is a one-line delta."""
+
+    def setUp(self):
+        super().setUp()
+        self.env["ATLAS_CONTRACT_GATE_DIR"] = os.path.join(self.tmp, "markers")
+        # (o)/(p) are one-shot letters owned by other tests; scope them off so
+        # this class only exercises the delta machinery on (a)/(b)/(c)/(d)/(e)/(k).
+        self.env["ATLAS_GATE_PHASES"] = "off"
+        self.env["ATLAS_GATE_COLONY"] = "off"
+
+    def _run(self):
+        return _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+
+    def test_first_stop_full_clause_then_delta(self):
+        r1 = self._run()
+        self.assertIn('"decision": "block"', r1.stdout)
+        self.assertIn("(d) docs/ROADMAP.md is missing", r1.stdout)
+        r2 = self._run()
+        self.assertIn('"decision": "block"', r2.stdout)
+        self.assertIn("(d) still open:", r2.stdout)
+        self.assertNotIn("docs/ROADMAP.md is missing", r2.stdout)
+        self.assertNotIn("Close the gap with the SMALLEST", r2.stdout)
+
+    def test_recurring_letters_carry_a_try_hint(self):
+        r1 = self._run()
+        self.assertIn(
+            "(c) try: append a dated entry under Recent in docs/CHANGELOG.md", r1.stdout
+        )
+
+
+class FailOpenVisibleTest(InProcessMainTest):
+    """F3: a fail-open crash is stated in the model-visible channel, not only
+    on stderr."""
+
+    def setUp(self):
+        super().setUp()
+        # (o)/(p) belong to other test classes; this class exercises only the
+        # crash path's output channel.
+        self.env["ATLAS_GATE_PHASES"] = "off"
+        self.env["ATLAS_GATE_COLONY"] = "off"
+
+    def test_fail_open_prints_model_visible_line(self):
+        with mock.patch("completion_gate._find_root", side_effect=RuntimeError("boom")):
+            rc, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
+        self.assertEqual(rc, 0)
+        self.assertIn("FAIL-OPEN", out)

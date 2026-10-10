@@ -20,7 +20,7 @@ The rest of this file is the code mode.
 
 Discovery-first, comprehensive audit swarm. You supply no arguments. The survey builds a knowledge graph of the codebase, aims every dimension reviewer at the hottest nodes that graph surfaces, verifies every finding adversarially, and delivers a prioritized, file:line-anchored report under docs/audits/atlas-audit-<date>/.
 
-**Elicitation:** before building the graph, if the user's ask did not fix the tier, ask ONE AskUserQuestion: audit depth - comprehensive sweep (recommended for "audit this"), hotspot-only quick pass, or a named-dimension focus (security/OWASP only, correctness only). Depth changes swarm size and wall-clock materially, so it is the user's call; which files are hot is discovery's call, never a question.
+**Elicitation:** before building the graph, if the user's ask did not fix the tier, ask ONE AskUserQuestion: audit depth - comprehensive sweep (recommended for "audit this"), hotspot-only quick pass, or a named-dimension focus (security/OWASP only, correctness only). Depth changes swarm size and wall-clock materially, so it is the user's call; which files are hot is discovery's call, never a question. Then, optionally: if the audit may be handed to compliance, an examiner, or a control-mapped report, ask ONE more AskUserQuestion - which compliance frameworks apply: FTC Safeguards, GLBA (16 CFR 314), SOC 2 CC, OWASP ASVS, any combination, or none (default). Framework selection only adds tags to the output; it never changes which findings are surfaced or verified.
 
 ## Zero-arg discovery
 
@@ -97,6 +97,8 @@ docs/audits/atlas-audit-<date>/
 
 Each finding in report.md carries: dimension, severity (HIGH / MED / LOW), file:line, a one-sentence description of the flaw, and the verifier's evidence. Rejected findings are not mentioned.
 
+**Compliance mapping (optional, elicited):** when the user selected frameworks at elicitation time, each verified finding additionally carries a `compliance:` line mapping it to the specific control IDs from the chosen frameworks that the finding touches - e.g. FTC Safeguards section (9.x), GLBA 16 CFR 314.4(x), SOC 2 CC-series criterion, or an OWASP ASVS requirement ID. Map from the finding's dimension and described flaw; cite the control ID, never paraphrase it into a new numbering. If a verified finding touches no control in the selected frameworks, state that explicitly rather than forcing a tag. Frameworks were not selected: emit no `compliance:` lines at all. Each verified verdict is also appended to `.atlas/.run/findings.json` by the `atlas:verifier` via `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_finding.py`; that ledger's entry schema, verified stamp, and append-only intent are documented in `${CLAUDE_PLUGIN_ROOT}/references/findings-schema.md`. The ledger holds verdicts and evidence references only - findings must never carry credential values; reference configuration by environment variable NAME only.
+
 The orchestrator writes handoff prompts only for findings the user accepts for remediation. Each `<finding-id>` used as a filename must be a filesystem-safe slug: lowercase, with every character outside `a-z 0-9 . _ -` (notably the Windows-reserved set `< > : " / \ | ? *`, plus spaces) replaced by `-`. A colon in any audit filename makes the repo un-checkout-able on Windows and blocks everyone syncing it. Each handoff is self-contained: it names the file:line, states the flaw and acceptance criterion, specifies which atlas squad agent should lead the fix, and ends with `Remediate with: atlas-launch <finding-id>`. After writing handoffs/, the orchestrator builds the hub so findings are navigable and one-command launchable:
 
 ```bash
@@ -142,3 +144,4 @@ The orchestrator collects all verified findings, assigns final severity ordering
 
 - [Lens set](references/lens-set.md): the three self-mode lenses (run health, asset/context audit, session forensics). Read when running `self` mode.
 - [Graph-to-hub pipeline](references/graph-to-hub-pipeline.md): how Phase 4 turns graphify output into the knowledge-graph hub. Read when building the hub or debugging one that came out wrong.
+- [Findings ledger schema](${CLAUDE_PLUGIN_ROOT}/references/findings-schema.md): the `.atlas/.run/findings.json` entry schema, verified stamp, and append-only intent, derived from `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_finding.py`. Read when a gate or reviewer asks about ledger contents.

@@ -8,6 +8,15 @@ herdr pane list stays one click away (`herdr_url`); `all=1` widens the roster to
   GET  /api/v2/colony?project=<abs root>[&all=1]
   POST /api/v2/colony/<name>/send   {text, project?}
   POST /api/v2/colony/<name>/kill   {project?}
+  POST /api/v2/colony/<name>/pause  {project?}    stop queueing to it; running work untouched
+  POST /api/v2/colony/<name>/resume {project?}    queue again; returns any recorded resume state
+  POST /api/v2/colony/<name>/cancel {project?, hard?}
+        graceful (default): stop dispatching to it, let the running unit finish, pending units stay
+        queued on the board, resume state recorded for the orchestrator; hard: the kill contract.
+
+Wave state lives in `.atlas/.run/colony_wave.json` (paused/canceled flags per member plus the
+graceful-cancel resume state). Roster rows carry `queued` (incoming messages still waiting for
+the member's next tool call) and `wave` (paused/canceled flags) so holds are visible to the lead.
 
 State: finished (exit 0 recorded) | dead (nonzero exit, or no live process, no exit record and no
 activity for STUCK_S) | stuck (live, silent for STUCK_S with an open todo) | idle (live pane idle) |
@@ -17,6 +26,7 @@ recent activity (a note, a todo update, or its join).
 
 from __future__ import annotations
 
+import json
 import os
 import signal
 import sqlite3
@@ -324,18 +334,26 @@ def build_colony(root: str, all_: bool = False, now: float | None = None) -> dic
     items = [i for i in atlas_todo.load(root).get("items", []) if not i.get("archived")]
     last_note: dict = {}
     sent: dict = {}  # member -> the newest message the dashboard (human) sent to it
-    try:
-        for r in atlas_todo.notes(root):
-            last_note[r.get("owner")] = r
-            if r.get("owner") == atlas_dash_irc.HUMAN:
-                sent[r.get("to")] = r
-    except OSError:
-        pass
+    pending: dict = {}  # member -> incoming messages still queued for its next tool call
     try:
         reg = atlas_todo._reg_read(root)["channels"]
     except (OSError, KeyError, ValueError):
         reg = {}
     memo: dict = {}
+    wave = _wave_read(root)["members"]
+    try:
+        for r in atlas_todo.notes(root):
+            last_note[r.get("owner")] = r
+            to = str(r.get("to") or "all")
+            if r.get("owner") == atlas_dash_irc.HUMAN:
+                sent[to] = r
+            kind = _irc_kind(r)
+            if atlas_dash_irc._tracked(r, kind) and (
+                atlas_dash_irc._delivery_status(root, r, kind, memo) == "queued"
+            ):
+                pending[to] = pending.get(to, 0) + 1
+    except OSError:
+        pass
     sid6 = (
         lead_chan["lead"][5:]
         if lead_chan and lead_chan["lead"].startswith("lead-")
@@ -407,6 +425,11 @@ def build_colony(root: str, all_: bool = False, now: float | None = None) -> dic
                 "parked": parked,
                 "pane_id": pane_id,
                 "steerable": steerable,
+                "queued": pending.get(name, 0),
+                "wave": {
+                    "paused": bool((wave.get(name) or {}).get("paused")),
+                    "canceled": bool((wave.get(name) or {}).get("canceled")),
+                },
                 "headless": state in LIVE_STATES
                 and not steerable,  # = no terminal pane, not a state
                 "liveness": liveness,
@@ -512,6 +535,189 @@ def refusal(root: str, name: str):
     return None
 
 
+# --- wave control: pause / resume / cancel ---------------------------------------------------
+# Dispatching here means sends (steering text). A wave verb flips a persisted flag the send
+# handler re-reads on every call, so a wave can be held without touching running workers.
+# The resume state is a snapshot for the orchestrator's "resuming interrupted runs" path.
+
+
+def _wave_path(root: str) -> Path:
+    return Path(root) / ".atlas" / ".run" / "colony_wave.json"
+
+
+def _wave_read(root: str) -> dict:
+    try:
+        wave = json.loads(_wave_path(root).read_text())
+    except (OSError, ValueError):
+        return {"members": {}}
+    if isinstance(wave, dict) and isinstance(wave.get("members"), dict):
+        return wave
+    return {"members": {}}
+
+
+def _wave_write(root: str, wave: dict) -> None:
+    """Atomic write so a crash mid-write cannot truncate the wave state."""
+    p = _wave_path(root)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.parent / (f".{p.name}.tmp{os.getpid()}")
+    tmp.write_text(json.dumps(wave, indent=2, sort_keys=True), encoding="utf-8")
+    os.replace(tmp, p)
+
+
+def _wave_gate(root: str, name: str):
+    """(409, body) when sends to `name` are held by a wave verb, else None."""
+    wm = _wave_read(root)["members"].get(name) or {}
+    if wm.get("paused"):
+        return _err(
+            409,
+            "member_paused",
+            f"{name!r} is paused; nothing is being queued for it",
+            "POST /api/v2/colony/<name>/resume to start queueing again",
+        )
+    if wm.get("canceled"):
+        return _err(
+            409,
+            "member_canceled",
+            f"{name!r} was gracefully canceled; its pending units are recorded for resume",
+            "POST /api/v2/colony/<name>/resume to requeue its pending units",
+        )
+    return None
+
+
+def _lead_only_guard(m: dict):
+    """The wave verbs never touch the lead: it is the user's own session, like kill."""
+    if m["kind"] == "lead":
+        return _err(
+            409,
+            "lead_not_killable",
+            "the lead is the user's own session",
+            "close it in its own terminal",
+        )
+    return None
+
+
+def _irc_kind(rec: dict) -> str:
+    text = str(rec.get("text") or "")
+    kind = (
+        "exit"
+        if atlas_dash_irc.EXIT_RE.match(text)
+        else ("irc" if rec.get("irc") else "note")
+    )
+    return "system" if str(rec.get("owner") or "") in ("board", "system") else kind
+
+
+def _resume_state(root: str, name: str) -> dict:
+    """What re-dispatching `name` needs: its open todos and its still-queued messages."""
+    items = [
+        {"id": i.get("id"), "content": i.get("content"), "status": i.get("status")}
+        for i in atlas_todo.load(root).get("items", [])
+        if not i.get("archived") and i.get("owner") == name and i.get("status") in OPEN
+    ]
+    queued = []
+    memo: dict = {}
+    try:
+        notes = atlas_todo.notes(root)
+    except OSError:
+        notes = []
+    for r in notes:
+        if str(r.get("to") or "all") != name:
+            continue
+        kind = _irc_kind(r)
+        if not atlas_dash_irc._tracked(r, kind):
+            continue
+        if atlas_dash_irc._delivery_status(root, r, kind, memo) == "queued":
+            queued.append(atlas_dash_irc._message_id(root, r))
+    return {"open_items": items, "queued_messages": queued}
+
+
+def _wave_target(ctx):
+    """((root, member), None) for a wave-verb target, or (None, error)."""
+    name = unquote(ctx.groups[0])
+    b = ctx.json() or {}
+    project = b.get("project") or (ctx.query or {}).get("project")
+    if not ctx.project_root(project):
+        return None, _err(
+            400, "project_required", "no known project given", "pass project=<abs root>"
+        )
+    hit = _find(ctx, name, project)
+    if not hit:
+        return None, _err(
+            404,
+            "no_such_member",
+            f"{name!r} is not on the colony roster",
+            "GET /api/v2/colony",
+        )
+    return hit, None
+
+
+def h_colony_pause(ctx):
+    hit, err = _wave_target(ctx)
+    if hit is None:
+        return err
+    root, m = hit
+    if guard := _lead_only_guard(m):
+        return guard
+    wave = _wave_read(root)
+    wave["members"].setdefault(m["name"], {})["paused"] = True
+    _wave_write(root, wave)
+    return 200, {
+        "ok": True,
+        "paused": m["name"],
+        "note": "sends to it are refused until resume; running work is untouched",
+    }
+
+
+def h_colony_resume(ctx):
+    hit, err = _wave_target(ctx)
+    if hit is None:
+        return err
+    root, m = hit
+    if guard := _lead_only_guard(m):
+        return guard
+    wave = _wave_read(root)
+    wm = wave["members"].pop(m["name"], {})
+    _wave_write(root, wave)
+    return 200, {
+        "ok": True,
+        "resumed": m["name"],
+        "resume_state": wm.get("resume_state"),
+    }
+
+
+def h_colony_cancel(ctx):
+    hit, err = _wave_target(ctx)
+    if hit is None:
+        return err
+    root, m = hit
+    if (ctx.json() or {}).get("hard"):
+        # --hard keeps the kill contract verbatim: lead guard, refusals, SIGTERM/pane close.
+        return h_colony_kill(ctx)
+    if guard := _lead_only_guard(m):
+        return guard
+    if m["state"] in REFUSAL:
+        return _err(
+            409,
+            REFUSAL[m["state"]],
+            f"{m['name']!r} is already {m['state']}",
+            "nothing to cancel",
+        )
+    state = _resume_state(root, m["name"])
+    wave = _wave_read(root)
+    wave["members"][m["name"]] = {
+        "canceled": True,
+        "canceled_at": time.time(),
+        "resume_state": state,
+    }
+    _wave_write(root, wave)
+    return 200, {
+        "ok": True,
+        "canceled": m["name"],
+        "mode": "graceful",
+        "running": m["state"],
+        "resume_state": state,
+    }
+
+
 # --- routes ----------------------------------------------------------------------------------
 
 
@@ -580,6 +786,9 @@ def h_colony_send(ctx):
             m["deliver"]["reason"],
             "pick a member that is running, or dispatch a new worker",
         )
+    gate = _wave_gate(root, m["name"])
+    if gate:
+        return gate
     channel = m["channel"]
     if m["steerable"]:
         flat = atlas_dash_irc.sanitize_keys(
@@ -589,7 +798,21 @@ def h_colony_send(ctx):
             atlas_herdr.send_prompt(m["pane_id"], flat)
         except atlas_herdr.PromptRefused as e:
             if e.http != 409:  # busy falls through to the board queue
-                return e.http, {"ok": False, "error": e.error, "why": e.why}
+                # receipt on the board: nothing was typed, nothing vanishes
+                msg = atlas_dash_irc._record_irc(
+                    root,
+                    atlas_dash_irc.HUMAN,
+                    name,
+                    text,
+                    delivery="refused",
+                    channel=channel,
+                )
+                return e.http, {
+                    "ok": False,
+                    "error": e.error,
+                    "why": e.why,
+                    "receipt": msg["status"],
+                }
         else:
             msg = atlas_dash_irc._record_irc(
                 root,
@@ -667,4 +890,7 @@ ROUTES = [
     ("GET", r"^/api/v2/colony$", h_colony_get),
     ("POST", r"^/api/v2/colony/([^/?#]+)/send$", h_colony_send),
     ("POST", r"^/api/v2/colony/([^/?#]+)/kill$", h_colony_kill),
+    ("POST", r"^/api/v2/colony/([^/?#]+)/pause$", h_colony_pause),
+    ("POST", r"^/api/v2/colony/([^/?#]+)/resume$", h_colony_resume),
+    ("POST", r"^/api/v2/colony/([^/?#]+)/cancel$", h_colony_cancel),
 ]

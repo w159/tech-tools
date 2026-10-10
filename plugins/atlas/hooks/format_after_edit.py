@@ -4,7 +4,8 @@
 Matches Edit / Write / MultiEdit / NotebookEdit. Picks a formatter by file extension, runs it in place
 using the project's own config, and is a no-op when the formatter is not installed. Meant
 to run ASYNC (hooks.json sets "async": true) so it never blocks the agentic loop. It
-never blocks a tool call; a formatter that fails is a quiet skip (not a hook crash).
+never blocks a tool call; a formatter that fails is a quiet skip (not a hook
+crash) - but the skip is recorded (friction row + fault row), never silent.
 
 Why this matters for an orchestrator: a uniform, formatter-clean tree means diffs stay
 minimal and reviewers (and verifier subagents) see only real changes, not whitespace noise.
@@ -112,7 +113,9 @@ def file_path_from(data: dict) -> str | None:
 
 def _record_skip(data: dict, fp: str, reason: str) -> None:
     """One cheap friction row per skip (`formatter_skipped:<reason>`, ext in snippet) so
-    formatter latency/failures are measurable. Never a fault row; never raises."""
+    formatter latency/failures are measurable, plus one fault row (F6): a failed
+    formatter used to be fully invisible - the run believed formatting happened
+    while the file stayed unformatted. Never raises; exit stays 0."""
     try:
         import atlas_db  # noqa: E402  (lazy: only on the skip path)
 
@@ -128,6 +131,11 @@ def _record_skip(data: dict, fp: str, reason: str) -> None:
             conn.close()
     except Exception:
         pass  # DB unavailable: the skip stays quiet, exit stays 0
+    atlas_hook_guard.fault(
+        "format_after_edit",
+        "formatter skipped: %s for %s (no candidate succeeded)" % (reason, fp),
+        data.get("cwd"),
+    )
 
 
 def main() -> int:
@@ -157,8 +165,9 @@ def main() -> int:
             # every edit is the highest-frequency noise source in the plugin.
             return 0
         reasons.add("parse")  # non-zero (e.g. syntax error mid-edit): try the next
-    # Every candidate failed or was absent: a skip, not a hook crash, so no fault row.
-    # Worst reason wins; no candidates at all means no formatter installed.
+    # Every candidate failed or was absent: a skip, not a hook crash, so the
+    # process still exits 0 - but the skip is recorded (friction row + fault
+    # row) so the pattern is measurable instead of silent.
     reason = next(
         (r for r in ("timeout", "parse", "missing") if r in reasons), "missing"
     )

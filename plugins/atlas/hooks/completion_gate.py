@@ -49,6 +49,9 @@ Sixteen conditions must ALL hold before the gate passes (else block ONCE):
       test-runner command (pytest, vitest, cargo test, ...). A stamp with no
       executed test behind it is self-attestation, and self-stamping is how
       coverage collapsed to zero while the gate stayed green.
+      ATLAS_MODE=solo relaxes this further: one executed test command pairs
+      one implementer with no stamped entry required. Never a blanket
+      exemption -- no executed test, no credit.
       The formula is max(0, unpaired_implementer_dispatches - _test_verified_this_run).
       Requiring a verifier *dispatch* specifically is what made every task,
       however small, cost two subagents; a test run is the better evidence and
@@ -84,6 +87,9 @@ Sixteen conditions must ALL hold before the gate passes (else block ONCE):
       at least one Task/Agent dispatch. Checked even when orchestration was
       never armed; sidechains are exempt. DB and current-turn transcript
       evidence are combined, and internal errors fail open.
+      ATLAS_MODE=solo acknowledges direct main-thread changes to at most 5
+      non-docs source files instead of demanding a dispatch; verification
+      evidence for the shipped work still applies.
   (n) Status header: for an orchestrating, non-sidechain session, the final
       reply (`last_assistant_message` in the Stop payload; omp's stop bridge
       fills it from session_stop) must start, on its first non-empty line, with
@@ -139,6 +145,7 @@ Stdlib only.
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import json
 import os
 import re
@@ -306,6 +313,16 @@ def _check_roadmap_reconciled(root: Path) -> bool:
         return True  # can't read → fail open
 
 
+def _solo_mode():
+    """ATLAS_MODE=solo (case-insensitive) opts this run into the solo fast
+    path: main-thread direct changes to at most 5 non-docs source files are
+    acknowledged instead of demanding an implementer dispatch ((m)), and one
+    executed test command pairs an implementer without a stamped findings
+    entry ((g)). Unset, empty, or any other value leaves every condition
+    unchanged."""
+    return os.environ.get("ATLAS_MODE", "").strip().lower() == "solo"
+
+
 def _delegation_exempt():
     """(dirs, extensions) exempt from the (m) delegation mandate, from the shared
     contracts/native-tools.json (also read by omp/contracts.ts); None if unreadable."""
@@ -336,6 +353,24 @@ def _nondocs_changed(changed_paths: list) -> bool:
         if not (p.startswith("docs/") or "/docs/" in p):
             return True
     return False
+
+
+def _target_exists(path: str, root: Path | None = None) -> bool:
+    """F2 (refuted-phantom class, LENS-PHANTOM-1010): a gate item may name a
+    file target that was valid when the signal was recorded but is gone by
+    block time (deleted, renamed, or recorded from a sibling run). Callers
+    re-verify at block time and DROP the stale target instead of sending the
+    model to chase a target that cannot exist. An unreadable filesystem fails
+    open (True): never drop a target on doubt, only on proof it is gone."""
+    if not path:
+        return False
+    try:
+        cand = Path(path)
+        if not cand.is_absolute() and root is not None:
+            cand = root / path
+        return cand.exists()
+    except OSError:
+        return True
 
 
 def _docs_moved_in_git(root: Path) -> bool:
@@ -630,16 +665,22 @@ def _shell_dirty_edits(root, session_id: str) -> list:
         return []
 
 
-def _missing_delegation(session_id: str, transcript_path: str = "", root=None) -> bool:
+def _missing_delegation(session_id: str, transcript_path: str = "", root=None) -> list:
     """(m) Main-thread code writes with no dispatch; fail open on any error.
 
-    Unlike the other code gates, sidechain writes and inherited git dirt do
+    Returns the non-docs file paths that triggered the condition (F9: the
+    block names them), or [] when there is no delegation block. Unlike the
+    other code gates, sidechain writes and inherited git dirt do
     not establish a main-thread change. Current-turn dispatches are read
     directly before Stop-time transcript ingestion has caught up. Code written
     through the shell counts too when `root` has a SessionStart dirty snapshot.
+
+    `transcript_path` is the harness-supplied transcript path, opened READ-ONLY
+    (pi-lens path-traversal flags on these opens are deliberate: the hook only
+    reads what the harness handed it, and fails open on any read error).
     """
     if "/subagents/" in transcript_path.replace("\\", "/"):
-        return False
+        return []
     conn = None
     try:
         import atlas_db
@@ -649,10 +690,10 @@ def _missing_delegation(session_id: str, transcript_path: str = "", root=None) -
             conn, session_id
         )
         if rid is None:
-            return False
+            return []
         started = atlas_db.run_started_at(conn, rid)
         if started is None:
-            return False
+            return []
         paths = [
             row[0]
             for row in conn.execute(
@@ -669,7 +710,7 @@ def _missing_delegation(session_id: str, transcript_path: str = "", root=None) -
             paths.append(json.loads(summary or "{}").get("file_path") or "")
         exempt = _delegation_exempt()
         if exempt is None:
-            return False  # contract unreadable: fail open, never block
+            return []  # contract unreadable: fail open, never block
         dirs, exts = exempt
         code_paths = [
             p
@@ -681,24 +722,32 @@ def _missing_delegation(session_id: str, transcript_path: str = "", root=None) -
             )
         ]
         code_paths += _shell_dirty_edits(root, session_id)
+        # URI-shaped records (agent:// IRC, xd:// devices) are not files: drop
+        # them before the existence check so they can neither block nor be
+        # named in the (m) clause.
+        code_paths = [p for p in code_paths if not is_uri_path(p)]
+        # F2 (refuted-phantom class): a recorded path can be gone by block time
+        # (deleted, renamed, or recorded from a sibling run). Re-verify
+        # existence here so the gate never sends the model after a phantom.
+        code_paths = [p for p in code_paths if _target_exists(p, root)]
         if not _nondocs_changed(code_paths):
-            return False
+            return []
         if conn.execute(
             "SELECT 1 FROM dispatches WHERE run_id=? LIMIT 1", (rid,)
         ).fetchone():
-            return False
+            return []
         if conn.execute(
             "SELECT 1 FROM events WHERE run_id=? AND context='main' "
             "AND tool IN ('Task','Agent') LIMIT 1",
             (rid,),
         ).fetchone():
-            return False
+            return []
         if conn.execute(
             "SELECT 1 FROM tool_calls WHERE session_id=? AND ts>=? "
             "AND is_sidechain=0 AND tool_name IN ('Task','Agent') LIMIT 1",
             (session_id, started),
         ).fetchone():
-            return False
+            return []
         if transcript_path:
             with open(transcript_path, encoding="utf-8", errors="replace") as fh:
                 for line in fh:
@@ -715,13 +764,36 @@ def _missing_delegation(session_id: str, transcript_path: str = "", root=None) -
                         and b.get("name") in {"Task", "Agent"}
                         for b in content
                     ):
-                        return False
-        return True
+                        return []
+        return code_paths
     except Exception:
-        return False
+        return []
     finally:
         if conn is not None:
             conn.close()
+
+
+# F8: one-line gist per gate letter. A letter that already blocked once this
+# session re-blocks as `(<letter>) still open: <gist>` instead of repeating the
+# full multi-line clause (which the model has already read this session).
+_GISTS: dict[str, str] = {
+    "a": "capture observed-behavior proof under .atlas/evidence/",
+    "b": "write the verified findings.json entry (atlas_finding.py --status verified)",
+    "c": "CHANGELOG missing; append a dated entry under Recent in docs/CHANGELOG.md",
+    "d": "ROADMAP missing; update docs/ROADMAP.md",
+    "e": "README missing; write the root README.md",
+    "f": "docs drift; add this run's change to docs/CHANGELOG.md",
+    "g": "unverified implementer dispatch; record a verified finding or dispatch atlas:verifier",
+    "h": "move done ROADMAP items to docs/CHANGELOG.md",
+    "i": "todos still open; finish them or explicitly drop them",
+    "j": "worktrees left; merge and remove them",
+    "k": "no plan; write the todo list now",
+    "l": "docs artifacts not named date-first; git mv to <YYYY-MM-DD>-<slug>",
+    "m": "main-thread code writes with no dispatch; dispatch atlas:implementer",
+    "n": "status header missing; start the reply with the atlas header",
+    "o": "required phases missing; add the phase markers",
+    "p": "colony channel unused; post one board note per worker",
+}
 
 
 def _reason(
@@ -744,57 +816,87 @@ def _reason(
     colony_missing: bool = False,
     session_id: str = "",
     colony_workers: int | None = None,
+    repeat: list | None = None,
+    delegation_paths: list | None = None,
+    solo_delegation_note: str = "",
 ) -> str:
-    parts = []
+    """Assemble the block reason.
+
+    `repeat` (F8): letters whose full clause already shipped this session --
+    each renders as one `(<letter>) still open: <gist>` line; when every
+    failing letter is a repeat the whole long guidance footer is dropped.
+    `delegation_paths` (F9): the exact files that triggered (m).
+    """
+    delta = set(repeat or ())
+    tagged: list[tuple[str, str]] = []
+
+    def emit(letter: str, text: str) -> None:
+        if letter in delta:
+            tagged.append(
+                (letter, f"  ({letter}) still open: {_GISTS.get(letter, letter)}")
+            )
+        else:
+            tagged.append((letter, text))
+
     if missing_a:
-        parts.append(
+        emit(
+            "a",
             "  (a) No files found under .atlas/evidence/. Capture observed-behavior proof "
             "(test output, DB read-back, endpoint response, or UI screenshot) there first. "
             "-> Dispatch the relevant atlas specialist (atlas:implementer to re-run and "
             "capture, atlas:ui-runtime-tester for a live UI screenshot, or atlas:db-prober "
-            "for a DB read-back) to produce and save that artifact under .atlas/evidence/."
+            "for a DB read-back) to produce and save that artifact under .atlas/evidence/.",
         )
     if missing_b:
-        parts.append(
+        emit(
+            "b",
             "  (b) .atlas/.run/findings.json is missing or has no entry with status "
             '"verified". -> If a verifier already reached a verdict this run, the '
             "record is simply unwritten: write it yourself, now, with one command -- "
             f'python3 "{SCRIPTS_DIR / "atlas_finding.py"}" --id <stage> '
             "--status verified --title '<one line>' --evidence '<path or test id>' "
             "--reproduction '<exact command>'. --title is required. Only dispatch "
-            "atlas:verifier if no independent check has actually run yet."
+            "atlas:verifier if no independent check has actually run yet.",
         )
     if missing_c:
-        parts.append(
+        emit(
+            "c",
             "  (c) docs/CHANGELOG.md is missing or empty. docs/ must be current -- "
             "update CHANGELOG.md (and ROADMAP/affected subfolders) to reflect this run. "
             "-> Dispatch atlas:docs-curator to bring docs/ current (CHANGELOG, ROADMAP, "
-            "affected subfolders) citing file:line evidence."
+            "affected subfolders) citing file:line evidence.\n"
+            "     (c) try: append a dated entry under Recent in docs/CHANGELOG.md",
         )
     if missing_d:
-        parts.append(
+        emit(
+            "d",
             "  (d) docs/ROADMAP.md is missing or empty. The roadmap is part of the "
             "docs/ single source of truth. -> Dispatch atlas:docs-curator to write or "
-            "update ROADMAP.md reflecting shipped, in-flight, and planned work."
+            "update ROADMAP.md reflecting shipped, in-flight, and planned work.\n"
+            "     (d) try: update docs/ROADMAP.md status markers to match shipped work",
         )
     if missing_e:
-        parts.append(
+        emit(
+            "e",
             "  (e) README.md at the project root is missing or empty. "
             "-> Dispatch atlas:docs-curator to write or refresh the root README so it "
-            "matches the current state of the code."
+            "matches the current state of the code.\n"
+            "     (e) try: write a root README.md describing the project and how to run it",
         )
     if drift:
-        parts.append(
+        emit(
+            "f",
             "  (f) Docs drift: non-docs files changed this run but docs/CHANGELOG.md "
             "is not in the diff. The CHANGELOG is the record that this change "
             "happened and was verified; an edit to some other doc is not a "
             "substitute for it. -> Write the CHANGELOG entry inline yourself (docs/ "
             "is a tree the orchestrator may edit directly), or dispatch "
             "atlas:docs-curator to reconcile docs/ (CHANGELOG, ROADMAP, affected "
-            "subfolders) citing file:line evidence, then retry Stop."
+            "subfolders) citing file:line evidence, then retry Stop.",
         )
     if unverified > 0:
-        parts.append(
+        emit(
+            "g",
             f"  (g) Law 5 -- verification coverage: {unverified} implementer dispatch(es) "
             "shipped code this run with nothing independent checking them. Two ways "
             "to close this, cheapest first: (1) run the failing check yourself -- the "
@@ -804,27 +906,32 @@ def _reason(
             "--reproduction '<command>'; a "
             "`verified` entry stamped during this run pairs an implementer exactly "
             "like a dispatch does, and a test cannot hallucinate. (2) Dispatch "
-            "atlas:verifier only when no test can express the check. Then retry Stop."
-            ""
+            "atlas:verifier only when no test can express the check. Then retry Stop.\n"
+            f'     (g) try: python3 "{SCRIPTS_DIR / "atlas_finding.py"}" --id <stage> '
+            "--status verified --title '<one line>' --evidence '<test id>' "
+            "--reproduction '<command>'",
         )
     if git_error:
-        parts.append(
+        emit(
+            "f",
             "  (f/g) Could not verify docs drift or verifier coverage: git is "
             f"unavailable, so the gate cannot inspect the run's diff ({git_error}). The "
             "gate must not let unverified code ship on the assumption that "
             "nothing changed. -> Ensure git is reachable from this environment "
-            "and retry Stop."
+            "and retry Stop.",
         )
     if roadmap_not_reconciled:
-        parts.append(
+        emit(
+            "h",
             "  (h) ROADMAP reconciliation: docs/ROADMAP.md contains items with "
             'status "done" that should have been moved to CHANGELOG.md with a '
             "date and evidence citation. A 'done' item in ROADMAP is a defect. "
             "-> Dispatch atlas:docs-curator to move completed and verified "
-            "items from ROADMAP to CHANGELOG, then retry Stop."
+            "items from ROADMAP to CHANGELOG, then retry Stop.",
         )
     if missing_plan:
-        parts.append(
+        emit(
+            "k",
             "  (k) No plan was ever made: this run shipped code with zero items on "
             "every plan surface (no TodoWrite call, no board items for this session, "
             "no LEDGER line). The plan is not paperwork - it is how the work gets "
@@ -834,49 +941,76 @@ def _reason(
             '(load it with ToolSearch("select:TodoWrite") first), otherwise '
             f'python3 "{SCRIPTS_DIR / "atlas_todo.py"}" set '
             '\'[{"content":"...","status":"completed"}]\' --session <session_id>. '
-            "Then retry Stop."
+            "Then retry Stop.",
         )
     if open_todos > 0:
-        parts.append(
+        emit(
+            "i",
             f"  (i) Todo list not drained: {open_todos} item(s) are still open (transcript "
             "TodoWrite, the .atlas/.run/todos.json board, or the LEDGER line). An "
             "item is `completed` only when its check passed -- not when a subagent "
             "returned. -> Finish them, or mark what you are deliberately leaving and "
-            "say so out loud in your reply, then retry Stop."
+            "say so out loud in your reply, then retry Stop.\n"
+            "     (i) try: mark each open item completed, or say out loud why you are "
+            "leaving it, then retry Stop",
         )
     if worktrees:
-        parts.append(
+        emit(
+            "j",
             f"  (j) {len(worktrees)} git worktree(s) from this run are still on disk: {', '.join(worktrees[:4])}. A worktree "
             "holding changes does not clean itself up. -> For each: commit inside it if "
             "`git -C <tree> status --porcelain` is non-empty, merge it into the local "
             "branch (git merge --no-ff <branch>), then `git worktree remove` it. Offer "
-            "the push; never run it unasked."
+            "the push; never run it unasked.",
         )
     if name_violations:
-        parts.append(
+        emit(
+            "l",
             f"  (l) {len(name_violations)} docs artifact(s) this run touched are not named date-first: "
             f"{'; '.join(p for p, _ in name_violations[:5])}. A dated record (plan, spec, lesson, decision, audit, finding) is "
             "<YYYY-MM-DD>-<slug> so a plain listing sorts chronologically; a "
             "trailing date or a leading sequence number sorts by subject instead. "
             "-> Rename with `git mv` (keep the history), then re-check with "
-            f'python3 "{SCRIPTS_DIR / "lint_docs_names.py"}".'
+            f'python3 "{SCRIPTS_DIR / "lint_docs_names.py"}".',
         )
     if missing_delegation:
-        parts.append(
+        files = ", ".join((delegation_paths or [])[:6])
+        named = f" Triggering files: {files}." if files else ""
+        emit(
+            "m",
             "  (m) Delegation mandate: this run shipped non-docs code from the main "
-            "thread with zero Task/Agent dispatches. -> Dispatch atlas:implementer "
-            "(or another atlas:* agent) for the code change, then verify and retry Stop."
+            "thread with zero Task/Agent dispatches."
+            + named
+            + " -> Dispatch atlas:implementer "
+            "(or another atlas:* agent) for the code change, then verify and retry Stop.\n"
+            "     (m) try: dispatch atlas:implementer (Task) for the files listed "
+            "above, or record why main-thread work was right (delegation exemption).",
         )
+    if solo_delegation_note:
+        # ATLAS_MODE=solo: (m) is acknowledged, not failing -- this line rides
+        # along in any block raised for another condition and never makes the
+        # gate speak on a pass.
+        tagged.append(("m-solo", f"  {solo_delegation_note}"))
     if missing_header:
-        parts.append(_header_reason_part(_contract_doc()))
+        emit("n", _header_reason_part(_contract_doc()))
     if missing_phases:
-        parts.append(_phases_reason_part(missing_phases, _contract_doc(), session_id))
+        emit(
+            "o",
+            _phases_reason_part(missing_phases, _contract_doc(), session_id),
+        )
     if colony_missing:
-        parts.append(_colony_reason_part(colony_workers))
-    failed = "\n".join(parts)
+        emit("p", _colony_reason_part(colony_workers))
+    body = "\n".join(text for _, text in tagged)
+    if tagged and all(letter in delta for letter, _ in tagged):
+        # F8: every failing letter was fully stated this session -- ship the
+        # one-line deltas only, never the whole essay again.
+        return (
+            "[atlas] Definition-of-done gate re-check (full instructions were sent "
+            "earlier this session):\n" + body
+        )
     return (
         "[atlas] Definition-of-done gate: the following condition(s) are not met:\n"
-        + failed
+        + body
         + "\n\nClose the gap with the SMALLEST deterministic action, in this order:\n"
         "  1. Anything that is only an unwritten record -- a docs/CHANGELOG line, a "
         "ROADMAP move, a findings.json verdict a verifier already reached -- write it "
@@ -918,9 +1052,23 @@ def main() -> int:
         if root is None:
             return 0  # no docs/ SSOT -> not an atlas run -> silent no-op
         session = str(data.get("session_id") or "")
-        missing_delegation = _missing_delegation(
+        delegation_paths = _missing_delegation(
             session, str(data.get("transcript_path") or ""), root
         )
+        missing_delegation = bool(delegation_paths)
+        # ATLAS_MODE=solo fast path: direct main-thread changes to at most 5
+        # non-docs source files are acknowledged, not demanded into a
+        # dispatch. The triggering-path list is unchanged (it is already the
+        # non-docs code paths); only what the gate does with it relaxes.
+        solo = _solo_mode()
+        solo_delegation_note = ""
+        if solo and delegation_paths and len(delegation_paths) <= 5:
+            missing_delegation = False
+            solo_delegation_note = (
+                "(m) solo mode: direct changes acknowledged for "
+                f"{len(delegation_paths)} files; verifier still required for "
+                "shipped work"
+            )
         if not _session_is_orchestrating(session):
             if missing_delegation and not _has_in_flight_dispatch(data):
                 _record_gate_block(session, ["m"])
@@ -929,7 +1077,11 @@ def main() -> int:
                         {
                             "decision": "block",
                             "reason": _reason(
-                                False, False, False, missing_delegation=True
+                                False,
+                                False,
+                                False,
+                                missing_delegation=True,
+                                delegation_paths=delegation_paths,
                             ),
                         }
                     )
@@ -1007,7 +1159,11 @@ def main() -> int:
         # (l) Naming: dated records must sort chronologically. Not gated on
         # code_changed -- a docs-only run that files a misnamed plan is exactly
         # the case worth catching.
-        name_violations = _docs_name_violations(root)
+        # F2: (l) items name file targets; drop any that are gone by block
+        # time instead of telling the model to rename a phantom.
+        name_violations = [
+            nv for nv in _docs_name_violations(root) if _target_exists(nv[0], root)
+        ]
         unverified = 0
         if code_changed:
             session = data.get("session_id", "")
@@ -1018,6 +1174,17 @@ def main() -> int:
                     root, session, str(data.get("transcript_path") or "")
                 ),
             )
+            if solo and unverified > 0:
+                # ATLAS_MODE=solo: one executed test command pairs one
+                # implementer without a stamped findings entry. Never a
+                # blanket exemption -- no executed test, no credit.
+                unverified = max(
+                    0,
+                    unverified
+                    - _test_run_credit(
+                        root, session, str(data.get("transcript_path") or "")
+                    ),
+                )
         # (n)/(o)/(p): the contract-visibility conditions. Each is evaluated for
         # orchestrating, non-sidechain sessions only (this point is past the
         # unflagged early return), is skipped while a dispatch is in flight
@@ -1030,11 +1197,11 @@ def main() -> int:
         header_failing = (
             not sidechain
             and _status_header_would_block(data, contract)
-            and not _contract_block_used("n", session)
+            and not _contract_block_used("n", session, root)
         )
         phases_missing = (
             []
-            if sidechain or not code_changed or _contract_block_used("o", session)
+            if sidechain or not code_changed or _contract_block_used("o", session, root)
             else _missing_required_phases(root, session, contract)
         )
         colony_workers = None
@@ -1042,7 +1209,7 @@ def main() -> int:
         if (
             not sidechain
             and not _switch_off(_SWITCH_COLONY)
-            and not _contract_block_used("p", session)
+            and not _contract_block_used("p", session, root)
         ):
             colony_workers = _colony_workers_dispatched(session)
             colony_failing = (
@@ -1094,18 +1261,31 @@ def main() -> int:
             )
             if failing
         ]
-        if _block_loop_exhausted(session, failed):
+        count, loop_exhausted = _block_loop_state(session, failed)
+        if loop_exhausted:
+            # F4: the allowed Stop is stated, not silent. The model-facing
+            # statement was the FINAL block notice emitted below; this line
+            # keeps the bypass observable in hook logs.
+            with contextlib.suppress(Exception):
+                sys.stderr.write(
+                    "[atlas] completion-gate: allowed the Stop after "
+                    f"{count} identical blocks; still open: "
+                    f"{_gate_block_snippet(failed)}\n"
+                )
             return 0
         _record_gate_block(data.get("session_id", ""), failed)
-        for letter, needs_marker in (
-            ("n", header_failing),
-            ("o", bool(phases_missing)),
-            ("p", colony_failing),
-        ):
-            if needs_marker:
+        # F8: mark every failing letter. The first Stop per letter ships the
+        # full clause (computed below, BEFORE these markers exist); later
+        # Stops ship a one-line delta. (n)/(o)/(p) keep their original
+        # one-shot semantics -- a marked letter never blocks again.
+        repeat = _repeat_letters(failed, session, root)
+        for letter in failed:
+            if letter in ("n", "o", "p"):
                 _mark_contract_block(
                     letter, session
                 )  # one-shot: never block on this letter again
+            else:
+                _mark_contract_block("seen-" + letter, session, root)
         block_reason = _reason(
             not ok_a,
             not ok_b,
@@ -1126,11 +1306,23 @@ def main() -> int:
             colony_missing=colony_failing,
             session_id=session,
             colony_workers=colony_workers,
+            repeat=repeat,
+            delegation_paths=delegation_paths,
+            solo_delegation_note=solo_delegation_note,
         )
+        notice = _block_loop_notice(count, failed)
+        if notice:
+            block_reason += "\n" + notice
         print(json.dumps({"decision": "block", "reason": block_reason}))
     except Exception as exc:  # noqa: BLE001 -- a Stop hook must never wedge the session
         # Fail-open, but surface the swallowed crash on stderr so a silent
-        # allow-through is at least observable in hook logs.
+        # allow-through is at least observable in hook logs -- and (F3) state
+        # it in the model-visible stdout channel too, so a run cannot end with
+        # the gate silently disarmed.
+        print(
+            "[atlas] completion-gate FAIL-OPEN: an error disabled the gate for "
+            f"this Stop ({exc}); the done-conditions were NOT checked."
+        )
         print(json.dumps({"decision": "fail-open", "error": str(exc)}), file=sys.stderr)
         atlas_hook_guard.fault("completion_gate", exc)
         return 0
@@ -1243,37 +1435,51 @@ def _block_loop_limit() -> int:
         return BLOCK_LOOP_LIMIT
 
 
-def _block_loop_exhausted(session_id: str, failed: list) -> bool:
-    """True once the same `failed` letters blocked BLOCK_LOOP_LIMIT times in a
-    row for this session: the caller then ALLOWS the Stop, after one friction
-    row. State: `loop-<session>` marker holding `<letters> <count>`. Never
-    raises; an unwritable marker means no cap, the lesser failure."""
-    if not session_id:
-        return False
+def _block_loop_state(session_id: str, failed: list) -> tuple[int, bool]:
+    """Count the identical consecutive blocks and say when the cap is reached.
+
+    Returns `(count, exhausted)`: `count` is how many times this exact `failed`
+    letter set has blocked in a row for this session, `exhausted` True once
+    that count exceeds BLOCK_LOOP_LIMIT -- the caller then ALLOWS the Stop.
+    State: `loop-<session>` marker holding `<letters> <count>`. Never raises;
+    an unwritable marker means no cap, the lesser failure. The exhausted
+    verdict is also recorded as one friction row (F4: the silent pass becomes
+    a stated one)."""
+    count = 1
+    path = None
+    state_dir = None
+    sig = ""
     try:
         sig = ",".join(failed)
         state_dir = atlas_hook_guard._state_dir()
+        # session_id is sanitized into [A-Za-z0-9_.-] before the join; the
+        # path derives from the hook state dir, never from model-controlled
+        # input (pi-lens path-traversal flag here is deliberate).
         path = os.path.join(
             state_dir, "gate-loop-" + re.sub(r"[^A-Za-z0-9_.-]", "_", session_id)
         )
     except Exception:
-        return False
-    count = 1
-    try:
-        with open(path, encoding="utf-8") as fh:
-            last_sig, _, n = fh.read().strip().rpartition(" ")
-        if last_sig == sig:
-            count = int(n) + 1
-    except (OSError, ValueError):
-        count = 1
-    try:
-        os.makedirs(state_dir, exist_ok=True)
-        with open(path, "w", encoding="utf-8") as fh:
-            fh.write(f"{sig} {count}")
-    except OSError:
-        return False
+        state_dir = None
+        path = None
+    if path is not None and state_dir is not None:
+        try:
+            with open(path, encoding="utf-8") as fh:
+                last_sig, _, n = fh.read().strip().rpartition(" ")
+            if last_sig == sig:
+                count = int(n) + 1
+        except (OSError, ValueError):
+            count = 1
+        try:
+            os.makedirs(state_dir, exist_ok=True)
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(f"{sig} {count}")
+        except OSError:
+            # An unwritable marker means no cap: the lesser failure (same as
+            # the original _block_loop_exhausted behavior -- no exhaustion, no
+            # friction row).
+            return count, False
     if count <= _block_loop_limit():
-        return False
+        return count, False
     conn = None
     try:
         with contextlib.suppress(Exception):
@@ -1290,7 +1496,28 @@ def _block_loop_exhausted(session_id: str, failed: list) -> bool:
     finally:
         if conn is not None:
             conn.close()
-    return True
+    return count, True
+
+
+def _block_loop_exhausted(session_id: str, failed: list) -> bool:
+    """True once the same `failed` letters blocked BLOCK_LOOP_LIMIT times in a
+    row for this session: the caller then ALLOWS the Stop. See
+    `_block_loop_state` for the counting itself."""
+    return _block_loop_state(session_id, failed)[1]
+
+
+def _block_loop_notice(count: int, failed: list) -> str | None:
+    """F4: the LAST block before the cap says so in the reason the model
+    reads, so a run cannot slide into an allowed Stop with open gate items
+    and nothing having said it. None while the cap is not imminent."""
+    limit = _block_loop_limit()
+    if count < limit:
+        return None
+    return (
+        f"  [atlas] FINAL block: this is identical block {count} of {limit}; the "
+        "next identical Stop will be ALLOWED with these conditions still open: "
+        f"{_gate_block_snippet(failed)}."
+    )
 
 
 def _record_gate_block(session_id: str, failed: list) -> None:
@@ -1493,6 +1720,38 @@ def _tests_executed_this_run(
     return False
 
 
+def _test_run_credit(root: Path, session_id: str, transcript_path: str = "") -> int:
+    """(g) ATLAS_MODE=solo credit: 1 when a test-runner command executed
+    during THIS run, regardless of a stamped findings entry -- the solo fast
+    path pairs one implementer with the test it ran instead of an agent.
+    Exactly one credit per run, never more; anything else (a stamp with no
+    executed test behind it, no check at all) earns nothing. Fail-open to 0
+    (gate keeps its strictness) on any error."""
+    conn = None
+    try:
+        import atlas_db
+
+        conn = atlas_db.connect()
+        rid = atlas_db.current_run_id(conn, session_id) or atlas_db.latest_run_id(
+            conn, session_id
+        )
+        if rid is None:
+            return 0
+        started = atlas_db.run_started_at(conn, rid)
+        if started is None:
+            return 0
+        return (
+            1
+            if _tests_executed_this_run(conn, session_id, started, transcript_path)
+            else 0
+        )
+    except Exception:
+        return 0
+    finally:
+        if conn is not None:
+            conn.close()
+
+
 def _test_verified_this_run(
     root: Path, session_id: str, transcript_path: str = ""
 ) -> int:
@@ -1618,26 +1877,33 @@ def _switch_off(name: str) -> bool:
     return os.environ.get(name, "").strip().lower() in {"off", "0", "false"}
 
 
-def _contract_marker(cond: str, session_id: str) -> str:
+def _contract_marker(cond: str, session_id: str, root: Path | None = None) -> str:
+    # `root` scopes the F8 delta-namespace markers ("seen-<letter>") to one
+    # workspace: sessions are per-root, and test harnesses reuse session ids
+    # across temp roots. The (n)/(o)/(p) one-shot letters keep the original
+    # session-only keying -- their cross-process semantics must not change.
+    digest = ""
+    if cond.startswith("seen-") and root is not None:
+        digest = "-" + hashlib.sha256(str(root).encode("utf-8")).hexdigest()[:8]
     return os.path.join(
         CONTRACT_GATE_MARKER_DIR,
-        f"{cond}-{re.sub(r'[^A-Za-z0-9_.-]', '_', session_id)}",
+        f"{cond}-{re.sub(r'[^A-Za-z0-9_.-]', '_', session_id)}{digest}",
     )
 
 
-def _contract_block_used(cond: str, session_id: str) -> bool:
+def _contract_block_used(cond: str, session_id: str, root: Path | None = None) -> bool:
     """True when condition `cond` already blocked once for this session.
     Fail-open to True on an unusable session id: with no way to remember a
     block, the condition must not fire (it could never be satisfied once)."""
     if not session_id:
         return True
     try:
-        return os.path.exists(_contract_marker(cond, session_id))
+        return os.path.exists(_contract_marker(cond, session_id, root))
     except OSError:
         return True
 
 
-def _mark_contract_block(cond: str, session_id: str) -> bool:
+def _mark_contract_block(cond: str, session_id: str, root: Path | None = None) -> bool:
     """Record that `cond` has blocked for this session. O_EXCL, so two racing
     Stops cannot both claim the first block. Returns True when this call
     created the marker. Never raises: a marker that cannot be written means
@@ -1648,13 +1914,25 @@ def _mark_contract_block(cond: str, session_id: str) -> bool:
         os.makedirs(CONTRACT_GATE_MARKER_DIR, exist_ok=True)
         os.close(
             os.open(
-                _contract_marker(cond, session_id),
+                _contract_marker(cond, session_id, root),
                 os.O_CREAT | os.O_EXCL | os.O_WRONLY,
             )
         )
         return True
     except OSError:
         return False
+
+
+def _repeat_letters(failed: list, session: str, root: Path | None = None) -> list:
+    """F8: failing letters whose FULL clause already shipped this session.
+    (n)/(o)/(p) are excluded: their own one-shot markers suppress any
+    re-block, so they can never be repeats."""
+    return [
+        letter
+        for letter in failed
+        if letter not in ("n", "o", "p")
+        and _contract_block_used("seen-" + letter, session, root)
+    ]
 
 
 def _payload_is_sidechain(data: dict) -> bool:
@@ -1898,7 +2176,9 @@ def _colony_reason_part(workers: int | None) -> str:
         "never report on the channel leave the lead synthesizing from nothing. "
         "-> Post one handoff note per worker: "
         f'`python3 "{SCRIPTS_DIR / "atlas_todo.py"}" note --owner <worker> --to lead "<summary>"`, '
-        "then retry Stop. (This check blocks once per session.)"
+        "then retry Stop. (This check blocks once per session.)\n"
+        f'     (p) try: python3 "{SCRIPTS_DIR / "atlas_todo.py"}" note --owner <worker> '
+        '--to lead "<worker summary>"'
     )
 
 

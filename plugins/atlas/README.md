@@ -11,9 +11,9 @@ skill or a slash command: durable knowledge goes to findings, docs, and memory.
 Org deployment (11 departments, 156 department skills) lives in the separate
 `armada` plugin in this repo; install it alongside atlas only for org use.
 
-## The skill fleet (47 skills, plainly named)
+## The skill fleet (50 skills, plainly named)
 
-Two manual skills, forty-five auto-trigger skills. Auto-trigger comes primarily from each skill's `description` (Claude Code
+Three manual skills, forty-seven auto-trigger skills. Auto-trigger comes primarily from each skill's `description` (Claude Code
 loads on relevance); `when_to_use` is retained as atlas-local routing metadata.
 Manual skills set `disable-model-invocation: true`.
 
@@ -46,6 +46,9 @@ contributed artifact schemas, review rubrics, and workflow shapes, not a second 
 | atlas-commit, atlas-ship, atlas-babysit-pr, atlas-resolve-pr-feedback | auto | Local-only commit; commit+push+PR with a mandatory confirmation gate before anything leaves the machine; bounded CI-repair loop; review-comment triage, fix, and reply (never auto-posted) |
 | atlas-polish, atlas-dogfood, atlas-test-xcode, atlas-test-browser | auto | Live interactive UX polish; diff-scoped autonomous browser QA with a repair loop; iOS Simulator test runtime; diff-scoped no-fix-loop browser smoke check |
 | atlas-proof, atlas-promote, atlas-worktree | auto | Publish/annotate/collect review workflow for durable docs; post-shipping announcement drafts (never auto-posted); atlas's own host-portable `git worktree` isolation primitive |
+| atlas-status | auto | Stakeholder-readable status rollup for a plan or feature, assembled from what the project actually has: plan, findings, todo board and git state (`scripts/atlas_status.py`); claims labeled verified vs assumed |
+| atlas-run-watch | auto | Provider-agnostic long-run watcher for a process PID, log tail or CI run, reusing the babysit-pr machinery, with a `.atlas/.run/runs/<id>/` ledger |
+| atlas-tour | MANUAL | One-time, plain-language guided first session of atlas: the orchestrator style, one dispatch, the gates |
 
 ## Layout
 
@@ -101,7 +104,7 @@ atlas/
 |   |-- docs-auditor.md            #   audits docs/ for drift against code
 |   |-- completeness-critic.md     #   "what did we miss" gap pass before done (fork)
 |   `-- runner.md                  #   mechanical executor (haiku/low) for <=7 exact numbered STEPS; fixed STEPS: report
-`-- skills/                        # the 47 skills, one directory each (SKILL.md; most add references/)
+`-- skills/                        # the 50 skills, one directory each (SKILL.md; most add references/)
 ```
 
 ## Getting started

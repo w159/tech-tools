@@ -17,6 +17,7 @@ import contextlib
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -1311,7 +1312,22 @@ class InProcessTest(unittest.TestCase):
         ):
             out = self._run_main(self._pre("Bash", {"command": "touch b.txt"}))
         self.assertIn('"permissionDecision": "deny"', out)
-        self.assertIn("Failing closed", out)
+        # F10: the deny after a (retried) DB error is marked transient so the
+        # model knows re-trying the op is correct.
+        self.assertIn("transient DB error", out)
+
+    def test_db_error_retries_once_and_allows_on_success(self):
+        # F10: a transient DB error must not read as policy. The query retries
+        # once; a retry that succeeds lets the op proceed with no output.
+        for _ in range(8):
+            self._run_main(self._post("Bash", {"command": "touch a.txt"}))
+        with patch.object(
+            self.atlas_db,
+            "unsanctioned_inline_ops_since_last_dispatch",
+            side_effect=[Exception("database is locked"), 2],
+        ):
+            out = self._run_main(self._pre("Bash", {"command": "touch b.txt"}))
+        self.assertEqual(out.strip(), "")
 
     # ---- helper unit coverage ----
 
@@ -2742,6 +2758,11 @@ class ModelPinRepresentationTest(unittest.TestCase):
     def test_claude_format_pin_passes(self):
         self._allowed(self._dispatch(model="sonnet"))
 
+    def test_resolved_pin_expansion_passes_doc_deny_case(self):
+        """DOCSCUR-DENY: the harness autofills `model` with the pin's RESOLVED
+        provider/id; the caller passed nothing. It must not read as an override."""
+        self._allowed(self._dispatch(model="anthropic/claude-sonnet-5"))
+
     def test_parent_model_injection_passes_for_any_provider(self):
         # Injection is detected by equality with the forwarded parent model, not
         # by a hardcoded provider/model, so a non-Anthropic parent works too.
@@ -3255,6 +3276,305 @@ class DeviceArgsOverwriteTest(unittest.TestCase):
             self._hook("Write", over, json.dumps({"pattern": "x", "other": 1})),
         )
         self.assertNotIn("device arguments", self._hook("Write", over, "{not json"))
+
+
+class ModelAutofillPinTest(unittest.TestCase):
+    """F1 / DOCSCUR-DENY: the omp harness autofills `model` with the pin's
+    RESOLVED provider/id. A pinned agent dispatched that way must pass; a
+    genuine caller override still denies."""
+
+    def setUp(self):
+        sys.path.insert(0, os.path.dirname(__file__))
+        import dispatch_tripwire as dt
+
+        self.dt = dt
+
+    def _pinned_role(self):
+        return (
+            patch.object(self.dt, "_frontmatter_model", return_value="@atlas-worker"),
+            patch.object(self.dt, "_omp_pinned_models", return_value=["@atlas-worker"]),
+        )
+
+    def test_resolved_role_pin_is_not_an_override(self):
+        # The exact DOCSCUR shape: frontmatter pins the ROLE alias, the payload
+        # carries its resolution.
+        with contextlib.ExitStack() as stack:
+            for p in self._pinned_role():
+                stack.enter_context(p)
+            self.assertIsNone(
+                self.dt._model_override(
+                    {
+                        "subagent_type": "atlas:docs-curator",
+                        "model": "anthropic/claude-sonnet-5",
+                    }
+                )
+            )
+
+    def test_genuine_override_still_denies_on_role_pin(self):
+        with contextlib.ExitStack() as stack:
+            for p in self._pinned_role():
+                stack.enter_context(p)
+            result = self.dt._model_override(
+                {"subagent_type": "atlas:docs-curator", "model": "opus"}
+            )
+        self.assertEqual(result[0], "atlas:docs-curator")
+        self.assertEqual(result[2], "opus")
+
+    def test_shipped_docs_curator_pin_licenses_sonnet_expansion(self):
+        # The shipped generated pin carries both representations.
+        selectors = self.dt._pin_selectors("docs-curator")
+        self.assertIn("sonnet", selectors)
+        self.assertIn("@atlas-worker", selectors)
+        self.assertIsNone(
+            self.dt._model_override(
+                {
+                    "subagent_type": "atlas:docs-curator",
+                    "model": "anthropic/claude-sonnet-5",
+                }
+            )
+        )
+
+
+class PinTierDefaultsTwinTest(unittest.TestCase):
+    """Contract guard: the `_PIN_TIER_DEFAULTS` twin in dispatch_tripwire.py
+    must stay equal to the authoritative `ATLAS_TIER_DEFAULTS` literal in
+    omp/atlas-agents.ts, and every expected pin expansion (worker/verifier/
+    mechanic tier resolution plus the docs-curator DOCSCUR case) must resolve
+    on the shipped generated agents. A drift between the twin and the omp
+    source fails here loudly (DOCSCUR-DENY class of bug)."""
+
+    def setUp(self):
+        sys.path.insert(0, os.path.dirname(__file__))
+        import dispatch_tripwire as dt
+
+        self.dt = dt
+        ts = (
+            Path(dt.__file__).resolve().parent.parent / "omp" / "atlas-agents.ts"
+        ).read_text(encoding="utf-8")
+        blocks = re.findall(r"ATLAS_TIER_DEFAULTS\s*=\s*\{([^}]*)\}", ts)
+        self.assertEqual(
+            len(blocks),
+            1,
+            "ATLAS_TIER_DEFAULTS literal not found in omp/atlas-agents.ts",
+        )
+        self.source = dict(re.findall(r'(\w+)\s*:\s*"([^"]+)"', blocks[0]))
+
+    def test_twin_matches_omp_source(self):
+        by_alias = {
+            f"@atlas-{tier}": tier_default for tier, tier_default in self.source.items()
+        }
+        self.assertEqual(self.dt._PIN_TIER_DEFAULTS, by_alias)
+
+    def test_expected_pin_expansions_match_source(self):
+        alias_to_tier = {
+            "@atlas-worker": "worker",
+            "@atlas-verifier": "verifier",
+            "@atlas-mechanic": "mechanic",
+        }
+        expected = (
+            ("explorer", "@atlas-worker"),
+            ("verifier", "@atlas-verifier"),
+            ("runner", "@atlas-mechanic"),
+            ("docs-curator", "@atlas-worker"),  # the DOCSCUR case
+        )
+        for agent, alias in expected:
+            selectors = self.dt._pin_selectors(agent)
+            self.assertIn(alias, selectors, agent)
+            self.assertIn(self.source[alias_to_tier[alias]], selectors, agent)
+
+
+class ToolsBlockParserTest(unittest.TestCase):
+    """F1 TOOLS parser: the block body runs to the next LINE-START label only,
+    so ALL-CAPS tokens inside the TOOLS text do not truncate it. F12: any
+    ctx_*/xd:// mention counts as a nav token; an empty TOOLS block still denies."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.env = dict(os.environ, ATLAS_DB=os.path.join(self.tmp, "atlas.db"))
+        os.environ.setdefault("ATLAS_CHANNELS", "off")
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db
+
+        conn = atlas_db.connect(self.env["ATLAS_DB"])
+        atlas_db.init(conn)
+        pid = atlas_db.register_project(conn, "/repo/x")
+        atlas_db.start_run(conn, pid, "sess-1")
+        atlas_db.mark_orchestrating(conn, "sess-1")
+        conn.close()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _dispatch(self, prompt):
+        return run_hook(
+            {
+                "session_id": "sess-1",
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Agent",
+                "tool_input": _named(
+                    {"subagent_type": "atlas:explorer", "prompt": prompt}
+                ),
+            },
+            self.env,
+        )
+
+    def test_all_caps_token_inside_tools_text_does_not_truncate(self):
+        # "ALSO:" sits mid-line after a sentence break: the old parser ended the
+        # TOOLS block there and lost the nav token that follows it.
+        prompt = (
+            "TOOLS: ToolSearch for devices. ALSO: serena for symbol edits\n"
+            + SPEC_BLOCK
+        )
+        r = self._dispatch(prompt)
+        self.assertEqual(r.returncode, 0)
+        self.assertEqual(r.stdout.strip(), "", r.stdout)
+
+    def test_xd_device_mention_counts_as_nav_token(self):
+        prompt = (
+            "TOOLS: ToolSearch loads the devices; write args to "
+            "xd://mcp__lean_ctx_ctx_read\n" + SPEC_BLOCK
+        )
+        r = self._dispatch(prompt)
+        self.assertEqual(r.stdout.strip(), "", r.stdout)
+
+    def test_ctx_prefix_token_counts_as_nav_token(self):
+        prompt = "TOOLS: ToolSearch then run ctx_glob over the tree\n" + SPEC_BLOCK
+        r = self._dispatch(prompt)
+        self.assertEqual(r.stdout.strip(), "", r.stdout)
+
+    def test_empty_tools_block_is_still_denied(self):
+        r = self._dispatch("TOOLS:\n" + SPEC_BLOCK)
+        self.assertEqual(r.returncode, 0)
+        self.assertIn('"permissionDecision": "deny"', r.stdout)
+
+
+class SpecAdvisoryFirstOffenseTest(unittest.TestCase):
+    """F11: the FIRST spec-requirement offense per session is advisory (200 +
+    additionalContext, the dispatch proceeds); the second offense denies."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.root = os.path.join(self.tmp, "repo")
+        os.makedirs(os.path.join(self.root, "docs"))
+        self.env = dict(os.environ, ATLAS_DB=os.path.join(self.tmp, "atlas.db"))
+        os.environ.setdefault("ATLAS_CHANNELS", "off")
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db
+
+        conn = atlas_db.connect(self.env["ATLAS_DB"])
+        atlas_db.init(conn)
+        pid = atlas_db.register_project(conn, self.root)
+        atlas_db.start_run(conn, pid, "sess-1")
+        atlas_db.mark_orchestrating(conn, "sess-1")
+        conn.close()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _dispatch(self):
+        return run_hook(
+            {
+                "session_id": "sess-1",
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Agent",
+                "cwd": self.root,
+                "tool_input": _named(
+                    {
+                        "subagent_type": "atlas:implementer",
+                        "prompt": TOOLS_BLOCK + "GOAL: fix the auth bug.\n",
+                    }
+                ),
+            },
+            self.env,
+        )
+
+    def test_first_offense_is_advisory_and_proceeds(self):
+        r = self._dispatch()
+        self.assertEqual(r.returncode, 0)
+        hso = json.loads(r.stdout)["hookSpecificOutput"]
+        self.assertNotIn("permissionDecision", hso)
+        self.assertIn("ADVISORY", hso["additionalContext"])
+        self.assertIn("DELIVERABLE:", hso["additionalContext"])
+        # The offense was recorded: the marker directory is populated.
+        markers = os.listdir(os.path.join(self.root, ".atlas", ".run", "spec_denies"))
+        self.assertEqual(len(markers), 1)
+
+    def test_second_offense_denies(self):
+        self._dispatch()
+        r = self._dispatch()
+        hso = json.loads(r.stdout)["hookSpecificOutput"]
+        self.assertEqual(hso["permissionDecision"], "deny")
+        self.assertIn("unbounded", hso["permissionDecisionReason"])
+
+    def test_no_project_root_keeps_the_deny(self):
+        # Without a docs/ root there is nowhere to record the offense, so the
+        # dispatch keeps the old deny (fail closed to previous behavior).
+        payload = {
+            "session_id": "sess-1",
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Agent",
+            "cwd": self.tmp,  # no docs/ anywhere above
+            "tool_input": _named(
+                {
+                    "subagent_type": "atlas:implementer",
+                    "prompt": TOOLS_BLOCK + "GOAL: fix the auth bug.\n",
+                }
+            ),
+        }
+        r = run_hook(payload, self.env)
+        hso = json.loads(r.stdout)["hookSpecificOutput"]
+        self.assertEqual(hso["permissionDecision"], "deny")
+
+
+class VerifierWatchSlotTest(unittest.TestCase):
+    """F5: the verifier-verdict baseline is keyed per subagent, so parallel
+    verifiers in one session do not share (and mutually mask) one slot."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.root = Path(self.tmp)
+        (self.root / ".atlas" / ".run").mkdir(parents=True)
+        sys.path.insert(0, os.path.dirname(__file__))
+        import dispatch_tripwire as dt
+
+        self.dt = dt
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _write_findings(self, n):
+        (self.root / ".atlas" / ".run" / "findings.json").write_text(
+            json.dumps([{"id": f"S{i}"} for i in range(n)])
+        )
+
+    def test_parallel_verifiers_get_separate_slots(self):
+        self._write_findings(1)
+        self.dt._stash_findings_count(self.root, "sess-v", "atlas:verifier|A")
+        # Verifier A writes its verdict; verifier B is stashed afterwards and
+        # must keep its own baseline, not clobber A's slot.
+        self._write_findings(2)
+        self.dt._stash_findings_count(self.root, "sess-v", "atlas:verifier|B")
+        state = json.loads(
+            (self.root / ".atlas" / ".run" / "verifier_watch.json").read_text()
+        )
+        self.assertEqual(state["session_id"], "sess-v")
+        self.assertEqual(
+            state["counts"], {"atlas:verifier|A": 1, "atlas:verifier|B": 2}
+        )
+        # A grew the file past its own baseline; B did not grow it past B's.
+        self.assertFalse(
+            self.dt._verdict_missing(self.root, "sess-v", "atlas:verifier|A")
+        )
+        self.assertTrue(
+            self.dt._verdict_missing(self.root, "sess-v", "atlas:verifier|B")
+        )
+
+    def test_other_session_state_is_ignored(self):
+        self._write_findings(1)
+        self.dt._stash_findings_count(self.root, "sess-a", "atlas:verifier|A")
+        self.assertFalse(
+            self.dt._verdict_missing(self.root, "sess-b", "atlas:verifier|A")
+        )
 
 
 if __name__ == "__main__":

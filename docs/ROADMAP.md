@@ -172,6 +172,23 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 
 ## Backlog
 
+### Deferred backlog: atlas 10.5.0 wave (added 2026-10-10)
+
+- Per-wave cost/token ledger + rollup (persona P2).
+- `atlas-release` changelog assembly from merged PRs (P6).
+- Sweep historical-duplicate detection + contributor reply kit (P6).
+- Signed audit-pack export + read-only connector profile across 12 connectors (P4).
+- Telemetry gaps 1-7 of findings.json mapping (friction_events, verifications, error_clusters, skill_usage, insights report, pattern_miner) (obs #26593).
+- Headless per-stage orchestration loop for `context_limit_exceeded`.
+- Worktree isolation: worktree live-dispatch gate exercise.
+- `hooks/todo_capture.py` dead-hook root cause (TodoWrite load failure).
+- Compound-packs follow-up audit.
+- Colony tmux transport live parity test.
+- Sprite dedupe ~2.5k lines.
+- `atlas_dashboard.py` monolith extraction.
+- Friction-event stream + findings dedupe (F15).
+- Review fleet mode + session handoff registry + onboard-team mode (P5).
+
 ### Follow-ups: atlas 10.4.3 harness parity and channel view (added 2026-10-09)
 
 Done 2026-10-09 (source tree, see `plugins/atlas/CHANGELOG.md`): omp Command Center settings (`applyAtlasStoreEnv`), live omp channel widget (`omp/channel-view.ts`), doctor `install-content`/`omp-content` drift (`check_content_drift`), omp model-role fallbacks (`ATLAS_TIER_DEFAULTS`), `${user_config.*}` on omp (`mcp/_env/load.*`). Not live until committed, pushed and updated in both harnesses.
