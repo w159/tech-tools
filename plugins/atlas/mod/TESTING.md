@@ -17,6 +17,33 @@ From the repo root. This loads the plugin the way the engine does and runs each
 test file; it exercises the mod (hooks, rendered trees, `Client` modules), not a
 surface's paint.
 
+## Measured state (2026-10-10)
+
+Full run from the repo root:
+
+```sh
+claude plugin test plugins/atlas
+```
+
+Expectation is two-tier:
+
+- **Mod lines must be fully green.** All 16 mod test files load and pass —
+  208 pass / 0 fail (includes `mod/sprites/sprites.test.ts`, which injects
+  `memFs` from `mod/test_helpers.ts` instead of importing `node:fs`, which the
+  host forbids).
+- **Colony/omp residuals are expected failures of the walk.** The full plugin
+  walk reports 377 tests / 185 files, 208 pass / 169 fail; every failure is a
+  `plugins/atlas/colony/**` or `plugins/atlas/omp/**` file importing
+  `bun:test`, which the mod test host forbids. Those suites stay on
+  `bun test` and are not mod regressions.
+
+Host facts: `claude plugin test [dir]` requires a plugin directory whose
+`hooks/hooks.json` names a module (`claude plugin test mod` fails with "no
+hooks module to load"; the single-file form is unsupported, and there is no
+exclude/config flag in `--help`); discovery walks the whole plugin tree at any
+nesting depth, independent of cwd. A mod test file may import only its own
+relative files plus `claude-code` / `claude-code/testing`.
+
 ## Helpers (`mod/test_helpers.ts`)
 
 | Export | What it is |

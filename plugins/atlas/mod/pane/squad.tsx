@@ -72,6 +72,7 @@ export default function Squad(props: SquadProps, surface: ClientSurface<SquadSta
       const s = surface.state as SquadState;
       surface.setState({ tick: s.tick, ptrY: e.type === 'leave' ? null : e.y });
     });
+    surface.setState({ tick: 0, ptrY: null }); // seed once: the tick timer reads state
   }
   const { tick, ptrY } = surface.state ?? { tick: 0, ptrY: null };
 

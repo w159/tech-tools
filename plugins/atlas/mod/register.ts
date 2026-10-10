@@ -8,6 +8,7 @@
 import type { EngineInterface, On, PluginOptions } from 'claude-code';
 import { SnapshotBuilder } from './snapshot';
 import type { AtlasSnapshot, FsLike, PhaseId, SquadAgent } from './contract';
+import { completeProps } from './props';
 import { PHASES, intentToArgv } from './intents';
 import { registerRouting, registerHeaderDrift, registerPromptReinforce } from './routing';
 import { registerRestyle } from './restyle';
@@ -73,9 +74,9 @@ function headerPhaseOf(answer: string): PhaseId | null {
 function clientPropsFor(module: string): Record<string, unknown> {
 	if (snapshot === null) return {};
 	if (module === BAND_MODULE) {
-		return { snapshot, columns: bandGeom.columns, maxRows: bandGeom.maxRows };
+		return completeProps({ snapshot, columns: bandGeom.columns, maxRows: bandGeom.maxRows });
 	}
-	return { snapshot, columns: paneGeom.columns, rows: paneGeom.rows };
+	return completeProps({ snapshot, columns: paneGeom.columns, rows: paneGeom.rows });
 }
 
 /** Track a spawned atlas persona as a live task agent (capped). */
@@ -228,7 +229,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			await builder.init(e.cwd, { ATLAS_PROJECT_ROOT: envRoot }, sessionId, folderOf(e.cwd), await gitBranch($, e.cwd));
 			await rebuild($);
 			if (interactive) {
-				await $.command.register({ name: 'atlas', description: 'Open the Atlas command center', argumentHint: '[colony|channel|board|squad|collab]' });
+				await $.command.register({ name: 'atlas-cc', description: 'Open the Atlas command center', argumentHint: '[colony|channel|board|squad|collab]' });
 				await $.command.register({ name: 'atlas-say', description: 'Post a note to the lead channel', argumentHint: '<message>' });
 				await $.command.register({ name: 'atlas-todo', description: 'Add a todo to the board', argumentHint: '<text>' });
 				await $.command.register({ name: 'atlas-sprites', description: 'Open the sprite gallery pane' });
@@ -283,7 +284,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		if (!modOn || snapshot === null || !interactive || e.surface !== 'terminal') return next(e);
 		bandGeom = { columns: e.props.bodyColumns, maxRows: e.props.maxRows };
 		const { Client } = $.ui.resolve(e);
-		return Client({ key: BAND_KEY, module: './band.tsx', props: { snapshot, columns: e.props.bodyColumns, maxRows: e.props.maxRows } });
+		return Client({ key: BAND_KEY, module: './band.tsx', props: completeProps({ snapshot, columns: e.props.bodyColumns, maxRows: e.props.maxRows }) });
 	});
 
 	// The docked command-center pane and the sprites gallery pane.
@@ -292,10 +293,10 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		paneGeom = { columns: e.props.bodyColumns, rows: e.props.scroll.bodyRows };
 		const { Client } = $.ui.resolve(e);
 		if (e.requestId === SPRITES_PANE_ID) {
-			return Client({ key: SPRITES_KEY, module: './pane/sprites.tsx', props: { columns: e.props.bodyColumns, rows: e.props.scroll.bodyRows } });
+			return Client({ key: SPRITES_KEY, module: './pane/sprites.tsx', props: completeProps({ columns: e.props.bodyColumns, rows: e.props.scroll.bodyRows }) });
 		}
 		if (e.requestId !== PANE_ID) return next(e);
-		const props = { snapshot, columns: e.props.bodyColumns, rows: e.props.scroll.bodyRows };
+		const props = completeProps({ snapshot, columns: e.props.bodyColumns, rows: e.props.scroll.bodyRows });
 		// module must be a string literal in source: the host reads it off the tree.
 		switch (tab) {
 			case 'channel':
@@ -350,8 +351,8 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		}
 	});
 
-	// /atlas [tab] — open (or retitle to) the command center.
-	on('command.run', { command: 'atlas' }, async ($, e) => {
+	// /atlas-cc [tab] — open (or retitle to) the command center.
+	on('command.run', { command: 'atlas-cc' }, async ($, e) => {
 		const arg = e.args.trim().toLowerCase();
 		if (arg === 'colony' || arg === 'channel' || arg === 'board' || arg === 'squad' || arg === 'collab') tab = arg;
 		await $.ui.open({ id: PANE_ID, title: 'Atlas' });

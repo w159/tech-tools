@@ -187,7 +187,7 @@ export function durationTree(snap: AtlasSnapshot, props: TurnDurationPropsLike, 
 
 // ---- PromptHint: contextual chords + the next contract step as the box's dim suggestion ----
 
-export const HINT_TAIL = `ctrl+x tab Command Center ${glyph.dot} /atlas-say @name …`
+export const HINT_TAIL = `/atlas-cc Command Center ${glyph.dot} /atlas-say @name …`
 
 /** The next contract step to propose after a turn (`check: impl-auth …`), or null when none. */
 export function nextStepText(snap: AtlasSnapshot): string | null {

@@ -39,6 +39,7 @@ export default function Collab(props: CollabProps, surface: ClientSurface<Collab
       const hit = feedGeo.find((z) => e.y === z.y && e.x >= z.x0);
       if (hit) surface.setState({ tick: s.tick, text: `@${hit.from} `, replyTo: hit.from });
     });
+    surface.setState({ tick: 0, text: '', replyTo: null }); // seed once: the tick timer reads state
   }
   const st = surface.state ?? { tick: 0, text: '', replyTo: null };
 

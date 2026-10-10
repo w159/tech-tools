@@ -74,12 +74,18 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
   now a turn.step generator; `collab.tsx:107` stray key prop dropped;
   `colony.tsx:922` Colony converted to the plain default-exported-function
   pattern); `claude plugin validate --json plugins/atlas` succeeds with 0
-  errors (notify wired with a `reason: 'answer'` matcher beside routing's
+  errors and 0 warnings (after the dead `$.atlasMod` contract removal:
+  `plugins/atlas/types/index.d.ts` deleted, the `types` key dropped from
+  `plugin.json`; notify wired with a `reason: 'answer'` matcher beside routing's
   un-matchered drift counter; `hooks.json` module path corrected to
   `../mod/register.ts`; the entrypoint no longer binds the `$.fs` noun; all
-  `Client` mounts are literal module paths); unit suites green: routing
-  23/23, data/todos 13/0, register 4/4, sprites 46/46, restyle 13/0 — full
-  mod suite 206 pass / 0 fail across 16 files. Remaining before 11.0.0: only
+  `Client` mounts are literal module paths); on the plugin test host
+  (`claude plugin test plugins/atlas`) all 16 mod test files load and pass —
+  208 pass / 0 fail (full plugin walk: 377 tests / 185 files, 208 pass /
+  169 fail; every failure is a `plugins/atlas/colony/**` or
+  `plugins/atlas/omp/**` file importing `bun:test`, which the host forbids —
+  documented expected residual, those suites stay on `bun test`).
+  Remaining before 11.0.0: only
   the live-session stage-0 observation (animated `Client` band in iTerm2 and
   herdr, per-subagent `turn.step` effort); the entrypoint at
   `plugins/atlas/mod/register.ts` (~399 lines) is written, tested and
@@ -172,7 +178,7 @@ Done 2026-10-09 (source tree, see `plugins/atlas/CHANGELOG.md`): omp Command Cen
 
 - Migrate vendor credentials out of `pluginConfigs` into `~/.config/atlas/atlas.env` (chmod 600); regulated credentials under GLBA / FTC Safeguards. The loaders' `pluginConfigs` read is a fallback only.
 - `atlas_doctor.py` `apply_fixes` still copies into the Claude plugin cache on a version mismatch.
-- Claude Code has no equivalent of the omp terminal channel view. The atlas Claude Code mod (Colony, IRC channel, TODO board, persona sprites, contract track) is now implemented in the source tree: `plugins/atlas/mod/`, wired by the `modules` entry in `hooks/hooks.json:192`, documented in `docs/atlas-mod.md` (tracked as in progress above). It ships as **atlas 11.0.0** only after its stage 0 live checks prove mods actually run here (animated `Client` band in iTerm2 and herdr, per-subagent `turn.step` effort). If they fail, no 11.0.0.
+- Claude Code has no equivalent of the omp terminal channel view. The atlas Claude Code mod (Colony, IRC channel, TODO board, persona sprites, contract track) is now implemented in the source tree: `plugins/atlas/mod/`, wired by the `modules` entry in `hooks/hooks.json:192`, documented in `docs/atlas-mod.md` (tracked as in progress above). Gate-verified in source 2026-10-10: `claude plugin test plugins/atlas` loads and passes all 16 mod test files (208 pass / 0 fail; the 169 remaining failures of the full walk are `plugins/atlas/colony/**` and `plugins/atlas/omp/**` bun:test files, an expected residual), `claude plugin validate --json plugins/atlas` returns success with 0 errors and 0 warnings, and `bunx tsc --noEmit -p tsconfig.json` exits 0 over 58 mod files. It ships as **atlas 11.0.0** only after its stage 0 live checks (animated `Client` band in iTerm2 and herdr, per-subagent `turn.step` effort). If they fail, no 11.0.0.
 - Unaddressed P1s from the review: `atlas_mux` report truncation at 600 chars; herdr spawn lock; transport re-decision; selffix metric verification; `dispatch_tripwire.py` `_CLAUSE_START` ReDoS; `completion_gate.py` test-runner regex.
 - fallow at 10.4.3: the real complexity findings and the introduced duplicate were refactored. The CRAP-only findings (cyclomatic < 12, cognitive <= 15, no coverage data) are accepted in `fallow-baselines/health.json`. Adding dashboard JS coverage would retire them.
 
