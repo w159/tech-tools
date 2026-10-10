@@ -5277,5 +5277,60 @@
     "status": "verified",
     "verified_at": "2026-10-10T09:21:45+00:00",
     "verified_by": "mods-docs-truth2 + mods-docs-live + mods-docs-norm"
+  },
+  {
+    "id": "MODS-TEST",
+    "surface": "plugins/atlas mod test gate",
+    "category": "mods",
+    "severity": "medium",
+    "title": "supersede: mod gate at HEAD is 17 files 215/0 mod tier, walk 384/186 with 169 colony-omp bun@test residual; props.test.ts guards the live-failure class",
+    "evidence": [
+      "lead run at HEAD: 215 pass / 169 fail; Ran 384 tests across 186 files [2.31s]; TSC_EXIT=0 (props.test.ts landed)",
+      "new mod/props.test.ts: 7/7 pass; 17 mod files load, zero (fail) mod/ lines (mods-props-test)"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin test plugins/atlas (repo root; TESTING.md measured-state carries the two-tier expectation)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-10T09:43:08+00:00",
+    "verified_by": "mods-props-test + mods-docs-final + lead run"
+  },
+  {
+    "id": "MODS-LIVE",
+    "surface": "plugins/atlas mod in a live Claude Code session",
+    "category": "mods",
+    "severity": "medium",
+    "title": "evidence correction (prior entry shell-expanded 0.00USD as 0.00): band capture line re-quoted verbatim",
+    "evidence": [
+      "band row 3 verbatim: squad conveyor selffix glyph, mail 0, ctx gauge 0 percent, 0 tok, 0.00 usd (the earlier stamp wrongly rendered 0.00 as a shell expansion /bin/zsh)",
+      "unchanged verdict: band renders, zero ui.render refused; /atlas-cc opens all five tabs idle and mid-turn (mods-pane-proof) with zero Client errors"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude --plugin-dir plugins/atlas (interactive; /atlas-cc opens the Command Center)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-10T09:43:08+00:00",
+    "verified_by": "lead correction"
+  },
+  {
+    "id": "DOCSCUR-DENY",
+    "surface": "plugins/atlas dispatch model-override gate (omp)",
+    "category": "friction",
+    "severity": "medium",
+    "title": "omp dispatch gate falsely denies docs-curator as a model override the caller never passed",
+    "evidence": [
+      "deny text: DENY - this Task dispatch to docs-curator overrides model with anthropic/claude-sonnet-5. The agent definition pins model: @atlas-worker",
+      "caller passed no model param on the task dispatch; suspected same class as the 10.4.3 fix where the omp model-override gate must accept frontmatter alias expansion (sonnet -> anthropic/claude-sonnet-5); docs-curator is the remaining role that denies",
+      "workaround used this session: dispatch as plain task agent; product fix belongs in agents/docs-curator.md pin or the tripwire alias handling"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "open",
+    "verified_at": "2026-10-10T09:43:08+00:00",
+    "verified_by": "lead, from an observed session deny"
   }
 ]
