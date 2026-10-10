@@ -5181,5 +5181,101 @@
     "status": "verified",
     "verified_at": "2026-10-10T07:32:48+00:00",
     "verified_by": "lead-01a122"
+  },
+  {
+    "id": "MODS-TSC",
+    "surface": "plugins/atlas tsconfig typecheck",
+    "category": "mods",
+    "severity": "medium",
+    "title": "mod tree fully covered by plugin tsconfig: tsc exit 0, 58 mod files in project",
+    "evidence": [
+      "plugins/atlas/tsconfig.json include [hooks,types,tests,mod]",
+      "bunx tsc --noEmit --listFiles | grep -c=/mod/ = 58",
+      "injected board.tsx error caught by tsc then reverted"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && bunx tsc --noEmit -p tsconfig.json",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-10T08:49:18+00:00",
+    "verified_by": "mods-tsc-cover (implementer) + lead stamp"
+  },
+  {
+    "id": "MODS-WIRE",
+    "surface": "plugins/atlas manifest + types contract",
+    "category": "mods",
+    "severity": "medium",
+    "title": "dead $.atlasMod engine contract removed; validate clean (0 errors/0 warnings); mod wiring type-checks",
+    "evidence": [
+      "explorer verdict: zero references to atlasMod in mod/** hooks/**; ui.render Client mounting at register.ts:282-310",
+      "validate --json: success=true errors=[] warnings=[] atlasMod warning gone",
+      "tsc exit 0 after types/index.d.ts deletion + plugin.json types key removal"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin validate --json plugins/atlas",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-10T08:51:23+00:00",
+    "verified_by": "mods-atlasmod-truth (explorer) + mods-types-clean (implementer) + lead"
+  },
+  {
+    "id": "MODS-TEST",
+    "surface": "plugins/atlas mod test gate",
+    "category": "mods",
+    "severity": "medium",
+    "title": "mod test gate two-tier truth: 16/16 mod files load on plugin test host, 208 pass / 0 fail; walk residual 169 colony/omp bun:test documented",
+    "evidence": [
+      "lead run: 208 pass / 169 fail; Ran 377 tests across 185 files [2.39s]",
+      "zero (fail) mod/ lines; all 16 mod test files load (mods-hint-fix grep, restyle.test.tsx green incl. sprites memFs)",
+      "tsc exit 0 over 58 mod files (include = hooks,types,tests,mod)"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin test plugins/atlas  (repo root; TESTING.md measured-state section documents the two-tier expectation)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-10T09:21:45+00:00",
+    "verified_by": "mods-test-fix + mods-pane-proof + mods-hint-fix + lead run"
+  },
+  {
+    "id": "MODS-LIVE",
+    "surface": "plugins/atlas mod in a live Claude Code session",
+    "category": "mods",
+    "severity": "medium",
+    "title": "mod renders live in Claude Code 2.1.296: band, spinner restyle, and /atlas-cc Command Center with all five tabs",
+    "evidence": [
+      "tmux capture, fresh claude --plugin-dir plugins/atlas: '\u2b22ATLAS \u27e6RESEARCH 0/6\u27e7\u2504\u2504\u25c7 theory\u2504\u2504\u25c7 test\u2504\u2504\u25c7 validate\u2504\u2504\u25c7 implement\u2504\u2504\u25c7 verify\u2504\u2504\u25c7 done' + starfield + '\u25e2 selffix\u25b6 \u27090 ctx 0% 0 tok /bin/zsh.00', zero refused lines (lead capture)",
+      "spinner restyle live: '\u25d1 \u27e6research 0/6\u27e7 \u25b1\u25b1\u25b1\u25b1\u25b1 \u00b7 selffix' during a turn (lead capture; wizard incident then cancelled)",
+      "atlas-cc opens Colony/Channel/Board/Squad/Collab idle and mid-turn, zero Client errors (mods-pane-proof pf2-cc captures)",
+      "root cause of earlier refusal: undefined Client props from channels.parseNote / herdr.mergeSquad; fixed by mod/props.ts completeProps through every mount (mods-band-propfix)"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude --plugin-dir plugins/atlas (interactive; /atlas-cc opens the Command Center)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-10T09:21:45+00:00",
+    "verified_by": "mods-band-propfix + mods-pane-proof + lead captures"
+  },
+  {
+    "id": "MODS-DOCS",
+    "surface": "docs + plugin changelog",
+    "category": "mods",
+    "severity": "medium",
+    "title": "mods docs reconciled to measured truth: TESTING.md two-tier state, CHANGELOG/ROADMAP/atlas-mod/parity numbers 208/169, plans header implemented",
+    "evidence": [
+      "grep '207 pass|170 fail|/ 170' over the five targets = 0 hits after sweep",
+      "props.ts wording de-ambiguated in CHANGELOG + docs/atlas-mod.md; plans doc 'design only' header replaced with implemented+verified",
+      "known remainder: two dated plan docs (2026-10-10-claude-code-native-parity, 2026-10-09-atlas-mod body) keep historical walk phrasing"
+    ],
+    "doc_refs": [],
+    "reproduction": "grep -rnE '207 pass|170 fail' docs plugins/atlas/mod/TESTING.md plugins/atlas/CHANGELOG.md",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-10T09:21:45+00:00",
+    "verified_by": "mods-docs-truth2 + mods-docs-live + mods-docs-norm"
   }
 ]

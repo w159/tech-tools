@@ -232,7 +232,7 @@
     "plugins/atlas/colony/herdr-web-ui/scripts/prompt-dock-demo-regression.ts:752-755|plugins/atlas/colony/herdr-web-ui/scripts/prompt-dock-demo-regression.ts:757-761",
     "mcp_servers/auvik-mcp/src/tools/alerts.ts:23-50|mcp_servers/auvik-mcp/src/tools/entities.ts:32-55",
     "plugins/atlas/scripts/dashboard_ui/js/pages/improve.js:116-131|plugins/atlas/scripts/dashboard_ui/js/pages/improve.js:501-509",
-    "plugins/atlas/mod/pane/collab.tsx:78-101|plugins/atlas/mod/pane/squad.tsx:146-187",
+    "plugins/atlas/mod/pane/collab.tsx:79-102|plugins/atlas/mod/pane/squad.tsx:147-188",
     "mcp_servers/paylocity-mcp/src/domains/employees.ts:92-133|mcp_servers/paylocity-mcp/src/domains/legacy_employees.ts:66-96",
     "plugins/atlas/colony/herdr-web-ui/scripts/droplet-demo-regression.ts:55-61|plugins/atlas/colony/herdr-web-ui/scripts/keyboard-viewport-regression.ts:94-98",
     "plugins/atlas/colony/herdr-web-ui/scripts/push-settings-regression.ts:44-48|plugins/atlas/colony/herdr-web-ui/scripts/usage-regression.ts:42-46",

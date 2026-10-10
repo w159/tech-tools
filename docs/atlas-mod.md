@@ -1,6 +1,6 @@
 # Atlas mod (Claude Code)
 
-Last verified against the source tree on 2026-10-09 (the unreleased atlas 11.0.0 line; installed releases before it have no mod): `bunx tsc --noEmit -p tsconfig.json` exits 0 and the mod test suite passes 211 tests with 0 failures across 16 files. Paths are relative to `plugins/atlas/` unless they start with `docs/`.
+Last verified against the source tree on 2026-10-10 (the unreleased atlas 11.0.0 line; installed releases before it have no mod): `claude plugin test plugins/atlas` loads and passes all 16 mod test files — 208 pass / 0 fail (the full plugin walk reports 377 tests / 185 files, 208 pass / 169 fail; every failure is a `plugins/atlas/colony/**` or `plugins/atlas/omp/**` file importing `bun:test`, which the plugin test host forbids — documented expected residual, those suites stay on `bun test`); `claude plugin validate --json plugins/atlas` returns success with 0 errors and 0 warnings; `bunx tsc --noEmit -p tsconfig.json` (include widened to `[hooks, types, tests, mod]`) exits 0 over 58 mod files. Live render is verified as of 2026-10-10: a tmux capture of a fresh `claude --plugin-dir plugins/atlas` session (Claude Code 2.1.296) shows the three-row AbovePrompt band with zero `ui.render … refused` lines. The earlier refusals came from `undefined` values reaching the Client props through `channels.ts` `parseNote` and `herdr.ts` `mergeSquad`; the fix is a `completeProps` deep undefined-strip sanitizer in `plugins/atlas/mod/props.ts` (`contract.ts` is chmod-locked read-only and so cannot host the helper), routed through every Client mount and every `ui.message` answer in `register.ts`. Paths are relative to `plugins/atlas/` unless they start with `docs/`.
 
 The Atlas mod is an in-process UI plugin module for Claude Code mods (Claude Code 2.1.287+). It brings the Colony, the IRC channel, the durable TODO board, the persona roster and the operating-contract progress into the Claude Code terminal, with Atlas branding (accent teal `#2fbd9f`, the hex-cube mark) and a pixel character per persona. It is the Claude-side twin of the omp channel widget (`omp/channel-view.ts`, `ATLAS_CHANNELS=off`); omp is a separate harness and stays as it is. The browser Command Center (`docs/atlas-workboard.md`) remains the browser front door; the mod is the in-terminal view and links out to the browser for terminals and deep control.
 
@@ -26,7 +26,7 @@ An `AbovePrompt` `Client` surface, three rows, redrawn at 10 fps while Claude is
 
 The band's phase comes from the last header in `turn.complete` (matched with the contract's `headerFirstLinePattern`), else the session's first `in_progress` item, else `research`; counts come from the session's todo slice, refiltered only when `todos.json`'s mtime changes. The band stays right when a reply forgets its header. Fewer than 3 available rows collapse to the track; non-terminal surfaces draw the track as an interactive `Svg`, or one text line where `Svg` is missing.
 
-### Command Center (`/atlas`)
+### Command Center (`/atlas-cc`)
 
 The docked pane (the mod opens it at 144 columns unasked, 110 once the user has opened it before). An 8-row `Raster` logo plays once per session on first open. Five full-height tabs:
 
@@ -146,7 +146,7 @@ plugins/atlas/mod/
 |   |-- channels.ts  #   channels.json registry and board/<owner>.jsonl notes (byte cursor)
 |   |-- personas.ts  #   agents/*.md frontmatter
 |   `-- herdr.ts     #   atlas_herdr.py status poll (5 s, Colony tab visible only)
-|-- pane/            # the /atlas Command Center tabs (Client surfaces)
+|-- pane/            # the /atlas-cc Command Center tabs (Client surfaces)
 |   |-- colony.tsx   #   diorama
 |   |-- channel.tsx  #   IRC client
 |   |-- board.tsx    #   kanban
