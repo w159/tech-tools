@@ -111,7 +111,11 @@ CONTRACT_GATE_MARKER_DIR (tmp dir `atlas-contract-gate`, overridable with
 ATLAS_CONTRACT_GATE_DIR) records the block, and a marked condition counts as
 satisfied. They are evaluated only for orchestrating sessions, never for a
 sidechain, and not while a dispatch is in flight. Conditions (a)-(m) re-block
-on every Stop until they hold.
+on every Stop until they hold. So a stuck run cannot wedge, the loop cap
+allows the Stop after BLOCK_LOOP_LIMIT identical consecutive blocks
+(default 3; tunable with ATLAS_GATE_BLOCK_LOOP, clamped to 1-7 -- the
+native Stop-hook block cap is 8, so this breaker must fire first) and
+records one gate_block_loop friction row.
 
 (a), (b), (f), and (g) all share one signal: whether THIS RUN shipped
 non-docs code (_nondocs_changed on the run-write signal from atlas_db). A
@@ -295,9 +299,9 @@ def _check_roadmap_reconciled(root: Path) -> bool:
             return True  # condition (d) handles missing ROADMAP
         content = roadmap.read_text(encoding="utf-8").lower()
         # Check for common patterns: "- [done]", "status: done", "| done |"
-        if "- [done]" in content or "status: done" in content or "| done |" in content:
-            return False
-        return True
+        return not (
+            "- [done]" in content or "status: done" in content or "| done |" in content
+        )
     except (OSError, UnicodeDecodeError):
         return True  # can't read → fail open
 
@@ -1210,14 +1214,33 @@ def _gate_block_snippet(failed: list) -> str:
     `conditions: <letters>` is the stable machine-readable part (tests and
     dashboards key on it); the parenthesised names are the reason. Unknown
     letters are kept verbatim rather than dropped."""
-    names = ", ".join(_CONDITION_NAMES.get(letter, letter) for letter in failed)
+    names = ", ".join(
+        _CONDITION_NAMES.get(letter, letter) or letter for letter in failed
+    )
     return "conditions: " + ",".join(failed) + " (" + names + ")"
 
 
 # Identical consecutive blocks tolerated per session. The gate re-blocks every
 # Stop by design, but an unchanged condition set 4+ times in a row is a loop the
 # model cannot escape (Stop bursts ~13s apart tripped the circuit breaker).
+# Tunable via ATLAS_GATE_BLOCK_LOOP (integer, clamped to 1-7: the native
+# Stop-hook block cap is 8, so the gate's own breaker must fire first).
 BLOCK_LOOP_LIMIT = 3
+
+
+def _block_loop_limit() -> int:
+    """The effective loop cap: ATLAS_GATE_BLOCK_LOOP clamped to 1-7, else the
+    BLOCK_LOOP_LIMIT default of 3 (read when the hook process loads its
+    config). A non-integer or empty value falls back to the default; the clamp
+    keeps the cap below Claude Code's native 8-consecutive-block Stop cap so
+    the gate's breaker, not the double gate, allows the Stop. Never raises."""
+    raw = os.environ.get("ATLAS_GATE_BLOCK_LOOP")
+    if raw is None:
+        return BLOCK_LOOP_LIMIT
+    try:
+        return max(1, min(7, int(raw.strip())))
+    except ValueError:
+        return BLOCK_LOOP_LIMIT
 
 
 def _block_loop_exhausted(session_id: str, failed: list) -> bool:
@@ -1227,24 +1250,29 @@ def _block_loop_exhausted(session_id: str, failed: list) -> bool:
     raises; an unwritable marker means no cap, the lesser failure."""
     if not session_id:
         return False
-    sig = ",".join(failed)
-    state_dir = atlas_hook_guard._state_dir()
-    path = os.path.join(
-        state_dir, "gate-loop-" + re.sub(r"[^A-Za-z0-9_.-]", "_", session_id)
-    )
+    try:
+        sig = ",".join(failed)
+        state_dir = atlas_hook_guard._state_dir()
+        path = os.path.join(
+            state_dir, "gate-loop-" + re.sub(r"[^A-Za-z0-9_.-]", "_", session_id)
+        )
+    except Exception:
+        return False
     count = 1
-    with contextlib.suppress(OSError, ValueError):
+    try:
         with open(path, encoding="utf-8") as fh:
             last_sig, _, n = fh.read().strip().rpartition(" ")
         if last_sig == sig:
             count = int(n) + 1
+    except (OSError, ValueError):
+        count = 1
     try:
         os.makedirs(state_dir, exist_ok=True)
         with open(path, "w", encoding="utf-8") as fh:
             fh.write(f"{sig} {count}")
     except OSError:
         return False
-    if count <= BLOCK_LOOP_LIMIT:
+    if count <= _block_loop_limit():
         return False
     conn = None
     try:

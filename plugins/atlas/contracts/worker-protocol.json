@@ -10,6 +10,8 @@
     "textFields": ["STATUS", "STEPS", "FILES_CHANGED", "EVIDENCE", "DELIVERABLE", "NEXT"],
     "statusValues": ["DONE", "FAILED", "BLOCKED"],
     "firstLinePattern": "^STATUS: (DONE|FAILED|BLOCKED)\\s*$",
+    "nativeWake": "Optional, env-gated: when the lead exports ATLAS_LEAD_AGENT (its lead session name), after posting the board note also send the same report text via SendMessage (to: that name) as a best-effort native wake. The board note stays the transport of record; do not retry sends; skip entirely when the var is unset or the session is not listed.",
+    "taskMirror": "Optional, env-gated: when the lead exports ATLAS_TASKS_MIRROR (truthy: 1/true/on), and a TaskCreate tool is available, mirror the board item you claim — TaskCreate with subject \"[<phase>] <content>\" at claim time, marked completed when you post your completion. The atlas board remains the source of truth; do not duplicate status updates beyond the one completion; skip entirely when the var is unset or off.",
     "jsonSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -40,6 +42,9 @@
   "channels": {
     "model": "Main channel per project: <cwd-basename>@<branch> (detached HEAD: @<short-sha>; non-git: basename). A lead that dispatches subagents gets the subchannel <main>/<lead-name> (opened at its first dispatch); its subagents are members with parent=lead. Notes carry a channel; to=all reaches the channel's members only, never another project/branch or another lead's subchannel. The lead is a member of its subchannel and of main and reads its members' todo board with `atlas_todo.py channel-board <channel>`.",
     "worker": "A dispatched worker finds a CHANNEL: block in its brief with its exact post and inbox commands. Post with `atlas_todo.py note --channel <ch> --owner <you> --to <sibling|lead|all>`; read with `atlas_todo.py inbox --owner <you>` between steps where the PostToolUse inbox hook is not active (omp subagents: the hook resolves the agent id the bridge sends as agent_name, else run inbox yourself)."
+  },
+  "collab": {
+    "rules": "Path claims: before editing any file run `atlas_todo.py claim-paths --channel <ch> --owner <you> --paths <file,dir,...>` for the files you will touch (run `conflicts --owner <you> --paths ...` first). On conflict a kind:'conflict' note is posted to the owning sibling: message them and wait or pick other work — never edit a path another worker holds. Release with `release-paths` when done. Post `note --kind handoff --item <id> --to <consumer> \"<result>\"` when finishing a slice another worker consumes. Post `note --kind blocked --to <lead|peer> \"<what you need>\"` instead of idling. Never skip tests or verification because a peer said they passed. Only the lead declares work done."
   },
   "switches": {
     "reportBlock": "ATLAS_GATE_REPORT",

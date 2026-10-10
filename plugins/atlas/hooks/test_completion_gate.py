@@ -3137,6 +3137,38 @@ class BlockLoopCapTest(unittest.TestCase):
             conn.close()
         self.assertEqual(len(rows), 1)
 
+    def test_env_override_moves_exhaustion_point(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        db = os.path.join(tmp, "atlas.db")
+        atlas_db.init(atlas_db.connect(db))
+        with mock.patch.dict(
+            os.environ,
+            {"ATLAS_DB": db, "ATLAS_HOOKSTATE_DIR": tmp, "ATLAS_GATE_BLOCK_LOOP": "5"},
+        ):
+            got = [
+                completion_gate._block_loop_exhausted("s-env", ["c"]) for _ in range(6)
+            ]
+        self.assertEqual(got, [False] * 5 + [True])
+
+    def test_invalid_env_values_fall_back_or_clamp(self):
+        # non-integer/empty -> default 3 (4th identical block allowed through);
+        # 9 clamps to 7 (8th exhausts, never reaching the native 8-block cap);
+        # 0 clamps to 1.
+        for raw, exhausted_at in (("abc", 4), ("", 4), ("9", 8), ("0", 2)):
+            with self.subTest(raw=raw):
+                tmp = tempfile.mkdtemp()
+                self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+                with mock.patch.dict(
+                    os.environ,
+                    {"ATLAS_HOOKSTATE_DIR": tmp, "ATLAS_GATE_BLOCK_LOOP": raw},
+                ):
+                    got = [
+                        completion_gate._block_loop_exhausted("s-raw", ["c"])
+                        for _ in range(exhausted_at)
+                    ]
+                self.assertEqual(got, [False] * (exhausted_at - 1) + [True])
+
 
 class ItemPhaseExtractionTest(unittest.TestCase):
     """The (o) phase carriers: the item's `phase` field wins, else the

@@ -7,7 +7,6 @@ _iso_sys.path.insert(
         _iso_os.path.dirname(_iso_os.path.abspath(__file__)), "..", "scripts"
     ),
 )
-import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import io
 import json
 import os
@@ -17,6 +16,8 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 from unittest.mock import patch
+
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -87,8 +88,8 @@ class RecallGateTest(unittest.TestCase):
             "hook_event_name": "PreToolUse",
             "tool_name": case["name"],
             "tool_input": case["input"],
-            "transcript_path": "/home/u/.claude/projects/p/%s.jsonl" % session_id,
-            "cwd": "/tmp/proj",
+            "transcript_path": f"/home/u/.claude/projects/p/{session_id}.jsonl",
+            "cwd": self.tmp,
         }
         payload.update(extra)
         return payload
@@ -99,7 +100,7 @@ class RecallGateTest(unittest.TestCase):
     def test_every_non_recall_call_is_denied_until_the_recall(self):
         self.assertTrue(CASES["block"])
         for i, case in enumerate(CASES["block"]):
-            sid = "block-%d" % i
+            sid = f"block-{i}"
             for attempt in range(
                 4
             ):  # denied on EVERY attempt, never fail-open after one
@@ -149,7 +150,7 @@ class RecallGateTest(unittest.TestCase):
             [(blk, {}, D), (tool_search, agent, A), (blk, {}, D)],
         ]
         for n, seq in enumerate(seqs):
-            sid = "seq-%d" % n
+            sid = f"seq-{n}"
             for step, (case, extra, want) in enumerate(seq):
                 _, out = _run_main(self._payload(case, session_id=sid, **extra))
                 self.assertEqual(_denied(out), want, (n, step, case["name"]))
@@ -229,8 +230,30 @@ class RecallGateTest(unittest.TestCase):
         self.assertTrue(_denied(_run_main(self._payload(case, session_id=sid))[1]))
         recall = CASES["satisfy"][0]
         self.assertEqual(_run_main(self._payload(recall, session_id=sid)), (0, ""))
-        self.assertEqual(self._markers(), ["recall-%s" % sid])
+        self.assertEqual(self._markers(), [f"recall-{sid}"])
         self.assertEqual(_run_main(self._payload(case, session_id=sid)), (0, ""))
+
+    def test_headless_bg_worker_sessions_are_never_denied(self):
+        """Worker sessions (mux/atlas_launch spawned; ATLAS_WORKER_NAME pinned)
+        never arm the recall gate: headless sessions cannot answer the
+        claude-mem MCP approval, same worker trust model as the 10.4.1
+        dispatch-tripwire exemption."""
+        self.assertTrue(CASES["block"])
+        case = CASES["block"][0]
+        for worker in ("alpha-1", "beta-2"):
+            sid = f"worker-{worker}"
+            with patch.dict(os.environ, {"ATLAS_WORKER_NAME": worker}):
+                self.assertEqual(
+                    _run_main(self._payload(case, session_id=sid)), (0, "")
+                )
+                self.assertEqual(self._markers(), [])
+
+    def test_blank_worker_name_is_not_a_worker(self):
+        """A blank ATLAS_WORKER_NAME is no worker: the gate still denies."""
+        case = CASES["block"][0]
+        with patch.dict(os.environ, {"ATLAS_WORKER_NAME": ""}):
+            code, out = _run_main(self._payload(case, session_id="blank-env"))
+        self.assertTrue(_denied(out))
 
     def test_reason_names_the_claude_mem_route_and_an_example(self):
         self.assertIn(CC_ROUTE, REASON)
@@ -240,7 +263,7 @@ class RecallGateTest(unittest.TestCase):
     def test_claude_mem_call_satisfies_silently_and_later_calls_pass(self):
         self.assertTrue(CASES["satisfy"])
         for i, case in enumerate(CASES["satisfy"]):
-            sid = "satisfy-%d" % i
+            sid = f"satisfy-{i}"
             self.assertEqual(
                 _run_main(self._payload(case, session_id=sid)), (0, ""), case["name"]
             )
@@ -265,7 +288,7 @@ class RecallGateTest(unittest.TestCase):
     def test_a_write_to_a_real_path_is_not_a_recall(self):
         case = {
             "name": "Write",
-            "input": {"file_path": "/tmp/xd://mcp__claude_mem.txt"},
+            "input": {"file_path": os.path.join(self.tmp, "xd://mcp__claude_mem.txt")},
         }
         code, out = _run_main(self._payload(case, session_id="realpath"))
         self.assertTrue(_denied(out))
@@ -273,7 +296,7 @@ class RecallGateTest(unittest.TestCase):
     def test_todo_is_exempt_and_leaves_the_gate_armed(self):
         self.assertTrue(CASES["exempt"])
         for i, case in enumerate(CASES["exempt"]):
-            sid = "exempt-%d" % i
+            sid = f"exempt-{i}"
             self.assertEqual(_run_main(self._payload(case, session_id=sid)), (0, ""))
             self.assertEqual(
                 self._markers(), [], "an exempt call must not consume the gate"
@@ -284,7 +307,7 @@ class RecallGateTest(unittest.TestCase):
     def test_toolsearch_passes_before_recall(self):
         """ToolSearch is how Claude Code loads the claude-mem tool: denying it deadlocks the gate."""
         for name in ("ToolSearch", "tool_search", "toolsearch"):
-            case = {"name": name, "input": {"query": "select:%s" % CC_ROUTE}}
+            case = {"name": name, "input": {"query": f"select:{CC_ROUTE}"}}
             self.assertEqual(_run_main(self._payload(case, session_id="ts")), (0, ""))
         self.assertEqual(self._markers(), [])
         self.assertTrue(
@@ -326,8 +349,9 @@ class RecallGateTest(unittest.TestCase):
             sub = self._payload(
                 case,
                 session_id="shared",
-                transcript_path="/home/u/.claude/projects/p/shared/subagents/agent-%d.jsonl"
-                % n,
+                transcript_path=(
+                    f"/home/u/.claude/projects/p/shared/subagents/agent-{n}.jsonl"
+                ),
             )
             self.assertEqual(_run_main(sub), (0, ""))
         self.assertEqual(_run_main(self._payload(case, session_id="shared")), (0, ""))
@@ -442,7 +466,7 @@ class RecallGateTest(unittest.TestCase):
             "hook_event_name": "PreToolUse",
             "tool_name": "Grep",
             "session_id": "scope-s1",
-            "cwd": "/tmp/x",
+            "cwd": self.tmp,
         }
         with patch.dict(os.environ, {"ATLAS_GATES": ""}):
             self.assertEqual(_run_main(payload), (0, ""))

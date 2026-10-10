@@ -7,6 +7,11 @@
   "entry": [
     "mcp_servers/_shared/__tests__/*.test.ts",
     "plugins/atlas/mcp/_env/load.mjs",
+    "plugins/atlas/mod/register.ts",
+    "plugins/atlas/mod/band.tsx",
+    "plugins/atlas/mod/pane/*.tsx",
+    "plugins/atlas/mod/**/*.test.ts",
+    "plugins/atlas/mod/**/*.test.tsx",
     "plugins/atlas/scripts/dashboard_ui/js/*.test.js",
     "plugins/atlas/scripts/dashboard_ui/js/pages/*.js",
     "plugins/atlas/omp/*.test.ts",

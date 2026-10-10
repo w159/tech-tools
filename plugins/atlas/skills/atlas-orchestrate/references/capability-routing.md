@@ -24,14 +24,14 @@ Pass the chosen capabilities into each subagent's spec as directives, **and** te
 | Task signal | Agent type | Skill(s) | MCP / tools | Model |
 |---|---|---|---|---|
 | Understand a codebase / map a feature | `atlas:explorer`, `codebase-explorer`*, `Explore`* | `smart-explore`, `learn-codebase`, `graphify`, `pathfinder` | `serena`, LSP, `context-mode` | sonnet |
-| Plan a feature / multi-step task | `Plan`* | `superpowers:brainstorming` -> `make-plan` -> `writing-plans` | `sequentialthinking` | opus/sonnet |
+| Plan a feature / multi-step task | `Plan`* | `superpowers:brainstorming` -> `make-plan` -> `writing-plans` | `sequentialthinking` | sonnet; opus only for the main thread or non-atlas agents |
 | Implement a feature / bounded change | `atlas:implementer`, `frontend-developer`*, `backend-architect`* | `superpowers:test-driven-development`, `frontend-design`/`ui-ux-pro-max` | `context7` (mandatory), `serena`, LSP; on JS/TS also `fallow` MCP/CLI after edits | sonnet |
 | Fix a bug / regression / incident | `debugger`* | `superpowers:systematic-debugging` | `serena`, `context-mode`, Sentry MCP if present | sonnet |
 | Dead code / duplication / complexity / JS-TS cleanup | `atlas:implementer` + `atlas:verifier` | `fallow-skills` if installed | `fallow` MCP or `fallow dead-code|dupes|health|audit --format json`; see `fallow-tools.md` | sonnet |
 | Run & validate behavior (FE/BE/DB) | `atlas:ui-runtime-tester`, `test-executor`*, `test-engineer`* | `verify`, `run`, `webapp-testing`, `python-testing-patterns` | Claude_Preview MCP, `context-mode`, curl, playwright; JS/TS: `fallow audit --format json` before commit | sonnet |
-| Full UI/UX test pass / persona testing / pre-release UX sweep (any app) | (orchestrator dispatches atlas-ux-test) | `atlas-ux-test` (canonical home; auto-discovers routes and fields) | Chrome DevTools MCP / Claude_Preview MCP / `browser-harness` / playwright, `context-mode` | sonnet; opus for the reporter |
+| Full UI/UX test pass / persona testing / pre-release UX sweep (any app) | (orchestrator dispatches atlas-ux-test) | `atlas-ux-test` (canonical home; auto-discovers routes and fields) | Chrome DevTools MCP / Claude_Preview MCP / `browser-harness` / playwright, `context-mode` | sonnet; opus only for the main-thread reporter |
 | Probe the database (read-only) | `atlas:db-prober` | - | read-only `psql`, `whodb`/data-agent-kit plugin if present, `gcloud` | sonnet |
-| Verify a finding / fix (adversarial) | `atlas:verifier`, `secondary-expert-validator`* | `superpowers:requesting-code-review` | re-run tests/queries; `codex` for a true second opinion | sonnet -> opus if critical |
+| Verify a finding / fix (adversarial) | `atlas:verifier`, `secondary-expert-validator`* | `superpowers:requesting-code-review` | re-run tests/queries; `codex` for a true second opinion | sonnet; opus only for the main thread or non-atlas agents |
 | Security review | `security-engineer`* | `security-review`, `security-best-practices`; `backend-security-skills`/`vibeguard` plugins if present | `context7`, `serena` | opus |
 | Comprehensive quality + security + OWASP audit (full codebase sweep) | (orchestrator dispatches atlas-audit) | `atlas-audit` | `serena`, `context7`, `context-mode`; no browser needed | sonnet (multi-swarm) |
 | Architecture map / structural dedup / boundaries doc missing | (orchestrator dispatches atlas-audit) | `atlas-audit` | `serena`, LSP, `context-mode` | sonnet |

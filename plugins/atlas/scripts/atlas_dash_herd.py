@@ -349,6 +349,63 @@ def _counts(rows: list[dict]) -> dict:
     return counts
 
 
+def _bg_agents(ctx) -> list[dict]:
+    """claude-bg worker rows for the herd agents feed: additive, source-tagged rows from
+    `claude agents --json` (via atlas_mux), merged when the mux transport is claude-bg. A missing
+    or failing CLI read contributes no rows and no keys; herdr rows are never touched."""
+    import atlas_mux
+
+    if ctx is None or atlas_mux.transport() != "claude-bg":
+        return []
+    try:
+        roots = atlas_dash_work._canon_roots(
+            atlas_dash_work._project_roots(ctx, (ctx.query or {}).get("project"))
+        )
+    except Exception:
+        roots = []
+    rows, seen = [], set()
+    for root in roots:
+        for w in atlas_mux._claude_workers(root) or []:
+            pid = str(w.get("pid") or "")
+            if pid in seen:
+                continue
+            seen.add(pid)
+            state = str(w.get("state") or "")
+            name = str(w.get("name") or pid)
+            rows.append(
+                {
+                    "pane_id": f"bg:{pid or name}",
+                    "label": name,
+                    "title": name,
+                    "agent": "claude",
+                    "status": (
+                        "working"
+                        if state == "working"
+                        else "done"
+                        if state in atlas_mux._BG_DONE_STATES
+                        else "idle"
+                    ),
+                    "cwd": root,
+                    "workspace": "",
+                    "workspace_id": None,
+                    "tab_id": None,
+                    "focused": False,
+                    "deep_link": "",
+                    "state_change_seq": None,
+                    "state_changed_at": None,
+                    "state_changed_source": None,
+                    "parent_pane": None,
+                    "children": [],
+                    "children_total": 0,
+                    "bg_state": state,
+                    "dead": w.get("dead"),
+                    "source": "claude-bg",
+                    "sources": ["claude-bg"],
+                }
+            )
+    return rows
+
+
 def _agents(ctx):
     t0 = time.perf_counter()
     now = time.time()
@@ -366,6 +423,7 @@ def _agents(ctx):
             _enrich(snap["agents"], conn, now, tabs, _parents(_owned_items(roots)))
     finally:
         _close(conn)
+    bg = _bg_agents(ctx)
     return 200, {
         "ok": True,
         "herdr": {"reachable": snap["reachable"], "reason": snap["reason"]},
@@ -374,10 +432,10 @@ def _agents(ctx):
             "url": st["url"],
             "auth_required": st["auth_required"],
         },
-        "counts": _counts(snap["agents"]),
+        "counts": _counts(snap["agents"] + bg),
         "workspaces": snap["workspaces"],
         "tabs": tabs,
-        "agents": snap["agents"],
+        "agents": snap["agents"] + bg,
         "fetched_ms": round((time.perf_counter() - t0) * 1000, 2),
     }
 

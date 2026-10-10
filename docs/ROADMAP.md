@@ -6,6 +6,102 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 
 ## In Progress
 
+- [in-progress] Claude Code native parity research (2026-10-09): research-only
+  sweep behind the mod build above, mapping what Claude Code natively provides
+  (agent view, dynamic workflows, cloud Projects, routines, model/persona
+  config, caching, skills, MCP) against the atlas mod, colony, mux, inbox and
+  gate surfaces before any further source edit. Live surface pinned: Claude
+  Code v2.1.296 (live `claude --version`), docs fetched at ~v2.1.29x. Done
+  this run: agent://NativeSurfaces/report fetched the agent-view, workflows,
+  claude-projects and routines docs in full: agent dispatch (`claude --bg`,
+  `claude agents --json` state, supervisor daemon, `worktree.bgIsolation`),
+  ultracode workflows agent()/pipeline()/parallel()/phase() with a default cap
+  of 16 concurrent agents (`CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS`),
+  cloud Project threads, routines triggers and hourly caps;
+  agent://NativeModelsPersonas/report fetched model-config, env-vars, costs,
+  prompt-caching, output-styles, skills, memory, MCP, claude-directory and
+  errors: model precedence (/model > --model > ANTHROPIC_MODEL > settings >
+  ANTHROPIC_DEFAULT_MODEL), effort levels and resolution, alias version gates
+  v2.1.284/280/293, `CLAUDE_CODE_SUBAGENT_MODEL(_FORCE)`,
+  `subagentPromptCacheTtl` 5m|1h, output styles are the persona mechanism but
+  not applied in subagents. Done additionally this run: the hooks/settings
+  slice returned a documented negative result (`artifact://752:1204`): no
+  `TeammateIdle`/`TaskCreated`/inbound-request hook events exist, the
+  documented hook list ends at `SubagentStop`, all hook inputs are single
+  objects, and the `teamInboundRequest*` settings keys do not exist; the mod
+  core corpus is substantially fetched (`agent://NativeModCore/report`:
+  register/on/matcher contract, reload semantics, ES-module/top-level-`$`
+  scanner rules, `claude plugin validate` and `claude-code/testing` kit,
+  events incl. `session.start`, `tool.call`, `command.run`, `ui.render`,
+  `session.receive`, `model.complete`, `engine.create`, noun contracts; the
+  30-minute subagent cap cut its tails). Lost to that cap with no output and
+  still open (re-run scoped smaller): messaging discovery + idle
+  notifications; the native inbox socket; channels/remote-control/cloud/
+  self-hosted. Done further this run: worktrees/interactive-mode/
+  terminal-config fetched in full (`agent://NativeWorktreeDisplay`:
+  `--worktree`/EnterWorktree/ExitWorktree, the four isolation checks incl.
+  git -C/GIT_DIR interdiction, `worktree.baseRef` fresh|head, sweep/locks;
+  `batched-commands.md` is 404); the mods UI/testing corpus fetched and
+  preserved at `.atlas/.run/mods-docs-corpus-2026-10-09.md`
+  (`agent://NativeModSurfaces`: plugins/mods/{reference,interface,test,
+  troubleshoot}.md); public Anthropic mod source recorded
+  (`agent://NativeModSource`: built-in mods sec-default/diff/telemetry/
+  agents-md, `mods/README.md` test protocol + testing API, `mods/types/
+  claude-code.d.ts`, mod-tests CI workflow; no playground dir exists).
+  Open: the hooks permissions/managed-settings remainder (beyond the
+  documented negative); the plugins/mods admin/gallery pages (budget cut);
+  seed-link crawl 2 levels + `llms.txt` (partially superseded by the
+  corpora); atlas
+  mapping with file:line (colony/mux/IRC/inbox/gates; mod/types/UI/
+  models/personas/worktree/loop/remote equivalents); as-is baseline;
+  independent coverage cross-check; docs/plans/2026-10-10-claude-code-native-parity.md
+  (one row per capability) + composition decision tree and target routing;
+  rank gaps impact/effort, then present them for confirmation (DONE this
+  run: plan written, critic-checked, and the user confirmed; shipped 2026-10-10:
+  S1 claude-bg default dispatch, S2 env-gated native wake
+  (`ATLAS_LEAD_AGENT`), S3 `ATLAS_GATE_BLOCK_LOOP` knob (clamp 1-7), S4
+  frontmatter persona pins (spawn rewrite removed), S6 agents-json fleet
+  rows; R3/R4 live-confirmed, R2 records-resolved; S5 (teams task-list
+  mirror) shipped 2026-10-10 as the opt-in `ATLAS_TASKS_MIRROR` brief
+  paragraph, atlas ledger still the source of truth; S2's native wake is
+  set only when `ATLAS_LEAD_AGENT` is populated lead-side (plumbing
+  shipped; population/lead-side pinning is the open half;
+  R3/R4/S1/S6 evidence:
+  `.atlas/evidence/parity-r3r4-2026-10-10/probes.md`); R1 animated-band
+  check is user-run and remains the
+  11.0.0 gate). Mod state
+  (verified live this run): all three tsc errors fixed (`routing.ts:87` hook
+  now a turn.step generator; `collab.tsx:107` stray key prop dropped;
+  `colony.tsx:922` Colony converted to the plain default-exported-function
+  pattern); `claude plugin validate --json plugins/atlas` succeeds with 0
+  errors (notify wired with a `reason: 'answer'` matcher beside routing's
+  un-matchered drift counter; `hooks.json` module path corrected to
+  `../mod/register.ts`; the entrypoint no longer binds the `$.fs` noun; all
+  `Client` mounts are literal module paths); unit suites green: routing
+  23/23, data/todos 13/0, register 4/4, sprites 46/46, restyle 13/0 — full
+  mod suite 206 pass / 0 fail across 16 files. Remaining before 11.0.0: only
+  the live-session stage-0 observation (animated `Client` band in iTerm2 and
+  herdr, per-subagent `turn.step` effort); the entrypoint at
+  `plugins/atlas/mod/register.ts` (~399 lines) is written, tested and
+  validated. Gate:
+  the implementation phase (implement/verify/record/confirm) starts only
+  after ranked gaps are presented to and confirmed by the user via
+  docs/plans/2026-10-10-claude-code-native-parity.md; the mod ships as atlas 11.0.0 only
+  after its stage-0 live checks.
+- [in-progress] Atlas Claude Code mod (2026-10-09): an in-process UI module in
+  `plugins/atlas/mod/` (contract-track band above the prompt, `/atlas` Command Center
+  with Colony, Channel, Board, Squad and Collab tabs, restyled built-in sites, persona
+  model/effort routing), entrypoint `register.ts` wired by the `modules` entry in
+  `hooks/hooks.json:192`, documented in `docs/atlas-mod.md`. Implemented in the source tree; mod tests use the
+  `claude-code/testing` kit. Not yet observed in a live session (the plan's stage 0
+  checks); ships as atlas 11.0.0. OPEN WORK on it: five sprite persona files
+  (`sprites/{armada,docsauditor,docscurator,implementer,unknown}.ts`) are
+  byte-identical from line 16-686 (fallow dup:c77b3abb6f87acd9) — nine personas share
+  lines 467-686: they render the same sprite; add a distinctness assertion to
+  `sprites.test.ts` and either give those personas their own frames or collapse them
+  onto one shared sprite with a documented reason; the duplication is baselined
+  (`fallow-baselines/dupes.json`) pending that fix. The early-wave `logo.ts` was
+  never wired by the entrypoint and is deleted.
 - [in-progress] Colony rebuild on herdr (2026-10-07, atlas 10.1.2): vendored
   herdr-web-ui + pinned herdr 0.9.3, `/atlas/**` gateway, herdr transport,
   `atlas_remote.py`, `session_boot.ensure_colony` are documented in
@@ -76,7 +172,7 @@ Done 2026-10-09 (source tree, see `plugins/atlas/CHANGELOG.md`): omp Command Cen
 
 - Migrate vendor credentials out of `pluginConfigs` into `~/.config/atlas/atlas.env` (chmod 600); regulated credentials under GLBA / FTC Safeguards. The loaders' `pluginConfigs` read is a fallback only.
 - `atlas_doctor.py` `apply_fixes` still copies into the Claude plugin cache on a version mismatch.
-- Claude Code has no equivalent of the omp terminal channel view. Planned as the atlas Claude Code mod (Colony, IRC channel, TODO board, persona sprites, contract track): `docs/plans/2026-10-09-atlas-mod.md`. It ships as **atlas 11.0.0** only after its stage 0 spike proves mods actually run here (animated `Client` band in iTerm2 and herdr, per-subagent `turn.step` effort). If the spike fails, no 11.0.0.
+- Claude Code has no equivalent of the omp terminal channel view. The atlas Claude Code mod (Colony, IRC channel, TODO board, persona sprites, contract track) is now implemented in the source tree: `plugins/atlas/mod/`, wired by the `modules` entry in `hooks/hooks.json:192`, documented in `docs/atlas-mod.md` (tracked as in progress above). It ships as **atlas 11.0.0** only after its stage 0 live checks prove mods actually run here (animated `Client` band in iTerm2 and herdr, per-subagent `turn.step` effort). If they fail, no 11.0.0.
 - Unaddressed P1s from the review: `atlas_mux` report truncation at 600 chars; herdr spawn lock; transport re-decision; selffix metric verification; `dispatch_tripwire.py` `_CLAUSE_START` ReDoS; `completion_gate.py` test-runner regex.
 - fallow at 10.4.3: the real complexity findings and the introduced duplicate were refactored. The CRAP-only findings (cyclomatic < 12, cognitive <= 15, no coverage data) are accepted in `fallow-baselines/health.json`. Adding dashboard JS coverage would retire them.
 
@@ -96,7 +192,8 @@ Done 2026-10-09 (source tree, see `plugins/atlas/CHANGELOG.md`): omp Command Cen
   lines), `docs-ssot.md` x2 (differ by 61 lines). Decide whether to merge to
   one canonical copy per pair or keep both with a documented reason.
 - The 9.0.0 omp fixes (`atlas_mux.py` `FORWARDED_ENV` widening (tmux-era;
-  as of 2026-10-07 workers are herdr panes by default and `FORWARDED_ENV` is
+  as of 2026-10-09 claude workers run native `claude --bg` by default
+  (herdr/tmux panes via `ATLAS_COLONY_TRANSPORT` opt-in) and `FORWARDED_ENV` is
   applied by `pane_env`/`pane_command`, see `docs/atlas-colony.md`), omp
   plugin-enablement detection via `omp-plugins.lock.json`, the
   `outputStyle`/`TodoWrite`-gating fixes in `omp/style.ts` and

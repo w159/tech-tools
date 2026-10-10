@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "channels": {
+    "lead-01a122": {
+      "name": "lead-01a122",
+      "kind": "lead",
+      "parent": "tech-tools@main",
+      "lead": "lead-01a122",
+      "members": [
+        {
+          "name": "impl-auth",
+          "role": "worker",
+          "parent": "lead-01a122",
+          "joined": 1760000003.1,
+          "pid": 41237,
+          "pid_start": "Thu Oct  9 09:13:20 2025",
+          "pane_id": "pane-1f2a"
+        },
+        {
+          "name": "verifier-ui",
+          "role": "worker",
+          "parent": "lead-01a122",
+          "joined": 1760000003.4,
+          "exit_code": 0,
+          "ended_at": 1760000345.6
+        },
+        {
+          "name": "docs-cur",
+          "role": "worker",
+          "parent": "lead-01a122",
+          "joined": 1760000003.9
+        }
+      ],
+      "project_root": "/Users/jerry/MEGA/Projects/Agentic/tech-tools",
+      "branch": "main",
+      "created": 1760000002.9,
+      "last_activity": 1760000388.2
+    }
+  }
+}

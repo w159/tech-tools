@@ -1,10 +1,14 @@
 # Changelog
 
+## Native adoption (2026-10-10, unreleased) — atlas Claude Code mod implemented in source (gated 11.0.0)
+
+Adoption detail for the new mod (`plugins/atlas/mod/`): claude workers dispatch on the native `claude --bg` transport by default (`--name/--agent/--model/--effort/--permission-mode` all live-accepted; status parses `claude agents --json`; kill `claude stop` — works on busy and done rows); herdr/tmux panes stay opt-in through `ATLAS_COLONY_TRANSPORT` and omp workers keep pane transports. Optional native wake: `ATLAS_LEAD_AGENT` passthrough plus a brief paragraph instructing a follow-up `SendMessage` beside the mandated board note (byte-identical brief when unset; `contracts/worker-protocol.json` records the step). The completion-gate block loop is env-tunable (`ATLAS_GATE_BLOCK_LOOP`, default 3, clamped 1-7, fail-open, documented against Claude Code's native Stop-hook block cap 8). Mod routing no longer rewrites models on `agent.spawn` — persona model/effort pins come from agent-definition frontmatter; `turn.step` keeps the per-phase effort pin. Verified: mod suite 206 pass / 0 fail across 16 files, `bunx tsc` exit 0, `claude plugin validate --json plugins/atlas` 0 errors; R1 (animated band in iTerm2/herdr) remains the single user-run check and the 11.0.0 gate. Follow-up ledger (2026-10-10): every claude-bg spawn in `atlas_mux.py` `_spawn_claude_bg` now passes `--settings '{"crossSessionInbound":"accept"}'` (claude-bg path only; omp pane spawns unchanged; `FORWARDED_ENV`/`ATLAS_WORKER_NAME` forwarding already present and set-only; live probe accepted), and `atlas_control.py` received a 23-item pi-lens blocker cleanup (imports sort, guards/narrowing, logging in two excepts, two `lens_diagnostic_mark` suppressions on false positives) with zero behavior change — verified by mux 77 passed / 30 subtests, launch 19 passed, gate+control 362 passed / 13 subtests. S5 shipped 2026-10-10: an opt-in `ATLAS_TASKS_MIRROR` paragraph in the bg brief mirrors a worker's board claim to the native teams task list (`TaskCreate` subject "[<phase>] <content>", one completion) while the atlas board stays the source of truth (unset = byte-identical brief; mux 77+2 new tests → 79 passed / 30 subtests with launch 19 passed).
+
 ## [10.4.3] - 2026-10-08
 
 Colony identity fixes from a live Claude Code lead plus two mux workers run. Sessions on an older installed plugin cache keep the old behavior until the plugin is updated or reinstalled from the marketplace.
 
-Planned, not shipped: the atlas Claude Code mod design (`docs/plans/2026-10-09-atlas-mod.md`). It is reserved for 11.0.0 and gated on the stage 0 spike proving mods work in Claude Code. This release contains no mod code.
+Planned, not shipped: the atlas Claude Code mod is now implemented in this source tree (`plugins/atlas/mod/`, wired at `plugins/atlas/hooks/hooks.json:192`, documented in `docs/atlas-mod.md`). It remains unreleased and is gated on the stage 0 live checks; it ships as atlas 11.0.0 only after they pass.
 
 ### Harness parity and live channel view (2026-10-09)
 

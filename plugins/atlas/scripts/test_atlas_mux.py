@@ -11,7 +11,6 @@ run-worker is not allowed to write the board itself.
 # Real-tmux smoke lives in docs (subagent-kit.md "Colony mux mode"); these
 # tests never touch a real tmux server.
 
-import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import contextlib
 import json
 import os
@@ -23,6 +22,8 @@ import sys
 import tempfile
 import time
 import unittest
+
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 
 SCRIPT = pathlib.Path(__file__).resolve().parent / "atlas_mux.py"
 
@@ -74,10 +75,29 @@ esac
 
 FAKE_HARNESS = r"""#!/bin/bash
 # Fake claude/omp: log argv + worker env; canned report lines.
+# claude-bg mode: --bg returns a backgrounded line, `agents --json` replays
+# $FAKE_TMUX_STATE/agents.json, `stop`/`logs` answer from the same state dir.
 L="${FAKE_HARNESS_LOG:?}"
 echo "argv[basename=$(basename "$0")]: $*" >>"$L"
 : > "$(dirname "$L")/argv.$(basename "$0")"
 for a in "$@"; do printf '%s\0' "$a" >>"$(dirname "$L")/argv.$(basename "$0")"; done
+case "$1" in
+  agents)
+    if [ -f "$FAKE_TMUX_STATE/agents.json" ]; then cat "$FAKE_TMUX_STATE/agents.json"; else echo "[]"; fi
+    exit 0 ;;
+  stop)
+    echo "stopped $2"; exit "${FAKE_STOP_EXIT:-0}" ;;
+  logs)
+    cat "$FAKE_TMUX_STATE/logs.out" 2>/dev/null; exit 0 ;;
+esac
+if [ "$1" = "--bg" ]; then
+  NAME=""; prev=""
+  for a in "$@"; do [ "$prev" = "--name" ] && NAME="$a"; prev="$a"; done
+  echo "backgrounded · fakebg42 · $NAME"
+  echo "  claude agents             list sessions"
+  echo "env: ATLAS_LEAD_AGENT=[$ATLAS_LEAD_AGENT] ATLAS_WORKER_NAME=[$ATLAS_WORKER_NAME] ATLAS_LEAD_NAME=[$ATLAS_LEAD_NAME] ATLAS_CHANNEL=[$ATLAS_CHANNEL] ATLAS_TASKS_MIRROR=[$ATLAS_TASKS_MIRROR]" >>"$L"
+  exit "${FAKE_BG_EXIT:-0}"
+fi
 echo "env: ATLAS_WORKER_NAME=[$ATLAS_WORKER_NAME] ATLAS_PROJECT_ROOT=[$ATLAS_PROJECT_ROOT]" >>"$L"
 echo "fake-report-1"
 echo "fake-report-2"
@@ -179,6 +199,14 @@ def _wait_exit(root, owner, timeout=20.0):
 
 def _pairs(argv):
     return [list(pair) for pair in zip(argv, argv[1:], strict=False)]
+
+
+# claude-bg --settings payload: cross-session inbound accept plus the two allow rules the
+# brief's mandatory actions need (the atlas_todo board-note Bash call, claude-mem MCP search)
+_BG_SETTINGS_JSON = (
+    '{"crossSessionInbound":"accept","permissions":{"allow":'
+    '["Bash(python3 *atlas_todo.py*)","mcp__claude_mem_mcp_search"]}}'
+)
 
 
 class Base(unittest.TestCase):
@@ -761,12 +789,14 @@ class SpawnOmpTests(Base):
     def test_lead_kill_switches_and_omp_profile_reach_the_worker_pane(self):
         # ATLAS_MANDATES=off in the lead was lost in the pane: the worker came up with the recall gate armed.
         self._omp_ready()
+        lead_agent_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, lead_agent_dir, ignore_errors=True)
         env = dict(
             self.spawn_env(),
             ATLAS_MANDATES="off",
             ATLAS_HOOK_BRIDGE="off",
             ATLAS_LEAN_SHELL="off",
-            PI_CODING_AGENT_DIR="/tmp/lead-agent-dir",
+            PI_CODING_AGENT_DIR=lead_agent_dir,
             ATLAS_TOOLKIT_LOAD="lead-value",
             ATLAS_WORKER_NAME="lead",
         )
@@ -793,7 +823,7 @@ class SpawnOmpTests(Base):
             "ATLAS_MANDATES=off",
             "ATLAS_HOOK_BRIDGE=off",
             "ATLAS_LEAN_SHELL=off",
-            "PI_CODING_AGENT_DIR=/tmp/lead-agent-dir",
+            "PI_CODING_AGENT_DIR=" + lead_agent_dir,
         ):
             self.assertIn(pair, pane)
         self.assertNotIn("ATLAS_TOOLKIT_LOAD", pane)  # bridge-pinned, never forwarded
@@ -1599,8 +1629,8 @@ class NotesInteropTests(Base):
 
 
 class HerdrTransportTests(Base):
-    """Default transport: workers are panes created over the herdr socket. The fake tmux on PATH logs any call,
-    and every test asserts it stayed silent."""
+    """Opt-in herdr transport (ATLAS_COLONY_TRANSPORT=herdr): workers are panes created over the herdr socket.
+    The fake tmux on PATH logs any call, and every test asserts it stayed silent."""
 
     def setUp(self):
         super().setUp()
@@ -1609,7 +1639,9 @@ class HerdrTransportTests(Base):
         self.handler = th.PaneHandler()
         self.fake = th.FakeHerdr(self.handler)
         self.addCleanup(self.fake.close)
-        self.env.pop("ATLAS_COLONY_TRANSPORT")  # the default: herdr
+        self.env["ATLAS_COLONY_TRANSPORT"] = (
+            "herdr"  # herdr is opt-in under the claude-bg default
+        )
         self.env["HERDR_SOCKET_PATH"] = self.fake.path
 
     def pane_texts(self):
@@ -1703,6 +1735,9 @@ class HerdrTransportTests(Base):
 
     def test_herdr_not_running_falls_back_to_tmux(self):
         env = self.spawn_env(extra={"HERDR_SOCKET_PATH": "/nonexistent/h.sock"})
+        env.pop(
+            "ATLAS_COLONY_TRANSPORT"
+        )  # the claude-bg default: omp falls back to panes
         prompt = self.make_prompt("p", "x")
         rc, data, _, err = _run(
             "spawn", "--run", "r1", "--name", "Alpha", "--harness", "omp",
@@ -1730,6 +1765,500 @@ class HerdrTransportTests(Base):
         self.assertEqual(texts[-1], "hi\nexit 0")
 
 
+class ClaudeBgTests(Base):
+    """claude-bg transport (the default for claude workers): `claude --bg` runs the harness as a
+    supervised background agent, status reads `claude agents --json`, kill is `claude stop`. The
+    fake claude on PATH answers all three from the fake-state dir."""
+
+    def bg_env(self, extra=None):
+        env = self.spawn_env(extra=extra)
+        env.pop("ATLAS_COLONY_TRANSPORT", None)  # the default: claude-bg
+        return env
+
+    def set_agents(self, rows):
+        (pathlib.Path(self.state) / "agents.json").write_text(json.dumps(rows))
+
+    def spawn(self, name="Alpha", env_extra=None):
+        self.make_agent(
+            "claude",
+            "explorer",
+            "---\nname: explorer\nmodel: opus\neffort: high\n---\nbody\n",
+        )
+        return _run(
+            "spawn",
+            "--run",
+            "r1",
+            "--harness",
+            "claude",
+            "--name",
+            name,
+            "--agent",
+            "explorer",
+            "--prompt-file",
+            self.make_prompt("p", "colonize the pane"),
+            "--agents-dir",
+            os.path.join(self.root, "agents"),
+            env=self.bg_env(env_extra),
+            cwd=self.root,
+        )
+
+    def test_default_transport_is_claude_bg(self):
+        rc, data, _, err = _run(
+            "status", "--run", "zz", env=self.bg_env(), cwd=self.root
+        )
+        self.assertEqual(0, rc, (data, err))
+        self.assertEqual("claude-bg", data.get("transport"), data)
+        self.assertFalse(data.get("tmux"), data)
+
+    def test_spawn_runs_claude_bg_with_agent_tier_and_report_brief(self):
+        rc, data, _, err = self.spawn()
+        self.assertEqual(0, rc, (data, err))
+        self.assertTrue(data.get("ok"), data)
+        self.assertEqual("claude-bg", data.get("transport"), data)
+        self.assertEqual("fakebg42", data.get("agent_id"), data)
+        base, argv = _fake_harness_argv(self.state)
+        self.assertEqual("claude", base)
+        self.assertEqual(
+            [
+                "--bg",
+                "--name",
+                "Alpha",
+                "--agent",
+                "atlas:explorer",
+                "--settings",
+                _BG_SETTINGS_JSON,
+                "--model",
+                "opus",
+                "--effort",
+                "high",
+                "--permission-mode",
+                "dontAsk",
+            ],
+            argv[:-1],
+        )
+        brief = argv[-1]
+        self.assertIn("colonize the pane", brief)  # the task prompt travels verbatim
+        # no run-worker wrapper watches a claude-bg agent, so the brief itself carries the
+        # board report contract (same C2 shape: one report note, then the exit line)
+        self.assertIn("# Atlas worker report contract", brief)
+        self.assertIn("--kind report", brief)
+        self.assertIn("--owner Alpha", brief)
+        self.assertIn("exit 0", brief)
+        self.assertIn("exit 1 [failed:", brief)
+        reg = json.loads(
+            (pathlib.Path(self.root) / ".atlas/.run/channels.json").read_text()
+        )
+        pane_ids = [
+            m.get("pane_id")
+            for c in reg["channels"].values()
+            for m in c["members"]
+            if m["name"] == "Alpha"
+        ]
+        self.assertEqual(
+            ["fakebg42"], pane_ids
+        )  # the claude session id is the member handle
+
+    def test_spawn_failure_refuses_and_reports(self):
+        rc, data, _, err = self.spawn(env_extra={"FAKE_BG_EXIT": "1"})
+        self.assertEqual(1, rc, (data, err))
+        self.assertFalse(data.get("ok"), data)
+        self.assertTrue(str(data.get("error", "")), data)
+
+    def test_bg_brief_native_wake_paragraph_is_env_gated(self):
+        """The SendMessage native wake is brief text ONLY when the lead exported
+        ATLAS_LEAD_AGENT: unset must reproduce the pre-wake brief (the board note stays the
+        transport of record; SendMessage is a best-effort extra)."""
+        import atlas_mux
+
+        args = ("colonize the pane", self.root, "Alpha", "chan", "lead")
+        had = os.environ.pop("ATLAS_LEAD_AGENT", None)
+        try:
+            bare = atlas_mux._bg_brief(*args)
+            self.assertNotIn("SendMessage", bare)
+            self.assertNotIn("ATLAS_LEAD_AGENT", bare)
+            self.assertTrue(bare.endswith("Post no other notes to the board."))
+            os.environ["ATLAS_LEAD_AGENT"] = "lead-01a122"
+            woke = atlas_mux._bg_brief(*args)
+        finally:
+            os.environ.pop("ATLAS_LEAD_AGENT", None)
+            if had is not None:
+                os.environ["ATLAS_LEAD_AGENT"] = had
+        self.assertIn(
+            "If the env var ATLAS_LEAD_AGENT is set to your lead's session name and "
+            "ListAgents shows it, send the same report text via SendMessage (to: that name) "
+            "immediately after posting the note. Do not retry sends. Skip entirely when "
+            "unset or not listed.",
+            woke,
+        )
+        # the wake rides after the note command, before the close of the report contract
+        self.assertLess(woke.index("--kind report"), woke.index("SendMessage"))
+        self.assertLess(woke.index("SendMessage"), woke.index("Post no other notes"))
+
+    def test_spawn_claude_bg_forwards_lead_agent_env(self):
+        """Lead-exported ATLAS_LEAD_AGENT reaches the claude-bg worker env (FORWARDED_ENV)
+        and flips the brief's native-wake paragraph; an unset spawn carries neither."""
+        rc, data, _, err = self.spawn(env_extra={"ATLAS_LEAD_AGENT": "lead-01a122"})
+        self.assertEqual(0, rc, (data, err))
+        self.assertTrue(data.get("ok"), data)
+        _, argv = _fake_harness_argv(self.state)
+        self.assertIn("SendMessage", argv[-1])
+        log = pathlib.Path(self.state, "log").read_text(encoding="utf-8")
+        self.assertIn("env: ATLAS_LEAD_AGENT=[lead-01a122]", log)
+
+        unset_env = self.bg_env()
+        unset_env.pop("ATLAS_LEAD_AGENT", None)
+        rc2, data2, _, err2 = _run(
+            "spawn",
+            "--run",
+            "r1",
+            "--harness",
+            "claude",
+            "--name",
+            "Beta",
+            "--agent",
+            "explorer",
+            "--prompt-file",
+            self.make_prompt("p2", "beta prompt"),
+            "--agents-dir",
+            os.path.join(self.root, "agents"),
+            env=unset_env,
+            cwd=self.root,
+        )
+        self.assertEqual(0, rc2, (data2, err2))
+        self.assertTrue(data2.get("ok"), data2)
+        _, argv2 = _fake_harness_argv(self.state)
+        self.assertNotIn("SendMessage", argv2[-1])
+        log2 = pathlib.Path(self.state, "log").read_text(encoding="utf-8")
+        self.assertIn("env: ATLAS_LEAD_AGENT=[]", log2)
+
+    def test_spawn_claude_bg_settings_cross_session_inbound(self):
+        """claude --bg spawns with --settings {"crossSessionInbound":"accept", ...} (plus the
+        two allow rules) so a worker's channel-bound messages are never parked on a
+        permission-class mismatch and its mandatory brief actions never prompt (claude-bg only)."""
+        rc, data, _, err = self.spawn()
+        self.assertEqual(0, rc, (data, err))
+        self.assertTrue(data.get("ok"), data)
+        _, argv = _fake_harness_argv(self.state)
+        self.assertIn(["--settings", _BG_SETTINGS_JSON], _pairs(argv), argv)
+
+    def test_spawn_claude_bg_is_unattended_safe_by_default(self):
+        """Unattended bg workers must not hang on permission prompts: with no caller
+        --permission-mode the spawn defaults to dontAsk (auto-deny, allow rules still run),
+        --settings parses with the brief's allow rules, and an explicit --permission-mode
+        still passes through."""
+        rc, data, _, err = self.spawn()
+        self.assertEqual(0, rc, (data, err))
+        _, argv = _fake_harness_argv(self.state)
+        self.assertIn(["--permission-mode", "dontAsk"], _pairs(argv), argv)
+        parsed = json.loads(dict(_pairs(argv))["--settings"])
+        self.assertEqual("accept", parsed["crossSessionInbound"])
+        self.assertEqual(
+            ["Bash(python3 *atlas_todo.py*)", "mcp__claude_mem_mcp_search"],
+            sorted(parsed["permissions"]["allow"]),
+        )
+        # caller passthrough: an explicit --permission-mode wins over the dontAsk default
+        rc2, data2, _, err2 = _run(
+            "spawn",
+            "--run",
+            "r1",
+            "--harness",
+            "claude",
+            "--name",
+            "Beta",
+            "--agent",
+            "explorer",
+            "--permission-mode",
+            "acceptEdits",
+            "--prompt-file",
+            self.make_prompt("p2", "beta prompt"),
+            "--agents-dir",
+            os.path.join(self.root, "agents"),
+            env=self.bg_env(),
+            cwd=self.root,
+        )
+        self.assertEqual(0, rc2, (data2, err2))
+        _, argv2 = _fake_harness_argv(self.state)
+        self.assertIn(["--permission-mode", "acceptEdits"], _pairs(argv2), argv2)
+        self.assertNotIn("dontAsk", argv2)
+
+    def test_spawn_claude_bg_worker_env_carries_channel_pins(self):
+        """The bg worker env carries ATLAS_WORKER_NAME (pinned by the mux) plus the lead's
+        ATLAS_LEAD_NAME/ATLAS_CHANNEL (FORWARDED_ENV) so the headless-worker dispatch
+        exemption and the note routing hold."""
+        rc, data, _, err = self.spawn(
+            env_extra={
+                "ATLAS_LEAD_NAME": "lead-01a122",
+                "ATLAS_CHANNEL": "tech-tools@main/pair",
+            }
+        )
+        self.assertEqual(0, rc, (data, err))
+        self.assertTrue(data.get("ok"), data)
+        log = pathlib.Path(self.state, "log").read_text(encoding="utf-8")
+        self.assertIn(
+            "env: ATLAS_LEAD_AGENT=[] ATLAS_WORKER_NAME=[Alpha] "
+            "ATLAS_LEAD_NAME=[lead-01a122] ATLAS_CHANNEL=[tech-tools@main/pair]",
+            log,
+            log,
+        )
+
+    def test_bg_brief_task_mirror_paragraph_is_env_gated(self):
+        """The TaskCreate board-mirror paragraph is brief text ONLY when the lead exported
+        ATLAS_TASKS_MIRROR truthy: unset/off must reproduce the pre-mirror brief (the atlas
+        board stays the source of truth; TaskCreate is a best-effort native mirror)."""
+        import atlas_mux
+
+        args = ("colonize the pane", self.root, "Alpha", "chan", "lead")
+        had = os.environ.pop("ATLAS_TASKS_MIRROR", None)
+        try:
+            bare = atlas_mux._bg_brief(*args)
+            self.assertNotIn("TaskCreate", bare)
+            self.assertNotIn("ATLAS_TASKS_MIRROR", bare)
+            self.assertTrue(bare.endswith("Post no other notes to the board."))
+            for on in ("1", "true", "ON"):
+                os.environ["ATLAS_TASKS_MIRROR"] = on
+                mirrored = atlas_mux._bg_brief(*args)
+                self.assertIn(
+                    "If a TaskCreate tool is available to you, mirror the board item you "
+                    'claim: TaskCreate with subject "[<phase>] <content>" at claim time and '
+                    "mark it completed when you post your completion. The atlas board remains "
+                    "the source of truth; do not duplicate status updates beyond the one "
+                    "completion.",
+                    mirrored,
+                )
+                # the mirror rides after the note command, before the close of the contract
+                self.assertLess(
+                    mirrored.index("--kind report"),
+                    mirrored.index('TaskCreate with subject "[<phase>]'),
+                )
+                self.assertLess(
+                    mirrored.index('TaskCreate with subject "[<phase>]'),
+                    mirrored.index("Post no other notes"),
+                )
+            for off in ("0", "false", "OFF", ""):
+                os.environ["ATLAS_TASKS_MIRROR"] = off
+                self.assertNotIn("TaskCreate", atlas_mux._bg_brief(*args))
+        finally:
+            os.environ.pop("ATLAS_TASKS_MIRROR", None)
+            if had is not None:
+                os.environ["ATLAS_TASKS_MIRROR"] = had
+
+    def test_spawn_claude_bg_forwards_tasks_mirror_env(self):
+        """Lead-exported ATLAS_TASKS_MIRROR reaches the claude-bg worker env (FORWARDED_ENV)
+        and flips the brief's task-mirror paragraph; an unset spawn carries neither."""
+        rc, data, _, err = self.spawn(env_extra={"ATLAS_TASKS_MIRROR": "1"})
+        self.assertEqual(0, rc, (data, err))
+        self.assertTrue(data.get("ok"), data)
+        _, argv = _fake_harness_argv(self.state)
+        self.assertIn("TaskCreate", argv[-1])
+        log = pathlib.Path(self.state, "log").read_text(encoding="utf-8")
+        self.assertIn("ATLAS_TASKS_MIRROR=[1]", log)
+
+        unset_env = self.bg_env()
+        unset_env.pop("ATLAS_TASKS_MIRROR", None)
+        rc2, data2, _, err2 = _run(
+            "spawn",
+            "--run",
+            "r1",
+            "--harness",
+            "claude",
+            "--name",
+            "Beta",
+            "--agent",
+            "explorer",
+            "--prompt-file",
+            self.make_prompt("p2", "beta prompt"),
+            "--agents-dir",
+            os.path.join(self.root, "agents"),
+            env=unset_env,
+            cwd=self.root,
+        )
+        self.assertEqual(0, rc2, (data2, err2))
+        self.assertTrue(data2.get("ok"), data2)
+        _, argv2 = _fake_harness_argv(self.state)
+        self.assertNotIn("TaskCreate", argv2[-1])
+        log2 = pathlib.Path(self.state, "log").read_text(encoding="utf-8")
+        self.assertIn("ATLAS_TASKS_MIRROR=[]", log2)
+
+    def test_status_lists_claude_bg_workers(self):
+        self.set_agents(
+            [
+                {
+                    "id": "bg1",
+                    "kind": "background",
+                    "cwd": self.root,
+                    "name": "Alpha",
+                    "status": "busy",
+                    "state": "working",
+                },
+                {
+                    "id": "bg2",
+                    "kind": "background",
+                    "cwd": "/elsewhere",
+                    "name": "Other",
+                    "status": "idle",
+                    "state": "done",
+                },
+                {
+                    "pid": 99,
+                    "kind": "interactive",
+                    "cwd": self.root,
+                    "name": "ATLAS lead",
+                    "status": "idle",
+                },
+            ]
+        )
+        rc, data, _, err = _run(
+            "status", "--run", "r1", env=self.bg_env(), cwd=self.root
+        )
+        self.assertEqual(0, rc, (data, err))
+        self.assertEqual("claude-bg", data.get("transport"), data)
+        workers = {w["name"]: w for w in data.get("workers", [])}
+        self.assertEqual(["Alpha"], sorted(workers))  # other cwd + interactive dropped
+        self.assertEqual(0, workers["Alpha"]["dead"])
+        self.assertEqual("bg1", workers["Alpha"]["pid"])
+        self.assertEqual("working", workers["Alpha"]["state"])
+        # a running worker's terminal output travels in the status row (`claude logs <id>`)
+        (pathlib.Path(self.state) / "logs.out").write_text(
+            "boot line\nSTATUS: half done\nNEXT: keep going\n"
+        )
+        rc, data, _, err = _run(
+            "status", "--run", "r1", env=self.bg_env(), cwd=self.root
+        )
+        self.assertEqual(0, rc, (data, err))
+        workers = {w["name"]: w for w in data.get("workers", [])}
+        self.assertEqual(
+            "STATUS: half done\nNEXT: keep going", workers["Alpha"]["tail"]
+        )
+
+    def test_status_marks_done_agents_dead(self):
+        self.set_agents(
+            [
+                {
+                    "id": "bg1",
+                    "kind": "background",
+                    "cwd": self.root,
+                    "name": "Alpha",
+                    "status": "idle",
+                    "state": "done",
+                }
+            ]
+        )
+        rc, data, _, err = _run(
+            "status", "--run", "r1", env=self.bg_env(), cwd=self.root
+        )
+        self.assertEqual(0, rc, (data, err))
+        workers = {w["name"]: w for w in data.get("workers", [])}
+        self.assertEqual(1, workers["Alpha"]["dead"])
+
+    def test_status_without_claude_binary_yields_no_workers(self):
+        env = self.bg_env()
+        env["PATH"] = "/usr/bin:/bin"
+        rc, data, _, err = _run("status", "--run", "r1", env=env, cwd=self.root)
+        self.assertEqual(0, rc, (data, err))
+        self.assertEqual([], data.get("workers"), data)
+
+    def test_kill_stops_claude_bg_workers_and_posts_exit_notes(self):
+        self.set_agents(
+            [
+                {
+                    "id": "bg1",
+                    "kind": "background",
+                    "cwd": self.root,
+                    "name": "Alpha",
+                    "status": "busy",
+                    "state": "working",
+                },
+                {
+                    "id": "bg2",
+                    "kind": "background",
+                    "cwd": "/elsewhere",
+                    "name": "Other",
+                    "status": "busy",
+                    "state": "working",
+                },
+                {
+                    "id": "bg3",
+                    "kind": "background",
+                    "cwd": self.root,
+                    "name": "Done",
+                    "status": "idle",
+                    "state": "done",
+                },
+            ]
+        )
+        rc, data, _, err = _run("kill", "--run", "r1", env=self.bg_env(), cwd=self.root)
+        self.assertEqual(0, rc, (data, err))
+        self.assertTrue(data.get("killed"), data)
+        self.assertEqual("claude-bg", data.get("transport"), data)
+        _, argv = _fake_harness_argv(self.state)  # the kill's one claude call
+        self.assertEqual(
+            ["stop", "bg1"], argv
+        )  # other cwd and done rows are not stopped
+        self.assertIn(
+            "exit 137 [failed: killed by atlas_mux kill]",
+            _texts(_notes(self.root, "Alpha"))[-1],
+        )
+
+    def test_kill_without_workers_is_idempotent(self):
+        self.set_agents([])
+        rc, data, _, err = _run("kill", "--run", "r1", env=self.bg_env(), cwd=self.root)
+        self.assertEqual(0, rc, (data, err))
+        self.assertFalse(data.get("killed"), data)
+
+    def test_omp_worker_under_default_keeps_pane_transport(self):
+        prompt = self.make_prompt("p", "x")
+        rc, data, _, err = _run(
+            "spawn", "--run", "r1", "--harness", "omp", "--name", "Beta",
+            "--agent", "implementer", "--prompt-file", prompt,
+            "--model", "x/y", "--thinking", "low", "--root", self.root,
+            env=self.bg_env(),
+        )  # fmt: skip
+        self.assertEqual(0, rc, (data, err))
+        self.assertTrue(data.get("ok"), data)
+        # claude --bg is claude-only: omp falls back to panes (herdr is not running here)
+        self.assertIn("new-window", "\n".join(_tmux_log_calls(self.state)))
+
+    def test_herdr_opt_in_still_takes_claude_workers(self):
+        import test_atlas_herdr as th
+
+        handler = th.PaneHandler()
+        fake = th.FakeHerdr(handler)
+        self.addCleanup(fake.close)
+        self.make_agent(
+            "claude",
+            "explorer",
+            "---\nname: explorer\nmodel: opus\neffort: high\n---\nbody\n",
+        )
+        rc, data, _, err = _run(
+            "spawn",
+            "--run",
+            "r1",
+            "--harness",
+            "claude",
+            "--name",
+            "Alpha",
+            "--agent",
+            "explorer",
+            "--prompt-file",
+            self.make_prompt("p", "go"),
+            "--agents-dir",
+            os.path.join(self.root, "agents"),
+            env=self.spawn_env(
+                extra={
+                    "ATLAS_COLONY_TRANSPORT": "herdr",
+                    "HERDR_SOCKET_PATH": fake.path,
+                }
+            ),
+            cwd=self.root,
+        )
+        self.assertEqual(0, rc, (data, err))
+        self.assertTrue(data.get("ok"), data)
+        words = shlex.split(
+            [p["text"] for m, p in fake.calls if m == "pane.send_input"][0]
+        )
+        self.assertIn("run-worker", words)  # the pane path is untouched when forced
+
+
 class DeadFlagTests(unittest.TestCase):
     def test_only_plain_ascii_digits_parse_else_zero(self):
         import atlas_mux
@@ -1744,8 +2273,9 @@ class TmuxStateRobustnessTests(unittest.TestCase):
     """Colony launches must not depend on the lead's tmux pane or on tmux being present."""
 
     def test_stale_tmux_env_never_reaches_tmux(self):
-        import atlas_mux
         from unittest import mock
+
+        import atlas_mux
 
         seen = {}
 
@@ -1765,8 +2295,9 @@ class TmuxStateRobustnessTests(unittest.TestCase):
         self.assertEqual(atlas_mux.TMUX_TIMEOUT_S, seen["timeout"])
 
     def test_missing_or_wedged_tmux_is_a_failed_result_not_an_exception(self):
-        import atlas_mux
         from unittest import mock
+
+        import atlas_mux
 
         def boom(exc):
             def run(*a, **k):

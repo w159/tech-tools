@@ -116,3 +116,39 @@ Both channel GETs need `X-Atlas-Token` because they expose message text. 503 `ch
 - The note `owner` is self-asserted: a process that knows a registered member's name can post as it and be delivered to the lead. Workers started outside `atlas_launch`, `atlas_mux spawn` or a dispatch are not registered; their notes land on the main channel.
 - The omp lead has no `CLAUDE_ENV_FILE` equivalent for its bash tool yet, so `atlas_mux spawn` run from an omp lead registers its workers in `<main>/lead`, not in the lead's `lead-<sid6>` subchannel.
 - Tests must never use the OS temp root as cwd: channel code walks up to the nearest `.atlas` and creates `.atlas/.run/channels.json` there (a channel named after the directory, e.g. `T`), after which every temp-dir fixture resolves that directory as its project root. `omp/worker-report.test.ts` was fixed to use a private `mkdtemp` directory; `scripts/test_no_tmp_marker.py` fails if `.atlas` exists in `$TMPDIR` or `/tmp` or if an omp/hooks/scripts test passes the bare temp root as `cwd`.
+- The Claude Code terminal view of a channel is the Atlas mod's Channel tab (`plugins/atlas/mod/`): a read-only viewer over the same registry and `board/<owner>.jsonl` notes with a per-file byte cursor. It never runs `atlas_todo.py inbox` (so it cannot drain a lead's mail) and composes only through the documented `note` argv. `ATLAS_MOD=off` disables it. Full model: `docs/atlas-mod.md`.
+
+## Collaboration protocol (claims, handoffs, blocked)
+
+Workers on one channel must not race each other's files or idle silently. The
+collaboration layer adds four read/write commands to `atlas_todo.py` —
+`claims`, `claim-paths`, `release-paths` and `conflicts` — plus three note
+kinds alongside `report`: `claim`, `handoff` and `blocked`.
+
+**Commands.** `claims` lists which worker currently claims which item;
+`claim-paths` records the file paths a worker is editing; `release-paths`
+releases them when the worker finishes (a path held by another worker blocks a
+second claim, so two workers never edit one file); `conflicts` shows paths
+claimed by more than one worker so the lead can arbitrate.
+
+**Worker rules.**
+
+1. Claim every todo and every file path before editing it.
+2. On a conflict (a path or item already claimed by a peer), message that peer
+   via a `note` before touching anything; never take a live claim
+   (`_CLAIM_STALE_S` of silence makes one stale and takeable).
+3. Post a `handoff` note when another worker consumes your output — it names
+   the consumer and what to consume — so the consumer does not wait on a lead.
+4. Post a `blocked` note instead of idling; a silent worker with an open todo
+   reads as `stuck` on the colony roster, not as working.
+5. Never skip verification because a peer said it passed; each worker runs the
+   checks for its own slice.
+6. Only the lead declares work done. A worker's own `exit 0` or `report` note
+   is never a completion signal.
+
+**Surfaces.** The Claude mod's Collab tab (`plugins/atlas/mod/`) and the
+contract-track band render `claims` and `conflicts` live: claimed items show
+the holder, conflicts light the band's `blocked` colour, and handoff/blocked
+notes appear in the channel log. Completion gates and verifier requirements are
+unchanged: this protocol coordinates work, it never relaxes gate (p), the
+`.atlas/.run/findings.json` verdict requirement, or any Stop-hook block.

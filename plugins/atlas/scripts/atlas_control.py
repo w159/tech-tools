@@ -18,9 +18,10 @@ into every hook subprocess, which is where the ATLAS_* vars are actually read.
 from __future__ import annotations
 
 import json
+import logging
 import os
-import re
 import queue
+import re
 import subprocess
 import sys
 import threading
@@ -497,8 +498,8 @@ _AD = {
         "hooks",
     ),
     "ATLAS_COLONY_TRANSPORT": (
-        "`tmux` spawns colony workers in tmux instead of herdr.",
-        "herdr",
+        "`herdr` or `tmux` forces a pane transport; the default is claude-bg (claude workers run via `claude --bg`).",
+        "claude-bg",
         "shell",
     ),
     "ATLAS_STOP_BRIDGE": ("`off` disables only omp's session-end bridge.", "", "shell"),
@@ -580,8 +581,7 @@ def _scan_env_readers() -> dict:
         for path in sorted(base.glob(pattern)):
             name = path.name
             if (
-                name.startswith("test_")
-                or name.startswith("_test_")
+                name.startswith(("test_", "_test_"))
                 or ".test." in name
                 or "test-isolation" in name
                 or name == "atlas_control.py"
@@ -589,7 +589,8 @@ def _scan_env_readers() -> dict:
                 continue
             try:
                 lines = path.read_text(encoding="utf-8").splitlines()
-            except Exception:
+            except Exception as exc:
+                logging.getLogger(__name__).debug("env-scan skip %s: %s", path, exc)
                 continue
             for lineno, line in enumerate(lines, 1):
                 if line.lstrip().startswith(_COMMENT_START):
@@ -1010,9 +1011,8 @@ def _count_dir(path: Path, suffixes=(".md",)) -> int:
         return 0
     n = 0
     for entry in path.iterdir():
-        if entry.is_dir() and (entry / "SKILL.md").is_file():
-            n += 1
-        elif entry.is_file() and entry.suffix in suffixes:
+        is_skill = entry.is_dir() and (entry / "SKILL.md").is_file()
+        if is_skill or (entry.is_file() and entry.suffix in suffixes):
             n += 1
     return n
 
@@ -1048,7 +1048,7 @@ def installed_plugins() -> list:
     """Installed plugins with enabled state and a content census."""
     enabled_map = read_settings().get("enabledPlugins") or {}
     roots = _plugin_search_paths()
-    keys = sorted(set(roots) | set(k for k in enabled_map if isinstance(k, str)))
+    keys = sorted(set(roots) | {k for k in enabled_map if isinstance(k, str)})
     out = []
     for key in keys:
         name, _, marketplace = key.partition("@")
@@ -1269,6 +1269,9 @@ def test_connector(name: str, env: dict | None = None, timeout: float = 20.0) ->
             "hint": f"Install {argv[0]} to run this connector.",
         }
 
+    assert proc.stdin is not None and proc.stdout is not None
+    assert proc.stderr is not None
+
     status_tool = _STATUS_TOOL.get(name, f"{name}_status")
     payload = b"".join(
         [
@@ -1303,14 +1306,15 @@ def test_connector(name: str, env: dict | None = None, timeout: float = 20.0) ->
     lines: queue.Queue = queue.Queue()
 
     def _pump():
-        for raw in proc.stdout:
+        for raw in proc.stdout or ():
             lines.put(raw)
         lines.put(None)
 
     threading.Thread(target=_pump, daemon=True).start()
     err_chunks: list = []
     threading.Thread(
-        target=lambda: err_chunks.append(proc.stderr.read()), daemon=True
+        target=lambda: err_chunks.append(proc.stderr.read() if proc.stderr else b""),
+        daemon=True,
     ).start()
     server_info: dict = {}
     tools: list = []
@@ -1352,8 +1356,8 @@ def test_connector(name: str, env: dict | None = None, timeout: float = 20.0) ->
             if deadline <= time.time():
                 timed_out = True
                 break
-    except BrokenPipeError:
-        pass
+    except BrokenPipeError as exc:
+        logging.getLogger(__name__).debug("connector %s stdin closed: %s", name, exc)
     finally:
         proc.kill()
         proc.wait()
@@ -1374,8 +1378,12 @@ def test_connector(name: str, env: dict | None = None, timeout: float = 20.0) ->
             "stderr": stderr_tail,
         }
     configured = None if status_text is None else not _UNCONFIGURED.search(status_text)
+    try:
+        elapsed_ms = int((time.time() - started) * 1000)
+    except Exception:
+        elapsed_ms = 0
     res = {
-        "ok": configured is not False,
+        "ok": configured is None or configured,
         "name": name,
         "server": server_info.get("name") or name,
         "version": server_info.get("version") or "",
@@ -1383,9 +1391,9 @@ def test_connector(name: str, env: dict | None = None, timeout: float = 20.0) ->
         "tools": [t.get("name") for t in tools[:12] if isinstance(t, dict)],
         "configured": configured,
         "status": (status_text or "")[:800],
-        "elapsed_ms": int((time.time() - started) * 1000),
+        "elapsed_ms": elapsed_ms,
     }
-    if configured is False:
+    if configured is not None and not configured:
         res["error"] = "not_configured"
         res["note"] = (
             "The server started but reports no usable credentials; "
@@ -1475,20 +1483,25 @@ def connector_usage(conn, since_s: float = CONNECTOR_USAGE_WINDOW_S, now=None) -
         cols = {r[1] for r in conn.execute("PRAGMA table_info(tool_calls)")}
         if not {"server", "ts", "is_error"} <= cols:
             return out
-        sql = _CONNECTOR_USAGE_SQL_DENIED if "denied" in cols else _CONNECTOR_USAGE_SQL
-        rows = conn.execute(sql, (now - since_s, now - since_s)).fetchall()
+        since = now - since_s
+        if "denied" in cols:
+            # pi-lens-ignore: python-sql-injection
+            rows = conn.execute(_CONNECTOR_USAGE_SQL_DENIED, (since, since)).fetchall()
+        else:
+            # pi-lens-ignore: python-sql-injection
+            rows = conn.execute(_CONNECTOR_USAGE_SQL, (since, since)).fetchall()
+        for server, total, recent, errors, last in rows:
+            name = CONNECTOR_ALIASES.get(server, server)
+            agg = out.setdefault(
+                name, {"calls_total": 0, "calls": 0, "errors": 0, "last_used": None}
+            )
+            agg["calls_total"] += int(total or 0)
+            agg["calls"] += int(recent or 0)
+            agg["errors"] += int(errors or 0)
+            if last and (agg["last_used"] is None or last > agg["last_used"]):
+                agg["last_used"] = float(last)
     except Exception:
         return out
-    for server, total, recent, errors, last in rows:
-        name = CONNECTOR_ALIASES.get(server, server)
-        agg = out.setdefault(
-            name, {"calls_total": 0, "calls": 0, "errors": 0, "last_used": None}
-        )
-        agg["calls_total"] += int(total or 0)
-        agg["calls"] += int(recent or 0)
-        agg["errors"] += int(errors or 0)
-        if last and (agg["last_used"] is None or last > agg["last_used"]):
-            agg["last_used"] = float(last)
     for agg in out.values():
         agg["error_rate"] = (
             round(agg["errors"] / agg["calls"], 3) if agg["calls"] else 0.0

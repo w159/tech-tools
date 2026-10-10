@@ -171,6 +171,11 @@ before starting, so two agents never build the same thing:
 
 - One item per agent. `claimed_by_other` means someone else holds it: claim a
   different open item or stop and report.
+- Optional native mirror (env-gated): when the lead exports `ATLAS_TASKS_MIRROR`,
+  mirror your claim with the TaskCreate tool (subject `[<phase>] <content>`) at
+  claim time and mark it completed when you post your completion. The atlas board
+  stays the source of truth — don't duplicate status updates beyond the one
+  completion; skip entirely when the var is unset or off.
 - `--force` steals a stale claim (30 min idle). Never force-steal a live agent's item.
 - Done: `complete --id <id> --evidence "<command + output, or file:line>"`.
 - Add an item from the CLI: `atlas_todo.py add [--unique] --session <session_id> "<text>"`.
@@ -252,6 +257,11 @@ SessionStart.
   `Model "..." not found` and on HTTP 402, so output matching model-not-found / 402 /
   credit / auth patterns is recorded as `exit 1`.
   Workers post their own notes with `atlas_todo.py note --owner <Name>`.
+- claude-bg workers have no run-worker wrapper: the brief itself carries the note command,
+  and — only when the lead exports `ATLAS_LEAD_AGENT` (its lead session name) — a best-effort
+  native wake: send the same report text via `SendMessage` to that session right after
+  posting the note (no retries; skip when unset or the session is not listed). The board
+  note is the transport of record.
 - The lead needs nothing beyond `atlas_todo.py notes --channel <its lead subchannel>`; no
   separate `--to lead` read.
 - Not Claude Code agent teams: teammates inherit the lead's effort, which would erase

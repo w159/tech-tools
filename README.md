@@ -179,7 +179,9 @@ atlas-orchestrate ship the rate limiter across API and cache
 
 The lead splits the work into named workers that share one board. Watch it in
 the [Workboard](#browser-dashboard-atlas-workboard); add `ATLAS_MUX=tmux` to
-run workers as herdr panes ([mux mode](#herdr-colony-mode-mux), remote viewing
+run workers through `atlas_mux.py spawn` — claude workers as `claude --bg`
+background agents by default, herdr panes with `ATLAS_COLONY_TRANSPORT=herdr`
+([mux mode](#herdr-colony-mode-mux), remote viewing
 in [Colony, herdr and Tailscale](#colony-herdr-and-tailscale)).
 
 **Check the changes in a real browser.**
@@ -339,8 +341,8 @@ edit warns, then every 5th, until a `docs/` change clears it.
 | `ATLAS_TODO=off` | TodoWrite-to-board mirror |
 | `ATLAS_ENGINE_ARM=off` | prompt-triggered orchestration arming |
 | `ATLAS_DECISION=off` | model-based prompt-arm decision (regex answer stays) |
-| `ATLAS_MUX` | unset = in-process colony (default); `ATLAS_MUX=tmux` unlocks `atlas_mux.py spawn` (workers in herdr panes) |
-| `ATLAS_COLONY_TRANSPORT` | `tmux` forces tmux windows for workers; unset = herdr, with tmux only when the herdr socket does not answer |
+| `ATLAS_MUX` | unset = in-process colony (default); `ATLAS_MUX=tmux` unlocks `atlas_mux.py spawn` (claude workers as `claude --bg` background agents; panes via `ATLAS_COLONY_TRANSPORT`) |
+| `ATLAS_COLONY_TRANSPORT` | `herdr` or `tmux` forces that pane transport; unset = `claude-bg` for claude workers (omp workers: herdr panes, tmux when the herdr socket does not answer) |
 | `ATLAS_COLONY=off` | SessionStart start of the herdr web UI (`0`, `off`, `false`, `no`) |
 | `ATLAS_REMOTE_PORT` | HTTPS port `atlas_remote.py` maps with `tailscale serve` (default 8443, never 443) |
 | `ATLAS_DASHBOARD_URL` | where the herdr web UI's `/atlas/**` gateway proxies the dashboard (loopback only; default `http://127.0.0.1:7421`) |
@@ -480,7 +482,7 @@ excluding `test_*.py`); unit tests sit beside them.
 | `atlas_dash_herd.py` | Dashboard v2 routes: herdr agents, prompts, panes, ensure (`/api/v2/herd/*`). |
 | `atlas_dash_insights.py` | Dashboard v2 routes: overview, health, activity, improve, prefs. |
 | `atlas_control.py` | Dashboard control plane: behavior knobs, ecosystem inventory, connector writes (allowlisted keys only). |
-| `atlas_mux.py` | Opt-in colony workers (`ATLAS_MUX=tmux` unlocks `spawn`); herdr transport by default, tmux fallback (see [below](#herdr-colony-mode-mux)). |
+| `atlas_mux.py` | Opt-in colony workers (`ATLAS_MUX=tmux` unlocks `spawn`); claude-bg transport by default, panes via `ATLAS_COLONY_TRANSPORT=herdr|tmux` (see [below](#herdr-colony-mode-mux)). |
 | `atlas_launch.py` | Starts one agent session as a detached herdr pane (tmux window only as the fallback); used by the dashboard and `atlas_mux`. |
 | `atlas_herdr.py` | Colony control: `status`, `ensure`, `reap`, `install-check`, `create-pane`; manages the one vendored herdr-web-ui. |
 | `atlas_remote.py` | Tailnet-only colony access through `tailscale serve`: `status`, `plan`, `apply --yes`, `disable --yes`, `url`. |
@@ -589,15 +591,20 @@ start empty so verification stays independent.
 
 Opt-in: `export ATLAS_MUX=tmux` in the lead's environment (the name is
 historical; it only unlocks `atlas_mux.py spawn`), then ask the lead in chat to
-run the colony. Each worker runs as its own detached headless process
-(`claude -p` or `omp -p`) in a pane of the herdr workspace `atlas-<run>`, one
-tab per worker. herdr is the default transport; tmux (session `atlas-<run>`,
-one window per worker) is used only when `ATLAS_COLONY_TRANSPORT=tmux` is set
-or the herdr socket does not answer. The in-process colony stays the default
-otherwise. Every worker pane carries `ATLAS_PROJECT_ROOT`, `ATLAS_WORKER_NAME`
-and the lead's 18 `ATLAS_*`/profile env switches (`FORWARDED_ENV` in
-`scripts/atlas_mux.py`) as `env K=V` pins in the pane command, so a worker
-honors the lead's kill switches. Spawn manually only to debug:
+run the colony. claude-bg is the default transport for claude workers: the
+worker runs as a supervised native background dispatch (`claude --bg --name
+<worker> --agent atlas:<role>`; status via `claude agents --json`, kill via
+`claude stop`), not in a pane. Panes are opt-in: `ATLAS_COLONY_TRANSPORT=herdr`
+runs each worker as its own detached headless process (`claude -p` or `omp -p`)
+in a pane of the herdr workspace `atlas-<run>`, one tab per worker;
+`ATLAS_COLONY_TRANSPORT=tmux` forces tmux instead (session `atlas-<run>`, one
+window per worker). omp workers always run as panes — herdr when its server is
+up, else tmux. The in-process colony stays the default otherwise. Every worker pane carries `ATLAS_PROJECT_ROOT`, `ATLAS_WORKER_NAME`
+and the lead's 21 `ATLAS_*`/profile env switches (`FORWARDED_ENV` in
+`scripts/atlas_mux.py`, now also `ATLAS_LEAD_NAME`, `ATLAS_CHANNEL` and
+`ATLAS_LEAD_AGENT` for the claude-bg native SendMessage wake) as `env K=V`
+pins in the pane command, so a worker honors the lead's kill switches. Spawn
+manually only to debug:
 
 ```bash
 export ATLAS_MUX=tmux

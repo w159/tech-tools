@@ -240,6 +240,15 @@ decision (the lead may still edit inline and then dispatch a verifier).
 Row-by-row status and how each surface is created, read, updated, and deleted:
 [docs/atlas-harness-parity.md](../../docs/atlas-harness-parity.md).
 
+## The Claude Code mod (in-terminal UI)
+
+The plugin ships an in-process mods module (`mod/`, wired by the `modules` entry in
+`hooks/hooks.json`; needs Claude Code 2.1.287+) that draws an always-on contract-track
+band above the prompt, a `/atlas` Command Center (Colony diorama, IRC Channel, Board
+kanban, Squad roster) and restyled spinner/tool/dispatch sites, one pixel persona per
+`agents/*.md` agent. It reads `.atlas/.run/` read-only and changes state only through
+the existing CLIs; `ATLAS_MOD=off` disables it. Full detail: `docs/atlas-mod.md`.
+
 ## Colony work (shared board + notes)
 
 Subagents work off one durable todo board at `<project>/.atlas/.run/todos.json`:
