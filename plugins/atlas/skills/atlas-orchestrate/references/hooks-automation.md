@@ -201,8 +201,9 @@ orchestrator rationalizes "I'll mark it unverified and move on"); this is the ma
   forced continuation (`stop_hook_active`) is allowed, and after >5 Stop events in 120 s the circuit
   breaker silences the gate for the session. On omp the bridge additionally allows at most 3
   consecutive blocks (`MAX_STOP_BLOCKS` in `omp/stop-bridge.ts`). Fail-open on any error. Disable
-  entirely with `ATLAS_GATE=off`. Block-loop limit: `BLOCK_LOOP_LIMIT=3`; after 3 identical consecutive
-  blocks the 4th Stop is allowed and `gate_block_loop` friction is recorded.
+  entirely with `ATLAS_GATE=off`. Block-loop limit: `BLOCK_LOOP_LIMIT=3` (tunable with
+  `ATLAS_GATE_BLOCK_LOOP`, clamped to 1-7); after N identical consecutive blocks the next Stop
+  is allowed and `gate_block_loop` friction is recorded.
 - **On by default when docs/ exists** (via the plugin's hooks.json; a plain `install_hooks.py --apply`
   does not install it, add `--select completion-gate`). Disable with `ATLAS_GATE=off`. (Note: it coexists with codebase-brain's
   `validate_gate.py` Stop hook -- that one is message-text based, this one is artifact based;

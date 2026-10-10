@@ -37,6 +37,7 @@ sys.path.insert(
     0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
 )
 import atlas_hook_guard  # noqa: E402
+import worker_inbox  # noqa: E402  (same-dir hook module; stdlib-only, lazy atlas_todo)
 
 # Per-session "recall satisfied" markers (tests point this at a temp dir).
 GATE_MARKER_DIR = os.path.join(tempfile.gettempdir(), "atlas-recall-gate")
@@ -233,6 +234,12 @@ def _decide(data: dict) -> str | None:
         if data.get("agent_id") or "/subagents/" in str(
             data.get("transcript_path") or ""
         ):
+            return None
+        # Headless atlas_mux bg workers (ATLAS_WORKER_NAME pinned in their env) cannot
+        # grant the MCP approval a claude-mem recall needs, so arming would deny-loop
+        # them to `done` with no note; exempt them like the subagents above, same leaf
+        # marker as the 10.4.1 dispatch-tripwire worker exemption.
+        if worker_inbox.is_worker_env():
             return None
         if (
             re.sub(r"[\W_]", "", tool_name.lower()) in _EXEMPT

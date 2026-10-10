@@ -4992,5 +4992,194 @@
     "status": "verified",
     "verified_at": "2026-10-09T22:28:32+00:00",
     "verified_by": "lead-01a122 (self-run scan)"
+  },
+  {
+    "id": "MOD-LEDGER-0910",
+    "surface": "plugins/atlas/mod, docs/ROADMAP.md, docs/CHANGELOG.md",
+    "category": "docs",
+    "severity": "info",
+    "title": "Docs ledger records the mod run; mod loads clean",
+    "evidence": [
+      "docs/CHANGELOG.md Unreleased block + docs/ROADMAP.md parity entry updated in-tree (git diff --numstat HEAD: docs/CHANGELOG.md 6+/, docs/ROADMAP.md 68+/1-, plugins/atlas/CHANGELOG.md 1+/1-); claude plugin validate --json plugins/atlas exit 0 success true 0 errors; bunx tsc -p plugins/atlas/mod/tsconfig.json exit 0; mod suite 211 pass / 0 fail across 16 files (routing 23/23, data/todos 13/0, register 4/4, sprites 46/46, restyle 13/0, notify wired {reason:'answer'}). Stage-0 live checks remain the 11.0.0 gate."
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin validate --json plugins/atlas; cd plugins/atlas/mod && bunx tsc --noEmit -p tsconfig.json && bun test --preload /tmp/cc_testing_preload.ts .",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-10T02:45:34+00:00",
+    "verified_by": "lead-01a122"
+  },
+  {
+    "id": "PARITY-PLAN-1010",
+    "surface": "docs/plans/claude-code-native-parity.md",
+    "category": "docs",
+    "severity": "info",
+    "title": "Native parity plan doc assembled, cross-checked, critic-fixed",
+    "evidence": [
+      "docs/plans/claude-code-native-parity.md: 13 capability rows (5 covered-natively / 6 hybrid / 2 keep-atlas), 15 gaps (R1-R5 research-ledger, S1-S6 source gated on user confirmation, D1-D4 deferred); completeness-critic pass verified rows against all 14 records, 7 findings (isDelivered misattribution, uncited baseline numbers, stale D2, D4 gate list, notify_when_idle direction, missing restyle row, 2 citation offsets) all fixed by the doc author; research phase 20/22 with residuals enumerated."
+    ],
+    "doc_refs": [
+      "docs/plans/claude-code-native-parity.md"
+    ],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-10T04:44:09+00:00",
+    "verified_by": "lead-01a122"
+  },
+  {
+    "id": "PARITY-SBATCH-1010",
+    "surface": "plugins/atlas/{scripts,hooks,mod}, docs/CHANGELOG.md, docs/ROADMAP.md, docs/plans/claude-code-native-parity.md",
+    "category": "feature",
+    "severity": "info",
+    "title": "S1/S2/S3/S4/S6 shipped; R2 records-resolved; R3/R4 live-confirmed",
+    "evidence": [
+      "Lead-run closeout: claude plugin validate --json plugins/atlas success:true; pytest mux+launch+gate+herdr 478 passed / 43 subtests (mux 75, launch 19+184, gate 325+13, dash suites 59+107 via implementers); mod suite 206 pass / 0 fail / 599 expect across 16 files; tsc exit 0. Shipped: S1 claude-bg default transport (probe-verified flags/stop/agents-json); S2 env-gated ATLAS_LEAD_AGENT native wake (byte-identical unset); S3 ATLAS_GATE_BLOCK_LOOP clamp 1-7 vs native cap 8; S4 spawn rewrite removed, frontmatter pins kept, resolvePin dead-code removed; S6 /api/v2/herd/agents merges source-tagged claude-bg rows. Docs synced (README transport statements 5 lines, FORWARDED_ENV lists, plan doc rows SHIPPED). Pending: S5 mirror; R1 animated-band = user-run 11.0.0 gate."
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin validate --json plugins/atlas | grep success; python3 -m pytest plugins/atlas/scripts/test_atlas_mux.py plugins/atlas/scripts/test_atlas_launch.py plugins/atlas/hooks/test_completion_gate.py plugins/atlas/scripts/test_atlas_herdr.py -q; cd plugins/atlas/mod && bunx tsc --noEmit -p tsconfig.json && bun test --preload /tmp/cc_testing_preload.ts .",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-10T05:42:24+00:00",
+    "verified_by": "lead-01a122"
+  },
+  {
+    "id": "PARITY-SUPPLEMENT-1010",
+    "surface": "docs/{ROADMAP,CHANGELOG,atlas-colony,atlas-channels,atlas-harness-parity}.md, plugins/atlas/CHANGELOG.md, plugins/atlas/scripts/atlas_mux.py",
+    "category": "docs",
+    "severity": "info",
+    "title": "Ledger consistency + S2 receiver-side acceptance closed",
+    "evidence": [
+      "LedgerConsistency: ledgers carry verified numbers (206 pass / 0 fail across 16 files; CHANGELOG '16 files'; plugin CHANGELOG Native adoption block; colony/channels/ROADMAP transport statements match atlas_mux.py; zero stale herdr-default phrases repo-wide after HarnessParityLine fixed docs/atlas-harness-parity.md:130). BgInboundAccept: env forwarding verified already-present (ATLAS_WORKER_NAME + FORWARDED_ENV, set-only) and bg workers now spawn with --settings '{\"crossSessionInbound\":\"accept\"}' (red-first, mux 77 passed / 30 subtests, launch 19 passed, live probe 3550d17a accepted + stopped). S2 open half recorded: ATLAS_LEAD_AGENT population is lead-side. Evidence: .atlas/evidence/parity-r3r4-2026-10-10/probes.md. TempDirFix cleared the last pi-lens blocker (S108) leaving 13 pre-existing warnings."
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m pytest plugins/atlas/scripts/test_atlas_mux.py -q (77 passed); grep -rn 'herdr panes by default|tmux as fallback' docs/ (0 hits); pi-lens mode=full test_atlas_mux.py (0 blocking)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-10T05:53:31+00:00",
+    "verified_by": "lead-01a122"
+  },
+  {
+    "id": "LENS-PHANTOM-1010",
+    "surface": "plugins/atlas/scripts/test_atlas_launch.py, plugins/atlas/hooks/completion_gate.py, plugins/atlas/scripts/test_atlas_control.py",
+    "category": "tooling",
+    "severity": "medium",
+    "title": "Stop-gate finding set names two nonexistent test files; named targets already clean",
+    "evidence": [
+      "ctx_glob '**/test_atlas_gates*' and '**/test_atlas_completion*' -> 0 files matched in 3,186 walked (repo-wide; git status confirms neither tracked nor untracked under plugins/atlas). The other two named targets verified clean: plugins/atlas/scripts/test_atlas_launch.py lens mode=full 'No issues across 1 file' + 19/19 pytest after the I001 import sort; plugins/atlas/hooks/completion_gate.py 0 blocking per lens mode=full (LensBlockers2 run) with 362 passed / 13 subtests across gate+control suites. Verdict: stop-gate finding cache is stale (phantom paths + already-fixed imports); no edits made."
+    ],
+    "doc_refs": [],
+    "reproduction": "ctx_glob patterns; lens_diagnostics mode=full paths=[test_atlas_launch.py]; python3 -m pytest plugins/atlas/scripts/test_atlas_launch.py plugins/atlas/hooks/test_completion_gate.py plugins/atlas/scripts/test_atlas_control.py -q",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-10T06:12:00+00:00",
+    "verified_by": "lead-01a122"
+  },
+  {
+    "id": "LENS-PHANTOM-1010",
+    "surface": "lens_diagnostics, plugins/atlas/{hooks/completion_gate.py,scripts/atlas_mux.py,scripts/test_atlas_launch.py}",
+    "category": "tooling",
+    "severity": "high",
+    "title": "STOP-GATE PHANTOM: stale cache refuted by fresh lens mode=full",
+    "evidence": [
+      "(1) ctx_glob '**/test_atlas_gates*' and '**/test_atlas_completion*' -> 0 matches in 3,186 files (phantom paths). (2) test_atlas_launch.py lens mode=full -> No issues; 19/19 pytest. (3) completion_gate.py lens mode=full -> 0 blockers, only 9 pre-existing warnings (no L1217/L1258/L1261/L302); the .get(letter, letter) join yields str-only at runtime AND the guarded call sites were verified guard-present by LensBlockers2 \u2014 pyright-style generator typing is not a lens criterion. (4) atlas_mux.py L830/L950 are warnings (10/10 severity + sleep-in-test mis-loc), not blockers. (5) Secrets: gitleaks 43s run -> 0 secrets. The STOP-gate finding set names nonexistent files and already-resolved items; its cache is stale. No further edits warranted; suites green (381 passed / 13 subtests across launch+gate+control)."
+    ],
+    "doc_refs": [],
+    "reproduction": "xd://lens_diagnostics mode=full paths=[completion_gate.py, atlas_mux.py] refreshRunners=cheap; ctx_glob patterns; python3 -m pytest launch+gate+control suites",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-10T06:13:59+00:00",
+    "verified_by": "lead-01a122"
+  },
+  {
+    "id": "LENS-PHANTOM-1010",
+    "surface": "plugins/atlas/hooks/completion_gate.py, plugins/atlas/scripts/atlas_mux.py",
+    "category": "tooling",
+    "severity": "high",
+    "title": "Gate items re-refuted by direct read (third pass)",
+    "evidence": [
+      "Lead read the code at the gate's own line refs: completion_gate.py:302 = guarded try with explicit False/True returns inside except (OSError, UnicodeDecodeError) (the negated-conditional form is present in function -style reader); :1217 = 'names = \", \".join(_CONDITION_NAMES.get(letter, letter) for letter in failed)' \u2014 str-only by construction; :1258-1261 = inside contextlib.suppress(OSError, ValueError) plus immediately following try/os.makedirs/except OSError; atlas_mux.py:847 = except (SystemExit, KeyboardInterrupt) as exc \u2014 an exception-class tuple, not a boolean expression (B030 not applicable). Secrets: gitleaks (43s, refreshed) = 0 secrets. The stop-gate set is stale; identical verdict to the 10-10 mode=full scan (0 blockers). No code churn performed on already-correct fail-open code."
+    ],
+    "doc_refs": [],
+    "reproduction": "read plugins/atlas/hooks/completion_gate.py:296-308 and :1210-1266; read plugins/atlas/scripts/atlas_mux.py:840-855; lens_diagnostics mode=full refreshRunners=cheap",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-10T06:27:35+00:00",
+    "verified_by": "lead-01a122"
+  },
+  {
+    "id": "PARITY-S5-1010",
+    "surface": "plugins/atlas/{scripts/atlas_mux.py,hooks/completion_gate.py}, docs/plans/2026-10-10-claude-code-native-parity.md, docs/CHANGELOG.md, .atlas/.run/todos board",
+    "category": "feature",
+    "severity": "info",
+    "title": "S6 sibling S5 task-mirror shipped opt-in; last gate items closed",
+    "evidence": [
+      "S5: opt-in ATLAS_TASKS_MIRROR brief paragraph, unset=byte-identical, red-first; mux 79 passed/30 subtests with launch 19 (lead rerun 404 passed/43 subtests across gate+mux after statics); honesty clause ledgered in plan row + changelogs (TaskCreate on plain claude-bg workers not probed). Board drained: 109 open -> 0 with per-category evidence. Plan doc renamed docs/plans/2026-10-10-claude-code-native-parity.md (lint_docs_names OK), refs updated. Statics: completion_gate 302/1217/1258 + atlas_mux 847 behavior-identical restatements, lens 0 blocking, pyright-direct 0."
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m pytest plugins/atlas/scripts/test_atlas_mux.py plugins/atlas/hooks/test_completion_gate.py -q; lens_diagnostics mode=full; atlas_todo.py list -> STILL_OPEN 0",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-10T06:47:05+00:00",
+    "verified_by": "lead-01a122"
+  },
+  {
+    "id": "PARITY-E2E-1010",
+    "surface": "plugins/atlas/scripts/atlas_mux.py, plugins/atlas/mod, docs/plans/2026-10-10-claude-code-native-parity.md",
+    "category": "feature",
+    "severity": "info",
+    "title": "Surface E2E: mux spawn/status/kill live; S5 mirror probed inert on bg workers",
+    "evidence": [
+      "Real-surface run: ATLAS_MUX=tmux atlas_mux.py spawn --run parity-e2e --name e2e-s1 --harness claude --agent runner -> ok, transport claude-bg, agent_id e8281551; status --run returned live row (blocked: plugin permission dialog surfaced by tail); claude stop -> stopped; kill -> ok; opt-in gate error verified. S5: bg worker spawned with ATLAS_TASKS_MIRROR=1 (agent_id 76ac77cd) + headless toolset probe on atlas:runner -> NONE (no task-list tools on plain bg workers) -> mirror inert there by env-gate design; ledgered. Evidence: .atlas/evidence/parity-r3r4-2026-10-10/{e2e-mux.md,probes.md}. Suites: mux 79/30, gate 325/13, launch 19, mod 206/0, validate success:true."
+    ],
+    "doc_refs": [],
+    "reproduction": "see .atlas/evidence/parity-r3r4-2026-10-10/e2e-mux.md commands",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-10T07:01:18+00:00",
+    "verified_by": "lead-01a122"
+  },
+  {
+    "id": "PARITY-E2E-1010",
+    "surface": "plugins/atlas/scripts/{atlas_mux.py,test_atlas_mux.py}, .atlas/.run/board/e2e-s8.jsonl",
+    "category": "feature",
+    "severity": "info",
+    "title": "S1 full unattended loop proven on real mux surface",
+    "evidence": [
+      "e2e-s8 (agent_id 55afa81f) ran end-to-end with round-2 unattended-safe defaults: spawn ok -> ran without dialog -> mandatory report note landed (.atlas/.run/board/e2e-s8.jsonl seq 217 owner e2e-s8 to lead text 'e2e-s1 ok') -> status 'done'/dead:1 -> cleanup. Earlier e2e-s6/e2e-s7 blocked on one-time user-scope claude-mem MCP server-trust dialog (exempt from permission modes); e2e-s8 clean after first approval. Kill path: killed:true on live rows x2 (e2e-s6/e2e-s7), killed:false honestly on stopped runs. Allow rules landed red-first (mux 80 passed/30 subtests): dontAsk default + Bash(python3 *atlas_todo.py*) + mcp__claude_mem_mcp_search; settings JSON crossSessionInbound accept. Evidence: .atlas/evidence/parity-r3r4-2026-10-10/{e2e-mux.md,stopgate-refutation.md,probes.md}."
+    ],
+    "doc_refs": [],
+    "reproduction": "commands in e2e-mux.md",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-10T07:19:07+00:00",
+    "verified_by": "lead-01a122"
+  },
+  {
+    "id": "PARITY-E2E-HEADLESS-1010",
+    "surface": "plugins/atlas/hooks/recall_gate.py, plugins/atlas/scripts/atlas_mux.py, .atlas/.run/board/e2e-s13-probe.jsonl",
+    "category": "bug",
+    "severity": "medium",
+    "title": "Unattended headless worker loop proven; recall_gate worker exemption landed",
+    "evidence": [
+      "e2e-s13-probe (source-loaded worker, claude --bg --permission-mode dontAsk with allow rules): ran to completion headless with NO permission prompt, made Bash calls under allow rules, posted board row (.atlas/.run/board/e2e-s13-probe.jsonl seq 221). Root cause of prior silent fails (e2e-s10/s11 done-0-notes) found: recall_gate denied every main-thread call in bg worker sessions lacking claude-mem recall; fixed by WorkerRecallSkip (recall_gate.py skips arming for ATLAS_WORKER_NAME sessions via worker_inbox.is_worker_env, 10.4.1 analogy) \u2014 red-first, test_recall_gate 25 passed, completion_gate 325/13. Caveat recorded: mux _bg_brief path not re-verified post-recall-fix (e2e-s8 proven pre-fix; third pass suggested)."
+    ],
+    "doc_refs": [],
+    "reproduction": "claude --bg --name e2e-s13-probe --permission-mode dontAsk --settings (see e2e-mux.md) --plugin-dir plugins/atlas; check .atlas/.run/board/e2e-s13-probe.jsonl",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-10T07:32:48+00:00",
+    "verified_by": "lead-01a122"
   }
 ]

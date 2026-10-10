@@ -16,8 +16,10 @@ the first ``ensure()`` mirrors it to ``$ATLAS_HOME/colony/herdr-web-ui`` and run
 herdr core is a pinned *binary* (``plugins/atlas/colony/herdr/PIN.json``): ``install-check`` fails with an
 actionable message when the installed herdr is older than the pin.
 
-CLI: ``python3 atlas_herdr.py status|ensure|reap|install-check|create-pane`` (prints JSON).
-``create-pane --name N --cwd D [--run R] [--env K=V ...] -- <command...>`` opens one worker pane.
+* CLI: ``python3 atlas_herdr.py status|ensure|reap|install-check|create-pane|prompt|close-pane`` (prints JSON).
+* ``create-pane --name N --cwd D [--run R] [--env K=V ...] -- <command...>`` opens one worker pane.
+* ``prompt --pane ID --text TEXT [--root]`` sends text to an idle agent pane.
+* ``close-pane --pane ID [--root]`` closes one colony pane.
 
 Stdlib only. Loopback only.
 """
@@ -303,6 +305,9 @@ class PromptRefused(Exception):
 
 
 PROMPT_MAX = 8000
+# herdr pane ids are "<workspace>:<pane>" (e.g. wB:p1); same charset herdr's own HTTP route allows.
+PANE_ID_RX = re.compile(r"[A-Za-z0-9:_.\-]{1,64}")
+PROMPT_CLI_MAX = 2000
 
 
 def send_prompt(pane_id, text) -> dict:
@@ -977,7 +982,9 @@ def ensure() -> dict:
     try:
         _refresh_url()
         who, colony_url, upstream_url = _where()
-        if who == "colony" and not _mirror_stale():  # fast path, no lock: nothing to spawn or rebuild
+        if (
+            who == "colony" and not _mirror_stale()
+        ):  # fast path, no lock: nothing to spawn or rebuild
             return _result("reused", colony_url, upstream_url)
         chk = install_check()
         if not chk["ok"]:
@@ -997,7 +1004,9 @@ def ensure() -> dict:
             _refresh_url()
             who, colony_url, upstream_url = _where()
             if who == "colony":  # a lock holder before us may have started it
-                if _mirror_stale():  # healthy but built from an older tree: rebuild, restart ours only
+                if (
+                    _mirror_stale()
+                ):  # healthy but built from an older tree: rebuild, restart ours only
                     return _restart_stale(colony_url, upstream_url)
                 return _result("reused", colony_url, upstream_url)
             if _managed():  # starting up (or wedged): wait, never spawn a second
@@ -1122,6 +1131,52 @@ def _create_pane_cli(argv: list[str]) -> dict:
     )
 
 
+def _prompt_cli(argv: list[str]) -> dict:
+    """CLI for send_prompt. --root is accepted for parity with sibling atlas scripts and ignored:
+    the colony is per-user ($ATLAS_HOME), not per-repo."""
+    pane = text = None
+    it = iter(argv)
+    for a in it:
+        if a == "--pane":
+            pane = next(it, "")
+        elif a == "--text":
+            text = next(it, "")
+        elif a == "--root":
+            next(it, "")
+        else:
+            return _err(f"unknown option {a!r}")
+    if not pane or text is None:
+        return _err("usage: prompt --pane ID --text TEXT [--root]")
+    if not PANE_ID_RX.fullmatch(pane):
+        return _err(f"invalid pane id {pane!r}")
+    if len(text) > PROMPT_CLI_MAX:
+        return _err(f"text longer than {PROMPT_CLI_MAX} characters")
+    try:
+        res = send_prompt(pane, text)
+    except PromptRefused as e:
+        why = f" ({e.why})" if e.why else ""
+        return _err(f"prompt refused ({e.http}): {e.error}{why}")
+    return _ok(pane_id=pane, result=res)
+
+
+def _close_pane_cli(argv: list[str]) -> dict:
+    """CLI for close_pane; --root accepted and ignored (per-user colony)."""
+    pane = None
+    it = iter(argv)
+    for a in it:
+        if a == "--pane":
+            pane = next(it, "")
+        elif a == "--root":
+            next(it, "")
+        else:
+            return _err(f"unknown option {a!r}")
+    if not pane:
+        return _err("usage: close-pane --pane ID [--root]")
+    if not PANE_ID_RX.fullmatch(pane):
+        return _err(f"invalid pane id {pane!r}")
+    return close_pane(pane)
+
+
 def main(argv: list[str]) -> int:
     cmds = {
         "status": status,
@@ -1131,9 +1186,13 @@ def main(argv: list[str]) -> int:
     }
     if len(argv) >= 2 and argv[1] == "create-pane":
         out = _create_pane_cli(argv[2:])
+    elif len(argv) >= 2 and argv[1] == "prompt":
+        out = _prompt_cli(argv[2:])
+    elif len(argv) >= 2 and argv[1] == "close-pane":
+        out = _close_pane_cli(argv[2:])
     elif len(argv) != 2 or argv[1] not in cmds:
         sys.stderr.write(
-            "usage: atlas_herdr.py status|ensure|reap|install-check|create-pane\n"
+            "usage: atlas_herdr.py status|ensure|reap|install-check|create-pane|prompt|close-pane\n"
         )
         return 2
     else:

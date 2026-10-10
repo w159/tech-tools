@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """atlas_mux -- opt-in colony mode (ATLAS_MUX=tmux); workers run as panes of a herdr workspace.
 
-Transport: herdr by default (workspace `atlas-<run>`, one tab/pane per worker, created over the herdr socket by
-atlas_herdr.create_pane). tmux is the explicit fallback: ATLAS_COLONY_TRANSPORT=tmux, or herdr is not running
-(session `atlas-<run>`, one window per worker). Each worker runs as its own headless harness process,
+Transport: claude-bg by default for claude workers — `claude --bg --name <worker> --agent atlas:<role>` runs the
+harness itself as a supervised background agent (status via `claude agents --json`, kill via `claude stop`; the
+worker's ONE report note contract travels in the composed brief, since no run-worker wrapper watches the output).
+ATLAS_COLONY_TRANSPORT=herdr|tmux forces a pane transport. omp workers always run as panes (claude --bg is
+claude-only): herdr when its server is up, else tmux (session `atlas-<run>`, one window per worker).
+Each worker runs as its own headless harness process,
 at the cost tier its agent definition declares:
 
   claude: claude -p --agent atlas:<role> --model <m> --effort <e> --permission-mode <p> <prompt>
@@ -91,6 +94,12 @@ FORWARDED_ENV = (
     "OMP_PROFILE",
     "ATLAS_LEAD_NAME",
     "ATLAS_CHANNEL",
+    # the lead's agent/session name; claude-bg brief adds the SendMessage native-wake
+    # paragraph only when it is set (see _bg_brief) and the worker env carries it for the wake
+    "ATLAS_LEAD_AGENT",
+    # the lead's task-mirror switch; claude-bg brief adds the TaskCreate mirror paragraph
+    # only when it is truthy (see _bg_brief)
+    "ATLAS_TASKS_MIRROR",
 )
 # omp prints one of these per unreachable MCP server; the run itself is fine.
 NOISE_RE = re.compile(
@@ -176,12 +185,82 @@ def _tmux(*args: str) -> subprocess.CompletedProcess:
 
 
 def transport() -> str:
-    """'herdr' (default) or 'tmux'. tmux only when ATLAS_COLONY_TRANSPORT=tmux, or herdr is not running."""
-    if os.environ.get("ATLAS_COLONY_TRANSPORT", "").lower() == "tmux":
-        return "tmux"
+    """'claude-bg' (the default), or the pane transport forced via ATLAS_COLONY_TRANSPORT=herdr|tmux."""
+    forced = os.environ.get("ATLAS_COLONY_TRANSPORT", "").strip().lower()
+    return forced if forced in ("herdr", "tmux", "claude-bg") else "claude-bg"
+
+
+def _pane_transport() -> str:
+    """'herdr' when the herdr server is up, else 'tmux' — for workers that must run as panes
+    (omp has no claude --bg equivalent; interactive launches always need a pane)."""
     import atlas_herdr
 
     return "herdr" if atlas_herdr._server_up() else "tmux"
+
+
+CLAUDE_TIMEOUT_S = 30
+# line 1 of a successful `claude --bg` run: `backgrounded · <id> · <name>`
+_BG_ID_RE = re.compile(r"backgrounded\s+·\s+(\S+)")
+# claude agents --json states that mean the background agent is finished
+_BG_DONE_STATES = frozenset(("done", "failed", "stopped", "error"))
+
+
+def _claude(
+    *args: str, env: dict | None = None, cwd: str | None = None
+) -> subprocess.CompletedProcess:
+    """Run the claude CLI with a bounded wait. A missing binary or a hung call comes back as a
+    failed CompletedProcess (127 / 124) with a stderr reason, never an exception or a hang."""
+    try:
+        return subprocess.run(
+            ["claude", *args],
+            capture_output=True,
+            text=True,
+            env=clean_env() if env is None else env,
+            cwd=cwd,
+            timeout=CLAUDE_TIMEOUT_S,
+        )
+    except FileNotFoundError:
+        return subprocess.CompletedProcess(
+            ["claude", *args], 127, "", "claude not found on PATH"
+        )
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(
+            ["claude", *args], 124, "", f"claude timed out after {CLAUDE_TIMEOUT_S}s"
+        )
+
+
+def _claude_workers(root: str) -> list | None:
+    """claude-bg workers of `root` from `claude agents --json`: background agents whose cwd is
+    this project. None when claude is missing or answers garbage (status then reports none)."""
+    res = _claude("agents", "--json")
+    if res.returncode != 0:
+        return None
+    try:
+        rows = json.loads(res.stdout)
+    except ValueError:
+        return None
+    if not isinstance(rows, list):
+        return None
+    real = os.path.realpath(root)
+    out = []
+    for row in rows:
+        if not isinstance(row, dict) or row.get("kind") != "background":
+            continue
+        if os.path.realpath(str(row.get("cwd") or "")) != real:
+            continue
+        name = str(row.get("name") or "")
+        if name in ("lead", "Sidebar"):
+            continue
+        state = str(row.get("state") or row.get("status") or "").lower()
+        out.append(
+            {
+                "name": name,
+                "dead": 1 if state in _BG_DONE_STATES else 0,
+                "pid": row.get("id") or row.get("pid") or "",
+                "state": state,
+            }
+        )
+    return out
 
 
 def pane_env(root: str, name: str) -> dict:
@@ -426,6 +505,131 @@ def _open_window(session: str, name: str, pane: str) -> str | None:
     return None
 
 
+def _bg_log_tail(pid: str) -> str:
+    """Recent terminal output of a running claude-bg worker (`claude logs <id>`, verified live:
+    it streams while the agent runs and claude clears the buffer on exit — a finished worker's
+    report reaches the board as its own note instead). Same tail shape as the pane capture."""
+    res = _claude("logs", str(pid))
+    if res.returncode != 0:
+        return ""
+    return _report(
+        [t for t in res.stdout.splitlines() if t.strip() and not NOISE_RE.match(t)]
+    )
+
+
+def _bg_brief(prompt: str, root: str, name: str, chan: str, lead: str) -> str:
+    """Task prompt + the board report contract. A pane worker gets its ONE report note posted by
+    the run-worker wrapper watching its output; a claude-bg agent has no wrapper, so the note
+    command travels in the brief itself (same C2 shape: report block, then the exit line). The
+    note is the transport of record; when the lead exported ATLAS_LEAD_AGENT, one env-gated
+    paragraph adds a best-effort SendMessage native wake (unset = byte-identical brief), and a
+    truthy ATLAS_TASKS_MIRROR adds an opt-in TaskCreate board-mirror paragraph the same way."""
+    todo = Path(__file__).resolve()
+    note_cmd = (
+        f"python3 {todo} note --root {shlex.quote(root)} --channel {shlex.quote(chan)} "
+        f"--owner {shlex.quote(name)} --to {shlex.quote(lead or 'lead')} --kind report "
+        "'<report>'"
+    )
+    wake = ""
+    if (os.environ.get("ATLAS_LEAD_AGENT") or "").strip():
+        wake = (
+            "If the env var ATLAS_LEAD_AGENT is set to your lead's session name and ListAgents "
+            "shows it, send the same report text via SendMessage (to: that name) immediately "
+            "after posting the note. Do not retry sends. Skip entirely when unset or not "
+            "listed.\n\n"
+        )
+    mirror = ""
+    if (os.environ.get("ATLAS_TASKS_MIRROR") or "").strip().lower() in (
+        "1",
+        "true",
+        "on",
+    ):
+        mirror = (
+            "If a TaskCreate tool is available to you, mirror the board item you claim: "
+            'TaskCreate with subject "[<phase>] <content>" at claim time and mark it '
+            "completed when you post your completion. The atlas board remains the source "
+            "of truth; do not duplicate status updates beyond the one completion.\n\n"
+        )
+    return (
+        f"{prompt}\n\n# Atlas worker report contract\n"
+        "When the task ends, post exactly ONE report note to the atlas board by running this "
+        "shell command, with <report> replaced by your STATUS..NEXT report block whose LAST line "
+        "is `exit <code>` (`exit 0` on success, otherwise `exit 1 [failed: reason]`):\n\n"
+        f"    {note_cmd}\n\n"
+        f"{wake}"
+        f"{mirror}"
+        "Post no other notes to the board."
+    )
+
+
+def _spawn_claude_bg(args, root: str, chan: str, model, level, session: str) -> int:
+    """claude-bg transport: `claude --bg` supervises the worker itself — no pane, no run-worker
+    wrapper. Status/kill go through `claude agents --json` / `claude stop`."""
+    prompt = Path(args.prompt_file).read_text(encoding="utf-8")
+    lead = (os.environ.get("ATLAS_LEAD_NAME") or "").strip() or str(
+        (atlas_todo.get_channel(root, chan) or {}).get("lead") or "lead"
+    )
+    argv = [
+        "--bg",
+        "--name",
+        args.name,
+        "--agent",
+        f"atlas:{args.agent}",
+        # accept cross-session inbound: the lead's SendMessage must not be parked on a
+        # permission-class mismatch (the interactive lead runs the accepting side); the
+        # allow rules cover the brief's two mandatory actions (board-note Bash call,
+        # claude-mem MCP search) so an unattended worker never prompts on them
+        "--settings",
+        '{"crossSessionInbound":"accept","permissions":{"allow":'
+        '["Bash(python3 *atlas_todo.py*)","mcp__claude_mem_mcp_search"]}}',
+    ]
+    if model:
+        argv += ["--model", model]
+    if level:
+        argv += ["--effort", level]
+    argv += [
+        # unattended-safe by default: without a caller mode, dontAsk auto-denies prompts
+        # (allow rules still run) instead of hanging; explicit --permission-mode passes through
+        "--permission-mode",
+        args.permission_mode or "dontAsk",
+        _bg_brief(prompt, root, args.name, chan, lead),
+    ]
+    env = dict(clean_env(), ATLAS_PROJECT_ROOT=root, ATLAS_WORKER_NAME=args.name)
+    env.update({k: os.environ[k] for k in FORWARDED_ENV if os.environ.get(k)})
+    res = _claude(*argv, env=env, cwd=os.path.abspath(args.cwd) if args.cwd else root)
+    found = _BG_ID_RE.search(res.stdout)
+    if res.returncode != 0 or not found:
+        atlas_todo.leave(root, chan, args.name)
+        return _emit(
+            {
+                "ok": False,
+                "error": (
+                    res.stderr.strip()
+                    or res.stdout.strip()
+                    or f"claude --bg failed ({res.returncode})"
+                ),
+            },
+            1,
+        )
+    agent_id = found.group(1)
+    # the claude session id is a hex string: it goes in the string-handle slot (pid= would int() it)
+    atlas_todo.set_member_handles(root, args.name, chan or None, pane_id=agent_id)
+    return _emit(
+        {
+            "ok": True,
+            "session": session,
+            "name": args.name,
+            "harness": args.harness,
+            "agent": args.agent,
+            "model": model,
+            "level": level,
+            "agent_id": agent_id,
+            "transport": "claude-bg",
+            "board": str(Path(root) / BOARD_REL / f"{args.name}.jsonl"),
+        }
+    )
+
+
 def cmd_spawn(args) -> int:
     error = _validate(args)
     if error:
@@ -447,6 +651,11 @@ def cmd_spawn(args) -> int:
     if tier_error:
         atlas_todo.leave(root, chan, args.name)
         return _emit({"ok": False, "error": tier_error}, 2)
+    use = transport()
+    if use == "claude-bg":
+        if args.harness == "claude":
+            return _spawn_claude_bg(args, root, chan, model, level, session)
+        use = _pane_transport()  # claude --bg is claude-only: omp workers keep panes
     # Session creation, the name check and new-window run under one lock (_open_window):
     # parallel spawns of one run raced check-then-create and 7 of 8 failed.
     worker = [
@@ -467,8 +676,9 @@ def cmd_spawn(args) -> int:
         root,
         "--cwd",
         os.path.abspath(args.cwd) if args.cwd else root,
+        # pane default stays acceptEdits (only the claude-bg transport defaults dontAsk)
         "--permission-mode",
-        args.permission_mode,
+        args.permission_mode or "acceptEdits",
     ]
     if args.agents_dir:
         worker += ["--agents-dir", args.agents_dir]
@@ -493,7 +703,6 @@ def cmd_spawn(args) -> int:
         + (shlex.join(["env", *forwarded]) + " " if forwarded else "")
         + shlex.join(worker)
     )
-    use = transport()
     if use == "herdr":
         # herdr panes get the board pins as well: run-worker re-pins them for the harness, the pane shell needs them
         # for anything the lead runs there (and for the hooks of a manually started harness).
@@ -642,11 +851,8 @@ def cmd_run_worker(args) -> int:
         seen = [t for t in head if not NOISE_RE.match(t)]
         code, reason = _classify("\n".join(seen), proc.wait())
     except (SystemExit, KeyboardInterrupt) as exc:
-        code = (
-            exc.code
-            if isinstance(exc, SystemExit) and isinstance(exc.code, int)
-            else 130
-        )
+        code = getattr(exc, "code", 130)
+        code = code if isinstance(code, int) else 130
         proc.terminate()
         return finish(code, _report(lines), f"killed by signal {code - 128}")
     return finish(code, _report(lines), reason)
@@ -691,7 +897,34 @@ def cmd_status(args) -> int:
         )
     )
     use = transport()
-    if use == "herdr":
+    if use == "claude-bg":
+        rows = _claude_workers(str(root)) or []
+        # a running worker's terminal output: `claude logs <id>` (the pane transports capture it live)
+        for w in rows:
+            if not w["dead"] and w["pid"]:
+                w["tail"] = _bg_log_tail(str(w["pid"]))
+        # omp/pane workers of the same run still exist under a pane transport
+        pane_use = _pane_transport()
+        if pane_use == "herdr":
+            import atlas_herdr
+
+            try:
+                panes = [
+                    {"name": p["label"], "dead": 0, "pid": p["pane_id"]}
+                    for p in atlas_herdr.list_panes(args.run)
+                ]
+            except atlas_herdr.HerdrSockError:
+                panes = None
+        else:
+            panes = (
+                _windows(session)
+                if _tmux("has-session", "-t", session).returncode == 0
+                else None
+            )
+        windows = rows + [
+            w for w in (panes or []) if w["name"] not in ("lead", "Sidebar")
+        ]
+    elif use == "herdr":
         import atlas_herdr
 
         try:
@@ -754,47 +987,79 @@ def _kill_notes(root: str, names) -> None:
             atlas_todo.leave(root, home, name)
 
 
+def _stop_claude_bg(root: str) -> list:
+    """`claude stop` every live claude-bg worker of `root`; returns the stopped names. The
+    agents rows carry no run grouping, so the root is the kill scope (the same destructiveness
+    class as herdr close_run / tmux kill-session)."""
+    stopped = []
+    for w in _claude_workers(root) or []:
+        if w["dead"]:
+            continue
+        if _claude("stop", str(w["pid"])).returncode == 0:
+            stopped.append(w["name"])
+    return stopped
+
+
 def cmd_kill(args) -> int:
     session = _session(args.run)
     root = os.path.abspath(
         args.root or os.environ.get("ATLAS_PROJECT_ROOT") or os.getcwd()
     )
-    if transport() == "herdr":
+    use = transport()
+    configured = use
+    stopped: list = []
+    if use == "claude-bg":
+        stopped = _stop_claude_bg(str(root))
+        use = _pane_transport()  # panes of this run (omp workers) may still exist
+    if use == "herdr":
         import atlas_herdr
 
         res = atlas_herdr.close_run(args.run)
         if not res["ok"]:
+            if stopped:
+                _kill_notes(root, stopped)
             return _emit(
                 {
                     "ok": False,
                     "session_name": session,
-                    "killed": False,
+                    "transport": configured,
+                    "killed": bool(stopped),
                     "error": res["reason"],
                 },
                 1,
             )
         # a killed worker never writes its own exit: without one it reads as working forever
-        _kill_notes(root, res["closed"])
+        _kill_notes(root, [*res["closed"], *stopped])
         return _emit(
             {
                 "ok": True,
                 "session_name": session,
-                "transport": "herdr",
-                "killed": bool(res["closed"]),
+                "transport": configured,
+                "killed": bool(res["closed"]) or bool(stopped),
             }
         )
     if _tmux("has-session", "-t", session).returncode != 0:
-        return _emit({"ok": True, "session_name": session, "killed": False})
+        if stopped:
+            _kill_notes(root, stopped)
+        return _emit(
+            {
+                "ok": True,
+                "session_name": session,
+                "transport": configured,
+                "killed": bool(stopped),
+            }
+        )
     victims = [w["name"] for w in _windows(session) or [] if w["name"] != "lead"]
     res = _tmux("kill-session", "-t", session)
     if res.returncode == 0:
         # a killed worker never writes its own exit: without one it reads as working forever
-        _kill_notes(root, victims)
+        _kill_notes(root, [*victims, *stopped])
     return _emit(
         {
             "ok": res.returncode == 0,
             "session_name": session,
-            "killed": res.returncode == 0,
+            "transport": configured,
+            "killed": res.returncode == 0 or bool(stopped),
             **({"error": res.stderr.strip()} if res.returncode else {}),
         },
         0 if res.returncode == 0 else 1,
@@ -807,7 +1072,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    def worker_opts(sp, internal=False):
+    def worker_opts(sp, internal=False, permission_default: str | None = "acceptEdits"):
         sp.add_argument("--run", required=True)
         sp.add_argument("--name", required=True)
         sp.add_argument("--harness", choices=("claude", "omp"), required=True)
@@ -829,8 +1094,8 @@ def _parser() -> argparse.ArgumentParser:
         )
         sp.add_argument(
             "--permission-mode",
-            default="acceptEdits",
-            help="claude --permission-mode (default acceptEdits)",
+            default=permission_default,
+            help="claude --permission-mode (default acceptEdits; claude-bg spawns default dontAsk)",
         )
         sp.add_argument(
             "--command-override", help="test-only: shell command replacing the harness"
@@ -847,7 +1112,12 @@ def _parser() -> argparse.ArgumentParser:
         )
         sp.add_argument("--cwd", help="harness working directory (default: --root)")
 
-    worker_opts(sub.add_parser("spawn", help="start one worker window"))
+    # no --permission-mode default: the spawn transport decides (claude-bg: dontAsk so an
+    # unattended worker auto-denies instead of hanging; pane workers: acceptEdits in cmd_spawn)
+    worker_opts(
+        sub.add_parser("spawn", help="start one worker window"),
+        permission_default=None,
+    )
     worker_opts(
         sub.add_parser("run-worker", help="internal: the pane command"), internal=True
     )

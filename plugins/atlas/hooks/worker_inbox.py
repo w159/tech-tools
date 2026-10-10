@@ -193,17 +193,27 @@ def delivery(root, worker, rec, memo=None):
     return ("skipped", None) if seq <= cursor_seq else ("queued", None)
 
 
+# Collaboration kinds surface at the top of the injected mail with a short label
+# (a stuck/handoff/conflict note must not drown in ordinary chatter).
+PRIORITY_LABELS = {"handoff": "HANDOFF", "blocked": "BLOCKED", "conflict": "CONFLICT"}
+
+
 def _format(notes):
     plural = "" if len(notes) == 1 else "s"
     lines = [
         f"[atlas] {len(notes)} message{plural} for you from the board (answer or "
         "act on them; they are delivered once):"
     ]
-    for rec in notes:
+    # stable sort: collaboration kinds first, seq order kept within each tier
+    for rec in sorted(
+        notes, key=lambda r: 0 if r.get("kind") in PRIORITY_LABELS else 1
+    ):
+        label = PRIORITY_LABELS.get(str(rec.get("kind") or ""))
         text = str(rec.get("text") or "").strip()
         if len(text) > MAX_BODY:
             text = text[:MAX_BODY] + " ...[truncated]"
-        lines.append(f"- from {rec.get('owner') or 'anon'}: {text}")
+        prefix = f"[{label}] " if label else ""
+        lines.append(f"- {prefix}from {rec.get('owner') or 'anon'}: {text}")
     return "\n".join(lines)
 
 

@@ -1,6 +1,5 @@
 """Tests for atlas_launch (argv, env hygiene), atlas_todo.sweep/restore/carry_over and the todos `start` op."""
 
-import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import os
 import shlex
 import subprocess
@@ -11,6 +10,8 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
+
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import atlas_dash_work as work  # noqa: E402
@@ -168,16 +169,18 @@ class LaunchArgvTest(unittest.TestCase):
         self.assertIn("--cwd", argv)
         self.assertEqual(kw["env"]["ATLAS_MUX"], "tmux")
 
-    def test_herdr_not_running_falls_back_to_tmux(self):
+    def test_default_transport_is_claude_bg_and_pane_transports_stay_opt_in(self):
         with (
             mock.patch.dict(os.environ, {}, clear=False),
             mock.patch.object(atlas_herdr, "_server_up", lambda: False),
         ):
             os.environ.pop("ATLAS_COLONY_TRANSPORT", None)
-            self.assertEqual(atlas_mux.transport(), "tmux")
+            self.assertEqual(atlas_mux.transport(), "claude-bg")
         with mock.patch.object(atlas_herdr, "_server_up", lambda: True):
             os.environ.pop("ATLAS_COLONY_TRANSPORT", None)
-            self.assertEqual(atlas_mux.transport(), "herdr")
+            self.assertEqual(atlas_mux.transport(), "claude-bg")
+            with mock.patch.dict(os.environ, {"ATLAS_COLONY_TRANSPORT": "herdr"}):
+                self.assertEqual(atlas_mux.transport(), "herdr")
             with mock.patch.dict(os.environ, {"ATLAS_COLONY_TRANSPORT": "tmux"}):
                 self.assertEqual(atlas_mux.transport(), "tmux")
 

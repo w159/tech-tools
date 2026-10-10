@@ -44,7 +44,7 @@ flowchart LR
 
 ## Spawning workers (transport)
 
-`scripts/atlas_mux.py:transport()` returns `herdr` unless `ATLAS_COLONY_TRANSPORT=tmux` or the herdr socket does not answer (`atlas_herdr._server_up`), in which case it returns `tmux`.
+`scripts/atlas_mux.py:transport()` returns `claude-bg` by default (claude workers run natively via `claude --bg`, no pane); `ATLAS_COLONY_TRANSPORT=herdr|tmux` forces a pane transport. omp workers spawn as panes: herdr when the herdr server is up (`atlas_herdr._server_up`), else tmux.
 
 | Layer | What it does | Source |
 |---|---|---|
@@ -184,7 +184,7 @@ python3 plugins/atlas/scripts/atlas_remote.py url              # https://<node>.
 | Variable | Read by | Meaning |
 |---|---|---|
 | `ATLAS_COLONY` | `hooks/session_boot.py:ensure_colony` | `off`/`0`/`false`/`no` skips starting the colony web UI at session start. Default on. |
-| `ATLAS_COLONY_TRANSPORT` | `scripts/atlas_mux.py:transport` | `tmux` forces the tmux fallback; otherwise herdr when its socket answers. |
+| `ATLAS_COLONY_TRANSPORT` | `scripts/atlas_mux.py:transport` | `herdr\|tmux` forces a pane transport; otherwise `claude-bg` is the default for claude workers. |
 | `ATLAS_MUX` | `scripts/atlas_mux.py:_validate` | Must be `tmux` for `atlas_mux.py spawn` (the opt-in gate, kept as is). |
 | `ATLAS_REMOTE_PORT` | `scripts/atlas_remote.py` | Tailnet HTTPS port, default 8443. |
 | `ATLAS_DASHBOARD_PORT` | `scripts/atlas_dashboard.py` | Dashboard listen port, default 7421. |
@@ -239,3 +239,16 @@ The vendored herdr-web-ui keeps its `LICENSE` and `THIRD_PARTY_NOTICES.md`; the 
 | Session start | `hooks/session_boot.py` (`ensure_colony`) |
 | Remote access | `scripts/atlas_remote.py` (tests: `scripts/test_atlas_remote.py`), `skills/atlas-orchestrate/references/remote-access.md` |
 | Dashboard product overview | `docs/atlas-workboard.md` |
+| In-terminal view (Claude Code mod) | `docs/atlas-mod.md` (contract-track band, `/atlas` Command Center; `plugins/atlas/mod/`) |
+
+### Collaboration protocol
+
+Workers on a channel coordinate through the board's collaboration layer
+(`atlas_todo.py` `claims` / `claim-paths` / `release-paths` / `conflicts`,
+note kinds `claim`, `handoff`, `blocked`): claim each item and file path
+before editing it, message the holder on a conflict instead of taking the
+claim, post a `handoff` note when a peer consumes your output, post `blocked`
+instead of idling, and never skip your own verification because a peer said it
+passed — only the lead declares work done. The roster and the mod's Collab tab
+surface claims and conflicts live; completion gates and verifier requirements
+are unchanged. Full rules: `docs/atlas-channels.md` "Collaboration protocol".

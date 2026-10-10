@@ -188,5 +188,8 @@
         ]
       }
     ]
-  }
+  },
+  "modules": [
+    "../mod/register.ts"
+  ]
 }

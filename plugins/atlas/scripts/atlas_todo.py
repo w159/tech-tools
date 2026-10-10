@@ -755,6 +755,7 @@ def note(
     delivery: Optional[str] = None,
     channel: Optional[str] = None,
     kind: str = "note",
+    paths: Optional[List[str]] = None,
 ) -> dict:
     """Append one note to `<root>/.atlas/.run/board/<owner>.jsonl`.
 
@@ -785,6 +786,8 @@ def note(
     }
     if kind and kind != "note":
         record["kind"] = kind
+    if paths:
+        record["paths"] = [str(p) for p in paths]
     if delivery:
         record["delivery"] = delivery
     with _file_lock(target / ".seq"):
@@ -878,6 +881,137 @@ def _note_seq(rec: dict) -> int:
         return int(rec.get("seq") or 0)
     except (TypeError, ValueError):
         return 0
+
+
+# --- path claims (who is editing what) -------------------------------------------
+#
+# A worker posts kind:'claim' with a `paths` list before editing; the latest claim
+# per owner wins, paths are dropped by the owner's kind:'release' note and the
+# whole claim by the owner's exit note (the mux report note ending in `exit <n>`).
+# `conflicts` reports overlaps (segment-boundary prefix aware, other owners only)
+# and posts a kind:'conflict' note to each conflicting owner.
+
+_EXIT_NOTE_RE = re.compile(r"(?m)^exit -?\d+")
+
+
+def _path_conflict(a: str, b: str) -> bool:
+    """True when `a` and `b` overlap: equal, or one a segment-boundary prefix of
+    the other (a claimed directory covers the files inside it; `mod/a` never
+    conflicts with `mod/aa`)."""
+    a, b = str(a).strip().rstrip("/"), str(b).strip().rstrip("/")
+    if not a or not b:
+        return False
+    return a == b or b.startswith(a + "/") or a.startswith(b + "/")
+
+
+def _claim_paths_arg(raw: Optional[str]) -> List[str]:
+    return [p.strip() for p in (raw or "").split(",") if p.strip()]
+
+
+def claim_paths(
+    root: Optional[str], owner: Any, paths: List[str], channel: Optional[str] = None
+) -> dict:
+    """Post a kind:'claim' note listing the paths `owner` is about to edit."""
+    plist = [p for p in paths if p and str(p).strip()]
+    if not plist:
+        return {"ok": False, "error": "paths_required"}
+    rec = note(
+        root,
+        owner,
+        "claims: " + ", ".join(plist),
+        to="all",
+        channel=channel,
+        kind="claim",
+        paths=plist,
+    )
+    return {"ok": True, "note": rec, "paths": plist}
+
+
+def release_paths(
+    root: Optional[str],
+    owner: Any,
+    paths: Optional[List[str]] = None,
+    channel: Optional[str] = None,
+) -> dict:
+    """Post a kind:'release' note: drops `paths` from the owner's claim, or all of
+    it when no paths are given."""
+    plist = [p for p in (paths or []) if p and str(p).strip()]
+    rec = note(
+        root,
+        owner,
+        "releases: " + (", ".join(plist) or "all"),
+        to="all",
+        channel=channel,
+        kind="release",
+        paths=plist or None,
+    )
+    return {"ok": True, "note": rec}
+
+
+def active_claims(root: Optional[str], channel: Optional[str] = None) -> List[dict]:
+    """Active path claims in `channel`: replay the channel's notes in seq order —
+    kind:'claim' sets (replaces) the owner's claim, kind:'release' drops the named
+    paths (or all of them), and the owner's exit note (kind:'report' whose text has
+    an `exit <n>` line) drops the whole claim."""
+    claims: Dict[str, dict] = {}
+    for rec in sorted(notes(root, channel=channel), key=_note_seq):
+        owner = str(rec.get("owner") or "anon")
+        kind = rec.get("kind")
+        if kind == "claim" and rec.get("paths"):
+            claims[owner] = {
+                "owner": owner,
+                "paths": list(rec["paths"]),
+                "ts": rec.get("ts"),
+                "seq": _note_seq(rec),
+            }
+        elif kind == "release" and owner in claims:
+            drop = rec.get("paths") or None
+            if drop:  # named paths only; an empty list releases the whole claim
+                claims[owner]["paths"] = [
+                    p for p in claims[owner]["paths"] if p not in drop
+                ]
+                if not claims[owner]["paths"]:
+                    del claims[owner]
+            else:
+                del claims[owner]
+        elif kind == "report" and _EXIT_NOTE_RE.search(str(rec.get("text") or "")):
+            claims.pop(owner, None)
+    return sorted(claims.values(), key=lambda c: str(c["owner"]))
+
+
+def path_conflicts(
+    root: Optional[str],
+    owner: Any,
+    paths: List[str],
+    channel: Optional[str] = None,
+    notify: bool = True,
+) -> dict:
+    """Overlapping active claims held by OTHER owners for `paths` (other owners
+    only, segment-boundary prefix aware). On conflict, posts one kind:'conflict'
+    note per conflicting owner so their inbox surfaces it."""
+    mine = [str(p).strip() for p in paths if p and str(p).strip()]
+    if not mine:
+        return {"ok": False, "error": "paths_required"}
+    me = _sanitize_owner(owner)
+    collisions: List[dict] = []
+    for c in active_claims(root, channel):
+        if c["owner"] == me:
+            continue
+        hit = sorted({p for p in mine for q in c["paths"] if _path_conflict(p, q)})
+        if hit:
+            collisions.append({"owner": c["owner"], "paths": hit})
+    ok = not collisions
+    if not ok and notify:
+        for c in collisions:
+            note(
+                root,
+                owner,
+                f"conflict: {me} wants {', '.join(c['paths'])} which you claim",
+                to=c["owner"],
+                channel=channel,
+                kind="conflict",
+            )
+    return {"ok": ok, "owner": me, "paths": mine, "conflicts": collisions}
 
 
 # --- channels (IRC model: main per project@branch, one subchannel per lead) ------
@@ -1350,6 +1484,14 @@ def channel_brief(root: Optional[str], channel: str, lead: str, name: str) -> st
         f"Posting is REQUIRED, one short line each: (1) on start, your intent to {lead}; "
         f"(2) on any cross-file or shared-contract change, notify the affected sibling; "
         f"(3) before your final report, the one-line result to {lead}.\n"
+        f'Collab: before editing, run {base} conflicts --root "{rt}" --channel "{channel}" '
+        f"--owner {name} --paths <files,dirs>, claim-paths the files, and release-paths "
+        f"when done; on conflict, message the owner and wait or pick other work.\n"
+        f'Finishing a slice another worker consumes: {base} note --root "{rt}" '
+        f'--channel "{channel}" --owner {name} --kind handoff --to <sibling> "<result>". '
+        f'Stuck: --kind blocked --to {lead} "<what you need>" instead of idling.\n'
+        f"Never skip tests or verification because a peer said they passed; only {lead} "
+        f"declares work done.\n"
         f'Inbox (run between steps): {base} inbox --root "{rt}" --owner {name}\n'
         f'Your todos: {base} claim --root "{rt}" --id <id> --owner {name}; the lead '
         f"watches this channel's board."
@@ -1440,10 +1582,12 @@ def _cli(argv: Optional[List[str]] = None) -> int:
             or a == "--members"
             or a == "--agent"
             or a == "--exit"
+            or a == "--kind"
+            or a == "--paths"
         ):
             flags[a[2:]] = args[i + 1] if i + 1 < len(args) else ""
             i += 2
-        elif a == "--force" or a == "--unique":
+        elif a == "--force" or a == "--unique" or a == "--json":
             flags[a[2:]] = "1"
             i += 1
         else:
@@ -1531,6 +1675,35 @@ def _cli(argv: Optional[List[str]] = None) -> int:
             out = remove(root, flags.get("id", ""))
         elif cmd == "carry":
             out = carry_over(root, flags.get("session") or "")
+        elif cmd == "claim-paths":
+            out = claim_paths(
+                root,
+                flags.get("owner", ""),
+                _claim_paths_arg(flags.get("paths")),
+                channel=flags.get("channel") or None,
+            )
+        elif cmd == "release-paths":
+            out = release_paths(
+                root,
+                flags.get("owner", ""),
+                _claim_paths_arg(flags.get("paths")) or None,
+                channel=flags.get("channel") or None,
+            )
+        elif cmd == "claims":
+            cl = active_claims(root, channel=flags.get("channel") or None)
+            if flags.get("json"):
+                out = {"ok": True, "claims": cl}
+            else:
+                for c in cl:
+                    print(f"{c['owner']}: {', '.join(c['paths'])}")
+                return 0
+        elif cmd == "conflicts":
+            out = path_conflicts(
+                root,
+                flags.get("owner", ""),
+                _claim_paths_arg(flags.get("paths")),
+                channel=flags.get("channel") or None,
+            )
         elif cmd == "note":
             owner = flags.get("owner", "").strip()
             if not owner:
@@ -1545,6 +1718,8 @@ def _cli(argv: Optional[List[str]] = None) -> int:
                         to=flags.get("to") or "all",
                         item=flags.get("item") or None,
                         channel=flags.get("channel") or None,
+                        kind=flags.get("kind") or "note",
+                        paths=_claim_paths_arg(flags.get("paths")) or None,
                     ),
                 }
         elif cmd == "notes":

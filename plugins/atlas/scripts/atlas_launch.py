@@ -4,8 +4,8 @@
 launch(root, name, prompt, ...) -> {"ok", "session", "window", "target", "attach", "prompt_file", "started_at", "reason"}
 is_live(target)                 -> `herdr:<pane>` exists in herdr, or a tmux window exists and its pane is not dead
 
-Transport (atlas_mux.transport): herdr by default (workspace `atlas-<run>`, one tab per worker, created over the
-herdr socket); tmux when ATLAS_COLONY_TRANSPORT=tmux or herdr is not running. Never attaches, focuses or opens a UI.
+Transport (atlas_mux.transport / _pane_transport): panes only — herdr when its server is up, else tmux; the mux's
+claude-bg default never reaches this module (a launch always needs a pane target). Never attaches, focuses or opens a UI.
 Interactive: `omp --cwd <cwd> @<prompt_file>` in a pane that carries ATLAS_PROJECT_ROOT, ATLAS_WORKER_NAME and the
 FORWARDED_ENV lead env. Headless: atlas_mux `spawn` (omp -p, agent role, exits when done).
 Both force ATLAS_MUX=tmux (the mux opt-in gate) in the CHILD env only and strip every CMUX_* var / cmux shim.
@@ -139,6 +139,9 @@ def launch(
     chan = (env.get("ATLAS_CHANNEL") or env_chan).strip()
     lead = (env.get("ATLAS_LEAD_NAME") or env_lead).strip()
     use = atlas_mux.transport()
+    if use == "claude-bg":
+        # claude-bg is the mux's own claude-worker dispatch; a launch always needs a pane target.
+        use = atlas_mux._pane_transport()
     if use == "tmux" and not shutil.which(
         "tmux", path=atlas_mux.clean_env().get("PATH")
     ):

@@ -15,7 +15,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import atlas_dash_herd  # noqa: E402
+import atlas_dash_work  # noqa: E402
 import atlas_herdr  # noqa: E402
+import atlas_mux  # noqa: E402
 
 
 class EnsureTests(unittest.TestCase):
@@ -36,7 +38,9 @@ class EnsureTests(unittest.TestCase):
                 "HEALTH_WAIT_S",
             )
         }
-        atlas_herdr._mirror_stale = lambda: False  # these tests are about spawning, not staleness
+        atlas_herdr._mirror_stale = lambda: (
+            False
+        )  # these tests are about spawning, not staleness
         root = Path(tempfile.mkdtemp()) / "plugin"
         (root / "scripts").mkdir(parents=True)
         (root / "scripts" / "plugin.ts").write_text("")
@@ -1237,6 +1241,104 @@ class SavedPortTests(unittest.TestCase):
         self.assertFalse(
             str(atlas_herdr.PLUGIN_ROOT).startswith(str(atlas_herdr.ATLAS_PLUGIN))
         )
+
+
+class ClaudeBgAgentsTests(unittest.TestCase):
+    """S6: GET /api/v2/herd/agents merges claude-bg workers (atlas_mux._claude_workers) into the
+    herdr agent rows when the mux transport is claude-bg, tagged source=claude-bg; with no bg rows
+    the body is byte-identical to the herdr-only body, and a failed agents-json read adds nothing."""
+
+    TRANSPORT_ENV = "ATLAS_COLONY_TRANSPORT"
+
+    class BgCtx:
+        """Minimal request ctx: explicit project, no db."""
+
+        def __init__(self, root):
+            self.query = {"project": "p"}
+            self._root = root
+
+        def db(self):
+            import sqlite3
+
+            raise sqlite3.Error("no db in bg tests")
+
+        def project_root(self, _name):
+            return self._root
+
+    def setUp(self):
+        self.old_transport = os.environ.get(self.TRANSPORT_ENV)
+        self.old_workers = atlas_mux._claude_workers
+        self.old_junk = atlas_dash_work._junk_root
+        self.root = tempfile.mkdtemp(prefix="s6bg", dir="/tmp")
+        os.environ[self.TRANSPORT_ENV] = "claude-bg"
+        atlas_dash_work._junk_root = lambda real: (
+            False
+        )  # tempdir project roots stay in canon
+        atlas_herdr._status_cache = None
+
+    def tearDown(self):
+        atlas_mux._claude_workers = self.old_workers
+        atlas_dash_work._junk_root = self.old_junk
+        if self.old_transport is None:
+            os.environ.pop(self.TRANSPORT_ENV, None)
+        else:
+            os.environ[self.TRANSPORT_ENV] = self.old_transport
+        atlas_herdr._status_cache = None
+
+    def body(self):
+        code, body = atlas_dash_herd._agents(self.BgCtx(self.root))
+        self.assertEqual(code, 200)
+        body = dict(body)
+        body.pop("fetched_ms")  # timing is not part of the contract
+        return body
+
+    def test_bg_worker_rows_merge_with_source_tag(self):
+        atlas_mux._claude_workers = lambda root: [
+            {"name": "dash-s6-probe", "dead": 0, "pid": "s6a1", "state": "working"}
+        ]
+        body = self.body()
+        rows = [r for r in body["agents"] if r.get("source") == "claude-bg"]
+        self.assertEqual(len(rows), 1)
+        row = rows[0]
+        self.assertEqual(row["pane_id"], "bg:s6a1")
+        self.assertEqual(row["label"], "dash-s6-probe")
+        self.assertEqual(row["title"], "dash-s6-probe")
+        self.assertEqual(row["status"], "working")
+        self.assertEqual(row["agent"], "claude")
+        self.assertEqual(row["cwd"], os.path.realpath(self.root))
+        self.assertEqual(body["counts"]["working"], 1)
+
+    def test_no_bg_rows_leaves_body_byte_identical_to_herdr_only(self):
+        atlas_mux._claude_workers = lambda root: []
+        os.environ[self.TRANSPORT_ENV] = "herdr"
+        gated_off = self.body()
+        os.environ[self.TRANSPORT_ENV] = "claude-bg"
+        gated_on = self.body()
+        self.assertEqual(
+            json.dumps(gated_off, sort_keys=True), json.dumps(gated_on, sort_keys=True)
+        )
+        self.assertEqual(
+            set(gated_on),
+            {"ok", "herdr", "web_ui", "counts", "workspaces", "tabs", "agents"},
+        )
+
+    def test_failed_agents_json_read_adds_no_rows_and_no_keys(self):
+        atlas_mux._claude_workers = lambda root: None  # claude missing / garbage output
+        body = self.body()
+        self.assertFalse(any(r.get("source") for r in body["agents"]))
+        os.environ[self.TRANSPORT_ENV] = "herdr"
+        self.assertEqual(
+            json.dumps(self.body(), sort_keys=True),
+            json.dumps(body, sort_keys=True),
+        )
+
+    def test_herdr_transport_never_merges_bg_rows(self):
+        atlas_mux._claude_workers = lambda root: [
+            {"name": "sneaky", "dead": 0, "pid": "s6b2", "state": "working"}
+        ]
+        os.environ[self.TRANSPORT_ENV] = "herdr"
+        body = self.body()
+        self.assertFalse(any(r.get("source") for r in body["agents"]))
 
 
 if __name__ == "__main__":

@@ -82,7 +82,7 @@ const plan = await agent(
    - a named failable check (the exact condition that would make it fail)
    - the agent type and model tier
    Mark stages that can run concurrently. Mark any output that cannot be verified [unverified].`,
-  { label: "plan", model: "opus" }
+  { label: "plan", model: "sonnet" }
 );
 
 log("Stage map produced.");
@@ -126,7 +126,7 @@ const verifications = await parallel(
      Do NOT confirm it is correct - derive your own check from the symptom,
      reproduce the originally-failing case, and observe the result.
      Return verdict: "verified" or "rejected", the check you ran, and evidence (file:line or command output).`,
-    { label: `verify-stage-${i + 1}`, model: "opus" }
+    { label: `verify-stage-${i + 1}`, model: "sonnet" }
   ))
 );
 
@@ -228,7 +228,7 @@ const verifyWave = await parallel(
      3. Observe the result - do NOT accept "it should work."
      Return: verdict ("verified" | "rejected"), evidence (file:line or command + output),
      and the check you ran. If you cannot run the check, return "rejected: unrunnable."`,
-    { label: `adversarial-verify-${i}`, model: "opus" }
+    { label: `adversarial-verify-${i}`, model: "sonnet" }
   ))
 );
 

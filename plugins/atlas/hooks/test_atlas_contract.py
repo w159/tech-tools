@@ -27,6 +27,7 @@ import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import contextlib
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -369,6 +370,21 @@ class CompletionGateContract(unittest.TestCase):
             "from the calling environment instead of overriding it with a "
             "fresh dir -- isolation regressed",
         )
+
+
+class HeaderFirstLinePatternContract(unittest.TestCase):
+    """The run-header first-line regex pins phase, optional progress, and the trailing bar."""
+
+    def test_header_pattern_accepts_phase_with_and_without_progress(self):
+        contract = json.loads(
+            (PLUGIN_ROOT / "contracts" / "operating-contract.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        pattern = re.compile(contract["headerFirstLinePattern"])
+        self.assertTrue(pattern.match("ATLAS | 🔧 implement 3/5 | x"))
+        self.assertTrue(pattern.match("ATLAS | 🔧 implement | x"))
+        self.assertFalse(pattern.match("ATLAS | implement 3/5 x"))
 
 
 class DocsDriftWatchContract(unittest.TestCase):
