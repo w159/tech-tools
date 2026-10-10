@@ -146,6 +146,7 @@ plugins/atlas/mod/
 |   |-- todos.ts     #   todos.json: session filter, archived filter, phase prefix, mtime poll
 |   |-- channels.ts  #   channels.json registry and board/<owner>.jsonl notes (byte cursor)
 |   |-- personas.ts  #   agents/*.md frontmatter
+|   |-- collab.ts   #   collab board claims and handoffs reader
 |   `-- herdr.ts     #   atlas_herdr.py status poll (5 s, Colony tab visible only)
 |-- pane/            # the /atlas-cc Command Center tabs (Client surfaces)
 |   |-- colony.tsx   #   diorama
