@@ -6,7 +6,12 @@ from __future__ import annotations
 import os as _iso_os
 import sys as _iso_sys
 
-_iso_sys.path.insert(0, _iso_os.path.join(_iso_os.path.dirname(_iso_os.path.abspath(__file__)), "..", "scripts"))
+_iso_sys.path.insert(
+    0,
+    _iso_os.path.join(
+        _iso_os.path.dirname(_iso_os.path.abspath(__file__)), "..", "scripts"
+    ),
+)
 import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import io
 import json
@@ -29,9 +34,11 @@ def _run_main(payload, env=None) -> tuple[int, str, str]:
     out = io.StringIO()
     err = io.StringIO()
     with mock.patch.dict(os.environ, env or {}, clear=False):
-        with mock.patch("sys.stdin", new=io.StringIO(raw)), redirect_stdout(
-            out
-        ), redirect_stderr(err):
+        with (
+            mock.patch("sys.stdin", new=io.StringIO(raw)),
+            redirect_stdout(out),
+            redirect_stderr(err),
+        ):
             code = fg.main()
     return code, out.getvalue(), err.getvalue()
 
@@ -110,10 +117,12 @@ class MainBehaviorTests(unittest.TestCase):
 
     def test_fail_verdict_denies(self):
         audit = {"verdict": "fail", "issues": [{"id": "unused-export"}]}
-        with mock.patch.object(
-            fg, "_resolve_runner", return_value=(["fallow"], "/bin/fallow")
-        ), mock.patch.object(fg, "_fallow_version", return_value="2.90.0"), mock.patch.object(
-            fg, "_run_audit", return_value=(1, audit, "")
+        with (
+            mock.patch.object(
+                fg, "_resolve_runner", return_value=(["fallow"], "/bin/fallow")
+            ),
+            mock.patch.object(fg, "_fallow_version", return_value="2.90.0"),
+            mock.patch.object(fg, "_run_audit", return_value=(1, audit, "")),
         ):
             code, out, err = _run_main(
                 {
@@ -132,10 +141,14 @@ class MainBehaviorTests(unittest.TestCase):
         self.assertIn("unused-export", hso["permissionDecisionReason"])
 
     def test_pass_verdict_allows(self):
-        with mock.patch.object(
-            fg, "_resolve_runner", return_value=(["fallow"], "/bin/fallow")
-        ), mock.patch.object(fg, "_fallow_version", return_value="2.90.0"), mock.patch.object(
-            fg, "_run_audit", return_value=(0, {"verdict": "pass"}, "")
+        with (
+            mock.patch.object(
+                fg, "_resolve_runner", return_value=(["fallow"], "/bin/fallow")
+            ),
+            mock.patch.object(fg, "_fallow_version", return_value="2.90.0"),
+            mock.patch.object(
+                fg, "_run_audit", return_value=(0, {"verdict": "pass"}, "")
+            ),
         ):
             code, out, err = _run_main(
                 {
@@ -148,10 +161,14 @@ class MainBehaviorTests(unittest.TestCase):
         self.assertEqual(out, "")
 
     def test_warn_verdict_allows(self):
-        with mock.patch.object(
-            fg, "_resolve_runner", return_value=(["fallow"], "/bin/fallow")
-        ), mock.patch.object(fg, "_fallow_version", return_value="2.90.0"), mock.patch.object(
-            fg, "_run_audit", return_value=(0, {"verdict": "warn"}, "")
+        with (
+            mock.patch.object(
+                fg, "_resolve_runner", return_value=(["fallow"], "/bin/fallow")
+            ),
+            mock.patch.object(fg, "_fallow_version", return_value="2.90.0"),
+            mock.patch.object(
+                fg, "_run_audit", return_value=(0, {"verdict": "warn"}, "")
+            ),
         ):
             code, out, _ = _run_main(
                 {
@@ -163,9 +180,12 @@ class MainBehaviorTests(unittest.TestCase):
         self.assertEqual(out, "")
 
     def test_version_floor_denies(self):
-        with mock.patch.object(
-            fg, "_resolve_runner", return_value=(["fallow"], "/bin/fallow")
-        ), mock.patch.object(fg, "_fallow_version", return_value="2.80.0"):
+        with (
+            mock.patch.object(
+                fg, "_resolve_runner", return_value=(["fallow"], "/bin/fallow")
+            ),
+            mock.patch.object(fg, "_fallow_version", return_value="2.80.0"),
+        ):
             code, out, _ = _run_main(
                 {
                     "tool_name": "Bash",
@@ -179,12 +199,16 @@ class MainBehaviorTests(unittest.TestCase):
         self.assertIn("below required", hso["permissionDecisionReason"])
 
     def test_runtime_error_fail_open(self):
-        with mock.patch.object(
-            fg, "_resolve_runner", return_value=(["fallow"], "/bin/fallow")
-        ), mock.patch.object(fg, "_fallow_version", return_value="2.90.0"), mock.patch.object(
-            fg,
-            "_run_audit",
-            return_value=(2, {"error": True, "message": "boom"}, ""),
+        with (
+            mock.patch.object(
+                fg, "_resolve_runner", return_value=(["fallow"], "/bin/fallow")
+            ),
+            mock.patch.object(fg, "_fallow_version", return_value="2.90.0"),
+            mock.patch.object(
+                fg,
+                "_run_audit",
+                return_value=(2, {"error": True, "message": "boom"}, ""),
+            ),
         ):
             code, out, err = _run_main(
                 {
@@ -195,6 +219,26 @@ class MainBehaviorTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(out, "")
         self.assertIn("runtime error", err)
+
+    def test_rc0_unparseable_verdict_notices(self):
+        # F13: rc 0 with an unparseable verdict used to pass silently; a lost
+        # fail verdict is an enforcement hole, so the skip is announced.
+        with (
+            mock.patch.object(
+                fg, "_resolve_runner", return_value=(["fallow"], "/bin/fallow")
+            ),
+            mock.patch.object(fg, "_fallow_version", return_value="2.90.0"),
+            mock.patch.object(fg, "_run_audit", return_value=(0, {}, "")),
+        ):
+            code, out, err = _run_main(
+                {"tool_name": "Bash", "tool_input": {"command": "git commit -m x"}},
+            )
+        self.assertEqual(code, 0)
+        self.assertEqual(out, "")
+        self.assertIn("no parsable JSON verdict", err)
+
+    def test_audit_timeout_is_capped_at_60s(self):
+        self.assertEqual(fg._AUDIT_TIMEOUT, 60)
 
 
 class SubprocessEndToEndTest(unittest.TestCase):

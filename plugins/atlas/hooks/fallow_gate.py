@@ -39,10 +39,11 @@ from bash_advisor import _git_subcommands  # noqa: E402  (one git parser for bot
 
 # Worst case in-hook time: npx probe + version probe + audit must stay under the
 # hooks.json timeout for this hook (300s), or the harness kills us before the
-# fail-open path returns.
+# fail-open path returns. F13: the audit is capped at 60s - a hung `fallow audit`
+# used to burn 240s on EVERY commit/push before the fail-open notice.
 _NPX_PROBE_TIMEOUT = 20
 _VERSION_TIMEOUT = 15
-_AUDIT_TIMEOUT = 240
+_AUDIT_TIMEOUT = 60
 
 _GATED_SUBCOMMANDS = ("commit", "push")
 
@@ -250,6 +251,17 @@ def main() -> int:
             )
         else:
             _notice("fallow-gate: fallow audit exited %s, skipping." % status)
+        return 0
+
+    if not verdict:
+        # F13: rc 0 with an unparseable (or absent) JSON verdict used to pass
+        # SILENTLY - a lost fail verdict is an enforcement hole. Say so.
+        _notice(
+            "fallow-gate: fallow audit exited 0 but returned no parsable JSON "
+            "verdict; skipping this audit (fail-open). A fail verdict may have "
+            "been lost to a parse error - re-run `fallow audit --format json --quiet "
+            "--explain --gate-marker agent` to see it."
+        )
         return 0
 
     return 0

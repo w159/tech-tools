@@ -72,6 +72,17 @@ Orchestrator stays Opus-tier; subagents default Sonnet, drop to Haiku for read-a
 
 17 hook programs / 21 bindings auto-load via `hooks/hooks.json` (including the fallow agent gate and the `worker_report_gate` SubagentStop check). Fail-open on missing deps. Key enforcers: `session_boot`, `prompt_optimizer` (+ arm-early), `bash_advisor`, `fallow_gate`, `dispatch_tripwire`, `completion_gate`, `recall_gate`, `todo_capture`, `worker_report_gate`, `format_after_edit`, `docs_drift_watch`, `connector_credential_watch`, `ingest_session`, `memory_capture`, `chronicle_facet`, `nudge`, `atlas_doctor`. Full contract/env: **load `references/hooks-automation.md`**. JS/TS fallow usage: **load `references/fallow-tools.md`**.
 
+## Solo mode (ATLAS_MODE=solo)
+
+For small direct changes in one-developer repos: `export ATLAS_MODE=solo` (case-insensitive) before a run whose work you are doing yourself on the main thread. Unset (or any other value) leaves every gate unchanged.
+
+**What it relaxes** (completion_gate only):
+
+- **(m) delegation mandate**: direct main-thread changes to **at most 5 non-docs source files** are acknowledged instead of demanded into an implementer dispatch. Any block the gate raises for another reason states `(m) solo mode: direct changes acknowledged for <N> files; verifier still required for shipped work`. Six or more files fall back to the normal (m) block.
+- **(g) verifier coverage**: one real test-runner command executed during the run (pytest, vitest, cargo test, ... — the same detection the stamped-entry credit uses) pairs one unpaired implementer without a stamped findings entry. Not a blanket exemption: a stamp with no executed test, or no check at all, still blocks, and one test run covers exactly one implementer.
+
+**What it does NOT relax**: the DELIVERABLE/spec gate (dispatch_tripwire's `REQUIRED_SPEC_BLOCKS` and its advisory tier are untouched), verification evidence itself — (a) evidence capture and (b) the verified findings entry are still required for shipped code — and every other delta gate letter ((a)-(l), (n)-(p)). Solo removes the *dispatch ceremony*, not the *proof of work*. When in doubt, run the test and stamp the finding; that is the whole fast path.
+
 ## Reference index - load only when triggered
 
 | Load this | When |

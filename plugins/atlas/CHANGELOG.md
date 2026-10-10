@@ -6,6 +6,54 @@ The mod's Command Center slash command is registered as `/atlas-cc` (previously 
 
 Adoption detail for the new mod (`plugins/atlas/mod/`): claude workers dispatch on the native `claude --bg` transport by default (`--name/--agent/--model/--effort/--permission-mode` all live-accepted; status parses `claude agents --json`; kill `claude stop` — works on busy and done rows); herdr/tmux panes stay opt-in through `ATLAS_COLONY_TRANSPORT` and omp workers keep pane transports. Optional native wake: `ATLAS_LEAD_AGENT` passthrough plus a brief paragraph instructing a follow-up `SendMessage` beside the mandated board note (byte-identical brief when unset; `contracts/worker-protocol.json` records the step). The completion-gate block loop is env-tunable (`ATLAS_GATE_BLOCK_LOOP`, default 3, clamped 1-7, fail-open, documented against Claude Code's native Stop-hook block cap 8). Mod routing no longer rewrites models on `agent.spawn` — persona model/effort pins come from agent-definition frontmatter; `turn.step` keeps the per-phase effort pin. Verified (2026-10-10 gates, superseding the earlier 206-pass/0-fail claim): on the plugin test host (`claude plugin test plugins/atlas`) all 17 mod test files load and pass — 215 pass / 0 fail; the full plugin walk reports 384 tests / 186 files, 215 pass / 169 fail, and every failure is a `plugins/atlas/colony/**` or `plugins/atlas/omp/**` file importing `bun:test`, which the mod test host forbids (documented expected residual; those suites stay on `bun test`); `claude plugin validate --json plugins/atlas` returns success with 0 errors and 0 warnings; the tsconfig include widened to `[hooks, types, tests, mod]` and `bunx tsc --noEmit -p tsconfig.json` exits 0 over 60 mod files. Two implementation fixes shipped with this: `mod/sprites/sprites.test.ts` now injects the host-compliant `memFs` instead of importing `node:fs`, and the dead `$.atlasMod` contract was removed (`plugins/atlas/types/index.d.ts` deleted, the `types` key dropped from `plugin.json`); R1 (animated band in iTerm2/herdr) remains the single user-run check and the 11.0.0 gate. Live render verified 2026-10-10: a tmux capture of a fresh `claude --plugin-dir plugins/atlas` session (Claude Code 2.1.296) shows the three-row AbovePrompt band with zero `ui.render … refused` lines — the render half of R1 is confirmed, the gate itself stays. The earlier refusals came from `undefined` values reaching the Client props through `channels.ts` `parseNote` and `herdr.ts` `mergeSquad`; fixed by a `completeProps` deep undefined-strip sanitizer in `plugins/atlas/mod/props.ts` (`contract.ts` is chmod-locked read-only and so cannot host the helper), routed through every Client mount and every `ui.message` answer in `register.ts`. `mod/props.test.ts` regression-guards the completeProps live-failure class (undefined/array-hole props) — the engine's `ui.render refused` failure. Follow-up ledger (2026-10-10): every claude-bg spawn in `atlas_mux.py` `_spawn_claude_bg` now passes `--settings '{"crossSessionInbound":"accept"}'` (claude-bg path only; omp pane spawns unchanged; `FORWARDED_ENV`/`ATLAS_WORKER_NAME` forwarding already present and set-only; live probe accepted), and `atlas_control.py` received a 23-item pi-lens blocker cleanup (imports sort, guards/narrowing, logging in two excepts, two `lens_diagnostic_mark` suppressions on false positives) with zero behavior change — verified by mux 77 passed / 30 subtests, launch 19 passed, gate+control 362 passed / 13 subtests. S5 shipped 2026-10-10: an opt-in `ATLAS_TASKS_MIRROR` paragraph in the bg brief mirrors a worker's board claim to the native teams task list (`TaskCreate` subject "[<phase>] <content>", one completion) while the atlas board stays the source of truth (unset = byte-identical brief; mux 77+2 new tests → 79 passed / 30 subtests with launch 19 passed).
 
+## [10.5.0] - 2026-10-10
+
+Atlas 10.5.0 iteration wave: gate fixes, 3 new skills, solo mode, colony verbs. Skill fleet 47 -> 50 (`atlas-status`, `atlas-run-watch`, `atlas-tour`; `atlas-review` queue mode is a doc-mode, not a new skill directory).
+
+### completion_gate
+
+- Delta-only re-blocks for all gate letters: a Stop re-evaluation re-renders still-open letters as one-line deltas (guidance footer dropped on repeat), instead of re-listing every still-open letter.
+- Phantom target drop at block time: a block item whose named file target no longer exists on disk is dropped instead of re-blocked (unreadable filesystem fails open and never drops a real target).
+- Blocks name the triggering files and give a `(<letter>) try:` next-action hint; fail-open paths are now model-visible instead of silent; a final-block notice precedes an eventual allow.
+- `ATLAS_MODE=solo`: acknowledged exemption for direct non-docs changes (<=5) without dispatches; one real test run pairs one unpaired implementer.
+
+### Independent-verification hardening
+
+- Contract test `PinTierDefaultsTwinTest` guards the dispatch tripwire's pin-tier twin against drift from `omp/atlas-agents.ts` (twin is the only fallback; a mismatch now fails the suite loudly).
+- `atlas_status.py` anchors Recent work on version-shaped tags only (falls back to the last 20 commits instead of claiming internal worktree tags like `ref-orca`).
+- `atlas-tour` cites hook surfaces by symbol and section anchor instead of line numbers, so tour steps survive hook edits.
+
+### dispatch_tripwire
+
+- A harness-autofilled pinned model is no longer denied: the pin check matches the pin selector, and the deny carries a `DOCSCUR` diagnostic class.
+- The `TOOLS` block is parsed line-anchored, so ALL-CAPS text inside the block is safe.
+- Navigation tokens accept any `ctx_*` or `xd://` mention.
+- The first spec-shape deny per session is advisory; a second one denies.
+- An inline-op DB failure retries once, then records a transient-marked deny.
+- Verifier watch is keyed on session + slot, so parallel verifiers stay independent.
+
+### Hooks and gates
+
+- `fallow_gate.py`: audit timeout 240s -> 60s; an unparseable verdict JSON emits an explicit notice instead of a silent allow.
+- `format_after_edit.py`: every terminal skip (parse/timeout/missing formatter) writes a fault row.
+- `bash_advisor.py`: new secrets-in-command-output advisory class (AWS keys, GitHub tokens, bearer tokens, env dumps), framed for FTC Safeguards / GLBA / SEC Reg S-P environments.
+- `hooks/validate-readonly-query.sh` is kept and documented as manual-only (`skills/atlas-db-audit/SKILL.md`); `skills/atlas/SKILL.md` gains its `allowed-tools` frontmatter (D1).
+
+### New skills
+
+- `atlas-status` (+ `scripts/atlas_status.py`): stakeholder rollup from plan/findings/todos/git, with claims labeled verified vs assumed.
+- `atlas-run-watch`: provider-agnostic long-run watcher reusing the babysit-pr machinery, ledgered under `.atlas/.run/runs/<id>/`.
+- `atlas-tour`: manual, guided first-session walkthrough; plus `references/skill-finder.md` (51 rows) and `references/findings-schema.md` (13 fields, derived 1:1 from `scripts/atlas_finding.py`).
+
+### Skills
+
+- `atlas-review` queue mode: batch PR review with one batch confirmation, a cross-PR triage table, and a `.atlas/.run/review/<run-id>/index.md` ledger.
+- `atlas-audit`: optional elicited framework mapping (FTC Safeguards, GLBA, SOC 2 CC, OWASP ASVS) tags verified findings; links the findings schema.
+
+### Colony
+
+- `scripts/atlas_dash_colony.py` gains `pause`/`resume`/`cancel` verbs (graceful default: stop dispatch, running work finishes, pending requeues; resume state in `.atlas/.run/colony_wave.json`; hard delegates to kill) and surfaces queued/refused send receipts on the roster and board.
+
 ## [10.4.3] - 2026-10-08
 
 Colony identity fixes from a live Claude Code lead plus two mux workers run. Sessions on an older installed plugin cache keep the old behavior until the plugin is updated or reinstalled from the marketplace.

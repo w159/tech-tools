@@ -55,6 +55,10 @@ Each phase reads exactly one reference. Read it at the phase boundary, not upfro
 
 Run phases 1-3 inline (they are orchestrator judgment over the diff). Phases 4-6 are subagent waves. Phase 7 is orchestrator-only synthesis — never delegate the report.
 
+## Queue mode (batch review of multiple PRs)
+
+When the invocation names more than one changeset — a PR-number/URL list, or an org query like "review the team's open PRs" — run queue mode instead of a single-PR review: assemble the queue (capped at 10 by default), confirm the whole batch with ONE gate, run the exact per-PR pipeline above once per item (each with its own run-id, reviewer roster, verifier validation, and `findings.json` rows), then emit one cross-PR triage table (PR, verdict, worst open severity, open P0/P1 counts, run-id) ranked by merge-blocking risk — Not-ready first. Each item still renders its full standard report; the table summarizes, it does not replace the reports. Still report-only: no pushes, no CI watching (`atlas-babysit-pr`), no thread resolution (`atlas-resolve-pr-feedback`). Full protocol, confirmation format, ranking rules, and failure handling: `references/batch-mode.md`.
+
 ## Persona prompt assets
 
 Every persona lives as a self-contained prompt file under `references/personas/`. The dispatch references the file path; the reviewer subagent reads it as its operating instructions. Never inline a persona into the dispatch prompt — the asset is the versioned contract, and editing an asset is how this skill improves without touching the spine.
@@ -81,7 +85,7 @@ Full trigger definitions and the suppression hierarchy are in `references/person
 
 Every reviewer returns the same finding envelope — title, severity P0-P3, file/line, rationale, evidence, confidence (0/25/50/75/100 anchors), autofix class (`gated_auto|manual|advisory`), owner, verification requirement, pre-existing flag, and `protected_subject` tag for high-consequence classes (memory-safety, concurrency, data-loss, auth, injection, public-contracts, secrets, crypto). A 75/100-confidence finding must quote the exact motivating line as its first evidence item. Full schema, anchors, and evidence gates: `references/findings-envelope.md`.
 
-Findings flow into atlas's existing ledger: after synthesis, the run stamps `.atlas/.run/findings.json` via `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_finding.py"` — one row per validated P0/P1 verdict and one row for the run's final verdict — reusing the mechanism `atlas:verifier` already requires. Reviewer detail artifacts live under `.atlas/.run/review/<run-id>/` (operational state, per docs SSOT), not in `docs/`. The report itself is chat output; it is not a durable docs/ artifact unless the user asks for one.
+Findings flow into atlas's existing ledger: after synthesis, the run stamps `.atlas/.run/findings.json` via `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_finding.py"` — one row per validated P0/P1 verdict and one row for the run's final verdict — reusing the mechanism `atlas:verifier` already requires. Reviewer detail artifacts live under `.atlas/.run/review/<run-id>/` (operational state, per docs SSOT), not in `docs/`. Every run also writes a one-page durable ledger index at `.atlas/.run/review/<run-id>/index.md` (one row per PR: verdict, worst open severity, finding IDs) so a PR's review history is diffable across rounds — format and cross-round use: `references/batch-mode.md`. The report itself is chat output; it is not a durable docs/ artifact unless the user asks for one.
 
 ## Dispatch shape
 

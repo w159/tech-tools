@@ -16,6 +16,13 @@ Catastrophic patterns detected (near-irreversible, high blast radius):
   - Redirect over a disk device  (> /dev/sd...)
   - World-writable chmod on /  (chmod -R 0777 /)
 
+Secret patterns detected (printed into output/transcript; rotate-and-report advice
+with FTC Safeguards Rule/GLBA and SEC Reg S-P framing):
+  - AWS access key ids  (AKIA...) and secret access keys
+  - GitHub tokens  (ghp_/gho_/github_pat_...)
+  - Bearer/API tokens  (Authorization: Bearer ..., token=...)
+  - Secret-bearing env vars echoed/dumped  ($GITHUB_TOKEN, CFG_*, *_API_KEY)
+
 Ponytail-before-commit mandate: a `git commit` (see _match_git_commit) gets a
 one-time-per-session nudge to run ponytail-review on the staged diff, armed only
 when the ponytail plugin is enabled (tool_routing.plugin_enabled). The omp twin is
@@ -135,6 +142,50 @@ def _match_catastrophic(command: str) -> str | None:
     return None
 
 
+# Secrets printed into command output (transcripts, logs, screenshots). Not
+# destructive like the class above -- but an exposed credential must be treated as
+# compromised and rotated, not just redacted, hence the compliance framing in the
+# warning. Deliberately narrow to avoid nagging on benign reads: a bare `env` is
+# NOT flagged (commonly needed, only sometimes secret-bearing); a secret-bearing
+# variable name on the same line is.
+_SECRET_VAR = (
+    r"(?:AWS_SECRET_ACCESS_KEY"  # nosec: variable name regex, not a credential
+    r"|[A-Z0-9_]*_(?:TOKEN|SECRET|PASSWORD|API_KEY)"
+    r"|CFG_[A-Z0-9_]+)"
+)  # nosec: regex of variable NAMES to warn on, not a credential
+_SECRETS = [
+    (re.compile(r"\bAKIA[0-9A-Z]{16}\b"), "an AWS access key id"),
+    (
+        re.compile(r"aws_secret_access_key\s*[=:]\s*[A-Za-z0-9/+=]{40}", re.IGNORECASE),
+        "an AWS secret access key",
+    ),
+    (
+        re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{20,})\b"),
+        "a GitHub token",
+    ),
+    (
+        re.compile(
+            r"(?:authorization[\"']?\s*[:=]\s*(?:bearer\s+)?[A-Za-z0-9._~+/=-]{8,}"
+            r"|\bbearer\s+[A-Za-z0-9._~+/=-]{8,})",
+            re.IGNORECASE,
+        ),
+        "a bearer/API token",
+    ),
+    (
+        re.compile(r"\b(?:env|printenv|echo|printf)\b[^\n|;&]*\b" + _SECRET_VAR),
+        "secret-bearing environment variables",
+    ),
+]
+
+
+def _match_secrets(command: str) -> str | None:
+    """Return the human reason string if the command prints secrets to output."""
+    for pat, reason in _SECRETS:
+        if pat.search(command):
+            return reason
+    return None
+
+
 _SEGMENT_SPLIT = re.compile(r"&&|\|\||;|\|")
 _ENV_ASSIGN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 _GIT_VALUE_OPTS = ("-C", "-c")
@@ -237,16 +288,23 @@ def main() -> int:
         return 0
 
     reason = _match_catastrophic(command)
-    if reason is None:
-        warning = _commit_nudge(data, command)
-        if warning is None:
-            return 0  # benign command -- no output, normal flow continues
-    else:
-        # Advisory only: additionalContext, no permissionDecision field.
+    if reason is not None:
         warning = (
             f"[atlas advisor] This command matches a catastrophic, near-irreversible pattern "
             f"({reason}). Confirm intent before running."
         )
+    else:
+        secret = _match_secrets(command)
+        if secret is not None:
+            warning = (
+                f"[atlas advisor] This command would print secrets into its output/transcript "
+                f"({secret}). Treat exposed credentials as compromised: rotate and report per "
+                f"FTC Safeguards Rule/GLBA and SEC Reg S-P; mask or omit them."
+            )
+        else:
+            warning = _commit_nudge(data, command)
+    if warning is None:
+        return 0  # benign command -- no output, normal flow continues
     print(
         json.dumps(
             {

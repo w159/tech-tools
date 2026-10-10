@@ -253,8 +253,9 @@ class MainInProcessTest(unittest.TestCase):
         self.assertTrue(any("ruff" in c for c in ran))
         prn.assert_not_called()
 
-    def test_formatter_failure_is_a_quiet_skip_not_a_crash(self):
-        """No formatter succeeded: exit 0 and no hook-faults row (it showed up as hook_crash)."""
+    def test_formatter_failure_writes_one_fault_row(self):
+        """No formatter succeeded: exit 0 (a skip, not a crash) AND exactly one
+        fault row - F6: the failure used to be fully invisible."""
         import atlas_faults
 
         before = len(atlas_faults.load())
@@ -269,7 +270,9 @@ class MainInProcessTest(unittest.TestCase):
         ):
             rc = self._run_main(_payload("Edit", self.target, cwd=self.tmp))
         self.assertEqual(rc, 0)
-        self.assertEqual(len(atlas_faults.load()), before)
+        faults = atlas_faults.load()
+        self.assertEqual(len(faults), before + 1)
+        self.assertIn("formatter skipped", str(faults[-1]))
 
     def _skip_rows(self):
         import atlas_db
@@ -287,7 +290,7 @@ class MainInProcessTest(unittest.TestCase):
         finally:
             conn.close()
 
-    def test_each_skip_reason_writes_exactly_one_friction_row_and_no_fault(self):
+    def test_each_skip_reason_writes_exactly_one_friction_row_and_one_fault(self):
         import atlas_faults
 
         class Bad:
@@ -310,7 +313,9 @@ class MainInProcessTest(unittest.TestCase):
             rows = self._skip_rows()
             self.assertEqual(len(rows) - before_rows, 1, reason)
             self.assertEqual(rows[-1], ("formatter_skipped:" + reason, ".py"))
-            self.assertEqual(len(atlas_faults.load()), before_faults, reason)
+            faults = atlas_faults.load()
+            self.assertEqual(len(faults), before_faults + 1, reason)
+            self.assertIn("formatter skipped: " + reason, str(faults[-1]), reason)
 
     def test_skip_with_db_unavailable_still_exits_zero(self):
         import atlas_db

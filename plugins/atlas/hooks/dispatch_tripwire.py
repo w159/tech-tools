@@ -108,25 +108,46 @@ def _watch_path(root):
     return root.joinpath(*VERIFIER_WATCH_RELPATH)
 
 
-def _stash_findings_count(root, session):
+def _verifier_slot(tinput):
+    """The watch slot for one verifier dispatch: subagent type + sibling name
+    (the named-dispatch identity). Parallel verifiers in one session each get
+    their own slot instead of sharing a baseline (friction F5)."""
+    return "%s|%s" % (
+        str(tinput.get("subagent_type") or ""),
+        str(tinput.get("name") or tinput.get("description") or ""),
+    )
+
+
+def _stash_findings_count(root, session, slot):
     """PreToolUse side of the verifier-verdict check: remember how many findings
-    existed before the verifier ran. ponytail: one slot per session, so N verifiers
-    dispatched in parallel share a baseline -- if any one of them writes, none are
-    flagged. Under-warning beats false-warning here."""
+    existed before THIS verifier ran, in its own slot, so N verifiers dispatched
+    in parallel keep separate baselines. Slots are merged across concurrent
+    stashes; a different session's state is discarded."""
     if root is None:
         return
     try:
         path = _watch_path(root)
         path.parent.mkdir(parents=True, exist_ok=True)
+        state = {}
+        try:
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict) and loaded.get("session_id") == session:
+                state = loaded
+        except Exception:
+            state = {}
+        counts = state.get("counts")
+        if not isinstance(counts, dict):
+            counts = {}
+        counts[slot] = _findings_count(root)
         path.write_text(
-            json.dumps({"session_id": session, "count": _findings_count(root)}),
+            json.dumps({"session_id": session, "counts": counts}),
             encoding="utf-8",
         )
     except Exception:
         pass  # advisory only
 
 
-def _verdict_missing(root, session):
+def _verdict_missing(root, session, slot):
     """PostToolUse side: True when a verifier returned and findings.json did not grow."""
     if root is None:
         return False
@@ -136,7 +157,11 @@ def _verdict_missing(root, session):
         return False  # no baseline -> cannot judge -> stay silent
     if not isinstance(state, dict) or state.get("session_id") != session:
         return False
-    before = state.get("count")
+    counts = state.get("counts")
+    if not isinstance(counts, dict):
+        # Legacy single-slot shape: treat it as this verifier's baseline.
+        counts = {"": state.get("count")}
+    before = counts.get(slot)
     if not isinstance(before, int):
         return False
     return _findings_count(root) <= before
@@ -250,7 +275,12 @@ def _deny(reason):
 # prose or parentheses ("(goal: ...)", "fix it, goal: x") and SUBGOAL: are not blocks.
 _CLAUSE_START = r"(?:^[ \t]*(?:[>#*_-]+[ \t]*)*|(?<=[.;!?])[ \t]+)"
 _LABEL_SUFFIX = r"[ \t]*[*_]*[ \t]*:[*_]*"
-_NEXT_LABEL_RE = re.compile(_CLAUSE_START + r"[A-Z][A-Z &/-]{2,}" + _LABEL_SUFFIX, re.M)
+# A block ENDS at the next LINE-start label only: an ALL-CAPS token inside the
+# block's own text (`xd://MCP__LEAN_CTX_...`, `HTTP:`, a quoted `NOTE:`) must
+# not truncate it. The START label stays clause-anchored above.
+_NEXT_LABEL_LINE_RE = re.compile(
+    r"(?m)^[ \t]*(?:[>#*_-]+[ \t]*)*" + r"[A-Z][A-Z &/-]{2,}" + _LABEL_SUFFIX
+)
 
 
 def _block_body(prompt, labels):
@@ -266,7 +296,7 @@ def _block_body(prompt, labels):
         if not m:
             continue
         rest = prompt[m.end() :]
-        nxt = _NEXT_LABEL_RE.search(rest)
+        nxt = _NEXT_LABEL_LINE_RE.search(rest)
         return rest[: nxt.start()] if nxt else rest
     return None
 
@@ -285,6 +315,47 @@ def _spec_skeleton(missing):
     """Paste-ready lines for exactly the labels `missing` (entries may end ' (empty)')."""
     labels = [m.replace(" (empty)", "") for m in missing]
     return "\n".join("%s %s" % (label, _SPEC_HINTS[label]) for label in labels)
+
+
+SPEC_DENIES_RELPATH = (".atlas", ".run", "spec_denies")
+
+
+def _spec_advisory_claimed(root, session):
+    """Claim the one-shot advisory for this session's FIRST spec-requirement
+    offense: True means "advisory now, deny from the second offense". The
+    marker lives under the project root; without one there is nowhere to
+    record the offense, so the dispatch keeps the old deny."""
+    if root is None:
+        return False
+    import hashlib
+
+    try:
+        marker = (
+            root.joinpath(*SPEC_DENIES_RELPATH)
+            / hashlib.sha256(str(session or "").encode()).hexdigest()
+        )
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        with marker.open("x"):
+            pass
+        return True
+    except FileExistsError:
+        return False
+    except Exception:
+        return False  # unrecordable -> the deny stays
+
+
+def _advisory(msg):
+    """PreToolUse 200 + additionalContext: the call proceeds, the model is told."""
+    print(
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "additionalContext": msg,
+                }
+            }
+        )
+    )
 
 
 def _toolkit_gap(tinput):
@@ -310,20 +381,16 @@ def _toolkit_gap(tinput):
         or "toolsearch" in low
         or os.environ.get("ATLAS_TOOLKIT_LOAD") == "omp"
     )
-    has_nav = any(
-        token in low
-        for token in (
-            "serena",
-            "lean-ctx",
-            "lean_ctx",
-            "ctx_compose",
-            "ctx_search",
-            "ctx_read",
-            "get_symbols_overview",
-            "find_symbol",
-            "activate_project",
-            "replace_symbol_body",
-        )
+    has_nav = (
+        "serena" in low
+        or "lean-ctx" in low
+        or "lean_ctx" in low
+        # Any ctx_* device mention or xd:// device path routes the subagent to
+        # real tools: the whitelist used to need a code edit per new device
+        # name, and every such miss was a denied round-trip (friction F12).
+        # Keep the deny only when the TOOLS block is empty.
+        or "xd://" in low
+        or any(tok.startswith("ctx_") for tok in re.split(r"[^a-z0-9_]+", low))
     )
     if has_load and has_nav:
         return None
@@ -548,6 +615,36 @@ def _omp_pinned_models(agent):
     return []
 
 
+# omp realises a role alias pin (`@atlas-worker`) by expanding the dispatch's
+# `model` to the resolved provider/id (`anthropic/claude-sonnet-5`) BEFORE the
+# hook sees the payload: the resolved form is harness autofill, not caller
+# intent. A caller override never matches the pin, so accepting `given` when it
+# expands any of the pin's own selectors is what separates autofill from
+# override (findings DOCSCUR-DENY). Tier defaults mirror ATLAS_TIER_DEFAULTS in
+# omp/atlas-agents.ts; @smol/@default stay literal (no atlas-owned tier).
+_PIN_TIER_DEFAULTS = {
+    "@atlas-worker": "sonnet",
+    "@atlas-verifier": "sonnet",
+    "@atlas-mechanic": "haiku",
+}
+
+
+def _pin_selectors(agent):
+    """Every model selector the agent's pin licenses: the frontmatter value,
+    the omp pin list verbatim, and each atlas role alias expanded to its tier
+    default."""
+    selectors = set()
+    declared = _frontmatter_model(agent)
+    if declared and declared.lower() != "inherit":
+        selectors.add(declared.lower())
+    for alias in _omp_pinned_models(agent):
+        selectors.add(alias)
+        tier = _PIN_TIER_DEFAULTS.get(alias)
+        if tier:
+            selectors.add(tier)
+    return selectors
+
+
 def _expands_pin(selector, declared):
     """omp expands the frontmatter alias to provider/id (`sonnet` ->
     `anthropic/claude-sonnet-5`): the alias as a dash-delimited token of the
@@ -603,12 +700,12 @@ def _model_override(tinput, session_model=""):
     declared = _frontmatter_model(agent[len("atlas:") :])
     if not declared or declared.lower() == "inherit":
         return None  # unpinned, inherit, or unreadable -> fail open
-    if given.lower() == declared.lower():
-        return None
-    if given.lower() in _omp_pinned_models(agent[len("atlas:") :]):
-        return None
-    if _expands_pin(given, declared):
-        return None
+    # The pin in every representation it takes: exact selector, role alias, and
+    # the role alias's resolved tier (what the omp harness autofills into the
+    # payload). A caller override matches none of them.
+    for sel in _pin_selectors(agent[len("atlas:") :]):
+        if given.lower() == sel or _expands_pin(given, sel):
+            return None
     if _inherited_selector(given, session_model):
         return None
     return agent, declared, given
@@ -704,7 +801,9 @@ def _record_dispatch_deny(
         _record_fault(exc)
 
 
-def _pre_tool_use(conn, atlas_db, tool, session, path, tinput=None, session_model=""):
+def _pre_tool_use(
+    conn, atlas_db, tool, session, path, tinput=None, session_model="", root=None
+):
     """Deny tier: fires before the op lands, orchestration-flagged sessions only."""
     # The deny tier is independently kill-switchable; the advisory tier persists.
     if os.environ.get("ATLAS_TRIPWIRE_HARD", "on").lower() == "off":
@@ -770,13 +869,26 @@ def _pre_tool_use(conn, atlas_db, tool, session, path, tinput=None, session_mode
                     "run in the same parallel wave." % (tool, goals, goals),
                 )
             else:
-                deny(
-                    "spec",
+                reason = (
                     "DENY - this %s dispatch to %s is unbounded: missing %s. Each block "
                     "is a line-start `LABEL: text` (labels in a shared batch context "
                     "count for every task). Add exactly:\n%s\nThen re-dispatch."
-                    % (tool, agent, ", ".join(missing), _spec_skeleton(missing)),
+                    % (tool, agent, ", ".join(missing), _spec_skeleton(missing))
                 )
+                if _spec_advisory_claimed(root, session):
+                    # F11: the first spec offense per session is taught, not
+                    # denied - the deny-then-rewrite round-trip is the expensive
+                    # enforcement point. Advisory rides as 200+additionalContext
+                    # and the dispatch proceeds; the second offense denies.
+                    _advisory(
+                        "[atlas] ADVISORY - first unbounded-dispatch offense this "
+                        "session, so this dispatch proceeds, but the next one is "
+                        "denied. Missing %s. Add exactly:\n%s\nEach block is a "
+                        "line-start `LABEL: text`."
+                        % (", ".join(missing), _spec_skeleton(missing))
+                    )
+                else:
+                    deny("spec", reason)
             return
         steps_problem = _runner_steps_problem(tinput or {})
         if steps_problem:
@@ -797,13 +909,24 @@ def _pre_tool_use(conn, atlas_db, tool, session, path, tinput=None, session_mode
     # Fail CLOSED on DB error: an unverified count must never let an inline
     # op past the hard limit mid-orchestration. The broad __main__ fail-open
     # covers garbage stdin / connect failures, not this trust decision.
-    try:
-        count = atlas_db.unsanctioned_inline_ops_since_last_dispatch(conn, run_id)
-    except Exception:
+    # F10: a transient SQLite error (lock, contention) must not read as policy,
+    # so the query retries once; a deny after that is marked TRANSIENT with a
+    # retry hint - re-trying the same inline op is correct, dispatching is not
+    # the only way out of an infrastructure hiccup.
+    count = None
+    for _attempt in (1, 2):
+        try:
+            count = atlas_db.unsanctioned_inline_ops_since_last_dispatch(conn, run_id)
+            break
+        except Exception:
+            count = None
+    if count is None:
         _deny(
-            "DENY - tripwire could not verify the inline-op count (DB error). "
-            "Failing closed; dispatch the next step to atlas:explorer "
-            "(investigation) or atlas:implementer (edits) instead of acting inline."
+            "DENY - tripwire could not verify the inline-op count (transient DB "
+            "error, after one retry). This deny is about the infrastructure, not "
+            "your op: re-trying the SAME inline op is correct. If it keeps "
+            "failing, dispatch the next step to atlas:explorer (investigation) "
+            "or atlas:implementer (edits) instead of acting inline."
         )
         return
     if count >= DENY_THRESHOLD:
@@ -1552,8 +1675,8 @@ def _run(payload):
     if tool in DISPATCH_TOOLS and _is_verifier(tinput.get("subagent_type")):
         root = find_root(Path(payload.get("cwd") or os.getcwd()))
         if event == "PreToolUse":
-            _stash_findings_count(root, session)
-        elif _verdict_missing(root, session):
+            _stash_findings_count(root, session, _verifier_slot(tinput))
+        elif _verdict_missing(root, session, _verifier_slot(tinput)):
             print(
                 json.dumps(
                     {
@@ -1600,6 +1723,7 @@ def _run(payload):
                         path,
                         tinput,
                         str(payload.get("session_model") or ""),
+                        root=find_root(Path(payload.get("cwd") or os.getcwd())),
                     )
                 if buf.getvalue():
                     sys.stdout.write(buf.getvalue())  # a deny wins; drop the nudge

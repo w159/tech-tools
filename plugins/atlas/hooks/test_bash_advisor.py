@@ -1,7 +1,12 @@
 import os as _iso_os
 import sys as _iso_sys
 
-_iso_sys.path.insert(0, _iso_os.path.join(_iso_os.path.dirname(_iso_os.path.abspath(__file__)), "..", "scripts"))
+_iso_sys.path.insert(
+    0,
+    _iso_os.path.join(
+        _iso_os.path.dirname(_iso_os.path.abspath(__file__)), "..", "scripts"
+    ),
+)
 import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import io
 import json
@@ -228,6 +233,77 @@ class MainInProcessTest(unittest.TestCase):
                 )
 
 
+class MatchSecretsPatternsTest(unittest.TestCase):
+    """Secrets-in-output class: matches high-signal shapes, passes benign reads."""
+
+    def test_each_secret_shape_detected(self):
+        cases = [
+            ("echo AKIAIOSFODNN7EXAMPLE", "AWS access key"),
+            (
+                "printenv | grep -i aws_secret_access_key=abc123DEF0123456789"
+                "abcdWXYZ+/0987654321ghijklmn",
+                "AWS secret key",
+            ),
+            (
+                "curl -s -H 'Authorization: token ghp_"
+                "0123456789abcdefghijklmnopqrstuvwxyz0123456789' api.github.com",
+                "GitHub token",
+            ),
+            (
+                "curl -H 'Authorization: Bearer abcdef123456' https://api",
+                "bearer token",
+            ),
+            ("echo $GITHUB_TOKEN", "token env var"),
+            ("printenv CFG_FALCON_CLIENT_ID", "connector env var"),
+            ("printf '%s' $AWS_SECRET_ACCESS_KEY", "secret env var"),
+        ]
+        for cmd, why in cases:
+            with self.subTest(why):
+                reason = bash_advisor._match_secrets(cmd)
+                self.assertIsNotNone(reason, f"missed secret in: {cmd}")
+
+    def test_benign_commands_not_flagged(self):
+        for cmd in [
+            "env",
+            "printenv PATH",
+            "ls -la",
+            "grep -r token docs/",
+            "echo hello world",
+            "cat .gitignore",
+        ]:
+            with self.subTest(cmd=cmd):
+                self.assertIsNone(bash_advisor._match_secrets(cmd))
+
+    def test_secret_advisory_carries_compliance_framing(self):
+        code, out = _run_main(
+            json.dumps(
+                {
+                    "tool_name": "Bash",
+                    "tool_input": {"command": "echo $GITHUB_TOKEN"},
+                }
+            )
+        )
+        self.assertEqual(code, 0)
+        ctx = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("rotate", ctx)
+        self.assertIn("FTC Safeguards", ctx)
+        self.assertIn("SEC Reg S-P", ctx)
+
+    def test_secret_advisory_exit_zero_subprocess(self):
+        proc = subprocess.run(
+            [sys.executable, HOOK_PATH],
+            input=json.dumps(
+                {"tool_name": "Bash", "tool_input": {"command": "echo $GH_TOKEN"}}
+            ),
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc.returncode, 0)
+        self.assertIn(
+            "additionalContext", json.loads(proc.stdout)["hookSpecificOutput"]
+        )
+
+
 class SubprocessEndToEndTest(unittest.TestCase):
     """A few real subprocess invocations confirming exit codes."""
 
@@ -290,9 +366,10 @@ class GitCommitParseTest(unittest.TestCase):
     def matches(self, cmd):
         return _match_git_commit(cmd)
 
-    CASES = json.load(
-        open(os.path.join(os.path.dirname(__file__), "..", "contracts", "mandates.json"))
-    )["gitCommitCases"]
+    with open(
+        os.path.join(os.path.dirname(__file__), "..", "contracts", "mandates.json")
+    ) as _fh:
+        CASES = json.load(_fh)["gitCommitCases"]
 
     def test_matches(self):
         for cmd in self.CASES["match"]:
@@ -387,7 +464,9 @@ class CommitReviewNudgeTest(unittest.TestCase):
         behavior as dispatch_tripwire's session-gated nudges)."""
         with mock.patch.object(bash_advisor, "_ponytail_installed", return_value=True):
             code, out = _run_main(
-                json.dumps({"tool_name": "Bash", "tool_input": {"command": "git commit"}})
+                json.dumps(
+                    {"tool_name": "Bash", "tool_input": {"command": "git commit"}}
+                )
             )
         self.assertEqual(code, 0)
         self.assertEqual(out, "")
