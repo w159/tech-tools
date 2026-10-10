@@ -135,7 +135,8 @@ plugins/atlas/mod/
 |-- band.tsx         # AbovePrompt band: contract track, titan walk, squad conveyor
 |-- routing.ts       # agent.spawn persona recording, turn.step effort pin, roster events
 |-- restyle.tsx      # Spinner, ToolUse, AssistantMessage, TurnDuration, PromptHint sites
-|-- logo.ts          # Raster helpers: title logo, spinner globe
+|-- props.ts         # completeProps: deep undefined and array-hole strip for Client props surfaces
+|-- props.test.ts    # regression tests for the completeProps live-failure class
 |-- notify.ts        # toasts and next-step suggestion on answer-turn boundaries
 |-- intents.ts       # board drag intents posted through surface.post
 |-- snapshot.ts      # session snapshot for the notify path
