@@ -27,12 +27,12 @@ claude plugin test plugins/atlas
 
 Expectation is two-tier:
 
-- **Mod lines must be fully green.** All 16 mod test files load and pass —
-  208 pass / 0 fail (includes `mod/sprites/sprites.test.ts`, which injects
+- **Mod lines must be fully green.** All 17 mod test files load and pass —
+  215 pass / 0 fail (includes `mod/sprites/sprites.test.ts`, which injects
   `memFs` from `mod/test_helpers.ts` instead of importing `node:fs`, which the
   host forbids).
 - **Colony/omp residuals are expected failures of the walk.** The full plugin
-  walk reports 377 tests / 185 files, 208 pass / 169 fail; every failure is a
+  walk reports 384 tests / 186 files, 215 pass / 169 fail; every failure is a
   `plugins/atlas/colony/**` or `plugins/atlas/omp/**` file importing
   `bun:test`, which the mod test host forbids. Those suites stay on
   `bun test` and are not mod regressions.
