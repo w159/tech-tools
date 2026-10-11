@@ -54,10 +54,13 @@ export function registerRouting(on: On, deps: RoutingDeps): void {
     // Models pass through untouched: the agent definition's frontmatter pin
     // is honored natively, so the event is never rewritten.
     const result = await next(e);
-    if (persona && !e.fork && typeof result.agentId === 'string') {
-      byAgent.set(result.agentId, persona.name);
+    if (!e.fork && typeof result.agentId === 'string') {
+      // Record every spawned subagent (generic `task` included) so the band's
+      // conveyor shows it; non-atlas types carry persona 'unknown', which
+      // mergeSquad resolves through personaOf.
+      if (persona) byAgent.set(result.agentId, persona.name);
       try {
-        deps.recordAgent(result.agentId, persona.name);
+        deps.recordAgent(result.agentId, persona?.name ?? 'unknown');
       } catch {
         // recording never blocks a spawn
       }

@@ -26,6 +26,8 @@ An `AbovePrompt` `Client` surface, three rows, redrawn at 10 fps while Claude is
 
 The band's phase comes from the last header in `turn.complete` (matched with the contract's `headerFirstLinePattern`), else the session's first `in_progress` item, else `research`; counts come from the session's todo slice, refiltered only when `todos.json`'s mtime changes. The band stays right when a reply forgets its header. Fewer than 3 available rows collapse to the track; non-terminal surfaces draw the track as an interactive `Svg`, or one text line where `Svg` is missing.
 
+Row 3's usage figures are honest about unknown: tokens / cost / context fill render `ctx --` · `-- tok` · `$--` until `session.measure` carries a value (d.ts `SessionMeasureInput`: `context.tokens`/`percent` are absent before the first API response, `cost.usd` without a ledger). `null` is "not measured yet"; a measured `0` still renders `0%` / `0 tok` / `$0.00`. `register.ts` holds the figures per-figure nullable (`UsageUnknown` prop on `BandProps`) and resets them at `session.start`; the snapshot's numeric contract fields fall back to measured-or-0 for the other consumers.
+
 ### Command Center (`/atlas-cc`)
 
 The docked pane (the mod opens it at 144 columns unasked, 110 once the user has opened it before). An 8-row `Raster` logo plays once per session on first open. Five full-height tabs:
@@ -55,7 +57,7 @@ All data is read from `<root>/.atlas/.run/`; the mod itself writes nothing to di
 | IRC channel | `board/<owner>.jsonl` lines `{ts, seq, owner, to, item, text, channel, kind?, delivery?}` | Filter `channel == <lead channel>`, sort by `seq,ts`, keep a per-file byte cursor from `stat.size`. The viewer never calls `atlas_todo.py inbox`, which drains the lead's mail |
 | Channel roster | `channels.json` `channels[name].members[{name, role, pane_id, pid, ended_at, exit_code}]` | The lead channel is the entry whose `lead` equals `lead-<first 6 of the session id>`, else `<folder>@<branch>` |
 | Colony panes | herdr unix socket (unreachable from `$`) | `$.process.run(['python3', <plugin>/scripts/atlas_herdr.py, 'status'])` every 5 s, only while the Colony tab is visible |
-| In-session subagents | `$.agent.list()` plus `agent.spawn`/`turn.complete` events | Native; the primary source for Task subagents |
+| In-session subagents | `$.agent.list()` plus `agent.spawn`/`turn.complete` events | Native; the primary source for Task subagents. `register.ts` re-syncs the squad from `$.agent.list()` (d.ts `EngineInterface.agent.list`, lines 3180–3187; `AgentInfo.status`, line 545) on every rebuild, so host-spawned agents appear even when their `agent.spawn` event was missed; status maps to band states (`pending`→`spawning`, `waiting`→`input`, `completed`→`finished`, `killed`→`dead`) and unknown statuses read `running` |
 | Personas | `agents/*.md` frontmatter (`model`, `effort`, `color`) | Read once at session start; the single source, no copied table |
 | Contract | `contracts/operating-contract.json` (`phases[].id/glyph`, `todoPhases`, `headerFirstLinePattern`) | Track order and the header regex |
 

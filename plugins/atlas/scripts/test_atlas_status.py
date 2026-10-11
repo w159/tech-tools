@@ -6,6 +6,7 @@ import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import atlas_status  # noqa: E402
 
 

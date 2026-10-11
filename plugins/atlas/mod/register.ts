@@ -7,7 +7,7 @@
 // a person is at the prompt (hooks also run headless, surface null).
 import type { EngineInterface, On, PluginOptions } from 'claude-code';
 import { SnapshotBuilder } from './snapshot';
-import type { AtlasSnapshot, FsLike, PhaseId, SquadAgent } from './contract';
+import type { AgentState, AtlasSnapshot, FsLike, PhaseId, SquadAgent } from './contract';
 import { completeProps } from './props';
 import { PHASES, intentToArgv } from './intents';
 import { registerRouting, registerHeaderDrift, registerPromptReinforce } from './routing';
@@ -38,7 +38,13 @@ let headerPhase: PhaseId | null = null;
 let headerMisses = 0;
 let lastSeenSeq = 0;
 let lastFingerprint = '';
-let usage = { tokens: 0, costUsd: 0, contextPct: 0 };
+// Unknown until session.measure carries a value: null = 'not measured yet',
+// rendered `--`; 0 stays a legitimate measured value.
+let usage: { tokens: number | null; costUsd: number | null; contextPct: number | null } = {
+	tokens: null,
+	costUsd: null,
+	contextPct: null,
+};
 let bandGeom = { columns: 0, maxRows: 0 };
 let paneGeom = { columns: 0, rows: 0 };
 let taskAgents: SquadAgent[] = [];
@@ -74,7 +80,7 @@ function headerPhaseOf(answer: string): PhaseId | null {
 function clientPropsFor(module: string): Record<string, unknown> {
 	if (snapshot === null) return {};
 	if (module === BAND_MODULE) {
-		return completeProps({ snapshot, columns: bandGeom.columns, maxRows: bandGeom.maxRows });
+		return completeProps({ snapshot, columns: bandGeom.columns, maxRows: bandGeom.maxRows, usage });
 	}
 	return completeProps({ snapshot, columns: paneGeom.columns, rows: paneGeom.rows });
 }
@@ -88,6 +94,36 @@ function recordAgent(agentId: string, persona: string): void {
 	}
 	taskAgents.push({ name: agentId, persona, state: 'running', source: 'task' });
 	if (taskAgents.length > 64) taskAgents = taskAgents.slice(-64);
+}
+
+/** AgentStatus (d.ts EngineInterface $.agent.list) -> band AgentState. */
+const LIST_STATE: Record<string, AgentState> = {
+	pending: 'spawning',
+	running: 'running',
+	waiting: 'input',
+	idle: 'idle',
+	completed: 'finished',
+	failed: 'failed',
+	killed: 'dead',
+};
+
+/** Sync the squad's task agents with the host's own agent list (ground truth,
+ * catches spawns the agent.spawn hook missed); spawn-recorded entries not yet
+ * listed stay as the instant fallback. Never throws. */
+function syncAgentsFromList(listed: readonly { id: string; name?: string; status: string }[]): void {
+	const known = new Set<string>();
+	const mapped: SquadAgent[] = [];
+	for (const a of listed) {
+		const name = typeof a.name === 'string' && a.name !== '' ? a.name : a.id;
+		known.add(name);
+		mapped.push({
+			name,
+			persona: taskAgents.find((t) => t.name === name)?.persona ?? 'unknown',
+			state: LIST_STATE[a.status] ?? 'running',
+			source: 'task',
+		});
+	}
+	taskAgents = [...mapped, ...taskAgents.filter((t) => !known.has(t.name))].slice(-64);
 }
 
 // ---- $-carrying top-level functions ----------------------------------------
@@ -134,15 +170,18 @@ async function dataFingerprint($: EngineInterface): Promise<string> {
 async function rebuild($: EngineInterface): Promise<void> {
 	if (builder === null) return;
 	try {
+		syncAgentsFromList(await $.agent.list());
+	} catch {
+		// no agent list in this harness: keep spawn-recorded agents
+	}
+	try {
 		const now = await $.clock.now();
 		const snap = await builder.build({
 			headerPhase,
 			headerMisses,
 			taskAgents,
 			herdrStdout,
-			tokens: usage.tokens,
-			costUsd: usage.costUsd,
-			contextPct: usage.contextPct,
+			usage,
 			lastSeenSeq,
 			now,
 		});
@@ -221,6 +260,10 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 	on('session.start', async ($, e, next) => {
 		try {
 			modOn = (await $.env.get('ATLAS_MOD').catch(() => undefined)) !== 'off';
+			// A fresh session is unmeasured again, whatever an earlier one measured,
+			// and its agents are its own.
+			usage = { tokens: null, costUsd: null, contextPct: null };
+			taskAgents = [];
 			if (!modOn) return next(e);
 			interactive = e.isInteractive;
 			builder = new SnapshotBuilder(engineFs($), $.plugin.root);
@@ -284,7 +327,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		if (!modOn || snapshot === null || !interactive || e.surface !== 'terminal') return next(e);
 		bandGeom = { columns: e.props.bodyColumns, maxRows: e.props.maxRows };
 		const { Client } = $.ui.resolve(e);
-		return Client({ key: BAND_KEY, module: './band.tsx', props: completeProps({ snapshot, columns: e.props.bodyColumns, maxRows: e.props.maxRows }) });
+		return Client({ key: BAND_KEY, module: './band.tsx', props: completeProps({ snapshot, columns: e.props.bodyColumns, maxRows: e.props.maxRows, usage }) });
 	});
 
 	// The docked command-center pane and the sprites gallery pane.
