@@ -7,13 +7,14 @@
 // plus a cost warning for every persona pinned to 'inherit'.
 import { BRAND } from '../contract';
 import type { AtlasSnapshot, SquadAgent } from '../contract';
+import type { UsageUnknown } from '../band';
 import type { ClientSurface, RenderElement } from 'claude-code';
 import { ROUTING_MATRIX, personaColor } from '../data/personas';
 import type { RoutingRow } from '../data/personas';
 import { spriteFor } from '../sprites';
 import { frameToRuns } from '../sprites/grid';
 
-type SquadProps = { snapshot: AtlasSnapshot; columns: number; rows: number };
+type SquadProps = { snapshot: AtlasSnapshot; columns: number; rows: number; usage?: UsageUnknown };
 type SquadState = { tick: number; ptrY: number | null };
 
 const CARD_W = 28; // cells per card
@@ -46,6 +47,15 @@ const clamp = (n: number, lo: number, hi: number): number => Math.max(lo, Math.m
 
 const fmtTokens = (n: number): string => (n < 1000 ? String(n) : `${Math.round(n / 100) / 10}k`);
 
+/** Per-figure usage text: `--` when that figure is unmeasured (null = no
+ * session.measure value yet); a measured 0 stays `0` / `$0.00`. */
+export function usageFigures(usage: UsageUnknown): { tok: string; cost: string } {
+  return {
+    tok: usage.tokens === null ? '--' : fmtTokens(usage.tokens),
+    cost: usage.costUsd === null ? '$--' : `$${usage.costUsd.toFixed(2)}`,
+  };
+}
+
 /** Card keys a routing row points at: 'atlas:<name>' / 'armada-*' / 'main thread' → card keyName. */
 const rowCardKeys = (row: RoutingRow): string[] =>
   row.persona
@@ -61,6 +71,8 @@ const rowCardKeys = (row: RoutingRow): string[] =>
 
 export default function Squad(props: SquadProps, surface: ClientSurface<SquadState>): RenderElement {
   const { snapshot, columns, rows } = props;
+  // Absent prop = snapshot fallback (measured-or-0), same semantics as band.tsx.
+  const usage = props.usage ?? { tokens: snapshot.tokens, costUsd: snapshot.costUsd, contextPct: snapshot.contextPct };
   const { Box, Text } = surface.elements;
 
   if (surface.state === undefined) {
@@ -213,6 +225,7 @@ export default function Squad(props: SquadProps, surface: ClientSurface<SquadSta
   };
 
   const liveCount = snapshot.squad.filter((a) => LIVE[a.state]).length;
+  const { tok, cost } = usageFigures(usage);
 
   return Box({
     flexDirection: 'column',
@@ -224,7 +237,7 @@ export default function Squad(props: SquadProps, surface: ClientSurface<SquadSta
           Text({ color: BRAND.accent, bold: true, children: '⬢ SQUAD — persona roster' }),
           Text({
             color: BRAND.dim,
-            children: `${liveCount} live · ${snapshot.squad.length} spawned · ${fmtTokens(snapshot.tokens)} tok · $${snapshot.costUsd.toFixed(2)}`,
+            children: `${liveCount} live · ${snapshot.squad.length} spawned · ${tok} tok · ${cost}`,
           }),
         ],
       }),

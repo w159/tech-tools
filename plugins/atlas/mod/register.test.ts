@@ -165,7 +165,7 @@ describe('ui.message intent handling', () => {
     expect(rec.runs.at(-1)).toEqual(cliArgv(intentToArgv(intent, ctx)));
     // No board found: an idle snapshot rides in the fresh props.
     expect(result).toEqual({
-      props: { snapshot: expect.objectContaining({ root: null, sessionId: 'sess-abc123def456' }), columns: 0, rows: 0 },
+      props: { snapshot: expect.objectContaining({ root: null, sessionId: 'sess-abc123def456' }), columns: 0, rows: 0, usage: { tokens: null, costUsd: null, contextPct: null } },
     });
   });
 

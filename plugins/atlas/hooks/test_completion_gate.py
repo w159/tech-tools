@@ -3604,3 +3604,58 @@ class FailOpenVisibleTest(InProcessMainTest):
             rc, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertEqual(rc, 0)
         self.assertIn("FAIL-OPEN", out)
+
+
+class _BufferedStdin:
+    """Minimal fake stdin: the hook reads raw bytes via sys.stdin.buffer."""
+
+    def __init__(self, raw):
+        self.buffer = io.BytesIO(raw)
+
+    def read(self):
+        return b""
+
+
+class FailOpenUnreadablePayloadTest(InProcessMainTest):
+    """F3 pin (30c8adc): an unreadable Stop payload is a VISIBLE fail-open.
+    main() must exit 0 and print the fail-open line to stdout (the
+    model-visible channel) instead of disarming silently; empty stdin stays
+    the documented readable no-op."""
+
+    FAIL_OPEN_LINE = "completion-gate FAIL-OPEN: the Stop payload was unreadable"
+
+    def _invoke_unreadable(self, raw, env_extra=None):
+        """Like _invoke but feeds raw stdin (str via StringIO, bytes via a
+        .buffer) and returns (rc, stdout)."""
+        env = dict(self.env)
+        if env_extra:
+            env.update(env_extra)
+        if isinstance(raw, bytes):
+            stdin_data = _BufferedStdin(raw)
+        else:
+            stdin_data = io.StringIO(raw)
+        stdout_buf = io.StringIO()
+        with (
+            mock.patch("sys.stdin", new=stdin_data),
+            mock.patch("sys.stdout", new=stdout_buf),
+            mock.patch.dict(os.environ, env, clear=True),
+        ):
+            rc = completion_gate.main()
+        return rc, stdout_buf.getvalue()
+
+    def test_malformed_json_stdin_prints_fail_open_line_and_exits_zero(self):
+        rc, out = self._invoke_unreadable('{"broken')
+        self.assertEqual(rc, 0)
+        self.assertIn(self.FAIL_OPEN_LINE, out)
+
+    def test_binary_bytes_stdin_prints_fail_open_line_and_exits_zero(self):
+        rc, out = self._invoke_unreadable(b"\x00\x80\x81\xff\xfe")
+        self.assertEqual(rc, 0)
+        self.assertIn(self.FAIL_OPEN_LINE, out)
+
+    def test_empty_stdin_exits_zero_without_fail_open_line(self):
+        # Documented current behavior: empty stdin is a readable no-op, so
+        # the gate must NOT claim the payload was unreadable.
+        rc, out = self._invoke_unreadable("", env_extra={"ATLAS_GATE": "off"})
+        self.assertEqual(rc, 0)
+        self.assertNotIn("FAIL-OPEN", out)

@@ -6,6 +6,34 @@ The mod's Command Center slash command is registered as `/atlas-cc` (previously 
 
 Adoption detail for the new mod (`plugins/atlas/mod/`): claude workers dispatch on the native `claude --bg` transport by default (`--name/--agent/--model/--effort/--permission-mode` all live-accepted; status parses `claude agents --json`; kill `claude stop` — works on busy and done rows); herdr/tmux panes stay opt-in through `ATLAS_COLONY_TRANSPORT` and omp workers keep pane transports. Optional native wake: `ATLAS_LEAD_AGENT` passthrough plus a brief paragraph instructing a follow-up `SendMessage` beside the mandated board note (byte-identical brief when unset; `contracts/worker-protocol.json` records the step). The completion-gate block loop is env-tunable (`ATLAS_GATE_BLOCK_LOOP`, default 3, clamped 1-7, fail-open, documented against Claude Code's native Stop-hook block cap 8). Mod routing no longer rewrites models on `agent.spawn` — persona model/effort pins come from agent-definition frontmatter; `turn.step` keeps the per-phase effort pin. Verified (2026-10-10 gates, superseding the earlier 206-pass/0-fail claim): on the plugin test host (`claude plugin test plugins/atlas`) all 17 mod test files load and pass — 215 pass / 0 fail; the full plugin walk reports 384 tests / 186 files, 215 pass / 169 fail, and every failure is a `plugins/atlas/colony/**` or `plugins/atlas/omp/**` file importing `bun:test`, which the mod test host forbids (documented expected residual; those suites stay on `bun test`); `claude plugin validate --json plugins/atlas` returns success with 0 errors and 0 warnings; the tsconfig include widened to `[hooks, types, tests, mod]` and `bunx tsc --noEmit -p tsconfig.json` exits 0 over 60 mod files. Two implementation fixes shipped with this: `mod/sprites/sprites.test.ts` now injects the host-compliant `memFs` instead of importing `node:fs`, and the dead `$.atlasMod` contract was removed (`plugins/atlas/types/index.d.ts` deleted, the `types` key dropped from `plugin.json`); R1 (animated band in iTerm2/herdr) remains the single user-run check and the 11.0.0 gate. Live render verified 2026-10-10: a tmux capture of a fresh `claude --plugin-dir plugins/atlas` session (Claude Code 2.1.296) shows the three-row AbovePrompt band with zero `ui.render … refused` lines — the render half of R1 is confirmed, the gate itself stays. The earlier refusals came from `undefined` values reaching the Client props through `channels.ts` `parseNote` and `herdr.ts` `mergeSquad`; fixed by a `completeProps` deep undefined-strip sanitizer in `plugins/atlas/mod/props.ts` (`contract.ts` is chmod-locked read-only and so cannot host the helper), routed through every Client mount and every `ui.message` answer in `register.ts`. `mod/props.test.ts` regression-guards the completeProps live-failure class (undefined/array-hole props) — the engine's `ui.render refused` failure. Follow-up ledger (2026-10-10): every claude-bg spawn in `atlas_mux.py` `_spawn_claude_bg` now passes `--settings '{"crossSessionInbound":"accept"}'` (claude-bg path only; omp pane spawns unchanged; `FORWARDED_ENV`/`ATLAS_WORKER_NAME` forwarding already present and set-only; live probe accepted), and `atlas_control.py` received a 23-item pi-lens blocker cleanup (imports sort, guards/narrowing, logging in two excepts, two `lens_diagnostic_mark` suppressions on false positives) with zero behavior change — verified by mux 77 passed / 30 subtests, launch 19 passed, gate+control 362 passed / 13 subtests. S5 shipped 2026-10-10: an opt-in `ATLAS_TASKS_MIRROR` paragraph in the bg brief mirrors a worker's board claim to the native teams task list (`TaskCreate` subject "[<phase>] <content>", one completion) while the atlas board stays the source of truth (unset = byte-identical brief; mux 77+2 new tests → 79 passed / 30 subtests with launch 19 passed).
 
+## [10.5.1] - 2026-10-11
+
+Patch release: mod band honesty, completion_gate fail-open visibility, omp style/bridge test fixes, live-test evidence.
+
+### mod (Command Center)
+
+- The contract-track band shows `--` for unmeasured ctx/tok/$ instead of `0`, so unmeasured values are no longer indistinguishable from measured zeros; the Squad pane gets the same honesty fix (done in this follow-up).
+- The squad syncs from the host agent list (`$.agent.list`) and records generic task spawns.
+
+### completion_gate
+
+- An unreadable Stop payload prints a model-visible FAIL-OPEN line instead of failing silently; regression tests cover the path.
+
+### omp
+
+- `omp/style.ts` regex fixed so omp no longer leaks `CLAUDE_CODE_ENABLE_TODO_TOOLS`.
+- The omp bridge test is updated to the advisory-then-deny sequence.
+
+### Tests
+
+- `hooks/test_atlas_status.py` gains the isolation import.
+
+### Live-test evidence
+
+- `claude -p --plugin-dir` source load: 50 skills, 13 agents, `Atlas ready`.
+- Hooks black-box suite: 15 cases.
+- Colony HTTP verbs exercised.
+
 ## [10.5.0] - 2026-10-10
 
 Atlas 10.5.0 iteration wave: gate fixes, 3 new skills, solo mode, colony verbs. Skill fleet 47 -> 50 (`atlas-status`, `atlas-run-watch`, `atlas-tour`; `atlas-review` queue mode is a doc-mode, not a new skill directory).

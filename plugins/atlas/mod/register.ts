@@ -82,7 +82,7 @@ function clientPropsFor(module: string): Record<string, unknown> {
 	if (module === BAND_MODULE) {
 		return completeProps({ snapshot, columns: bandGeom.columns, maxRows: bandGeom.maxRows, usage });
 	}
-	return completeProps({ snapshot, columns: paneGeom.columns, rows: paneGeom.rows });
+	return completeProps({ snapshot, columns: paneGeom.columns, rows: paneGeom.rows, usage });
 }
 
 /** Track a spawned atlas persona as a live task agent (capped). */
@@ -339,7 +339,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			return Client({ key: SPRITES_KEY, module: './pane/sprites.tsx', props: completeProps({ columns: e.props.bodyColumns, rows: e.props.scroll.bodyRows }) });
 		}
 		if (e.requestId !== PANE_ID) return next(e);
-		const props = completeProps({ snapshot, columns: e.props.bodyColumns, rows: e.props.scroll.bodyRows });
+		const props = completeProps({ snapshot, columns: e.props.bodyColumns, rows: e.props.scroll.bodyRows, usage });
 		// module must be a string literal in source: the host reads it off the tree.
 		switch (tab) {
 			case 'channel':
