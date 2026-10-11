@@ -35,7 +35,7 @@
   "author": "w159",
   "license": "Apache-2.0",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "node-threatlocker": "file:../../mcp_node/node-threatlocker",
     "zod": "^4.0.0"
   },
