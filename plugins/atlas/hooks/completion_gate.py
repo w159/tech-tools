@@ -1031,7 +1031,29 @@ def _reason(
 
 
 def main() -> int:
-    data = atlas_hook_guard.load_payload("completion_gate")
+    # One stdin read: load_payload(hook, raw=raw) owns parse + fault row; the
+    # readability probe here only decides whether the disarm is SILENT. F3: a
+    # run must not end with the gate disarmed and nothing on the model-visible
+    # channel saying so -- an unreadable payload is exactly that failure.
+    _raw = b""
+    with contextlib.suppress(Exception):
+        _buf = getattr(sys.stdin, "buffer", None)
+        _raw = _buf.read() if _buf is not None else sys.stdin.read().encode()
+    _readable = True
+    try:
+        json.loads(_raw) if _raw.strip() else {}
+    except ValueError:
+        _readable = False
+    # Always routed through load_payload so an unreadable payload keeps its
+    # fault row (the durable trace); the flag only decides the model-visible
+    # line. F3: a run must not end with the gate disarmed and nothing saying so.
+    data = atlas_hook_guard.load_payload("completion_gate", raw=_raw)
+    if not _readable:
+        print(
+            "[atlas] completion-gate FAIL-OPEN: the Stop payload was unreadable, "
+            "so the done-conditions were NOT checked this Stop."
+        )
+        return 0
     # Finalize the observability run regardless of gate outcome.
     _finalize_db(data.get("session_id", ""))
     try:

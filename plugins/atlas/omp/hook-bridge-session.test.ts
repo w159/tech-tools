@@ -365,32 +365,69 @@ for (const leanCtx of [false, true]) {
 // disagreeing with the payload the bridge builds. This drives the real hook through the real bridge.
 // The project root must NOT be under the OS temp dir: the tripwire exempts temp paths from its
 // "never edit target code inline" rule, which made an earlier hand check wrongly report that rule dead on omp.
-test("REAL dispatch_tripwire through the bridge: spec-less, bundled and production-edit calls are denied; well-formed and docs calls pass", async () => {
+type Fire = (toolName: string, input: Record<string, unknown>) => Promise<Record<string, unknown> | undefined>;
+
+// The real bridge returns a hook's `{ block, reason }` on deny; advisory verdicts ride as 200 +
+// additionalContext (no block). fire surfaces that so tests can pin the text.
+// hookPayload/isDeny/contextOf are the shared verdict contract for every REAL-tripwire fire closure
+// in this file, and keep the dispatchFire closure under the fallow complexity gate.
+const hookPayload = (toolName: string, input: Record<string, unknown>) => ({ toolCallId: `c${Math.random()}`, toolName, input });
+const isDeny = (r: Record<string, unknown> | undefined) => Boolean(r?.block);
+const contextOf = (r: Record<string, unknown> | undefined) => (typeof r?.additionalContext === "string" ? r.additionalContext : "");
+
+function dispatchFire(handlers: Record<string, Handler[]>, ctx: Ctx): Fire {
+	return async (toolName, input) => {
+		let context = "";
+		for (const h of handlers.tool_call ?? []) {
+			const r = await h(hookPayload(toolName, input), ctx);
+			if (isDeny(r)) return r;
+			context += contextOf(r);
+		}
+		// advisory verdicts ride as 200 + additionalContext (no block)
+		return context ? { additionalContext: context } : undefined;
+	};
+}
+
+function armRunstate(root: string, sessionId: string) {
+	const runstate = join(import.meta.dir, "..", "scripts", "omp_runstate.py");
+	const sh = (...argv: string[]) => Bun.spawnSync(["python3", runstate, ...argv, "--session-id", sessionId, "--cwd", root], { env: process.env });
+	sh("begin");
+	sh("arm", "--agent-type", "atlas:implementer");
+	return sh;
+}
+
+// F11: the FIRST spec-shape offense per session is advisory - it proceeds (no block) with additionalContext.
+async function expectFirstOffenseIsAdvisory(fire: Fire) {
+	const first = await fire("task", task(`${SPEC_TOOLS}just fix it`));
+	expect(first?.block ?? false).toBe(false);
+	expect(String(first?.additionalContext)).toMatch(/^\[atlas\] ADVISORY - first unbounded-dispatch offense/);
+}
+
+// the SECOND spec-less dispatch in the same session ("real-sess", stable) denies with the old reason;
+// a two-GOAL bundle and an inline production edit deny; a docs edit passes.
+async function expectSecondOffenseAndEdges(fire: Fire) {
+	expect(String((await fire("task", task(`${SPEC_TOOLS}just fix it once more`)))?.reason)).toContain("unbounded: missing GOAL:");
+	expect(String((await fire("task", task(`${SPEC_TOOLS}${WELL_FORMED_SPEC}GOAL: and also rewrite billing\n`)))?.reason)).toContain("2 GOAL: blocks");
+	expect(String((await fire("edit", { path: "src/a.py", input: "x" }))?.reason)).toContain("never edit target code inline");
+	expect(await fire("edit", { path: "docs/CHANGELOG.md", input: "x" })).toBeUndefined();
+}
+
+const SPEC_TOOLS = "TOOLS: first load them with ToolSearch, then use serena and lean-ctx for code navigation.\n";
+const WELL_FORMED_SPEC = "GOAL: fix add\nDELIVERABLE: patched src/calc.py\nSUCCESS CRITERIA: pytest passes\nOUT OF SCOPE: docs\nSTOP CONDITIONS: tests green\nREPORT: structured result\n";
+const task = (prompt: string) => ({ tasks: [{ name: "W", agent: "implementer", task: prompt }] });
+
+test("REAL dispatch_tripwire through the bridge: first spec-less call is advisory, the second denies; bundled and production-edit calls are denied; well-formed and docs calls pass", async () => {
 	await withSandbox(async root => {
-		const runstate = join(import.meta.dir, "..", "scripts", "omp_runstate.py");
-		const sh = (...argv: string[]) => Bun.spawnSync(["python3", runstate, ...argv, "--session-id", "real-sess", "--cwd", root], { env: process.env });
-		sh("begin");
-		sh("arm", "--agent-type", "atlas:implementer");
+		armRunstate(root, "real-sess");
 
 		const handlers: Record<string, Handler[]> = {};
 		registerHookBridge({ on: (ev: string, fn: Handler) => void (handlers[ev] ??= []).push(fn) } as unknown as ExtensionAPI);
 		const ctx: Ctx = { cwd: root, agent: { kind: "main" }, sessionManager: { getSessionId: () => "real-sess" } };
-		const fire = async (toolName: string, input: Record<string, unknown>) => {
-			for (const h of handlers.tool_call ?? []) {
-				const r = await h({ toolCallId: `c${Math.random()}`, toolName, input }, ctx);
-				if (r?.block) return r;
-			}
-			return undefined;
-		};
-		const TOOLS = "TOOLS: first load them with ToolSearch, then use serena and lean-ctx for code navigation.\n";
-		const SPEC = "GOAL: fix add\nDELIVERABLE: patched src/calc.py\nSUCCESS CRITERIA: pytest passes\nOUT OF SCOPE: docs\nSTOP CONDITIONS: tests green\nREPORT: structured result\n";
-		const task = (prompt: string) => ({ tasks: [{ name: "W", agent: "implementer", task: prompt }] });
+		const fire = dispatchFire(handlers, ctx);
 
-		expect(await fire("task", task(TOOLS + SPEC))).toBeUndefined();
-		expect(String((await fire("task", task(`${TOOLS}just fix it`)))?.reason)).toContain("unbounded: missing GOAL:");
-		expect(String((await fire("task", task(`${TOOLS}${SPEC}GOAL: and also rewrite billing\n`)))?.reason)).toContain("2 GOAL: blocks");
-		expect(String((await fire("edit", { path: "src/a.py", input: "x" }))?.reason)).toContain("never edit target code inline");
-		expect(await fire("edit", { path: "docs/CHANGELOG.md", input: "x" })).toBeUndefined();
+		expect(await fire("task", task(SPEC_TOOLS + WELL_FORMED_SPEC))).toBeUndefined();
+		await expectFirstOffenseIsAdvisory(fire);
+		await expectSecondOffenseAndEdges(fire);
 	});
 });
 

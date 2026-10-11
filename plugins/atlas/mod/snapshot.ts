@@ -86,9 +86,7 @@ export class SnapshotBuilder {
     headerMisses: number;
     taskAgents: SquadAgent[];
     herdrStdout?: string;
-    tokens: number;
-    costUsd: number;
-    contextPct: number;
+    usage: { tokens: number | null; costUsd: number | null; contextPct: number | null };
     lastSeenSeq: number;
     now: number;
   }): Promise<AtlasSnapshot> {
@@ -97,9 +95,11 @@ export class SnapshotBuilder {
       sessionId: this.sessionId,
       contract: this.contract,
       personas: this.personas,
-      tokens: live.tokens,
-      costUsd: live.costUsd,
-      contextPct: live.contextPct,
+      // Measured-or-0 for the snapshot's numeric contract fields; the band gets
+      // the true unknown-ness via the nullable usage prop (contract.ts locked).
+      tokens: live.usage.tokens ?? 0,
+      costUsd: live.usage.costUsd ?? 0,
+      contextPct: live.usage.contextPct ?? 0,
       headerMisses: live.headerMisses,
       now: live.now,
     };

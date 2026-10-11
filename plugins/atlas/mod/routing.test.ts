@@ -171,15 +171,23 @@ describe('registerRouting agent.spawn', () => {
     expect(drift).toEqual([]);
   });
 
-  test('leaves unknown roles and armada dispatches untouched', async () => {
+  test('routes no persona for unknown roles but records them for the band', async () => {
     const { on, pick } = captureOn();
-    const { deps, recorded } = routingDeps();
+    const { deps, recorded, drift } = routingDeps();
     registerRouting(on, deps);
-    for (const subagentType of ['atlas:nobody', 'armada:core', 'general-purpose']) {
+    for (const subagentType of ['atlas:nobody', 'armada:core', 'general-purpose', 'task']) {
       const result = await pick('agent.spawn')(undefined, spawnInput({ subagentType }), spawnNext);
       expect(result).toEqual({ model: 'parent-model', agentId: 'agent-1' });
     }
-    expect(recorded).toEqual([]);
+    // No persona routing and no drift, yet every spawn shows in the band
+    // (persona 'unknown' resolves through mergeSquad's personaOf).
+    expect(recorded).toEqual([
+      ['agent-1', 'unknown'],
+      ['agent-1', 'unknown'],
+      ['agent-1', 'unknown'],
+      ['agent-1', 'unknown'],
+    ]);
+    expect(drift).toEqual([]);
   });
 
   test('fails open when getPersonas throws', async () => {

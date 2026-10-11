@@ -10,10 +10,20 @@ import type { ClientModule } from 'claude-code';
 import { BRAND, type AgentState, type AtlasSnapshot, type Intent, type PhaseId } from './contract';
 import { bar, blink, dim, glyph, phaseColor, stateColor } from './theme';
 
+/** Per-figure unknown-ness: null = not measured yet (session.measure has not
+ * carried a value), 0 is a legitimate measured value. Absent prop = snapshot
+ * fallback (measured-or-0) for callers that predate the prop. */
+export interface UsageUnknown {
+  tokens: number | null;
+  costUsd: number | null;
+  contextPct: number | null;
+}
+
 export interface BandProps {
   snapshot: AtlasSnapshot;
   columns: number;
   maxRows: number;
+  usage?: UsageUnknown;
 }
 
 interface Seg {
@@ -54,7 +64,7 @@ function phasesOf(snap: AtlasSnapshot): PhaseId[] {
 }
 
 /** Row 1: ⬢ATLAS + phase nodes (done diamonds, current capsule, hollow rest) joined by rails. */
-function buildTrack(snap: AtlasSnapshot, glow: string, flash: boolean): {
+export function buildTrack(snap: AtlasSnapshot, glow: string, flash: boolean): {
   segs: Seg[];
   phases: PhaseId[];
   nodeX: number[];
@@ -119,11 +129,15 @@ function buildField(w: number, tick: number, progress: number): { stars: string;
 }
 
 /** Row 3: live agents in persona colour, then mail, context gauge, tokens and cost. */
-function buildConveyor(snap: AtlasSnapshot, w: number): { segs: Seg[]; zones: Zone[] } {
+export function buildConveyor(snap: AtlasSnapshot, w: number, usage: UsageUnknown = {
+  tokens: snap.tokens,
+  costUsd: snap.costUsd,
+  contextPct: snap.contextPct,
+}): { segs: Seg[]; zones: Zone[] } {
   const zones: Zone[] = [];
   const segs: Seg[] = [];
   const live = snap.squad.filter(a => LIVE_STATES[a.state]);
-  const ctx = snap.contextPct;
+  const ctx = usage.contextPct;
   const fmtK = (n: number) => (n >= 1000 ? `${Math.round(n / 1000)}k` : `${Math.round(n)}`);
 
   const tail = (withGauge: boolean, withTok: boolean): Seg[] => {
@@ -131,12 +145,18 @@ function buildConveyor(snap: AtlasSnapshot, w: number): { segs: Seg[]; zones: Zo
       { text: `✉${snap.unread}`, color: snap.unread > 0 ? BRAND.input : BRAND.dim, dimmed: snap.unread === 0 },
     ];
     if (withGauge) {
-      t.push({ text: `  ${glyph.dot} ctx ${bar(ctx, 10)} ${Math.round(ctx)}%`, color: BRAND.dim, dimmed: true });
+      t.push(ctx === null
+        ? { text: `  ${glyph.dot} ctx --`, color: BRAND.dim, dimmed: true }
+        : { text: `  ${glyph.dot} ctx ${bar(ctx, 10)} ${Math.round(ctx)}%`, color: BRAND.dim, dimmed: true });
     }
     if (withTok) {
-      t.push({ text: `  ${glyph.dot} ${fmtK(snap.tokens)} tok`, color: BRAND.dim, dimmed: true });
+      t.push(usage.tokens === null
+        ? { text: `  ${glyph.dot} -- tok`, color: BRAND.dim, dimmed: true }
+        : { text: `  ${glyph.dot} ${fmtK(usage.tokens)} tok`, color: BRAND.dim, dimmed: true });
     }
-    t.push({ text: `  ${glyph.dot} $${snap.costUsd.toFixed(2)}`, color: BRAND.dim, dimmed: true });
+    t.push(usage.costUsd === null
+      ? { text: `  ${glyph.dot} $--`, color: BRAND.dim, dimmed: true }
+      : { text: `  ${glyph.dot} $${usage.costUsd.toFixed(2)}`, color: BRAND.dim, dimmed: true });
     return t;
   };
   const tailLen = (t: Seg[]) => t.reduce((n, s) => n + s.text.length, 0);
@@ -238,7 +258,7 @@ const Band: ClientModule = (props, surface) => {
   const track = buildTrack(snap, glow, breath);
   const tSegs = clipSegs(track.segs, w);
   const field = buildField(w, tick, snap.counts.total > 0 ? snap.counts.done / snap.counts.total : 0);
-  const conv = buildConveyor(snap, w);
+  const conv = buildConveyor(snap, w, bp.usage);
   const cSegs = clipSegs(conv.segs, w);
   const refs = refsFor.get(surface);
   if (refs) refs.zones = full ? conv.zones : [];
