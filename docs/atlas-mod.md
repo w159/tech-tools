@@ -25,7 +25,7 @@ Both surfaces are drawn with native elements (`$.ui.resolve(e)` from the `ui.ren
 
 ### The band (always on)
 
-One native line above the prompt, `Atlas  <phase> n of m   N working   N gates open` (`mod/band.tsx:14-21` `bandTree`), drawn only for the terminal surface in an interactive session with the mod on (`register.ts:584-588`). `n of m` is `routeCounts(s.todoGroups, s.contract)`, the same tasks the sidebar route shows; `N working` counts squad agents in state `running` or `spawning`; `N gates open` is `openGateCount` over the gate groups (`mod/gates.ts:43-44`). Runs are cut to `props.bodyColumns` with `fitText` (`band.tsx:22-29`).
+A round-bordered section (border `promptBorder`, 3 rows; one borderless line under 40 columns or when `AbovePrompt.maxRows` < 3, d.ts :10263-10292) above the prompt, `Atlas  <phase> n of m   N working   N gates open` (`mod/band.tsx:14-21` `bandTree`), drawn only for the terminal surface in an interactive session with the mod on (`register.ts:584-588`). `n of m` is `routeCounts(s.todoGroups, s.contract)`, the same tasks the sidebar route shows; `N working` counts squad agents in state `running` or `spawning`; `N gates open` is `openGateCount` over the gate groups (`mod/gates.ts:43-44`). Runs are cut to `props.bodyColumns` with `fitText` (`band.tsx:22-29`).
 
 The phase comes from the last header in `turn.complete` (matched with the contract's `headerFirstLinePattern`), else the session's first `in_progress` item, else `research`. Usage figures (tokens, cost, context fill) are held per-figure nullable in `$.state` (`usage`, `null` means not measured yet) and feed the snapshot; the band line itself no longer prints them.
 
@@ -172,7 +172,7 @@ plugins/atlas/mod/
 |-- register.ts      # entry point: register(on, options); wired from hooks.json "modules"; $.state atoms, gates run, sendNote, ui.render hooks
 |-- register.test.ts, register-sidebar.test.ts, register-open.test.ts, register-agents.test.ts # register wiring
 |-- theme.ts         # chartRoom palette, width-safe glyph allowlist, fitText/textWidth
-|-- band.tsx         # AbovePrompt band: one native line (bandTree)
+|-- band.tsx         # AbovePrompt band: bordered section (bandTree)
 |-- gates.ts         # parseGates, gatesError, headerGroup, openGateCount (pure)
 |-- pane/
 |   |-- sidebar.tsx  #   sidebarTree: route, tasks, team + message field, gates, advisor notes

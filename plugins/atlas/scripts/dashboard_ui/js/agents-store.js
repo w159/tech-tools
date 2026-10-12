@@ -7,6 +7,7 @@
 //   agentsStore.start({ project, pollMs }); agentsStore.stop();
 // The store owns the single SSE stream (api.stream) and forwards non-fleet topics to onEvent().
 
+import { nextPollDelay, SESSION_EXPIRED_TEXT } from "./poll-backoff.js";
 import { api, ApiError, stableJson } from "./api.js";
 
 // ---- vocabulary (MASTER 5.2) ------------------------------------------------
@@ -359,14 +360,27 @@ function createAgentsStore() {
     });
   }
 
+  // Colony poll: setTimeout chain so the delay backs off on errors and stops on 401/403
+  // (a stale token never recovers by retrying). Visibility return restarts it.
+  let colonyFails = 0;
   function tickColony() {
-    clearInterval(colonyTimer);
+    clearTimeout(colonyTimer);
     colonyTimer = null;
-    if (colonyWatch > 0 && started) {
-      load("colony").then(() => emit());
-      colonyTimer = setInterval(() => load("colony").then(() => emit()), 8000);
-    }
+    if (!(colonyWatch > 0 && started) || (typeof document !== "undefined" && document.hidden)) return;
+    load("colony").then(() => {
+      emit();
+      const s = status.colony;
+      colonyFails = s && !s.ok ? colonyFails + 1 : 0;
+      const wait = nextPollDelay(8000, colonyFails, s && !s.ok ? { status: s.code } : null);
+      if (wait === null) {
+        daemonError = SESSION_EXPIRED_TEXT;
+        emit(true);
+        return;
+      }
+      colonyTimer = setTimeout(tickColony, wait);
+    });
   }
+  if (typeof document !== "undefined") document.addEventListener("visibilitychange", () => { if (!document.hidden && started) { colonyFails = 0; tickColony(); } });
 
   return {
     // Begin (or retarget) the live model. Safe to call again with a new project.
@@ -387,7 +401,7 @@ function createAgentsStore() {
       started = false;
       if (stream) stream.close();
       stream = null;
-      clearInterval(colonyTimer);
+      clearTimeout(colonyTimer);
       clearInterval(projectsTimer);
       colonyTimer = projectsTimer = null;
     },

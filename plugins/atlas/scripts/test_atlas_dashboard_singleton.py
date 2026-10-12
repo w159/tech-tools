@@ -68,6 +68,23 @@ class LogTests(unittest.TestCase):
         self.assertNotEqual(self._logged('"%s" %s %s', "GET /api/health HTTP/1.1", "500", "-"), "")
 
 
+class AuthFailureThrottleTests(unittest.TestCase):
+    def test_repeated_401_logged_once_then_summarized(self):
+        line = '"GET /api/v2/irc?project=x HTTP/1.1" 401 -'
+        with mock.patch.dict(d._auth_log_state, clear=True), mock.patch.object(d.time, "monotonic") as clock:
+            clock.return_value = 100.0
+            self.assertEqual(d._throttle_auth_failure(line), line)
+            for _ in range(5):
+                self.assertIsNone(d._throttle_auth_failure(line))
+            clock.return_value = 100.0 + d.AUTH_LOG_INTERVAL_S + 1
+            self.assertIn("5 repeats suppressed", d._throttle_auth_failure(line))
+
+    def test_success_lines_pass_through(self):
+        ok = '"GET /api/v2/irc HTTP/1.1" 200 -'
+        self.assertEqual(d._throttle_auth_failure(ok), ok)
+        self.assertEqual(d._throttle_auth_failure(ok), ok)
+
+
 class BrokenPipeTests(unittest.TestCase):
     def test_json_swallows_client_hangup(self):
         h = mock.Mock()

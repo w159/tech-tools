@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## [11.1.6] - 2026-10-12 -- hook guard hardening
+
+- Hook guard: hookstate session files are swept after 7 days (was 1 day) without touching fresher ones; new `hooks/test_hookstate_sweep.py`. Audit confirmed strict=False on every stdin JSON parse, the 1 MiB hook-faults cap, and the Bash exploration deny rewrite hint already present.
+- Dashboard: repeated 401/403 responses to a stale-token tab are logged once per route per 60 s with a suppressed count (dashboard.log had 17k identical 401 lines); tests in `scripts/test_atlas_dashboard_singleton.py`. Reuse of a healthy daemon, 5 MiB launch-time log rotation to dashboard.log.1, and silent 200 health probes were already in source.
+- omp workers: audit found the dispatch strip already in source (generated agents carry `spawns: "none"`, which omp parses as an empty spawn allowlist, and every brief has a "You do not dispatch" section); `omp/gen-agents.test.ts` now asserts the brief section for every agent alongside the existing `spawns` assertion. The generic omp `task` agent (no atlas agent named) keeps `spawns: "*"` and is not covered.
+- Band: AbovePrompt band is now a round-bordered section (promptBorder) like the sidebar; one line under 40 columns or maxRows < 3.
+- Dashboard: colony poll backs off on errors (cap 60s), stops on 401/403 with "Session expired, reload the page.", resumes on tab visibility (poll-backoff.js).
+
 ## [11.1.5] - 2026-10-12 -- atlas 11.1.5: Health page tells the truth
 
 - Health payload: top-level `data_warnings` ([{source, message}]) lists every swallowed data-source failure (DB open/query/columns, connector provider, hookstate, ledger, nudge); the affected subsystem becomes `warn` instead of `ok` or a silent zero. New `scripts/atlas_health_collect.py`.

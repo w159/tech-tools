@@ -51,7 +51,7 @@ STOP_BURST_WINDOW = 120  # seconds
 # actual Stop cycles, not how many hooks happen to be wired to Stop.
 STOP_EVENT_DEDUP_SECONDS = 2
 
-STALE_SESSION_SECONDS = 86400  # prune session state files older than a day
+STALE_SESSION_SECONDS = 7 * 86400  # prune session state files older than 7 days
 MAX_EMITTED_HASHES = 50  # cap per-session emitted-message memory
 
 # Bound on how long a Stop hook will wait for the per-session lock below --
@@ -166,7 +166,7 @@ def _save_state(session_id, state):
 
 
 def _prune_stale_sessions(now):
-    """Delete session state files untouched for a day so hookstate/ cannot
+    """Delete session state files untouched for 7 days so hookstate/ cannot
     grow without bound on a long-lived machine. Takes `now` from the caller
     instead of calling _now() itself so it never consumes an extra tick from
     a test's mocked time source."""

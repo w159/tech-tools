@@ -636,12 +636,12 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		return next(e);
 	});
 
-	// The band above the prompt: one native line (terminal + interactive only).
+	// The band above the prompt: bordered section (terminal + interactive only).
 	on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
 		if (e.surface !== 'terminal' || e.props.hasSurvey || !(await read($, isModOn)) || !(await read($, isInteractive))) return next(e);
 		const snapshot = await read($, snapshotState);
 		if (snapshot === null) return next(e);
-		return bandTree($.ui.resolve(e), { snapshot, openGates: openGateCount(await gateGroups($)), columns: e.props.bodyColumns, tick: await read($, spinnerTickState) });
+		return bandTree($.ui.resolve(e), { snapshot, openGates: openGateCount(await gateGroups($)), columns: e.props.bodyColumns, maxRows: e.props.maxRows, tick: await read($, spinnerTickState) });
 	});
 
 	// The Atlas sidebar: a native tree, so its elements join the engine's focus ring.

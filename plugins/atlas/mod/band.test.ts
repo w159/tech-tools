@@ -8,7 +8,8 @@ import { chartRoom, textWidth } from './theme';
 type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });
 const els = { Box: mk('Box'), Text: mk('Text') } as unknown as ClientElements;
-const texts = (n: Node): Node[] => (n.props.children as Node[]).filter((c) => c.kind === 'Text');
+const inner = (n: Node): Node => (n.props.borderStyle ? (n.props.children as Node[])[0]! : n);
+const texts = (n: Node): Node[] => (inner(n).props.children as Node[]).filter((c) => c.kind === 'Text');
 const line = (n: Node): string => texts(n).map((t) => t.props.children).join('');
 const HEX = /^#[0-9a-f]{6}$/i;
 
@@ -56,8 +57,19 @@ describe('bandTree', () => {
     expect(line(bandTree(els, { snapshot, openGates: 1, columns: 120 }) as unknown as Node)).toContain('1 gate open');
   });
   test('never wider than the band', () => {
-    for (const columns of [10, 24, 30, 40, 80]) {
+    for (const columns of [10, 24, 30, 40, 50, 80]) {
       expect(textWidth(line(bandTree(els, { snapshot, openGates: 3, columns }) as unknown as Node))).toBeLessThanOrEqual(columns);
     }
+  });
+  test('bordered round in promptBorder at 80 columns, three rows allowed', () => {
+    const tree = bandTree(els, { snapshot, openGates: 0, columns: 80, maxRows: 5 }) as unknown as Node;
+    expect(tree.props.borderStyle).toBe('round');
+    expect(tree.props.borderColor).toBe(chartRoom.border);
+    expect(tree.props.borderColor).toBe('promptBorder');
+    expect(textWidth(line(tree))).toBeLessThanOrEqual(78);
+  });
+  test('narrow or short host drops the border to one line', () => {
+    expect((bandTree(els, { snapshot, openGates: 0, columns: 39 }) as unknown as Node).props.borderStyle).toBeUndefined();
+    expect((bandTree(els, { snapshot, openGates: 0, columns: 80, maxRows: 2 }) as unknown as Node).props.borderStyle).toBeUndefined();
   });
 });

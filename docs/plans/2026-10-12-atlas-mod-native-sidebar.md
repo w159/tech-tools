@@ -15,7 +15,7 @@ elements and `$.state` atoms; Buttons there join the engine focus ring (Tab, arr
 
 - Rewrite the UI on native elements; drop every `Client` module. Keep `mod/data/*`.
 - Layout: docked sidebar pane, opened at `session.start` when `viewport.isFullscreen` and there is room
-  (110+ columns); the AbovePrompt band stays one compact line (phase n/m, working count, open gates).
+  (110+ columns); the AbovePrompt band is a round-bordered section (decision 2026-10-12, overturning the one-line band): lead chip, phase glyph, phase n/m, working count, open gates; borderless one line under 40 columns or when the host's `maxRows` is under 3.
 - Gates section shows all four: completion-gate conditions (with fix command per failure), dispatch
   tripwire state (armed, inline-op count vs limit, recent denies), tool-routing compliance (context tools
   used vs bypassed, tokens saved), header contract (last reply matched, declared phase).

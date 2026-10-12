@@ -59,6 +59,8 @@ function expectAgentMatches(name: string, source: string, generatedContent: stri
 	expect(model).toEqual(modelPatternsFor(name));
 	expect(model).toEqual(expectedModelChain(name, source));
 	expect(fm.spawns).toBe("none");
+	// The brief must also tell the worker it cannot dispatch.
+	expect(generatedContent).toContain("## You do not dispatch");
 	expect(generatedContent.endsWith(ompBody(body)) || generatedContent.endsWith(ompBody(body) + "\n")).toBe(true);
 }
 

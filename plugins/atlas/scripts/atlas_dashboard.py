@@ -1513,6 +1513,23 @@ def _reclaim_temp_listener(port: int, health: dict, want_db: str) -> bool:
 
 
 LOG_ROTATE_BYTES = 5 * 1024 * 1024
+AUTH_LOG_INTERVAL_S = 60.0
+_auth_log_state: dict[str, list] = {}  # route -> [last logged monotonic, suppressed count]
+
+
+def _throttle_auth_failure(line: str) -> str | None:
+    """A tab holding a stale token polls forever; log each 401/403 route once per
+    AUTH_LOG_INTERVAL_S with a suppressed count so it cannot flood dashboard.log."""
+    m = re.search(r'"(?:GET|POST|PUT|PATCH|DELETE) ([^ ?"]+)[^"]*" (40[13]) ', line)
+    if not m:
+        return line
+    key, now = f"{m.group(2)} {m.group(1)}", time.monotonic()
+    last, skipped = _auth_log_state.get(key, [None, 0])
+    if last is not None and now - last < AUTH_LOG_INTERVAL_S:
+        _auth_log_state[key] = [last, skipped + 1]
+        return None
+    _auth_log_state[key] = [now, 0]
+    return f"{line} (+{skipped} repeats suppressed)" if skipped else line
 
 
 def _open_log() -> "object":
@@ -2313,6 +2330,9 @@ class Handler(BaseHTTPRequestHandler):
         line = format % args
         # Liveness probes fire every few seconds from every session; only failures are worth a line.
         if re.search(r'"GET /(api/(v2/)?)?health[ ?]', line) and line.rstrip().split()[-2:-1] == ["200"]:
+            return
+        line = _throttle_auth_failure(line)
+        if line is None:
             return
         sys.stderr.write(f"[atlas-dashboard] {_ts()} {line}\n")
 
