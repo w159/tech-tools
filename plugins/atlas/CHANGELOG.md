@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## [11.1.3] - 2026-10-12 -- atlas 11.1.3: real glyph on every task row
+
+- Every task row shows its own status glyph (done, in progress, pending, blocked); follow-on tasks in a phase no longer show a dot. The phase name still appears on the first task only.
+
 ## [11.1.2] - 2026-10-12 -- atlas 11.1.2: sidebar matches the plan mockup
 
 - Sidebar matches the plan mockup: frameless sections, compact route line, task rows only, plain team rows, single gates list.

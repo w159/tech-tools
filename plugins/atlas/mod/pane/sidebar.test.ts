@@ -60,12 +60,14 @@ describe('sidebar tree', () => {
   test('tasks are one row each; the phase name shows on the first task only, empty phases are not listed', () => {
     const snap = busySnap();
     const it = (id: string, status: string) => ({ id, content: `task ${id}`, status, owner: id === 'a' ? 'bob' : null, evidence: null, live: true });
-    const todoGroups = [{ phase: 'implement', dept: '', glyph: '', done: 0, total: 2, items: [it('a', 'in_progress'), it('b', 'pending')] }] as any;
+    const todoGroups = [{ phase: 'implement', dept: '', glyph: '', done: 0, total: 3, items: [it('a', 'in_progress'), it('b', 'pending'), it('c', 'completed')] }] as any;
     const root = sidebarTree(els, model({}, { ...snap, todoGroups }), on) as unknown as Node;
     const a = textOf(button(root, 'task:a'));
     const b = textOf(button(root, 'task:b'));
+    const c = textOf(button(root, 'task:c'));
     expect(a).toMatch(/^◉ implement +task a +bob$/);
-    expect(b).toMatch(/^· {11}task b$/);
+    expect(b).toMatch(/^○ {11}task b$/);
+    expect(c).toMatch(/^✓ {11}task c$/);
     expect(textOf(root)).not.toContain('research  ');
   });
 

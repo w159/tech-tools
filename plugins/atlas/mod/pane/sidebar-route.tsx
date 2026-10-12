@@ -70,11 +70,11 @@ function taskSegments(v: TaskView): Segment[] {
   ];
 }
 
-/** First task of a phase shows its status glyph and the phase name; later ones show `·` in the status colour. */
+/** Every task shows its own status glyph; only the first task of a phase shows the phase name. */
 function taskRow(els: ClientElements, m: SidebarModel, on: SidebarHandlers, v: Omit<TaskView, 'mark' | 'markColor' | 'label'> & { phase: string; first: boolean }): RenderElement[] {
   const st = statusOf(v.it.status);
   const key = `task:${v.it.id}`;
-  const view: TaskView = { it: v.it, mark: v.first ? st.g : '·', markColor: st.color, label: v.first ? v.phase : '', pw: v.pw, cols: v.cols };
+  const view: TaskView = { it: v.it, mark: st.g, markColor: st.color, label: v.first ? v.phase : '', pw: v.pw, cols: v.cols };
   return [
     els.Button({ key, plain: true, onPress: () => on.toggle(key), children: fitRuns(els, taskSegments(view), v.cols) }),
     ...(m.ui.expanded === key ? [evidenceLine(els, v.it, v.cols)] : []),

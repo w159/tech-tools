@@ -70,7 +70,7 @@ Sentence case everywhere, no all-caps labels, no middle-dot meta strings, no arr
  ✓ research   map auth path
  ✓ test       failing tripwire test
  ◉ implement  sidebar module        impl-ui
- ·            gate data             impl-gates
+ ◉            gate data             impl-gates
  ○ verify     live tmux check
 
  Team                    lead is conducting 2
