@@ -7,6 +7,8 @@ import type { Mate } from './sidebar-team';
 import type { SidebarModel } from './sidebar-types';
 
 const BUBBLE_MAX_COLS = 36;
+// The portrait adds 6 rows; below 40 it pushed Gates, Advisor and the message field past the bottom (measured at 24/32/40 rows).
+const PORTRAIT_MIN_ROWS = 40;
 const ACTIVE_MOODS: ReadonlySet<Mood> = new Set<Mood>(['working', 'thinking', 'blocked']);
 
 /** Portrait beside a speech bubble, one Box row per line so every line is measurable. */
@@ -21,7 +23,7 @@ function portraitRows(els: ClientElements, x: Mate, cols: number, tick: number):
 
 /** Portrait only with room (a bordered pane with rows to spare), and only for an active member or one the person picked. */
 const wantsPortrait = (x: Mate, m: SidebarModel, bordered: boolean): boolean =>
-  bordered && m.rows >= 28 && (ACTIVE_MOODS.has(x.mood) || m.ui.recipient !== null);
+  bordered && m.rows >= PORTRAIT_MIN_ROWS && (ACTIVE_MOODS.has(x.mood) || m.ui.recipient !== null);
 
 export function portraitFor(els: ClientElements, m: SidebarModel, list: Mate[], cols: number, bordered: boolean): RenderElement[] {
   const sel = list.find((x) => x.name === (m.ui.recipient ?? 'lead'));

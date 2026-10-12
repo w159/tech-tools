@@ -83,7 +83,8 @@ export async function readTodos(
 }
 
 /** Board rows carry `origin` (session|carried|manual|advisor) at runtime; TodoItem (locked contract) does not declare it. */
-type BoardItem = TodoItem & { origin?: string };
+type BoardItem = TodoItem & { origin?: string; created_at?: number | string };
+const createdAt = (it: BoardItem): number => Number(it.created_at) || 0;
 const isLive = (it: BoardItem, sessionId: string): boolean =>
   it.session_id === sessionId || (it.status !== 'completed' && it.origin !== 'carried');
 
@@ -128,7 +129,9 @@ export function groupTodos(items: TodoItem[], contract: Contract, sessionId: str
       total: rows.length,
     });
   }
-  const advisors = items.filter(it => isAdvisor(it) && it.status !== 'completed').map(row);
+  // Newest first: the pane shows the two most recent and folds the older ones into "+N more".
+  const advisors = items.filter(it => isAdvisor(it) && it.status !== 'completed')
+    .sort((a, b) => createdAt(b) - createdAt(a)).map(row);
   if (advisors.length > 0) {
     groups.push({ phase: 'advisor', dept: 'ADVISOR NOTES', glyph: '·', items: advisors, done: 0, total: advisors.length });
   }

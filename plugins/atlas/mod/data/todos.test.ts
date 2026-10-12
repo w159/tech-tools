@@ -221,6 +221,12 @@ describe('groupTodos / contractProgress', () => {
     expect(groups.at(-1)).toMatchObject({ phase: 'advisor', total: 2 });
     expect(contractProgress(items, CONTRACT, 's1')).toEqual([{ phase: 'test', done: 1, total: 1 }]);
   });
+
+  test('advisor notes list newest first by created_at, whatever the board order or session', () => {
+    const adv = (id: string, created_at: number, session_id = 's1') => ({ ...item({ id, session_id }), origin: 'advisor', created_at }) as TodoItem;
+    const groups = groupTodos([adv('mid', 20), adv('old', 10, 'other-session'), adv('new', 30)], CONTRACT, 's1');
+    expect(groups.at(-1)?.items.map(i => i.id)).toEqual(['new', 'mid', 'old']);
+  });
 });
 
 describe('carried rows re-stamped to the current session (defect A)', () => {

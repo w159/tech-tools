@@ -55,7 +55,9 @@ export function mates(s: LiveSnapshot): Mate[] {
   // Other sessions' leads ("lead-01a118") are never teammates of this one.
   // A roster entry with role "lead" is a lead whatever its name ("selffix"): herdr.ts leaves it out of the
   // squad, so without this check it surfaced here as an idle "unknown" teammate forever (nothing ever sets ended_at).
-  const others = s.members.filter((x) => !x.ended_at && x.role !== 'lead' && !isLeadName(x.name));
+  // A roster member that has a squad entry (even a stale one dropped above) is never re-added as an "unknown" teammate.
+  const inSquad = new Set(s.squad.map((a) => a.name));
+  const others = s.members.filter((x) => !x.ended_at && x.role !== 'lead' && !isLeadName(x.name) && !inSquad.has(x.name));
   const entries: Entry[] = [
     leadEntry(s, working),
     ...squad.map((a) => ({ name: a.name, persona: a.persona, state: a.state })),
@@ -65,8 +67,14 @@ export function mates(s: LiveSnapshot): Mate[] {
   return entries.filter((e) => !seen.has(e.name) && !!seen.add(e.name)).map((e) => mateOf(s, e));
 }
 
-/** Cap on Team rows so the whole sidebar stays on screen; the rest fold into "+N more". */
-const teamCap = (rows: number): number => (rows >= 30 ? 6 : rows >= 20 ? 4 : 2);
+/** The lead's row mood, shared with the band's dot so the two never disagree. */
+export const leadMood = (s: LiveSnapshot): Mood => mates(s)[0]!.mood;
+
+/**
+ * Cap on Team rows so Gates and the message field stay near the fold; the rest fold into "+N more".
+ * Measured: with route, 4 gate groups and advisor notes the sidebar is ~33 rows at 4 members, so 6 members need 36+.
+ */
+const teamCap = (rows: number): number => (rows >= 36 ? 6 : rows >= 28 ? 4 : 2);
 
 /** First `cap` mates, with the selected recipient swapped in when it falls past the cap. */
 function visibleMates(list: Mate[], cap: number, recipient: string | null): Mate[] {

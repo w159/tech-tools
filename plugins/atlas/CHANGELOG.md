@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## [11.1.5] - 2026-10-12 -- atlas 11.1.5: Health page tells the truth
+
+- Health payload: top-level `data_warnings` ([{source, message}]) lists every swallowed data-source failure (DB open/query/columns, connector provider, hookstate, ledger, nudge); the affected subsystem becomes `warn` instead of `ok` or a silent zero. New `scripts/atlas_health_collect.py`.
+- Hooks: faults group by (hook, plugin_version, project) with "last seen N min ago" and active (within 30 min) or historic. Historic-only streams are `info`; a stale plugin install adds the `atlas_doctor.py --fix` instruction.
+- Health page: data-warnings banner, "Copy fix command" on silent-failure cards (disabled with reason when none), history_reason shown instead of "None recorded", active/historic badge on hook evidence.
+- Tool-error label "Unclassified" renamed "Tool-use mistake (not an atlas fault)".
+- Advisor notes list newest first by created_at (the fold holds the older ones); scope stays all open notes from any session.
+- Sidebar polish: route labels align to their waypoint marks (rail stretches to the pane width, names cut to fit, never wrapped); gate count includes an unreadable source and the band and sidebar share one count function; a stale squad member is no longer re-added from the roster as an idle teammate; the band's lead dot follows the same lead mood as the Team row (blocked shows); the portrait now needs 40 rows and Team caps at 6/4/2 members for 36/28/less rows so Gates and the message field are not pushed off a 32-row pane.
+
 ## [11.1.4] - 2026-10-12 -- atlas 11.1.4: rich sidebar restored
 
 - Sidebar returns to the richer 11.1.0 design: round-bordered sections (plain below 40 columns), member chips with readable names, a portrait with a speech bubble for the selected or active member, per-phase mini bars, and gates grouped into collapsed Buttons that expand into line Buttons.

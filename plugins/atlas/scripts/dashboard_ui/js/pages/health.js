@@ -1,6 +1,7 @@
 // Atlas Workboard v2 — Health page: subsystem grid, silent-failure list with
 // fix hints, and what is working. No innerHTML; all data via h() text children.
-import { h, replace } from '../dom.js';
+import { h, replace, copyText } from '../dom.js';
+import { fixCommands } from '../health-fix.js';
 import { changeKey, keepView } from '../keep-view.js';
 import {
   Badge, Card, Table, Tabs, EmptyState, StatusDot, Sparkline,
@@ -98,7 +99,7 @@ function subsystemCard(s) {
   const hist = Array.isArray(s.history) ? s.history : null;
   const spark = hist && hist.some((b) => b.ok || b.fail)
     ? h('div', { class: 'pg-spark', title: s.history_source || '' }, Sparkline({ values: hist.map((b) => (b.ok || 0) + (b.fail || 0)), status }), h('span', { class: 'pg-hint' }, s.history_source || 'activity per bucket'))
-    : h('p', { class: 'pg-hint', title: hist ? '' : (s.history_reason || '') }, hist ? 'No activity in this window' : 'No history for this subsystem');
+    : h('p', { class: 'pg-hint' }, hist ? 'No activity in this window' : `No history: ${s.history_reason || 'no timestamped source'}`);
   const notMeasured = s.measured === false ? 'Not measured' : null;
   const reason = s.measured === false ? (s.reason || 'no data source yet') : null;
   const needsYou = s.status === 'warn' || s.status === 'fail';
@@ -118,7 +119,7 @@ function subsystemCard(s) {
     needsYou ? explain : null,
     h('dl', { class: 'pg-kvs pg-kvs-inline' },
       kv(s.ok_label || 'Last OK', s.last_ok ? whenNode(s.last_ok) : (notMeasured || 'No success recorded in this window')),
-      kv(s.fail_label || 'Last failure', s.last_fail ? whenNode(s.last_fail) : (notMeasured || 'None recorded in this window'))),
+      kv(s.fail_label || 'Last failure', s.last_fail ? whenNode(s.last_fail) : (notMeasured || (hist ? 'None recorded in this window' : `Not tracked: ${s.history_reason || 'no timestamped source'}`)))),
     reason && !(s.last_ok && s.last_fail)
       ? h('details', { class: 'pg-reason', 'data-keep': `why-${s.id}` }, h('summary', {}, 'Why not measured'), h('p', {}, reason))
       : null,
@@ -127,8 +128,39 @@ function subsystemCard(s) {
     evidence.length
       ? h('details', { class: 'pg-evidence', 'data-keep': `ev-${s.id}` },
         h('summary', {}, `Evidence (${evidence.length})`),
-        h('ul', {}, ...evidence.map((e) => h('li', { class: 'pg-mono' }, String(e)))))
+        h('ul', {}, ...evidence.map(evidenceItem)))
       : null);
+}
+
+// Hook fault streams end in "last seen N ago; active|none since": show that as a badge.
+function evidenceItem(e) {
+  const text = String(e);
+  const m = /last seen [^;]+; (active|none since)$/.exec(text);
+  return h('li', { class: 'pg-mono' }, text,
+    m ? Badge({ status: m[1] === 'active' ? 'warn' : 'info', text: m[1] === 'active' ? 'active' : 'historic' }) : null);
+}
+
+// "Copy fix command" button; disabled with the reason when no concrete command exists.
+function fixButton(f) {
+  const cmds = fixCommands(f, (S.data && S.data.subsystems) || []);
+  if (!cmds.length) {
+    return h('button', { type: 'button', class: 'btn', disabled: true, title: 'No single command fixes this; read the sample and the Do this text.' }, 'No fix command');
+  }
+  const btn = h('button', { type: 'button', class: 'btn', title: cmds.join('\n') }, 'Copy fix command');
+  btn.addEventListener('click', async () => {
+    const ok = await copyText(cmds.join('\n'));
+    btn.textContent = ok ? 'Copied' : 'Copy failed: select the text in Do this';
+    setTimeout(() => { btn.textContent = 'Copy fix command'; }, 2500);
+  });
+  return btn;
+}
+
+function warningsBanner(list) {
+  if (!Array.isArray(list) || !list.length) return null;
+  return h('div', { class: 'pg-hintbox', role: 'alert' },
+    h('strong', {}, `${list.length} data source${list.length === 1 ? '' : 's'} failed while building this page`),
+    h('p', {}, 'Numbers below may be missing or zero because of this, not because nothing happened.'),
+    h('ul', {}, ...list.map((w) => h('li', { class: 'pg-mono' }, `${w.source}: ${w.message}`))));
 }
 
 function clip(s, n) {
@@ -163,6 +195,7 @@ function failureCard(f) {
     f.what ? h('p', { class: 'pg-hint' }, f.what) : null,
     sample ? h('pre', { class: 'pg-mono-block' }, clip(sample, 220)) : null,
     h('div', { class: 'pg-hintbox' }, h('strong', {}, 'Do this'), h('p', {}, f.next || f.hint || 'No action recorded for this failure kind.')),
+    h('div', { class: 'pg-head-actions' }, fixButton(f)),
     failureFacts(f, active));
 }
 
@@ -298,6 +331,7 @@ function body() {
   const subs = S.data.subsystems || [];
   const fails = [...(S.data.silent_failures || [])].sort((a, b) => (b.count || 0) - (a.count || 0));
   return h('div', { class: 'pg-stack' },
+    warningsBanner(S.data.data_warnings),
     summaryLine(subs),
     subsystemsCard(subs),
     silentFailuresCard(fails),

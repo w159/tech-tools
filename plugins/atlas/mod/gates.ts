@@ -49,6 +49,9 @@ export function headerGroup(check: HeaderCheck): GateGroup {
   };
 }
 
-/** Lines that are not ok across all groups; each group error counts once. */
+/** Open items in one group: its failing lines, plus one when its source could not be read. */
+export const groupOpenCount = (g: GateGroup): number => g.lines.filter((l) => !l.ok).length + (g.error ? 1 : 0);
+
+/** The one open-gate figure the band and the sidebar header both show. */
 export const openGateCount = (groups: readonly GateGroup[]): number =>
-  groups.reduce((n, g) => n + g.lines.filter((l) => !l.ok).length, 0);
+  groups.reduce((n, g) => n + groupOpenCount(g), 0);

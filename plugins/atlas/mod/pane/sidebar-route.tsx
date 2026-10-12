@@ -18,27 +18,41 @@ const statusOf = (s: string): { g: string; color: string } => STATUS_STYLE[s] ??
 
 export const phaseGlyph = (s: LiveSnapshot, id: string): string => s.contract.phases.find((p) => p.id === id)?.glyph ?? glyph.ring;
 
-const SEGMENT_LEN = 4;
+const MIN_SEGMENT_LEN = 3;
 
 const waypointMark = (i: number, cur: number): Segment =>
   i === cur ? { t: '◉', color: C.focus, bold: true } : i < cur ? { t: '◆', color: C.ok } : { t: '○', color: C.muted };
-const waypointRail = (i: number, cur: number): Segment =>
-  i < cur ? { t: '━'.repeat(SEGMENT_LEN), color: C.ok } : { t: '─'.repeat(SEGMENT_LEN), color: C.muted };
+const waypointRail = (i: number, cur: number, len: number): Segment =>
+  i < cur ? { t: '━'.repeat(len), color: C.ok } : { t: '─'.repeat(len), color: C.muted };
 
-/** `◆━━━━◆━━━━◉────○`: fixed-length rail segments, heavy up to the current phase, light after it. */
-function waypointRuns(count: number, cur: number): Segment[] {
+/** Columns between two waypoint marks: the rail spreads over the row, leaving the last label its full width. */
+export const segmentLen = (phases: string[], cols: number): number => {
+  if (phases.length < 2) return MIN_SEGMENT_LEN;
+  const lastW = Math.min(textWidth(phases[phases.length - 1]!), 8);
+  return Math.max(MIN_SEGMENT_LEN, Math.floor((cols - lastW) / (phases.length - 1)) - 1);
+};
+
+/** `◆━━━◆━━━◉───○`: equal rail segments, heavy up to the current phase, light after it. */
+function waypointRuns(count: number, cur: number, len: number): Segment[] {
   return Array.from({ length: count }, (_, i): Segment[] =>
-    i === count - 1 ? [waypointMark(i, cur)] : [waypointMark(i, cur), waypointRail(i, cur)]).flat();
+    i === count - 1 ? [waypointMark(i, cur)] : [waypointMark(i, cur), waypointRail(i, cur, len)]).flat();
 }
 
-/** Waypoint line plus one plain label row; the current phase is bold in the focus key. */
+/** Each name starts under its waypoint mark in a slot as wide as the rail step, cut to fit (never wrapped). */
+function labelRuns(phases: string[], cur: number, len: number, cols: number): Segment[] {
+  const step = len + 1;
+  return phases.map((p, i): Segment => {
+    const slot = i === phases.length - 1 ? Math.max(1, cols - step * i) : step;
+    const text = pad(fitText(p, slot - (i === phases.length - 1 ? 0 : 1)), slot);
+    return i === cur ? { t: text, color: C.focus, bold: true } : { t: text, color: C.muted };
+  });
+}
+
+/** Waypoint line plus one label row aligned to it; the current phase is bold in the focus key. */
 export function routeLines(els: ClientElements, phases: string[], cur: number, cols: number): RenderElement[] {
   if (phases.length === 0) return [];
-  const labels: Segment[] = phases.flatMap((p, i) => [
-    ...(i ? [{ t: ' ' }] : []),
-    i === cur ? { t: p, color: C.focus, bold: true } : { t: p, color: C.muted },
-  ]);
-  return [rowOf(els, waypointRuns(phases.length, cur), cols), rowOf(els, labels, cols)];
+  const len = segmentLen(phases, cols);
+  return [rowOf(els, waypointRuns(phases.length, cur, len), cols), rowOf(els, labelRuns(phases, cur, len, cols), cols)];
 }
 
 // ---- tasks -------------------------------------------------------------------

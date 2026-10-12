@@ -1,5 +1,6 @@
 // Sidebar gates section (status strip, collapsible groups, fix lines) and advisor notes.
 import type { ClientElements, RenderElement } from 'claude-code';
+import { groupOpenCount } from '../gates';
 import { fitRuns, rowOf, type Segment } from '../runs';
 import { chartRoom as C, fitText } from '../theme';
 import { scrub } from './chrome';
@@ -10,8 +11,6 @@ const okMark = (ok: boolean): { g: string; color: string } => (ok ? { g: '✓', 
 /** A dimmed detail line under an expanded item. */
 const noteLine = (els: ClientElements, text: string, cols: number): RenderElement =>
   els.Box({ flexShrink: 0, children: els.Text({ color: C.muted, children: fitText(`     ${text}`, cols) }) });
-
-export const openGates = (gates: GateGroup[]): number => gates.reduce((n, g) => n + g.lines.filter((x) => !x.ok).length, 0);
 
 function lineRows(els: ClientElements, m: SidebarModel, on: SidebarHandlers, ln: GateLine, cols: number): RenderElement[] {
   const key = `gate:${ln.id}`;
@@ -29,8 +28,8 @@ function lineRows(els: ClientElements, m: SidebarModel, on: SidebarHandlers, ln:
 const unavailableRow = (els: ClientElements, g: GateGroup, cols: number): RenderElement[] =>
   g.error ? [rowOf(els, [{ t: `${g.title} unavailable: ${scrub(g.error)}`, color: C.muted }], cols)] : [];
 
-const groupOk = (g: GateGroup): boolean => !g.error && g.lines.every((x) => x.ok);
-const openCount = (g: GateGroup): number => g.lines.filter((x) => !x.ok).length;
+const groupOk = (g: GateGroup): boolean => groupOpenCount(g) === 0;
+const openCount = groupOpenCount;
 const groupKey = (g: GateGroup): string => `group:${g.id}`;
 
 /** One mark per group, so the collapsed section still shows which sources are red. */

@@ -6,6 +6,8 @@ import { busySnap, NOW } from '../live_fixture';
 import type { LiveSnapshot } from '../orchestra-types';
 import { textWidth } from '../theme';
 import { sidebarTree, type GateGroup, type SidebarHandlers, type SidebarModel } from './sidebar';
+import { openGateCount } from '../gates';
+import { segmentLen } from './sidebar-route';
 
 type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });
@@ -50,13 +52,29 @@ describe('sidebar tree', () => {
     const rows = all(root).filter((n) => n.kind === 'Box' && n.props.flexDirection === 'row').map(textOf);
     const phases = busySnap().contract.todoPhases.map(String);
     const cur = phases.indexOf('implement');
-    const way = '━━━━'.length;
+    const way = segmentLen(phases, 57);
     const markAt = (i: number) => (i === cur ? '◉' : i < cur ? '◆' : '○');
     const railAt = (i: number) => (i === phases.length - 1 ? '' : (i < cur ? '━' : '─').repeat(way));
     const expected = phases.map((_, i) => markAt(i) + railAt(i)).join('');
     expect(rows[1]).toBe(expected);
-    expect(rows[2]).toBe(phases.join(' '));
+    expect(rows[2]!.trimEnd()).toBe(phases.map((p, i) => (i === phases.length - 1 ? p : p.padEnd(way + 1))).join(''));
     expect(textOf(root)).toContain(`Atlas  implement, `);
+  });
+
+  // Every phase name starts in the same column as its waypoint mark, truncated rather than wrapped, at 50 and 38 columns.
+  for (const columns of [50, 38]) test(`route labels sit under their waypoints at ${columns} columns`, () => {
+    const root = sidebarTree(els, model({ columns }), on) as unknown as Node;
+    const rows = all(root).filter((n) => n.kind === 'Box' && n.props.flexDirection === 'row').map(textOf);
+    const [rail, labels] = [rows[1]!, rows[2]!];
+    const phases = busySnap().contract.todoPhases.map(String);
+    const marks = [...rail].map((c, i) => ('◆◉○'.includes(c) ? i : -1)).filter((i) => i >= 0);
+    expect(marks).toHaveLength(phases.length);
+    const inner = columns - 1 - (columns >= 40 ? 2 : 0);
+    expect(textWidth(labels)).toBeLessThanOrEqual(inner);
+    marks.forEach((col, i) => {
+      const cell = [...labels].slice(col, i === marks.length - 1 ? undefined : marks[i + 1]).join('');
+      expect(cell.startsWith(phases[i]![0]!)).toBe(true);
+    });
   });
 
   test('each phase has a mini-bar header; tasks are one row each with their own status glyph', () => {
@@ -68,7 +86,7 @@ describe('sidebar tree', () => {
     expect(textOf(button(root, 'task:a'))).toMatch(/^ {2}◉ task a +bob$/);
     expect(textOf(button(root, 'task:b'))).toMatch(/^ {2}○ task b$/);
     expect(textOf(button(root, 'task:c'))).toMatch(/^ {2}✓ task c$/);
-    expect(textOf(root)).not.toContain('research  ');
+    expect(textOf(root)).not.toMatch(/research +[▰▱]/);
   });
 
   test('sections are bordered from 40 columns up and plain below', () => {
@@ -231,6 +249,28 @@ describe('sidebar tree', () => {
     const rowsOf = (m: SidebarModel) => all(sidebarTree(els, m, on) as unknown as Node).filter((n) => n.kind === 'Box' && n.props.flexDirection === 'row').length;
     expect(rowsOf(model({ ui, rows: 40 }))).toBeGreaterThan(rowsOf(model({ ui, rows: 20 })));
     expect(rowsOf(model({ ui, rows: 40 }))).toBeGreaterThan(rowsOf(model({ ui, rows: 40, columns: 38 })));
+  });
+
+  test('a stale squad member is not resurrected from the roster as an idle "unknown" teammate', () => {
+    const snap = busySnap();
+    const old = new Date(NOW - 3 * 60 * 60 * 1000).toISOString();
+    const squad = [{ ...snap.squad[0]!, name: 'ghost', state: 'parked', lastNoteTs: old }] as any;
+    const t = textOf(sidebarTree(els, model({}, { ...snap, squad, members: [{ name: 'ghost', role: 'subagent' }], activity: {}, comms: [] }), on) as unknown as Node);
+    expect(t).not.toContain('ghost');
+  });
+
+  test('gates header counts an unreadable source, matching the red mark and the band figure', () => {
+    const g: GateGroup[] = [{ id: 'completion', title: 'Gates', lines: [], error: 'boom' }, { id: 'routing', title: 'Tool routing', lines: [{ id: 'r', label: 'r', ok: false }] }];
+    const t = textOf(sidebarTree(els, model({ gates: g }), on) as unknown as Node);
+    expect(t).toMatch(/Gates +2 open/);
+    expect(openGateCount(g)).toBe(2);
+  });
+
+  test('the portrait waits for 40 rows so Gates and the message field are not pushed off a 32-row pane', () => {
+    const ui = { recipient: busySnap().squad[0]!.name, expanded: null, draft: '' };
+    const rowsOf = (rows: number) => all(sidebarTree(els, model({ ui, rows }), on) as unknown as Node).filter((n) => n.kind === 'Box' && n.props.flexDirection === 'row').length;
+    expect(rowsOf(32)).toBe(rowsOf(28));
+    expect(rowsOf(40)).toBeGreaterThan(rowsOf(39));
   });
 
   test('empty team says how to dispatch', () => {

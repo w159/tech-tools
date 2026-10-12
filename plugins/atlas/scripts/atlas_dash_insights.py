@@ -36,6 +36,7 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 import atlas_faults  # noqa: E402 (needs SCRIPTS_DIR on sys.path)
+import atlas_health_collect as hc  # noqa: E402
 
 try:  # optional collaborators; every use is guarded
     import atlas_db  # type: ignore
@@ -142,7 +143,8 @@ class _Db:
                 self._cols[table] = {
                     r[1] for r in self.conn.execute(f"PRAGMA table_info({table})")
                 }
-            except (sqlite3.Error, AttributeError):
+            except (sqlite3.Error, AttributeError) as exc:
+                hc.warn("db", f"cannot read columns of {table}: {exc}")
                 self._cols[table] = set()
         return self._cols[table]
 
@@ -151,7 +153,8 @@ class _Db:
             return []
         try:
             return self.conn.execute(sql, params).fetchall()
-        except sqlite3.Error:
+        except sqlite3.Error as exc:
+            hc.warn("db", f"query failed: {exc}")
             return []
 
     def dicts(self, sql, params=()) -> list[dict]:
@@ -161,14 +164,16 @@ class _Db:
             cur = self.conn.execute(sql, params)
             names = [d[0] for d in cur.description]
             return [dict(zip(names, r)) for r in cur.fetchall()]
-        except sqlite3.Error:
+        except sqlite3.Error as exc:
+            hc.warn("db", f"query failed: {exc}")
             return []
 
 
 def _open(ctx) -> _Db:
     try:
         return _Db(ctx.db())
-    except Exception:
+    except Exception as exc:
+        hc.warn("db", f"cannot open telemetry database: {exc}")
         return _Db(None)
 
 
@@ -179,7 +184,8 @@ def _project_filter(ctx, db: _Db):
         return None
     try:
         root = ctx.project_root(raw)
-    except Exception:
+    except Exception as exc:
+        hc.warn("db", f"project filter {raw!r} not resolved: {exc}")
         root = None
     return str(root) if root else str(raw)
 
@@ -556,13 +562,15 @@ def _hookstate_scan(now: float) -> dict:
     out = {"sessions": 0, "last_run": {}, "bursts": [], "newest": None, "stops": []}
     try:
         files = glob.glob(str(HOOKSTATE_DIR / "*.json"))
-    except OSError:
+    except OSError as exc:
+        hc.warn("hooks", f"hookstate directory unreadable: {exc}")
         return out
     for f in files:
         try:
             with open(f) as fh:
                 st = json.load(fh)
-        except (OSError, ValueError):
+        except (OSError, ValueError) as exc:
+            hc.warn("hooks", f"hookstate file {os.path.basename(f)} unreadable: {exc}")
             continue
         out["sessions"] += 1
         for hook, ts in (st.get("last_run") or {}).items():
@@ -699,8 +707,8 @@ FAILURE_INFO = {
         "Re-run the command in the sample and fix the script; repeats mean the tool is broken.",
     ),
     "tool_error_unclassified": (
-        "Unclassified tool error",
-        "A tool call errored and its text matches no known cause (model misuse, environment, your code).",
+        "Tool-use mistake (not an atlas fault)",
+        "A tool call errored and its text matches no known atlas cause. Mostly agent tool-use mistakes (permission denied on Edit, bad Read selectors), not atlas faults.",
         "Read the sample. If the tool itself is at fault fix it; otherwise ignore (classifier: atlas_db.classify_error).",
     ),
     "ingest_stalled": (
@@ -949,7 +957,8 @@ def _connector_aliases() -> dict:
         import atlas_control
 
         return dict(atlas_control.CONNECTOR_ALIASES)
-    except Exception:
+    except Exception as exc:
+        hc.warn("connectors", f"connector aliases unavailable: {exc}")
         return {}
 
 
@@ -1079,6 +1088,7 @@ def _unlogged_transcripts(db: _Db, now: float, since: float) -> dict:
 
 
 def _health_payload(ctx):
+    warnings = hc.start()
     db = _open(ctx)
     now = time.time()
     win = _window_seconds(_q(ctx, "window", "7d"))
@@ -1168,13 +1178,25 @@ def _health_payload(ctx):
         f"; last trip {_iso(trips[0][0])} (session {trips[0][1][:12]})" if trips else ""
     )
     recent_crashes = sum(1 for r in fault_rows if r["ts"] >= now - ACTIVE_SECS)
+    plugin_ver = hc.installed_plugin_version()
+    streams = hc.group_fault_streams(fault_rows, now, plugin_ver)
+    # Faults older than the active window are history: informational, not warn.
     hooks_status = (
         "fail"
         if trip_active
         else "warn"
-        if recent_crashes or active_of("hook_burst_tripped")
+        if any(g["active"] for g in streams) or active_of("hook_burst_tripped")
+        else "info"
+        if streams or crashes
         else "ok"
     )
+    stream_ev = [hc.describe_stream(g, now) for g in streams[:3]]
+    stale = next((g for g in streams if g["stale"]), None)
+    if stale:
+        stream_ev.append(
+            f"stale plugin install {stale['version']} is producing faults: run "
+            f"python3 {SCRIPTS_DIR}/atlas_doctor.py --fix, then /reload-plugins"
+        )
     subs.append(
         sub(
             "hooks",
@@ -1192,13 +1214,15 @@ def _health_payload(ctx):
                     if recent_crashes
                     else "(all historic, none in the last 24h)"
                 )
+                + (f"; {hc.describe_stream(streams[0], now)}" if streams else "")
                 if crashes
                 else ""
             )
             + (f"; last hook run {_iso(newest_hook)}" if newest_hook else ""),
             _iso(newest_hook),
             _newest(last_of("hook_burst_tripped"), last_of("hook_crash")),
-            [s["sample"] for s in silent if s["kind"] == "hook_crash"][:3]
+            stream_ev
+            + [s["sample"] for s in silent if s["kind"] == "hook_crash"][:3]
             + [
                 f"{_iso(r['ts'])} "
                 + _clip(f"{r.get('hook')}: {r.get('type')}: {r.get('error')}", 200)
@@ -1450,7 +1474,8 @@ def _health_payload(ctx):
     if CONNECTOR_STATUS_PROVIDER is not None:
         try:
             rows = list(CONNECTOR_STATUS_PROVIDER() or [])
-        except Exception:
+        except Exception as exc:
+            hc.warn("connectors", f"connector status provider failed: {exc}")
             rows = []
     flagged = [r for r in rows if r.get("health") in ("unconfigured", "degraded")]
     live = [r for r in rows if r.get("health") in ("ok", "idle", "degraded")]
@@ -1703,7 +1728,9 @@ def _health_payload(ctx):
     subs.append(chr_card)
 
     successes = _successes(db, since, root)
+    hc.apply_to_subsystems(subs, warnings)
     return {
+        "data_warnings": warnings,
         "checked_at": _iso(now),
         "window_seconds": int(win),
         "active_seconds": ACTIVE_SECS,
@@ -2220,8 +2247,8 @@ ACTIVITY_KINDS = {
     ),
     "tool_error": ("Atlas script error", "An atlas script failed internally."),
     "tool_error_unclassified": (
-        "Unclassified error",
-        "A tool errored and its text matches no known cause.",
+        "Tool-use mistake",
+        "A tool errored on a mistake in how it was used; mostly not an atlas fault.",
     ),
     "friction": (
         "Friction signal",
@@ -2719,7 +2746,8 @@ def _load_ledger(root: str | None, roots: list[str]) -> list[dict]:
                 entries = (
                     data if isinstance(data, list) else (data.get("findings") or [])
                 )
-        except Exception:
+        except Exception as exc:
+            hc.warn("doctor", f"findings ledger {p} unreadable: {exc}")
             continue
         project = str(p.parent.parent.parent)
         for i, e in enumerate(entries):
@@ -2781,7 +2809,8 @@ def _nudges() -> dict:
         try:
             with open(f, encoding="utf-8") as fh:
                 st = json.load(fh)
-        except (OSError, ValueError):
+        except (OSError, ValueError) as exc:
+            hc.warn("nudge", f"hookstate file {os.path.basename(f)} unreadable: {exc}")
             continue
         lr = (st.get("last_run") or {}).get("nudge") if isinstance(st, dict) else None
         if lr:

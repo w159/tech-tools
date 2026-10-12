@@ -6,7 +6,8 @@ import type { ClientElements, RenderElement } from 'claude-code';
 import { routeCounts } from '../data/todos';
 import { rowOf, type Segment } from '../runs';
 import { chartRoom as C, glyph } from '../theme';
-import { advisorRows, gateJumpKey, gateRows, openGates } from './sidebar-gates';
+import { openGateCount } from '../gates';
+import { advisorRows, gateJumpKey, gateRows } from './sidebar-gates';
 import { phaseGlyph, routeLines, taskRows } from './sidebar-route';
 import { teamRows, teamSummary } from './sidebar-team';
 import { headRow, hotkeyHead, type SidebarHandlers, type SidebarModel } from './sidebar-types';
@@ -26,7 +27,7 @@ const section = (els: ClientElements, key: string, bordered: boolean, cols: numb
 const bold = (t: string): Segment => ({ t, bold: true });
 
 function gatesHead(els: ClientElements, model: SidebarModel, on: SidebarHandlers, inner: number): RenderElement {
-  const open = openGates(model.gates);
+  const open = openGateCount(model.gates);
   const jump = gateJumpKey(model.gates);
   return hotkeyHead(els, [open ? { t: '✗ ', color: C.fail, bold: true } : { t: '✓ ', color: C.ok, bold: true }, bold('Gates')],
     open ? { t: `${open} open`, color: C.fail } : { t: 'all clear', color: C.ok },

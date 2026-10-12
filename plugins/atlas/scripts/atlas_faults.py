@@ -44,20 +44,39 @@ def _truncate(path: str) -> None:
         raise
 
 
+def _plugin_version() -> str | None:
+    """Version of the plugin copy that is running, so a fault from a stale
+    install can be told apart from a current bug. None when unreadable."""
+    manifest = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "..",
+        ".claude-plugin",
+        "plugin.json",
+    )
+    try:
+        with open(manifest, encoding="utf-8") as f:
+            version = json.load(f).get("version")
+        return version if isinstance(version, str) and version else None
+    except Exception:  # noqa: BLE001 -- the version tag is optional
+        return None
+
+
 def record(hook: str, exc: BaseException, cwd: str | None = None) -> None:
     """Append one JSON fault line. Never raises."""
     try:
         path = _path()
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        line = json.dumps(
-            {
-                "ts": time.time(),
-                "hook": str(hook),
-                "error": str(exc)[:_ERR_CAP],
-                "type": type(exc).__name__,
-                "cwd": cwd if cwd is not None else os.getcwd(),
-            }
-        )
+        row = {
+            "ts": time.time(),
+            "hook": str(hook),
+            "error": str(exc)[:_ERR_CAP],
+            "type": type(exc).__name__,
+            "cwd": cwd if cwd is not None else os.getcwd(),
+        }
+        version = _plugin_version()
+        if version:
+            row["plugin_version"] = version
+        line = json.dumps(row)
         with open(path, "a", encoding="utf-8") as f:
             f.write(line + "\n")
         if os.path.getsize(path) > MAX_BYTES:

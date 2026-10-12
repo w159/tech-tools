@@ -36,6 +36,6 @@ describe('headerGroup / gatesError / openGateCount', () => {
   });
   test('error group and count', () => {
     expect(gatesError('boom')).toEqual({ id: 'completion', title: 'Gates', lines: [], error: 'boom' });
-    expect(openGateCount([{ id: 'routing', title: 'r', lines: [okLine, { ...okLine, ok: false }] }, gatesError('x')])).toBe(1);
+    expect(openGateCount([{ id: 'routing', title: 'r', lines: [okLine, { ...okLine, ok: false }] }, gatesError('x')])).toBe(2);
   });
 });

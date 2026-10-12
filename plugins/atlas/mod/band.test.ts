@@ -29,6 +29,14 @@ describe('bandTree', () => {
     expect(text).toContain('Lead agent');
     expect(text).not.toMatch(/\bLE\b/);
   });
+  test('the lead dot follows the lead mood the Team row shows (blocked, not just working or idle)', () => {
+    const dotColor = (activity: any) => {
+      const tree = bandTree(els, { snapshot: { ...snapshot, squad: [], activity }, openGates: 0, columns: 120 }) as unknown as Node;
+      return texts(tree).find((t) => t.props.children === '●')!.props.color;
+    };
+    const idle = dotColor({});
+    expect(dotColor({ lead: { mood: 'blocked', tool: null, since: 0, lastLine: '' } })).not.toBe(idle);
+  });
   test('no hex colour without a background, no dim stacked on colour', () => {
     const tree = bandTree(els, { snapshot, openGates: 1, columns: 120 }) as unknown as Node;
     for (const t of texts(tree)) {

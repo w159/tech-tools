@@ -36,6 +36,22 @@ class FaultsTest(unittest.TestCase):
         self.assertEqual(len(atlas_faults.load(0)), 1)
         self.assertEqual(atlas_faults.load(rec["ts"] + 10), [])
 
+    def test_guard_fault_row_carries_plugin_version(self):
+        import atlas_hook_guard
+
+        manifest = os.path.join(HERE, "..", ".claude-plugin", "plugin.json")
+        want = json.load(open(manifest))["version"]
+        atlas_hook_guard.fault("h", "boom", "/x")
+        self.assertEqual(atlas_faults.load(0)[0]["plugin_version"], want)
+
+    def test_unreadable_manifest_omits_version_and_row_without_it_loads(self):
+        with mock.patch("json.load", side_effect=ValueError("bad")):
+            self.assertIsNone(atlas_faults._plugin_version())
+            atlas_faults.record("h", ValueError("boom"), "/x")
+        rec = atlas_faults.load(0)[0]
+        self.assertNotIn("plugin_version", rec)
+        self.assertEqual(rec["error"], "boom")
+
     def test_never_raises(self):
         with mock.patch.dict(os.environ, {"ATLAS_HOME": "/dev/null/x"}):
             atlas_faults.record("h", RuntimeError("x"))
@@ -91,7 +107,14 @@ class FaultsTest(unittest.TestCase):
     def test_load_skips_bad_lines(self):
         good = json.dumps({"ts": 5.0, "hook": "a"})
         with open(self.path, "w") as f:
-            f.write(good + "\n" + json.dumps({"ts": "x"}) + "\n[1]\nnot json\n" + good + "\n")
+            f.write(
+                good
+                + "\n"
+                + json.dumps({"ts": "x"})
+                + "\n[1]\nnot json\n"
+                + good
+                + "\n"
+            )
         self.assertEqual(len(atlas_faults.load(0)), 2)
 
     def test_truncate_failure_leaves_no_tmp(self):

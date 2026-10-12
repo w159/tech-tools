@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## [11.1.5] - 2026-10-12 -- atlas 11.1.5: Health page tells the truth
+
+Detail: `plugins/atlas/CHANGELOG.md` 11.1.5. Also: sidebar polish (route label alignment, shared gate count including unreadable sources, stale roster fix, band lead dot mood, portrait and team-cap row thresholds).
+
 ## [11.1.4] - 2026-10-12 -- atlas 11.1.4: rich sidebar restored
 
 Detail: `plugins/atlas/CHANGELOG.md` 11.1.4.
